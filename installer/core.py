@@ -31,8 +31,8 @@ KEEP_IF_PRESENT = ("addons/amxmodx/configs/",)
 # Modes that need nothing beyond Loner-Strike's own plugins
 CORE_MODES = ("classic", "csdm", "csdm_ffa", "knife", "pistols", "deagle", "awp", "scoutz", "surf")
 CORE_ADDONS = ("quakesounds",)          # miscstats.amxx comes with AMX Mod X
-OUR_PLUGINS = ("gamemodes", "gm_humanbots", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_vip")
-ALWAYS_ON = ("gamemodes", "gm_humanbots", "gm_pubserver", "gm_vip")   # listed in plugins.ini
+OUR_PLUGINS = ("gamemodes", "gm_humanbots", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_vip", "gm_extras")
+ALWAYS_ON = ("gamemodes", "gm_humanbots", "gm_pubserver", "gm_vip", "gm_extras")   # listed in plugins.ini
 
 
 def _tree(root):

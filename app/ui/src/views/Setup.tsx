@@ -108,6 +108,7 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
   return (
     <div className="setup">
       <div className="setup-card">
+        <ThemeMusic />
         <ol className="setup-steps" aria-label="Setup steps">
           {(["games", "content", "review", "install"] as Stage[]).map((s, i) => (
             <li key={s} className={stage === s ? "now" : order(stage) > order(s) ? "done" : ""}>
@@ -335,5 +336,89 @@ function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan
         </section>
       </div>
     </div>
+  );
+}
+
+/** The game's own menu music, quietly, while setting up. Only if the player has the
+ *  game (it's their copy, never shipped with the app); it starts on the first click,
+ *  since the window can't play sound before that. */
+function ThemeMusic() {
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem("ls.music") !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const [ready, setReady] = useState(false);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const wanted = useRef(on);
+  wanted.current = on;
+
+  const fadeTo = (a: HTMLAudioElement, target: number) => {
+    const step = () => {
+      const d = target - a.volume;
+      if (Math.abs(d) < 0.02) {
+        a.volume = target;
+        if (target === 0) a.pause();
+        return;
+      }
+      a.volume = Math.min(1, Math.max(0, a.volume + Math.sign(d) * 0.02));
+      setTimeout(step, 40);
+    };
+    step();
+  };
+  const start = (a: HTMLAudioElement) => {
+    a.volume = 0;
+    a.play().then(() => fadeTo(a, 0.3)).catch(() => {});
+  };
+
+  useEffect(() => {
+    let url = "";
+    let cancelled = false;
+    fetch("/api/app/theme.mp3")
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        if (!blob || cancelled) return;
+        url = URL.createObjectURL(blob);
+        const a = new Audio(url);
+        a.loop = true;
+        audio.current = a;
+        setReady(true);
+        if (wanted.current) start(a);
+      })
+      .catch(() => {});
+    // the window may refuse to play before the first click: try again then
+    const firstClick = () => {
+      const a = audio.current;
+      if (a && wanted.current && a.paused) start(a);
+    };
+    window.addEventListener("pointerdown", firstClick, { once: true });
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pointerdown", firstClick);
+      audio.current?.pause();
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, []);
+
+  if (!ready) return null;
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    try {
+      localStorage.setItem("ls.music", next ? "on" : "off");
+    } catch {
+      /* private window */
+    }
+    const a = audio.current;
+    if (!a) return;
+    if (next) start(a);
+    else fadeTo(a, 0);
+  };
+  return (
+    <button className="music-toggle" aria-pressed={on} onClick={toggle} title={on ? "Turn the music off" : "Play the menu music"}>
+      <span aria-hidden="true">♪</span> {on ? "Music on" : "Music off"}
+    </button>
   );
 }

@@ -834,3 +834,88 @@ a.btn.primary { color: var(--signal-ink); }
 .admin-tabs { margin-bottom: -10px; }
 .tab-n { font-style: normal; margin-left: 6px; font-size: 12px; color: var(--bone-faint); background: var(--bg); border-radius: 8px; padding: 0 6px; }
 @media (max-width: 760px) { .admin-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .admin-tabs::-webkit-scrollbar { display: none; } }
+
+/* ---- sounds page (views/Sounds.tsx) ------------------------------------------------------ */
+.sounds h3 { margin: 0 0 4px; font-size: 17px; }
+.sounds .sounds-head p { margin: 0; }
+.sounds-switch { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; color: var(--bone-dim); cursor: pointer; }
+.sound-pools { display: grid; gap: 14px; }
+.sound-pool .row.between { align-items: flex-start; }
+.sound-pool h3.pool-t { color: var(--t); }
+.sound-pool h3.pool-ct { color: var(--ct); }
+.track-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.track-list li {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; padding: 6px 10px;
+}
+.track-list li.off .track-name { color: var(--bone-faint); }
+.track-play {
+  width: 34px; height: 34px; flex: none; display: grid; place-items: center; border: 0; border-radius: 50%;
+  background: var(--panel-2); color: var(--bone); box-shadow: var(--raised);
+}
+.track-play:hover { color: var(--signal); }
+.track-play.on { background: var(--signal); color: var(--signal-ink); }
+.track-info { display: grid; min-width: 0; }
+.track-name { font-weight: 600; overflow-wrap: anywhere; }
+.track-info small { color: var(--bone-faint); font-size: 13px; }
+.track-info small.warn { color: var(--warn); }
+.track-actions { display: flex; align-items: center; gap: 10px; }
+.track-actions select { font: inherit; font-size: 14px; color: var(--bone); background: var(--panel); box-shadow: var(--raised); border: 0; border-radius: 2px; padding: 5px 8px; max-width: 190px; }
+.sound-packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.sound-pack { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sound-pack h3 { margin-top: 6px; }
+.sound-pack .pack-about { margin: 6px 0 0; font-size: 15px; color: var(--bone-dim); }
+.sound-pack .pack-actions { margin-top: auto; padding-top: 12px; }
+.sound-pack .tag.ok { color: var(--ok); }
+@media (max-width: 760px) {
+  .sounds .row.between { flex-wrap: wrap; }
+  .sound-packs { grid-template-columns: 1fr; }
+  .track-list li { grid-template-columns: auto minmax(0, 1fr); row-gap: 8px; }
+  .track-actions { grid-column: 1 / -1; flex-wrap: wrap; }
+  .track-actions select { flex: 1 1 140px; max-width: none; min-height: 44px; }
+  .track-play { width: 44px; height: 44px; }
+  /* a 44px tall switch, same look */
+  .sounds .switch { height: 44px; width: 56px; }
+  .sounds .switch::after { top: 13px; }
+  .sounds .switch[aria-checked="true"]::after { left: 35px; }
+  .sound-pack .pack-actions .btn { flex: 1 1 auto; }
+}
+
+/* ---- setup: the game's menu music ----------------------------------------------- */
+.setup-card { position: relative; }
+.music-toggle { position: absolute; top: 14px; right: 16px; z-index: 2; border: 0; border-radius: 2px; padding: 4px 10px; background: var(--bg); box-shadow: var(--sunken); color: var(--bone-faint); font: 600 13px/1.2 var(--text); cursor: pointer; }
+.music-toggle[aria-pressed="true"] { color: var(--signal); }
+.music-toggle:hover { color: var(--bone); }
+@media (max-width: 760px) { .music-toggle { top: 10px; right: 10px; } }
+.setup-steps { padding-right: 120px; }
+@media (max-width: 760px) { .setup-steps { padding-right: 0; padding-top: 30px; } }
+
+/* ---- server extras: map rotation, chat messages, kickers, fast downloads -------------- */
+.extras { --chat-default: #ffb000; --chat-green: #66d966; --chat-red: #ff5a4a; --chat-blue: #99ccff; --chat-grey: #cccccc; }
+.extras section > .settings { margin-top: 12px; }
+.extras-warn { margin: 0; color: var(--warn); }
+.rot-scope select { max-width: 460px; width: 100%; font: inherit; font-size: 15px; }
+.rot-empty { margin: 0; }
+.rot-list, .ad-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.rot-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 2px 4px 2px 10px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; cursor: grab; }
+.rot-item.drop { outline: 1px solid var(--signal); }
+.rot-n { flex: none; width: 2.2em; text-align: right; color: var(--bone-faint); font-variant-numeric: tabular-nums; font-size: 14px; }
+.rot-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.rot-actions, .ad-tools { flex: none; display: flex; gap: 4px; align-items: center; }
+.btn.icon { display: inline-grid; place-items: center; padding: 4px; width: 32px; height: 32px; }
+.rot-add { margin-bottom: 0; }
+.rot-matches { margin-top: -4px; }
+.ad-item { display: flex; gap: 8px; align-items: center; }
+.ad-item .search { min-width: 0; }
+.ad-tools select { font: inherit; font-size: 14px; padding: 6px 8px; }
+.chip.ad-example { white-space: normal; text-align: left; }
+.chat-preview { background: #1d2017; box-shadow: var(--sunken); padding: 8px 12px; font: 600 14px/1.5 Verdana, Tahoma, sans-serif; overflow-wrap: anywhere; }
+.chat-preview p { margin: 0; }
+@media (max-width: 760px) {
+  .rot-item { cursor: default; padding-left: 8px; gap: 6px; }
+  .btn.icon { width: 44px; height: 44px; }
+  .rot-scope select { max-width: none; min-height: 44px; }
+  .ad-item { flex-direction: column; align-items: stretch; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--bevel-lo); }
+  .ad-tools select { flex: 1; min-height: 44px; font-size: 16px; }
+  .extras .setting .seg { display: grid; grid-template-columns: repeat(3, 1fr); }
+}

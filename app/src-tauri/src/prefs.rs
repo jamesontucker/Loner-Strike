@@ -395,6 +395,36 @@ async fn api_import(State(st): State<Shared>, headers: HeaderMap) -> Reply {
     }
 }
 
+// ---- the game's menu music ------------------------------------------------------------
+
+/// The player's own copy of the menu music (media/gamestartup.mp3): this game's, then
+/// Counter-Strike 1.6's, then Half-Life's. Never shipped with the app.
+fn theme_file(st: &Shared) -> Option<PathBuf> {
+    let mut halflifes: Vec<(PathBuf, String)> = Vec::new();
+    if let Some(g) = st.local_game() {
+        halflifes.push((g.hl.clone(), g.name.clone()));
+    }
+    for i in crate::steam::find_installs() {
+        halflifes.push((i.hl.clone(), i.games.first().cloned().unwrap_or_default()));
+    }
+    halflifes.into_iter().find_map(|(hl, game)| {
+        [game.as_str(), "cstrike", "valve"].iter().filter(|g| !g.is_empty()).map(|g| hl.join(g).join("media/gamestartup.mp3")).find(|p| p.is_file())
+    })
+}
+
+async fn api_theme(State(st): State<Shared>) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let file = tokio::task::spawn_blocking(move || theme_file(&st).and_then(|p| std::fs::read(p).ok())).await.ok().flatten();
+    match file {
+        Some(data) if data.len() < 20_000_000 => (
+            [(axum::http::header::CONTENT_TYPE, "audio/mpeg"), (axum::http::header::CACHE_CONTROL, "max-age=3600")],
+            data,
+        )
+            .into_response(),
+        _ => (StatusCode::NOT_FOUND, "no music").into_response(),
+    }
+}
+
 #[derive(Deserialize)]
 struct AddFileReq {
     section: String,
@@ -431,6 +461,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/app/prefs", get(api_prefs).post(api_prefs_set))
         .route("/api/app/storage", get(api_storage))
         .route("/api/app/diagnostics", get(api_diagnostics))
+        .route("/api/app/theme.mp3", get(api_theme))
 }
 
 /// The app window only: these open dialogs or folders on this computer, or change who can connect.

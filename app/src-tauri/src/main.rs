@@ -7,6 +7,7 @@ mod app_api;
 mod connect;
 mod archive;
 mod content;
+mod extras;
 mod game;
 mod gamebanana;
 mod maps;
@@ -21,6 +22,7 @@ mod welcome;
 mod setup;
 mod setup_api;
 mod sharing;
+mod sounds;
 mod steam;
 mod sys;
 

@@ -6,6 +6,7 @@
 	            so the same regulars keep turning up; some bots join as one-off newcomers.
 	Come & go:  now and then a bot leaves and someone new takes the slot (gm_churn).
 	RTV:        "rtv" starts a map vote once enough players want one; "nominate <map>".
+	            With gm_rtv_cycle 1 (gm_extras) both offer only the map rotation's maps.
 	Welcome:    a welcome screen when you join (gm_welcome), replacing the CZ advert.
 
 	Cvars: gm_regulars 0/1, gm_churn 0/1/2, gm_rtv 0/1, gm_welcome 0/1/2
@@ -347,6 +348,9 @@ build_pool()
 	if (g_MapPool)
 		return
 	g_MapPool = ArrayCreate(32)
+	// the host's map rotation only (gm_extras' setting), when it has other maps
+	if (get_cvar_num("gm_rtv_cycle") && rotation_pool())
+		return
 	new Trie:hidden = TrieCreate(), Trie:seen = TrieCreate(), Trie:fav = TrieCreate()
 	read_list("hidden_maps.txt", hidden)
 	read_list("favorites.txt", fav)
@@ -380,6 +384,58 @@ build_pool()
 	TrieDestroy(hidden)
 	TrieDestroy(seen)
 	TrieDestroy(fav)
+}
+
+// The rotation gm_extras uses: the current mode's own list, else the game's map cycle
+bool:rotation_pool()
+{
+	new mode[32], cycle[64]
+	new f = fopen(fmt("%s/current.txt", g_DataDir), "rt")
+	if (f)
+	{
+		fgets(f, mode, charsmax(mode))
+		trim(mode)
+		fclose(f)
+	}
+	if (mode[0] && plain_name(mode))
+		pool_from(fmt("%s/rotation_%s.txt", g_DataDir, mode))
+	if (!ArraySize(g_MapPool))
+	{
+		get_cvar_string("mapcyclefile", cycle, charsmax(cycle))
+		pool_from(cycle[0] ? cycle : "mapcycle.txt")
+	}
+	return ArraySize(g_MapPool) > 0
+}
+
+pool_from(const path[])
+{
+	new f = fopen(path, "rt")
+	if (!f)
+		return
+	new line[64], map[32], cur[32]
+	get_mapname(cur, charsmax(cur))
+	while (fgets(f, line, charsmax(line)))
+	{
+		trim(line)
+		if (!line[0] || line[0] == ';' || (line[0] == '/' && line[1] == '/'))
+			continue
+		parse(line, map, charsmax(map))
+		new len = strlen(map)
+		if (len > 4 && equali(map[len - 4], ".bsp"))
+			map[len - 4] = 0
+		if (!plain_name(map) || equali(map, cur) || !is_map_valid(map))
+			continue
+		new bool:dup
+		for (new i = 0; i < ArraySize(g_MapPool) && !dup; i++)
+		{
+			new have[32]
+			ArrayGetString(g_MapPool, i, have, charsmax(have))
+			dup = bool:equali(have, map)
+		}
+		if (!dup)
+			ArrayPushString(g_MapPool, map)
+	}
+	fclose(f)
 }
 
 bool:plain_name(const name[])

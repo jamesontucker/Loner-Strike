@@ -16,11 +16,13 @@ import { PlayIdle, PlayLive } from "./views/Play";
 import { Players } from "./views/Players";
 import { QuickBar } from "./views/QuickBar";
 import { ServerPage, Servers } from "./views/Servers";
+import { ServerExtras } from "./views/ServerExtras";
+import { Sounds } from "./views/Sounds";
 import { MatchButtons, SettingsPage } from "./views/Settings";
 import { Welcome } from "./views/Welcome";
 import { anySetUp, Setup, type Scan } from "./views/Setup";
 
-type Section = "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "servers" | "admins" | "welcome" | "more" | "mods" | "settings";
+type Section = "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "servers" | "admins" | "extras" | "welcome" | "more" | "mods" | "sounds" | "settings";
 
 const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean }[] = [
   { id: "play", label: "Play", icon: "play" },
@@ -33,8 +35,10 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "friends", label: "Play with friends", icon: "friends", group: "Online" },
   { id: "admins", label: "Admins", icon: "admins" },
   { id: "welcome", label: "Welcome page", icon: "welcome" },
+  { id: "extras", label: "Rotation & chat", icon: "extras" },
   { id: "more", label: "Get more", icon: "more", group: "Library" },
   { id: "mods", label: "Mods", icon: "addons" },
+  { id: "sounds", label: "Sounds", icon: "sound" },
   { id: "settings", label: "Settings", icon: "settings" },
   { id: "servers", label: "Servers", icon: "server", group: "Hosting" },
 ];
@@ -288,6 +292,8 @@ function Shell() {
                 ))}
               {section === "admins" && <Admins data={online} installed={app?.game?.installed} />}
               {section === "welcome" && <Welcome target="local" />}
+              {section === "sounds" && <Sounds target="local" />}
+              {section === "extras" && <ServerExtras target="local" />}
               {section === "more" && <GetMore onInstalled={() => reloadMaps(true)} />}
               {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={() => setSetupOpen(true)} />}
               {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={() => setSetupOpen(true)} switchTo={(id) => switchGame(id.replace(/^local:/, ""))} />}
