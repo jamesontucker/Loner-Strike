@@ -58,7 +58,8 @@ pub fn unit(id: &str) -> String {
 
 // ---- the connection --------------------------------------------------------------------
 
-static SESSIONS: Mutex<Option<HashMap<String, Arc<Mutex<Session>>>>> = Mutex::new(None);
+// open sessions, with the fingerprint each one was verified against
+static SESSIONS: Mutex<Option<HashMap<String, (Arc<Mutex<Session>>, String)>>> = Mutex::new(None);
 
 fn connect(r: &RemoteInfo) -> Result<Session, String> {
     let addr = (r.host.as_str(), r.ssh_port)
@@ -120,15 +121,18 @@ fn in_known_hosts(s: &Session, r: &RemoteInfo) -> bool {
 
 /// A first look at a machine, before setting anything up: its fingerprint (for the
 /// player to confirm), whether this computer's SSH already knows it, and its CPU type.
+/// Uses a connection of its own that isn't kept, since the identity isn't confirmed yet.
 pub fn probe(r: &RemoteInfo) -> Result<(String, bool, String), String> {
-    drop_session(r);
-    let fp = host_key(r)?;
-    let known = {
-        let s = session(r)?;
-        let s = s.lock().unwrap();
-        in_known_hosts(&s, r)
-    };
-    let (_, arch) = exec(r, "uname -m")?;
+    let mut first = r.clone();
+    first.host_key = None;
+    let s = connect(&first)?;
+    let fp = fingerprint(&s).ok_or("The server didn't identify itself.")?;
+    let known = in_known_hosts(&s, r);
+    let mut arch = String::new();
+    let mut ch = s.channel_session().map_err(|e| e.to_string())?;
+    ch.exec("uname -m").map_err(|e| e.to_string())?;
+    let _ = ch.read_to_string(&mut arch);
+    let _ = ch.wait_close();
     Ok((fp, known, arch.trim().to_string()))
 }
 
@@ -152,22 +156,25 @@ fn check_identity(s: &Session, r: &RemoteInfo) -> Result<(), String> {
     Ok(())
 }
 
-/// The machine's identity as this session saw it (saved with the server on first connect).
-pub fn host_key(r: &RemoteInfo) -> Result<String, String> {
-    let s = session(r)?;
-    let s = s.lock().unwrap();
-    fingerprint(&s).ok_or_else(|| "The server didn't identify itself.".into())
-}
+
 
 /// The open session for a machine (opened on first use, reopened if it dropped).
+/// Only for a machine whose identity was confirmed (r.host_key): the probe before
+/// setup uses its own connection that's never kept.
 fn session(r: &RemoteInfo) -> Result<Arc<Mutex<Session>>, String> {
+    let expected = r.host_key.clone().ok_or("The server's identity hasn't been confirmed.")?;
     let mut all = SESSIONS.lock().unwrap();
     let all = all.get_or_insert_with(HashMap::new);
-    if let Some(s) = all.get(&r.label()) {
-        return Ok(s.clone());
+    if let Some((s, fp)) = all.get(&r.label()) {
+        if *fp == expected {
+            return Ok(s.clone());
+        }
     }
-    let s = Arc::new(Mutex::new(connect(r)?));
-    all.insert(r.label(), s.clone());
+    // connect() checks the identity against r.host_key
+    let s = connect(r)?;
+    let fp = fingerprint(&s).ok_or("The server didn't identify itself.")?;
+    let s = Arc::new(Mutex::new(s));
+    all.insert(r.label(), (s.clone(), fp));
     Ok(s)
 }
 

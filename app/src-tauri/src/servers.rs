@@ -589,13 +589,14 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
     }
     let mut info = remote_of(&req)?;
     let host = info.host.clone();
-    // the machine the player confirmed, and no other: its identity is saved and checked
-    // on every connection from now on
-    if crate::remote::host_key(&info)? != req.host_key {
-        return Err("The server's fingerprint isn't the one you confirmed. Check the server again.".into());
+    // the machine the player confirmed, and no other: connecting checks its identity
+    // against this fingerprint, now and every time after
+    if !req.host_key.starts_with("SHA256:") {
+        return Err("Check the server first.".into());
     }
     info.host_key = Some(req.host_key.clone());
-    let (_, arch) = crate::remote::exec(&info, "uname -m")?;
+    let (_, arch) = crate::remote::exec(&info, "uname -m")
+        .map_err(|e| if e.contains("identity") { "The server's fingerprint isn't the one you confirmed. Check the server again.".to_string() } else { e })?;
     if arch.trim() != "x86_64" {
         return Err(format!("That machine is {}. The Counter-Strike server only runs on x86 (AMD or Intel) machines.", arch.trim()));
     }
