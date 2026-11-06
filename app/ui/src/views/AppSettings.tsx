@@ -252,6 +252,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           {ON_THIS_COMPUTER ? (
             <div className="row">
               <button className="btn primary" onClick={openSetup}>Run setup</button>
+              <button className="btn" onClick={() => useNav.getState().setSetupOpen(true, true)}>Watch the intro</button>
               {app?.game && scan && (
                 <BusyButton className="btn danger" busy={busy("app:uninstall")} label="Remove Loner-Strike" busyLabel="Removing…" onClick={removeAll} />
               )}

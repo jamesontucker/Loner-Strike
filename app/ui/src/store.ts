@@ -32,6 +32,8 @@ type Nav = {
   server: string | null;
   moreOpen: boolean;
   setupOpen: boolean;
+  /** setup opened from Settings to see the first-run intro again (music and all) */
+  setupIntro: boolean;
   /** "Set up later" on the first run (per device) */
   setupLater: boolean;
   /** Settings to scroll to when it opens ("updates") */
@@ -39,7 +41,7 @@ type Nav = {
   go: (s: Section, focus?: string) => void;
   openServer: (id: string | null) => void;
   setMoreOpen: (v: boolean) => void;
-  setSetupOpen: (v: boolean) => void;
+  setSetupOpen: (v: boolean, intro?: boolean) => void;
   laterSetup: () => void;
   clearFocus: () => void;
 };
@@ -49,6 +51,7 @@ export const useNav = create<Nav>((set, get) => ({
   server: null,
   moreOpen: false,
   setupOpen: false,
+  setupIntro: false,
   setupLater: saved<string>("ls.setupLater", "0") === "1",
   focus: null,
   go: (section, focus) => {
@@ -68,10 +71,10 @@ export const useNav = create<Nav>((set, get) => ({
     window.dispatchEvent(new Event("ls-target"));
   },
   setMoreOpen: (moreOpen) => set({ moreOpen }),
-  setSetupOpen: (setupOpen) => set({ setupOpen }),
+  setSetupOpen: (setupOpen, intro = false) => set({ setupOpen, setupIntro: setupOpen && intro }),
   laterSetup: () => {
     keep("ls.setupLater", "1");
-    set({ setupOpen: false, setupLater: true });
+    set({ setupOpen: false, setupIntro: false, setupLater: true });
   },
   clearFocus: () => set({ focus: null }),
 }));

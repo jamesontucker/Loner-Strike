@@ -68,7 +68,7 @@ export default function App() {
 
 function Shell() {
   const { state, reconnecting, refresh } = useGameState();
-  const { section, server: openServer, moreOpen, setupOpen, setupLater, go, openServer: enterServer, setMoreOpen, setSetupOpen, laterSetup } = useNav();
+  const { section, server: openServer, moreOpen, setupOpen, setupIntro, setupLater, go, openServer: enterServer, setMoreOpen, setSetupOpen, laterSetup } = useNav();
   const appQ = useAppInfo();
   const mapsQ = useMaps();
   const scanQ = useScan();
@@ -231,7 +231,7 @@ function Shell() {
       reloadScan();
       refreshAll();
     };
-    return <Setup scan={scan!} fromSettings={setupOpen && anySetUp(scan)} onClose={laterSetup} onDone={done} onRescan={() => reloadScan()} />;
+    return <Setup scan={scan!} fromSettings={setupOpen && anySetUp(scan) && !setupIntro} onClose={laterSetup} onDone={done} onRescan={() => reloadScan()} />;
   }
   const isLive = (id: Section) => !!NAV.find((n) => n.id === id)?.live;
   const needsGame = section !== "servers" && isLive(section) && !online;
