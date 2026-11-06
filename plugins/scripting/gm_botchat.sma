@@ -50,12 +50,13 @@
 #include <amxmodx>
 #include <amxmisc>
 #include <nvault>
+#include <cstrike>
 
 #define PLUGIN  "Bot chat"
 #define VERSION "1.0"
 #define AUTHOR  "gamemodes"
 
-#define MAX_SECTIONS 96
+#define MAX_SECTIONS 160
 #define TASK_SAY     8100
 #define MAX_PENDING  16
 #define MAX_CHAIN    3
@@ -84,7 +85,8 @@ new g_RoundKills[33], bool:g_Streaked[33]
 new g_DeathRow[33]                  // deaths since this player's last kill
 new bool:g_Raged[33]
 new Float:g_NextHeard
-new g_KilledBy[33][33]               // this map: how often [killer][victim]
+new g_KilledBy[33][33]
+new g_WinRun[3], g_LoseRun[3]        // rounds won / lost in a row, per side               // this map: how often [killer][victim]
 new g_Vault = INVALID_HANDLE
 new Trie:g_Left                      // bots that left mid-map: name -> when                // bots don't answer every line someone types
 
@@ -197,7 +199,7 @@ load_lines()
 					cur = Invalid_Array
 					continue
 				}
-				cur = g_Lists[g_ListCount++] = ArrayCreate(128)
+				cur = g_Lists[g_ListCount++] = ArrayCreate(192)
 				TrieSetCell(g_Sections, name, cur)
 			}
 			continue
@@ -507,7 +509,7 @@ bool:pick_line(id, const section[], text[], len)
 	new n = ArraySize(list)
 	if (!n)
 		return false
-	new raw[192], letters[16]
+	new raw[192], letters[64]
 	for (new tries = 0; tries < 16; tries++)
 	{
 		ArrayGetString(list, random(n), raw, charsmax(raw))
@@ -587,7 +589,7 @@ public task_say(task)
 	if (tag[0] && chain < MAX_CHAIN)
 	{
 		new who = (other && is_user_bot(other) && other != id) ? other : any_bot(id)
-		want(who, fmt("r_%s", tag), id, 0.75, -1.0, chain + 1)
+		want(who, fmt("r_%s", tag), id, 0.75, -1.0, chain + 1, team)
 	}
 }
 
@@ -803,12 +805,46 @@ any_bot_on(team, not)
 
 // ---- what happens ---------------------------------------------------------------------
 
+any_dead_bot_on(team)
+{
+	new list[32], n
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_connected(i) && is_user_bot(i) && !is_user_alive(i) && get_user_team(i) == team)
+			list[n++] = i
+	return n ? list[random(n)] : 0
+}
+
+// One bot left on its side against three or more
+last_alive_check(team)
+{
+	new alive, last, enemies
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (!is_user_alive(i))
+			continue
+		new t = get_user_team(i)
+		if (t == team)
+		{
+			alive++
+			last = i
+		}
+		else if (t == 1 || t == 2)
+			enemies++
+	}
+	if (alive == 1 && enemies >= 3 && is_user_bot(last))
+		want(last, "last_alive", 0, 0.45, -1.0, 0, random_num(0, 1) == 1)
+}
+
 public ev_newround()
 {
 	arrayset(g_RoundKills, 0, sizeof g_RoundKills)
 	arrayset(g_Streaked, false, sizeof g_Streaked)
 	if (random_num(1, 100) <= 12)
-		want(any_bot(0), "idle", 0, 0.6, random_float(2.0, 9.0))
+	{
+		new h
+		time(h)
+		want(any_bot(0), (h >= 0 && h < 5 && random_num(0, 1)) ? "late_night" : "idle", 0, 0.6, random_float(2.0, 9.0))
+	}
 }
 
 public ev_death()
@@ -851,6 +887,17 @@ public ev_death()
 		want(killer, "streak", victim, 0.35)
 		want(any_bot_on(get_user_team(victim), victim), "enemy_streak", killer, 0.35)
 	}
+
+	if (g_RoundKills[killer] == 5)
+		want(killer, "ace", 0, 0.8, -1.0, 1)
+	// scoped rifles without the scope
+	if (is_user_bot(killer) && (equal(weapon, "awp") || equal(weapon, "scout")) && cs_get_user_zoom(killer) == CS_SET_NO_ZOOM)
+		want(killer, "noscope", victim, 0.5)
+	// someone dead and watching says something about a teammate's kill
+	new watcher = any_dead_bot_on(get_user_team(killer))
+	if (watcher && random_num(1, 100) <= 4)
+		want(watcher, "spectating", killer, 0.6, -1.0, 0, true)
+	last_alive_check(get_user_team(victim))
 
 	new bool:knife = bool:equal(weapon, "knife"), bool:nade = bool:equal(weapon, "grenade")
 	if (knife)
@@ -956,6 +1003,25 @@ public ev_ctwin()
 
 round_end(winner)
 {
+	new loser = 3 - winner
+	new bool:comeback = g_LoseRun[winner] >= 4
+	g_WinRun[winner]++
+	g_LoseRun[winner] = 0
+	g_LoseRun[loser]++
+	g_WinRun[loser] = 0
+	if (comeback)
+		want(any_bot_on(winner, 0), "comeback", 0, 0.6, -1.0, 0, random_num(0, 1) == 1)
+	else if (g_WinRun[winner] == 4 || g_WinRun[winner] == 7 || g_WinRun[winner] == 10)
+		want(any_bot_on(winner, 0), "winning_streak_team", 0, 0.6, -1.0, 0, true)
+	if (g_LoseRun[loser] == 4 || g_LoseRun[loser] == 7 || g_LoseRun[loser] == 10)
+		want(any_bot_on(loser, 0), "losing_streak_team", 0, 0.6, -1.0, 0, true)
+	// survived with almost nothing left
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_alive(i) && is_user_bot(i) && get_user_health(i) <= 15 && random_num(1, 100) <= 40)
+		{
+			want(i, "low_hp", 0, 0.6)
+			break
+		}
 	// the last one standing on the winning side, if it did a lot of the work
 	new alive, last
 	for (new i = 1; i <= MaxClients; i++)
@@ -982,7 +1048,12 @@ public ev_planted()
 public ev_defused()
 {
 	new id = get_loguser_index()
-	want(id, "defused", 0, 0.4)
+	// defused with terrorists still alive: a ninja defuse
+	new ts
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_alive(i) && get_user_team(i) == 1)
+			ts++
+	want(id, ts ? "defuse_ninja" : "defused", 0, ts ? 0.7 : 0.4)
 	want(any_bot_on(1, 0), "they_defused", id, 0.3)
 }
 

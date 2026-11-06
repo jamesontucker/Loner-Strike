@@ -740,6 +740,7 @@ public fw_prethink(id)
 		if (random_float(0.0, 1.0) >= chance || !hop_clear(id))
 			return
 		g_HopsLeft[id] = random_num(hopsLo, hopsHi)
+		say_line(id, "bunnyhop", 0, 0.04)
 	}
 	else if (!hop_clear(id))
 	{
