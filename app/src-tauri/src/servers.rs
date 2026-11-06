@@ -1010,9 +1010,9 @@ pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/servers", route_get(api_list).post(api_create))
         .route("/api/servers/select", post(api_select))
-        .route("/api/servers/{id}", post(api_change))
-        .route("/api/servers/{id}/console", route_get(api_console))
-        .route("/api/servers/{id}/{action}", post(api_action))
+        .route("/api/servers/:id", post(api_change))
+        .route("/api/servers/:id/console", route_get(api_console))
+        .route("/api/servers/:id/:action", post(api_action))
 }
 
 /// Only for the app window, not the phone link: a free-form console, and importing a
@@ -1020,7 +1020,7 @@ pub fn routes() -> Router<Shared> {
 pub fn local_routes() -> Router<Shared> {
     Router::new()
         .route("/api/servers/import", post(api_import))
-        .route("/api/servers/{id}/console/send", post(api_console_cmd))
+        .route("/api/servers/:id/console/send", post(api_console_cmd))
         .route("/api/servers/pick-folder", post(api_pick_folder))
 }
 

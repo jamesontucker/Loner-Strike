@@ -177,11 +177,30 @@ mod tests {
         if panel {
             req = req.header("x-panel", "1");
         }
+        if body.is_some() {
+            req = req.header("content-type", "application/json");
+        }
         let req = req.body(body.map(|b| Body::from(b.to_string())).unwrap_or_else(Body::empty)).unwrap();
         let res = server::router(st.clone(), Listener::Local).oneshot(req).await.unwrap();
         let status = res.status();
         let bytes = axum::body::to_bytes(res.into_body(), 1 << 24).await.unwrap();
         (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    }
+
+    /// Every per-server route reaches its handler (not the page fallback).
+    #[tokio::test]
+    async fn server_routes_match() {
+        let st = state();
+        let (_, v) = call(&st, "POST", "/api/servers/no-such-server/bogus", Some(json!({})), true).await;
+        assert_eq!(v["error"], "Unknown action.");
+        let (_, v) = call(&st, "GET", "/api/servers/no-such-server/console", None, false).await;
+        assert!(v["lines"].is_array());
+        let (_, v) = call(&st, "POST", "/api/servers/no-such-server", Some(json!({})), true).await;
+        assert!(v["error"].is_string());
+        let (_, v) = call(&st, "POST", "/api/servers/no-such-server/console/send", Some(json!({"command": "status"})), true).await;
+        assert!(v["error"].is_string());
+        let (_, v) = call(&st, "GET", "/api/welcome", None, false).await;
+        assert!(v.is_object());
     }
 
     #[tokio::test]
