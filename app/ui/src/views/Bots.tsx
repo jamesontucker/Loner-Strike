@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Online } from "../types";
-import { Banner, useCommand, useConfirm } from "../ui";
+import { Banner, Info, useCommand, useConfirm } from "../ui";
 import { SettingsPage } from "./Settings";
 
 export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
@@ -22,7 +22,7 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
       )}
       {st.navleft > 0 && <Banner>Bots are learning {st.map}… {st.navleft} step{st.navleft === 1 ? "" : "s"} left.</Banner>}
       <div className="slider-row">
-        <label htmlFor="botCount">Bots</label>
+        <label htmlFor="botCount">Bots<Info text="How many bots are in the game. Kill all only kills them, and they're back next round; Kick all takes every bot out until you add more." /></label>
         <input
           id="botCount"
           type="range"

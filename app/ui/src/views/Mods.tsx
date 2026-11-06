@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getJson, ON_THIS_COMPUTER, postJson, useStable } from "../api";
 import { Icon } from "../icons";
 import type { AppInfo } from "../types";
-import { SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
+import { Info, SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
 import type { Job, Scan } from "./Setup";
 
 const BOT_NOTE = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" };
@@ -134,6 +134,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
         <div className="toolbar mods-toolbar">
           <div className="chips" role="group" aria-label="Show">
             {FILTERS.map(([id, label]) => <button key={id} className="chip" aria-pressed={filter === id} onClick={() => setFilter(id)}>{label}</button>)}
+            <Info text="A game mode changes how the whole game plays, and you switch between modes. An add-on, like the grappling hook, works on top of whichever mode is on." />
           </div>
           <label className="sort">
             <span>Sort</span>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import type { AppInfo, PhoneInfo } from "../types";
 import { ON_THIS_COMPUTER } from "../api";
-import { applyScale, savedScale, SCALES, SectionHead, Switch, useConfirm, useToast } from "../ui";
+import { applyScale, savedScale, Info, SCALES, SectionHead, Switch, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
 
 type Prefs = { auto_update: boolean; keep_servers: boolean; game_folders: string[]; notify_joins: boolean };
@@ -156,6 +156,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
           {ON_THIS_COMPUTER && (
             <p className="muted small-note">
               Game not found? <button className="link inline" onClick={addFolder}>Choose its Half-Life folder</button> (the one with cstrike or czero inside).
+              <Info text="For a game Loner-Strike didn't find by itself, like one on another drive. Folders you add are listed above; Forget only takes one off the list and deletes nothing." />
             </p>
           )}
         </div>

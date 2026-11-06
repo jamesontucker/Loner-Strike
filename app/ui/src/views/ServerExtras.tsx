@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getJson, ON_THIS_COMPUTER, postJson, useQueuedSave } from "../api";
 import type { MapInfo } from "../types";
-import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Color = "default" | "green" | "red" | "blue" | "grey";
 type Ad = { text: string; color: Color };
@@ -233,7 +233,7 @@ function Rotation({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
       />
       <div className="panel stack-tight">
         <label className="field rot-scope">
-          <span>Which rotation</span>
+          <span>Which rotation<Info text="The main rotation is used by every mode. A mode can also have its own list, which takes over while that mode is on, so surf maps only come up in Surf." /></span>
           <select value={scope} onChange={(e) => pickScope(e.target.value)}>
             <option value="">Main rotation (every mode, {d.rotation.file})</option>
             {byName(d.modes).map((m) => (
@@ -706,7 +706,7 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
           HTTP instead, in seconds. The folder on the web server has to look like the game folder: <b>maps/</b>, <b>sound/</b>, <b>models/</b>, <b>sprites/</b> and so on.
         </p>
         <label className="field">
-          <span>Web address of that folder</span>
+          <span>Web address of that folder<Info text="Sets the game's sv_downloadurl. Any host that serves plain files works, like cheap web hosting or a public storage bucket." /></span>
           <input className="search" type="url" spellCheck={false} placeholder="https://dl.example.com/czero" value={value} onChange={(e) => setUrl(e.target.value)} />
           <small className={ok ? undefined : "err-text"}>{ok ? "Leave it empty to turn fast downloads off." : "Start with http:// or https://, with no spaces or quotes."}</small>
         </label>

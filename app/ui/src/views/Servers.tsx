@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getJson, ON_THIS_COMPUTER, postJson, useOnce, useStable } from "../api";
 import type { AppInfo, MapInfo, Online, ServerInfo, ServerList } from "../types";
-import { SectionHead, SteamProgress, useConfirm, useToast } from "../ui";
+import { Info, SectionHead, SteamProgress, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
 import { Bots } from "./Bots";
 import { Friends } from "./Friends";
@@ -349,7 +349,7 @@ function ServerDetails({ server, onChanged, act }: { server: ServerInfo; onChang
           <input className="search" maxLength={48} value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <div className="field">
-          <span>Who can join</span>
+          <span>Who can join<Info text="Anyone with the address suits friends: they join with the address you send them, but strangers can't find it. Listed on Steam puts it in everyone's Internet server list." /></span>
           <div className="seg" role="group" aria-label="Who can join">
             {VISIBILITY.map((v) => (
               <button key={v.id} aria-pressed={vis === v.id} onClick={() => setVis(v.id)}>{v.name}</button>
@@ -359,15 +359,15 @@ function ServerDetails({ server, onChanged, act }: { server: ServerInfo; onChang
         </div>
         <div className="row">
           <label className="field">
-            <span>Starting map</span>
+            <span>Starting map<Info text="The map the server loads when it starts. After that, the map rotation decides what comes next." /></span>
             <input className="search" value={map} onChange={(e) => setMap(e.target.value)} spellCheck={false} />
           </label>
           <label className="field">
-            <span>Player slots</span>
+            <span>Player slots<Info text="The most players the server holds at once, bots included. Each bot takes a slot, so leave room for people." /></span>
             <input className="search narrow" type="number" min={2} max={32} value={slots} onChange={(e) => setSlots(+e.target.value)} />
           </label>
           <label className="field">
-            <span>Port</span>
+            <span>Port<Info text="The network port the server listens on; each server needs its own. Change it only if something else uses it, and open the new port on your router if friends connect to you directly." /></span>
             <input className="search narrow" type="number" min={1024} max={65000} value={port} onChange={(e) => setPort(+e.target.value)} />
           </label>
         </div>
@@ -500,7 +500,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
             </div>
           </div>
           <div className="field">
-            <span>Who can join</span>
+            <span>Who can join<Info text="Anyone with the address suits friends: they join with the address you send them, but strangers can't find it. Listed on Steam puts it in everyone's Internet server list." /></span>
             <div className="seg" role="group" aria-label="Who can join">
               {VISIBILITY.map((v) => (
                 <button key={v.id} aria-pressed={vis === v.id} onClick={() => setVis(v.id)}>{v.name}</button>

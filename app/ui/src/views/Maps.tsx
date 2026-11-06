@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { addFromFile, ON_THIS_COMPUTER, postJson, withTarget } from "../api";
 import type { MapInfo, Online } from "../types";
-import { SectionHead, useCommand, useConfirm, useToast } from "../ui";
+import { Info, SectionHead, useCommand, useConfirm, useToast } from "../ui";
 
 const CATS: [string, string][] = [
   ["all", "All"], ["fav", "Favourites"], ["recent", "Recently played"], ["defuse", "Bomb defusal"],
@@ -9,6 +9,11 @@ const CATS: [string, string][] = [
   ["other", "Other"], ["nonav", "Needs bot nav"],
   ["stock", "Came with the game"], ["download", "Downloaded"], ["added", "Added by hand"], ["hidden", "Hidden"],
 ];
+/** A "?" after the filters whose names don't say enough. */
+const CAT_INFO: Record<string, string> = {
+  nonav: "Maps bots haven't learned yet. The first time you play one, the bots spend a few minutes learning it before they can move around.",
+  hidden: "Maps you hid. They stay installed but are left out of the other lists, the in-game map menu and map votes.",
+};
 const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favourites first"], ["type", "By type"], ["source", "Downloaded first"]];
 const SOURCE_ORDER = ["download", "added", "stock"];
 const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by hand" };
@@ -155,7 +160,10 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
           </label>
           <div className="chips">
             {CATS.map(([id, label]) => (
-              <button key={id} className="chip" aria-pressed={cat === id} onClick={() => setCat(id)}>{label}</button>
+              <Fragment key={id}>
+                <button className="chip" aria-pressed={cat === id} onClick={() => setCat(id)}>{label}</button>
+                {CAT_INFO[id] && <Info text={CAT_INFO[id]} />}
+              </Fragment>
             ))}
           </div>
         </div>

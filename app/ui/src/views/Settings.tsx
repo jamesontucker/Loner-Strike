@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { Online, Setting } from "../types";
-import { SectionHead, Segmented, useCommand, useConfirm } from "../ui";
+import { Info, SectionHead, Segmented, useCommand, useConfirm } from "../ui";
 
 // Short explanations under settings, as in the old panel
 const NOTES: Record<string, string> = {
@@ -33,6 +33,25 @@ const NOTES: Record<string, string> = {
   mp_limitteams: "How many more players one team can have before joining it is blocked",
   mp_respawn_immunitytime: "Players can't be hurt for a moment after they spawn; good with deathmatch",
 };
+// A "?" for settings whose name and choices don't explain them and that have no note
+const INFO: Record<string, string> = {
+  bot_quota_mode: "Fixed keeps exactly the number of bots you set. Fill server counts people too, so a bot leaves each time someone joins. Per human adds that many bots for each person playing.",
+  bot_chatter: "The bots' voice lines, like calling out enemies. Minimal keeps only the important ones, Radio uses just the standard radio messages.",
+  bot_stop: "Every bot stops dead where it is until you turn this off. Handy for looking around a map or lining up a shot.",
+  bot_defer_to_human: "When a person is on their team, bots leave the objective to them: planting, defusing and rescuing hostages.",
+  bot_walk: "Bots never run, so they're slower and quieter. Good for practising.",
+  bot_allow_rogues: "Now and then a bot ignores radio commands and the objective and goes off on its own, like a real pub player. None keeps every bot on task.",
+  mp_freezetime: "Seconds at the start of each round when nobody can move, for buying.",
+  mp_round_infinite: "Rounds never end on their own, not when a team is wiped out and not when the time runs out. Useful for practice.",
+  mp_weapons_allow_map_placed: "Guns some maps leave lying on the ground, like on aim_ and fy_ maps. Remove takes them away.",
+  wc3_races: "Chameleon is a ninth race whose skills are picked at random from the other races.",
+  wc3_ult_cooldown: "How long before a player can use their ultimate, their race's strongest power, again.",
+  zp_starting_ammo_packs: "Ammo packs are Zombie Plague's money: players spend them on extra items and weapons.",
+  zp_nem_enabled: "Rounds where one zombie, the Nemesis, has huge health and takes on all the humans.",
+  zp_surv_enabled: "Rounds where one human, the Survivor, gets a powerful gun and lots of health against all the zombies.",
+  bb_build_time: "How long the builders have to put up barricades before the zombies are let out.",
+  sh_maxbinds: "How many heroes with a power you trigger with a key each player can pick. The rest of their heroes work on their own.",
+};
 const STYLE_NOTES: Record<string, string> = {
   "0": "CZ's own bots, unchanged",
   "4": "Slow to notice you, wobbly aim, spray until empty",
@@ -60,6 +79,7 @@ export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat
         <div className="setting" key={s.cvar}>
           <div className="name">
             {s.name}
+            {INFO[s.cvar] && !NOTES[s.cvar] && <Info text={INFO[s.cvar]} />}
             {(s.cvar === "gm_botstyle" ? STYLE_NOTES[s.value] : NOTES[s.cvar]) && (
               <span className="note">{s.cvar === "gm_botstyle" ? STYLE_NOTES[s.value] : NOTES[s.cvar]}</span>
             )}

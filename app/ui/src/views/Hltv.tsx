@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getJson, ON_THIS_COMPUTER, postJson, useOnce } from "../api";
 import type { ServerInfo } from "../types";
-import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Settings = { enabled: boolean; port: number; delay: number; max_spectators: number; name: string; password: string; record: boolean };
 type Demo = { name: string; size: number; modified: number };
@@ -176,11 +176,11 @@ export function Hltv({ server }: { server: ServerInfo }) {
           </div>
           <div className="row hltv-numbers">
             <label className="field">
-              <span>Spectators</span>
+              <span>Spectators<Info text="The most people who can watch at once. Watchers don't take player slots. 0 lets nobody watch, but it can still record demos." /></span>
               <input className="search narrow" type="number" min={0} max={255} value={form.max_spectators} onChange={(e) => set({ max_spectators: Math.max(0, Math.round(+e.target.value)) })} />
             </label>
             <label className="field">
-              <span>Port</span>
+              <span>Port<Info text="HLTV listens on its own port, separate from the server's. Change it only if something else already uses it." /></span>
               <input className="search narrow" type="number" min={1024} max={65000} value={form.port} onChange={(e) => set({ port: Math.round(+e.target.value) })} />
             </label>
           </div>

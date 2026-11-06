@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { getJson, postJson } from "../api";
 import type { Online } from "../types";
-import { SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
+import { Info, SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 
 type Share = {
   installed: boolean;
@@ -36,6 +36,13 @@ const METHODS: { id: Method; name: string; blurb: string; tag?: string }[] = [
 ];
 
 const GAME = "Counter-Strike";
+
+/** What each virtual LAN is, for its "?" */
+const VLAN_INFO: Record<"zerotier" | "radmin" | "hamachi", string> = {
+  zerotier: "ZeroTier links your computers into one private network over the internet, so your game shows up in friends' LAN tab as if you were in the same room. Everyone installs it and joins your network.",
+  radmin: "Radmin VPN is a free virtual LAN for Windows, popular for old games. Everyone installs it and joins your network, then your game shows up in their LAN tab.",
+  hamachi: "Hamachi is the virtual LAN people used for games in the 2000s. Everyone joins your network by its ID and password; free networks hold 5 people.",
+};
 
 function inviteText(name: string, pw: string, addr: string, intro: string[], lanTab: boolean) {
   return [
@@ -156,7 +163,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     return (
       <ol className="steps">
         <li className={ip ? "done" : "now"}>
-          <strong>Install {app}</strong>
+          <strong>Install {app}<Info text={VLAN_INFO[method as "zerotier" | "radmin" | "hamachi"]} /></strong>
           <p>{ip ? "Running." : <><a href={url} target="_blank" rel="noreferrer">Download {app}</a> (free) on this computer and every friend's. {extra}</>}</p>
         </li>
         <li className={ip ? "done" : "now"}>
@@ -188,7 +195,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     steps = (
       <ol className="steps">
         <li className={direct?.on ? "done" : "now"}>
-          <strong>Open the port on your router</strong>
+          <strong>Open the port on your router<Info text="Friends connect straight to your computer, so ping is as low as it gets. Needs UPnP switched on in your router, and doesn't work if your internet provider shares one address between customers." /></strong>
           <p>Loner-Strike asks your router to send game traffic to this computer (UPnP), and closes it again when you stop or quit.</p>
           {directElsewhere && <p className="muted">Direct is open for port {direct?.port} right now. Starting it here moves it to this {server ? "server" : "game"}.</p>}
           {directHere ? (
@@ -214,7 +221,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     steps = (
       <ol className="steps">
         <li className={sh.connected ? "done" : "now"}>
-          <strong>Make a free playit.gg account</strong>
+          <strong>Make a free playit.gg account<Info text="playit.gg passes game traffic through its own servers, so you don't touch your router and friends install nothing. Ping is a little higher than Direct, depending on how far the relay is." /></strong>
           <p>{sh.connected ? "Done." : <><a href="https://playit.gg/login/create" target="_blank" rel="noreferrer">Sign up at playit.gg</a>, then confirm the email they send you. The free plan is enough.</>}</p>
         </li>
         <li className={sh.connected ? "done" : "now"}>
@@ -248,7 +255,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     intro = ["Have Tailscale running and signed in to the network I shared with you first (tailscale.com/download)."];
     steps = (
       <ol className="steps">
-        <li className={ts.installed ? "done" : "now"}><strong>Install Tailscale on this computer</strong><p>{ts.installed ? "Installed." : <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Download Tailscale (free) and sign in.</a>}</p></li>
+        <li className={ts.installed ? "done" : "now"}><strong>Install Tailscale on this computer<Info text="Tailscale is a private network for your devices and the friends you invite. Only people on it can reach your game; each friend installs Tailscale too." /></strong><p>{ts.installed ? "Installed." : <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Download Tailscale (free) and sign in.</a>}</p></li>
         <li className={running ? "done" : ts.installed ? "now" : ""}><strong>Turn it on</strong><p>{running ? `Connected as ${ts.name || ts.ip}.` : ts.installed ? "Open the Tailscale app from the menu bar and connect." : "After installing."}</p></li>
         <li className={running ? "now" : ""}><strong>Let your friend in</strong><p>Your friend installs Tailscale too. Then share this computer with them, or invite them to your network, from the <a href="https://login.tailscale.com/admin/machines" target="_blank" rel="noreferrer">Tailscale admin console</a>.</p></li>
       </ol>

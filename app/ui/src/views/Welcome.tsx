@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getJson, postJson } from "../api";
-import { SectionHead, Skeleton, useToast } from "../ui";
+import { Info, SectionHead, Skeleton, useToast } from "../ui";
 
 type Data = { style: "builtin" | "custom" | "url"; note: string; html: string | null; url: string | null; max: number; error?: string };
 
@@ -90,7 +90,7 @@ export function Welcome({ target }: { target: string }) {
         <div className="welcome-edit">
           <div className="panel">
             <div className="row between">
-              <h3>Page</h3>
+              <h3>Page<Info text="The HTML shown in the game's welcome window. The chips below add live details like {map}, which the game fills in for each player." /></h3>
               {!html && <button className="btn small" onClick={() => setHtml(STARTER)}>Start from an example</button>}
             </div>
             <textarea className="invite code" spellCheck={false} value={html} onChange={(e) => setHtml(e.target.value)} placeholder="<h1>{server}</h1>" />

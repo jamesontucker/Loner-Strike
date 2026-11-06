@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getJson, postJson } from "../api";
 import { Icon } from "../icons";
-import { SteamProgress, useToast } from "../ui";
+import { Info, SteamProgress, useToast } from "../ui";
 import logo from "../assets/logo.svg";
 
 // ---- what the setup API returns -------------------------------------------------
@@ -130,7 +130,7 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
             <h2>Which game?</h2>
             {scan.installs.length > 1 && (
               <label className="field">
-                <span>Steam install</span>
+                <span>Steam install<Info text="Loner-Strike found more than one Steam on this computer; on a Mac each CrossOver bottle with Steam counts. Pick the one your Counter-Strike is in." /></span>
                 <select value={installIdx} onChange={(e) => { const n = +e.target.value; setInstallIdx(n); setGames((["cstrike", "czero"] as const).filter((id) => scan.installs[n].games.some((g) => g.id === id))); }}>
                   {scan.installs.map((i, n) => <option key={i.hl} value={n}>{i.kind === "crossover" ? `CrossOver bottle "${i.bottle}"` : "Steam"} – {i.hl}</option>)}
                 </select>

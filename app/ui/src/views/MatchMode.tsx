@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { cmd, getJson, postJson, useQueuedSave } from "../api";
-import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Settings = {
   max_rounds: number;
@@ -243,7 +243,7 @@ function Roster({ title, players, warmup }: { title: string; players: Player[]; 
           {players.map((p, i) => (
             <li key={`${p.name}-${i}`}>
               <span className="match-name">{p.name}</span>
-              {p.captain ? <span className="match-pill">Captain</span> : null}
+              {p.captain ? <><span className="match-pill">Captain</span><Info text="Usually the player on this side who typed /ready first. The captain calls the team's tactical pauses." /></> : null}
               {p.bot ? <span className="match-pill dim">Bot</span> : null}
               {warmup && !p.bot && <span className={`match-pill ${p.ready ? "ok" : "dim"}`}>{p.ready ? "Ready" : "Not ready"}</span>}
             </li>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MatchMode } from "./MatchMode";
 import { getJson, postJson, useQueuedSave } from "../api";
-import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type FilterMode = "off" | "replace" | "block";
 type Settings = { filter: FilterMode; words: string[]; chatlog: boolean; reports: boolean; stats_bots: boolean };
@@ -265,7 +265,7 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
           {!s.csx && <p className="panel cm-note">Stats need the CSX module, which AMX Mod X includes. Run Setup again from Settings if it's missing.</p>}
           <input className="search full" type="search" placeholder="Search names or SteamIDs" value={q} onChange={(e) => (setQ(e.target.value), setShown(PAGE))} aria-label="Search players" />
           <div className="row cm-sort">
-            <span className="muted">Sort by</span>
+            <span className="muted">Sort by<Info text="Rank is the order /rank and /top15 use: kills minus deaths and team kills. HS is the share of kills that were headshots, Acc. the share of shots that hit." /></span>
             <div className="seg" role="group" aria-label="Sort by">
               {SORTS.map(([id, l]) => (
                 <button key={id} type="button" aria-pressed={sort === id} onClick={() => setSort(id)}>{l}</button>
@@ -615,7 +615,7 @@ function ModTab({ d, setD }: { d: Data; setD: SetData }) {
         </ul>
         <div className="panel stack-tight">
           <label className="field">
-            <span>Mute by SteamID</span>
+            <span>Mute by SteamID<Info text="Mutes them for everyone on the server. Players can still mute someone just for themselves from the scoreboard." /></span>
             <input className="search" placeholder="SteamID, like STEAM_0:1:12345" value={id} onChange={(e) => setId(e.target.value)} spellCheck={false} />
             <small>Or select someone on the Players page, in the chat log or in the stats.</small>
           </label>
@@ -634,7 +634,7 @@ function ModTab({ d, setD }: { d: Data; setD: SetData }) {
         <SectionHead title="Swear filter" note="Words that get starred out, or stop the message. A word also catches longer words that start with it, so fuck catches fucking. Commands like /rtv are never touched." />
         <div className="settings">
           <div className="setting">
-            <span className="name">When someone swears<span className="note">{words.length ? `${words.length} ${words.length === 1 ? "word" : "words"} on the list.` : "Add words below first."}</span></span>
+            <span className="name">When someone swears<Info text="Star it out still sends the message, with the word hidden behind stars. Don't send it drops the whole message and tells the sender why." /><span className="note">{words.length ? `${words.length} ${words.length === 1 ? "word" : "words"} on the list.` : "Add words below first."}</span></span>
             <div className="seg" role="group" aria-label="When someone swears">
               {([["off", "Nothing"], ["replace", "Star it out"], ["block", "Don't send it"]] as [FilterMode, string][]).map(([m, l]) => (
                 <button key={m} type="button" aria-pressed={d.settings.filter === m} onClick={() => save({ filter: m })}>{l}</button>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getJson, postJson, useQueuedSave } from "../api";
 import type { Online } from "../types";
-import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Role = "owner" | "admin" | "moderator" | "vip";
 type Person = { id: string; name: string; role: Role; expires: string | null; note: string; expired: boolean };
@@ -425,7 +425,7 @@ function Editor({ draft, setDraft, today, onSave }: { draft: Draft; setDraft: (d
       <h3>{draft.was ? `Edit ${draft.name || draft.was}` : "Add someone"}</h3>
       <div className="editor-grid">
         <label className="field">
-          <span>SteamID</span>
+          <span>SteamID<Info text="A Steam account's permanent ID. Names can change any time, so roles and bans go by this instead." /></span>
           <input className="search mono" placeholder="STEAM_0:1:12345" value={draft.id} onChange={(e) => set({ id: e.target.value })} />
           <small>
             They can find it by typing <b>status</b> in the game console, or look it up on steamid.io.
@@ -462,7 +462,7 @@ function Editor({ draft, setDraft, today, onSave }: { draft: Draft; setDraft: (d
         <small>{draft.expires ? `Until the end of ${niceDate(draft.expires, today)}.` : "No end date."}</small>
       </div>
       <label className="field">
-        <span>Note</span>
+        <span>Note<Info text="Only for you, to remember why they have the role. Players never see it." /></span>
         <input className="search" placeholder="e.g. donated $5 on Ko-fi" value={draft.note} maxLength={120} onChange={(e) => set({ note: e.target.value })} />
       </label>
       <div className="row">
