@@ -1336,15 +1336,16 @@ pub fn start(id: &str) -> Result<(), String> {
     // one start at a time, so a double click (or the crash watcher racing a restart)
     // can't launch two copies
     static STARTING: Mutex<()> = Mutex::new(());
-    let _g = STARTING.lock().unwrap_or_else(|e| e.into_inner());
     let e = get(id).ok_or("That server isn't there any more.")?;
     if !e.ready {
         return Err("This server isn't finished setting up.".into());
     }
+    // (systemd starts one copy at most, and a slow machine mustn't hold up local starts)
     if let Some(r) = &e.remote {
         clear_pending_restart(&e.id);
         return crate::remote::systemctl(r, &e.id, "start");
     }
+    let _g = STARTING.lock().unwrap_or_else(|e| e.into_inner());
     if with_runs(|r| r.procs.contains_key(id)) || left_running(&e) {
         return Ok(());
     }

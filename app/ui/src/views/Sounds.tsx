@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, useActions, useActivity } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, useActions, useActivity, isAbort } from "../api";
 import { useGameState, useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { Banner, BusyButton, LoadError, SectionHead, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
@@ -64,10 +64,16 @@ export function Sounds({ target }: { target: string }) {
   const seen = useRef(new Set<string>());
 
   const load = useCallback(async () => {
+    let cancelled = false;
     const [s, p] = await Promise.all([
-      getJson<Data>("/api/sounds").catch(() => ({ error: "Couldn't reach the app." }) as Data),
+      getJson<Data>("/api/sounds").catch((e) => {
+        cancelled ||= isAbort(e);
+        return { error: "Couldn't reach the app." } as Data;
+      }),
       getJson<Packs>("/api/sounds/packs").catch(() => null),
     ]);
+    // another server was opened meanwhile: this answer isn't for this page any more
+    if (cancelled) return;
     setD(s);
     setPacksFailed(!p || !!p.error);
     if (p && !p.error) {

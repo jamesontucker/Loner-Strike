@@ -102,7 +102,9 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
   }, [toast, onInstalled]);
 
   const details = (id: number, name: string) => run(key(`details:${id}`), async () => {
-    const d = await getJson<GbDetails>(`/api/gb/mod/${id}?section=${section}`).catch(() => null);
+    // (opening another server meanwhile cancels it: nothing to say then)
+    const d = await getJson<GbDetails>(`/api/gb/mod/${id}?section=${section}`).catch((e) => (isAbort(e) ? undefined : null));
+    if (d === undefined) return;
     if (d && !(d as unknown as { error?: string }).error) setOpen(d);
     else toast("Couldn't load that page.", true);
   }, `Opening ${name}…`);

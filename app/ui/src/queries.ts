@@ -46,16 +46,20 @@ export function useGameState() {
   // re-render once the grace period runs out, even if no new answer comes
   const [, tick] = useState(0);
   const data = q.data;
+  // a failed check keeps the old data in TanStack Query: the newer of the two decides
+  const failing = q.isError && q.errorUpdatedAt >= q.dataUpdatedAt;
   let state: GameState | null = null;
   let reconnecting = false;
-  if (data?.online) {
-    last.current = { target, data, at: Date.now() };
+  if (data?.online && !failing) {
+    last.current = { target, data, at: q.dataUpdatedAt };
     state = data;
   } else if (data || q.isError) {
     const l = last.current;
     if (l && l.target === target && Date.now() - l.at < GRACE_MS) {
       state = l.data;
       reconnecting = true;
+    } else if (failing) {
+      state = { online: false, reason: LOST };
     } else {
       state = data ?? { online: false, reason: LOST };
     }

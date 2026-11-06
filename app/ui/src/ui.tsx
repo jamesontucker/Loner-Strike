@@ -31,14 +31,18 @@ export function Sheet({
   const box = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
+  // where focus was before the sheet: read while rendering, because React focuses an
+  // autoFocus field inside the sheet before any effect runs
+  const [back] = useState(() => document.activeElement as HTMLElement | null);
+  // a backdrop click closes only if the press started there (not a drag out of a field)
+  const downOnBackdrop = useRef(false);
   useEffect(() => {
-    const back = document.activeElement as HTMLElement | null;
     const root = document.getElementById("root");
     openSheets++;
     root?.setAttribute("inert", "");
     // focus the first field (or button) unless something inside already asked for it
     const el = box.current;
-    if (el && !el.contains(document.activeElement)) (el.querySelector<HTMLElement>("[autofocus]") ?? el.querySelector<HTMLElement>(FOCUSABLE) ?? el).focus();
+    if (el && !el.contains(document.activeElement)) (el.querySelector<HTMLElement>(FOCUSABLE) ?? el).focus();
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape" && close.current) {
         e.stopPropagation();
@@ -66,7 +70,11 @@ export function Sheet({
     };
   }, []);
   return createPortal(
-    <div className={`sheet-backdrop${bottom ? " bottom" : ""}`} onClick={() => close.current?.()}>
+    <div
+      className={`sheet-backdrop${bottom ? " bottom" : ""}`}
+      onPointerDown={(e) => (downOnBackdrop.current = e.target === e.currentTarget)}
+      onClick={(e) => e.target === e.currentTarget && downOnBackdrop.current && close.current?.()}
+    >
       <div ref={box} className={className} role={role} aria-modal="true" aria-label={label} aria-describedby={describedBy} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         {children}
       </div>

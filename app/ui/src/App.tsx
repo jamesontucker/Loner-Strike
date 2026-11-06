@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { clock, ON_THIS_COMPUTER, postJson, withTarget, useActions, useActivity } from "./api";
 import { gameTitle } from "./games";
 import { Icon } from "./icons";
@@ -75,6 +75,9 @@ function Shell() {
   const servers = serversQ.data ?? null;
   const toast = useToast();
   const ask = useConfirm();
+  const answered = useRef(false);
+  // setup copies files on the computer; from a phone it can only be pointed at
+  const openSetup = () => (ON_THIS_COMPUTER ? setSetupOpen(true) : toast("Set it up on the computer running Loner-Strike."));
   const { run: once, busy } = useActions();
   /** Goes to a section, asking first when a page has edits that aren't saved. */
   const nav = async (s: Section, focus?: string) => {
@@ -120,7 +123,7 @@ function Shell() {
         const id = what.slice(8) as Section;
         if (NAV.some((n) => n.id === id)) nav(id);
       } else if (what === "updates") {
-        go("settings", "updates");
+        await nav("settings", "updates");
         // same key as Settings' Check now button, so it shows there too
         await once("app:update:check", async () => {
           const r = await postJson<{ available?: boolean; version?: string; error?: string }>("/api/app/update/check").catch((): { available?: boolean; version?: string; error?: string } => ({ error: "Couldn't check for updates." }));
@@ -163,8 +166,10 @@ function Shell() {
   const players = openServer ? 0 : online?.players.length ?? 0;
   const tabbar = tabbarFor(!!servers?.servers.length);
 
-  // until the app has answered once: one splash, not a flash of "No game found"
-  if (!scanQ.data || (!appQ.data && !appQ.isError)) {
+  // until the app has answered once: one splash, not a flash of "No game found" (later,
+  // opening a server whose info isn't cached yet keeps the app on screen)
+  if (appQ.data || appQ.isError) answered.current = true;
+  if (!scanQ.data || !answered.current) {
     if (scanQ.isError) {
       return (
         <div className="splash">
@@ -180,7 +185,7 @@ function Shell() {
   }
 
   // First run (nothing set up yet), or opened from Settings
-  if (setupOpen || (!anySetUp(scan) && !setupLater)) {
+  if ((setupOpen && ON_THIS_COMPUTER) || (!anySetUp(scan) && !setupLater)) {
     // setup copies files on the computer: a phone can only wait for it
     if (!ON_THIS_COMPUTER) {
       return (
@@ -188,7 +193,10 @@ function Shell() {
           <div className="waiting">
             <h2>Finish setup on your computer</h2>
             <p className="muted">Loner-Strike isn't set up yet. Open it on the computer the game is on, set it up there, and this page fills in.</p>
-            <button className="btn" onClick={() => reloadScan()}>Check again</button>
+            <div className="row">
+              <button className="btn primary" onClick={() => reloadScan()}>Check again</button>
+              <button className="btn" onClick={laterSetup}>Use it anyway</button>
+            </div>
           </div>
         </div>
       );
@@ -261,14 +269,14 @@ function Shell() {
           {state === null ? (
             <Skeleton rows={4} />
           ) : needsGame ? (
-            <Waiting label={NAV.find((n) => n.id === section)!.label} game={gameName} gameOpen={gameOpen} reason={state.online ? "" : state.reason} onPlay={() => go("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={() => setSetupOpen(true)} />
+            <Waiting label={NAV.find((n) => n.id === section)!.label} game={gameName} gameOpen={gameOpen} reason={state.online ? "" : state.reason} onPlay={() => go("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={openSetup} />
           ) : (
             <>
               {section === "play" &&
                 (online ? (
                   <PlayLive data={online} maps={maps} refresh={refresh} openMaps={() => go("maps")} />
                 ) : (
-                  <PlayIdle app={app} reason={state.online ? "" : state.reason} gameOpen={gameOpen} maps={maps} openSetup={() => setSetupOpen(true)} />
+                  <PlayIdle app={app} reason={state.online ? "" : state.reason} gameOpen={gameOpen} maps={maps} openSetup={openSetup} />
                 ))}
               {section === "maps" && <Maps data={online} maps={maps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} />}
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
@@ -307,8 +315,8 @@ function Shell() {
               {section === "extras" && <ServerExtras target="local" />}
               {section === "community" && <Community target="local" />}
               {section === "more" && <GetMore onInstalled={refreshMaps} />}
-              {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={() => setSetupOpen(true)} />}
-              {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={() => setSetupOpen(true)} switchGame={switchGame} />}
+              {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={openSetup} />}
+              {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={openSetup} switchGame={switchGame} />}
             </>
           )}
         </main>

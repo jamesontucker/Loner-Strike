@@ -175,15 +175,16 @@ fn session(r: &RemoteInfo) -> Result<Arc<Mutex<Session>>, String> {
     }
     // a machine that just didn't answer isn't tried again straight away, so the page's
     // regular checks don't each wait out the connection timeout
-    if DOWN.lock().unwrap().as_ref().and_then(|m| m.get(&r.label())).is_some_and(|t| t.elapsed() < Duration::from_secs(20)) {
-        return Err(format!("Can't reach {} right now.", r.host));
+    // (with the reason it gave: a changed identity or a refused key is worth seeing as is)
+    if let Some((_, why)) = DOWN.lock().unwrap().as_ref().and_then(|m| m.get(&r.label()).cloned()).filter(|(t, _)| t.elapsed() < Duration::from_secs(20)) {
+        return Err(why);
     }
     // connecting happens outside the list's lock (it can take seconds), so other
     // machines aren't held up; connect() checks the identity against r.host_key
     let s = match connect(r) {
         Ok(s) => s,
         Err(e) => {
-            DOWN.lock().unwrap().get_or_insert_with(HashMap::new).insert(r.label(), std::time::Instant::now());
+            DOWN.lock().unwrap().get_or_insert_with(HashMap::new).insert(r.label(), (std::time::Instant::now(), e.clone()));
             return Err(e);
         }
     };
@@ -205,7 +206,7 @@ fn session(r: &RemoteInfo) -> Result<Arc<Mutex<Session>>, String> {
 }
 
 /// Machines that didn't answer, and when
-static DOWN: Mutex<Option<HashMap<String, std::time::Instant>>> = Mutex::new(None);
+static DOWN: Mutex<Option<HashMap<String, (std::time::Instant, String)>>> = Mutex::new(None);
 
 fn drop_session(r: &RemoteInfo) {
     if let Some(all) = SESSIONS.lock().unwrap().as_mut() {
@@ -294,14 +295,23 @@ pub fn read_file_quick(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
 /// Runs `f` on the session if it's free within a few seconds (a quick command in front is
 /// waited for; something long, like an upload or Valve's download, isn't).
 fn with_session_quick<T>(r: &RemoteInfo, f: impl Fn(&Session) -> Result<T, ssh2::Error>) -> Result<T, String> {
-    let s = session(r)?;
+    match quick_once(r, &f) {
+        // a session left idle may have been dropped by the machine: one more try on a fresh one
+        Err((true, _)) => quick_once(r, &f).map_err(|(_, e)| e),
+        other => other.map_err(|(_, e)| e),
+    }
+}
+
+/// One go of with_session_quick; an error says whether a fresh session might do better.
+fn quick_once<T>(r: &RemoteInfo, f: &impl Fn(&Session) -> Result<T, ssh2::Error>) -> Result<T, (bool, String)> {
+    let s = session(r).map_err(|e| (false, e))?;
     let started = std::time::Instant::now();
     let guard = loop {
         if let Ok(g) = s.try_lock() {
             break g;
         }
         if started.elapsed() > Duration::from_secs(3) {
-            return Err(format!("{} is busy with something else. Try again in a moment.", r.host));
+            return Err((false, format!("{} is busy with something else. Try again in a moment.", r.host)));
         }
         std::thread::sleep(Duration::from_millis(100));
     };
@@ -309,10 +319,11 @@ fn with_session_quick<T>(r: &RemoteInfo, f: impl Fn(&Session) -> Result<T, ssh2:
     drop(guard);
     res.map_err(|e| {
         // a missing file isn't a broken connection
-        if !matches!(e.code(), ssh2::ErrorCode::SFTP(_)) {
+        let broken = !matches!(e.code(), ssh2::ErrorCode::SFTP(_));
+        if broken {
             drop_session(r);
         }
-        format!("The connection to {} failed ({e}).", r.host)
+        (broken, format!("The connection to {} failed ({e}).", r.host))
     })
 }
 
