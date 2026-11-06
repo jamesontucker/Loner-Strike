@@ -146,7 +146,7 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
         ))}
       </div>
 
-      <HostingGuide />
+      <WhereToHost />
 
       {creating && (
         <NewServer
@@ -165,7 +165,7 @@ type Tab = "community" | "hltv" | "extras" | "sounds" | "overview" | "friends" |
 const TABS: { id: Tab; label: string; group: string; live?: boolean }[] = [
   { id: "overview", label: "Overview", group: "Server" },
   { id: "friends", label: "Play with friends", group: "Server" },
-  { id: "extras", label: "Rotation & chat", group: "Server" },
+  { id: "extras", label: "Rotation & messages", group: "Server" },
   { id: "hltv", label: "HLTV", group: "Server" },
   { id: "modes", label: "Modes", group: "Game", live: true },
   { id: "maps", label: "Maps", group: "Game" },
@@ -175,7 +175,7 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean }[] = [
   { id: "fun", label: "Fun", group: "Game", live: true },
   { id: "players", label: "Players", group: "People", live: true },
   { id: "admins", label: "Admins", group: "People" },
-  { id: "community", label: "Stats & chat", group: "People" },
+  { id: "community", label: "Stats & moderation", group: "People" },
   { id: "welcome", label: "Welcome page", group: "People" },
   { id: "mods", label: "Mods", group: "Content" },
   { id: "sounds", label: "Sounds", group: "Content" },
@@ -438,6 +438,8 @@ function Console({ server }: { server: ServerInfo }) {
   const [lines, setLines] = useState<string[]>([]);
   const [cmd, setCmd] = useState("");
   const box = useRef<HTMLPreElement>(null);
+  // off: the console stays where you scrolled it while new lines come in
+  const [follow, setFollow] = useState(true);
   useEffect(() => {
     const load = () => getJson<Reply>(`/api/servers/${server.id}/console`).then((r) => setLines(r.lines ?? [])).catch(() => null);
     load();
@@ -445,8 +447,8 @@ function Console({ server }: { server: ServerInfo }) {
     return () => clearInterval(t);
   }, [server.id]);
   useEffect(() => {
-    box.current?.scrollTo({ top: box.current.scrollHeight });
-  }, [lines]);
+    if (follow) box.current?.scrollTo({ top: box.current.scrollHeight });
+  }, [lines, follow]);
   const once = useOnce();
   const send = () => once("send", async () => {
     if (!cmd.trim()) return;
@@ -457,7 +459,12 @@ function Console({ server }: { server: ServerInfo }) {
   });
   return (
     <div className="panel">
-      <h3>Console</h3>
+      <div className="row between">
+        <h3>Console</h3>
+        <label className="follow-toggle small-note">
+          <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow new lines
+        </label>
+      </div>
       <pre className="console" ref={box}>{lines.length ? lines.join("\n") : "Nothing yet. Start the server to see its console."}</pre>
       {ON_THIS_COMPUTER ? (
         <form className="row" onSubmit={(e) => { e.preventDefault(); send(); }}>
@@ -672,20 +679,22 @@ const HOSTS = [
     name: "Free cloud servers",
     cost: "Free",
     body: "Oracle Cloud's Always Free tier includes two small AMD servers, enough for about 10 players with a few bots. Pick the AMD one: the free Arm servers can't run the game. AWS and Azure give a small server free for 12 months. Google's free tier allows too little traffic.",
-    you: "Sign up (a card is needed), make a server and open its UDP port (27015 or 27016) in the firewall.",
+    you: "Sign up (a card is needed), make an AMD Ubuntu server with a public IP, open UDP ports 27015-27020 in its firewall, then add it here: New server, A Linux server (VPS).",
   },
   {
     name: "A cheap server (VPS)",
     cost: "About $4–7 a month",
     body: "Hetzner gives the most for the money; DigitalOcean and Vultr are simple; OVH includes DDoS protection. Pick a plan with an IPv4 address and an x86 (Intel/AMD) CPU, not Arm.",
-    you: "Buy the plan and open the game's UDP port. Setting up a Linux server from this app comes in a later version.",
+    you: "Buy an Ubuntu plan, open UDP ports 27015-27020 in its firewall, then add it here: New server, A Linux server (VPS).",
   },
 ];
 
-function HostingGuide() {
+/** Where to run a server, and how big; folded away until opened. */
+function WhereToHost() {
   return (
-    <section className="stack-tight">
-      <h2>Where to host</h2>
+    <details className="where-to-host">
+      <summary><h2>Where to host</h2><span className="muted">Free and cheap places, and how big a server you need</span></summary>
+      <section className="stack-tight">
       <div className="host-grid">
         {HOSTS.map((h) => (
           <div key={h.name} className="panel host">
@@ -716,6 +725,7 @@ function HostingGuide() {
           Shared web hosting can't run game servers.
         </p>
       </div>
-    </section>
+      </section>
+    </details>
   );
 }

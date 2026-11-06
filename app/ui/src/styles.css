@@ -278,6 +278,7 @@ select, .search {
   background: var(--panel-2); box-shadow: var(--raised); transition: left .12s, background .12s;
 }
 .switch[aria-checked="true"]::after { left: 23px; background: var(--signal); }
+.switch:disabled { opacity: .55; cursor: progress; }
 
 .banner {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
@@ -1206,3 +1207,10 @@ select option, select optgroup { background: var(--panel); color: var(--bone); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
 .working { display: inline-flex; align-items: center; gap: 0; margin-right: 12px; font-size: 13px; color: var(--bone-dim); white-space: nowrap; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
+.where-to-host > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.where-to-host > summary::-webkit-details-marker { display: none; }
+.where-to-host > summary h2 { margin: 0; }
+.where-to-host > summary h2::before { content: "\25B8"; display: inline-block; width: 1em; color: var(--bone-dim); transition: transform .15s; }
+.where-to-host[open] > summary h2::before { transform: rotate(90deg); }
+.where-to-host > section { margin-top: 12px; }
+.follow-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--bone-dim); }
