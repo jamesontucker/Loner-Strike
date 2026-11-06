@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getJson, postJson } from "../api";
 import { Icon } from "../icons";
 import { SteamProgress, useToast } from "../ui";
@@ -316,6 +316,16 @@ function ThemeMusic() {
     }
   });
   const [ready, setReady] = useState(false);
+  const [volume, setVolumeRaw] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem("ls.musicVol"));
+      return v > 0 && v <= 1 ? v : 0.3;
+    } catch {
+      return 0.3;
+    }
+  });
+  const level = useRef(volume);
+  level.current = volume;
   const audio = useRef<HTMLAudioElement | null>(null);
   const wanted = useRef(on);
   wanted.current = on;
@@ -335,7 +345,7 @@ function ThemeMusic() {
   };
   const start = (a: HTMLAudioElement) => {
     a.volume = 0;
-    a.play().then(() => fadeTo(a, 0.3)).catch(() => {});
+    a.play().then(() => fadeTo(a, level.current)).catch(() => {});
   };
 
   useEffect(() => {
@@ -381,9 +391,33 @@ function ThemeMusic() {
     if (next) start(a);
     else fadeTo(a, 0);
   };
+  const setVolume = (v: number) => {
+    setVolumeRaw(v);
+    try {
+      localStorage.setItem("ls.musicVol", String(v));
+    } catch {
+      /* private window */
+    }
+    if (audio.current && on) audio.current.volume = v;
+  };
   return (
-    <button className="music-toggle" aria-pressed={on} onClick={toggle} title={on ? "Turn the music off" : "Play the menu music"}>
-      <span aria-hidden="true">♪</span> {on ? "Music on" : "Music off"}
-    </button>
+    <div className="music">
+      <button className="music-toggle" aria-pressed={on} onClick={toggle} title={on ? "Turn the music off" : "Play the menu music"}>
+        <span aria-hidden="true">♪</span> {on ? "Music on" : "Music off"}
+      </button>
+      {on && (
+        <input
+          className="music-volume"
+          type="range"
+          min={0.05}
+          max={1}
+          step={0.05}
+          value={volume}
+          onChange={(e) => setVolume(Number(e.target.value))}
+          aria-label="Music volume"
+          style={{ "--fill": `${Math.round(((volume - 0.05) / 0.95) * 100)}%` } as CSSProperties}
+        />
+      )}
+    </div>
   );
 }

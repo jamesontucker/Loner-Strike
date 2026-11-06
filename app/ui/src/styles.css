@@ -883,10 +883,11 @@ a.btn.primary { color: var(--signal-ink); }
 
 /* ---- setup: the game's menu music ----------------------------------------------- */
 .setup-card { position: relative; }
-.music-toggle { position: absolute; top: 14px; right: 16px; z-index: 2; border: 0; border-radius: 2px; padding: 4px 10px; background: var(--bg); box-shadow: var(--sunken); color: var(--bone-faint); font: 600 13px/1.2 var(--text); cursor: pointer; }
+.music { position: absolute; top: 14px; right: 16px; z-index: 2; display: flex; align-items: center; gap: 8px; }
+.music-toggle { border: 0; border-radius: 2px; padding: 4px 10px; background: var(--bg); box-shadow: var(--sunken); color: var(--bone-faint); font: 600 13px/1.2 var(--text); cursor: pointer; }
 .music-toggle[aria-pressed="true"] { color: var(--signal); }
 .music-toggle:hover { color: var(--bone); }
-@media (max-width: 760px) { .music-toggle { top: 10px; right: 10px; } }
+@media (max-width: 760px) { .music { top: 10px; right: 10px; } }
 .setup-steps { padding-right: 120px; }
 @media (max-width: 760px) { .setup-steps { padding-right: 0; padding-top: 30px; } }
 
@@ -931,3 +932,11 @@ a.btn.primary { color: var(--signal-ink); }
 .first-row .field { margin-bottom: 0; }
 .first-play { align-self: end; min-height: 38px; padding: 7px 20px; font-size: 16px; display: inline-flex; gap: 6px; align-items: center; }
 @media (max-width: 760px) { .first-play { flex: 1 1 100%; justify-content: center; } }
+
+/* music volume: a sunken Steam-style track with a raised thumb */
+.music-volume { -webkit-appearance: none; appearance: none; width: 90px; height: 8px; border-radius: 2px; cursor: pointer;
+  background: linear-gradient(to right, var(--signal) var(--fill, 30%), var(--bg) var(--fill, 30%)); box-shadow: var(--sunken); }
+.music-volume::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 16px; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); }
+.music-volume::-moz-range-thumb { width: 12px; height: 16px; border: 0; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); }
+.setup-steps { padding-right: 230px; }
+@media (max-width: 760px) { .setup-steps { padding-right: 0; } }
