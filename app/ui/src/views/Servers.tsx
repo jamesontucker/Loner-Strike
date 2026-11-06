@@ -73,9 +73,11 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
   const once = useOnce();
   const act = (s: ServerInfo, action: string) => once(`${s.id}:${action}`, async () => {
     if (action === "delete" && !(await ask(s.imported ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.` : `Delete "${s.name}"? Its folder, maps, settings and admins are deleted.`, { ok: s.imported ? "Remove" : "Delete", danger: true }))) return;
+    if (action === "rebuild" && !(await ask(`Rebuild "${s.name}" from scratch? Everything in its folder on ${s.host} is deleted (settings, admins, bans, stats, added maps) and it's set up again like when you made it.`, { ok: "Wipe and rebuild", danger: true }))) return;
     const r = await post(`/api/servers/${s.id}/${action}`);
     if (r.error) return toast(r.error, true);
     if (action === "retry") toast("Trying again. It carries on from where it got to.");
+    if (action === "rebuild") toast("Rebuilding from scratch. It takes a few minutes.");
     if (action === "join") toast(`Joining ${s.name}…`);
     if (action === "delete") toast(r.note || `${s.name} ${s.imported ? "removed" : "deleted"}`, !!r.note);
     onChanged();
@@ -121,6 +123,7 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
             ) : s.state === "failed" ? (
               <div className="row">
                 {s.host && <button className="btn primary" onClick={() => act(s, "retry")}>Try again</button>}
+                {s.host && <button className="btn" onClick={() => act(s, "rebuild")}>Rebuild from scratch</button>}
                 <button className="btn danger" onClick={() => act(s, "delete")}>{s.imported ? "Remove" : "Delete"}</button>
               </div>
             ) : (
@@ -217,11 +220,21 @@ export function ServerPage(props: {
 
   // reinstall everything that's on the server, keeping its settings
   const rebuild = async () => {
+    if (s.host) return wipeRebuild();
     if (!(await ask(`Rebuild Loner-Strike on ${s.name}? It reinstalls its files; settings, admins and maps stay.`, { ok: "Rebuild" }))) return;
     const components = (app?.game?.installed ?? []).filter((c) => c !== "foundation" && c !== "core");
     const r = await post("/api/setup/install", { hl: s.dir, games: [s.game], components, repair: true });
     if (r.error) return toast(r.error, true);
     setBusyJob(true);
+  };
+  // a server on another machine: wipe it and set it up again with the same details
+  const wipeRebuild = async () => {
+    if (!(await ask(`Rebuild ${s.name} from scratch? Everything in its folder on ${s.host} is deleted (its settings, admins, bans, stats and any maps added to it) and it's set up again like when you made it. Takes about as long as the first time.`, { ok: "Wipe and rebuild", danger: true }))) return;
+    const r = await post(`/api/servers/${s.id}/rebuild`);
+    if (r.error) return toast(r.error, true);
+    toast("Rebuilding. It takes a few minutes.");
+    onChanged();
+    onBack();
   };
   const needsLive = TABS.find((t) => t.id === tab)?.live && !data;
   return (

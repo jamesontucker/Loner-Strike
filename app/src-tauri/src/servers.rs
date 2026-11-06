@@ -1493,6 +1493,32 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 let appid = if e.game == "cstrike" { "10" } else { "80" };
                 crate::steam::launch(&client.hl, appid, &args).map(|_| json!({"ok": true}))
             }
+            "rebuild" => {
+                // a server on another machine, wiped and set up again with the same details
+                let e = get(&id).ok_or("That server isn't there any more.")?;
+                let r = e.remote.clone().ok_or("Rebuild from scratch is for servers on another machine.")?;
+                let client = client(&st2).ok_or("Set up the game on this computer first.")?;
+                let res = crate::setup_api::resources_for(&st2)?;
+                crate::remote::remove(&r, &e.id)?;
+                // this computer's copy too (only ever a folder we made: <servers root>/<id>)
+                let ok_dir = e.dir.file_name().map(|n| n.to_string_lossy() == e.id).unwrap_or(false)
+                    && e.dir.parent().and_then(|p| p.file_name()).map(|n| n == FOLDER || n == "Servers").unwrap_or(false);
+                if ok_dir && e.dir.is_dir() {
+                    std::fs::remove_dir_all(&e.dir).map_err(|err| format!("Couldn't clear this computer's copy ({err})."))?;
+                }
+                edit(|l| l.iter_mut().filter(|x| x.id == id).for_each(|x| x.ready = false))?;
+                forget(&id);
+                let with = e.setup_with.clone().unwrap_or(SetupWith { template: "local".into(), components: vec![] });
+                let catalog = setup::components::load_catalog(&res)?;
+                let (source, components) = match template_source(&with.template, &e.game, &client, &catalog) {
+                    Some((dir, comps)) => (Some(dir), comps),
+                    None => (None, with.components.clone()),
+                };
+                let mut e = e;
+                e.ready = false;
+                let job = remote_setup(e, source, components, res)?;
+                Ok(json!({"ok": true, "job": job}))
+            }
             "retry" => {
                 // a setup that stopped part way, again with the same details
                 let e = get(&id).ok_or("That server isn't there any more.")?;
