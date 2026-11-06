@@ -125,6 +125,9 @@ impl Game {
         let mut g = Game::with_app_dir(hl, name, &app);
         g.port = port;
         g.dedicated = dedicated;
+        if dedicated {
+            g.store = Arc::new(MapStore::new_server(hl, &g.dir, &app, g.maps_cache.clone()));
+        }
         g.rcon = Arc::new(Rcon::new(g.rcon.password().to_string(), port));
         g.sharing = Sharing::global(&app, &g.data, port);
         g

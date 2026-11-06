@@ -33,7 +33,7 @@ pub fn watch(app: tauri::AppHandle, st: Shared) {
             std::thread::sleep(Duration::from_secs(5));
             let mut games: Vec<(String, String, std::sync::Arc<crate::game::Game>)> = Vec::new();
             if let Some(g) = st.local_game() {
-                games.push(("local".into(), "your game".into(), g));
+                games.push((format!("local:{}", g.name), "your game".into(), g));
             }
             for e in crate::servers::load().into_iter().filter(|e| e.ready && crate::servers::running(&e.id)) {
                 if let Some(g) = crate::servers::game_for(&e.id, || None) {

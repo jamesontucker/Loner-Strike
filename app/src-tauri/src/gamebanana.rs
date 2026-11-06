@@ -258,6 +258,16 @@ impl MapStore {
         store
     }
 
+    /// The store for a dedicated server: its maps go in its own game folder (the one
+    /// that's uploaded to a server on another machine, Condition Zero's included), with a
+    /// record of its own, so your game and each server list and remove only their own.
+    pub fn new_server(hl: &Path, game_dir: &Path, app_dir: &Path, maps_cache: Arc<Mutex<Option<Vec<Value>>>>) -> MapStore {
+        let mut store = MapStore::new(hl, game_dir, app_dir, maps_cache);
+        store.cstrike = game_dir.to_path_buf();
+        store.record_path = hl.join(".installed_maps.json");
+        store
+    }
+
         // ---- install record -------------------------------------------------
     pub fn records(&self) -> Map<String, Value> {
         sys::read_json_map(&self.record_path)
@@ -468,7 +478,8 @@ impl MapStore {
             let found = found.or(close);
             if let Some(url) = found {
                 let data = get_bytes(&url, 4 * 1024 * 1024)?;
-                std::fs::write(self.shots.join(format!("{name}.jpg")), data).ok()?;
+                // (atomic: a thumbnail request meanwhile never gets half a picture)
+                sys::write_atomic(&self.shots.join(format!("{name}.jpg")), &data).ok()?;
                 return self.shot_for(&name);
             }
         }
@@ -933,7 +944,7 @@ impl MapStore {
         // a missing picture isn't worth failing the install over
         if let Some(data) = get_bytes(url, 4 * 1024 * 1024) {
             for m in maps {
-                let _ = std::fs::write(self.shots.join(format!("{}.jpg", m.to_lowercase())), &data);
+                let _ = sys::write_atomic(&self.shots.join(format!("{}.jpg", m.to_lowercase())), &data);
             }
         }
     }

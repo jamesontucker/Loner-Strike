@@ -562,7 +562,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         // Loner-Strike itself, with the same modes as the template
         let plan = setup::plan_install(entry.install(), &[g.clone()], &components, &res, false)?;
         job.insert_before(&format!("{g}/srv-settings"), plan.step_list());
-        let store = Arc::new(crate::gamebanana::MapStore::new(&entry.dir, &entry.dir.join(&g), &sys::app_dir(), Arc::new(Mutex::new(None))));
+        let store = Arc::new(crate::gamebanana::MapStore::new_server(&entry.dir, &entry.dir.join(&g), &sys::app_dir(), Arc::new(Mutex::new(None))));
         setup::install_into(job, &plan, &res, Some(store))?;
         let data = entry.dir.join(&g).join("addons/amxmodx/data/gamemodes");
         job.run(&format!("{g}/srv-settings"), || {
@@ -789,11 +789,12 @@ fn sync_as(e: &Entry, mode: Send) -> Result<(usize, usize), String> {
     let saved: Option<Manifest> = std::fs::read_to_string(manifest_path(e)).ok().and_then(|t| serde_json::from_str(&t).ok());
     let now = current_files(e);
     let (changed, gone): (std::collections::HashSet<String>, Vec<String>) = match (&saved, everything) {
+        // (first: after Valve's update put stock configs back, the record can't be trusted)
+        _ if mode == Send::AllButData => (now.keys().filter(|k| !k.starts_with("addons/amxmodx/data/")).cloned().collect(), vec![]),
         (Some(old), false) => (
             now.iter().filter(|(k, v)| !old.get(*k).is_some_and(|o| same_file(o, v))).map(|(k, _)| k.clone()).collect(),
             old.keys().filter(|k| !now.contains_key(*k)).cloned().collect(),
         ),
-        _ if mode == Send::AllButData => (now.keys().filter(|k| !k.starts_with("addons/amxmodx/data/")).cloned().collect(), vec![]),
         // a server from before the app kept a record: only what the machine doesn't have
         // goes up. What's there stays (it may have changed on the machine, and sending all
         // of it, maps included, would tie up the connection for minutes)
@@ -1028,7 +1029,7 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
         std::fs::write(gdir.join("liblist.gam"), liblist).map_err(|e| e.to_string())?;
         let plan = setup::plan_install(entry.install(), &[g.clone()], &components, &res, false)?;
         job.insert_before(&format!("{g}/srv-settings"), plan.step_list());
-        let store = Arc::new(crate::gamebanana::MapStore::new(&entry.dir, &gdir, &sys::app_dir(), Arc::new(Mutex::new(None))));
+        let store = Arc::new(crate::gamebanana::MapStore::new_server(&entry.dir, &gdir, &sys::app_dir(), Arc::new(Mutex::new(None))));
         setup::install_into(job, &plan, &res, Some(store))?;
         let data = gdir.join("addons/amxmodx/data/gamemodes");
         job.run(&format!("{g}/srv-settings"), || {
@@ -1889,7 +1890,8 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 }
             }
         }
-        if now.port != e.port {
+        // the cached connection to it knows the old port and listen address
+        if now.port != e.port || now.listen_ip != e.listen_ip {
             forget(&id);
         }
         // on another machine the start options live in its service: write it again (and
@@ -1998,7 +2000,6 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                         x.setup_with = Some(with.clone());
                     })
                 })?;
-                crate::lists::forget(&id);
                 // this computer's copy too (only ever a folder we made: <servers root>/<id>)
                 let ok_dir = e.dir.file_name().map(|n| n.to_string_lossy() == e.id).unwrap_or(false)
                     && e.dir.parent().and_then(|p| p.file_name()).map(|n| n == FOLDER || n == "Servers").unwrap_or(false);
@@ -2006,6 +2007,8 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                     std::fs::remove_dir_all(&e.dir).map_err(|err| format!("Couldn't clear this computer's copy ({err})."))?;
                 }
                 drop(guard);
+                // (after the sync lock: shared lists take theirs first, then sync)
+                crate::lists::forget(&id);
                 forget(&id);
                 let mut e = e;
                 e.ready = false;
@@ -2033,7 +2036,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
             "delete" => {
                 let e = get(&id).ok_or("That server isn't there any more.")?;
                 // no upload starts while it goes (one would make its folders again)
-                let _guard = sync_guard();
+                let guard = sync_guard();
                 // on another machine: its service and folder there go too (if it can be reached)
                 let mut note = None;
                 if let Some(r) = &e.remote {
@@ -2042,7 +2045,6 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                     }
                 }
                 stop(&id);
-                crate::lists::forget(&id);
                 // only ever a folder we made: <servers root>/<id>
                 let ok_dir = !e.imported
                     && e.dir.file_name().map(|n| n.to_string_lossy() == e.id).unwrap_or(false)
@@ -2051,6 +2053,9 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                     std::fs::remove_dir_all(&e.dir).map_err(|err| format!("Couldn't delete the server's folder ({err})."))?;
                 }
                 edit(|l| l.retain(|x| x.id != id))?;
+                drop(guard);
+                // (after the sync lock: shared lists take theirs first, then sync)
+                crate::lists::forget(&id);
                 forget(&id);
                 Ok(json!({"ok": true, "note": note}))
             }

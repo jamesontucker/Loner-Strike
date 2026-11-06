@@ -396,7 +396,7 @@ pub fn take_users(text: &str) -> (String, Vec<Person>) {
 
 /// Brings an existing server's SteamID admins into the Admins page. Returns how many.
 pub fn import_users(game_dir: &Path, data: &Path) -> usize {
-    let _l = LOCK.lock().unwrap();
+    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let users = game_dir.join("addons/amxmodx/configs/users.ini");
     let Ok(old) = crate::sys::read_latin1(&users) else { return 0 };
     let (rest, found) = take_users(&old);
@@ -420,7 +420,7 @@ pub fn import_users(game_dir: &Path, data: &Path) -> usize {
 
 /// At app start: bring users.ini and vip.cfg up to date (drops anyone whose time ran out).
 pub fn sync(g: &Game) {
-    let _l = LOCK.lock().unwrap();
+    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let _ = write_files(g, &load(&g.data));
 }
 
@@ -614,7 +614,7 @@ fn answer(r: Option<Result<Value, String>>) -> Reply {
 async fn api_list(State(st): State<Shared>) -> Reply {
     answer(
         with_game(&st, |g| {
-            let _l = LOCK.lock().unwrap();
+            let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
             // a VIP whose time ran out while the app was open leaves users.ini now
             if write_files(g, &load(&g.data)).unwrap_or(false) {
                 reload(g);
@@ -641,7 +641,7 @@ struct PersonReq {
 }
 
 fn change(g: &Game, f: impl FnOnce(&mut Admins) -> Result<(), String>) -> Result<Value, String> {
-    let _l = LOCK.lock().unwrap();
+    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut a = load(&g.data);
     f(&mut a)?;
     save(&g.data, &a)?;
@@ -748,7 +748,7 @@ async fn api_ban(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<B
     let minutes = req.minutes.min(525_600);
     answer(
         with_game(&st, move |g| {
-            let _l = LOCK.lock().unwrap();
+            let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
             let online = tell_game(g, &format!("banid {minutes} {id} kick"))?;
             if minutes > 0 {
                 if !online {
@@ -789,7 +789,7 @@ async fn api_unban(State(st): State<Shared>, headers: HeaderMap, Json(req): Json
     };
     answer(
         with_game(&st, move |g| {
-            let _l = LOCK.lock().unwrap();
+            let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
             tell_game(g, &format!("{} {value}", if kind == "ip" { "removeip" } else { "removeid" }))?;
             edit_ban_file(g, kind, |t| remove_ban_line(t, &value))?;
             Ok(listing(g))
@@ -817,7 +817,7 @@ pub(crate) fn shared_admins(g: &Game) -> String {
 
 /// Gives `to` the same admins, VIPs and VIP settings as `from`.
 pub(crate) fn copy_admins(from: &Game, to: &Game) -> Result<(), String> {
-    let _l = LOCK.lock().unwrap();
+    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let a = load(&from.data);
     save(&to.data, &a)?;
     write_files(to, &a)?;
@@ -841,7 +841,7 @@ pub(crate) fn ban_set(g: &Game) -> Result<std::collections::BTreeSet<String>, St
 /// Adds and lifts bans on `to` ("id STEAM_..." / "ip 1.2.3.4" lines), leaving its other
 /// bans alone (ones made in the game there stay).
 pub(crate) fn apply_bans(to: &Game, add: &[String], lift: &[String]) -> Result<(), String> {
-    let _l = LOCK.lock().unwrap();
+    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let parse = |l: &String| {
         l.split_once(' ')
             .map(|(k, v)| (if k == "ip" { "ip" } else { "id" }, v.to_string()))
@@ -882,7 +882,7 @@ pub(crate) fn apply_bans(to: &Game, add: &[String], lift: &[String]) -> Result<(
 /// Gives `to` the same bans as `from` (the running game is told about each one that
 /// came or went).
 pub(crate) fn copy_bans(from: &Game, to: &Game) -> Result<(), String> {
-    let _l = LOCK.lock().unwrap();
+    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let old = read_bans(to)?;
     let new = read_bans(from)?;
     for kind in ["id", "ip"] {

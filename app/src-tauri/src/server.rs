@@ -139,6 +139,7 @@ async fn with_target(req: Request, next: Next) -> Response {
         return (StatusCode::BAD_REQUEST, axum::Json(serde_json::json!({"error": "Unknown server."}))).into_response();
     }
     let id2 = id.clone();
+    let writes_files = path != "/api/cmd";
     let game = tokio::task::spawn_blocking(move || crate::servers::game_for(&id, || None)).await.ok().flatten();
     match game {
         Some(g) => {
@@ -152,7 +153,8 @@ async fn with_target(req: Request, next: Next) -> Response {
                     if let Some(list) = list {
                         crate::lists::after_change(&id2, list);
                     }
-                    if remote {
+                    // (plain game commands only talk to the game: nothing to send)
+                    if remote && writes_files {
                         crate::servers::sync_settings(&id2);
                         crate::hltv::refresh_remote(&id2);
                     }
@@ -172,6 +174,9 @@ async fn ui(uri: Uri, headers: axum::http::HeaderMap) -> Response {
     let file = if path.is_empty() { "index.html" } else { path };
     let (file, f) = match Ui::get(file) {
         Some(f) => (file, f),
+        // an old build's file (a page left open across an update): say so, so the page
+        // can reload, instead of answering with the HTML page
+        None if file.starts_with("assets/") => return (StatusCode::NOT_FOUND, "not found").into_response(),
         None => match Ui::get("index.html") {
             Some(f) => ("index.html", f),
             None => return (StatusCode::NOT_FOUND, "The app's pages are missing - rebuild the UI (npm run build in app/ui).").into_response(),

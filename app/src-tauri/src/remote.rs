@@ -284,8 +284,14 @@ pub fn exec(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
 /// connection (never held up by an upload or Valve's download); if another check holds
 /// it for more than a few seconds it says so instead of waiting.
 pub fn exec_quick(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
+    exec_quick_for(r, cmd, 15)
+}
+
+/// exec_quick with a longer limit, for commands that take a while to finish (stopping a
+/// server) but shouldn't wait behind an upload.
+pub fn exec_quick_for(r: &RemoteInfo, cmd: &str, secs: u32) -> Result<(i32, String), String> {
     with_session_quick(r, |s, started| {
-        s.set_timeout(15_000);
+        s.set_timeout(secs * 1000);
         let mut ch = s.channel_session()?;
         ch.exec(&format!("{cmd} 2>&1"))?;
         // from here the command has run: never again on a retry (a kick or a ban twice)
@@ -361,7 +367,27 @@ pub fn exec_stream(r: &RemoteInfo, cmd: &str, input: &[u8], line: impl FnMut(&st
 /// way out, never whole in memory). A feed that fails ends the command without
 /// finishing its input, and is the error returned.
 fn exec_feed(r: &RemoteInfo, cmd: &str, feed: impl FnOnce(&mut dyn Write) -> Result<(), String>, mut line: impl FnMut(&str)) -> Result<i32, String> {
-    let s = session(r, false)?;
+    // a connection left idle may have been dropped on the way (nothing keeps it alive):
+    // opening the command gets 30 s and, failing that, one more go on a fresh connection
+    let mut attempt = 0;
+    let (s, mut ch) = loop {
+        let s = session(r, false)?;
+        let opened = {
+            let g = s.lock().unwrap();
+            g.set_timeout(30_000);
+            g.channel_session().and_then(|mut ch| ch.exec(&format!("{cmd} 2>&1")).map(|_| ch))
+        };
+        match opened {
+            Ok(ch) => break (s, ch),
+            Err(e) => {
+                drop_session(r, false);
+                attempt += 1;
+                if attempt >= 2 {
+                    return Err(format!("The connection to {} failed ({e}).", r.host));
+                }
+            }
+        }
+    };
     let s = s.lock().unwrap();
     // setup can be quiet for a while (Valve's download), but not forever: a machine that
     // stops answering ends the job instead of holding the connection
@@ -369,8 +395,6 @@ fn exec_feed(r: &RemoteInfo, cmd: &str, feed: impl FnOnce(&mut dyn Write) -> Res
     let mut feed = Some(feed);
     let mut fed: Result<(), String> = Ok(());
     let mut run = || -> Result<i32, ssh2::Error> {
-        let mut ch = s.channel_session()?;
-        ch.exec(&format!("{cmd} 2>&1"))?;
         if let Some(feed) = feed.take() {
             // (nothing reads the command's output meanwhile: what these commands print
             // is small enough to wait in the channel)
@@ -417,6 +441,10 @@ fn exec_feed(r: &RemoteInfo, cmd: &str, feed: impl FnOnce(&mut dyn Write) -> Res
     let r2 = run();
     s.set_timeout(30_000);
     drop(s);
+    if fed.is_err() {
+        // the channel was cut off part way: the connection may be in a bad state
+        drop_session(r, false);
+    }
     fed?;
     r2.map_err(|e| {
         drop_session(r, false);
@@ -466,7 +494,7 @@ pub fn upload_dir(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Path) ->
     // password) readable by this user only
     let code = exec_feed(
         r,
-        &format!("mkdir -p {to} && tar xzf - -C {to} && chmod -R go-rwx {to}/addons/amxmodx/data 2>/dev/null; true", to = shell_quote(to)),
+        &format!("mkdir -p {to} && tar xzf - -C {to} && {{ chmod -R go-rwx {to}/addons/amxmodx/data 2>/dev/null || true; }}", to = shell_quote(to)),
         |w| {
             let gz = flate2::write::GzEncoder::new(w, flate2::Compression::fast());
             let mut tar = tar::Builder::new(gz);
@@ -720,7 +748,8 @@ pub fn unit_state(r: &RemoteInfo, u: &str) -> Result<(bool, u64), String> {
 }
 
 pub fn systemctl(r: &RemoteInfo, id: &str, action: &str) -> Result<(), String> {
-    let (code, out) = exec(r, &format!("sudo systemctl {action} {}", unit(id)))?;
+    // on the quick connection: Start and Stop don't wait for an upload to finish
+    let (code, out) = exec_quick_for(r, &format!("sudo systemctl {action} {}", unit(id)), 90)?;
     if code != 0 {
         return Err(format!("The server didn't {action} ({}).", out.trim()));
     }
