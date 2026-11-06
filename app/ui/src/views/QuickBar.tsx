@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { postJson, targetKey, useActions } from "../api";
+import { useNav } from "../store";
 import type { MapInfo, Online } from "../types";
 import { useCommand, useToast } from "../ui";
 
 type Item = { label: string; on: () => void; pressed?: boolean; disabled?: boolean; show?: boolean };
 
 /** A button that opens a short list of actions under it. */
-function Menu({ label, items, active }: { label: string; items: Item[]; active?: boolean }) {
+function Menu({ label, items, active, ariaLabel }: { label: string; items: Item[]; active?: boolean; ariaLabel?: string }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -39,7 +40,7 @@ function Menu({ label, items, active }: { label: string; items: Item[]; active?:
   if (!shown.length) return null;
   return (
     <div className="qmenu" ref={box}>
-      <button ref={button} className="qb" aria-haspopup="menu" aria-expanded={open} aria-pressed={active || undefined} onClick={() => setOpen((o) => !o)}>
+      <button ref={button} className="qb" aria-label={ariaLabel} aria-haspopup="menu" aria-expanded={open} aria-pressed={active || undefined} onClick={() => setOpen((o) => !o)}>
         {label} <span className="caret" aria-hidden="true">▾</span>
       </button>
       {open && (
@@ -68,9 +69,11 @@ function Menu({ label, items, active }: { label: string; items: Item[]; active?:
 /** One-click actions while a game is live, under the top bar, grouped so they fit. */
 export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; maps: MapInfo[]; refresh: () => void; reloadMaps: () => void }) {
   const run = useCommand(refresh);
-  const { run: once } = useActions();
+  const { run: once, busy } = useActions();
   const toast = useToast();
+  const go = useNav((s) => s.go);
   const [announcing, setAnnouncing] = useState(false);
+  const announceButton = useRef<HTMLButtonElement>(null);
   const [text, setText] = useState("");
   const st = data.state;
   const me = data.players.find((p) => p.host);
@@ -90,6 +93,25 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
     toast(here?.fav ? "Removed from favourites" : "Added to favourites");
     reloadMaps();
   };
+  // the bot count just asked for, shown until the game reports it (or a few seconds pass)
+  const [want, setWant] = useState<{ n: number; at: number } | null>(null);
+  useEffect(() => {
+    if (!want) return;
+    if (want.n === st.bots) return setWant(null);
+    const t = setTimeout(() => setWant(null), Math.max(0, 3000 - (Date.now() - want.at)));
+    return () => clearTimeout(t);
+  }, [want, st.bots]);
+  const botCount = want?.n ?? st.bots;
+  const botsKey = `quick:${targetKey()}:bots`;
+  const botsBusy = busy(botsKey);
+  const setBots = (n: number) => once(botsKey, async () => {
+    setWant({ n, at: Date.now() });
+    if (!(await run("gm_bots", ["count", String(n)]))) setWant(null);
+  }, n > botCount ? "Adding a bot…" : "Removing a bot…");
+  const closeAnnounce = () => {
+    setAnnouncing(false);
+    announceButton.current?.focus();
+  };
   const announce = async () => {
     if (text.trim() && (await run("gm_announce", [text.trim()]))) {
       setText("");
@@ -101,7 +123,10 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
     { label: "Restart round", on: () => run("gm_match", ["restart"]) },
     { label: "End round", on: () => run("gm_do", ["endround"]) },
     { label: "+10 minutes", on: () => run("gm_do", ["addtime"]), show: st.timelimit > 0 },
+  ];
+  const botMenu: Item[] = [
     { label: "Peaceful bots", on: () => run("gm_set", ["bot_zombie", st.peaceful ? "0" : "1"]), pressed: !!st.peaceful },
+    { label: "All bot settings", on: () => go("bots") },
   ];
   const map: Item[] = [
     { label: "Restart map", on: () => once(`quick:${targetKey()}:restartmap`, () => run("gm_restartmap"), "Restarting the map…") },
@@ -114,7 +139,7 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
         { label: "Noclip", on: () => run("gm_player", [String(me.uid), "noclip"]), pressed: !!me.noclip },
         { label: "Respawn me", on: () => run("gm_player", [String(me.uid), "respawn"]) },
         { label: "Heal me", on: () => run("gm_do", ["heal"]), show: !!me.alive },
-        { label: "$16,000", on: () => run("gm_do", ["money"]), show: !career },
+        { label: "Give me $16,000", on: () => run("gm_do", ["money"]), show: !career },
         { label: "Save my spot", on: () => run("gm_pos", ["save"]) },
         { label: "Back to my spot", on: () => run("gm_pos", ["load"]), disabled: !data.me?.haspos },
       ]
@@ -124,24 +149,24 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
     <div className="quick" aria-label="Quick actions">
       <div className="quick-inner">
         <button className="qb" aria-pressed={!!st.paused} onClick={() => run("gm_pause")}>{st.paused ? "Resume" : "Pause"}</button>
-        {!career && <Menu label="Round" items={round} active={!!st.peaceful} />}
+        {!career && <Menu label="Round" items={round} />}
         {!career && <Menu label="Map" items={map} />}
         {!career && (
           <div className="qstep" role="group" aria-label="Bots">
-            <button className="qb" aria-label="One bot fewer" onClick={() => run("gm_bots", ["count", String(Math.max(0, st.bots - 1))])}>−</button>
-            <span>{st.bots} bot{st.bots === 1 ? "" : "s"}</span>
-            <button className="qb" aria-label="One more bot" onClick={() => run("gm_bots", ["count", String(Math.min(st.maxplayers - 1, st.bots + 1))])}>+</button>
+            <button className="qb" aria-label="One bot fewer" disabled={botsBusy || botCount <= 0} aria-busy={botsBusy || undefined} onClick={() => setBots(Math.max(0, botCount - 1))}>−</button>
+            <Menu label={`${botCount} bot${botCount === 1 ? "" : "s"}`} ariaLabel={`${botCount} bot${botCount === 1 ? "" : "s"}: bot options`} items={botMenu} active={!!st.peaceful} />
+            <button className="qb" aria-label="One more bot" disabled={botsBusy || botCount >= st.maxplayers - 1} aria-busy={botsBusy || undefined} onClick={() => setBots(Math.min(st.maxplayers - 1, botCount + 1))}>+</button>
           </div>
         )}
         <Menu label="You" items={you} active={!!me?.god || !!me?.noclip} />
-        <button className="qb" aria-pressed={announcing} onClick={() => setAnnouncing((a) => !a)}>Announce</button>
+        <button ref={announceButton} className="qb" aria-pressed={announcing} onClick={() => setAnnouncing((a) => !a)}>Announce</button>
         <button className="qb" aria-pressed={!!st.recording} onClick={() => run("gm_do", ["demo"])}>{st.recording ? "● Stop recording" : "Record demo"}</button>
       </div>
       {announcing && (
-        <form className="quick-announce" onSubmit={(e) => { e.preventDefault(); announce(); }}>
+        <form className="quick-announce" onSubmit={(e) => { e.preventDefault(); announce(); }} onKeyDown={(e) => e.key === "Escape" && closeAnnounce()}>
           <input className="search grow" autoFocus maxLength={120} placeholder="A message everyone sees in the middle of the screen" value={text} onChange={(e) => setText(e.target.value)} />
           <button className="btn primary" type="submit" disabled={!text.trim()}>Send</button>
-          <button className="btn" type="button" onClick={() => setAnnouncing(false)}>Cancel</button>
+          <button className="btn" type="button" onClick={closeAnnounce}>Cancel</button>
         </form>
       )}
     </div>

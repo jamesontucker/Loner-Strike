@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { MatchMode } from "./MatchMode";
-import { getJson, postJson, targetKey, useActions, useQueuedSave } from "../api";
-import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { MatchMode, NeedsSetup } from "./MatchMode";
+import { getJson, isAbort, postJson, targetKey, useActions, useQueuedSave } from "../api";
+import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { useDirty } from "./Servers";
 import { ShareList } from "./ShareList";
 
 type FilterMode = "off" | "replace" | "block";
@@ -58,6 +59,20 @@ function played(s: number) {
   return h < 100 ? `${h} h ${Math.round((s % 3600) / 60)} min` : `${h} h`;
 }
 
+/** The game's clock now (seconds): its time when the data came in, counted on locally.
+ *  Re-renders every 30 seconds so "time left" counts down. */
+function useGameNow(d: Data) {
+  const [, tick] = useState(0);
+  const at = useMemo(() => Date.now(), [d.now]);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+  return d.now + (Date.now() - at) / 1000;
+}
+/** Mutes that haven't run out yet. */
+const activeGags = (d: Data, now: number) => d.gags.filter((g) => !g.until || g.until > now);
+
 function left(until: number, now: number) {
   if (!until) return "until removed";
   const m = Math.max(1, Math.ceil((until - now) / 60));
@@ -81,7 +96,17 @@ const teamClass = (t: string) => (t === "T" ? "t" : t === "CT" ? "ct" : "");
 
 /** Stats and ranks, the chat log, player reports, and mutes with the swear filter, for the game or server being managed. */
 export function Community({ target }: { target: string }) {
+  const ask = useConfirm();
   const [d, setD] = useState<Data | null>(null);
+  // unsaved changes on the open tab (the swear filter's word list)
+  const dirty = useRef(false);
+  const [anyDirty, setAnyDirty] = useState(false);
+  const markDirty = useCallback((v: boolean) => {
+    dirty.current = v;
+    setAnyDirty(v);
+  }, []);
+  // a server's tab bar asks too
+  useDirty("community", anyDirty);
   const [error, setError] = useState("");
   const [chatQuery, setChatQuery] = useState("");
   const [tab, setTabRaw] = useState<Tab>(() => {
@@ -92,7 +117,10 @@ export function Community({ target }: { target: string }) {
       return "stats";
     }
   });
-  const setTab = (t: Tab) => {
+  const setTab = async (t: Tab) => {
+    if (t === tab) return;
+    if (dirty.current && !(await ask("Leave without saving your changes to the word list?", { ok: "Leave" }))) return;
+    dirty.current = false;
     setTabRaw(t);
     try {
       localStorage.setItem("ls.communityTab", t);
@@ -104,17 +132,29 @@ export function Community({ target }: { target: string }) {
   const reload = useCallback(() => {
     getJson<Data | Err>("/api/community")
       .then((r) => (failed(r) ? setError(r.error) : (setD(r), setError(""))))
-      .catch(() => setError("Couldn't reach the app."));
+      .catch((e) => !isAbort(e) && setError("Couldn't reach the app."));
   }, []);
 
   useEffect(() => {
     setD(null);
     setError("");
     reload();
+    // mutes run out: check again every minute
+    const every = setInterval(() => !document.hidden && reload(), 60000);
+    return () => clearInterval(every);
   }, [target, reload]);
 
   // a failed reload keeps the page; the error only replaces it before anything loaded
-  if (!d) return error ? <p className="muted">{error}</p> : <Skeleton rows={6} />;
+  if (!d)
+    return error ? (
+      <div className="stack narrow community">
+        <SectionHead title="Stats & moderation" />
+        <LoadError text={error} onRetry={() => (setError(""), reload())} />
+      </div>
+    ) : (
+      <Skeleton rows={6} />
+    );
+  const gagCount = activeGags(d, d.now).length;
 
   const showChat = (q: string) => {
     setChatQuery(q);
@@ -124,16 +164,14 @@ export function Community({ target }: { target: string }) {
   return (
     <div className="stack narrow community">
       {!d.plugin && (
-        <p className="panel extras-warn">
-          This game doesn't have the community plugin yet. Run Setup again from Settings to add it. Until then your settings are saved here, but the game doesn't use them.
-        </p>
+        <NeedsSetup text="This game doesn't have the community plugin yet." after="Until then your settings are saved here, but the game doesn't use them." />
       )}
       <div className="chips admin-tabs" role="tablist" aria-label="Community sections">
         {TABS.map(([id, label]) => (
           <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>
             {label}
             {id === "reports" && d.open_reports > 0 && <i className="tab-n">{d.open_reports}</i>}
-            {id === "mod" && d.gags.length > 0 && <i className="tab-n">{d.gags.length}</i>}
+            {id === "mod" && gagCount > 0 && <i className="tab-n">{gagCount}</i>}
           </button>
         ))}
       </div>
@@ -141,7 +179,7 @@ export function Community({ target }: { target: string }) {
       {tab === "matches" && <MatchMode key={`match-${target}`} target={target} />}
       {tab === "chat" && <ChatTab key={`chat-${target}`} d={d} setD={setD} initial={chatQuery} />}
       {tab === "reports" && <ReportsTab key={`rep-${target}`} d={d} setD={setD} reload={reload} showChat={showChat} />}
-      {tab === "mod" && <ModTab key={`mod-${target}`} d={d} setD={setD} reload={reload} />}
+      {tab === "mod" && <ModTab key={`mod-${target}`} d={d} setD={setD} reload={reload} onDirty={markDirty} />}
     </div>
   );
 }
@@ -242,6 +280,8 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
   const save = useSettings(d, setD);
   const { run, busy: isBusy } = useActions();
   const [s, setS] = useState<Stats | null>(null);
+  const [error, setError] = useState("");
+  const loaded = useRef(false);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("rank");
@@ -250,9 +290,19 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
 
   const load = useCallback(async (refresh: boolean) => {
     setBusy(true);
-    const r = await getJson<Stats | Err>(`/api/community/stats${refresh ? "?refresh=1" : ""}`).catch(() => OFFLINE);
-    setBusy(false);
-    if (failed(r)) return toast(r.error, true);
+    let r: Stats | Err;
+    try {
+      r = await getJson<Stats | Err>(`/api/community/stats${refresh ? "?refresh=1" : ""}`);
+    } catch (e) {
+      if (isAbort(e)) return;
+      r = OFFLINE;
+    } finally {
+      setBusy(false);
+    }
+    // before the first answer the error takes the list's place; after it, the old list stays
+    if (failed(r)) return loaded.current ? toast(r.error, true) : setError(r.error);
+    loaded.current = true;
+    setError("");
     setS(r);
   }, [toast]);
 
@@ -283,11 +333,11 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
         <BusyButton busy={busy} label="Refresh" busyLabel="Refreshing…" onClick={() => load(true)} />
       </SectionHead>
       {!s ? (
-        <Skeleton rows={5} />
+        error ? <LoadError text={error} onRetry={() => (setError(""), load(true))} /> : <Skeleton rows={5} />
       ) : (
         <>
           {s.reset_pending && <p className="panel cm-note">Stats clear when the map changes. Until then the old ones show here.</p>}
-          {!s.csx && <p className="panel cm-note">Stats need the CSX module, which AMX Mod X includes. Run Setup again from Settings if it's missing.</p>}
+          {!s.csx && <NeedsSetup className="panel cm-note" text="Stats need the CSX module, which AMX Mod X includes, and this game doesn't have it." />}
           <input className="search full" type="search" placeholder="Search names or SteamIDs" value={q} onChange={(e) => (setQ(e.target.value), setShown(PAGE))} aria-label="Search players" />
           <div className="row cm-sort">
             <span className="muted">Sort by<Info text="Rank is the order /rank and /top15 use: kills minus deaths and team kills. HS is the share of kills that were headshots, Acc. the share of shots that hit." /></span>
@@ -370,7 +420,8 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
 function StatDetail({ p, d, setD }: { p: StatRow; d: Data; setD: SetData }) {
   const hits = p.body.head + p.body.chest + p.body.stomach + p.body.arms + p.body.legs;
   const parts: [string, number][] = [["Head", p.body.head], ["Chest", p.body.chest], ["Stomach", p.body.stomach], ["Arms", p.body.arms], ["Legs", p.body.legs]];
-  const muted = d.gags.find((g) => g.id === p.auth);
+  const now = useGameNow(d);
+  const muted = activeGags(d, now).find((g) => g.id === p.auth);
   return (
     <div className="cm-detail">
       <dl className="cm-facts">
@@ -394,7 +445,7 @@ function StatDetail({ p, d, setD }: { p: StatRow; d: Data; setD: SetData }) {
       )}
       <p className="muted small-note">
         <span className="mono">{p.auth}</span>
-        {muted ? ` · muted, ${left(muted.until, d.now)}` : ""}
+        {muted ? ` · muted, ${left(muted.until, now)}` : ""}
       </p>
       {p.steam && (
         <div className="row">
@@ -418,15 +469,21 @@ function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string
   const [more, setMore] = useState(false);
   const [limit, setLimit] = useState(200);
   const [open, setOpen] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const now = useGameNow(d);
 
   const pollError = usePollError();
+  const got = useRef(false);
   const latest = useRef(0);
   const load = useCallback(async () => {
     const mine = ++latest.current;
-    const r = await getJson<{ lines: ChatLine[]; more: boolean } | Err>(`/api/community/chat?q=${encodeURIComponent(q.trim())}&limit=${limit}`).catch(() => OFFLINE);
-    if (mine !== latest.current) return;
-    if (failed(r)) return pollError(r.error);
+    const r = await getJson<{ lines: ChatLine[]; more: boolean } | Err>(`/api/community/chat?q=${encodeURIComponent(q.trim())}&limit=${limit}`).catch((e) => (isAbort(e) ? null : OFFLINE));
+    if (!r || mine !== latest.current) return;
+    // before the first lines the error takes the list's place; after that it's a toast
+    if (failed(r)) return got.current ? pollError(r.error) : setError(r.error);
+    got.current = true;
     pollError(null);
+    setError("");
     setLines(r.lines);
     setMore(r.more);
   }, [q, limit, pollError]);
@@ -441,6 +498,18 @@ function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string
     };
   }, [load]);
 
+  // keyed on what was said, not the position: new lines come in on top every 10 seconds, and
+  // an open line (with the mute length picked in it) has to stay open
+  const keys = useMemo(() => {
+    const seen = new Map<string, number>();
+    return (lines ?? []).map((c) => {
+      const base = `${c.t}-${c.id}-${c.text}`;
+      const n = seen.get(base) ?? 0;
+      seen.set(base, n + 1);
+      return n ? `${base}-${n}` : base;
+    });
+  }, [lines]);
+
   return (
     <section>
       <SectionHead title="Chat log" note="What people said, newest first, with the time and their SteamID. Select a line to mute or ban who said it." />
@@ -449,14 +518,14 @@ function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string
       </div>
       <input className="search full" type="search" placeholder="Search names, SteamIDs or words" value={q} onChange={(e) => (setQ(e.target.value), setLimit(200))} aria-label="Search the chat log" />
       {!lines ? (
-        <Skeleton rows={6} />
+        error ? <LoadError text={error} onRetry={() => (setError(""), load())} /> : <Skeleton rows={6} />
       ) : lines.length === 0 ? (
         <p className="empty">{q.trim() ? "Nothing matches that." : "Nothing said yet. Chat shows up here as people talk."}</p>
       ) : (
         <ul className="cm-chat" aria-label="Chat lines">
           {lines.map((c, i) => {
-            const key = `${c.t}-${c.id}-${i}`;
-            const muted = d.gags.find((g) => g.id === c.id);
+            const key = keys[i];
+            const muted = activeGags(d, now).find((g) => g.id === c.id);
             return (
               <li key={key}>
                 <button className="cm-line" aria-expanded={open === key} onClick={() => setOpen(open === key ? null : key)}>
@@ -472,7 +541,7 @@ function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string
                   <div className="cm-line-actions">
                     <p className="muted small-note">
                       <span className="mono">{c.id}</span>
-                      {muted ? ` · muted, ${left(muted.until, d.now)}` : ""}
+                      {muted ? ` · muted, ${left(muted.until, now)}` : ""}
                     </p>
                     {STEAMID.test(c.id) ? (
                       <div className="row">
@@ -508,12 +577,17 @@ function ReportsTab({ d, setD, reload, showChat }: { d: Data; setD: SetData; rel
   const { run, busy } = useActions();
   const [list, setList] = useState<Report[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   const pollError = usePollError();
+  const got = useRef(false);
   const load = useCallback(async () => {
-    const r = await getJson<{ reports: Report[] } | Err>("/api/community/reports").catch(() => OFFLINE);
-    if (failed(r)) return pollError(r.error);
+    const r = await getJson<{ reports: Report[] } | Err>("/api/community/reports").catch((e) => (isAbort(e) ? null : OFFLINE));
+    if (!r) return;
+    if (failed(r)) return got.current ? pollError(r.error) : setError(r.error);
+    got.current = true;
     pollError(null);
+    setError("");
     setList(r.reports);
   }, [pollError]);
 
@@ -540,9 +614,9 @@ function ReportsTab({ d, setD, reload, showChat }: { d: Data; setD: SetData; rel
         <Toggle label="Let players report" note="Say /report in the game. One report a minute per player. Admins playing see them too." on={d.settings.reports} busy={busy(settingKey({ reports: true }))} set={(v) => save({ reports: v })} />
       </div>
       {!list ? (
-        <Skeleton rows={4} />
+        error ? <LoadError text={error} onRetry={() => (setError(""), load())} /> : <Skeleton rows={4} />
       ) : list.length === 0 ? (
-        <p className="empty">No reports. That's good news.</p>
+        <p className="empty">No reports.</p>
       ) : (
         <ul className="people cm-reports">
           {list.map((r) => {
@@ -594,7 +668,7 @@ function ReportsTab({ d, setD, reload, showChat }: { d: Data; setD: SetData; rel
 
 // ---- gags and the swear filter ---------------------------------------------------------------
 
-function ModTab({ d, setD, reload }: { d: Data; setD: SetData; reload: () => void }) {
+function ModTab({ d, setD, reload, onDirty }: { d: Data; setD: SetData; reload: () => void; onDirty: (dirty: boolean) => void }) {
   const toast = useToast();
   const ask = useConfirm();
   const save = useSettings(d, setD);
@@ -604,6 +678,11 @@ function ModTab({ d, setD, reload }: { d: Data; setD: SetData; reload: () => voi
   const [word, setWord] = useState("");
   const words = draft ?? d.settings.words;
   const dirty = draft !== null && draft.join("\n") !== d.settings.words.join("\n");
+  const now = useGameNow(d);
+  const gags = activeGags(d, now);
+  // the page asks before another tab throws the unsaved list away
+  useEffect(() => onDirty(dirty), [dirty, onDirty]);
+  useEffect(() => () => onDirty(false), [onDirty]);
 
   const unmute = async (g: Gag) => {
     if (!(await ask(`Unmute ${g.name || g.id}?`, { ok: "Unmute" }))) return;
@@ -631,19 +710,19 @@ function ModTab({ d, setD, reload }: { d: Data; setD: SetData; reload: () => voi
       <section>
         <SectionHead title="Muted players" note="A muted player can't use chat, voice or both until it runs out, even if they leave and come back. Their commands like /rtv still work. Bots are never muted." />
         <ul className="people">
-          {d.gags.map((g) => (
+          {gags.map((g) => (
             <li key={g.id}>
               <div className="person">
                 <span className="person-name">{g.name || <span className="mono">{g.id}</span>}</span>
                 <span className="person-sub">
-                  {g.chat && g.voice ? "Chat and voice" : g.chat ? "Chat" : "Voice"} · {left(g.until, d.now)}
+                  {g.chat && g.voice ? "Chat and voice" : g.chat ? "Chat" : "Voice"} · {left(g.until, now)}
                   {g.name ? <> · <span className="mono">{g.id}</span></> : null}
                 </span>
               </div>
               <BusyButton busy={busy(ck(`unmute:${g.id}`))} label="Unmute" busyLabel="Unmuting…" onClick={() => unmute(g)} />
             </li>
           ))}
-          {!d.gags.length && <li className="empty">Nobody is muted.</li>}
+          {!gags.length && <li className="empty">Nobody is muted.</li>}
         </ul>
         <div className="panel stack-tight">
           <label className="field">

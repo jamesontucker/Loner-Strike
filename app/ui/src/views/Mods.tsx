@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
-import { getJson, setupJob, ON_THIS_COMPUTER, postJson, targetKey, useActions, useActivity, useStable } from "../api";
+import { currentTarget, getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useActivity, useStable } from "../api";
 import { Icon } from "../icons";
+import { useSetupJob, waitForSetupJob } from "../queries";
+import { useNav } from "../store";
 import type { AppInfo } from "../types";
-import { BusyButton, Info, SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
-import type { Job, Scan } from "./Setup";
+import { BusyButton, Info, LoadError, SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
+import type { Scan } from "./Setup";
+import { BOT_NOTE, BOT_RATING } from "../games";
 
-const BOT_NOTE = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" };
-const BOT_RATING: Record<string, "great" | "ok" | "weak" | "none"> = {
-  hns: "ok", deathrun: "ok", match: "ok", surf: "ok", soccerjam: "weak", basebuilder: "weak", kreedz: "none",
-};
 
 // Part of Loner-Strike's own plugin: always there once the basics are installed
 const BUILT_IN: { id: string; name: string; kind: "mode" | "addon"; description: string }[] = [
@@ -27,6 +26,8 @@ const BUILT_IN: { id: string; name: string; kind: "mode" | "addon"; description:
 const SORTS: [string, string][] = [["name", "A to Z"], ["installed", "Installed first"], ["kind", "Modes first"], ["bots", "Best with bots"]];
 const FILTERS: [string, string][] = [["all", "All"], ["mode", "Game modes"], ["addon", "Add-ons"], ["installed", "Installed"]];
 const RANK = { great: 0, ok: 1, weak: 2, none: 3 } as const;
+/** Add-ons switched on and off from Sounds rather than Add-ons (one switch each). */
+const ON_SOUNDS = ["quakesounds", "roundmusic"];
 const stored = (k: string, d: string) => {
   try {
     return localStorage.getItem(k) || d;
@@ -47,7 +48,10 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
   const onChanged = useStable(onChangedProp);
   const ask = useConfirm();
   const toast = useToast();
-  const [job, setJob] = useState<Job | null>(null);
+  const go = useNav((s) => s.go);
+  // the setup job while one runs (the action itself waits for the end)
+  const jobQ = useSetupJob();
+  const job = jobQ.data?.state === "running" ? jobQ.data : null;
   const { run } = useActions();
   // the mod being installed or removed here ("core" for the basics), kept app-wide so it
   // still shows after leaving the page and coming back
@@ -58,16 +62,6 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
   const setSort = (v: string) => (setSortRaw(v), store("ls.modsSort", v));
   const setFilter = (v: string) => (setFilterRaw(v), store("ls.modsFilter", v));
   const game = app?.game;
-
-  // show the setup job's progress while one runs (the action itself waits for the end)
-  useEffect(() => {
-    if (!busy) return;
-    const t = setInterval(async () => {
-      const j = await setupJob<Job>();
-      if (j) setJob(j);
-    }, 800);
-    return () => clearInterval(t);
-  }, [busy]);
 
   if (!game || !scan) return (scan ? <p className="muted">No game found.</p> : <Skeleton />);
   const installed = new Set(game.installed ?? []);
@@ -93,26 +87,32 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
 
   const change = async (id: string | null, remove: boolean, name?: string) => {
     if (busy) return;
-    if (remove && !(await ask(id ? "Remove it? Its files go, and anything it replaced is put back." : `Remove Loner-Strike from ${where}? Everything it changed is put back.`, { ok: "Remove", danger: true }))) return;
+    if (remove && !(await ask(id ? `Remove ${name ?? id}? Its files go, and anything it replaced is put back.` : `Remove Loner-Strike from ${where}? Everything it changed is put back.`, { ok: "Remove", danger: true }))) return;
     const body = { hl: game.hl, games: [game.id], ...(id ? { components: [id] } : remove ? {} : { components: [] }) };
     const label = id ? `${remove ? "Removing" : "Installing"} ${name ?? id}…` : remove ? `Removing Loner-Strike from ${where}…` : "Installing the basics…";
     await run(`${prefix}${id ?? "core"}`, async () => {
-      setJob(null);
       const r = await postJson<{ ok?: boolean; error?: string }>(remove ? "/api/setup/uninstall" : "/api/setup/install", body).catch(() => ({ error: "Couldn't reach the app." }));
       if (r.error) return toast(r.error, true);
-      // follow the setup job to its end
-      for (;;) {
-        await new Promise((res) => setTimeout(res, 800));
-        const j = await setupJob<Job>();
-        if (!j || (j.state !== "done" && j.state !== "error")) continue;
-        toast(j.state === "done" ? (running ? "Done. It loads on the next map." : "Done") : j.error || "That stopped.", j.state === "error");
-        onChanged();
-        return;
-      }
+      const j = await waitForSetupJob();
+      if (!j) toast("Lost track of the install. Check Mods to see if it finished.", true);
+      else toast(j.state === "done" ? (running ? "Done. It loads on the next map." : "Done") : j.error || "That stopped.", j.state === "error");
+      onChanged();
     }, label);
   };
 
   const now = job?.steps.find((s) => s.state === "running");
+  // where an installed add-on is switched on and off (your own game only: a server has no Add-ons page)
+  const own = !game.dedicated && !currentTarget();
+  const switchAt = (c: { id: string; kind: string; on: boolean }) => {
+    if (!own || !c.on || c.kind !== "addon") return null;
+    const sounds = ON_SOUNDS.includes(c.id.replace(/^addon-/, ""));
+    return (
+      <>
+        <span className="muted small-note">Turn it on or off in {sounds ? "Sounds" : "Add-ons"}</span>
+        <button className="btn" onClick={() => go(sounds ? "sounds" : "addons")}>{sounds ? "Open Sounds" : "Open Add-ons"}</button>
+      </>
+    );
+  };
   return (
     <div className="stack">
       <SectionHead title="Mods" note={`Game modes and add-ons on ${where}. Everything is backed up, so removing something puts the original files back.`}>
@@ -166,6 +166,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
                   ) : (
                     <BusyButton className="btn primary" busy={busy === c.id} disabled={!!busy} label="Install" busyLabel="Installing…" onClick={() => change(c.id, false, c.name)} />
                   )}
+                  {switchAt(c)}
                   {rating && <span className={`bots-note ${rating}`}>{BOT_NOTE[rating]}</span>}
                 </div>
               </div>
@@ -193,11 +194,14 @@ function OwnPlugins() {
   const toast = useToast();
   const ask = useConfirm();
   const [list, setList] = useState<string[] | null>(null);
+  const [failed, setFailed] = useState(false);
   const { run, busy } = useActions();
   const key = (what: string) => `mods:${targetKey()}:plugin:${what}`;
-  useEffect(() => {
-    getJson<{ plugins: string[] }>("/api/mods/plugins").then((r) => setList(r.plugins ?? [])).catch(() => setList([]));
-  }, []);
+  const load = () => {
+    setFailed(false);
+    getJson<{ plugins: string[] }>("/api/mods/plugins").then((r) => setList(r.plugins ?? [])).catch((e) => !isAbort(e) && setFailed(true));
+  };
+  useEffect(load, []);
   type R = { ok?: boolean; error?: string; cancelled?: boolean; name?: string; plugins?: string[] };
   const add = () => run(key("add"), async () => {
     const r = await postJson<R>("/api/mods/plugins/add").catch((): R => ({ error: "Couldn't reach the app." }));
@@ -219,7 +223,9 @@ function OwnPlugins() {
       <SectionHead title="Your own plugins" note="AMX Mod X plugins you have as a file. They load in every mode. A .sma source is compiled for you.">
         {ON_THIS_COMPUTER && <BusyButton busy={busy(key("add"))} label="Add a plugin…" busyLabel="Adding…" onClick={add} />}
       </SectionHead>
-      {list === null ? (
+      {list === null && failed ? (
+        <LoadError text="Couldn't load your plugins." onRetry={load} />
+      ) : list === null ? (
         <Skeleton rows={2} />
       ) : list.length ? (
         <ul className="people">

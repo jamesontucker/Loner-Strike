@@ -1,36 +1,47 @@
 import { useEffect, useRef, useState } from "react";
-import { getJson, postJson, targetKey, useActions, useActivity } from "../api";
+import { useQuery } from "@tanstack/react-query";
+import { getJson, getJsonAt, postJson, targetKey, useActions, useActivity } from "../api";
+import { BOT_NOTE, BOT_RATING, gameTitle } from "../games";
 import { Icon } from "../icons";
+import { useTarget } from "../queries";
+import { usePlayDraft, usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
-import { BusyButton, Info, SectionHead, useCommand, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, SectionHead, Sheet, useCommand, useConfirm, useToast } from "../ui";
 import { MapCard } from "./Maps";
 import { MatchMode } from "./MatchMode";
 
-// How well bots handle each mode (shown on the cards)
-const BOT_RATING: Record<string, "great" | "ok" | "weak" | "none"> = {
-  hns: "ok", deathrun: "ok", surf: "ok", soccerjam: "weak", basebuilder: "weak", kreedz: "none",
-};
-const BOT_NOTE = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" };
-
-const GAME_NAME = (id?: string) => (id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero");
+/** A start that hasn't brought the game up after this long can be sent again (CrossOver
+ *  can take a minute to open the game). */
+const LAUNCH_CEILING_MS = 90000;
 
 export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppInfo | null; reason: string; gameOpen: boolean; maps: MapInfo[]; openSetup: () => void }) {
   const toast = useToast();
   const { run, busy } = useActions();
-  const key = (what: string) => `play:${targetKey()}:${what}`;
-  // after a start is sent, the button keeps saying Starting… while the game loads
-  const [held, setHeld] = useState(false);
-  const starting = busy(key("launch")) || held;
-  const game = GAME_NAME(app?.game?.id);
-  const [pick, setPick] = useState("");
-  const [botsPick, setBotsPick] = useState<number | null>(null);
-  const [opts, setOpts] = useState<StartOptions | null>(null);
-  const [modePick, setModePick] = useState<string | null>(null);
-  // only what was changed here is saved; the rest stays as the mode has it
-  const [changed, setChanged] = useState<Record<string, string>>({});
+  const t = targetKey();
+  const key = (what: string) => `play:${t}:${what}`;
+  // after a start is sent, the button keeps saying Starting… until the game comes up
+  // (stores/playDraft ends it), the request fails, or LAUNCH_CEILING_MS passes
+  const launchedAt = usePlayDrafts((s) => s.launching[t]);
+  const { startLaunch, endLaunch } = usePlayDrafts.getState();
+  const [, tick] = useState(0);
+  const overdue = launchedAt !== undefined && Date.now() - launchedAt >= LAUNCH_CEILING_MS;
   useEffect(() => {
-    getJson<StartOptions>("/api/app/start-options").then((o) => setOpts(Array.isArray(o.modes) ? o : null)).catch(() => setOpts(null));
-  }, [app?.game?.id]);
+    if (launchedAt === undefined || overdue) return;
+    const timer = setTimeout(() => tick((n) => n + 1), launchedAt + LAUNCH_CEILING_MS - Date.now() + 50);
+    return () => clearTimeout(timer);
+  }, [launchedAt, overdue]);
+  const starting = busy(key("launch")) || (launchedAt !== undefined && !overdue);
+  const game = gameTitle(app?.game?.id);
+  const gameId = app?.game?.id ?? "";
+  // the form, kept per game across pages and restarts
+  const [draft, setDraft] = usePlayDraft(gameId);
+  const changed = draft.changed;
+  const optsQ = useQuery({
+    queryKey: ["startOptions", gameId],
+    queryFn: () => getJson<StartOptions>("/api/app/start-options"),
+    enabled: !!gameId,
+  });
+  const opts = optsQ.data && Array.isArray(optsQ.data.modes) ? optsQ.data : null;
   const launchMenu = () => run(key("open"), async () => {
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { menu: true }).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) toast(r.error, true);
@@ -43,24 +54,23 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
     const start = mode ? { mode: mode.id, settings: { ...fresh, ...changed } } : {};
     return run(key("launch"), async () => {
       const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}), ...start }).catch(() => ({ error: "Couldn't reach the app." }));
-      if (r.error) toast(r.error, true);
-      else {
+      if (r.error) {
+        endLaunch(t);
+        toast(r.error, true);
+      } else {
         toast(`Starting ${game}…`);
-        setHeld(true);
-        setTimeout(() => setHeld(false), 20000);
+        startLaunch(t);
       }
     }, `Starting ${game}${map ? ` on ${map}` : ""}…`);
   };
   const bots = app?.bots ?? null;
   const modes = opts ? [...opts.modes].sort((a, b) => a.name.localeCompare(b.name)) : [];
-  const mode = modes.find((m) => m.id === (modePick ?? opts?.mode)) ?? modes.find((m) => m.id === "classic") ?? modes[0];
+  const mode = modes.find((m) => m.id === (draft.mode ?? opts?.mode)) ?? modes.find((m) => m.id === "classic") ?? modes[0];
   const value = (cvar: string) => changed[cvar] ?? mode?.settings[cvar] ?? DEFAULTS[cvar] ?? null;
-  const change = (cvar: string, v: string) => setChanged((c) => ({ ...c, [cvar]: v }));
-  const pickMode = (id: string) => {
-    setModePick(id);
+  const change = (cvar: string, v: string) => setDraft({ changed: { ...changed, [cvar]: v } });
+  const pickMode = (id: string) =>
     // time limit and friendly fire belong to the mode: show the new mode's own (bot settings stay)
-    setChanged((c): Record<string, string> => Object.fromEntries(Object.entries(c).filter(([k]) => k === "bot_difficulty" || k === "gm_botstyle")));
-  };
+    setDraft({ mode: id, changed: Object.fromEntries(Object.entries(changed).filter(([k]) => k === "bot_difficulty" || k === "gm_botstyle")) });
   if (app?.game && !app.game.installed?.includes("core")) {
     return (
       <div className="idle">
@@ -72,7 +82,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
             Set it up
           </button>
           <div className="last">
-            Or <button className="link inline" disabled={starting} aria-busy={starting} onClick={() => launch()}>{starting ? "starting…" : `start ${game} without it`}</button>.
+            Or <button className="link inline" disabled={starting} aria-busy={starting} onClick={() => launch()}>{starting ? "starting…" : overdue ? "still starting? Start again" : `start ${game} without it`}</button>.
           </div>
         </div>
       </div>
@@ -81,8 +91,10 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
   const recent = maps.filter((m) => m.recent >= 0).sort((a, b) => a.recent - b.recent).slice(0, 10);
   const favs = maps.filter((m) => m.fav && !m.hidden).sort((a, b) => a.name.localeCompare(b.name));
   const stock = app?.game?.id === "czero" ? "de_dust2_cz" : "de_dust2";
+  // a picked map that's gone since (deleted, or hidden) falls back like no pick
+  const pick = draft.map && (!maps.length || maps.some((m) => m.name === draft.map)) ? draft.map : "";
   const map = pick || app?.lastmap || recent[0]?.name || favs[0]?.name || (maps.some((m) => m.name === stock) ? stock : maps[0]?.name) || stock;
-  const botCount = botsPick ?? bots ?? 9;
+  const botCount = draft.bots ?? bots ?? 9;
 
   if (!app?.game) {
     return (
@@ -115,14 +127,14 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           )}
           <div className="field">
             <span id="start-map">Map<Info text="Type to search. Maps made for the mode you picked come first, then the ones you played recently and your favourites." /></span>
-            <MapPicker value={map} maps={maps} mode={mode?.id} modeName={mode?.name} recent={recent} favs={favs} onPick={setPick} labelledBy="start-map" />
+            <MapPicker value={map} maps={maps} mode={mode?.id} modeName={mode?.name} recent={recent} favs={favs} onPick={(m) => setDraft({ map: m })} labelledBy="start-map" />
           </div>
         </div>
         <div className="start-box start-settings">
           <div className="field">
             <span>Bots<Info text="How many bots join. You can add or remove bots once you're in." /></span>
             <div className="seg" role="group" aria-label="Bots">
-              {[0, 5, 9, 15].map((n) => <button key={n} aria-pressed={botCount === n} onClick={() => setBotsPick(n)}>{n === 0 ? "None" : n}</button>)}
+              {[0, 5, 9, 15].map((n) => <button key={n} aria-pressed={botCount === n} onClick={() => setDraft({ bots: n })}>{n === 0 ? "None" : n}</button>)}
             </div>
           </div>
           {mode && botCount > 0 && (
@@ -164,7 +176,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
         <BusyButton
           className="btn launch"
           busy={starting}
-          label={<><Icon name="play" size={22} />{mode ? `Play ${mode.name} on ${map}` : `Play ${map}`}</>}
+          label={<><Icon name="play" size={22} />{overdue ? "Still starting? Start again" : mode ? `Play ${mode.name} on ${map}` : `Play ${map}`}</>}
           busyLabel="Starting…"
           onClick={() => launch(map, botCount)}
         />
@@ -261,7 +273,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
           </SectionHead>
           <div className="maps">
             {recent.map((m) => (
-              <MapCard key={m.name} map={m} onClick={() => changeMap(m.name)} />
+              <MapCard key={m.name} map={m} onClick={async () => (await ask(`Change the map to ${m.name}? Everyone playing moves to it.`, { ok: "Change map" })) && changeMap(m.name)} />
             ))}
           </div>
         </section>
@@ -337,6 +349,7 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
     box.current?.querySelector(".map-picker-list .active")?.scrollIntoView({ block: "nearest" });
   }, [active]);
   let n = -1;
+  const optId = (i: number) => `map-opt-${labelledBy}-${i}`;
   return (
     <div className="map-picker" ref={box}>
       <button ref={button} type="button" className="map-picker-button" aria-haspopup="listbox" aria-expanded={open} aria-labelledby={labelledBy} onClick={() => { setOpen((o) => !o); setActive(Math.max(0, flat.findIndex((m) => m.name === value))); }}>
@@ -345,9 +358,9 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
       </button>
       {open && (
         <div className="map-picker-pop">
-          <input className="search" type="search" autoFocus placeholder={`Search ${have.length} maps`} value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={key} aria-label="Search maps" />
-          <div className="map-picker-list" role="listbox" aria-label="Maps">
-            {flat.length === 0 && <p className="muted small-note">No map called that. Get more from Get more.</p>}
+          <input className="search" type="search" autoFocus placeholder={`Search ${have.length} maps`} value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={key} aria-label="Search maps" role="combobox" aria-expanded="true" aria-controls={`${labelledBy}-list`} aria-autocomplete="list" aria-activedescendant={flat[active] ? optId(active) : undefined} />
+          <div className="map-picker-list" id={`${labelledBy}-list`} role="listbox" aria-label="Maps">
+            {flat.length === 0 && <p className="muted small-note">No map matches. Find more in Get more.</p>}
             {shown.map(([label, list]) => (
               <div key={label || "results"}>
                 {label && <div className="map-picker-group">{label}</div>}
@@ -355,7 +368,7 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
                   n++;
                   const i = n;
                   return (
-                    <button key={label + m.name} type="button" role="option" aria-selected={m.name === value} className={i === active ? "active" : ""} onMouseEnter={() => setActive(i)} onClick={() => choose(m.name)}>
+                    <button key={label + m.name} id={optId(i)} type="button" role="option" tabIndex={-1} aria-selected={m.name === value} className={i === active ? "active" : ""} onMouseEnter={() => setActive(i)} onClick={() => choose(m.name)}>
                       {m.name}
                       {m.fav && <span className="muted" aria-label="favourite"> ★</span>}
                     </button>
@@ -380,18 +393,20 @@ const MODE_PREFIX: Record<string, string[]> = {
 
 /** Switching mode, with the map to play it on: the mode's own maps first, or the current one. */
 function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; current: string; map: string; maps: MapInfo[]; onClose: () => void; onGo: (map: string | null) => void }) {
-  const [listed, setListed] = useState<string[] | null>(null);
+  const target = useTarget();
+  const listedQ = useQuery({
+    queryKey: ["modeMaps", target, mode.id],
+    queryFn: async ({ signal }) => {
+      const l = await getJsonAt<string[]>(`/api/modes/${encodeURIComponent(mode.id)}/maps`, target, signal);
+      return Array.isArray(l) ? l : [];
+    },
+    staleTime: 60000,
+  });
+  // a list that didn't load falls back to maps whose names fit the mode
+  const listed = listedQ.data ?? (listedQ.isError ? [] : null);
   // null: not chosen yet; "": keep the current map
   const [pick, setPick] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  useEffect(() => {
-    getJson<string[]>(`/api/modes/${encodeURIComponent(mode.id)}/maps`).then((l) => setListed(Array.isArray(l) ? l : [])).catch(() => setListed([]));
-  }, [mode.id]);
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", esc);
-    return () => window.removeEventListener("keydown", esc);
-  }, [onClose]);
   const have = maps.filter((m) => !m.hidden);
   const byName = new Map(have.map((m) => [m.name.toLowerCase(), m]));
   const prefixes = MODE_PREFIX[mode.id] ?? [];
@@ -404,8 +419,7 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
   const same = mode.id === current;
   const chosen = pick === "" ? null : pick ?? (same || fits ? null : suggested[0]?.name ?? null);
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet wide switch-mode" role="dialog" aria-label={`Play ${mode.name}`} onClick={(e) => e.stopPropagation()}>
+    <Sheet label={`Play ${mode.name}`} onClose={onClose} className="sheet wide switch-mode">
         <div className="sheet-body">
           <div className="row between">
             <h2>{mode.name}</h2>
@@ -418,7 +432,7 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
                 Keep {map}{fits ? "" : " (may not suit this mode)"}
               </button>
             )}
-            <input className="search grow" type="search" placeholder="Search all maps" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className="search grow" type="search" placeholder="Search all maps" aria-label="Search all maps" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           {!query && (
             <p className="muted small-note">
@@ -437,7 +451,6 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
             <button className="btn" onClick={onClose}>Cancel</button>
           </div>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

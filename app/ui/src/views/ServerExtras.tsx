@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
+import { useServers } from "../queries";
+import { useNav } from "../store";
 import type { MapInfo } from "../types";
-import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { NeedsSetup, setupPlace } from "./MatchMode";
+import { useDirty } from "./Servers";
 import { ShareList } from "./ShareList";
 
 type Color = "default" | "green" | "red" | "blue" | "grey";
@@ -93,6 +97,16 @@ const EXTRAS_TABS: [ExtrasTab, string][] = [
 
 export function ServerExtras({ target }: { target: string }) {
   const toast = useToast();
+  const ask = useConfirm();
+  // unsaved changes on the open tab (a rotation or the chat messages)
+  const dirty = useRef(false);
+  const [anyDirty, setAnyDirty] = useState(false);
+  const markDirty = useCallback((v: boolean) => {
+    dirty.current = v;
+    setAnyDirty(v);
+  }, []);
+  // a server's tab bar asks too
+  useDirty("extras", anyDirty);
   const [d, setD] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [maps, setMaps] = useState<MapInfo[]>([]);
@@ -106,7 +120,10 @@ export function ServerExtras({ target }: { target: string }) {
       return "rotation";
     }
   });
-  const setTab = (t: ExtrasTab) => {
+  const setTab = async (t: ExtrasTab) => {
+    if (t === tab) return;
+    if (dirty.current && !(await ask("Leave without saving your changes on this tab?", { ok: "Leave" }))) return;
+    dirty.current = false;
     setTabRaw(t);
     try {
       localStorage.setItem("ls.extrasTab", t);
@@ -120,7 +137,7 @@ export function ServerExtras({ target }: { target: string }) {
     setError("");
     getJson<Reply>("/api/extras")
       .then((r) => (failed(r) ? setError(r.error) : setD(r)))
-      .catch(() => setError("Couldn't reach the app."));
+      .catch((e) => !isAbort(e) && setError("Couldn't reach the app."));
     getJson<MapInfo[]>("/api/maps")
       .then((m) => setMaps(Array.isArray(m) ? m : []))
       .catch(() => setMaps([]));
@@ -140,23 +157,27 @@ export function ServerExtras({ target }: { target: string }) {
   };
   const saveSettings = (s: Partial<Settings>, done?: string) => (d ? queue(d.settings, (cur) => ({ ...cur, ...s }), (full) => send("/api/extras/settings", full, done)) : Promise.resolve(false));
 
-  if (error) return <p className="muted">{error}</p>;
+  if (error)
+    return (
+      <div className="stack narrow extras">
+        <SectionHead title="Rotation & messages" />
+        <LoadError text={error} onRetry={() => setVersion((v) => v + 1)} />
+      </div>
+    );
   if (!d) return <Skeleton rows={6} />;
 
   return (
     <div className="stack narrow extras">
       {!d.plugin && (
-        <p className="panel extras-warn">
-          This game doesn't have the extras plugin yet. Run Setup again from Settings to add it. Until then your settings are saved here, but the game doesn't use them.
-        </p>
+        <NeedsSetup text="This game doesn't have the extras plugin yet." after="Until then your settings are saved here, but the game doesn't use them." />
       )}
       <div className="chips admin-tabs" role="tablist" aria-label="Rotation and chat sections">
         {EXTRAS_TABS.map(([id, label]) => (
           <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
         ))}
       </div>
-      {tab === "rotation" && <Rotation key={`rot-${target}`} d={d} maps={maps} send={send} saveSettings={saveSettings} />}
-      {tab === "chat" && <Messages key={`ads-${target}-${version}`} d={d} saveSettings={saveSettings} onShared={() => setVersion((v) => v + 1)} />}
+      {tab === "rotation" && <Rotation key={`rot-${target}`} d={d} maps={maps} send={send} saveSettings={saveSettings} onDirty={markDirty} />}
+      {tab === "chat" && <Messages key={`ads-${target}-${version}`} d={d} saveSettings={saveSettings} onShared={() => setVersion((v) => v + 1)} onDirty={markDirty} />}
       {tab === "kickers" && <Kickers d={d} saveSettings={saveSettings} />}
       {tab === "people" && <JoinsVotes d={d} saveSettings={saveSettings} />}
       {tab === "schedule" && <Schedule key={`sched-${target}`} d={d} maps={maps} send={send} saveSettings={saveSettings} />}
@@ -167,9 +188,15 @@ export function ServerExtras({ target }: { target: string }) {
 
 type SaveSettings = (s: Partial<Settings>, done?: string) => Promise<boolean>;
 
+/** Tells the page whether this tab has unsaved changes, so switching tabs can ask first. */
+function useReportDirty(dirty: boolean, onDirty: (v: boolean) => void) {
+  useEffect(() => onDirty(dirty), [dirty, onDirty]);
+  useEffect(() => () => onDirty(false), [onDirty]);
+}
+
 // ---- map rotation -------------------------------------------------------------------
 
-function Rotation({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; send: (p: string, b: unknown, done?: string) => Promise<boolean>; saveSettings: SaveSettings }) {
+function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: MapInfo[]; send: (p: string, b: unknown, done?: string) => Promise<boolean>; saveSettings: SaveSettings; onDirty: (v: boolean) => void }) {
   const ask = useConfirm();
   const { run, busy } = useActions();
   const [scope, setScope] = useState("");
@@ -182,6 +209,7 @@ function Rotation({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
   const saved = own ?? [];
   const list = draft ?? saved;
   const dirty = draft !== null && draft.join("\n") !== saved.join("\n");
+  useReportDirty(dirty, onDirty);
   const modeName = (id: string) => d.modes.find((m) => m.id === id)?.name ?? id;
   const installed = useMemo(() => new Set(maps.map((m) => m.name.toLowerCase())), [maps]);
   const inList = new Set(list.map((m) => m.toLowerCase()));
@@ -363,7 +391,7 @@ function Rotation({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
 
 // ---- chat messages --------------------------------------------------------------------
 
-function Messages({ d, saveSettings, onShared }: { d: Data; saveSettings: SaveSettings; onShared: () => void }) {
+function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSettings: SaveSettings; onShared: () => void; onDirty: (v: boolean) => void }) {
   const ads = d.settings.ads;
   const { run, busy } = useActions();
   const pick = (what: string, p: Partial<typeof ads>, label: string) => run(xk(`ads:${what}`), () => saveSettings({ ads: { ...ads, ...p } }), label);
@@ -371,6 +399,7 @@ function Messages({ d, saveSettings, onShared }: { d: Data; saveSettings: SaveSe
   const [focus, setFocus] = useState(0);
   const cur = draft ?? { prefix: ads.prefix, messages: ads.messages };
   const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify({ prefix: ads.prefix, messages: ads.messages });
+  useReportDirty(dirty, onDirty);
   const set = (p: Partial<typeof cur>) => setDraft({ ...cur, ...p });
   const setMsg = (i: number, p: Partial<Ad>) => set({ messages: cur.messages.map((m, j) => (j === i ? { ...m, ...p } : m)) });
   const move = (from: number, to: number) => {
@@ -540,6 +569,7 @@ function Kickers({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) {
 
 function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) {
   const { joins, votes } = d.settings;
+  const server = useNav((s) => s.server);
   const host = d.dedicated ? "" : ", you (the host)";
   return (
     <>
@@ -559,7 +589,7 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
               ) : (
                 <div className="setting">
                   <span className="name">
-                    Country<span className="note">This game doesn't have AMX Mod X's country database, so messages show without a country. Running Setup again adds it.</span>
+                    Country<span className="note">This game doesn't have AMX Mod X's country database, so messages show without a country. {setupPlace(server)}</span>
                   </span>
                 </div>
               )}
@@ -634,6 +664,10 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
   const turnOn = (on: boolean) => saveSettings({ empty: { ...empty, on, map: empty.map || firstMap } });
   const sched = d.schedule;
   const at = time ?? sched?.time ?? "05:00";
+  // a server on another machine is still restarted from here, on this computer's clock
+  const open = useNav((s) => s.server);
+  const servers = useServers().data?.servers;
+  const remote = !!open && !!servers?.find((x) => x.id === open)?.host;
   const saveRestart = (on: boolean, t = at) =>
     send("/api/extras/schedule", { on, time: t }, on ? `The server restarts every day at ${t}.` : "Daily restart is off").then((ok) => ok && setTime(null));
 
@@ -677,6 +711,11 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
       {sched && (
         <section>
           <SectionHead title="Daily restart" note="Long-running servers stay smoother with a fresh start once a day. Players get a warning in chat 5 minutes and 1 minute before." />
+          {remote && (
+            <p className="panel extras-warn">
+              Runs from this computer: Loner-Strike has to be open at that time. The time is this computer's, not the server's.
+            </p>
+          )}
           <div className="settings">
             <Toggle label="Restart every day" note="Only while the server is running and Loner-Strike is open on this computer." on={sched.on} set={(v) => saveRestart(v)} />
             <div className="setting">

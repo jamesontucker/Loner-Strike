@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { cmd, getJson, postJson, useActions, useActivity, useQueuedSave } from "../api";
-import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { cmd, getJson, isAbort, postJson, useActions, useActivity, useQueuedSave } from "../api";
+import { useGameState } from "../queries";
+import { useNav } from "../store";
+import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Settings = {
   max_rounds: number;
@@ -56,6 +58,27 @@ const COMMANDS: [string, string][] = [
   ["/warmup", "admins: stop the match"],
 ];
 
+/** Where to add something setup installs: Mods ("Run full setup") for your own game; on a
+ *  server, Rebuild under Maintenance on its Overview tab. */
+export function setupPlace(server: string | null) {
+  return server ? "To add it, open this server's Overview tab and use Rebuild under Maintenance." : "To add it, use Run full setup in Mods.";
+}
+
+/** Something setup adds is missing: says so, where to add it, and (for your own game) a way there. */
+export function NeedsSetup({ text, after, className = "panel extras-warn" }: { text: ReactNode; after?: ReactNode; className?: string }) {
+  const server = useNav((s) => s.server);
+  const go = useNav((s) => s.go);
+  return (
+    <div className={`${className} needs-setup`}>
+      <p>
+        {text} {setupPlace(server)}
+        {after ? <> {after}</> : null}
+      </p>
+      {!server && <button className="btn" onClick={() => go("mods")}>Open Mods</button>}
+    </div>
+  );
+}
+
 /** Match mode: settings, the match on now, and past results. */
 export function MatchMode({ target = "local" }: { target?: string } = {}) {
   const toast = useToast();
@@ -78,8 +101,8 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
         setError("");
         setD(r);
       }
-    } catch {
-      setError("Couldn't reach the app.");
+    } catch (e) {
+      if (!isAbort(e)) setError("Couldn't reach the app.");
     } finally {
       loading.current = false;
     }
@@ -105,10 +128,17 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
   const save = (s: Partial<Settings>) => d && queue(d.settings, (cur) => ({ ...cur, ...s }), (full) => post("/api/scrim/settings", full, "Saved"));
   const act = async (action: string, done: string, confirm?: string) => {
     if (busy) return;
-    if (confirm && !(await ask(confirm, { ok: "Yes", danger: true }))) return;
+    if (confirm && !(await ask(confirm, { ok: CONFIRM_OK[action] ?? "Go ahead", danger: true }))) return;
     await run(key(`act:${action}`), () => post("/api/scrim/action", { action }, done), `${ACTING[action] ?? "Sending"}…`);
   };
-  const switchMode = () => run(key("act:switch"), async () => {
+  // people playing lose their round when the map restarts; with no player list, always ask
+  const { state } = useGameState();
+  const people = state?.online ? state.players.filter((p) => !p.bot && !p.host).length : null;
+  const switchMode = async () => {
+    if (people !== 0 && !(await ask(people ? `Switch to Match mode? The map restarts for the ${people === 1 ? "player" : `${people} players`} on it.` : "Switch to Match mode? The map restarts.", { ok: "Switch and restart" }))) return;
+    await switchNow();
+  };
+  const switchNow = () => run(key("act:switch"), async () => {
     try {
       await cmd("gm_mode", [MODE]);
       toast("Switching to Match mode. The map reloads.");
@@ -118,13 +148,20 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
     setTimeout(refresh, 4000);
   }, "Switching to Match mode…");
 
-  if (error && !d) return <p className="muted">{error}</p>;
-  if (!d) return <Skeleton rows={6} />;
+  if (!d)
+    return error ? (
+      <div className="stack narrow match">
+        <SectionHead title="Match mode" />
+        <LoadError text={error} onRetry={() => (setError(""), refresh())} />
+      </div>
+    ) : (
+      <Skeleton rows={6} />
+    );
 
   return (
     <div className="stack narrow match">
       {!d.installed && (
-        <p className="panel match-note">This game doesn't have Match mode yet. Run Setup again from Settings to add it. Your settings here are kept until then.</p>
+        <NeedsSetup className="panel match-note" text="This game doesn't have Match mode yet." after="Your settings here are kept until then." />
       )}
       <Now d={d} busy={busy} acting={(a) => isBusy(key(`act:${a}`))} act={act} switchMode={switchMode} />
       <MatchSettings s={d.settings} save={save} target={target} />
@@ -153,6 +190,8 @@ const ACTING: Record<string, string> = {
   restart: "Restarting the match",
   warmup: "Stopping the match",
 };
+/** The confirm button for an action that asks first. */
+const CONFIRM_OK: Record<string, string> = { restart: "Restart match", warmup: "Stop match" };
 
 function Now({ d, busy, acting, act, switchMode }: { d: Data; busy: boolean; acting: (action: string) => boolean; act: Act; switchMode: () => void }) {
   const on = d.current_mode === MODE;
@@ -174,9 +213,11 @@ function Now({ d, busy, acting, act, switchMode }: { d: Data; busy: boolean; act
     return (
       <section>
         <SectionHead title="Now" />
-        <p className="panel match-now muted">
-          {d.plugin ? "The game isn't running, or the match plugin hasn't answered yet." : "The match plugin isn't installed. Run Setup again from Settings."}
-        </p>
+        {d.plugin ? (
+          <p className="panel match-now muted">The game isn't running, or the match plugin hasn't answered yet.</p>
+        ) : (
+          <NeedsSetup className="panel match-now" text="The match plugin isn't installed." />
+        )}
       </section>
     );
   }

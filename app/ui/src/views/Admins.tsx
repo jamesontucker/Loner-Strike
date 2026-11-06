@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { getJson, postJson, targetKey, useActions, useQueuedSave } from "../api";
+import { useEffect, useRef, useState } from "react";
+import { getJson, isAbort, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import type { Online } from "../types";
-import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { NeedsSetup } from "./MatchMode";
 import { ShareList } from "./ShareList";
 
 type Role = "owner" | "admin" | "moderator" | "vip";
@@ -16,7 +17,7 @@ type Data = { people: Person[]; donate: string; perks: Perks; abilities: Abiliti
 type Reply = Data | { ok: false; error: string };
 
 const ROLES: { id: Role; name: string; what: string }[] = [
-  { id: "owner", name: "Owner", what: "Everything, including server settings and RCON. Can't be kicked by other admins." },
+  { id: "owner", name: "Owner", what: "Everything, including server settings and console commands. Can't be kicked by other admins." },
   { id: "admin", name: "Admin", what: "Kick, ban, slay, change maps, votes, admin chat and menus. Plus the abilities you pick below." },
   { id: "moderator", name: "Moderator", what: "Kick, slay, votes, admin chat and menus. No bans or map changes." },
   { id: "vip", name: "VIP", what: "A reserved slot, the VIP tags and the abilities you pick below. No admin powers." },
@@ -89,7 +90,7 @@ const GIVE: { key: string; label: string; role: Role; days?: number }[] = [
 type Draft = { id: string; name: string; role: Role; expires: string; note: string; was?: string };
 const EMPTY: Draft = { id: "", name: "", role: "vip", expires: "", note: "" };
 
-const TABS: [Tab, string][] = [["people", "Admins & VIPs"], ["players", "Players"], ["bans", "Bans"], ["abilities", "What each role gets"], ["vip", "VIP & donations"]];
+const TABS: [Tab, string][] = [["people", "Admins & VIPs"], ["players", "Player history"], ["bans", "Bans"], ["abilities", "What each role gets"], ["vip", "VIP & donations"]];
 type Tab = "people" | "players" | "bans" | "abilities" | "vip";
 
 export function Admins({ data, installed }: { data: Online | null; installed?: string[] }) {
@@ -118,10 +119,23 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
     }
   };
 
+  // a failed reload keeps the page (and says so); the error only replaces it before anything loaded
+  const loaded = useRef(false);
   const load = () =>
     getJson<Reply>("/api/admins")
-      .then((r) => ("people" in r ? setD(r) : setFailed(r.error)))
-      .catch(() => setFailed("Couldn't reach the app."));
+      .then((r) => {
+        if ("people" in r) {
+          loaded.current = true;
+          setD(r);
+          setFailed("");
+        } else if (loaded.current) toast(r.error, true);
+        else setFailed(r.error);
+      })
+      .catch((e) => {
+        if (isAbort(e)) return;
+        if (loaded.current) toast("Couldn't reach the app.", true);
+        else setFailed("Couldn't reach the app.");
+      });
   useEffect(() => {
     load();
   }, []);
@@ -140,8 +154,15 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
     return true;
   };
 
-  if (failed) return <div className="stack"><SectionHead title="Admins" /><p className="muted">{failed}</p></div>;
-  if (!d) return <Skeleton />;
+  if (!d)
+    return failed ? (
+      <div className="stack narrow">
+        <SectionHead title="Admins" />
+        <LoadError text={failed} onRetry={() => (setFailed(""), load())} />
+      </div>
+    ) : (
+      <Skeleton />
+    );
 
   const save = () => act("save", async () => {
     if (!draft) return;
@@ -149,12 +170,15 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
     if (ok) setDraft(null);
   }, `Saving ${draft?.name || draft?.id.trim() || "them"}…`);
   const remove = async (p: Person) => (await ask(`Take ${p.name || p.id} off the list?`, { ok: "Remove", danger: true })) && act(`remove:${p.id}`, () => send("/api/admins/remove", { id: p.id }, "Removed"), `Removing ${p.name || p.id}…`);
-  const grant = (pl: { steamid: string; name: string }, role: Role, days?: number) => {
+  const grant = async (pl: { steamid: string; name: string }, role: Role, days?: number) => {
     const existing = d.people.find((p) => p.id === pl.steamid);
+    // admin powers are worth a second look before they're handed out
+    if (role === "owner" && !(await ask(`Make ${pl.name} an owner? Owners can change server settings and run console commands.`, { ok: "Make owner" }))) return;
+    if (role === "admin" && !(await ask(`Make ${pl.name} an admin? Admins can kick, ban, slay and change maps.`, { ok: "Make admin" }))) return;
     act(`grant:${pl.steamid}`, () => send(
       "/api/admins/person",
       { id: pl.steamid, name: existing?.name || pl.name, role, expires: days ? addDays(d.today, days) : null, note: existing?.note ?? "", was: existing?.id },
-      role === "vip" ? `${pl.name} is a VIP for ${days} days` : `${pl.name} is now ${role === "admin" ? "an admin" : `a ${roleName(role).toLowerCase()}`}`,
+      role === "vip" ? (days ? `${pl.name} is a VIP for ${days} days` : `${pl.name} is now a VIP`) : `${pl.name} is now ${role === "admin" ? "an admin" : `a ${roleName(role).toLowerCase()}`}`,
     ), `Giving ${pl.name} a role…`);
   };
   const ban = async (id: string, minutes: number, name?: string, after?: () => void) => {
@@ -205,7 +229,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
           <button className="btn primary" onClick={() => setDraft({ ...EMPTY })}>Add someone</button>
         </SectionHead>
         <ShareList list="admins" onShared={load} />
-        {!d.users_ini && <p className="err-text">AMX Mod X isn't set up for this game yet, so these can't take effect. Run Setup from Settings first.</p>}
+        {!d.users_ini && <NeedsSetup className="err-text" text="AMX Mod X isn't set up for this game yet, so these can't take effect." />}
         {draft && <Editor draft={draft} setDraft={setDraft} today={d.today} onSave={save} saving={busy("save")} />}
         <ul className="people">
           {people.map((p) => (
@@ -246,7 +270,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
 
       {tab === "players" && (
       <div>
-        <SectionHead title="Players" note="Everyone who's joined, newest first. Give someone a role, or ban them, in one click." />
+        <SectionHead title="Player history" note="Everyone who's joined, newest first. Give someone a role, or ban them, in one click." />
         <input className="search full" type="search" placeholder="Search names or SteamIDs" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search players" />
         <ul className="people">
           {players
@@ -347,7 +371,15 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
               {ABILITIES.map((a) => (
                 <tr key={a.key}>
                   <th scope="row">
-                    <span className="ability-name">{a.name}{a.unfair && <i className="role-badge" title="Off in modes it would break, unless you allow it below">Some modes</i>}</span>
+                    <span className="ability-name">
+                      {a.name}
+                      {a.unfair && (
+                        <>
+                          <i className="role-badge">Some modes</i>
+                          <Info text="Off in modes it would break, like Zombie or Deathrun, unless you switch on Allow in every mode below." />
+                        </>
+                      )}
+                    </span>
                     <span className="ability-what">{a.what}</span>
                     <span className="ability-how">{a.how}</span>
                     {a.key === "hook" && noHook && <span className="ability-how err-text">The hook add-on isn't installed, so this does nothing yet. Add it from Mods.</span>}
@@ -445,8 +477,16 @@ function Perk({ label, note, on, set, busy }: { label: string; note: string; on:
 function Editor({ draft, setDraft, today, onSave, saving }: { draft: Draft; setDraft: (d: Draft | null) => void; today: string; onSave: () => void; saving: boolean }) {
   const set = (p: Partial<Draft>) => setDraft({ ...draft, ...p });
   const validId = STEAMID.test(draft.id.trim().toUpperCase());
+  // the form opens above a list that can be long: bring it into view, ready to type
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+  }, [draft.was]);
   return (
-    <div className="panel editor">
+    <div className="panel editor" ref={box}>
       <h3>{draft.was ? `Edit ${draft.name || draft.was}` : "Add someone"}</h3>
       <div className="editor-grid">
         <label className="field">

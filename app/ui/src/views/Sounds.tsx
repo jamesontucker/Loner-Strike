@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getJson, setupJob as pollSetupJob, ON_THIS_COMPUTER, postJson, useActions, useActivity } from "../api";
-import { Banner, BusyButton, SectionHead, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
-import type { Job } from "./Setup";
+import { getJson, ON_THIS_COMPUTER, postJson, useActions, useActivity } from "../api";
+import { useGameState, useSetupJob, waitForSetupJob } from "../queries";
+import { useNav } from "../store";
+import { Banner, BusyButton, LoadError, SectionHead, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
 
 type Track = { name: string; size: number; on: boolean; kind: "mp3" | "wav"; pack?: string | null; problem?: string | null };
 type Pool = { id: "t" | "ct" | "any"; label: string; tracks: Track[]; on: number; over: boolean };
@@ -46,9 +47,14 @@ export function Sounds({ target }: { target: string }) {
     }
   };
   const [packs, setPacks] = useState<Packs | null>(null);
+  const [packsFailed, setPacksFailed] = useState(false);
+  const go = useNav((s) => s.go);
+  // the restart button only works while the game (or server) is running
+  const live = !!useGameState().state?.online;
   const [changed, setChanged] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
-  const [setupJob, setSetupJob] = useState<Job | null>(null);
+  const jobQ = useSetupJob();
+  const setupJob = jobQ.data?.state === "running" ? jobQ.data : null;
   const { run: once, busy: isBusy } = useActions();
   const key = (what: string) => `sounds:${target}:${what}`;
   const installing = isBusy(key("install-music"));
@@ -63,6 +69,7 @@ export function Sounds({ target }: { target: string }) {
       getJson<Packs>("/api/sounds/packs").catch(() => null),
     ]);
     setD(s);
+    setPacksFailed(!p || !!p.error);
     if (p && !p.error) {
       // finished jobs from before this page opened aren't news
       setPacks((old) => {
@@ -76,6 +83,7 @@ export function Sounds({ target }: { target: string }) {
   useEffect(() => {
     setD(null);
     setPacks(null);
+    setPacksFailed(false);
     setChanged(false);
     stop();
     load();
@@ -107,16 +115,6 @@ export function Sounds({ target }: { target: string }) {
     }, 1200);
     return () => clearInterval(t);
   }, [packBusy, toast, load]);
-
-  // show the setup job's progress (installing the round-end music add-on)
-  useEffect(() => {
-    if (!installing) return;
-    const t = setInterval(async () => {
-      const j = await pollSetupJob<Job>();
-      if (j) setSetupJob(j);
-    }, 800);
-    return () => clearInterval(t);
-  }, [installing]);
 
   function stop() {
     audio.current?.pause();
@@ -182,18 +180,12 @@ export function Sounds({ target }: { target: string }) {
 
   const installMusic = () => once(key("install-music"), async () => {
     if (!d) return;
-    setSetupJob(null);
     const r = await postJson<Reply>("/api/setup/install", { hl: d.hl, games: [d.game], components: ["addon-roundmusic"] }).catch(failed);
     if (r.error) return toast(r.error, true);
-    // follow the setup job to its end
-    for (;;) {
-      await new Promise((res) => setTimeout(res, 800));
-      const j = await pollSetupJob<Job>();
-      if (!j || (j.state !== "done" && j.state !== "error")) continue;
-      toast(j.state === "done" ? "Round-end music is installed. It starts on the next map." : j.error || "That stopped.", j.state === "error");
-      load();
-      return;
-    }
+    const j = await waitForSetupJob();
+    if (!j) toast("Lost track of the install. Check Mods to see if it finished.", true);
+    else toast(j.state === "done" ? "Round-end music is installed. It starts on the next map." : j.error || "That stopped.", j.state === "error");
+    load();
   }, "Installing round-end music…");
 
   const packAction = async (p: Pack, action: "install" | "remove") => {
@@ -215,21 +207,27 @@ export function Sounds({ target }: { target: string }) {
   };
 
   if (!d) return <Skeleton />;
-  if (d.error) return <p className="muted">{d.error}</p>;
+  if (d.error) return <LoadError text={d.error} onRetry={() => { setD(null); load(); }} />;
   const m = d.music;
   const where = d.dedicated ? "this server" : "your game";
   const now = setupJob?.steps.find((s) => s.state === "running");
   const count = m.pools.reduce((n, p) => n + p.on, 0);
+  // setting up happens on Mods: a button for your own game, words for a server (its own Mods tab)
+  const toMods = target === "local"
+    ? <div className="row"><button className="btn" onClick={() => go("mods")}>Run full setup in Mods</button></div>
+    : null;
 
   return (
     <div className="stack sounds">
       <SectionHead title="Sounds" note={`Round-end music, Quake sounds and sound packs on ${where}. Players download custom sounds the first time they join.`} />
 
-      {changed && (
+      {changed && (live ? (
         <Banner action={<BusyButton className="btn primary" busy={isBusy(key("restartmap"))} label="Restart map" busyLabel="Restarting…" onClick={() => once(key("restartmap"), () => run("gm_restartmap").then((ok) => ok && setChanged(false)), "Restarting the map…")} />}>
           Sound changes start on the next map.
         </Banner>
-      )}
+      ) : (
+        <Banner>Changes apply when the game next starts.</Banner>
+      ))}
 
       <div className="chips admin-tabs" role="tablist" aria-label="Sounds sections">
         {SOUND_TABS.map(([id, label]) => (
@@ -264,7 +262,10 @@ export function Sounds({ target }: { target: string }) {
                 <div className="row"><BusyButton className="btn primary" busy={installing} label="Install round-end music" busyLabel="Installing…" onClick={installMusic} /></div>
               </>
             ) : (
-              <p className="muted measure">Set up Loner-Strike on {where} first, from Mods. Then round-end music can be added.</p>
+              <>
+                <p className="muted measure">Set up Loner-Strike on {where} first{target === "local" ? "" : ", from this server's Mods tab"}. Then round-end music can be added.</p>
+                {toMods}
+              </>
             )}
           </div>
         )}
@@ -348,8 +349,9 @@ export function Sounds({ target }: { target: string }) {
             <h3>Quake sounds</h3>
             <p className="muted measure">
               The announcer from the old pub servers: First blood, Headshot, Double kill, Killing spree, Monster kill, Godlike and more.
-              {d.quake.installed ? " Changing it applies from the next map." : " They come with Loner-Strike's basics; set it up from Mods to get them."}
+              {d.quake.installed ? " Changing it applies from the next map." : ` They come with Loner-Strike's basics; set it up${target === "local" ? "" : " from this server's Mods tab"} to get them.`}
             </p>
+            {!d.quake.installed && toMods}
           </div>
           {d.quake.installed && (
             <label className="sounds-switch">
@@ -368,7 +370,9 @@ export function Sounds({ target }: { target: string }) {
           title="Classic sound packs"
           note={`A few picks from GameBanana's Counter-Strike 1.6 sounds.${d.dedicated ? " Packs that replace game sounds change what you hear, so they go into your own game; music packs go onto this server." : ""} Anything replaced is backed up, and removing a pack puts it back.`}
         />
-        {!packs ? (
+        {!packs && packsFailed ? (
+          <LoadError text="Couldn't load the sound packs." onRetry={load} />
+        ) : !packs ? (
           <Skeleton rows={2} />
         ) : (
           <div className="sound-packs">

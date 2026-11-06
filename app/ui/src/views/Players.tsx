@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { targetKey, useActions } from "../api";
+import { currentTarget, targetKey, useActions } from "../api";
 import type { Online, Player } from "../types";
 import { BusyButton, SectionHead, useCommand, useConfirm } from "../ui";
 import { MuteControl } from "./Community";
@@ -43,19 +43,27 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
     <div className="stack">
       <div>
         <SectionHead title="Players" note="Select someone for god mode, weapons, teleporting and more." />
-        <div className="row">
-          <BusyButton busy={busy(key("all:respawn"))} label="Respawn the dead" busyLabel="Respawning…" onClick={() => all("all:respawn", "gm_player", ["all", "respawn"], "Respawning the dead…")} />
-          <BusyButton busy={busy(key("all:heal"))} label="Heal everyone" busyLabel="Healing…" onClick={() => all("all:heal", "gm_player", ["all", "heal"], "Healing everyone…")} />
-          <span className="spacer" />
-          <BusyButton busy={busy(key("team:t"))} label="Join Terrorists" busyLabel="Joining…" onClick={() => all("team:t", "gm_team", ["t"], "Joining the Terrorists…")} />
-          <BusyButton busy={busy(key("team:ct"))} label="Join CTs" busyLabel="Joining…" onClick={() => all("team:ct", "gm_team", ["ct"], "Joining the CTs…")} />
-          <BusyButton busy={busy(key("team:spec"))} label="Spectate" busyLabel="Moving…" onClick={() => all("team:spec", "gm_team", ["spec"], "Moving you to spectators…")} />
-          <BusyButton
-            busy={busy(key("team:swap"))}
-            label="Swap teams"
-            busyLabel="Swapping…"
-            onClick={async () => (await ask("Swap everyone to the other team? The round restarts.", { ok: "Swap teams" })) && all("team:swap", "gm_team", ["swap"], "Swapping teams…")}
-          />
+        <div className="player-actions">
+          <div className="row" role="group" aria-labelledby="pa-everyone">
+            <span className="pa-label" id="pa-everyone">Everyone</span>
+            <BusyButton busy={busy(key("all:respawn"))} label="Respawn the dead" busyLabel="Respawning…" onClick={() => all("all:respawn", "gm_player", ["all", "respawn"], "Respawning the dead…")} />
+            <BusyButton busy={busy(key("all:heal"))} label="Heal everyone" busyLabel="Healing…" onClick={() => all("all:heal", "gm_player", ["all", "heal"], "Healing everyone…")} />
+            <BusyButton
+              busy={busy(key("team:swap"))}
+              label="Swap teams"
+              busyLabel="Swapping…"
+              onClick={async () => (await ask("Swap everyone to the other team? The round restarts.", { ok: "Swap teams" })) && all("team:swap", "gm_team", ["swap"], "Swapping teams…")}
+            />
+          </div>
+          {/* on a server there's no "you" in the game */}
+          {!currentTarget() && (
+            <div className="row" role="group" aria-labelledby="pa-you">
+              <span className="pa-label" id="pa-you">You</span>
+              <BusyButton busy={busy(key("team:t"))} label="Join Terrorists" busyLabel="Joining…" onClick={() => all("team:t", "gm_team", ["t"], "Joining the Terrorists…")} />
+              <BusyButton busy={busy(key("team:ct"))} label="Join Counter-Terrorists" busyLabel="Joining…" onClick={() => all("team:ct", "gm_team", ["ct"], "Joining the Counter-Terrorists…")} />
+              <BusyButton busy={busy(key("team:spec"))} label="Spectate" busyLabel="Moving…" onClick={() => all("team:spec", "gm_team", ["spec"], "Moving you to spectators…")} />
+            </div>
+          )}
         </div>
       </div>
       <div className="teams">
@@ -67,6 +75,14 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
               <h3>
                 {title} <span>{list.length}</span>
               </h3>
+              {list.length > 0 && (
+                <div className="prow prow-head" aria-hidden="true">
+                  <span>Name</span>
+                  <span>Health</span>
+                  <span className="num">Money</span>
+                  <span className="num kd">K/D</span>
+                </div>
+              )}
               <ul>
                 {list.map((p) => (
                   <li key={p.uid} className={p.alive ? "" : "dead"}>
@@ -78,11 +94,11 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
                         {p.noclip ? <i className="flag">noclip</i> : null}
                         {p.frozen ? <i className="flag">frozen</i> : null}
                       </span>
-                      <span className={`hp${p.hp && p.hp < 35 ? " low" : ""}`} aria-label={`${p.hp} health`}>
+                      <span className={`hp${p.hp && p.hp < 35 ? " low" : ""}`} role="meter" aria-label="Health" aria-valuenow={Math.max(0, p.hp)} aria-valuemin={0} aria-valuemax={Math.max(100, p.hp)}>
                         <i style={{ width: `${Math.min(100, p.hp)}%` }} />
                       </span>
-                      <span className="num">${p.money.toLocaleString()}</span>
-                      <span className="num kd">{p.frags}/{p.deaths}</span>
+                      <span className="num"><span className="ls-sr">Money </span>${p.money.toLocaleString()}</span>
+                      <span className="num kd"><span className="ls-sr">Kills and deaths </span>{p.frags}/{p.deaths}</span>
                     </button>
                     {open === p.uid && (
                       <div className="pactions">

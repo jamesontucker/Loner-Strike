@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { postJson, targetKey, useActions } from "../api";
 import type { AppInfo } from "../types";
-import { BusyButton, useToast } from "../ui";
+import { gameTitle } from "../games";
+import { BusyButton, Sheet, useToast } from "../ui";
 import type { Scan } from "./Setup";
 import { JobProgress } from "./Servers";
 
@@ -37,19 +38,31 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
       <button className="btn small" disabled={blocked || updating} onClick={() => { setOpen(false); update([id]); }}>{label}</button>
     </li>
   );
-  const count = outdated.length + theirs.length;
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  // what the bar says: Loner-Strike's own parts, mods you had before it, or both
+  const summary =
+    outdated.length && theirs.length
+      ? `${plural(outdated.length, "part", "parts")} of Loner-Strike and ${theirs.length} of your own mods have fixes waiting.`
+      : outdated.length
+        ? `${plural(outdated.length, "part", "parts")} of Loner-Strike ${outdated.length === 1 ? "has" : "have"} fixes waiting.`
+        : `${plural(theirs.length, "mod is", "mods are")} in your game without the bot fixes.`;
   if (running)
     return (
       <div className="panel files-update">
-        <JobProgress onEnd={(ok) => { setRunning(false); toast(ok ? "Up to date" : "That stopped. The bar shows why.", !ok); reloadApp(); }} />
+        <JobProgress
+          title="Updating Loner-Strike's files…"
+          // a failed update stays on screen with its reason until closed
+          onEnd={(ok) => { if (ok) setRunning(false); toast(ok ? "Up to date" : "The update stopped. The bar shows why.", !ok); reloadApp(); }}
+          onClose={() => setRunning(false)}
+        />
       </div>
     );
   return (
     <>
       <div className="files-bar" role="status">
         <span>
-          {outdated.length ? `${count} ${count === 1 ? "part" : "parts"} of Loner-Strike ${count === 1 ? "has" : "have"} fixes waiting.` : `${count} ${count === 1 ? "mod is" : "mods are"} in your game without the bot fixes.`}
-          {blocked ? ` Close ${g.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"} to update.` : ""}
+          {summary}
+          {blocked ? ` Close ${gameTitle(g.id)} to update.` : ""}
         </span>
         <span className="files-bar-actions">
           <button className="btn small" onClick={() => setOpen(true)}>Details</button>
@@ -58,8 +71,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
         </span>
       </div>
       {open && (
-        <div className="sheet-backdrop" onClick={() => setOpen(false)}>
-          <div className="sheet files-sheet" role="dialog" aria-label="Fixes for your game files" onClick={(e) => e.stopPropagation()}>
+        <Sheet label="Fixes for your game files" onClose={() => setOpen(false)} className="sheet files-sheet">
             <div className="sheet-body">
             <h2>Fixes for your game files</h2>
             {outdated.length > 0 && (
@@ -74,14 +86,13 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
                 <ul className="files-update-list">{theirs.map((id) => row(id, "Put in the fixed one"))}</ul>
               </>
             )}
-            {blocked && <p className="muted small-note">Close {g.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"} first.</p>}
+            {blocked && <p className="muted small-note">Close {gameTitle(g.id)} first.</p>}
             <div className="row">
               <BusyButton className="btn primary" busy={updating} disabled={blocked} label="Update all" busyLabel="Updating…" onClick={() => { setOpen(false); update([...outdated, ...theirs]); }} />
               <button className="btn" onClick={() => setOpen(false)}>Close</button>
             </div>
             </div>
-          </div>
-        </div>
+        </Sheet>
       )}
     </>
   );

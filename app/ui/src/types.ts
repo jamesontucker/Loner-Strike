@@ -113,6 +113,8 @@ export type ServerInfo = {
   /** on another machine (a VPS): its address */
   host?: string | null;
   address?: string;
+  /** on another machine: why it didn't answer last time (it's shown stopped meanwhile) */
+  unreachable?: string | null;
   /** new files went up to its machine: used after a restart or map change */
   pending_restart?: boolean;
   listen_ip?: string;

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getJson, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
-import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { useDirty } from "./Servers";
 
 type Settings = { enabled: boolean; port: number; delay: number; max_spectators: number; name: string; password: string; record: boolean };
 type Demo = { name: string; size: number; modified: number };
@@ -37,6 +38,22 @@ function size(b: number) {
 function when(s: number) {
   return s ? new Date(s * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
 }
+/** Servers whose HLTV settings were saved while it ran: its uptime then. Kept across tab
+ *  switches; cleared once HLTV restarts or stops. */
+const restartAfter = new Map<string, number>();
+
+/** Why a number is out of its range, or "" when it's fine. */
+const numberProblem = (text: string, min: number, max: number, what: string) => {
+  const v = text.trim() === "" ? NaN : Number(text);
+  return !Number.isInteger(v) || v < min || v > max ? `${what}: a whole number from ${min} to ${max}.` : "";
+};
+
+/** Pulls a typed number into its range when the field is left (an empty one waits for Save). */
+const clampText = (text: string, min: number, max: number) => {
+  const v = Math.round(Number(text));
+  return text.trim() === "" || isNaN(v) ? text : String(Math.min(max, Math.max(min, v)));
+};
+
 function delayText(s: number) {
   return s === 0 ? "None" : s < 60 ? `${s} s` : `${s / 60} min`.replace(".5 min", " min 30 s");
 }
@@ -50,18 +67,32 @@ export function Hltv({ server }: { server: ServerInfo }) {
   const { run, busy } = useActions();
   const key = (what: string) => `hltv:${server.id}:${what}`;
   const saving = busy(key("save"));
+  // edits not saved yet: polls don't overwrite them, and leaving the tab asks first
   const dirty = useRef(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = (v: boolean) => {
+    dirty.current = v;
+    setIsDirty(v);
+  };
+  useDirty("hltv", isDirty);
   const [failed, setFailed] = useState("");
+  // the number fields as typed, checked on Save
+  const [nums, setNums] = useState<{ spectators: string; port: string } | null>(null);
+  const [problem, setProblem] = useState("");
+  const [restartAt, setRestartAt] = useState<number | undefined>(() => restartAfter.get(server.id));
 
   const load = async () => {
     const r = await getJson<Status & { error?: string }>(`/api/servers/${server.id}/hltv`).catch(() => null);
     if (!r || !r.settings) return setFailed(r?.error || "Couldn't reach the app.");
     setFailed("");
     setSt(r);
-    if (!dirty.current) setForm(r.settings);
+    if (!dirty.current) {
+      setForm(r.settings);
+      setNums({ spectators: String(r.settings.max_spectators), port: String(r.settings.port) });
+    }
   };
   useEffect(() => {
-    dirty.current = false;
+    markDirty(false);
     setSt(null);
     setForm(null);
     // the next check only after the last one answered (a slow server doesn't pile them up)
@@ -80,18 +111,56 @@ export function Hltv({ server }: { server: ServerInfo }) {
   }, [server.id]);
 
   const set = (patch: Partial<Settings>) => {
-    dirty.current = true;
+    markDirty(true);
     setForm((f) => (f ? { ...f, ...patch } : f));
   };
+  const setNum = (patch: Partial<{ spectators: string; port: string }>) => {
+    markDirty(true);
+    setProblem("");
+    setNums((n) => (n ? { ...n, ...patch } : n));
+  };
 
-  const save = (next: Settings | null = form) => run(key("save"), async () => {
-    if (!next) return;
-    const r = await post(`/api/servers/${server.id}/hltv`, next);
+  const needRestart = (r: Reply) => {
+    if (!r.restart || !st) return;
+    restartAfter.set(server.id, st.uptime);
+    setRestartAt(st.uptime);
+  };
+  const clearRestart = () => {
+    restartAfter.delete(server.id);
+    setRestartAt(undefined);
+  };
+  // HLTV restarted (its uptime started again) or stopped: the new settings are in use
+  useEffect(() => {
+    if (restartAt !== undefined && st && (st.state !== "running" || st.uptime < restartAt)) clearRestart();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [st, restartAt]);
+
+  const save = () => {
+    if (!form || !nums || !st) return;
+    const portMin = st.remote ? 27015 : 1024;
+    const portMax = st.remote ? 27020 : 65000;
+    const bad = numberProblem(nums.spectators, 0, 255, "Spectators") || numberProblem(nums.port, portMin, portMax, "Port");
+    setProblem(bad);
+    if (bad) return;
+    const next = { ...form, max_spectators: Number(nums.spectators), port: Number(nums.port) };
+    run(key("save"), async () => {
+      const r = await post(`/api/servers/${server.id}/hltv`, next);
+      if (r.error) return toast(r.error, true);
+      markDirty(false);
+      needRestart(r);
+      toast(r.restart ? "Saved. Restart HLTV to use the new settings." : "Saved");
+      load();
+    }, `Saving HLTV settings for ${server.name}…`);
+  };
+  // the on/off switch saves just that: other edits wait for Save
+  const setEnabled = (v: boolean) => run(key("save"), async () => {
+    if (!st) return;
+    const r = await post(`/api/servers/${server.id}/hltv`, { ...st.settings, enabled: v });
     if (r.error) return toast(r.error, true);
-    dirty.current = false;
-    toast(r.restart ? "Saved. Restart HLTV to use the new settings." : "Saved");
+    setForm((f) => (f ? { ...f, enabled: v } : f));
+    toast(v ? "HLTV is on. It starts and stops with the server." : "HLTV is off");
     load();
-  }, `Saving HLTV settings for ${server.name}…`);
+  }, `${v ? "Turning on" : "Turning off"} HLTV on ${server.name}…`);
 
   // one start, stop or restart at a time
   const acting = busy(key("act:start")) || busy(key("act:stop")) || busy(key("act:restart"));
@@ -100,16 +169,17 @@ export function Hltv({ server }: { server: ServerInfo }) {
     run(key(`act:${action}`), async () => {
       const r = await post(`/api/servers/${server.id}/hltv/${action}`);
       if (r.error) return toast(r.error, true);
+      if (action !== "stop") clearRestart();
       toast(action === "stop" ? "HLTV stopped" : "Starting HLTV…");
       setTimeout(load, 1200);
     }, `${action === "stop" ? "Stopping" : action === "restart" ? "Restarting" : "Starting"} HLTV on ${server.name}…`);
   };
 
-  if (!st || !form) {
+  if (!st || !form || !nums) {
     return (
       <div className="stack">
-        <SectionHead title="HLTV" />
-        {failed ? <p className="muted">{failed}</p> : <Skeleton rows={4} />}
+        <SectionHead title="Spectators & demos" />
+        {failed ? <LoadError text={failed} onRetry={load} /> : <Skeleton rows={4} />}
       </div>
     );
   }
@@ -119,9 +189,18 @@ export function Hltv({ server }: { server: ServerInfo }) {
   return (
     <div className="stack hltv">
       <SectionHead
-        title="HLTV"
-        note="Lets people watch this server's matches live, a little behind the action, without taking a player slot. It can also record every map to a demo file you can replay later."
+        title="Spectators & demos"
+        note="HLTV lets people watch this server's matches live, a little behind the action, without taking a player slot. It can also record every map to a demo file you can replay later."
       />
+      {failed && <p className="muted small-note" role="status">Can't reach the server, showing the last known state.</p>}
+      {restartAt !== undefined && running && (
+        <div className="files-bar" role="status">
+          <span>New HLTV settings are saved. They're used after HLTV restarts.</span>
+          <span className="files-bar-actions">
+            <BusyButton className="btn small primary" busy={busy(key("act:restart"))} disabled={acting} label="Restart now" busyLabel="Restarting…" onClick={() => act("restart")} />
+          </span>
+        </div>
+      )}
 
       {!st.available && (
         <div className="banner">
@@ -172,7 +251,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
           <h3>Settings</h3>
           <div className="setting">
             <span className="name">HLTV<span className="note">Starts and stops with the server</span></span>
-            <Switch on={form.enabled} disabled={saving} onChange={(v) => { const next = { ...form, enabled: v }; setForm(next); save(next); }} label="HLTV" />
+            <Switch on={form.enabled} disabled={saving} onChange={setEnabled} label="HLTV" />
           </div>
           <label className="field">
             <span>Name</span>
@@ -191,13 +270,14 @@ export function Hltv({ server }: { server: ServerInfo }) {
           <div className="row hltv-numbers">
             <label className="field">
               <span>Spectators<Info text="The most people who can watch at once. Watchers don't take player slots. 0 lets nobody watch, but it can still record demos." /></span>
-              <input className="search narrow" type="number" min={0} max={255} value={form.max_spectators} onChange={(e) => set({ max_spectators: Math.max(0, Math.round(+e.target.value)) })} />
+              <input className="search narrow" type="number" min={0} max={255} value={nums.spectators} onChange={(e) => setNum({ spectators: e.target.value })} onBlur={() => setNums({ ...nums, spectators: clampText(nums.spectators, 0, 255) })} />
             </label>
             <label className="field">
               <span>Port<Info text="HLTV listens on its own port, separate from the server's. Change it only if something else already uses it." /></span>
-              <input className="search narrow" type="number" min={st.remote ? 27015 : 1024} max={st.remote ? 27020 : 65000} value={form.port} onChange={(e) => set({ port: Math.round(+e.target.value) })} />
+              <input className="search narrow" type="number" min={st.remote ? 27015 : 1024} max={st.remote ? 27020 : 65000} value={nums.port} onChange={(e) => setNum({ port: e.target.value })} onBlur={() => setNums({ ...nums, port: clampText(nums.port, st.remote ? 27015 : 1024, st.remote ? 27020 : 65000) })} />
             </label>
           </div>
+          {problem && <p className="err-text small-note">{problem}</p>}
           <p className="muted small-note">Each spectator uses about 3 KB/s of upload. The port is {st.default_port} unless you change it.</p>
           <label className="field">
             <span>Spectator password</span>
@@ -208,7 +288,8 @@ export function Hltv({ server }: { server: ServerInfo }) {
             <Switch on={form.record} onChange={(v) => set({ record: v })} label="Record demos" />
           </div>
           <div className="row">
-            <BusyButton className="btn primary" busy={saving} label="Save" busyLabel="Saving…" onClick={() => save()} />
+            <BusyButton className="btn primary" busy={saving} label="Save" busyLabel="Saving…" onClick={save} />
+            {isDirty && !saving && <span className="muted small-note">Unsaved changes</span>}
           </div>
         </div>
       </div>
@@ -270,11 +351,14 @@ function Addresses({ st }: { st: Status }) {
           <span className="muted">from this network</span>
         </div>
       )}
-      <div className="hltv-address">
-        <code className="hltv-cmd">connect {st.addresses.computer}</code>
-        <button className="btn small" onClick={() => copy(st.addresses.computer ?? "")}>Copy</button>
-        <span className="muted">from this computer</span>
-      </div>
+      {st.addresses.computer && (
+        <div className="hltv-address">
+          <code className="hltv-cmd">connect {st.addresses.computer}</code>
+          <button className="btn small" onClick={() => copy(st.addresses.computer!)}>Copy</button>
+          <span className="muted">from this computer</span>
+        </div>
+      )}
+      {!st.addresses.network && !st.addresses.computer && <p className="muted small-note">The address isn't known yet. It shows here once HLTV is up.</p>}
       {st.visibility !== "lan" && (
         <p className="muted small-note">People outside your network use your internet address with port {port}. Open UDP port {port} on your router for them, the same way as the server's own port.</p>
       )}
@@ -287,7 +371,7 @@ function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; re
   const { run, busy } = useActions();
   const key = (d: Demo) => `hltv:${server.id}:delete:${d.name}`;
   const remove = async (d: Demo) => {
-    if (!(await ask(`Delete ${d.name}?`, { ok: "Delete", danger: true }))) return;
+    if (!(await ask(`Delete ${d.name}? It can't be brought back.`, { ok: "Delete the demo", danger: true }))) return;
     await run(key(d), async () => {
       const r = await post(`/api/servers/${server.id}/hltv/delete-demo`, { name: d.name });
       if (r.error) return toast(r.error, true);
@@ -300,7 +384,7 @@ function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; re
     const r = await post(`/api/servers/${server.id}/hltv/fetch-demo`, { name: d.name });
     if (r.error) return toast(r.error, true);
     toast(`${d.name} is in your game's ${server.game} folder. Type viewdemo ${d.name.replace(/\.dem$/i, "")} in the console.`);
-  }, `Downloading ${d.name}…`);
+  }, `Copying ${d.name} to your game…`);
   const show = async (name = "") => {
     const r = await post(`/api/servers/${server.id}/hltv-folder`, { name });
     if (r.error) toast(r.error.includes("forbidden") ? "That only works on the computer running Loner-Strike." : r.error, true);
@@ -328,7 +412,7 @@ function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; re
                   </div>
                   <div className="row">
                     {ON_THIS_COMPUTER && st.remote ? (
-                      <BusyButton className="btn" busy={busy(fetchKey(d))} label="Get it" busyLabel="Downloading…" onClick={() => fetchDemo(d)} />
+                      <BusyButton className="btn" busy={busy(fetchKey(d))} label="Copy to my game" busyLabel="Copying…" onClick={() => fetchDemo(d)} />
                     ) : ON_THIS_COMPUTER ? (
                       <button className="btn" onClick={() => show(d.name)}>Show</button>
                     ) : (
@@ -340,7 +424,7 @@ function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; re
               );
             })}
           </ul>
-          <p className="muted small-note">{st.remote ? "Get it copies a demo into your game's folder. Then type viewdemo followed by its name in the console." : `To watch one, put it in your game's ${server.game} folder and type viewdemo followed by its name in the console.`}</p>
+          <p className="muted small-note">{st.remote ? "Copy to my game puts a demo in your game's folder. Then type viewdemo followed by its name in the console." : `To watch one, put it in your game's ${server.game} folder and type viewdemo followed by its name in the console.`}</p>
         </>
       )}
     </div>

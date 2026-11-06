@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addFromFile, getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable } from "../api";
+import { addFromFile, getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable } from "../api";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
-import { BusyButton, SectionHead, Skeleton, useConfirm, useToast } from "../ui";
+import { BusyButton, LoadError, SectionHead, Sheet, Skeleton, useConfirm, useToast } from "../ui";
 
 const SORTS: [string, string][] = [["popular", "Most downloaded"], ["new", "Newest"], ["liked", "Most liked"]];
 // Shown until the server sends its own list
@@ -40,9 +40,12 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
 
   // only the newest browse request may fill the grid (searches and tabs change fast)
   const latest = useRef(0);
+  // what the last request was (a fresh page or the next one), for Try again
+  const lastReset = useRef(true);
   const load = useCallback(
     async (reset: boolean) => {
       const mine = ++latest.current;
+      lastReset.current = reset;
       setLoading(true);
       setError("");
       const next = reset ? 1 : page + 1;
@@ -143,6 +146,8 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
 
   const [showInstalled, setShowInstalled] = useState(false);
   const active = jobs.filter((j) => !["done", "error"].includes(j.state));
+  const jobFor = (mod: number) => active.find((j) => j.mod === mod);
+  const jobText = (j: GbJob) => (j.size && (j.got ?? 0) < j.size ? `Downloading ${Math.round(((j.got ?? 0) / j.size) * 100)}%` : j.size ? "Installing…" : "Downloading…");
   const label = sections.find((s) => s[0] === section)?.[1] ?? "Maps";
 
   return (
@@ -160,7 +165,14 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
         </SectionHead>
         <div className="chips section-tabs" role="tablist" aria-label="What to get" hidden={!!only}>
           {sections.map(([id, name]) => (
-            <button key={id} className="chip" role="tab" aria-selected={section === id && !showInstalled} onClick={() => { setShowInstalled(false); setSection(id); setCat(null); setItems([]); }}>
+            <button key={id} className="chip" role="tab" aria-selected={section === id && !showInstalled} onClick={() => {
+              setShowInstalled(false);
+              // the same tab again (or back from Installed) keeps what's shown and checks for new
+              if (id === section) return void load(true);
+              setSection(id);
+              setCat(null);
+              setItems([]);
+            }}>
               {name}
             </button>
           ))}
@@ -174,7 +186,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
         ))}
         {!showInstalled && (
           <div className="toolbar">
-            <input className="search" type="search" placeholder={`Search ${label.toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className="search" type="search" aria-label={`Search ${label.toLowerCase()}`} placeholder={`Search ${label.toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} />
             {cats.length > 1 && (
               <select value={cat ?? cats[0][0]} onChange={(e) => setCat(+e.target.value)} aria-label="Type">
                 {cats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
@@ -192,90 +204,95 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
         <InstalledList onChanged={onInstalled} />
       ) : (
         <>
-          {error && <p className="muted">{error}</p>}
+          {error && !items.length && !loading && <LoadError text={error} onRetry={() => load(lastReset.current)} />}
           <div className="maps grid">
-            {items.map((m) => (
-              <button key={m.id} className="map-card" aria-busy={busy(key(`details:${m.id}`))} onClick={() => details(m.id, m.name)} title={m.name}>
-                <div className="map-pic">
-                  {m.image ? (
-                    <img src={m.image} alt="" loading="lazy" />
-                  ) : (
-                    <div className="no-pic" aria-hidden="true">
-                      <span className="no-pic-kind">{label.replace(/s$/, "")}</span>
-                      <span className="no-pic-name small-name">{m.name}</span>
+            {items.map((m) => {
+              const job = jobFor(m.id);
+              return (
+                <div key={m.id} className="card-wrap">
+                  <button className="map-card" aria-busy={busy(key(`details:${m.id}`))} onClick={() => details(m.id, m.name)} title={m.name}>
+                    <div className="map-pic">
+                      {m.image ? (
+                        <img src={m.image} alt="" loading="lazy" />
+                      ) : (
+                        <div className="no-pic" aria-hidden="true">
+                          <span className="no-pic-kind">{label.replace(/s$/, "")}</span>
+                          <span className="no-pic-name small-name">{m.name}</span>
+                        </div>
+                      )}
+                      {m.installed && !job && <span className="badge">Installed</span>}
+                      {job && <span className="badge busy" role="status">{jobText(job)}</span>}
+                    </div>
+                    <span className="map-label">{m.name}</span>
+                    <span className="map-sub">{m.author} · ♥ {m.likes}</span>
+                  </button>
+                  {m.audio && (
+                    <div className="card-pic-overlay">
+                      <button
+                        type="button"
+                        className={`play-preview${playing === m.id ? " on" : ""}`}
+                        aria-label={playing === m.id ? `Stop ${m.name}` : `Play ${m.name}`}
+                        onClick={() => preview(m.id, m.audio!)}
+                      >
+                        {playing === m.id ? "■" : "▶"}
+                      </button>
                     </div>
                   )}
-                  {m.audio && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      className={`play-preview${playing === m.id ? " on" : ""}`}
-                      aria-label={playing === m.id ? `Stop ${m.name}` : `Play ${m.name}`}
-                      onClick={(e) => { e.stopPropagation(); preview(m.id, m.audio!); }}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); preview(m.id, m.audio!); } }}
-                    >
-                      {playing === m.id ? "■" : "▶"}
-                    </span>
-                  )}
-                  {m.installed && <span className="badge">Installed</span>}
                 </div>
-                <span className="map-label">{m.name}</span>
-                <span className="map-sub">{m.author} · ♥ {m.likes}</span>
-              </button>
-            ))}
+              );
+            })}
             {!items.length && !loading && !error && <p className="muted">Nothing here.</p>}
             {!items.length && loading && Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>)}
           </div>
-          {!done && !error && items.length > 0 && (
+          {!done && items.length > 0 && (
             <div className="row center">
-              <button className="btn" disabled={loading} onClick={() => load(false)}>{loading ? "Loading…" : "Show more"}</button>
+              {error && !loading && <p className="err-text" role="alert">{error}</p>}
+              <BusyButton busy={loading} label={error ? "Try again" : "Show more"} busyLabel="Loading…" onClick={() => load(error ? lastReset.current : false)} />
             </div>
           )}
         </>
       )}
 
       {open && (
-        <div className="sheet-backdrop" onClick={() => setOpen(null)}>
-          <div className="sheet wide" role="dialog" aria-label={open.name} onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-pic">{open.images[0] && <img src={open.images[0]} alt="" />}</div>
-            <div className="sheet-body">
-              <h2>{open.name}</h2>
-              <p className="muted">by {open.author}{open.type ? ` · ${open.type}` : ""}</p>
-              {open.audio && <audio controls src={open.audio} className="preview" />}
-              <p className="gb-text">{open.text}</p>
-              {open.installed ? (
-                <div className="banner">
-                  <div>Installed.</div>
-                  <BusyButton className="btn danger" busy={busy(removeKey(section, open.id))} label="Remove" busyLabel="Removing…" onClick={() => remove(open.id, open.name)} />
-                </div>
-              ) : (
-                <ul className="files">
-                  {open.files.map((f) => (
-                    <li key={f.id}>
-                      <div>
-                        <span>{f.file} <small>{size(f.size)}</small></span>
-                        {f.replaces && f.replaces.length > 0 && (
-                          <p className="muted small-note">Replaces {f.replaces.length === 1 ? f.replaces[0] : `${f.replaces.length} game files (${f.replaces.slice(0, 3).join(", ")}${f.replaces.length > 3 ? "…" : ""})`}. Backed up first.</p>
-                        )}
-                        {f.conflicts && f.conflicts.length > 0 && (
-                          <p className="err-text small-note">Also changes files from {[...new Set(f.conflicts.map((c) => c.name))].join(", ")}. Removing either later puts things back in order.</p>
-                        )}
-                        {f.listed === false && <p className="muted small-note">Its contents are checked after downloading.</p>}
-                      </div>
-                      {f.virus ? <span className="muted">Flagged by GameBanana's virus scan</span> : f.supported ? (
-                        <BusyButton className="btn primary" busy={busy(key(`install:${open.id}:${f.id}`))} label="Install" busyLabel="Installing…" onClick={() => install(open.id, f.id, open.name)} />
-                      ) : <span className="muted">Can't open this kind of file</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="row">
-                <a className="btn" href={open.url} target="_blank" rel="noreferrer">Open on GameBanana</a>
-                <button className="btn" onClick={() => setOpen(null)}>Close</button>
+        <Sheet className="sheet wide" label={open.name} onClose={() => setOpen(null)}>
+          <div className="sheet-pic">{open.images[0] && <img src={open.images[0]} alt="" />}</div>
+          <div className="sheet-body">
+            <h2>{open.name}</h2>
+            <p className="muted">by {open.author}{open.type ? ` · ${open.type}` : ""}</p>
+            {open.audio && <audio controls src={open.audio} className="preview" />}
+            <p className="gb-text">{open.text}</p>
+            {open.installed ? (
+              <div className="banner">
+                <div>Installed.</div>
+                <BusyButton className="btn danger" busy={busy(removeKey(section, open.id))} label="Remove" busyLabel="Removing…" onClick={() => remove(open.id, open.name)} />
               </div>
+            ) : (
+              <ul className="files">
+                {open.files.map((f) => (
+                  <li key={f.id}>
+                    <div>
+                      <span>{f.file} <small>{size(f.size)}</small></span>
+                      {f.replaces && f.replaces.length > 0 && (
+                        <p className="muted small-note">Replaces {f.replaces.length === 1 ? f.replaces[0] : `${f.replaces.length} game files (${f.replaces.slice(0, 3).join(", ")}${f.replaces.length > 3 ? "…" : ""})`}. Backed up first.</p>
+                      )}
+                      {f.conflicts && f.conflicts.length > 0 && (
+                        <p className="err-text small-note">Also changes files from {[...new Set(f.conflicts.map((c) => c.name))].join(", ")}. Removing either later puts things back in order.</p>
+                      )}
+                      {f.listed === false && <p className="muted small-note">Its contents are checked after downloading.</p>}
+                    </div>
+                    {f.virus ? <span className="muted">Flagged by GameBanana's virus scan</span> : f.supported ? (
+                      <BusyButton className="btn primary" busy={busy(key(`install:${open.id}:${f.id}`))} disabled={!!jobFor(open.id)} label={jobFor(open.id) ? jobText(jobFor(open.id)!) : "Install"} busyLabel="Installing…" onClick={() => install(open.id, f.id, open.name)} />
+                    ) : <span className="muted">Can't open this kind of file</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="row">
+              <a className="btn" href={open.url} target="_blank" rel="noreferrer">Open on GameBanana</a>
+              <button className="btn" onClick={() => setOpen(null)}>Close</button>
             </div>
           </div>
-        </div>
+        </Sheet>
       )}
     </div>
   );
@@ -290,7 +307,13 @@ function InstalledList({ onChanged }: { onChanged: () => void }) {
   const ask = useConfirm();
   const { run, busy } = useActions();
   const [list, setList] = useState<Installed[] | null>(null);
-  const load = () => getJson<Installed[]>("/api/gb/installed").then((l) => setList(Array.isArray(l) ? l : [])).catch(() => setList([]));
+  const [failed, setFailed] = useState(false);
+  const load = () => {
+    setFailed(false);
+    return getJson<Installed[]>("/api/gb/installed")
+      .then((l) => setList(Array.isArray(l) ? l : []))
+      .catch((e) => !isAbort(e) && setFailed(true));
+  };
   useEffect(() => {
     load();
   }, []);
@@ -305,6 +328,7 @@ function InstalledList({ onChanged }: { onChanged: () => void }) {
       onChanged();
     }, `Removing ${it.name}…`);
   };
+  if (failed && !list) return <LoadError text="Couldn't load what's installed." onRetry={load} />;
   if (!list) return <Skeleton />;
   if (!list.length) return <p className="muted">Nothing downloaded yet. Anything you install from here shows up in this list.</p>;
   return (

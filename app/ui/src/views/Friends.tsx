@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { getJson, postJson, targetKey, useActions } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions } from "../api";
+import { useServers } from "../queries";
+import { useNav } from "../store";
 import type { Online } from "../types";
 import { BusyButton, Info, SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 
@@ -32,8 +34,12 @@ const METHODS: { id: Method; name: string; blurb: string; tag?: string }[] = [
   { id: "tailscale", name: "Tailscale", blurb: "A private network everyone joins" },
   { id: "zerotier", name: "ZeroTier", blurb: "A virtual LAN everyone joins" },
   { id: "radmin", name: "Radmin VPN", blurb: "A virtual LAN for gamers", tag: "Windows only" },
-  { id: "hamachi", name: "Hamachi", blurb: "The 2004 classic. Up to 5 people free", tag: "Retro" },
+  { id: "hamachi", name: "Hamachi", blurb: "An older virtual LAN. Up to 5 people free" },
 ];
+
+/** The computer running Loner-Strike, for steps that differ on a Mac and on Windows
+ *  (null on a phone, where it isn't known). */
+const OS: "mac" | "windows" | null = !ON_THIS_COMPUTER ? null : /Mac/.test(navigator.platform) ? "mac" : /Win/.test(navigator.platform) ? "windows" : null;
 
 const GAME = "Counter-Strike";
 
@@ -52,15 +58,15 @@ const SHARE_LABEL: Record<string, string> = {
 const VLAN_INFO: Record<"zerotier" | "radmin" | "hamachi", string> = {
   zerotier: "ZeroTier links your computers into one private network over the internet, so your game shows up in friends' LAN tab as if you were in the same room. Everyone installs it and joins your network.",
   radmin: "Radmin VPN is a free virtual LAN for Windows, popular for old games. Everyone installs it and joins your network, then your game shows up in their LAN tab.",
-  hamachi: "Hamachi is the virtual LAN people used for games in the 2000s. Everyone joins your network by its ID and password; free networks hold 5 people.",
+  hamachi: "Hamachi is an older virtual LAN that many people still use for games. Everyone joins your network by its ID and password; free networks hold 5 people.",
 };
 
 function inviteText(name: string, pw: string, addr: string, intro: string[], lanTab: boolean) {
   return [
-    `Join my ${GAME} game${name ? ` "${name}"` : ""}!`,
+    `Join my ${GAME} game${name ? ` "${name}"` : ""}.`,
     ...(intro.length ? ["", ...intro] : []),
     "",
-    ...(lanTab ? ["In the game, open Find Servers > LAN and join it. Or open the console (~) and type:"] : [
+    ...(lanTab ? ["In the game, open Find Servers, then LAN, and join it. Or open the console (~) and type:"] : [
       "Paste this into your browser's address bar and Steam opens the game and joins:",
       `steam://connect/${addr}${pw ? "/" + pw : ""}`,
       "",
@@ -109,6 +115,10 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   const busy = (what: string) => busyKey(key(what));
   const directBusy = busy("direct");
   const [vlans, setVlans] = useState<VLans>({});
+  // a server on a rented machine: friends connect straight to its address
+  const open = useNav((n) => n.server);
+  const servers = useServers().data;
+  const vps = server && open ? servers?.servers.find((x) => x.id === open && x.host) : undefined;
 
   useEffect(() => {
     const load = () => {
@@ -201,7 +211,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     steps = (
       <ol className="steps">
         <li className="done"><strong>Get everyone on the same network</strong><p>Same Wi-Fi, or plugged into the same router.</p></li>
-        <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong><p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (Wine/CrossOver): click Allow.</p></li>
+        <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong>{OS === "mac" ? <p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (Wine/CrossOver): click Allow.</p> : OS === "windows" ? <p>The first time, Windows may ask whether to let the game through its firewall: allow it on private networks.</p> : null}</li>
         <li className="now"><strong>Friends join from the LAN tab</strong><p>In Counter-Strike, open <b>Find Servers</b> and the <b>LAN</b> tab, and your server is there{serverName ? ` as "${serverName}"` : ""}.</p></li>
       </ol>
     );
@@ -272,7 +282,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     steps = (
       <ol className="steps">
         <li className={ts.installed ? "done" : "now"}><strong>Install Tailscale on this computer<Info text="Tailscale is a private network for your devices and the friends you invite. Only people on it can reach your game; each friend installs Tailscale too." /></strong><p>{ts.installed ? "Installed." : <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Download Tailscale (free) and sign in.</a>}</p></li>
-        <li className={running ? "done" : ts.installed ? "now" : ""}><strong>Turn it on</strong><p>{running ? `Connected as ${ts.name || ts.ip}.` : ts.installed ? "Open the Tailscale app from the menu bar and connect." : "After installing."}</p></li>
+        <li className={running ? "done" : ts.installed ? "now" : ""}><strong>Turn it on</strong><p>{running ? `Connected as ${ts.name || ts.ip}.` : ts.installed ? `Open the Tailscale app${OS === "mac" ? " from the menu bar" : OS === "windows" ? " from the system tray" : ""} and connect.` : "After installing."}</p></li>
         <li className={running ? "now" : ""}><strong>Let your friend in</strong><p>Your friend installs Tailscale too. Then share this computer with them, or invite them to your network, from the <a href="https://login.tailscale.com/admin/machines" target="_blank" rel="noreferrer">Tailscale admin console</a>.</p></li>
       </ol>
     );
@@ -281,7 +291,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
       "Create a free network at my.zerotier.com, join it from the ZeroTier app with its Network ID, and send friends the ID. Approve them in the network's member list when they join.");
   } else if (method === "radmin") {
     steps = vlanSteps("Radmin VPN", "radmin-vpn.com", "https://www.radmin-vpn.com/",
-      <b>Radmin VPN only runs on Windows, so it won't work from a Mac.</b>,
+      OS === "mac" ? <b>Radmin VPN only runs on Windows, so it won't work from a Mac.</b> : null,
       "In Radmin VPN, choose Create network from the Network menu, give it a name and password, and send both to your friends so they can join.");
   } else if (method === "hamachi") {
     steps = vlanSteps("Hamachi", "vpn.net", "https://vpn.net/", <span className="muted">The free plan allows 5 people per network.</span>,
@@ -289,6 +299,69 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   }
 
   const text = address ? inviteText(serverName, password, address, intro, lanTab) : "";
+
+  // the name and join password, the same for every way of connecting
+  const yourServer = (
+    <form
+      className="panel"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const p = password.trim();
+        if (!/^[A-Za-z0-9_-]{0,24}$/.test(p)) return toast("Passwords can use letters, numbers, - and _.", true);
+        const r = await act("server", { name: serverName.trim(), password: p });
+        if (r) toast(data ? "Saved and applied to the game" : "Saved. It applies when you start a game.");
+      }}
+    >
+      <h3>Your server</h3>
+      <label className="field">
+        <span>Server name</span>
+        <input className="search" maxLength={48} placeholder="e.g. Friday night frags" value={serverName} onChange={(e) => setName(e.target.value)} />
+      </label>
+      <label className="field">
+        <span>Password</span>
+        <div className="row">
+          <input className="search" maxLength={24} placeholder="No password" spellCheck={false} value={password} onChange={(e) => setPw(e.target.value)} />
+          <button type="button" className="btn" onClick={() => {
+            const w = ["alpha", "bravo", "delta", "echo", "foxtrot", "kilo", "lima", "oscar", "sierra", "tango", "victor", "zulu"];
+            setPw(`${w[Math.floor(Math.random() * w.length)]}-${100 + Math.floor(Math.random() * 900)}`);
+          }}>Make one</button>
+        </div>
+        <small>Letters, numbers, - and _. Leave it empty to let in anyone who has the address.</small>
+      </label>
+      <button className="btn primary" type="submit" disabled={busy("server")} aria-busy={busy("server")}>
+        {busy("server") ? <><span className="spinner" aria-hidden="true" />Saving…</> : "Save"}
+      </button>
+    </form>
+  );
+
+  if (vps) {
+    const at = vps.address ?? `${vps.host}:${vps.port}`;
+    const invite = inviteText(serverName, password, at, [], false);
+    return (
+      <div className="stack">
+        <SectionHead title="Play with friends" note={`${vps.name} runs on ${vps.host}, so friends connect straight to it. They need Counter-Strike on Steam.`} />
+        <div className="friends">
+          <div className="panel">
+            <span className={`live ${vps.state === "running" ? "on" : ""}`}>{vps.state === "running" ? "Friends can join now" : "Start the server and friends can join"}</span>
+            <div className="address">{at}</div>
+            <div className="row">
+              <button className="btn" onClick={() => copy(at, toast)}>Copy address</button>
+            </div>
+            <p className="muted small-note">
+              If friends can't connect, check UDP port {vps.port} is open in your provider's firewall (security list, security group or firewall group). Setup opened
+              it on the machine itself, but not at the provider.
+            </p>
+            <h3>Send this to your friends</h3>
+            <textarea className="invite" readOnly value={invite} />
+            <div className="row">
+              <button className="btn primary" onClick={() => copy(invite, toast)}>Copy message</button>
+            </div>
+          </div>
+          <div className="stack">{yourServer}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="stack">
@@ -299,7 +372,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
       <div className="methods" role="radiogroup" aria-label="How friends connect">
         {METHODS.map((m) => (
           <button key={m.id} role="radio" aria-checked={method === m.id} className="method" onClick={() => setMethod(m.id)}>
-            <span className="method-name">{m.name}{m.tag && <i>{m.tag}</i>}</span>
+            <span className="method-name">{m.name}{m.tag && !(m.id === "radmin" && OS === "windows") && <i>{m.tag}</i>}</span>
             <span className="method-blurb">{m.blurb}</span>
           </button>
         ))}
@@ -307,36 +380,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
       <div className="friends">
         <div>{steps}</div>
         <div className="stack">
-          <form
-            className="panel"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const p = password.trim();
-              if (!/^[A-Za-z0-9_-]{0,24}$/.test(p)) return toast("Passwords can use letters, numbers, - and _.", true);
-              const r = await act("server", { name: serverName.trim(), password: p });
-              if (r) toast(data ? "Saved and applied to the game" : "Saved. It applies when you start a game.");
-            }}
-          >
-            <h3>Your server</h3>
-            <label className="field">
-              <span>Server name</span>
-              <input className="search" maxLength={48} placeholder="e.g. Friday night frags" value={serverName} onChange={(e) => setName(e.target.value)} />
-            </label>
-            <label className="field">
-              <span>Password</span>
-              <div className="row">
-                <input className="search" maxLength={24} placeholder="No password" spellCheck={false} value={password} onChange={(e) => setPw(e.target.value)} />
-                <button type="button" className="btn" onClick={() => {
-                  const w = ["alpha", "bravo", "delta", "echo", "foxtrot", "kilo", "lima", "oscar", "sierra", "tango", "victor", "zulu"];
-                  setPw(`${w[Math.floor(Math.random() * w.length)]}-${100 + Math.floor(Math.random() * 900)}`);
-                }}>Make one</button>
-              </div>
-              <small>Letters, numbers, - and _. Leave it empty to let in anyone who has the address.</small>
-            </label>
-            <button className="btn primary" type="submit" disabled={busy("server")} aria-busy={busy("server")}>
-              {busy("server") ? <><span className="spinner" aria-hidden="true" />Saving…</> : "Save"}
-            </button>
-          </form>
+          {yourServer}
 
           {live && address && (
             <div className="panel">

@@ -331,7 +331,7 @@ export function Banner({ children, action }: { children: ReactNode; action?: Rea
 }
 
 /** The classic Steam loader: a sunken bar that fills up with blocks. */
-export function SteamProgress({ value, title, text, error }: { value: number; title: string; text?: string; error?: boolean }) {
+export function SteamProgress({ value, title, text, error, foot = "This may take a few minutes." }: { value: number; title: string; text?: string; error?: boolean; foot?: string }) {
   const bar = useRef<HTMLDivElement>(null);
   const [slots, setSlots] = useState(40);
   useEffect(() => {
@@ -352,7 +352,7 @@ export function SteamProgress({ value, title, text, error }: { value: number; ti
         {Array.from({ length: filled }, (_, i) => <i key={i} />)}
       </div>
       <div className="steam-box-foot">
-        <span>This may take a few minutes.</span>
+        <span>{foot}</span>
         <span>{Math.round(value * 100)}%</span>
       </div>
     </div>

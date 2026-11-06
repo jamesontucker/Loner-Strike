@@ -1,12 +1,14 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { clock, ON_THIS_COMPUTER, postJson, withTarget, useActions, useActivity } from "./api";
+import { gameTitle } from "./games";
 import { Icon } from "./icons";
 import { queryClient, reloadAppInfo, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
 import { useNav, type Section } from "./store";
 import type { AppInfo, Online } from "./types";
-import { applyScale, ConfirmProvider, LoadError, savedScale, Sheet, Skeleton, ToastProvider, useToast } from "./ui";
+import { applyScale, ConfirmProvider, useConfirm, LoadError, savedScale, Sheet, Skeleton, ToastProvider, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
+import { hasUnsavedEdits } from "./views/Servers";
 import { Addons } from "./views/Addons";
 import { AppSettings } from "./views/AppSettings";
 import { Bots } from "./views/Bots";
@@ -46,8 +48,6 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "settings", label: "Settings", icon: "settings", group: "App" },
 ];
 
-const gameTitle = (id?: string | null) => (id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero");
-
 applyScale(savedScale());
 
 export default function App() {
@@ -74,7 +74,13 @@ function Shell() {
   const scan = scanQ.data ?? null;
   const servers = serversQ.data ?? null;
   const toast = useToast();
+  const ask = useConfirm();
   const { run: once, busy } = useActions();
+  /** Goes to a section, asking first when a page has edits that aren't saved. */
+  const nav = async (s: Section, focus?: string) => {
+    if (hasUnsavedEdits() && !(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
+    go(s, focus);
+  };
 
   const reloadApp = () => void reloadAppInfo();
   const refreshMaps = () => void reloadMaps();
@@ -112,7 +118,7 @@ function Shell() {
       const what = (e as CustomEvent<string>).detail;
       if (what.startsWith("section:")) {
         const id = what.slice(8) as Section;
-        if (NAV.some((n) => n.id === id)) go(id);
+        if (NAV.some((n) => n.id === id)) nav(id);
       } else if (what === "updates") {
         go("settings", "updates");
         // same key as Settings' Check now button, so it shows there too
@@ -134,13 +140,13 @@ function Shell() {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
       if (e.key === ",") {
         e.preventDefault();
-        go("settings");
+        nav("settings");
         return;
       }
       const n = Number(e.key);
       if (n >= 1 && n <= 9 && NAV[n - 1]) {
         e.preventDefault();
-        go(NAV[n - 1].id);
+        nav(NAV[n - 1].id);
       }
     };
     window.addEventListener("keydown", key);
@@ -205,7 +211,7 @@ function Shell() {
       className={`${cls}${n.live && !online ? " needs-game" : ""}`}
       aria-current={section === n.id ? "page" : undefined}
       title={n.live && !online ? "Needs a game you're hosting" : undefined}
-      onClick={() => go(n.id)}
+      onClick={() => nav(n.id)}
     >
       <Icon name={n.icon} />
       {n.label}
@@ -313,7 +319,7 @@ function Shell() {
         {tabbar.map((id) => {
           const n = NAV.find((x) => x.id === id)!;
           return (
-            <button key={id} aria-current={section === id && !moreOpen ? "page" : undefined} onClick={() => go(id)}>
+            <button key={id} aria-current={section === id && !moreOpen ? "page" : undefined} onClick={() => nav(id)}>
               <Icon name={n.icon} size={22} />
               <span>{n.label}</span>
               {id === "players" && players > 0 && <i className="tab-count">{players}</i>}

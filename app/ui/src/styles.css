@@ -1245,3 +1245,54 @@ code.secret { padding: 5px 8px; background: var(--line); box-shadow: var(--sunke
   .working-phone { display: flex; margin: 0; padding: 6px 16px; max-width: none; background: var(--side); box-shadow: inset 0 -1px 0 var(--line); }
 }
 .more-sheet .nav-group { padding: 10px 14px 4px; }
+
+/* ---- admins, community, extras, welcome, match mode ---- */
+.needs-setup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.needs-setup > p { margin: 0; flex: 1 1 260px; }
+.community .needs-setup.cm-note { margin: 0 0 12px; }
+.ability-name .info { margin-left: 0; }
+
+/* ---- settings, setup, play, files update ---- */
+.size-skeleton { display: inline-block; width: 52px; height: 12px; vertical-align: -1px; border-radius: 2px; background: var(--panel-2); animation: shimmer 1s ease-in-out infinite alternate; }
+.size-skeleton.wide { display: block; width: 60%; margin-top: 6px; }
+.app-settings > section.settings-lit > .panel { outline-color: var(--signal); }
+.app-settings > section > .panel { outline: 2px solid transparent; outline-offset: 2px; transition: outline-color .6s; }
+@media (prefers-reduced-motion: reduce) { .size-skeleton { animation: none; } }
+
+/* ---- maps, get more, players, quick bar (cards with their own buttons) ---- */
+/* a card's extra button (favourite, sound preview) sits next to the card's own button, laid over its picture */
+.card-wrap { position: relative; min-width: 0; }
+.card-wrap > .map-card { width: 100%; }
+.card-pic-overlay { position: absolute; top: 0; left: 0; right: 0; aspect-ratio: 16 / 9; pointer-events: none; }
+.card-pic-overlay > button { pointer-events: auto; border: 0; padding: 0; }
+.card-wrap:hover .fav-toggle, .card-wrap:focus-within .fav-toggle { opacity: 1; }
+.card-wrap:hover .map-card .map-pic { outline: 2px solid var(--signal); }
+.badge.busy { background: var(--signal); color: var(--signal-ink); top: auto; bottom: 6px; }
+.random-map { display: inline-flex; }
+.player-actions { display: grid; gap: 8px; }
+.pa-label { min-width: 72px; color: var(--bone-faint); font-size: 13px; font-weight: 600; }
+.prow.prow-head { padding: 0 2px 4px; color: var(--bone-faint); font-size: 12px; font-weight: 600; }
+.prow.prow-head:hover { background: none; }
+.ls-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.qstep .qmenu .caret { min-width: 0; color: inherit; font-size: 10px; }
+.qstep .qmenu-list span { min-width: 0; text-align: left; font-size: inherit; }
+.qstep .qmenu-list .tick { width: 14px; min-width: 14px; color: var(--signal); }
+.qstep .qb .ls-sr { min-width: 0; }
+
+/* ---- servers, HLTV, friends (UX pass) ---- */
+.live.off-line { color: var(--warn); }
+.live.off-line::before { background: var(--warn); }
+.unreachable { display: grid; gap: 6px; padding: 8px 12px; border-left: 3px solid var(--warn); background: var(--panel); }
+.unreachable p { margin: 0; }
+.inline-error { display: grid; gap: 4px; margin: 6px 0 0; }
+.inline-error p { margin: 0; }
+.job-progress { display: grid; gap: 8px; }
+.job-progress .steam-box { margin-bottom: 0; }
+.server-restart-bar { margin: 0; }
+.waiting .spinner { vertical-align: -1px; }
+@media (max-width: 760px) {
+  /* faded edges where more tabs are off screen */
+  .server-tabs.more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
+  .server-tabs.more-left { -webkit-mask-image: linear-gradient(to right, transparent, #000 36px); mask-image: linear-gradient(to right, transparent, #000 36px); }
+  .server-tabs.more-left.more-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+}

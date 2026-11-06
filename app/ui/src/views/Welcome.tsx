@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { getJson, postJson, useActions } from "../api";
-import { BusyButton, Info, SectionHead, Skeleton, useToast } from "../ui";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { getJson, isAbort, postJson, useActions } from "../api";
+import { useNav } from "../store";
+import { BusyButton, Info, LoadError, SectionHead, Skeleton, useToast } from "../ui";
+import { useDirty } from "./Servers";
 import { ShareList } from "./ShareList";
 
 type Data = { style: "builtin" | "custom" | "url"; note: string; html: string | null; url: string | null; max: number; error?: string };
@@ -36,7 +38,10 @@ const SAMPLE: Record<string, string> = { "{server}": "Friday night frags", "{pla
 /** The page players see when they join (the game's MOTD window), for the game or server being managed. */
 export function Welcome({ target }: { target: string }) {
   const toast = useToast();
+  const server = useNav((s) => s.server);
   const [d, setD] = useState<Data | null>(null);
+  const [error, setError] = useState("");
+  const code = useRef<HTMLTextAreaElement>(null);
   const [style, setStyle] = useState<Data["style"]>("builtin");
   const [note, setNote] = useState("");
   const [html, setHtml] = useState("");
@@ -46,31 +51,64 @@ export function Welcome({ target }: { target: string }) {
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
+    setD(null);
+    setError("");
     getJson<Data>("/api/welcome")
       .then((r) => {
+        if (r.error) return setError(r.error);
         setD(r);
         setStyle(r.style);
         setNote(r.note);
         setHtml(r.html ?? "");
         setUrl(r.url ?? "");
       })
-      .catch(() => setD({ error: "Couldn't reach the app." } as Data));
+      .catch((e) => !isAbort(e) && setError("Couldn't reach the app."));
   }, [target, version]);
 
   const preview = useMemo(() => Object.entries(SAMPLE).reduce((h, [k, v]) => h.split(k).join(v), html), [html]);
+  const dirty = !!d && (style !== d.style || note !== d.note || html !== (d.html ?? "") || url !== (d.url ?? ""));
+  // a server's tab bar asks before leaving with unsaved edits
+  useDirty("welcome", dirty);
+  if (error)
+    return (
+      <div className="stack">
+        <SectionHead title="Welcome page" />
+        <LoadError text={error} onRetry={() => setVersion((v) => v + 1)} />
+      </div>
+    );
   if (!d) return <Skeleton />;
-  if (d.error) return <p className="muted">{d.error}</p>;
   const tooLong = html.length > d.max;
+
+  /** Puts a fill-in where the cursor is (or over the selection), and keeps typing from there. */
+  const insert = (k: string) => {
+    const el = code.current;
+    const start = el?.selectionStart ?? html.length;
+    const end = el?.selectionEnd ?? html.length;
+    setHtml(html.slice(0, start) + k + html.slice(end));
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + k.length, start + k.length);
+    });
+  };
 
   const save = () => run(`welcome:${target}:save`, async () => {
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/welcome", { style, note, html, url }).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) return toast(r.error, true);
+    setD({ ...d, style, note, html: html || null, url: url || null });
     toast("Saved. Players see it next time they join.");
   }, "Saving the welcome page…");
 
   return (
     <div className="stack">
-      <SectionHead title="Welcome page" note="What players see when they join. Turn it on or off, or show it every map, with Welcome screen on the Match page. Players can say /welcome to see it again." />
+      <SectionHead
+        title="Welcome page"
+        note={
+          <>
+            What players see when they join. To turn it off or show it every map, use the Welcome screen setting on the {server ? "server's Match tab" : "Match page"}, with the round
+            settings. Players can say /welcome to see it again.
+          </>
+        }
+      />
       <ShareList list="welcome" onShared={() => setVersion((v) => v + 1)} />
       <div className="methods" role="radiogroup" aria-label="Welcome page">
         {STYLES.map((s) => (
@@ -98,13 +136,13 @@ export function Welcome({ target }: { target: string }) {
               <h3>Page<Info text="The HTML shown in the game's welcome window. The chips below add live details like {map}, which the game fills in for each player." /></h3>
               {!html && <button className="btn small" onClick={() => setHtml(STARTER)}>Start from an example</button>}
             </div>
-            <textarea className="invite code" spellCheck={false} value={html} onChange={(e) => setHtml(e.target.value)} placeholder="<h1>{server}</h1>" />
+            <textarea ref={code} className="invite code" spellCheck={false} aria-label="Page HTML" value={html} onChange={(e) => setHtml(e.target.value)} placeholder="<h1>{server}</h1>" />
             <p className={tooLong ? "err-text" : "muted"}>
               {html.length} of {d.max} characters{tooLong ? ". The game cuts off longer pages, so trim it, or host it as a web page instead." : "."}
             </p>
             <div className="chips">
               {PLACEHOLDERS.map(([k, label]) => (
-                <button key={k} className="chip" title={`Fills in ${label}`} onClick={() => setHtml((h) => h + k)}>{k}</button>
+                <button key={k} className="chip" title={`Fills in ${label}`} onClick={() => insert(k)}>{k}</button>
               ))}
             </div>
           </div>
@@ -128,6 +166,7 @@ export function Welcome({ target }: { target: string }) {
 
       <div className="row">
         <BusyButton className="btn primary" busy={busy(`welcome:${target}:save`)} disabled={style === "custom" && tooLong} label="Save" busyLabel="Saving…" onClick={save} />
+        {dirty && <span className="muted">Not saved yet</span>}
       </div>
     </div>
   );

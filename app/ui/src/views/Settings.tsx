@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { targetKey, useActions } from "../api";
+import { useCallback, useRef, useState, type ReactNode } from "react";
+import { sameValue, targetKey, useActions } from "../api";
 import type { Online, Setting } from "../types";
 import { BusyButton, Info, SectionHead, Segmented, useCommand, useConfirm } from "../ui";
 
@@ -61,13 +61,48 @@ const STYLE_NOTES: Record<string, string> = {
   "3": "Seasoned: fast reactions, tight aim, few mistakes",
   "5": "Pro level: crisp flicks, short bursts, the occasional bunnyhop",
   "6": "Nearly an aimbot: snaps to heads, bunnyhops often",
-  "7": "Everything maxed. Good luck",
+  "7": "Everything maxed",
 };
+
+/** How long a picked value shows before the game's own answer wins regardless. */
+const PENDING_MS = 3000;
+
+/** Values just picked, per setting: shown instead of the polled one until the game
+ *  reports the same value (or a few seconds pass), so a control doesn't jump back to
+ *  the old value between the save and the next poll. */
+export function usePending() {
+  const picked = useRef(new Map<string, { v: string; at: number }>());
+  const [, tick] = useState(0);
+  const set = useCallback((k: string, v: string) => {
+    picked.current.set(k, { v, at: Date.now() });
+    tick((n) => n + 1);
+    setTimeout(() => tick((n) => n + 1), PENDING_MS + 50);
+  }, []);
+  const clear = useCallback((k: string) => {
+    picked.current.delete(k);
+    tick((n) => n + 1);
+  }, []);
+  const value = (k: string, polled: string) => {
+    const p = picked.current.get(k);
+    if (!p) return polled;
+    if (sameValue(polled, p.v) || Date.now() - p.at > PENDING_MS) {
+      picked.current.delete(k);
+      return polled;
+    }
+    return p.v;
+  };
+  return { set, clear, value };
+}
 
 export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat: number; refresh: () => void; q?: string }) {
   const run = useCommand(refresh);
   const { run: act, busy } = useActions();
   const key = (cvar: string) => `settings:${targetKey()}:${cvar}`;
+  const pending = usePending();
+  const pick = (s: Setting, v: string) => act(key(s.cvar), async () => {
+    pending.set(s.cvar, v);
+    if (!(await run("gm_set", [s.cvar, v], true))) pending.clear(s.cvar);
+  }, `Changing ${s.name}…`);
   const all = data.settings.filter((s) => s.cat === cat && s.visible);
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const list = all.filter((s) => {
@@ -78,25 +113,20 @@ export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat
   if (!list.length) return <p className="muted">No settings match "{q.trim()}".</p>;
   return (
     <div className="settings">
-      {list.map((s: Setting) => (
-        <div className="setting" key={s.cvar}>
-          <div className="name">
-            {s.name}
-            {INFO[s.cvar] && !NOTES[s.cvar] && <Info text={INFO[s.cvar]} />}
-            {(s.cvar === "gm_botstyle" ? STYLE_NOTES[s.value] : NOTES[s.cvar]) && (
-              <span className="note">{s.cvar === "gm_botstyle" ? STYLE_NOTES[s.value] : NOTES[s.cvar]}</span>
-            )}
+      {list.map((s: Setting) => {
+        const value = pending.value(s.cvar, s.value);
+        const note = s.cvar === "gm_botstyle" ? STYLE_NOTES[value] : NOTES[s.cvar];
+        return (
+          <div className="setting" key={s.cvar}>
+            <div className="name">
+              {s.name}
+              {INFO[s.cvar] && !NOTES[s.cvar] && <Info text={INFO[s.cvar]} />}
+              {note && <span className="note">{note}</span>}
+            </div>
+            <Segmented label={s.name} values={s.values} labels={s.labels} current={value} disabled={busy(key(s.cvar))} onPick={(v) => pick(s, v)} />
           </div>
-          <Segmented
-            label={s.name}
-            values={s.values}
-            labels={s.labels}
-            current={s.value}
-            disabled={busy(key(s.cvar))}
-            onPick={(v) => act(key(s.cvar), () => run("gm_set", [s.cvar, v], true), `Changing ${s.name}…`)}
-          />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

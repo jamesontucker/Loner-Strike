@@ -30,15 +30,36 @@ const PROVIDERS = [
   },
 ];
 
-const TROUBLE = [
+const TROUBLE: { q: string; a: string; match?: RegExp }[] = [
   { q: "\"Failed to contact game server\"", a: "The provider's firewall doesn't allow UDP 27015-27020 inbound, or the server is stopped." },
-  { q: "Couldn't reach it on port 22", a: "The machine is off, the address is wrong, or (on Oracle) it has no public IP." },
-  { q: "The server didn't accept the key", a: "Wrong user (ubuntu or root), the key wasn't added when the machine was made, or you picked the .pub file." },
-  { q: "The key has a passphrase", a: "Not supported yet. Make a key without one and add its .pub line to ~/.ssh/authorized_keys on the machine." },
-  { q: "The server's identity has changed", a: "Expected if you rebuilt the machine: run ssh-keygen -R with its address, then delete the server here and add it again. Otherwise, don't connect." },
-  { q: "The machine is aarch64", a: "It's ARM. Make an x86 (AMD or Intel) one." },
+  { q: "Couldn't reach it on port 22", a: "The machine is off, the address is wrong, or (on Oracle) it has no public IP.", match: /couldn't (reach|find)|can't reach|port 22|timed out|connection .*(failed|dropped)/i },
+  { q: "The server didn't accept the key", a: "Wrong user (ubuntu or root), the key wasn't added when the machine was made, or you picked the .pub file.", match: /didn't accept the key|key file/i },
+  { q: "The key has a passphrase", a: "Not supported yet. Make a key without one and add its .pub line to ~/.ssh/authorized_keys on the machine.", match: /passphrase/i },
+  { q: "The server's identity has changed", a: "Expected if you rebuilt the machine: run ssh-keygen -R with its address, then delete the server here and add it again. Otherwise, don't connect.", match: /identity has changed/i },
+  { q: "The machine is aarch64", a: "It's ARM. Make an x86 (AMD or Intel) one.", match: /aarch64|arm64|only runs on x86/i },
   { q: "Setup stopped part way", a: "Try again carries on where it stopped. Rebuild from scratch wipes the server's folder on the machine and starts over." },
 ];
+
+/** The troubleshooting tip that fits an SSH or setup error, if one does. */
+export function troubleFor(error: string | null | undefined): { q: string; a: string } | null {
+  if (!error) return null;
+  return TROUBLE.find((t) => t.match?.test(error)) ?? null;
+}
+
+/** How big a machine to rent: the one table both hosting guides show. */
+export function SizingTable() {
+  return (
+    <table className="sizing">
+      <thead>
+        <tr><th>Players (bots included)</th><th>CPU</th><th>Memory</th><th>Upload speed</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Up to about 10, a few bots</td><td>1 vCPU</td><td>1 GB</td><td>5 Mbps</td></tr>
+        <tr><td>20 to 32, with bots</td><td>2 vCPU</td><td>2 to 4 GB</td><td>10 to 20 Mbps</td></tr>
+      </tbody>
+    </table>
+  );
+}
 
 export function HostingGuide() {
   return (
@@ -52,15 +73,7 @@ export function HostingGuide() {
 
       <div className="panel">
         <h4>1. Choose a host and size</h4>
-        <table className="sizing">
-          <thead>
-            <tr><th>Players (bots included)</th><th>CPU</th><th>Memory</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Up to about 10, a few bots</td><td>1 vCPU</td><td>1 GB</td></tr>
-            <tr><td>20 to 32, with bots</td><td>2 vCPU</td><td>2 to 4 GB</td></tr>
-          </tbody>
-        </table>
+        <SizingTable />
         <p className="muted measure">
           Free: Oracle Cloud's Always Free AMD machines (VM.Standard.E2.1.Micro), when Oracle has capacity, or Oracle's trial credits. Cheap: Hetzner, Vultr,
           DigitalOcean, OVH and Linode have x86 plans at around $4 to $7 a month. Pick a location near your players.
@@ -104,6 +117,10 @@ export function HostingGuide() {
       <div className="panel">
         <h4>4. Open UDP 27015-27020</h4>
         <p className="muted measure">
+          Servers on a Linux machine use UDP 27015 to 27019 (one port each) and 27020 for HLTV. (Servers on this computer use 27016 and up instead, since your own
+          game has 27015.)
+        </p>
+        <p className="muted measure">
           The app opens the ports in the machine's own firewall during setup. It can't reach your provider's firewall (security list, security group, firewall group),
           so add an inbound rule there: protocol UDP, ports 27015-27020, source anywhere (<code>0.0.0.0/0</code>). Leave SSH (TCP 22) open; the app uses it for
           everything else.
@@ -125,7 +142,7 @@ export function HostingGuide() {
           <li>Make the server.</li>
         </ol>
         <p className="muted measure">
-          Setup takes 5 to 15 minutes. The server runs on UDP 27015 as a service called <code>lonerstrike-&lt;name&gt;</code>, keeps running with the app closed and
+          Setup takes 5 to 15 minutes; keep Loner-Strike open until it finishes. The first server runs on UDP 27015 as a service called <code>lonerstrike-&lt;name&gt;</code>, keeps running with the app closed and
           restarts after a crash or a reboot.
         </p>
       </div>
@@ -143,7 +160,7 @@ export function HostingGuide() {
         </p>
       </div>
 
-      <div className="panel">
+      <div className="panel" id="hosting-trouble">
         <h4>Troubleshooting</h4>
         {TROUBLE.map((t) => (
           <p key={t.q} className="measure">

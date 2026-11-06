@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { getJson, postJson, useActions } from "../api";
+import { useQuery } from "@tanstack/react-query";
+import { getJsonAt, postJson, useActions } from "../api";
+import { BOT_NOTE, BOT_RATING, gameShort, gameTitle } from "../games";
 import { Icon } from "../icons";
+import { useSetupJob, waitForSetupJob } from "../queries";
 import { BusyButton, Info, SteamProgress, useToast } from "../ui";
 import logo from "../assets/logo.svg";
 
@@ -19,11 +22,6 @@ export type Scan = { installs: SetupInstall[]; catalog: CatalogItem[]; native_ma
 export type Step = { id: string; label: string; state: "pending" | "running" | "done" | "error"; detail?: string; game?: string };
 export type Job = { id?: string; state: "idle" | "running" | "done" | "error"; kind?: string; steps: Step[]; progress: number; error?: string; failed_compiles?: string[]; notes?: string[] };
 
-const BOT_NOTE = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" };
-// Same ratings as the mode cards on the Play screen
-const BOT_RATING: Record<string, "great" | "ok" | "weak" | "none"> = {
-  hns: "ok", deathrun: "ok", surf: "ok", soccerjam: "weak", basebuilder: "weak", kreedz: "none",
-};
 const ratingOf = (c: CatalogItem) => {
   if (c.kind !== "mode") return null;
   const mode = c.id.replace(/^mode-/, "");
@@ -42,7 +40,13 @@ const IS_MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform
  *  the game choice and its way out is Cancel. */
 export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan: Scan; fromSettings?: boolean; onClose: () => void; onDone: () => void; onRescan: () => void }) {
   const toast = useToast();
-  const [stage, setStage] = useState<Stage>("welcome");
+  // a setup already running (started before a reload, or from Mods): straight to its progress
+  const jobQ = useSetupJob();
+  const [stage, setStage] = useState<Stage>(() => (jobQ.data?.state === "running" ? "install" : fromSettings ? "games" : "welcome"));
+  useEffect(() => {
+    if (jobQ.data?.state === "running" && stage !== "install") setStage("install");
+    // only the first answer counts: later ones are this setup's own job
+  }, [jobQ.isFetched]);
   const [installIdx, setInstallIdx] = useState(0);
   const install = scan.installs[installIdx];
   // every game this Steam has, CS 1.6 first
@@ -50,17 +54,17 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
   const [preset, setPreset] = useState<"all" | "basics" | "pick">("all");
   const usable = useMemo(() => scan.catalog.filter((c) => !c.games || c.games.some((g) => games.includes(g))), [scan.catalog, games]);
   const [picked, setPicked] = useState<Set<string>>(() => new Set(scan.catalog.map((c) => c.id)));
-  const [job, setJob] = useState<Job | null>(null);
+  const job = stage === "install" || stage === "done" ? jobQ.data ?? null : null;
+  // the app stopped answering while setup ran: say so instead of a bar that never moves
+  const [lost, setLost] = useState(false);
   // setup can't change the game's files while it runs: checked on the review step
-  const [gameOpen, setGameOpen] = useState(false);
-  useEffect(() => {
-    if (stage !== "review") return;
-    const check = () => getJson<{ running: boolean }>("/api/setup/running").then((r) => setGameOpen(!!r.running)).catch(() => setGameOpen(false));
-    check();
-    const t = setInterval(check, 2000);
-    return () => clearInterval(t);
-  }, [stage]);
-  const timer = useRef<number>();
+  const runningQ = useQuery({
+    queryKey: ["setupGameOpen"],
+    queryFn: ({ signal }) => getJsonAt<{ running: boolean }>("/api/setup/running", null, signal),
+    enabled: stage === "review",
+    refetchInterval: 2000,
+  });
+  const gameOpen = stage === "review" && !!runningQ.data?.running;
 
   const chosen = preset === "all" ? usable : preset === "basics" ? [] : usable.filter((c) => picked.has(c.id));
 
@@ -72,21 +76,25 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
       components: chosen.map((c) => c.id),
     }).catch((): { ok?: boolean; job?: string; error?: string } => ({ error: "Setup couldn't start." }));
     if (!r.ok) return toast(r.error || "Setup couldn't start.", true);
+    setLost(false);
+    // the new job, not the last one's end, before the progress shows
+    await jobQ.refetch();
     setStage("install");
   }, "Starting setup…");
 
+  // follow the job to its end; the progress itself comes from useSetupJob
   useEffect(() => {
-    if (stage !== "install") return;
-    const tick = async () => {
-      const j = await getJson<Job>("/api/setup/job").catch(() => null);
-      if (!j) return;
-      setJob(j);
-      if (j.state === "done") setStage("done");
+    if (stage !== "install" || lost) return;
+    let gone = false;
+    waitForSetupJob().then((j) => {
+      if (gone) return;
+      if (!j) setLost(true);
+      else if (j.state === "done") setStage("done");
+    });
+    return () => {
+      gone = true;
     };
-    tick();
-    timer.current = window.setInterval(tick, 700);
-    return () => window.clearInterval(timer.current);
-  }, [stage]);
+  }, [stage, lost]);
 
   const finish = () => run("setup:finish", async () => {
     await postJson("/api/app/game", { hl: install.hl, game: games[0] }).catch(() => null);
@@ -98,7 +106,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
   return (
     <div className="setup">
       <div className="setup-card">
-        <ThemeMusic />
+        {!fromSettings && <ThemeMusic />}
         <ol className="setup-steps" aria-label="Setup steps">
           {(["games", "content", "review", "install"] as Stage[]).map((s, i) => (
             <li key={s} className={stage === s ? "now" : order(stage) > order(s) ? "done" : ""}>
@@ -119,7 +127,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               <button className="btn primary big-btn" onClick={() => setStage("games")}>Set it up</button>
               <button className="btn" onClick={onClose}>Set up later</button>
             </div>
-            <p className="muted later">Later, everything here is in the app under Mods and Settings.</p>
+            <p className="muted later">Later, you can add or remove any of it under Mods.</p>
             <p className="made-by setup-by">by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a></p>
           </section>
         )}
@@ -147,7 +155,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
                     disabled={!g}
                     onClick={() => setGames((cur) => (on ? cur.filter((x) => x !== id) : [...cur, id].sort((a) => (a === "cstrike" ? -1 : 1))))}
                   >
-                    <span className="game-title">{id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}</span>
+                    <span className="game-title">{gameTitle(id)}</span>
                     <span className="muted">
                       {!g ? "Not installed in this Steam" : g.installed ? "Set up already; picking it updates it" : g.foreign ? "Has other mods installed; Loner-Strike works alongside them" : "Ready to set up"}
                     </span>
@@ -158,7 +166,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             </div>
             <p className="muted">Both use the same bots. Condition Zero adds more bot voices and its own versions of the maps.</p>
             {IS_MAC && <p className="muted">On a Mac, Counter-Strike runs through CrossOver: Windows Steam installed in a CrossOver bottle. That's where Loner-Strike found your games.</p>}
-            <Nav back={() => setStage("welcome")} next={() => setStage("content")} canNext={games.length > 0} />
+            <Nav back={fromSettings ? onClose : () => setStage("welcome")} backLabel={fromSettings ? "Cancel" : "Back"} next={() => setStage("content")} canNext={games.length > 0} />
           </section>
         )}
 
@@ -170,7 +178,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               <button aria-pressed={preset === "basics"} onClick={() => setPreset("basics")}>Just the basics</button>
               <button aria-pressed={preset === "pick"} onClick={() => setPreset("pick")}>Let me pick</button>
             </div>
-            <p className="muted">The basics are always included: {BASICS}. You can add or remove anything later from Settings.</p>
+            <p className="muted">The basics are always included: {BASICS}. You can add or remove anything later under Mods.</p>
             {preset !== "basics" && (
               <div className="pick-grid">
                 {usable.map((c) => {
@@ -200,9 +208,9 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
           <section className="setup-pane">
             <h2>Ready to install</h2>
             <ul className="review">
-              <li><b>Game{games.length > 1 ? "s" : ""}:</b> {games.map((g) => (g === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero")).join(" and ")}</li>
+              <li><b>Game{games.length > 1 ? "s" : ""}:</b> {games.map(gameTitle).join(" and ")}</li>
               <li><b>Mods:</b> Metamod-P, AMX Mod X and ReGameDLL (the pieces that let mods run)</li>
-              <li><b>Loner-Strike:</b> bot styles, regulars, the in-game menu (F3) and this panel</li>
+              <li><b>Loner-Strike:</b> bot styles, regular bots (the same names keep coming back, like on a real server), the in-game menu (F3) and this panel</li>
               <li><b>Modes and add-ons:</b> the basics{chosen.length ? ` plus ${chosen.map((c) => c.name).join(", ")}` : ""}</li>
             </ul>
             <p className="muted">It downloads from the original projects (GameBanana for maps), compiles the plugins, and backs up every file it replaces.</p>
@@ -224,6 +232,18 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
 
         {stage === "install" && (
           <section className="setup-pane">
+            {lost && job?.state !== "error" && (
+              <>
+                <h2>Lost contact with setup</h2>
+                <p className="err-text">Loner-Strike stopped answering, so there's no telling how far setup got.</p>
+                <p className="muted">Try again to check on it. If the app restarted, run setup again: whatever finished is kept.</p>
+                <div className="row">
+                  <button className="btn primary" onClick={() => { setLost(false); jobQ.refetch(); }}>Try again</button>
+                  <button className="btn" onClick={onClose}>Close</button>
+                </div>
+              </>
+            )}
+            {!(lost && job?.state !== "error") && <>
             <h2>{job?.state === "error" ? "Setup stopped" : "Installing"}</h2>
             <SteamProgress
               value={job?.progress ?? 0}
@@ -237,7 +257,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
                   <span className="dot-state" aria-hidden="true">{s.state === "done" ? "✓" : s.state === "error" ? "!" : s.state === "running" ? "•" : ""}</span>
                   <span>
                     {s.label}
-                    {s.game && games.length > 1 ? <small> · {s.game === "cstrike" ? "CS 1.6" : "CZ"}</small> : null}
+                    {s.game && games.length > 1 ? <small> · {gameShort(s.game)}</small> : null}
                   </span>
                 </li>
               ))}
@@ -246,9 +266,13 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               <>
                 <p className="err-text">{job.error}</p>
                 <p className="muted">Nothing that finished is lost; run setup again to retry.</p>
-                <div className="row"><button className="btn primary" onClick={() => setStage("review")}>Try again</button></div>
+                <div className="row">
+                  <button className="btn primary" onClick={() => setStage("review")}>Try again</button>
+                  <button className="btn" onClick={onClose}>Close</button>
+                </div>
               </>
             )}
+            </>}
           </section>
         )}
 
@@ -276,10 +300,10 @@ function order(s: Stage) {
   return ["welcome", "games", "content", "review", "install", "done"].indexOf(s);
 }
 
-function Nav({ back, next, canNext = true, nextLabel = "Continue", busy = false, busyLabel = "" }: { back: () => void; next: () => void; canNext?: boolean; nextLabel?: string; busy?: boolean; busyLabel?: string }) {
+function Nav({ back, backLabel = "Back", next, canNext = true, nextLabel = "Continue", busy = false, busyLabel = "" }: { back: () => void; backLabel?: string; next: () => void; canNext?: boolean; nextLabel?: string; busy?: boolean; busyLabel?: string }) {
   return (
     <div className="setup-nav">
-      <button className="btn" disabled={busy} onClick={back}>Back</button>
+      <button className="btn" disabled={busy} onClick={back}>{backLabel}</button>
       <BusyButton className="btn primary" busy={busy} disabled={!canNext} label={nextLabel} busyLabel={busyLabel} onClick={next} />
     </div>
   );
