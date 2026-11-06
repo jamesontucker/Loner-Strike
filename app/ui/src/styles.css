@@ -77,6 +77,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--bone-faint);
   font-size: 13px; font-weight: 600;
 }
+/* a short window (a 13" laptop): a little tighter, so every section still fits */
+@media (min-width: 761px) and (max-height: 900px) {
+  .nav-item { padding-top: 4px; padding-bottom: 4px; }
+  .nav-group { margin-top: 7px; }
+  .brand { padding-bottom: 10px; }
+}
 .nav-item {
   width: 100%;
   display: flex; align-items: center; gap: 11px;
