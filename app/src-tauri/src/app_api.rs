@@ -221,6 +221,31 @@ async fn api_lan() -> Json<Value> {
     Json(json!({"ip": lan_ip(), "port": 27015}))
 }
 
+/// Direct (UPnP): GET the status, POST {on} to open or close the router port.
+async fn api_direct() -> Json<Value> {
+    Json(crate::connect::direct_status())
+}
+
+#[derive(Deserialize)]
+struct DirectReq {
+    on: bool,
+}
+
+async fn api_direct_set(headers: HeaderMap, Json(req): Json<DirectReq>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    let v = tokio::task::spawn_blocking(move || if req.on { crate::connect::open_direct() } else { crate::connect::close_direct() })
+        .await
+        .unwrap_or_else(|_| json!({"on": false, "error": "Something went wrong."}));
+    (StatusCode::OK, Json(v))
+}
+
+/// This computer's address on ZeroTier, Radmin VPN or Hamachi, when they're running.
+async fn api_vlans() -> Json<Value> {
+    Json(tokio::task::spawn_blocking(crate::connect::virtual_lans).await.unwrap_or_else(|_| json!({})))
+}
+
 // ---- choosing the game ---------------------------------------------------------
 /// Which game the panel controls: the one picked last, else one Loner-Strike set up
 /// (CS 1.6 first), else the first one found.
@@ -344,4 +369,6 @@ pub fn routes() -> Router<Shared> {
         .route("/api/app/game", post(api_use_game))
         .route("/api/app/restart", post(api_restart))
         .route("/api/app/lan", get(api_lan))
+        .route("/api/app/direct", get(api_direct).post(api_direct_set))
+        .route("/api/app/vlans", get(api_vlans))
 }

@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_api;
+mod connect;
 mod archive;
 mod content;
 mod game;
@@ -52,6 +53,7 @@ fn main() {
                 app_api::start_phone(&state);
             }
             tauri::async_runtime::spawn(check_for_update(app.handle().clone()));
+            connect::renew_loop();
             // LONER_UI_URL points the window at the React dev server while working on the UI
             let url = std::env::var("LONER_UI_URL")
                 .unwrap_or_else(|_| format!("http://127.0.0.1:{port}/"))
@@ -64,8 +66,16 @@ fn main() {
                 .build()?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("Loner-Strike couldn't start");
+        .build(tauri::generate_context!())
+        .expect("Loner-Strike couldn't start")
+        .run(|_, event| {
+            // close the router port again when the app quits
+            if let tauri::RunEvent::Exit = event {
+                if connect::DIRECT.lock().map(|d| d.on).unwrap_or(false) {
+                    connect::close_direct();
+                }
+            }
+        });
 }
 
 /// Looks for a newer release on GitHub and offers to install it.

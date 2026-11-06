@@ -19,6 +19,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rand = "0.8"
 dirs = "5"
+igd-next = "0.18"
+if-addrs = "0.15"
 rust-embed = { version = "8", features = ["mime-guess"] }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # HTTPS to GameBanana and playit.gg (same rustls + ring stack the updater already uses)

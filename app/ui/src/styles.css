@@ -535,3 +535,14 @@ input[type="range"] { accent-color: var(--signal); }
 /* ---- word wrapping: no lone words on the last line ------------------------- */
 h1, h2, h3, .tagline, .big, .mode-name, .preset-name, .pick-name, .game-title, .map-title, .address, .banner > div, .toast { text-wrap: balance; }
 p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { text-wrap: pretty; }
+
+/* ---- ways to play with friends ----------------------------------------------- */
+.methods { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.method { text-align: left; display: grid; gap: 3px; padding: 10px 12px; border: 1px solid transparent; border-radius: 3px; background: var(--panel); box-shadow: var(--raised); }
+.method:hover { background: var(--panel-2); }
+.method[aria-checked="true"] { border-color: var(--signal); background: var(--panel-2); }
+.method-name { font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.method-name i { font-style: normal; font-size: 11px; font-weight: 700; color: var(--bone-faint); background: var(--bg); padding: 0 6px; border-radius: 2px; }
+.method[aria-checked="true"] .method-name i { color: var(--signal); }
+.method-blurb { color: var(--bone-faint); font-size: 13px; line-height: 1.3; text-wrap: pretty; }
+@media (max-width: 760px) { .methods { grid-template-columns: 1fr 1fr; } }
