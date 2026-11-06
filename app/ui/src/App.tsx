@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { clock, getJson } from "./api";
 import { useGameState } from "./api";
-import { Icon, Mark } from "./icons";
+import { Icon } from "./icons";
 import type { AppInfo, MapInfo, Online } from "./types";
 import { ToastProvider, useCommand } from "./ui";
 import { Addons } from "./views/Addons";
@@ -105,10 +105,7 @@ function Shell() {
     <div className="shell">
       <aside className="sidebar">
         <div className="drag-strip" data-tauri-drag-region />
-        <div className="brand">
-          <Mark />
-          <span>Loner-Strike</span>
-        </div>
+        <div className="brand">Loner-Strike</div>
         <nav className="nav" aria-label="Sections">
           {NAV.map((n) => (
             <div key={n.id}>

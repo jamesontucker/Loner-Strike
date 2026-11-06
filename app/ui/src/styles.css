@@ -58,9 +58,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .drag-strip { height: 38px; flex: none; } /* room for the macOS window buttons */
 .brand {
-  display: flex; align-items: center; gap: 10px;
-  padding: 2px 8px 18px;
-  font: 400 19px/1 var(--stencil);
+  padding: 4px 10px 20px;
+  font: 400 21px/1 var(--stencil);
+  color: var(--bone);
   letter-spacing: .01em;
   white-space: nowrap;
 }
