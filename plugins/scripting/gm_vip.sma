@@ -125,7 +125,7 @@ public plugin_cfg()
 	read_line(fmt("%s/current.txt", g_DataDir), mode, charsmax(mode))
 	g_Perks = g_Career ? PERKS_NONE : mode_perks(mode)
 
-	load_settings()
+	load_settings(false)
 	if (file_exists("banned.cfg"))
 		server_cmd("exec banned.cfg")
 	if (file_exists("listip.cfg"))
@@ -158,14 +158,17 @@ read_line(const path[], out[], len)
 	}
 }
 
-load_settings()
+load_settings(bool:now = true)
 {
 	new path[160]
 	formatex(path, charsmax(path), "%s/vip.cfg", g_DataDir)
 	if (file_exists(path))
 	{
+	// at map start the exec just goes in the queue: running the queue then could also
+	// run a map change someone queued, in the middle of this map starting
 		server_cmd("exec ^"%s^"", path)
-		server_exec()
+		if (now)
+			server_exec()
 	}
 }
 

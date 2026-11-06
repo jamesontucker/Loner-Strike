@@ -79,9 +79,17 @@ new CsTeams:g_VoteSide, g_Vote[33], g_VoteMenu = -1
 // Pauses
 new g_PausesLeft[2], bool:g_PausePending, g_PauseTeam = -1, bool:g_Paused, g_PausedAt, g_PauseBy[32]
 
+set_phase(ph)
+{
+	g_Phase = ph
+	set_cvar_num("gm_scrim_phase", ph == PH_OVER ? PH_NONE : ph)
+}
+
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR)
+	// other plugins read this (gm_extras leaves warmup alone); a new map starts with no match
+	set_pcvar_num(register_cvar("gm_scrim_phase", "0"), PH_NONE)
 	g_pMaxRounds = register_cvar("gm_scrim_maxrounds", "30")
 	g_pOvertime  = register_cvar("gm_scrim_overtime", "1")
 	g_pKnife     = register_cvar("gm_scrim_knife", "1")
@@ -365,7 +373,7 @@ enter_warmup(bool:restart)
 	remove_task(TASK_VOTE)
 	remove_task(TASK_NEXT)
 	close_vote()
-	g_Phase = PH_WARMUP
+	set_phase(PH_WARMUP)
 	g_Paused = false
 	g_PausePending = false
 	restore_money()
@@ -510,7 +518,7 @@ admin_start(const who[])
 
 start_knife()
 {
-	g_Phase = PH_KNIFE
+	set_phase(PH_KNIFE)
 	save_live()
 	set_if("mp_round_infinite", "0")
 	set_if("mp_buy_anywhere", "0")
@@ -525,7 +533,7 @@ start_knife()
 
 knife_won(CsTeams:side)
 {
-	g_Phase = PH_VOTE
+	set_phase(PH_VOTE)
 	g_VoteSide = side
 	arrayset(g_Vote, 0, sizeof g_Vote)
 	new voters = 0
@@ -644,7 +652,7 @@ go_live(bool:swap)
 	if (get_pcvar_num(g_pBots) && get_cvar_pointer("bot_quota"))
 		fill_bots()
 
-	g_Phase = PH_LIVE
+	set_phase(PH_LIVE)
 	g_Side0 = CS_TEAM_CT
 	g_Score[0] = g_Score[1] = 0
 	g_Rounds = 0
@@ -909,7 +917,7 @@ team_label(t, out[], len)
 
 finish()
 {
-	g_Phase = PH_OVER
+	set_phase(PH_OVER)
 	remove_task(TASK_NEXT)
 	new l0[40], l1[40]
 	team_label(0, l0, charsmax(l0))

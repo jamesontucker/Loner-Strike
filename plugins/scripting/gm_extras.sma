@@ -76,6 +76,7 @@
 
 #define TAG          "^4[Server]^1"
 
+new bool:g_In[MAX_PLAYERS + 1], g_Uid[MAX_PLAYERS + 1], bool:g_Bot[MAX_PLAYERS + 1], g_Name[MAX_PLAYERS + 1][32]
 new g_pRotRandom, g_pAdsInterval, g_pAdsRandom
 new g_pAfk, g_pAfkSpec, g_pAfkKick, g_pPing, g_pPingMax, g_pPingChecks, g_pFastdl
 new g_pNextmap, g_pChattime
@@ -215,9 +216,23 @@ load(bool:first)
 	formatex(path, charsmax(path), "%s/extras.cfg", g_DataDir)
 	if (file_exists(path))
 	{
+	// at map start the exec just goes in the queue: running the queue then could also
+	// run a map change someone queued, in the middle of this map starting
 		server_cmd("exec ^"%s^"", path)
-		server_exec()
+		if (!first)
+			server_exec()
 	}
+	if (first)
+		set_task(0.1, "task_loaded")
+	else
+		loaded(false)
+}
+
+public task_loaded()
+	loaded(true)
+
+loaded(bool:first)
+{
 	apply_fastdl()
 	load_ads()
 	if (!g_Career)
@@ -538,6 +553,11 @@ public client_putinserver(id)
 	g_PingN[id] = 0
 	g_Strikes[id] = 0
 	g_CanVote[id] = false
+	// kept for fw_disconnect: by the time it runs the player may already count as gone
+	g_In[id] = !is_user_hltv(id)
+	g_Uid[id] = get_user_userid(id)
+	g_Bot[id] = is_user_bot(id) != 0
+	get_user_name(id, g_Name[id], charsmax(g_Name[]))
 	joined(id)
 	if (!is_user_bot(id) && !is_user_hltv(id))
 		remove_task(TASK_EMPTY)
@@ -548,11 +568,18 @@ public client_disconnected(id)
 	g_Watch[id] = false
 }
 
+public client_infochanged(id)
+{
+	if (g_In[id])
+		get_user_info(id, "name", g_Name[id], charsmax(g_Name[]))
+}
+
 // Someone really left (or was kicked): not called on a map change
 public fw_disconnect(id)
 {
-	if (id < 1 || id > MaxClients || !is_user_connected(id))
+	if (id < 1 || id > MaxClients || !g_In[id])
 		return FMRES_IGNORED
+	g_In[id] = false
 	left(id)
 	vote_left(id)
 	check_empty(id)
@@ -611,6 +638,9 @@ to_spec(id, kick_after)
 public task_afk()
 {
 	if (g_Career || !get_pcvar_num(g_pAfk))
+		return
+	// a match (gm_scrim) is on: players wait in warmup on purpose, and spectator would undo their ready
+	if (get_cvar_num("gm_scrim_phase"))
 		return
 	new spec = clamp(get_pcvar_num(g_pAfkSpec), 30, 3600)
 	new kick_after = get_pcvar_num(g_pAfkKick)
@@ -753,7 +783,8 @@ set_here(uid, bool:on)
 	get_localinfo("gm_here", list, charsmax(list))
 	formatex(key, charsmax(key), ",%d,", uid)
 	replace_string(list, charsmax(list), key, ",")
-	if (!list[0] || strlen(list) > 280)       // a fresh server, or something went missing
+	// a fresh server, or a list too long for localinfo (the engine refuses 127+ characters)
+	if (!list[0] || strlen(list) > 110)
 		copy(list, charsmax(list), ",")
 	if (on)
 		add(list, charsmax(list), key[1])
@@ -787,7 +818,9 @@ joined(id)
 	new uid = get_user_userid(id)
 	if (was_here(uid))          // back after a map change
 		return
-	set_here(uid, true)
+	// bots get a new userid every map, so they're never "back"
+	if (!is_user_bot(id))
+		set_here(uid, true)
 	if (!show_joins(id))
 		return
 	new name[32], ip[24], country[48]
@@ -804,14 +837,13 @@ joined(id)
 		client_print_color(0, print_team_grey, "%s ^3%s^1 joined.", TAG, name)
 }
 
+// from what was kept at join: the player is on the way out
 left(id)
 {
-	set_here(get_user_userid(id), false)
-	if (!show_joins(id))
+	set_here(g_Uid[id], false)
+	if (g_Career || !get_pcvar_num(g_pJoins) || (g_Bot[id] && get_pcvar_num(g_pJoinsSkipBots)))
 		return
-	new name[32]
-	get_user_name(id, name, charsmax(name))
-	client_print_color(0, print_team_grey, "%s ^3%s^1 left.", TAG, name)
+	client_print_color(0, print_team_grey, "%s ^3%s^1 left.", TAG, g_Name[id])
 }
 
 // ---------------------------------------------------------------------------
@@ -998,7 +1030,7 @@ vote_left(id)
 {
 	if (g_VoteMenu == -1)
 		return
-	if (get_user_userid(id) == g_VoteUid && !g_VoteBan)
+	if (g_Uid[id] == g_VoteUid && !g_VoteBan)
 	{
 		close_vote()
 		client_print_color(0, print_team_grey, "%s ^3%s^1 left, so the vote is over.", TAG, g_VoteName)
@@ -1156,7 +1188,7 @@ public task_empty()
 	else if (menu)
 		server_cmd("gm_map %s", map)
 	else
-		server_cmd("changelevel %s", map)
+		engine_changelevel(map)
 }
 
 // ---------------------------------------------------------------------------

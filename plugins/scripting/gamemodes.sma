@@ -238,6 +238,8 @@ enum { MC_DE, MC_CS, MC_OBJ, MC_SURF, MC_FUN, MC_OTHER, MC_COUNT }
 new const MAPCAT_NAMES[MC_COUNT][] = { "Bomb defusal (de_)", "Hostage rescue (cs_)", "Other objectives (as_, es_)", "Surf", "Arena & fun", "Everything else" }
 
 new bool:g_BotHams
+new g_MapProfile[64]       // bot_profile_db this map loaded with (see task_changelevel)
+new bool:g_Changing
 new bool:g_Paused
 new g_ModeId[MAX_MODES][32]
 new g_ModeName[MAX_MODES][48]
@@ -349,6 +351,8 @@ public plugin_init()
 	RegisterHam(Ham_Killed, "player", "fw_killed_post", 1)
 	register_event("Money", "ev_money", "b")
 	register_event("DeathMsg", "ev_death", "a")
+	register_event("30", "ev_intermission", "a")
+	get_cvar_string("bot_profile_db", g_MapProfile, charsmax(g_MapProfile))
 	register_logevent("ev_roundstart", 2, "1=Round_Start")
 	register_event("SendAudio", "ev_win_t", "a", "2&%!MRAD_terwin")
 	register_event("SendAudio", "ev_win_ct", "a", "2&%!MRAD_ctwin")
@@ -438,6 +442,14 @@ public plugin_cfg()
 	}
 	set_task(1.0, "task_apply")
 	set_task(4.0, "task_reapply_saved")
+	// bots kicked for a roster change come back now
+	new quota[8]
+	get_localinfo("gm_quota_back", quota, charsmax(quota))
+	if (quota[0])
+	{
+		set_localinfo("gm_quota_back", "")
+		set_cvar_string("bot_quota", quota)
+	}
 	set_task(5.0, "task_learn_guard_start")
 	set_task(30.0, "task_edicts", TASK_EDICTS, _, _, "b")
 	remember_recent()
@@ -2249,9 +2261,52 @@ do_go(mode, const map[])
 	set_task(1.5, "task_changelevel", 0, data, sizeof data)
 }
 
+// The bot roster this map loaded with. Bots that stay connected through a map
+// change after bot_profile_db changed can crash the game as the new map loads
+// (their personalities were freed with the old roster), so they're kicked first
+// and the bot count is put back on the next map.
+bool:profile_changed()
+{
+	new now[64]
+	get_cvar_string("bot_profile_db", now, charsmax(now))
+	return !equali(now, g_MapProfile)
+}
+
+kick_bots_for_profile()
+{
+	if (!profile_changed())
+		return false
+	new quota[8]
+	get_cvar_string("bot_quota", quota, charsmax(quota))
+	set_localinfo("gm_quota_back", quota)
+	set_cvar_num("bot_quota", 0)
+	server_cmd("bot_kick")
+	server_exec()
+	return true
+}
+
 public task_changelevel(const map[])
 {
+	// one map change at a time: a second one queued behind it would run while
+	// the next map is still starting
+	if (g_Changing)
+		return
+	g_Changing = true
+	if (kick_bots_for_profile())
+		set_task(0.6, "task_changelevel_now", 0, map, 32)
+	else
+		server_cmd("changelevel %s", map)
+}
+
+public task_changelevel_now(const map[])
+{
 	server_cmd("changelevel %s", map)
+}
+
+// the game's own map change (time limit): it waits through the scoreboard first
+public ev_intermission()
+{
+	kick_bots_for_profile()
 }
 
 show_nav(id)

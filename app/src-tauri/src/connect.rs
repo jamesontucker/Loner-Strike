@@ -112,11 +112,12 @@ pub fn close_direct() -> Value {
 pub fn renew_loop() {
     std::thread::spawn(|| loop {
         std::thread::sleep(Duration::from_secs((LEASE_SECS / 2) as u64));
+        // read before `on`: a close after this point is always seen by the check
+        let since = CLOSED.load(std::sync::atomic::Ordering::SeqCst);
         let (on, port) = {
             let d = DIRECT.lock().unwrap();
             (d.on, d.port)
         };
-        let since = CLOSED.load(std::sync::atomic::Ordering::SeqCst);
         if on {
             open_unless_closed(port, Some(since));
         }

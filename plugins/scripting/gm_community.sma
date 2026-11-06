@@ -120,7 +120,7 @@ public plugin_init()
 
 public plugin_cfg()
 {
-	load_settings()
+	load_settings(false)
 	load_gags()
 	load_playtime()
 	load_botnames()
@@ -143,14 +143,17 @@ public plugin_end()
 	dump_stats()
 }
 
-load_settings()
+load_settings(bool:now = true)
 {
 	new path[160]
 	formatex(path, charsmax(path), "%s/community.cfg", g_DataDir)
 	if (file_exists(path))
 	{
+	// at map start the exec just goes in the queue: running the queue then could also
+	// run a map change someone queued, in the middle of this map starting
 		server_cmd("exec ^"%s^"", path)
-		server_exec()
+		if (now)
+			server_exec()
 	}
 	load_words()
 }

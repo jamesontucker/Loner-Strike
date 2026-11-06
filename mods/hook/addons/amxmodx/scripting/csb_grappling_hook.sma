@@ -43,6 +43,7 @@ new g_pEnabled, g_pRange, g_pPull, g_pCooldown, g_pVipOnly
 new bool:g_bHooking[33]
 new Float:g_fHook[33][3]
 new Float:g_fNextHook[33]
+new Float:g_fNextBeam[33]
 new g_iBeamSpr
 
 public plugin_init()
@@ -141,6 +142,7 @@ public cmdHookStart(id)
     g_fHook[id][1] = fHit[1]
     g_fHook[id][2] = fHit[2]
     g_bHooking[id] = true
+    g_fNextBeam[id] = 0.0
     return PLUGIN_HANDLED
 }
 
@@ -196,7 +198,13 @@ public fwPreThink(id)
     fVel[2] = fDir[2] * pull
     set_pev(id, pev_velocity, fVel)
 
-    drawBeam(fOrigin, g_fHook[id])
+    // the beam lives 0.1 s, so drawing it that often looks the same as every
+    // frame without broadcasting a message to everyone 100 times a second
+    if (get_gametime() >= g_fNextBeam[id])
+    {
+        g_fNextBeam[id] = get_gametime() + 0.1
+        drawBeam(fOrigin, g_fHook[id])
+    }
     return FMRES_IGNORED
 }
 

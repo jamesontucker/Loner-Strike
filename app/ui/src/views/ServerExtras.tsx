@@ -5,6 +5,9 @@ import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Color = "default" | "green" | "red" | "blue" | "grey";
 type Ad = { text: string; color: Color };
+/** Modes A to Z, for the pickers. */
+const byName = <T extends { name: string }>(l: T[]) => [...l].sort((a, b) => a.name.localeCompare(b.name));
+
 type Settings = {
   rotation_random: boolean;
   rtv_cycle: boolean;
@@ -233,7 +236,7 @@ function Rotation({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
           <span>Which rotation</span>
           <select value={scope} onChange={(e) => pickScope(e.target.value)}>
             <option value="">Main rotation (every mode, {d.rotation.file})</option>
-            {d.modes.map((m) => (
+            {byName(d.modes).map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
                 {d.rotation.modes[m.id] ? " (own list)" : ""}
@@ -645,7 +648,7 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
                   <span className="name">Mode<span className="note">Keep the mode, or switch to one.</span></span>
                   <select className="sched-select" aria-label="Mode to go back to" value={empty.mode} onChange={(e) => saveSettings({ empty: { ...empty, mode: e.target.value } })}>
                     <option value="">Keep the current mode</option>
-                    {d.modes.map((m) => (
+                    {byName(d.modes).map((m) => (
                       <option key={m.id} value={m.id}>{m.name}</option>
                     ))}
                   </select>
