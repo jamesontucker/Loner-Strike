@@ -338,6 +338,8 @@ new CVAR_BOTS, CVAR_BOTKICKDIST, CVAR_BOTROLES
 new g_botKeeper[TEAMS]
 new g_botPresser[TEAMS]
 new g_botSlot[MAX_PLAYER]
+// each bot plays a bit differently: skill (aim of its shots) and pace, set when it's first seen
+new Float:g_botSkill[MAX_PLAYER], Float:g_botPace[MAX_PLAYER]
 new Float:g_botHoldStart[MAX_PLAYER]
 new Float:g_botNextKick[MAX_PLAYER]
 new g_botChaser[TEAMS]
@@ -1380,6 +1382,7 @@ public touchNet(ball, goalpost)
 
 		//Increase Score, and update cvar score
 		score[team]++
+		BotGoalReact(ballowner, team)
 		switch(team) {
 			case 1: set_cvar_num("score_ct",score[team])
 			case 2: set_cvar_num("score_t",score[team])
@@ -2248,6 +2251,7 @@ public eraser(num) {
 
 ====================================================================================================*/
 public client_disconnect(id) {
+	g_botSkill[id] = 0.0
 	if(is_kickball) {
 		new x
 		for(x = 1; x<=RECORDS; x++)
@@ -2787,6 +2791,59 @@ flameWave(myorig[3]) {
              within reach of the enemy goal's mascot. An enemy close by is left to the bot's brain.
    A bot holding the ball with an enemy on it passes to an open teammate nearer the enemy goal.
 ====================================================================================================*/
+// A point to shoot at: the goal's middle moved toward one of its sides
+GetGoalAim(team, Float:out[3]) {
+	if(!GetGoalCenter(team, out))
+		return 0
+	new ent = GoalEnt[team]
+	new Float:mins[3], Float:maxs[3]
+	entity_get_vector(ent, EV_VEC_absmin, mins)
+	entity_get_vector(ent, EV_VEC_absmax, maxs)
+	new axis = (maxs[0] - mins[0]) > (maxs[1] - mins[1]) ? 0 : 1
+	out[axis] += (maxs[axis] - mins[axis]) * random_float(-0.32, 0.32)
+	return 1
+}
+
+// After a goal: the scorer celebrates if it's a bot, and someone on each side may say something
+BotGoalReact(scorer, team) {
+	if(!get_pcvar_num(CVAR_BOTS))
+		return
+	if(is_user_connected(scorer) && is_user_bot(scorer))
+		set_task(0.2, "BotCelebrate", 7654400 + scorer, "", 0, "a", 4)
+	set_task(random_float(0.8, 2.5), "BotGoalChat", 7654500 + team)
+	set_task(random_float(1.5, 3.5), "BotGoalChat", 7654500 + (3 - team) + 10)
+}
+
+public BotCelebrate(task) {
+	new id = task - 7654400
+	if(is_user_alive(id) && (entity_get_int(id, EV_INT_flags) & FL_ONGROUND)) {
+		new Float:vel[3]
+		entity_get_vector(id, EV_VEC_velocity, vel)
+		vel[2] = 260.0
+		entity_set_vector(id, EV_VEC_velocity, vel)
+	}
+}
+
+public BotGoalChat(task) {
+	new code = task - 7654500
+	new bool:conceded = code > 10
+	new team = conceded ? code - 10 : code
+	if(random_num(1, 100) > (conceded ? 35 : 45))
+		return
+	new bots[32], n, id
+	for(id=1; id<=maxplayers; id++)
+		if(is_user_connected(id) && is_user_bot(id) && get_user_team(id) == team)
+			bots[n++] = id
+	if(!n)
+		return
+	static const SCORED[][] = { "GOAL", "nice!", "what a shot", "lets go", "yesss", "get in" }
+	static const LOST[][] = { "wtf keeper", "unlucky", "come on", "who was on him", "ugh", "lol" }
+	if(conceded)
+		engclient_cmd(bots[random_num(0, n-1)], "say", LOST[random_num(0, sizeof LOST - 1)])
+	else
+		engclient_cmd(bots[random_num(0, n-1)], "say", SCORED[random_num(0, sizeof SCORED - 1)])
+}
+
 GetGoalCenter(team, Float:out[3]) {
 	if(team < 1 || team > 2)
 		return 0
@@ -2871,6 +2928,11 @@ public BotPickChasers() {
 		team = get_user_team(id)
 		if(team == 1 || team == 2)
 			g_botSlot[id] = slot[team]++
+		if(g_botSkill[id] == 0.0) {
+			new Float:diff = float(clamp(get_cvar_num("bot_difficulty"), 0, 3))
+			g_botSkill[id] = floatmin(1.0, random_float(0.35, 0.75) + diff * 0.08)
+			g_botPace[id] = random_float(0.86, 1.0)
+		}
 	}
 }
 
@@ -2887,6 +2949,8 @@ BotSteer(id, Float:target[3]) {
 	spd = entity_get_float(id, EV_FL_maxspeed)
 	if(spd < 100.0 || spd > 600.0)
 		spd = 250.0
+	if(g_botPace[id] > 0.0)
+		spd *= g_botPace[id]
 	entity_get_vector(id, EV_VEC_velocity, vel)
 	vel[0] = dx / len * spd
 	vel[1] = dy / len * spd
@@ -2927,18 +2991,36 @@ BotThink(id) {
 
 		if((dist < get_pcvar_float(CVAR_BOTKICKDIST) || now - g_botHoldStart[id] > 6.0) && now >= g_botNextKick[id]) {
 			g_botNextKick[id] = now + 0.3
-			new Float:dir[3], Float:ang[3]
-			dir[0] = goal[0] - org[0]
-			dir[1] = goal[1] - org[1]
-			dir[2] = goal[2] - org[2]
+			new Float:dir[3], Float:ang[3], Float:aim[3]
+			// like a person: go for one side of the goal, not its middle
+			GetGoalAim(3 - team, aim)
+			dir[0] = aim[0] - org[0]
+			dir[1] = aim[1] - org[1]
+			dir[2] = aim[2] - org[2]
 			vector_to_angle(dir, ang)
-			// v_angle pitch is inverted (positive = down); add some loft and a little aim error
+			// v_angle pitch is inverted (positive = down); add some loft, and aim error that
+			// a weaker bot has more of (a few shots go wide)
+			new Float:err = 2.0 + (1.0 - floatmax(g_botSkill[id], 0.3)) * 9.0
 			ang[0] = -ang[0] - random_float(4.0, 14.0)
-			ang[1] += random_float(-4.0, 4.0)
+			ang[1] += random_float(-err, err)
 			ang[2] = 0.0
 			entity_set_vector(id, EV_VEC_v_angle, ang)
 			kickBall(id, 0)
 			return
+		}
+		// someone closing in: weave instead of running straight at them
+		if(BotEnemyNear(id, 320.0)) {
+			new Float:dx = goal[0] - org[0], Float:dy = goal[1] - org[1]
+			new Float:l = floatsqroot(dx*dx + dy*dy)
+			if(l > 1.0) {
+				new Float:w = floatsin(now * 2.6 + float(id), radian) * 220.0
+				new Float:t[3]
+				t[0] = org[0] + dx / l * 300.0 - dy / l * w
+				t[1] = org[1] + dy / l * 300.0 + dx / l * w
+				t[2] = org[2]
+				BotSteer(id, t)
+				return
+			}
 		}
 		BotSteer(id, goal)
 		return
