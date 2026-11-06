@@ -18,6 +18,10 @@ pub struct Rcon {
     password: String,
     addr: String,
     lock: Mutex<()>,
+    /// A server on another machine: commands go through the SSH session to a helper
+    /// there (lsrcon) that talks to the game locally, so the password never crosses
+    /// the internet. (machine, the password file there)
+    via: Option<(crate::remote::RemoteInfo, String)>,
 }
 
 /// GoldSrc text is Latin-1: every byte is one character.
@@ -27,12 +31,12 @@ pub fn latin1(bytes: &[u8]) -> String {
 
 impl Rcon {
     pub fn new(password: String, port: u16) -> Self {
-        Rcon { password, addr: format!("127.0.0.1:{port}"), lock: Mutex::new(()) }
+        Rcon { password, addr: format!("127.0.0.1:{port}"), lock: Mutex::new(()), via: None }
     }
 
-    /// A server on another machine.
-    pub fn at(host: &str, password: String, port: u16) -> Self {
-        Rcon { password, addr: format!("{host}:{port}"), lock: Mutex::new(()) }
+    /// A server on another machine, reached through SSH (`pw_file`: its password file there).
+    pub fn over_ssh(r: crate::remote::RemoteInfo, pw_file: String, password: String, port: u16) -> Self {
+        Rcon { password, addr: format!("127.0.0.1:{port}"), lock: Mutex::new(()), via: Some((r, pw_file)) }
     }
 
     pub fn password(&self) -> &str {
@@ -41,8 +45,16 @@ impl Rcon {
 
     pub fn send(&self, command: &str) -> Result<String, RconError> {
         let _guard = self.lock.lock().unwrap();
-        let local = self.addr.starts_with("127.0.0.1:");
-        let sock = UdpSocket::bind(if local { "127.0.0.1:0" } else { "0.0.0.0:0" }).map_err(|_| RconError::Offline)?;
+        if let Some((r, pw_file)) = &self.via {
+            let port = self.addr.rsplit(':').next().unwrap_or("27015");
+            let cmd = format!("lsrcon {port} {} {}", crate::remote::shell_quote(pw_file), crate::remote::shell_quote(command));
+            return match crate::remote::exec(r, &cmd) {
+                Ok((0, out)) if out.contains("Bad rcon_password") => Err(RconError::BadPassword),
+                Ok((0, out)) => Ok(out),
+                _ => Err(RconError::Offline),
+            };
+        }
+        let sock = UdpSocket::bind("127.0.0.1:0").map_err(|_| RconError::Offline)?;
         sock.set_read_timeout(Some(Duration::from_millis(1500))).ok();
         sock.connect(&self.addr).map_err(|_| RconError::Offline)?;
 

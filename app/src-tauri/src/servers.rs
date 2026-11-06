@@ -96,7 +96,12 @@ impl Entry {
     pub(crate) fn rcon(&self) -> Option<crate::rcon::Rcon> {
         let pw = std::fs::read_to_string(self.dir.join(&self.game).join("addons/amxmodx/data/gamemodes/panel_rcon.txt")).ok()?;
         Some(match &self.remote {
-            Some(r) => crate::rcon::Rcon::at(&r.host, pw.trim().to_string(), self.port),
+            Some(r) => crate::rcon::Rcon::over_ssh(
+                r.clone(),
+                format!("{}/{}/addons/amxmodx/data/gamemodes/panel_rcon.txt", crate::remote::server_dir(&self.id), self.game),
+                pw.trim().to_string(),
+                self.port,
+            ),
             None => crate::rcon::Rcon::new(pw.trim().to_string(), self.port),
         })
     }

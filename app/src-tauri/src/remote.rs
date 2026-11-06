@@ -274,7 +274,7 @@ export DEBIAN_FRONTEND=noninteractive
 command -v apt-get >/dev/null || fail "Only Ubuntu and Debian are supported for now."
 sudo dpkg --add-architecture i386
 sudo apt-get update -qq >/dev/null
-sudo apt-get install -y -qq lib32gcc-s1 lib32stdc++6 libc6-i386 curl ca-certificates unzip xz-utils tar >/dev/null
+sudo apt-get install -y -qq lib32gcc-s1 lib32stdc++6 libc6-i386 curl ca-certificates unzip xz-utils tar python3 >/dev/null
 
 step firewall
 if command -v iptables >/dev/null; then
@@ -372,6 +372,37 @@ case "$cmd" in
 esac
 EOF
 sudo chmod 755 /usr/local/bin/lsctl
+sudo tee /usr/local/bin/lsrcon >/dev/null <<'LSRCON'
+#!/usr/bin/env python3
+# lsrcon <port> <password file> <command>: a server command to a game on this machine,
+# for the Loner-Strike app (it sends commands over SSH, so the password stays here)
+import socket, sys
+port, pw = int(sys.argv[1]), open(sys.argv[2]).read().strip()
+P = b"\xff\xff\xff\xff"
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.settimeout(1.5)
+try:
+    s.sendto(P + b"challenge rcon\n", ("127.0.0.1", port))
+    ch = s.recv(65535)[4:].split()[2]
+    s.sendto(P + b"rcon " + ch + b' "' + pw.encode() + b'" ' + " ".join(sys.argv[3:]).encode("latin-1") + b"\n", ("127.0.0.1", port))
+except (socket.timeout, OSError, IndexError):
+    sys.exit(2)
+singles, splits = [], {{}}
+s.settimeout(0.4)
+while True:
+    try:
+        d = s.recv(65535)
+    except socket.timeout:
+        break
+    if len(d) > 9 and d[:4] == b"\xfe\xff\xff\xff":
+        splits.setdefault(d[4:8], []).append((d[8] >> 4, d[9:]))
+    else:
+        singles.append(d)
+for parts in splits.values():
+    singles.append(b"".join(p for _, p in sorted(parts)))
+sys.stdout.buffer.write(b"".join(d[5:] if d[:4] == P and len(d) > 5 else d for d in singles))
+LSRCON
+sudo chmod 755 /usr/local/bin/lsrcon
 sudo systemctl daemon-reload
 sudo systemctl enable {unit} >/dev/null 2>&1
 echo "@@STEP ready"
@@ -429,6 +460,6 @@ mod tests {
         assert_eq!(shell_quote("it's"), "'it'\\''s'");
         assert!(setup_env("my-server", "czero").contains("GAME='czero'"));
         let svc = service_sh("x", &["-game".into(), "cstrike".into()]);
-        assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike'") && svc.contains("lsctl"));
+        assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike'") && svc.contains("lsctl") && svc.contains("b\"\\xff\\xff\\xff\\xff\""));
     }
 }
