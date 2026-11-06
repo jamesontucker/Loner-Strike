@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { MatchMode } from "./MatchMode";
 import { getJson, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { ShareList } from "./ShareList";
 
 type FilterMode = "off" | "replace" | "block";
 type Settings = { filter: FilterMode; words: string[]; chatlog: boolean; reports: boolean; stats_bots: boolean };
@@ -663,6 +664,7 @@ function ModTab({ d, setD }: { d: Data; setD: SetData }) {
 
       <section>
         <SectionHead title="Swear filter" note="Words that get starred out, or stop the message. A word also catches longer words that start with it, so fuck catches fucking. Commands like /rtv are never touched." />
+        <ShareList list="filter" />
         <div className="settings">
           <div className="setting">
             <span className="name">When someone swears<Info text="Star it out still sends the message, with the word hidden behind stars. Don't send it drops the whole message and tells the sender why." /><span className="note">{words.length ? `${words.length} ${words.length === 1 ? "word" : "words"} on the list.` : "Add words below first."}</span></span>

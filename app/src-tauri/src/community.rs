@@ -734,6 +734,22 @@ pub fn routes() -> Router<Shared> {
         .route("/api/community/settings", post(api_settings))
 }
 
+// ---- shared between servers (lists.rs) ----------------------------------------------
+
+pub(crate) fn shared_words(g: &Game) -> String {
+    load(&g.data).words.join("\n")
+}
+
+/// Gives `to` the same swear filter words as `from` (its other settings stay).
+pub(crate) fn copy_words(from: &Game, to: &Game) -> Result<(), String> {
+    let _l = LOCK.lock().unwrap();
+    let mut s = load(&to.data);
+    s.words = load(&from.data).words;
+    save(&to.data, &s)?;
+    let _ = tell(to, RELOAD);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -119,6 +119,28 @@ pub fn routes() -> Router<Shared> {
     Router::new().route("/api/welcome", get(api_get).post(api_set))
 }
 
+// ---- shared between servers (lists.rs) ----------------------------------------------
+
+const FILES: [&str; 4] = ["welcome_note.txt", "welcome_url.txt", "welcome.html", "welcome_draft.json"];
+
+pub(crate) fn shared(data: &Path) -> String {
+    FILES.iter().map(|f| read(data, f)).collect::<Vec<_>>().join("\0")
+}
+
+/// Gives `to` the same welcome page as `from`.
+pub(crate) fn copy(from: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|e| e.to_string())?;
+    for f in FILES {
+        match std::fs::read(from.join(f)) {
+            Ok(b) => std::fs::write(to.join(f), b).map_err(|e| e.to_string())?,
+            Err(_) => {
+                let _ = std::fs::remove_file(to.join(f));
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

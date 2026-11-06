@@ -789,6 +789,54 @@ pub fn routes() -> Router<Shared> {
         .route("/api/admins/unban", post(api_unban))
 }
 
+// ---- shared between servers (lists.rs) ----------------------------------------------
+
+/// The admin list as it's stored, to tell whether it changed.
+pub(crate) fn shared_admins(g: &Game) -> String {
+    std::fs::read_to_string(g.data.join("admins.json")).unwrap_or_default()
+}
+
+/// Gives `to` the same admins, VIPs and VIP settings as `from`.
+pub(crate) fn copy_admins(from: &Game, to: &Game) -> Result<(), String> {
+    let _l = LOCK.lock().unwrap();
+    let a = load(&from.data);
+    save(&to.data, &a)?;
+    write_files(to, &a)?;
+    reload(to);
+    Ok(())
+}
+
+pub(crate) fn shared_bans(g: &Game) -> String {
+    let mut v: Vec<String> = read_bans(g).into_iter().map(|b| format!("{} {}", b.kind, b.value)).collect();
+    v.sort();
+    v.join("\n")
+}
+
+/// Gives `to` the same bans as `from` (the running game is told about each one that
+/// came or went).
+pub(crate) fn copy_bans(from: &Game, to: &Game) -> Result<(), String> {
+    let _l = LOCK.lock().unwrap();
+    let old = read_bans(to);
+    let new = read_bans(from);
+    for kind in ["id", "ip"] {
+        let text = crate::sys::read_latin1(&from.dir.join(ban_file(kind))).unwrap_or_default();
+        edit_ban_file(to, kind, |_| text)?;
+    }
+    let mut cmds = Vec::new();
+    for b in old.iter().filter(|b| !new.contains(b)) {
+        cmds.push(format!("{} {}", if b.kind == "ip" { "removeip" } else { "removeid" }, b.value));
+    }
+    for b in new.iter().filter(|b| !old.contains(b)) {
+        cmds.push(format!("{} 0 {}", if b.kind == "ip" { "addip" } else { "banid" }, b.value));
+    }
+    for chunk in cmds.chunks(20) {
+        if !tell_game(to, &chunk.join(";"))? {
+            break;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

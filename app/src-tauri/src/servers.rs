@@ -1835,6 +1835,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                     }
                 }
                 stop(&id);
+                crate::lists::forget(&id);
                 // only ever a folder we made: <servers root>/<id>
                 let ok_dir = !e.imported
                     && e.dir.file_name().map(|n| n.to_string_lossy() == e.id).unwrap_or(false)

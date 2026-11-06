@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import type { MapInfo } from "../types";
 import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { ShareList } from "./ShareList";
 
 type Color = "default" | "green" | "red" | "blue" | "grey";
 type Ad = { text: string; color: Color };
@@ -397,6 +398,7 @@ function Messages({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) 
   return (
     <section>
       <SectionHead title="Chat messages" note="Messages that show up in chat every few minutes, like a real server's: your Discord, the rules, a donate reminder. Only while someone is playing." />
+      <ShareList list="messages" />
       <div className="settings">
         <Toggle label="Show messages" note={ads.messages.length ? `${ads.messages.length} ${ads.messages.length === 1 ? "message" : "messages"}.` : "Write some below first."} on={ads.on} set={(v) => saveSettings({ ads: { ...ads, on: v } })} />
         <div className="setting">

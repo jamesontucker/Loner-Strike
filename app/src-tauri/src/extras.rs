@@ -773,6 +773,22 @@ pub fn local_routes() -> Router<Shared> {
     Router::new().route("/api/extras/export", post(api_export))
 }
 
+// ---- shared between servers (lists.rs) ----------------------------------------------
+
+pub(crate) fn shared_ads(g: &Game) -> String {
+    serde_json::to_string(&load(&g.data).ads).unwrap_or_default()
+}
+
+/// Gives `to` the same timed chat messages as `from` (its other settings stay).
+pub(crate) fn copy_ads(from: &Game, to: &Game) -> Result<(), String> {
+    let _l = LOCK.lock().unwrap();
+    let mut s = load(&to.data);
+    s.ads = load(&from.data).ads;
+    save(&to.data, &s)?;
+    reload(to);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

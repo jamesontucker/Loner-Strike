@@ -124,13 +124,18 @@ async fn with_target(req: Request, next: Next) -> Response {
     // depend on (or fail because of) the one that's open
     let path = req.uri().path();
     let by_path = path == "/api/servers" || path.starts_with("/api/servers/");
+    let post = req.method() == axum::http::Method::POST;
     let Some(id) = header.or(query).filter(|t| !t.is_empty() && t != "local" && !by_path) else {
-        return next.run(req).await;
+        let res = next.run(req).await;
+        // the player's own game: a list it shares with servers goes to them
+        if post && !by_path && res.status().is_success() {
+            tokio::task::spawn_blocking(|| crate::lists::after_change("local"));
+        }
+        return res;
     };
     if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') || id.len() > 48 {
         return (StatusCode::BAD_REQUEST, axum::Json(serde_json::json!({"error": "Unknown server."}))).into_response();
     }
-    let post = req.method() == axum::http::Method::POST;
     let id2 = id.clone();
     let game = tokio::task::spawn_blocking(move || crate::servers::game_for(&id, || None)).await.ok().flatten();
     match game {
@@ -138,8 +143,15 @@ async fn with_target(req: Request, next: Next) -> Response {
             let remote = g.remote.is_some();
             let res = TARGET.scope(Some(g), next.run(req)).await;
             // a server on another machine: a change made here goes up to it
-            if post && remote && res.status().is_success() {
-                tokio::task::spawn_blocking(move || crate::servers::sync_settings(&id2));
+            if post && res.status().is_success() {
+                tokio::task::spawn_blocking(move || {
+                    // a list it shares goes to the others first, then a server on another
+                    // machine gets the change uploaded
+                    crate::lists::after_change(&id2);
+                    if remote {
+                        crate::servers::sync_settings(&id2);
+                    }
+                });
             }
             res
         }
@@ -170,9 +182,11 @@ pub enum Listener {
 }
 
 pub fn router(state: Shared, listener: Listener) -> Router {
+    crate::lists::init(&state);
     let routes = Router::new()
         .merge(crate::panel_api::routes())
         .merge(crate::app_api::routes())
+        .merge(crate::lists::routes())
         .merge(crate::admins::routes())
         .merge(crate::setup_api::routes())
         .merge(crate::servers::routes())

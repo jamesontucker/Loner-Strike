@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getJson, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import type { Online } from "../types";
 import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { ShareList } from "./ShareList";
 
 type Role = "owner" | "admin" | "moderator" | "vip";
 type Person = { id: string; name: string; role: Role; expires: string | null; note: string; expired: boolean };
@@ -203,6 +204,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
         <SectionHead title="Admins" note="Give people admin powers or VIP perks on your server, like real servers do.">
           <button className="btn primary" onClick={() => setDraft({ ...EMPTY })}>Add someone</button>
         </SectionHead>
+        <ShareList list="admins" />
         {!d.users_ini && <p className="err-text">AMX Mod X isn't set up for this game yet, so these can't take effect. Run Setup from Settings first.</p>}
         {draft && <Editor draft={draft} setDraft={setDraft} today={d.today} onSave={save} saving={busy("save")} />}
         <ul className="people">
@@ -298,6 +300,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
       {tab === "bans" && (
       <div>
         <SectionHead title="Bans" note="People who can't join your server." />
+        <ShareList list="bans" />
         <div className="row ban-form">
           <input className="search" placeholder="SteamID, like STEAM_0:1:12345" value={banId} onChange={(e) => setBanId(e.target.value)} aria-label="SteamID to ban" />
           <select value={banTime} onChange={(e) => setBanTime(Number(e.target.value))} aria-label="How long">

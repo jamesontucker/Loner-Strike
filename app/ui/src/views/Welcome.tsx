@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getJson, postJson, useActions } from "../api";
 import { BusyButton, Info, SectionHead, Skeleton, useToast } from "../ui";
+import { ShareList } from "./ShareList";
 
 type Data = { style: "builtin" | "custom" | "url"; note: string; html: string | null; url: string | null; max: number; error?: string };
 
@@ -68,6 +69,7 @@ export function Welcome({ target }: { target: string }) {
   return (
     <div className="stack">
       <SectionHead title="Welcome page" note="What players see when they join. Turn it on or off, or show it every map, with Welcome screen on the Match page. Players can say /welcome to see it again." />
+      <ShareList list="welcome" />
       <div className="methods" role="radiogroup" aria-label="Welcome page">
         {STYLES.map((s) => (
           <button key={s.id} className="method" role="radio" aria-checked={style === s.id} onClick={() => setStyle(s.id)}>

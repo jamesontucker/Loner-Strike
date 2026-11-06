@@ -12,6 +12,7 @@ mod extras;
 mod game;
 mod gamebanana;
 mod hltv;
+mod lists;
 mod maps;
 mod notify;
 mod panel_api;
