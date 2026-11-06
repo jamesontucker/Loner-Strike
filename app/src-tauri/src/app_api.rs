@@ -215,6 +215,12 @@ async fn api_update_install(State(st): State<Shared>, headers: HeaderMap) -> (St
     }
 }
 
+// ---- LAN parties -------------------------------------------------------------------
+/// This computer's address on the local network, for friends in the same room.
+async fn api_lan() -> Json<Value> {
+    Json(json!({"ip": lan_ip(), "port": 27015}))
+}
+
 // ---- choosing the game ---------------------------------------------------------
 /// Which game the panel controls: the one picked last, else one Loner-Strike set up
 /// (CS 1.6 first), else the first one found.
@@ -337,4 +343,5 @@ pub fn routes() -> Router<Shared> {
         .route("/api/app/launch", post(api_launch))
         .route("/api/app/game", post(api_use_game))
         .route("/api/app/restart", post(api_restart))
+        .route("/api/app/lan", get(api_lan))
 }

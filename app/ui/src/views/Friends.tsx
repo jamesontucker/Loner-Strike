@@ -46,6 +46,17 @@ function invite(sh: Share) {
   ].join("\n");
 }
 
+function lanInvite(sh: Share, addr: string) {
+  const pw = sh.password;
+  return [
+    `LAN game${sh.name ? `: "${sh.name}"` : ""}!`,
+    "",
+    "In Counter-Strike, open Find Servers > LAN and join it. Or open the console (~) and type:",
+    `${pw ? `password ${pw}; ` : ""}connect ${addr}`,
+    ...(pw ? ["", `Password: ${pw}`] : []),
+  ].join("\n");
+}
+
 async function copy(text: string, toast: (t: string, e?: boolean) => void) {
   try {
     await navigator.clipboard.writeText(text);
@@ -62,6 +73,18 @@ export function Friends({ data, refresh }: { data: Online | null; refresh: () =>
   const [name, setName] = useState<string | null>(null);
   const [pw, setPw] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
+  // LAN needs nothing from the share service, so it's remembered here
+  const [lan, setLanRaw] = useState(() => {
+    try { return localStorage.getItem("ls.lan") === "1"; } catch { return false; }
+  });
+  const setLan = (v: boolean) => {
+    setLanRaw(v);
+    try { localStorage.setItem("ls.lan", v ? "1" : "0"); } catch { /* private window */ }
+  };
+  const [lanAddr, setLanAddr] = useState<{ ip: string | null; port: number } | null>(null);
+  useEffect(() => {
+    getJson<{ ip: string | null; port: number }>("/api/app/lan").then(setLanAddr).catch(() => setLanAddr(null));
+  }, []);
 
   useEffect(() => {
     const load = () =>
@@ -100,16 +123,34 @@ export function Friends({ data, refresh }: { data: Online | null; refresh: () =>
         <div className="stack">
           <div>
             <div className="seg" role="group" aria-label="How friends connect">
-              <button aria-pressed={!viaTs} onClick={() => act("method", { method: "playit" })}>playit.gg</button>
-              <button aria-pressed={viaTs} onClick={() => act("method", { method: "tailscale" })}>Tailscale</button>
+              <button aria-pressed={lan} onClick={() => setLan(true)}>Same network (LAN)</button>
+              <button aria-pressed={!lan && !viaTs} onClick={() => { setLan(false); act("method", { method: "playit" }); }}>playit.gg</button>
+              <button aria-pressed={!lan && viaTs} onClick={() => { setLan(false); act("method", { method: "tailscale" }); }}>Tailscale</button>
             </div>
             <p className="muted">
-              {viaTs
-                ? "A private network that you and your friends join. Everyone installs the free Tailscale app."
-                : "A free relay that gives your game a public address. Friends don't install anything; the password keeps strangers out."}
+              {lan
+                ? "Friends on the same Wi-Fi or network join directly. Nothing to install or sign up for: a LAN party."
+                : viaTs
+                ? "A private network that you and your friends join over the internet. Everyone installs the free Tailscale app."
+                : "A free relay that gives your game a public address over the internet. Friends don't install anything; the password keeps strangers out."}
             </p>
           </div>
-          {viaTs ? (
+          {lan ? (
+            <ol className="steps">
+              <li className="done">
+                <strong>Get everyone on the same network</strong>
+                <p>Same Wi-Fi, or plugged into the same router.</p>
+              </li>
+              <li className="now">
+                <strong>Start your game</strong>
+                <p>Play from Loner-Strike as usual. The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (Wine/CrossOver): click Allow.</p>
+              </li>
+              <li className="now">
+                <strong>Friends join from the LAN tab</strong>
+                <p>In Counter-Strike they open <b>Find Servers</b>, then the <b>LAN</b> tab, and your server shows up{sh.name ? ` as "${sh.name}"` : ""}. Or they type the address below in the console.</p>
+              </li>
+            </ol>
+          ) : viaTs ? (
             <ol className="steps">
               <li className={sh.tailscale.installed ? "done" : "now"}>
                 <strong>Install Tailscale on this computer</strong>
@@ -184,7 +225,35 @@ export function Friends({ data, refresh }: { data: Online | null; refresh: () =>
             <button className="btn primary" type="submit">Save</button>
           </form>
 
-          {(live || sh.phase === "starting") && (
+          {lan && (
+            <div className="panel">
+              <span className={`live ${data ? "on" : ""}`}>{data ? "Friends on your network can join now" : "Start the game and friends can join"}</span>
+              {lanAddr?.ip ? <div className="address">{lanAddr.ip}:{lanAddr.port}</div> : <p className="err-text">This computer isn't on a network right now.</p>}
+              {full && (
+                <div className="banner">
+                  <div>The server is full of bots, so there's no room for friends.</div>
+                  <button className="btn primary" onClick={() => st && run("gm_bots", ["count", String(Math.max(0, Math.min(st.bots, st.maxplayers - st.humans - 2)))])}>Make room</button>
+                </div>
+              )}
+              {friends.length > 0 && <p>In your game: {friends.join(", ")}</p>}
+              {lanAddr?.ip && (
+                <>
+                  <h3>Tell your friends</h3>
+                  <textarea
+                    className="invite"
+                    readOnly
+                    value={lanInvite(sh, `${lanAddr.ip}:${lanAddr.port}`)}
+                  />
+                  <div className="row">
+                    <button className="btn primary" onClick={() => copy(lanInvite(sh, `${lanAddr.ip}:${lanAddr.port}`), toast)}>Copy message</button>
+                    <button className="btn" onClick={() => copy(`${lanAddr.ip}:${lanAddr.port}`, toast)}>Copy address</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {!lan && (live || sh.phase === "starting") && (
             <div className="panel">
               <span className={`live ${live ? "on" : ""}`}>{live ? "Friends can join now" : "Starting…"}</span>
               {addr ? <div className="address">{addr}</div> : <p className="muted">Getting an address ready…</p>}
