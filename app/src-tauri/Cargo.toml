@@ -22,11 +22,18 @@ dirs = "5"
 rust-embed = { version = "8", features = ["mime-guess"] }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # HTTPS to GameBanana and playit.gg (same rustls + ring stack the updater already uses)
-reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls-no-provider"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "query", "rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 regex = "1"
 zip = { version = "9", default-features = false, features = ["deflate", "deflate64", "bzip2", "lzma"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "tga", "webp"] }
+# Setup (setup/): pinned downloads checked by sha256, unpacking .tar.gz/.tar.xz/.zip without Python
+sha2 = "0.10"
+sha1 = "0.10"
+tar = { version = "0.4", default-features = false }
+flate2 = "1"
+bzip2 = "0.6"
+lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "xz"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

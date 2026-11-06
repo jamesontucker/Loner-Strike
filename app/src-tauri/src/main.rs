@@ -3,11 +3,19 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_api;
+mod archive;
+mod content;
 mod game;
+mod gamebanana;
+mod maps;
 mod panel_api;
 mod rcon;
 mod server;
+mod setup;
+mod setup_api;
+mod sharing;
 mod steam;
+mod sys;
 
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use tauri::{WebviewUrl, WebviewWindowBuilder};

@@ -74,17 +74,25 @@ export type MapInfo = {
   title?: string;
   cat: string;
   nav: boolean;
-  thumb: "shot" | "radar" | null;
+  thumb: "shot" | "radar" | "lookup" | null;
   by: string;
+  source: "stock" | "download" | "added";
+  mod?: number;
+  modName?: string;
+  pack?: string[];
   fav: boolean;
   hidden: boolean;
   recent: number;
 };
 
-export type GbItem = { id: number; name: string; author: string; type: string; image: string | null; likes: number; views: number; added: number; installed: boolean };
-export type GbPage = { items: GbItem[]; total: number; done: boolean; page: number; categories: [number, string][] };
-export type GbFile = { id: number; file: string; size: number; downloads: number; added: number; supported: boolean; virus: boolean };
-export type GbDetails = { id: number; name: string; author: string; type: string; text: string; images: string[]; files: GbFile[]; url: string; installed: unknown };
+export type GbItem = { id: number; name: string; author: string; type: string; image: string | null; likes: number; views: number; added: number; installed: boolean; audio?: string | null };
+export type GbSection = [string, string, [number, string][]];
+export type GbPage = { items: GbItem[]; total: number; done: boolean; page: number; categories: [number, string][]; section?: string; sections?: GbSection[] };
+export type GbFile = {
+  id: number; file: string; size: number; downloads: number; added: number; supported: boolean; virus: boolean;
+  contents?: string[]; replaces?: string[]; conflicts?: { path: string; mod: number; name: string }[]; listed?: boolean;
+};
+export type GbDetails = { id: number; name: string; author: string; type: string; text: string; images: string[]; files: GbFile[]; url: string; installed: unknown; section?: string; audio?: string | null; replaces?: string[] };
 export type GbJob = { id: string; mod: number; file: number; state: string; message?: string; got?: number; size?: number; maps?: string[]; name?: string };
 
 export type AppInfo = {

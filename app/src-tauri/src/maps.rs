@@ -16,6 +16,23 @@ const MAP_TITLES: &[(&str, &str)] = &[
     ("cs_militia", "Militia"), ("de_chateau", "Chateau"),
 ];
 
+/// The maps Counter-Strike 1.6 ships with (Valve's depot): stock in cstrike/maps.
+/// Everything in czero/maps that no download brought is Condition Zero's own.
+pub const STOCK_CS: &[&str] = &[
+    "as_oilrig", "cs_747", "cs_assault", "cs_backalley", "cs_estate", "cs_havana", "cs_italy", "cs_militia",
+    "cs_office", "cs_siege", "de_airstrip", "de_aztec", "de_cbble", "de_chateau", "de_dust", "de_dust2",
+    "de_inferno", "de_nuke", "de_piranesi", "de_prodigy", "de_storm", "de_survivor", "de_torn", "de_train",
+    "de_vertigo",
+];
+
+/// maps/<stock map>.* (never removed by an uninstall).
+pub fn is_stock_file(rel: &str) -> bool {
+    let r = rel.replace('\\', "/").to_lowercase();
+    let Some(file) = r.strip_prefix("maps/") else { return false };
+    let stem = file.split('.').next().unwrap_or("");
+    !file.contains('/') && STOCK_CS.contains(&stem)
+}
+
 const FUN_PREFIXES: &[&str] = &[
     "fy_", "aim_", "awp_", "ka_", "35hp", "scout", "he_", "gg_", "zm_", "dm_", "mg_", "fun_", "knife", "arena",
     "pool_", "deathrun", "jail", "bhop", "kz_",
@@ -134,15 +151,20 @@ impl Game {
         sys::write_latin1(&self.data.join(list_file(which).unwrap()), &text).map_err(|e| e.to_string())
     }
 
+    /// The map list, from the disk only: no network (pictures GameBanana might have
+    /// are marked "lookup" and fetched when /thumb asks for them).
     fn scan_maps(&self) -> Vec<Value> {
-        let mut found: BTreeMap<String, String> = BTreeMap::new();
+        // name -> (file name, in czero/maps)
+        let mut found: BTreeMap<String, (String, bool)> = BTreeMap::new();
         let mut navs: HashSet<String> = HashSet::new();
         for g in self.game_dirs() {
+            let is_cz = g.file_name().map(|n| n == "czero").unwrap_or(false);
             for e in std::fs::read_dir(g.join("maps")).into_iter().flatten().flatten() {
                 let f = e.file_name().to_string_lossy().to_string();
                 let low = f.to_lowercase();
                 if low.ends_with(".bsp") {
-                    found.entry(low[..low.len() - 4].to_string()).or_insert_with(|| f[..f.len() - 4].to_string());
+                    let entry = found.entry(low[..low.len() - 4].to_string()).or_insert_with(|| (f[..f.len() - 4].to_string(), false));
+                    entry.1 |= is_cz;
                 } else if low.ends_with(".nav") {
                     navs.insert(low[..low.len() - 4].to_string());
                 }
@@ -150,12 +172,42 @@ impl Game {
         }
         let mut by = self.map_sources();
         by.extend(self.store.authors());
+        // where each downloaded map came from, and what else that download brought
+        let mut from: HashMap<String, (Value, String, Vec<String>)> = HashMap::new();
+        for (id, r) in self.store.records() {
+            let maps: Vec<String> = r["maps"].as_array().into_iter().flatten().filter_map(|m| m.as_str().map(String::from)).collect();
+            let mod_id = id.parse::<i64>().map(|n| json!(n)).unwrap_or(json!(id));
+            for m in &maps {
+                from.insert(m.to_lowercase(), (mod_id.clone(), r["name"].as_str().unwrap_or("").to_string(), maps.clone()));
+            }
+        }
+        let pics = Pictures::index(self);
+        let misses = self.store.misses();
         found
             .into_iter()
-            .map(|(key, name)| {
-                let (kind, _) = self.thumb_source(&name);
-                json!({"name": name, "cat": map_category(&name), "nav": navs.contains(&key), "thumb": kind,
-                       "by": by.get(&key).cloned().unwrap_or_else(|| "Other".into()), "title": self.map_title(&name)})
+            .map(|(key, (name, in_cz))| {
+                let thumb = if pics.shots.contains_key(&key) || self.store.shot_for(&key).is_some() {
+                    Some("shot")
+                } else if !crate::gamebanana::MapStore::missed_recently(&misses, &key) {
+                    Some("lookup")
+                } else if pics.radars.contains_key(&key) {
+                    Some("radar")
+                } else {
+                    None
+                };
+                let mut m = json!({"name": name, "cat": map_category(&name), "nav": navs.contains(&key), "thumb": thumb,
+                                   "by": by.get(&key).cloned().unwrap_or_else(|| "Other".into()), "title": self.map_title(&name)});
+                match from.get(&key) {
+                    Some((id, mod_name, pack)) => {
+                        m["source"] = json!("download");
+                        m["mod"] = id.clone();
+                        m["modName"] = json!(mod_name);
+                        m["pack"] = json!(pack);
+                    }
+                    None if in_cz || STOCK_CS.contains(&key.as_str()) => m["source"] = json!("stock"),
+                    None => m["source"] = json!("added"),
+                }
+                m
             })
             .collect()
     }
@@ -186,7 +238,8 @@ impl Game {
         out
     }
 
-    /// ("shot" | "radar" | None, path) for a map's picture.
+    /// ("shot" | "radar" | None, path) for a map's picture. Asks GameBanana (once a
+    /// month at most per map) when there's no screenshot on disk.
     pub fn thumb_source(&self, name: &str) -> (Option<&'static str>, Option<PathBuf>) {
         for g in self.game_dirs() {
             for sub in ["gfx/thumbnails/maps_wide", "gfx/thumbnails/maps"] {
@@ -207,8 +260,8 @@ impl Game {
         (None, None)
     }
 
-    /// The map's picture as a PNG (converted once, then cached).
-    pub fn thumbnail(&self, name: &str) -> Option<PathBuf> {
+    /// The map's picture as a PNG (converted once, then cached), and its kind.
+    pub fn thumbnail(&self, name: &str) -> Option<(PathBuf, &'static str)> {
         let (kind, src) = self.thumb_source(name);
         let (kind, src) = (kind?, src?);
         let cache = self.app.join("cache");
@@ -218,7 +271,38 @@ impl Game {
         if !out.exists() || mtime(&out) < mtime(&src) {
             let _ = convert(&src, &out, kind == "radar");
         }
-        out.exists().then_some(out)
+        out.exists().then_some((out, kind))
+    }
+}
+
+/// Screenshots and radar images on disk, read once per scan (not once per map).
+struct Pictures {
+    shots: HashMap<String, PathBuf>,
+    radars: HashMap<String, PathBuf>,
+}
+
+impl Pictures {
+    fn index(g: &Game) -> Pictures {
+        let collect = |dirs: Vec<PathBuf>, exts: &[&str]| {
+            let mut out = HashMap::new();
+            for d in dirs {
+                for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+                    let f = e.file_name().to_string_lossy().to_lowercase();
+                    if let Some(ext) = exts.iter().find(|x| f.ends_with(*x)) {
+                        out.entry(f[..f.len() - ext.len()].to_string()).or_insert(e.path());
+                    }
+                }
+            }
+            out
+        };
+        let dirs = g.game_dirs();
+        Pictures {
+            shots: collect(
+                dirs.iter().flat_map(|d| [d.join("gfx/thumbnails/maps_wide"), d.join("gfx/thumbnails/maps")]).collect(),
+                &[".tga", ".bmp"],
+            ),
+            radars: collect(dirs.iter().map(|d| d.join("overviews")).collect(), &[".bmp", ".tga"]),
+        }
     }
 }
 

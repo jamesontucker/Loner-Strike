@@ -25,7 +25,7 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "players", label: "Players", icon: "players", live: true },
   { id: "addons", label: "Add-ons", icon: "addons", live: true },
   { id: "friends", label: "Play with friends", icon: "friends", group: "Online" },
-  { id: "more", label: "Get maps", icon: "more", group: "Library" },
+  { id: "more", label: "Get more", icon: "more", group: "Library" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];
 

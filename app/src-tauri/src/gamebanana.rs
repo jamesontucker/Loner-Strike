@@ -7,6 +7,7 @@
 //! recorded in installed_maps.json so it can be uninstalled cleanly.
 
 use crate::archive::{self, MAX_UNPACKED};
+use crate::content::{self, Section};
 use crate::sys;
 use regex::Regex;
 use serde::Serialize;
@@ -168,6 +169,8 @@ pub struct Job {
     #[serde(rename = "mod")]
     pub mod_id: i64,
     pub file: i64,
+    /// maps, skins, sounds... (see content::SECTIONS)
+    pub section: String,
     pub state: String,
     pub got: u64,
     pub size: u64,
@@ -175,6 +178,8 @@ pub struct Job {
     pub maps: Vec<String>,
     pub kept: Vec<String>,
     pub skipped: Vec<String>,
+    /// Game files this download replaced (backed up; put back when it's removed)
+    pub replaced: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ended: Option<f64>,
 }
@@ -191,6 +196,8 @@ pub struct MapStore {
     jobs: Mutex<HashMap<String, Job>>,
     /// The game's cached map list: emptied after an install so the next list is fresh
     maps_cache: Arc<Mutex<Option<Vec<Value>>>>,
+    /// Skins, sounds... installed into the game folder
+    pub content: content::Records,
 }
 
 impl MapStore {
@@ -207,6 +214,7 @@ impl MapStore {
             lookups: Semaphore { left: Mutex::new(3), cv: Condvar::new() },
             jobs: Mutex::new(HashMap::new()),
             maps_cache,
+            content: content::Records::new(app_dir),
         }
     }
 
@@ -246,12 +254,17 @@ impl MapStore {
     }
 
     // ---- pictures for maps that came without one ------------------------
-    fn misses(&self) -> Map<String, Value> {
+    pub fn misses(&self) -> Map<String, Value> {
         std::fs::read_to_string(self.shots.join("not_found.json"))
             .ok()
             .and_then(|t| serde_json::from_str::<Value>(&t).ok())
             .and_then(|v| v.as_object().cloned())
             .unwrap_or_default()
+    }
+
+    /// True if GameBanana had no picture for this map in the last month.
+    pub fn missed_recently(misses: &Map<String, Value>, name: &str) -> bool {
+        sys::now() - misses.get(&name.to_lowercase()).and_then(|v| v.as_f64()).unwrap_or(0.0) < 30.0 * 86400.0
     }
 
     /// Looks for the map on GameBanana and saves its first screenshot.
@@ -325,58 +338,98 @@ impl MapStore {
     }
 
     // ---- browsing -------------------------------------------------------
-    pub fn browse(&self, category: i64, sort: &str, query: &str, page: i64) -> Result<Value, StoreError> {
-        if !CATEGORIES.iter().any(|(c, _)| *c == category) {
+    /// One page of a section (maps, skins, sounds...). `category` None means the section's first.
+    pub fn browse(&self, section: &str, category: Option<i64>, sort: &str, query: &str, page: i64) -> Result<Value, StoreError> {
+        let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
+        let category = category.unwrap_or(sec.cats[0].0);
+        if !sec.cats.iter().any(|(c, _)| *c == category) {
             return Err(StoreError::Bad("unknown category".into()));
         }
         let page = page.clamp(1, 500);
         let mut params = vec![
             ("_nPage", page.to_string()),
             ("_nPerpage", PER_PAGE.to_string()),
-            ("_aFilters[Generic_Category]", category.to_string()),
             ("_sSort", sort_key(sort).to_string()),
         ];
+        if category == 0 {
+            params.push(("_aFilters[Generic_Game]", content::CS16_GAME.to_string()));
+        } else {
+            params.push(("_aFilters[Generic_Category]", category.to_string()));
+        }
         let query: String = query.trim().chars().take(60).collect();
         if !query.is_empty() {
             params.push(("_aFilters[Generic_Name]", format!("contains,{query}")));
         }
-        let d = get_json("/Mod/Index", &params)?;
-        let installed = self.records();
-        let have: HashSet<String> = self.installed_map_names().iter().map(|m| m.to_lowercase()).collect();
+        let d = get_json(&format!("/{}/Index", sec.kind), &params)?;
+        let is_maps = sec.key == "maps";
+        let installed = if is_maps { self.records() } else { self.content.for_game(&self.game_dir) };
+        let have: HashSet<String> = if is_maps { self.installed_map_names().iter().map(|m| m.to_lowercase()).collect() } else { HashSet::new() };
         let mut items = Vec::new();
         for r in d["_aRecords"].as_array().into_iter().flatten() {
             let id = r["_idRow"].clone();
-            let mid = match &id {
-                Value::Number(n) => n.to_string(),
-                v => s(v),
-            };
+            let Some(n) = id.as_i64() else { continue };
+            let key = if is_maps { n.to_string() } else { content::record_key(sec, n) };
             let name = s(&r["_sName"]);
             let guess = name.trim().split(|c: char| c.is_whitespace() || c == '[' || c == '(').next().unwrap_or("").to_lowercase();
+            let kind = r["_aSubCategory"]["_sName"].as_str().or(r["_aRootCategory"]["_sName"].as_str()).unwrap_or("");
             items.push(json!({
                 "id": id,
                 "name": name,
                 "author": s(&r["_aSubmitter"]["_sName"]),
-                "type": s(&r["_aSubCategory"]["_sName"]),
+                "type": kind,
                 "image": image(&r["_aPreviewMedia"], "_sFile220"),
+                "audio": r["_aPreviewMedia"]["_aMetadata"]["_sAudioUrl"].as_str(),
                 "likes": r.get("_nLikeCount").cloned().unwrap_or(json!(0)),
                 "views": r.get("_nViewCount").cloned().unwrap_or(json!(0)),
                 "added": r.get("_tsDateAdded").cloned().unwrap_or(json!(0)),
-                "installed": installed.contains_key(&mid) || have.contains(&guess),
+                "installed": installed.contains_key(&key) || have.contains(&guess),
             }));
         }
         let meta = &d["_aMetadata"];
+        let cats = |sec: &Section| sec.cats.iter().map(|(i, n)| json!([i, n])).collect::<Vec<_>>();
         Ok(json!({
             "items": items,
             "total": meta.get("_nRecordCount").cloned().unwrap_or(json!(0)),
             "done": meta.get("_bIsComplete").cloned().unwrap_or(json!(true)),
             "page": page,
-            "categories": CATEGORIES.iter().map(|(i, n)| json!([i, n])).collect::<Vec<_>>(),
+            "section": sec.key,
+            "category": category,
+            "categories": cats(sec),
+            "sections": content::SECTIONS.iter().map(|x| json!([x.key, x.label, cats(x)])).collect::<Vec<_>>(),
         }))
     }
 
-    pub fn details(&self, mod_id: i64) -> Result<Value, StoreError> {
-        let d = get_json(&format!("/Mod/{mod_id}/ProfilePage"), &[])?;
-        let rec = self.records().get(&mod_id.to_string()).cloned();
+    /// GameBanana's own listing of what's inside an uploaded archive.
+    fn archive_listing(file_id: i64) -> Option<Vec<String>> {
+        let r = sys::http()
+            .get("https://api.gamebanana.com/Core/Item/Data")
+            .query(&[("itemtype", "File".to_string()), ("itemid", file_id.to_string()), ("fields", "aFlattenedFileList()".to_string())])
+            .header("User-Agent", USER_AGENT)
+            .timeout(Duration::from_secs(10))
+            .send()
+            .ok()?;
+        let v: Value = serde_json::from_str(&r.text().ok()?).ok()?;
+        Some(v.get(0)?.as_array()?.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+    }
+
+    /// The game folders whose files a download can replace: the game, then CZ's fallback (cstrike).
+    fn game_dirs(&self) -> Vec<PathBuf> {
+        let mut v = vec![self.game_dir.clone()];
+        if self.cstrike != self.game_dir {
+            v.push(self.cstrike.clone());
+        }
+        v
+    }
+
+    pub fn details(&self, section: &str, mod_id: i64) -> Result<Value, StoreError> {
+        let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
+        let d = get_json(&format!("/{}/{mod_id}/ProfilePage", sec.kind), &[])?;
+        let is_maps = sec.key == "maps";
+        let rec = if is_maps {
+            self.records().get(&mod_id.to_string()).cloned()
+        } else {
+            self.content.for_game(&self.game_dir).get(&content::record_key(sec, mod_id)).cloned()
+        };
         let images: Vec<String> = d["_aPreviewMedia"]["_aImages"]
             .as_array()
             .into_iter()
@@ -387,27 +440,66 @@ impl MapStore {
                 format!("{}/{}", s(&i["_sBaseUrl"]), f)
             })
             .collect();
+        // for skins and the like: what each file would put in the game, and what it would replace
+        let existing = if is_maps { None } else { Some(content::Existing::scan(&self.game_dirs())) };
+        let owners = if is_maps { HashMap::new() } else { self.content.owners(&self.game_dir) };
+        let mut all_replaces: Vec<String> = Vec::new();
         let files: Vec<Value> = d["_aFiles"]
             .as_array()
             .into_iter()
             .flatten()
-            .map(|f| {
+            .enumerate()
+            .map(|(n, f)| {
                 let name = s(&f["_sFile"]);
                 let low = name.to_lowercase();
                 let av = s(&f["_sAvResult"]).to_lowercase();
-                json!({
+                let single = [".mdl", ".wav", ".spr", ".wad", ".bmp", ".tga"].iter().any(|e| low.ends_with(e));
+                let supported = archive::is_archive(&low) || if is_maps { low.ends_with(".bsp") } else { single };
+                let mut v = json!({
                     "id": f["_idRow"], "file": name, "size": f.get("_nFilesize").cloned().unwrap_or(json!(0)),
                     "downloads": f.get("_nDownloadCount").cloned().unwrap_or(json!(0)),
                     "added": f.get("_tsDateAdded").cloned().unwrap_or(json!(0)),
-                    "supported": archive::is_archive(&low) || low.ends_with(".bsp"),
+                    "supported": supported,
                     "virus": !(av.is_empty() || av == "clean"),
-                })
+                });
+                if let (Some(ex), true, Some(fid)) = (&existing, supported && n < 6, f["_idRow"].as_i64()) {
+                    let listing = if single { Some(vec![name.clone()]) } else { Self::archive_listing(fid) };
+                    match listing {
+                        Some(list) => {
+                            let rels: Vec<Vec<String>> = list.iter().map(|r| archive::listed_parts(r)).collect();
+                            let (plan, _) = content::plan(sec.key, &rels, ex);
+                            let dests: Vec<String> = plan.into_iter().map(|(_, d)| d).collect();
+                            let dirs = self.game_dirs();
+                            let replaces: Vec<String> = dests
+                                .iter()
+                                .filter_map(|d| dirs.iter().map(|g| content::resolve(g, d)).find(|r| r.2).map(|r| r.1))
+                                .collect();
+                            let conflicts: Vec<Value> = replaces
+                                .iter()
+                                .filter_map(|r| owners.get(&r.to_lowercase()).map(|(k, n)| json!({"path": r, "mod": k, "name": n})))
+                                .collect();
+                            for r in &replaces {
+                                if !all_replaces.contains(r) {
+                                    all_replaces.push(r.clone());
+                                }
+                            }
+                            v["contents"] = json!(dests);
+                            v["replaces"] = json!(replaces);
+                            v["conflicts"] = json!(conflicts);
+                            // nested archives can't be looked into before downloading
+                            v["listed"] = json!(!list.iter().any(|r| archive::is_archive(r)));
+                        }
+                        None => v["listed"] = json!(false),
+                    }
+                }
+                v
             })
             .collect();
         Ok(json!({
-            "id": mod_id, "name": s(&d["_sName"]), "author": s(&d["_aSubmitter"]["_sName"]),
+            "id": mod_id, "section": sec.key, "name": s(&d["_sName"]), "author": s(&d["_aSubmitter"]["_sName"]),
             "type": s(&d["_aCategory"]["_sName"]), "text": plain(&s(&d["_sText"]), 1200),
-            "images": images, "files": files, "downloads": d.get("_nDownloadCount").cloned().unwrap_or(json!(0)),
+            "images": images, "audio": d["_aPreviewMedia"]["_aMetadata"]["_sAudioUrl"].as_str(),
+            "files": files, "replaces": all_replaces, "downloads": d.get("_nDownloadCount").cloned().unwrap_or(json!(0)),
             "likes": d.get("_nLikeCount").cloned().unwrap_or(json!(0)), "url": s(&d["_sProfileUrl"]),
             "installed": rec,
         }))
@@ -427,18 +519,26 @@ impl MapStore {
     }
 
     // ---- installing -----------------------------------------------------
+    /// Installs a map download (kept for setup: same as start_section_install("maps", ...)).
     pub fn start_install(self: &Arc<Self>, mod_id: i64, file_id: i64) -> String {
+        self.start_section_install("maps", mod_id, file_id).unwrap_or_default()
+    }
+
+    pub fn start_section_install(self: &Arc<Self>, section: &str, mod_id: i64, file_id: i64) -> Result<String, StoreError> {
+        let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
         let job_id = {
             let mut jobs = self.jobs.lock().unwrap();
-            if let Some(j) = jobs.values().find(|j| j.mod_id == mod_id && ["queued", "downloading", "unpacking"].contains(&j.state.as_str())) {
-                return j.id.clone();
+            if let Some(j) = jobs.values().find(|j| {
+                j.mod_id == mod_id && j.section == sec.key && ["queued", "downloading", "unpacking"].contains(&j.state.as_str())
+            }) {
+                return Ok(j.id.clone());
             }
-            let id = format!("{mod_id}-{file_id}-{}", sys::now() as i64);
+            let id = format!("{}-{mod_id}-{file_id}-{}", sec.key, sys::now() as i64);
             jobs.insert(
                 id.clone(),
                 Job {
-                    id: id.clone(), mod_id, file: file_id, state: "queued".into(), got: 0, size: 0,
-                    message: "Waiting".into(), maps: vec![], kept: vec![], skipped: vec![], ended: None,
+                    id: id.clone(), mod_id, file: file_id, section: sec.key.into(), state: "queued".into(), got: 0, size: 0,
+                    message: "Waiting".into(), maps: vec![], kept: vec![], skipped: vec![], replaced: vec![], ended: None,
                 },
             );
             id
@@ -446,7 +546,7 @@ impl MapStore {
         let me = self.clone();
         let id = job_id.clone();
         std::thread::spawn(move || me.install(&id));
-        job_id
+        Ok(job_id)
     }
 
     pub fn job_list(&self) -> Vec<Job> {
@@ -466,15 +566,16 @@ impl MapStore {
     }
 
     fn install(&self, id: &str) {
-        let (mod_id, file_id) = {
+        let (mod_id, file_id, section) = {
             let jobs = self.jobs.lock().unwrap();
             let j = &jobs[id];
-            (j.mod_id, j.file)
+            (j.mod_id, j.file, j.section.clone())
         };
         let _ = std::fs::create_dir_all(&self.work);
         let tmp = sys::make_temp_dir(&self.work, "gb-");
         let res = match &tmp {
-            Ok(tmp) => self.install_into(id, mod_id, file_id, tmp),
+            Ok(tmp) if section == "maps" => self.install_into(id, mod_id, file_id, tmp).map(|(m, a, b, c)| (m, a, b, c, vec![])),
+            Ok(tmp) => self.install_content(id, &section, mod_id, file_id, tmp),
             Err(e) => Err(StoreError::Bad(e.to_string())),
         };
         if let Ok(tmp) = &tmp {
@@ -482,7 +583,8 @@ impl MapStore {
         }
         let now = sys::now();
         match res {
-            Ok((msg, maps, kept, skipped)) => self.update(id, |j| {
+            Ok((msg, maps, kept, skipped, replaced)) => self.update(id, |j| {
+                j.replaced = replaced;
                 j.state = "done".into();
                 j.message = msg;
                 j.maps = maps;
@@ -501,40 +603,8 @@ impl MapStore {
     #[allow(clippy::type_complexity)]
     fn install_into(&self, id: &str, mod_id: i64, file_id: i64, tmp: &Path) -> Result<(String, Vec<String>, Vec<String>, Vec<String>), StoreError> {
         let bad = |m: &str| StoreError::Bad(m.to_string());
-        let info = self.details(mod_id)?;
-        let f = info["files"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .find(|x| x["id"].as_i64() == Some(file_id))
-            .cloned()
-            .ok_or_else(|| bad("That file is no longer on GameBanana."))?;
-        let fname = s(&f["file"]);
-        if f["supported"] != json!(true) {
-            return Err(StoreError::Bad(format!("{fname} isn't an archive the app can open.")));
-        }
-        let size = f["size"].as_u64().unwrap_or(0);
-        if size > MAX_DOWNLOAD {
-            return Err(bad("That download is over 1.5 GB."));
-        }
-        let ext = archive::ext_of(&fname).to_lowercase();
-        let download = tmp.join(format!("download{ext}"));
-        self.download(id, file_id, &download, size)?;
-
-        self.update(id, |j| {
-            j.state = "unpacking".into();
-            j.message = "Unpacking".into();
-        });
-        let src = tmp.join("x");
-        std::fs::create_dir_all(&src).map_err(|e| StoreError::Bad(e.to_string()))?;
-        if ext == ".bsp" {
-            // only the file name from GameBanana, never a path
-            let base = Path::new(&fname).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "map.bsp".into());
-            std::fs::rename(&download, src.join(base)).map_err(|e| StoreError::Bad(e.to_string()))?;
-        } else {
-            archive::extract(&download, &src, MAX_UNPACKED).map_err(StoreError::Bad)?;
-            archive::extract_nested(&src).map_err(StoreError::Bad)?;
-        }
+        let info = self.details("maps", mod_id)?;
+        let (src, fname) = self.fetch(id, &info, file_id, tmp, &[".bsp"])?;
 
         self.update(id, |j| j.message = "Copying map files".into());
         let (plan, skipped) = archive::plan(&src);
@@ -562,7 +632,7 @@ impl MapStore {
             if let Some(d) = full.parent() {
                 std::fs::create_dir_all(d).map_err(|e| StoreError::Bad(e.to_string()))?;
             }
-            std::fs::copy(path, &full).map_err(|e| StoreError::Bad(e.to_string()))?;
+            content::replace_with(path, &full).map_err(|e| StoreError::Bad(e.to_string()))?;
             installed.push(dest.clone());
             if dest.to_lowercase().ends_with(".bsp") {
                 maps.push(stem(dest));
@@ -654,8 +724,132 @@ impl MapStore {
         }
     }
 
+    /// Downloads and unpacks a file into tmp/x (shared by maps and the rest).
+    fn fetch(&self, id: &str, info: &Value, file_id: i64, tmp: &Path, single: &[&str]) -> Result<(PathBuf, String), StoreError> {
+        let f = info["files"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|x| x["id"].as_i64() == Some(file_id))
+            .cloned()
+            .ok_or_else(|| StoreError::Bad("That file is no longer on GameBanana.".into()))?;
+        let fname = s(&f["file"]);
+        if f["supported"] != json!(true) {
+            return Err(StoreError::Bad(format!("{fname} isn't an archive the app can open.")));
+        }
+        let size = f["size"].as_u64().unwrap_or(0);
+        if size > MAX_DOWNLOAD {
+            return Err(StoreError::Bad("That download is over 1.5 GB.".into()));
+        }
+        let ext = archive::ext_of(&fname).to_lowercase();
+        let download = tmp.join(format!("download{ext}"));
+        self.download(id, file_id, &download, size)?;
+        self.update(id, |j| {
+            j.state = "unpacking".into();
+            j.message = "Unpacking".into();
+        });
+        let src = tmp.join("x");
+        std::fs::create_dir_all(&src).map_err(|e| StoreError::Bad(e.to_string()))?;
+        if single.contains(&ext.as_str()) {
+            // only the file name from GameBanana, never a path
+            let base = Path::new(&fname.replace('\\', "/")).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| format!("file{ext}"));
+            std::fs::rename(&download, src.join(base)).map_err(|e| StoreError::Bad(e.to_string()))?;
+        } else {
+            archive::extract(&download, &src, MAX_UNPACKED).map_err(StoreError::Bad)?;
+            archive::extract_nested(&src).map_err(StoreError::Bad)?;
+        }
+        Ok((src, fname))
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn install_content(&self, id: &str, section: &str, mod_id: i64, file_id: i64, tmp: &Path) -> Result<(String, Vec<String>, Vec<String>, Vec<String>, Vec<String>), StoreError> {
+        let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
+        let key = content::record_key(sec, mod_id);
+        if self.content.for_game(&self.game_dir).contains_key(&key) {
+            return Err(StoreError::Bad("That's already installed. Remove it first to install another version.".into()));
+        }
+        let info = self.details(section, mod_id)?;
+        let (src, fname) = self.fetch(id, &info, file_id, tmp, &[".mdl", ".wav", ".spr", ".wad", ".bmp", ".tga"])?;
+
+        self.update(id, |j| j.message = "Copying files".into());
+        let files = archive::walk(&src);
+        let rels: Vec<Vec<String>> = files.iter().map(|p| archive::rel_parts(&src, p)).collect();
+        let existing = content::Existing::scan(&self.game_dirs());
+        let (plan, mut skipped) = content::plan(sec.key, &rels, &existing);
+        // never replace what the installer or a map download put there
+        let theirs = content::installer_files(&self.game_dir);
+        let maps_files: HashSet<String> = if self.game_dir == self.cstrike {
+            self.records()
+                .values()
+                .flat_map(|r| r["files"].as_array().cloned().unwrap_or_default())
+                .map(|f| s(&f).to_lowercase())
+                .collect()
+        } else {
+            HashSet::new()
+        };
+        let mut chosen = Vec::new();
+        for (i, dest) in plan {
+            let actual = content::resolve(&self.game_dir, &dest).1.to_lowercase();
+            if theirs.contains(&actual) || maps_files.contains(&actual) {
+                skipped.push(format!("{dest} (part of Loner-Strike or a map, so it wasn't replaced)"));
+                continue;
+            }
+            chosen.push((files[i].clone(), dest));
+        }
+        if chosen.is_empty() {
+            return Err(StoreError::Bad(format!("Nothing in that download fits {}.", sec.label.to_lowercase())));
+        }
+        let _g = self.lock.lock().unwrap();
+        let (entries, replaced) = self.content.install(&self.game_dir, &key, &chosen).map_err(StoreError::Bad)?;
+        let mut rec = self.content.load();
+        let seq = rec.values().filter_map(|r| r["seq"].as_i64()).max().unwrap_or(0) + 1;
+        let author = s(&info["author"]);
+        let count = entries.len();
+        rec.insert(
+            key,
+            json!({
+                "section": sec.key, "name": info["name"], "author": if author.is_empty() { "GameBanana".into() } else { author },
+                "url": info["url"], "file": fname, "date": sys::now() as i64, "seq": seq,
+                "game": self.game_dir.to_string_lossy(), "files": entries,
+            }),
+        );
+        if let Err(e) = self.content.save(&rec) {
+            // without a record it couldn't be undone later, so undo it now
+            let _ = self.content.uninstall_entry(&self.game_dir, &rec[&content::record_key(sec, mod_id)]);
+            return Err(StoreError::Bad(e.to_string()));
+        }
+        let msg = match (count, replaced.len()) {
+            (0, _) => "Nothing new to install: you already have exactly these files.".to_string(),
+            (n, 0) => format!("Installed {} ({n} file{}).", s(&info["name"]), if n == 1 { "" } else { "s" }),
+            (n, r) => format!("Installed {} ({n} file{}, replacing {r}; the originals come back if you remove it).", s(&info["name"]), if n == 1 { "" } else { "s" }),
+        };
+        skipped.truncate(40);
+        Ok((msg, vec![], vec![], skipped, replaced))
+    }
+
     // ---- uninstalling ---------------------------------------------------
+    /// Removes a map download (kept for setup): the maps it removed.
     pub fn uninstall(&self, mod_id: i64) -> Result<Vec<String>, StoreError> {
+        self.uninstall_maps(mod_id)
+    }
+
+    /// Removes a download: {"maps": [...]} for a map download, {"maps": [], "files": [...]} for the rest.
+    pub fn uninstall_section(&self, section: &str, mod_id: i64) -> Result<Value, StoreError> {
+        let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
+        if sec.key == "maps" {
+            return self.uninstall_maps(mod_id).map(|m| json!({"maps": m}));
+        }
+        let key = content::record_key(sec, mod_id);
+        if !self.content.for_game(&self.game_dir).contains_key(&key) {
+            return Err(StoreError::Bad("That download isn't installed from the app.".into()));
+        }
+        let _g = self.lock.lock().unwrap();
+        let r = self.content.uninstall(&key).map_err(StoreError::Bad)?;
+        let files: Vec<String> = r["files"].as_array().into_iter().flatten().map(|f| s(&f["path"])).collect();
+        Ok(json!({"maps": [], "files": files}))
+    }
+
+    fn uninstall_maps(&self, mod_id: i64) -> Result<Vec<String>, StoreError> {
         let maps = {
             let _g = self.lock.lock().unwrap();
             let mut rec = self.records();
@@ -667,7 +861,7 @@ impl MapStore {
                 .map(|f| s(f).to_lowercase())
                 .collect();
             for dest in r["files"].as_array().into_iter().flatten().map(s) {
-                if needed.contains(&dest.to_lowercase()) {
+                if needed.contains(&dest.to_lowercase()) || crate::maps::is_stock_file(&dest) {
                     continue;
                 }
                 if let Some(full) = inside(&self.cstrike, &dest) {
@@ -752,13 +946,121 @@ mod tests {
         std::fs::write(app.join("installed_maps.json"), rec.to_string()).unwrap();
         let store = MapStore::new(&hl, &hl.join("czero"), &app, Arc::new(Mutex::new(None)));
         assert_eq!(store.authors().get("de_b").map(String::as_str), Some("y"));
-        assert_eq!(store.uninstall(1).unwrap(), vec!["de_a".to_string()]);
+        assert_eq!(store.uninstall_section("maps", 1).unwrap(), json!({"maps": ["de_a"]}));
         assert!(!hl.join("cstrike/maps/de_a.bsp").exists());
         assert!(!hl.join("cstrike/maps/de_a.nav").exists());
         assert!(hl.join("cstrike/shared.wad").exists());
         assert!(hl.join("liblist.gam").exists());
-        assert!(store.uninstall(1).is_err());
+        assert!(store.uninstall_section("maps", 1).is_err());
         assert!(store.records().contains_key("2"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Talks to GameBanana for real: `cargo test -- --ignored gamebanana_live`
+    #[test]
+    #[ignore]
+    fn gamebanana_live() {
+        let root = sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "live-").unwrap();
+        let hl = root.join("hl");
+        std::fs::create_dir_all(hl.join("cstrike/maps")).unwrap();
+        let store = Arc::new(MapStore::new(&hl, &hl.join("czero"), &root.join("app"), Arc::new(Mutex::new(None))));
+        let page = store.browse("maps", Some(5497), "popular", "", 1).unwrap();
+        let items = page["items"].as_array().unwrap();
+        assert!(!items.is_empty());
+        // the smallest supported file among the first few maps, one zip and one rar/7z if we can
+        let mut tried = 0;
+        for it in items.iter().take(12) {
+            let d = store.details("maps", it["id"].as_i64().unwrap()).unwrap();
+            let Some(f) = d["files"].as_array().unwrap().iter().filter(|f| f["supported"] == true && f["size"].as_u64().unwrap_or(0) < 8_000_000).next() else { continue };
+            let job = store.start_section_install("maps", d["id"].as_i64().unwrap(), f["id"].as_i64().unwrap()).unwrap();
+            let j = loop {
+                std::thread::sleep(Duration::from_millis(300));
+                let j = store.job_list().into_iter().find(|j| j.id == job).unwrap();
+                if j.ended.is_some() {
+                    break j;
+                }
+            };
+            eprintln!("{} [{}]: {} {} maps={:?} skipped={:?}", d["name"], f["file"], j.state, j.message, j.maps, j.skipped.len());
+            if j.state == "done" && !j.maps.is_empty() {
+                assert!(hl.join("cstrike/maps").join(format!("{}.bsp", j.maps[0])).exists());
+                assert!(store.shot_for(&j.maps[0]).is_some());
+                let removed = store.uninstall_section("maps", d["id"].as_i64().unwrap()).unwrap();
+                assert_eq!(removed["maps"], json!(j.maps));
+                assert!(!hl.join("cstrike/maps").join(format!("{}.bsp", j.maps[0])).exists());
+            }
+            tried += 1;
+            if tried == 3 {
+                break;
+            }
+        }
+        assert!(tried > 0);
+        assert!(store.find_shot("de_dust2").is_some() || store.find_shot("de_inferno").is_some());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Skins, sounds, sprays, HUDs for real, into a throwaway game folder:
+    /// `cargo test -- --ignored content_live --nocapture`
+    #[test]
+    #[ignore]
+    fn content_live() {
+        let root = sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "clive-").unwrap();
+        let hl = root.join("hl");
+        let cz = hl.join("czero");
+        for (p, d) in [("czero/models/v_awp.mdl", "cz awp"), ("cstrike/models/v_m4a1.mdl", "cs m4"), ("czero/tempdecal.wad", "my spray"),
+                       ("cstrike/sound/weapons/awp1.wav", "awp shot"), ("czero/resource/background/800_1_a_loading.tga", "bg")] {
+            std::fs::create_dir_all(hl.join(p).parent().unwrap()).unwrap();
+            std::fs::write(hl.join(p), d).unwrap();
+        }
+        let store = Arc::new(MapStore::new(&hl, &cz, &root.join("app"), Arc::new(Mutex::new(None))));
+        let wait = |job: String| loop {
+            std::thread::sleep(Duration::from_millis(300));
+            let j = store.job_list().into_iter().find(|j| j.id == job).unwrap();
+            if j.ended.is_some() {
+                break j;
+            }
+        };
+        for sec in ["skins", "players", "sounds", "sprays", "sprites", "gui"] {
+            let page = store.browse(sec, None, "popular", "", 1).unwrap();
+            eprintln!("{sec}: {} items, first {:?}", page["total"], page["items"][0]["name"]);
+            assert!(page["items"].as_array().unwrap().len() > 0);
+        }
+        // two AWP skins on top of each other, then removed in the "wrong" order
+        let d = store.details("skins", 223124).unwrap();
+        eprintln!("replaces {:?}, contents {:?}", d["replaces"], d["files"][0]["contents"]);
+        assert!(d["replaces"].as_array().unwrap().iter().any(|r| r == "models/v_awp.mdl"));
+        let fid = d["files"][0]["id"].as_i64().unwrap();
+        let j = wait(store.start_section_install("skins", 223124, fid).unwrap());
+        eprintln!("{} {} replaced={:?} skipped={:?}", j.state, j.message, j.replaced, j.skipped);
+        assert_eq!(j.state, "done");
+        assert!(j.replaced.contains(&"models/v_awp.mdl".to_string()));
+        let first = std::fs::read(cz.join("models/v_awp.mdl")).unwrap();
+        let other = store.browse("skins", Some(8320), "popular", "awp", 1).unwrap();
+        let second = other["items"].as_array().unwrap().iter().map(|i| i["id"].as_i64().unwrap()).find(|&i| i != 223124).unwrap();
+        let d2 = store.details("skins", second).unwrap();
+        eprintln!("second {} conflicts {:?}", d2["name"], d2["files"][0]["conflicts"]);
+        let j2 = wait(store.start_section_install("skins", second, d2["files"][0]["id"].as_i64().unwrap()).unwrap());
+        eprintln!("{} {} replaced={:?}", j2.state, j2.message, j2.replaced);
+        store.uninstall_section("skins", 223124).unwrap();
+        if j2.replaced.iter().any(|r| r == "models/v_awp.mdl") {
+            assert_ne!(std::fs::read(cz.join("models/v_awp.mdl")).unwrap(), first, "the later skin stays");
+        }
+        store.uninstall_section("skins", second).unwrap();
+        assert_eq!(std::fs::read_to_string(cz.join("models/v_awp.mdl")).unwrap(), "cz awp");
+        assert!(store.content.load().is_empty());
+
+        // a spray, a sound pack, a menu background: install, then remove
+        for (sec, id) in [("sprays", 82585), ("sounds", 31434), ("gui", 28432)] {
+            let d = store.details(sec, id).unwrap();
+            let j = wait(store.start_section_install(sec, id, d["files"][0]["id"].as_i64().unwrap()).unwrap());
+            eprintln!("{sec} {}: {} {} replaced={} skipped={}", d["name"], j.state, j.message, j.replaced.len(), j.skipped.len());
+            assert_eq!(j.state, "done", "{}", j.message);
+            store.uninstall_section(sec, id).unwrap();
+        }
+        assert_eq!(std::fs::read_to_string(cz.join("tempdecal.wad")).unwrap(), "my spray");
+        assert_eq!(std::fs::read_to_string(cz.join("resource/background/800_1_a_loading.tga")).unwrap(), "bg");
+        let left: Vec<_> = archive::walk(&cz).into_iter().map(|p| p.strip_prefix(&cz).unwrap().to_string_lossy().to_string()).collect();
+        eprintln!("left in czero: {left:?}");
+        assert_eq!(left.len(), 3, "only the original files are left");
         let _ = std::fs::remove_dir_all(&root);
     }
 }

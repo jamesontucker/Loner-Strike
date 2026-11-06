@@ -99,6 +99,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
     let routes = Router::new()
         .merge(crate::panel_api::routes())
         .merge(crate::app_api::routes())
+        .merge(crate::setup_api::routes())
         .fallback(ui);
     let routes = match listener {
         Listener::Local => routes.layer(middleware::from_fn_with_state(state.clone(), guard_local)),

@@ -6,8 +6,10 @@ import { SectionHead, useCommand, useToast } from "../ui";
 const CATS: [string, string][] = [
   ["all", "All"], ["fav", "Favourites"], ["recent", "Recently played"], ["defuse", "Bomb defusal"],
   ["hostage", "Hostage rescue"], ["objective", "Objectives"], ["surf", "Surf"], ["arena", "Arena & fun"],
-  ["other", "Other"], ["nonav", "Needs bot nav"], ["hidden", "Hidden"],
+  ["other", "Other"], ["nonav", "Needs bot nav"],
+  ["stock", "Came with the game"], ["download", "Downloaded"], ["added", "Added by hand"], ["hidden", "Hidden"],
 ];
+const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by hand" };
 
 export function MapCard({ map, onClick, current }: { map: MapInfo; onClick: () => void; current?: boolean }) {
   const [broken, setBroken] = useState(false);
@@ -36,10 +38,25 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
     if (cat === "fav") list = list.filter((m) => m.fav);
     else if (cat === "recent") list = list.filter((m) => m.recent >= 0).sort((a, b) => a.recent - b.recent);
     else if (cat === "nonav") list = list.filter((m) => !m.nav);
+    else if (cat === "stock" || cat === "download" || cat === "added") list = list.filter((m) => m.source === cat);
     else if (cat !== "all" && cat !== "hidden") list = list.filter((m) => m.cat === cat);
     if (query) list = list.filter((m) => `${m.name} ${m.title ?? ""} ${m.by}`.toLowerCase().includes(query));
     return list;
   }, [maps, cat, q]);
+
+  const remove = async (map: MapInfo) => {
+    if (!map.mod) return;
+    const others = (map.pack ?? []).filter((n) => n.toLowerCase() !== map.name.toLowerCase());
+    const msg = others.length
+      ? `${map.name} came in "${map.modName ?? "a pack"}" with ${others.length} other map${others.length === 1 ? "" : "s"} (${others.slice(0, 6).join(", ")}${others.length > 6 ? "…" : ""}). Removing it removes the whole download. Continue?`
+      : `Remove ${map.name}? Its files are deleted.`;
+    if (!confirm(msg)) return;
+    const r = await postJson<{ ok?: boolean; error?: string; maps?: string[] }>("/api/gb/uninstall", { mod: map.mod, section: "maps" }).catch((): { ok?: boolean; error?: string; maps?: string[] } => ({ error: "Couldn't remove it." }));
+    if (r.error) return toast(r.error, true);
+    toast(`Removed ${(r.maps ?? [map.name]).join(", ")}`);
+    setPicked(null);
+    reload();
+  };
 
   const flag = async (map: MapInfo, f: "fav" | "hidden", on: boolean) => {
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/mapflag", { flag: f, map: map.name, on }).catch(() => ({ error: "Couldn't save that." }));
@@ -88,6 +105,11 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
                 {picked.by !== "Other" ? `by ${picked.by}` : ""}
                 {!picked.nav && " · Bots will learn this map first (a few minutes)"}
               </p>
+              <p className="muted">
+                {SOURCE[picked.source]}
+                {picked.source === "download" && picked.modName ? `: ${picked.modName}` : ""}
+                {picked.pack && picked.pack.length > 1 ? ` (a pack of ${picked.pack.length} maps)` : ""}
+              </p>
               <div className="row">
                 {data && (
                   <button className="btn primary" onClick={() => { setPicked(null); run("gm_map", [picked.name]); }}>
@@ -96,6 +118,9 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
                 )}
                 <button className="btn" onClick={() => flag(picked, "fav", !picked.fav)}>{picked.fav ? "Unfavourite" : "Favourite"}</button>
                 <button className="btn" onClick={() => flag(picked, "hidden", !picked.hidden)}>{picked.hidden ? "Show again" : "Hide"}</button>
+                {picked.source === "download" && picked.mod && (
+                  <button className="btn danger" onClick={() => remove(picked)}>Remove</button>
+                )}
                 <button className="btn" onClick={() => setPicked(null)}>Close</button>
               </div>
             </div>

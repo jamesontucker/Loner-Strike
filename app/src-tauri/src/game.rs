@@ -1,10 +1,17 @@
 //! One game folder (czero or cstrike) and the Game Mode Menu plugin inside it.
-//! Mirrors panel/panel.py's Game: live state over RCON, and the commands the panel may send.
+//! Mirrors panel/panel.py's Game: live state over RCON, the commands the panel may
+//! send, and the health check. Maps and pictures are in maps.rs, the map store in
+//! gamebanana.rs, playing with friends in sharing.rs.
 
+use crate::gamebanana::MapStore;
 use crate::rcon::{latin1, Rcon, RconError};
+use crate::sharing::Sharing;
+use crate::sys;
 use rand::Rng;
-use serde_json::{json, Map, Value};
-use std::path::PathBuf;
+use regex::Regex;
+use serde_json::{json, Value};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 /// Commands the panel may send. Everything else is refused.
 const ALLOWED: &[&str] = &[
@@ -12,24 +19,49 @@ const ALLOWED: &[&str] = &[
     "gm_player", "gm_nav", "gm_pause", "gm_team", "gm_preset", "gm_presetsave", "gm_presetdel", "gm_pos",
     "gm_crash", "gm_do", "gm_announce",
 ];
+const METAMOD_DLL: &str = r"addons\metamod\dlls\metamod.dll";
+const OFFLINE: &str = "Condition Zero isn't running, or no match is loaded.";
+const BAD_PASSWORD: &str = "the game rejected the panel password - restart the map once";
+
+/// Why a command failed: the request was wrong (HTTP 400) or the game didn't take it (503).
+#[derive(Debug)]
+pub enum CmdError {
+    Bad(String),
+    Game(String),
+}
 
 pub struct Game {
     pub hl: PathBuf,
     pub name: String,
     pub dir: PathBuf,
-    data: PathBuf,
-    rcon: Rcon,
-}
-
-fn safe_arg(a: &str) -> bool {
-    !a.is_empty() && a.len() <= 64 && a.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
+    pub(crate) data: PathBuf,
+    /// The app's own folder (records, caches)
+    pub(crate) app: PathBuf,
+    pub(crate) rcon: Arc<Rcon>,
+    pub(crate) maps_cache: Arc<Mutex<Option<Vec<Value>>>>,
+    pub store: Arc<MapStore>,
+    pub sharing: Arc<Sharing>,
 }
 
 impl Game {
     pub fn new(hl: &PathBuf, name: &str) -> Game {
+        let app = sys::app_dir();
+        // first run: bring over what the old Python panel knew
+        if let Some(old) = sys::old_panel_dir() {
+            for f in ["installed_maps.json", "map_sources.json"] {
+                sys::adopt(&old.join(f), &app.join(f));
+            }
+        }
+        let g = Game::with_app_dir(hl, name, &app);
+        g.sharing.adopt_old_panel();
+        g
+    }
+
+    pub fn with_app_dir(hl: &Path, name: &str, app: &Path) -> Game {
         let dir = hl.join(name);
         let data = dir.join("addons/amxmodx/data/gamemodes");
         let _ = std::fs::create_dir_all(&data);
+        let _ = std::fs::create_dir_all(app.join("cache"));
         // The plugin reads the same file, so both sides share the RCON password
         let pw_file = data.join("panel_rcon.txt");
         let mut pw = std::fs::read_to_string(&pw_file).unwrap_or_default().trim().to_string();
@@ -39,18 +71,18 @@ impl Game {
             pw = (0..24).map(|_| CHARS[rng.gen_range(0..CHARS.len())] as char).collect();
             let _ = std::fs::write(&pw_file, format!("{pw}\n"));
         }
-        Game { hl: hl.clone(), name: name.into(), dir, data, rcon: Rcon::new(pw, 27015) }
+        let rcon = Arc::new(Rcon::new(pw, 27015));
+        let maps_cache = Arc::new(Mutex::new(None));
+        let store = Arc::new(MapStore::new(hl, &dir, app, maps_cache.clone()));
+        let sharing = Arc::new(Sharing::new(app, &data, rcon.clone()));
+        Game { hl: hl.to_path_buf(), name: name.into(), dir, data, app: app.to_path_buf(), rcon, maps_cache, store, sharing }
     }
 
     pub fn state(&self) -> Value {
         let reply = match self.rcon.send("gm_status") {
             Ok(r) => r,
-            Err(RconError::BadPassword) => {
-                return json!({"online": false, "reason": "the game rejected the panel password - restart the map once"})
-            }
-            Err(RconError::Offline) => {
-                return json!({"online": false, "reason": "Condition Zero isn't running, or no match is loaded."})
-            }
+            Err(RconError::BadPassword) => return json!({"online": false, "reason": BAD_PASSWORD}),
+            Err(RconError::Offline) => return json!({"online": false, "reason": OFFLINE}),
         };
         let path = self.data.join("status.json");
         let lines: Vec<String> = if reply.contains("GM status written") && path.exists() {
@@ -80,9 +112,9 @@ impl Game {
         out
     }
 
-    pub fn command(&self, cmd: &str, args: &[String]) -> Result<Vec<String>, String> {
+    pub fn command(&self, cmd: &str, args: &[String]) -> Result<Vec<String>, CmdError> {
         if !ALLOWED.contains(&cmd) {
-            return Err("unknown command".into());
+            return Err(CmdError::Bad("unknown command".into()));
         }
         let line = if cmd == "gm_announce" {
             // free text: keep only characters that can't end or extend the console command
@@ -94,32 +126,149 @@ impl Game {
                 .collect();
             let text = text.trim().to_string();
             if text.is_empty() {
-                return Err("empty message".into());
+                return Err(CmdError::Bad("empty message".into()));
             }
             format!("gm_announce \"{text}\"")
         } else {
-            if !args.iter().all(|a| safe_arg(a)) {
-                return Err("invalid argument".into());
+            if !args.iter().all(|a| crate::maps::safe_arg(a)) {
+                return Err(CmdError::Bad("invalid argument".into()));
             }
             std::iter::once(cmd.to_string()).chain(args.iter().cloned()).collect::<Vec<_>>().join(" ")
         };
         match self.rcon.send(&line) {
+            Ok(reply) if cmd == "gm_announce" => {
+                let _ = reply;
+                Ok(vec![])
+            }
             Ok(reply) => Ok(reply.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect()),
-            Err(RconError::BadPassword) => Err("the game rejected the panel password - restart the map once".into()),
-            Err(RconError::Offline) => Err("Condition Zero isn't running, or no match is loaded.".into()),
+            Err(RconError::BadPassword) => Err(CmdError::Game(BAD_PASSWORD.into())),
+            Err(RconError::Offline) => Err(CmdError::Game(OFFLINE.into())),
         }
     }
 
-    /// The parts of panel.py's health report the page needs to draw its status chip.
+    /// Checks that Metamod, AMX Mod X and the menu are wired up, fixing what a
+    /// Steam update or file verification tends to undo.
     pub fn health(&self) -> Value {
-        let mut checks = Map::new();
-        let am = self.dir.join("addons/amxmodx");
-        let lib = std::fs::read_to_string(self.dir.join("liblist.gam")).unwrap_or_default().to_lowercase();
-        checks.insert("Game loads Metamod".into(), json!(lib.contains("addons\\metamod\\dlls\\metamod.dll")));
-        checks.insert("AMX Mod X installed".into(), json!(am.join("dlls/amxmodx_mm.dll").exists()));
-        checks.insert("Game Mode Menu installed".into(), json!(am.join("plugins/gamemodes.amxx").exists()));
-        let list: Vec<Value> = checks.iter().map(|(k, v)| json!({"name": k, "ok": v, "detail": ""})).collect();
-        let ok = list.iter().all(|c| c["ok"] == json!(true));
-        json!({"ok": ok, "checks": list, "fixed": []})
+        health_check(&self.dir, true)
+    }
+}
+
+/// panel.py's health(): {"ok", "checks": [{"name", "ok", "detail"}], "fixed": [...]}.
+pub fn health_check(cz: &Path, repair: bool) -> Value {
+    let mut checks: Vec<Value> = Vec::new();
+    let mut fixed: Vec<&str> = Vec::new();
+    let am = cz.join("addons").join("amxmodx");
+    let mut check = |name: &str, ok: bool, detail: &str| checks.push(json!({"name": name, "ok": ok, "detail": detail}));
+
+    let liblist = cz.join("liblist.gam");
+    match sys::read_latin1(&liblist) {
+        Ok(text) => {
+            let re = Regex::new(r#"(?m)^gamedll\s+"([^"]*)""#).unwrap();
+            let m = re.captures(&text).and_then(|c| c.get(1));
+            match m {
+                Some(m) if m.as_str().to_lowercase() == METAMOD_DLL.to_lowercase() => check("Game loads Metamod", true, ""),
+                Some(m) if repair => {
+                    let backup = cz.join(format!("liblist.gam.steam-{}", sys::stamp()));
+                    let new = format!("{}{}{}", &text[..m.start()], METAMOD_DLL, &text[m.end()..]);
+                    if sys::write_latin1(&backup, &text).is_ok() && sys::write_latin1(&liblist, &new).is_ok() {
+                        fixed.push("Steam had reset liblist.gam, so the mods weren't loading. Fixed it. Restart Condition Zero.");
+                        check("Game loads Metamod", true, "repaired");
+                    } else {
+                        check("Game loads Metamod", false, "liblist.gam doesn't point at Metamod");
+                    }
+                }
+                _ => check("Game loads Metamod", false, "liblist.gam doesn't point at Metamod"),
+            }
+        }
+        Err(_) => check("Game loads Metamod", false, "liblist.gam is missing"),
+    }
+
+    check("Metamod installed", cz.join("addons/metamod/dlls/metamod.dll").exists(), "");
+    let mm_ini = cz.join("addons/metamod/plugins.ini");
+    let mm_text = sys::read_latin1(&mm_ini).unwrap_or_default();
+    if mm_text.to_lowercase().contains("amxmodx_mm.dll") {
+        check("Metamod loads AMX Mod X", true, "");
+    } else if repair && mm_ini.parent().map(|d| d.is_dir()).unwrap_or(false) {
+        if std::fs::write(&mm_ini, "win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n").is_ok() {
+            fixed.push("Metamod's plugin list was missing AMX Mod X. Fixed it. Restart Condition Zero.");
+            check("Metamod loads AMX Mod X", true, "repaired");
+        } else {
+            check("Metamod loads AMX Mod X", false, "");
+        }
+    } else {
+        check("Metamod loads AMX Mod X", false, "");
+    }
+    check("AMX Mod X installed", am.join("dlls/amxmodx_mm.dll").exists(), "");
+    check("Game Mode Menu installed", am.join("plugins/gamemodes.amxx").exists(), "");
+
+    let pl_ini = am.join("configs/plugins.ini");
+    let pl_text = sys::read_latin1(&pl_ini).unwrap_or_default();
+    let enabled = Regex::new(r"(?m)^\s*gamemodes\.amxx").unwrap().is_match(&pl_text);
+    if enabled {
+        check("Game Mode Menu enabled", true, "");
+    } else if repair && !pl_text.is_empty() {
+        use std::io::Write;
+        let res = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&pl_ini)
+            .and_then(|mut f| f.write_all(b"\r\ngamemodes.amxx\t\t; Game Mode Menu\r\n"));
+        if res.is_ok() {
+            fixed.push("The Game Mode Menu had been removed from plugins.ini. Added it back. Restart the map.");
+            check("Game Mode Menu enabled", true, "repaired");
+        } else {
+            check("Game Mode Menu enabled", false, "");
+        }
+    } else {
+        check("Game Mode Menu enabled", false, "");
+    }
+
+    let binds = sys::read_latin1(&cz.join("config.cfg")).unwrap_or_default();
+    let menu = binds.contains("\"gamemenu\"");
+    check(
+        "F3 and F4 keys bound",
+        menu && binds.contains("\"gamequick\""),
+        if menu { "" } else { "type  bind F3 gamemenu  in the console" },
+    );
+    let ok = checks.iter().all(|c| c["ok"] == json!(true));
+    json!({"ok": ok, "checks": checks, "fixed": fixed})
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn health_repairs() {
+        let root = sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "health-").unwrap();
+        let cz = root.join("czero");
+        for d in ["addons/metamod/dlls", "addons/amxmodx/dlls", "addons/amxmodx/plugins", "addons/amxmodx/configs"] {
+            std::fs::create_dir_all(cz.join(d)).unwrap();
+        }
+        std::fs::write(cz.join("liblist.gam"), "game \"CZ\"\r\ngamedll \"dlls\\czero.dll\"\r\n").unwrap();
+        std::fs::write(cz.join("addons/metamod/dlls/metamod.dll"), "").unwrap();
+        std::fs::write(cz.join("addons/amxmodx/dlls/amxmodx_mm.dll"), "").unwrap();
+        std::fs::write(cz.join("addons/amxmodx/plugins/gamemodes.amxx"), "").unwrap();
+        std::fs::write(cz.join("addons/amxmodx/configs/plugins.ini"), "admin.amxx\r\n").unwrap();
+        std::fs::write(cz.join("config.cfg"), "bind \"F3\" \"gamemenu\"\nbind \"F4\" \"gamequick\"\n").unwrap();
+
+        let h = health_check(&cz, false);
+        assert_eq!(h["ok"], false);
+        assert_eq!(h["fixed"].as_array().unwrap().len(), 0);
+
+        let h = health_check(&cz, true);
+        assert_eq!(h["ok"], true, "{h}");
+        assert_eq!(h["fixed"].as_array().unwrap().len(), 3);
+        let lib = std::fs::read_to_string(cz.join("liblist.gam")).unwrap();
+        assert_eq!(lib, "game \"CZ\"\r\ngamedll \"addons\\metamod\\dlls\\metamod.dll\"\r\n");
+        assert!(std::fs::read_dir(&cz).unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with("liblist.gam.steam-")));
+        assert!(std::fs::read_to_string(cz.join("addons/metamod/plugins.ini")).unwrap().contains("amxmodx_mm.dll"));
+        assert!(std::fs::read_to_string(cz.join("addons/amxmodx/configs/plugins.ini")).unwrap().contains("\r\ngamemodes.amxx"));
+
+        let h = health_check(&cz, true);
+        assert_eq!(h["ok"], true);
+        assert_eq!(h["fixed"].as_array().unwrap().len(), 0);
+        let names: Vec<&str> = h["checks"].as_array().unwrap().iter().map(|c| c["name"].as_str().unwrap()).collect();
+        assert_eq!(names.len(), 7);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

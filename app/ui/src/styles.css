@@ -142,7 +142,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .stack > * + * { margin-top: 34px; }
 .section-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 14px; }
 .section-head p { margin: 0; color: var(--bone-faint); font-size: 15px; }
-h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; }
+h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; white-space: nowrap; }
 .link { margin-left: auto; border: 0; background: none; color: var(--signal); font-weight: 600; }
 
 .btn {
@@ -478,3 +478,7 @@ input[type="range"] { accent-color: var(--signal); }
   .sheet, .sheet.wide { width: 100%; max-height: 92vh; border-radius: 6px 6px 0 0; padding-bottom: env(safe-area-inset-bottom); }
   .toasts { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; }
 }
+
+.section-tabs { margin: 0 0 12px; }
+.small-note { font-size: 13px; margin: 3px 0 0; }
+.preview { width: 100%; margin: 6px 0 10px; }

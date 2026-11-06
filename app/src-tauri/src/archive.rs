@@ -401,25 +401,48 @@ fn normpath(p: &str) -> String {
 /// [(source file, path relative to cstrike/)] for every map file in the download,
 /// and what was left out (at most 40).
 pub fn plan(root: &Path) -> (Vec<(PathBuf, String)>, Vec<String>) {
-    let (mut plan, mut seen, mut skipped) = (Vec::new(), std::collections::HashSet::new(), Vec::new());
     let files = walk(root);
-    let bsps: std::collections::HashSet<String> = files
+    let rels: Vec<Vec<String>> = files.iter().map(|p| rel_parts(root, p)).collect();
+    let (picked, skipped) = plan_rels(&rels);
+    (picked.into_iter().map(|(i, d)| (files[i].clone(), d)).collect(), skipped)
+}
+
+/// The parts of path below root ("a/b/c.bsp" -> ["a", "b", "c.bsp"]).
+pub fn rel_parts(root: &Path, path: &Path) -> Vec<String> {
+    let Ok(relp) = path.strip_prefix(root) else { return vec![] };
+    relp.components()
+        .filter_map(|c| match c {
+            Component::Normal(s) => Some(s.to_string_lossy().to_string()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+        .split(['/', '\\'])
+        .filter(|s| !s.is_empty() && *s != ".")
+        .map(String::from)
+        .collect()
+}
+
+/// A path from an archive listing ("dir\\x/y.bsp") as parts, dropping "", "." and anything with "..".
+pub fn listed_parts(rel: &str) -> Vec<String> {
+    let parts: Vec<String> = rel.split(['/', '\\']).filter(|s| !s.is_empty() && *s != ".").map(String::from).collect();
+    if parts.iter().any(|p| p == "..") {
+        return vec![];
+    }
+    parts
+}
+
+/// plan() on paths alone (from the unpacked folder, or from GameBanana's listing of an
+/// archive): [(index into rels, destination)], and what was left out.
+pub fn plan_rels(rels: &[Vec<String>]) -> (Vec<(usize, String)>, Vec<String>) {
+    let (mut plan, mut seen, mut skipped) = (Vec::new(), std::collections::HashSet::new(), Vec::new());
+    let bsps: std::collections::HashSet<String> = rels
         .iter()
-        .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()))
+        .filter_map(|p| p.last().map(|n| n.to_lowercase()))
         .filter(|n| n.ends_with(".bsp"))
         .map(|n| n[..n.len() - 4].to_string())
         .collect();
-    for path in files {
-        let Ok(relp) = path.strip_prefix(root) else { continue };
-        let parts: Vec<String> = relp
-            .components()
-            .filter_map(|c| match c {
-                Component::Normal(s) => Some(s.to_string_lossy().replace('\\', "/")),
-                _ => None,
-            })
-            .flat_map(|s| s.split('/').map(String::from).collect::<Vec<_>>())
-            .filter(|s| !s.is_empty() && s != ".")
-            .collect();
+    for (index, parts) in rels.iter().enumerate() {
         if parts.is_empty() {
             continue;
         }
@@ -469,7 +492,7 @@ pub fn plan(root: &Path) -> (Vec<(PathBuf, String)>, Vec<String>) {
             continue;
         }
         seen.insert(dest.to_lowercase());
-        plan.push((path, dest));
+        plan.push((index, dest));
     }
     skipped.truncate(40);
     (plan, skipped)
@@ -596,10 +619,8 @@ mod tests {
         let dest = r.join("out");
         std::fs::create_dir_all(&dest).unwrap();
         let e = extract(&archive, &dest, MAX_UNPACKED);
-        // with unar installed it refuses too; either way nothing linked is left behind
-        if let Err(e) = &e {
-            assert!(e.contains("links"), "{e}");
-        }
+        // tar's listing shows the link, and lsar's does too when unar is installed
+        assert!(e.unwrap_err().contains("links"));
         assert!(std::fs::symlink_metadata(dest.join("maps/de_a.txt")).map(|m| !m.file_type().is_symlink()).unwrap_or(true));
         let _ = std::fs::remove_dir_all(&r);
     }
