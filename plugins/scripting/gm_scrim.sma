@@ -23,6 +23,13 @@
 	  gm_scrim_players during warmup. Bots count as ready. Hooks use RegisterHamPlayer,
 	  so Condition Zero bots (another class) are covered.
 
+	Bot economy (gm_scrim_boteco 1): each live round a team of bots decides like a
+	  team of people would: full buy when it can afford rifles and armour, a save
+	  ("eco") when it can't, and sometimes a force buy when a save would lose the
+	  match anyway. Bots can't be told what to buy, so on a save their money is
+	  capped for the buy time (pistol and armour money) and given back after, less
+	  what they spent. A bot calls it in team chat now and then.
+
 	Settings: data/gamemodes/scrim.cfg (written by the app), re-read with gm_scrimreload.
 	Server commands: gm_scrimreload, gm_scrimstatus, gm_scrim <start|restart|warmup|pause|unpause>
 	Cvars: gm_scrim_maxrounds, gm_scrim_overtime, gm_scrim_knife, gm_scrim_bots,
@@ -77,6 +84,11 @@ new g_Roster[2][MAX_ROSTER][32], g_RosterN[2]
 new CsTeams:g_VoteSide, g_Vote[33], g_VoteMenu = -1
 
 // Pauses
+// bot economy: what each side does this round, and bots' money held back on a save
+enum { BUY_FULL, BUY_ECO, BUY_FORCE }
+#define TASK_BOTMONEY 6301
+#define TASK_CALLBUY  6310
+new g_pBotEco, g_SideBuy[3], g_Held[33], g_Cap[33]
 new g_PausesLeft[2], bool:g_PausePending, g_PauseTeam = -1, bool:g_Paused, g_PausedAt, g_PauseBy[32]
 
 set_phase(ph)
@@ -94,6 +106,7 @@ public plugin_init()
 	g_pOvertime  = register_cvar("gm_scrim_overtime", "1")
 	g_pKnife     = register_cvar("gm_scrim_knife", "1")
 	g_pBots      = register_cvar("gm_scrim_bots", "0")
+	g_pBotEco    = register_cvar("gm_scrim_boteco", "1")
 	g_pPlayers   = register_cvar("gm_scrim_players", "10")
 	g_pPauses    = register_cvar("gm_scrim_pauses", "2")
 	g_pPauseTime = register_cvar("gm_scrim_pausetime", "60")
@@ -449,6 +462,7 @@ public cmd_notready(id)
 	if (g_Phase != PH_WARMUP || !g_Ready[id])
 		return PLUGIN_HANDLED
 	g_Ready[id] = false
+	g_Held[id] = g_Cap[id] = 0
 	g_ReadyOrder[id] = 0
 	new name[32]
 	get_user_name(id, name, charsmax(name))
@@ -735,9 +749,12 @@ public ev_newround()
 	g_InFreeze = true
 	g_RoundOver = false
 	g_IgnoreEnd = false
+	give_back_money()
 	if (g_Phase == PH_LIVE)
 	{
 		add_roster()
+		// after the round's money is paid out
+		set_task(0.2, "task_bot_buy")
 		if (g_AnnounceLive)
 		{
 			g_AnnounceLive = false
@@ -761,6 +778,110 @@ public ev_newround()
 public ev_round_start()
 {
 	g_InFreeze = false
+	// buy time runs from here
+	remove_task(TASK_BOTMONEY)
+	set_task(floatmax(get_cvar_float("mp_buytime"), 0.1) * 60.0 + 1.0, "task_give_back", TASK_BOTMONEY)
+}
+
+// ---- bot economy -------------------------------------------------------------------
+
+
+bool:pistol_round()
+{
+	return !g_InOt && (g_Rounds == 0 || g_Rounds == g_MaxRounds / 2)
+}
+
+public task_bot_buy()
+{
+	if (g_Phase != PH_LIVE || !get_pcvar_num(g_pBotEco))
+		return
+	for (new t = 1; t <= 2; t++)
+		plan_side(t)
+}
+
+// What a side does this round, from its bots' money (people on it choose for themselves)
+plan_side(t)
+{
+	new bots[32], n, total
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (is_user_connected(p) && is_user_bot(p) && get_user_team(p) == t)
+		{
+			bots[n++] = p
+			total += cs_get_user_money(p)
+		}
+	}
+	g_SideBuy[t] = BUY_FULL
+	if (!n || pistol_round() || g_InOt)
+		return
+	new avg = total / n
+	// rifle, helmet and a grenade or two (the CT rifles cost more)
+	new full = t == 1 ? 3700 : 4200
+	if (avg >= full)
+		g_SideBuy[t] = BUY_FULL
+	else
+	{
+		// one round from losing the match: saving doesn't help, buy what you can
+		new CsTeams:side = t == 1 ? CS_TEAM_T : CS_TEAM_CT
+		new them = side_score(side == CS_TEAM_T ? CS_TEAM_CT : CS_TEAM_T)
+		new last = them >= g_MaxRounds / 2
+		g_SideBuy[t] = (last || (avg >= 2500 && random_num(1, 100) <= 30)) ? BUY_FORCE : BUY_ECO
+	}
+	if (g_SideBuy[t] == BUY_ECO)
+	{
+		for (new i = 0; i < n; i++)
+		{
+			new p = bots[i], money = cs_get_user_money(p)
+			// pistol and armour money, a bit different per bot
+			new cap = random_num(650, 1050)
+			if (money > cap)
+			{
+				g_Held[p] = money
+				g_Cap[p] = cap
+				cs_set_user_money(p, cap, 0)
+			}
+		}
+	}
+	// someone calls it, not every round
+	if (random_num(1, 100) <= 55)
+		set_task(random_float(1.0, 4.0), "task_call_buy", TASK_CALLBUY + bots[random_num(0, n - 1)])
+}
+
+public task_call_buy(task)
+{
+	new p = task - TASK_CALLBUY
+	if (!is_user_connected(p) || g_Phase != PH_LIVE)
+		return
+	new t = get_user_team(p)
+	if (t < 1 || t > 2)
+		return
+	static const ECO[][] = { "eco", "save", "eco this one", "eco pls", "lets save" }
+	static const FORCE[][] = { "force buy", "force", "lets force", "full force" }
+	static const FULL[][] = { "buy up", "full buy", "buy", "nades too" }
+	switch (g_SideBuy[t])
+	{
+		case BUY_ECO: engclient_cmd(p, "say_team", ECO[random_num(0, sizeof ECO - 1)])
+		case BUY_FORCE: engclient_cmd(p, "say_team", FORCE[random_num(0, sizeof FORCE - 1)])
+		default: if (random_num(1, 100) <= 30) engclient_cmd(p, "say_team", FULL[random_num(0, sizeof FULL - 1)])
+	}
+}
+
+public task_give_back()
+{
+	give_back_money()
+}
+
+// After the buy time: the money held back, plus anything earned since, less what was spent
+give_back_money()
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!g_Cap[p])
+			continue
+		if (is_user_connected(p))
+			cs_set_user_money(p, min(16000, max(0, g_Held[p] + cs_get_user_money(p) - g_Cap[p])), 0)
+		g_Held[p] = g_Cap[p] = 0
+	}
 }
 
 public ev_twin()

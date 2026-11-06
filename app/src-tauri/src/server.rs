@@ -82,6 +82,11 @@ async fn guard_lan(State(st): State<Shared>, req: Request, next: Next) -> Respon
     if !st.lan_hosts.read().unwrap().contains(&host) {
         return (StatusCode::FORBIDDEN, "forbidden").into_response();
     }
+    // never open without a real key (an empty one would match "ls_token=")
+    let token = st.token.read().unwrap().clone();
+    if token.len() < 16 {
+        return (StatusCode::FORBIDDEN, "forbidden").into_response();
+    }
     let cookie_ok = req
         .headers()
         .get(header::COOKIE)

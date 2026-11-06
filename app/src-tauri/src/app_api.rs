@@ -67,8 +67,9 @@ pub fn load_settings() -> Settings {
             Settings::default()
         }),
         Ok(None) => Settings::default(),
-        // there but unreadable for now: use defaults this time, never save them over it
-        Err(_) => return Settings::default(),
+        // there but unreadable for now: use defaults this time (with a fresh phone key,
+        // never an empty one), and never save them over it
+        Err(_) => return Settings { token: new_token(), ..Settings::default() },
     };
     if s.token.len() < 16 {
         let _g = SETTINGS.lock().unwrap_or_else(|e| e.into_inner());
