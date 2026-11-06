@@ -350,6 +350,55 @@ footer { padding: 34px 0 48px; color: var(--faint); font-size: 15px; box-shadow:
 footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; }
 footer a { color: var(--dim); }
 
+.sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* 2004 bits: crosshair, kill feed, visitor counter, friend toast */
+
+/* The CS 1.6 crosshair on the hero and the screenshots. Mouse only; anything clickable keeps its own cursor. */
+@media (pointer: fine) {
+  .hero, .gallery { cursor: url("img/crosshair.svg") 16 16, crosshair; }
+  .hero a, .hero button, .gallery a { cursor: pointer; }
+}
+
+/* Kill feed, top right of the hero like in the game. Decorative, never takes clicks. */
+.hero { position: relative; }
+.killfeed { position: absolute; top: 10px; right: max(16px, calc((100% - 1140px) / 2)); z-index: 1; margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 3px; pointer-events: none; user-select: none; font: 700 14px/1 var(--text); }
+.killfeed li { display: flex; align-items: center; gap: 7px; padding: 4px 8px; background: rgba(23,26,18,.62); border-radius: 2px; white-space: nowrap;
+  transition: opacity .6s; }
+.killfeed li.new { animation: kf-in .25s both; }
+.killfeed li.out { opacity: 0; }
+@keyframes kf-in { from { opacity: 0; } }
+.killfeed .t { color: #e0866a; }
+.killfeed .ct { color: #9cbcdc; }
+.killfeed svg { display: block; height: 14px; fill: var(--signal); }
+.killfeed .hs { fill: #e0866a; }
+@media (prefers-reduced-motion: reduce) { .killfeed li, .killfeed li.new { animation: none; transition: none; } }
+@media (max-width: 860px) { .killfeed { display: none; } }
+
+/* Visitor counter, like a hit counter from 2004 */
+.counter { margin: 0; display: flex; align-items: center; gap: 8px; flex-basis: 100%; }
+.odo { display: inline-flex; align-items: center; gap: 2px; padding: 3px; background: #23271c; box-shadow: var(--sunken); border-radius: 2px; }
+.odo b { display: inline-grid; place-items: center; width: 17px; height: 22px; padding-top: 2px; font: 400 16px/1 var(--stencil); color: var(--signal);
+  background: linear-gradient(#171a12 0 48%, #2b3124 52% 100%); box-shadow: var(--raised); }
+.odo i { width: 3px; align-self: flex-end; height: 6px; font: 400 14px/0 var(--stencil); color: var(--faint); font-style: normal; }
+
+/* "is now playing" toast, like the messenger pop-ups of the time */
+.toast { position: fixed; left: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 4; width: min(280px, 100vw - 32px);
+  background: var(--panel); box-shadow: var(--raised), 0 10px 30px rgba(0,0,0,.4); border-radius: 3px; padding: 3px; font-size: 15px; line-height: 1.3;
+  transform: translateX(calc(-100% - 24px)); transition: transform .45s ease-out; }
+.toast.on { transform: none; }
+.toast-bar { display: flex; align-items: center; justify-content: space-between; height: 22px; padding: 0 2px 0 8px; background: var(--side); border-radius: 2px;
+  font-size: 13px; font-weight: 600; color: var(--faint); }
+.toast-bar button { width: 22px; height: 18px; padding: 0; border: 0; border-radius: 2px; background: var(--panel-2); color: var(--bone); box-shadow: var(--raised);
+  font: 700 16px/1 var(--text); cursor: pointer; }
+.toast-bar button:hover { color: var(--signal); }
+.toast-bar button:active { box-shadow: var(--sunken); }
+.toast-body { display: flex; align-items: center; gap: 10px; padding: 9px 8px 8px; color: var(--dim); }
+.toast-body img { flex: none; width: 36px; height: 36px; box-shadow: var(--sunken); border-radius: 2px; }
+.toast-body b { color: var(--bone); }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
 @media (max-width: 860px) {
   body { font-size: 17px; }
   .top nav a:not(.btn) { display: none; }
@@ -381,6 +430,15 @@ footer a { color: var(--dim); }
 
 <main>
   <section class="hero">
+    <!-- Fake kill feed, filled by the script at the bottom. Decorative. -->
+    <ul class="killfeed" id="killfeed" aria-hidden="true"></ul>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+      <symbol id="w-ak47" viewBox="0 0 64 18"><path d="M0 7 14 5v5L3 13H0zM14 5h20v5H14zM34 6h28v1.6H34zM34 4.4h12V6H34zM34 6h10v3H34zM57.5 3.8h1.6V6h-1.6zM24 10h5q1 4.5 4 7l-5 1q-3-3.5-4-8zM18 10h3.2l-1.6 5h-3z"/></symbol>
+      <symbol id="w-awp" viewBox="0 0 72 18"><path d="M0 8l4-2 14 1v4H9l-4 3H0zM18 7h16v4H18zM34 8h37v1.6H34zM20 3h13v2.6H20zM18 2.4l2 .6v2.6l-2 .5zM33 3l2-.6V6l-2-.4zM22 5.6h1.5V7H22zM30 5.6h1.5V7H30zM22 11h3l-1 4h-3zM27 11h3v2.2h-3z"/></symbol>
+      <symbol id="w-deagle" viewBox="0 0 30 18"><path fill-rule="evenodd" d="M3 3h26v5H3zM4 8h7l-2.5 9H2zM11 8h12v2h-6v1q0 2.5-3 2.5h-3zM12.5 10h3q0 1.8-1.5 1.8h-1.5z"/></symbol>
+      <symbol id="w-knife" viewBox="0 0 36 14"><path d="M1 5.2h11v3.6H1q-1 0-1-1.8t1-1.8zM12 3h2v8h-2zM14 5h14q6 .5 8 3H14z"/></symbol>
+      <symbol id="w-hs" viewBox="0 0 18 18"><path fill-rule="evenodd" d="M9 1.5a6.5 6.5 0 0 1 6.5 6.5c0 2.2-1 3.6-2.5 4.5V16H5v-3.5C3.5 11.6 2.5 10.2 2.5 8A6.5 6.5 0 0 1 9 1.5zM6.3 6.8a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 1 0 0-3.2zM11.7 6.8a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 1 0 0-3.2zM8 12h2v2H8z"/></symbol>
+    </svg>
     <div class="wrap">
       <div>
         <img class="hero-logo" src="img/logo.svg" alt="" width="112" height="112">
@@ -665,6 +723,7 @@ footer a { color: var(--dim); }
   <div class="wrap">
     <span>Made by <a href="https://x.com/nanoshrine" data-event="X profile">nanoshrine</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a> · <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md">Credits</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></span>
     <span>Not affiliated with Valve. Counter-Strike is a trademark of Valve Corporation.</span>
+    <p class="counter" id="counter" hidden></p>
   </div>
 </footer>
 
@@ -676,6 +735,11 @@ footer a { color: var(--dim); }
   const OUR_SERVER = { address: "", status: "" };
   // Your Polar checkout link (in Polar: Products, your product, Checkout Links).
   const POLAR_CHECKOUT = "https://buy.polar.sh/polar_cl_Z1Ps6X1fYyIsMLnpunW5IkbF5rQTA2klPjfiZ1Dq8yn";
+  // Visitor counter in the footer. An https URL that adds one to the count on each request
+  // and answers {"count": n} with the new total. It must allow this site in CORS
+  // (Access-Control-Allow-Origin) and shouldn't set cookies or keep IP addresses. The page asks
+  // once per browser session and remembers the number. Empty, or if the request fails: no counter.
+  const COUNTER_URL = "";
 
   // "Play on our server": shown once an address is set above
   if (OUR_SERVER.address) {
@@ -792,6 +856,136 @@ footer a { color: var(--dim); }
     else bar.previousElementSibling.textContent = "Connected.";
   };
   add();
+
+  // ---- 2004 bits ----------------------------------------------------------------
+  const store = {
+    get(k) { try { return sessionStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { sessionStorage.setItem(k, v); } catch {} },
+  };
+
+  // Visitor counter: only shown with a real number from COUNTER_URL
+  (async () => {
+    if (!COUNTER_URL) return;
+    let count = Number(store.get("ls-visitor"));
+    if (!count) {
+      try {
+        const r = await fetch(COUNTER_URL, { cache: "no-store" });
+        if (!r.ok) return;
+        count = Number((await r.json()).count);
+      } catch { return; }
+      if (!Number.isSafeInteger(count) || count < 1) return;
+      store.set("ls-visitor", String(count));
+    }
+    const digits = String(count).padStart(6, "0");
+    const odo = document.createElement("span");
+    odo.className = "odo";
+    odo.setAttribute("aria-hidden", "true");
+    [...digits].forEach((d, i) => {
+      const left = digits.length - i;
+      if (i && left % 3 === 0) odo.append(Object.assign(document.createElement("i"), { textContent: "," }));
+      odo.append(Object.assign(document.createElement("b"), { textContent: d }));
+    });
+    const sr = Object.assign(document.createElement("span"), { className: "sr", textContent: count.toLocaleString("en-US") });
+    const el = document.getElementById("counter");
+    el.append("You are visitor", odo, sr);
+    el.hidden = false;
+  })();
+
+  // Kill feed in the corner of the hero
+  {
+    const feed = document.getElementById("killfeed");
+    const NAMES = [
+      "[xDS]Viper", "[xDS]Frost", "-=[CoC]=-Reaper", "-=[CoC]=-Dutch", "=PwN=Shadow", "=PwN=Kobra", "=PwN=Jinx",
+      "|TnT|Blaze", "|TnT|Moose", "|TnT|Hex", "[NoS]Rook", "Player", "Ghost", "Slick", "Mr.Kitty",
+      "xXSniperXx", "Wolf", "Tango", "Steve", "DeathFromAbove",
+    ];
+    // weapon, how often, and whether a headshot is possible
+    const WEAPONS = [["ak47", 5, 1], ["awp", 3, 1], ["deagle", 3, 1], ["knife", 1, 0]];
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+    const icon = (id, w) =>
+      `<svg viewBox="${document.querySelector(`#w-${id}`).getAttribute("viewBox")}" style="width:${w}px"${id === "hs" ? ' class="hs"' : ""}><use href="#w-${id}"/></svg>`;
+    const WIDTH = { ak47: 50, awp: 56, deagle: 24, knife: 36, hs: 14 };
+    const line = () => {
+      const killer = pick(NAMES);
+      let victim = pick(NAMES);
+      while (victim === killer) victim = pick(NAMES);
+      const tKills = Math.random() < 0.5;
+      const w = pick(WEAPONS.flatMap(([id, n, hs]) => Array(n).fill([id, hs])));
+      const hs = w[1] && Math.random() < 0.3;
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="${tKills ? "t" : "ct"}"></span>${icon(w[0], WIDTH[w[0]])}${hs ? icon("hs", WIDTH.hs) : ""}<span class="${tKills ? "ct" : "t"}"></span>`;
+      li.firstChild.textContent = killer;
+      li.lastChild.textContent = victim;
+      return li;
+    };
+    if (reduce) {
+      // A still frame instead of a moving feed
+      for (let i = 0; i < 3; i++) feed.append(line());
+    } else {
+      let timer = null;
+      let visible = true;
+      const push = () => {
+        const li = line();
+        li.className = "new";
+        feed.append(li);
+        while (feed.children.length > 4) feed.firstChild.remove();
+        setTimeout(() => { li.classList.add("out"); setTimeout(() => li.remove(), 700); }, 5000);
+        timer = setTimeout(push, 2600 + Math.random() * 2800);
+      };
+      const run = () => {
+        const go = visible && !document.hidden;
+        if (go && !timer) timer = setTimeout(push, 1200);
+        if (!go && timer) { clearTimeout(timer); timer = null; }
+      };
+      document.addEventListener("visibilitychange", run);
+      new IntersectionObserver(([e]) => { visible = e.isIntersecting; run(); }).observe(document.querySelector(".hero"));
+    }
+  }
+
+  // "nanoshrine is now playing" toast, once per session after about 15 s on the page
+  if (!store.get("ls-toast")) {
+    const footer = document.querySelector("footer");
+    let footerInView = false;
+    let toast = null;
+    new IntersectionObserver(([e]) => {
+      footerInView = e.isIntersecting;
+      if (footerInView && toast) hide();
+    }).observe(footer);
+
+    const hide = () => {
+      if (!toast) return;
+      const t = toast;
+      toast = null;
+      t.classList.remove("on");
+      setTimeout(() => t.remove(), reduce ? 0 : 500);
+    };
+    const showToast = () => {
+      store.set("ls-toast", "1");
+      toast = document.createElement("div");
+      toast.className = "toast";
+      toast.setAttribute("role", "status");
+      toast.innerHTML = `<div class="toast-bar"><span>Friends</span><button type="button" aria-label="Close">×</button></div>
+        <div class="toast-body"><img src="img/logo.svg" alt="" width="36" height="36"><span></span></div>`;
+      toast.querySelector("button").addEventListener("click", hide);
+      document.body.append(toast);
+      // Text goes in after the live region exists, so it's read once
+      requestAnimationFrame(() => {
+        if (!toast) return;
+        const b = document.createElement("b");
+        b.textContent = "nanoshrine";
+        const game = Object.assign(document.createElement("span"), { className: "nobr", textContent: "Counter-Strike 1.6" });
+        toast.querySelector(".toast-body span").append(b, " is now playing ", game);
+        toast.classList.add("on");
+      });
+      setTimeout(hide, 8000);
+    };
+    // Count only time the page is actually in front, and wait while the footer is on screen
+    let seconds = 0;
+    const tick = setInterval(() => {
+      if (document.hidden) return;
+      if (++seconds >= 15 && !footerInView) { clearInterval(tick); showToast(); }
+    }, 1000);
+  }
 </script>
 </body>
 </html>
