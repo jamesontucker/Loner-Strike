@@ -80,7 +80,7 @@ new const WORDS[][] = { "", "", "", "", "bro", "mate", "dude", "man", "lads", "f
 new const EMOTES[][] = { "", "", "", ":)", ":D", "^^", ":3", "<3", "o7", ":P", ";)", "xD", ":(" }
 new g_Laugh[33], g_Word[33], g_Emote[33], bool:g_TextSpeak[33], g_Typos[33], g_Shouty[33], Float:g_Chatty[33]
 
-new g_pLevel, g_pHumans
+new g_pLevel, g_pHumans, g_pDeadChat
 new g_CfgDir[128]
 new Trie:g_Sections                 // section name -> Array of "letters|text"
 new Array:g_Lists[MAX_SECTIONS], g_ListCount
@@ -99,7 +99,7 @@ new g_Vault = INVALID_HANDLE
 new Trie:g_Left                      // bots that left mid-map: name -> when                // bots don't answer every line someone types
 
 // lines waiting to be "typed"
-new g_PendBot[MAX_PENDING], g_PendOther[MAX_PENDING], g_PendChain[MAX_PENDING], bool:g_PendTeam[MAX_PENDING]
+new g_PendBot[MAX_PENDING], g_PendUser[MAX_PENDING], g_PendOther[MAX_PENDING], g_PendChain[MAX_PENDING], bool:g_PendTeam[MAX_PENDING]
 new g_PendText[MAX_PENDING][128]
 
 public plugin_init()
@@ -107,6 +107,7 @@ public plugin_init()
 	register_plugin(PLUGIN, VERSION, AUTHOR)
 	g_pLevel  = register_cvar("gm_botchat", "2")
 	g_pHumans = register_cvar("gm_botchat_humans", "1")
+	g_pDeadChat = register_cvar("gm_botchat_deadchat", "1")
 	register_srvcmd("gm_botchat_reload", "cmd_reload")
 
 	register_event("DeathMsg", "ev_death", "a")
@@ -142,6 +143,8 @@ public n_persona(plugin, params)
 public n_say(plugin, params)
 {
 	new id = get_param(1), section[32]
+	if (id < 1 || id > MaxClients || !is_user_connected(id) || !is_user_bot(id))
+		return 0
 	get_string(2, section, charsmax(section))
 	strtolower(section)
 	new Float:chance = get_param_f(4)
@@ -327,7 +330,9 @@ remember_all(human)
 		d += g_KilledBy[human][b]
 		new key[72]
 		memory_key(b, human, key, charsmax(key))
-		nvault_set(g_Vault, key, fmt("%d %d %d", k, d, today()))
+		// only people who actually played each other
+		if (g_KilledBy[b][human] || g_KilledBy[human][b])
+			nvault_set(g_Vault, key, fmt("%d %d %d", k, d, today()))
 		g_KilledBy[b][human] = g_KilledBy[human][b] = 0
 	}
 }
@@ -336,6 +341,35 @@ public client_disconnected(id)
 {
 	if (!is_user_bot(id))
 		remember_all(id)
+	// nothing left waiting to be said by whoever had this slot
+	for (new i = 0; i < MAX_PENDING; i++)
+		if (g_PendBot[i] == id)
+		{
+			g_PendBot[i] = 0
+			remove_task(TASK_SAY + i)
+		}
+}
+
+// A dead bot's line, shown to the living too (with the game's own *DEAD* tag)
+dead_chat(id, const text[], bool:team)
+{
+	static msg
+	if (!msg)
+		msg = get_user_msgid("SayText")
+	new t = get_user_team(id)
+	new fmt_[32]
+	copy(fmt_, charsmax(fmt_), team ? (t == 1 ? "#Cstrike_Chat_T_Dead" : "#Cstrike_Chat_CT_Dead") : "#Cstrike_Chat_AllDead")
+	for (new r = 1; r <= MaxClients; r++)
+	{
+		if (!is_user_connected(r) || is_user_bot(r) || !is_user_alive(r) || (team && get_user_team(r) != t))
+			continue
+		message_begin(MSG_ONE, msg, _, r)
+		write_byte(id)
+		write_string(fmt_)
+		write_string("")
+		write_string(text)
+		message_end()
+	}
 }
 
 public plugin_end()
@@ -559,6 +593,7 @@ queue(id, other, const text[], chain, bool:team, Float:delay)
 	if (slot < 0)
 		return
 	g_PendBot[slot] = id
+	g_PendUser[slot] = get_user_userid(id)
 	g_PendOther[slot] = other
 	g_PendChain[slot] = chain
 	g_PendTeam[slot] = team
@@ -578,8 +613,11 @@ public task_say(task)
 	new slot = task - TASK_SAY
 	new id = g_PendBot[slot], other = g_PendOther[slot], chain = g_PendChain[slot]
 	g_PendBot[slot] = 0
-	if (!is_user_connected(id))
+	// still the same bot (the slot may have gone to someone else meanwhile)
+	if (!is_user_connected(id) || !is_user_bot(id) || get_user_userid(id) != g_PendUser[slot])
 		return
+	if (other && !is_user_connected(other))
+		other = 0
 
 	new text[128], tag[24]
 	copy(text, charsmax(text), g_PendText[slot])
@@ -606,6 +644,9 @@ public task_say(task)
 	if (!text[0])
 		return
 	engclient_cmd(id, team ? "say_team" : "say", text)
+	// the living don't see the dead talk; like pub servers' dead-chat plugins, show it to them
+	if (!is_user_alive(id) && get_pcvar_num(g_pDeadChat))
+		dead_chat(id, text, team)
 
 	// someone answers: the one it was about if that's a bot, else another bot
 	if (tag[0] && chain < MAX_CHAIN)

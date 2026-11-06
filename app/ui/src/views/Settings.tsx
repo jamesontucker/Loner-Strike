@@ -22,6 +22,7 @@ const NOTES: Record<string, string> = {
   gm_hb_radio: "Radio calls that fit the moment: enemy spotted, enemy down, the team's caller says go",
   gm_botchat: "How often bots talk: kills, deaths, rage, encouraging teammates, answering you",
   gm_botchat_humans: "Bots answer what people type, and the one you name answers you",
+  gm_botchat_deadchat: "In CS the living can't see what the dead say; like old pub servers, this shows dead bots' chat to everyone",
   gm_clans: "Bots with the same clan tag join together and play on the same side",
   gm_botjoin: "When a map starts, bots join a few at a time instead of all at once",
   gm_botvotes: "Bots join rock the vote and vote for maps; people's votes still decide",

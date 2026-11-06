@@ -86,6 +86,7 @@ new const SETTINGS[][SettingData] =
 	{ "gm_hb_radio",        "Bots use the radio", "1 0",                    "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botchat",         "Bot chat",         "0 1 2 3",                  "Off|Now and then|Normal|Chatty",      CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botchat_humans",  "Bots answer you",  "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_botchat_deadchat", "Dead bots' chat", "1 0",                      "Everyone sees it|Only the dead",      CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_clans",           "Clans stick together", "1 0",                  "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botjoin",         "Bots trickle in",  "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botvotes",        "Bots vote for maps", "1 0",                    "On Off",                              CAT_BOT,    SC_GLOBAL, "" },

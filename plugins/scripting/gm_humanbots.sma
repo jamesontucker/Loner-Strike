@@ -104,7 +104,7 @@ new g_pHabits, g_pAfk, g_pSprays, g_pRadio
 new bool:g_Chat                                 // gm_botchat is running
 new Float:g_JoinedAt[33], Float:g_ReloadAt[33], Float:g_AfkUntil[33], Float:g_NoTargetSince[33], Float:g_NextKnifeTry[33]
 new bool:g_KnifeRun[33], g_Fav[33], g_Rival[33], g_DeathsBy[33][33]
-new g_SprayDecals[8], g_SprayCount, g_RadioCall[33]
+new g_SprayDecals[8], g_SprayCount, g_RadioCall[33], Float:g_Habit[33] = { 1.0, ... }
 #define PRIMARY_BITS ((1<<CSW_SCOUT)|(1<<CSW_XM1014)|(1<<CSW_MAC10)|(1<<CSW_AUG)|(1<<CSW_UMP45)|(1<<CSW_SG550)|(1<<CSW_GALIL)|(1<<CSW_FAMAS)|(1<<CSW_AWP)|(1<<CSW_MP5NAVY)|(1<<CSW_M249)|(1<<CSW_M3)|(1<<CSW_M4A1)|(1<<CSW_TMP)|(1<<CSW_G3SG1)|(1<<CSW_SG552)|(1<<CSW_AK47)|(1<<CSW_P90))
 #define PISTOL_BITS  ((1<<CSW_P228)|(1<<CSW_ELITE)|(1<<CSW_FIVESEVEN)|(1<<CSW_USP)|(1<<CSW_GLOCK18)|(1<<CSW_DEAGLE))
 
@@ -310,12 +310,14 @@ Float:panic_factor(s)
 // The bot's skill right now (higher = slower and sloppier), with its mood
 Float:skill_of(id)
 {
-	return g_Skill[id] * habit_skill(id) * (1.0 + (get_pcvar_num(g_pTilt) ? g_Tilt[id] * g_TiltWay[id] : 0.0))
+	return g_Skill[id] * g_Habit[id] * (1.0 + (get_pcvar_num(g_pTilt) ? g_Tilt[id] * g_TiltWay[id] : 0.0))
 }
 
 public ev_death()
 {
 	new killer = read_data(1), victim = read_data(2)
+	if (victim >= 1 && victim <= MaxClients)
+		g_AfkUntil[victim] = 0.0
 	if (victim >= 1 && victim <= MaxClients && killer != victim)
 	{
 		g_Tilt[victim] = floatmin(g_Tilt[victim] + 0.08, 0.3)
@@ -368,7 +370,12 @@ public client_putinserver(id)
 	// most people get sloppy when it goes badly; some get careful
 	g_TiltWay[id] = (name_hash(id) / 7) % 100 < 70 ? 1.0 : -0.5
 	g_JoinedAt[id] = get_gametime()
+	g_Habit[id] = 1.0
 	g_Rival[id] = 0
+	// nobody holds a grudge against whoever had this slot before
+	for (new k = 1; k <= MaxClients; k++)
+		if (g_Rival[k] == id)
+			g_Rival[k] = 0
 	g_Fav[id] = -1
 	for (new k = 1; k <= MaxClients; k++)
 		g_DeathsBy[id][k] = g_DeathsBy[k][id] = 0
@@ -453,6 +460,8 @@ public task_scan()
 		if (!is_user_alive(id) || !is_user_bot(id))
 			continue
 		new s = bot_style(id), seen
+		// the personality factor, worked out here rather than every frame
+		g_Habit[id] = habit_skill(id)
 
 		new Float:eye[3], Float:view[3], Float:fwd[3]
 		eye_pos(id, eye)
@@ -473,9 +482,11 @@ public task_scan()
 				continue
 			new Float:dot = (dir[0] * fwd[0] + dir[1] * fwd[1] + dir[2] * fwd[2]) / dist
 			new Float:angle = floatacos(floatclamp(dot, -1.0, 1.0), degrees)
-			if (angle < STYLES[s][ST_ViewFov] && can_see(id, eye, e))
-				seen++
-			if (angle < bestAngle && can_see(id, eye, e))
+			// one line-of-sight check per enemy in view (traces are the expensive part)
+			if (angle >= STYLES[s][ST_ViewFov] || !can_see(id, eye, e))
+				continue
+			seen++
+			if (angle < bestAngle)
 			{
 				best = e
 				bestAngle = angle
@@ -654,6 +665,8 @@ public fw_cmdstart(id, uc, seed)
 		if (now < g_AfkUntil[id] && !g_Target[id])
 		{
 			set_uc(uc, UC_Buttons, 0)
+			set_uc(uc, UC_ForwardMove, 0.0)
+			set_uc(uc, UC_SideMove, 0.0)
 			return FMRES_IGNORED
 		}
 		g_AfkUntil[id] = 0.0
@@ -993,27 +1006,29 @@ public ev_round_start()
 		if (!is_user_alive(id) || !is_user_bot(id))
 			continue
 		new p = persona(id)
-		// a mood settles between rounds
+		// a mood settles between rounds; last round's afk is over
 		g_Tilt[id] *= 0.85
+		g_AfkUntil[id] = 0.0
 		if (get_pcvar_num(g_pAfk) && random(1000) < (has(p, "dYLF") ? 15 : 7))
 			g_AfkUntil[id] = now + random_float(20.0, 60.0)
 		if (get_pcvar_num(g_pSprays) && g_SprayCount && random(100) < (has(p, "jkhXS3") ? 25 : 10))
-			set_task(random_float(1.0, 8.0), "task_spray", id)
+			set_task(random_float(1.0, 8.0), "task_spray", get_user_userid(id))
 		new team = get_user_team(id)
 		if (get_pcvar_num(g_pRadio) && (team == 1 || team == 2) && !called[team] && has(p, "itr") && random(100) < 35)
 		{
 			called[team] = true
-			set_task(random_float(0.3, 2.0), "task_radio", id)
+			set_task(random_float(0.3, 2.0), "task_radio", get_user_userid(id))
 			g_RadioCall[id] = random(6)
 		}
 	}
 }
 
 
-public task_radio(id)
+public task_radio(userid)
 {
 	static const CALLS[][] = { "go", "followme", "stormfront", "getinpos", "sticktog", "regroup" }
-	if (is_user_alive(id))
+	new id = find_player("k", userid)
+	if (id && is_user_alive(id) && is_user_bot(id))
 		engclient_cmd(id, CALLS[g_RadioCall[id] % sizeof CALLS])
 }
 
@@ -1122,9 +1137,10 @@ knife_run(id, Float:now)
 }
 
 // A logo on the wall in front of it
-public task_spray(id)
+public task_spray(userid)
 {
-	if (!is_user_alive(id) || g_Target[id] || !g_SprayCount)
+	new id = find_player("k", userid)
+	if (!id || !is_user_alive(id) || !is_user_bot(id) || g_Target[id] || !g_SprayCount)
 		return
 	new Float:eye[3], Float:view[3], Float:fwd[3], Float:end[3]
 	eye_pos(id, eye)
@@ -1143,11 +1159,13 @@ public task_spray(id)
 	if (frac >= 1.0 || (hit > 0 && pev_valid(hit)))
 		return
 	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
-	write_byte(TE_WORLDDECAL)
+	// the index is one byte: decals past 255 go in the "high" message
+	new d = g_SprayDecals[random(g_SprayCount)]
+	write_byte(d > 255 ? TE_WORLDDECALHIGH : TE_WORLDDECAL)
 	engfunc(EngFunc_WriteCoord, end[0])
 	engfunc(EngFunc_WriteCoord, end[1])
 	engfunc(EngFunc_WriteCoord, end[2])
-	write_byte(g_SprayDecals[random(g_SprayCount)])
+	write_byte(d > 255 ? d - 256 : d)
 	message_end()
 	emit_sound(id, CHAN_VOICE, "player/sprayer.wav", 1.0, ATTN_NORM, 0, PITCH_NORM)
 	say_line(id, "spray", 0, 0.08)

@@ -129,6 +129,9 @@ public plugin_end()
 {
 	if (!g_Career)
 		set_cvar_string("motdfile", "motd.txt")
+	// a map change in the middle of bots trickling in: the full count carries over
+	if (g_RampTarget && get_cvar_num("bot_quota") == g_RampSet)
+		set_cvar_num("bot_quota", g_RampTarget)
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +281,7 @@ bool:clan_friend(out[], len)
 public task_churn()
 {
 	new level = get_pcvar_num(g_pChurn)
-	if (level <= 0 || g_Career || g_Voting || get_cvar_num("bot_quota") < 3)
+	if (level <= 0 || g_Career || g_Voting || get_cvar_num("bot_quota") < 3 || get_cvar_num("gm_scrim_phase"))
 		return
 	// one leaves every ~4 minutes, or every ~90 seconds on "busy"
 	if (random_float(0.0, 1.0) > 15.0 / (level >= 2 ? 90.0 : 240.0))
@@ -328,8 +331,15 @@ public task_ramp_start()
 	new q = get_cvar_num("bot_quota")
 	if (!get_pcvar_num(g_pBotJoin) || g_Career || q < 4 || get_cvar_num("gm_scrim_phase"))
 		return
+	// only the ones not in yet trickle in: lowering the count would kick bots already playing
+	new now
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_connected(i) && is_user_bot(i))
+			now++
+	if (now >= q - 1)
+		return
 	g_RampTarget = q
-	g_RampSet = max(2, q / 3)
+	g_RampSet = max(max(2, q / 3), now)
 	set_cvar_num("bot_quota", g_RampSet)
 	set_task(random_float(3.0, 9.0), "task_ramp")
 }
@@ -343,7 +353,11 @@ public task_ramp()
 	set_cvar_num("bot_quota", g_RampSet)
 	if (g_RampSet < g_RampTarget)
 		set_task(random_float(3.0, 12.0), "task_ramp")
+	else
+		g_RampTarget = 0
 }
+
+
 
 // Someone who left earlier comes back now and then (under the same name)
 bool:came_back(out[], len)
@@ -409,7 +423,7 @@ public cmd_say(id)
 		if (get_pcvar_num(g_pBotVotes))
 			for (new b = 1; b <= MaxClients; b++)
 				if (is_user_connected(b) && is_user_bot(b) && random(100) < 30)
-					set_task(random_float(2.0, 9.0), "task_bot_rtv", b)
+					set_task(random_float(2.0, 9.0), "task_bot_rtv", get_user_userid(b))
 		return PLUGIN_CONTINUE      // others see it in chat, like on a real server
 	}
 	if (equali(word, "nominate") || equali(word, "nom"))
@@ -442,10 +456,14 @@ bool:human_rocked()
 	return false
 }
 
-public task_bot_rtv(id)
+public task_bot_rtv(userid)
 {
-	if (is_user_connected(id) && !g_Voting && !g_VoteDone)
-		engclient_cmd(id, "say", "rtv")
+	new id = find_player("k", userid)
+	if (!id || !is_user_bot(id) || g_Voting || g_VoteDone)
+		return
+	// shown in chat, and counted (a bot's own command doesn't reach the say hook)
+	engclient_cmd(id, "say", "rtv")
+	rock(id)
 }
 
 rocked()
@@ -608,7 +626,8 @@ public task_group_clans()
 	// one swap per round is enough to look natural
 	for (new a = 1; a <= MaxClients; a++)
 	{
-		if (!tags[a][0] || !is_user_connected(a))
+		// only the dead change sides (a living one would stand on the other team, maybe with the bomb)
+		if (!tags[a][0] || !is_user_connected(a) || is_user_alive(a))
 			continue
 		new CsTeams:ta = cs_get_user_team(a)
 		if (ta != CS_TEAM_T && ta != CS_TEAM_CT)
@@ -633,7 +652,7 @@ public task_group_clans()
 		// a bot with no clan on the clan's side takes this one's place
 		for (new c = 1; c <= MaxClients; c++)
 		{
-			if (c == a || tags[c][0] || !is_user_connected(c) || !is_user_bot(c) || cs_get_user_team(c) != home)
+			if (c == a || tags[c][0] || !is_user_connected(c) || !is_user_bot(c) || is_user_alive(c) || cs_get_user_team(c) != home)
 				continue
 			cs_set_user_team(a, home)
 			cs_set_user_team(c, ta)
@@ -850,7 +869,7 @@ public start_vote()
 	if (get_pcvar_num(g_pBotVotes))
 		for (new b = 1; b <= MaxClients; b++)
 			if (is_user_connected(b) && is_user_bot(b) && random(100) < 60)
-				set_task(random_float(2.0, float(VOTE_TIME) - 2.0), "task_bot_vote", b)
+				set_task(random_float(2.0, float(VOTE_TIME) - 2.0), "task_bot_vote", get_user_userid(b))
 
 	new menu = menu_create(fmt("\yVote for the next map \d(%d seconds)", VOTE_TIME), "vote_handler")
 	for (new i = 0; i < g_VoteOptions; i++)
@@ -868,9 +887,10 @@ public start_vote()
 }
 
 // A bot picks a map like a person would: the nominations and maps it likes a bit more
-public task_bot_vote(id)
+public task_bot_vote(userid)
 {
-	if (!g_Voting || !is_user_connected(id))
+	new id = find_player("k", userid)
+	if (!g_Voting || !id || !is_user_bot(id))
 		return
 	new item = random(g_VoteOptions + 1)
 	if (g_NomCount && random(100) < 40)
