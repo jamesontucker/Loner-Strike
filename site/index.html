@@ -120,6 +120,17 @@ p { text-wrap: pretty; }
   background: var(--bg); box-shadow: var(--sunken); color: var(--bone); }
 .steps b { color: var(--bone); }
 
+/* everything in it */
+.everything { padding: 64px 0 20px; }
+.feature-groups { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
+.group { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 18px 18px 8px; }
+.group h3 { font: 400 20px/1.1 var(--stencil); margin: 0 0 10px; }
+.group ul { list-style: none; margin: 0; padding: 0; }
+.group li { position: relative; padding: 0 0 10px 22px; color: var(--dim); font-size: 16px; line-height: 1.4; text-wrap: pretty; }
+.group li::before { content: ""; position: absolute; left: 2px; top: 6px; width: 9px; height: 9px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
+@media (max-width: 1060px) { .feature-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .feature-groups { grid-template-columns: 1fr; } }
+
 /* gallery */
 .gallery { padding: 64px 0 70px; }
 .shots { list-style: none; margin: 22px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
@@ -185,7 +196,7 @@ footer a { color: var(--dim); }
     <a class="wordmark" href="#">Loner-Strike</a>
     <nav aria-label="Page">
       <a href="#modes">Modes</a>
-      <a href="#features">What's in it</a>
+      <a href="#everything">Features</a>
       <a href="#gallery">Screenshots</a>
       <a href="#faq">FAQ</a>
       <a class="btn primary" href="#get" data-event="Get it (top)">Get it</a>
@@ -276,6 +287,59 @@ footer a { color: var(--dim); }
         <div class="window">
           <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
           <img src="img/servers.jpg" alt="A dedicated server's page with settings, console and maintenance" width="1280" height="800" loading="lazy">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="everything" id="everything">
+    <div class="wrap">
+      <h2>Everything in it</h2>
+      <p class="lead">Free, for Counter-Strike 1.6 and Condition Zero. Everything it changes is backed up and can be removed.</p>
+      <div class="feature-groups">
+        <div class="group">
+          <h3>Playing</h3>
+          <ul>
+            <li>Bots with human reaction times and aim, from casual to bunnyhopping pros</li>
+            <li>A regular cast of bot names and clan tags</li>
+            <li>Classic community modes, patched so bots play them</li>
+            <li>Thousands of maps from GameBanana, with screenshots, favourites and search</li>
+            <li>Skins, player models, sounds and sprays, backed up and removable</li>
+            <li>Round-end music, Quake sounds and classic sound packs</li>
+            <li>Add your own maps, sounds and AMX Mod X plugins from a file</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>Friends</h3>
+          <ul>
+            <li>Seven ways to connect: LAN, your router, playit.gg, Tailscale, ZeroTier, Radmin VPN and Hamachi</li>
+            <li>Server name, password and a ready-to-send invite</li>
+            <li>A custom welcome page when people join</li>
+            <li>A notification when someone joins while you're away</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>Running a server</h3>
+          <ul>
+            <li>Dedicated servers downloaded and set up for you, or bring your own</li>
+            <li>Admins, moderators and VIPs, with abilities per role and end dates</li>
+            <li>Bans, gags, a swear filter, a chat log and player reports</li>
+            <li>Map rotation, timed chat messages, AFK and high-ping kickers</li>
+            <li>Stats and ranks, votekick and voteban, join messages with country</li>
+            <li>Match mode for 5v5s: ready-up, knife round, half-time swap</li>
+            <li>HLTV for spectators and demos, fast downloads, scheduled restarts</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>The app</h3>
+          <ul>
+            <li>Guided setup that finds your game, on Windows or a Mac with CrossOver</li>
+            <li>Control everything from your phone by scanning a QR code</li>
+            <li>Quick actions while you play: pause, bots, god mode, noclip and more</li>
+            <li>Export your setup to another computer or server</li>
+            <li>Automatic updates, signed and checked</li>
+            <li>Open source under the GPL</li>
+          </ul>
         </div>
       </div>
     </div>
