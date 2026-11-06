@@ -23,9 +23,9 @@ struct Ui;
 
 pub struct AppState {
     pub game: Option<Game>,
-    /// Host headers we answer to; anything else is refused.
+    /// Host names the app window's listener answers to (127.0.0.1 / localhost).
     pub hosts: RwLock<Vec<String>>,
-    /// Host headers that came in over the LAN (phones): those need the token.
+    /// Host names the phone listener answers to (this computer's LAN address).
     pub lan_hosts: RwLock<Vec<String>>,
     /// Phone access token, kept between runs so a saved QR keeps working.
     pub token: String,
@@ -35,30 +35,43 @@ pub struct AppState {
 
 pub type Shared = Arc<AppState>;
 
-async fn guard(State(st): State<Shared>, req: Request, next: Next) -> Response {
-    let host = req.headers().get(header::HOST).and_then(|h| h.to_str().ok()).unwrap_or("").to_lowercase();
+/// The app window's listener (127.0.0.1): only requests addressed to our own local
+/// host names get in (a web page can point its own domain at 127.0.0.1).
+async fn guard_local(State(st): State<Shared>, req: Request, next: Next) -> Response {
+    let host = host_of(&req);
     if !st.hosts.read().unwrap().contains(&host) {
         return (StatusCode::FORBIDDEN, "forbidden").into_response();
     }
-    if st.lan_hosts.read().unwrap().contains(&host) {
-        let cookie_ok = req
-            .headers()
-            .get(header::COOKIE)
-            .and_then(|c| c.to_str().ok())
-            .map(|c| c.split(';').any(|p| p.trim() == format!("ls_token={}", st.token)))
-            .unwrap_or(false);
-        let query_ok = req.uri().query().map(|q| q.split('&').any(|p| p == format!("t={}", st.token))).unwrap_or(false);
-        if !cookie_ok && !query_ok {
-            return (StatusCode::FORBIDDEN, "Scan the QR code in Loner-Strike's Settings to connect.").into_response();
-        }
-        let mut res = next.run(req).await;
-        if query_ok {
-            let c = format!("ls_token={}; Path=/; SameSite=Strict; Max-Age=31536000", st.token);
-            res.headers_mut().insert(header::SET_COOKIE, c.parse().unwrap());
-        }
-        return res;
-    }
     next.run(req).await
+}
+
+/// The phone listener (LAN): always needs the token, whatever the request says
+/// about itself, and only answers to the phone address.
+async fn guard_lan(State(st): State<Shared>, req: Request, next: Next) -> Response {
+    let host = host_of(&req);
+    if !st.lan_hosts.read().unwrap().contains(&host) {
+        return (StatusCode::FORBIDDEN, "forbidden").into_response();
+    }
+    let cookie_ok = req
+        .headers()
+        .get(header::COOKIE)
+        .and_then(|c| c.to_str().ok())
+        .map(|c| c.split(';').any(|p| p.trim() == format!("ls_token={}", st.token)))
+        .unwrap_or(false);
+    let query_ok = req.uri().query().map(|q| q.split('&').any(|p| p == format!("t={}", st.token))).unwrap_or(false);
+    if !cookie_ok && !query_ok {
+        return (StatusCode::FORBIDDEN, "Scan the QR code in Loner-Strike's Settings to connect.").into_response();
+    }
+    let mut res = next.run(req).await;
+    if query_ok {
+        let c = format!("ls_token={}; Path=/; SameSite=Strict; Max-Age=31536000", st.token);
+        res.headers_mut().insert(header::SET_COOKIE, c.parse().unwrap());
+    }
+    res
+}
+
+fn host_of(req: &Request) -> String {
+    req.headers().get(header::HOST).and_then(|h| h.to_str().ok()).unwrap_or("").to_lowercase()
 }
 
 /// Serves the UI files; unknown paths get index.html (the app routes on the client).
@@ -75,17 +88,27 @@ async fn ui(uri: Uri) -> Response {
     }
 }
 
-pub fn router(state: Shared) -> Router {
-    Router::new()
+/// Which listener a router is for decides its guard (never the request's own headers).
+#[derive(Clone, Copy, PartialEq)]
+pub enum Listener {
+    Local,
+    Lan,
+}
+
+pub fn router(state: Shared, listener: Listener) -> Router {
+    let routes = Router::new()
         .merge(crate::panel_api::routes())
         .merge(crate::app_api::routes())
-        .fallback(ui)
-        .layer(middleware::from_fn_with_state(state.clone(), guard))
-        .with_state(state)
+        .fallback(ui);
+    let routes = match listener {
+        Listener::Local => routes.layer(middleware::from_fn_with_state(state.clone(), guard_local)),
+        Listener::Lan => routes.layer(middleware::from_fn_with_state(state.clone(), guard_lan)),
+    };
+    routes.with_state(state)
 }
 
 pub async fn serve(state: Shared, listener: std::net::TcpListener) {
     listener.set_nonblocking(true).ok();
     let listener = tokio::net::TcpListener::from_std(listener).expect("listener");
-    axum::serve(listener, router(state)).await.ok();
+    axum::serve(listener, router(state, Listener::Local)).await.ok();
 }

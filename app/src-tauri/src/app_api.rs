@@ -85,14 +85,13 @@ pub fn start_phone(st: &Shared) {
         }
     };
     let host = format!("{ip}:{PHONE_PORT}");
-    st.hosts.write().unwrap().push(host.clone());
     st.lan_hosts.write().unwrap().push(host.clone());
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     let state = st.clone();
     tauri::async_runtime::spawn(async move {
         listener.set_nonblocking(true).ok();
         if let Ok(l) = tokio::net::TcpListener::from_std(listener) {
-            let _ = axum::serve(l, server::router(state))
+            let _ = axum::serve(l, server::router(state, server::Listener::Lan))
                 .with_graceful_shutdown(async {
                     let _ = rx.await;
                 })
@@ -109,7 +108,6 @@ fn stop_phone(st: &Shared) {
         let _ = tx.send(());
     }
     if let Some(h) = phone.host.take() {
-        st.hosts.write().unwrap().retain(|x| *x != h);
         st.lan_hosts.write().unwrap().retain(|x| *x != h);
     }
 }
