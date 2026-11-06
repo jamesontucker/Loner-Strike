@@ -463,20 +463,22 @@ pub fn parse_bans(text: &str, kind: &'static str) -> Vec<Ban> {
         .collect()
 }
 
-fn read_bans(g: &Game) -> Vec<Ban> {
+fn read_bans(g: &Game) -> Result<Vec<Ban>, String> {
     let mut out = Vec::new();
     for kind in ["id", "ip"] {
-        out.extend(parse_bans(&ban_text(g, kind), kind));
+        out.extend(parse_bans(&ban_text(g, kind)?, kind));
     }
-    out
+    Ok(out)
 }
 
 /// A ban file as the server has it: on a Linux server, the one on the machine (the game
 /// adds to it itself), not this computer's copy.
-fn ban_text(g: &Game, kind: &str) -> String {
+fn ban_text(g: &Game, kind: &str) -> Result<String, String> {
     match &g.remote {
-        Some((r, dir)) => crate::remote::read_file(r, &format!("{dir}/{}", ban_file(kind))).map(|b| crate::rcon::latin1(&b)).unwrap_or_default(),
-        None => crate::sys::read_latin1(&g.dir.join(ban_file(kind))).unwrap_or_default(),
+        // only a file that isn't there counts as no bans: a failed read must never look
+        // like an empty list (it would be written back, or lift every ban when shared)
+        Some((r, dir)) => Ok(crate::remote::read_file_opt(r, &format!("{dir}/{}", ban_file(kind)))?.map(|b| crate::rcon::latin1(&b)).unwrap_or_default()),
+        None => Ok(crate::sys::read_latin1(&g.dir.join(ban_file(kind))).unwrap_or_default()),
     }
 }
 
@@ -489,7 +491,7 @@ pub fn remove_ban_line(text: &str, value: &str) -> String {
 
 fn edit_ban_file(g: &Game, kind: &str, f: impl FnOnce(&str) -> String) -> Result<(), String> {
     let path = g.dir.join(ban_file(kind));
-    let old = ban_text(g, kind);
+    let old = ban_text(g, kind)?;
     let new = f(&old);
     if new != old {
         if let Some((r, dir)) = &g.remote {
@@ -587,7 +589,7 @@ fn listing(g: &Game) -> Value {
             v
         })
         .collect();
-    json!({"people": people, "donate": a.donate, "perks": a.perks, "abilities": a.abilities, "bans": read_bans(g), "today": today,
+    json!({"people": people, "donate": a.donate, "perks": a.perks, "abilities": a.abilities, "bans": read_bans(g).unwrap_or_default(), "today": today,
            "users_ini": g.dir.join("addons/amxmodx/configs").is_dir(), "seen": seen(&g.data)})
 }
 
@@ -820,14 +822,16 @@ pub(crate) fn copy_admins(from: &Game, to: &Game) -> Result<(), String> {
 }
 
 pub(crate) fn shared_bans(g: &Game) -> String {
-    let mut v: Vec<String> = read_bans(g).into_iter().map(|b| format!("{} {}", b.kind, b.value)).collect();
+    // (unreadable: a value no real list has, so nothing is passed on from it)
+    let Ok(bans) = read_bans(g) else { return "unreadable".into() };
+    let mut v: Vec<String> = bans.into_iter().map(|b| format!("{} {}", b.kind, b.value)).collect();
     v.sort();
     v.join("\n")
 }
 
 /// The bans as "id STEAM_..." / "ip 1.2.3.4" lines.
-pub(crate) fn ban_set(g: &Game) -> std::collections::BTreeSet<String> {
-    read_bans(g).into_iter().map(|b| format!("{} {}", b.kind, b.value)).collect()
+pub(crate) fn ban_set(g: &Game) -> Result<std::collections::BTreeSet<String>, String> {
+    Ok(read_bans(g)?.into_iter().map(|b| format!("{} {}", b.kind, b.value)).collect())
 }
 
 /// Adds and lifts bans on `to` ("id STEAM_..." / "ip 1.2.3.4" lines), leaving its other
@@ -875,10 +879,10 @@ pub(crate) fn apply_bans(to: &Game, add: &[String], lift: &[String]) -> Result<(
 /// came or went).
 pub(crate) fn copy_bans(from: &Game, to: &Game) -> Result<(), String> {
     let _l = LOCK.lock().unwrap();
-    let old = read_bans(to);
-    let new = read_bans(from);
+    let old = read_bans(to)?;
+    let new = read_bans(from)?;
     for kind in ["id", "ip"] {
-        let text = ban_text(from, kind);
+        let text = ban_text(from, kind)?;
         edit_ban_file(to, kind, |_| text)?;
     }
     let mut cmds = Vec::new();

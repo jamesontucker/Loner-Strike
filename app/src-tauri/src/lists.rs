@@ -168,7 +168,9 @@ pub fn after_change(target: &str, list: &str) {
     }
     let done = if list == "bans" {
         // what was added or lifted here since the last share, and only that
-        let mine: Vec<String> = crate::admins::ban_set(&g).into_iter().collect();
+        // this member's bans couldn't be read: nothing is worked out from that
+        let Ok(mine) = crate::admins::ban_set(&g) else { return };
+        let mine: Vec<String> = mine.into_iter().collect();
         let add: Vec<String> = mine.iter().filter(|b| !group.base.contains(b)).cloned().collect();
         let lift: Vec<String> = group.base.iter().filter(|b| !mine.contains(b)).cloned().collect();
         let r = each_other(&member, &group.members, |o| crate::admins::apply_bans(o, &add, &lift));
@@ -244,7 +246,8 @@ async fn api_set(headers: HeaderMap, on: Option<axum::Extension<crate::server::O
             let mut group = Group { members, ..Default::default() };
             remember(&req.list, &mut group);
             if req.list == "bans" {
-                group.base = game(&req.from).map(|g| crate::admins::ban_set(&g).into_iter().collect()).unwrap_or_default();
+                let from = game(&req.from).ok_or("That server isn't set up yet.")?;
+                group.base = crate::admins::ban_set(&from)?.into_iter().collect();
             }
             c.insert(req.list.clone(), group);
         } else {

@@ -261,6 +261,23 @@ pub fn exec_quick(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
     })
 }
 
+/// A file on the machine, or None if it isn't there. Any other failure is an error, never
+/// an empty file.
+pub fn read_file_opt(r: &RemoteInfo, path: &str) -> Result<Option<Vec<u8>>, String> {
+    with_session(r, |s| {
+        let sftp = s.sftp()?;
+        let mut f = match sftp.open(Path::new(path)) {
+            Ok(f) => f,
+            // LIBSSH2_FX_NO_SUCH_FILE
+            Err(e) if e.code() == ssh2::ErrorCode::SFTP(2) => return Ok(None),
+            Err(e) => return Err(e),
+        };
+        let mut v = Vec::new();
+        f.read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        Ok(Some(v))
+    })
+}
+
 /// read_file for the regular checks (the game's status file): gives up after a few
 /// seconds if the connection is busy.
 pub fn read_file_quick(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
