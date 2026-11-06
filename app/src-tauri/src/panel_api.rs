@@ -215,7 +215,9 @@ async fn gb_install(State(st): State<Shared>, headers: HeaderMap, body: Bytes) -
         return reply(StatusCode::BAD_REQUEST, json!({"ok": false, "error": "invalid mod or file"}));
     };
     let section = req.get("section").map(text).unwrap_or_else(|| "maps".into());
-    match st.game().map(|g| g.store.start_section_install(&section, m, f)) {
+    // skins, sounds and the rest only change how the game looks to you: always your game
+    let g = if section == "maps" { st.game() } else { st.local_game() };
+    match g.map(|g| g.store.start_section_install(&section, m, f)) {
         None => no_game_found(),
         Some(Ok(job)) => reply(StatusCode::OK, json!({"ok": true, "job": job})),
         Some(Err(e)) => store_error(e, true),
@@ -234,7 +236,10 @@ async fn gb_uninstall(State(st): State<Shared>, headers: HeaderMap, body: Bytes)
         return reply(StatusCode::BAD_REQUEST, json!({"ok": false, "error": "invalid mod"}));
     };
     let section = req.get("section").map(text).unwrap_or_else(|| "maps".into());
-    match with_game(&st, move |g| g.store.uninstall_section(&section, m)).await {
+    let Some(g) = (if section == "maps" { st.game() } else { st.local_game() }) else {
+        return no_game_found();
+    };
+    match tokio::task::spawn_blocking(move || g.store.uninstall_section(&section, m)).await.ok() {
         None => no_game_found(),
         Some(Ok(mut v)) => {
             v["ok"] = json!(true);

@@ -440,6 +440,13 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
             }
             let _ = std::fs::create_dir_all(&data);
             std::fs::write(data.join("friends.json"), json!({"name": entry.name, "password": ""}).to_string()).map_err(|e| e.to_string())?;
+            // empty ban lists, so the server doesn't complain it has none
+            for f in ["banned.cfg", "listip.cfg"] {
+                let p = entry.dir.join(&g).join(f);
+                if !p.exists() {
+                    let _ = std::fs::write(p, "");
+                }
+            }
             std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike\nhostname \"{}\"\n", entry.name)).map_err(|e| e.to_string())
         })?;
         job.run(&format!("{g}/srv-maps"), || match &source {
@@ -790,16 +797,13 @@ fn answer(r: Result<Value, String>) -> (StatusCode, Json<Value>) {
 
 /// The player's own game install (servers are made from it and joined with it).
 fn client(st: &Shared) -> Option<Install> {
-    let local = game_for("local", || crate::app_api::pick_game(&crate::app_api::load_settings()))
-        .or_else(|| st.game().filter(|g| !g.dedicated))?;
+    let local = st.local_game()?;
     crate::steam::find_installs().into_iter().find(|i| i.hl == local.hl)
 }
 
-async fn api_list(State(st): State<Shared>) -> Json<Value> {
-    let selected = crate::app_api::load_settings().target.unwrap_or_else(|| "local".into());
-    let local = st.game().filter(|g| !g.dedicated).map(|g| g.name.clone());
+async fn api_list() -> Json<Value> {
     let list: Vec<Value> = load().iter().map(view).collect();
-    Json(json!({"selected": selected, "local": local, "servers": list, "steamcmd": steamcmd_exe().is_file()}))
+    Json(json!({"servers": list, "steamcmd": steamcmd_exe().is_file()}))
 }
 
 #[derive(Deserialize)]
@@ -829,21 +833,7 @@ async fn api_select(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
         .unwrap_or(false);
         return answer(if ok { Ok(json!({"ok": true})) } else { Err("That game isn't installed.".into()) });
     }
-    let id = req.id.clone();
-    let r = tokio::task::spawn_blocking(move || {
-        let s = crate::app_api::load_settings();
-        game_for(&id, || crate::app_api::pick_game(&s)).ok_or_else(|| "That server isn't ready.".to_string())
-    })
-    .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
-    match r {
-        Ok(g) => {
-            st.set_game(Some(g));
-            crate::app_api::set_target(&req.id);
-            answer(Ok(json!({"ok": true})))
-        }
-        Err(e) => answer(Err(e)),
-    }
+    answer(Err("Pick CS 1.6 or Condition Zero.".into()))
 }
 
 async fn api_create(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<NewServer>) -> (StatusCode, Json<Value>) {
@@ -974,20 +964,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
     })
     .await
     .unwrap_or_else(|_| Err("Something went wrong.".into()));
-    // a deleted server can't stay selected
-    if r.is_ok() && get_target_missing() {
-        let local = tokio::task::spawn_blocking(|| game_for("local", || crate::app_api::pick_game(&crate::app_api::load_settings()))).await.ok().flatten();
-        st.set_game(local);
-        crate::app_api::set_target("local");
-    }
     answer(r)
-}
-
-fn get_target_missing() -> bool {
-    match crate::app_api::load_settings().target.as_deref() {
-        None | Some("local") => false,
-        Some(id) => get(id).is_none(),
-    }
 }
 
 async fn api_console(UrlPath(id): UrlPath<String>) -> Json<Value> {

@@ -13,7 +13,8 @@ const NOTES: Record<string, string> = {
 const size = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 /** GameBanana's Counter-Strike 1.6 section: maps, skins, models, sounds and more. */
-export function GetMore({ onInstalled }: { onInstalled: () => void }) {
+/** only: show just one section (a server's "Get maps"). */
+export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?: string }) {
   const toast = useToast();
   const [section, setSection] = useState("maps");
   const [sections, setSections] = useState<GbSection[]>(FALLBACK_SECTIONS);
@@ -115,8 +116,8 @@ export function GetMore({ onInstalled }: { onInstalled: () => void }) {
   return (
     <div className="stack">
       <div>
-        <SectionHead title="Get more" note={`From GameBanana's Counter-Strike 1.6 section. ${NOTES[section] ?? NOTES.default}`} />
-        <div className="chips section-tabs" role="tablist" aria-label="What to get">
+        <SectionHead title={only ? "Get maps" : "Get more"} note={`From GameBanana's Counter-Strike 1.6 section. ${NOTES[section] ?? NOTES.default}`} />
+        <div className="chips section-tabs" role="tablist" aria-label="What to get" hidden={!!only}>
           {sections.map(([id, name]) => (
             <button key={id} className="chip" role="tab" aria-pressed={section === id} onClick={() => { setSection(id); setCat(null); setItems([]); }}>
               {name}

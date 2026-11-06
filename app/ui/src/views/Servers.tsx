@@ -1,8 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
-import type { ServerInfo, ServerList } from "../types";
+import type { AppInfo, MapInfo, Online, ServerInfo, ServerList } from "../types";
 import { SectionHead, SteamProgress, useToast } from "../ui";
+import { Admins } from "./Admins";
+import { Bots } from "./Bots";
+import { GetMore } from "./GetMore";
+import { Maps } from "./Maps";
+import { Mods } from "./Mods";
+import { PlayLive } from "./Play";
+import { Players } from "./Players";
+import { MatchButtons, SettingsPage } from "./Settings";
 import type { Job, Scan } from "./Setup";
+import { Welcome } from "./Welcome";
 
 const GAME = { cstrike: "Counter-Strike 1.6", czero: "Condition Zero" } as const;
 const VISIBILITY = [
@@ -48,43 +57,23 @@ export function JobProgress({ onEnd }: { onEnd: (ok: boolean) => void }) {
   );
 }
 
-export function Servers({ scan, selected, onSelect, onChanged }: { scan: Scan | null; selected: string; onSelect: (id: string) => void; onChanged: () => void }) {
+/** Every server, and making or adding one. Opening a server shows its own page. */
+export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; list: ServerList | null; onOpen: (id: string) => void; onChanged: () => void }) {
   const toast = useToast();
-  const [list, setList] = useState<ServerList | null>(null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [busyJob, setBusyJob] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    getJson<ServerList>("/api/servers").then(setList).catch(() => null);
-  }, []);
-  useEffect(() => {
-    load();
-    const t = setInterval(() => !document.hidden && load(), 3000);
-    return () => clearInterval(t);
-  }, [load]);
 
   const act = async (s: ServerInfo, action: string) => {
-    if (action === "delete") {
-      const msg = s.imported
-        ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.`
-        : `Delete "${s.name}"? Its folder, maps and settings are deleted.`;
-      if (!confirm(msg)) return;
-    }
     const r = await post(`/api/servers/${s.id}/${action}`);
     if (r.error) return toast(r.error, true);
     if (action === "join") toast(`Joining ${s.name}…`);
-    if (action === "update" && r.job) setBusyJob(s.id);
-    if (action === "delete") onChanged();
-    load();
+    onChanged();
   };
-
   const installed = (scan?.installs ?? []).flatMap((i) => i.games.filter((g) => g.installed).map((g) => g.id));
 
   return (
     <div className="stack">
-      <SectionHead title="Servers" note="Dedicated servers run on their own, separate from your game. Each has its own modes, maps, admins and password.">
+      <SectionHead title="Servers" note="Optional: run dedicated servers that keep going without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game.">
         <button className="btn" onClick={() => setImporting(true)}>Add one you already run</button>
         <button className="btn primary" onClick={() => setCreating(true)}>New server</button>
       </SectionHead>
@@ -93,15 +82,15 @@ export function Servers({ scan, selected, onSelect, onChanged }: { scan: Scan | 
         <div className="panel">
           <h3>No servers yet</h3>
           <p className="muted measure">
-            A dedicated server keeps going when you close the game, and you join it like anyone else. Loner-Strike downloads Valve's free
-            server (about 1 GB), sets it up like your game and runs it for you.
+            Your own game already hosts matches for you and friends (see Play with friends). A dedicated server is for when you want one that keeps
+            running while you're not playing. Loner-Strike downloads Valve's free server (about 1 GB), sets it up and runs it for you.
           </p>
         </div>
       )}
 
       <div className="server-list">
         {list?.servers.map((s) => (
-          <div key={s.id} className={`server${selected === s.id ? " selected" : ""}`}>
+          <div key={s.id} className="server">
             <div className="server-head">
               <div>
                 <h3>{s.name}</h3>
@@ -117,28 +106,20 @@ export function Servers({ scan, selected, onSelect, onChanged }: { scan: Scan | 
             </div>
             {s.error && <p className="err-text">{s.error}</p>}
             {s.state === "setting-up" ? (
-              <JobProgress onEnd={(ok) => { toast(ok ? `${s.name} is ready` : "Setting up the server stopped", !ok); load(); onChanged(); }} />
-            ) : busyJob === s.id ? (
-              <JobProgress onEnd={(ok) => { setBusyJob(null); toast(ok ? "Server files updated" : "The update stopped", !ok); }} />
+              <JobProgress onEnd={(ok) => { toast(ok ? `${s.name} is ready` : "Setting up the server stopped", !ok); onChanged(); }} />
             ) : (
               <div className="row">
+                <button className="btn primary" onClick={() => onOpen(s.id)}>Open</button>
                 {s.state === "running" ? (
                   <>
-                    <button className="btn primary" onClick={() => act(s, "join")}>Join</button>
-                    <button className="btn" onClick={() => act(s, "restart")}>Restart</button>
+                    <button className="btn" onClick={() => act(s, "join")}>Join</button>
                     <button className="btn danger" onClick={() => act(s, "stop")}>Stop</button>
                   </>
                 ) : (
-                  <button className="btn primary" onClick={() => act(s, "start")}>Start</button>
+                  <button className="btn" onClick={() => act(s, "start")}>Start</button>
                 )}
-                {selected !== s.id && <button className="btn" onClick={() => onSelect(s.id)}>Manage</button>}
-                <button className="btn" aria-expanded={open === s.id} onClick={() => setOpen(open === s.id ? null : s.id)}>
-                  {open === s.id ? "Hide details" : "Settings & console"}
-                </button>
               </div>
             )}
-            {!s.loner && s.ready && <AddLoner server={s} onDone={load} />}
-            {open === s.id && s.ready && <ServerDetails server={s} onChanged={load} act={(a) => act(s, a)} />}
           </div>
         ))}
       </div>
@@ -150,10 +131,125 @@ export function Servers({ scan, selected, onSelect, onChanged }: { scan: Scan | 
           servers={list?.servers ?? []}
           games={installed}
           onClose={() => setCreating(false)}
-          onCreated={() => { setCreating(false); load(); }}
+          onCreated={() => { setCreating(false); onChanged(); }}
         />
       )}
-      {importing && <ImportServer onClose={() => setImporting(false)} onDone={() => { setImporting(false); load(); }} />}
+      {importing && <ImportServer onClose={() => setImporting(false)} onDone={() => { setImporting(false); onChanged(); }} />}
+    </div>
+  );
+}
+
+type Tab = "overview" | "modes" | "maps" | "getmaps" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
+const TABS: { id: Tab; label: string; live?: boolean }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "modes", label: "Modes", live: true },
+  { id: "maps", label: "Maps" },
+  { id: "getmaps", label: "Get maps" },
+  { id: "bots", label: "Bots", live: true },
+  { id: "match", label: "Match", live: true },
+  { id: "fun", label: "Fun", live: true },
+  { id: "players", label: "Players", live: true },
+  { id: "mods", label: "Mods" },
+  { id: "admins", label: "Admins" },
+  { id: "welcome", label: "Welcome page" },
+];
+
+/** One server's own control panel. Every request from here names the server. */
+export function ServerPage(props: {
+  server: ServerInfo;
+  data: Online | null;
+  reason: string;
+  app: AppInfo | null;
+  scan: Scan | null;
+  maps: MapInfo[];
+  refresh: () => void;
+  reloadMaps: () => void;
+  reloadApp: () => void;
+  onChanged: () => void;
+  onBack: () => void;
+}) {
+  const { server: s, data, app, scan, maps, refresh, reloadMaps, reloadApp, onChanged, onBack } = props;
+  const toast = useToast();
+  const [tab, setTab] = useState<Tab>("overview");
+  const [busyJob, setBusyJob] = useState(false);
+
+  const act = async (action: string) => {
+    if (action === "delete") {
+      const msg = s.imported
+        ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.`
+        : `Delete "${s.name}"? Its folder, maps and settings are deleted.`;
+      if (!confirm(msg)) return;
+    }
+    const r = await post(`/api/servers/${s.id}/${action}`);
+    if (r.error) return toast(r.error, true);
+    if (action === "join") toast(`Joining ${s.name}…`);
+    if (action === "start") toast(`Starting ${s.name}…`);
+    if (action === "update" && r.job) setBusyJob(true);
+    if (action === "delete") return onBack(), onChanged();
+    onChanged();
+    setTimeout(refresh, 1500);
+  };
+
+  const needsLive = TABS.find((t) => t.id === tab)?.live && !data;
+  return (
+    <div className="stack">
+      <div className="server-top">
+        <button className="link back" onClick={onBack}>← All servers</button>
+        <div className="row between">
+          <div>
+            <h2 className="server-title">{s.name}</h2>
+            <p className="muted">
+              Dedicated server · {GAME[s.game]} · port {s.port} · <span className={`live inline${s.state === "running" ? " on" : ""}`}>{STATE[s.state]}</span>
+            </p>
+          </div>
+          <div className="row">
+            {s.state === "running" ? (
+              <>
+                <button className="btn primary" onClick={() => act("join")}>Join</button>
+                <button className="btn" onClick={() => act("restart")}>Restart</button>
+                <button className="btn danger" onClick={() => act("stop")}>Stop</button>
+              </>
+            ) : (
+              <button className="btn primary" onClick={() => act("start")}>Start the server</button>
+            )}
+          </div>
+        </div>
+        <div className="chips server-tabs" role="tablist" aria-label={`${s.name} sections`}>
+          {TABS.map((t) => (
+            <button key={t.id} role="tab" className="chip" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {s.error && <p className="err-text">{s.error}</p>}
+      {!s.loner && <AddLoner server={s} onDone={() => { onChanged(); reloadApp(); }} />}
+      {busyJob && <JobProgress onEnd={(ok) => { setBusyJob(false); toast(ok ? "Server files updated" : "The update stopped", !ok); }} />}
+
+      {needsLive ? (
+        <div className="waiting">
+          <h2>{TABS.find((t) => t.id === tab)!.label}</h2>
+          <p className="muted">{s.state === "running" ? "Connecting to the server…" : "This needs the server running."}</p>
+          {s.state !== "running" && <button className="btn primary" onClick={() => act("start")}>Start the server</button>}
+        </div>
+      ) : (
+        <>
+          {tab === "overview" && <ServerDetails server={s} onChanged={onChanged} act={act} />}
+          {tab === "modes" && data && <PlayLive data={data} maps={maps} refresh={refresh} openMaps={() => setTab("maps")} />}
+          {tab === "maps" && <Maps data={data} maps={maps} reload={reloadMaps} refresh={refresh} />}
+          {tab === "getmaps" && <GetMore only="maps" onInstalled={reloadMaps} />}
+          {tab === "bots" && data && <Bots data={data} refresh={refresh} />}
+          {tab === "match" && data && (
+            <SettingsPage title="Match" note="Saved for this mode on this server." data={data} cat={2} refresh={refresh}>
+              <MatchButtons refresh={refresh} />
+            </SettingsPage>
+          )}
+          {tab === "fun" && data && <SettingsPage title="Fun & effects" note="These apply immediately." data={data} cat={3} refresh={refresh} />}
+          {tab === "players" && data && <Players data={data} refresh={refresh} />}
+          {tab === "mods" && <Mods app={app} scan={scan} running={!!data} onChanged={() => { reloadApp(); onChanged(); }} openSetup={() => {}} />}
+          {tab === "admins" && <Admins data={data} />}
+          {tab === "welcome" && <Welcome target={s.id} />}
+        </>
+      )}
     </div>
   );
 }

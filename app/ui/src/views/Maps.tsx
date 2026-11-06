@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { postJson } from "../api";
+import { postJson, withTarget } from "../api";
 import type { MapInfo, Online } from "../types";
 import { SectionHead, useCommand, useToast } from "../ui";
 
@@ -16,7 +16,7 @@ export function MapCard({ map, onClick, current }: { map: MapInfo; onClick: () =
   return (
     <button className="map-card" onClick={onClick} aria-current={current ? "true" : undefined} title={map.title || map.name}>
       <div className={`map-pic${map.thumb === "radar" ? " radar" : ""}`}>
-        {map.thumb && !broken && <img src={`/thumb/${encodeURIComponent(map.name)}.png`} alt="" loading="lazy" onError={() => setBroken(true)} />}
+        {map.thumb && !broken && <img src={withTarget(`/thumb/${encodeURIComponent(map.name)}.png`)} alt="" loading="lazy" onError={() => setBroken(true)} />}
         {map.fav && <span className="fav-star" aria-label="Favourite">★</span>}
       </div>
       <span className="map-label">{map.name}</span>
@@ -96,7 +96,7 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
         <div className="sheet-backdrop" onClick={() => setPicked(null)}>
           <div className="sheet" role="dialog" aria-label={picked.name} onClick={(e) => e.stopPropagation()}>
             <div className={`sheet-pic${picked.thumb === "radar" ? " radar" : ""}`}>
-              {picked.thumb && <img src={`/thumb/${encodeURIComponent(picked.name)}.png`} alt="" />}
+              {picked.thumb && <img src={withTarget(`/thumb/${encodeURIComponent(picked.name)}.png`)} alt="" />}
             </div>
             <div className="sheet-body">
               <h2 className="map-title">{picked.name}</h2>

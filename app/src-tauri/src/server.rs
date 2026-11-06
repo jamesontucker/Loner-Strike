@@ -21,8 +21,14 @@ use std::sync::{Arc, Mutex, OnceLock, RwLock};
 #[folder = "../ui/dist/"]
 struct Ui;
 
+tokio::task_local! {
+    /// The dedicated server a request is about (X-Target header or ?target=), if any.
+    static TARGET: Option<Arc<Game>>;
+}
+
 pub struct AppState {
-    /// The game or dedicated server the panel controls right now (see servers.rs)
+    /// The player's own game (CS 1.6 or Condition Zero). Requests for a dedicated
+    /// server name it with X-Target instead (see with_target).
     pub current: RwLock<Option<Arc<Game>>>,
     /// Host names the app window's listener answers to (127.0.0.1 / localhost).
     pub hosts: RwLock<Vec<String>>,
@@ -37,11 +43,18 @@ pub struct AppState {
 pub type Shared = Arc<AppState>;
 
 impl AppState {
+    /// The game this request is about: the server it names, else the player's own game.
+    /// (Read it before spawn_blocking: the request's target doesn't follow into other threads.)
     pub fn game(&self) -> Option<Arc<Game>> {
+        TARGET.try_with(|t| t.clone()).ok().flatten().or_else(|| self.local_game())
+    }
+
+    /// The player's own game, whatever the request is about.
+    pub fn local_game(&self) -> Option<Arc<Game>> {
         self.current.read().unwrap().clone()
     }
 
-    /// Switches the panel to another game or server.
+    /// Switches the player's own game (CS 1.6 / Condition Zero).
     pub fn set_game(&self, g: Option<Arc<Game>>) {
         if let Some(g) = &g {
             g.sharing.retarget(g.rcon.clone(), &g.data, g.port);
@@ -91,6 +104,24 @@ fn host_of(req: &Request) -> String {
     req.headers().get(header::HOST).and_then(|h| h.to_str().ok()).unwrap_or("").to_lowercase()
 }
 
+/// A request naming a dedicated server (X-Target: <id>, or ?target=<id> for images)
+/// runs with that server as its game.
+async fn with_target(req: Request, next: Next) -> Response {
+    let header = req.headers().get("x-target").and_then(|v| v.to_str().ok()).map(String::from);
+    let query = req.uri().query().and_then(|q| q.split('&').find_map(|p| p.strip_prefix("target=").map(String::from)));
+    let Some(id) = header.or(query).filter(|t| !t.is_empty() && t != "local") else {
+        return next.run(req).await;
+    };
+    if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') || id.len() > 48 {
+        return (StatusCode::BAD_REQUEST, axum::Json(serde_json::json!({"error": "Unknown server."}))).into_response();
+    }
+    let game = tokio::task::spawn_blocking(move || crate::servers::game_for(&id, || None)).await.ok().flatten();
+    match game {
+        Some(g) => TARGET.scope(Some(g), next.run(req)).await,
+        None => (StatusCode::NOT_FOUND, axum::Json(serde_json::json!({"online": false, "error": "That server isn't there any more, or isn't set up yet.", "reason": "That server isn't there any more."}))).into_response(),
+    }
+}
+
 /// Serves the UI files; unknown paths get index.html (the app routes on the client).
 async fn ui(uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
@@ -122,6 +153,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
         .merge(crate::servers::routes())
         .merge(crate::welcome::routes())
         .fallback(ui);
+    let routes = routes.layer(middleware::from_fn(with_target));
     let routes = match listener {
         Listener::Local => routes.merge(crate::servers::local_routes()).layer(middleware::from_fn_with_state(state.clone(), guard_local)),
         Listener::Lan => routes.layer(middleware::from_fn_with_state(state.clone(), guard_lan)),

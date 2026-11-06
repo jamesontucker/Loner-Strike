@@ -201,6 +201,13 @@ mod tests {
         assert!(v["error"].is_string());
         let (_, v) = call(&st, "GET", "/api/welcome", None, false).await;
         assert!(v.is_object());
+        // a request for a server that doesn't exist never falls back to your game
+        let req = axum::http::Request::builder().uri("/api/state").header("host", HOST).header("x-target", "no-such-server").body(Body::empty()).unwrap();
+        let res = server::router(st.clone(), Listener::Local).oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        let req = axum::http::Request::builder().uri("/api/state").header("host", HOST).header("x-target", "../etc").body(Body::empty()).unwrap();
+        let res = server::router(st.clone(), Listener::Local).oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

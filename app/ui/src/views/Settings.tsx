@@ -80,3 +80,18 @@ export function SettingsPage({
     </div>
   );
 }
+
+/** Restart / end the round / more time, for the Match page. */
+export function MatchButtons({ refresh }: { refresh: () => void }) {
+  const run = useCommand(refresh);
+  return (
+    <div className="row">
+      <button className="btn primary" onClick={() => run("gm_match", ["restart"])}>Restart round</button>
+      <button className="btn" onClick={() => run("gm_do", ["endround"])}>End round now</button>
+      <button className="btn" onClick={() => run("gm_do", ["addtime"])}>Add 10 minutes</button>
+      <button className="btn danger" onClick={() => confirm("Reset every match and fun setting for this mode to its defaults?") && run("gm_match", ["reset"])}>
+        Reset this mode's settings
+      </button>
+    </div>
+  );
+}

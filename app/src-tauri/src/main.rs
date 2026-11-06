@@ -35,10 +35,8 @@ fn main() {
         .expect("couldn't open a local port");
     let port = listener.local_addr().unwrap().port();
     let settings = app_api::load_settings();
-    // the game or server the panel was on last time (the game if that server is gone)
-    let target = settings.target.clone().unwrap_or_else(|| "local".into());
-    let game = servers::game_for(&target, || app_api::pick_game(&settings))
-        .or_else(|| servers::game_for("local", || app_api::pick_game(&settings)));
+    // the player's own game (servers are reached per request, see server::with_target)
+    let game = servers::game_for("local", || app_api::pick_game(&settings));
     let state = Arc::new(server::AppState {
         current: RwLock::new(None),
         hosts: RwLock::new(vec![format!("127.0.0.1:{port}"), format!("localhost:{port}")]),

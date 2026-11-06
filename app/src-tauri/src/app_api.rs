@@ -60,12 +60,6 @@ pub fn set_local_game(hl: &str, game: &str) {
     save_settings(&s);
 }
 
-pub fn set_target(id: &str) {
-    let mut s = load_settings();
-    s.target = Some(id.into());
-    save_settings(&s);
-}
-
 fn save_settings(s: &Settings) {
     let p = settings_path();
     if let Some(d) = p.parent() {

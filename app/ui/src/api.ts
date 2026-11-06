@@ -4,8 +4,20 @@ import type { GameState } from "./types";
 // Commands only take plain words; the server checks the same rule.
 export const SAFE = /^[A-Za-z0-9_.\-]{1,64}$/;
 
+// The dedicated server the Servers area has open; null is the player's own game.
+// Every request names it (X-Target), so nothing is switched behind the player's back.
+let TARGET: string | null = null;
+export function setTarget(id: string | null) {
+  TARGET = id;
+}
+/** For URLs the browser loads by itself (images). */
+export function withTarget(url: string) {
+  return TARGET ? `${url}${url.includes("?") ? "&" : "?"}target=${encodeURIComponent(TARGET)}` : url;
+}
+const targetHeader = (): Record<string, string> => (TARGET ? { "X-Target": TARGET } : {});
+
 export async function getJson<T>(path: string): Promise<T> {
-  const r = await fetch(path, { credentials: "same-origin" });
+  const r = await fetch(path, { credentials: "same-origin", headers: targetHeader() });
   if (!r.ok && r.status !== 400) throw new Error(`${path}: ${r.status}`);
   return r.json() as Promise<T>;
 }
@@ -15,7 +27,7 @@ export async function postJson<T>(path: string, body: unknown = {}): Promise<T> 
     method: "POST",
     credentials: "same-origin",
     // Only our own pages can send this header without a CORS preflight
-    headers: { "Content-Type": "application/json", "X-Panel": "1" },
+    headers: { "Content-Type": "application/json", "X-Panel": "1", ...targetHeader() },
     body: JSON.stringify(body),
   });
   return r.json() as Promise<T>;

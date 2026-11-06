@@ -642,3 +642,12 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .mod-name small { color: var(--bone-faint); font-weight: 600; font-size: 12px; }
 .mod-desc { color: var(--bone-dim); font-size: 14px; line-height: 1.35; }
 .mod .row { margin-top: 6px; }
+
+/* ---- one server's page ---------------------------------------------------------- */
+.server-top { display: grid; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--bevel-lo); }
+.link.back { margin: 0; padding: 0; justify-self: start; }
+.server-title { font-size: 28px; }
+.server-tabs { margin-top: 4px; }
+.live.inline { display: inline-flex; font-size: inherit; }
+.game-switch { margin: 0 6px 16px; display: flex; }
+.game-switch button { flex: 1; }

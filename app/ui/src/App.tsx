@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { clock, getJson, postJson } from "./api";
+import { clock, getJson, postJson, setTarget, withTarget } from "./api";
 import { useGameState } from "./api";
 import { Icon } from "./icons";
 import type { AppInfo, MapInfo, Online, ServerList } from "./types";
@@ -14,8 +14,8 @@ import { Maps } from "./views/Maps";
 import { Mods } from "./views/Mods";
 import { PlayIdle, PlayLive } from "./views/Play";
 import { Players } from "./views/Players";
-import { Servers } from "./views/Servers";
-import { SettingsPage } from "./views/Settings";
+import { ServerPage, Servers } from "./views/Servers";
+import { MatchButtons, SettingsPage } from "./views/Settings";
 import { Welcome } from "./views/Welcome";
 import { anySetUp, Setup, type Scan } from "./views/Setup";
 
@@ -30,12 +30,12 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "players", label: "Players", icon: "players", live: true },
   { id: "addons", label: "Add-ons", icon: "addons", live: true },
   { id: "friends", label: "Play with friends", icon: "friends", group: "Online" },
-  { id: "servers", label: "Servers", icon: "server" },
   { id: "admins", label: "Admins", icon: "admins" },
   { id: "welcome", label: "Welcome page", icon: "welcome" },
   { id: "more", label: "Get more", icon: "more", group: "Library" },
   { id: "mods", label: "Mods", icon: "addons" },
   { id: "settings", label: "Settings", icon: "settings" },
+  { id: "servers", label: "Servers", icon: "server", group: "Hosting" },
 ];
 
 function loadSection(): Section {
@@ -72,9 +72,12 @@ function Shell() {
     }
   });
   const [servers, setServers] = useState<ServerList | null>(null);
+  // the dedicated server open in the Servers area; everything else is always your game
+  const [openServer, setOpenServer] = useState<string | null>(null);
   const toast = useToast();
 
   const setSection = (s: Section) => {
+    if (s !== "servers" && openServer) enterServer(null);
     setSectionRaw(s);
     setMoreOpen(false);
     document.querySelector(".content")?.scrollTo({ top: 0 });
@@ -110,22 +113,28 @@ function Shell() {
     return () => clearInterval(t);
   }, [reloadApp, reloadMaps, reloadScan, reloadServers]);
 
-  // switches every section to another game or server
-  const selectTarget = async (id: string) => {
-    if (id === "__new") return setSection("servers");
-    if (id === targetValue) return;
-    const r = await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id }).catch(() => ({ error: "Couldn't reach the app." }));
+  // opens a server's own page (its requests name it), or goes back to your game
+  const enterServer = (id: string | null) => {
+    setTarget(id);
+    setOpenServer(id);
+    setMaps([]);
+    refresh();
+    reloadApp();
+    reloadMaps(true);
+  };
+  // CS 1.6 / Condition Zero: which of your games the app is about
+  const switchGame = async (game: string) => {
+    if (app?.game?.id === game) return;
+    const r = await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id: `local:${game}` }).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) return toast(r.error, true);
     reloadApp();
     reloadMaps(true);
-    reloadServers();
     refresh();
   };
-  const target = servers?.selected ?? "local";
-  const current = servers?.servers.find((x) => x.id === target) ?? null;
+  const current = openServer ? servers?.servers.find((x) => x.id === openServer) ?? null : null;
   // CS 1.6 and Condition Zero on this computer, CS 1.6 first
   const localGames = (["cstrike", "czero"] as const).filter((g) => scan?.installs.some((i) => i.games.some((x) => x.id === g)));
-  const targetValue = target === "local" ? `local:${app?.game && !app.game.dedicated ? app.game.id : localGames[0] ?? "cstrike"}` : target;
+  const myGame = openServer ? null : app?.game?.id;
 
   // ⌘1-⌘9 switch sections
   useEffect(() => {
@@ -148,7 +157,7 @@ function Shell() {
     if (navKey) reloadMaps(true);
   }, [navKey, reloadMaps]);
 
-  const players = online?.players.length ?? 0;
+  const players = openServer ? 0 : online?.players.length ?? 0;
 
   // First run (nothing set up yet), or opened from Settings
   if (scan && (setupOpen || (!anySetUp(scan) && !setupLater))) {
@@ -170,32 +179,21 @@ function Shell() {
     };
     return <Setup scan={scan} onClose={close} onDone={done} />;
   }
-  const needsGame = NAV.find((n) => n.id === section)?.live && !online;
+  const needsGame = section !== "servers" && NAV.find((n) => n.id === section)?.live && !online;
 
   return (
     <div className="shell">
       <aside className="sidebar">
         <div className="drag-strip" data-tauri-drag-region />
         <div className="brand">Loner-Strike</div>
-        {localGames.length + (servers?.servers.length ?? 0) > 1 && (
-          <label className="target">
-            <span>Managing</span>
-            <select value={targetValue} onChange={(e) => selectTarget(e.target.value)}>
-              <optgroup label="My game">
-                {localGames.map((g) => (
-                  <option key={g} value={`local:${g}`}>{g === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}</option>
-                ))}
-              </optgroup>
-              {!!servers?.servers.length && (
-                <optgroup label="Servers">
-                  {servers.servers.filter((x) => x.ready).map((x) => (
-                    <option key={x.id} value={x.id}>{x.name}{x.state === "running" ? " (running)" : ""}</option>
-                  ))}
-                </optgroup>
-              )}
-              <option value="__new">New server…</option>
-            </select>
-          </label>
+        {localGames.length > 1 && (
+          <div className="seg game-switch" role="group" aria-label="Your game">
+            {localGames.map((g) => (
+              <button key={g} aria-pressed={myGame === g} disabled={!!openServer} onClick={() => switchGame(g)}>
+                {g === "cstrike" ? "CS 1.6" : "Condition Zero"}
+              </button>
+            ))}
+          </div>
         )}
         <nav className="nav" aria-label="Sections">
           {NAV.map((n) => (
@@ -211,8 +209,7 @@ function Shell() {
           ))}
         </nav>
         <div className="side-foot">
-          {current ? `${current.name} · ` : ""}
-          {app?.game ? (app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero") : "No game found"}
+          {current ? `Server: ${current.name}` : app?.game ? (app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero") : "No game found"}
           {app?.version && <span> · v{app.version}</span>}
         </div>
       </aside>
@@ -229,8 +226,6 @@ function Shell() {
               {section === "play" &&
                 (online ? (
                   <PlayLive data={online} maps={maps} refresh={refresh} openMaps={() => setSection("maps")} />
-                ) : current ? (
-                  <ServerIdle name={current.name} id={current.id} state={current.state} after={reloadServers} />
                 ) : (
                   <PlayIdle app={app} reason={state.online ? "" : state.reason} maps={maps} />
                 ))}
@@ -245,12 +240,30 @@ function Shell() {
               {section === "players" && online && <Players data={online} refresh={refresh} />}
               {section === "addons" && online && <Addons data={online} refresh={refresh} />}
               {section === "friends" && <Friends data={online} refresh={refresh} />}
-              {section === "servers" && <Servers scan={scan} selected={target} onSelect={selectTarget} onChanged={reloadServers} />}
-              {section === "admins" && <Admins key={target} data={online} />}
-              {section === "welcome" && <Welcome target={target} />}
+              {section === "servers" &&
+                (current ? (
+                  <ServerPage
+                    key={current.id}
+                    server={current}
+                    data={online}
+                    reason={state.online ? "" : state.reason}
+                    app={app}
+                    scan={scan}
+                    maps={maps}
+                    refresh={refresh}
+                    reloadMaps={() => reloadMaps(true)}
+                    reloadApp={reloadApp}
+                    onChanged={reloadServers}
+                    onBack={() => enterServer(null)}
+                  />
+                ) : (
+                  <Servers scan={scan} list={servers} onOpen={enterServer} onChanged={reloadServers} />
+                ))}
+              {section === "admins" && <Admins data={online} />}
+              {section === "welcome" && <Welcome target="local" />}
               {section === "more" && <GetMore onInstalled={() => reloadMaps(true)} />}
               {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={() => setSetupOpen(true)} />}
-              {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={() => setSetupOpen(true)} switchTo={selectTarget} />}
+              {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={() => setSetupOpen(true)} switchTo={(id) => switchGame(id.replace(/^local:/, ""))} />}
             </>
           )}
         </main>
@@ -311,7 +324,7 @@ function Strip({ data, reason, app, server, refresh }: { data: Online | null; re
   return (
     <header className="strip" data-tauri-drag-region>
       <div className="strip-map">
-        <div className="thumb" style={{ backgroundImage: `url(/thumb/${encodeURIComponent(st.map)}.png)` }} aria-hidden="true" />
+        <div className="thumb" style={{ backgroundImage: `url(${withTarget(`/thumb/${encodeURIComponent(st.map)}.png`)})` }} aria-hidden="true" />
         <div>
           <div className="map-name">{st.map}</div>
           <div className="strip-meta">
@@ -334,54 +347,12 @@ function Strip({ data, reason, app, server, refresh }: { data: Online | null; re
   );
 }
 
-function MatchButtons({ refresh }: { refresh: () => void }) {
-  const run = useCommand(refresh);
-  return (
-    <div className="row">
-      <button className="btn primary" onClick={() => run("gm_match", ["restart"])}>Restart round</button>
-      <button className="btn" onClick={() => run("gm_do", ["endround"])}>End round now</button>
-      <button className="btn" onClick={() => run("gm_do", ["addtime"])}>Add 10 minutes</button>
-      <button className="btn danger" onClick={() => confirm("Reset every match and fun setting for this mode to its defaults?") && run("gm_match", ["reset"])}>
-        Reset this mode's settings
-      </button>
-    </div>
-  );
-}
-
 function Waiting({ label, onPlay }: { label: string; onPlay: () => void }) {
   return (
     <div className="waiting">
       <h2>{label}</h2>
       <p className="muted">This needs a game running.</p>
       <button className="btn primary" onClick={onPlay}>Go to Play</button>
-    </div>
-  );
-}
-
-/** Play, when the panel is managing a dedicated server that isn't up. */
-function ServerIdle({ name, id, state, after }: { name: string; id: string; state: string; after: () => void }) {
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  const start = async () => {
-    setBusy(true);
-    const r = await postJson<{ ok?: boolean; error?: string }>(`/api/servers/${id}/start`).catch(() => ({ error: "Couldn't reach the app." }));
-    setBusy(false);
-    if (r.error) return toast(r.error, true);
-    toast(`Starting ${name}…`);
-    after();
-  };
-  return (
-    <div className="idle">
-      <div className="idle-hero">
-        <h1>{name}</h1>
-        <p>{state === "running" ? "The server is starting. The panel connects in a few seconds." : "This server is stopped. Start it, then join from the Servers tab."}</p>
-        {state !== "running" && (
-          <button className="btn launch" disabled={busy} onClick={start}>
-            <Icon name="play" size={22} />
-            {busy ? "Starting…" : "Start the server"}
-          </button>
-        )}
-      </div>
     </div>
   );
 }
