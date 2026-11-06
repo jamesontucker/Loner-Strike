@@ -392,8 +392,10 @@ fn template_source(template: &str, game: &str, client: &Install, catalog: &[Valu
         }
     };
     let rec = setup::record::Record::open(&dir);
+    // the mods and add-ons it has (setup puts in the foundation and our own plugins itself)
     let comps = catalog
         .iter()
+        .filter(|c| setup::components::installable(c))
         .filter_map(|c| c["id"].as_str())
         .filter(|id| rec.installed(id))
         .map(String::from)
