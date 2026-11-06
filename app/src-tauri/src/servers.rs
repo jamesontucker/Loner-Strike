@@ -27,6 +27,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub(crate) const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
+/// Where servers went before they moved into Loner-Strike/Servers (still recognised)
 const FOLDER: &str = "Loner-Strike Servers";
 /// The player's own game hosts on 27015, so servers start above it and never clash
 const FIRST_PORT: u16 = 27016;
@@ -255,13 +256,55 @@ pub fn find_install(hl: &Path) -> Option<Install> {
 /// Where servers live: inside the game's CrossOver bottle on a Mac (so wine sees
 /// them as C:\Loner-Strike Servers), the app's local data folder on Windows.
 fn root_for(client: &Install) -> Result<PathBuf, String> {
+    // the folder picked in Settings, if it suits this game (on a Mac: in its bottle)
+    if let Some(dir) = crate::app_api::load_settings().servers_dir.map(PathBuf::from) {
+        if servers_dir_ok(&dir, client).is_ok() {
+            return Ok(dir);
+        }
+    }
+    default_root(client)
+}
+
+/// Loner-Strike/Servers: in the game's CrossOver bottle on a Mac (the servers run
+/// there), in the app's data folder on Windows.
+pub fn default_root(client: &Install) -> Result<PathBuf, String> {
     if client.kind == "crossover" {
-        let s = client.hl.to_string_lossy().to_string();
-        let i = s.find("/drive_c/").ok_or("The game isn't in a CrossOver bottle.")?;
-        Ok(PathBuf::from(&s[..i + 8]).join(FOLDER))
+        Ok(drive_c(client)?.join("Loner-Strike").join("Servers"))
     } else {
         Ok(dirs::data_local_dir().ok_or("Couldn't find the app data folder.")?.join("Loner-Strike").join("Servers"))
     }
+}
+
+/// The C: drive of the bottle the game is in.
+fn drive_c(client: &Install) -> Result<PathBuf, String> {
+    let s = client.hl.to_string_lossy().to_string();
+    let i = s.find("/drive_c/").ok_or("The game isn't in a CrossOver bottle.")?;
+    Ok(PathBuf::from(&s[..i + 8]))
+}
+
+/// Whether new servers can go in `dir` for this game: an absolute folder, and on a Mac
+/// inside the same CrossOver bottle as the game (servers run through it).
+pub fn servers_dir_ok(dir: &Path, client: &Install) -> Result<(), String> {
+    if !dir.is_absolute() {
+        return Err("Pick a folder, not a relative path.".into());
+    }
+    if client.kind == "crossover" && !dir.starts_with(drive_c(client)?) {
+        return Err("On a Mac the servers have to be inside the same CrossOver bottle as the game (its drive_c folder).".into());
+    }
+    if dir.exists() && !dir.is_dir() {
+        return Err("That's a file, not a folder.".into());
+    }
+    Ok(())
+}
+
+/// A folder Loner-Strike made for a server (only those are ever deleted): named after
+/// it, in one of the servers folders it uses.
+fn made_here(e: &Entry) -> bool {
+    let named = e.dir.file_name().map(|n| n.to_string_lossy() == e.id).unwrap_or(false);
+    let parent = e.dir.parent();
+    let in_ours = parent.and_then(|p| p.file_name()).map(|n| n == FOLDER || n == "Servers").unwrap_or(false)
+        || crate::app_api::load_settings().servers_dir.is_some_and(|d| parent == Some(Path::new(&d)));
+    !e.imported && named && in_ours
 }
 
 /// "Friday Night Frags" -> "friday-night-frags" (unique among the servers).
@@ -1669,7 +1712,7 @@ fn answer(r: Result<Value, String>) -> (StatusCode, Json<Value>) {
 }
 
 /// The player's own game install (servers are made from it and joined with it).
-fn client(st: &Shared) -> Option<Install> {
+pub(crate) fn client(st: &Shared) -> Option<Install> {
     let local = st.local_game()?;
     crate::steam::find_installs().into_iter().find(|i| i.hl == local.hl)
 }
@@ -2001,8 +2044,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                     })
                 })?;
                 // this computer's copy too (only ever a folder we made: <servers root>/<id>)
-                let ok_dir = e.dir.file_name().map(|n| n.to_string_lossy() == e.id).unwrap_or(false)
-                    && e.dir.parent().and_then(|p| p.file_name()).map(|n| n == FOLDER || n == "Servers").unwrap_or(false);
+                let ok_dir = made_here(&e);
                 if ok_dir && e.dir.is_dir() {
                     std::fs::remove_dir_all(&e.dir).map_err(|err| format!("Couldn't clear this computer's copy ({err})."))?;
                 }
@@ -2046,9 +2088,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 }
                 stop(&id);
                 // only ever a folder we made: <servers root>/<id>
-                let ok_dir = !e.imported
-                    && e.dir.file_name().map(|n| n.to_string_lossy() == e.id).unwrap_or(false)
-                    && e.dir.parent().and_then(|p| p.file_name()).map(|n| n == FOLDER || n == "Servers").unwrap_or(false);
+                let ok_dir = made_here(&e);
                 if ok_dir && e.dir.is_dir() {
                     std::fs::remove_dir_all(&e.dir).map_err(|err| format!("Couldn't delete the server's folder ({err})."))?;
                 }

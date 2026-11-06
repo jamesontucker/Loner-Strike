@@ -42,6 +42,9 @@ pub struct Settings {
     /// no desktop notification when someone joins your game or a server
     #[serde(default)]
     pub mute_joins: bool,
+    /// where new dedicated servers go (None: Loner-Strike/Servers in the usual place)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub servers_dir: Option<String>,
 }
 
 /// A new phone access key.

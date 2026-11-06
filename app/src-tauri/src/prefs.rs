@@ -205,6 +205,48 @@ async fn api_folder_remove(headers: HeaderMap, Json(req): Json<FolderReq>) -> Re
     ok(json!({"ok": true, "game_folders": s.game_folders}))
 }
 
+// ---- where new servers go -------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct ServersDirReq {
+    /// empty: back to the usual place
+    #[serde(default)]
+    dir: String,
+}
+
+fn servers_dir_info(st: &Shared) -> Value {
+    let client = crate::servers::client(st);
+    let default = client.as_ref().and_then(|c| crate::servers::default_root(c).ok());
+    let chosen = crate::app_api::load_settings().servers_dir;
+    json!({"dir": chosen, "default": default, "mac": client.as_ref().is_some_and(|c| c.kind == "crossover")})
+}
+
+async fn api_servers_dir(State(st): State<Shared>) -> Json<Value> {
+    Json(tokio::task::spawn_blocking(move || servers_dir_info(&st)).await.unwrap_or_default())
+}
+
+/// The folder new servers go in. Servers made before stay where they are.
+async fn api_servers_dir_set(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<ServersDirReq>) -> Reply {
+    if !from_panel(&headers) {
+        return forbidden();
+    }
+    let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
+        let dir = req.dir.trim().trim_end_matches(['/', '\\']).to_string();
+        if !dir.is_empty() {
+            let client = crate::servers::client(&st).ok_or("Set up the game on this computer first.")?;
+            crate::servers::servers_dir_ok(Path::new(&dir), &client)?;
+        }
+        edit_settings(|s| s.servers_dir = (!dir.is_empty()).then_some(dir));
+        Ok(servers_dir_info(&st))
+    })
+    .await
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again.".into()));
+    match r {
+        Ok(v) => ok(v),
+        Err(e) => err(e),
+    }
+}
+
 // ---- diagnostics --------------------------------------------------------------------
 
 /// A plain-text summary for bug reports. No passwords or keys.
@@ -428,7 +470,8 @@ fn game_file(st: &Shared, folders: &[&str], rel: &str) -> Option<PathBuf> {
 
 #[derive(Deserialize)]
 /// The menu music: this game's, then Counter-Strike 1.6's, then Half-Life's; or with
-/// track=hl, Half-Life's own (setup plays the two in turn)
+/// track=hl / hl12 / hl13 / hl17, Half-Life's theme or a piece of its soundtrack (setup
+/// shuffles them)
 struct ThemeReq {
     /// "hl": Half-Life's theme
     #[serde(default)]
@@ -437,8 +480,15 @@ struct ThemeReq {
 
 async fn api_theme(State(st): State<Shared>, axum::extract::Query(q): axum::extract::Query<ThemeReq>) -> axum::response::Response {
     use axum::response::IntoResponse;
-    let folders: &'static [&'static str] = if q.track == "hl" { &["valve"] } else { &["", "cstrike", "valve"] };
-    let file = tokio::task::spawn_blocking(move || game_file(&st, folders, "media/gamestartup.mp3").and_then(|p| std::fs::read(p).ok())).await.ok().flatten();
+    // setup's playlist: the two menu themes and three pieces from Half-Life's soundtrack
+    let (folders, rel): (&'static [&'static str], &'static str) = match q.track.as_str() {
+        "hl" => (&["valve"], "media/gamestartup.mp3"),
+        "hl12" => (&["valve"], "media/Half-Life12.mp3"),
+        "hl13" => (&["valve"], "media/Half-Life13.mp3"),
+        "hl17" => (&["valve"], "media/Half-Life17.mp3"),
+        _ => (&["", "cstrike", "valve"], "media/gamestartup.mp3"),
+    };
+    let file = tokio::task::spawn_blocking(move || game_file(&st, folders, rel).and_then(|p| std::fs::read(p).ok())).await.ok().flatten();
     match file {
         Some(data) if data.len() < 20_000_000 => (
             [(axum::http::header::CONTENT_TYPE, "audio/mpeg"), (axum::http::header::CACHE_CONTROL, "max-age=3600")],
@@ -512,6 +562,7 @@ pub fn local_routes() -> Router<Shared> {
         .route("/api/app/storage/clear", post(api_storage_clear))
         .route("/api/app/open-folder", post(api_open_folder))
         .route("/api/app/game-folder", post(api_folder_add))
+        .route("/api/app/servers-folder", get(api_servers_dir).post(api_servers_dir_set))
         .route("/api/app/game-folder/remove", post(api_folder_remove))
         .route("/api/app/export", post(api_export))
         .route("/api/app/import", post(api_import))
