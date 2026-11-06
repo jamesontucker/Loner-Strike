@@ -1,6 +1,6 @@
 # Loner-Strike
 
-**Re-live the golden days of Counter-Strike locally or with the friends you don't have.**
+**Play Counter-Strike like it's 2004, alone or with the friends you don't have.**
 
 Counter-Strike 1.6 and Condition Zero set up like an old community server, except it's just you, your bots, and maybe a friend.
 
