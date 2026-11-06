@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, useActions, useActivity } from "../api";
+import { getJson, setupJob as pollSetupJob, ON_THIS_COMPUTER, postJson, useActions, useActivity } from "../api";
 import { Banner, BusyButton, SectionHead, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
 import type { Job } from "./Setup";
 
@@ -112,7 +112,7 @@ export function Sounds({ target }: { target: string }) {
   useEffect(() => {
     if (!installing) return;
     const t = setInterval(async () => {
-      const j = await getJson<Job>("/api/setup/job").catch(() => null);
+      const j = await pollSetupJob<Job>();
       if (j) setSetupJob(j);
     }, 800);
     return () => clearInterval(t);
@@ -188,7 +188,7 @@ export function Sounds({ target }: { target: string }) {
     // follow the setup job to its end
     for (;;) {
       await new Promise((res) => setTimeout(res, 800));
-      const j = await getJson<Job>("/api/setup/job").catch(() => null);
+      const j = await pollSetupJob<Job>();
       if (!j || (j.state !== "done" && j.state !== "error")) continue;
       toast(j.state === "done" ? "Round-end music is installed. It starts on the next map." : j.error || "That stopped.", j.state === "error");
       load();

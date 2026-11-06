@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions, useActivity, useStable } from "../api";
+import { getJson, setupJob, ON_THIS_COMPUTER, postJson, targetKey, useActions, useActivity, useStable } from "../api";
 import { Icon } from "../icons";
 import type { AppInfo } from "../types";
 import { BusyButton, Info, SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
@@ -63,7 +63,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
   useEffect(() => {
     if (!busy) return;
     const t = setInterval(async () => {
-      const j = await getJson<Job>("/api/setup/job").catch(() => null);
+      const j = await setupJob<Job>();
       if (j) setJob(j);
     }, 800);
     return () => clearInterval(t);
@@ -103,7 +103,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
       // follow the setup job to its end
       for (;;) {
         await new Promise((res) => setTimeout(res, 800));
-        const j = await getJson<Job>("/api/setup/job").catch(() => null);
+        const j = await setupJob<Job>();
         if (!j || (j.state !== "done" && j.state !== "error")) continue;
         toast(j.state === "done" ? (running ? "Done. It loads on the next map." : "Done") : j.error || "That stopped.", j.state === "error");
         onChanged();

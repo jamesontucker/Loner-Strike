@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getJson, postJson, useActions } from "../api";
+import { getJson, setupJob, postJson, useActions } from "../api";
 import type { AppInfo, PhoneInfo } from "../types";
 import { ON_THIS_COMPUTER } from "../api";
 import { applyScale, savedScale, BusyButton, Info, SCALES, SectionHead, Switch, useConfirm, useToast } from "../ui";
@@ -129,10 +129,10 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
       // runs on even if you leave this page, so the spinner stays until it's done
       for (;;) {
         await new Promise((res) => setTimeout(res, 1000));
-        const j = await getJson<{ state: string; error?: string }>("/api/setup/job").catch(() => null);
+        const j = await setupJob<{ state: string; error?: string }>();
         if (!j || j.state === "running") continue;
         if (j.state === "error") toast(j.error || "Couldn't remove everything. Nothing was restarted.", true);
-        else await postJson("/api/app/restart");
+        else await postJson("/api/app/restart").catch(() => null); // the app going away can drop the reply
         return;
       }
     }, "Removing Loner-Strike…");

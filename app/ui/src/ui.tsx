@@ -71,6 +71,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((t) => [...t, { id, text, error }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), error ? 5200 : 2600);
   }, []);
+  // errors from actions (useActions) that nothing else reported
+  useEffect(() => {
+    const on = (e: Event) => push(String((e as CustomEvent).detail), true);
+    window.addEventListener("ls-error", on);
+    return () => window.removeEventListener("ls-error", on);
+  }, [push]);
   return (
     <ToastCtx.Provider value={push}>
       {children}

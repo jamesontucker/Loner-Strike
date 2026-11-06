@@ -43,6 +43,17 @@ export async function getJson<T>(path: string): Promise<T> {
   }
 }
 
+/** GET for a set target (the one an action started on), without the switch check: for
+ *  following a job to its end, which must finish even if another server is opened. */
+export async function getJsonAt<T>(path: string, target: string | null): Promise<T> {
+  const r = await fetch(path, { credentials: "same-origin", headers: target ? { "X-Target": target } : {} });
+  if (!r.ok && r.status !== 400) throw new Error(`${path}: ${r.status}`);
+  return (await r.json()) as T;
+}
+
+/** The setup job (one for the whole app), or null if the app didn't answer. */
+export const setupJob = <T>() => getJsonAt<T>("/api/setup/job", null).catch(() => null);
+
 export async function postJson<T>(path: string, body: unknown = {}): Promise<T> {
   const r = await fetch(path, {
     method: "POST",
@@ -129,9 +140,10 @@ export async function addFromFile(section: string): Promise<{ ok: boolean; messa
   const r = await postJson<{ ok?: boolean; job?: string; error?: string; cancelled?: boolean }>("/api/gb/add-file", { section }).catch(() => ({ error: "Couldn't reach the app." }) as { error: string; job?: string; cancelled?: boolean });
   if (r.cancelled) return null;
   if (r.error || !r.job) return { ok: false, message: r.error || "That didn't work." };
+  const target = TARGET;
   for (let i = 0; i < 600; i++) {
     await new Promise((res) => setTimeout(res, 800));
-    const jobs = await getJson<{ id: string; state: string; message?: string }[]>("/api/gb/jobs").catch(() => []);
+    const jobs = await getJsonAt<{ id: string; state: string; message?: string }[]>("/api/gb/jobs", target).catch(() => []);
     const j = Array.isArray(jobs) ? jobs.find((x) => x.id === r.job) : undefined;
     if (j && (j.state === "done" || j.state === "error")) return { ok: j.state === "done", message: j.message || (j.state === "done" ? "Added" : "That didn't work.") };
   }
@@ -208,6 +220,9 @@ export function useActions() {
     changed();
     try {
       await fn();
+    } catch {
+      // the toast provider shows it: a button never fails without a word
+      window.dispatchEvent(new CustomEvent("ls-error", { detail: "That didn't work: couldn't reach the app." }));
     } finally {
       activity.delete(key);
       changed();

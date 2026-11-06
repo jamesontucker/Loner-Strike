@@ -141,7 +141,7 @@ export function Community({ target }: { target: string }) {
       {tab === "matches" && <MatchMode key={`match-${target}`} target={target} />}
       {tab === "chat" && <ChatTab key={`chat-${target}`} d={d} setD={setD} initial={chatQuery} />}
       {tab === "reports" && <ReportsTab key={`rep-${target}`} d={d} setD={setD} reload={reload} showChat={showChat} />}
-      {tab === "mod" && <ModTab key={`mod-${target}`} d={d} setD={setD} />}
+      {tab === "mod" && <ModTab key={`mod-${target}`} d={d} setD={setD} reload={reload} />}
     </div>
   );
 }
@@ -594,7 +594,7 @@ function ReportsTab({ d, setD, reload, showChat }: { d: Data; setD: SetData; rel
 
 // ---- gags and the swear filter ---------------------------------------------------------------
 
-function ModTab({ d, setD }: { d: Data; setD: SetData }) {
+function ModTab({ d, setD, reload }: { d: Data; setD: SetData; reload: () => void }) {
   const toast = useToast();
   const ask = useConfirm();
   const save = useSettings(d, setD);
@@ -664,7 +664,7 @@ function ModTab({ d, setD }: { d: Data; setD: SetData }) {
 
       <section>
         <SectionHead title="Swear filter" note="Words that get starred out, or stop the message. A word also catches longer words that start with it, so fuck catches fucking. Commands like /rtv are never touched." />
-        <ShareList list="filter" />
+        <ShareList list="filter" onShared={() => { setDraft(null); reload(); }} />
         <div className="settings">
           <div className="setting">
             <span className="name">When someone swears<Info text="Star it out still sends the message, with the word hidden behind stars. Don't send it drops the whole message and tells the sender why." /><span className="note">{words.length ? `${words.length} ${words.length === 1 ? "word" : "words"} on the list.` : "Add words below first."}</span></span>

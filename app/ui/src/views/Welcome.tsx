@@ -42,6 +42,8 @@ export function Welcome({ target }: { target: string }) {
   const [html, setHtml] = useState("");
   const [url, setUrl] = useState("");
   const { run, busy } = useActions();
+  // bumped when this page starts using a shared welcome page: load it again
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     getJson<Data>("/api/welcome")
@@ -53,7 +55,7 @@ export function Welcome({ target }: { target: string }) {
         setUrl(r.url ?? "");
       })
       .catch(() => setD({ error: "Couldn't reach the app." } as Data));
-  }, [target]);
+  }, [target, version]);
 
   const preview = useMemo(() => Object.entries(SAMPLE).reduce((h, [k, v]) => h.split(k).join(v), html), [html]);
   if (!d) return <Skeleton />;
@@ -69,7 +71,7 @@ export function Welcome({ target }: { target: string }) {
   return (
     <div className="stack">
       <SectionHead title="Welcome page" note="What players see when they join. Turn it on or off, or show it every map, with Welcome screen on the Match page. Players can say /welcome to see it again." />
-      <ShareList list="welcome" />
+      <ShareList list="welcome" onShared={() => setVersion((v) => v + 1)} />
       <div className="methods" role="radiogroup" aria-label="Welcome page">
         {STYLES.map((s) => (
           <button key={s.id} className="method" role="radio" aria-checked={style === s.id} onClick={() => setStyle(s.id)}>

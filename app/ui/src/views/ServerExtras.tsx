@@ -96,6 +96,8 @@ export function ServerExtras({ target }: { target: string }) {
   const [d, setD] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [maps, setMaps] = useState<MapInfo[]>([]);
+  // bumped when the chat messages start coming from a shared list: load everything again
+  const [version, setVersion] = useState(0);
   const [tab, setTabRaw] = useState<ExtrasTab>(() => {
     try {
       const t = localStorage.getItem("ls.extrasTab") as ExtrasTab;
@@ -122,7 +124,7 @@ export function ServerExtras({ target }: { target: string }) {
     getJson<MapInfo[]>("/api/maps")
       .then((m) => setMaps(Array.isArray(m) ? m : []))
       .catch(() => setMaps([]));
-  }, [target]);
+  }, [target, version]);
 
   const queue = useQueuedSave<Settings>();
   /** Sends one change; the reply is the new state. */
@@ -154,7 +156,7 @@ export function ServerExtras({ target }: { target: string }) {
         ))}
       </div>
       {tab === "rotation" && <Rotation key={`rot-${target}`} d={d} maps={maps} send={send} saveSettings={saveSettings} />}
-      {tab === "chat" && <Messages key={`ads-${target}`} d={d} saveSettings={saveSettings} />}
+      {tab === "chat" && <Messages key={`ads-${target}-${version}`} d={d} saveSettings={saveSettings} onShared={() => setVersion((v) => v + 1)} />}
       {tab === "kickers" && <Kickers d={d} saveSettings={saveSettings} />}
       {tab === "people" && <JoinsVotes d={d} saveSettings={saveSettings} />}
       {tab === "schedule" && <Schedule key={`sched-${target}`} d={d} maps={maps} send={send} saveSettings={saveSettings} />}
@@ -361,7 +363,7 @@ function Rotation({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
 
 // ---- chat messages --------------------------------------------------------------------
 
-function Messages({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) {
+function Messages({ d, saveSettings, onShared }: { d: Data; saveSettings: SaveSettings; onShared: () => void }) {
   const ads = d.settings.ads;
   const { run, busy } = useActions();
   const pick = (what: string, p: Partial<typeof ads>, label: string) => run(xk(`ads:${what}`), () => saveSettings({ ads: { ...ads, ...p } }), label);
@@ -398,7 +400,7 @@ function Messages({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) 
   return (
     <section>
       <SectionHead title="Chat messages" note="Messages that show up in chat every few minutes, like a real server's: your Discord, the rules, a donate reminder. Only while someone is playing." />
-      <ShareList list="messages" />
+      <ShareList list="messages" onShared={onShared} />
       <div className="settings">
         <Toggle label="Show messages" note={ads.messages.length ? `${ads.messages.length} ${ads.messages.length === 1 ? "message" : "messages"}.` : "Write some below first."} on={ads.on} set={(v) => saveSettings({ ads: { ...ads, on: v } })} />
         <div className="setting">
