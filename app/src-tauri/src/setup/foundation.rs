@@ -1,5 +1,5 @@
-//! The foundation: Metamod-P, AMX Mod X (base + Counter-Strike addon) and ReGameDLL
-//! (installer/core.py's install_foundation). Every version is the one Loner-Strike
+//! The foundation: Metamod-P, AMX Mod X (base + Counter-Strike addon) and ReGameDLL.
+//! Every version is the one Loner-Strike
 //! is tested with, pinned by checksum.
 
 use super::fetch;

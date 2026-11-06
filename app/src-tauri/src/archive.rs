@@ -1,5 +1,5 @@
 //! Unpacking map downloads safely, and picking out the files that belong in the game.
-//! Mirrors the helpers in panel/getmaps.py:
+//! The rules:
 //!
 //! - nothing may unpack to more than 3 GB (checked before, watched during, checked after);
 //! - archives with symbolic or hard links aren't unpacked, and any link left over is removed;

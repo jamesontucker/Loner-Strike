@@ -25,7 +25,7 @@
 	gm_hb_mistakes   1 occasional mistakes
 	gm_hb_bhop       1 Locked In and Hackers bunnyhop between fights
 	Each style also has a bot personality file (czero/BotProfile_<Style>.db,
-	made by the control panel's botstyles.py) that gamemodes.amxx switches to.
+	made by the app's setup) that gamemodes.amxx switches to.
 */
 
 #include <amxmodx>

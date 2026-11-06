@@ -1,5 +1,5 @@
 //! Every file Loner-Strike writes into a game folder, so it can all be undone.
-//! Same format as installer/record.py, so either installer can undo the other.
+//! Same format the old Python installer used, so its installs can still be undone.
 //!
 //! The record lives in <game>/addons/loner-strike/record.json. Before a file that
 //! was already there (and not ours) is changed, a copy goes to

@@ -1,4 +1,4 @@
-//! Downloads (cached and checked by sha256) and unpacking (installer/fetch.py).
+//! Downloads (cached and checked by sha256) and unpacking.
 //!
 //! The cache is <cache dir>/Loner-Strike/downloads; files the Python installer
 //! already downloaded (~/.loner-strike/downloads) are reused once they check out.
@@ -52,7 +52,7 @@ fn matches(path: &Path, sha: Option<&str>) -> bool {
     path.is_file() && sha.map(|s| sha256(path).map(|h| h.eq_ignore_ascii_case(s)).unwrap_or(false)).unwrap_or(true)
 }
 
-/// The cache file name, as fetch.py names it: sha1(url)[:16]-<last path part>.
+/// The cache file name: sha1(url)[:16]-<last path part>.
 pub fn cache_name(url: &str) -> String {
     let digest = hex(&Sha1::digest(url.as_bytes()));
     let base = url.split('?').next().unwrap_or(url).rsplit('/').next().unwrap_or("");

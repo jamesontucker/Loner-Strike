@@ -41,8 +41,7 @@
     "resources": {
       "../../plugins/": "plugins/",
       "../../mods/": "mods/",
-      "../../catalog/": "catalog/",
-      "../../panel/botstyles.py": "panel/botstyles.py"
+      "../../catalog/": "catalog/"
     },
     "windows": {
       "nsis": {

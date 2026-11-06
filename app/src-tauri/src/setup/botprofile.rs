@@ -1,5 +1,5 @@
-//! Bot personalities: the original CS 1.6 bot profile (installer/botprofile.py)
-//! and the bot style files made from a profile (panel/botstyles.py).
+//! Bot personalities: the original CS 1.6 bot profile, and the bot style files
+//! made from a profile (one per style, for gm_humanbots.amxx).
 //! Both use Python's random with fixed seeds, so the output matches the Python
 //! tools byte for byte.
 
@@ -100,7 +100,7 @@ pub struct Style {
     pub skill_scale: Option<f64>,
 }
 
-/// The styles as panel/botstyles.py defines them (used when that file isn't shipped).
+/// The styles: aggression and teamwork ranges, and how skill is scaled.
 pub fn builtin_styles() -> Vec<Style> {
     let s = |name: &str, a: (f64, f64), t: (f64, f64), k: Option<f64>| Style { name: name.into(), aggression: a, teamwork: t, skill_scale: k };
     vec![
@@ -114,36 +114,9 @@ pub fn builtin_styles() -> Vec<Style> {
     ]
 }
 
-/// The STYLES table read from a shipped botstyles.py, in its order.
-pub fn parse_styles(py: &str) -> Vec<Style> {
-    let re = Regex::new(
-        r#""(\w+)"\s*:\s*\(\s*\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)\s*,\s*\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)\s*,\s*(None|[0-9.]+)\s*\)"#,
-    )
-    .unwrap();
-    let Some(start) = py.find("STYLES = {") else { return vec![] };
-    let body = &py[start..];
-    let body = &body[..body.find("\n}").unwrap_or(body.len())];
-    re.captures_iter(body)
-        .filter_map(|c| {
-            let f = |i: usize| c[i].parse::<f64>().ok();
-            Some(Style {
-                name: c[1].to_string(),
-                aggression: (f(2)?, f(3)?),
-                teamwork: (f(4)?, f(5)?),
-                skill_scale: if &c[6] == "None" { None } else { Some(f(6)?) },
-            })
-        })
-        .collect()
-}
-
-/// The styles from <resources>/panel/botstyles.py, or the built-in copy.
-pub fn styles(res: &Path) -> Vec<Style> {
-    let parsed = std::fs::read_to_string(res.join("panel/botstyles.py")).map(|t| parse_styles(&t)).unwrap_or_default();
-    if parsed.is_empty() {
-        builtin_styles()
-    } else {
-        parsed
-    }
+/// The bot styles.
+pub fn styles(_res: &Path) -> Vec<Style> {
+    builtin_styles()
 }
 
 /// botstyles.reshape: a profile with aggression and teamwork squeezed into the
@@ -190,46 +163,3 @@ pub fn reshape(text: &str, style: &Style, seed: u64) -> String {
     out.join("\r\n") + "\r\n"
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn styles_match_botstyles_py() {
-        let root = super::super::repo_root();
-        let py = std::fs::read_to_string(root.join("panel/botstyles.py")).unwrap();
-        assert_eq!(parse_styles(&py), builtin_styles());
-    }
-
-    #[test]
-    fn generate_matches_python() {
-        let root = super::super::repo_root();
-        let script = format!(
-            "import sys; sys.path.insert(0, {:?}); from installer import botprofile; sys.stdout.buffer.write(botprofile.generate().encode('latin-1'))",
-            root.to_string_lossy()
-        );
-        let Some(out) = super::super::test_python(&script) else { return };
-        assert_eq!(generate(), out);
-    }
-
-    #[test]
-    fn reshape_matches_python() {
-        let root = super::super::repo_root();
-        let base = generate();
-        let tmp = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "bp-").unwrap();
-        let src = tmp.join("BotProfile.db");
-        std::fs::write(&src, &base).unwrap();
-        for st in builtin_styles() {
-            let script = format!(
-                "import sys; sys.path.insert(0, {:?}); import botstyles; t=open({:?}, encoding='latin-1').read(); sys.stdout.buffer.write(botstyles.reshape(t, {:?}).encode('latin-1'))",
-                root.join("panel").to_string_lossy(),
-                src.to_string_lossy(),
-                st.name
-            );
-            let Some(out) = super::super::test_python(&script) else { return };
-            // Python reads with universal newlines here; the text has CRLF which becomes \n, same lines
-            assert_eq!(reshape(&base, &st, 27015), out, "{}", st.name);
-        }
-        let _ = std::fs::remove_dir_all(tmp);
-    }
-}

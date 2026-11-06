@@ -1,5 +1,4 @@
 //! Get maps: browse GameBanana's Counter-Strike 1.6 maps and install them.
-//! Mirrors panel/getmaps.py (same answers to the panel).
 //!
 //! Only map content is copied into the game (the map, its textures, models, sounds,
 //! sprites, sky and radar images). Anything that could run code or change settings

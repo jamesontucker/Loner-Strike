@@ -1,5 +1,5 @@
-//! Loner-Strike's own plugins, the Game Mode Menu configs, bot styles and keys
-//! (installer/core.py's install_core and compile_plugin).
+//! Loner-Strike's own plugins, the Game Mode Menu configs, bot styles and keys,
+//! and compiling plugins.
 
 use super::botprofile;
 use super::foundation::tree;

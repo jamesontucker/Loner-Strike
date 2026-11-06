@@ -1,4 +1,4 @@
-//! Applying unified diffs at install time (installer/patch.py's parse and apply).
+//! Applying unified diffs at install time (the bot fixes for the community mods).
 //!
 //! Used for mods whose upstream code has no license: the app ships only
 //! Loner-Strike's changes and applies them to the original files it downloads.
@@ -132,29 +132,5 @@ mod tests {
         let diff = "--- a/f\n+++ b/f\n@@ -1,2 +1,2 @@\n x\n-y\n\\ No newline at end of file\n+z\n\\ No newline at end of file\n";
         let files = parse(diff).unwrap();
         assert_eq!(apply("x\ny", &files[0].1).unwrap(), "x\nz");
-    }
-
-    /// The real DICE patches apply to text the same way Python's patch.py does
-    /// (checked against python3 on a synthetic "original" made by reversing them).
-    #[test]
-    fn dice_patches_parse_like_python() {
-        let root = super::super::repo_root();
-        let dir = root.join("mods/dice-patches");
-        let Ok(entries) = std::fs::read_dir(&dir) else { return };
-        for e in entries.flatten() {
-            let text = crate::sys::read_latin1(&e.path()).unwrap();
-            let files = parse(&text).unwrap();
-            let script = format!(
-                "import sys; sys.path.insert(0, {:?}); from installer import patch; \
-                 f = patch.parse(open({:?}, encoding='latin-1', newline='').read()); \
-                 print(sum(len(b) for h in f.values() for _, b in h), sum(len(h) for h in f.values()))",
-                root.to_string_lossy(),
-                e.path().to_string_lossy()
-            );
-            let Some(out) = super::super::test_python(&script) else { return };
-            let lines: usize = files.iter().flat_map(|(_, h)| h.iter().map(|(_, b)| b.len())).sum();
-            let hunks: usize = files.iter().map(|(_, h)| h.len()).sum();
-            assert_eq!(format!("{lines} {hunks}"), out.trim(), "{:?}", e.path());
-        }
     }
 }

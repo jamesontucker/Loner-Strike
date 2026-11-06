@@ -1,5 +1,4 @@
-//! Catalog components: game modes and add-ons made by the community
-//! (installer/components.py).
+//! Catalog components: game modes and add-ons made by the community.
 //!
 //! A component (catalog/components.json, catalog/parts/*.json) can have:
 //!   vendor   folder (under the app's resources) mirroring the game folder: the mod's

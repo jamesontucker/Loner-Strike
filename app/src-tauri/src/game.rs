@@ -1,6 +1,5 @@
 //! One game folder (czero or cstrike) and the Game Mode Menu plugin inside it.
-//! Mirrors panel/panel.py's Game: live state over RCON, the commands the panel may
-//! send, and the health check. Maps and pictures are in maps.rs, the map store in
+//! Live state over RCON, the commands the panel may send, and the health check. Maps and pictures are in maps.rs, the map store in
 //! gamebanana.rs, playing with friends in sharing.rs.
 
 use crate::gamebanana::MapStore;
@@ -172,7 +171,7 @@ impl Game {
     }
 }
 
-/// panel.py's health(): {"ok", "checks": [{"name", "ok", "detail"}], "fixed": [...]}.
+/// The health check: {"ok", "checks": [{"name", "ok", "detail"}], "fixed": [...]}.
 pub fn health_check(cz: &Path, repair: bool) -> Value {
     let mut checks: Vec<Value> = Vec::new();
     let mut fixed: Vec<&str> = Vec::new();

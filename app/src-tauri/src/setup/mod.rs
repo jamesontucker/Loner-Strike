@@ -1,4 +1,4 @@
-//! Setting up a game without Python: a port of setup.py / installer/*.py.
+//! Setting up a game: Loner-Strike's foundation, plugins and mods in, and out again.
 //!
 //! - foundation: Metamod-P, AMX Mod X and ReGameDLL (pinned, sha256-checked)
 //! - core: Loner-Strike's plugins, the Game Mode Menu settings, bot styles, F3/F4 keys
@@ -86,7 +86,7 @@ impl Progress for Quiet {
 /// Everything an install step needs.
 pub struct Ctx<'a> {
     pub install: &'a Install,
-    /// Loner-Strike's files: plugins/, mods/, catalog/, panel/botstyles.py
+    /// Loner-Strike's files: plugins/, mods/, catalog/
     pub res: &'a Path,
     pub progress: &'a dyn Progress,
     /// GameBanana map store, for modes that come with maps (None: maps are skipped)

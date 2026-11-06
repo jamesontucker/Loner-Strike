@@ -1,9 +1,4 @@
 # local state that must never be published
-panel/cache/
-panel/tools/
-panel/installed_maps.json
-panel/map_sources.json
-panel/panel.log
 panel_rcon.txt
 secret.txt
 sharing.json
@@ -20,9 +15,6 @@ status.json
 __pycache__/
 .DS_Store
 
-# made by setup.py for this computer
-Start Loner-Strike.command
-Start Loner-Strike.bat
 
 # app build output
 app/src-tauri/target/

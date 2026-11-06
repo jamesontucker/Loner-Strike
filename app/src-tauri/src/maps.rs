@@ -1,5 +1,5 @@
 //! The map list (with favourites, hidden and recent), map titles and authors, and
-//! map pictures. Mirrors the map half of panel/panel.py's Game.
+//! map pictures.
 
 use crate::game::Game;
 use crate::sys;
@@ -55,7 +55,7 @@ pub fn map_category(name: &str) -> &'static str {
     }
 }
 
-/// Same rule as panel.py's SAFE_ARG.
+/// A command argument the panel may send: plain words only (the UI checks the same rule).
 pub fn safe_arg(a: &str) -> bool {
     !a.is_empty() && a.len() <= 64 && a.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
 }

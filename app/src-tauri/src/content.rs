@@ -513,7 +513,7 @@ fn prune(mut d: Option<&Path>, stop: &Path) {
     }
 }
 
-/// Files the installer (installer/record.py) put in the game: never replaced by downloads.
+/// Files setup put in the game (its install record): never replaced by downloads.
 pub fn installer_files(game: &Path) -> HashSet<String> {
     std::fs::read_to_string(game.join("addons/loner-strike/record.json"))
         .ok()

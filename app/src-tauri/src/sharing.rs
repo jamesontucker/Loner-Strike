@@ -1,5 +1,4 @@
 //! Play with friends: shares the game over a playit.gg tunnel or Tailscale.
-//! Mirrors panel/sharing.py (same answers to the panel).
 //!
 //! playit.gg gives this computer a public address and relays friends' game traffic
 //! to it. The app runs playit's own program (playitd) only while sharing is on, as

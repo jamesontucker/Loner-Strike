@@ -1,5 +1,4 @@
-//! The game control API: same requests and answers as panel/panel.py, so the
-//! web panel and the app share one protocol.
+//! The game control API the panel (in the app window or on a phone) talks to.
 
 use crate::game::{CmdError, Game};
 use crate::gamebanana::StoreError;
@@ -40,7 +39,7 @@ pub fn from_panel(headers: &HeaderMap) -> bool {
     headers.get("x-panel").and_then(|v| v.to_str().ok()) == Some("1")
 }
 
-/// A POST body as JSON (like panel.py: at most 4 KB, empty means {}).
+/// A POST body as JSON (at most 4 KB, empty means {}).
 fn body_json(body: &Bytes) -> Result<Value, Response> {
     let b = &body[..body.len().min(4096)];
     if b.iter().all(|c| c.is_ascii_whitespace()) {
@@ -483,7 +482,6 @@ mod tests {
         assert_eq!(call(&st, "GET", "/thumb/de_gamma.png", None, false).await.0, StatusCode::NOT_FOUND);
         assert_eq!(call(&st, "GET", "/thumb/a%20b.png", None, false).await.0, StatusCode::NOT_FOUND);
 
-        // health keeps panel.py's shape
         let (_, b, _) = call(&st, "GET", "/api/health", None, false).await;
         let h = j(&b);
         assert!(h["checks"].as_array().unwrap().iter().all(|c| c.get("name").is_some() && c.get("detail").is_some()));
