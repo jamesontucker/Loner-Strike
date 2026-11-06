@@ -243,7 +243,7 @@ function Shell() {
           {current ? `Server: ${current.name}` : app?.game ? (app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero") : "No game found"}
           {app?.version && <span> · v{app.version}</span>}
           <div className="made-by">
-            by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">Nanoshrine</a>
+            by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a>
           </div>
         </div>
       </aside>

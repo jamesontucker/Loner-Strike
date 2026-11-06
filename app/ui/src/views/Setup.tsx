@@ -117,7 +117,7 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
               <button className="btn" onClick={onClose}>Set up later</button>
             </div>
             <p className="muted later">Later, everything here is in the app under Mods and Settings.</p>
-            <p className="made-by setup-by">by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">Nanoshrine</a></p>
+            <p className="made-by setup-by">by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a></p>
           </section>
         )}
 
