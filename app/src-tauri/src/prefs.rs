@@ -454,6 +454,7 @@ async fn api_menu_sound(State(st): State<Shared>, axum::extract::Path(name): axu
     use axum::response::IntoResponse;
     let rel = match name.as_str() {
         "rollover" => "sound/UI/buttonrollover.wav",
+        "press" => "sound/UI/buttonclick.wav",
         "click" => "sound/UI/buttonclickrelease.wav",
         _ => return (StatusCode::NOT_FOUND, "no sound").into_response(),
     };

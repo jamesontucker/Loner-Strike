@@ -417,7 +417,8 @@ function ThemeMusic() {
     // not <audio>: the window only lets an <audio> play from a click, and a hover never
     // is one; an audio context, once the first click has woken it, plays both at once.
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    const ctx = Ctx ? new Ctx() : null;
+    // ("interactive": the shortest delay the machine can do, for UI sounds)
+    const ctx = Ctx ? new Ctx({ latencyHint: "interactive" }) : null;
     const sounds: Record<string, AudioBuffer> = {};
     const loadSound = (name: string, key: string) =>
       fetch(`/api/app/menu-sound/${name}`)
@@ -426,6 +427,7 @@ function ThemeMusic() {
         .then((b) => b && (sounds[key] = b))
         .catch(() => {});
     loadSound("rollover", "over");
+    loadSound("press", "press");
     loadSound("click", "click");
     const play = (which: string, loud: number) => {
       const b = sounds[which];
@@ -449,11 +451,16 @@ function ThemeMusic() {
       if (b && b !== lastOver) play("over", 0.8);
       lastOver = b ?? null;
     };
-    const click = (e: PointerEvent) => {
+    // like the game's menus: one sound as the button goes down, another as it comes up
+    const press = (e: PointerEvent) => {
       wake();
+      if ((e.target as Element | null)?.closest(BUTTONS)) play("press", 0.9);
+    };
+    const click = (e: PointerEvent) => {
       if ((e.target as Element | null)?.closest(BUTTONS)) play("click", 1);
     };
     document.addEventListener("pointerover", over);
+    document.addEventListener("pointerdown", press);
     document.addEventListener("pointerup", click);
     // the window may refuse to play before the first click: try again then
     const firstClick = () => {
@@ -466,6 +473,7 @@ function ThemeMusic() {
       fade.current++;
       window.removeEventListener("pointerdown", firstClick);
       document.removeEventListener("pointerover", over);
+      document.removeEventListener("pointerdown", press);
       document.removeEventListener("pointerup", click);
       window.removeEventListener("pointerdown", wake);
       window.removeEventListener("keydown", wake);
