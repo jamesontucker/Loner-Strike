@@ -142,7 +142,7 @@ Leave SSH (TCP 22) open as it is. The app uses it to set up and manage the serve
 10. **Who can join:**
     - **Listed on Steam** shows it in the Internet tab of Find Servers.
     - **Anyone with the address** keeps it out of the list; people join with the address you send them.
-    - Either way, a join password (in the server's Play with friends tab) keeps strangers out.
+    - Either way, a join password keeps strangers out. Set it in the form or later on the server's Overview.
 11. Click **Make the server**.
 
 Setup takes 5 to 15 minutes. It:
@@ -164,7 +164,9 @@ In **Servers**, each server has **Join**, **Start** and **Stop**, and **Open** f
 - **Join:** with a listed server, Join works with the game already open. With an unlisted one, Join restarts the game to connect if it's open.
 - **Friends** join with `connect <address>:27015` in the game console, or through Find Servers if it's listed.
 - **Console:** the server's Overview tab shows its console, and you can send server commands from there (`status`, `changelevel de_dust2`).
-- Changes you save in the server's pages are uploaded to the machine. Some, like the name and player slots, need a restart.
+- Changes you save in the server's pages are uploaded to the machine. Player slots, who can join and the start options need a restart; the app says so.
+- **Advanced** (on the Overview, under Settings): the port (27015 to 27019), the listen address, extra start options like `-pingboost 2`, and the console (RCON) password for tools like HLSW.
+- **HLTV:** turn it on in the server's HLTV tab. It runs as its own service next to the server, on port 27020, and starts and stops with it. Spectators use `connect <address>:27020`. Recorded demos stay on the machine; **Get it** copies one into your game so you can watch it with `viewdemo`.
 
 You can also manage it over SSH:
 
