@@ -1,4 +1,4 @@
-#define maxPlayers 27
+#define maxPlayers 33
 
 #include <amxmodx>
 #include <amxmisc>

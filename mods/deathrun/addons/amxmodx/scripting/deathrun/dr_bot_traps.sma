@@ -271,10 +271,25 @@ public TaskThink( ) {
 		if( fRange > 0.0 && get_distance_f( fBot, fBtn ) > fRange )
 			continue;
 
+		// don't spring a trap on ourselves
+		new bool:bSelf;
+		for( new p = 0; p < g_iPts[ b ] && !bSelf; p++ )
+			if( get_distance_f( fBot, g_fPts[ b ][ p ] ) < fRadius )
+				bSelf = true;
+		if( bSelf )
+			continue;
+
 		new bool:bHit, bool:bCTAtButton;
 
 		for( new c = 0; c < iNumCT && !bCTAtButton; c++ ) {
 			pev( iCTs[ c ], pev_origin, fCT );
+
+			// lead the trap: where the CT will be in ~0.4 s
+			new Float:fVel[ 3 ], Float:fLead[ 3 ];
+			pev( iCTs[ c ], pev_velocity, fVel );
+			fLead[ 0 ] = fCT[ 0 ] + fVel[ 0 ] * 0.4;
+			fLead[ 1 ] = fCT[ 1 ] + fVel[ 1 ] * 0.4;
+			fLead[ 2 ] = fCT[ 2 ] + fVel[ 2 ] * 0.4;
 
 			// a CT standing at the button is probably using it himself - leave it alone
 			if( get_distance_f( fCT, fBtn ) < 120.0 ) {
@@ -283,7 +298,7 @@ public TaskThink( ) {
 			}
 
 			for( new p = 0; p < g_iPts[ b ] && !bHit; p++ )
-				if( get_distance_f( fCT, g_fPts[ b ][ p ] ) < fRadius )
+				if( get_distance_f( fLead, g_fPts[ b ][ p ] ) < fRadius )
 					bHit = true;
 		}
 

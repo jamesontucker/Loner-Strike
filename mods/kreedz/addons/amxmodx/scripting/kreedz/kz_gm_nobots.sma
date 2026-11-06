@@ -37,8 +37,16 @@ public plugin_cfg()
 
 public on_cvar_change(pcvar, const old_value[], const new_value[])
 {
-	if (g_Enforce && str_to_float(new_value) != 0.0 && !task_exists(TASK_FORCE))
-		set_task(0.1, "task_force", TASK_FORCE)   // not from inside the hook itself
+	if (!g_Enforce || str_to_float(new_value) == 0.0)
+		return
+	// Queue the reset right behind the command that set it (same frame), so the
+	// bot manager never sees the saved count and no bot is created; the task is a fallback.
+	if (pcvar == g_pQuota)
+		server_cmd("bot_quota 0")
+	else if (pcvar == g_pAutoBhop && get_pcvar_num(g_pKeepBhopOff))
+		server_cmd("gm_autobhop 0")
+	if (!task_exists(TASK_FORCE))
+		set_task(0.1, "task_force", TASK_FORCE)
 }
 
 public task_force()

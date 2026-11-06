@@ -269,7 +269,7 @@ public EventRandromize( ) {
 	g_bRandromized = true;
 	
 	new i, iPlayers[ 32 ], iNum, iPlayer;
-	get_players( iPlayers, iNum, "c" );
+	get_players( iPlayers, iNum, "h" ); // CZ: "c" skipped bots
 	
 	if( iNum <= 1 )
 		return PLUGIN_CONTINUE;
@@ -333,7 +333,7 @@ public EventRoundStart( ) {
 	g_bStarting	= false;
 	
 	new i, iPlayers[ 32 ], iNum, iRealPlayers, CsTeams:iTeam;
-	get_players( iPlayers, iNum, "c" );
+	get_players( iPlayers, iNum, "h" ); // CZ: "c" skipped bots
 	
 	if( iNum <= 1 )
 		return PLUGIN_CONTINUE;
@@ -398,7 +398,7 @@ public CheckTerrorists( ) {
 		return PLUGIN_CONTINUE;
 	
 	new i, iPlayers[ 32 ], iTerrors, iNum, iRealPlayers, CsTeams:iTeam;
-	get_players( iPlayers, iNum, "c" );
+	get_players( iPlayers, iNum, "h" ); // CZ: "c" skipped bots
 	
 	if( iNum <= 1 )
 		return PLUGIN_CONTINUE;
@@ -443,7 +443,7 @@ public EventTerrsWin( ) {
 		return PLUGIN_CONTINUE;
 	
 	new iPlayers[ 32 ], iNum, iPlayer;
-	get_players( iPlayers, iNum, "c" );
+	get_players( iPlayers, iNum, "h" ); // CZ: "c" skipped bots
 	
 	if( iNum <= 1 )
 		return PLUGIN_CONTINUE;
@@ -510,7 +510,7 @@ public EventDeath( ) {
 }
 
 public fnRevivePlayer( id ) {
-	if( g_bConnected[ id ] ) {
+	if( g_bConnected[ id ] && g_Lifes[ id ] > 0 ) {
 		if( cs_get_user_team( id ) == CS_TEAM_CT ) {
 			new iCTcount;
 			for( new i = 1; i <= g_iMaxplayers; i++ )
@@ -580,6 +580,7 @@ public client_putinserver( id )
 public client_disconnect( id ) {
 	g_bConnected[ id ] = false;
 	g_Lifes[ id ] = 0;
+	remove_task( id ); // pending fnRevivePlayer
 	
 	if( g_iLastTerr == id )
 		g_iLastTerr = 0;
@@ -617,9 +618,9 @@ public FwdStartFrame( ) {
 		return FMRES_IGNORED;
 	
 	static iPlayers[ 32 ], iNum, iPlayer, iPlayer2, i, j;
-	get_players( iPlayers, iNum, "ache", "CT" );
+	get_players( iPlayers, iNum, "aeh", "CT" ); // CZ: include bots
 	
-	arrayset( g_iSemiClip, 0, 32 );
+	arrayset( g_iSemiClip, 0, sizeof g_iSemiClip );
 	
 	if( iNum <= 1 )
 		return FMRES_IGNORED;

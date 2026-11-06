@@ -42,6 +42,8 @@
 #define TASK_AUTODIFF 4600
 #define TASK_LEARNGUARD 4700
 #define TASK_NOBOMB   4800
+#define TASK_SELFRESPAWN 4400
+#define TASK_MONEY       4500
 #define TASK_EDICTS   4900
 
 enum { CAT_HIDDEN, CAT_BOT, CAT_MATCH, CAT_FUN }
@@ -1651,8 +1653,12 @@ public task_bot_hams(id)
 
 public client_disconnected(id)
 {
+	// per-player tasks must not carry over to whoever takes the slot next
 	remove_task(id + TASK_HINT)
 	remove_task(id + TASK_LOADOUT)
+	remove_task(id + TASK_NOBOMB)
+	remove_task(id + TASK_SELFRESPAWN)
+	remove_task(id + TASK_MONEY)
 }
 
 public task_hint(taskid)
@@ -3967,8 +3973,6 @@ public srv_crash()
 // Practice tools: instant respawn, unlimited money, saved spot
 // ---------------------------------------------------------------------------
 
-#define TASK_SELFRESPAWN 4400
-#define TASK_MONEY       4500
 
 public fw_killed_post(victim, attacker, gib)
 {

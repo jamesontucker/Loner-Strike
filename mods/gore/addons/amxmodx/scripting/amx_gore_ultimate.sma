@@ -780,7 +780,12 @@ public event_host_killed(iAgressor)
 
 	//Check to make sure its a player
 	if (is_user_alive(iAgressor)) {
-		iWeapon =  get_user_weapon(iAgressor,clip,ammo)
+		if (is_user_bot(iAgressor)) {
+			//get_user_weapon is stale for bots, read the active item (m_pActiveItem / m_iId)
+			new iItem = get_pdata_cbase(iAgressor, 373)
+			iWeapon = pev_valid(iItem) ? get_pdata_int(iItem, 43, 4) : 0
+		}
+		else iWeapon =  get_user_weapon(iAgressor,clip,ammo)
 	}
 	else {
 		iAgressor = iVictim

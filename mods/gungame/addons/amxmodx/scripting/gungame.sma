@@ -133,6 +133,8 @@ enum
 #define TASK_CHECK_JOINCLASS		1500
 #define TASK_AUTOVOTE_RESULT		1600
 #define TASK_GET_TOP_PLAYERS		1700
+#define TASK_BOT_STRIP_C4		1800
+#define TASK_BOT_NADES			1900
 
 //**********************************************************************
 // VARIABLE DEFINITIONS
@@ -296,6 +298,7 @@ public plugin_init()
 	RegisterHam(Ham_Killed,"player","ham_player_killed_pre",0);
 	RegisterHam(Ham_Killed,"player","ham_player_killed_post",1);
 	RegisterHam(Ham_Item_PostFrame,"weapon_awp","ham_awp_postframe",1); // gg_awp_oneshot for bots (no CurWeapon)
+	set_task(1.0,"bot_nade_check",TASK_BOT_NADES,_,_,"b"); // nade refresh for bots (no AmmoX)
 
 	// commands
 	register_clcmd("joinclass","cmd_joinclass"); // new menus
@@ -1278,13 +1281,13 @@ public event_intermission()
 		if(tkNum == 1) winner = topKillers[0];
 		else
 		{
-			new leastDeaths, deaths;
+			new leastDeaths = -1, deaths;
 
 			// get the least deaths
 			for(i=0;i<tkNum;i++)
 			{
 				deaths = cs_get_user_deaths(topKillers[i]);
-				if(deaths <= leastDeaths) leastDeaths = deaths;
+				if(leastDeaths == -1 || deaths < leastDeaths) leastDeaths = deaths;
 			}
 
 			new leastDead[32], ldNum;
@@ -1296,7 +1299,7 @@ public event_intermission()
 					leastDead[ldNum++] = topKillers[i];
 			}
 
-			leastDead[random_num(0,ldNum-1)];
+			winner = leastDead[random_num(0,ldNum-1)];
 		}
 	}
 
@@ -1354,6 +1357,30 @@ public message_scenario(msg_id,msg_dest,msg_entity)
 	}
 
 	return PLUGIN_CONTINUE;
+}
+
+// remove a bot's c4 if we disabled objectives
+public bot_strip_c4(taskid)
+{
+	new id = taskid-TASK_BOT_STRIP_C4;
+	if(is_user_alive(id) && user_has_weapon(id,CSW_C4)) strip_c4(id);
+}
+
+// bots get no AmmoX, so check here whether they need a new grenade
+public bot_nade_check()
+{
+	if(!ggActive) return;
+
+	new Float:refresh = get_pcvar_float(gg_nade_refresh);
+	if(refresh <= 0.0) return;
+
+	for(new id=1;id<=maxPlayers;id++)
+	{
+		if(!is_user_alive(id) || !is_user_bot(id) || !equal(lvlWeapon[id],HEGRENADE)) continue;
+		if(user_has_weapon(id,CSW_HEGRENADE) || task_exists(TASK_REFRESH_NADE+id)) continue;
+
+		set_task(refresh,"refresh_nade",TASK_REFRESH_NADE+id);
+	}
 }
 
 // remove c4 if we disabled objectives
@@ -1457,7 +1484,7 @@ public message_money(msg_id,msg_dest,msg_entity)
 // someone planted the bomb
 public logevent_bomb_planted()
 {
-	if(!ggActive || !get_pcvar_num(gg_bomb_defuse_lvl) || roundEnded)
+	if(!ggActive || !get_pcvar_num(gg_bomb_defuse_lvl) || roundEnded || get_pcvar_num(gg_block_objectives))
 		return;
 
 	new id = get_loguser_index();
@@ -1478,7 +1505,7 @@ public logevent_bomb_planted()
 // someone defused the bomb
 public logevent_bomb_defused()
 {
-	if(!ggActive || !get_pcvar_num(gg_bomb_defuse_lvl))
+	if(!ggActive || !get_pcvar_num(gg_bomb_defuse_lvl) || get_pcvar_num(gg_block_objectives))
 		return;
 
 	new id = get_loguser_index();
@@ -4631,9 +4658,13 @@ spawned(id)
 		refill_ammo(id);
 	}
 
-	// show welcome message
-	if(!welcomed[id] && get_pcvar_num(gg_join_msg))
+	// show welcome message (not for bots: it would retry forever)
+	if(!welcomed[id] && get_pcvar_num(gg_join_msg) && !is_user_bot(id))
 		show_welcome(id);
+
+	// bots may not trigger WeapPickup, so take their C4 here too
+	if(is_user_bot(id) && bombMap && get_pcvar_num(gg_block_objectives))
+		set_task(0.3,"bot_strip_c4",TASK_BOT_STRIP_C4+id);
 	
 	// update bomb for DM
 	if(cs_get_user_team(id) == CS_TEAM_T && !get_pcvar_num(gg_block_objectives) && get_pcvar_num(gg_dm))

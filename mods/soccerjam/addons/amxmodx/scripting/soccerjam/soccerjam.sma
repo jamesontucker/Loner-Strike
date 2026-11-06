@@ -428,6 +428,7 @@ public plugin_init() {
 		register_event("ResetHUD", "Event_ResetHud", "be")
 		// bots never get ResetHUD: do the same per-spawn setup for them from Ham_Spawn
 		RegisterHam(Ham_Spawn, "player", "Ham_PlayerSpawn_Post", 1, true)
+		RegisterHam(Ham_TakeDamage, "player", "Ham_PlayerTakeDamage_Post", 1, true)
 		register_event("HLTV","Event_StartRound","a","1=0","2=0")
 		register_event("Damage", "Event_Damage", "b", "2!0", "3=0", "4!0" )
 
@@ -1445,6 +1446,18 @@ public Event_Damage()
 {
 	new victim = read_data(0)
 	new attacker = get_user_attacker(victim)
+	DamageEffects(victim, attacker)
+}
+
+// bots never get the Damage message: run the same tackle/disarm logic from Ham_TakeDamage for them
+public Ham_PlayerTakeDamage_Post(victim, inflictor, attacker, Float:damage, damagebits)
+{
+	if(damage > 0.0 && is_user_bot(victim) && attacker >= 1 && attacker <= maxplayers && attacker != victim)
+		DamageEffects(victim, attacker)
+}
+
+DamageEffects(victim, attacker)
+{
 	if(is_user_alive(attacker)) {
 		if(is_user_alive(victim) ) {
 
@@ -2815,6 +2828,18 @@ BotSteer(id, Float:target[3]) {
 	vel[0] = dx / len * spd
 	vel[1] = dy / len * spd
 	entity_set_vector(id, EV_VEC_velocity, vel)
+
+	// nudge the view toward where we run (small steps; big jumps get overridden by the bot AI)
+	new Float:va[3], Float:want, Float:diff
+	entity_get_vector(id, EV_VEC_v_angle, va)
+	want = floatatan2(dy, dx, degrees)
+	diff = want - va[1]
+	while(diff > 180.0) diff -= 360.0
+	while(diff < -180.0) diff += 360.0
+	if(diff > 15.0) diff = 15.0
+	else if(diff < -15.0) diff = -15.0
+	va[1] += diff
+	entity_set_vector(id, EV_VEC_v_angle, va)
 }
 
 BotThink(id) {

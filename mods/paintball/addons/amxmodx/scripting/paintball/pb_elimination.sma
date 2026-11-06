@@ -26,6 +26,21 @@ public plugin_init()
 }
 
 
+// players eliminated by someone who leaves come back like when their killer dies
+public client_disconnected(id)
+{
+	remove_task(id+TASK_REVIVE)
+	g_MyKiller[id] = 0
+	for(new i = 1; i <= g_MaxPlayers; i++)
+	{
+		if(i == id || g_MyKiller[i] != id)
+			continue
+		g_MyKiller[i] = 0
+		if(is_user_connected(i) && !is_user_alive(i))
+			Check_PlayerDeath(i+TASK_REVIVE)
+	}
+}
+
 public fw_PlayerSpawn_Post(id)
 {
 	g_MyKiller[id] = 0

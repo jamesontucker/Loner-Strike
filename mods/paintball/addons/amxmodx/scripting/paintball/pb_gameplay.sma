@@ -79,6 +79,10 @@ public fw_PlayerSpawn_Post(id)
 {
 	if(!is_user_alive(id))
 		return
+	
+	// CZ bot patch: ZBots buy through the game itself; real guns do no damage here, so leave them no money
+	if(is_user_bot(id) && get_pcvar_num(g_Cvar_Money))
+		cs_set_user_money(id, 0, 0)
 		
 	if(get_pcvar_num(g_Cvar_SpawnProtect))
 	{
@@ -116,8 +120,28 @@ public Event_NewRound()
 		
 	}
 		
+	// remove paint balls and splats left from the last round
+	new ball
+	while ((ball = engfunc(EngFunc_FindEntityByString, ball, "classname", "paintball")) != 0)
+		engfunc(EngFunc_RemoveEntity, ball)
+		
 	g_ModelCounter = 0.0
 	Select_New_SuperLauncher()
+}
+
+// a new player in this slot starts fresh
+public client_putinserver(id)
+{
+	ShowMenu[id] = 1
+	MenuState[id] = 0
+	g_HasKill[id] = 0
+	g_Has_CustomModel[id] = 0
+	g_InVendetta[id] = 0
+	g_Vendetta_Bonus[id] = 0
+	g_KilledBy[id] = -1
+	g_KillingTime[id] = 0
+	for(new i = 1; i <= 32; i++)
+		if(g_KilledBy[i] == id) { g_KilledBy[i] = -1; g_KillingTime[i] = 0; g_InVendetta[i] = 0; }
 }
 
 public Select_New_SuperLauncher()

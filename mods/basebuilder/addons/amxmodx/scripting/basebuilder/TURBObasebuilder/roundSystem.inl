@@ -34,8 +34,7 @@ public timerStart(){
 		}	
 		if(prepTime){
 			if (!gTime){
-				Release_Zombies();
-				startRelease();	
+				Release_Zombies();	// CZ panel: it already calls startRelease()
 			} 
 			format(gRound, sizeof(gRound), "Przygotowanie");
 		}
@@ -228,6 +227,7 @@ public startPrep(){
 }
 
 public round_End(){
+	removeEntity__All("cameraRocket");
 	gameEnd();
 	
 	new ret;
@@ -268,7 +268,7 @@ public gameEnd(){
 			}
 		
 			
-			for(new i = i; i < maxPlayers; i ++){
+			for(new i = 1; i < maxPlayers; i ++){
 				if(get_user_team(i) == USER_HUMAN){
 					
 					addMission(i, mission_SURVIVOR, 1);
@@ -317,7 +317,10 @@ public gameEnd(){
 			}
 			for( new i = 1; i < maxPlayers; i++ ){
 				if( !is_user_connected(i) || is_user_hltv(i)) continue;
-				cs_set_user_team(i, userRoundTeam[i] == USER_ZOMBIE ? USER_HUMAN : USER_ZOMBIE );
+				// CZ panel: players who joined mid-round have no round team yet - use their current team
+				new roundTeam = userRoundTeam[i] ? userRoundTeam[i] : get_user_team(i);
+				if( roundTeam != USER_ZOMBIE && roundTeam != USER_HUMAN ) continue;
+				cs_set_user_team(i, roundTeam == USER_ZOMBIE ? USER_HUMAN : USER_ZOMBIE );
 			}
 			new tt	= 	numPlayers(USER_ZOMBIE, false);
 			new ct	= 	numPlayers(USER_HUMAN, false);
@@ -366,6 +369,7 @@ public removeSkill(){
 	removeEntity__All(classbombTrap);
 	removeEntity__All(classBomb);
 	removeEntity__All(rocketClass);
+	removeEntity__All("cameraRocket");
 
 }
 

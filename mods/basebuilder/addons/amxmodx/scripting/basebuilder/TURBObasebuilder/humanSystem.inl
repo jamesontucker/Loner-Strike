@@ -1655,6 +1655,14 @@ public explodeRocket(id){
 	
 	releaseView(id);
 	remove_entity(ent);
+	// CZ panel: the camera entity was never removed
+	new camera = userRocketCamera[id];
+	if( camera && pev_valid(camera) ){
+		new szCamClass[16];
+		entity_get_string(camera, EV_SZ_classname, szCamClass, sizeof(szCamClass) - 1);
+		if( equal(szCamClass, "cameraRocket") ) remove_entity(camera);
+	}
+	userRocketCamera[id] = 0;
 }
 public releaseView(id){
 	if( userRocketItem[id] != 0 ){

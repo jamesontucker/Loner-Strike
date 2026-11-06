@@ -534,6 +534,7 @@ public client_putinserver(plr)
 	g_bConnected[plr] = true;
 	g_bAlive[plr] = false;
 	g_bFirstSpawn[plr] = false;
+	g_bNonSpawnEvent[plr] = false;
 	
 	return PLUGIN_CONTINUE;
 }
@@ -1262,6 +1263,14 @@ public fwdCmdStart(plr, ucHandle, seed)
 		return FMRES_IGNORED;
 	}
 	
+	// CZ bot patch: the hide-time blindness is a client screen fade, so seeker
+	// bots can't attack at all while the hide timer runs
+	if( g_HideTimer > 0 && is_user_bot(plr) && cs_get_user_team(plr) == HNS_TEAM_SEEKER )
+	{
+		set_uc(ucHandle, UC_Buttons, get_uc(ucHandle, UC_Buttons) & ~(IN_ATTACK|IN_ATTACK2));
+		return FMRES_IGNORED;
+	}
+	
 	if( hns_get_weapon(plr) != CSW_KNIFE )
 	{
 		return FMRES_IGNORED;
@@ -1576,6 +1585,11 @@ public fwdHamPlayerSpawnPost(plr)
 {
 	if( is_user_bot(plr) && is_user_alive(plr) )
 	{
+		// ZBots buy through the game itself, past hns_disablebuy: leave them no money
+		if( g_bHnsOn )
+		{
+			cs_set_user_money(plr, 0, 0);
+		}
 		fwdPlayerSpawn(plr);
 	}
 	
@@ -1604,7 +1618,7 @@ public fwdPlayerSpawn(plr)
 		return PLUGIN_CONTINUE;
 	}
 	
-	if( !g_bFirstSpawn[plr] )
+	if( !g_bFirstSpawn[plr] && !is_user_bot(plr) )
 	{
 		show_plugin_info(plr);
 		
@@ -1761,6 +1775,8 @@ public eventMoney(plr)
 
 public eventNewRound()
 {
+	g_bWeaponsGiven = false;
+	
 	if( !g_bHnsOn )
 	{
 		return PLUGIN_CONTINUE;
@@ -1842,6 +1858,11 @@ public eventCurWeapon(plr)
 
 public TaskRespawn(plr)
 {
+	if( !is_user_connected(plr) || is_user_alive(plr) )
+	{
+		return;
+	}
+	
 	// thanks GHW_Chronic & MeRcyLeZZ
 	set_pev(plr, pev_deadflag, DEAD_RESPAWNABLE);
 	dllfunc(DLLFunc_Think, plr);
@@ -2343,6 +2364,12 @@ public taskHideTimer()
 				if( team == HNS_TEAM_SEEKER && g_bAlive[plr] )
 				{
 					make_ScreenFade(plr, 1.5, 1.5, blind_red, blind_green, blind_blue, blind_alpha);
+					
+					// CZ bot patch: bots ignore screen fades; make seeker bots really blind
+					if( is_user_bot(plr) )
+					{
+						ExecuteHamB(Ham_CS_Player_Blind, plr, 1.2, 1.2, 1.2, 255);
+					}
 					
 					/*set_pev(plr, pev_flags, pev(plr, pev_flags) | FL_FROZEN);
 					set_pev(plr, pev_maxspeed, -1.0);*/

@@ -216,7 +216,10 @@ public task_churn()
 		else
 			dead[nd++] = i
 	}
-	new id = nd ? dead[random(nd)] : (na && random(3) == 0 ? alive[random(na)] : 0)
+	// only dead bots leave: kicking a living one wrecks round-based modes
+	// (eliminations, the deathrun activator, team swaps); try again later otherwise
+	#pragma unused alive, na
+	new id = nd ? dead[random(nd)] : 0
 	if (id)
 		server_cmd("kick #%d", get_user_userid(id))
 }

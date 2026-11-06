@@ -195,6 +195,9 @@ public plugin_init(){
 	
 	register_cvar("basebuilder_version", VERSION, FCVAR_SERVER);
 	
+	// CZ panel: scan every edict (clones above 768 were never freed)
+	maxEnts = global_get(glb_maxEntities);
+	
 	// CZ panel: phase lengths (seconds) as cvars, and bot helpers
 	bind_pcvar_num(create_cvar("bb_build_time",		"145"),		gBuildTime);
 	bind_pcvar_num(create_cvar("bb_prep_time",		"40"),		gPrepTime);
@@ -318,7 +321,8 @@ public plugin_init(){
 	RegisterHam(Ham_Use, 		"func_button", 		"ham_UseButtonEnt",		false);
 	
 	register_forward(FM_GetGameDescription, 			"fw_GetGameDescription",	false);
-	register_forward(FM_SetClientKeyValue, 			"fw_SetClientKeyValue",		false);
+	// CZ panel: fw_SetClientKeyValue is not defined anywhere - registering it stopped plugin_init here
+	// register_forward(FM_SetClientKeyValue, 			"fw_SetClientKeyValue",		false);
 	register_forward(FM_ClientUserInfoChanged, 		"fw_ClientUserInfoChanged",	false);
 	register_forward(FM_CmdStart, 				"fw_CmdStart",			false);
 	register_forward(FM_PlayerPreThink, 			"fw_PlayerPreThink",		false);
@@ -411,6 +415,18 @@ public botGiveWeapon(id){
 	new item = random_num(minW, maxW);
 	userWeaponSelect[id] = item;
 	giveWeapons(id, item);
+}
+
+public botCheckTeam(id){
+	id -= TASK_BOTWEAPON + 100;
+	if(!is_user_connected(id)) return;
+	if(!get_user_team(id) || get_user_team(id) > USER_HUMAN){
+		static tries[33];
+		if(++tries[id] < 10) set_task(2.0, "botCheckTeam", id + TASK_BOTWEAPON + 100);
+		else tries[id] = 0;
+		return;
+	}
+	checkTeam(id);
 }
 
 public botRefillAmmo(){
@@ -554,6 +570,7 @@ public touchPlayerWall(id, ent){
 public teamCampTouching(id){
 	
 	if( get_user_team(id) != USER_HUMAN) return;
+	if( is_user_bot(id) ) return;
 	if(!prepTime && !gameTime) return;
 	if(isAdmin(id)) return;
 		
@@ -938,6 +955,9 @@ public fw_ClientUserInfoChanged(id) {
 public client_putinserver(id){
 	set_task(0.1, "startLogin", id+ TASK_LOGIN);
 	
+	// CZ panel: bots never see the team menu (joinTeam), so respawn bots that join mid-round
+	if(is_user_bot(id)) set_task(3.0, "botCheckTeam", id + TASK_BOTWEAPON + 100);
+	
 	if(isAdmin(id)) userAdmin[id] = true;
 	else userAdmin[id] = false;
 	
@@ -968,6 +988,7 @@ public radarOff(id){
 
 public client_disconnected(id){
 
+	stopEnt(id);
 	fVaultSave(id);	
 	mysqlSave(id);
 	removeBarHp(id);
@@ -993,6 +1014,7 @@ public client_disconnected(id){
 }
 
 public client_connect(id){
+	userRoundTeam[id] = 0;
 	get_user_name(id, userName[id], sizeof(userName[]) -1 );
 		
 	new bool:kick = false;

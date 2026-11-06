@@ -523,6 +523,7 @@ public Super_SmallExp(Bomb)
 	set_pev(Ent, pev_iuser2, get_user_team(id))
 	
 	entity_set_string(Ent, EV_SZ_classname, "paintball")
+	set_pev(Ent, pev_nextthink, get_gametime() + 10.0) // never outlive 10 s (fw_PaintBall_Think removes it)
 	engfunc(EngFunc_SetModel, Ent, PaintBall)
 	
 	set_pev(Ent, pev_mins, Float:{-3.0, -3.0, -3.0})
@@ -623,6 +624,8 @@ public fw_PaintBall_Touch(Ent, id)
 			
 			set_pev(Ent, pev_gravity, 1.5)
 			set_pev(Ent, pev_velocity, Velocity)
+			// a bouncing ball stays a trigger: don't let it lie around as a landmine
+			set_pev(Ent, pev_nextthink, get_gametime() + 3.0)
 		}
 		
 		emit_sound(Ent, CHAN_AUTO, WeaponFireSounds[random_num(1, 4)], 1.0, ATTN_NORM, 0, PITCH_NORM)
@@ -713,6 +716,7 @@ public Create_PaintBall(id, Float:Target[3])
 			set_pev(Ent, pev_iuser2, get_user_team(id))
 			
 			entity_set_string(Ent, EV_SZ_classname, "paintball")
+	set_pev(Ent, pev_nextthink, get_gametime() + 10.0) // never outlive 10 s (fw_PaintBall_Think removes it)
 			engfunc(EngFunc_SetModel, Ent, S_Launcher)
 			
 			set_pev(Ent, pev_mins, Float:{-3.0, -3.0, -3.0})
@@ -748,6 +752,7 @@ public Create_PaintBall(id, Float:Target[3])
 	set_pev(Ent, pev_owner, id)
 	
 	entity_set_string(Ent, EV_SZ_classname, "paintball")
+	set_pev(Ent, pev_nextthink, get_gametime() + 10.0) // never outlive 10 s (fw_PaintBall_Think removes it)
 	engfunc(EngFunc_SetModel, Ent, PaintBall)
 	
 	set_pev(Ent, pev_mins, Float:{-1.0, -1.0, -1.0})
