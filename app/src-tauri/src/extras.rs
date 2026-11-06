@@ -60,11 +60,13 @@ pub struct Ads {
     pub random: bool,
     pub prefix: String,
     pub messages: Vec<Ad>,
+    /// now and then, a line saying the server runs Loner-Strike (on unless turned off)
+    pub credit: bool,
 }
 
 impl Default for Ads {
     fn default() -> Self {
-        Ads { on: false, minutes: 3, random: false, prefix: "[Server]".into(), messages: vec![] }
+        Ads { on: false, minutes: 3, random: false, prefix: "[Server]".into(), messages: vec![], credit: true }
     }
 }
 
@@ -239,6 +241,7 @@ pub fn cfg(s: &Settings) -> String {
         format!("gm_rtv_cycle {}", b(s.rtv_cycle)),
         format!("gm_ads_interval {ads}"),
         format!("gm_ads_random {}", b(s.ads.random)),
+        format!("gm_credit {}", b(s.ads.credit)),
         format!("gm_afk {}", b(s.afk.on)),
         format!("gm_afk_spec {}", s.afk.spec),
         format!("gm_afk_kick {}", s.afk.kick),

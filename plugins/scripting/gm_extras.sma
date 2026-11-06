@@ -42,7 +42,10 @@
 	of Duty missions.
 
 	Settings: data/gamemodes/extras.cfg (written by the app), re-read with gm_extrasreload.
-	Cvars: gm_rotation_random, gm_rtv_cycle, gm_ads_interval, gm_ads_random, gm_afk,
+	A line saying the server runs Loner-Strike, every 20 minutes while people are on
+	(gm_credit 1, the default; 0 turns it off).
+
+	Cvars: gm_rotation_random, gm_rtv_cycle, gm_ads_interval, gm_ads_random, gm_credit, gm_afk,
 	       gm_afk_spec, gm_afk_kick, gm_ping, gm_ping_max, gm_ping_checks, gm_fastdl,
 	       gm_joins, gm_joins_country, gm_joins_skipbots, gm_votekick, gm_voteban,
 	       gm_vote_percent, gm_vote_min, gm_vote_bantime, gm_vote_cooldown, gm_vote_bots,
@@ -68,6 +71,8 @@ native botchat_say(id, const section[], other, Float:chance)
 #define TASK_PING    7300
 #define TASK_EMPTY   7400
 #define TASK_VOTE    7500
+#define TASK_CREDIT  7600
+#define CREDIT_EVERY 20.0   // minutes between "this server runs Loner-Strike" lines
 
 #define VOTE_TIME    20
 
@@ -80,7 +85,7 @@ native botchat_say(id, const section[], other, Float:chance)
 #define TAG          "^4[Server]^1"
 
 new bool:g_In[MAX_PLAYERS + 1], g_Uid[MAX_PLAYERS + 1], bool:g_Bot[MAX_PLAYERS + 1], g_Name[MAX_PLAYERS + 1][32]
-new g_pRotRandom, g_pAdsInterval, g_pAdsRandom
+new g_pRotRandom, g_pAdsInterval, g_pAdsRandom, g_pCredit
 new g_pAfk, g_pAfkSpec, g_pAfkKick, g_pPing, g_pPingMax, g_pPingChecks, g_pFastdl
 new g_pNextmap, g_pChattime
 new g_DataDir[128]
@@ -111,6 +116,7 @@ public plugin_init()
 	register_cvar("gm_rtv_cycle", "0")                      // read by gm_pubserver
 	g_pAdsInterval = register_cvar("gm_ads_interval", "0")
 	g_pAdsRandom   = register_cvar("gm_ads_random", "0")
+	g_pCredit      = register_cvar("gm_credit", "1")
 	g_pAfk         = register_cvar("gm_afk", "0")
 	g_pAfkSpec     = register_cvar("gm_afk_spec", "120")
 	g_pAfkKick     = register_cvar("gm_afk_kick", "0")
@@ -158,6 +164,7 @@ public plugin_init()
 
 	set_task(float(AFK_STEP), "task_afk", TASK_AFK, _, _, "b")
 	set_task(PING_STEP, "task_ping", TASK_PING, _, _, "b")
+	set_task(CREDIT_EVERY * 60.0, "task_credit", TASK_CREDIT, _, _, "b")
 }
 
 public plugin_cfg()
@@ -537,6 +544,18 @@ public task_ad()
 		client_print_color(0, sender, "^4%s %c%s", g_AdPrefix, code, text)
 	else
 		client_print_color(0, sender, "%c%s", code, text)
+}
+
+// Now and then, while people other than the host are on: where the server comes from
+// (gm_credit 0 turns it off; the app's Chat messages page has the switch)
+public task_credit()
+{
+	if (!get_pcvar_num(g_pCredit) || g_Career)
+		return
+	// on a listen server the host is one of the humans, and already knows
+	if (humans() - (is_dedicated_server() ? 0 : 1) <= 0)
+		return
+	client_print_color(0, print_team_default, "^4[Loner-Strike]^1 This server runs on Loner-Strike, free for CS 1.6 and Condition Zero at ^4lonerstrike.com")
 }
 
 // ---------------------------------------------------------------------------

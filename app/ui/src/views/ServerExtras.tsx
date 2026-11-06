@@ -16,7 +16,7 @@ const byName = <T extends { name: string }>(l: T[]) => [...l].sort((a, b) => a.n
 type Settings = {
   rotation_random: boolean;
   rtv_cycle: boolean;
-  ads: { on: boolean; minutes: number; random: boolean; prefix: string; messages: Ad[] };
+  ads: { on: boolean; minutes: number; random: boolean; prefix: string; messages: Ad[]; credit: boolean };
   afk: { on: boolean; spec: number; kick: number };
   ping: { on: boolean; max: number; checks: number };
   fastdl: string;
@@ -432,6 +432,12 @@ function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSetting
       <ShareList list="messages" onShared={onShared} />
       <div className="settings">
         <Toggle label="Show messages" note={ads.messages.length ? `${ads.messages.length} ${ads.messages.length === 1 ? "message" : "messages"}.` : "Write some below first."} on={ads.on} set={(v) => saveSettings({ ads: { ...ads, on: v } })} />
+        <Toggle
+          label="Mention Loner-Strike"
+          note="Every 20 minutes while people are on: “This server runs on Loner-Strike, free for CS 1.6 and Condition Zero at lonerstrike.com”. Separate from your own messages."
+          on={ads.credit ?? true}
+          set={(v) => saveSettings({ ads: { ...ads, credit: v } })}
+        />
         <div className="setting">
           <span className="name">How often<span className="note">One message each time.</span></span>
           <div className="seg" role="group" aria-label="How often">
