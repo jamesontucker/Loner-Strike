@@ -106,7 +106,7 @@ fix_key(id, bool:on)
 
 // ---- what each bot's ping is --------------------------------------------------------
 
-// A bot's base ping, from its name, within gm_botping_min..max: 80% in the lower half
+// A bot's base ping, from its name: 70% low, 20% up to gm_botping_max, a few far beyond it
 base_of(id)
 {
 	new name[32], h = 5381
@@ -116,9 +116,15 @@ base_of(id)
 	new lo = clamp(get_pcvar_num(g_pMin), 1, 4000)
 	new hi = clamp(get_pcvar_num(g_pMax), lo + 1, 4095)
 	new mid = lo + (hi - lo) / 2
-	if (h % 100 < 80)
+	// most close by, a tail of people far away: like a real server's scoreboard
+	new r = h % 100
+	if (r < 70)
 		return lo + 5 + (h / 100) % max(1, mid - lo - 5)
-	return mid + (h / 100) % max(1, hi - mid + 1)
+	if (r < 90)
+		return mid + (h / 100) % max(1, hi - mid + 1)
+	if (r < 97)
+		return hi + (h / 100) % 90                // 150-250 at defaults
+	return 250 + (h / 100) % 100                // the one with a terrible connection
 }
 
 public task_tick()

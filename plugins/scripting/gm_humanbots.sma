@@ -272,11 +272,39 @@ bot_style(id)
 		return s
 	if (!g_Mix[id])
 	{
-		// like a real lobby: lots of average players, some new, a few very good
-		new r = random(100)
+		// like a real lobby: lots of average players, some new, a few very good. From the
+		// name, so a regular plays at the same level every time; its personality leans it
+		new r = name_hash(id) % 100, p = persona(id)
+		if (has(p, "nkuL"))
+			r = r / 2                       // toward newbie
+		else if (has(p, "tESNi"))
+			r = 50 + r / 2                  // toward veteran
 		g_Mix[id] = r < 22 ? STYLE_NEWBIE : r < 57 ? STYLE_PUB : r < 80 ? STYLE_MM : r < 95 ? STYLE_VET : STYLE_LOCKED
 	}
 	return g_Mix[id]
+}
+
+name_hash(id)
+{
+	new name[32], h = 33
+	get_user_name(id, name, charsmax(name))
+	for (new i = 0; name[i]; i++)
+		h = (h * 131 + name[i]) & 0xFFFFFF
+	return h
+}
+
+// How easily a style panics
+Float:panic_factor(s)
+{
+	switch (s)
+	{
+		case STYLE_NEWBIE: return 1.5
+		case STYLE_PUB: return 1.0
+		case STYLE_MM: return 0.5
+		case STYLE_VET: return 0.3
+		case STYLE_LOCKED: return 0.15
+	}
+	return 0.0
 }
 
 // The bot's skill right now (higher = slower and sloppier), with its mood
@@ -290,7 +318,7 @@ public ev_death()
 	new killer = read_data(1), victim = read_data(2)
 	if (victim >= 1 && victim <= MaxClients && killer != victim)
 	{
-		g_Tilt[victim] = floatmin(g_Tilt[victim] + 0.08, 0.45)
+		g_Tilt[victim] = floatmin(g_Tilt[victim] + 0.08, 0.3)
 		// the player who keeps killing this bot becomes its rival
 		if (killer >= 1 && killer <= MaxClients && ++g_DeathsBy[victim][killer] >= 3)
 			g_Rival[victim] = killer
@@ -303,18 +331,13 @@ public ev_death()
 	}
 	if (killer < 1 || killer > MaxClients || killer == victim || !is_user_bot(killer))
 		return
-	g_Tilt[killer] = floatmax(g_Tilt[killer] - 0.06, -0.1)
+	g_Tilt[killer] = floatmax(g_Tilt[killer] - 0.08, -0.1)
 	// a show-off moment, now and then (not in a match)
 	if (!get_pcvar_num(g_pShowoff) || get_cvar_num("gm_scrim_phase") || style() == STYLE_CLASSIC)
 		return
-	new chance
-	switch (bot_style(killer))
-	{
-		case STYLE_NEWBIE, STYLE_PUB: chance = 10
-		case STYLE_HACKER, STYLE_GOD: chance = 14
-		case STYLE_LOCKED: chance = 6
-		default: chance = 4
-	}
+	// mostly the jokers and show-offs
+	new p = persona(killer)
+	new chance = has(p, "jkhOmX") ? 4 : p ? 1 : 2
 	if (random(100) >= chance)
 		return
 	new Float:now = get_gametime()
@@ -343,7 +366,7 @@ public client_putinserver(id)
 	g_Mix[id] = 0
 	g_Tilt[id] = 0.0
 	// most people get sloppy when it goes badly; some get careful
-	g_TiltWay[id] = random(100) < 70 ? 1.0 : -0.5
+	g_TiltWay[id] = (name_hash(id) / 7) % 100 < 70 ? 1.0 : -0.5
 	g_JoinedAt[id] = get_gametime()
 	g_Rival[id] = 0
 	g_Fav[id] = -1
@@ -478,7 +501,7 @@ public task_scan()
 		}
 		// several enemies at once, or nearly dead: some panic for a moment
 		if (get_pcvar_num(g_pTilt) && get_pcvar_num(g_pMistakes) && g_PanicUntil[id] < now
-			&& (seen >= 2 || get_user_health(id) < 30) && random_float(0.0, 1.0) < 0.02 * skill_of(id))
+			&& (seen >= 2 || get_user_health(id) < 30) && random_float(0.0, 1.0) < 0.006 * panic_factor(s))
 			g_PanicUntil[id] = now + random_float(1.0, 2.0)
 		g_TargetDist[id] = bestDist
 		g_TargetAngVel[id] = angular_speed(id, best, bestDist)
@@ -970,8 +993,10 @@ public ev_round_start()
 		if (!is_user_alive(id) || !is_user_bot(id))
 			continue
 		new p = persona(id)
-		if (get_pcvar_num(g_pAfk) && random(1000) < (has(p, "dYLF") ? 60 : 20))
-			g_AfkUntil[id] = now + random_float(3.0, 9.0)
+		// a mood settles between rounds
+		g_Tilt[id] *= 0.85
+		if (get_pcvar_num(g_pAfk) && random(1000) < (has(p, "dYLF") ? 15 : 7))
+			g_AfkUntil[id] = now + random_float(20.0, 60.0)
 		if (get_pcvar_num(g_pSprays) && g_SprayCount && random(100) < (has(p, "jkhXS3") ? 25 : 10))
 			set_task(random_float(1.0, 8.0), "task_spray", id)
 		new team = get_user_team(id)

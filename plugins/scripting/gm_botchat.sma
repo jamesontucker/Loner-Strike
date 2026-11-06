@@ -61,13 +61,21 @@
 #define MAX_PENDING  16
 #define MAX_CHAIN    3
 
-new const PERSONAS[] = "ftsjqncokxhzpbiduwrmABCDEFGHLMNOPSTY"
+new const PERSONAS[] = "ftsjqncokxhzpbiduwrmABCDEFGHLMNOPSTYIJKQRUVWXZ0123"
 // how much each personality talks (same order as PERSONAS)
 new const Float:CHATTY[] = { 1.0, 0.8, 1.2, 1.4, 0.3, 1.0, 0.7, 0.8, 1.5, 0.8, 1.6, 1.2, 1.3, 1.3, 1.1, 0.6, 0.9, 1.0, 1.0, 1.3,
-	1.1, 1.0, 1.1, 0.8, 1.0, 1.0, 1.0, 1.2, 0.15, 1.0, 1.0, 1.3, 0.9, 1.0, 1.0, 1.6 }
+	1.1, 1.0, 1.1, 0.8, 1.0, 1.0, 1.0, 1.2, 0.15, 1.0, 1.0, 1.3, 0.9, 1.0, 1.0, 1.6,
+	1.0, 1.0, 1.2, 1.0, 0.9, 1.0, 1.0, 0.8, 1.2, 0.6, 1.0, 1.0, 1.0, 1.1 }
+// how common each personality is (per 1000; same order): most people on a pub are
+// ordinary players, a few are characters
+new const WEIGHT[] = { 80, 60, 70, 70, 90, 70, 75, 45, 15, 30, 10, 3, 3, 20, 35, 15, 40, 30, 8, 15,
+	8, 10, 8, 10, 10, 8, 6, 10, 70, 8, 10, 12, 6, 12, 8, 12,
+	8, 8, 8, 6, 8, 5, 6, 6, 8, 6, 6, 5, 6, 8 }
 
 // habits, picked per bot from its name
-new const LAUGHS[][] = { "lol", "lol", "lol", "lmao", "haha", "hahaha", "xD", "xd", "kkkk", "jajaja", "mdr", "www", "555", "kek", "hehe", "rofl", "lmfao", "ahah" }
+// the first ones are for anyone; the last six only for people whose English isn't first
+new const LAUGHS[][] = { "lol", "lol", "lol", "lmao", "haha", "hahaha", "xD", "xd", "hehe", "rofl", "lmfao", "ahah", "kkkk", "jajaja", "mdr", "www", "555", "kek" }
+#define LAUGHS_ANYONE 12
 new const WORDS[][] = { "", "", "", "", "bro", "mate", "dude", "man", "lads", "fam", "my guy", "buddy", "bruh", "boys", "guys", "homie" }
 new const EMOTES[][] = { "", "", "", ":)", ":D", "^^", ":3", "<3", "o7", ":P", ";)", "xD", ":(" }
 new g_Laugh[33], g_Word[33], g_Emote[33], bool:g_TextSpeak[33], g_Typos[33], g_Shouty[33], Float:g_Chatty[33]
@@ -143,9 +151,9 @@ public n_say(plugin, params)
 		new name[32]
 		get_user_name(id, name, charsmax(name))
 		TrieSetCell(g_Left, name, floatround(get_gametime()))
-		// leaving is said for sure (when chat is on), not left to the usual gaps
+		// about half say bye; the rest just go
 		new text[128]
-		if (get_pcvar_num(g_pLevel) && pick_line(id, "leave", text, charsmax(text)))
+		if (get_pcvar_num(g_pLevel) && random_num(1, 100) <= 45 && pick_line(id, "leave", text, charsmax(text)))
 			queue(id, 0, text, MAX_CHAIN, false, random_float(0.3, 1.2))
 		return 1
 	}
@@ -417,10 +425,20 @@ persona_of(id)
 	get_user_name(id, name, charsmax(name))
 	for (new i = 0; name[i]; i++)
 		h = (h * 31 + name[i]) & 0xFFFFFF
-	new p = h % (sizeof PERSONAS - 1)
 	if (get_cvar_num("gm_botstyle") == 4 && h % 3 == 0)
-		p = 5
-	return p
+		return 5
+	// weighted: plain players are common, gimmicks rare
+	new total
+	for (new i = 0; i < sizeof WEIGHT; i++)
+		total += WEIGHT[i]
+	new r = h % total
+	for (new i = 0; i < sizeof WEIGHT; i++)
+	{
+		if (r < WEIGHT[i])
+			return i
+		r -= WEIGHT[i]
+	}
+	return 0
 }
 
 // A bot's own habits, from its name (a different mix of the name than its personality)
@@ -431,16 +449,18 @@ habits_of(id)
 	for (new i = 0; name[i]; i++)
 		h = (h ^ name[i]) * 16777619
 	h &= 0x7FFFFFFF
-	g_Laugh[id] = h % sizeof LAUGHS
+	g_Laugh[id] = h % LAUGHS_ANYONE
 	g_Word[id] = (h / 7) % sizeof WORDS
 	g_Emote[id] = (h / 31) % sizeof EMOTES
 	g_TextSpeak[id] = (h / 101) % 3 == 0
 	g_Typos[id] = (h / 211) % 15             // percent
 	g_Shouty[id] = (h / 401) % 4 == 0 ? 8 : 1
-	g_Chatty[id] = 0.4 + float((h / 977) % 13) * 0.1
+	// a few people do most of the talking: most say little, some a lot
+	new tier = (h / 977) % 100
+	g_Chatty[id] = tier < 45 ? 0.15 : tier < 75 ? 0.6 : tier < 93 ? 1.5 : 3.0
 	new p = PERSONAS[g_Persona[id]]
 	if (p == 'x' && g_Laugh[id] < 6)
-		g_Laugh[id] = 8 + (h % 6)            // kkkk, jajaja, mdr, www, 555, kek
+		g_Laugh[id] = LAUGHS_ANYONE + (h % 6)   // kkkk, jajaja, mdr, www, 555, kek
 	if (p == 'k')
 		g_TextSpeak[id] = true
 }
@@ -458,10 +478,10 @@ Float:level_mult()
 {
 	switch (get_pcvar_num(g_pLevel))
 	{
-		case 1: return 0.35
-		case 3: return 2.0
+		case 1: return 0.2
+		case 3: return 1.2
 	}
-	return 1.0
+	return 0.6
 }
 
 Float:global_gap()
@@ -509,20 +529,22 @@ bool:pick_line(id, const section[], text[], len)
 	new n = ArraySize(list)
 	if (!n)
 		return false
-	new raw[192], letters[64]
-	for (new tries = 0; tries < 16; tries++)
+	// one at random among the lines this personality would say
+	new raw[192], letters[64], seen, pick = -1
+	for (new i = 0; i < n; i++)
 	{
-		ArrayGetString(list, random(n), raw, charsmax(raw))
+		ArrayGetString(list, i, raw, charsmax(raw))
 		new bar = contain(raw, "|")
 		copy(letters, min(bar, charsmax(letters)), raw)
-		if (has_persona(id, letters))
-		{
-			copy(text, len, raw[bar + 1])
-			trim(text)
-			return true
-		}
+		if (has_persona(id, letters) && random(++seen) == 0)
+			pick = i
 	}
-	return false
+	if (pick < 0)
+		return false
+	ArrayGetString(list, pick, raw, charsmax(raw))
+	copy(text, len, raw[contain(raw, "|") + 1])
+	trim(text)
+	return true
 }
 
 queue(id, other, const text[], chain, bool:team, Float:delay)
@@ -545,7 +567,7 @@ queue(id, other, const text[], chain, bool:team, Float:delay)
 	if (delay < 0.0)
 		delay = random_float(0.6, 2.0) + strlen(text) * random_float(0.05, 0.11)
 	new Float:now = get_gametime()
-	g_NextBot[id] = now + delay + bot_gap() * random_float(0.6, 1.4)
+	g_NextBot[id] = now + delay + bot_gap() * random_float(0.6, 1.4) / floatsqroot(floatmax(g_Chatty[id], 0.15))
 	if (!chain)
 		g_NextAny = now + delay + global_gap() * random_float(0.6, 1.4)
 	set_task(delay, "task_say", TASK_SAY + slot)
@@ -720,8 +742,8 @@ decorate(id, text[], len)
 	// its own laugh and text-speak
 	if (g_Laugh[id] > 2)
 	{
-		replace_string(text, len, "lol", LAUGHS[g_Laugh[id]])
-		replace_string(text, len, "haha", LAUGHS[g_Laugh[id]])
+		replace_word(text, len, "lol", LAUGHS[g_Laugh[id]])
+		replace_word(text, len, "haha", LAUGHS[g_Laugh[id]])
 	}
 	if (g_TextSpeak[id])
 	{
@@ -730,31 +752,40 @@ decorate(id, text[], len)
 		for (new w = 0; w < sizeof FROM; w++)
 			replace_word(text, len, FROM[w], TO[w])
 	}
-	// the word it keeps using
-	if (WORDS[g_Word[id]][0] && strlen(text) < 40 && random_num(1, 100) <= 18)
-		add(text, len, fmt(" %s", WORDS[g_Word[id]]))
-	// its emoticon
-	if (EMOTES[g_Emote[id]][0] && random_num(1, 100) <= 14)
+	// already ends in a laugh, an emoticon or a question: nothing more on the end
+	l = strlen(text)
+	new last = l ? text[l - 1] : 0
+	new bool:ended = last == '?' || last == ')' || last == '(' || last == 'D' || last == 'P' || last == '3' || last == '>'
+		|| (l >= 3 && (containi(text[l - 3], "lol") != -1 || containi(text[l - 3], "kek") != -1 || containi(text[l - 2], "xd") != -1 || containi(text[l - 3], "mao") != -1 || containi(text[l - 3], "aha") != -1 || containi(text[l - 3], "ehe") != -1))
+	if (!ended)
 	{
-		add(text, len, fmt(" %s", EMOTES[g_Emote[id]]))
-		return
-	}
-	// endings
-	new r = random_num(1, 100)
-	switch (p)
-	{
-		case 'f': if (r <= 18) add(text, len, random_num(0, 1) ? " :)" : " :D")
-		case 'j': if (r <= 25) add(text, len, random_num(0, 2) == 0 ? " xd" : random_num(0, 1) ? " lol" : " :P")
-		case 'n': if (r <= 15) add(text, len, random_num(0, 1) ? "?" : " lol")
-		case 's': if (r <= 15) add(text, len, random_num(0, 1) ? "..." : " -_-")
-		case 'c': if (r <= 12) add(text, len, " haha")
-		case 't': if (r <= 10) add(text, len, "!")
-		case 'o': if (r <= 10) add(text, len, ".")
-		case 'k': if (r <= 25) add(text, len, random_num(0, 1) ? "!!!" : " lol")
-		case 'h': if (r <= 30) add(text, len, random_num(0, 1) ? "!!" : " LETS GO")
+		// the word it keeps using
+		if (WORDS[g_Word[id]][0] && strlen(text) < 40 && random_num(1, 100) <= 18)
+			add(text, len, fmt(" %s", WORDS[g_Word[id]]))
+		// its emoticon, or an ending its personality likes (with its own laugh)
+		else if (EMOTES[g_Emote[id]][0] && random_num(1, 100) <= 14)
+			add(text, len, fmt(" %s", EMOTES[g_Emote[id]]))
+		else
+		{
+			new laugh[12]
+			copy(laugh, charsmax(laugh), LAUGHS[g_Laugh[id]])
+			new r = random_num(1, 100)
+			switch (p)
+			{
+				case 'f': if (r <= 18) add(text, len, random_num(0, 1) ? " :)" : " :D")
+				case 'j': if (r <= 25) add(text, len, random_num(0, 2) == 0 ? " xd" : random_num(0, 1) ? fmt(" %s", laugh) : " :P")
+				case 'n': if (r <= 15) add(text, len, random_num(0, 1) ? "?" : fmt(" %s", laugh))
+				case 's': if (r <= 15) add(text, len, random_num(0, 1) ? "..." : " -_-")
+				case 'c': if (r <= 12) add(text, len, fmt(" %s", laugh))
+				case 't': if (r <= 10) add(text, len, "!")
+				case 'o': if (r <= 10) add(text, len, ".")
+				case 'k': if (r <= 25) add(text, len, random_num(0, 1) ? "!!!" : fmt(" %s", laugh))
+				case 'h': if (r <= 20) add(text, len, random_num(0, 1) ? "!!" : " LETS GO")
+			}
+		}
 	}
 	// excitement
-	if ((p == 'h' && random_num(1, 100) <= 40) || ((p == 'j' || p == 's' || p == 'k') && random_num(1, 100) <= 4 * g_Shouty[id]))
+	if ((p == 'h' && random_num(1, 100) <= 20) || ((p == 'j' || p == 's' || p == 'k') && random_num(1, 100) <= 4 * g_Shouty[id]))
 		strtoupper(text)
 	else if ((p == 'j' || p == 'n') && random_num(1, 100) <= 10)
 		add(text, len, "!!")
@@ -839,7 +870,8 @@ public ev_newround()
 {
 	arrayset(g_RoundKills, 0, sizeof g_RoundKills)
 	arrayset(g_Streaked, false, sizeof g_Streaked)
-	if (random_num(1, 100) <= 12)
+	// freeze time is when people chat most
+	if (random_num(1, 100) <= 35)
 	{
 		new h
 		time(h)
@@ -938,23 +970,23 @@ bool:mood(victim)
 {
 	new row = g_DeathRow[victim], team = get_user_team(victim)
 	// someone on the team cheers them up (people too)
-	if (row == 3 || row == 6)
+	if (row == 5 || row == 8)
 	{
 		new mate = clanmate_bot(victim, true)
-		want(mate ? mate : any_bot_on(team, victim), "support", victim, mate ? 0.7 : 0.45, -1.0, 0, true)
+		want(mate ? mate : any_bot_on(team, victim), "support", victim, mate ? 0.45 : 0.2, -1.0, 0, true)
 	}
 	if (!is_user_bot(victim))
 		return false
 	new p = PERSONAS[g_Persona[victim]]
-	if (row >= 5 && !g_Raged[victim] && (p == 's' || p == 'j' || p == 't' || random_num(1, 100) <= 25))
+	if (row >= 6 && !g_Raged[victim] && (p == 's' || p == 'j' || p == 't' || p == 'O' || p == 'H' || random_num(1, 100) <= 25))
 	{
 		g_Raged[victim] = true
 		crash_out(victim)
 		return true
 	}
-	if (row == 3 || row == 4)
+	if (row == 4)
 	{
-		want(victim, "tilt", 0, 0.5)
+		want(victim, "tilt", 0, 0.35)
 		return true
 	}
 	return false
@@ -976,7 +1008,9 @@ crash_out(id)
 		queue(id, 0, text, MAX_CHAIN, false, at)
 		at += random_float(0.7, 2.2) + strlen(text) * 0.04
 	}
-	if (PERSONAS[g_Persona[id]] == 's' && random_num(1, 100) <= 30 && pick_line(id, "ragequit", text, charsmax(text)))
+	// the hot-headed quit a third of the time, anyone now and then
+	new p = PERSONAS[g_Persona[id]]
+	if (random_num(1, 100) <= (contain("stOH", fmt("%c", p)) != -1 ? 35 : 8) && pick_line(id, "ragequit", text, charsmax(text)))
 	{
 		queue(id, 0, text, MAX_CHAIN, false, at + 0.8)
 		set_task(at + 2.5, "task_ragequit", get_user_userid(id))
