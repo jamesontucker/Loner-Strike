@@ -29,7 +29,7 @@ The mods are community classics. We added:
 You need Counter-Strike 1.6 and/or Condition Zero on Steam.
 
 - **Windows:** download Loner-Strike from [Releases](https://github.com/jamesontucker/Loner-Strike/releases) and open it. Setup finds the game and walks you through the rest.
-- **Mac:** the Mac version of Counter-Strike can't run mods, so play it through [CrossOver](https://www.codeweavers.com/crossover) (paid, with a free trial): install Windows Steam in a CrossOver bottle and Counter-Strike in that. Then download Loner-Strike from Releases; it finds the game inside CrossOver.
+- **Mac:** the Mac version of Counter-Strike can't run mods, so install Windows Steam and Counter-Strike in a Wine bottle with [CrossOver](https://www.codeweavers.com/crossover) (paid, with a free trial) or [Whisky](https://getwhisky.app) (free). Then download Loner-Strike from Releases; it finds the game in either. With Parallels, run the Windows version of Loner-Strike inside the Windows virtual machine instead.
 
 Everything it changes is backed up. Remove one mode, or all of Loner-Strike, from the app's Mods page and your game goes back the way it was.
 

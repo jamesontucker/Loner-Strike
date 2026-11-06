@@ -18,18 +18,10 @@ pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", 
 pub const ALWAYS_ON: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_vip"];
 pub const BINDS: &[&str] = &["bind \"F3\" \"gamemenu\"", "bind \"F4\" \"gamequick\""];
 
-const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
-
 /// A command that runs a Windows program (the plugin compiler) for this install:
-/// through CrossOver's wine on a Mac, directly on Windows.
-pub fn windows_command(install: &crate::steam::Install, exe: &std::path::Path) -> std::process::Command {
-    if install.kind == "crossover" {
-        let mut c = crate::sys::command(CROSSOVER_WINE);
-        c.arg("--bottle").arg(install.bottle.as_deref().unwrap_or("Steam")).arg("--wait-children").arg(exe);
-        c
-    } else {
-        crate::sys::command(exe)
-    }
+/// in its CrossOver or Whisky bottle on a Mac (wine.rs), directly on Windows.
+pub fn windows_command(install: &crate::steam::Install, exe: &std::path::Path) -> Result<std::process::Command, String> {
+    crate::wine::command(&install.kind, install.bottle.as_deref(), exe, true)
 }
 
 /// Compiles addons/amxmodx/scripting/<src_rel> into plugins/<out_name>.amxx.
@@ -40,11 +32,13 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
     let src = am.join("scripting").join(src_rel);
     let out_rel = format!("addons/amxmodx/plugins/{out_name}.amxx");
     let out_full = rec.prepare(&out_rel)?;
-    if install_is_crossover(ctx) && !std::path::Path::new(CROSSOVER_WINE).is_file() {
-        ctx.progress.note(&format!("Couldn't compile {src_rel}: CrossOver isn't installed in Applications."));
-        return Ok(false);
-    }
-    let mut cmd = windows_command(ctx.install, &exe);
+    let mut cmd = match windows_command(ctx.install, &exe) {
+        Ok(c) => c,
+        Err(why) => {
+            ctx.progress.note(&format!("Couldn't compile {src_rel}: {why}"));
+            return Ok(false);
+        }
+    };
     cmd.arg(&src).arg(format!("-o{}", out_full.display()));
     if let Some(inc) = include_rel {
         cmd.arg(format!("-i{}", am.join("scripting").join(inc).display()));
@@ -66,10 +60,6 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
         return Ok(false);
     }
     Ok(true)
-}
-
-fn install_is_crossover(ctx: &Ctx) -> bool {
-    ctx.install.kind == "crossover"
 }
 
 /// Our plugin sources, compiled. Ok(false) if any didn't compile.

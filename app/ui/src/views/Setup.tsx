@@ -117,7 +117,7 @@ export function Setup({ scan, onClose, onDone }: { scan: Scan; onClose: () => vo
               <label className="field">
                 <span>Steam install</span>
                 <select value={installIdx} onChange={(e) => { const n = +e.target.value; setInstallIdx(n); setGames((["cstrike", "czero"] as const).filter((id) => scan.installs[n].games.some((g) => g.id === id))); }}>
-                  {scan.installs.map((i, n) => <option key={i.hl} value={n}>{i.kind === "crossover" ? `CrossOver bottle "${i.bottle}"` : "Steam"} – {i.hl}</option>)}
+                  {scan.installs.map((i, n) => <option key={i.hl} value={n}>{i.kind === "crossover" ? `CrossOver bottle "${i.bottle}"` : i.kind === "whisky" ? `Whisky bottle "${(i.bottle ?? "").split("/").pop()}"` : "Steam"} – {i.hl}</option>)}
                 </select>
               </label>
             )}
@@ -143,7 +143,7 @@ export function Setup({ scan, onClose, onDone }: { scan: Scan; onClose: () => vo
               })}
             </div>
             <p className="muted">Both use the same bots. Condition Zero adds more bot voices and its own versions of the maps.</p>
-            {IS_MAC && <p className="muted">On a Mac, Counter-Strike runs through CrossOver: Windows Steam installed in a CrossOver bottle. That's where Loner-Strike found your games.</p>}
+            {IS_MAC && <p className="muted">On a Mac, Counter-Strike runs through CrossOver or Whisky: Windows Steam installed in a bottle. That's where Loner-Strike found your games.</p>}
             <Nav back={() => setStage("welcome")} next={() => setStage("content")} canNext={games.length > 0} />
           </section>
         )}
@@ -267,9 +267,9 @@ function NoGame({ nativeMac }: { nativeMac: boolean }) {
           <img src={logo} alt="" width={96} height={96} />
           <h1>No game found</h1>
           {nativeMac ? (
-            <p>You have the Mac version of Half-Life, which mods can't run on. Install the Windows version of Steam in CrossOver, install Counter-Strike 1.6 or Condition Zero there, then reopen Loner-Strike.</p>
+            <p>You have the Mac version of Half-Life, which mods can't run on. Install the Windows version of Steam in <a href="https://www.codeweavers.com/crossover" target="_blank" rel="noreferrer">CrossOver</a> (paid, free trial) or <a href="https://getwhisky.app" target="_blank" rel="noreferrer">Whisky</a> (free), install Counter-Strike 1.6 or Condition Zero there, then reopen Loner-Strike.</p>
           ) : (
-            <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Steam in CrossOver" : ""}. Install one, then reopen Loner-Strike.</p>
+            <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Windows Steam in CrossOver or Whisky (free)" : ""}. Install one, then reopen Loner-Strike.</p>
           )}
         </section>
       </div>
