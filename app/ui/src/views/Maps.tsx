@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
-import { addFromFile, currentTarget, ON_THIS_COMPUTER, postJson, targetKey, useActions, withTarget } from "../api";
+import { memo, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { addFromFile, currentTarget, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable, withTarget } from "../api";
 import { useMaps } from "../queries";
 import { useNav } from "../store";
-import type { MapInfo, Online } from "../types";
+import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Sheet, useCommand, useConfirm, useToast } from "../ui";
 
 const CATS: [string, string][] = [
@@ -19,6 +19,11 @@ const SHOW_INFO = "Bots haven't learned it: the first time you play one of these
 const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favourites first"], ["type", "By type"], ["source", "Downloaded first"]];
 const SOURCE_ORDER = ["download", "added", "stock"];
 const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by hand" };
+/** Cards drawn at first: a few thousand at once makes the page slow; the rest come with Show more. */
+const PAGE = 150;
+
+/** One collator for every map sort: localeCompare builds a new one on each call. */
+export const COLLATOR = new Intl.Collator();
 
 /** What a map without a screenshot shows: its type and name, like a map-loading screen. */
 function NoPicture({ name }: { name: string }) {
@@ -32,13 +37,18 @@ function NoPicture({ name }: { name: string }) {
   );
 }
 
-export function MapCard({ map, onClick, current, onFav, selected }: { map: MapInfo; onClick: () => void; current?: boolean; onFav?: () => void; selected?: boolean }) {
-  const [broken, setBroken] = useState(false);
+/** A map's card. Memoised: the Maps page has hundreds of them, so the handlers take the
+ *  map instead of being made per card, and a card only redraws when its own map changes. */
+export const MapCard = memo(function MapCard({ map, onClick, current, onFav, selected }: { map: MapInfo; onClick: (map: MapInfo) => void; current?: boolean; onFav?: (map: MapInfo) => void; selected?: boolean }) {
+  // the picture can fail while the app is still looking for one: a newer answer in the
+  // map list (thumb changes) tries again, with ?v= so the browser doesn't reuse the 404
+  const [brokenFor, setBrokenFor] = useState<MapInfo["thumb"] | undefined>(undefined);
+  const broken = brokenFor === map.thumb;
   const card = (
-    <button className={`map-card${selected ? " selected" : ""}`} onClick={onClick} aria-current={current ? "true" : undefined} aria-pressed={selected === undefined ? undefined : selected} title={map.title || map.name}>
+    <button className={`map-card${selected ? " selected" : ""}`} onClick={() => onClick(map)} aria-current={current ? "true" : undefined} aria-pressed={selected === undefined ? undefined : selected} title={map.title || map.name}>
       <div className={`map-pic${map.thumb === "radar" ? " radar" : ""}`}>
         {(map.thumb !== "radar" || broken) && <NoPicture name={map.name} />}
-        {map.thumb && !broken && <img src={withTarget(`/thumb/${encodeURIComponent(map.name)}.png`)} alt="" loading="lazy" onError={() => setBroken(true)} />}
+        {map.thumb && !broken && <img src={withTarget(`/thumb/${encodeURIComponent(map.name)}.png?v=${map.thumb}`)} alt="" loading="lazy" onError={() => setBrokenFor(map.thumb)} />}
         {!onFav && map.fav && <span className="fav-star" aria-label="Favourite">★</span>}
       </div>
       <span className="map-label">{map.name}</span>
@@ -55,16 +65,20 @@ export function MapCard({ map, onClick, current, onFav, selected }: { map: MapIn
           className={`fav-toggle${map.fav ? " on" : ""}`}
           aria-label={map.fav ? `Remove ${map.name} from favourites` : `Add ${map.name} to favourites`}
           title={map.fav ? "Remove from favourites" : "Add to favourites"}
-          onClick={onFav}
+          onClick={() => onFav(map)}
         >
           {map.fav ? "★" : "☆"}
         </button>
       </div>
     </div>
   );
-}
+});
 
-export function Maps({ data, maps, loading, reload, refresh }: { data: Online | null; maps: MapInfo[]; loading?: boolean; reload: () => void; refresh: () => void }) {
+/** `current`: the map being played; `live`: a game is running to change maps on. Not the
+ *  whole game state, which is new every 2 seconds. */
+export function Maps({ current: currentMap, live, maps, loading, reload: reloadProp, refresh: refreshProp }: { current?: string; live: boolean; maps: MapInfo[]; loading?: boolean; reload: () => void; refresh: () => void }) {
+  const reload = useStable(reloadProp);
+  const refresh = useStable(refreshProp);
   const ask = useConfirm();
   const run = useCommand(refresh);
   const toast = useToast();
@@ -75,6 +89,9 @@ export function Maps({ data, maps, loading, reload, refresh }: { data: Online | 
   const [cat, setCat] = useState("all");
   const [show, setShow] = useState("all");
   const [q, setQ] = useState("");
+  // typing stays quick: the list filters a moment behind the box
+  const search = useDeferredValue(q);
+  const [limit, setLimit] = useState(PAGE);
   const [sort, setSortRaw] = useState(() => {
     try {
       return localStorage.getItem("ls.mapSort") || "name";
@@ -94,10 +111,10 @@ export function Maps({ data, maps, loading, reload, refresh }: { data: Online | 
   const { run: once, busy } = useActions();
   const key = (what: string) => `maps:${targetKey()}:${what}`;
   const changeMap = (name: string) => once(key("change"), () => run("gm_map", [name]), `Changing the map to ${name}…`);
-  const current = data?.state.map.toLowerCase();
+  const current = currentMap?.toLowerCase();
 
   const shown = useMemo(() => {
-    const query = q.trim().toLowerCase();
+    const query = search.trim().toLowerCase();
     let list = maps.filter((m) => (show === "hidden" ? m.hidden : !m.hidden));
     if (show === "nonav") list = list.filter((m) => !m.nav);
     else if (show === "stock" || show === "download" || show === "added") list = list.filter((m) => m.source === show);
@@ -106,20 +123,22 @@ export function Maps({ data, maps, loading, reload, refresh }: { data: Online | 
     else if (cat !== "all") list = list.filter((m) => m.cat === cat);
     if (query) list = list.filter((m) => `${m.name} ${m.title ?? ""} ${m.by}`.toLowerCase().includes(query));
     if (cat !== "recent") {
-      const byName = (a: MapInfo, b: MapInfo) => a.name.localeCompare(b.name);
+      const byName = (a: MapInfo, b: MapInfo) => COLLATOR.compare(a.name, b.name);
       const played = (m: MapInfo) => (m.recent >= 0 ? m.recent : 1e9);
       const order: Record<string, (a: MapInfo, b: MapInfo) => number> = {
         name: byName,
         "name-desc": (a, b) => byName(b, a),
         played: (a, b) => played(a) - played(b) || byName(a, b),
         favs: (a, b) => Number(b.fav) - Number(a.fav) || byName(a, b),
-        type: (a, b) => a.cat.localeCompare(b.cat) || byName(a, b),
+        type: (a, b) => COLLATOR.compare(a.cat, b.cat) || byName(a, b),
         source: (a, b) => SOURCE_ORDER.indexOf(a.source) - SOURCE_ORDER.indexOf(b.source) || byName(a, b),
       };
       list = [...list].sort(order[sort] ?? byName);
     }
     return list;
-  }, [maps, cat, show, q, sort]);
+  }, [maps, cat, show, search, sort]);
+  // other filters start from the top again
+  useEffect(() => setLimit(PAGE), [cat, show, search, sort]);
 
   const remove = async (map: MapInfo) => {
     if (!map.mod) return;
@@ -146,10 +165,13 @@ export function Maps({ data, maps, loading, reload, refresh }: { data: Online | 
     reload();
   }, f === "fav" ? (on ? `Adding ${map.name} to favourites…` : `Removing ${map.name} from favourites…`) : on ? `Hiding ${map.name}…` : `Showing ${map.name} again…`);
 
+  // the same function for every card, so the cards' memo holds
+  const toggleFav = useStable((m: MapInfo) => flag(m, "fav", !m.fav));
+
   return (
     <div className="stack">
       <div>
-        <SectionHead title="Maps" note={data ? "Pick a map to play it in the current mode." : "Start the game to change maps."}>
+        <SectionHead title="Maps" note={live ? "Pick a map to play it in the current mode." : "Start the game to change maps."}>
           {ON_THIS_COMPUTER && (
             <BusyButton busy={busy(key("add-file"))} label="Add a map file…" busyLabel="Adding…" onClick={() => once(key("add-file"), async () => {
               const r = await addFromFile("maps");
@@ -157,10 +179,10 @@ export function Maps({ data, maps, loading, reload, refresh }: { data: Online | 
               if (r?.ok) reload();
             }, "Adding a map file…")} />
           )}
-          <span className="random-map" title={data ? undefined : "Start the game to change maps."}>
-            <BusyButton busy={busy(key("change"))} disabled={!data} label="Random map" busyLabel="Changing…" onClick={() => {
+          <span className="random-map" title={live ? undefined : "Start the game to change maps."}>
+            <BusyButton busy={busy(key("change"))} disabled={!live} label="Random map" busyLabel="Changing…" onClick={() => {
               const pool = shown.filter((m) => m.name.toLowerCase() !== current);
-              if (!data) return;
+              if (!live) return;
               if (!pool.length) return toast("No other map matches these filters.", true);
               changeMap(pool[Math.floor(Math.random() * pool.length)].name);
             }} />
@@ -202,10 +224,15 @@ export function Maps({ data, maps, loading, reload, refresh }: { data: Online | 
         </div>
       ) : (
         <div className="maps grid">
-          {shown.map((m) => (
-            <MapCard key={m.name} map={m} current={m.name.toLowerCase() === current} onClick={() => setPicked(m)} onFav={() => flag(m, "fav", !m.fav)} />
+          {shown.slice(0, limit).map((m) => (
+            <MapCard key={m.name} map={m} current={m.name.toLowerCase() === current} onClick={setPicked} onFav={toggleFav} />
           ))}
           {!shown.length && (maps.length ? <p className="muted">No maps match.</p> : Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>))}
+        </div>
+      )}
+      {shown.length > limit && (
+        <div className="row center">
+          <button className="btn" onClick={() => setLimit(limit + PAGE * 2)}>Show more ({shown.length - limit} left)</button>
         </div>
       )}
 
@@ -213,7 +240,7 @@ export function Maps({ data, maps, loading, reload, refresh }: { data: Online | 
         <Sheet label={picked.name} onClose={() => setPicked(null)}>
           <div className={`sheet-pic${picked.thumb === "radar" ? " radar" : ""}`}>
             {picked.thumb !== "radar" && <NoPicture name={picked.name} />}
-            {picked.thumb && <img src={withTarget(`/thumb/${encodeURIComponent(picked.name)}.png`)} alt="" />}
+            {picked.thumb && <img src={withTarget(`/thumb/${encodeURIComponent(picked.name)}.png?v=${picked.thumb}`)} alt="" />}
           </div>
           <div className="sheet-body">
             <h2 className="map-title">{picked.name}</h2>
@@ -228,7 +255,7 @@ export function Maps({ data, maps, loading, reload, refresh }: { data: Online | 
               {picked.pack && picked.pack.length > 1 ? ` (a pack of ${picked.pack.length} maps)` : ""}
             </p>
             <div className="row">
-              {data && (
+              {live && (
                 <BusyButton className="btn primary" busy={busy(key("change"))} label={`Play ${picked.name}`} busyLabel="Changing…" onClick={() => { setPicked(null); changeMap(picked.name); }} />
               )}
               <BusyButton busy={busy(key(`flag:fav:${picked.name}`))} label={picked.fav ? "Unfavourite" : "Favourite"} busyLabel="Saving…" onClick={() => flag(picked, "fav", !picked.fav)} />

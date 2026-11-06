@@ -270,6 +270,23 @@ new bool:g_AddonOn[MAX_ADDONS]
 new bool:g_AddonLoaded[MAX_ADDONS]
 new g_AddonCount
 
+// Each add-on's settings (its configs/gamemodes/addons/<id>.ini), read once instead of
+// opening the file for every setting on every gm_status. Read again when the file changes.
+enum _:AddonSet
+{
+	AS_Cvar[32],
+	AS_Name[32],
+	AS_Values[96],
+	AS_Labels[128]
+}
+new Array:g_AddonSets[MAX_ADDONS]
+new g_AddonIniTime[MAX_ADDONS]
+new Float:g_AddonCheckAt
+
+// When status.json was last written: the panel polls every 2 seconds (more with a phone
+// open too), and one written under a second ago is still current
+new Float:g_StatusAt = -10.0
+
 #define MAX_PRESETS 48
 
 new g_PresetId[MAX_PRESETS][24]
@@ -1245,6 +1262,7 @@ load_addons()
 		copy(g_AddonPlugins[g_AddonCount], charsmax(g_AddonPlugins[]), plugins)
 		copy(g_AddonDesc[g_AddonCount], charsmax(g_AddonDesc[]), desc)
 		copy(g_AddonCmd[g_AddonCount], charsmax(g_AddonCmd[]), cmd)
+		g_AddonSets[g_AddonCount] = Invalid_Array
 		g_AddonCount++
 	}
 	fclose(f)
@@ -1262,6 +1280,11 @@ load_addons()
 				g_AddonOn[i] = g_AddonLoaded[i] = true
 	}
 	fclose(f)
+
+	// the ones running this map are in every status: read their settings now
+	for (new i = 0; i < g_AddonCount; i++)
+		if (g_AddonLoaded[i])
+			load_addon_settings(i)
 }
 
 // Saves enabled add-ons and writes configs/plugins-gmaddons.ini (loaded on next map).
@@ -1315,27 +1338,64 @@ bool:addon_has_options(a)
 	return g_AddonCmd[a][0] || file_exists(path)
 }
 
-bool:read_addon_setting(a, n, cvar[], clen, name[], nlen, values[], vlen, labels[], llen)
+// Reads (or reads again) an add-on's settings into g_AddonSets[a].
+load_addon_settings(a)
 {
-	new path[192], line[256], i
+	new path[192], line[384], set[AddonSet]
 	addon_ini(a, path, charsmax(path))
+	if (g_AddonSets[a] == Invalid_Array)
+		g_AddonSets[a] = ArrayCreate(AddonSet)
+	else
+		ArrayClear(g_AddonSets[a])
+	g_AddonIniTime[a] = file_exists(path) ? GetFileTime(path, FileTime_LastChange) : 0
 	new f = fopen(path, "rt")
 	if (!f)
-		return false
+		return
 	while (!feof(f))
 	{
 		fgets(f, line, charsmax(line))
 		trim(line)
 		if (!line[0] || line[0] == ';' || line[0] == '/')
 			continue
-		if (i++ != n)
-			continue
-		parse(line, cvar, clen, name, nlen, values, vlen, labels, llen)
-		fclose(f)
-		return true
+		arrayset(set, 0, sizeof set)
+		parse(line, set[AS_Cvar], charsmax(set[AS_Cvar]), set[AS_Name], charsmax(set[AS_Name]), set[AS_Values], charsmax(set[AS_Values]), set[AS_Labels], charsmax(set[AS_Labels]))
+		ArrayPushArray(g_AddonSets[a], set)
 	}
 	fclose(f)
-	return false
+}
+
+// An add-on updated while the game runs: at most every 10 seconds, read again the
+// settings of any whose ini changed since.
+check_addon_settings()
+{
+	new Float:now = get_gametime()
+	if (now < g_AddonCheckAt)
+		return
+	g_AddonCheckAt = now + 10.0
+	new path[192]
+	for (new a = 0; a < g_AddonCount; a++)
+	{
+		if (g_AddonSets[a] == Invalid_Array)
+			continue
+		addon_ini(a, path, charsmax(path))
+		if ((file_exists(path) ? GetFileTime(path, FileTime_LastChange) : 0) != g_AddonIniTime[a])
+			load_addon_settings(a)
+	}
+}
+
+bool:read_addon_setting(a, n, cvar[], clen, name[], nlen, values[], vlen, labels[], llen)
+{
+	if (g_AddonSets[a] == Invalid_Array)
+		load_addon_settings(a)
+	if (n < 0 || n >= ArraySize(g_AddonSets[a]))
+		return false
+	new set[AddonSet]
+	ArrayGetArray(g_AddonSets[a], n, set)
+	copy(cvar, clen, set[AS_Cvar])
+	copy(name, nlen, set[AS_Name])
+	copy(values, vlen, set[AS_Values])
+	copy(labels, llen, set[AS_Labels])
+	return true
 }
 
 save_addon_settings(a)
@@ -3090,8 +3150,23 @@ host_player()
 	return 0
 }
 
+// Every other panel command can change what the status says: the next one is written fresh.
+status_stale()
+{
+	g_StatusAt = -10.0
+}
+
 public srv_status()
 {
+	// polled from more than one place: a file this fresh answers for it
+	new Float:now = get_gametime()
+	if (now >= g_StatusAt && now - g_StatusAt < 1.0)
+	{
+		server_print("GM status written")
+		return PLUGIN_HANDLED
+	}
+	check_addon_settings()
+
 	new map[32], esc[128], esc2[128], esc3[160], cur[40]
 	get_mapname(map, charsmax(map))
 
@@ -3176,6 +3251,7 @@ public srv_status()
 	fprintf(f, "{^"t^":^"me^",^"uid^":%d,^"haspos^":%d}^n", host ? get_user_userid(host) : 0, (host && g_HasPos[host]) ? 1 : 0)
 	fprintf(f, "{^"t^":^"end^"}^n")
 	fclose(f)
+	g_StatusAt = get_gametime()
 	server_print("GM status written")
 	return PLUGIN_HANDLED
 }
@@ -3191,6 +3267,7 @@ bool:career_blocked()
 // gm_mode <id> [map]
 public srv_mode()
 {
+	status_stale()
 	if (career_blocked())
 		return PLUGIN_HANDLED
 	new id[32], map[32]
@@ -3216,6 +3293,7 @@ public srv_mode()
 // gm_map <map>  (keeps the mode; map presets may apply)
 public srv_map()
 {
+	status_stale()
 	if (career_blocked())
 		return PLUGIN_HANDLED
 	new map[32]
@@ -3232,6 +3310,7 @@ public srv_map()
 // gm_set <cvar> <value>  (only settings the menu knows about)
 public srv_set()
 {
+	status_stale()
 	new cvar[32], val[40]
 	read_argv(1, cvar, charsmax(cvar))
 	read_argv(2, val, charsmax(val))
@@ -3259,6 +3338,7 @@ find_addon(const id[])
 // gm_addon <id> <0|1>
 public srv_addon()
 {
+	status_stale()
 	new id[32], val[4]
 	read_argv(1, id, charsmax(id))
 	read_argv(2, val, charsmax(val))
@@ -3277,6 +3357,7 @@ public srv_addon()
 // gm_addonset <addon> <cvar> <value>
 public srv_addonset()
 {
+	status_stale()
 	new id[32], cvar[32], val[64], name[32], values[96], labels[128], c[32]
 	read_argv(1, id, charsmax(id))
 	read_argv(2, cvar, charsmax(cvar))
@@ -3299,6 +3380,7 @@ public srv_addonset()
 
 public srv_restartmap()
 {
+	status_stale()
 	new map[32]
 	get_mapname(map, charsmax(map))
 	gm_print(0, "Restarting map...")
@@ -3311,6 +3393,7 @@ public srv_restartmap()
 // Plugin tasks don't run while paused, which is why pausable stays on.
 public srv_pause()
 {
+	status_stale()
 	set_cvar_num("pausable", 1)
 	server_cmd("pause")
 	g_Paused = !g_Paused
@@ -3321,6 +3404,7 @@ public srv_pause()
 // gm_do <addtime|endround|money|heal|demo>: one-click actions for the host
 public srv_do()
 {
+	status_stale()
 	if (career_blocked())
 		return PLUGIN_HANDLED
 	new arg[16]
@@ -3379,6 +3463,7 @@ public srv_do()
 // gm_announce <text>: message in the middle of everyone's screen
 public srv_announce()
 {
+	status_stale()
 	new text[128]
 	read_args(text, charsmax(text))
 	remove_quotes(text)
@@ -3394,6 +3479,7 @@ public srv_announce()
 // gm_team <swap|t|ct|spec>: swap everyone's team, or move the host
 public srv_team()
 {
+	status_stale()
 	if (career_blocked())
 		return PLUGIN_HANDLED
 	new arg[8]
@@ -3443,6 +3529,7 @@ public srv_team()
 // gm_bots <addt|addct|kick|kill|count> [n]
 public srv_bots()
 {
+	status_stale()
 	if (career_blocked())
 		return PLUGIN_HANDLED
 	new action[16]
@@ -3454,6 +3541,7 @@ public srv_bots()
 // gm_match <restart|reset>
 public srv_match()
 {
+	status_stale()
 	if (career_blocked())
 		return PLUGIN_HANDLED
 	new action[16]
@@ -3465,6 +3553,7 @@ public srv_match()
 // gm_player <userid|all> <action> [weapon]
 public srv_player()
 {
+	status_stale()
 	new target[16], action[16], arg[32]
 	read_argv(1, target, charsmax(target))
 	read_argv(2, action, charsmax(action))
@@ -3492,6 +3581,7 @@ public srv_player()
 // gm_nav <learn|analyze|batch|stop>
 public srv_nav()
 {
+	status_stale()
 	if (career_blocked())
 		return PLUGIN_HANDLED
 	new action[16]
@@ -3800,6 +3890,7 @@ public cmd_presetname(id)
 // gm_preset <id>
 public srv_preset()
 {
+	status_stale()
 	new id[24]
 	read_argv(1, id, charsmax(id))
 	new p = find_preset(id)
@@ -3813,6 +3904,7 @@ public srv_preset()
 // gm_presetsave <name_with_underscores>
 public srv_presetsave()
 {
+	status_stale()
 	new name[64]
 	read_argv(1, name, charsmax(name))
 	save_preset(name)
@@ -3822,6 +3914,7 @@ public srv_presetsave()
 // gm_presetdel <id>
 public srv_presetdel()
 {
+	status_stale()
 	new id[24]
 	read_argv(1, id, charsmax(id))
 	new p = find_preset(id)
@@ -4006,6 +4099,7 @@ public crash_handler(id, menu, item)
 // gm_crash <rebuild|hide|dismiss>
 public srv_crash()
 {
+	status_stale()
 	new action[16]
 	read_argv(1, action, charsmax(action))
 	do_crash(action)
@@ -4119,6 +4213,7 @@ public cmd_loadpos(id)
 // gm_pos <save|load>  (for the host)
 public srv_pos()
 {
+	status_stale()
 	new action[8]
 	read_argv(1, action, charsmax(action))
 	new host = host_player()

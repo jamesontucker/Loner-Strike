@@ -141,14 +141,22 @@ async fn thumb(State(st): State<Shared>, Path(file): Path<String>) -> Response {
     if !crate::maps::safe_arg(&name) {
         return reply(StatusCode::NOT_FOUND, json!({"error": "not found"}));
     }
-    let png = with_game(&st, move |g| g.thumbnail(&name).and_then(|(p, kind)| std::fs::read(p).ok().map(|d| (d, kind)))).await.flatten();
-    match png {
-        Some((data, kind)) => (
-            [(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "max-age=3600"), (header::HeaderName::from_static("x-thumb-kind"), kind)],
-            data,
-        )
-            .into_response(),
-        None => (StatusCode::NOT_FOUND, [(header::CONTENT_TYPE, "text/plain")], "no picture").into_response(),
+    // never waits on GameBanana: a picture still being looked up is answered with what's
+    // here now (the radar, or nothing), and not kept by the browser so the next ask gets it
+    let (pic, looking) = with_game(&st, move |g| {
+        let (found, looking) = g.thumbnail(&name);
+        (found.and_then(|(p, kind)| std::fs::read(&p).ok().map(|d| (d, kind, p))), looking)
+    })
+    .await
+    .unwrap_or((None, false));
+    match pic {
+        Some((data, kind, path)) => {
+            let ctype = if path.extension().is_some_and(|x| x == "jpg") { "image/jpeg" } else { "image/png" };
+            // a screenshot rarely changes; a radar may give way to one found later
+            let cache = if looking { "no-cache" } else if kind == "shot" { "max-age=604800" } else { "max-age=3600" };
+            ([(header::CONTENT_TYPE, ctype), (header::CACHE_CONTROL, cache), (header::HeaderName::from_static("x-thumb-kind"), kind)], data).into_response()
+        }
+        None => (StatusCode::NOT_FOUND, [(header::CONTENT_TYPE, "text/plain"), (header::CACHE_CONTROL, "no-store")], "no picture").into_response(),
     }
 }
 
@@ -473,8 +481,8 @@ mod tests {
         let res = server::router(st.clone(), Listener::Local).oneshot(req).await.unwrap();
         assert_eq!(res.headers()["x-thumb-kind"], "radar");
         let (s, b, ct) = call(&st, "GET", "/thumb/de_alpha.png", None, false).await;
-        assert_eq!((s, ct.as_str()), (StatusCode::OK, "image/png"));
-        assert_eq!(image::load_from_memory(&b).unwrap().width(), 4);
+        assert_eq!((s, ct.as_str()), (StatusCode::OK, "image/jpeg"));
+        assert_eq!(image::load_from_memory(&b).unwrap().width(), 4, "never enlarged");
         let (s, b, _) = call(&st, "GET", "/thumb/aim_beta.png", None, false).await;
         assert_eq!(s, StatusCode::OK);
         let radar = image::load_from_memory(&b).unwrap();

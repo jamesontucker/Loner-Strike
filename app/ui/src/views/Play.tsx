@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJson, getJsonAt, postJson, targetKey, useActions, useActivity } from "../api";
 import { BOT_NOTE, BOT_RATING, gameTitle } from "../games";
@@ -7,7 +7,7 @@ import { useTarget } from "../queries";
 import { usePlayDraft, usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Sheet, useCommand, useConfirm, useToast } from "../ui";
-import { MapCard } from "./Maps";
+import { COLLATOR, MapCard } from "./Maps";
 import { MatchMode } from "./MatchMode";
 
 /** A start that hasn't brought the game up after this long can be sent again (CrossOver
@@ -89,7 +89,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
     );
   }
   const recent = maps.filter((m) => m.recent >= 0).sort((a, b) => a.recent - b.recent).slice(0, 10);
-  const favs = maps.filter((m) => m.fav && !m.hidden).sort((a, b) => a.name.localeCompare(b.name));
+  const favs = maps.filter((m) => m.fav && !m.hidden).sort((a, b) => COLLATOR.compare(a.name, b.name));
   const stock = app?.game?.id === "czero" ? "de_dust2_cz" : "de_dust2";
   // a picked map that's gone since (deleted, or hidden) falls back like no pick
   const pick = draft.map && (!maps.length || maps.some((m) => m.name === draft.map && !m.hidden)) ? draft.map : "";
@@ -317,16 +317,22 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
     document.addEventListener("pointerdown", away);
     return () => document.removeEventListener("pointerdown", away);
   }, [open]);
-  const have = maps.filter((m) => !m.hidden);
+  // sorted once per map list, not on every render (this re-renders with the game's state)
+  const have = useMemo(() => maps.filter((m) => !m.hidden).sort((a, b) => COLLATOR.compare(a.name, b.name)), [maps]);
   const query = q.trim().toLowerCase();
-  const prefixes = (mode && MODE_PREFIX[mode]) || [];
+  const forMode = useMemo(() => {
+    const prefixes = (mode && MODE_PREFIX[mode]) || [];
+    return prefixes.length ? have.filter((m) => prefixes.some((p) => m.name.toLowerCase().startsWith(p))) : [];
+  }, [have, mode]);
+  // (sort is stable, so matches at the same place stay in name order)
+  const found = useMemo(() => (query ? have.filter((m) => m.name.toLowerCase().includes(query)).sort((a, b) => a.name.toLowerCase().indexOf(query) - b.name.toLowerCase().indexOf(query)) : []), [have, query]);
   const groups: [string, MapInfo[]][] = query
-    ? [["", have.filter((m) => m.name.toLowerCase().includes(query)).sort((a, b) => a.name.toLowerCase().indexOf(query) - b.name.toLowerCase().indexOf(query) || a.name.localeCompare(b.name))]]
+    ? [["", found]]
     : [
-        [`Maps for ${modeName ?? "this mode"}`, prefixes.length ? have.filter((m) => prefixes.some((p) => m.name.toLowerCase().startsWith(p))).sort((a, b) => a.name.localeCompare(b.name)) : []],
+        [`Maps for ${modeName ?? "this mode"}`, forMode],
         ["Recently played", recent],
         ["Favourites", favs],
-        ["All maps", [...have].sort((a, b) => a.name.localeCompare(b.name))],
+        ["All maps", have],
       ];
   const shown = groups.map(([label, list]) => [label, list.slice(0, query ? 80 : 200)] as [string, MapInfo[]]).filter(([, l]) => l.length);
   const flat = shown.flatMap(([, l]) => l);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addFromFile, getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable } from "../api";
+import { addFromFile, getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, usePoll, useStable } from "../api";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
 import { BusyButton, LoadError, SectionHead, Sheet, Skeleton, useConfirm, useToast } from "../ui";
 
@@ -80,33 +80,28 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
   }, [q]);
 
   // install progress
-  useEffect(() => {
-    let first = true;
-    const tick = async () => {
-      const list = await getJson<GbJob[]>("/api/gb/jobs").catch(() => [] as GbJob[]);
-      if (!Array.isArray(list)) return;
-      setJobs(list);
-      // jobs that had already ended before this page opened were announced then
-      if (first) {
-        first = false;
-        list.filter((j) => j.state === "done" || j.state === "error").forEach((j) => seenDone.current.add(j.id));
-        return;
-      }
-      for (const j of list) {
-        if ((j.state === "done" || j.state === "error") && !seenDone.current.has(j.id)) {
-          seenDone.current.add(j.id);
-          toast(j.message || (j.state === "done" ? "Installed" : "Install failed"), j.state === "error");
-          if (j.state === "done") {
-            onInstalled();
-            setItems((old) => old.map((m) => (m.id === j.mod ? { ...m, installed: true } : m)));
-          }
+  const first = useRef(true);
+  usePoll(async () => {
+    const list = await getJson<GbJob[]>("/api/gb/jobs").catch(() => [] as GbJob[]);
+    if (!Array.isArray(list)) return;
+    setJobs(list);
+    // jobs that had already ended before this page opened were announced then
+    if (first.current) {
+      first.current = false;
+      list.filter((j) => j.state === "done" || j.state === "error").forEach((j) => seenDone.current.add(j.id));
+      return;
+    }
+    for (const j of list) {
+      if ((j.state === "done" || j.state === "error") && !seenDone.current.has(j.id)) {
+        seenDone.current.add(j.id);
+        toast(j.message || (j.state === "done" ? "Installed" : "Install failed"), j.state === "error");
+        if (j.state === "done") {
+          onInstalled();
+          setItems((old) => old.map((m) => (m.id === j.mod ? { ...m, installed: true } : m)));
         }
       }
-    };
-    tick();
-    const t = setInterval(tick, 1500);
-    return () => clearInterval(t);
-  }, [toast, onInstalled]);
+    }
+  }, 1500);
 
   const details = (id: number, name: string) => run(key(`details:${id}`), async () => {
     // (opening another server meanwhile cancels it: nothing to say then)

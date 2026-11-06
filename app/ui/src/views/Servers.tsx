@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
-import { clock, getJson, ON_THIS_COMPUTER, postJson, useActions, useOnce, useStable } from "../api";
-import { reloadServers, useSetupJob } from "../queries";
+import { getJson, ON_THIS_COMPUTER, postJson, useActions, useOnce, usePoll } from "../api";
+import { reloadServers } from "../queries";
+import { useDirty, useDirtyStore } from "../store";
 import type { AppInfo, MapInfo, Online, ServerInfo, ServerList } from "../types";
 import { HostingGuide, SizingTable, troubleFor } from "./HostingGuide";
-import { BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
+import { JobProgress } from "./JobProgress";
+import { BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
 import { Bots } from "./Bots";
 import { Friends } from "./Friends";
@@ -16,10 +18,12 @@ import { Players } from "./Players";
 import { MatchButtons, SettingsPage } from "./Settings";
 import type { Scan } from "./Setup";
 import { Community } from "./Community";
-import { Hltv } from "./Hltv";
 import { ServerExtras } from "./ServerExtras";
 import { Sounds } from "./Sounds";
 import { Welcome } from "./Welcome";
+
+// only servers that use it open this tab
+const Hltv = lazy(() => import("./Hltv").then((m) => ({ default: m.Hltv })));
 
 const GAME = { cstrike: "Counter-Strike 1.6", czero: "Condition Zero" } as const;
 const VISIBILITY = [
@@ -53,23 +57,6 @@ function deleteQuestion(s: ServerInfo): [string, string] {
 const wipeQuestion = (s: ServerInfo) =>
   `Rebuild "${s.name}" from scratch? Everything in its folder on ${s.host} is deleted (its settings, admins, bans, stats and any maps added to it) and it's set up again like when you made it. Takes 5 to 15 minutes.`;
 
-// ---- unsaved edits on a server's tabs ----------------------------------------------------
-
-const useDirtyStore = create<{ dirty: Record<string, boolean>; set: (key: string, v: boolean) => void }>((set) => ({
-  dirty: {},
-  set: (key, v) => set((s) => (!!s.dirty[key] === v ? s : { dirty: { ...s.dirty, [key]: v } })),
-}));
-/** A tab on a server's page reports whether it has unsaved edits (key: unique to the tab,
- *  e.g. "welcome"). The page asks before switching tabs or going back while any tab has
- *  some. Cleared when the tab closes. */
-export function useDirty(key: string, dirty: boolean) {
-  const set = useDirtyStore((s) => s.set);
-  useEffect(() => set(key, dirty), [key, dirty, set]);
-  useEffect(() => () => set(key, false), [key, set]);
-}
-/** Whether a server tab has unsaved edits right now (for leaving from outside the page). */
-export const hasUnsavedEdits = () => Object.values(useDirtyStore.getState().dirty).some(Boolean);
-
 // ---- start options saved while running: used after a restart -----------------------------
 
 /** Server id: its uptime when the new start options were saved. Cleared once it restarts. */
@@ -85,90 +72,6 @@ const useRestartNeeded = create<{ at: Record<string, number>; mark: (id: string,
 }));
 
 const ACTION_LABEL: Record<string, string> = { start: "Starting", stop: "Stopping", restart: "Restarting", join: "Joining", retry: "Setting up", rebuild: "Rebuilding", delete: "Deleting", update: "Updating" };
-
-/** The setup job's progress. A failed job stays on screen with why it stopped until
- *  Close (and Try again, when the caller can start it again). */
-export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, remote }: {
-  onEnd: (ok: boolean) => void;
-  onClose?: () => void;
-  onRetry?: () => void;
-  /** what it's doing, e.g. "Updating Valve's server files…" */
-  title?: string;
-  /** on another machine: setup there takes 5 to 15 minutes */
-  remote?: boolean;
-}) {
-  const onEnd = useStable(onEndProp);
-  const q = useSetupJob();
-  // a job that had already ended before this bar opened isn't this one
-  const [startId] = useState(() => q.data?.id);
-  const seen = useRef(false);
-  const ended = useRef(false);
-  const [lost, setLost] = useState(false);
-  const [opened] = useState(() => Date.now());
-  const [, tick] = useState(0);
-  const data = q.isFetchedAfterMount ? q.data : undefined;
-  const job = data && (data.state === "running" || seen.current || (data.state !== "idle" && data.id !== startId)) ? data : null;
-  if (job) seen.current = true;
-  const over = !!job && (job.state === "done" || job.state === "error");
-
-  useEffect(() => {
-    if (!over || ended.current) return;
-    ended.current = true;
-    onEnd(job!.state === "done");
-  }, [over, job, onEnd]);
-  // the shared query only polls a running job: ask until this one shows up, and give up
-  // (saying so) if it never does or the app stops answering
-  const latest = useRef(q);
-  latest.current = q;
-  useEffect(() => {
-    if (over || lost) return;
-    let misses = 0;
-    const t = setInterval(() => {
-      const cur = latest.current;
-      const d = cur.isFetchedAfterMount ? cur.data : undefined;
-      if (cur.isError || !seen.current || d?.state !== "running") {
-        if (++misses >= 15 && !ended.current) {
-          ended.current = true;
-          setLost(true);
-          onEnd(false);
-        }
-        if (d?.state !== "running") cur.refetch();
-      } else misses = 0;
-      // the elapsed time moves on
-      tick((n) => n + 1);
-    }, 1000);
-    return () => clearInterval(t);
-  }, [over, lost, onEnd]);
-
-  // the job's id ends in when it started (ms)
-  const began = Number(/-(\d{12,})$/.exec(job?.id ?? "")?.[1]) || opened;
-  const elapsed = Math.max(0, Math.round((Date.now() - began) / 1000));
-  const failed = lost || job?.state === "error";
-  const steps = job?.steps ?? [];
-  const now = steps.find((s) => s.state === "running");
-  const n = now ? steps.indexOf(now) + 1 : steps.filter((s) => s.state === "done").length;
-  const foot = failed
-    ? ""
-    : [steps.length > 1 && n > 0 ? `Step ${n} of ${steps.length}` : "", `${clock(elapsed)} so far`, remote ? "usually 5 to 15 minutes" : ""].filter(Boolean).join(" · ");
-  const name = title ?? (job?.kind === "server" ? "Setting up the server…" : "Installing…");
-  return (
-    <div className="job-progress">
-      <SteamProgress
-        value={job?.progress ?? 0}
-        title={failed ? `Stopped: ${name.charAt(0).toLowerCase()}${name.slice(1).replace(/…$/, "")}` : name}
-        text={lost ? "Lost track of it. The app stopped answering; check the server's page to see if it finished." : job?.state === "error" ? job.error : now ? `${now.label}${now.detail ? ` · ${now.detail}` : ""}` : "Getting ready…"}
-        error={failed}
-        foot={foot}
-      />
-      {failed && (onRetry || onClose) && (
-        <div className="row">
-          {onRetry && <button className="btn primary" onClick={onRetry}>Try again</button>}
-          {onClose && <button className="btn" onClick={onClose}>Close</button>}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /** An unlisted server can't be joined from a game that's already open (it doesn't answer
  *  the game's lookups), so the game is closed and started again with the address. */
@@ -584,7 +487,7 @@ export function ServerPage(props: {
           )}
           {tab === "friends" && <Friends data={data} refresh={refresh} server={{ name: s.name, visibility: s.visibility }} />}
           {tab === "modes" && data && <PlayLive data={data} maps={maps} refresh={refresh} openMaps={() => setTab("maps")} />}
-          {tab === "maps" && <Maps data={data} maps={maps} reload={reloadMaps} refresh={refresh} />}
+          {tab === "maps" && <Maps current={data?.state.map} live={!!data} maps={maps} reload={reloadMaps} refresh={refresh} />}
           {tab === "getmaps" && <GetMore only="maps" onInstalled={reloadMaps} />}
           {tab === "bots" && data && <Bots data={data} refresh={refresh} />}
           {tab === "match" && data && (
@@ -599,7 +502,7 @@ export function ServerPage(props: {
           {tab === "welcome" && <Welcome target={s.id} />}
           {tab === "sounds" && <Sounds target={s.id} />}
           {tab === "extras" && <ServerExtras target={s.id} />}
-          {tab === "hltv" && <Hltv server={s} />}
+          {tab === "hltv" && <Suspense fallback={<Skeleton rows={4} />}><Hltv server={s} /></Suspense>}
           {tab === "community" && <Community target={s.id} />}
         </>
       )}
@@ -900,19 +803,14 @@ function Console({ server }: { server: ServerInfo }) {
   const box = useRef<HTMLPreElement>(null);
   // off: the console stays where you scrolled it while new lines come in
   const [follow, setFollow] = useState(true);
-  useEffect(() => {
-    const load = () =>
-      getJson<Reply>(`/api/servers/${server.id}/console`)
-        .then((r) => {
-          if (r.error && !r.lines) return setFailed(true);
-          setFailed(false);
-          setLines(r.lines ?? []);
-        })
-        .catch(() => setFailed(true));
-    load();
-    const t = setInterval(load, 2000);
-    return () => clearInterval(t);
-  }, [server.id]);
+  usePoll(() =>
+    getJson<Reply>(`/api/servers/${server.id}/console`)
+      .then((r) => {
+        if (r.error && !r.lines) return setFailed(true);
+        setFailed(false);
+        setLines(r.lines ?? []);
+      })
+      .catch(() => setFailed(true)), 2000, [server.id]);
   const shown = [...lines, ...sent];
   useEffect(() => {
     if (follow) box.current?.scrollTo({ top: box.current.scrollHeight });

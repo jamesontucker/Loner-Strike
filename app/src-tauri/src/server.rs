@@ -165,18 +165,52 @@ async fn with_target(req: Request, next: Next) -> Response {
 }
 
 /// Serves the UI files; unknown paths get index.html (the app routes on the client).
-async fn ui(uri: Uri) -> Response {
+/// Text files go gzipped to a browser that takes it (a phone on Wi-Fi gets the bundle
+/// at a fraction of its size).
+async fn ui(uri: Uri, headers: axum::http::HeaderMap) -> Response {
     let path = uri.path().trim_start_matches('/');
     let file = if path.is_empty() { "index.html" } else { path };
-    match Ui::get(file).or_else(|| Ui::get("index.html")) {
-        Some(f) => {
-            let mime = f.metadata.mimetype().to_string();
-            // only Vite's hashed build files never change; everything else (logo, icons) may
-            let cache = if file.starts_with("assets/") { "public, max-age=31536000, immutable" } else { "no-cache" };
-            ([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, cache.to_string())], f.data).into_response()
+    let (file, f) = match Ui::get(file) {
+        Some(f) => (file, f),
+        None => match Ui::get("index.html") {
+            Some(f) => ("index.html", f),
+            None => return (StatusCode::NOT_FOUND, "The app's pages are missing - rebuild the UI (npm run build in app/ui).").into_response(),
+        },
+    };
+    let mime = f.metadata.mimetype().to_string();
+    // only Vite's hashed build files never change; everything else (logo, icons) may
+    let cache = if file.starts_with("assets/") { "public, max-age=31536000, immutable" } else { "no-cache" };
+    let gzip_ok = headers
+        .get(header::ACCEPT_ENCODING)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.split(',').any(|e| e.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("gzip")));
+    let vary = (header::VARY, "accept-encoding".to_string());
+    if gzip_ok && compressible(&mime) {
+        if let Some(gz) = gzipped(file, &f.data) {
+            return ([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, cache.to_string()), (header::CONTENT_ENCODING, "gzip".to_string()), vary], gz).into_response();
         }
-        None => (StatusCode::NOT_FOUND, "The app's pages are missing - rebuild the UI (npm run build in app/ui).").into_response(),
     }
+    ([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, cache.to_string()), vary], f.data).into_response()
+}
+
+/// Text worth compressing (pictures and fonts already are).
+fn compressible(mime: &str) -> bool {
+    mime.starts_with("text/") || mime.contains("javascript") || mime.contains("json") || mime.contains("svg") || mime.contains("xml")
+}
+
+/// An embedded file gzipped, made once on first ask (the files never change while the
+/// app runs). None if it doesn't get smaller.
+fn gzipped(file: &str, data: &[u8]) -> Option<axum::body::Bytes> {
+    use std::collections::HashMap;
+    use std::io::Write;
+    static GZ: Mutex<Option<HashMap<String, Option<axum::body::Bytes>>>> = Mutex::new(None);
+    if let Some(v) = GZ.lock().unwrap().as_ref().and_then(|m| m.get(file)) {
+        return v.clone();
+    }
+    let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+    let gz = enc.write_all(data).and_then(|_| enc.finish()).ok().filter(|g| g.len() + 64 < data.len()).map(axum::body::Bytes::from);
+    GZ.lock().unwrap().get_or_insert_with(HashMap::new).insert(file.to_string(), gz.clone());
+    gz
 }
 
 /// Which listener a router is for decides its guard (never the request's own headers).
@@ -225,4 +259,21 @@ pub async fn serve(state: Shared, listener: std::net::TcpListener) {
     listener.set_nonblocking(true).ok();
     let listener = tokio::net::TcpListener::from_std(listener).expect("listener");
     axum::serve(listener, router(state, Listener::Local)).await.ok();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gzip_once() {
+        let text = "const x = 1;\n".repeat(500);
+        let gz = gzipped("test/x.js", text.as_bytes()).unwrap();
+        let mut back = String::new();
+        std::io::Read::read_to_string(&mut flate2::read::GzDecoder::new(&gz[..]), &mut back).unwrap();
+        assert_eq!(back, text);
+        assert_eq!(gzipped("test/x.js", b"different").unwrap(), gz, "made once");
+        assert!(gzipped("test/tiny.js", b"x").is_none(), "not worth it");
+        assert!(compressible("application/javascript") && compressible("text/css") && !compressible("image/png"));
+    }
 }

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { create } from "zustand";
 
 // ---- where you are in the app ------------------------------------------------------
@@ -112,3 +113,21 @@ export const useActivityStore = create<Activity>((set, get) => ({
       return { running };
     }),
 }));
+
+// ---- unsaved edits on a server's tabs ------------------------------------------------
+// Here rather than on the Servers page, which loads only when it's opened.
+
+export const useDirtyStore = create<{ dirty: Record<string, boolean>; set: (key: string, v: boolean) => void }>((set) => ({
+  dirty: {},
+  set: (key, v) => set((s) => (!!s.dirty[key] === v ? s : { dirty: { ...s.dirty, [key]: v } })),
+}));
+/** A tab on a server's page reports whether it has unsaved edits (key: unique to the tab,
+ *  e.g. "welcome"). The page asks before switching tabs or going back while any tab has
+ *  some. Cleared when the tab closes. */
+export function useDirty(key: string, dirty: boolean) {
+  const set = useDirtyStore((s) => s.set);
+  useEffect(() => set(key, dirty), [key, dirty, set]);
+  useEffect(() => () => set(key, false), [key, set]);
+}
+/** Whether a server tab has unsaved edits right now (for leaving from outside the page). */
+export const hasUnsavedEdits = () => Object.values(useDirtyStore.getState().dirty).some(Boolean);

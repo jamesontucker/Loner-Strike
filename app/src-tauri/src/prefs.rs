@@ -87,7 +87,7 @@ fn picture_files() -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = crate::archive::walk(&cache.join("gbshots"));
     for e in std::fs::read_dir(&cache).into_iter().flatten().flatten() {
         let p = e.path();
-        if p.is_file() && p.extension().map(|x| x == "png").unwrap_or(false) {
+        if p.is_file() && p.extension().is_some_and(|x| x == "png" || x == "jpg") {
             out.push(p);
         }
     }

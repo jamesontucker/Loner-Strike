@@ -122,6 +122,9 @@ new Float:g_LastFire[33], Float:g_PauseUntil[33], Float:g_SprayDrift[33], Float:
 new bool:g_Fired[33]
 new g_InThink
 new bool:g_Bending
+// forward ids while registered (0: not): TraceLine runs thousands of times a second for
+// the bots' own AI, so none of these are hooked while there's nothing for them to do
+new g_FwCmdStart, g_FwPreThink, g_FwPostThink, g_FwPostThinkPost, g_FwTraceLine
 
 public plugin_init()
 {
@@ -149,11 +152,9 @@ public plugin_init()
 	}
 	register_event("DeathMsg", "ev_death", "a")
 
-	register_forward(FM_CmdStart, "fw_cmdstart")
-	register_forward(FM_PlayerPreThink, "fw_prethink")
-	register_forward(FM_PlayerPostThink, "fw_postthink")
-	register_forward(FM_PlayerPostThink, "fw_postthink_post", 1)
-	register_forward(FM_TraceLine, "fw_traceline")
+	// gamemodes switches styles by setting gm_botstyle; the forwards follow it
+	hook_cvar_change(g_pStyle, "cvar_changed")
+	hook_cvar_change(g_pAim, "cvar_changed")
 	set_task(SCAN_INTERVAL, "task_scan", _, _, _, "b")
 }
 
@@ -254,6 +255,45 @@ public plugin_cfg()
 	get_cvar_string("sv_password", pass, charsmax(pass))
 	get_cvar_string("humans_join_team", team, charsmax(team))
 	g_Career = pass[0] && (equali(team, "CT") || equali(team, "T"))
+	update_forwards(style(), get_pcvar_num(g_pAim))
+}
+
+// (the hook can run before the cvar holds its new value: read it from new_value)
+public cvar_changed(pcvar, const old_value[], const new_value[])
+{
+	new v = str_to_num(new_value)
+	if (pcvar == g_pStyle)
+		update_forwards((g_Career || !(STYLE_CLASSIC < v < STYLE_COUNT || v == STYLE_MIXED)) ? STYLE_CLASSIC : v, get_pcvar_num(g_pAim))
+	else
+		update_forwards(style(), v)
+}
+
+// Hooks what a style needs: thinking and commands for any style but Classic, and the
+// bullet traces (with PostThink, which marks them) only while gm_hb_aim bends them.
+update_forwards(s, aim)
+{
+	new bool:on = s != STYLE_CLASSIC
+	g_FwCmdStart = set_forward(on, FM_CmdStart, "fw_cmdstart", g_FwCmdStart, 0)
+	g_FwPreThink = set_forward(on, FM_PlayerPreThink, "fw_prethink", g_FwPreThink, 0)
+	on = on && aim != 0
+	g_FwPostThink = set_forward(on, FM_PlayerPostThink, "fw_postthink", g_FwPostThink, 0)
+	g_FwPostThinkPost = set_forward(on, FM_PlayerPostThink, "fw_postthink_post", g_FwPostThinkPost, 1)
+	g_FwTraceLine = set_forward(on, FM_TraceLine, "fw_traceline", g_FwTraceLine, 0)
+	if (!on)
+		g_InThink = 0
+}
+
+// Registers or unregisters one forward; returns its id (0 when off).
+set_forward(bool:on, type, const func[], id, post)
+{
+	if (on && !id)
+		return register_forward(type, func, post)
+	if (!on && id)
+	{
+		unregister_forward(type, id, post)
+		return 0
+	}
+	return id
 }
 
 style()

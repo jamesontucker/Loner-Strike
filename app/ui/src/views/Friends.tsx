@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions, usePoll } from "../api";
 import { useServers } from "../queries";
 import { useNav } from "../store";
 import type { Online } from "../types";
@@ -121,19 +121,17 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   const vps = server && open ? servers?.servers.find((x) => x.id === open && x.host) : undefined;
 
   useEffect(() => {
-    const load = () => {
+    getJson<{ ip: string | null; port: number }>("/api/app/lan").then((r) => setLanAddr(r.ip ? `${r.ip}:${r.port}` : null)).catch(() => null);
+    getJson<Direct>("/api/app/direct").then(setDirect).catch(() => null);
+  }, []);
+  usePoll(() =>
+    Promise.all([
       getJson<Share>("/api/share")
         .then((s) => ("phase" in s ? setSh(s) : setMissing(true)))
         // only an app without sharing at all; a missed poll keeps what's shown
-        .catch((e: Error) => e.message.endsWith(": 404") && setMissing(true));
-      getJson<VLans>("/api/app/vlans").then(setVlans).catch(() => setVlans({}));
-    };
-    load();
-    getJson<{ ip: string | null; port: number }>("/api/app/lan").then((r) => setLanAddr(r.ip ? `${r.ip}:${r.port}` : null)).catch(() => null);
-    getJson<Direct>("/api/app/direct").then(setDirect).catch(() => null);
-    const t = setInterval(load, 3000);
-    return () => clearInterval(t);
-  }, []);
+        .catch((e: Error) => e.message.endsWith(": 404") && setMissing(true)),
+      getJson<VLans>("/api/app/vlans").then(setVlans).catch(() => setVlans({})),
+    ]), 3000);
 
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
     let out: Share | null = null;

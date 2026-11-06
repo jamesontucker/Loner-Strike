@@ -2,7 +2,7 @@ import { useState } from "react";
 import { currentTarget, targetKey, useActions } from "../api";
 import type { Online, Player } from "../types";
 import { BusyButton, SectionHead, useCommand, useConfirm } from "../ui";
-import { MuteControl } from "./Community";
+import { MuteControl } from "./MuteControl";
 
 const WEAPONS: [string, string][] = [
   ["weapon_ak47", "AK-47"], ["weapon_m4a1", "M4A1"], ["weapon_awp", "AWP"], ["weapon_deagle", "Desert Eagle"],

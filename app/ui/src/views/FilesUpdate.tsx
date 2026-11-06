@@ -4,7 +4,7 @@ import type { AppInfo } from "../types";
 import { gameTitle } from "../games";
 import { BusyButton, Sheet, useToast } from "../ui";
 import type { Scan } from "./Setup";
-import { JobProgress } from "./Servers";
+import { JobProgress } from "./JobProgress";
 
 /** After an app update: the parts of Loner-Strike in this game whose files changed, and
  *  mods the player had before Loner-Strike (without its bot fixes). One button puts the

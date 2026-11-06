@@ -80,6 +80,26 @@ pub fn inside(root: &Path, rel: &str) -> Option<PathBuf> {
     (out != root).then_some(out)
 }
 
+/// The components installed in a game folder, for lists polled every few seconds:
+/// record.json is only read again when it changes (it can be large).
+pub fn component_ids_cached(game_dir: &Path) -> Vec<String> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    type Seen = (Option<std::time::SystemTime>, u64, Vec<String>);
+    static CACHE: Mutex<Option<HashMap<PathBuf, Seen>>> = Mutex::new(None);
+    let path = game_dir.join(RECORD_DIR).join("record.json");
+    let meta = std::fs::metadata(&path).ok();
+    let stamp = (meta.as_ref().and_then(|m| m.modified().ok()), meta.as_ref().map(|m| m.len()).unwrap_or(0));
+    if let Some((t, len, ids)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|c| c.get(&path)) {
+        if (*t, *len) == stamp {
+            return ids.clone();
+        }
+    }
+    let ids = Record::open(game_dir).component_ids();
+    CACHE.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new).insert(path, (stamp.0, stamp.1, ids.clone()));
+    ids
+}
+
 impl Record {
     pub fn open(game_dir: &Path) -> Record {
         let dir = game_dir.join(RECORD_DIR);

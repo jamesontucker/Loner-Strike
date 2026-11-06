@@ -1,33 +1,35 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { clock, ON_THIS_COMPUTER, postJson, withTarget, useActions, useActivity } from "./api";
 import { gameTitle } from "./games";
 import { Icon } from "./icons";
 import { queryClient, reloadAppInfo, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
-import { useNav, type Section } from "./store";
+import { hasUnsavedEdits, useNav, type Section } from "./store";
 import { usePlayDrafts } from "./stores/playDraft";
 import type { AppInfo, Online } from "./types";
 import { applyScale, ConfirmProvider, useConfirm, LoadError, savedScale, Sheet, Skeleton, ToastProvider, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
-import { hasUnsavedEdits } from "./views/Servers";
 import { Addons } from "./views/Addons";
 import { AppSettings } from "./views/AppSettings";
 import { Bots } from "./views/Bots";
-import { Admins } from "./views/Admins";
 import { Friends } from "./views/Friends";
-import { GetMore } from "./views/GetMore";
 import { Maps } from "./views/Maps";
 import { Mods } from "./views/Mods";
 import { PlayIdle, PlayLive } from "./views/Play";
 import { Players } from "./views/Players";
 import { QuickBar } from "./views/QuickBar";
-import { ServerPage, Servers } from "./views/Servers";
-import { Community } from "./views/Community";
-import { ServerExtras } from "./views/ServerExtras";
 import { Sounds } from "./views/Sounds";
 import { MatchButtons, SettingsPage } from "./views/Settings";
 import { Welcome } from "./views/Welcome";
 import { anySetUp, Setup } from "./views/Setup";
+
+// The bigger pages load the first time they're opened, so the app starts on a smaller bundle
+const Servers = lazy(() => import("./views/Servers").then((m) => ({ default: m.Servers })));
+const ServerPage = lazy(() => import("./views/Servers").then((m) => ({ default: m.ServerPage })));
+const Community = lazy(() => import("./views/Community").then((m) => ({ default: m.Community })));
+const ServerExtras = lazy(() => import("./views/ServerExtras").then((m) => ({ default: m.ServerExtras })));
+const Admins = lazy(() => import("./views/Admins").then((m) => ({ default: m.Admins })));
+const GetMore = lazy(() => import("./views/GetMore").then((m) => ({ default: m.GetMore })));
 
 const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean }[] = [
   { id: "play", label: "Play", icon: "play" },
@@ -274,14 +276,14 @@ function Shell() {
           ) : needsGame ? (
             <Waiting label={NAV.find((n) => n.id === section)!.label} game={gameName} gameOpen={gameOpen} reason={state.online ? "" : state.reason} onPlay={() => go("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={openSetup} />
           ) : (
-            <>
+            <Suspense fallback={<Skeleton rows={4} />}>
               {section === "play" &&
                 (online ? (
                   <PlayLive data={online} maps={maps} refresh={refresh} openMaps={() => go("maps")} />
                 ) : (
                   <PlayIdle app={app} reason={state.online ? "" : state.reason} gameOpen={gameOpen} maps={maps} openSetup={openSetup} />
                 ))}
-              {section === "maps" && <Maps data={online} maps={maps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} />}
+              {section === "maps" && <Maps current={online?.state.map} live={!!online} maps={maps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} />}
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
               {section === "match" && online && (
                 <SettingsPage title="Match" note={`Saved for ${online.modes.find((m) => m.id === online.state.mode)?.name ?? "this mode"}. Round changes take effect next round.`} data={online} cat={2} refresh={refresh}>
@@ -320,7 +322,7 @@ function Shell() {
               {section === "more" && <GetMore onInstalled={refreshMaps} />}
               {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={openSetup} />}
               {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={openSetup} switchGame={switchGame} />}
-            </>
+            </Suspense>
           )}
         </main>
       </div>

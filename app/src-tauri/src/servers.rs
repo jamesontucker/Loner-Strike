@@ -648,9 +648,40 @@ fn upload_filter(rel: &Path) -> bool {
 
 /// After a change on a settings page (or anything else here): what changed goes up.
 pub fn sync_settings(id: &str) {
+    // a request may have started something that's still writing (a download): the
+    // background sync keeps looking closely for a while
+    mark_changed(id);
     if let Some(e) = get(id).filter(|e| e.ready && e.remote.is_some()) {
         let _ = sync(&e, false);
     }
+}
+
+/// Servers whose copy here was changed lately, and until when sync_loop looks at them
+/// every round instead of once a minute.
+static CHANGED: Mutex<Option<HashMap<String, Instant>>> = Mutex::new(None);
+/// How long after a change a server is looked at every round
+const CHANGED_FOR: Duration = Duration::from_secs(180);
+/// How often sync_loop looks at a server nothing was known to change
+const IDLE_CHECK: Duration = Duration::from_secs(60);
+
+/// This server's copy here was (or is being) changed: sync_loop looks at it closely.
+pub fn mark_changed(id: &str) {
+    CHANGED.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new).insert(id.to_string(), Instant::now() + CHANGED_FOR);
+}
+
+/// mark_changed for whichever server on another machine has its game folder here
+/// (a map or a skin downloaded straight into it).
+pub fn mark_changed_dir(game_dir: &Path) {
+    for e in load().into_iter().filter(|e| e.remote.is_some() && e.dir.join(&e.game) == game_dir) {
+        mark_changed(&e.id);
+    }
+}
+
+/// Whether sync_loop should walk this server's files now: changed lately, or not
+/// looked at for a minute.
+fn due(id: &str, last_walk: Option<Instant>) -> bool {
+    let hot = CHANGED.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|m| m.get(id).copied()).is_some_and(|t| Instant::now() < t);
+    hot || last_walk.is_none_or(|t| t.elapsed() >= IDLE_CHECK)
 }
 
 // ---- keeping a server on another machine in step with this computer's copy --------------
@@ -673,6 +704,15 @@ fn server_owned(key: &str) -> bool {
     matches!(key, "banned.cfg" | "listip.cfg" | "addons/amxmodx/data/gamemodes/status.json")
         || key.starts_with("addons/amxmodx/logs/")
         || key.ends_with(".log")
+}
+
+/// Writes the record of what was uploaded, unless it's what's there already (most
+/// rounds nothing changed). Whether it wrote.
+fn save_manifest(path: &Path, saved: Option<&Manifest>, now: &Manifest) -> bool {
+    if saved == Some(now) {
+        return false;
+    }
+    sys::write_atomic(path, serde_json::to_string(now).unwrap_or_default().as_bytes()).is_ok()
 }
 
 /// This computer's copy as it is now (what upload_filter lets through, minus files the
@@ -770,7 +810,7 @@ fn sync_as(e: &Entry, mode: Send) -> Result<(usize, usize), String> {
         let list = chunk.iter().map(|g| crate::remote::shell_quote(g)).collect::<Vec<_>>().join(" ");
         crate::remote::exec(r, &format!("cd {} && rm -f -- {list}", crate::remote::shell_quote(&to)))?;
     }
-    let _ = sys::write_atomic(&manifest_path(e), serde_json::to_string(&now).unwrap_or_default().as_bytes());
+    save_manifest(&manifest_path(e), saved.as_ref(), &now);
     let touched = || changed.iter().chain(gone.iter());
     if touched().any(|p| p.starts_with("addons/amxmodx/data/") || p.starts_with("addons/amxmodx/configs/")) {
         if let Some(rc) = e.rcon() {
@@ -799,7 +839,9 @@ fn sync_guard() -> std::sync::MutexGuard<'static, ()> {
 pub fn sync_loop() {
     static STARTED: std::sync::Once = std::sync::Once::new();
     STARTED.call_once(|| {
-        std::thread::spawn(|| loop {
+        // when each server's files were last walked
+        let mut walked: HashMap<String, Instant> = HashMap::new();
+        std::thread::spawn(move || loop {
             std::thread::sleep(Duration::from_secs(6));
             // not while a setup job runs (it may be writing the copy)
             if setup::current().state == "running" {
@@ -812,6 +854,12 @@ pub fn sync_loop() {
                 if wait.get(&e.id).is_some_and(|t| Instant::now() < *t) {
                     continue;
                 }
+                // walking every file is the costly part: only for a server changed lately,
+                // else once a minute (a change nothing told us about still goes up)
+                if !due(&e.id, walked.get(&e.id).copied()) {
+                    continue;
+                }
+                walked.insert(e.id.clone(), Instant::now());
                 match sync(&e, false) {
                     Ok(_) => {
                         wait.remove(&e.id);
@@ -1518,8 +1566,8 @@ fn hide_passwords(line: &str) -> String {
 }
 
 fn view(e: &Entry) -> Value {
-    let record = setup::record::Record::open(&e.dir.join(&e.game));
-    let loner = record.installed("core");
+    let installed = setup::record::component_ids_cached(&e.dir.join(&e.game));
+    let loner = installed.iter().any(|c| c == "core");
     let (state, uptime, error) = if e.remote.is_some() && e.ready {
         let (on, secs) = remote_state(e);
         // never had an answer yet (the connection busy with an upload, say): not known
@@ -1553,7 +1601,7 @@ fn view(e: &Entry) -> Value {
            "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(), "pending_restart": pending_restart(&e.id),
            "listen_ip": e.listen_ip, "extra_args": e.extra_args, "password": join_password(e),
            "unreachable": e.remote.as_ref().and_then(|_| unreachable(&e.id)),
-           "installed": record.component_ids()})
+           "installed": installed})
 }
 
 // ---- which game the panel controls -----------------------------------------------------
@@ -2326,6 +2374,31 @@ mod restart_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manifest_written_only_on_change() {
+        let dir = sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "manifest-").unwrap();
+        let path = dir.join(".uploaded.json");
+        let mut now = Manifest::new();
+        now.insert("maps/de_x.bsp".into(), (10, 5));
+        assert!(save_manifest(&path, None, &now));
+        let saved: Manifest = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(!save_manifest(&path, Some(&saved), &now), "nothing changed: not written again");
+        let mut later = now.clone();
+        later.insert("maps/de_y.bsp".into(), (3, 6));
+        assert!(save_manifest(&path, Some(&saved), &later));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn walks_when_changed_or_once_a_minute() {
+        let id = "test-due-server";
+        assert!(due(id, None), "never walked");
+        assert!(!due(id, Some(Instant::now())));
+        assert!(due(id, Instant::now().checked_sub(IDLE_CHECK)));
+        mark_changed(id);
+        assert!(due(id, Some(Instant::now())), "changed lately");
+    }
 
     #[test]
     fn progress_lines() {

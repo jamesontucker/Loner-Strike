@@ -11,7 +11,7 @@ use crate::sys;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::Duration;
@@ -205,6 +205,18 @@ pub fn local_single(section: &str) -> &'static [&'static str] {
     }
 }
 
+/// Maps waiting for a picture lookup, and how many threads are working through them.
+#[derive(Default)]
+struct Later {
+    queue: VecDeque<String>,
+    /// queued or being looked up (each map once)
+    wanted: HashSet<String>,
+    workers: usize,
+}
+
+/// Picture lookups at once in the background
+const LOOKUP_WORKERS: usize = 3;
+
 /// installed_maps.json and content/record.json are app-wide: every game, server and
 /// temporary store writes them under this one lock.
 pub static RECORDS: Mutex<()> = Mutex::new(());
@@ -217,6 +229,8 @@ pub struct MapStore {
     work: PathBuf,
     /// Guards installed_maps.json and the misses file
     lookups: Semaphore,
+    /// Picture lookups waiting or under way in the background (see find_shot_later)
+    later: Mutex<Later>,
     jobs: Mutex<HashMap<String, Job>>,
     /// The game's cached map list: emptied after an install so the next list is fresh
     maps_cache: Arc<Mutex<Option<Vec<Value>>>>,
@@ -235,6 +249,7 @@ impl MapStore {
             shots,
             work: app_dir.join("cache").join("downloads"),
             lookups: Semaphore { left: Mutex::new(3), cv: Condvar::new() },
+            later: Mutex::new(Later::default()),
             jobs: Mutex::new(HashMap::new()),
             maps_cache,
             content: content::Records::new(app_dir),
@@ -329,6 +344,53 @@ impl MapStore {
     /// True if GameBanana had no picture for this map in the last week.
     pub fn missed_recently(misses: &Map<String, Value>, name: &str) -> bool {
         sys::now() - misses.get(&name.to_lowercase()).and_then(|v| v.as_f64()).unwrap_or(0.0) < MISS_DAYS * 86400.0
+    }
+
+    /// Asks GameBanana for a map's picture in the background, so a picture request never
+    /// waits on its searches (a grid of them would take every connection the page has).
+    /// Each map once, a few at a time; when one is found the map list says so. True while
+    /// a lookup for it is waiting or under way.
+    pub fn find_shot_later(self: &Arc<Self>, name: &str) -> bool {
+        let name = name.to_lowercase();
+        if self.shot_for(&name).is_some() || MapStore::missed_recently(&self.misses(), &name) {
+            return false;
+        }
+        let mut later = self.later.lock().unwrap_or_else(|e| e.into_inner());
+        if !later.wanted.insert(name.clone()) {
+            return true;
+        }
+        // newest first: the pictures on screen now are the ones asked for last
+        later.queue.push_front(name);
+        if later.workers < LOOKUP_WORKERS {
+            later.workers += 1;
+            let store = self.clone();
+            std::thread::spawn(move || store.lookup_worker());
+        }
+        true
+    }
+
+    fn lookup_worker(&self) {
+        loop {
+            let name = {
+                let mut later = self.later.lock().unwrap_or_else(|e| e.into_inner());
+                match later.queue.pop_front() {
+                    Some(n) => n,
+                    None => {
+                        later.workers -= 1;
+                        return;
+                    }
+                }
+            };
+            if self.find_shot(&name).is_some() {
+                // the cached map list said "lookup": it has a picture now
+                if let Some(list) = self.maps_cache.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+                    for m in list.iter_mut().filter(|m| m["name"].as_str().is_some_and(|n| n.to_lowercase() == name)) {
+                        m["thumb"] = json!("shot");
+                    }
+                }
+            }
+            self.later.lock().unwrap_or_else(|e| e.into_inner()).wanted.remove(&name);
+        }
     }
 
     /// Looks for the map on GameBanana and saves its first screenshot.
@@ -732,6 +794,8 @@ impl MapStore {
         if let Ok(tmp) = &tmp {
             let _ = std::fs::remove_dir_all(tmp);
         }
+        // a server on another machine whose copy this is: what came goes up soon
+        crate::servers::mark_changed_dir(&self.game_dir);
         let now = sys::now();
         match res {
             Ok((msg, maps, kept, skipped, replaced)) => self.update(id, |j| {

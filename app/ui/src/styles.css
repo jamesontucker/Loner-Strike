@@ -66,8 +66,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   letter-spacing: .01em;
   white-space: nowrap;
 }
-.nav { flex: 1; overflow-y: auto; scrollbar-width: none; }
-.nav::-webkit-scrollbar { display: none; }
+.nav { flex: 1; overflow-y: auto; min-height: 0; }
+/* a slim version of the Steam scrollbar, only when the sections don't fit */
+.nav::-webkit-scrollbar { width: 8px; }
+.nav::-webkit-scrollbar-track { background: transparent; box-shadow: none; }
+.nav::-webkit-scrollbar-thumb { background: var(--panel); box-shadow: var(--raised); min-height: 24px; }
+.nav::-webkit-scrollbar-button { display: none; }
 .nav-group {
   margin: 10px 10px 3px;
   color: var(--bone-faint);
@@ -1279,6 +1283,10 @@ code.secret { padding: 5px 8px; background: var(--line); box-shadow: var(--sunke
 .card-pic-overlay > button { pointer-events: auto; border: 0; padding: 0; }
 .card-wrap:hover .fav-toggle, .card-wrap:focus-within .fav-toggle { opacity: 1; }
 .card-wrap:hover .map-card .map-pic { outline: 2px solid var(--signal); }
+/* the Maps page can have hundreds of cards: the browser skips laying out and painting the
+   ones off screen. The padding keeps the hover and current-map outlines inside the card's
+   box, which content-visibility clips to. */
+.maps.grid > .card-wrap { content-visibility: auto; contain-intrinsic-size: auto 170px auto 136px; padding: 3px; margin: -3px; }
 .badge.busy { background: var(--signal); color: var(--signal-ink); top: auto; bottom: 6px; }
 .random-map { display: inline-flex; }
 .player-actions { display: grid; gap: 8px; }

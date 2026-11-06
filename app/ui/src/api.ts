@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { currentTarget, isAbort, targetSignal, useActivityStore } from "./store";
 
 export { currentTarget, isAbort };
@@ -132,6 +132,43 @@ export function useStable<A extends unknown[], R>(fn: (...a: A) => R) {
   const latest = useRef(fn);
   latest.current = fn;
   return useCallback((...a: A) => latest.current(...a), []);
+}
+
+/** Calls `fn` now, then again `ms` after each call has finished, so a slow answer never
+ *  stacks up a second request. A hidden window stops asking and asks again as soon as it's
+ *  shown. Changing `deps` (or `on`) starts it over. */
+export function usePoll(fn: () => unknown, ms: number, deps: unknown[] = [], on = true) {
+  const call = useStable(fn);
+  useEffect(() => {
+    if (!on) return;
+    let timer = 0;
+    let busy = false;
+    let stopped = false;
+    const step = async () => {
+      timer = 0;
+      if (stopped || busy || document.hidden) return;
+      busy = true;
+      try {
+        await call();
+      } catch {
+        /* the next one tries again */
+      } finally {
+        busy = false;
+      }
+      if (!stopped && !document.hidden) timer = window.setTimeout(step, ms);
+    };
+    const shown = () => {
+      if (!document.hidden && !timer) step();
+    };
+    step();
+    document.addEventListener("visibilitychange", shown);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", shown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [call, ms, on, ...deps]);
 }
 
 /** Runs an action unless the same one is still going, so a double click sends it once. */

@@ -238,42 +238,63 @@ impl Game {
         out
     }
 
-    /// ("shot" | "radar" | None, path) for a map's picture. Asks GameBanana (once a
-    /// month at most per map) when there's no screenshot on disk.
-    pub fn thumb_source(&self, name: &str) -> (Option<&'static str>, Option<PathBuf>) {
+    /// ("shot" | "radar" | None, path, looking) for a map's picture. With no screenshot on
+    /// disk GameBanana is asked in the background (once a week at most per map), and
+    /// `looking` says one may still turn up: until then it's the radar or nothing.
+    pub fn thumb_source(&self, name: &str) -> (Option<&'static str>, Option<PathBuf>, bool) {
         for g in self.game_dirs() {
             for sub in ["gfx/thumbnails/maps_wide", "gfx/thumbnails/maps"] {
                 if let Some(p) = find_in(&g.join(sub), name, &[".tga", ".bmp"]) {
-                    return (Some("shot"), Some(p));
+                    return (Some("shot"), Some(p), false);
                 }
             }
         }
         // a GameBanana screenshot (saved or looked up) beats the radar overview
-        if let Some(p) = self.store.shot_for(name).or_else(|| self.store.find_shot(name)) {
-            return (Some("shot"), Some(p));
+        if let Some(p) = self.store.shot_for(name) {
+            return (Some("shot"), Some(p), false);
         }
+        let looking = self.store.find_shot_later(name);
         for g in self.game_dirs() {
             if let Some(p) = find_in(&g.join("overviews"), name, &[".bmp", ".tga"]) {
-                return (Some("radar"), Some(p));
+                return (Some("radar"), Some(p), looking);
             }
         }
-        (None, None)
+        (None, None, looking)
     }
 
-    /// The map's picture as a PNG (converted once, then cached), and its kind.
-    pub fn thumbnail(&self, name: &str) -> Option<(PathBuf, &'static str)> {
-        let (kind, src) = self.thumb_source(name);
-        let (kind, src) = (kind?, src?);
+    /// The map's picture, converted once and then cached: screenshots as a small JPEG
+    /// (shown at a fraction of GameBanana's 530 pixels), radars as PNG. Also its kind,
+    /// and whether a better picture may still turn up (see thumb_source).
+    pub fn thumbnail(&self, name: &str) -> (Option<(PathBuf, &'static str)>, bool) {
+        let (kind, src, looking) = self.thumb_source(name);
+        let (Some(kind), Some(src)) = (kind, src) else { return (None, looking) };
         let cache = self.app.join("cache");
         let _ = std::fs::create_dir_all(&cache);
-        let out = cache.join(format!("{kind}-{}.png", name.to_lowercase()));
+        let base = format!("{kind}-{}", name.to_lowercase());
         let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
-        if !out.exists() || mtime(&out) < mtime(&src) {
-            let _ = convert(&src, &out, kind == "radar");
+        let fresh = |p: &Path| p.exists() && mtime(p) >= mtime(&src);
+        if kind == "shot" {
+            let jpg = cache.join(format!("{base}.jpg"));
+            // a PNG made by an earlier version is still good
+            let old = cache.join(format!("{base}.png"));
+            if !fresh(&jpg) && fresh(&old) {
+                return (Some((old, kind)), looking);
+            }
+            if !fresh(&jpg) {
+                let _ = convert(&src, &jpg, Shrink::Width(SHOT_WIDTH));
+            }
+            return (jpg.exists().then_some((jpg, kind)), looking);
         }
-        out.exists().then_some((out, kind))
+        let out = cache.join(format!("{base}.png"));
+        if !fresh(&out) {
+            let _ = convert(&src, &out, Shrink::Fit(512));
+        }
+        (out.exists().then_some((out, kind)), looking)
     }
 }
+
+/// Screenshots are shown about 170 pixels wide: twice that stays sharp on a phone
+const SHOT_WIDTH: u32 = 340;
 
 /// Screenshots and radar images on disk, read once per scan (not once per map).
 struct Pictures {
@@ -306,8 +327,16 @@ impl Pictures {
     }
 }
 
-/// TGA/BMP/JPEG -> PNG; radar overviews are shrunk to at most 512 pixels.
-pub fn convert(src: &Path, out: &Path, shrink: bool) -> Result<(), String> {
+/// How convert sizes a picture down (never up).
+pub enum Shrink {
+    /// at most this wide (screenshots)
+    Width(u32),
+    /// at most this wide and high (radar overviews)
+    Fit(u32),
+}
+
+/// TGA/BMP/JPEG -> PNG, or JPEG when `out` ends in .jpg.
+pub fn convert(src: &Path, out: &Path, shrink: Shrink) -> Result<(), String> {
     let data = std::fs::read(src).map_err(|e| e.to_string())?;
     let fmt = match src.extension().map(|e| e.to_string_lossy().to_lowercase()).as_deref() {
         Some("tga") => Some(image::ImageFormat::Tga), // TGA has no magic number to guess from
@@ -319,11 +348,20 @@ pub fn convert(src: &Path, out: &Path, shrink: bool) -> Result<(), String> {
         None => image::load_from_memory(&data),
     }
     .map_err(|e| e.to_string())?;
-    if shrink && (img.width() > 512 || img.height() > 512) {
-        img = img.resize(512, 512, image::imageops::FilterType::Triangle);
+    match shrink {
+        Shrink::Width(w) if img.width() > w => img = img.resize(w, img.height(), image::imageops::FilterType::Triangle),
+        Shrink::Fit(n) if img.width() > n || img.height() > n => img = img.resize(n, n, image::imageops::FilterType::Triangle),
+        _ => {}
     }
-    let tmp = out.with_extension("png.tmp");
-    img.save_with_format(&tmp, image::ImageFormat::Png).map_err(|e| e.to_string())?;
+    let jpeg = out.extension().is_some_and(|x| x == "jpg");
+    let tmp = out.with_extension("tmp");
+    if jpeg {
+        let f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(std::io::BufWriter::new(f), 80);
+        img.to_rgb8().write_with_encoder(enc).map_err(|e| e.to_string())?;
+    } else {
+        img.save_with_format(&tmp, image::ImageFormat::Png).map_err(|e| e.to_string())?;
+    }
     std::fs::rename(&tmp, out).map_err(|e| e.to_string())
 }
 
@@ -339,6 +377,20 @@ mod tests {
         assert_eq!(map_category("surf_ski"), "surf");
         assert_eq!(map_category("awp_india"), "arena");
         assert_eq!(map_category("random"), "other");
+    }
+
+    #[test]
+    fn small_jpeg_shots() {
+        let dir = sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "shot-").unwrap();
+        let src = dir.join("de_x.bmp");
+        image::RgbImage::from_pixel(530, 300, image::Rgb([90, 120, 30])).save(&src).unwrap();
+        let out = dir.join("shot-de_x.jpg");
+        convert(&src, &out, Shrink::Width(SHOT_WIDTH)).unwrap();
+        let data = std::fs::read(&out).unwrap();
+        assert_eq!(image::guess_format(&data).unwrap(), image::ImageFormat::Jpeg);
+        let img = image::load_from_memory(&data).unwrap();
+        assert_eq!((img.width(), img.height()), (340, 192));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

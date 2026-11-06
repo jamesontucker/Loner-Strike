@@ -52,6 +52,8 @@
 #define MAX_BOTNAMES 3000
 #define TASK_EXPIRE  7400
 #define TASK_BOTS    7401
+#define TASK_DUMP    7402
+#define DUMP_STEP    300       // ranks written per tick of a dump
 
 enum _:Gag
 {
@@ -68,6 +70,10 @@ new Array:g_Gags
 new Trie:g_Play            // SteamID (or "n:<name>") -> seconds played
 new Trie:g_BotNames
 new bool:g_ResetPending
+// A dump in progress: csx can hold thousands of ranks and get_stats walks its list from
+// the top for each one, so they're written DUMP_STEP at a time, 0.1 s apart, to
+// stats.json.part, which replaces stats.json once it's complete
+new g_DumpFile, g_DumpNext, g_DumpNum
 
 new bool:g_Human[33]       // a real player: not a bot, not HLTV
 new g_Auth[33][36]
@@ -140,7 +146,8 @@ public plugin_end()
 		}
 	}
 	save_playtime()
-	dump_stats()
+	// the map is ending: no frames left to spread it over
+	dump_stats(true)
 }
 
 load_settings(bool:now = true)
@@ -177,6 +184,7 @@ public srv_reload()
 public srv_dump()
 {
 	dump_stats()
+	// (the file is complete a moment later when there are many ranks)
 	server_print("[community] stats written")
 	return PLUGIN_HANDLED
 }
@@ -191,7 +199,9 @@ public srv_reset()
 	new now = get_systime()
 	for (new id = 1; id <= MaxClients; id++)
 		g_Joined[id] = now
-	dump_stats()
+	// a dump still going has the old stats in it
+	dump_cancel()
+	dump_stats(true)
 	server_print("[community] stats clear at the next map change")
 	return PLUGIN_HANDLED
 }
@@ -961,19 +971,51 @@ public ev_intermission()
 	dump_stats()
 }
 
-dump_stats()
+// Writes stats.json: at once when `now` (the map ending, a reset), else over a few frames.
+// A dump already going carries on (finished at once when `now`).
+dump_stats(bool:now = false)
 {
-	new f = fopen(fmt("%s/stats.json", g_DataDir), "wt")
-	if (!f)
+	if (!g_DumpFile)
+	{
+		g_DumpFile = fopen(fmt("%s/stats.json.part", g_DataDir), "wt")
+		if (!g_DumpFile)
+			return
+		new csx = module_exists("xstats") ? 1 : 0
+		g_DumpNum = (csx && !g_ResetPending) ? min(get_statsnum(), 5000) : 0
+		g_DumpNext = 0
+		new rankbots = cvar_exists("csstats_rankbots") ? get_cvar_num("csstats_rankbots") : -1
+		fprintf(g_DumpFile, "{^"t^":^"info^",^"time^":%d,^"csx^":%d,^"rank_by^":%d,^"rankbots^":%d,^"reset_pending^":%d,^"total^":%d}^n",
+			get_systime(), csx, get_cvar_num("csstats_rank"), rankbots, g_ResetPending ? 1 : 0, g_DumpNum)
+	}
+	if (now)
+	{
+		remove_task(TASK_DUMP)
+		dump_ranks(g_DumpNum)
+		dump_finish()
+	}
+	else if (!task_exists(TASK_DUMP))
+		task_dump()
+}
+
+public task_dump()
+{
+	if (!g_DumpFile)
 		return
-	new csx = module_exists("xstats") ? 1 : 0
-	new num = (csx && !g_ResetPending) ? min(get_statsnum(), 5000) : 0
-	new rankbots = cvar_exists("csstats_rankbots") ? get_cvar_num("csstats_rankbots") : -1
-	fprintf(f, "{^"t^":^"info^",^"time^":%d,^"csx^":%d,^"rank_by^":%d,^"rankbots^":%d,^"reset_pending^":%d,^"total^":%d}^n",
-		get_systime(), csx, get_cvar_num("csstats_rank"), rankbots, g_ResetPending ? 1 : 0, num)
+	dump_ranks(DUMP_STEP)
+	if (g_DumpNext >= g_DumpNum)
+		dump_finish()
+	else
+		set_task(0.1, "task_dump", TASK_DUMP)
+}
+
+// Writes up to `count` more ranks of the dump in progress.
+dump_ranks(count)
+{
+	new from = g_DumpNext, to = min(g_DumpNum, g_DumpNext + count)
+	g_DumpNext = to
 	new stats[STATSX_MAX_STATS], body[MAX_BODYHITS], s2[STATSX_MAX_OBJECTIVE]
 	new name[32], auth[36], ename[80], eauth[80]
-	for (new i = 0; i < num; i++)
+	for (new i = from; i < to; i++)
 	{
 		arrayset(stats, 0, sizeof stats)
 		arrayset(body, 0, sizeof body)
@@ -985,7 +1027,7 @@ dump_stats()
 		new bot = (equali(auth, "BOT") || (!real_steamid(auth) && !equal(auth, "VALVE_", 6) && TrieKeyExists(g_BotNames, name))) ? 1 : 0
 		json_escape(name, ename, charsmax(ename))
 		json_escape(auth, eauth, charsmax(eauth))
-		fprintf(f, "{^"t^":^"p^",^"rank^":%d,^"name^":^"%s^",^"auth^":^"%s^",^"bot^":%d,^"k^":%d,^"d^":%d,^"hs^":%d,^"tk^":%d,^"shots^":%d,^"hits^":%d,^"dmg^":%d,^"body^":[%d,%d,%d,%d,%d,%d,%d,%d],^"defusing^":%d,^"defused^":%d,^"planted^":%d,^"exploded^":%d,^"time^":%d}^n",
+		fprintf(g_DumpFile, "{^"t^":^"p^",^"rank^":%d,^"name^":^"%s^",^"auth^":^"%s^",^"bot^":%d,^"k^":%d,^"d^":%d,^"hs^":%d,^"tk^":%d,^"shots^":%d,^"hits^":%d,^"dmg^":%d,^"body^":[%d,%d,%d,%d,%d,%d,%d,%d],^"defusing^":%d,^"defused^":%d,^"planted^":%d,^"exploded^":%d,^"time^":%d}^n",
 			i + 1, ename, eauth, bot,
 			stats[STATSX_KILLS], stats[STATSX_DEATHS], stats[STATSX_HEADSHOTS], stats[STATSX_TEAMKILLS],
 			stats[STATSX_SHOTS], stats[STATSX_HITS], stats[STATSX_DAMAGE],
@@ -993,6 +1035,27 @@ dump_stats()
 			s2[STATSX_TOTAL_DEFUSIONS], s2[STATSX_BOMBS_DEFUSED], s2[STATSX_BOMBS_PLANTED], s2[STATSX_BOMB_EXPLOSIONS],
 			bot ? 0 : played(auth, name))
 	}
-	fclose(f)
+}
+
+dump_finish()
+{
+	fclose(g_DumpFile)
+	g_DumpFile = 0
+	new path[160], part[160]
+	formatex(path, charsmax(path), "%s/stats.json", g_DataDir)
+	formatex(part, charsmax(part), "%s/stats.json.part", g_DataDir)
+	// (Windows won't rename over an existing file)
+	delete_file(path)
+	rename_file(part, path, 1)
 	save_playtime()
+}
+
+dump_cancel()
+{
+	remove_task(TASK_DUMP)
+	if (!g_DumpFile)
+		return
+	fclose(g_DumpFile)
+	g_DumpFile = 0
+	delete_file(fmt("%s/stats.json.part", g_DataDir))
 }

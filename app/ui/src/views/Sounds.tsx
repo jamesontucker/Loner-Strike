@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, useActions, useActivity, isAbort } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, useActions, useActivity, usePoll, isAbort } from "../api";
 import { useGameState, useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { Banner, BusyButton, LoadError, SectionHead, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
@@ -101,27 +101,23 @@ export function Sounds({ target }: { target: string }) {
 
   // follow pack downloads while any run
   const packBusy = !!packs?.jobs.some((j) => busyState(j.state));
-  useEffect(() => {
-    if (!packBusy) return;
-    const t = setInterval(async () => {
-      const p = await getJson<Packs>("/api/sounds/packs").catch(() => null);
-      if (!p || p.error) return;
-      setPacks(p);
-      let music = false;
-      for (const j of p.jobs) {
-        if (!busyState(j.state) && !seen.current.has(j.id)) {
-          seen.current.add(j.id);
-          toast(j.message || (j.state === "done" ? "Installed" : "That didn't work."), j.state === "error");
-          if (j.id.startsWith("roundsound-") && j.state === "done") music = true;
-        }
+  usePoll(async () => {
+    const p = await getJson<Packs>("/api/sounds/packs").catch(() => null);
+    if (!p || p.error) return;
+    setPacks(p);
+    let music = false;
+    for (const j of p.jobs) {
+      if (!busyState(j.state) && !seen.current.has(j.id)) {
+        seen.current.add(j.id);
+        toast(j.message || (j.state === "done" ? "Installed" : "That didn't work."), j.state === "error");
+        if (j.id.startsWith("roundsound-") && j.state === "done") music = true;
       }
-      if (music) {
-        setChanged(true);
-        load();
-      }
-    }, 1200);
-    return () => clearInterval(t);
-  }, [packBusy, toast, load]);
+    }
+    if (music) {
+      setChanged(true);
+      load();
+    }
+  }, 1200, [], packBusy);
 
   function stop() {
     audio.current?.pause();

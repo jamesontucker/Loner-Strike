@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import { useServers } from "../queries";
-import { useNav } from "../store";
+import { useDirty, useNav } from "../store";
 import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { NeedsSetup, setupPlace } from "./MatchMode";
-import { useDirty } from "./Servers";
 import { ShareList } from "./ShareList";
 
 type Color = "default" | "green" | "red" | "blue" | "grey";

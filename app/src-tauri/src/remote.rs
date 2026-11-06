@@ -63,7 +63,9 @@ pub fn hltv_unit(id: &str) -> String {
 
 // ---- the connection --------------------------------------------------------------------
 
-// open sessions, with the fingerprint each one was verified against
+// open sessions, with the fingerprint each one was verified against. Two per machine:
+// one for long work (uploads, setup, downloads) and one for quick checks (status,
+// console, server commands), so a long transfer never makes a live page look offline.
 static SESSIONS: Mutex<Option<HashMap<String, (Arc<Mutex<Session>>, String)>>> = Mutex::new(None);
 
 fn connect(r: &RemoteInfo) -> Result<Session, String> {
@@ -177,10 +179,11 @@ fn check_identity(s: &Session, r: &RemoteInfo) -> Result<(), String> {
 
 /// The open session for a machine (opened on first use, reopened if it dropped).
 /// Only for a machine whose identity was confirmed (r.host_key): the probe before
-/// setup uses its own connection that's never kept.
-fn session(r: &RemoteInfo) -> Result<Arc<Mutex<Session>>, String> {
+/// setup uses its own connection that's never kept. `quick`: the quick checks' session.
+fn session(r: &RemoteInfo, quick: bool) -> Result<Arc<Mutex<Session>>, String> {
     let expected = r.host_key.clone().ok_or("The server's identity hasn't been confirmed.")?;
-    if let Some((s, fp)) = SESSIONS.lock().unwrap().as_ref().and_then(|m| m.get(&r.label()).cloned()) {
+    let key = session_key(r, quick);
+    if let Some((s, fp)) = SESSIONS.lock().unwrap().as_ref().and_then(|m| m.get(&key).cloned()) {
         if fp == expected {
             return Ok(s);
         }
@@ -205,14 +208,22 @@ fn session(r: &RemoteInfo) -> Result<Arc<Mutex<Session>>, String> {
     let mut all = SESSIONS.lock().unwrap();
     let all = all.get_or_insert_with(HashMap::new);
     // another thread may have connected meanwhile: use one session per machine
-    if let Some((s, fp)) = all.get(&r.label()) {
+    if let Some((s, fp)) = all.get(&key) {
         if *fp == expected {
             return Ok(s.clone());
         }
     }
     let s = Arc::new(Mutex::new(s));
-    all.insert(r.label(), (s.clone(), fp));
+    all.insert(key, (s.clone(), fp));
     Ok(s)
+}
+
+fn session_key(r: &RemoteInfo, quick: bool) -> String {
+    if quick {
+        format!("{}|quick", r.label())
+    } else {
+        r.label()
+    }
 }
 
 /// A machine with a given key: fixing the key (or picking another) isn't held back by
@@ -230,9 +241,9 @@ fn forget_down(r: &RemoteInfo) {
 /// Machines that didn't answer, and when
 static DOWN: Mutex<Option<HashMap<String, (std::time::Instant, String)>>> = Mutex::new(None);
 
-fn drop_session(r: &RemoteInfo) {
+fn drop_session(r: &RemoteInfo, quick: bool) {
     if let Some(all) = SESSIONS.lock().unwrap().as_mut() {
-        all.remove(&r.label());
+        all.remove(&session_key(r, quick));
     }
 }
 
@@ -240,13 +251,13 @@ fn drop_session(r: &RemoteInfo) {
 /// connection (it may have dropped while idle).
 fn with_session<T>(r: &RemoteInfo, f: impl Fn(&Session) -> Result<T, ssh2::Error>) -> Result<T, String> {
     for attempt in 0..2 {
-        let s = session(r)?;
+        let s = session(r, false)?;
         let s = s.lock().unwrap();
         match f(&s) {
             Ok(v) => return Ok(v),
             Err(e) if attempt == 0 => {
                 drop(s);
-                drop_session(r);
+                drop_session(r, false);
                 let _ = e;
             }
             Err(e) => return Err(format!("The connection to {} failed ({e}).", r.host)),
@@ -269,9 +280,9 @@ pub fn exec(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
     })
 }
 
-/// Like exec, for status checks and server commands: if the connection is busy with
-/// something long (an upload, Valve's download) it says so after a few seconds instead
-/// of waiting it out.
+/// Like exec, for status checks and server commands: on the quick checks' own
+/// connection (never held up by an upload or Valve's download); if another check holds
+/// it for more than a few seconds it says so instead of waiting.
 pub fn exec_quick(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
     with_session_quick(r, |s, started| {
         s.set_timeout(15_000);
@@ -303,21 +314,8 @@ pub fn read_file_opt(r: &RemoteInfo, path: &str) -> Result<Option<Vec<u8>>, Stri
     })
 }
 
-/// read_file for the regular checks (the game's status file): gives up after a few
-/// seconds if the connection is busy.
-pub fn read_file_quick(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
-    with_session_quick(r, |s, _| {
-        s.set_timeout(15_000);
-        let sftp = s.sftp()?;
-        let mut f = sftp.open(Path::new(path))?;
-        let mut v = Vec::new();
-        f.read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
-        Ok(v)
-    })
-}
-
-/// Runs `f` on the session if it's free within a few seconds (a quick command in front is
-/// waited for; something long, like an upload or Valve's download, isn't).
+/// Runs `f` on the quick checks' session if it's free within a few seconds (long work
+/// uses the other session, so only another quick command can be in front).
 /// `f` gets a flag to set once its command has started, so a dropped connection after
 /// that isn't retried.
 fn with_session_quick<T>(r: &RemoteInfo, f: impl Fn(&Session, &std::cell::Cell<bool>) -> Result<T, ssh2::Error>) -> Result<T, String> {
@@ -331,7 +329,7 @@ fn with_session_quick<T>(r: &RemoteInfo, f: impl Fn(&Session, &std::cell::Cell<b
 
 /// One go of with_session_quick; an error says whether a fresh session might do better.
 fn quick_once<T>(r: &RemoteInfo, f: &impl Fn(&Session, &std::cell::Cell<bool>) -> Result<T, ssh2::Error>, ran: &std::cell::Cell<bool>) -> Result<T, (bool, String)> {
-    let s = session(r).map_err(|e| (false, e))?;
+    let s = session(r, true).map_err(|e| (false, e))?;
     let started = std::time::Instant::now();
     let guard = loop {
         if let Ok(g) = s.try_lock() {
@@ -348,24 +346,39 @@ fn quick_once<T>(r: &RemoteInfo, f: &impl Fn(&Session, &std::cell::Cell<bool>) -
         // a missing file isn't a broken connection
         let broken = !matches!(e.code(), ssh2::ErrorCode::SFTP(_));
         if broken {
-            drop_session(r);
+            drop_session(r, true);
         }
         (broken, format!("The connection to {} failed ({e}).", r.host))
     })
 }
 
 /// Runs a command with `input` on its stdin, passing its output on line by line (long jobs).
-pub fn exec_stream(r: &RemoteInfo, cmd: &str, input: &[u8], mut line: impl FnMut(&str)) -> Result<i32, String> {
-    let s = session(r)?;
+pub fn exec_stream(r: &RemoteInfo, cmd: &str, input: &[u8], line: impl FnMut(&str)) -> Result<i32, String> {
+    exec_feed(r, cmd, |w| if input.is_empty() { Ok(()) } else { w.write_all(input).map_err(|e| e.to_string()) }, line)
+}
+
+/// exec_stream with stdin written by `feed` as the command runs (an upload packed on the
+/// way out, never whole in memory). A feed that fails ends the command without
+/// finishing its input, and is the error returned.
+fn exec_feed(r: &RemoteInfo, cmd: &str, feed: impl FnOnce(&mut dyn Write) -> Result<(), String>, mut line: impl FnMut(&str)) -> Result<i32, String> {
+    let s = session(r, false)?;
     let s = s.lock().unwrap();
     // setup can be quiet for a while (Valve's download), but not forever: a machine that
     // stops answering ends the job instead of holding the connection
     s.set_timeout(15 * 60 * 1000);
+    let mut feed = Some(feed);
+    let mut fed: Result<(), String> = Ok(());
     let mut run = || -> Result<i32, ssh2::Error> {
         let mut ch = s.channel_session()?;
         ch.exec(&format!("{cmd} 2>&1"))?;
-        if !input.is_empty() {
-            ch.write_all(input).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        if let Some(feed) = feed.take() {
+            // (nothing reads the command's output meanwhile: what these commands print
+            // is small enough to wait in the channel)
+            if let Err(e) = feed(&mut ch) {
+                fed = Err(e);
+                let _ = ch.close();
+                return Ok(-1);
+            }
         }
         ch.send_eof()?;
         // read until the command has really finished (a quiet spell isn't the end),
@@ -404,8 +417,9 @@ pub fn exec_stream(r: &RemoteInfo, cmd: &str, input: &[u8], mut line: impl FnMut
     let r2 = run();
     s.set_timeout(30_000);
     drop(s);
+    fed?;
     r2.map_err(|e| {
-        drop_session(r);
+        drop_session(r, false);
         format!("The connection to {} dropped ({e}).", r.host)
     })
 }
@@ -444,48 +458,43 @@ pub fn write_file(r: &RemoteInfo, path: &str, data: &[u8]) -> Result<(), String>
 /// Uploads a folder (the files `keep` lets through) into `to` on the machine, as one
 /// compressed archive unpacked there.
 pub fn upload_dir(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Path) -> bool) -> Result<u64, String> {
-    let mut bytes = Vec::new();
+    let files: Vec<PathBuf> = crate::archive::walk(from).into_iter().filter(|f| f.strip_prefix(from).is_ok_and(|rel| keep(rel)) && f.is_file()).collect();
     let mut count = 0u64;
-    {
-        let gz = flate2::write::GzEncoder::new(&mut bytes, flate2::Compression::fast());
-        let mut tar = tar::Builder::new(gz);
-        for file in crate::archive::walk(from) {
-            let Ok(rel) = file.strip_prefix(from) else { continue };
-            if !keep(rel) || !file.is_file() {
-                continue;
+    let mut last = String::new();
+    // packed straight into the connection as it goes up (a map pack would otherwise
+    // sit whole in memory first); settings (the panel's RCON password, the join
+    // password) readable by this user only
+    let code = exec_feed(
+        r,
+        &format!("mkdir -p {to} && tar xzf - -C {to} && chmod -R go-rwx {to}/addons/amxmodx/data 2>/dev/null; true", to = shell_quote(to)),
+        |w| {
+            let gz = flate2::write::GzEncoder::new(w, flate2::Compression::fast());
+            let mut tar = tar::Builder::new(gz);
+            for file in &files {
+                let rel = file.strip_prefix(from).unwrap_or(file);
+                let name = rel.to_string_lossy().replace('\\', "/");
+                let mut data = std::fs::read(file).map_err(|e| format!("Couldn't read {name} ({e})."))?;
+                // Linux reads a Windows line ending's CR as part of the line (in AMX Mod X's
+                // configs a path ending in CR is a folder that doesn't exist): text goes up
+                // with Linux line endings
+                let lower = name.to_lowercase();
+                if [".ini", ".cfg", ".txt", ".games"].iter().any(|x| lower.ends_with(x)) {
+                    data = lf(&data);
+                }
+                let mut h = tar::Header::new_gnu();
+                h.set_size(data.len() as u64);
+                h.set_mode(0o644);
+                h.set_mtime(std::fs::metadata(file).ok().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0));
+                h.set_cksum();
+                tar.append_data(&mut h, &name, &data[..]).map_err(|e| format!("Couldn't send {name} ({e})."))?;
+                count += 1;
             }
-            let name = rel.to_string_lossy().replace('\\', "/");
-            let mut data = std::fs::read(&file).map_err(|e| format!("Couldn't read {name} ({e})."))?;
-            // Linux reads a Windows line ending's CR as part of the line (in AMX Mod X's
-            // configs a path ending in CR is a folder that doesn't exist): text goes up
-            // with Linux line endings
-            let lower = name.to_lowercase();
-            if [".ini", ".cfg", ".txt", ".games"].iter().any(|x| lower.ends_with(x)) {
-                data = lf(&data);
-            }
-            let mut h = tar::Header::new_gnu();
-            h.set_size(data.len() as u64);
-            h.set_mode(0o644);
-            h.set_mtime(std::fs::metadata(&file).ok().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0));
-            h.set_cksum();
-            tar.append_data(&mut h, &name, &data[..]).map_err(|e| format!("Couldn't pack {name} ({e})."))?;
-            count += 1;
-        }
-        tar.into_inner().and_then(|gz| gz.finish()).map_err(|e| e.to_string())?;
-    }
-    let (code, out) = {
-        let mut last = String::new();
-        // settings (the panel's RCON password, the join password) readable by this user only
-        let code = exec_stream(
-            r,
-            &format!("mkdir -p {to} && tar xzf - -C {to} && chmod -R go-rwx {to}/addons/amxmodx/data 2>/dev/null; true", to = shell_quote(to)),
-            &bytes,
-            |l| last = l.to_string(),
-        )?;
-        (code, last)
-    };
+            tar.into_inner().and_then(|gz| gz.finish()).map(|_| ()).map_err(|e| e.to_string())
+        },
+        |l| last = l.to_string(),
+    )?;
     if code != 0 {
-        return Err(format!("Unpacking on the server failed ({out})."));
+        return Err(format!("Unpacking on the server failed ({last})."));
     }
     Ok(count)
 }
@@ -659,19 +668,22 @@ try:
     s.sendto(P + b"rcon " + ch + b' "' + pw.encode() + b'" ' + " ".join(sys.argv[3:]).encode("latin-1") + b"\n", ("127.0.0.1", port))
 except (socket.timeout, OSError, IndexError):
     sys.exit(2)
-singles, splits = [], {{}}
-s.settimeout(0.4)
+# the first packet may take a while; after it a short quiet spell ends the answer,
+# unless a split one (byte 8: part number << 4 | parts) is still missing parts
+singles, splits, totals = [], {{}}, {{}}
 while True:
     try:
         d = s.recv(65535)
     except socket.timeout:
         break
     if len(d) > 9 and d[:4] == b"\xfe\xff\xff\xff":
-        splits.setdefault(d[4:8], []).append((d[8] >> 4, d[9:]))
+        splits.setdefault(d[4:8], {{}})[d[8] >> 4] = d[9:]
+        totals[d[4:8]] = d[8] & 15
     else:
         singles.append(d)
+    s.settimeout(0.4 if any(len(v) < totals[k] for k, v in splits.items()) else 0.05)
 for parts in splits.values():
-    singles.append(b"".join(p for _, p in sorted(parts)))
+    singles.append(b"".join(p for _, p in sorted(parts.items())))
 sys.stdout.buffer.write(b"".join(d[5:] if d[:4] == P and len(d) > 5 else d for d in singles))
 LSRCON
 sudo chmod 755 /usr/local/bin/lsrcon

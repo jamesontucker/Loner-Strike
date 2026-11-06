@@ -10,7 +10,9 @@ use rand::Rng;
 use regex::Regex;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 /// Commands the panel may send. Everything else is refused.
 const ALLOWED: &[&str] = &[
@@ -28,6 +30,60 @@ pub enum CmdError {
     Bad(String),
     Game(String),
 }
+
+/// A value worked out at most once per `ttl`: callers arriving while it's being worked
+/// out wait for that answer instead of asking again (the app window, every phone and
+/// the join notifier all poll the same game).
+pub struct Recent<T> {
+    ttl: Duration,
+    value: Mutex<Option<(Instant, u64, T)>>,
+    /// held while the value is worked out
+    turn: Mutex<()>,
+    /// bumped by clear(), so an answer begun before a change isn't kept after it
+    generation: AtomicU64,
+}
+
+impl<T: Clone> Recent<T> {
+    pub const fn new(ttl: Duration) -> Self {
+        Recent { ttl, value: Mutex::new(None), turn: Mutex::new(()), generation: AtomicU64::new(0) }
+    }
+
+    fn fresh(&self) -> Option<T> {
+        let gen = self.generation.load(Ordering::SeqCst);
+        let v = self.value.lock().unwrap_or_else(|e| e.into_inner());
+        v.as_ref().filter(|(at, g, _)| *g == gen && at.elapsed() < self.ttl).map(|(_, _, t)| t.clone())
+    }
+
+    pub fn get_or(&self, f: impl FnOnce() -> T) -> T {
+        if let Some(v) = self.fresh() {
+            return v;
+        }
+        let _turn = self.turn.lock().unwrap_or_else(|e| e.into_inner());
+        // someone else may have just worked it out while this one waited
+        if let Some(v) = self.fresh() {
+            return v;
+        }
+        let gen = self.generation.load(Ordering::SeqCst);
+        let v = f();
+        *self.value.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), gen, v.clone()));
+        v
+    }
+
+    /// Forgets the value (something changed it): the next caller asks again.
+    pub fn clear(&self) {
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        *self.value.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+}
+
+/// Is the game open on this computer? (a process search: not on every state check)
+fn game_open() -> bool {
+    static OPEN: Recent<bool> = Recent::new(Duration::from_secs(5));
+    OPEN.get_or(sys::game_running)
+}
+
+/// Splits lsrcon's reply from the status file sent after it in the same command.
+const FILE_MARK: &str = "\n@@LS-STATUS-FILE@@\n";
 
 pub struct Game {
     pub hl: PathBuf,
@@ -47,6 +103,8 @@ pub struct Game {
     /// On another machine: how to reach it, and its game folder there (files the plugin
     /// writes, like status.json, are fetched from it)
     pub remote: Option<(crate::remote::RemoteInfo, String)>,
+    /// The last state(), shared by everyone asking within a second
+    status: Recent<Value>,
 }
 
 impl Game {
@@ -90,32 +148,38 @@ impl Game {
         let maps_cache = Arc::new(Mutex::new(None));
         let store = Arc::new(MapStore::new(hl, &dir, app, maps_cache.clone()));
         let sharing = Arc::new(Sharing::new(app, &data, crate::sharing::GAME_PORT));
-        Game { hl: hl.to_path_buf(), name: name.into(), dir, data, app: app.to_path_buf(), rcon, maps_cache, store, sharing, port: crate::sharing::GAME_PORT, dedicated: false, remote: None }
+        Game { hl: hl.to_path_buf(), name: name.into(), dir, data, app: app.to_path_buf(), rcon, maps_cache, store, sharing, port: crate::sharing::GAME_PORT, dedicated: false, remote: None, status: Recent::new(Duration::from_secs(1)) }
     }
 
+    /// The game's live state, asked at most once a second however many pages poll it.
     pub fn state(&self) -> Value {
+        self.status.get_or(|| self.state_now())
+    }
+
+    fn state_now(&self) -> Value {
         // a dedicated server on the game's port isn't the game: don't knock with the wrong password
         if !self.dedicated {
             if let Some(name) = crate::servers::running_on(self.port) {
                 return json!({"online": false, "reason": format!("The server \"{name}\" is using your game's port ({}). Stop it to host from your game.", self.port)});
             }
         }
-        let reply = match self.rcon.send("gm_status") {
+        // on another machine the plugin writes status.json there: it comes back with the
+        // reply, in the same SSH command
+        let remote_file = self.remote.as_ref().map(|(_, dir)| format!("{dir}/addons/amxmodx/data/gamemodes/status.json"));
+        let sent = match &remote_file {
+            Some(f) => self.rcon.send_then_cat("gm_status", f, FILE_MARK),
+            None => self.rcon.send("gm_status").map(|r| (r, None)),
+        };
+        let (reply, file) = match sent {
             Ok(r) => r,
             Err(RconError::BadPassword) => return json!({"online": false, "reason": BAD_PASSWORD}),
             // game_open: the game is open on this computer but not hosting a map (main menu,
             // or playing on someone else's server)
-            Err(RconError::Offline) => return json!({"online": false, "reason": OFFLINE, "game_open": !self.dedicated && crate::sys::game_running()}),
+            Err(RconError::Offline) => return json!({"online": false, "reason": OFFLINE, "game_open": !self.dedicated && game_open()}),
         };
         let path = self.data.join("status.json");
-        // on another machine the file is written there: bring it over first
-        if let (Some((r, dir)), true) = (&self.remote, reply.contains("GM status written")) {
-            match crate::remote::read_file_quick(r, &format!("{dir}/addons/amxmodx/data/gamemodes/status.json")) {
-                Ok(bytes) => {
-                    let _ = std::fs::write(&path, bytes);
-                }
-                Err(e) => return json!({"online": false, "reason": e}),
-            }
+        if let (Some(bytes), true) = (file, reply.contains("GM status written")) {
+            let _ = std::fs::write(&path, bytes);
         }
         let lines: Vec<String> = if reply.contains("GM status written") && path.exists() {
             latin1(&std::fs::read(&path).unwrap_or_default()).lines().map(String::from).collect()
@@ -167,7 +231,10 @@ impl Game {
             }
             std::iter::once(cmd.to_string()).chain(args.iter().cloned()).collect::<Vec<_>>().join(" ")
         };
-        match self.rcon.send(&line) {
+        // the next state() shows what the command did
+        let sent = self.rcon.send(&line);
+        self.status.clear();
+        match sent {
             Ok(reply) if cmd == "gm_announce" => {
                 let _ = reply;
                 Ok(vec![])
@@ -268,6 +335,26 @@ pub fn health_check(cz: &Path, repair: bool) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recent_is_shared() {
+        use std::sync::atomic::AtomicUsize;
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+        let r: Arc<Recent<usize>> = Arc::new(Recent::new(Duration::from_millis(300)));
+        let slow = || {
+            std::thread::sleep(Duration::from_millis(50));
+            CALLS.fetch_add(1, Ordering::SeqCst) + 1
+        };
+        // callers arriving together wait for the one answer
+        let threads: Vec<_> = (0..8).map(|_| { let r = r.clone(); std::thread::spawn(move || r.get_or(slow)) }).collect();
+        let got: Vec<usize> = threads.into_iter().map(|t| t.join().unwrap()).collect();
+        assert!(got.iter().all(|&v| v == 1), "{got:?}");
+        assert_eq!(r.get_or(slow), 1, "still fresh");
+        r.clear();
+        assert_eq!(r.get_or(slow), 2, "asked again after a change");
+        std::thread::sleep(Duration::from_millis(350));
+        assert_eq!(r.get_or(slow), 3, "asked again once stale");
+    }
 
     #[test]
     fn health_repairs() {

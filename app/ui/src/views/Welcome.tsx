@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getJson, isAbort, postJson, useActions } from "../api";
-import { useNav } from "../store";
+import { useDirty, useNav } from "../store";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, useToast } from "../ui";
-import { useDirty } from "./Servers";
 import { ShareList } from "./ShareList";
 
 type Data = { style: "builtin" | "custom" | "url"; note: string; html: string | null; url: string | null; max: number; error?: string };

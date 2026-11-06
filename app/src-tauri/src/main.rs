@@ -86,10 +86,19 @@ fn main() {
                 .unwrap_or_else(|_| format!("http://127.0.0.1:{port}/"))
                 .parse()
                 .unwrap();
+            // a little roomier than before, but never taller or wider than the screen
+            // (a 13" laptop is about 900 points tall, menu bar and Dock included)
+            let (mut w, mut h) = (1320.0, 940.0);
+            if let Ok(Some(m)) = app.primary_monitor() {
+                let size = m.size().to_logical::<f64>(m.scale_factor());
+                w = f64::min(w, size.width - 40.0);
+                h = f64::min(h, size.height - 80.0);
+            }
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("Loner-Strike")
-                .inner_size(1240.0, 860.0)
-                .min_inner_size(820.0, 660.0) // the sidebar fits without scrolling
+                .inner_size(w, h)
+                .min_inner_size(820.0, 600.0) // the sidebar scrolls when it doesn't fit
+                .center()
                 .build()?;
             Ok(())
         })
