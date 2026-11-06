@@ -242,6 +242,9 @@ function Shell() {
         <div className="side-foot">
           {current ? `Server: ${current.name}` : app?.game ? (app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero") : "No game found"}
           {app?.version && <span> · v{app.version}</span>}
+          <div className="made-by">
+            by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">Nanoshrine</a>
+          </div>
         </div>
       </aside>
 
