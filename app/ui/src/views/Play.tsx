@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import { Icon } from "../icons";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
-import { SectionHead, useCommand, useConfirm, useToast } from "../ui";
+import { Info, SectionHead, useCommand, useConfirm, useToast } from "../ui";
 import { MapCard } from "./Maps";
 import { MatchMode } from "./MatchMode";
 
@@ -35,7 +35,9 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
   const launch = async (map?: string, bots?: number) => {
     if (starting) return;
     setStarting(true);
-    const start = mode ? { mode: mode.id, settings: changed } : {};
+    // never chosen before: start with the defaults shown, so they're saved like a choice
+    const fresh = Object.fromEntries(Object.entries(DEFAULTS).filter(([k]) => !changed[k] && mode?.settings[k] == null));
+    const start = mode ? { mode: mode.id, settings: { ...fresh, ...changed } } : {};
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}), ...start }).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) {
       toast(r.error, true);
@@ -48,7 +50,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
   const bots = app?.bots ?? null;
   const modes = opts ? [...opts.modes].sort((a, b) => a.name.localeCompare(b.name)) : [];
   const mode = modes.find((m) => m.id === (modePick ?? opts?.mode)) ?? modes.find((m) => m.id === "classic") ?? modes[0];
-  const value = (cvar: string) => changed[cvar] ?? mode?.settings[cvar] ?? null;
+  const value = (cvar: string) => changed[cvar] ?? mode?.settings[cvar] ?? DEFAULTS[cvar] ?? null;
   const change = (cvar: string, v: string) => setChanged((c) => ({ ...c, [cvar]: v }));
   const pickMode = (id: string) => {
     setModePick(id);
@@ -101,27 +103,27 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
         <div className="start-box">
           {modes.length > 0 && mode && (
             <label className="field">
-              <span>Mode</span>
+              <span>Mode<Info text="The game mode the game starts in. It remembers its own settings; you can switch modes once you're in, too." /></span>
               <select value={mode.id} onChange={(e) => pickMode(e.target.value)}>
                 {modes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </label>
           )}
           <div className="field">
-            <span id="start-map">Map</span>
+            <span id="start-map">Map<Info text="Type to search. Maps made for the mode you picked come first, then the ones you played recently and your favourites." /></span>
             <MapPicker value={map} maps={maps} mode={mode?.id} modeName={mode?.name} recent={recent} favs={favs} onPick={setPick} labelledBy="start-map" />
           </div>
         </div>
         <div className="start-box start-settings">
           <div className="field">
-            <span>Bots</span>
+            <span>Bots<Info text="How many bots join. You can add or remove bots once you're in." /></span>
             <div className="seg" role="group" aria-label="Bots">
               {[0, 5, 9, 15].map((n) => <button key={n} aria-pressed={botCount === n} onClick={() => setBotsPick(n)}>{n === 0 ? "None" : n}</button>)}
             </div>
           </div>
           {mode && botCount > 0 && (
             <div className="field">
-              <span>Bot skill</span>
+              <span>Bot skill<Info text="How smart the bots are: how aware they are, their tactics, how they move as a team. Their aim and reactions come from the bot style. Hard suits most bot styles." /></span>
               <div className="seg" role="group" aria-label="Bot skill">
                 {["Easy", "Normal", "Hard", "Expert"].map((l, i) => <button key={l} aria-pressed={value("bot_difficulty") === String(i)} onClick={() => change("bot_difficulty", String(i))}>{l}</button>)}
               </div>
@@ -129,15 +131,16 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           )}
           {mode && botCount > 0 && (
             <label className="field">
-              <span>Bot style</span>
-              <select value={value("gm_botstyle") ?? "0"} onChange={(e) => change("gm_botstyle", e.target.value)}>
+              <span>Bot style<Info text="How the bots aim, react and behave: from new players to suspiciously good. Mixed lobby gives every bot its own level, like a real server." /></span>
+              <select value={value("gm_botstyle") ?? DEFAULTS.gm_botstyle} onChange={(e) => change("gm_botstyle", e.target.value)}>
                 {BOT_STYLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
+              <span className="field-note">{STYLE_NOTE[value("gm_botstyle") ?? DEFAULTS.gm_botstyle]}</span>
             </label>
           )}
           {mode && (
             <label className="field">
-              <span>Time limit</span>
+              <span>Time limit<Info text="How long a map lasts before the next one. None plays until you change it." /></span>
               <select value={value("mp_timelimit") ?? ""} onChange={(e) => change("mp_timelimit", e.target.value)}>
                 {value("mp_timelimit") === null && <option value="">As the mode has it</option>}
                 {TIME_LIMITS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -147,7 +150,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           )}
           {mode && (
             <div className="field">
-              <span>Friendly fire</span>
+              <span>Friendly fire<Info text="Whether you can hurt your own team." /></span>
               <div className="seg" role="group" aria-label="Friendly fire">
                 {[["0", "Off"], ["1", "On"]].map(([v, l]) => <button key={v} aria-pressed={(value("mp_friendlyfire") ?? "0") === v} onClick={() => change("mp_friendlyfire", v)}>{l}</button>)}
               </div>
@@ -246,6 +249,20 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
 }
 
 type StartOptions = { modes: { id: string; name: string; settings: Record<string, string | null> }[]; mode: string };
+// What each bot style is like
+const STYLE_NOTE: Record<string, string> = {
+  "0": "The game's own bots: instant reactions, perfect aim.",
+  "4": "New players: slow to react, they spray and miss a lot.",
+  "1": "A typical public server: a few sharp players, most average, some bad.",
+  "8": "Everyone different, from new to very good. A regular keeps their level.",
+  "2": "Solid players who work as a team.",
+  "3": "Experienced: quick, accurate, short bursts.",
+  "5": "Very good and focused. They bunnyhop between fights.",
+  "6": "Suspiciously good: most bullets find you and they notice you from behind.",
+  "7": "Everything maxed. Every bullet near you is a headshot.",
+};
+// What the screen shows (and starts the game with) when nothing's been chosen yet
+const DEFAULTS: Record<string, string> = { bot_difficulty: "2", gm_botstyle: "8" };
 // gm_botstyle values, in the order the in-game menu shows them
 const BOT_STYLES: [string, string][] = [["0", "Classic"], ["4", "Newbie lobby"], ["1", "Pub server"], ["8", "Mixed lobby"], ["2", "Matchmaking"], ["3", "Veterans"], ["5", "Locked In"], ["6", "Hackers"], ["7", "Gods"]];
 const TIME_LIMITS: [string, string][] = [["0", "None"], ["10", "10 min"], ["20", "20 min"], ["30", "30 min"], ["45", "45 min"], ["60", "60 min"]];

@@ -133,6 +133,46 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boo
   return <button type="button" role="switch" aria-checked={on} aria-label={label} className="switch" onClick={() => onChange(!on)} />;
 }
 
+/** A small "?" that explains a field: shown on hover, or on click/tap (phones). Safe
+ *  inside a <label>: clicking it doesn't open the field. */
+export function Info({ text }: { text: ReactNode }) {
+  // shown while hovered, or pinned open by a click/tap
+  const [hover, setHover] = useState(false);
+  const [pinned, setOpen] = useState(false);
+  const open = hover || pinned;
+  const box = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!pinned) return;
+    const away = (e: Event) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [pinned]);
+  return (
+    <span className="info" ref={box} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <button
+        type="button"
+        className="info-btn"
+        aria-label="What's this?"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((o) => !o);
+          setHover(false);
+        }}
+      >
+        ?
+      </button>
+      {open && <span className="info-pop" role="tooltip">{text}</span>}
+    </span>
+  );
+}
+
 export function SectionHead({ title, note, children }: { title: string; note?: ReactNode; children?: ReactNode }) {
   return (
     <div className="section-head">

@@ -1189,3 +1189,12 @@ select option, select optgroup { background: var(--panel); color: var(--bone); }
 .files-sheet { max-width: 520px; }
 .files-sheet .files-update-list { max-height: 50vh; overflow-y: auto; padding-right: 6px; }
 .files-sheet h2 { margin-top: 0; }
+
+/* ---- "?" explanations next to fields ------------------------------------------------- */
+.info { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
+.info-btn { width: 17px; height: 17px; padding: 0; border: 0; border-radius: 50%; background: var(--panel-2); color: var(--bone-dim); font: 700 11px/17px var(--text); text-align: center; cursor: help; box-shadow: var(--raised); }
+.info-btn:hover, .info-btn[aria-expanded="true"] { color: var(--signal); }
+.info-pop { position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); z-index: 60; width: max-content; max-width: min(300px, calc(100vw - 32px)); padding: 8px 10px; background: var(--bg); color: var(--bone); box-shadow: var(--raised), 0 8px 24px rgba(0,0,0,.45); border-radius: 2px; font: 400 13px/1.4 var(--text); text-transform: none; letter-spacing: 0; white-space: normal; text-align: left; pointer-events: none; }
+.field-note { font-size: 12.5px; color: var(--bone-dim); max-width: 260px; margin-top: 2px; }
+.start-settings { align-items: flex-start; }
+.start-settings .field > span:first-child { min-height: 22px; display: flex; align-items: center; }
