@@ -36,3 +36,9 @@ Round-end music ships with freely licensed tracks from OpenGameArt; each track's
 
 ## Maps
 Maps are downloaded from [GameBanana](https://gamebanana.com) and belong to their creators. The panel shows each map's author.
+
+## Fonts
+| Font | Author | License |
+|---|---|---|
+| [Counter-Strike](https://www.dafont.com/counter-strike.font) (titles in the app) | SoJa | 100% free (dafont) |
+| Barlow Semi Condensed | Jeremy Tribby | SIL Open Font License |

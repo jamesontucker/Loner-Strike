@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f5f6f7"/>
+      <stop offset=".55" stop-color="#dadde0"/>
+      <stop offset="1" stop-color="#b6bbc1"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#787d84"/>
+    </linearGradient>
+  </defs>
+  <!-- brushed metal tile with a bevelled rim -->
+  <rect x="16" y="16" width="480" height="480" rx="64" fill="url(#rim)"/>
+  <rect x="28" y="28" width="456" height="456" rx="54" fill="url(#metal)"/>
+
+  <g transform="translate(26 -2)">
+  <!-- crate -->
+  <rect x="262" y="340" width="132" height="110" rx="5" fill="#3b4762"/>
+  <path d="M262 376h132M262 413h132" stroke="#2a3349" stroke-width="5"/>
+
+  <!-- the loner, hunched on the crate, head down -->
+  <g fill="#1f2a44" stroke="#1f2a44" stroke-linecap="round" stroke-linejoin="round">
+    <!-- rifle propped between the knees, stock on the floor, barrel up -->
+    <path stroke="none" d="M124 452 L150 450 L146 392 L134 386 Z"/>
+    <path d="M140 392 L126 214" stroke-width="12" fill="none"/>
+    <path d="M126 214 L118 138" stroke-width="6" fill="none"/>
+    <path stroke="none" d="M128 262 l14 -2 l6 44 l-14 3 z"/>
+    <path d="M118 150 l8 -2" stroke-width="6" fill="none"/>
+    <!-- hunched back -->
+    <path stroke="none" d="M304 346 C318 290 300 236 246 226 C220 222 198 236 194 258 C196 290 220 320 250 344 Z"/>
+    <!-- head, bowed forward, with helmet -->
+    <circle cx="190" cy="236" r="29" stroke="none"/>
+    <path stroke="none" d="M154 232 C156 198 188 186 214 194 C232 200 240 214 238 228 L232 236 C214 226 186 224 154 240 Z"/>
+    <!-- upper arm to the knee, forearm to the rifle -->
+    <path d="M232 256 L190 304" stroke-width="27" fill="none"/>
+    <path d="M190 304 L144 296" stroke-width="22" fill="none"/>
+    <circle cx="138" cy="294" r="13" stroke="none"/>
+    <!-- thigh along the crate, shin down, boot -->
+    <path d="M296 340 L186 318" stroke-width="38" fill="none"/>
+    <path d="M182 322 L184 434" stroke-width="32" fill="none"/>
+    <path stroke="none" d="M152 428 h52 c10 0 16 6 16 14 v8 h-74 c-6 0 -8 -6 -6 -10 z"/>
+  </g>
+  </g>
+</svg>

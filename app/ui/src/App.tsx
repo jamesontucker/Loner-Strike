@@ -51,9 +51,12 @@ function Shell() {
   const [section, setSectionRaw] = useState<Section>(loadSection);
   const [app, setApp] = useState<AppInfo | null>(null);
   const [maps, setMaps] = useState<MapInfo[]>([]);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const setSection = (s: Section) => {
     setSectionRaw(s);
+    setMoreOpen(false);
+    document.querySelector(".content")?.scrollTo({ top: 0 });
     try {
       localStorage.setItem("ls.section", s);
     } catch {
@@ -153,9 +156,43 @@ function Shell() {
           )}
         </main>
       </div>
+
+      {/* phones: the five most used sections, the rest under More */}
+      <nav className="tabbar" aria-label="Sections">
+        {TABBAR.map((id) => {
+          const n = NAV.find((x) => x.id === id)!;
+          return (
+            <button key={id} aria-current={section === id && !moreOpen ? "page" : undefined} onClick={() => setSection(id)}>
+              <Icon name={n.icon} size={22} />
+              <span>{n.label}</span>
+              {id === "players" && players > 0 && <i className="tab-count">{players}</i>}
+            </button>
+          );
+        })}
+        <button aria-current={moreOpen || !TABBAR.includes(section) ? "page" : undefined} onClick={() => setMoreOpen((o) => !o)}>
+          <Icon name="menu" size={22} />
+          <span>More</span>
+          {app?.update && <i className="tab-dot" />}
+        </button>
+      </nav>
+      {moreOpen && (
+        <div className="sheet-backdrop bottom" onClick={() => setMoreOpen(false)}>
+          <div className="more-sheet" onClick={(e) => e.stopPropagation()}>
+            {NAV.filter((n) => !TABBAR.includes(n.id)).map((n) => (
+              <button key={n.id} className="nav-item" aria-current={section === n.id ? "page" : undefined} onClick={() => setSection(n.id)}>
+                <Icon name={n.icon} />
+                {n.label}
+                {n.id === "settings" && app?.update && <span className="dot" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const TABBAR: Section[] = ["play", "maps", "bots", "players"];
 
 function Strip({ data, reason, app, refresh }: { data: Online | null; reason: string; app: AppInfo | null; refresh: () => void }) {
   const run = useCommand(refresh);
