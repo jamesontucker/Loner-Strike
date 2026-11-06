@@ -231,6 +231,12 @@ load_nav_spawns(const map[])
 			skip(f, read_u16(f))
 
 	new areas = read_u32(f)
+	// an empty or broken file (a huge count reads as negative): nothing to pick from
+	if (areas <= 0)
+	{
+		fclose(f)
+		return
+	}
 	new stride = areas / NAV_CANDIDATES + 1
 	new count, Float:lo[3], Float:hi[3]
 	for (new a = 0; a < areas && !feof(f); a++)

@@ -43,7 +43,7 @@ native botchat_say(id, const section[], other, Float:chance)
 #define MAX_NOMS     4
 #define NEWCOMER_PCT 35
 
-new g_pRegulars, g_pChurn, g_pRtv, g_pWelcome, g_pClans, g_pBotJoin, g_pBotVotes
+new g_pRegulars, g_pChurn, g_pRtv, g_pWelcome, g_pClans, g_pBotJoin, g_pBotVotes, g_pRampTarget
 new bool:g_Chat
 new Array:g_LeftNames, Array:g_LeftAt   // bots that left this map, and when
 new g_RampTarget, g_RampSet             // joining a few at a time
@@ -73,6 +73,10 @@ public plugin_init()
 	g_pClans    = register_cvar("gm_clans", "1")
 	g_pBotJoin  = register_cvar("gm_botjoin", "1")
 	g_pBotVotes = register_cvar("gm_botvotes", "1")
+	// the full bot count while they trickle in (0 otherwise), so the Game Mode Menu
+	// saves that and not the low live bot_quota; it sets this to 0 to end the ramp
+	g_pRampTarget = register_cvar("gm_botjoin_target", "0")
+	set_pcvar_num(g_pRampTarget, 0)
 	g_Chat = bool:LibraryExists("gm_botchat", LibType_Library)
 	g_LeftNames = ArrayCreate(32)
 	g_LeftAt = ArrayCreate(1)
@@ -132,6 +136,7 @@ public plugin_end()
 	// a map change in the middle of bots trickling in: the full count carries over
 	if (g_RampTarget && get_cvar_num("bot_quota") == g_RampSet)
 		set_cvar_num("bot_quota", g_RampTarget)
+	set_pcvar_num(g_pRampTarget, 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -340,21 +345,31 @@ public task_ramp_start()
 		return
 	g_RampTarget = q
 	g_RampSet = max(max(2, q / 3), now)
+	set_pcvar_num(g_pRampTarget, q)
 	set_cvar_num("bot_quota", g_RampSet)
 	set_task(random_float(3.0, 9.0), "task_ramp")
 }
 
 public task_ramp()
 {
-	// someone changed the bot count meanwhile: theirs wins
-	if (get_cvar_num("bot_quota") != g_RampSet)
+	// someone changed the bot count meanwhile, or the menu ended the ramp: theirs wins
+	if (get_cvar_num("bot_quota") != g_RampSet || !get_pcvar_num(g_pRampTarget))
+	{
+		end_ramp()
 		return
+	}
 	g_RampSet = min(g_RampTarget, g_RampSet + random_num(1, 2))
 	set_cvar_num("bot_quota", g_RampSet)
 	if (g_RampSet < g_RampTarget)
 		set_task(random_float(3.0, 12.0), "task_ramp")
 	else
-		g_RampTarget = 0
+		end_ramp()
+}
+
+end_ramp()
+{
+	g_RampTarget = 0
+	set_pcvar_num(g_pRampTarget, 0)
 }
 
 
@@ -466,11 +481,12 @@ public task_bot_rtv(userid)
 	rock(id)
 }
 
+// people only, like needed(): a bot's rtv is chat flavour and doesn't count
 rocked()
 {
 	new n
 	for (new i = 1; i <= MaxClients; i++)
-		if (g_Rocked[i] && is_user_connected(i))
+		if (g_Rocked[i] && is_user_connected(i) && !is_user_bot(i) && !is_user_hltv(i))
 			n++
 	return n
 }

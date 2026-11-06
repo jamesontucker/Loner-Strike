@@ -88,6 +88,25 @@ public plugin_natives()
 {
 	// the plugin still loads (mutes, filter, log, reports) if csx isn't there
 	set_native_filter("native_filter")
+	register_library("gm_community")
+	register_native("gm_chat_blocked", "n_chat_blocked")
+}
+
+// gm_chat_blocked(id, const text[]): true when this chat line never shows (a muted
+// player, or gm_filter 2 and a swear word). The say command itself isn't swallowed,
+// so the Game Mode Menu's event feed and gm_botchat ask here instead.
+public n_chat_blocked(plugin, params)
+{
+	new id = get_param(1)
+	if (id < 1 || id > MaxClients || !g_Human[id])
+		return 0
+	if (muted(id, GAG_CHAT))
+		return 1
+	if (get_pcvar_num(g_pFilter) != 2 || !ArraySize(g_Words))
+		return 0
+	new text[192]
+	get_string(2, text, charsmax(text))
+	return has_swear(text) ? 1 : 0
 }
 
 public native_filter(const name[], index, trap)
@@ -198,7 +217,7 @@ public srv_reset()
 	delete_file(fmt("%s/playtime.txt", g_DataDir))
 	new now = get_systime()
 	for (new id = 1; id <= MaxClients; id++)
-		g_Joined[id] = now
+		g_Joined[id] = (g_Human[id] && is_user_connected(id)) ? now : 0
 	// a dump still going has the old stats in it
 	dump_cancel()
 	dump_stats(true)

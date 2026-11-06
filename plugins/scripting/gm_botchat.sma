@@ -52,6 +52,9 @@
 #include <nvault>
 #include <cstrike>
 
+// gm_community: true for chat that never shows (muted player, filtered out)
+native gm_chat_blocked(id, const text[])
+
 #define PLUGIN  "Bot chat"
 #define VERSION "1.0"
 #define AUTHOR  "gamemodes"
@@ -130,6 +133,13 @@ public plugin_natives()
 	register_library("gm_botchat")
 	register_native("botchat_persona", "n_persona")
 	register_native("botchat_say", "n_say")
+	// still loads without gm_community
+	set_native_filter("native_filter")
+}
+
+public native_filter(const name[], index, trap)
+{
+	return (!trap && equal(name, "gm_chat_blocked")) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 // botchat_persona(id): the bot's personality letter (0 for people)
@@ -1134,6 +1144,8 @@ public ev_defused()
 
 public ev_intermission()
 {
+	if (g_Career || !get_pcvar_num(g_pLevel))
+		return
 	// the end of the map: a few gg's, not every bot
 	new said
 	for (new i = 1; i <= MaxClients && said < 4; i++)
@@ -1197,6 +1209,9 @@ heard(id, bool:team)
 	remove_quotes(msg)
 	trim(msg)
 	if (!msg[0] || msg[0] == '/' || msg[0] == '!' || get_gametime() < g_NextHeard)
+		return
+	// nobody else saw it (muted or filtered), so no bot answers it
+	if (LibraryExists("gm_community", LibType_Library) && gm_chat_blocked(id, msg))
 		return
 	strtolower(msg)
 

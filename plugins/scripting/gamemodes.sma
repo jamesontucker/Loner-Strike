@@ -29,6 +29,9 @@
 #include <fakemeta>
 #include <hamsandwich>
 
+// gm_community: true for chat that never shows (muted player, filtered out)
+native gm_chat_blocked(id, const text[])
+
 #define PLUGIN  "Game Mode Menu"
 #define VERSION "2.0"
 #define AUTHOR  "local"
@@ -45,6 +48,7 @@
 #define TASK_SELFRESPAWN 4400
 #define TASK_MONEY       4500
 #define TASK_EDICTS   4900
+#define TASK_PAUSE    5000
 
 enum { CAT_HIDDEN, CAT_BOT, CAT_MATCH, CAT_FUN }
 enum { SC_NONE, SC_GLOBAL, SC_MODE }
@@ -346,6 +350,17 @@ new g_EvSeq
 public plugin_precache()
 {
 	g_BeamSpr = precache_model("sprites/laserbeam.spr")
+}
+
+public plugin_natives()
+{
+	// still loads without gm_community
+	set_native_filter("native_filter")
+}
+
+public native_filter(const name[], index, trap)
+{
+	return (!trap && equal(name, "gm_chat_blocked")) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 public plugin_init()
@@ -688,6 +703,10 @@ load_current()
 	new id[32]
 	read_data_line("current.txt", id, charsmax(id))
 	g_Cur = max(find_mode(id), 0)
+	// saved mode was uninstalled: rewrite the plugin list too, or its removed
+	// .amxx files keep failing to load on every map
+	if (id[0] && find_mode(id) < 0)
+		write_mode_plugins(g_Cur)
 }
 
 mode_has_flag(mode, flag)
@@ -870,8 +889,28 @@ bool:presets_enabled()
 public task_save_quota()
 {
 	new q[8]
-	get_cvar_string("bot_quota", q, charsmax(q))
+	num_to_str(bot_quota_target(), q, charsmax(q))
 	set_setting(find_setting("bot_quota"), q)
+}
+
+// While gm_pubserver lets bots join a few at a time, bot_quota is held low;
+// gm_botjoin_target is the full count then (0 otherwise).
+bot_quota_target()
+{
+	new p = get_cvar_pointer("gm_botjoin_target")
+	new target = p ? get_pcvar_num(p) : 0
+	return target > 0 ? target : get_cvar_num("bot_quota")
+}
+
+// Bot count changes from the menu: let the rest join now and stop the ramp,
+// so it doesn't later raise a count the player just picked.
+end_bot_ramp()
+{
+	new p = get_cvar_pointer("gm_botjoin_target")
+	if (!p || get_pcvar_num(p) <= 0)
+		return
+	set_cvar_num("bot_quota", get_pcvar_num(p))
+	set_pcvar_num(p, 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -1128,12 +1167,15 @@ navqueue_remove(const map[], next[] = "", nlen = 0)
 	else
 	{
 		f = fopen(path, "wt")
-		for (new i = 0; i < ArraySize(keep); i++)
+		if (f)
 		{
-			ArrayGetString(keep, i, line, charsmax(line))
-			fprintf(f, "%s^n", line)
+			for (new i = 0; i < ArraySize(keep); i++)
+			{
+				ArrayGetString(keep, i, line, charsmax(line))
+				fprintf(f, "%s^n", line)
+			}
+			fclose(f)
 		}
-		fclose(f)
 		if (nlen)
 			ArrayGetString(keep, 0, next, nlen)
 	}
@@ -2009,6 +2051,9 @@ public modes_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		// also called on disconnect: nothing to reopen then
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_main(id)
 		return PLUGIN_HANDLED
 	}
@@ -2153,6 +2198,8 @@ public maproot_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		if (g_PickMode[id] >= 0) show_modes(id)
 		else show_main(id)
 		return PLUGIN_HANDLED
@@ -2285,6 +2332,8 @@ public maplist_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_map_root(id)
 		return PLUGIN_HANDLED
 	}
@@ -2364,6 +2413,8 @@ public nav_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_map_root(id)
 		return PLUGIN_HANDLED
 	}
@@ -2437,6 +2488,8 @@ public missingnav_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_nav(id)
 		return PLUGIN_HANDLED
 	}
@@ -2532,6 +2585,8 @@ public settings_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_main(id)
 		return PLUGIN_HANDLED
 	}
@@ -2593,6 +2648,7 @@ do_match(const action[])
 // addt | addct | kick | kill | count (with n)
 do_bots(const action[], n)
 {
+	end_bot_ramp()
 	if (equal(action, "addt"))       server_cmd("bot_add_t")
 	else if (equal(action, "addct")) server_cmd("bot_add_ct")
 	else if (equal(action, "kick"))  server_cmd("bot_kick")
@@ -2673,6 +2729,7 @@ public task_reshow_bots(id)
 // Bot difficulty only applies to newly added bots, so re-add the current ones.
 respawn_bots()
 {
+	end_bot_ramp()
 	new q = get_cvar_num("bot_quota")
 	if (q <= 0)
 		return
@@ -2712,6 +2769,8 @@ public botcount_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_settings(id, CAT_BOT, 0)
 		return PLUGIN_HANDLED
 	}
@@ -2719,6 +2778,7 @@ public botcount_handler(id, menu, item)
 	get_info(menu, item, info, charsmax(info))
 	menu_destroy(menu)
 
+	end_bot_ramp()
 	server_cmd("bot_quota %s", info)
 	set_task(1.0, "task_save_quota")
 	set_task(1.2, "task_reshow_bots", id)
@@ -2761,6 +2821,8 @@ public players_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_main(id)
 		return PLUGIN_HANDLED
 	}
@@ -2839,6 +2901,8 @@ public pactions_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_players(id)
 		return PLUGIN_HANDLED
 	}
@@ -2948,6 +3012,8 @@ public give_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_player_actions(id)
 		return PLUGIN_HANDLED
 	}
@@ -2991,6 +3057,8 @@ public addons_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_main(id)
 		return PLUGIN_HANDLED
 	}
@@ -3052,6 +3120,8 @@ public addon_opt_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_addons(id, 0)
 		return PLUGIN_HANDLED
 	}
@@ -3105,6 +3175,8 @@ public admin_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_main(id)
 		return PLUGIN_HANDLED
 	}
@@ -3142,8 +3214,11 @@ json_escape(const src[], out[], len)
 }
 
 // The listen-server host (first human), used as "me" for bring/goto.
+// A dedicated server has no host: the first human there is just a stranger.
 host_player()
 {
+	if (is_dedicated_server())
+		return 0
 	for (new p = 1; p <= MaxClients; p++)
 		if (is_user_connected(p) && !is_user_bot(p) && !is_user_hltv(p))
 			return p
@@ -3389,16 +3464,46 @@ public srv_restartmap()
 }
 
 // gm_pause: toggles the engine's pause. On a listen server the console's
-// "pause" is sent on by the host player, so everything freezes, bots included.
-// Plugin tasks don't run while paused, which is why pausable stays on.
+// command is sent on by the host player, so everything freezes, bots included.
+// Plugin tasks don't run while paused, which is why pausable stays on until
+// task_pause_check runs again after play resumes.
 public srv_pause()
 {
 	status_stale()
+	// the server console can't pause a dedicated server, a player has to send it
+	new p
+	if (is_dedicated_server())
+	{
+		for (p = 1; p <= MaxClients; p++)
+			if (is_user_connected(p) && !is_user_bot(p) && !is_user_hltv(p))
+				break
+		if (p > MaxClients)
+		{
+			server_print("GM pause unavailable")
+			return PLUGIN_HANDLED
+		}
+	}
 	set_cvar_num("pausable", 1)
-	server_cmd("pause")
+	// setpause/unpause don't toggle, so a lost command can't leave us out of step
+	if (p)
+		client_cmd(p, g_Paused ? "unpause" : "setpause")
+	else
+		server_cmd(g_Paused ? "unpause" : "setpause")
 	g_Paused = !g_Paused
+	// tasks freeze while paused: this runs on time only if no pause happened,
+	// otherwise right after the unpause
+	remove_task(TASK_PAUSE)
+	set_task(0.5, "task_pause_check", TASK_PAUSE)
 	server_print("GM %s", g_Paused ? "paused" : "resumed")
 	return PLUGIN_HANDLED
+}
+
+// Play is running, so we're not paused; switch pausable off again so clients
+// can't pause from their console.
+public task_pause_check()
+{
+	g_Paused = false
+	set_cvar_num("pausable", 0)
 }
 
 // gm_do <addtime|endround|money|heal|demo>: one-click actions for the host
@@ -3768,10 +3873,12 @@ delete_preset(p)
 {
 	if (!g_PresetUser[p])
 		return
-	new path[192], line[512], id[24], name[40]
+	// same size load_preset_file reads with; saved presets run past 1000 chars
+	static line[1400]
+	new path[192], id[24], name[40]
 	copy(name, charsmax(name), g_PresetName[p])
 	formatex(path, charsmax(path), "%s/presets_user.ini", g_DataDir)
-	new Array:keep = ArrayCreate(512)
+	new Array:keep = ArrayCreate(sizeof line)
 	new f = fopen(path, "rt")
 	if (f)
 	{
@@ -3824,6 +3931,8 @@ public presets_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_main(id)
 		return PLUGIN_HANDLED
 	}
@@ -3857,6 +3966,8 @@ public userpreset_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_presets(id)
 		return PLUGIN_HANDLED
 	}
@@ -4084,6 +4195,8 @@ public crash_handler(id, menu, item)
 	if (item == MENU_EXIT)
 	{
 		menu_destroy(menu)
+		if (!is_user_connected(id))
+			return PLUGIN_HANDLED
 		show_main(id)
 		return PLUGIN_HANDLED
 	}
@@ -4128,7 +4241,8 @@ public task_autodiff()
 {
 	if (!get_pcvar_num(g_pAutoDiff) || g_Career || !host_player())
 		return
-	new diff = get_cvar_num("bot_difficulty"), step = 0
+	// a hand-set value outside 0-3 would index past NAMES below
+	new diff = clamp(get_cvar_num("bot_difficulty"), 0, 3), step = 0
 	if (g_DiffKills >= 6 && g_DiffKills >= g_DiffDeaths * 2 && diff < 3)
 		step = 1
 	else if (g_DiffDeaths >= 5 && g_DiffDeaths * 2 >= g_DiffKills * 3 && diff > 0)
@@ -4276,7 +4390,9 @@ public quick_handler(id, menu, item)
 	get_info(menu, item, info, charsmax(info))
 	menu_destroy(menu)
 
-	new bots = get_playersnum_ex(GetPlayers_ExcludeHuman)
+	// bots still trickling in (gm_pubserver) count as in already
+	new ramp = get_cvar_pointer("gm_botjoin_target")
+	new bots = max(get_playersnum_ex(GetPlayers_ExcludeHuman), ramp ? get_pcvar_num(ramp) : 0)
 	if (equal(info, "restart"))      do_match("restart")
 	else if (equal(info, "botup"))   do_bots("count", bots + 1)
 	else if (equal(info, "botdown")) do_bots("count", max(bots - 1, 0))
@@ -4392,6 +4508,9 @@ public hook_say(id)
 	remove_quotes(msg)
 	trim(msg)
 	if (!msg[0] || !is_user_connected(id))
+		return PLUGIN_CONTINUE
+	// a line nobody else saw stays out of the app's event feed too
+	if (LibraryExists("gm_community", LibType_Library) && gm_chat_blocked(id, msg))
 		return PLUGIN_CONTINUE
 	read_argv(0, cmd, charsmax(cmd))
 	get_user_name(id, name, charsmax(name))

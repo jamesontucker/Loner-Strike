@@ -55,6 +55,7 @@
 #define TASK_VOTE    7950
 #define TASK_NEXT    7960
 #define TASK_BOTS    7970
+#define TASK_PAUSABLE 7980
 #define OT_MONEY     10000
 #define OT_HALF      3
 #define MAX_ROSTER   16
@@ -1267,6 +1268,16 @@ do_unpause(const who[])
 	new p = any_human()
 	if (p)
 		client_cmd(p, "unpause")
+	// pausable has to stay on until the unpause arrives; tasks only run again once
+	// play does, so this switches it off right after (clients can't pause on their own)
+	remove_task(TASK_PAUSABLE)
+	set_task(0.5, "task_pausable_off", TASK_PAUSABLE)
+}
+
+public task_pausable_off()
+{
+	if (!g_Paused)
+		set_cvar_num("pausable", 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -1278,6 +1289,8 @@ public client_disconnected(id)
 	g_Ready[id] = false
 	g_ReadyOrder[id] = 0
 	g_Vote[id] = 0
+	// held money from a bot eco round: the next player in this slot starts clean
+	g_Held[id] = g_Cap[id] = 0
 	remove_task(id + TASK_RESPAWN)
 	remove_task(id + TASK_STRIP)
 }

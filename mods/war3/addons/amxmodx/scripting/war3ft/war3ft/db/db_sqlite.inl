@@ -221,6 +221,11 @@ SQLITE_Save( id )
 
 	static iCurrentLevel;
 
+	// Loner-Strike fix: levels written in this save; the cache only takes them once the
+	// COMMIT went through, so a failed save is tried again next time
+	new iWritten[MAX_SKILLS];
+	arrayset( iWritten, -1, MAX_SKILLS );
+
 	// Only save skill levels if the user does NOT play chameleon
 	if ( p_data[id][P_RACE] != RACE_CHAMELEON )
 	{
@@ -234,7 +239,7 @@ SQLITE_Save( id )
 				// Then we need to save this!
 				if ( iCurrentLevel >= 0 && g_iDBPlayerSkillStore[id][iSkillID] != iCurrentLevel )
 				{
-					g_iDBPlayerSkillStore[id][iSkillID] = iCurrentLevel;
+					iWritten[iSkillID] = iCurrentLevel;
 					format( szQuery, 511, "REPLACE INTO `wc3_player_skill` ( `player_id` , `skill_id` , `skill_level` ) VALUES ( '%d', '%d', '%d' );", iUniqueID, iSkillID, iCurrentLevel );
 					query = SQL_PrepareQuery( g_DBConn, szQuery );
 	
@@ -253,13 +258,26 @@ SQLITE_Save( id )
 		}
 	}
 
-	SQLITE_Exec( "COMMIT" );
+	if ( !SQLITE_Exec( "COMMIT" ) )
+	{
+		SQLITE_Exec( "ROLLBACK" );
+
+		return;
+	}
+
+	for ( new iSkillID = 0; iSkillID < MAX_SKILLS; iSkillID++ )
+	{
+		if ( iWritten[iSkillID] >= 0 )
+		{
+			g_iDBPlayerSkillStore[id][iSkillID] = iWritten[iSkillID];
+		}
+	}
 
 	return;
 }
 
 // Loner-Strike: run a statement that returns nothing (transaction control) and free its handle
-SQLITE_Exec( const szSql[] )
+bool:SQLITE_Exec( const szSql[] )
 {
 	new szQuery[32];
 	copy( szQuery, 31, szSql );
@@ -269,10 +287,12 @@ SQLITE_Exec( const szSql[] )
 	{
 		SQLITE_Error( query, szQuery, 11 );
 
-		return;
+		return false;
 	}
 
 	SQL_FreeHandle( query );
+
+	return true;
 }
 
 SQLITE_Save_T( id )

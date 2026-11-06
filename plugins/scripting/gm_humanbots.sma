@@ -365,7 +365,7 @@ public ev_death()
 		if (killer >= 1 && killer <= MaxClients && ++g_DeathsBy[victim][killer] >= 3)
 			g_Rival[victim] = killer
 	}
-	if (killer >= 1 && killer <= MaxClients && killer != victim && is_user_bot(killer) && get_pcvar_num(g_pRadio) && !get_cvar_num("gm_scrim_phase"))
+	if (killer >= 1 && killer <= MaxClients && killer != victim && is_user_bot(killer) && get_pcvar_num(g_pRadio) && !get_cvar_num("gm_scrim_phase") && style() != STYLE_CLASSIC)
 	{
 		new p = persona(killer)
 		if (random(100) < (has(p, "r") ? 35 : has(p, "it") ? 15 : 6))
@@ -702,7 +702,7 @@ public fw_cmdstart(id, uc, seed)
 	// standing still for a moment (afk): no shooting either
 	if (g_AfkUntil[id] > 0.0)
 	{
-		if (now < g_AfkUntil[id] && !g_Target[id])
+		if (now < g_AfkUntil[id] && !g_Target[id] && !user_has_weapon(id, CSW_C4))
 		{
 			set_uc(uc, UC_Buttons, 0)
 			set_uc(uc, UC_ForwardMove, 0.0)
@@ -1049,8 +1049,9 @@ public ev_round_start()
 		// a mood settles between rounds; last round's afk is over
 		g_Tilt[id] *= 0.85
 		g_AfkUntil[id] = 0.0
-		if (get_pcvar_num(g_pAfk) && random(1000) < (has(p, "dYLF") ? 15 : 7))
-			g_AfkUntil[id] = now + random_float(20.0, 60.0)
+		// a few seconds, and never with the bomb: the round would wait on it
+		if (get_pcvar_num(g_pAfk) && !user_has_weapon(id, CSW_C4) && random(1000) < (has(p, "dYLF") ? 15 : 7))
+			g_AfkUntil[id] = now + random_float(3.0, 10.0)
 		if (get_pcvar_num(g_pSprays) && g_SprayCount && random(100) < (has(p, "jkhXS3") ? 25 : 10))
 			set_task(random_float(1.0, 8.0), "task_spray", get_user_userid(id))
 		new team = get_user_team(id)

@@ -194,7 +194,7 @@ enum saveData
 // misc
 new weapons_menu, scores_menu, level_menu, warmup = -1, warmupWeapon[24], voted, won, trailSpr, roundEnded,
 menuText[512], dummy[2], tempSave[TEMP_SAVES][saveData], czero, maxPlayers, mapIteration = 1, cfgDir[32],
-autovoted, autovotes[3], autovote_mode, roundsElapsed, gameCommenced, cycleNum = -1, czbot_hams, mp_friendlyfire,
+autovoted, autovotes[3], autovote_mode, roundsElapsed, gameCommenced, cycleNum = -1, mp_friendlyfire,
 winSounds[MAX_WINSOUNDS][MAX_WINSOUND_LEN+1], numWinSounds, currentWinSound, hudSyncWarmup, hudSyncReqKills,
 hudSyncLDisplay, shouldWarmup, ggActive, teamLevel[3], teamLvlWeapon[3][24], teamScore[3], bombMap, hostageMap,
 bombStatus[4], c4planter, Float:spawns[MAX_SPAWNS][9], spawnCount, csdmSpawnCount, hudSyncCountdown,
@@ -294,9 +294,11 @@ public plugin_init()
 	// hams
 	RegisterHam(Ham_Touch,"weaponbox","ham_weapon_touch",0);
 	RegisterHam(Ham_Touch,"armoury_entity","ham_weapon_touch",0);
-	RegisterHam(Ham_Spawn,"player","ham_player_spawn",1);
-	RegisterHam(Ham_Killed,"player","ham_player_killed_pre",0);
-	RegisterHam(Ham_Killed,"player","ham_player_killed_post",1);
+	// Loner-Strike: specialbot also hooks CZ bots and ReGameDLL's CS 1.6 bots, which plain
+	// "player" hooks miss (on 1.6 they never respawned or got their level's weapon)
+	RegisterHam(Ham_Spawn,"player","ham_player_spawn",1,true);
+	RegisterHam(Ham_Killed,"player","ham_player_killed_pre",0,true);
+	RegisterHam(Ham_Killed,"player","ham_player_killed_post",1,true);
 	RegisterHam(Ham_Item_PostFrame,"weapon_awp","ham_awp_postframe",1); // gg_awp_oneshot for bots (no CurWeapon)
 	set_task(1.0,"bot_nade_check",TASK_BOT_NADES,_,_,"b"); // nade refresh for bots (no AmmoX)
 
@@ -737,37 +739,13 @@ public client_disconnect(id)
 	stats_clear_struct(playerStats[id]);
 }
 
-// someone joins, monitor ham hooks
+// someone joins
 public client_putinserver(id)
 {
-	// Loner-Strike fix: don't require bot_quota > 0 (bots added while it's 0 never got the hooks; same as zp5)
-	if(czero && !czbot_hams && is_user_bot(id))
-		set_task(0.1,"czbot_hook_ham",id);
-	
+	// (bot ham hooks: registered with specialbot in plugin_init, not per bot here)
+
 	// bots don't call joinclass
 	if(is_user_bot(id)) cmd_joinclass(id);
-}
-
-// delay for private data to initialize --
-// here is the problem: registering a ham hook for "player" won't
-// register it for CZ bots, for some reason. so we have to register
-// it by entity. so we do this ridiculous thing in order to do so.
-public czbot_hook_ham(id)
-{
-	if(czbot_hams || !is_user_connected(id)) return;
-
-	// probably a czero bot
-	if(is_user_bot(id))
-	{
-		RegisterHamFromEntity(Ham_Spawn,id,"ham_player_spawn",1);
-		RegisterHamFromEntity(Ham_Killed,id,"ham_player_killed_pre",0);
-		RegisterHamFromEntity(Ham_Killed,id,"ham_player_killed_post",1);
-
-		czbot_hams = 1;
-		
-		// bug fix for mid-round spawning, thanks to MeRcyLeZZ
-		if(is_user_alive(id)) ham_player_spawn(id);
-	}
 }
 
 // remove a save

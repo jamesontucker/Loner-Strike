@@ -66,13 +66,12 @@ native botchat_say(id, const section[], other, Float:chance)
 #define VERSION "1.0"
 #define AUTHOR  "gamemodes"
 
-#define TASK_ADS     7100
 #define TASK_AFK     7200
 #define TASK_PING    7300
 #define TASK_EMPTY   7400
 #define TASK_VOTE    7500
-#define TASK_CREDIT  7600
-#define CREDIT_EVERY 20.0   // minutes between "this server runs Loner-Strike" lines
+#define TASK_MSGS    7600
+#define CREDIT_EVERY 20     // minutes between "this server runs Loner-Strike" lines
 
 #define VOTE_TIME    20
 
@@ -164,7 +163,9 @@ public plugin_init()
 
 	set_task(float(AFK_STEP), "task_afk", TASK_AFK, _, _, "b")
 	set_task(PING_STEP, "task_ping", TASK_PING, _, _, "b")
-	set_task(CREDIT_EVERY * 60.0, "task_credit", TASK_CREDIT, _, _, "b")
+	// chat messages and the credit line: checked once a minute against the time they
+	// last showed, which outlasts the map change (a timer would restart every map)
+	set_task(60.0, "task_messages", TASK_MSGS, _, _, "b")
 }
 
 public plugin_cfg()
@@ -455,12 +456,6 @@ load_ads()
 	new every = g_Career ? 0 : clamp(get_pcvar_num(g_pAdsInterval), 0, 60)
 	if (!ArraySize(g_Ads))
 		every = 0
-	if (every != g_AdEvery || !task_exists(TASK_ADS))
-	{
-		remove_task(TASK_ADS)
-		if (every > 0)
-			set_task(every * 60.0, "task_ad", TASK_ADS, _, _, "b")
-	}
 	g_AdEvery = every
 }
 
@@ -510,10 +505,49 @@ fill(text[], len)
 	}
 }
 
-public task_ad()
+public task_messages()
+{
+	if (g_Career)
+		return
+	if (g_AdEvery > 0 && humans() && due("gm_adat", g_AdEvery * 60))
+	{
+		show_ad()
+		mark_shown("gm_adat")
+	}
+	// on a listen server the host is one of the humans, and already knows
+	if (get_pcvar_num(g_pCredit) && humans() - (is_dedicated_server() ? 0 : 1) > 0 && due("gm_creditat", CREDIT_EVERY * 60))
+	{
+		show_credit()
+		mark_shown("gm_creditat")
+	}
+}
+
+// Has `secs` passed since the time kept in localinfo `key`? A fresh server starts
+// counting now.
+bool:due(const key[], secs)
+{
+	new buf[16]
+	get_localinfo(key, buf, charsmax(buf))
+	new last = str_to_num(buf), now = get_systime()
+	if (last <= 0 || last > now)
+	{
+		mark_shown(key)
+		return false
+	}
+	return now - last >= secs
+}
+
+mark_shown(const key[])
+{
+	new buf[16]
+	num_to_str(get_systime(), buf, charsmax(buf))
+	set_localinfo(key, buf)
+}
+
+show_ad()
 {
 	new n = ArraySize(g_Ads)
-	if (!n || g_Career || !humans())
+	if (!n)
 		return
 	new i
 	if (get_pcvar_num(g_pAdsRandom) && n > 1)
@@ -548,13 +582,8 @@ public task_ad()
 
 // Now and then, while people other than the host are on: where the server comes from
 // (gm_credit 0 turns it off; the app's Chat messages page has the switch)
-public task_credit()
+show_credit()
 {
-	if (!get_pcvar_num(g_pCredit) || g_Career)
-		return
-	// on a listen server the host is one of the humans, and already knows
-	if (humans() - (is_dedicated_server() ? 0 : 1) <= 0)
-		return
 	client_print_color(0, print_team_default, "^4[Loner-Strike]^1 This server runs on Loner-Strike, free for CS 1.6 and Condition Zero at ^4lonerstrike.com")
 }
 
