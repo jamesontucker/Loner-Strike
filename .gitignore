@@ -23,3 +23,7 @@ __pycache__/
 # made by setup.py for this computer
 Start Loner-Strike.command
 Start Loner-Strike.bat
+
+# app build output
+app/src-tauri/target/
+app/src-tauri/gen/
