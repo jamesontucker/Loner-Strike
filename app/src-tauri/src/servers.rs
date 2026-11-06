@@ -1405,7 +1405,8 @@ fn hide_passwords(line: &str) -> String {
 }
 
 fn view(e: &Entry) -> Value {
-    let loner = setup::record::Record::open(&e.dir.join(&e.game)).installed("core");
+    let record = setup::record::Record::open(&e.dir.join(&e.game));
+    let loner = record.installed("core");
     let (state, uptime, error) = if e.remote.is_some() && e.ready {
         let (on, secs) = remote_state(e);
         (if on { "running" } else { "stopped" }, secs, None)
@@ -1434,7 +1435,8 @@ fn view(e: &Entry) -> Value {
            "maxplayers": e.maxplayers, "ready": e.ready, "state": state, "uptime": uptime, "error": error,
            "imported": e.imported, "loner": loner, "dir": e.dir,
            "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(), "pending_restart": pending_restart(&e.id),
-           "listen_ip": e.listen_ip, "extra_args": e.extra_args, "password": join_password(e)})
+           "listen_ip": e.listen_ip, "extra_args": e.extra_args, "password": join_password(e),
+           "installed": record.component_ids()})
 }
 
 // ---- which game the panel controls -----------------------------------------------------
