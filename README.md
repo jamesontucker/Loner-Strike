@@ -6,7 +6,7 @@ Counter-Strike 1.6 / Condition Zero set up like an old community server, except 
 
 ## What's in it
 
-- 20 game modes: Classic, Deathmatch, Free for all, Gun Game, Zombie Plague (two versions), Warcraft 3, SuperHero, Hide and Seek, Paintball, Deathrun, Base Builder, SoccerJam, Surf, Kreedz, plus knife/pistol/deagle/AWP/scout modes
+- 21 game modes: Classic, Match (5v5 scrims: ready up, knife round, MR15, past results), Deathmatch, Free for all, Gun Game, Zombie Plague (two versions), Warcraft 3, SuperHero, Hide and Seek, Paintball, Deathrun, Base Builder, SoccerJam, Surf, Kreedz, plus knife/pistol/deagle/AWP/scout modes
 - Add-ons: grappling hook, Quake sounds, gore, Roll the Dice, round-end music
 - Bot styles, from "newbie lobby" up to "Gods"
 - Bots with names and clan tags that come and go like real players

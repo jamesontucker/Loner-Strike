@@ -26,7 +26,7 @@ use std::process::{Child, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
+pub(crate) const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
 const FOLDER: &str = "Loner-Strike Servers";
 /// The player's own game hosts on 27015, so servers start above it and never clash
 const FIRST_PORT: u16 = 27016;
@@ -61,6 +61,12 @@ pub struct Entry {
     /// a server folder the player already had: never deleted, only forgotten
     #[serde(default)]
     pub imported: bool,
+    /// HLTV spectator relay (hltv.rs)
+    #[serde(default)]
+    pub hltv: crate::hltv::Settings,
+    /// a daily restart at a set time (the Schedule tab of Server extras)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restart: Option<DailyRestart>,
 }
 
 fn default_visibility() -> String {
@@ -83,7 +89,7 @@ impl Entry {
     }
 
     /// The panel's RCON password, shared with the plugin (game.rs writes it).
-    fn rcon(&self) -> Option<crate::rcon::Rcon> {
+    pub(crate) fn rcon(&self) -> Option<crate::rcon::Rcon> {
         let pw = std::fs::read_to_string(self.dir.join(&self.game).join("addons/amxmodx/data/gamemodes/panel_rcon.txt")).ok()?;
         Some(crate::rcon::Rcon::new(pw.trim().to_string(), self.port))
     }
@@ -121,7 +127,7 @@ fn save(list: &[Entry]) -> Result<(), String> {
 
 static LIST_LOCK: Mutex<()> = Mutex::new(());
 
-fn edit(f: impl FnOnce(&mut Vec<Entry>)) -> Result<(), String> {
+pub(crate) fn edit(f: impl FnOnce(&mut Vec<Entry>)) -> Result<(), String> {
     let _g = LIST_LOCK.lock().unwrap();
     let mut list = load();
     f(&mut list);
@@ -403,6 +409,8 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         maxplayers: default_slots(),
         ready: false,
         imported: false,
+        hltv: Default::default(),
+        restart: None,
     };
     let base = root.join(".base");
     let g = req.game.clone();
@@ -561,6 +569,8 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         maxplayers: default_slots(),
         ready: true,
         imported: true,
+        hltv: Default::default(),
+        restart: None,
     };
     // name and password as the Friends tab keeps them (it writes friends.cfg only when
     // something changes there, so the server's own server.cfg keeps working meanwhile)
@@ -632,7 +642,7 @@ fn launch_args(e: &Entry) -> Vec<String> {
 }
 
 /// .../Bottles/<bottle>/drive_c/Some Folder/hlds.exe -> C:\Some Folder\hlds.exe
-fn windows_path(p: &Path) -> Option<String> {
+pub(crate) fn windows_path(p: &Path) -> Option<String> {
     let s = p.to_string_lossy();
     let i = s.find("/drive_c/")?;
     Some(format!("C:\\{}", s[i + 9..].replace('/', "\\")))
@@ -688,6 +698,7 @@ pub fn start(id: &str) -> Result<(), String> {
         r.errors.remove(id);
         r.procs.insert(id.into(), Proc { child, started: Instant::now(), stopping: false });
     });
+    crate::hltv::server_started(&e);
     watch();
     Ok(())
 }
@@ -695,6 +706,10 @@ pub fn start(id: &str) -> Result<(), String> {
 /// Asks the server to quit (RCON), then ends it if it hasn't after a few seconds.
 pub fn stop(id: &str) {
     let e = get(id);
+    // HLTV first, so its demo is finished properly
+    if let Some(e) = &e {
+        crate::hltv::stop(e);
+    }
     let child = with_runs(|r| {
         r.procs.get_mut(id).map(|p| p.stopping = true);
         r.procs.remove(id).map(|p| p.child)
@@ -1109,6 +1124,178 @@ pub fn local_routes() -> Router<Shared> {
         .route("/api/servers/pick-folder", post(api_pick_folder))
 }
 
+// ---- daily restart (Server extras' Schedule tab) ------------------------------------
+//
+// A running server can restart itself once a day at a set local time, while the app is
+// open. Players get a warning 5 minutes and 1 minute before, through gm_extras'
+// gm_extraswarn (a fixed command with a number), and once more as it restarts.
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct DailyRestart {
+    #[serde(default)]
+    pub on: bool,
+    #[serde(default = "default_restart_hour")]
+    pub hour: u8,
+    #[serde(default)]
+    pub minute: u8,
+}
+
+fn default_restart_hour() -> u8 {
+    5
+}
+
+impl Default for DailyRestart {
+    fn default() -> Self {
+        DailyRestart { on: false, hour: default_restart_hour(), minute: 0 }
+    }
+}
+
+impl DailyRestart {
+    pub fn time(&self) -> String {
+        format!("{:02}:{:02}", self.hour, self.minute)
+    }
+}
+
+/// "04:30" -> (4, 30)
+pub fn parse_time(s: &str) -> Option<(u8, u8)> {
+    let (h, m) = s.trim().split_once(':')?;
+    if h.is_empty() || h.len() > 2 || m.len() != 2 || !h.bytes().chain(m.bytes()).all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let (h, m): (u8, u8) = (h.parse().ok()?, m.parse().ok()?);
+    (h < 24 && m < 60).then_some((h, m))
+}
+
+/// The daily restart of the server in `dir` (the folder with hlds.exe) running `game`.
+pub fn restart_of(dir: &Path, game: &str) -> Option<DailyRestart> {
+    load().into_iter().find(|e| e.dir == dir && e.game == game).map(|e| e.restart.unwrap_or_default())
+}
+
+pub fn set_restart(dir: &Path, game: &str, r: DailyRestart) -> Result<(), String> {
+    if get_by_dir(dir, game).is_none() {
+        return Err("That server isn't there any more.".into());
+    }
+    edit(|l| l.iter_mut().filter(|e| e.dir == dir && e.game == game).for_each(|e| e.restart = Some(r.clone())))?;
+    schedule_restarts();
+    Ok(())
+}
+
+fn get_by_dir(dir: &Path, game: &str) -> Option<Entry> {
+    load().into_iter().find(|e| e.dir == dir && e.game == game)
+}
+
+/// What to do now (minute of the day) for a restart at `at`: Some(5) and Some(1) warn,
+/// Some(0) restarts.
+pub fn restart_step(now: u32, at: u32) -> Option<u32> {
+    let left = (at + 1440 - now % 1440) % 1440;
+    [5, 1, 0].contains(&left).then_some(left)
+}
+
+/// (a key for today, minute of the day), local time.
+#[cfg(unix)]
+fn local_now() -> (u32, u32) {
+    // SAFETY: localtime_r only writes into the tm we pass
+    unsafe {
+        let t = libc::time(std::ptr::null_mut());
+        let mut tm: libc::tm = std::mem::zeroed();
+        libc::localtime_r(&t, &mut tm);
+        ((tm.tm_year as u32) * 1000 + tm.tm_yday as u32, (tm.tm_hour * 60 + tm.tm_min) as u32)
+    }
+}
+
+#[cfg(windows)]
+fn local_now() -> (u32, u32) {
+    use windows_sys::Win32::Foundation::SYSTEMTIME;
+    use windows_sys::Win32::System::SystemInformation::GetLocalTime;
+    // SAFETY: GetLocalTime only fills in the struct we pass
+    let st = unsafe {
+        let mut st: SYSTEMTIME = std::mem::zeroed();
+        GetLocalTime(&mut st);
+        st
+    };
+    (st.wYear as u32 * 10000 + st.wMonth as u32 * 100 + st.wDay as u32, st.wHour as u32 * 60 + st.wMinute as u32)
+}
+
+/// Starts the one thread that runs every server's daily restart (main.rs, and when a
+/// schedule is saved).
+pub fn schedule_restarts() {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        std::thread::spawn(|| {
+            let mut done: std::collections::HashSet<String> = std::collections::HashSet::new();
+            loop {
+                std::thread::sleep(Duration::from_secs(15));
+                let (day, now) = local_now();
+                done.retain(|k| k.ends_with(&format!("@{day}")));
+                for e in load() {
+                    let Some(r) = e.restart.clone().filter(|r| r.on && e.ready) else { continue };
+                    let Some(left) = restart_step(now, r.hour as u32 * 60 + r.minute as u32) else { continue };
+                    // each step once a day
+                    if !done.insert(format!("{}#{left}@{day}", e.id)) || !running(&e.id) {
+                        continue;
+                    }
+                    if left > 0 {
+                        if let Some(rcon) = e.rcon() {
+                            let _ = rcon.send(&format!("gm_extraswarn {left}"));
+                        }
+                    } else {
+                        let id = e.id.clone();
+                        std::thread::spawn(move || restart_now(&id));
+                    }
+                }
+            }
+        });
+    });
+}
+
+fn restart_now(id: &str) {
+    if let Some(rcon) = get(id).and_then(|e| e.rcon()) {
+        let _ = rcon.send("gm_extraswarn 0");
+    }
+    std::thread::sleep(Duration::from_secs(3));
+    stop(id);
+    // one left running from before the app started was only asked to quit
+    for _ in 0..60 {
+        if !get(id).map(|e| left_running(&e)).unwrap_or(false) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    if let Err(err) = start(id) {
+        with_runs(|r| r.errors.insert(id.to_string(), format!("The daily restart couldn't start it again: {err}")));
+    }
+}
+
+#[cfg(test)]
+mod restart_tests {
+    use super::*;
+
+    #[test]
+    fn restart_times() {
+        assert_eq!(parse_time("05:00"), Some((5, 0)));
+        assert_eq!(parse_time(" 4:30 "), Some((4, 30)));
+        assert_eq!(parse_time("23:59"), Some((23, 59)));
+        for bad in ["24:00", "12:60", "12", "1:5", "ab:cd", "-1:00", "12:00:00", ""] {
+            assert_eq!(parse_time(bad), None, "{bad}");
+        }
+        assert_eq!(DailyRestart::default().time(), "05:00");
+        let at = 5 * 60;
+        assert_eq!(restart_step(at - 5, at), Some(5));
+        assert_eq!(restart_step(at - 1, at), Some(1));
+        assert_eq!(restart_step(at, at), Some(0));
+        assert_eq!(restart_step(at - 3, at), None);
+        assert_eq!(restart_step(at + 1, at), None, "after the time: nothing until tomorrow");
+        // just after midnight, warnings come the evening before
+        assert_eq!(restart_step(1440 - 4, 1), Some(5));
+        assert_eq!(restart_step(0, 1), Some(1));
+        // servers.json from before schedules existed still loads
+        let e: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"czero","port":27016,"dir":"/x","kind":"crossover","bottle":null}"#).unwrap();
+        assert!(e.restart.is_none());
+        let r: DailyRestart = serde_json::from_str(r#"{"on":true}"#).unwrap();
+        assert_eq!(r.time(), "05:00");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1125,7 +1312,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false,
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None,
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -1140,7 +1327,7 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false,
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None,
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));

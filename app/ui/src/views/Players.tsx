@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Online, Player } from "../types";
 import { SectionHead, useCommand, useConfirm } from "../ui";
+import { MuteControl } from "./Community";
 
 const WEAPONS: [string, string][] = [
   ["weapon_ak47", "AK-47"], ["weapon_m4a1", "M4A1"], ["weapon_awp", "AWP"], ["weapon_deagle", "Desert Eagle"],
@@ -89,6 +90,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
                             <button className="btn danger" onClick={() => act(p, "kick")}>Kick</button>
                           </div>
                         )}
+                        {!p.host && !p.bot && p.steamid && <MuteControl steamid={p.steamid} name={p.name} />}
                       </div>
                     )}
                   </li>

@@ -405,9 +405,10 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
         .map
         .filter(|m| m.len() <= 31 && m.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c)))
         .or_else(|| last_map(&st));
-    let mut game_args: Vec<String> = Vec::new();
+    // the game's console goes to qconsole.log, so a crash can be looked into afterwards
+    let mut game_args: Vec<String> = vec!["-condebug".into()];
     if let (false, Some(m)) = (req.menu, map) {
-        game_args = vec!["+maxplayers".into(), "32".into(), "+map".into(), m];
+        game_args.extend(["+maxplayers".into(), "32".into(), "+map".into(), m]);
     }
     match crate::steam::launch(&g.hl, appid, &game_args) {
         Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))),

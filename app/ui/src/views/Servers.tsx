@@ -12,6 +12,8 @@ import { PlayLive } from "./Play";
 import { Players } from "./Players";
 import { MatchButtons, SettingsPage } from "./Settings";
 import type { Job, Scan } from "./Setup";
+import { Community } from "./Community";
+import { Hltv } from "./Hltv";
 import { ServerExtras } from "./ServerExtras";
 import { Sounds } from "./Sounds";
 import { Welcome } from "./Welcome";
@@ -146,11 +148,12 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
   );
 }
 
-type Tab = "extras" | "sounds" | "overview" | "friends" | "modes" | "maps" | "getmaps" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
+type Tab = "community" | "hltv" | "extras" | "sounds" | "overview" | "friends" | "modes" | "maps" | "getmaps" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
 const TABS: { id: Tab; label: string; group: string; live?: boolean }[] = [
   { id: "overview", label: "Overview", group: "Server" },
   { id: "friends", label: "Play with friends", group: "Server" },
   { id: "extras", label: "Rotation & chat", group: "Server" },
+  { id: "hltv", label: "HLTV", group: "Server" },
   { id: "modes", label: "Modes", group: "Game", live: true },
   { id: "maps", label: "Maps", group: "Game" },
   { id: "getmaps", label: "Get maps", group: "Game" },
@@ -159,6 +162,7 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean }[] = [
   { id: "fun", label: "Fun", group: "Game", live: true },
   { id: "players", label: "Players", group: "People", live: true },
   { id: "admins", label: "Admins", group: "People" },
+  { id: "community", label: "Stats & chat", group: "People" },
   { id: "welcome", label: "Welcome page", group: "People" },
   { id: "mods", label: "Mods", group: "Content" },
   { id: "sounds", label: "Sounds", group: "Content" },
@@ -283,6 +287,8 @@ export function ServerPage(props: {
           {tab === "welcome" && <Welcome target={s.id} />}
           {tab === "sounds" && <Sounds target={s.id} />}
           {tab === "extras" && <ServerExtras target={s.id} />}
+          {tab === "hltv" && <Hltv server={s} />}
+          {tab === "community" && <Community target={s.id} />}
         </>
       )}
     </div>

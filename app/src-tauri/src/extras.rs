@@ -8,6 +8,10 @@
 //! - Timed chat messages: <data>/ads.txt.
 //! - Away (AFK) and high-ping kicks, and fast downloads (sv_downloadurl): cvars in
 //!   <data>/extras.cfg, which gm_extras.amxx runs on every map and on gm_extrasreload.
+//! - Join and leave messages (with the country, from AMX Mod X's geoip module and the
+//!   GeoLite2 database its package ships), vote kick and vote ban, and going back to a
+//!   default map and mode when the server empties: cvars in extras.cfg too.
+//! - A dedicated server's daily restart, kept with the server (servers.rs runs it).
 //!
 //! The settings themselves live in <data>/extras.json. Everything written is built
 //! from validated map names, numbers, a checked URL and cleaned one-line messages.
@@ -96,6 +100,60 @@ impl Default for Ping {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct Joins {
+    pub on: bool,
+    /// "(Germany)" after the name, when the geoip data is there
+    pub country: bool,
+    pub skip_bots: bool,
+}
+
+impl Default for Joins {
+    fn default() -> Self {
+        Joins { on: false, country: true, skip_bots: true }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct Votes {
+    pub kick: bool,
+    pub ban: bool,
+    /// share of the players who can vote that must say yes
+    pub percent: u32,
+    /// players on the server before a vote can start
+    pub min_players: u32,
+    pub ban_minutes: u32,
+    /// minutes between votes
+    pub cooldown: u32,
+    /// bots can be vote-kicked
+    pub kick_bots: bool,
+}
+
+impl Default for Votes {
+    fn default() -> Self {
+        Votes { kick: false, ban: false, percent: 60, min_players: 3, ban_minutes: 30, cooldown: 3, kick_bots: false }
+    }
+}
+
+/// Back to a map (and mode) once the last real player has left.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct Empty {
+    pub on: bool,
+    pub minutes: u32,
+    pub map: String,
+    /// a Game Mode Menu mode id; "" keeps the mode
+    pub mode: String,
+}
+
+impl Default for Empty {
+    fn default() -> Self {
+        Empty { on: false, minutes: 5, map: String::new(), mode: String::new() }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default)]
 pub struct Settings {
@@ -108,6 +166,9 @@ pub struct Settings {
     pub ping: Ping,
     /// sv_downloadurl; empty: off
     pub fastdl: String,
+    pub joins: Joins,
+    pub votes: Votes,
+    pub empty: Empty,
 }
 
 /// One line for the game's chat: no control characters, at most `max` characters.
@@ -147,6 +208,22 @@ pub fn tidy(mut s: Settings) -> Result<Settings, String> {
     if !s.fastdl.is_empty() && !valid_url(&s.fastdl) {
         return Err("The download address has to start with http:// or https://, with no spaces or quotes.".into());
     }
+    s.votes.percent = s.votes.percent.clamp(30, 100);
+    s.votes.min_players = s.votes.min_players.clamp(2, 32);
+    s.votes.ban_minutes = s.votes.ban_minutes.clamp(1, 10080);
+    s.votes.cooldown = s.votes.cooldown.min(60);
+    s.empty.minutes = s.empty.minutes.clamp(1, 120);
+    s.empty.map = s.empty.map.trim().to_string();
+    s.empty.mode = s.empty.mode.trim().to_string();
+    if !s.empty.map.is_empty() && !valid_map(&s.empty.map) {
+        return Err("That isn't a map name.".into());
+    }
+    if !s.empty.mode.is_empty() && !valid_mode(&s.empty.mode) {
+        return Err("Unknown game mode.".into());
+    }
+    if s.empty.on && s.empty.map.is_empty() {
+        return Err("Pick the map to go back to.".into());
+    }
     Ok(s)
 }
 
@@ -155,6 +232,7 @@ pub fn cfg(s: &Settings) -> String {
     let b = |v: bool| if v { 1 } else { 0 };
     let ads = if s.ads.on && !s.ads.messages.is_empty() { s.ads.minutes } else { 0 };
     let url = if valid_url(&s.fastdl) { s.fastdl.as_str() } else { "" };
+    let empty_ok = s.empty.on && valid_map(&s.empty.map);
     [
         "// Written by Loner-Strike's Server extras page. Change it there.".to_string(),
         format!("gm_rotation_random {}", b(s.rotation_random)),
@@ -168,6 +246,19 @@ pub fn cfg(s: &Settings) -> String {
         format!("gm_ping_max {}", s.ping.max),
         format!("gm_ping_checks {}", s.ping.checks),
         format!("gm_fastdl \"{url}\""),
+        format!("gm_joins {}", b(s.joins.on)),
+        format!("gm_joins_country {}", b(s.joins.country)),
+        format!("gm_joins_skipbots {}", b(s.joins.skip_bots)),
+        format!("gm_votekick {}", b(s.votes.kick)),
+        format!("gm_voteban {}", b(s.votes.ban)),
+        format!("gm_vote_percent {}", s.votes.percent),
+        format!("gm_vote_min {}", s.votes.min_players),
+        format!("gm_vote_bantime {}", s.votes.ban_minutes),
+        format!("gm_vote_cooldown {}", s.votes.cooldown),
+        format!("gm_vote_bots {}", b(s.votes.kick_bots)),
+        format!("gm_empty {}", if empty_ok { s.empty.minutes } else { 0 }),
+        format!("gm_empty_map \"{}\"", if empty_ok { s.empty.map.as_str() } else { "" }),
+        format!("gm_empty_mode \"{}\"", if empty_ok && valid_mode(&s.empty.mode) { s.empty.mode.as_str() } else { "" }),
         String::new(),
     ]
     .join("\r\n")
@@ -331,6 +422,27 @@ fn modes(g: &Game) -> Vec<(String, String)> {
     parse_modes(&crate::sys::read_latin1(&g.dir.join("addons/amxmodx/configs/gamemodes/modes.ini")).unwrap_or_default())
 }
 
+/// Countries in join messages need AMX Mod X's geoip module and a MaxMind country
+/// database (AMX Mod X 1.10's package ships GeoLite2-Country.mmdb). The module loads by
+/// itself when a plugin uses it; gm_extras runs without it.
+fn geoip_ready(g: &Game) -> bool {
+    let am = g.dir.join("addons/amxmodx");
+    let module = ["geoip_amxx.dll", "geoip_amxx_i386.so"].iter().any(|m| am.join("modules").join(m).is_file());
+    let db = ["GeoLite2-Country.mmdb", "GeoIP2-Country.mmdb", "GeoLite2-City.mmdb", "GeoIP2-City.mmdb"].iter().any(|d| am.join("data").join(d).is_file());
+    module && db
+}
+
+/// The daily restart of a dedicated server (none for the player's own game).
+fn schedule(g: &Game) -> Value {
+    if !g.dedicated {
+        return Value::Null;
+    }
+    match crate::servers::restart_of(&g.hl, &g.name) {
+        Some(r) => json!({"on": r.on, "time": r.time()}),
+        None => Value::Null,
+    }
+}
+
 fn installed_maps(g: &Game) -> BTreeMap<String, String> {
     g.maps(false).iter().filter_map(|m| m["name"].as_str()).map(|n| (n.to_lowercase(), n.to_string())).collect()
 }
@@ -353,6 +465,8 @@ fn listing(g: &Game) -> Value {
         "current_mode": current,
         "plugin": g.dir.join("addons/amxmodx/plugins/gm_extras.amxx").exists(),
         "dedicated": g.dedicated,
+        "geoip": geoip_ready(g),
+        "schedule": schedule(g),
     })
 }
 
@@ -546,12 +660,18 @@ async fn api_settings(State(st): State<Shared>, headers: HeaderMap, Json(req): J
     if !from_panel(&headers) {
         return forbidden();
     }
-    let s = match tidy(req) {
+    let mut s = match tidy(req) {
         Ok(s) => s,
         Err(e) => return bad(e),
     };
     answer(
         with_game(&st, move |g| {
+            if !s.empty.map.is_empty() {
+                s.empty.map = installed_maps(g).get(&s.empty.map.to_lowercase()).cloned().ok_or(format!("{} isn't installed.", s.empty.map))?;
+            }
+            if !s.empty.mode.is_empty() && !modes(g).iter().any(|(id, _)| *id == s.empty.mode) {
+                return Err("That game mode isn't installed.".to_string());
+            }
             let _l = LOCK.lock().unwrap();
             save(&g.data, &s)?;
             reload(g);
@@ -592,6 +712,31 @@ async fn api_rotation(State(st): State<Shared>, headers: HeaderMap, Json(req): J
     )
 }
 
+#[derive(Deserialize)]
+struct ScheduleReq {
+    on: bool,
+    /// "HH:MM", local time
+    time: String,
+}
+
+/// A dedicated server's daily restart.
+async fn api_schedule(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<ScheduleReq>) -> Reply {
+    if !from_panel(&headers) {
+        return forbidden();
+    }
+    let Some((hour, minute)) = crate::servers::parse_time(&req.time) else { return bad("Pick a time like 05:00.") };
+    answer(
+        with_game(&st, move |g| {
+            if !g.dedicated {
+                return Err("Only dedicated servers restart on a schedule.".to_string());
+            }
+            crate::servers::set_restart(&g.hl, &g.name, crate::servers::DailyRestart { on: req.on, hour, minute })?;
+            Ok(listing(g))
+        })
+        .await,
+    )
+}
+
 /// The app window only: copies the custom content into a folder the user picks.
 async fn api_export(State(st): State<Shared>, headers: HeaderMap) -> Reply {
     use tauri_plugin_dialog::DialogExt;
@@ -620,6 +765,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/extras", get(api_get))
         .route("/api/extras/settings", post(api_settings))
         .route("/api/extras/rotation", post(api_rotation))
+        .route("/api/extras/schedule", post(api_schedule))
 }
 
 /// Only for the app window (a folder picker on this computer).
@@ -758,6 +904,36 @@ mod tests {
         write_rotation(&mode, &data, &[], false).unwrap();
         assert!(!mode.exists(), "an empty mode list is removed");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn extras_joins_votes_and_empty() {
+        let mut s = Settings::default();
+        assert!(s.joins.skip_bots && s.joins.country && !s.votes.kick_bots, "bots left out by default");
+        s.votes = Votes { kick: true, ban: true, percent: 5, min_players: 99, ban_minutes: 0, cooldown: 500, kick_bots: false };
+        s.empty = Empty { on: true, minutes: 0, map: " de_dust2 ".into(), mode: "classic".into() };
+        let t = tidy(s.clone()).unwrap();
+        assert_eq!((t.votes.percent, t.votes.min_players, t.votes.ban_minutes, t.votes.cooldown), (30, 32, 1, 60));
+        assert_eq!((t.empty.minutes, t.empty.map.as_str()), (1, "de_dust2"));
+        let c = cfg(&t);
+        for line in ["gm_votekick 1", "gm_voteban 1", "gm_vote_percent 30", "gm_vote_bots 0", "gm_joins 0", "gm_joins_skipbots 1", "gm_empty 1", "gm_empty_map \"de_dust2\"", "gm_empty_mode \"classic\""] {
+            assert!(c.contains(&format!("{line}\r\n")), "{line}");
+        }
+        // nothing that could end the cfg line
+        for (map, mode) in [("de_dust2\"; quit", ""), ("de_dust2", "Bad Mode"), ("", "")] {
+            let mut e = s.clone();
+            e.empty.map = map.into();
+            e.empty.mode = mode.into();
+            assert!(tidy(e).is_err(), "{map} {mode}");
+        }
+        // switched off: no map needed, and the plugin gets 0
+        let mut off = s.clone();
+        off.empty = Empty { on: false, ..Empty::default() };
+        let t = tidy(off).unwrap();
+        assert!(cfg(&t).contains("gm_empty 0\r\ngm_empty_map \"\"\r\ngm_empty_mode \"\"\r\n"));
+        // settings saved before these existed still load
+        let old: Settings = serde_json::from_str(r#"{"rotation_random": true, "fastdl": ""}"#).unwrap();
+        assert_eq!((old.joins, old.votes, old.empty), (Joins::default(), Votes::default(), Empty::default()));
     }
 
     #[test]

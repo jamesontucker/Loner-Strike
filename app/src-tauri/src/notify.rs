@@ -1,5 +1,6 @@
 //! A desktop notification when someone joins your game or one of your servers,
-//! for when Loner-Strike is in the background (Settings: "Tell me when someone joins").
+//! for when Loner-Strike is in the background (Settings: "Tell me when someone joins"),
+//! and one for each player report (say /report, see community.rs).
 
 use crate::server::Shared;
 use std::collections::{HashMap, HashSet};
@@ -30,10 +31,6 @@ pub fn watch(app: tauri::AppHandle, st: Shared) {
         let mut seen: HashMap<String, HashSet<(i64, String)>> = HashMap::new();
         loop {
             std::thread::sleep(Duration::from_secs(5));
-            if crate::app_api::load_settings().mute_joins {
-                seen.clear();
-                continue;
-            }
             let mut games: Vec<(String, String, std::sync::Arc<crate::game::Game>)> = Vec::new();
             if let Some(g) = st.local_game() {
                 games.push(("local".into(), "your game".into(), g));
@@ -42,6 +39,16 @@ pub fn watch(app: tauri::AppHandle, st: Shared) {
                 if let Some(g) = crate::servers::game_for(&e.id, || None) {
                     games.push((e.id.clone(), e.name.clone(), g));
                 }
+            }
+            // reports from players (say /report) always notify, whatever the join setting
+            for (_, label, g) in &games {
+                if let Some(text) = crate::community::report_note(&crate::community::new_reports(&g.data), label) {
+                    let _ = app.notification().builder().title("Loner-Strike").body(text).show();
+                }
+            }
+            if crate::app_api::load_settings().mute_joins {
+                seen.clear();
+                continue;
             }
             let focused = app.get_webview_window("main").and_then(|w| w.is_focused().ok()).unwrap_or(false);
             for (key, label, g) in games {

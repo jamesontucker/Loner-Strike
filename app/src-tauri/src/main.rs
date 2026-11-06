@@ -6,16 +6,19 @@ mod admins;
 mod app_api;
 mod connect;
 mod archive;
+mod community;
 mod content;
 mod extras;
 mod game;
 mod gamebanana;
+mod hltv;
 mod maps;
 mod notify;
 mod panel_api;
 mod plugins;
 mod prefs;
 mod rcon;
+mod scrim;
 mod server;
 mod servers;
 mod welcome;
@@ -70,6 +73,8 @@ fn main() {
                 tauri::async_runtime::spawn(check_for_update(app.handle().clone()));
             }
             connect::renew_loop();
+            // dedicated servers' daily restarts (Server extras, Schedule)
+            servers::schedule_restarts();
             notify::watch(app.handle().clone(), state.clone());
             #[cfg(target_os = "macos")]
             app.set_menu(mac_menu(app.handle())?)?;

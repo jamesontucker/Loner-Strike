@@ -240,6 +240,19 @@ async fn api_diagnostics(State(st): State<Shared>) -> Json<Value> {
             s.game_folders.len()
         ));
         out.push(format!("Game running: {}", crate::sys::game_running()));
+        // the end of the game's console (written with -condebug), for crashes
+        if let Some(g) = &game {
+            for p in [g.hl.join("qconsole.log"), g.dir.join("qconsole.log")] {
+                if let Ok(text) = crate::sys::read_latin1(&p) {
+                    let lines: Vec<&str> = text.lines().filter(|l| !l.to_lowercase().contains("password")).collect();
+                    out.push(format!("Last game console lines ({}):", p.display()));
+                    for l in &lines[lines.len().saturating_sub(40)..] {
+                        out.push(format!("  {l}"));
+                    }
+                    break;
+                }
+            }
+        }
         let job = crate::setup::current();
         if job.state != "idle" {
             out.push(format!("Last setup: {} ({}){}", job.kind, job.state, job.error.map(|e| format!(": {e}")).unwrap_or_default()));

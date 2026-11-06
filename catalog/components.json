@@ -263,6 +263,17 @@
    "bot_patched": false
   },
   {
+   "id": "mode-match",
+   "kind": "mode",
+   "name": "Match (5v5)",
+   "mode_id": "match",
+   "plugins": [
+    "gm_scrim.amxx"
+   ],
+   "source": "this repo / built in",
+   "bot_patched": false
+  },
+  {
    "id": "mode-war3",
    "kind": "mode",
    "name": "Warcraft 3",

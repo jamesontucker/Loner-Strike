@@ -4,6 +4,7 @@ import { Icon } from "../icons";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
 import { SectionHead, useCommand, useConfirm, useToast } from "../ui";
 import { MapCard } from "./Maps";
+import { MatchMode } from "./MatchMode";
 
 // How well bots handle each mode (shown on the cards)
 const BOT_RATING: Record<string, "great" | "ok" | "weak" | "none"> = {
@@ -126,6 +127,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
 
   return (
     <div className="stack">
+      {st.mode === "match" && <MatchMode />}
       {switching && <SwitchMode mode={switching} current={st.mode} map={st.map} maps={maps} onClose={() => setSwitching(null)} onGo={(map) => { setSwitching(null); if (switching.id === st.mode) { if (map) run("gm_map", [map]); } else run("gm_mode", map ? [switching.id, map] : [switching.id]); }} />}
       {data.presets.length > 0 && (
         <section>

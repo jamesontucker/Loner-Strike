@@ -12,6 +12,9 @@ type Settings = {
   afk: { on: boolean; spec: number; kick: number };
   ping: { on: boolean; max: number; checks: number };
   fastdl: string;
+  joins: { on: boolean; country: boolean; skip_bots: boolean };
+  votes: { kick: boolean; ban: boolean; percent: number; min_players: number; ban_minutes: number; cooldown: number; kick_bots: boolean };
+  empty: { on: boolean; minutes: number; map: string; mode: string };
 };
 type Data = {
   settings: Settings;
@@ -20,6 +23,8 @@ type Data = {
   current_mode: string;
   plugin: boolean;
   dedicated: boolean;
+  geoip: boolean;
+  schedule: { on: boolean; time: string } | null;
 };
 type Reply = Data | { ok: false; error: string };
 const failed = (r: Reply | { error?: string }): r is { ok: false; error: string } => "error" in r && !!r.error;
@@ -45,9 +50,15 @@ const AFK_SPEC = [60, 90, 120, 180, 300];
 const AFK_KICK = [0, 60, 120, 180, 300];
 const PING_MAX = [150, 200, 250, 300, 400];
 const PING_CHECKS = [3, 5, 10];
+const VOTE_PERCENT = [51, 60, 66, 75];
+const VOTE_MIN = [2, 3, 4, 6];
+const BAN_MINUTES = [15, 30, 60, 180, 1440];
+const VOTE_COOLDOWN = [0, 2, 3, 5, 10];
+const EMPTY_MINUTES = [2, 5, 10, 30];
 const MAP_NAME = /^[A-Za-z0-9_.-]{1,31}$/;
 const URL_OK = /^https?:\/\/[^\s/."'`;\\<>{}|^][^\s"'`;\\<>{}|^]*$/;
 
+const mins = (m: number) => (m >= 60 && m % 60 === 0 ? `${m / 60} ${m === 60 ? "hour" : "hours"}` : `${m} min`);
 const secs = (s: number) => (s < 60 ? `${s} sec` : s % 60 ? `${Math.floor(s / 60)} min ${s % 60} sec` : `${s / 60} min`);
 
 /** Small line icons (no arrow characters in the copy). */
@@ -63,8 +74,15 @@ const DOWN = "M6 9l6 6 6-6";
 const CROSS = "M6 6l12 12M18 6L6 18";
 
 /** Map rotation, chat messages, away and ping kicks, and fast downloads for the game or server being managed. */
-type ExtrasTab = "rotation" | "chat" | "kickers" | "downloads";
-const EXTRAS_TABS: [ExtrasTab, string][] = [["rotation", "Map rotation"], ["chat", "Chat messages"], ["kickers", "Kickers"], ["downloads", "Fast downloads"]];
+type ExtrasTab = "rotation" | "chat" | "kickers" | "people" | "schedule" | "downloads";
+const EXTRAS_TABS: [ExtrasTab, string][] = [
+  ["rotation", "Map rotation"],
+  ["chat", "Chat messages"],
+  ["kickers", "Kickers"],
+  ["people", "Joins & votes"],
+  ["schedule", "Schedule"],
+  ["downloads", "Fast downloads"],
+];
 
 export function ServerExtras({ target }: { target: string }) {
   const toast = useToast();
@@ -73,7 +91,8 @@ export function ServerExtras({ target }: { target: string }) {
   const [maps, setMaps] = useState<MapInfo[]>([]);
   const [tab, setTabRaw] = useState<ExtrasTab>(() => {
     try {
-      return (localStorage.getItem("ls.extrasTab") as ExtrasTab) || "rotation";
+      const t = localStorage.getItem("ls.extrasTab") as ExtrasTab;
+      return EXTRAS_TABS.some(([id]) => id === t) ? t : "rotation";
     } catch {
       return "rotation";
     }
@@ -129,6 +148,8 @@ export function ServerExtras({ target }: { target: string }) {
       {tab === "rotation" && <Rotation key={`rot-${target}`} d={d} maps={maps} send={send} saveSettings={saveSettings} />}
       {tab === "chat" && <Messages key={`ads-${target}`} d={d} saveSettings={saveSettings} />}
       {tab === "kickers" && <Kickers d={d} saveSettings={saveSettings} />}
+      {tab === "people" && <JoinsVotes d={d} saveSettings={saveSettings} />}
+      {tab === "schedule" && <Schedule key={`sched-${target}`} d={d} maps={maps} send={send} saveSettings={saveSettings} />}
       {tab === "downloads" && <FastDownloads key={`dl-${target}`} d={d} saveSettings={saveSettings} />}
     </div>
   );
@@ -494,6 +515,161 @@ function Kickers({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) {
         )}
       </div>
     </section>
+  );
+}
+
+// ---- joins and votes ------------------------------------------------------------------------
+
+function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) {
+  const { joins, votes } = d.settings;
+  const host = d.dedicated ? "" : ", you (the host)";
+  return (
+    <>
+      <section>
+        <SectionHead title="Join messages" note="A line in chat when someone joins or leaves, like Alex (Germany) joined." />
+        <div className="settings">
+          <Toggle label="Join and leave messages" note="Not on map changes, only when someone really comes or goes." on={joins.on} set={(v) => saveSettings({ joins: { ...joins, on: v } })} />
+          {joins.on && (
+            <>
+              {d.geoip ? (
+                <Toggle
+                  label="Show the country"
+                  note="Players on your own network show none, and people joining through the app's internet link may not either."
+                  on={joins.country}
+                  set={(v) => saveSettings({ joins: { ...joins, country: v } })}
+                />
+              ) : (
+                <div className="setting">
+                  <span className="name">
+                    Country<span className="note">This game doesn't have AMX Mod X's country database, so messages show without a country. Running Setup again adds it.</span>
+                  </span>
+                </div>
+              )}
+              <Toggle label="Leave out bots" note="Bots come and go a lot. Leave this on to keep chat quiet." on={joins.skip_bots} set={(v) => saveSettings({ joins: { ...joins, skip_bots: v } })} />
+            </>
+          )}
+        </div>
+      </section>
+      <section>
+        <SectionHead
+          title="Player votes"
+          note={`Players say /votekick or /voteban, pick someone from a menu, and everyone else votes for 20 seconds. Owners with immunity${host} and the TV relay can't be voted on.`}
+        />
+        <div className="settings">
+          <Toggle label="Vote kick" note="Someone kicked this way can join again straight away." on={votes.kick} set={(v) => saveSettings({ votes: { ...votes, kick: v } })} />
+          <Toggle label="Vote ban" note="Keeps them out for a while. Never for good: that's for you to decide." on={votes.ban} set={(v) => saveSettings({ votes: { ...votes, ban: v } })} />
+          {(votes.kick || votes.ban) && (
+            <>
+              <Choice
+                label="Yes votes needed"
+                note="Out of everyone who can vote, not counting the player being voted on."
+                values={VOTE_PERCENT}
+                current={votes.percent}
+                show={(v) => `${v}%`}
+                pick={(v) => saveSettings({ votes: { ...votes, percent: v } })}
+              />
+              <Choice
+                label="Players needed"
+                note="Real players on the server before anyone can start a vote."
+                values={VOTE_MIN}
+                current={votes.min_players}
+                show={(v) => `${v}`}
+                pick={(v) => saveSettings({ votes: { ...votes, min_players: v } })}
+              />
+              <Choice
+                label="Time between votes"
+                note="After one vote ends, before the next can start."
+                values={VOTE_COOLDOWN}
+                current={votes.cooldown}
+                show={(v) => (v ? `${v} min` : "None")}
+                pick={(v) => saveSettings({ votes: { ...votes, cooldown: v } })}
+              />
+            </>
+          )}
+          {votes.ban && (
+            <Choice label="Ban length" note="By Steam account, or by address for players without one." values={BAN_MINUTES} current={votes.ban_minutes} show={mins} pick={(v) => saveSettings({ votes: { ...votes, ban_minutes: v } })} />
+          )}
+          {votes.kick && (
+            <Toggle
+              label="Bots can be vote-kicked"
+              note="Handy when a bot is spoiling the game. The bot count goes down by one. Bots can never be banned."
+              on={votes.kick_bots}
+              set={(v) => saveSettings({ votes: { ...votes, kick_bots: v } })}
+            />
+          )}
+        </div>
+      </section>
+    </>
+  );
+}
+
+// ---- schedule ------------------------------------------------------------------------------
+
+function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; send: (p: string, b: unknown, done?: string) => Promise<boolean>; saveSettings: SaveSettings }) {
+  const empty = d.settings.empty;
+  const [time, setTime] = useState<string | null>(null);
+  const names = useMemo(() => maps.map((m) => m.name).filter((n) => MAP_NAME.test(n)).sort((a, b) => a.localeCompare(b)), [maps]);
+  const options = empty.map && !names.some((n) => n.toLowerCase() === empty.map.toLowerCase()) ? [empty.map, ...names] : names;
+  const firstMap = d.rotation.main.find((m) => names.includes(m)) ?? names[0] ?? "de_dust2";
+  const turnOn = (on: boolean) => saveSettings({ empty: { ...empty, on, map: empty.map || firstMap } });
+  const sched = d.schedule;
+  const at = time ?? sched?.time ?? "05:00";
+  const saveRestart = (on: boolean, t = at) =>
+    send("/api/extras/schedule", { on, time: t }, on ? `The server restarts every day at ${t}.` : "Daily restart is off").then((ok) => ok && setTime(null));
+
+  return (
+    <>
+      <section>
+        <SectionHead title="When the server empties" note="Once the last real player has left, wait a little, then go back to a map and mode of your choice. Bots don't count as players." />
+        <div className="settings">
+          <Toggle
+            label="Go back to a set map"
+            note={d.dedicated ? "So the next people to join find the server the way you like it." : "Your own game closes when you leave it, so this mostly matters on a dedicated server."}
+            on={empty.on}
+            set={turnOn}
+          />
+          {empty.on && (
+            <>
+              <Choice label="After" note="With nobody playing." values={EMPTY_MINUTES} current={empty.minutes} show={(v) => `${v} min`} pick={(v) => saveSettings({ empty: { ...empty, minutes: v } })} />
+              <div className="setting">
+                <span className="name">Map</span>
+                <select className="sched-select" aria-label="Map to go back to" value={empty.map} onChange={(e) => saveSettings({ empty: { ...empty, map: e.target.value } })}>
+                  {options.map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
+              {d.modes.length > 0 && (
+                <div className="setting">
+                  <span className="name">Mode<span className="note">Keep the mode, or switch to one.</span></span>
+                  <select className="sched-select" aria-label="Mode to go back to" value={empty.mode} onChange={(e) => saveSettings({ empty: { ...empty, mode: e.target.value } })}>
+                    <option value="">Keep the current mode</option>
+                    {d.modes.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+      {sched && (
+        <section>
+          <SectionHead title="Daily restart" note="Long-running servers stay smoother with a fresh start once a day. Players get a warning in chat 5 minutes and 1 minute before." />
+          <div className="settings">
+            <Toggle label="Restart every day" note="Only while the server is running and Loner-Strike is open on this computer." on={sched.on} set={(v) => saveRestart(v)} />
+            <div className="setting">
+              <span className="name">At<span className="note">This computer's time. Pick a quiet hour.</span></span>
+              <div className="row sched-time">
+                <input type="time" className="search" aria-label="Restart time" value={at} onChange={(e) => setTime(e.target.value)} />
+                <button className="btn" disabled={time === null || time === sched.time || !/^\d{2}:\d{2}$/.test(at)} onClick={() => saveRestart(sched.on, at)}>Save time</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+    </>
   );
 }
 

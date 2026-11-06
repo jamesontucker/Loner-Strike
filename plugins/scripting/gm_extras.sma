@@ -22,6 +22,20 @@
 	  first minute of a map, nor a player's first 45 seconds.
 	Fast downloads: gm_fastdl "<url>" sets sv_downloadurl, and clears it again when
 	  emptied (a value the host set some other way is left alone).
+	Joins: "Name (Germany) joined." / "Name left." in chat (gm_joins). The country comes
+	  from AMX Mod X's geoip module and its GeoLite2 database when both are there
+	  (gm_joins_country); addresses on the local network show none. gm_joins_skipbots 1
+	  leaves bots out. A map change isn't a leave and a join: who's here is kept in
+	  localinfo by userid.
+	Votes: say /votekick or /voteban opens a menu of players; everyone else then votes
+	  for 20 seconds. gm_vote_percent of the players who can vote (not the target) must
+	  say yes, with at least gm_vote_min players on the server; gm_vote_cooldown minutes
+	  between votes. Bans last gm_vote_bantime minutes (by SteamID, else by address).
+	  Immune: flag a, the listen-server host and HLTV; bots only to votekick, with
+	  gm_vote_bots 1 (and the bot count goes down by one).
+	Empty server: gm_empty minutes after the last real player leaves, go back to
+	  gm_empty_map (and Game Mode Menu mode gm_empty_mode, through its gm_mode command).
+	gm_extraswarn <minutes>: the app's daily restart warning (0: restarting now).
 
 	Never acts on bots, HLTV or the listen-server host; flag a (immunity) is never
 	moved or kicked, and admins (flag c) aren't kicked for ping. Nothing runs in Tour
@@ -29,7 +43,10 @@
 
 	Settings: data/gamemodes/extras.cfg (written by the app), re-read with gm_extrasreload.
 	Cvars: gm_rotation_random, gm_rtv_cycle, gm_ads_interval, gm_ads_random, gm_afk,
-	       gm_afk_spec, gm_afk_kick, gm_ping, gm_ping_max, gm_ping_checks, gm_fastdl
+	       gm_afk_spec, gm_afk_kick, gm_ping, gm_ping_max, gm_ping_checks, gm_fastdl,
+	       gm_joins, gm_joins_country, gm_joins_skipbots, gm_votekick, gm_voteban,
+	       gm_vote_percent, gm_vote_min, gm_vote_bantime, gm_vote_cooldown, gm_vote_bots,
+	       gm_empty, gm_empty_map, gm_empty_mode
 */
 
 #include <amxmodx>
@@ -37,6 +54,7 @@
 #include <cstrike>
 #include <fakemeta>
 #include <hamsandwich>
+#include <geoip>
 
 #define PLUGIN  "Server extras"
 #define VERSION "1.0"
@@ -45,6 +63,10 @@
 #define TASK_ADS     7100
 #define TASK_AFK     7200
 #define TASK_PING    7300
+#define TASK_EMPTY   7400
+#define TASK_VOTE    7500
+
+#define VOTE_TIME    20
 
 #define AFK_STEP     5
 #define PING_STEP    10.0
@@ -69,6 +91,15 @@ new Float:g_Active[33], Float:g_Spawned[33], Float:g_Look[33][3]
 new g_Idle[33], g_Away[33], bool:g_Moved[33], bool:g_Warned[33]
 new g_Pings[33][PING_SAMPLES], g_PingN[33], g_Strikes[33], Float:g_Joined[33]
 
+new g_pJoins, g_pJoinsCountry, g_pJoinsSkipBots
+new g_pVoteKick, g_pVoteBan, g_pVotePct, g_pVoteMin, g_pVoteBanTime, g_pVoteCool, g_pVoteBots
+new g_pEmpty, g_pEmptyMap, g_pEmptyMode
+new bool:g_Geo
+
+// the vote going on (g_VoteMenu -1: none)
+new g_VoteMenu = -1, bool:g_VoteBan, g_VoteUid, g_VoteName[32], g_VoteAuth[40], g_VoteIp[24]
+new g_VoteYes, g_VoteNo, g_VoteVoters, bool:g_CanVote[33], g_Voted[33], Float:g_VoteEnded
+
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR)
@@ -83,11 +114,36 @@ public plugin_init()
 	g_pPingMax     = register_cvar("gm_ping_max", "250")
 	g_pPingChecks  = register_cvar("gm_ping_checks", "5")
 	g_pFastdl      = register_cvar("gm_fastdl", "")
+	g_pJoins         = register_cvar("gm_joins", "0")
+	g_pJoinsCountry  = register_cvar("gm_joins_country", "1")
+	g_pJoinsSkipBots = register_cvar("gm_joins_skipbots", "1")
+	g_pVoteKick      = register_cvar("gm_votekick", "0")
+	g_pVoteBan       = register_cvar("gm_voteban", "0")
+	g_pVotePct       = register_cvar("gm_vote_percent", "60")
+	g_pVoteMin       = register_cvar("gm_vote_min", "3")
+	g_pVoteBanTime   = register_cvar("gm_vote_bantime", "30")
+	g_pVoteCool      = register_cvar("gm_vote_cooldown", "3")
+	g_pVoteBots      = register_cvar("gm_vote_bots", "0")
+	g_pEmpty         = register_cvar("gm_empty", "0")
+	g_pEmptyMap      = register_cvar("gm_empty_map", "")
+	g_pEmptyMode     = register_cvar("gm_empty_mode", "")
 	g_pChattime    = get_cvar_pointer("mp_chattime")
 
 	register_srvcmd("gm_extrasreload", "srv_reload")
+	register_srvcmd("gm_extraswarn", "srv_warn")
 	register_event("30", "ev_intermission", "a")
 	register_forward(FM_CmdStart, "fw_cmdstart")
+	// the game's own disconnect: not called on a map change (AMX Mod X's client_disconnected is)
+	register_forward(FM_ClientDisconnect, "fw_disconnect")
+	for (new i = 0; i < 2; i++)
+	{
+		new say[12]
+		copy(say, charsmax(say), i ? "say_team" : "say")
+		register_clcmd(fmt("%s /votekick", say), "cmd_votekick")
+		register_clcmd(fmt("%s votekick", say), "cmd_votekick")
+		register_clcmd(fmt("%s /voteban", say), "cmd_voteban")
+		register_clcmd(fmt("%s voteban", say), "cmd_voteban")
+	}
 	// RegisterHamPlayer also covers Condition Zero bots; the callback ignores them
 	RegisterHamPlayer(Ham_Spawn, "fw_spawn_post", 1)
 
@@ -116,7 +172,25 @@ public plugin_cfg()
 	new ad[8]
 	get_localinfo("gm_adnext", ad, charsmax(ad))
 	g_AdNext = str_to_num(ad)
+	g_Geo = bool:LibraryExists("geoip", LibType_Library)
 	load(true)
+}
+
+// The geoip module is optional: without it, joins show no country
+public plugin_natives()
+{
+	set_module_filter("module_filter")
+	set_native_filter("native_filter")
+}
+
+public module_filter(const module[], LibType:type)
+{
+	return equali(module, "geoip") ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+}
+
+public native_filter(const name[], index, trap)
+{
+	return (!trap && equali(name, "geoip_", 6)) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 public plugin_end()
@@ -148,6 +222,7 @@ load(bool:first)
 	load_ads()
 	if (!g_Career)
 		pick_next(first)
+	check_empty(0)
 }
 
 read_line(const path[], out[], len)
@@ -364,11 +439,12 @@ load_ads()
 	g_AdEvery = every
 }
 
-humans()
+// Real players on the server (not bots or HLTV), leaving out `skip`
+humans(skip = 0)
 {
 	new n
 	for (new i = 1; i <= MaxClients; i++)
-		if (is_user_connected(i) && !is_user_bot(i) && !is_user_hltv(i))
+		if (i != skip && is_user_connected(i) && !is_user_bot(i) && !is_user_hltv(i))
 			n++
 	return n
 }
@@ -461,11 +537,26 @@ public client_putinserver(id)
 	g_Warned[id] = false
 	g_PingN[id] = 0
 	g_Strikes[id] = 0
+	g_CanVote[id] = false
+	joined(id)
+	if (!is_user_bot(id) && !is_user_hltv(id))
+		remove_task(TASK_EMPTY)
 }
 
 public client_disconnected(id)
 {
 	g_Watch[id] = false
+}
+
+// Someone really left (or was kicked): not called on a map change
+public fw_disconnect(id)
+{
+	if (id < 1 || id > MaxClients || !is_user_connected(id))
+		return FMRES_IGNORED
+	left(id)
+	vote_left(id)
+	check_empty(id)
+	return FMRES_IGNORED
 }
 
 public fw_spawn_post(id)
@@ -642,4 +733,449 @@ apply_fastdl()
 		set_cvar_string("sv_downloadurl", "")
 		set_localinfo("gm_fastdl", "")
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Join and leave messages
+// ---------------------------------------------------------------------------
+
+// Who's on the server, by userid, kept over map changes (",12,15,")
+bool:was_here(uid)
+{
+	new list[320]
+	get_localinfo("gm_here", list, charsmax(list))
+	return contain(list, fmt(",%d,", uid)) >= 0
+}
+
+set_here(uid, bool:on)
+{
+	new list[320], key[16]
+	get_localinfo("gm_here", list, charsmax(list))
+	formatex(key, charsmax(key), ",%d,", uid)
+	replace_string(list, charsmax(list), key, ",")
+	if (!list[0] || strlen(list) > 280)       // a fresh server, or something went missing
+		copy(list, charsmax(list), ",")
+	if (on)
+		add(list, charsmax(list), key[1])
+	set_localinfo("gm_here", list)
+}
+
+// No country for this computer and the local network (or playit.gg, which arrives as local)
+bool:lan_ip(const ip[])
+{
+	if (!ip[0] || equal(ip, "loopback") || equal(ip, "127.", 4) || equal(ip, "10.", 3) || equal(ip, "192.168.", 8) || equal(ip, "169.254.", 8))
+		return true
+	if (equal(ip, "172.", 4))
+	{
+		new second = str_to_num(ip[4])
+		return second >= 16 && second <= 31
+	}
+	return false
+}
+
+bool:show_joins(id)
+{
+	if (g_Career || !get_pcvar_num(g_pJoins) || is_user_hltv(id))
+		return false
+	return !(is_user_bot(id) && get_pcvar_num(g_pJoinsSkipBots))
+}
+
+joined(id)
+{
+	if (is_user_hltv(id))
+		return
+	new uid = get_user_userid(id)
+	if (was_here(uid))          // back after a map change
+		return
+	set_here(uid, true)
+	if (!show_joins(id))
+		return
+	new name[32], ip[24], country[48]
+	get_user_name(id, name, charsmax(name))
+	if (g_Geo && !is_user_bot(id) && get_pcvar_num(g_pJoinsCountry))
+	{
+		get_user_ip(id, ip, charsmax(ip), 1)
+		if (!lan_ip(ip) && geoip_country_ex(ip, country, charsmax(country)) <= 0)
+			country[0] = 0
+	}
+	if (country[0])
+		client_print_color(0, print_team_grey, "%s ^3%s^1 (%s) joined.", TAG, name, country)
+	else
+		client_print_color(0, print_team_grey, "%s ^3%s^1 joined.", TAG, name)
+}
+
+left(id)
+{
+	set_here(get_user_userid(id), false)
+	if (!show_joins(id))
+		return
+	new name[32]
+	get_user_name(id, name, charsmax(name))
+	client_print_color(0, print_team_grey, "%s ^3%s^1 left.", TAG, name)
+}
+
+// ---------------------------------------------------------------------------
+// Vote kick and vote ban
+// ---------------------------------------------------------------------------
+
+public cmd_votekick(id)
+{
+	vote_menu(id, false)
+	return PLUGIN_CONTINUE
+}
+
+public cmd_voteban(id)
+{
+	vote_menu(id, true)
+	return PLUGIN_CONTINUE
+}
+
+bool:is_host(id)
+{
+	return id == 1 && !is_dedicated_server()
+}
+
+bool:can_target(id, bool:ban, starter)
+{
+	if (id == starter || !is_user_connected(id) || is_user_hltv(id) || is_host(id))
+		return false
+	if (get_user_flags(id) & ADMIN_IMMUNITY)
+		return false
+	if (is_user_bot(id))
+		return !ban && get_pcvar_num(g_pVoteBots) != 0
+	return true
+}
+
+// Whether `id` may start a vote now; tells them why not
+bool:may_start(id, bool:ban)
+{
+	if (g_Career || !is_user_connected(id) || is_user_bot(id) || is_user_hltv(id))
+		return false
+	new what[8]
+	copy(what, charsmax(what), ban ? "ban" : "kick")
+	if (!get_pcvar_num(ban ? g_pVoteBan : g_pVoteKick))
+	{
+		client_print_color(id, print_team_default, "%s Vote %s is off on this server.", TAG, what)
+		return false
+	}
+	if (g_VoteMenu != -1)
+	{
+		client_print_color(id, print_team_default, "%s A vote is going on already.", TAG)
+		return false
+	}
+	new need = clamp(get_pcvar_num(g_pVoteMin), 2, 32)
+	if (humans() < need)
+	{
+		client_print_color(id, print_team_default, "%s Vote %s needs at least %d players on the server.", TAG, what, need)
+		return false
+	}
+	new wait = floatround(g_VoteEnded + clamp(get_pcvar_num(g_pVoteCool), 0, 60) * 60.0 - get_gametime(), floatround_ceil)
+	if (g_VoteEnded > 0.0 && wait > 0)
+	{
+		client_print_color(id, print_team_default, "%s The next vote can start in %d:%02d.", TAG, wait / 60, wait % 60)
+		return false
+	}
+	return true
+}
+
+vote_menu(id, bool:ban)
+{
+	if (!may_start(id, ban))
+		return
+	new menu = menu_create(ban ? "\yVote to ban who?" : "\yVote to kick who?", "pick_handler")
+	new name[32], info[16], n
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (!can_target(i, ban, id))
+			continue
+		get_user_name(i, name, charsmax(name))
+		formatex(info, charsmax(info), "%d %d", ban, get_user_userid(i))
+		menu_additem(menu, name, info)
+		n++
+	}
+	if (!n)
+	{
+		menu_destroy(menu)
+		client_print_color(id, print_team_default, "%s There's nobody here you can vote to %s.", TAG, ban ? "ban" : "kick")
+		return
+	}
+	menu_display(id, menu)
+}
+
+by_userid(uid)
+{
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_connected(i) && get_user_userid(i) == uid)
+			return i
+	return 0
+}
+
+public pick_handler(id, menu, item)
+{
+	if (item < 0)
+	{
+		menu_destroy(menu)
+		return PLUGIN_HANDLED
+	}
+	new info[16], access, cb, a[4], b[12]
+	menu_item_getinfo(menu, item, access, info, charsmax(info), _, _, cb)
+	menu_destroy(menu)
+	parse(info, a, charsmax(a), b, charsmax(b))
+	new bool:ban = str_to_num(a) != 0
+	new target = by_userid(str_to_num(b))
+	// everything again: time passed while the menu was open
+	if (!may_start(id, ban))
+		return PLUGIN_HANDLED
+	if (!target || !can_target(target, ban, id))
+	{
+		client_print_color(id, print_team_default, "%s That player can't be voted on any more.", TAG)
+		return PLUGIN_HANDLED
+	}
+	start_vote(id, target, ban)
+	return PLUGIN_HANDLED
+}
+
+start_vote(starter, target, bool:ban)
+{
+	g_VoteBan = ban
+	g_VoteUid = get_user_userid(target)
+	get_user_name(target, g_VoteName, charsmax(g_VoteName))
+	get_user_authid(target, g_VoteAuth, charsmax(g_VoteAuth))
+	get_user_ip(target, g_VoteIp, charsmax(g_VoteIp), 1)
+	g_VoteYes = 0
+	g_VoteNo = 0
+	g_VoteVoters = 0
+
+	new title[96]
+	if (ban)
+		formatex(title, charsmax(title), "\yBan %s for %d minutes?", g_VoteName, clamp(get_pcvar_num(g_pVoteBanTime), 1, 10080))
+	else
+		formatex(title, charsmax(title), "\yKick %s?", g_VoteName)
+	g_VoteMenu = menu_create(title, "vote_handler")
+	menu_additem(g_VoteMenu, "Yes")
+	menu_additem(g_VoteMenu, "No")
+	menu_setprop(g_VoteMenu, MPROP_EXIT, MEXIT_NEVER)
+
+	new name[32]
+	get_user_name(starter, name, charsmax(name))
+	client_print_color(0, print_team_grey, "%s ^3%s^1 started a vote to %s ^3%s^1. Vote in the menu.", TAG, name, ban ? "ban" : "kick", g_VoteName)
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		g_Voted[i] = 0
+		g_CanVote[i] = i != target && is_user_connected(i) && !is_user_bot(i) && !is_user_hltv(i)
+		if (!g_CanVote[i])
+			continue
+		g_VoteVoters++
+		if (i == starter)
+		{
+			g_Voted[i] = 1
+			g_VoteYes++
+		}
+		else
+			menu_display(i, g_VoteMenu, 0, VOTE_TIME)
+	}
+	set_task(VOTE_TIME + 1.0, "task_vote_end", TASK_VOTE)
+	if (g_VoteYes + g_VoteNo >= g_VoteVoters)
+		end_vote()
+}
+
+public vote_handler(id, menu, item)
+{
+	if (menu != g_VoteMenu || item < 0 || id < 1 || id > MaxClients || !g_CanVote[id] || g_Voted[id])
+		return PLUGIN_HANDLED
+	g_Voted[id] = item == 0 ? 1 : 2
+	if (item == 0)
+		g_VoteYes++
+	else
+		g_VoteNo++
+	if (g_VoteYes + g_VoteNo >= g_VoteVoters)
+		end_vote()
+	return PLUGIN_HANDLED
+}
+
+// A voter left: they no longer count. The target left: a kick vote is over.
+vote_left(id)
+{
+	if (g_VoteMenu == -1)
+		return
+	if (get_user_userid(id) == g_VoteUid && !g_VoteBan)
+	{
+		close_vote()
+		client_print_color(0, print_team_grey, "%s ^3%s^1 left, so the vote is over.", TAG, g_VoteName)
+		return
+	}
+	if (g_CanVote[id])
+	{
+		g_CanVote[id] = false
+		g_VoteVoters--
+		// their vote goes with them
+		if (g_Voted[id] == 1)
+			g_VoteYes--
+		else if (g_Voted[id] == 2)
+			g_VoteNo--
+		g_Voted[id] = 0
+		if (g_VoteVoters <= 0 || g_VoteYes + g_VoteNo >= g_VoteVoters)
+			end_vote()
+	}
+}
+
+close_vote()
+{
+	if (g_VoteMenu == -1)
+		return
+	new menu = g_VoteMenu
+	g_VoteMenu = -1
+	remove_task(TASK_VOTE)
+	g_VoteEnded = get_gametime()
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		new old, open
+		if (is_user_connected(i) && player_menu_info(i, old, open) && open == menu)
+			menu_cancel(i)
+	}
+	menu_destroy(menu)
+}
+
+public task_vote_end()
+{
+	end_vote()
+}
+
+bool:steam_id(const auth[])
+{
+	if (!equal(auth, "STEAM_", 6) || equal(auth, "STEAM_ID", 8))
+		return false
+	for (new i = 0; auth[i]; i++)
+		if (!isdigit(auth[i]) && !(auth[i] >= 'A' && auth[i] <= 'Z') && auth[i] != '_' && auth[i] != ':')
+			return false
+	return true
+}
+
+bool:plain_ip(const ip[])
+{
+	for (new i = 0; ip[i]; i++)
+		if (!isdigit(ip[i]) && ip[i] != '.')
+			return false
+	return ip[0] != 0
+}
+
+end_vote()
+{
+	if (g_VoteMenu == -1)
+		return
+	close_vote()
+	new pct = clamp(get_pcvar_num(g_pVotePct), 30, 100)
+	new voters = max(g_VoteVoters, 1)
+	new need = (pct * voters + 99) / 100
+	if (g_VoteYes < need)
+	{
+		client_print_color(0, print_team_grey, "%s The vote failed: %d of %d voted yes, %d needed. ^3%s^1 stays.", TAG, g_VoteYes, voters, need, g_VoteName)
+		return
+	}
+	new target = by_userid(g_VoteUid)
+	if (g_VoteBan)
+	{
+		new minutes = clamp(get_pcvar_num(g_pVoteBanTime), 1, 10080)
+		// a player through playit.gg or on this computer shares the local address: kick only
+		if (steam_id(g_VoteAuth))
+			server_cmd("banid %d %s", minutes, g_VoteAuth)
+		else if (plain_ip(g_VoteIp) && !equal(g_VoteIp, "127.", 4))
+			server_cmd("addip %d %s", minutes, g_VoteIp)
+		if (target)
+			kick(target, fmt("Banned for %d minutes by a vote of the players", minutes))
+		client_print_color(0, print_team_grey, "%s The vote passed (%d of %d). ^3%s^1 is banned for %d minutes.", TAG, g_VoteYes, voters, g_VoteName, minutes)
+		return
+	}
+	if (!target)
+	{
+		client_print_color(0, print_team_grey, "%s The vote passed, but ^3%s^1 left already.", TAG, g_VoteName)
+		return
+	}
+	if (is_user_bot(target))
+	{
+		// one bot fewer, instead of the game adding a new one
+		new quota = get_cvar_pointer("bot_quota")
+		if (quota && get_pcvar_num(quota) > 0)
+			set_pcvar_num(quota, get_pcvar_num(quota) - 1)
+	}
+	kick(target, "Kicked by a vote of the players")
+	client_print_color(0, print_team_grey, "%s The vote passed (%d of %d). ^3%s^1 was kicked.", TAG, g_VoteYes, voters, g_VoteName)
+}
+
+// ---------------------------------------------------------------------------
+// Empty server: back to a default map (and mode)
+// ---------------------------------------------------------------------------
+
+// true when there's nothing to go back to, or the server is there already
+bool:at_default()
+{
+	new map[32], cur[32], mode[32], now[32]
+	get_pcvar_string(g_pEmptyMap, map, charsmax(map))
+	if (!plain_name(map) || !is_map_valid(map))
+		return true
+	get_mapname(cur, charsmax(cur))
+	if (!equali(map, cur))
+		return false
+	get_pcvar_string(g_pEmptyMode, mode, charsmax(mode))
+	if (!mode[0] || is_plugin_loaded("gamemodes.amxx", true) == -1)
+		return true
+	read_line(fmt("%s/current.txt", g_DataDir), now, charsmax(now))
+	return equali(mode, now) != 0
+}
+
+// `leaving`: a player on their way out (still counted as connected)
+check_empty(leaving)
+{
+	remove_task(TASK_EMPTY)
+	new minutes = get_pcvar_num(g_pEmpty)
+	if (g_Career || minutes <= 0 || humans(leaving) > 0 || at_default())
+		return
+	set_task(clamp(minutes, 1, 120) * 60.0, "task_empty", TASK_EMPTY)
+}
+
+public task_empty()
+{
+	if (g_Career || get_pcvar_num(g_pEmpty) <= 0 || humans() > 0 || at_default())
+		return
+	// someone still loading in counts too: try again later
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (is_user_connecting(i) && !is_user_bot(i) && !is_user_hltv(i))
+		{
+			set_task(60.0, "task_empty", TASK_EMPTY)
+			return
+		}
+	}
+	new map[32], mode[32]
+	get_pcvar_string(g_pEmptyMap, map, charsmax(map))
+	get_pcvar_string(g_pEmptyMode, mode, charsmax(mode))
+	new bool:menu = is_plugin_loaded("gamemodes.amxx", true) != -1
+	server_print("[extras] nobody is playing: back to %s", map)
+	if (menu && mode[0] && plain_name(mode))
+		server_cmd("gm_mode %s %s", mode, map)
+	else if (menu)
+		server_cmd("gm_map %s", map)
+	else
+		server_cmd("changelevel %s", map)
+}
+
+// ---------------------------------------------------------------------------
+// Daily restart warning (sent by the app)
+// ---------------------------------------------------------------------------
+
+public srv_warn()
+{
+	new arg[8], text[96]
+	read_argv(1, arg, charsmax(arg))
+	new minutes = str_to_num(arg)
+	if (minutes <= 0)
+		copy(text, charsmax(text), "The server is restarting now. Rejoin in a minute.")
+	else if (minutes == 1)
+		copy(text, charsmax(text), "The server restarts in 1 minute.")
+	else
+		formatex(text, charsmax(text), "The server restarts in %d minutes.", minutes)
+	set_hudmessage(255, 220, 80, -1.0, 0.3, 0, 0.0, 8.0, 0.3, 0.5, -1)
+	show_hudmessage(0, "%s", text)
+	client_print_color(0, print_team_red, "%s ^3%s", TAG, text)
+	return PLUGIN_HANDLED
 }

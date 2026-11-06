@@ -151,15 +151,18 @@ pub fn router(state: Shared, listener: Listener) -> Router {
         .merge(crate::admins::routes())
         .merge(crate::setup_api::routes())
         .merge(crate::servers::routes())
+        .merge(crate::hltv::routes())
         .merge(crate::welcome::routes())
         .merge(crate::extras::routes())
+        .merge(crate::scrim::routes())
+        .merge(crate::community::routes())
         .merge(crate::prefs::routes())
         .merge(crate::plugins::routes())
         .merge(crate::sounds::routes())
         .fallback(ui);
     let routes = routes.layer(middleware::from_fn(with_target));
     let routes = match listener {
-        Listener::Local => routes.merge(crate::servers::local_routes()).merge(crate::prefs::local_routes()).merge(crate::plugins::local_routes()).merge(crate::sounds::local_routes()).merge(crate::extras::local_routes()).layer(middleware::from_fn_with_state(state.clone(), guard_local)),
+        Listener::Local => routes.merge(crate::servers::local_routes()).merge(crate::hltv::local_routes()).merge(crate::prefs::local_routes()).merge(crate::plugins::local_routes()).merge(crate::sounds::local_routes()).merge(crate::extras::local_routes()).layer(middleware::from_fn_with_state(state.clone(), guard_local)),
         Listener::Lan => routes.layer(middleware::from_fn_with_state(state.clone(), guard_lan)),
     };
     routes.with_state(state)

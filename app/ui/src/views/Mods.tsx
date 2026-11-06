@@ -7,7 +7,7 @@ import type { Job, Scan } from "./Setup";
 
 const BOT_NOTE = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" };
 const BOT_RATING: Record<string, "great" | "ok" | "weak" | "none"> = {
-  hns: "ok", deathrun: "ok", surf: "ok", soccerjam: "weak", basebuilder: "weak", kreedz: "none",
+  hns: "ok", deathrun: "ok", match: "ok", surf: "ok", soccerjam: "weak", basebuilder: "weak", kreedz: "none",
 };
 
 // Part of Loner-Strike's own plugin: always there once the basics are installed
@@ -21,6 +21,7 @@ const BUILT_IN: { id: string; name: string; kind: "mode" | "addon"; description:
   { id: "awp", name: "AWP Only", kind: "mode", description: "Free AWP every spawn" },
   { id: "scoutz", name: "Scoutz & Knivez", kind: "mode", description: "Scouts, low gravity, air control" },
   { id: "surf", name: "Surf", kind: "mode", description: "Air control, free guns, long rounds" },
+  { id: "match", name: "Match (5v5)", kind: "mode", description: "Scrims and pick-up games: ready up, knife for sides, MR15 with half-time" },
   { id: "quakesounds", name: "Quake sounds", kind: "addon", description: "Killing spree and headshot announcers" },
 ];
 const SORTS: [string, string][] = [["name", "A to Z"], ["installed", "Installed first"], ["kind", "Modes first"], ["bots", "Best with bots"]];
