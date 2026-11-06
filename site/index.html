@@ -122,7 +122,13 @@ p { text-wrap: pretty; }
 
 /* why this exists */
 .why { padding: 56px 0 8px; }
-.why-text { max-width: 64ch; margin-top: 14px; }
+.why-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 40px; align-items: start; margin-top: 14px; }
+.why-text { max-width: 64ch; }
+.why-photo { margin: 6px 0 0; }
+.why-photo img { width: 100%; height: auto; border-radius: 3px; box-shadow: var(--raised), 0 18px 50px rgba(0,0,0,.4); filter: sepia(.15) saturate(.9); }
+.why-photo figcaption { margin-top: 8px; color: var(--faint); font-size: 13px; }
+.why-photo figcaption a { color: var(--faint); }
+@media (max-width: 860px) { .why-grid { grid-template-columns: 1fr; gap: 20px; } }
 .why-text p { color: var(--dim); font-size: 19px; line-height: 1.6; margin: 0 0 14px; }
 .why-text p:first-child { color: var(--bone); }
 @media (max-width: 860px) { .why-text p { font-size: 17px; } }
@@ -250,11 +256,17 @@ footer a { color: var(--dim); }
   <section class="why" id="why">
     <div class="wrap">
       <h2>Why this exists</h2>
+      <div class="why-grid">
       <div class="why-text">
         <p>I still play Counter-Strike 1.6. Mostly late at night, mostly against bots.</p>
         <p>The problem is the bots. Out of the box they spin around and headshot you before you've seen them. And the fun stuff, Zombie Plague, Warcraft 3, Surf, means digging through forum threads from 2009, fixing config files, and then finding out half the mods don't even notice bots exist.</p>
         <p>So I fixed it for myself. Bots that hesitate and miss like real people. The old mods, patched to work with them. A panel so I never have to open another .cfg file. And on the rare night a friend wants to play, they can join in a click.</p>
         <p>It turned out pretty good, so here it is. It's free, because none of it would exist without the people who made these mods in the first place.</p>
+      </div>
+      <figure class="why-photo">
+        <img src="img/dreamhack-2004.jpg" alt="Rows of players at their computers at the DreamHack LAN party, winter 2004" width="1100" height="830" loading="lazy">
+        <figcaption>DreamHack, winter 2004. Photo: <a href="https://commons.wikimedia.org/wiki/File:Winter_2004_DreamHack_LAN_Party.jpg">Toffelginkgo</a>, <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a></figcaption>
+      </figure>
       </div>
     </div>
   </section>

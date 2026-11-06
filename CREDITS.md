@@ -42,3 +42,8 @@ Maps are downloaded from [GameBanana](https://gamebanana.com) and belong to thei
 |---|---|---|
 | [Counter-Strike](https://www.dafont.com/counter-strike.font) (titles in the app) | SoJa | 100% free (dafont) |
 | Barlow Semi Condensed | Jeremy Tribby | SIL Open Font License |
+
+## Website
+| Image | Author | License |
+|---|---|---|
+| [DreamHack, winter 2004](https://commons.wikimedia.org/wiki/File:Winter_2004_DreamHack_LAN_Party.jpg) | Toffelginkgo | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
