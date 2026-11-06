@@ -71,6 +71,9 @@ pub struct Entry {
     /// its Loner-Strike files (where plugins are compiled), uploaded after changes
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote: Option<crate::remote::RemoteInfo>,
+    /// How it was set up (template and mods), so a setup that stopped can run again
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setup_with: Option<SetupWith>,
 }
 
 fn default_visibility() -> String {
@@ -81,6 +84,13 @@ fn default_map() -> String {
 }
 fn default_slots() -> u32 {
     20
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SetupWith {
+    pub template: String,
+    #[serde(default)]
+    pub components: Vec<String>,
 }
 
 impl Entry {
@@ -441,6 +451,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         hltv: Default::default(),
         restart: None,
         remote: None,
+        setup_with: None,
     };
     let base = root.join(".base");
     let g = req.game.clone();
@@ -588,7 +599,6 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         return Err("Pick Counter-Strike 1.6 or Condition Zero.".into());
     }
     let mut info = remote_of(&req)?;
-    let host = info.host.clone();
     // the machine the player confirmed, and no other: connecting checks its identity
     // against this fingerprint, now and every time after
     if !req.host_key.starts_with("SHA256:") {
@@ -629,8 +639,20 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         hltv: Default::default(),
         restart: None,
         remote: Some(info.clone()),
+        setup_with: Some(SetupWith { template: req.template.clone(), components: req.components.clone() }),
     };
-    let g = req.game.clone();
+    edit(|l| l.push(entry.clone()))?;
+    let job = remote_setup(entry, source, components, res).inspect_err(|_| {
+        let _ = edit(|l| l.retain(|e| e.id != id));
+    })?;
+    Ok((id, job))
+}
+
+/// The setup job for a server on another machine (also "Try again" after a setup that
+/// stopped: every step is safe to run again). Returns the job id.
+fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, res: PathBuf) -> Result<String, String> {
+    let g = entry.game.clone();
+    let host = entry.remote.as_ref().map(|r| r.host.clone()).unwrap_or_default();
     let steps = vec![
         setup::server_step(&g, "srv-machine", &format!("Setting up {host}: libraries, firewall, Valve's server"), 10.0),
         setup::server_step(&g, "srv-settings", "Copying settings and admins", 0.3),
@@ -638,9 +660,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         setup::server_step(&g, "srv-service", "Starting it as a service", 0.3),
         setup::server_step(&g, "srv-done", "Finishing up", 0.1),
     ];
-    edit(|l| l.push(entry.clone()))?;
-    let entry_id = entry.id.clone();
-    let job = setup::start_job("server", steps, move |job| {
+    setup::start_job("server", steps, move |job| {
         let r = entry.remote.clone().unwrap();
         job.run(&format!("{g}/srv-machine"), || {
             // the script reports its stages; Valve's download reports its own progress
@@ -721,10 +741,6 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         })?;
         job.run(&format!("{g}/srv-done"), || edit(|l| l.iter_mut().filter(|e| e.id == entry.id).for_each(|e| e.ready = true)))
     })
-    .inspect_err(|_| {
-        let _ = edit(|l| l.retain(|e| e.id != entry_id));
-    })?;
-    Ok((id, job))
 }
 
 /// Re-downloads Valve's files into the base copy and refreshes the server's engine files.
@@ -833,6 +849,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         hltv: Default::default(),
         restart: None,
         remote: None,
+        setup_with: None,
     };
     // name and password as the Friends tab keeps them (it writes friends.cfg only when
     // something changes there, so the server's own server.cfg keeps working meanwhile)
@@ -1476,6 +1493,23 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 let appid = if e.game == "cstrike" { "10" } else { "80" };
                 crate::steam::launch(&client.hl, appid, &args).map(|_| json!({"ok": true}))
             }
+            "retry" => {
+                // a setup that stopped part way, again with the same details
+                let e = get(&id).ok_or("That server isn't there any more.")?;
+                if e.ready || e.remote.is_none() {
+                    return Err("Only a server on another machine whose setup didn't finish can be tried again.".into());
+                }
+                let client = client(&st2).ok_or("Set up the game on this computer first.")?;
+                let res = crate::setup_api::resources_for(&st2)?;
+                let with = e.setup_with.clone().unwrap_or(SetupWith { template: "local".into(), components: vec![] });
+                let catalog = setup::components::load_catalog(&res)?;
+                let (source, components) = match template_source(&with.template, &e.game, &client, &catalog) {
+                    Some((dir, comps)) => (Some(dir), comps),
+                    None => (None, with.components.clone()),
+                };
+                let job = remote_setup(e, source, components, res)?;
+                Ok(json!({"ok": true, "job": job}))
+            }
             "delete" => {
                 let e = get(&id).ok_or("That server isn't there any more.")?;
                 // on another machine: its service and folder there go too (if it can be reached)
@@ -1765,7 +1799,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None,
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None,
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -1780,7 +1814,7 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None,
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None,
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));

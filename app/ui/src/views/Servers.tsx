@@ -75,6 +75,7 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
     if (action === "delete" && !(await ask(s.imported ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.` : `Delete "${s.name}"? Its folder, maps, settings and admins are deleted.`, { ok: s.imported ? "Remove" : "Delete", danger: true }))) return;
     const r = await post(`/api/servers/${s.id}/${action}`);
     if (r.error) return toast(r.error, true);
+    if (action === "retry") toast("Trying again. It carries on from where it got to.");
     if (action === "join") toast(`Joining ${s.name}…`);
     if (action === "delete") toast(r.note || `${s.name} ${s.imported ? "removed" : "deleted"}`, !!r.note);
     onChanged();
@@ -119,6 +120,7 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
               <JobProgress onEnd={(ok) => { toast(ok ? `${s.name} is ready` : "Setting up the server stopped", !ok); onChanged(); }} />
             ) : s.state === "failed" ? (
               <div className="row">
+                {s.host && <button className="btn primary" onClick={() => act(s, "retry")}>Try again</button>}
                 <button className="btn danger" onClick={() => act(s, "delete")}>{s.imported ? "Remove" : "Delete"}</button>
               </div>
             ) : (
