@@ -87,6 +87,9 @@ const GIVE: { key: string; label: string; role: Role; days?: number }[] = [
 type Draft = { id: string; name: string; role: Role; expires: string; note: string; was?: string };
 const EMPTY: Draft = { id: "", name: "", role: "vip", expires: "", note: "" };
 
+const TABS: [Tab, string][] = [["people", "Admins & VIPs"], ["players", "Players"], ["bans", "Bans"], ["abilities", "What each role gets"], ["vip", "VIP & donations"]];
+type Tab = "people" | "players" | "bans" | "abilities" | "vip";
+
 export function Admins({ data, installed }: { data: Online | null; installed?: string[] }) {
   const ask = useConfirm();
   const toast = useToast();
@@ -97,6 +100,21 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
   const [banTime, setBanTime] = useState(0);
   const [donate, setDonate] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [tab, setTabRaw] = useState<Tab>(() => {
+    try {
+      return (localStorage.getItem("ls.adminTab") as Tab) || "people";
+    } catch {
+      return "people";
+    }
+  });
+  const setTab = (t: Tab) => {
+    setTabRaw(t);
+    try {
+      localStorage.setItem("ls.adminTab", t);
+    } catch {
+      /* private window */
+    }
+  };
 
   const load = () =>
     getJson<Reply>("/api/admins")
@@ -160,6 +178,17 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
 
   return (
     <div className="stack narrow">
+      <div className="chips admin-tabs" role="tablist" aria-label="Admins sections">
+        {TABS.map(([id, label]) => (
+          <button key={id} role="tab" className="chip" aria-pressed={tab === id} onClick={() => setTab(id)}>
+            {label}
+            {id === "people" && d.people.length > 0 && <i className="tab-n">{d.people.length}</i>}
+            {id === "players" && players.length > 0 && <i className="tab-n">{players.length}</i>}
+            {id === "bans" && d.bans.length > 0 && <i className="tab-n">{d.bans.length}</i>}
+          </button>
+        ))}
+      </div>
+      {tab === "people" && (
       <div>
         <SectionHead title="Admins" note="Give people admin powers or VIP perks on your server, like real servers do.">
           <button className="btn primary" onClick={() => setDraft({ ...EMPTY })}>Add someone</button>
@@ -194,7 +223,9 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
           being a normal player.
         </p>
       </div>
+      )}
 
+      {tab === "players" && (
       <div>
         <SectionHead title="Players" note="Everyone who's joined, newest first. Give someone a role, or ban them, in one click." />
         <input className="search full" type="search" placeholder="Search names or SteamIDs" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search players" />
@@ -243,7 +274,9 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
           Only people joining through Steam have a SteamID. On a LAN or offline game they show up as STEAM_ID_LAN and can't be listed, given roles or banned here.
         </p>
       </div>
+      )}
 
+      {tab === "bans" && (
       <div>
         <SectionHead title="Bans" note="People who can't join your server." />
         <div className="row ban-form">
@@ -270,7 +303,9 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
         </ul>
         <p className="muted small-note">Bans for a set time last until they run out or the game restarts, so they aren't listed here.</p>
       </div>
+      )}
 
+      {tab === "abilities" && (
       <div>
         <SectionHead title="What each role gets" note="Tick the abilities each role can use in the game. Changes reach a running game straight away." />
         <div className="ability-wrap">
@@ -325,7 +360,9 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
           can say <b>/vip</b> in the game to see what they can use.
         </p>
       </div>
+      )}
 
+      {tab === "vip" && (
       <div>
         <SectionHead title="VIP & donations" note="What spawn gear gives, and where people can support your server." />
         <div className="panel vip-note">
@@ -362,6 +399,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
           armor and the kit. Changes reach a running game straight away; the mode check happens on the next map.
         </p>
       </div>
+      )}
     </div>
   );
 }

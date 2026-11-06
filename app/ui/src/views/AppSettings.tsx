@@ -5,7 +5,7 @@ import { ON_THIS_COMPUTER } from "../api";
 import { applyScale, savedScale, SCALES, SectionHead, Switch, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
 
-type Prefs = { auto_update: boolean; keep_servers: boolean; game_folders: string[] };
+type Prefs = { auto_update: boolean; keep_servers: boolean; game_folders: string[]; notify_joins: boolean };
 type Storage = { downloads: number; pictures: number; folder: string };
 const mb = (n?: number) => (n === undefined ? "…" : n < 1048576 ? `${Math.max(0, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(n < 104857600 ? 1 : 0)} MB`);
 
@@ -234,6 +234,13 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
                 <button key={label} aria-pressed={scale === v} onClick={() => { applyScale(v); setScale(v); }}>{label}</button>
               ))}
             </div>
+          </div>
+          <div className="row between setting-line toggle">
+            <div>
+              <b>Tell me when someone joins</b>
+              <p className="muted">A notification when a person (not a bot) joins your game or one of your servers, while Loner-Strike is in the background.</p>
+            </div>
+            <Switch on={prefs?.notify_joins ?? true} label="Tell me when someone joins" onChange={(v) => setPref({ notify_joins: v })} />
           </div>
           <div className="row between setting-line toggle">
             <div>

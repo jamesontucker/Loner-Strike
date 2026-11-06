@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
-import { SectionHead, useConfirm, useToast } from "../ui";
+import { SectionHead, Skeleton, useConfirm, useToast } from "../ui";
 
 const SORTS: [string, string][] = [["popular", "Most downloaded"], ["new", "Newest"], ["liked", "Most liked"]];
 // Shown until the server sends its own list
@@ -128,6 +128,7 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
     setPlaying(null);
   }, [section]);
 
+  const [showInstalled, setShowInstalled] = useState(false);
   const active = jobs.filter((j) => !["done", "error"].includes(j.state));
   const label = sections.find((s) => s[0] === section)?.[1] ?? "Maps";
 
@@ -137,10 +138,11 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
         <SectionHead title={only ? "Get maps" : "Get more"} note={`From GameBanana's Counter-Strike 1.6 section. ${NOTES[section] ?? NOTES.default}`} />
         <div className="chips section-tabs" role="tablist" aria-label="What to get" hidden={!!only}>
           {sections.map(([id, name]) => (
-            <button key={id} className="chip" role="tab" aria-pressed={section === id} onClick={() => { setSection(id); setCat(null); setItems([]); }}>
+            <button key={id} className="chip" role="tab" aria-pressed={section === id && !showInstalled} onClick={() => { setShowInstalled(false); setSection(id); setCat(null); setItems([]); }}>
               {name}
             </button>
           ))}
+          <button className="chip" role="tab" aria-pressed={showInstalled} onClick={() => setShowInstalled(true)}>Installed</button>
         </div>
         {active.map((j) => (
           <div className="job" key={j.id}>
@@ -148,58 +150,66 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
             {j.size ? <progress max={j.size} value={j.got ?? 0} /> : null}
           </div>
         ))}
-        <div className="toolbar">
-          <input className="search" type="search" placeholder={`Search ${label.toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} />
-          {cats.length > 1 && (
-            <select value={cat ?? cats[0][0]} onChange={(e) => setCat(+e.target.value)} aria-label="Type">
-              {cats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-            </select>
-          )}
-          <div className="seg" role="group" aria-label="Sort">
-            {SORTS.map(([id, l]) => (
-              <button key={id} aria-pressed={sort === id} onClick={() => setSort(id)}>{l}</button>
-            ))}
-          </div>
-        </div>
-      </div>
-      {error && <p className="muted">{error}</p>}
-      <div className="maps grid">
-        {items.map((m) => (
-          <button key={m.id} className="map-card" onClick={() => details(m.id)} title={m.name}>
-            <div className="map-pic">
-              {m.image ? (
-                <img src={m.image} alt="" loading="lazy" />
-              ) : (
-                <div className="no-pic" aria-hidden="true">
-                  <span className="no-pic-kind">{label.replace(/s$/, "")}</span>
-                  <span className="no-pic-name small-name">{m.name}</span>
-                </div>
-              )}
-              {m.audio && (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className={`play-preview${playing === m.id ? " on" : ""}`}
-                  aria-label={playing === m.id ? `Stop ${m.name}` : `Play ${m.name}`}
-                  onClick={(e) => { e.stopPropagation(); preview(m.id, m.audio!); }}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); preview(m.id, m.audio!); } }}
-                >
-                  {playing === m.id ? "■" : "▶"}
-                </span>
-              )}
-              {m.installed && <span className="badge">Installed</span>}
+        {!showInstalled && (
+          <div className="toolbar">
+            <input className="search" type="search" placeholder={`Search ${label.toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} />
+            {cats.length > 1 && (
+              <select value={cat ?? cats[0][0]} onChange={(e) => setCat(+e.target.value)} aria-label="Type">
+                {cats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            )}
+            <div className="seg" role="group" aria-label="Sort">
+              {SORTS.map(([id, l]) => (
+                <button key={id} aria-pressed={sort === id} onClick={() => setSort(id)}>{l}</button>
+              ))}
             </div>
-            <span className="map-label">{m.name}</span>
-            <span className="map-sub">{m.author} · ♥ {m.likes}</span>
-          </button>
-        ))}
-        {!items.length && !loading && !error && <p className="muted">Nothing here.</p>}
-        {!items.length && loading && Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>)}
+          </div>
+        )}
       </div>
-      {!done && !error && items.length > 0 && (
-        <div className="row center">
-          <button className="btn" disabled={loading} onClick={() => load(false)}>{loading ? "Loading…" : "Show more"}</button>
-        </div>
+      {showInstalled ? (
+        <InstalledList onChanged={onInstalled} />
+      ) : (
+        <>
+          {error && <p className="muted">{error}</p>}
+          <div className="maps grid">
+            {items.map((m) => (
+              <button key={m.id} className="map-card" onClick={() => details(m.id)} title={m.name}>
+                <div className="map-pic">
+                  {m.image ? (
+                    <img src={m.image} alt="" loading="lazy" />
+                  ) : (
+                    <div className="no-pic" aria-hidden="true">
+                      <span className="no-pic-kind">{label.replace(/s$/, "")}</span>
+                      <span className="no-pic-name small-name">{m.name}</span>
+                    </div>
+                  )}
+                  {m.audio && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className={`play-preview${playing === m.id ? " on" : ""}`}
+                      aria-label={playing === m.id ? `Stop ${m.name}` : `Play ${m.name}`}
+                      onClick={(e) => { e.stopPropagation(); preview(m.id, m.audio!); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); preview(m.id, m.audio!); } }}
+                    >
+                      {playing === m.id ? "■" : "▶"}
+                    </span>
+                  )}
+                  {m.installed && <span className="badge">Installed</span>}
+                </div>
+                <span className="map-label">{m.name}</span>
+                <span className="map-sub">{m.author} · ♥ {m.likes}</span>
+              </button>
+            ))}
+            {!items.length && !loading && !error && <p className="muted">Nothing here.</p>}
+            {!items.length && loading && Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>)}
+          </div>
+          {!done && !error && items.length > 0 && (
+            <div className="row center">
+              <button className="btn" disabled={loading} onClick={() => load(false)}>{loading ? "Loading…" : "Show more"}</button>
+            </div>
+          )}
+        </>
       )}
 
       {open && (
@@ -246,5 +256,53 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
         </div>
       )}
     </div>
+  );
+}
+
+type Installed = { mod: number; section: string; name: string; author?: string; url?: string; date?: number; maps?: string[]; files?: number };
+const SECTION_NAME: Record<string, string> = { maps: "Map", skins: "Weapon skin", players: "Player model", sounds: "Sound", sprays: "Spray", sprites: "Effect", gui: "HUD & menu" };
+
+/** Everything downloaded into this game, in one place, to remove what you don't want. */
+function InstalledList({ onChanged }: { onChanged: () => void }) {
+  const toast = useToast();
+  const ask = useConfirm();
+  const [list, setList] = useState<Installed[] | null>(null);
+  const load = () => getJson<Installed[]>("/api/gb/installed").then((l) => setList(Array.isArray(l) ? l : [])).catch(() => setList([]));
+  useEffect(() => {
+    load();
+  }, []);
+  const remove = async (it: Installed) => {
+    const what = it.section === "maps" ? `Its map${(it.maps?.length ?? 0) === 1 ? " is" : "s are"} deleted.` : "The game's original files are put back.";
+    if (!(await ask(`Remove ${it.name}? ${what}`, { ok: "Remove", danger: true }))) return;
+    const r = await postJson<{ ok?: boolean; error?: string }>("/api/gb/uninstall", { mod: it.mod, section: it.section }).catch(() => ({ error: "Couldn't remove it." }));
+    if (r.error) return toast(r.error, true);
+    toast(`Removed ${it.name}`);
+    load();
+    onChanged();
+  };
+  if (!list) return <Skeleton />;
+  if (!list.length) return <p className="muted">Nothing downloaded yet. Anything you install from here shows up in this list.</p>;
+  return (
+    <ul className="people installed-list">
+      {list.map((it) => (
+        <li key={`${it.section}:${it.mod}`}>
+          <div className="person">
+            <span className="person-name">
+              {it.name}
+              <i className="role-badge">{SECTION_NAME[it.section] ?? it.section}</i>
+            </span>
+            <span className="person-sub">
+              {it.author ? `by ${it.author}` : ""}
+              {it.maps?.length ? ` · ${it.maps.length > 3 ? `${it.maps.length} maps` : it.maps.join(", ")}` : ""}
+              {it.date ? ` · added ${new Date(it.date * 1000).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}` : ""}
+            </span>
+          </div>
+          <div className="row">
+            {it.url && <a className="btn" href={it.url} target="_blank" rel="noreferrer">Page</a>}
+            <button className="btn danger" onClick={() => remove(it)}>Remove</button>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -289,6 +289,29 @@ impl MapStore {
         p.is_file().then_some(p)
     }
 
+    /// Everything installed from GameBanana (or from a file) into this game: maps and
+    /// the rest, newest first, with what's needed to remove each.
+    pub fn installed_list(&self) -> Vec<Value> {
+        let mut out: Vec<Value> = self
+            .records()
+            .into_iter()
+            .filter_map(|(id, r)| {
+                let maps = r["maps"].as_array().cloned().unwrap_or_default();
+                (!maps.is_empty()).then(|| {
+                    json!({"mod": id.parse::<i64>().unwrap_or(0), "section": "maps", "name": r["name"], "author": r["author"],
+                           "url": r["url"], "date": r["date"], "maps": maps})
+                })
+            })
+            .collect();
+        for (key, r) in self.content.for_game(&self.game_dir) {
+            let id = key.rsplit(':').next().and_then(|n| n.parse::<i64>().ok()).unwrap_or(0);
+            out.push(json!({"mod": id, "section": r["section"], "name": r["name"], "author": r["author"], "url": r["url"], "date": r["date"],
+                            "files": r["files"].as_array().map(|f| f.len()).unwrap_or(0)}));
+        }
+        out.sort_by_key(|v| std::cmp::Reverse(v["date"].as_i64().unwrap_or(0)));
+        out
+    }
+
     // ---- pictures for maps that came without one ------------------------
     pub fn misses(&self) -> Map<String, Value> {
         std::fs::read_to_string(self.shots.join(MISS_FILE))

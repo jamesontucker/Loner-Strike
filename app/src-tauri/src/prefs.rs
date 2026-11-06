@@ -29,13 +29,14 @@ fn forbidden() -> Reply {
 
 async fn api_prefs() -> Json<Value> {
     let s = load_settings();
-    Json(json!({"auto_update": !s.manual_updates, "keep_servers": s.keep_servers, "game_folders": s.game_folders}))
+    Json(json!({"auto_update": !s.manual_updates, "keep_servers": s.keep_servers, "game_folders": s.game_folders, "notify_joins": !s.mute_joins}))
 }
 
 #[derive(Deserialize)]
 struct PrefsReq {
     auto_update: Option<bool>,
     keep_servers: Option<bool>,
+    notify_joins: Option<bool>,
 }
 
 async fn api_prefs_set(headers: HeaderMap, Json(req): Json<PrefsReq>) -> Reply {
@@ -49,8 +50,11 @@ async fn api_prefs_set(headers: HeaderMap, Json(req): Json<PrefsReq>) -> Reply {
     if let Some(v) = req.keep_servers {
         s.keep_servers = v;
     }
+    if let Some(v) = req.notify_joins {
+        s.mute_joins = !v;
+    }
     save_settings(&s);
-    ok(json!({"auto_update": !s.manual_updates, "keep_servers": s.keep_servers, "game_folders": s.game_folders}))
+    ok(json!({"auto_update": !s.manual_updates, "keep_servers": s.keep_servers, "game_folders": s.game_folders, "notify_joins": !s.mute_joins}))
 }
 
 // ---- phones -----------------------------------------------------------------------

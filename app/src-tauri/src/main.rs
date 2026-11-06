@@ -10,6 +10,7 @@ mod content;
 mod game;
 mod gamebanana;
 mod maps;
+mod notify;
 mod panel_api;
 mod prefs;
 mod rcon;
@@ -54,6 +55,7 @@ fn main() {
         .plugin(tauri_plugin_process::init())
         // the window opens where and how big it was last time
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_notification::init())
         .on_menu_event(|app, event| menu_clicked(app, event.id().as_ref()))
         .setup(move |app| {
             let _ = state.app.set(app.handle().clone());
@@ -65,6 +67,7 @@ fn main() {
                 tauri::async_runtime::spawn(check_for_update(app.handle().clone()));
             }
             connect::renew_loop();
+            notify::watch(app.handle().clone(), state.clone());
             #[cfg(target_os = "macos")]
             app.set_menu(mac_menu(app.handle())?)?;
             // LONER_UI_URL points the window at the React dev server while working on the UI

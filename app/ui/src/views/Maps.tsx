@@ -9,6 +9,8 @@ const CATS: [string, string][] = [
   ["other", "Other"], ["nonav", "Needs bot nav"],
   ["stock", "Came with the game"], ["download", "Downloaded"], ["added", "Added by hand"], ["hidden", "Hidden"],
 ];
+const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favourites first"], ["type", "By type"], ["source", "Downloaded first"]];
+const SOURCE_ORDER = ["download", "added", "stock"];
 const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by hand" };
 
 /** What a map without a screenshot shows: its type and name, like a map-loading screen. */
@@ -43,6 +45,21 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
   const toast = useToast();
   const [cat, setCat] = useState("all");
   const [q, setQ] = useState("");
+  const [sort, setSortRaw] = useState(() => {
+    try {
+      return localStorage.getItem("ls.mapSort") || "name";
+    } catch {
+      return "name";
+    }
+  });
+  const setSort = (v: string) => {
+    setSortRaw(v);
+    try {
+      localStorage.setItem("ls.mapSort", v);
+    } catch {
+      /* private window */
+    }
+  };
   const [picked, setPicked] = useState<MapInfo | null>(null);
   const current = data?.state.map.toLowerCase();
 
@@ -55,8 +72,21 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
     else if (cat === "stock" || cat === "download" || cat === "added") list = list.filter((m) => m.source === cat);
     else if (cat !== "all" && cat !== "hidden") list = list.filter((m) => m.cat === cat);
     if (query) list = list.filter((m) => `${m.name} ${m.title ?? ""} ${m.by}`.toLowerCase().includes(query));
+    if (cat !== "recent") {
+      const byName = (a: MapInfo, b: MapInfo) => a.name.localeCompare(b.name);
+      const played = (m: MapInfo) => (m.recent >= 0 ? m.recent : 1e9);
+      const order: Record<string, (a: MapInfo, b: MapInfo) => number> = {
+        name: byName,
+        "name-desc": (a, b) => byName(b, a),
+        played: (a, b) => played(a) - played(b) || byName(a, b),
+        favs: (a, b) => Number(b.fav) - Number(a.fav) || byName(a, b),
+        type: (a, b) => a.cat.localeCompare(b.cat) || byName(a, b),
+        source: (a, b) => SOURCE_ORDER.indexOf(a.source) - SOURCE_ORDER.indexOf(b.source) || byName(a, b),
+      };
+      list = [...list].sort(order[sort] ?? byName);
+    }
     return list;
-  }, [maps, cat, q]);
+  }, [maps, cat, q, sort]);
 
   const remove = async (map: MapInfo) => {
     if (!map.mod) return;
@@ -92,6 +122,12 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
         </SectionHead>
         <div className="toolbar">
           <input className="search" type="search" placeholder="Search maps, authors or names like “cobble”" value={q} onChange={(e) => setQ(e.target.value)} />
+          <label className="sort">
+            <span>Sort</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value)} disabled={cat === "recent"}>
+              {SORTS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            </select>
+          </label>
           <div className="chips">
             {CATS.map(([id, label]) => (
               <button key={id} className="chip" aria-pressed={cat === id} onClick={() => setCat(id)}>{label}</button>

@@ -39,6 +39,9 @@ pub struct Settings {
     /// Half-Life folders added by hand (the scan didn't find them)
     #[serde(default)]
     pub game_folders: Vec<String>,
+    /// no desktop notification when someone joins your game or a server
+    #[serde(default)]
+    pub mute_joins: bool,
 }
 
 /// A new phone access key.

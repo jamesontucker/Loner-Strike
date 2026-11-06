@@ -198,6 +198,13 @@ async fn gb_mod(State(st): State<Shared>, Path(id): Path<String>, Query(q): Quer
     }
 }
 
+async fn gb_installed(State(st): State<Shared>) -> Response {
+    match with_game(&st, |g| g.store.installed_list()).await {
+        Some(list) => reply(StatusCode::OK, json!(list)),
+        None => no_game_found(),
+    }
+}
+
 async fn gb_jobs(State(st): State<Shared>) -> Response {
     let jobs = st.game().map(|g| g.store.job_list()).unwrap_or_default();
     reply(StatusCode::OK, json!(jobs))
@@ -319,6 +326,7 @@ pub fn routes() -> Router<Shared> {
         .route("/thumb/:file", get(thumb))
         .route("/api/gb/browse", get(gb_browse))
         .route("/api/gb/jobs", get(gb_jobs))
+        .route("/api/gb/installed", get(gb_installed))
         .route("/api/gb/mod/:id", get(gb_mod))
         .route("/api/gb/install", post(gb_install))
         .route("/api/gb/uninstall", post(gb_uninstall))

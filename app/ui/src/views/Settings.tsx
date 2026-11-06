@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { Online, Setting } from "../types";
 import { SectionHead, Segmented, useCommand, useConfirm } from "../ui";
 
@@ -28,10 +28,16 @@ const STYLE_NOTES: Record<string, string> = {
   "7": "Everything maxed. Good luck",
 };
 
-export function SettingsList({ data, cat, refresh }: { data: Online; cat: number; refresh: () => void }) {
+export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat: number; refresh: () => void; q?: string }) {
   const run = useCommand(refresh);
-  const list = data.settings.filter((s) => s.cat === cat && s.visible);
-  if (!list.length) return <p className="muted">Nothing to set here in this mode.</p>;
+  const all = data.settings.filter((s) => s.cat === cat && s.visible);
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const list = all.filter((s) => {
+    const text = `${s.name} ${NOTES[s.cvar] ?? ""} ${s.labels}`.toLowerCase();
+    return words.every((w) => text.includes(w));
+  });
+  if (!all.length) return <p className="muted">Nothing to set here in this mode.</p>;
+  if (!list.length) return <p className="muted">No settings match "{q.trim()}".</p>;
   return (
     <div className="settings">
       {list.map((s: Setting) => (
@@ -70,13 +76,20 @@ export function SettingsPage({
   refresh: () => void;
   children?: ReactNode;
 }) {
+  const [q, setQ] = useState("");
+  const count = data.settings.filter((s) => s.cat === cat && s.visible).length;
   return (
     <div className="stack">
       <div>
         <SectionHead title={title} note={note} />
         {children}
       </div>
-      <SettingsList data={data} cat={cat} refresh={refresh} />
+      <div className="stack-tight">
+        {count > 6 && (
+          <input className="search full" type="search" placeholder={`Filter ${count} settings, like "round" or "gravity"`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter settings" />
+        )}
+        <SettingsList data={data} cat={cat} refresh={refresh} q={q} />
+      </div>
     </div>
   );
 }

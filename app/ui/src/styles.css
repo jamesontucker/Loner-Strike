@@ -811,3 +811,26 @@ a.btn.primary { color: var(--signal-ink); }
   .setting-line.toggle { flex-wrap: nowrap; }
   .setting-line.toggle > div:first-child { flex: 1; min-width: 0; }
 }
+
+/* ---- mods: filters and sort ------------------------------------------------------ */
+.mods-toolbar { justify-content: space-between; margin-bottom: 4px; }
+.sort { display: inline-flex; align-items: center; gap: 8px; color: var(--bone-faint); font-weight: 600; font-size: 14px; }
+.sort select { font: inherit; color: var(--bone); background: var(--bg); box-shadow: var(--sunken); border: 0; border-radius: 2px; padding: 5px 8px; }
+
+/* ---- get more: items without a picture, sound previews ------------------------------ */
+.no-pic-name.small-name { font: 700 15px/1.2 var(--text); color: var(--bone-dim); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.play-preview { position: absolute; right: 8px; bottom: 8px; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--signal); color: var(--signal-ink); box-shadow: 0 2px 8px rgba(0,0,0,.4); font-size: 14px; cursor: pointer; }
+.play-preview:hover { background: #d4c55d; }
+.play-preview.on { background: var(--bone); }
+
+/* ---- play: start a game ---------------------------------------------------------------- */
+.start-box { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: end; margin: 0 0 20px; }
+.start-box .field { margin: 0; }
+.start-box select { min-width: 220px; font-size: 16px; padding: 8px 10px; color: var(--bone); background: var(--bg); box-shadow: var(--sunken); border: 0; border-radius: 2px; }
+@media (max-width: 760px) { .start-box select { min-width: 0; width: 100%; } .start-box .field { flex: 1 1 100%; } }
+@media (max-width: 760px) { .start-box .seg, .first-row .seg { display: grid; grid-template-columns: repeat(4, 1fr); } }
+
+/* ---- admins: tabs ------------------------------------------------------------------- */
+.admin-tabs { margin-bottom: -10px; }
+.tab-n { font-style: normal; margin-left: 6px; font-size: 12px; color: var(--bone-faint); background: var(--bg); border-radius: 8px; padding: 0 6px; }
+@media (max-width: 760px) { .admin-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .admin-tabs::-webkit-scrollbar { display: none; } }
