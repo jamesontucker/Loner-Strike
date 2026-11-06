@@ -135,7 +135,7 @@ p { text-wrap: pretty; }
 
 /* everything in it */
 .everything { padding: 64px 0 20px; }
-.feature-groups { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
+.feature-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
 .group { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 18px 18px 8px; }
 .group h3 { font: 400 20px/1.1 var(--stencil); margin: 0 0 10px; }
 .group ul { list-style: none; margin: 0; padding: 0; }
@@ -275,7 +275,7 @@ footer a { color: var(--dim); }
         <h3>Bots that play like people</h3>
         <p>The game's own bots react instantly and never miss. Loner-Strike gives them human reaction times, flicks that overshoot, aim that wobbles and sprays that get away from them. Pick how good they are, from a newbie lobby to players who bunnyhop, or a mixed lobby where each bot has its own level.</p>
         <ul>
-          <li>Each bot has a personality (tryhard, salty, joker, old-timer and dozens more) and plays and types to match</li>
+          <li>Each bot has a personality and plays and types to match</li>
           <li>They chat, reply to each other and to you, rage when they keep dying and cheer up a teammate</li>
           <li>Regulars with clan tags keep coming back, with believable pings on the scoreboard</li>
           <li>They get tilted, panic, make radio calls, spray their logo and learn new maps by themselves</li>
@@ -359,11 +359,21 @@ footer a { color: var(--dim); }
       <p class="lead">Free, for Counter-Strike 1.6 and Condition Zero. Everything it changes is backed up and can be removed.</p>
       <div class="feature-groups">
         <div class="group">
-          <h3>Playing</h3>
+          <h3>Bots</h3>
           <ul>
-            <li>Bots with human reaction times and aim, from casual to bunnyhopping pros</li>
-            <li>Bot personalities that chat, banter and rage, and regulars with clan tags</li>
-            <li>Classic community modes, patched so bots play them</li>
+            <li>Human reaction times and aim, from a newbie lobby to bunnyhopping pros</li>
+            <li>A mixed lobby where every bot plays at its own level</li>
+            <li>Personalities that chat, banter, rage and cheer each other up</li>
+            <li>Regulars with clan tags and believable pings on the scoreboard</li>
+            <li>They get tilted, panic, make radio calls and spray their logo</li>
+            <li>They learn new maps by themselves</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>Modes and maps</h3>
+          <ul>
+            <li>22 classic community modes, from Zombie Plague to Gun Game and Surf</li>
+            <li>Patched so bots play them: SuperHero bots pick heroes, Deathrun bots trigger traps</li>
             <li>Thousands of maps from GameBanana, with screenshots, favourites and search</li>
             <li>Skins, player models, sounds and sprays, backed up and removable</li>
             <li>Round-end music, Quake sounds and classic sound packs</li>
@@ -382,23 +392,31 @@ footer a { color: var(--dim); }
         <div class="group">
           <h3>Running a server</h3>
           <ul>
-            <li>Dedicated servers on your computer or a rented Linux machine, set up for you, or bring your own</li>
-            <li>Admins, bans, the swear filter, welcome page and chat messages shared across servers</li>
             <li>Admins, moderators and VIPs, with abilities per role and end dates</li>
             <li>Bans, gags, a swear filter, a chat log and player reports</li>
             <li>Map rotation, timed chat messages, AFK and high-ping kickers</li>
             <li>Stats and ranks, votekick and voteban, join messages with country</li>
             <li>Match mode for 5v5s: ready-up, knife round, half-time swap</li>
             <li>HLTV for spectators and demos, fast downloads, scheduled restarts</li>
-            <li>The app tells you when a rented server stops answering, and why</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>Hosting</h3>
+          <ul>
+            <li>Dedicated servers on your computer or a rented Linux machine, set up for you</li>
+            <li>Bring in a server you already run</li>
+            <li>Changes in the app reach the server by themselves</li>
+            <li>Admins, bans and the swear filter shared across your servers</li>
+            <li>Copy one server's mods to another</li>
+            <li>Join and console passwords, and a warning when a server stops answering</li>
           </ul>
         </div>
         <div class="group">
           <h3>The app</h3>
           <ul>
             <li>Guided setup that finds your game, on Windows or a Mac with CrossOver</li>
+            <li>An in-game menu on F3, and quick actions in the app while you play</li>
             <li>Control everything from your phone by scanning a QR code</li>
-            <li>Quick actions while you play: pause, bots, god mode, noclip and more</li>
             <li>Export your setup to another computer or server</li>
             <li>Automatic updates, signed and checked</li>
             <li>Open source under the GPL</li>
