@@ -33,7 +33,8 @@ export function Sounds({ target }: { target: string }) {
   const [d, setD] = useState<Data | null>(null);
   const [tab, setTabRaw] = useState<SoundTab>(() => {
     try {
-      return (localStorage.getItem("ls.soundTab") as SoundTab) || "music";
+      const t = localStorage.getItem("ls.soundTab") as SoundTab;
+      return SOUND_TABS.some(([id]) => id === t) ? t : "music";
     } catch {
       return "music";
     }

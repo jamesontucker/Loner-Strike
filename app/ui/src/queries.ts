@@ -136,6 +136,7 @@ export function useSetupJob() {
  *  Call it right after starting a job. */
 export async function waitForSetupJob(): Promise<Job | null> {
   let misses = 0;
+  let idle = 0;
   let seenRunning = false;
   for (;;) {
     await new Promise((r) => setTimeout(r, 800));
@@ -152,6 +153,7 @@ export async function waitForSetupJob(): Promise<Job | null> {
     if (j.state === "done" || j.state === "error") return j;
     // the job went away (the app restarted): nothing more to follow
     if (j.state === "idle" && seenRunning) return null;
-    if (j.state === "idle" && ++misses >= 10) return null;
+    // never started (or the app restarted before it showed): stop asking after ~8 s
+    if (j.state === "idle" && ++idle >= 10) return null;
   }
 }

@@ -81,10 +81,17 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
 
   // install progress
   useEffect(() => {
+    let first = true;
     const tick = async () => {
       const list = await getJson<GbJob[]>("/api/gb/jobs").catch(() => [] as GbJob[]);
       if (!Array.isArray(list)) return;
       setJobs(list);
+      // jobs that had already ended before this page opened were announced then
+      if (first) {
+        first = false;
+        list.filter((j) => j.state === "done" || j.state === "error").forEach((j) => seenDone.current.add(j.id));
+        return;
+      }
       for (const j of list) {
         if ((j.state === "done" || j.state === "error") && !seenDone.current.has(j.id)) {
           seenDone.current.add(j.id);

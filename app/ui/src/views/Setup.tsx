@@ -139,7 +139,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               <label className="field">
                 <span>Steam install<Info text="Loner-Strike found more than one Steam on this computer; on a Mac each CrossOver bottle with Steam counts. Pick the one your Counter-Strike is in." /></span>
                 <select value={installIdx} onChange={(e) => { const n = +e.target.value; setInstallIdx(n); setGames((["cstrike", "czero"] as const).filter((id) => scan.installs[n].games.some((g) => g.id === id))); }}>
-                  {scan.installs.map((i, n) => <option key={i.hl} value={n}>{i.kind === "crossover" ? `CrossOver bottle "${i.bottle}"` : "Steam"} – {i.hl}</option>)}
+                  {scan.installs.map((i, n) => <option key={i.hl} value={n}>{i.kind === "crossover" ? `CrossOver bottle "${i.bottle}"` : "Steam"}: {i.hl}</option>)}
                 </select>
               </label>
             )}

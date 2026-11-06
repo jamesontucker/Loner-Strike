@@ -26,7 +26,7 @@ body{background:#3e4637;color:#dedfd6;font:15px Verdana,sans-serif;padding:20px}
 h1{color:#c4b550;margin:0 0 6px}
 </style></head><body>
 <h1>{server}</h1>
-<p>Welcome, {player}! Now playing {mode} on {map}.</p>
+<p>Welcome, {player}. Now playing {mode} on {map}.</p>
 <ul>
 <li>No cheating, no spawn camping</li>
 <li>Say <b>rtv</b> to vote for a new map</li>
@@ -123,7 +123,7 @@ export function Welcome({ target }: { target: string }) {
         <div className="panel">
           <label className="field">
             <span>Your message</span>
-            <textarea className="invite short" maxLength={300} placeholder="Play fair, have fun. gl hf!" value={note} onChange={(e) => setNote(e.target.value)} />
+            <textarea className="invite short" maxLength={300} placeholder="Play fair, have fun. gl hf" value={note} onChange={(e) => setNote(e.target.value)} />
             <small>Shown under the commands: your rules, a Discord invite, a thank-you to supporters. {300 - note.length} characters left.</small>
           </label>
         </div>

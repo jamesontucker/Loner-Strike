@@ -105,7 +105,8 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
   const [q, setQ] = useState("");
   const [tab, setTabRaw] = useState<Tab>(() => {
     try {
-      return (localStorage.getItem("ls.adminTab") as Tab) || "people";
+      const t = localStorage.getItem("ls.adminTab") as Tab;
+      return TABS.some(([id]) => id === t) ? t : "people";
     } catch {
       return "people";
     }

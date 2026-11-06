@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { targetKey, useActions } from "../api";
 import type { Online } from "../types";
 
@@ -20,6 +20,7 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
     if (!dragging) setCount(st.bots);
   }, [st.bots, dragging]);
   // send the count, then let the game's own number show again once it's had time to answer
+  const settle = useRef(0);
   const sendCount = (n: number) => run("gm_bots", ["count", String(n)], true).then(() => setTimeout(() => setDragging(false), 1500));
   const learning = st.navleft > 0;
 
@@ -42,9 +43,22 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
           onChange={(e) => {
             setDragging(true);
             setCount(+e.target.value);
+            // screen readers and switch controls change it without pointer or key events:
+            // a quiet moment sends it too
+            clearTimeout(settle.current);
+            const n = +e.target.value;
+            settle.current = window.setTimeout(() => sendCount(n), 700);
           }}
-          onPointerUp={() => sendCount(count)}
-          onKeyUp={(e) => SLIDER_KEYS.includes(e.key) && sendCount(count)}
+          onPointerUp={() => {
+            clearTimeout(settle.current);
+            sendCount(count);
+          }}
+          onPointerCancel={() => setDragging(false)}
+          onKeyUp={(e) => {
+            if (!SLIDER_KEYS.includes(e.key)) return;
+            clearTimeout(settle.current);
+            sendCount(count);
+          }}
         />
         <output htmlFor="botCount">{count}</output>
         <div className="row">

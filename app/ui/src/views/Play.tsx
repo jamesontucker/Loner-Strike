@@ -6,7 +6,7 @@ import { Icon } from "../icons";
 import { useTarget } from "../queries";
 import { usePlayDraft, usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
-import { BusyButton, Info, SectionHead, Sheet, useCommand, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, LoadError, SectionHead, Sheet, useCommand, useConfirm, useToast } from "../ui";
 import { MapCard } from "./Maps";
 import { MatchMode } from "./MatchMode";
 
@@ -92,7 +92,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
   const favs = maps.filter((m) => m.fav && !m.hidden).sort((a, b) => a.name.localeCompare(b.name));
   const stock = app?.game?.id === "czero" ? "de_dust2_cz" : "de_dust2";
   // a picked map that's gone since (deleted, or hidden) falls back like no pick
-  const pick = draft.map && (!maps.length || maps.some((m) => m.name === draft.map)) ? draft.map : "";
+  const pick = draft.map && (!maps.length || maps.some((m) => m.name === draft.map && !m.hidden)) ? draft.map : "";
   const map = pick || app?.lastmap || recent[0]?.name || favs[0]?.name || (maps.some((m) => m.name === stock) ? stock : maps[0]?.name) || stock;
   const botCount = draft.bots ?? bots ?? 9;
 
@@ -117,6 +117,9 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
             : `${game} isn't running. Pick a mode, a map and the bots, and Loner-Strike starts it and connects by itself.`}
         </p>
         <div className="start-box">
+          {optsQ.isError && !opts && (
+            <LoadError text="Couldn't load the modes and bot settings. Starting now uses the game's last settings." onRetry={() => optsQ.refetch()} />
+          )}
           {modes.length > 0 && mode && (
             <label className="field">
               <span>Mode<Info text="The game mode the game starts in. It remembers its own settings; you can switch modes once you're in, too." /></span>
@@ -219,7 +222,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
 
   return (
     <div className="stack">
-      {st.mode === "match" && <MatchMode />}
+      {st.mode === "match" && <MatchMode target={targetKey()} />}
       {switching && <SwitchMode mode={switching} current={st.mode} map={st.map} maps={maps} onClose={() => setSwitching(null)} onGo={(map) => { setSwitching(null); if (switching.id === st.mode) { if (map) changeMap(map); } else switchMode(switching, map); }} />}
       {data.presets.length > 0 && (
         <section>

@@ -5,6 +5,7 @@ import { gameTitle } from "./games";
 import { Icon } from "./icons";
 import { queryClient, reloadAppInfo, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
 import { useNav, type Section } from "./store";
+import { usePlayDrafts } from "./stores/playDraft";
 import type { AppInfo, Online } from "./types";
 import { applyScale, ConfirmProvider, useConfirm, LoadError, savedScale, Sheet, Skeleton, ToastProvider, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
@@ -102,6 +103,8 @@ function Shell() {
         ? await postJson<{ ok?: boolean; error?: string }>("/api/app/game", { hl, game })
         : await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id: `local:${game}` });
       if (r.error) return toast(r.error, true);
+      // a start sent to the other game isn't this one's
+      usePlayDrafts.getState().endLaunch("local");
       await queryClient.invalidateQueries();
       reloadMaps();
     }, `Switching to ${gameTitle(game)}…`);

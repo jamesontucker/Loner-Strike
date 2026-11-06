@@ -67,7 +67,18 @@ export const usePlayDrafts = create<Drafts>()(
           return { launching };
         }),
     }),
-    { name: "ls.playDraft", storage: createJSONStorage(() => safe), partialize: (s) => ({ drafts: s.drafts }) },
+    {
+      name: "ls.playDraft",
+      version: 1,
+      storage: createJSONStorage(() => safe),
+      partialize: (s) => ({ drafts: s.drafts }),
+      // only well-formed drafts come back (an older or damaged copy is dropped)
+      merge: (saved, now) => {
+        const drafts = (saved as { drafts?: unknown } | undefined)?.drafts;
+        const ok = drafts && typeof drafts === "object" && Object.values(drafts).every((d) => d && typeof d === "object" && typeof (d as { changed?: unknown }).changed === "object");
+        return { ...now, drafts: ok ? (drafts as typeof now.drafts) : {} };
+      },
+    },
   ),
 );
 
