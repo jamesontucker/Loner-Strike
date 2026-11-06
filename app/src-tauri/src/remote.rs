@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 use ssh2::Session;
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -231,17 +231,36 @@ pub fn exec_stream(r: &RemoteInfo, cmd: &str, input: &[u8], mut line: impl FnMut
             ch.write_all(input).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
         }
         ch.send_eof()?;
-        let mut reader = BufReader::new(&mut ch);
-        let mut buf = Vec::new();
+        // read until the command has really finished (a quiet spell isn't the end),
+        // passing complete lines on as they come
+        let mut pending: Vec<u8> = Vec::new();
+        let mut chunk = [0u8; 8192];
+        let mut quiet_since = std::time::Instant::now();
         loop {
-            buf.clear();
-            match reader.read_until(b'\n', &mut buf) {
-                Ok(0) => break,
-                Ok(_) => line(String::from_utf8_lossy(&buf).trim_end()),
-                Err(_) => break,
+            match ch.read(&mut chunk) {
+                Ok(0) if ch.eof() => break,
+                Ok(0) => std::thread::sleep(Duration::from_millis(50)),
+                Ok(n) => {
+                    quiet_since = std::time::Instant::now();
+                    pending.extend_from_slice(&chunk[..n]);
+                    while let Some(i) = pending.iter().position(|&b| b == b'\n') {
+                        let l: Vec<u8> = pending.drain(..=i).collect();
+                        line(String::from_utf8_lossy(&l).trim_end());
+                    }
+                }
+                Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut | std::io::ErrorKind::Interrupted) => {}
+                Err(e) => return Err(ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str()))),
+            }
+            // (the end is a read of nothing once the other side has finished, so lines
+            // still buffered when it finished are read first)
+            // nothing at all for 15 minutes: the machine has stopped answering
+            if quiet_since.elapsed() > Duration::from_secs(15 * 60) {
+                return Err(ssh2::Error::new(ssh2::ErrorCode::Session(-9), "no answer for 15 minutes"));
             }
         }
-        drop(reader);
+        if !pending.is_empty() {
+            line(String::from_utf8_lossy(&pending).trim_end());
+        }
         ch.wait_close()?;
         ch.exit_status()
     };
