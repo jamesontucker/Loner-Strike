@@ -315,6 +315,18 @@ code, pre, .mono, .address, .err-text, .copyable, .load-error p, .console, input
 .slider-row label { font-weight: 700; }
 .slider-row output { font: 400 24px/1 var(--stencil); color: var(--signal); }
 input[type="range"] { accent-color: var(--signal); }
+/* checkboxes: the old Steam look, a sunken box with a gold tick */
+input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; margin: 0; flex: none;
+  width: 16px; height: 16px; vertical-align: -3px; cursor: pointer;
+  background: #2c3226 center / 12px 12px no-repeat; box-shadow: var(--sunken); border-radius: 1px;
+}
+input[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6.5l2.6 2.6L10 3.4' fill='none' stroke='%23c4b550' stroke-width='2' stroke-linecap='square'/%3E%3C/svg%3E");
+}
+input[type="checkbox"]:hover:not(:disabled) { background-color: #343b2e; }
+input[type="checkbox"]:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
 
 /* presets */
 .presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
@@ -699,7 +711,7 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .ability-grid tbody th { font-weight: 500; min-width: 220px; }
 .ability-grid tbody tr:last-child th, .ability-grid tbody tr:last-child td { border-bottom: 0; }
 .ability-grid td { width: 84px; }
-.ability-grid input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--signal); cursor: pointer; }
+.ability-grid input[type="checkbox"] { width: 18px; height: 18px; background-size: 13px 13px; }
 .ability-name { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-weight: 700; }
 .ability-what { display: block; color: var(--bone-dim); font-size: 14px; }
 .ability-how { display: block; color: var(--bone-faint); font-size: 13px; }
