@@ -587,9 +587,25 @@ pub fn sync_settings(id: &str) {
     }
 }
 
+/// The bots' navigation files this computer's game has learned (CS 1.6 ships none), so
+/// the server's bots know those maps without learning them again. Only ones missing there.
+fn copy_navs(e: &Entry) {
+    let Some(game) = crate::steam::find_installs().into_iter().find(|i| i.games.iter().any(|g| g == &e.game)) else { return };
+    let (from, to) = (game.hl.join(&e.game).join("maps"), e.dir.join(&e.game).join("maps"));
+    let Ok(list) = std::fs::read_dir(&from) else { return };
+    let _ = std::fs::create_dir_all(&to);
+    for f in list.flatten() {
+        let name = f.file_name();
+        if name.to_string_lossy().to_lowercase().ends_with(".nav") && !to.join(&name).exists() {
+            let _ = std::fs::copy(f.path(), to.join(&name));
+        }
+    }
+}
+
 /// Puts this computer's copy of a server's files on its machine.
 pub fn upload(e: &Entry) -> Result<u64, String> {
     let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
+    copy_navs(e);
     crate::remote::upload_dir(r, &e.dir.join(&e.game), &format!("{}/{}", crate::remote::server_dir(&e.id), e.game), &upload_filter)
 }
 
@@ -1493,6 +1509,14 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                     .and_then(|t| serde_json::from_str::<Value>(&t).ok())
                     .and_then(|v| v["password"].as_str().map(String::from))
                     .filter(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || "-_".contains(c)));
+                // the game already open: Steam tells it to join; otherwise it starts joining
+                if sys::game_running() {
+                    let url = match &pw {
+                        Some(p) => format!("steam://connect/{}/{p}", e.address()),
+                        None => format!("steam://connect/{}", e.address()),
+                    };
+                    return crate::steam::open_steam_url(&client.hl, &url).map(|_| json!({"ok": true}));
+                }
                 let mut args = Vec::new();
                 if let Some(p) = pw {
                     args.extend(["+password".to_string(), p]);
