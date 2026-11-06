@@ -177,7 +177,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     steps = (
       <ol className="steps">
         <li className="done"><strong>Get everyone on the same network</strong><p>Same Wi-Fi, or plugged into the same router.</p></li>
-        <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong><p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (Wine, CrossOver or Whisky): click Allow.</p></li>
+        <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong><p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (Wine/CrossOver): click Allow.</p></li>
         <li className="now"><strong>Friends join from the LAN tab</strong><p>In Counter-Strike: <b>Find Servers → LAN</b>, and your server is there{serverName ? ` as "${serverName}"` : ""}.</p></li>
       </ol>
     );

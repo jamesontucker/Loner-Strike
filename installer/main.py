@@ -47,7 +47,7 @@ def pick_install(args):
     if not found:
         if sys.platform == "darwin" and steam.native_mac_hl():
             raise SystemExit("Found the Mac version of Half-Life, which mods can't run on. Install the Windows version of "
-                             "Steam in CrossOver or Whisky, install the game there, and run setup again.")
+                             "Steam in CrossOver, install the game there, and run setup again.")
         raise SystemExit("Couldn't find Counter-Strike or Condition Zero. Use --hl-dir to point at the Half-Life folder.")
     if len(found) == 1 or args.yes:
         return found[0]

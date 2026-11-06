@@ -528,7 +528,7 @@ function ImportServer({ onClose, onDone }: { onClose: () => void; onDone: () => 
             <input className="search grow" placeholder="Server folder" value={dir} onChange={(e) => setDir(e.target.value)} spellCheck={false} />
             <button className="btn" onClick={pick}>Browse…</button>
           </div>
-          <p className="muted">On a Mac the folder has to be inside a CrossOver or Whisky bottle, so it can run. Servers on a Linux VPS come in a later version.</p>
+          <p className="muted">On a Mac the folder has to be inside a CrossOver bottle, so it can run. Servers on a Linux VPS come in a later version.</p>
           <div className="row">
             <button className="btn primary" disabled={!dir.trim()} onClick={go}>Add server</button>
             <button className="btn" onClick={onClose}>Cancel</button>

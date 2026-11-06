@@ -15,7 +15,6 @@ mod rcon;
 mod server;
 mod servers;
 mod welcome;
-mod wine;
 mod setup;
 mod setup_api;
 mod sharing;

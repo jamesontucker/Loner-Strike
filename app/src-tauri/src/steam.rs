@@ -1,5 +1,5 @@
 //! Finds Half-Life installs with czero (Condition Zero) and/or cstrike (CS 1.6).
-//! Windows: every Steam library. Mac: Steam inside CrossOver or Whisky bottles (wine.rs).
+//! Windows: every Steam library. Mac: Steam inside CrossOver bottles.
 
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize)]
 pub struct Install {
     pub hl: PathBuf,
-    /// "windows", "crossover" or "whisky"
+    /// "windows" or "crossover"
     pub kind: String,
     pub bottle: Option<String>,
     pub games: Vec<String>,
@@ -45,42 +45,33 @@ fn push(found: &mut Vec<Install>, hl: PathBuf, kind: &str, bottle: Option<String
     }
 }
 
-/// Steam inside one Wine bottle, and the games in each of its libraries.
-#[cfg(target_os = "macos")]
-fn bottle_installs(found: &mut Vec<Install>, drive_c: &Path, kind: &str, bottle: &str) {
-    for steam in ["Program Files (x86)/Steam", "Program Files/Steam"] {
-        let root = drive_c.join(steam);
-        if !root.is_dir() {
-            continue;
-        }
-        for lib in libraries(&root) {
-            // Windows paths inside the bottle: only C: maps to drive_c
-            let lib = if lib.len() > 3 && lib.as_bytes()[1] == b':' {
-                if !lib.to_lowercase().starts_with('c') {
-                    continue;
-                }
-                drive_c.join(lib[3..].replace('\\', "/"))
-            } else {
-                PathBuf::from(lib)
-            };
-            push(found, lib.join("steamapps/common/Half-Life"), kind, Some(bottle.to_string()));
-        }
-    }
-}
-
 #[cfg(target_os = "macos")]
 pub fn find_installs() -> Vec<Install> {
     let mut found = Vec::new();
     let Some(home) = dirs::home_dir() else { return found };
-    // CrossOver: bottles by name
     let bottles = home.join("Library/Application Support/CrossOver/Bottles");
-    for entry in std::fs::read_dir(&bottles).into_iter().flatten().flatten() {
+    let Ok(entries) = std::fs::read_dir(&bottles) else { return found };
+    for entry in entries.flatten() {
         let bottle = entry.file_name().to_string_lossy().to_string();
-        bottle_installs(&mut found, &entry.path().join("drive_c"), "crossover", &bottle);
-    }
-    // Whisky: bottles by folder
-    for bottle in crate::wine::whisky_bottles() {
-        bottle_installs(&mut found, &bottle.join("drive_c"), "whisky", &bottle.to_string_lossy());
+        let drive_c = entry.path().join("drive_c");
+        for steam in ["Program Files (x86)/Steam", "Program Files/Steam"] {
+            let root = drive_c.join(steam);
+            if !root.is_dir() {
+                continue;
+            }
+            for lib in libraries(&root) {
+                // Windows paths inside the bottle: only C: maps to drive_c
+                let lib = if lib.len() > 3 && lib.as_bytes()[1] == b':' {
+                    if !lib.to_lowercase().starts_with('c') {
+                        continue;
+                    }
+                    drive_c.join(lib[3..].replace('\\', "/"))
+                } else {
+                    PathBuf::from(lib)
+                };
+                push(&mut found, lib.join("steamapps/common/Half-Life"), "crossover", Some(bottle.clone()));
+            }
+        }
     }
     found
 }
@@ -119,15 +110,19 @@ pub fn find_installs() -> Vec<Install> {
 pub fn launch(hl: &Path, appid: &str, args: &[String]) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        // <bottle>/drive_c/<steam>/steamapps/common/Half-Life -> C:\<steam>\steam.exe
-        let (kind, bottle) = crate::wine::bottle_of(hl).ok_or("The game isn't in a CrossOver or Whisky bottle.")?;
+        // .../Bottles/<bottle>/drive_c/<steam>/steamapps/common/Half-Life
+        let s = hl.to_string_lossy().to_string();
+        let i = s.find("/Bottles/").ok_or("The game isn't in a CrossOver bottle.")?;
+        let rest = &s[i + 9..];
+        let bottle = rest.split('/').next().unwrap_or_default().to_string();
+        let drive_c = format!("{}/drive_c/", &s[..i + 9 + bottle.len()]);
         let steam_root = hl.parent().and_then(|p| p.parent()).and_then(|p| p.parent()).ok_or("Couldn't find Steam.")?;
-        let steam_exe = crate::wine::windows_path(&steam_root.join("steam.exe")).ok_or("Couldn't find Steam.")?;
-        let mut cmd = crate::wine::command(&kind, Some(&bottle), &steam_exe, false)?;
-        cmd.arg("-applaunch").arg(appid).args(args);
+        let rel = steam_root.to_string_lossy().strip_prefix(&drive_c).map(String::from).ok_or("Couldn't find Steam.")?;
+        let steam_exe = format!("C:\\{}\\steam.exe", rel.replace('/', "\\"));
+        let mut cmd = std::process::Command::new("/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine");
+        cmd.args(["--bottle", &bottle, &steam_exe, "-applaunch", appid]).args(args);
         cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-        let app = if kind == "whisky" { "Whisky" } else { "CrossOver" };
-        cmd.spawn().map(|_| ()).map_err(|e| format!("Couldn't start Steam through {app} ({e})."))
+        cmd.spawn().map(|_| ()).map_err(|e| format!("Couldn't start CrossOver ({e})."))
     }
     #[cfg(windows)]
     {

@@ -3,9 +3,9 @@
 //! settings, maps, admins and port. The panel switches between "My game" and
 //! any server (AppState::set_game).
 //!
-//! On a Mac the server is the Windows HLDS, run in the game's CrossOver or Whisky
-//! bottle (Valve makes no Mac server; see wine.rs); its folder sits in that bottle,
-//! under C:\Loner-Strike Servers. SteamCMD itself runs natively (Valve's Mac build).
+//! On a Mac the server is the Windows HLDS, run through CrossOver like the game
+//! (Valve makes no Mac server); its folder sits in the game's bottle, under
+//! C:\Loner-Strike Servers. SteamCMD itself runs natively (Valve's Mac build).
 
 use crate::game::Game;
 use crate::panel_api::from_panel;
@@ -26,6 +26,7 @@ use std::process::{Child, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
 const FOLDER: &str = "Loner-Strike Servers";
 /// The player's own game hosts on 27015, so servers start above it and never clash
 const FIRST_PORT: u16 = 27016;
@@ -44,7 +45,7 @@ pub struct Entry {
     pub port: u16,
     /// The server's folder (hlds.exe and the game folder inside)
     pub dir: PathBuf,
-    /// "crossover" or "whisky" (Mac) or "windows", like the game it was made from
+    /// "crossover" (Mac) or "windows", like the game it was made from
     pub kind: String,
     pub bottle: Option<String>,
     /// "lan": this network only; "unlisted": anyone with the address; "listed": in Steam's server browser
@@ -136,12 +137,12 @@ pub fn find_install(hl: &Path) -> Option<Install> {
     load().into_iter().find(|e| e.dir == hl && e.ready).map(|e| e.install())
 }
 
-/// Where servers live: inside the game's bottle on a Mac (so Wine sees them as
-/// C:\Loner-Strike Servers), the app's local data folder on Windows.
+/// Where servers live: inside the game's CrossOver bottle on a Mac (so wine sees
+/// them as C:\Loner-Strike Servers), the app's local data folder on Windows.
 fn root_for(client: &Install) -> Result<PathBuf, String> {
-    if client.kind != "windows" {
+    if client.kind == "crossover" {
         let s = client.hl.to_string_lossy().to_string();
-        let i = s.find("/drive_c/").ok_or("The game isn't in a CrossOver or Whisky bottle.")?;
+        let i = s.find("/drive_c/").ok_or("The game isn't in a CrossOver bottle.")?;
         Ok(PathBuf::from(&s[..i + 8]).join(FOLDER))
     } else {
         Ok(dirs::data_local_dir().ok_or("Couldn't find the app data folder.")?.join("Loner-Strike").join("Servers"))
@@ -377,8 +378,8 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
     if !["cstrike", "czero"].contains(&req.game.as_str()) {
         return Err("Pick Counter-Strike 1.6 or Condition Zero.".into());
     }
-    if let Some(why) = crate::wine::missing(&client.kind) {
-        return Err(format!("{why} The server runs through it, like the game."));
+    if client.kind == "crossover" && !Path::new(CROSSOVER_WINE).is_file() {
+        return Err("CrossOver isn't installed in Applications. The server runs through it, like the game.".into());
     }
     let catalog = setup::components::load_catalog(&res)?;
     let (source, components) = match template_source(&req.template, &req.game, &client, &catalog) {
@@ -507,8 +508,8 @@ pub fn import(dir: &Path) -> Result<Value, String> {
     let (kind, bottle) = if cfg!(windows) {
         ("windows".to_string(), None)
     } else {
-        let (k, b) = crate::wine::bottle_of(&dir).ok_or("On a Mac the server has to be inside a CrossOver or Whisky bottle (its drive_c folder), so it can run.")?;
-        (k, Some(b))
+        let b = bottle_of(&dir).ok_or("On a Mac the server has to be inside a CrossOver bottle (its drive_c), so it can run.")?;
+        ("crossover".to_string(), Some(b))
     };
     let list = load();
     if list.iter().any(|e| e.dir == dir) {
@@ -591,16 +592,33 @@ fn launch_args(e: &Entry) -> Vec<String> {
     a
 }
 
+/// .../Bottles/<bottle>/drive_c/Some Folder/hlds.exe -> C:\Some Folder\hlds.exe
+fn windows_path(p: &Path) -> Option<String> {
+    let s = p.to_string_lossy();
+    let i = s.find("/drive_c/")?;
+    Some(format!("C:\\{}", s[i + 9..].replace('/', "\\")))
+}
+
+/// The CrossOver bottle a path is in.
+fn bottle_of(p: &Path) -> Option<String> {
+    let s = p.to_string_lossy();
+    let i = s.find("/Bottles/")?;
+    let rest = &s[i + 9..];
+    rest.find("/drive_c/").map(|j| rest[..j].to_string())
+}
+
 fn spawn(e: &Entry) -> Result<Child, String> {
     if !e.hlds().is_file() {
         return Err("The server's files are missing. Delete it and make it again.".into());
     }
     let log = std::fs::File::create(e.dir.join("loner-strike-server.log")).map_err(|err| err.to_string())?;
-    let mut cmd = if e.kind == "windows" {
-        sys::command(e.hlds())
+    let mut cmd = if e.kind == "crossover" {
+        let mut c = sys::command(CROSSOVER_WINE);
+        let win = windows_path(&e.hlds()).ok_or("The server has to be inside a CrossOver bottle's C: drive.")?;
+        c.arg("--bottle").arg(e.bottle.as_deref().unwrap_or("Steam")).arg(win);
+        c
     } else {
-        let win = crate::wine::windows_path(&e.hlds()).ok_or("The server has to be inside its bottle's C: drive.")?;
-        crate::wine::command(&e.kind, e.bottle.as_deref(), win, false)?
+        sys::command(e.hlds())
     };
     cmd.args(launch_args(e))
         .current_dir(&e.dir)
@@ -1083,6 +1101,9 @@ mod tests {
 
     #[test]
     fn paths_and_cfg() {
+        let p = Path::new("/Users/x/Library/Application Support/CrossOver/Bottles/Steam/drive_c/HLDS/hlds.exe");
+        assert_eq!(windows_path(p).unwrap(), "C:\\HLDS\\hlds.exe");
+        assert_eq!(bottle_of(p).unwrap(), "Steam");
         let cfg = "hostname \"My \"Server\"\nsv_password secret // comment\nsv_passwordx 1\n";
         assert_eq!(cfg_value(cfg, "hostname").unwrap(), "My \"Server");
         assert_eq!(cfg_value(cfg, "sv_password").unwrap(), "secret");

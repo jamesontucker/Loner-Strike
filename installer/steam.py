@@ -2,7 +2,7 @@
 
 Supported:
   - Windows Steam (any library folder)
-  - Steam inside a CrossOver or Whisky bottle on a Mac
+  - Steam inside a CrossOver bottle on a Mac
 
 Native Mac Steam is detected only to explain that it can't be used: AMX Mod X
 and ReGameDLL have no builds for the macOS version of the game.
@@ -15,16 +15,6 @@ import sys
 
 GAMES = {"czero": "Counter-Strike: Condition Zero", "cstrike": "Counter-Strike 1.6"}
 CROSSOVER_WINE = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine"
-WHISKY_ID = "com.isaacmarovitz.Whisky"
-
-
-def whisky_wine():
-    """Whisky's Wine (newer builds call it wine64, older ones wine)."""
-    base = os.path.expanduser("~/Library/Application Support/%s/Libraries/Wine/bin" % WHISKY_ID)
-    for name in ("wine64", "wine"):
-        if os.path.isfile(os.path.join(base, name)):
-            return os.path.join(base, name)
-    return None
 
 
 class Install:
@@ -32,8 +22,8 @@ class Install:
 
     def __init__(self, hl_dir, kind, bottle=None):
         self.hl = hl_dir
-        self.kind = kind            # "windows", "crossover" or "whisky"
-        self.bottle = bottle        # CrossOver bottle name, or the Whisky bottle's folder
+        self.kind = kind            # "windows" or "crossover"
+        self.bottle = bottle        # CrossOver bottle name
         self.games = [g for g in GAMES if os.path.isfile(os.path.join(hl_dir, g, "liblist.gam"))]
 
     def game_dir(self, game):
@@ -43,13 +33,10 @@ class Install:
         """argv that runs a Windows program (e.g. the plugin compiler) here."""
         if self.kind == "crossover":
             return [CROSSOVER_WINE, "--bottle", self.bottle, "--wait-children", exe] + list(args)
-        if self.kind == "whisky":
-            return ["/usr/bin/env", "WINEPREFIX=" + self.bottle, "WINEDEBUG=-all", whisky_wine() or "wine64", exe] + list(args)
         return [exe] + list(args)
 
     def describe(self):
-        where = {"crossover": "CrossOver bottle \"%s\"" % self.bottle,
-                 "whisky": "Whisky bottle \"%s\"" % os.path.basename(self.bottle or "")}.get(self.kind, "Steam")
+        where = "CrossOver bottle \"%s\"" % self.bottle if self.kind == "crossover" else "Steam"
         return "%s (%s): %s" % (where, self.hl, ", ".join(GAMES[g] for g in self.games) or "no supported games")
 
 
@@ -99,17 +86,11 @@ def find_windows():
     return found
 
 
-def _bottles():
-    """(drive_c, kind, bottle) for every CrossOver and Whisky bottle."""
-    for drive_c in glob.glob(os.path.expanduser("~/Library/Application Support/CrossOver/Bottles/*/drive_c")):
-        yield drive_c, "crossover", os.path.basename(os.path.dirname(drive_c))
-    for drive_c in glob.glob(os.path.expanduser("~/Library/Containers/%s/Bottles/*/drive_c" % WHISKY_ID)):
-        yield drive_c, "whisky", os.path.dirname(drive_c)
-
-
-def find_mac():
+def find_crossover():
     found = []
-    for drive_c, kind, bottle in _bottles():
+    pattern = os.path.expanduser("~/Library/Application Support/CrossOver/Bottles/*/drive_c")
+    for drive_c in glob.glob(pattern):
+        bottle = os.path.basename(os.path.dirname(drive_c))
         for steam in ("Program Files (x86)/Steam", "Program Files/Steam"):
             root = os.path.join(drive_c, steam)
             if not os.path.isdir(root):
@@ -121,7 +102,7 @@ def find_mac():
                     lib = os.path.join(drive_c, lib[3:].replace("\\", "/"))
                 hl = _hl_in(lib)
                 if hl and all(i.hl != hl for i in found):
-                    found.append(Install(hl, kind, bottle))
+                    found.append(Install(hl, "crossover", bottle))
     return found
 
 
@@ -134,7 +115,7 @@ def find_installs():
     if sys.platform == "win32":
         return find_windows()
     if sys.platform == "darwin":
-        return find_mac()
+        return find_crossover()
     return []
 
 
@@ -143,13 +124,8 @@ def install_at(path, bottle=None):
     is taken from the path, or given with --bottle (for a test copy elsewhere)."""
     path = os.path.abspath(os.path.expanduser(path))
     if sys.platform == "darwin":
-        if bottle:
-            return Install(path, "crossover", bottle)
         m = re.search(r"/CrossOver/Bottles/([^/]+)/drive_c/", path)
-        if m:
-            return Install(path, "crossover", m.group(1))
-        i = path.find("/drive_c/")
-        if i < 0:
-            raise SystemExit("On a Mac the game has to be inside a CrossOver or Whisky bottle (or pass --bottle).")
-        return Install(path, "whisky", path[:i])
+        if not m and not bottle:
+            raise SystemExit("On a Mac the game has to be inside a CrossOver bottle (or pass --bottle).")
+        return Install(path, "crossover", bottle or m.group(1))
     return Install(path, "windows")
