@@ -921,9 +921,9 @@ a.btn.primary { color: var(--signal-ink); }
 }
 
 /* setup's last step fits the card without scrolling */
-.setup-pane.welcome:has(.first-game) { gap: 2px; padding: 0; }
-.setup-pane.welcome:has(.first-game) h1 { margin: 6px 0 4px; font-size: 38px; }
-.setup-pane.welcome:has(.first-game) > p { margin: 0; }
+.setup-pane.welcome:has(.done-tips) { gap: 2px; padding: 0; }
+.setup-pane.welcome:has(.done-tips) h1 { margin: 6px 0 4px; font-size: 38px; }
+.setup-pane.welcome:has(.done-tips) > p { margin: 0; }
 .done-mark { width: 46px; height: 46px; font-size: 24px; margin-bottom: 0; }
 .done-tips { margin: 10px 0 12px; gap: 6px; }
 .done-tips li { padding: 7px 12px; font-size: 15px; }

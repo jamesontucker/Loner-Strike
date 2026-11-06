@@ -35,10 +35,6 @@ export const anySetUp = (scan: Scan | null) => !!scan?.installs.some((i) => i.ga
 
 type Stage = "welcome" | "games" | "content" | "review" | "install" | "done";
 
-// Maps every copy of the game has, for the first game
-const FIRST_MAPS = ["de_dust2", "de_inferno", "de_nuke", "de_train", "de_aztec", "cs_office", "cs_italy"];
-const FIRST_MAPS_CZ = ["de_dust2_cz", "de_inferno_cz", "de_aztec_cz", "de_dust_cz", "cs_office_cz", "cs_italy_cz"];
-
 const IS_MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 
 /** onClose: back to the app without setting up; onDone: setup finished. */
@@ -89,17 +85,8 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
     return () => window.clearInterval(timer.current);
   }, [stage]);
 
-  // the first game: a stock map and a few bots, straight from the last step
-  const [firstMap, setFirstMap] = useState("");
-  const [firstBots, setFirstBots] = useState(9);
-  const firstMaps = games[0] === "czero" ? FIRST_MAPS_CZ : FIRST_MAPS;
-  const finish = async (play: boolean) => {
+  const finish = async () => {
     await postJson("/api/app/game", { hl: install.hl, game: games[0] }).catch(() => null);
-    if (play) {
-      const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { map: firstMap || firstMaps[0], bots: firstBots }).catch(() => ({ error: "Couldn't start the game." }));
-      if (r.error) toast(r.error, true);
-      else toast("Starting the game…");
-    }
     onDone();
   };
 
@@ -273,27 +260,7 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
             </ul>
             {!!job?.failed_compiles?.length && <p className="err-text">These didn't build, so they won't load: {job.failed_compiles.join(", ")}.</p>}
             {job?.notes?.map((n) => <p key={n} className="muted">{n}</p>)}
-            <div className="first-game">
-              <h3>Your first game</h3>
-              <div className="first-row">
-                <label className="field">
-                  <span>Map</span>
-                  <select value={firstMap || firstMaps[0]} onChange={(e) => setFirstMap(e.target.value)}>
-                    {firstMaps.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </label>
-                <div className="field">
-                  <span>Bots</span>
-                  <div className="seg" role="group" aria-label="Bots">
-                    {[4, 9, 15].map((n) => <button key={n} aria-pressed={firstBots === n} onClick={() => setFirstBots(n)}>{n}</button>)}
-                  </div>
-                </div>
-                <button className="btn primary first-play" onClick={() => finish(true)}>
-                  <Icon name="play" size={18} /> Play
-                </button>
-              </div>
-            </div>
-            <button className="link inline" onClick={() => finish(false)}>Or open the panel</button>
+            <button className="btn primary big-btn" onClick={finish}>Open the panel</button>
           </section>
         )}
       </div>
