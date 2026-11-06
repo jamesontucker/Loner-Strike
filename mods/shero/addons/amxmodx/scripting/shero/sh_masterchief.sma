@@ -143,6 +143,7 @@ public plugin_init()
 
 	// EVENTS
 	register_event("Damage", "masterchief_damage", "b", "2!0")
+	RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage_pre", 0, true)	// CZ patch: remember health before armor
 	RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage", 1, true)	// CZ patch: Damage event never fires for bot victims
 
 	#if PLAYER_MODEL > 0 || defined GIVE_WEAPON
@@ -530,3 +531,8 @@ public bot_ammo_loop()
 	}
 }
 #endif
+public bot_victim_damage_pre(victim)
+{
+	sh_bot_damage_pre(victim)
+	return HAM_IGNORED
+}

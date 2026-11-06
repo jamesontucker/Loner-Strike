@@ -45,21 +45,14 @@ public FwdPlayerPreThink( id ) {
 	pev( id, pev_absmin, flMins );
 	pev( id, pev_absmax, flMaxs );
 	
-	for( new i = 0; i < g_iCount; i++ ) {
-		if( !pev_valid( g_iHurt[i] ) || pev( g_iHurt[i], pev_solid ) != SOLID_TRIGGER )
-			continue;
-		
-		// live bounds (moving/toggled triggers)
-		pev( g_iHurt[i], pev_absmin, g_flHurtMins[i] );
-		pev( g_iHurt[i], pev_absmax, g_flHurtMaxs[i] );
-		
+	for( new i = 0; i < g_iCount; i++ )
 		if( !( g_flHurtMins[i][0] > flMaxs[0] || g_flHurtMaxs[i][0] < flMins[0] )
 		&& !( g_flHurtMins[i][1] > flMaxs[1] || g_flHurtMaxs[i][1] < flMins[1] )
-		&& !( g_flHurtMins[i][2] > flMaxs[2] || g_flHurtMaxs[i][2] < flMins[2] ) ) {
+		&& !( g_flHurtMins[i][2] > flMaxs[2] || g_flHurtMaxs[i][2] < flMins[2] )
+		&& pev( g_iHurt[i], pev_solid ) == SOLID_TRIGGER ) {	// CZ: toggled traps only hurt while on
 			dllfunc( DLLFunc_Touch, id, g_iHurt[i] );
 			dllfunc( DLLFunc_Touch, g_iHurt[i], id );
 		}
-	}
 	
 	return FMRES_IGNORED;
 }

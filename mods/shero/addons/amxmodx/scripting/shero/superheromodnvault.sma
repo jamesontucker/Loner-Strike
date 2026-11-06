@@ -2363,6 +2363,15 @@ public round_Start()
 	gRoundFreeze = false
 	gBetweenRounds = false
 
+	// CZ patch: the game reset speeds while gRoundFreeze was still set, so bots (no CurWeapon)
+	// would run at normal speed until their next weapon switch. Apply hero speeds now.
+	for ( new x = 1; x <= gServersMaxPlayers; x++ ) {
+		if ( is_user_alive(x) && is_user_bot(x) ) {
+			gCurrentWeapon[x] = sh_get_held_weapon(x)
+			setSpeedPowers(x, false)
+		}
+	}
+
 	set_task(0.1, "roundStartDelay")
 }
 //----------------------------------------------------------------------------------------------

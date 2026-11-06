@@ -227,6 +227,7 @@ public startPrep(){
 }
 
 public round_End(){
+	releaseAllRockets();
 	removeEntity__All("cameraRocket");
 	gameEnd();
 	
@@ -368,9 +369,17 @@ public removeSkill(){
 	removeEntity__All(classIceBolt);
 	removeEntity__All(classbombTrap);
 	removeEntity__All(classBomb);
+	releaseAllRockets();
 	removeEntity__All(rocketClass);
 	removeEntity__All("cameraRocket");
 
+}
+
+// CZ panel: give players their own view back before their rocket camera is removed
+public releaseAllRockets(){
+	for(new i = 1; i < maxPlayers; i++){
+		if(is_user_connected(i) && userRocketItem[i]) releaseView(i);
+	}
 }
 
 public removeEntity__All(const nameClass[]){

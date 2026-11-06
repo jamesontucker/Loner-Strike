@@ -1,6 +1,6 @@
 --- a/addons/amxmodx/scripting/dice/dice_main.sma
 +++ b/addons/amxmodx/scripting/dice/dice_main.sma
-@@ -1,808 +1,963 @@
+@@ -1,808 +1,970 @@
 -#include <amxmodx>
 -#include <amxmisc>
 -#include <cstrike>
@@ -937,6 +937,12 @@
 +	g_pBotDelay = register_cvar("dice_bot_delay", "50")
 +	// items a bot re-rolls because bots can't handle them (space separated item names)
 +	g_pBotSkip = register_cvar("dice_bot_skip", "noclip camera bury zeus")
++
++	// saved to DICE.cfg along with the item cvars
++	ArrayPushString(g_aCvars, "dice_rolls_per_round")
++	ArrayPushString(g_aCvars, "dice_bot_chance")
++	ArrayPushString(g_aCvars, "dice_bot_delay")
++	ArrayPushString(g_aCvars, "dice_bot_skip")
 +}
 +
 +public plugin_precache()
@@ -1210,6 +1216,7 @@
 +	
 +public OnRoundStart()
 +{
++	g_bSilent = false
 +	g_blFreeze = false
 +	g_iHumanWaiting = 0
 +	arrayset(g_iRoundRolls, 0, sizeof(g_iRoundRolls))

@@ -117,6 +117,12 @@ public client_damage( iAttacker, iVictim, iDamage, iWeapon, iHitPlace, TA )
 		return;
 	}
 
+	// [CZ patch] bot victims are handled only by EVENT_TakeDamage, so procs can never run twice
+	if ( is_user_bot( iVictim ) )
+	{
+		return;
+	}
+
 	WC3_OnDamage( iAttacker, iVictim, iDamage, iWeapon, iHitPlace );
 }
 

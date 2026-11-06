@@ -417,15 +417,16 @@ public botGiveWeapon(id){
 	giveWeapons(id, item);
 }
 
+new botTeamTries[33];
 public botCheckTeam(id){
 	id -= TASK_BOTWEAPON + 100;
 	if(!is_user_connected(id)) return;
 	if(!get_user_team(id) || get_user_team(id) > USER_HUMAN){
-		static tries[33];
-		if(++tries[id] < 10) set_task(2.0, "botCheckTeam", id + TASK_BOTWEAPON + 100);
-		else tries[id] = 0;
+		if(++botTeamTries[id] < 10) set_task(2.0, "botCheckTeam", id + TASK_BOTWEAPON + 100);
+		else botTeamTries[id] = 0;
 		return;
 	}
+	botTeamTries[id] = 0;
 	checkTeam(id);
 }
 
@@ -989,6 +990,8 @@ public radarOff(id){
 public client_disconnected(id){
 
 	stopEnt(id);
+	remove_task(id + TASK_BOTWEAPON + 100);
+	botTeamTries[id] = 0;
 	fVaultSave(id);	
 	mysqlSave(id);
 	removeBarHp(id);

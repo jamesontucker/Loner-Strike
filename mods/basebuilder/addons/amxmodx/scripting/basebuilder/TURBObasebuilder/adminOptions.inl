@@ -765,13 +765,14 @@ public reWriteBlocksParty(id, team){
 	adminResetBlock(3, team, id);
 }	
 
-new Float:saveEntOrigin[1024][3];
+new Float:saveEntOrigin[4096][3];	// CZ panel: maxEnts is now glb_maxEntities
 
 public adminResetBlock(type, id1, id2){
 	new szClass[10], szTarget[7];
 	new Float:fOrigin[3];
 	for(new ent=maxPlayers+1; ent<maxEnts;ent ++){
 	
+		if( ent >= sizeof(saveEntOrigin) ) break;
 		if( !pev_valid(ent) ) continue;
 		if( ent == gBarrier )  continue;
 			

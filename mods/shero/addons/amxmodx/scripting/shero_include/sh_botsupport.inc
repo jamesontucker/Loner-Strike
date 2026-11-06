@@ -72,12 +72,24 @@ stock sh_bot_refill_ammo(id, mode = 0, onlyWeapon = 0)
 // sh_dmg_attacker() instead of get_user_attacker() (also fixes stale bot weapons).
 // ---------------------------------------------------------------------------
 stock bool:gShBotDmg, gShBotDmgAmount, gShBotDmgAttacker, gShBotDmgWeapon, gShBotDmgBody
+stock Float:gShBotPreHealth[33]
+
+// Call from a Ham_TakeDamage PRE hook (bot flag) so the post path can use the health actually
+// lost (after armor), which is what the Damage message reports for humans.
+stock sh_bot_damage_pre(victim)
+{
+	if ( 1 <= victim <= 32 && is_user_bot(victim) ) pev(victim, pev_health, gShBotPreHealth[victim])
+}
 
 stock bool:sh_bot_damage_begin(victim, inflictor, attacker, Float:damage, damagebits)
 {
 	if ( gShBotDmg || damage <= 0.0 || !is_user_connected(victim) || !is_user_bot(victim) ) return false
 
-	gShBotDmgAmount = floatround(damage)
+	// health actually lost (armor absorbed the rest); same as the Damage message's value for humans
+	new Float:health
+	pev(victim, pev_health, health)
+	gShBotDmgAmount = (victim <= 32 && gShBotPreHealth[victim] > 0.0) ? floatround(gShBotPreHealth[victim] - health) : floatround(damage)
+	if ( victim <= 32 ) gShBotPreHealth[victim] = 0.0
 	if ( gShBotDmgAmount <= 0 ) return false
 	gShBotDmgAttacker = attacker
 	gShBotDmgWeapon = 0

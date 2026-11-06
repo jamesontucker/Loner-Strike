@@ -77,6 +77,7 @@ public plugin_init()
 	register_event("CurWeapon", "weaponChange", "be", "1=1")
 	set_task(1.0, "bot_ammo_loop", _, _, _, "b")	// CZ patch: bots never send CurWeapon
 	register_event("Damage", "deadpool_damage", "b", "2!0")
+	RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage_pre", 0, true)	// CZ patch: remember health before armor
 	RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage", 1, true)	// CZ patch: Damage event never fires for bot victims
 	register_event("DeathMsg", "deadpool_death", "a")
 
@@ -386,5 +387,10 @@ public bot_victim_damage(victim, inflictor, attacker, Float:damage, damagebits)
 		deadpool_damage(victim)
 		sh_bot_damage_end()
 	}
+	return HAM_IGNORED
+}
+public bot_victim_damage_pre(victim)
+{
+	sh_bot_damage_pre(victim)
 	return HAM_IGNORED
 }

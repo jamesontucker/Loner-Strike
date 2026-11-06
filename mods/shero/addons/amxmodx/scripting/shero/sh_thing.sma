@@ -36,6 +36,7 @@ public plugin_init()
   register_srvcmd("Thing_init", "Thing_init")
   shRegHeroInit(gHeroName, "Thing_init")
   register_event("Damage", "Thing_damage", "b", "2!0")
+  RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage_pre", 0, true)	// CZ patch: remember health before armor
   RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage", 1, true)	// CZ patch: Damage event never fires for bot victims
 }
 //----------------------------------------------------------------------------------------------
@@ -81,5 +82,10 @@ public bot_victim_damage(victim, inflictor, attacker, Float:damage, damagebits)
 		Thing_damage(victim)
 		sh_bot_damage_end()
 	}
+	return HAM_IGNORED
+}
+public bot_victim_damage_pre(victim)
+{
+	sh_bot_damage_pre(victim)
 	return HAM_IGNORED
 }
