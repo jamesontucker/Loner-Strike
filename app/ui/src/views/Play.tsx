@@ -286,7 +286,7 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
   let n = -1;
   return (
     <div className="map-picker" ref={box}>
-      <button ref={button} type="button" className="map-picker-button" aria-haspopup="listbox" aria-expanded={open} aria-labelledby={labelledBy} onClick={() => { setOpen((o) => !o); setActive(0); }}>
+      <button ref={button} type="button" className="map-picker-button" aria-haspopup="listbox" aria-expanded={open} aria-labelledby={labelledBy} onClick={() => { setOpen((o) => !o); setActive(Math.max(0, flat.findIndex((m) => m.name === value))); }}>
         <span>{value}</span>
         <span className="caret" aria-hidden="true">▾</span>
       </button>

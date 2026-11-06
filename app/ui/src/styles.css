@@ -826,7 +826,7 @@ a.btn.primary { color: var(--signal-ink); }
 /* ---- play: start a game ---------------------------------------------------------------- */
 .start-box { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: end; margin: 0 0 20px; }
 .start-box .field { margin: 0; }
-.start-box select { min-width: 220px; font-size: 16px; padding: 8px 10px; color: var(--bone); background: var(--bg); box-shadow: var(--sunken); border: 0; border-radius: 2px; }
+.start-box select { min-width: 220px; font-size: 16px; padding: 8px 10px; color: var(--bone); background-color: var(--bg); box-shadow: var(--sunken); border: 0; border-radius: 2px; }
 @media (max-width: 760px) { .start-box select { min-width: 0; width: 100%; } .start-box .field { flex: 1 1 100%; } }
 @media (max-width: 760px) { .start-box .seg, .first-row .seg { display: grid; grid-template-columns: repeat(4, 1fr); } }
 
@@ -1157,3 +1157,20 @@ button.cm-stat[aria-expanded="true"] { background: var(--panel); }
   .map-picker-button { min-width: 0; width: 100%; }
   .map-picker-list button { min-height: 40px; font-size: 15px; }
 }
+
+/* ---- dropdowns: the same sunken box and caret everywhere ----------------------------- */
+select:not([multiple]) {
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23c2c9b7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 11px center; background-size: 10px 6px;
+}
+select:not([multiple]):hover, .map-picker-button:hover { filter: brightness(1.12); }
+select:focus-visible, .map-picker-button:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+select option, select optgroup { background: var(--panel); color: var(--bone); }
+/* the map picker looks like the dropdowns next to it */
+.map-picker-button { padding: 8px 30px 8px 10px; position: relative; line-height: normal; }
+.map-picker-button .caret { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); width: 10px; height: 6px; margin: 0; font-size: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23c2c9b7'/%3E%3C/svg%3E") no-repeat center / 10px 6px; }
+.map-picker-pop .search { flex: none; max-width: none; width: 100%; min-height: 0; }
+.start-box select, .start-box .map-picker-button { height: 40px; box-sizing: border-box; font-size: 16px; }
