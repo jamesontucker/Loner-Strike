@@ -192,6 +192,14 @@ export function ServerPage(props: {
     setTimeout(refresh, 1500);
   };
 
+  // reinstall everything that's on the server, keeping its settings
+  const rebuild = async () => {
+    if (!confirm(`Rebuild Loner-Strike on ${s.name}? It reinstalls its files; settings, admins and maps stay.`)) return;
+    const components = (app?.game?.installed ?? []).filter((c) => c !== "foundation" && c !== "core");
+    const r = await post("/api/setup/install", { hl: s.dir, games: [s.game], components, repair: true });
+    if (r.error) return toast(r.error, true);
+    setBusyJob(true);
+  };
   const needsLive = TABS.find((t) => t.id === tab)?.live && !data;
   return (
     <div className="stack">
@@ -225,7 +233,7 @@ export function ServerPage(props: {
 
       {s.error && <p className="err-text">{s.error}</p>}
       {!s.loner && <AddLoner server={s} onDone={() => { onChanged(); reloadApp(); }} />}
-      {busyJob && <JobProgress onEnd={(ok) => { setBusyJob(false); toast(ok ? "Server files updated" : "The update stopped", !ok); }} />}
+      {busyJob && <JobProgress onEnd={(ok) => { setBusyJob(false); toast(ok ? "Done" : "That stopped. The bar shows why.", !ok); reloadApp(); }} />}
 
       {needsLive ? (
         <div className="waiting">
@@ -235,7 +243,12 @@ export function ServerPage(props: {
         </div>
       ) : (
         <>
-          {tab === "overview" && <ServerDetails server={s} onChanged={onChanged} act={act} />}
+          {tab === "overview" && (
+            <>
+              <ServerDetails server={s} onChanged={onChanged} act={act} />
+              <Maintenance server={s} installed={app?.game?.installed ?? []} act={act} rebuild={rebuild} />
+            </>
+          )}
           {tab === "friends" && <Friends data={data} refresh={refresh} server={{ name: s.name, visibility: s.visibility }} />}
           {tab === "modes" && data && <PlayLive data={data} maps={maps} refresh={refresh} openMaps={() => setTab("maps")} />}
           {tab === "maps" && <Maps data={data} maps={maps} reload={reloadMaps} refresh={refresh} />}
@@ -327,11 +340,41 @@ function ServerDetails({ server, onChanged, act }: { server: ServerInfo; onChang
         </div>
         <div className="row">
           <button className="btn primary" onClick={save}>Save</button>
-          {!server.imported && <button className="btn" onClick={() => act("update")} disabled={server.state === "running"}>Update Valve's server files</button>}
-          <button className="btn danger" onClick={() => act("delete")}>{server.imported ? "Remove from list" : "Delete server"}</button>
         </div>
       </div>
       <Console server={server} />
+    </div>
+  );
+}
+
+/** Updating, rebuilding and deleting a server. */
+function Maintenance({ server, installed, act, rebuild }: { server: ServerInfo; installed: string[]; act: (a: string) => void; rebuild: () => void }) {
+  const running = server.state === "running";
+  return (
+    <div className="panel">
+      <h3>Maintenance</h3>
+      {running && <p className="muted">Stop the server first to update or rebuild it.</p>}
+      <ul className="upkeep">
+        {!server.imported && (
+          <li>
+            <div><b>Update Valve's server files</b><p className="muted">Gets the latest version of the server from Valve. Your mods and settings stay.</p></div>
+            <button className="btn" disabled={running} onClick={() => act("update")}>Update</button>
+          </li>
+        )}
+        {server.loner && (
+          <li>
+            <div><b>Rebuild Loner-Strike</b><p className="muted">Reinstalls Metamod, AMX Mod X, ReGameDLL and the {Math.max(0, installed.length - 2)} mode{installed.length - 2 === 1 ? "" : "s"} and add-ons on it. Fixes a server that won't start or lost its mods. Settings, admins and maps stay.</p></div>
+            <button className="btn" disabled={running} onClick={rebuild}>Rebuild</button>
+          </li>
+        )}
+        <li>
+          <div>
+            <b>{server.imported ? "Remove from Loner-Strike" : "Delete the server"}</b>
+            <p className="muted">{server.imported ? "Takes it off the list. Its folder stays where it is." : "Deletes its folder, maps, settings and admins. Your own game isn't touched."}</p>
+          </div>
+          <button className="btn danger" onClick={() => act("delete")}>{server.imported ? "Remove" : "Delete"}</button>
+        </li>
+      </ul>
     </div>
   );
 }
