@@ -2,6 +2,7 @@
 
 const P: Record<string, string> = {
   play: '<path d="M7 4.5v15l12-7.5z"/>',
+  maps: '<path d="M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/>',
   bots: '<rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16.5h5"/>',
   match: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/>',
   fun: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>',

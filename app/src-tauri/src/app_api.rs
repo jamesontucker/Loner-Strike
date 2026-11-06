@@ -161,7 +161,8 @@ async fn api_app(State(st): State<Shared>) -> Json<Value> {
     let version = st.app.get().map(|a| a.package_info().version.to_string()).unwrap_or_default();
     let pending = PENDING.lock().unwrap().as_ref().map(|u| json!({"version": u.version, "notes": u.body}));
     let game = st.game.as_ref().map(|g| json!({"id": g.name, "dir": g.dir}));
-    Json(json!({"version": version, "update": pending, "game": game}))
+    Json(json!({"version": version, "update": pending, "game": game,
+                "bots": saved_bots(&st), "lastmap": last_map(&st)}))
 }
 
 async fn api_update_check(State(st): State<Shared>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
@@ -182,7 +183,9 @@ async fn api_update_check(State(st): State<Shared>, headers: HeaderMap) -> (Stat
             (StatusCode::OK, Json(v))
         }
         Ok(None) => (StatusCode::OK, Json(json!({"available": false}))),
-        Err(e) => (StatusCode::OK, Json(json!({"error": format!("Couldn't check for updates ({e}).")}))),
+        // no published release yet answers 404, which is the same as "nothing new"
+        Err(e) if e.to_string().contains("valid release JSON") => (StatusCode::OK, Json(json!({"available": false}))),
+        Err(_) => (StatusCode::OK, Json(json!({"error": "Couldn't check for updates. Check your internet connection."}))),
     }
 }
 
@@ -207,10 +210,62 @@ async fn api_update_install(State(st): State<Shared>, headers: HeaderMap) -> (St
     }
 }
 
+// ---- launching the game -----------------------------------------------------
+fn data_file(st: &Shared, name: &str) -> Option<String> {
+    let g = st.game.as_ref()?;
+    std::fs::read_to_string(g.dir.join("addons/amxmodx/data/gamemodes").join(name)).ok()
+}
+
+/// The bot count saved by the Game Mode Menu (global.cfg: bot_quota "14").
+fn saved_bots(st: &Shared) -> Option<u32> {
+    data_file(st, "global.cfg")?
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("bot_quota").map(|v| v.trim().trim_matches('"').parse().ok()))
+        .flatten()
+}
+
+/// The last map played (only plain map names; it goes on a command line).
+fn last_map(st: &Shared) -> Option<String> {
+    let m = data_file(st, "lastmap.txt")?.trim().to_string();
+    (!m.is_empty() && m.len() <= 31 && m.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))).then_some(m)
+}
+
+#[derive(Deserialize, Default)]
+struct LaunchReq {
+    /// start a server on this map (or the last one) instead of the main menu
+    #[serde(default)]
+    map: Option<String>,
+    #[serde(default)]
+    menu: bool,
+}
+
+async fn api_launch(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<LaunchReq>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    let Some(g) = st.game.as_ref() else {
+        return (StatusCode::OK, Json(json!({"error": "Couldn't find the game."})));
+    };
+    let appid = if g.name == "cstrike" { "10" } else { "80" };
+    let map = req
+        .map
+        .filter(|m| m.len() <= 31 && m.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c)))
+        .or_else(|| last_map(&st));
+    let mut game_args: Vec<String> = Vec::new();
+    if let (false, Some(m)) = (req.menu, map) {
+        game_args = vec!["+maxplayers".into(), "32".into(), "+map".into(), m];
+    }
+    match crate::steam::launch(&g.hl, appid, &game_args) {
+        Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))),
+        Err(e) => (StatusCode::OK, Json(json!({"error": e}))),
+    }
+}
+
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/app", get(api_app))
         .route("/api/app/update/check", post(api_update_check))
         .route("/api/app/update/install", post(api_update_install))
         .route("/api/app/phone", get(api_phone).post(api_phone_set))
+        .route("/api/app/launch", post(api_launch))
 }

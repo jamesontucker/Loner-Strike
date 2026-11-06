@@ -102,3 +102,38 @@ pub fn find_installs() -> Vec<Install> {
 pub fn find_installs() -> Vec<Install> {
     Vec::new()
 }
+
+/// Starts the game through Steam: Steam inside CrossOver on a Mac, Steam on Windows.
+/// `args` go to the game (e.g. +map de_dust2 to start a server straight away).
+pub fn launch(hl: &Path, appid: &str, args: &[String]) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        // .../Bottles/<bottle>/drive_c/<steam>/steamapps/common/Half-Life
+        let s = hl.to_string_lossy().to_string();
+        let i = s.find("/Bottles/").ok_or("The game isn't in a CrossOver bottle.")?;
+        let rest = &s[i + 9..];
+        let bottle = rest.split('/').next().unwrap_or_default().to_string();
+        let drive_c = format!("{}/drive_c/", &s[..i + 9 + bottle.len()]);
+        let steam_root = hl.parent().and_then(|p| p.parent()).and_then(|p| p.parent()).ok_or("Couldn't find Steam.")?;
+        let rel = steam_root.to_string_lossy().strip_prefix(&drive_c).map(String::from).ok_or("Couldn't find Steam.")?;
+        let steam_exe = format!("C:\\{}\\steam.exe", rel.replace('/', "\\"));
+        let mut cmd = std::process::Command::new("/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine");
+        cmd.args(["--bottle", &bottle, &steam_exe, "-applaunch", appid]).args(args);
+        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        cmd.spawn().map(|_| ()).map_err(|e| format!("Couldn't start CrossOver ({e})."))
+    }
+    #[cfg(windows)]
+    {
+        let _ = hl;
+        // Steam's URL handler: steam://run/<appid>//<game arguments>
+        let mut cmd = std::process::Command::new("cmd");
+        let url = format!("steam://run/{}//{}", appid, args.join(" "));
+        cmd.args(["/C", "start", "", &url]);
+        cmd.spawn().map(|_| ()).map_err(|e| format!("Couldn't start Steam ({e})."))
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        let _ = (hl, appid, args);
+        Err("Launching isn't supported on this system.".into())
+    }
+}
