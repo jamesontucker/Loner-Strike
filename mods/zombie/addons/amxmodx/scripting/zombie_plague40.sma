@@ -4888,7 +4888,7 @@ public cmd_toggle(id, level, cid)
 	get_mapname(mapname, charsmax(mapname))
 	
 	// Restart current map
-	server_cmd("changelevel %s", mapname)
+	engine_changelevel(mapname)	// Loner-Strike fix: was a raw server_cmd("changelevel ...")
 	
 	return PLUGIN_HANDLED;
 }
@@ -7681,7 +7681,8 @@ save_customization()
 public register_ham_czbots(id)
 {
 	// Make sure it's a CZ bot and it's still connected
-	if (g_hamczbots || !g_isconnected[id] || !get_pcvar_num(cvar_botquota))
+	// Loner-Strike fix: don't require bot_quota > 0 (bots added while it's 0 never got the hooks; same as zp5)
+	if (g_hamczbots || !g_isconnected[id] || !g_isbot[id])
 		return;
 	
 	RegisterHamFromEntity(Ham_Spawn, id, "fw_PlayerSpawn_Post", 1)

@@ -30,6 +30,17 @@ new diskTimer[SH_MAXSLOTS+1]
 new disk[SH_MAXSLOTS+1]
 new flash
 //------------------------------------------------------------------------------------ 
+// Loner-Strike fix: disk[] holds an entity index that may already be freed and reused
+// (map/round cleanup, decay); only touch it while it's still this player's disk
+bool:disk_alive(id)
+{
+	new ent = disk[id]
+	if(ent <= 0 || !is_valid_ent(ent)) return false
+	new classname[8]
+	entity_get_string(ent, EV_SZ_classname, classname, charsmax(classname))
+	return equal(classname, "disk") && entity_get_edict(ent, EV_ENT_owner) == id
+}
+//------------------------------------------------------------------------------------ 
 public plugin_init() 
 { 
     //Special thanks to avalanche for helping me to debug my hero.
@@ -95,7 +106,7 @@ public frieza_init()
         diskTimer[id] = -1
         new Float: fOrigin[3]
 	new origin[3]
-	if(is_valid_ent(disk[id])){
+	if(disk_alive(id)){
 		entity_get_vector(disk[id], EV_VEC_origin, fOrigin)
 		FVecIVec(fOrigin, origin)
 		decay_effects(disk[id], origin)
@@ -138,6 +149,7 @@ public frieza_kill()  //triggered everytime someone dies
 	new id = read_data(2)  //This tells who the victim is
 	if(g_hasfriezaPowers[id] && diskTimer[id] > 0){
 		diskTimer[id] = -1
+		if(!disk_alive(id)) return
 		new Float: fOrigin[3]
 		new origin[3]
 		//gets current position of entity
@@ -151,7 +163,10 @@ public frieza_kill()  //triggered everytime someone dies
 public frieza_disklife(){ 
     for(new id = 1; id <= SH_MAXSLOTS; id++){ 
         if(g_hasfriezaPowers[id] && is_user_alive(id)){ 
-            if(diskTimer[id] > 0){ 
+            if(diskTimer[id] >= 0 && !disk_alive(id)){
+                diskTimer[id] = -1	// Loner-Strike fix: disk already gone
+            }
+            else if(diskTimer[id] > 0){ 
                 diskTimer[id]-- 
 		new Float: fVelocity[3]
 		//gets the velocity by the direction you are looking at
@@ -201,7 +216,11 @@ public fire_disk(id)
     fOrigin[1] += floatsin(viewing_angles[1], degrees) * distance_from_user
     fOrigin[2] += floatsin(-viewing_angles[0], degrees) * distance_from_user
 
+    // Loner-Strike fix: don't orphan a disk that's still flying
+    if(disk_alive(id)) remove_entity(disk[id])
+
     new NewEnt = create_entity("info_target")  //Makes an object 
+    if(!is_valid_ent(NewEnt)) return
     entity_set_string(NewEnt, EV_SZ_classname, "disk") //sets the classname of the entity
     disk[id] = NewEnt
 
@@ -335,7 +354,7 @@ public decay_effects(NewEnt, origin[3])  //removes the entity plus adds a decayi
 //------------------------------------------------------------------------------------------
 public client_disconnect(id)  //This makes sure that the disk isn't flying after disconnect
 {
-	if(g_hasfriezaPowers[id] && diskTimer[id] > 0){
+	if(g_hasfriezaPowers[id] && diskTimer[id] > 0 && disk_alive(id)){
 		new Float: fOrigin[3]
 		new origin[3]
 		entity_get_vector(disk[id], EV_VEC_origin, fOrigin)

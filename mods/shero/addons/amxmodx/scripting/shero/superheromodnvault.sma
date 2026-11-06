@@ -5030,7 +5030,8 @@ getSaveKey(id, savekey[32])
 
 		// Attempt to get rid of the skill tag so we save with bots true name
 		new lastchar = strlen(botname) - 1
-		if ( botname[lastchar] == ')' ) {
+		// Loner-Strike fix: an empty name made this read botname[-1]
+		if ( lastchar >= 0 && botname[lastchar] == ')' ) {
 			for ( new x = lastchar - 1; x > 0; x-- ) {
 				if ( botname[x] == '(' ) {
 					botname[x - 1] = 0

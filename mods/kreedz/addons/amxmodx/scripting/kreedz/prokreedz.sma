@@ -429,7 +429,8 @@ public plugin_cfg()
 	new startcheck[100], data[256], map[64], x[13], y[13], z[13];
 	formatex(startcheck, 99, "%s/%s", Kzdir, KZ_STARTFILE)
 	new f = fopen(startcheck, "rt" )
-	while( !feof( f ) )
+	// Loner-Strike fix: a missing start file aborted plugin_cfg with a runtime error
+	while( f && !feof( f ) )
 	{
 		fgets( f, data, sizeof data - 1 )
 		parse( data, map, 63, x, 12, y, 12, z, 12)
@@ -444,7 +445,7 @@ public plugin_cfg()
 			break;
 		}
 	}
-	fclose(f)
+	if( f ) fclose(f)
 
 	new ent = -1;
 	while( ( ent = engfunc(EngFunc_FindEntityByString, ent, "classname", "func_water") ) != 0 )
@@ -1424,12 +1425,13 @@ stock kz_set_start(const map[], Float:origin[3])
 	DefaultStart = true
 	
 	new file = fopen(tempfile, "wt")
+	if( !file ) return	// Loner-Strike fix: unchecked handles threw runtime errors
 	new vault = fopen(realfile, "rt")
 	
 	new data[128], key[64]
 	new bool:replaced = false
 	
-	while( !feof(vault) )
+	while( vault && !feof(vault) )
 	{
 		fgets(vault, data, 127)
 		parse(data, key, 63)
@@ -1452,10 +1454,11 @@ stock kz_set_start(const map[], Float:origin[3])
 	}
 	
 	fclose(file)
-	fclose(vault)
+	if( vault ) fclose(vault)
 	
 	delete_file(realfile)
-	while( !rename_file(tempfile, realfile, 1) ) {}
+	// Loner-Strike fix: this spun forever on a locked file; give up after a few tries
+	for( new tries = 0; tries < 5 && !rename_file(tempfile, realfile, 1); tries++ ) {}
 }
 
 stock kz_showtime_roundtime(id, time)
@@ -1770,6 +1773,13 @@ public Verif(id, action)
 
 	new file = fopen(tempfile, "wt")
 	new vault = fopen(realfile, "rt")
+	// Loner-Strike fix: unchecked handles threw runtime errors
+	if( !file || !vault )
+	{
+		if( file ) fclose(file)
+		if( vault ) fclose(vault)
+		return 0
+	}
 	new data[150], sid[32], time[25], checks[5], gochecks[5], x[25], y[25], z[25], scout[5]
 	while( !feof(vault) )
 	{
@@ -1801,8 +1811,8 @@ public Verif(id, action)
 	delete_file(realfile)
 	if(file_size(tempfile) == 0)
 		delete_file(tempfile)
-	else	
-		while( !rename_file(tempfile, realfile, 1) ) {}
+	else	// Loner-Strike fix: this spun forever on a locked file; give up after a few tries
+		for( new tries = 0; tries < 5 && !rename_file(tempfile, realfile, 1); tries++ ) {}
 	
 	
 	if(!exist)
@@ -1821,7 +1831,7 @@ public kz_savepos (id, Float:time, checkpoints, gochecks, Float:origin[3], scout
 	new vault = fopen(realfile, "rt+")
 	write_file(realfile, formatorigin) // La sfarsit adaug datele mele
 	
-	fclose(vault)
+	if( vault ) fclose(vault)	// Loner-Strike fix: the file may not exist yet
 	
 }
  
@@ -2692,6 +2702,7 @@ public save_pro15()
    
 	new Data[256];
 	new f = fopen(profile, "at")
+	if( !f ) return	// Loner-Strike fix: unchecked handle threw a runtime error
 	
 	for(new i = 0; i < 15; i++)
 	{
@@ -2707,6 +2718,7 @@ public read_pro15()
 	formatex(profile, 127, "%s/pro_%s.cfg", Topdir, g_szMapName)
 	
 	new f = fopen(profile, "rt" )
+	if( !f ) return	// Loner-Strike fix: no top-15 file yet; the runtime error aborted plugin_cfg
 	new i = 0
 	while( !feof(f) && i < 16)
 	{
@@ -2849,6 +2861,7 @@ public save_Noob15()
    
 	new Data[256];
 	new f = fopen(profile, "at")
+	if( !f ) return	// Loner-Strike fix: unchecked handle threw a runtime error
 	
 	for(new i = 0; i < 15; i++)
 	{
@@ -2864,6 +2877,7 @@ public read_Noob15()
 	formatex(profile, 127, "%s/Noob_%s.cfg", Topdir, g_szMapName)
 	
 	new f = fopen(profile, "rt" )
+	if( !f ) return	// Loner-Strike fix: no top-15 file yet; the runtime error aborted plugin_cfg
 	new i = 0
 	while( !feof(f) && i < 16)
 	{

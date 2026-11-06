@@ -172,7 +172,8 @@ public restartMap(){
 	
 	new currentMap[64];
 	get_mapname(currentMap, sizeof(currentMap) - 1);
-	server_cmd("map ^"%s^"", currentMap);
+	// Loner-Strike fix: a raw "map" command is a full server restart that drops players; changelevel keeps them
+	engine_changelevel(currentMap);
 	
 }
 /* AMXX-Studio Notes - DO NOT MODIFY BELOW HERE

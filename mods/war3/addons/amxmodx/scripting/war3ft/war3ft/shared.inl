@@ -1648,7 +1648,12 @@ SHARED_GetHeldWeapon( id, &iClip, &iAmmo )
 		}
 
 		iClip = cs_get_weapon_ammo( iItem );
-		iAmmo = cs_get_user_bpammo( id, iWeapon );
+		// Loner-Strike fix: cs_get_user_bpammo throws "Invalid weapon id" for weapons without
+		// backpack ammo (knife, C4, slot 2), aborting the caller (e.g. the TakeDamage handler)
+		if ( iWeapon != CSW_KNIFE && iWeapon != CSW_C4 && iWeapon != 2 )
+		{
+			iAmmo = cs_get_user_bpammo( id, iWeapon );
+		}
 
 		return iWeapon;
 	}

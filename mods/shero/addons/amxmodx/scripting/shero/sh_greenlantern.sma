@@ -43,7 +43,8 @@ public plugin_init()
 	register_srvcmd("greenlantern_init", "greenlantern_init")
 	shRegHeroInit(gHeroName, "greenlantern_init")
 
-	register_concmd("shield", "create_shield")
+	// Loner-Strike fix: "shield" is also CS's tactical-shield buy alias and was ungated (anyone, even dead, could spam entities)
+	register_concmd("shield", "cmd_shield")
 	register_event("ResetHUD", "newSpawn", "b")
 
 	//KEY DOWN
@@ -118,7 +119,23 @@ public greenlantern_ku()
 }
 
 //----------------------------------------------------------------------------------------------
+// Loner-Strike fix: only a living Green Lantern off cooldown may use the "shield" command; everyone else falls through to the buy alias
+public cmd_shield(id)
+{
+	if ( !gHasGreenPower[id] || !is_user_alive(id) ) return PLUGIN_CONTINUE
+	if ( !hasRoundStarted() || gPlayerUltimateUsed[id] ) {
+		playSoundDenySelect(id)
+		return PLUGIN_HANDLED
+	}
+	create_shield(id)
+	if (get_cvar_float("greenlantern_cooldown") > 0.0) ultimateTimer(id, get_cvar_float("greenlantern_cooldown"))
+	return PLUGIN_HANDLED
+}
+//----------------------------------------------------------------------------------------------
 public create_shield(id) {
+	// Loner-Strike fix: drop a still-standing shield first so it can't be orphaned
+	remove_task(id)
+	remove_shield(id)
 	gLanternShield[id] = create_entity("func_breakable")
 	entity_set_string(gLanternShield[id], EV_SZ_classname, "gl_shield")
 	entity_set_model(gLanternShield[id], "models/shmod/wall.mdl") // I found it somewhere in the forums
@@ -196,13 +213,21 @@ public newSpawn(id)
 //----------------------------------------------------------------------------------------------
 public remove_shield(id)
 {
-	remove_entity(gLanternShield[id])
+	// Loner-Strike fix: the shield may already be gone (newSpawn) and its index reused; only remove our own entity
+	new ent = gLanternShield[id]
+	gLanternShield[id] = 0
+	if ( ent > 0 && is_valid_ent(ent) ) {
+		new classname[16]
+		entity_get_string(ent, EV_SZ_classname, classname, charsmax(classname))
+		if ( equal(classname, "gl_shield") ) remove_entity(ent)
+	}
 }
 //----------------------------------------------------------------------------------------------
 public glow_effect(parm[])
 {
 	new float:vec1[3]
 	new id = parm[0]
+	if ( !is_user_connected(id) ) return	// Loner-Strike fix: MSG_ONE to a gone player errors
 	get_user_origin(id, vec1, 0)
 	message_begin(MSG_ONE, SVC_TEMPENTITY, vec1, id)
 	write_byte(27) //TE_DLIGHT  dynamic light, effect world, minor entity effect

@@ -199,7 +199,7 @@ winSounds[MAX_WINSOUNDS][MAX_WINSOUND_LEN+1], numWinSounds, currentWinSound, hud
 hudSyncLDisplay, shouldWarmup, ggActive, teamLevel[3], teamLvlWeapon[3][24], teamScore[3], bombMap, hostageMap,
 bombStatus[4], c4planter, Float:spawns[MAX_SPAWNS][9], spawnCount, csdmSpawnCount, hudSyncCountdown,
 weaponName[MAX_WEAPONS+1][24], Float:weaponGoal[MAX_WEAPONS+1], weaponNum, initTeamplayStr[32], initTeamplayInt = -1,
-bot_quota, spareName[32], sqlInit, galileoID = -1;
+spareName[32], sqlInit, galileoID = -1;
 
 // stats file stuff
 new sfStatsStruct[statsData], lastStatsMode = -909;
@@ -474,7 +474,7 @@ public plugin_init()
 	if(equal(modName,"czero"))
 	{
 		czero = 1;
-		bot_quota = get_cvar_pointer("bot_quota");
+		// bot_quota = get_cvar_pointer("bot_quota"); // Loner-Strike: no longer needed (CZ bot hooks no longer require bot_quota > 0)
 	}
 	
 	// identify this as a bomb map
@@ -740,7 +740,8 @@ public client_disconnect(id)
 // someone joins, monitor ham hooks
 public client_putinserver(id)
 {
-	if(czero && !czbot_hams && is_user_bot(id) && get_pcvar_num(bot_quota) > 0)
+	// Loner-Strike fix: don't require bot_quota > 0 (bots added while it's 0 never got the hooks; same as zp5)
+	if(czero && !czbot_hams && is_user_bot(id))
 		set_task(0.1,"czbot_hook_ham",id);
 	
 	// bots don't call joinclass
@@ -756,7 +757,7 @@ public czbot_hook_ham(id)
 	if(czbot_hams || !is_user_connected(id)) return;
 
 	// probably a czero bot
-	if(is_user_bot(id) && get_pcvar_num(bot_quota) > 0)
+	if(is_user_bot(id))
 	{
 		RegisterHamFromEntity(Ham_Spawn,id,"ham_player_spawn",1);
 		RegisterHamFromEntity(Ham_Killed,id,"ham_player_killed_pre",0);
@@ -9551,7 +9552,7 @@ public goto_nextmap()
 	new nextMap[32];
 	get_cvar_string("amx_nextmap",nextMap,31);
 
-	server_cmd("changelevel %s",nextMap);
+	engine_changelevel(nextMap);	// Loner-Strike fix: was a raw server_cmd("changelevel ...")
 }
 
 // find a player's weapon entity

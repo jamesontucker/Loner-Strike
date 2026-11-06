@@ -1533,7 +1533,13 @@ public checkCamping(id){
 }
 
 public ham_WeaponCleaner_Post(weapon, id){
-	if (pev_valid(weapon)) remove_entity(weapon);
+	if (!pev_valid(weapon)) return HAM_SUPERCEDE;
+	// Loner-Strike fix: removing a weaponbox outright orphaned the weapon_* inside it (edict leak);
+	// make it think now so its own Kill() removes the contents too
+	static szClass[16];
+	pev(weapon, pev_classname, szClass, charsmax(szClass));
+	if (equal(szClass, "weaponbox")) set_pev(weapon, pev_nextthink, get_gametime());
+	else remove_entity(weapon);
 	return HAM_SUPERCEDE;
 }
 public ham_TakeDamage(victim, inflictor, attacker, Float:damage, damagebits){

@@ -84,6 +84,16 @@ public sh_client_spawn(id)
 	bomberman_newsetup(id)
 }
 //----------------------------------------------------------------------------------------------
+// Loner-Strike fix: gBombEntity[] holds an entity index that may have been freed and reused
+// (map/round cleanup); only touch it if it's still this player's bomb
+bool:is_our_bomb(ent, id)
+{
+	if ( ent <= 0 || !pev_valid(ent) ) return false
+	new classname[16]
+	pev(ent, pev_classname, classname, charsmax(classname))
+	return equal(classname, "remote_bomb") && pev(ent, pev_owner) == id
+}
+//----------------------------------------------------------------------------------------------
 bomberman_newsetup(id)
 {
 	gPlayerInCooldown[id] = false
@@ -92,7 +102,7 @@ bomberman_newsetup(id)
 
 	new bombent = gBombEntity[id]
 
-	if ( pev_valid(bombent) ) {
+	if ( is_our_bomb(bombent, id) ) {
 		engfunc(EngFunc_RemoveEntity, bombent)
 	}
 
@@ -180,7 +190,7 @@ explode_bomb(id)
 {
 	new bombent = gBombEntity[id]
 
-	if ( pev_valid(bombent) ) {
+	if ( is_our_bomb(bombent, id) ) {
 
 		sh_set_cooldown(id, get_pcvar_float(gPcvarCooldown))
 
@@ -306,7 +316,7 @@ public client_connect(id)
 {
 	new bombent = gBombEntity[id]
 
-	if ( pev_valid(bombent) ) {
+	if ( is_our_bomb(bombent, id) ) {
 		engfunc(EngFunc_RemoveEntity, bombent)
 	}
 
@@ -319,7 +329,7 @@ public client_disconnect(id)
 {
 	new bombent = gBombEntity[id]
 
-	if ( pev_valid(bombent) ) {
+	if ( is_our_bomb(bombent, id) ) {
 		engfunc(EngFunc_RemoveEntity, bombent)
 	}
 

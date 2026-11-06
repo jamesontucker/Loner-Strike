@@ -27,6 +27,7 @@ new gHeroName[]="Sub-Zero"
 new bool:g_HasSubZeroPower[SH_MAXSLOTS+1]
 new gLastWeapon[SH_MAXSLOTS+1]
 new blastring
+new gFrozenEnt[SH_MAXSLOTS+1]	// Loner-Strike: each victim's ice model, so it can't pile up
 
 public plugin_init()
 {
@@ -46,6 +47,7 @@ public plugin_init()
 	// REGISTER EVENTS THIS HERO WILL RESPOND TO! (AND SERVER COMMANDS)
 	register_event("ResetHUD","newRound","b")
 	register_touch("ice_blast","*","frozen")
+	register_think("freezed","freezed_expire")	// Loner-Strike fix: ice models now expire with the freeze
 	// KEY DOWN
 	register_srvcmd("subzero_kd", "subzero_kd")
 	shRegKeyDown(gHeroName, "subzero_kd")
@@ -180,13 +182,39 @@ public frozen(pToucher, pTouched)
 	}
 }
 
+// Loner-Strike fix: the ice model stayed until someone respawned (one more per freeze); the stored
+// index may have been freed and reused, so check it's still our "freezed" entity before removing
+remove_frozen(victim)
+{
+	new ent = gFrozenEnt[victim]
+	gFrozenEnt[victim] = 0
+	if ( ent > 0 && is_valid_ent(ent) ) {
+		new szClassName[16]
+		entity_get_string(ent, EV_SZ_classname, szClassName, 15)
+		if ( equal(szClassName, "freezed") ) remove_entity(ent)
+	}
+}
+
+public freezed_expire(ent)
+{
+	if ( !is_valid_ent(ent) ) return
+	for ( new i = 1; i <= SH_MAXSLOTS; i++ ) {
+		if ( gFrozenEnt[i] == ent ) gFrozenEnt[i] = 0
+	}
+	remove_entity(ent)
+}
+
 public freezed(victim)
 {
 	new Float:vOrigin[3]
 	entity_get_vector(victim, EV_VEC_origin, vOrigin)
 	vOrigin[2] -= 25
 	
+	remove_frozen(victim)
 	new frozenground = create_entity("info_target")
+	if ( !is_valid_ent(frozenground) ) return
+	gFrozenEnt[victim] = frozenground
+	entity_set_float(frozenground, EV_FL_nextthink, get_gametime() + get_cvar_float("subzero_freezetime"))
 	entity_set_string(frozenground, EV_SZ_classname, "freezed")
 	entity_set_model(frozenground, "models/shmod/freezed.mdl")
 	entity_set_size(frozenground, Float:{-2.5, -2.5, -1.5}, Float:{2.5, 2.5, 1.5})
@@ -247,6 +275,7 @@ public RemoveByClass(id){
  	  RemoveEntity(frozenground) 
   	} 
   	  while (frozenground) 
+	for ( new i = 1; i <= SH_MAXSLOTS; i++ ) gFrozenEnt[i] = 0
 }
 //----------------------------------------------------------------------------------------------
 // CZ patch: bots never get ResetHUD, run the per-spawn code for them from the core's spawn forward

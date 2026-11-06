@@ -357,7 +357,20 @@ public buildingBuild(id){
 	}
 	return PLUGIN_CONTINUE;
 }
+// Loner-Strike fix: the clone limit was per human only (16 humans could exhaust the edicts);
+// also cap clones server-wide and keep headroom below the engine's edict limit
+#define BB_MAX_CLONES		300
+#define BB_EDICT_HEADROOM	150
+stock bool:cloneAllowed(){
+	if( engfunc(EngFunc_NumberOfEntities) >= maxEnts - BB_EDICT_HEADROOM ) return false;
+	new count;
+	for(new ent=maxPlayers+1; ent<maxEnts; ent ++){
+		if( pev_valid(ent) && getLock(ent) == 3 && ++count >= BB_MAX_CLONES ) return false;
+	}
+	return true;
+}
 public createClone(entView){
+	if( !cloneAllowed() ) return -1;
 	new ent=create_entity("func_wall");
 	if( !pev_valid(ent) ) return -1;
 	

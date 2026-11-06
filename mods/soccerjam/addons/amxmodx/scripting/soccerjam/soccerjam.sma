@@ -85,6 +85,8 @@
 /* ------------------------------------------------------------------------- */
 
 #define TEAMS 4 //Don't edit this.
+#define TASK_GOALNET 7654600	// Loner-Strike: FinalizeGoalNet task ids (+team)
+#define TASK_DISARMSTRIP 7654700	// Loner-Strike: deferred knife-disarm strip (+player id)
 
 //Names to be put on scoreboard.
 static const TeamNames[TEAMS][] = {
@@ -527,7 +529,8 @@ public pfn_keyvalue(entid) {
 			team = str_to_num(value)
 			if(team == 1 || team == 2) {
 				GoalEnt[team] = entid
-				set_task(1.0, "FinalizeGoalNet", team)
+				// Loner-Strike fix: task ids 1/2 collided with player-id task removal (remove_task(id))
+				set_task(1.0, "FinalizeGoalNet", TASK_GOALNET + team)
 			}
 		}
 	}
@@ -741,6 +744,7 @@ create_Game_Player_Equip() {
 
 public FinalizeGoalNet(team)
 {
+	team -= TASK_GOALNET
 	new goalnet = GoalEnt[team]
 	entity_set_string(goalnet,EV_SZ_classname,"soccerjam_goalnet")
 	entity_set_int(goalnet, EV_INT_team, team)
@@ -1293,6 +1297,10 @@ public touchPlayer(ball, player) {
 
 public touchNet(ball, goalpost)
 {
+	// Loner-Strike fix: with no owner, get_user_team() gives -1 and GoalEnt[team] went out of bounds
+	if(ballowner < 1)
+		return PLUGIN_HANDLED
+
 	remove_task(55555)
 
 	new team = get_user_team(ballowner)
@@ -1497,9 +1505,11 @@ DamageEffects(victim, attacker)
 							new weapon = pev_valid(item) ? cs_get_weapon_id(item) : 0
 							if(weapon == CSW_KNIFE)
 							{
-								strip_user_weapons(victim);
+								// Loner-Strike fix: don't strip weapons inside Ham_TakeDamage (bots' path); defer it,
+								// and give the knife back after the strip has happened
+								set_task(0.1, "DeferredStrip", TASK_DISARMSTRIP + victim)
 								has_knife[victim] = false;
-								set_task(float(disarm / DISARM_MULTIPLIER), "give_knife", victim+1000)
+								set_task(float(disarm / DISARM_MULTIPLIER) + 0.2, "give_knife", victim+1000)
 								client_print(attacker,print_chat,"%L",attacker,"DISARM_KNIFE_ATTACKER",vname)
 								client_print(victim,print_chat,"%L",victim,"DISARM_KNIFE_VICTIM",aname)
 							}
@@ -2118,6 +2128,12 @@ set_speedchange(id, Float:speed=0.0)
 	new Float:agi = float( (PlayerUpgrades[id][AGI] * AMOUNT_AGI) + (id==ballholder?(AMOUNT_POWERPLAY * (PowerPlay*2)):0) )
 	agi += (BASE_SPEED + speed)
 	entity_set_float(id,EV_FL_maxspeed, agi)
+}
+
+public DeferredStrip(id) {
+	id -= TASK_DISARMSTRIP
+	if(is_user_alive(id) && !has_knife[id])
+		strip_user_weapons(id)
 }
 
 public give_knife(id) {

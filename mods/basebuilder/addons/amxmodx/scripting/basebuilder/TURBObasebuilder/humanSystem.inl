@@ -1,3 +1,7 @@
+// Loner-Strike fix: per-entity think tasks used the raw entity index as task id, which collides
+// with player-id tasks and id+TASK_* ranges (remove_task on those killed an entity's think chain)
+#define TASK_ENTTHINK 40000
+
 #include <	amxmodx		>
 #include <	amxmisc		>
 #include <	cstrike		>
@@ -716,11 +720,12 @@ public trapCreate(id){
 	
 	addPro(id, pro_BEAR,1);
 	
-	set_task(0.1, "trapThink", ent);
+	set_task(0.1, "trapThink", ent + TASK_ENTTHINK);
 }
 
 
 public trapThink(ent){
+	ent -= TASK_ENTTHINK;	// Loner-Strike fix: task id is offset, see TASK_ENTTHINK
 	if( !pev_valid(ent)) return PLUGIN_CONTINUE;
 
 	new szClass[18];
@@ -773,7 +778,7 @@ public trapThink(ent){
 			remove_entity(ent);
 		}
 	}
-	if (pev_valid(ent)) set_task(0.1, "trapThink", ent);
+	if (pev_valid(ent)) set_task(0.1, "trapThink", ent + TASK_ENTTHINK);
 	return PLUGIN_CONTINUE;
 }
 public Float:removeSlow(id){
@@ -803,11 +808,12 @@ public electricPower(id){
 	entity_set_float(	ent, 	EV_FL_fuser4,		float(2  + ( userHumanLevel[id][human_ELEKTRYK]/2) + ( isProTime ? 2 : 0)));
 	entity_set_int(		ent, 	EV_INT_iuser1,		id );
 
-	set_task(0.1, "electricThink", ent);	
+	set_task(0.1, "electricThink", ent + TASK_ENTTHINK);	
 	
 }
 
 public electricThink(ent){
+	ent -= TASK_ENTTHINK;	// Loner-Strike fix: task id is offset, see TASK_ENTTHINK
 	if( !pev_valid(ent) ) return PLUGIN_CONTINUE;
 
 	new Float:gTime = ((get_gametime()-entity_get_float(ent, EV_FL_fuser1))/entity_get_float(ent, EV_FL_fuser4));
@@ -827,7 +833,7 @@ public electricThink(ent){
 	set_task(1.0, "electroDamage", ent);	
 	
 	if( gTime > 1.0 ) remove_entity(ent);
-	else set_task(0.1, "electricThink", ent);
+	else set_task(0.1, "electricThink", ent + TASK_ENTTHINK);
 	
 	return PLUGIN_CONTINUE;
 }
@@ -930,10 +936,11 @@ public ammoCreateBonus(id){
 	entity_set_int(		ent, 	EV_INT_iuser1,		id );
 	addPro(id, pro_ECOBOX,1);
 	
-	set_task(0.1, "ammoThinkBonus", ent);	
+	set_task(0.1, "ammoThinkBonus", ent + TASK_ENTTHINK);	
 	
 }
 public ammoThinkBonus(ent){
+	ent -= TASK_ENTTHINK;	// Loner-Strike fix: task id is offset, see TASK_ENTTHINK
 	if( !pev_valid(ent) ) return PLUGIN_CONTINUE;
 
 	new Float:gTime = ((get_gametime()-entity_get_float(ent, EV_FL_fuser1))/entity_get_float(ent, EV_FL_fuser4));	
@@ -954,7 +961,7 @@ public ammoThinkBonus(ent){
 		}
 	}
 	if( gTime > 1.0 ) remove_entity(ent);
-	else set_task(0.1, "ammoThinkBonus", ent);
+	else set_task(0.1, "ammoThinkBonus", ent + TASK_ENTTHINK);
 	return PLUGIN_CONTINUE;
 }
 
@@ -1050,10 +1057,11 @@ public fireCreate(id){
 	write_byte(64);
 	message_end();
 	
-	fireThink(ent);
+	fireThink(ent + TASK_ENTTHINK);
 }
 
 public fireThink(ent){
+	ent -= TASK_ENTTHINK;	// Loner-Strike fix: task id is offset, see TASK_ENTTHINK
 	if(!pev_valid(ent)) return PLUGIN_CONTINUE;
 		
 	
@@ -1066,7 +1074,7 @@ public fireThink(ent){
 	
 	makePou(iOrigin, sprite_pouFire);
 	
-	set_task(0.1, "fireThink", ent);
+	set_task(0.1, "fireThink", ent + TASK_ENTTHINK);
 	
 	return PLUGIN_CONTINUE;
 	
@@ -1169,10 +1177,11 @@ public iceBoltCreate(id){
 	write_byte(64);
 	message_end();
 	
-	iceBoltThink(ent);
+	iceBoltThink(ent + TASK_ENTTHINK);
 }
 
 public iceBoltThink(ent){
+	ent -= TASK_ENTTHINK;	// Loner-Strike fix: task id is offset, see TASK_ENTTHINK
 	if(!pev_valid(ent)) return PLUGIN_CONTINUE;
 
 	new Float:fOrigin[3], iOrigin[3];
@@ -1182,7 +1191,7 @@ public iceBoltThink(ent){
 	
 	makePou(iOrigin, sprite_pouIce);
 
-	set_task(0.1, "iceBoltThink", ent);
+	set_task(0.1, "iceBoltThink", ent + TASK_ENTTHINK);
 	
 	return PLUGIN_CONTINUE;
 	
@@ -1310,9 +1319,10 @@ public bombCreate(id){
 	entity_set_int(		ent, 	EV_INT_iuser1,		id );
 	set_rendering(		ent, 	kRenderFxGlowShell, 	255, 0, 0, 	kRenderNormal, 	5);
 	
-	bombThink(ent);
+	bombThink(ent + TASK_ENTTHINK);
 }
 public bombThink(ent){
+	ent -= TASK_ENTTHINK;	// Loner-Strike fix: task id is offset, see TASK_ENTTHINK
 	if( !pev_valid(ent) ) return;
 
 	new Float:percent = ((get_gametime()-entity_get_float(ent, EV_FL_fuser1)	)/entity_get_float(ent, EV_FL_fuser4));
@@ -1340,7 +1350,7 @@ public bombThink(ent){
 	
 	entity_set_vector(	ent, 	EV_VEC_velocity,	fVelocity);
 	if( percent > 1.0 ) bombExplode(ent);	
-	else set_task(0.1, "bombThink", ent);
+	else set_task(0.1, "bombThink", ent + TASK_ENTTHINK);
 }
 public bombExplode(ent){
 	if( !pev_valid(ent) || ent == 0) return PLUGIN_CONTINUE;
@@ -1435,11 +1445,12 @@ public bombTrapCreate(id,Float: fOrigin[3]){
 	set_rendering(		ent, 	kRenderFxGlowShell, 	255, 56, 56, 	kRenderNormal, 	3);
 	entity_set_int(		ent, 	EV_INT_iuser1,		id);
 	
-	set_task(0.2, "bombTrapThink", ent);
-	bombTrapEffect(ent);
+	set_task(0.2, "bombTrapThink", ent + TASK_ENTTHINK);
+	bombTrapEffect(ent + TASK_ENTTHINK);
 }
 
 public bombTrapEffect(ent){
+	ent -= TASK_ENTTHINK;	// Loner-Strike fix: task id is offset, see TASK_ENTTHINK
 	if( !pev_valid(ent)) return PLUGIN_CONTINUE;
 	
 	new Float:fOrigin[3];
@@ -1450,11 +1461,12 @@ public bombTrapEffect(ent){
 	makePou(iOrigin, sprite_pouFire);
 	makeLight(fOrigin,25, 255, 56, 56,15, 30);
 	
-	if (pev_valid(ent)) set_task(1.0, "bombTrapEffect", ent);
+	if (pev_valid(ent)) set_task(1.0, "bombTrapEffect", ent + TASK_ENTTHINK);
 	
 	return PLUGIN_CONTINUE;	
 }
 public bombTrapThink(ent){
+	ent -= TASK_ENTTHINK;	// Loner-Strike fix: task id is offset, see TASK_ENTTHINK
 	if( !pev_valid(ent)) return PLUGIN_CONTINUE;
 
 	new szClass[18];
@@ -1483,7 +1495,7 @@ public bombTrapThink(ent){
 		}
 		if(closeTrap) trapBomberExplode(ent);
 	}
-	if (pev_valid(ent)) set_task(0.1, "bombTrapThink", ent);
+	if (pev_valid(ent)) set_task(0.1, "bombTrapThink", ent + TASK_ENTTHINK);
 	
 	return PLUGIN_CONTINUE;
 }

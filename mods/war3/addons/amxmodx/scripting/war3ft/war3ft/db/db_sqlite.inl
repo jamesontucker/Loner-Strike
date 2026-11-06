@@ -113,6 +113,9 @@ SQLITE_Init()
 		return;
 	}
 
+	// Loner-Strike fix: free the query handle
+	SQL_FreeHandle( query );
+
 	bDBAvailable = true;
 }
 
@@ -197,6 +200,9 @@ SQLITE_Save( id )
 
 	new iUniqueID = DB_GetUniqueID( id );
 
+	// Loner-Strike fix: one transaction per save instead of one disk sync per row
+	SQLITE_Exec( "BEGIN" );
+
 	// Save the user's XP!
 	new szQuery[512];
 	format( szQuery, 511, "REPLACE INTO `wc3_player_race` ( `player_id` , `race_id` , `race_xp` ) VALUES ( '%d', '%d', '%d');", iUniqueID, p_data[id][P_RACE], p_data[id][P_XP] );
@@ -205,9 +211,13 @@ SQLITE_Save( id )
 	if ( !SQL_Execute( query ) )
 	{
 		SQLITE_Error( query, szQuery, 6 );
+		SQLITE_Exec( "ROLLBACK" );
 
 		return;
 	}
+
+	// Loner-Strike fix: query handles were never freed (one leaked per save)
+	SQL_FreeHandle( query );
 
 	static iCurrentLevel;
 
@@ -231,15 +241,38 @@ SQLITE_Save( id )
 					if ( !SQL_Execute( query ) )
 					{
 						SQLITE_Error( query, szQuery, 7 );
+						SQLITE_Exec( "ROLLBACK" );
 	
 						return;
 					}
+
+					// Loner-Strike fix: free each skill query handle
+					SQL_FreeHandle( query );
 				}
 			}
 		}
 	}
 
+	SQLITE_Exec( "COMMIT" );
+
 	return;
+}
+
+// Loner-Strike: run a statement that returns nothing (transaction control) and free its handle
+SQLITE_Exec( const szSql[] )
+{
+	new szQuery[32];
+	copy( szQuery, 31, szSql );
+	new Handle:query = SQL_PrepareQuery( g_DBConn, szQuery );
+
+	if ( !SQL_Execute( query ) )
+	{
+		SQLITE_Error( query, szQuery, 11 );
+
+		return;
+	}
+
+	SQL_FreeHandle( query );
 }
 
 SQLITE_Save_T( id )
@@ -528,6 +561,9 @@ SQLITE_Prune()
 
 			return;
 		}
+
+		// Loner-Strike fix: free the query handle
+		SQL_FreeHandle( query );
 	}
 }
 

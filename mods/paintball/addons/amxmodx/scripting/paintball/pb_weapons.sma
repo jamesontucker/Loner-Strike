@@ -110,6 +110,38 @@ new Float:g_Recoil[33][3]
 new g_WeaponEvent[MAX_GUN], Float:DelayTime[33], blood1, blood2
 new g_OldWeapon[33]
 
+// Loner-Strike fix: every pellet is an entity that lives up to 10 s; a full bot server ran out of edicts.
+// Count live balls and refuse new ones over the cap.
+#define MAX_LIVE_BALLS 120
+new g_LiveBalls, Float:g_LiveBallsSync
+
+// Loner-Strike fix: all paintball removals go through here so the live count stays right
+remove_ball(Ent)
+{
+	remove_entity(Ent)
+	if(g_LiveBalls > 0) g_LiveBalls--
+}
+
+// Loner-Strike fix: room for another ball? At the cap, recount (pb_gameplay also removes balls on new round)
+bool:ball_slot_free()
+{
+	if(g_LiveBalls < MAX_LIVE_BALLS) return true
+	if(get_gametime() - g_LiveBallsSync < 0.5) return false
+	g_LiveBallsSync = get_gametime()
+	g_LiveBalls = 0
+	new ent = -1
+	while((ent = find_ent_by_class(ent, "paintball")) > 0) g_LiveBalls++
+	return g_LiveBalls < MAX_LIVE_BALLS
+}
+
+// Loner-Strike fix: the Metatron tasks are keyed by the grenade's index; make sure it's still that grenade
+bool:is_our_grenade(ent)
+{
+	if(!pev_valid(ent)) return false
+	static classname[16]; pev(ent, pev_classname, classname, charsmax(classname))
+	return bool:equal(classname, "grenade") && pev(ent, pev_bInDuck) == 162
+}
+
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR)
@@ -497,6 +529,8 @@ public fw_Grenade_Think(ent)
 
 public Metatron_Exp(ent)
 {
+	if(!is_our_grenade(ent)) return	// Loner-Strike fix: the grenade may be gone and its index reused
+	
 	for (new a = 0; a < 10; a++)
 		set_task(0.1 + a*0.2, "Super_SmallExp", ent);	
 	
@@ -505,13 +539,15 @@ public Metatron_Exp(ent)
 
 public Super_SmallExp(Bomb)
 {
-	if(!pev_valid(Bomb)) return
+	if(!is_our_grenade(Bomb)) return	// Loner-Strike fix: task is keyed by entity index, which may have been reused
+	
+	static id; id = pev(Bomb, pev_owner)
+	if(!is_user_connected(id)) return	// checked before creating the ball so it isn't leaked
+	if(!ball_slot_free()) return
 	
 	static Ent; Ent = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
 	if(!pev_valid(Ent)) return
-	
-	static id; id = pev(Bomb, pev_owner)
-	if(!is_user_connected(id)) return
+	g_LiveBalls++
 	
 	static Float:Origin[3]; pev(Bomb, pev_origin, Origin)
 	
@@ -558,7 +594,7 @@ public Super_SmallExp(Bomb)
 
 public remove_nade(ent)
 {
-	if(!pev_valid(ent)) return 
+	if(!is_our_grenade(ent)) return	// Loner-Strike fix: don't remove whatever reused this index
 	
 	//act_explode(ent);
 	engfunc(EngFunc_RemoveEntity, ent);
@@ -589,7 +625,7 @@ public fw_PaintBall_Touch(Ent, id)
 		static Owner; Owner = pev(Ent, pev_iuser1)
 		if(is_user_connected(Owner)) PaintBall_Damage(Ent, Owner)
 
-		remove_entity(Ent)
+		remove_ball(Ent)
 		return
 	}
 	
@@ -602,7 +638,7 @@ public fw_PaintBall_Touch(Ent, id)
 			ExecuteHamB(Ham_TakeDamage, id, Ent, Owner, 560.0, DMG_BULLET)
 		}
 		
-		remove_entity(Ent)
+		remove_ball(Ent)
 	} else {
 		if(pev_valid(id) && pev(id, pev_iuser3) == 249) 
 			return
@@ -673,7 +709,7 @@ public PaintBall_Damage(Ent, Attacker)
 public fw_PaintBall_Think(Ent)
 {
 	if(!pev_valid(Ent)) return
-	remove_entity(Ent)
+	remove_ball(Ent)
 }
 
 public Create_PaintBall(id, Float:Target[3])
@@ -699,10 +735,11 @@ public Create_PaintBall(id, Float:Target[3])
 	
 	if(Gun == GUN_GL)
 	{
-		if(get_gametime() - 0.1 > DelayTime[id])
+		if(get_gametime() - 0.1 > DelayTime[id] && ball_slot_free())
 		{
 			static Ent; Ent = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
 			if(!pev_valid(Ent)) return
+			g_LiveBalls++
 			
 			static Float:Angles[3]; pev(id, pev_v_angle, Angles)
 			
@@ -741,8 +778,10 @@ public Create_PaintBall(id, Float:Target[3])
 		return
 	}
 	
+	if(!ball_slot_free()) return
 	static Ent; Ent = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
 	if(!pev_valid(Ent)) return
+	g_LiveBalls++
 	
 	// Set info for ent
 	set_pev(Ent, pev_movetype, MOVETYPE_FLY)
