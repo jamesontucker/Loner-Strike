@@ -12,6 +12,7 @@ cyclops_multishot 0.2			//Delay for multishots on holding key down
 */
 
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 // Damage Variables
 new const lDamage[7] = {
@@ -117,7 +118,7 @@ public sh_hero_key(id, heroID, key)
 			}
 
 			// Remember this weapon...
-			gLastWeapon[id] = get_user_weapon(id)
+			gLastWeapon[id] = is_user_bot(id) ? sh_get_held_weapon(id) : get_user_weapon(id)	// CZ patch: stale for bots
 
 			// switch to knife
 			sh_switch_weapon(id, CSW_KNIFE)
@@ -166,7 +167,8 @@ public fire_laser(id)
 	}
 
 	// Make sure still on knife
-	if ( get_user_weapon(id) != CSW_KNIFE ) sh_switch_weapon(id, CSW_KNIFE)
+	// CZ patch: get_user_weapon is stale for bots (switched to knife every shot)
+	if ( (is_user_bot(id) ? sh_get_held_weapon(id) : get_user_weapon(id)) != CSW_KNIFE ) sh_switch_weapon(id, CSW_KNIFE)
 
 	// Do not decrement if unlimited shots are set
 	if ( lasershots > 0 ) gLaserShots[id] = --lasershots
@@ -187,7 +189,9 @@ public fire_laser(id)
 		emit_sound(tid, CHAN_BODY, gSoundHit, VOL_NORM, ATTN_NORM, 0, PITCH_NORM)
 
 		// Deal the damage...
-		sh_extra_damage(tid, id, lDamage[tbody-1], "optic blast", tbody == 1 ? 1 : 0, SH_DMG_NORM, true)
+		// CZ patch: tbody 0 (generic hit) indexed lDamage[-1]; treat it as a chest hit
+		new hitIdx = (1 <= tbody <= sizeof lDamage) ? tbody - 1 : 1
+		sh_extra_damage(tid, id, lDamage[hitIdx], "optic blast", tbody == 1 ? 1 : 0, SH_DMG_NORM, true)
 	}
 }
 //----------------------------------------------------------------------------------------------

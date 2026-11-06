@@ -65,6 +65,10 @@ public zp_fw_items_select_pre(id, itemid, ignorecost)
 	formatex(text, charsmax(text), "[%d/%d]", g_AntidotesTaken, get_pcvar_num(cvar_antidote_round_limit))
 	zp_items_menu_text_add(text)
 	
+	// CZ setup: bots would just cure themselves out of the fight
+	if (is_user_bot(id))
+		return ZP_ITEM_NOT_AVAILABLE;
+	
 	// Antidote not available to last zombie
 	if (zp_core_get_zombie_count() == 1)
 		return ZP_ITEM_NOT_AVAILABLE;

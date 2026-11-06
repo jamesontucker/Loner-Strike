@@ -112,6 +112,8 @@ loadXP(id, const savekey[32])
 			strbrkqt(Right, Left, charsmax(Left), Right, charsmax(Right))
 			heroIndex = getHeroID(Left)
 			if ( -1 < heroIndex < gSuperHeroCount ) {
+				// CZ patch: don't restore heroes blocked for bots (shbots.ini "skip")
+				if ( is_user_bot(id) && gHeroBotBlocked[heroIndex] ) continue
 				if ( getHeroLevel(heroIndex) <= playerLevel ) {
 					gPlayerPowers[id][0] = ++powerCount
 					gPlayerPowers[id][powerCount] = heroIndex

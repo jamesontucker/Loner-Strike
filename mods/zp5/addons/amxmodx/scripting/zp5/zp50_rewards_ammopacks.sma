@@ -10,6 +10,7 @@
 ================================================================================*/
 
 #include <amxmodx>
+#include <fakemeta>
 #include <hamsandwich>
 #include <cs_ham_bots_api>
 #include <zp50_gamemodes>
@@ -29,6 +30,7 @@ new g_MaxPlayers
 
 new Float:g_DamageDealtToZombies[MAXPLAYERS+1]
 new Float:g_DamageDealtToHumans[MAXPLAYERS+1]
+new Float:g_HealthBefore[MAXPLAYERS+1] // CZ setup: victim HP before the hit
 
 new cvar_ammop_winner, cvar_ammop_loser
 new cvar_ammop_damage, cvar_ammop_zombie_damaged_hp, cvar_ammop_human_damaged_hp
@@ -58,6 +60,8 @@ public plugin_init()
 	if (LibraryExists(LIBRARY_SURVIVOR, LibType_Library))
 		cvar_ammop_survivor_ignore = register_cvar("zp_ammop_survivor_ignore", "0")
 	
+	RegisterHam(Ham_TakeDamage, "player", "fw_TakeDamage_Pre")
+	RegisterHamBots(Ham_TakeDamage, "fw_TakeDamage_Pre")
 	RegisterHam(Ham_TakeDamage, "player", "fw_TakeDamage_Post", 1)
 	RegisterHamBots(Ham_TakeDamage, "fw_TakeDamage_Post", 1)
 	RegisterHam(Ham_Killed, "player", "fw_PlayerKilled_Post", 1)
@@ -93,12 +97,23 @@ public zp_fw_core_infect_post(id, attacker)
 		zp_ammopacks_set(attacker, zp_ammopacks_get(attacker) + get_pcvar_num(cvar_ammop_human_infected))
 }
 
+// CZ setup: remember the victim's health, so one-hit kills (Sniper AWP, Assassin)
+// that set a huge damage value only reward the health actually taken
+public fw_TakeDamage_Pre(victim, inflictor, attacker, Float:damage, damage_type)
+{
+	pev(victim, pev_health, g_HealthBefore[victim])
+}
+
 // Ham Take Damage Post Forward
 public fw_TakeDamage_Post(victim, inflictor, attacker, Float:damage, damage_type)
 {
 	// Non-player damage or self damage
 	if (victim == attacker || !is_user_alive(attacker))
 		return;
+	
+	// CZ setup: never credit more than the victim's health
+	if (g_HealthBefore[victim] > 0.0 && damage > g_HealthBefore[victim])
+		damage = g_HealthBefore[victim]
 	
 	// Ignore ammo pack rewards for Nemesis?
 	if ((LibraryExists(LIBRARY_NEMESIS, LibType_Library) && zp_class_nemesis_get(attacker) || LibraryExists(LIBRARY_ASSASSIN, LibType_Library) && zp_class_assassin_get(attacker)) && get_pcvar_num(cvar_ammop_nemesis_ignore))

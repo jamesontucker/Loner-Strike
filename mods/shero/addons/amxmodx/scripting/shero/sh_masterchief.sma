@@ -152,6 +152,9 @@ public plugin_init()
 	#if defined USE_WPN_MODEL || AMMO_MODE < 4
 		register_event("CurWeapon", "weapon_change", "be", "1=1")
 	#endif
+	#if AMMO_MODE < 4
+		set_task(1.0, "bot_ammo_loop", _, _, _, "b")	// CZ patch: bots never send CurWeapon
+	#endif
 
 	#if PLAYER_MODEL > 0
 		register_event("DeathMsg", "masterchief_death", "a")
@@ -314,8 +317,10 @@ masterchief_tasks(id)
 	set_task(1.0, "masterchief_morph", id)
 
 	#if PLAYER_MODEL == 1
-		if ( get_pcvar_num(CvarTeamGlow) )
+		if ( get_pcvar_num(CvarTeamGlow) ) {
+			remove_task(id+100)	// CZ patch: the repeating task used to stack every spawn
 			set_task(1.0, "masterchief_glow", id+100, _, _, "b")
+		}
 	#endif
 }
 #endif
@@ -514,3 +519,14 @@ public bot_victim_damage(victim, inflictor, attacker, Float:damage, damagebits)
 	}
 	return HAM_IGNORED
 }
+//----------------------------------------------------------------------------------------------
+#if AMMO_MODE < 4
+// CZ patch: unlimited P90 ammo for bots (they never get the CurWeapon message used above)
+public bot_ammo_loop()
+{
+	if ( !shModActive() ) return
+	for ( new id = 1; id <= SH_MAXSLOTS; id++ ) {
+		if ( HasMasterChief[id] && is_user_alive(id) && is_user_bot(id) ) sh_bot_refill_ammo(id, AMMO_MODE, CSW_P90)
+	}
+}
+#endif

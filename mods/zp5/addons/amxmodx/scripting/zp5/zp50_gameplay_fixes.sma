@@ -22,6 +22,10 @@
 #include <zp50_class_nemesis>
 #define LIBRARY_SURVIVOR "zp50_class_survivor"
 #include <zp50_class_survivor>
+#define LIBRARY_ASSASSIN "zp50_class_assassin" // CZ setup: Advance classes
+#include <zp50_class_assassin>
+#define LIBRARY_SNIPER "zp50_class_sniper"
+#include <zp50_class_sniper>
 #include <zp50_colorchat>
 
 // Settings file
@@ -92,7 +96,7 @@ public plugin_natives()
 }
 public module_filter(const module[])
 {
-	if (equal(module, LIBRARY_NEMESIS))
+	if (equal(module, LIBRARY_NEMESIS) || equal(module, LIBRARY_ASSASSIN) || equal(module, LIBRARY_SNIPER))
 		return PLUGIN_HANDLED;
 	
 	return PLUGIN_CONTINUE;
@@ -316,6 +320,13 @@ public client_disconnect(leaving_player)
 				if (get_pcvar_num(cvar_keep_hp_on_disconnect))
 					set_user_health(id, get_user_health(leaving_player))
 			}
+			else if (LibraryExists(LIBRARY_ASSASSIN, LibType_Library) && zp_class_assassin_get(leaving_player))
+			{
+				zp_class_assassin_set(id)
+				
+				if (get_pcvar_num(cvar_keep_hp_on_disconnect))
+					set_user_health(id, get_user_health(leaving_player))
+			}
 			else
 				zp_core_infect(id, id)
 		}
@@ -336,6 +347,13 @@ public client_disconnect(leaving_player)
 			if (LibraryExists(LIBRARY_SURVIVOR, LibType_Library) && zp_class_survivor_get(leaving_player))
 			{
 				zp_class_survivor_set(id)
+				
+				if (get_pcvar_num(cvar_keep_hp_on_disconnect))
+					set_user_health(id, get_user_health(leaving_player))
+			}
+			else if (LibraryExists(LIBRARY_SNIPER, LibType_Library) && zp_class_sniper_get(leaving_player))
+			{
+				zp_class_sniper_set(id)
 				
 				if (get_pcvar_num(cvar_keep_hp_on_disconnect))
 					set_user_health(id, get_user_health(leaving_player))

@@ -1742,7 +1742,8 @@ WC3_NewSession( id )
 		}
 
 		// Set the bot's race?
-		if ( random_float( 0.0, 1.0 ) <= BOT_CHANGERACE || !p_data[id][P_RACE] )
+		// [CZ patch] bots keep their race until it's level 10, so they keep up with the human
+		if ( ( p_data[id][P_LEVEL] >= MAX_LEVELS && random_float( 0.0, 1.0 ) <= BOT_CHANGERACE ) || !p_data[id][P_RACE] )
 		{
 			p_data[id][P_RACE] = random_num( 1, get_pcvar_num( CVAR_wc3_races ) );
 

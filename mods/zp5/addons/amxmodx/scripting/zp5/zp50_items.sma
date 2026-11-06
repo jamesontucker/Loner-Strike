@@ -70,7 +70,7 @@ public zp_fw_core_cure_post(id, attacker) g_BotTried[id] = false
 
 public task_bot_buy()
 {
-	static players[32], num, i, id, items[64], count, index
+	static players[32], num, i, id, items[64], count, index, real_name[32]
 	get_players(players, num, "ad")
 	for (i = 0; i < num; i++)
 	{
@@ -86,6 +86,12 @@ public task_bot_buy()
 		count = 0
 		for (index = 0; index < g_ItemCount && count < sizeof items; index++)
 		{
+			// Bots already get nightvision for free; the antidote plugin refuses bots.
+			// What's left is sensible: zombies get Madness/Infection Bomb, humans weapons/grenades.
+			ArrayGetString(g_ItemRealName, index, real_name, charsmax(real_name))
+			if (equal(real_name, "Nightvision"))
+				continue;
+			
 			ExecuteForward(g_Forwards[FW_ITEM_SELECT_PRE], g_ForwardResult, id, index, 0)
 			if (g_ForwardResult < ZP_ITEM_NOT_AVAILABLE)
 				items[count++] = index

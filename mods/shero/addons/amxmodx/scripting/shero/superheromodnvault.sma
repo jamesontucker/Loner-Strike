@@ -2243,6 +2243,9 @@ public ham_PlayerSpawn_Post(id)
 	if ( !is_user_alive(id) ) return HAM_IGNORED
 	if ( cs_get_user_team(id) == CS_TEAM_UNASSIGNED ) return HAM_IGNORED
 
+	// CZ patch: a bot's key-down state must not survive into a new life
+	if ( is_user_bot(id) ) arrayset(gInPowerDown[id], 0, SH_MAXBINDPOWERS+1)
+
 	//Prevents non-saved XP servers from having loading issues
 	if ( !gLongTermXP ) gReadXPNextRound[id] = false
 
@@ -2565,6 +2568,7 @@ public ham_ResetMaxSpeed_Post(id)
 	if ( !is_user_bot(id) || !is_user_alive(id) || !get_pcvar_num(sv_superheros) ) return HAM_IGNORED
 
 	gCurrentWeapon[id] = sh_get_held_weapon(id)
+	gCurrentFOV[id] = get_pdata_int(id, 363)	// m_iFOV, SetFOV message is never sent to bots
 	setSpeedPowers(id, false)
 
 	return HAM_IGNORED
@@ -2695,7 +2699,11 @@ setArmorPowers(id)
 	new newArmor = getMaxArmor(id)
 
 	// Little check for armor system
-	if ( oldArmor != 0 || oldArmor >= newArmor ) return
+	// CZ patch: bots buy armor before this runs, so only skip when they already have enough
+	if ( is_user_bot(id) ) {
+		if ( oldArmor >= newArmor ) return
+	}
+	else if ( oldArmor != 0 || oldArmor >= newArmor ) return
 
 	// Set the armor to the correct value
 	cs_set_user_armor(id, newArmor, CS_ARMOR_VESTHELM)
@@ -4595,6 +4603,7 @@ initPlayer(id)
 	gPlayerXP[id] = 0
 	gPlayerPowers[id][0] = 0
 	gPlayerBinds[id][0] = 0
+	arrayset(gInPowerDown[id], 0, SH_MAXBINDPOWERS+1)	// CZ patch: slot reused by a new player
 	gCurrentWeapon[id] = 0
 	gPlayerStunTimer[id] = -1
 	gPlayerGodTimer[id] = -1

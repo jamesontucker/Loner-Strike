@@ -2784,6 +2784,9 @@ public client_putinserver(id)
 		// Set bot flag
 		g_isbot[id] = true
 		
+		// Pick a random zombie class now, so the first infection isn't always the default one
+		if (g_zclass_i > 0) g_zombieclassnext[id] = random_num(0, g_zclass_i - 1)
+		
 		// CZ bots seem to use a different "classtype" for player entities
 		// (or something like that) which needs to be hooked separately
 		if (!g_hamczbots && cvar_botquota)
@@ -3352,6 +3355,10 @@ public fw_PlayerPreThink(id)
 	
 	// Not on ground or not enough speed
 	if (!(pev(id, pev_flags) & FL_ONGROUND) || fm_get_speed(id) < 80)
+		return;
+	
+	// Bots only leap when they can see an enemy close by
+	if (g_isbot[id] && !bot_leap_target(id))
 		return;
 	
 	static Float:velocity[3]
@@ -7689,8 +7696,34 @@ public register_ham_czbots(id)
 	// Ham forwards for CZ bots succesfully registered
 	g_hamczbots = true
 	
-	// If the bot has already spawned, call the forward manually for him
-	if (is_user_alive(id)) fw_PlayerSpawn_Post(id)
+	// If bots have already spawned, call the forward manually for them
+	for (new i = 1; i <= g_maxplayers; i++)
+		if (g_isbot[i] && is_user_alive(i) && !g_isalive[i]) fw_PlayerSpawn_Post(i)
+}
+
+// Is there a visible enemy within leaping range of this bot?
+bot_leap_target(id)
+{
+	static i, Float:start[3], Float:end[3], Float:ofs[3], Float:fraction
+	pev(id, pev_origin, start)
+	pev(id, pev_view_ofs, ofs)
+	xs_vec_add(start, ofs, start)
+	
+	for (i = 1; i <= g_maxplayers; i++)
+	{
+		if (i == id || !g_isalive[i] || g_zombie[i] == g_zombie[id])
+			continue;
+		
+		pev(i, pev_origin, end)
+		if (get_distance_f(start, end) > 600.0)
+			continue;
+		
+		engfunc(EngFunc_TraceLine, start, end, IGNORE_MONSTERS, id, 0)
+		get_tr2(0, TR_flFraction, fraction)
+		if (fraction >= 1.0)
+			return true;
+	}
+	return false;
 }
 
 // Disable minmodels task
@@ -7707,18 +7740,11 @@ public bot_buy_extras(taskid)
 	if (!g_isalive[ID_SPAWN] || g_survivor[ID_SPAWN] || g_nemesis[ID_SPAWN])
 		return;
 	
+	// (Night Vision is useless to bots, and an Antidote would just cure a zombie bot)
 	if (!g_zombie[ID_SPAWN]) // human bots
 	{
-		// Attempt to buy Night Vision
-		buy_extra_item(ID_SPAWN, EXTRA_NVISION)
-		
 		// Attempt to buy a weapon
 		buy_extra_item(ID_SPAWN, random_num(EXTRA_WEAPONS_STARTID, EXTRAS_CUSTOM_STARTID-1))
-	}
-	else // zombie bots
-	{
-		// Attempt to buy an Antidote
-		buy_extra_item(ID_SPAWN, EXTRA_ANTIDOTE)
 	}
 }
 

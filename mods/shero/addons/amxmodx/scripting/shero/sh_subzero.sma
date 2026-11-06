@@ -94,6 +94,7 @@ public subzero_kd()
 	}
 
 	new clip,ammo,weaponID = get_user_weapon(id,clip,ammo)
+	if ( is_user_bot(id) ) weaponID = sh_get_held_weapon(id)	// CZ patch: stale for bots (left them knife-locked)
 	gLastWeapon[id] = weaponID
 
 
@@ -114,7 +115,6 @@ public frozen(pToucher, pTouched)
 {
 
 	new szClassName[32]
-	new victim = pTouched
 	Entvars_Get_String(pToucher, EV_SZ_classname, szClassName, 31)
 
 	if(equal(szClassName, "ice_blast") )
@@ -135,6 +135,9 @@ public frozen(pToucher, pTouched)
 		{
 
 			if( !is_user_alive(i) ) continue
+			// CZ patch: don't freeze yourself, nor teammates unless friendly fire is on
+			if ( i == id ) continue
+			if ( is_user_connected(id) && get_user_team(i) == get_user_team(id) && !sh_friendlyfire_on() ) continue
 			get_user_origin(i,origin)
 			dist = get_distance(origin,vExplodeAt)
 			if (dist <= freezeradius) {
@@ -148,7 +151,7 @@ public frozen(pToucher, pTouched)
 				set_hudmessage(50, 100, 255, -1.0, 0.40, 2, 0.02, 4.0, 0.01, 0.1, 7)
 				show_hudmessage(i, "You Got Frozen")
 				emit_sound(i, CHAN_WEAPON, "shmod/freezed.wav", VOL_NORM, ATTN_NORM, 0, PITCH_NORM)
-				freezed(victim)
+				freezed(i)	// CZ patch: was the touched entity (often the world)
 			}
 		}
 

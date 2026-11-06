@@ -151,6 +151,10 @@ public fw_PlayerPreThink(id)
 	if (!(pev(id, pev_flags) & FL_ONGROUND) || fm_get_speed(id) < 80)
 		return;
 	
+	// CZ setup: bots only leap at a visible enemy in front of them (not blindly off ledges)
+	if (is_user_bot(id) && !bot_enemy_ahead(id, 600.0))
+		return;
+	
 	static Float:velocity[3]
 	
 	// Make velocity vector
@@ -173,4 +177,38 @@ stock fm_get_speed(entity)
 	pev(entity, pev_velocity, velocity)
 	
 	return floatround(vector_length(velocity));
+}
+
+// CZ setup: is there a visible enemy within range, roughly where the bot is aiming?
+stock bot_enemy_ahead(id, Float:range)
+{
+	static Float:eye[3], Float:other[3], Float:view_ofs[3], Float:aim[3], Float:dir[3], Float:dist, Float:fraction
+	pev(id, pev_origin, eye)
+	pev(id, pev_view_ofs, view_ofs)
+	eye[0] += view_ofs[0]; eye[1] += view_ofs[1]; eye[2] += view_ofs[2]
+	velocity_by_aim(id, 1, aim)
+	
+	new zombie = zp_core_is_zombie(id)
+	for (new enemy = 1; enemy <= MaxClients; enemy++)
+	{
+		if (enemy == id || !is_user_alive(enemy) || zp_core_is_zombie(enemy) == zombie)
+			continue;
+		
+		pev(enemy, pev_origin, other)
+		dir[0] = other[0] - eye[0]; dir[1] = other[1] - eye[1]; dir[2] = other[2] - eye[2]
+		dist = floatsqroot(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2])
+		if (dist > range || dist < 1.0)
+			continue;
+		
+		// Roughly in front (within ~60 degrees of the aim direction)
+		if ((dir[0]*aim[0] + dir[1]*aim[1] + dir[2]*aim[2]) / (dist * floatsqroot(aim[0]*aim[0] + aim[1]*aim[1] + aim[2]*aim[2])) < 0.5)
+			continue;
+		
+		// Line of sight
+		engfunc(EngFunc_TraceLine, eye, other, IGNORE_MONSTERS, id, 0)
+		get_tr2(0, TR_flFraction, fraction)
+		if (fraction >= 1.0)
+			return true;
+	}
+	return false;
 }

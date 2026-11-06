@@ -25,6 +25,44 @@ public _ULT_Delay()
 		{
 			ULT_IconHandler( id );
 		}
+
+		// [CZ patch] bots cast their ultimate when it's ready and they can see an enemy
+		if ( is_user_bot( id ) )
+		{
+			ULT_BotTryCast( id );
+		}
+	}
+}
+
+// [CZ patch] Ultimates that search for a target (or pick one / protect the caster) are cast by bots
+// when ready and an enemy is in sight; the target search then hits whoever the bot shoots at.
+ULT_BotTryCast( id )
+{
+	if ( !is_user_alive( id ) || g_iUltimateDelay > 0 || p_data[id][P_ULTIMATEDELAY] > 0 || p_data_b[id][PB_HEXED] || p_data_b[id][PB_ISSEARCHING] || g_EndRound )
+	{
+		return;
+	}
+
+	new iSkillID = SM_GetSkillOfType( id, SKILL_TYPE_ULTIMATE );
+	if ( iSkillID < 0 || SM_GetSkillLevel( id, iSkillID, 3 ) <= 0 )
+	{
+		return;
+	}
+
+	switch ( iSkillID )
+	{
+		case ULTIMATE_CHAINLIGHTNING, ULTIMATE_ENTANGLE, ULTIMATE_IMMOLATE, ULTIMATE_LOCUSTSWARM, ULTIMATE_BIGBADVOODOO: {}
+		default: return;
+	}
+
+	new iTeam = get_user_team( id );
+	for ( new i = 1; i <= MAXPLAYERS; i++ )
+	{
+		if ( i != id && is_user_alive( i ) && get_user_team( i ) != iTeam && is_visible( id, i ) )
+		{
+			cmd_Ultimate( id );
+			return;
+		}
 	}
 }
 

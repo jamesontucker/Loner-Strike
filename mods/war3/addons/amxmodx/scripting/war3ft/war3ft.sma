@@ -190,7 +190,7 @@ public plugin_init()
 	register_dictionary( "war3FT.txt");
 
 	// [CZ patch] specialBot=true so the hooks also fire for CZ bots (replaces the old CZ_BotHookHam trick)
-	RegisterHam( Ham_TakeDamage, "player", "EVENT_TakeDamage", 0, true );
+	RegisterHam( Ham_TakeDamage, "player", "EVENT_TakeDamage", 1, true );	// post: procs for bot victims
 	RegisterHam( Ham_Spawn, "player", "EVENT_Spawn", 1, true );
 
 	// Game Specific Initialization

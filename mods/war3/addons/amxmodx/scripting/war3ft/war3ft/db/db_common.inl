@@ -320,6 +320,12 @@ public DB_FetchUniqueID( id )
 		return;
 	}
 
+	// [CZ patch] the retry task below kept running after the player (usually a kicked bot) left
+	if ( !is_user_connected( id ) )
+	{
+		return;
+	}
+
 	// Update the user's timestamp for each race
 	switch( g_DBType )
 	{

@@ -1,6 +1,6 @@
 --- a/addons/amxmodx/scripting/dice/dice_main.sma
 +++ b/addons/amxmodx/scripting/dice/dice_main.sma
-@@ -1,808 +1,928 @@
+@@ -1,808 +1,963 @@
 -#include <amxmodx>
 -#include <amxmisc>
 -#include <cstrike>
@@ -902,7 +902,7 @@
 +
 +// --- CZ server patch: once-per-round limit + bots rolling ---
 +#define TASK_BOTROLL 512300
-+new g_pPerRound, g_pBotChance, g_pBotDelay
++new g_pPerRound, g_pBotChance, g_pBotDelay, g_pBotSkip
 +new g_iRoundRolls[PSTRING_MAX]
 +new bool:g_bSilent
 +new g_iHumanWaiting
@@ -935,6 +935,8 @@
 +	g_pBotChance = register_cvar("dice_bot_chance", "50")
 +	// bots roll at a random moment between 4 s and this many seconds after the round starts
 +	g_pBotDelay = register_cvar("dice_bot_delay", "50")
++	// items a bot re-rolls because bots can't handle them (space separated item names)
++	g_pBotSkip = register_cvar("dice_bot_skip", "noclip camera bury zeus")
 +}
 +
 +public plugin_precache()
@@ -1290,6 +1292,11 @@
 +		}
 +		else
 +		{
++			new iItem = PickItem(id)
++
++			if(iItem == -1)
++				return PLUGIN_HANDLED
++
 +			g_blActive = true
 +			g_iCurrentUser = id
 +			g_iLastRoll[id] = iTime + g_eSettings[ROLL_INTERVAL]
@@ -1298,7 +1305,7 @@
 +			if(g_iHumanWaiting == id)
 +				g_iHumanWaiting = 0
 +			
-+			new szName[32], iDuration, iItem = random(g_iItems)
++			new szName[32], iDuration
 +			get_user_name(id, szName, charsmax(szName))
 +			ArrayGetArray(g_aItems, iItem, g_eItem)
 +			ColorChat(0, "%L", LANG_PLAYER, "DICE_ROLLED", szName, LANG_PLAYER, g_eItem[ChatMessage])
@@ -1507,6 +1514,34 @@
 +}
 +
 +/* CZ server patch: bots roll the dice too */
++
++// Random item; bots re-roll items listed in dice_bot_skip. -1 = nothing a bot can use.
++PickItem(id)
++{
++	new iItem = random(g_iItems)
++
++	if(!is_user_bot(id))
++		return iItem
++
++	new szSkip[192], eItem[Items], szWord[34], iAllowed[64], iNum
++	get_pcvar_string(g_pBotSkip, szSkip, charsmax(szSkip))
++
++	if(!szSkip[0])
++		return iItem
++
++	format(szSkip, charsmax(szSkip), " %s ", szSkip)
++
++	for(new i; i < g_iItems && iNum < sizeof(iAllowed); i++)
++	{
++		ArrayGetArray(g_aItems, i, eItem)
++		formatex(szWord, charsmax(szWord), " %s ", eItem[Name])
++
++		if(containi(szSkip, szWord) == -1)
++			iAllowed[iNum++] = i
++	}
++
++	return iNum ? iAllowed[random(iNum)] : -1
++}
 +
 +ScheduleBotRolls()
 +{

@@ -44,29 +44,67 @@ public grenade_throw( index, greindex, wId )
 }
 
 // HamSandwich implementation
+// [CZ patch] CSX's client_damage comes from the Damage message, which bots never receive, so every
+// per-hit skill/item proc was skipped when the victim was a bot. This post hook feeds bot victims
+// through the same code (human victims still go through client_damage only, so nothing runs twice).
 public EVENT_TakeDamage( iVictim, inflictor, iAttacker, Float:f_Damage, damagetype )
 {
+	if ( !WC3_Check() || !SHARED_ValidPlayer( iVictim ) || !is_user_bot( iVictim ) )
+	{
+		return HAM_IGNORED;
+	}
 
-	static s_Classname[ 8 ];
-	pev ( inflictor, pev_classname, s_Classname, charsmax ( s_Classname ) );
+	if ( !SHARED_ValidPlayer( iAttacker ) || iAttacker == iVictim || !is_user_connected( iAttacker ) )
+	{
+		return HAM_IGNORED;
+	}
 
+	// No damage was actually taken (friendly fire off, godmode...)
+	new iTookDamage;
+	GetOrigHamReturnInteger( iTookDamage );
+	if ( !iTookDamage )
+	{
+		return HAM_IGNORED;
+	}
 
-	new s_PlayerName[32], s_PlayerName2[32];
+	new iDamage = floatround( f_Damage );
+	if ( iDamage <= 0 )
+	{
+		return HAM_IGNORED;
+	}
 
-	get_user_name( iVictim, s_PlayerName, 31 );
-	get_user_name( iAttacker, s_PlayerName2, 31 );
+	new iWeapon, iHitPlace, iClip, iAmmo;
 
-	//server_print( "%s:%d attack's %s:%d for %0.0f damage with %s:%d", s_PlayerName2, iAttacker, s_PlayerName, iVictim, f_Damage, s_Classname, inflictor );
+	// Shot / knifed directly by the attacker
+	if ( inflictor == iAttacker )
+	{
+		iWeapon		= SHARED_GetHeldWeapon( iAttacker, iClip, iAmmo );
+		iHitPlace	= get_pdata_int( iVictim, 75 );		// m_LastHitGroup
+	}
 
-      
-/*	client_print( iAttacker, print_chat, "Damage: %f0.0, Victim: %d, Inflictor: %d (%s)", iDamage, iVictim, inflictor, s_Classname );
-	client_print( iVictim, print_chat, "Damage: %f0.0, iAttacker: %d, Inflictor: %d (%s)", iDamage, iAttacker, inflictor, s_Classname );
+	// Grenade (or the bomb)
+	else if ( pev_valid( inflictor ) )
+	{
+		new szClassname[16];
+		pev( inflictor, pev_classname, szClassname, charsmax( szClassname ) );
 
+		if ( !equal( szClassname, "grenade" ) )
+		{
+			return HAM_IGNORED;
+		}
 
-	server_print( "Attacker: %d, Damage: %f0.0, Victim: %d, Inflictor: %d (%s)", iAttacker, iDamage, iVictim, inflictor, s_Classname );
-*/
-	//return HAM_SUPERCEDE
+		new szModel[32];
+		pev( inflictor, pev_model, szModel, charsmax( szModel ) );
 
+		iWeapon		= ( containi( szModel, "c4" ) != -1 ) ? CSW_C4 : CSW_HEGRENADE;
+		iHitPlace	= 0;
+	}
+	else
+	{
+		return HAM_IGNORED;
+	}
+
+	WC3_OnDamage( iAttacker, iVictim, iDamage, iWeapon, iHitPlace );
 
 	return HAM_IGNORED;
 }
@@ -78,6 +116,13 @@ public client_damage( iAttacker, iVictim, iDamage, iWeapon, iHitPlace, TA )
 	{
 		return;
 	}
+
+	WC3_OnDamage( iAttacker, iVictim, iDamage, iWeapon, iHitPlace );
+}
+
+// [CZ patch] body of client_damage, shared with EVENT_TakeDamage (bot victims)
+WC3_OnDamage( iAttacker, iVictim, iDamage, iWeapon, iHitPlace )
+{
 
 	// If they damage themself we don't care now do we ?
 	if ( iVictim == iAttacker )
@@ -379,6 +424,17 @@ public EVENT_Spawn( id )
 
 	// Store the player's team!
 	g_iPlayerTeam[id] = get_user_team( id );
+
+	// [CZ patch] We're forcibly respawning the player (scroll/ankh/reincarnation) - so lets just return
+	//   (the same check upstream's ResetHUD handler had; SHARED_Respawn gives weapons etc. itself)
+	if ( bIgnorePlayerSpawning[id] )
+	{
+		// Only re-apply the passive movement skills
+		SHARED_SetGravity( id );
+		SHARED_SetSpeed( id );
+
+		return HAM_HANDLED;
+	}
 
 	// Prespawn call
 	//   - Purpose is to have a spawn call that happens before everything else!

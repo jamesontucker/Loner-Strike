@@ -310,7 +310,7 @@ public clcmd_buyammo(id)
 	{
 		if (zp_ammopacks_get(id) < get_pcvar_num(cvar_buy_ammo_cost_ammopacks))
 		{
-			zp_colored_print(id, "%L (%L)", id, "NOT_ENOUGH_AMMO", id, "REQUIRED_AMOUNT", get_pcvar_num(cvar_buy_ammo_cost_ammopacks))
+			if (!is_user_bot(id)) zp_colored_print(id, "%L (%L)", id, "NOT_ENOUGH_AMMO", id, "REQUIRED_AMOUNT", get_pcvar_num(cvar_buy_ammo_cost_ammopacks))
 			return;
 		}
 	}
@@ -318,7 +318,7 @@ public clcmd_buyammo(id)
 	{
 		if (cs_get_user_money(id) < get_pcvar_num(cvar_buy_ammo_cost_money))
 		{
-			zp_colored_print(id, "%L (%L)", id, "NOT_ENOUGH_MONEY", id, "REQUIRED_AMOUNT", get_pcvar_num(cvar_buy_ammo_cost_money))
+			if (!is_user_bot(id)) zp_colored_print(id, "%L (%L)", id, "NOT_ENOUGH_MONEY", id, "REQUIRED_AMOUNT", get_pcvar_num(cvar_buy_ammo_cost_money))
 			return;
 		}
 	}
@@ -359,7 +359,7 @@ public clcmd_buyammo(id)
 	
 	// Play clip purchase sound, and notify player
 	emit_sound(id, CHAN_ITEM, g_sound_buyammo, 1.0, ATTN_NORM, 0, PITCH_NORM)
-	zp_colored_print(id, "%L", id, "AMMO_BOUGHT")
+	if (!is_user_bot(id)) zp_colored_print(id, "%L", id, "AMMO_BOUGHT") // CZ setup: no chat for bots
 }
 
 stock fm_cs_set_user_buyzone_offset(id, set = true)

@@ -64,8 +64,14 @@ ITEM_Cost( id, iItem )
 
 public ITEM_CanBuy( id, iItem )
 {
+	// [CZ patch] Mole puts bots in the enemy spawn where they just get stranded
+	if ( iItem == ITEM_MOLE && is_user_bot( id ) )
+	{
+		return false;
+	}
+
 	// User doesn't have the money
-	if ( SHARED_GetUserMoney( id ) < ITEM_Cost( id, iItem ) )
+	else if ( SHARED_GetUserMoney( id ) < ITEM_Cost( id, iItem ) )
 	{
 		client_print( id, print_center, "%L", id, "INSUFFICIENT_FUNDS" );
 
@@ -165,7 +171,13 @@ public ITEM_Buy( id, iItem )
 					bShowReplaceMenu = true;
 				}
 
-				if ( bShowReplaceMenu )
+				// [CZ patch] bots can't answer the menu: they replace the item in slot one
+				if ( bShowReplaceMenu && is_user_bot( id ) )
+				{
+					ITEM_Remove( id, ITEM_SLOT_ONE );
+				}
+
+				else if ( bShowReplaceMenu )
 				{
 					g_iFutureItem[id] = iItem;
 

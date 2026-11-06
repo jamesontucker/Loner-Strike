@@ -1,6 +1,6 @@
 --- a/addons/amxmodx/scripting/dice/dice_items_global.sma
 +++ b/addons/amxmodx/scripting/dice/dice_items_global.sma
-@@ -1,974 +1,1014 @@
+@@ -1,974 +1,1017 @@
 -#include <amxmodx>
 -#include <amxmisc>
 -#include <dice>
@@ -1756,8 +1756,11 @@
 +public ItemBury(id)
 +{
 +	new iDepth = GetDiceCvar(g_eCvars[BuryDepth])
++	new iTries
++	g_iDepth[id] = 0
 +	
-+	while(!is_player_stuck(id))
++	// Loner-Strike: capped so it can't loop forever where the player never gets stuck
++	while(!is_player_stuck(id) && iTries++ < 8)
 +	{
 +		bury_player(id, 1)
 +		g_iDepth[id] += iDepth
@@ -1789,7 +1792,7 @@
 +	
 +	switch(iType)
 +	{
-+		case 0:	iOrigin[2] += GetDiceCvar(g_eCvars[BuryDepth]) + 5
++		case 0:	iOrigin[2] += max(g_iDepth[id], GetDiceCvar(g_eCvars[BuryDepth])) + 5
 +		case 1:	iOrigin[2] -= 30
 +	}
 +	
