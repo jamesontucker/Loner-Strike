@@ -940,3 +940,21 @@ a.btn.primary { color: var(--signal-ink); }
 .music-volume::-moz-range-thumb { width: 12px; height: 16px; border: 0; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); }
 .setup-steps { padding-right: 230px; }
 @media (max-width: 760px) { .setup-steps { padding-right: 0; } }
+
+/* ---- quick actions: grouped menus ------------------------------------------------- */
+.quick-inner { overflow: visible; flex-wrap: wrap; }
+.qmenu { position: relative; flex: none; }
+.caret { font-size: 10px; margin-left: 2px; opacity: .8; }
+.qmenu-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 190px; display: grid; padding: 4px; background: var(--panel); box-shadow: var(--raised), 0 10px 28px rgba(0,0,0,.45); border-radius: 2px; }
+.qmenu-list button { display: flex; align-items: center; gap: 8px; border: 0; background: none; color: var(--bone); text-align: left; padding: 7px 10px; font: 600 14px/1.2 var(--text); border-radius: 2px; cursor: pointer; white-space: nowrap; }
+.qmenu-list button:hover:not(:disabled) { background: var(--panel-2); color: var(--signal); }
+.qmenu-list button:disabled { opacity: .45; cursor: default; }
+.qmenu-list .tick { width: 14px; color: var(--signal); font-weight: 800; }
+.qstep { flex: none; display: inline-flex; align-items: center; gap: 4px; }
+.qstep span { color: var(--bone-dim); font-size: 13px; font-weight: 600; min-width: 48px; text-align: center; }
+.qstep .qb { padding: 5px 9px; }
+@media (max-width: 760px) {
+  .quick-inner { flex-wrap: wrap; overflow: visible; }
+  .qmenu-list { min-width: 200px; }
+  .qmenu-list button { min-height: 44px; font-size: 15px; }
+}

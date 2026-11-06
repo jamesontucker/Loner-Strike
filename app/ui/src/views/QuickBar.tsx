@@ -1,9 +1,56 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { postJson } from "../api";
 import type { MapInfo, Online } from "../types";
 import { useCommand, useToast } from "../ui";
 
-/** One-click actions while a game is live, under the top bar (as in the original panel). */
+type Item = { label: string; on: () => void; pressed?: boolean; disabled?: boolean; show?: boolean };
+
+/** A button that opens a short list of actions under it. */
+function Menu({ label, items, active }: { label: string; items: Item[]; active?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: Event) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const shown = items.filter((i) => i.show !== false);
+  if (!shown.length) return null;
+  return (
+    <div className="qmenu" ref={box}>
+      <button className="qb" aria-haspopup="menu" aria-expanded={open} aria-pressed={active || undefined} onClick={() => setOpen((o) => !o)}>
+        {label} <span className="caret" aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="qmenu-list" role="menu">
+          {shown.map((i) => (
+            <button
+              key={i.label}
+              role="menuitemcheckbox"
+              aria-checked={i.pressed ?? false}
+              disabled={i.disabled}
+              onClick={() => {
+                i.on();
+                setOpen(false);
+              }}
+            >
+              <span className="tick" aria-hidden="true">{i.pressed ? "✓" : ""}</span>
+              {i.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One-click actions while a game is live, under the top bar, grouped so they fit. */
 export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; maps: MapInfo[]; refresh: () => void; reloadMaps: () => void }) {
   const run = useCommand(refresh);
   const toast = useToast();
@@ -31,40 +78,45 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
     }
   };
 
-  type Q = { label: string; on?: () => void; pressed?: boolean; show?: boolean; disabled?: boolean };
-  const items: Q[] = [
-    { label: "Restart round", on: () => run("gm_match", ["restart"]), show: !career },
-    { label: st.paused ? "Resume" : "Pause", on: () => run("gm_pause"), pressed: !!st.paused },
-    { label: "Restart map", on: () => run("gm_restartmap"), show: !career },
-    { label: "Random map", on: randomMap, show: !career },
-    { label: here?.fav ? "Favourite map" : "Favourite this map", on: favourite, pressed: !!here?.fav, show: !!here },
-    { label: "End round", on: () => run("gm_do", ["endround"]), show: !career },
-    { label: "+10 minutes", on: () => run("gm_do", ["addtime"]), show: !career && st.timelimit > 0 },
-    { label: "Bots −", on: () => run("gm_bots", ["count", String(Math.max(0, st.bots - 1))]), show: !career },
-    { label: "Bots +", on: () => run("gm_bots", ["count", String(Math.min(st.maxplayers - 1, st.bots + 1))]), show: !career },
-    { label: "Peaceful bots", on: () => run("gm_set", ["bot_zombie", st.peaceful ? "0" : "1"]), pressed: !!st.peaceful, show: !career },
-    { label: "God mode", on: () => me && run("gm_player", [String(me.uid), "god"]), pressed: !!me?.god, show: !!me },
-    { label: "Noclip", on: () => me && run("gm_player", [String(me.uid), "noclip"]), pressed: !!me?.noclip, show: !!me },
-    { label: "Respawn me", on: () => me && run("gm_player", [String(me.uid), "respawn"]), show: !!me },
-    { label: "Heal me", on: () => run("gm_do", ["heal"]), show: !!me?.alive },
-    { label: "$16,000", on: () => run("gm_do", ["money"]), show: !!me && !career },
-    { label: "Save my spot", on: () => run("gm_pos", ["save"]), show: !!me },
-    { label: "Back to my spot", on: () => run("gm_pos", ["load"]), show: !!me, disabled: !data.me?.haspos },
-    { label: "Announce…", on: () => setAnnouncing((a) => !a), pressed: announcing },
-    { label: st.recording ? "Stop recording" : "Record demo", on: () => run("gm_do", ["demo"]), pressed: !!st.recording },
+  const round: Item[] = [
+    { label: "Restart round", on: () => run("gm_match", ["restart"]) },
+    { label: "End round", on: () => run("gm_do", ["endround"]) },
+    { label: "+10 minutes", on: () => run("gm_do", ["addtime"]), show: st.timelimit > 0 },
+    { label: "Peaceful bots", on: () => run("gm_set", ["bot_zombie", st.peaceful ? "0" : "1"]), pressed: !!st.peaceful },
   ];
+  const map: Item[] = [
+    { label: "Restart map", on: () => run("gm_restartmap") },
+    { label: "Random map", on: randomMap },
+    { label: here?.fav ? "Favourite map" : "Favourite this map", on: favourite, pressed: !!here?.fav, show: !!here },
+  ];
+  const you: Item[] = me
+    ? [
+        { label: "God mode", on: () => run("gm_player", [String(me.uid), "god"]), pressed: !!me.god },
+        { label: "Noclip", on: () => run("gm_player", [String(me.uid), "noclip"]), pressed: !!me.noclip },
+        { label: "Respawn me", on: () => run("gm_player", [String(me.uid), "respawn"]) },
+        { label: "Heal me", on: () => run("gm_do", ["heal"]), show: !!me.alive },
+        { label: "$16,000", on: () => run("gm_do", ["money"]), show: !career },
+        { label: "Save my spot", on: () => run("gm_pos", ["save"]) },
+        { label: "Back to my spot", on: () => run("gm_pos", ["load"]), disabled: !data.me?.haspos },
+      ]
+    : [];
 
   return (
     <div className="quick" aria-label="Quick actions">
       <div className="quick-inner">
-        {items
-          .filter((q) => q.show !== false)
-          .map((q) => (
-            <button key={q.label} className="qb" aria-pressed={q.pressed === undefined ? undefined : q.pressed} disabled={q.disabled} onClick={q.on}>
-              {q.label}
-            </button>
-          ))}
-        {!career && <span className="qb-count">{st.bots} bot{st.bots === 1 ? "" : "s"}</span>}
+        <button className="qb" aria-pressed={!!st.paused} onClick={() => run("gm_pause")}>{st.paused ? "Resume" : "Pause"}</button>
+        {!career && <Menu label="Round" items={round} active={!!st.peaceful} />}
+        {!career && <Menu label="Map" items={map} />}
+        {!career && (
+          <div className="qstep" role="group" aria-label="Bots">
+            <button className="qb" aria-label="One bot fewer" onClick={() => run("gm_bots", ["count", String(Math.max(0, st.bots - 1))])}>−</button>
+            <span>{st.bots} bot{st.bots === 1 ? "" : "s"}</span>
+            <button className="qb" aria-label="One more bot" onClick={() => run("gm_bots", ["count", String(Math.min(st.maxplayers - 1, st.bots + 1))])}>+</button>
+          </div>
+        )}
+        <Menu label="You" items={you} active={!!me?.god || !!me?.noclip} />
+        <button className="qb" aria-pressed={announcing} onClick={() => setAnnouncing((a) => !a)}>Announce</button>
+        <button className="qb" aria-pressed={!!st.recording} onClick={() => run("gm_do", ["demo"])}>{st.recording ? "● Stop recording" : "Record demo"}</button>
       </div>
       {announcing && (
         <form className="quick-announce" onSubmit={(e) => { e.preventDefault(); announce(); }}>
