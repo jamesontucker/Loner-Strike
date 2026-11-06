@@ -8,6 +8,11 @@
 //! Everything it needs goes in loner-strike-hltv.cfg, run with `+exec` after Valve's
 //! own hltv.cfg (Proxy::Init runs hltv.cfg, then the command line's + commands run).
 //! The panel talks to it over RCON with a random adminpassword from that file.
+//!
+//! On a Linux server (a VPS) it's Valve's Linux `hltv` instead, run by a systemd service
+//! that starts and stops with the server's (remote::hltv_sh), on port 27020 unless set
+//! otherwise. Its demos stay on the machine; the app lists them and copies one into the
+//! player's game over SFTP.
 
 use crate::panel_api::from_panel;
 use crate::rcon::Rcon;
@@ -15,7 +20,7 @@ use crate::server::Shared;
 use crate::servers::{self, Entry};
 use crate::sys;
 use axum::body::Body;
-use axum::extract::Path as UrlPath;
+use axum::extract::{Path as UrlPath, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get as route_get, post};
@@ -71,8 +76,14 @@ pub fn port_of(e: &Entry) -> u16 {
 }
 
 fn default_port(e: &Entry) -> u16 {
+    if e.remote.is_some() {
+        return REMOTE_PORT;
+    }
     e.port.saturating_add(PORT_OFFSET)
 }
+
+/// HLTV's port on a Linux server: the top of the range setup opens there
+const REMOTE_PORT: u16 = 27020;
 
 fn display_name(e: &Entry) -> String {
     let n = clean_name(&e.hltv.name);
@@ -122,6 +133,16 @@ pub fn validate(mut s: Settings, me: &Entry, all: &[Entry]) -> Result<Settings, 
 }
 
 fn port_free_in_list(p: u16, me: &Entry, all: &[Entry]) -> Result<(), String> {
+    if let Some(r) = &me.remote {
+        if !(27015..=REMOTE_PORT).contains(&p) || p == me.port {
+            return Err(format!("On a Linux server HLTV uses a port from 27015 to 27020 that the server doesn't (27020 if the server is on {}).", me.port));
+        }
+        let same = |o: &&Entry| o.id != me.id && o.remote.as_ref().is_some_and(|x| x.host == r.host);
+        if let Some(o) = all.iter().filter(same).find(|o| o.port == p || (o.hltv.enabled && port_of(o) == p)) {
+            return Err(format!("\"{}\" uses port {p} on that machine. Pick another one.", o.name));
+        }
+        return Ok(());
+    }
     if !(1024..=65000).contains(&p) {
         return Err("Pick an HLTV port from 1024 to 65000.".into());
     }
@@ -211,7 +232,36 @@ fn exe(e: &Entry) -> PathBuf {
 fn admin(e: &Entry) -> Option<Rcon> {
     let text = std::fs::read_to_string(e.dir.join(CFG)).ok()?;
     let pw = text.lines().find_map(|l| l.strip_prefix("adminpassword "))?.trim().trim_matches('"').to_string();
-    (!pw.is_empty()).then(|| Rcon::new(pw, port_of(e)))
+    if pw.is_empty() {
+        return None;
+    }
+    Some(match &e.remote {
+        Some(r) => Rcon::over_ssh(r.clone(), format!("{}/hltv_admin.txt", crate::remote::server_dir(&e.id)), pw, port_of(e)),
+        None => Rcon::new(pw, port_of(e)),
+    })
+}
+
+fn new_admin() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    (0..20).map(|_| char::from(b"abcdefghijklmnopqrstuvwxyz0123456789"[rng.gen_range(0..36)])).collect()
+}
+
+/// On a Linux server: writes HLTV's settings and service there, and turns it on or off.
+/// A copy of the settings stays here, for the admin password.
+fn remote_apply(e: &Entry, on: bool) -> Result<(), String> {
+    let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
+    let admin = new_admin();
+    let cfg = config(e, &admin, server_password(e).as_deref());
+    std::fs::write(e.dir.join(CFG), &cfg).map_err(|err| format!("Couldn't write HLTV's settings ({err})."))?;
+    if on {
+        allow_proxies(e);
+    }
+    let code = crate::remote::exec_stream(r, "bash -s", crate::remote::hltv_sh(&e.id, cfg.trim_end(), &admin, port_of(e), on).as_bytes(), |_| {})?;
+    if code != 0 {
+        return Err("Couldn't set up HLTV on the server.".into());
+    }
+    Ok(())
 }
 
 /// The server's join password (Play with friends keeps it), which HLTV needs too.
@@ -238,13 +288,17 @@ fn alive(r: &mut Runs, id: &str) -> bool {
 
 /// Called when the server has just been started: HLTV follows once it's up.
 pub fn server_started(e: &Entry) {
-    if e.hltv.enabled {
+    // on a Linux server its service starts with the server's
+    if e.hltv.enabled && e.remote.is_none() {
         let _ = start(e);
     }
 }
 
 /// Starts HLTV as soon as the server answers (it needs a map loaded to connect).
 pub fn start(e: &Entry) -> Result<(), String> {
+    if e.remote.is_some() {
+        return remote_apply(e, true);
+    }
     if !exe(e).is_file() {
         return Err("This server has no hltv.exe. Update Valve's server files (Overview, Maintenance) to get it.".into());
     }
@@ -320,11 +374,7 @@ fn spawn(e: &Entry) -> Result<Child, String> {
     if std::net::UdpSocket::bind(("0.0.0.0", port)).is_err() {
         return Err(format!("Port {port} is in use by another program. Pick another HLTV port."));
     }
-    let admin: String = {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
-        (0..20).map(|_| char::from(b"abcdefghijklmnopqrstuvwxyz0123456789"[rng.gen_range(0..36)])).collect()
-    };
+    let admin = new_admin();
     let cfg = config(e, &admin, server_password(e).as_deref());
     std::fs::write(e.dir.join(CFG), cfg).map_err(|err| format!("Couldn't write HLTV's settings ({err})."))?;
     let log = std::fs::File::create(e.dir.join(OUT_LOG)).map_err(|err| err.to_string())?;
@@ -348,6 +398,14 @@ fn spawn(e: &Entry) -> Result<Child, String> {
 
 /// Finishes the demo being recorded and quits HLTV (ending it if it doesn't).
 pub fn stop(e: &Entry) {
+    if let Some(r) = &e.remote {
+        // the demo finished first, then the service (it starts again with the server)
+        if let Some(a) = admin(e) {
+            let _ = a.send("stoprecording");
+        }
+        let _ = crate::remote::exec(r, &format!("sudo systemctl stop {}", crate::remote::hltv_unit(&e.id)));
+        return;
+    }
     let (child, waiting) = with_runs(|r| {
         let waiting = r.pending.remove(&e.id).is_some();
         r.errors.remove(&e.id);
@@ -425,6 +483,12 @@ fn find_demo(e: &Entry, name: &str) -> Option<PathBuf> {
 }
 
 fn demos(e: &Entry) -> Vec<Value> {
+    if let Some(r) = &e.remote {
+        let mut d = crate::remote::demos(r, &e.id, &e.game);
+        d.retain(|(n, _, _)| safe_demo(n));
+        d.sort_by(|a, b| b.2.cmp(&a.2));
+        return d.into_iter().map(|(name, size, when)| json!({"name": name, "size": size, "modified": when})).collect();
+    }
     let mut out: Vec<(u64, Value)> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for dir in demo_dirs(e) {
@@ -445,6 +509,17 @@ fn demos(e: &Entry) -> Vec<Value> {
 
 /// The last lines of HLTV's console, without the panel's own status checks.
 fn console(e: &Entry) -> Vec<String> {
+    if let Some(r) = &e.remote {
+        let cmd = format!("tail -c 24576 \"$HOME/{}/{CONSOLE_LOG}\" 2>/dev/null", crate::remote::server_dir(&e.id));
+        let out = crate::remote::exec(r, &cmd).map(|(_, o)| o).unwrap_or_default();
+        let lines: Vec<String> = out
+            .lines()
+            .filter(|l| !l.contains("Executing rcon") && !l.to_lowercase().contains("password") && !l.trim().is_empty())
+            .map(String::from)
+            .collect();
+        let skip = lines.len().saturating_sub(80);
+        return lines[skip..].to_vec();
+    }
     for p in [e.dir.join(CONSOLE_LOG), e.dir.join(OUT_LOG)] {
         let Ok(mut f) = std::fs::File::open(&p) else { continue };
         let len = f.metadata().map(|m| m.len()).unwrap_or(0);
@@ -473,11 +548,17 @@ fn lan_ip() -> Option<String> {
 }
 
 fn status(e: &Entry) -> Value {
-    let (running, pending, error, uptime) = with_runs(|r| {
-        let running = alive(r, &e.id);
-        let uptime = r.procs.get(&e.id).map(|p| p.started.elapsed().as_secs()).unwrap_or(0);
-        (running, r.pending.contains_key(&e.id), r.errors.get(&e.id).cloned(), uptime)
-    });
+    let (running, pending, error, uptime) = match &e.remote {
+        Some(r) => {
+            let (on, secs) = if e.hltv.enabled { crate::remote::unit_active(r, &crate::remote::hltv_unit(&e.id)) } else { (false, 0) };
+            (on, false, None, secs)
+        }
+        None => with_runs(|r| {
+            let running = alive(r, &e.id);
+            let uptime = r.procs.get(&e.id).map(|p| p.started.elapsed().as_secs()).unwrap_or(0);
+            (running, r.pending.contains_key(&e.id), r.errors.get(&e.id).cloned(), uptime)
+        }),
+    };
     let rcon = if running || (e.hltv.enabled && e.dir.join(CFG).is_file()) { admin(e) } else { None };
     let reply = rcon.and_then(|r| r.send("status").ok()).filter(|t| t.contains("HLTV"));
     // still up from before the app last closed
@@ -492,7 +573,8 @@ fn status(e: &Entry) -> Value {
     };
     let port = port_of(e);
     json!({
-        "available": exe(e).is_file(),
+        "available": e.remote.is_some() || exe(e).is_file(),
+        "remote": e.remote.is_some(),
         "settings": {
             "enabled": e.hltv.enabled, "port": port, "delay": e.hltv.delay, "max_spectators": e.hltv.max_spectators,
             "name": e.hltv.name, "password": e.hltv.password, "record": e.hltv.record,
@@ -507,7 +589,10 @@ fn status(e: &Entry) -> Value {
         "slots": live.slots,
         "recording": live.recording,
         "server_running": servers::running(&e.id),
-        "addresses": {"computer": format!("127.0.0.1:{port}"), "network": lan_ip().map(|ip| format!("{ip}:{port}"))},
+        "addresses": match &e.remote {
+            Some(r) => json!({"computer": null, "network": null, "internet": format!("{}:{port}", r.host)}),
+            None => json!({"computer": format!("127.0.0.1:{port}"), "network": lan_ip().map(|ip| format!("{ip}:{port}"))}),
+        },
         "visibility": e.visibility,
         "demos": demos(e),
         "console": console(e),
@@ -567,8 +652,15 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req): J
                 x.hltv = s.clone();
             }
         })?;
-        let running = with_runs(|r| alive(r, &id) || r.pending.contains_key(&id));
         let e = entry(&id)?;
+        // on a Linux server: the service written again, and on or off with these settings
+        if e.remote.is_some() {
+            if changed || s.enabled {
+                remote_apply(&e, s.enabled)?;
+            }
+            return Ok(json!({"ok": true, "restart": false}));
+        }
+        let running = with_runs(|r| alive(r, &id) || r.pending.contains_key(&id));
         // turned off: stop it now; turned on with the server up: start it now
         if !s.enabled && running {
             stop(&Entry { hltv: Settings { enabled: true, ..s.clone() }, ..e.clone() });
@@ -586,8 +678,8 @@ struct ActionReq {
     name: String,
 }
 
-async fn api_action(UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap, Json(req): Json<ActionReq>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<ActionReq>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || (action == "fetch-demo" && on.is_none()) {
         return forbidden();
     }
     blocking(move || {
@@ -610,6 +702,29 @@ async fn api_action(UrlPath((id, action)): UrlPath<(String, String)>, headers: H
                 stop(&Entry { hltv: Settings { enabled: true, ..e.hltv.clone() }, ..e.clone() });
                 start(&e).map(|_| json!({"ok": true}))
             }
+            "delete-demo" if e.remote.is_some() => {
+                let r = e.remote.as_ref().unwrap();
+                let path = (safe_demo(&req.name)).then(|| crate::remote::find_demo(r, &e.id, &e.game, &req.name)).flatten().ok_or("That demo isn't there any more.")?;
+                let busy = admin(&e).and_then(|a| a.send("status").ok()).map(|t| parse_status(&t).recording.as_deref() == Some(req.name.as_str())).unwrap_or(false);
+                if busy {
+                    return Err("HLTV is still recording that demo. Stop HLTV first.".into());
+                }
+                let (code, out) = crate::remote::exec(r, &format!("rm -f -- \"$HOME/\"{}", crate::remote::shell_quote(&path)))?;
+                if code != 0 {
+                    return Err(format!("Couldn't delete it ({}).", out.trim()));
+                }
+                Ok(json!({"ok": true}))
+            }
+            "fetch-demo" => {
+                // from the Linux server into the player's game folder, ready for viewdemo
+                let r = e.remote.as_ref().ok_or("That demo is on this computer already.")?;
+                let path = (safe_demo(&req.name)).then(|| crate::remote::find_demo(r, &e.id, &e.game, &req.name)).flatten().ok_or("That demo isn't there any more.")?;
+                let game = st.local_game().ok_or("Set up the game on this computer first.")?;
+                let data = crate::remote::read_file(r, &path)?;
+                let to = game.hl.join(&e.game).join(&req.name);
+                std::fs::write(&to, data).map_err(|err| format!("Couldn't save it ({err})."))?;
+                Ok(json!({"ok": true}))
+            }
             "delete-demo" => {
                 let path = find_demo(&e, &req.name).ok_or("That demo isn't there any more.")?;
                 let busy = with_runs(|r| alive(r, &id))
@@ -631,6 +746,10 @@ async fn api_demo(UrlPath((id, name)): UrlPath<(String, String)>) -> Response {
     let not_found = || (StatusCode::NOT_FOUND, "not found").into_response();
     let found = tokio::task::spawn_blocking(move || {
         let e = servers::get(&id)?;
+        if let Some(r) = &e.remote {
+            let path = safe_demo(&name).then(|| crate::remote::find_demo(r, &e.id, &e.game, &name)).flatten()?;
+            return crate::remote::read_file(r, &path).ok().map(|d| (name, d));
+        }
         let path = find_demo(&e, &name)?;
         std::fs::read(path).ok().map(|d| (name, d))
     })
@@ -655,6 +774,9 @@ async fn api_folder(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req):
     }
     blocking(move || {
         let e = entry(&id)?;
+        if e.remote.is_some() {
+            return Err("The demos are on the server. Use Get it to copy one to your game.".into());
+        }
         let demo = (!req.name.is_empty()).then(|| find_demo(&e, &req.name)).flatten();
         let dir = demos(&e)
             .first()

@@ -1280,6 +1280,10 @@ pub fn stop(id: &str) {
     let e = get(id);
     if let Some(e) = e.as_ref().filter(|e| e.remote.is_some()) {
         clear_pending_restart(&e.id);
+        // HLTV's demo finished first (its service stops with the server's anyway)
+        if e.hltv.enabled {
+            crate::hltv::stop(e);
+        }
         let _ = crate::remote::systemctl(e.remote.as_ref().unwrap(), &e.id, "stop");
         return;
     }

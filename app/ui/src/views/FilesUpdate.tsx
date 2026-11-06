@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { postJson } from "../api";
+import { postJson, targetKey, useActions } from "../api";
 import type { AppInfo } from "../types";
-import { useToast } from "../ui";
+import { BusyButton, useToast } from "../ui";
 import type { Scan } from "./Setup";
 import { JobProgress } from "./Servers";
 
@@ -13,6 +13,10 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
   const [running, setRunning] = useState(false);
   const [skip, setSkip] = useState(false);
   const [open, setOpen] = useState(false);
+  const { run, busy } = useActions();
+  // one update at a time, whichever button started it
+  const key = `files:${targetKey()}:update`;
+  const updating = busy(key);
   const g = app?.game;
   const outdated = g?.outdated ?? [];
   const theirs = g?.unmanaged ?? [];
@@ -21,16 +25,16 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
   const name = (id: string) => (id === "core" ? "Loner-Strike's own plugins" : scan?.catalog.find((c) => c.id === id)?.name ?? id);
   const blocked = gameOpen && !g.dedicated;
   // one part, or all of them ("core" alone: setup's own parts are always refreshed)
-  const update = async (ids: string[]) => {
+  const update = (ids: string[]) => run(key, async () => {
     const components = ids.filter((c) => c !== "core" && c !== "foundation");
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/install", { hl: g.hl, games: [g.id], components, repair: true }).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) return toast(r.error, true);
     setRunning(true);
-  };
+  }, ids.length === 1 ? `Updating ${name(ids[0])}…` : "Updating Loner-Strike's files…");
   const row = (id: string, label: string) => (
     <li key={id} className="files-update-row">
       <span>{name(id)}</span>
-      <button className="btn small" disabled={blocked} onClick={() => { setOpen(false); update([id]); }}>{label}</button>
+      <button className="btn small" disabled={blocked || updating} onClick={() => { setOpen(false); update([id]); }}>{label}</button>
     </li>
   );
   const count = outdated.length + theirs.length;
@@ -49,7 +53,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
         </span>
         <span className="files-bar-actions">
           <button className="btn small" onClick={() => setOpen(true)}>Details</button>
-          <button className="btn small primary" disabled={blocked} onClick={() => update([...outdated, ...theirs])}>Update all</button>
+          <BusyButton className="btn small primary" busy={updating} disabled={blocked} label="Update all" busyLabel="Updating…" onClick={() => update([...outdated, ...theirs])} />
           <button className="files-bar-close" aria-label="Hide until next time" onClick={() => setSkip(true)}>×</button>
         </span>
       </div>
@@ -72,7 +76,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
             )}
             {blocked && <p className="muted small-note">Close {g.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"} first.</p>}
             <div className="row">
-              <button className="btn primary" disabled={blocked} onClick={() => { setOpen(false); update([...outdated, ...theirs]); }}>Update all</button>
+              <BusyButton className="btn primary" busy={updating} disabled={blocked} label="Update all" busyLabel="Updating…" onClick={() => { setOpen(false); update([...outdated, ...theirs]); }} />
               <button className="btn" onClick={() => setOpen(false)}>Close</button>
             </div>
             </div>

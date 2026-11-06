@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { postJson } from "../api";
+import { postJson, targetKey, useActions } from "../api";
 import type { MapInfo, Online } from "../types";
 import { useCommand, useToast } from "../ui";
 
@@ -68,6 +68,7 @@ function Menu({ label, items, active }: { label: string; items: Item[]; active?:
 /** One-click actions while a game is live, under the top bar, grouped so they fit. */
 export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; maps: MapInfo[]; refresh: () => void; reloadMaps: () => void }) {
   const run = useCommand(refresh);
+  const { run: once } = useActions();
   const toast = useToast();
   const [announcing, setAnnouncing] = useState(false);
   const [text, setText] = useState("");
@@ -78,7 +79,10 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
 
   const randomMap = () => {
     const pool = maps.filter((m) => !m.hidden && m.name.toLowerCase() !== st.map.toLowerCase());
-    if (pool.length) run("gm_map", [pool[Math.floor(Math.random() * pool.length)].name]);
+    if (!pool.length) return;
+    const name = pool[Math.floor(Math.random() * pool.length)].name;
+    // same key as the Maps page, so a map change is only sent once
+    once(`maps:${targetKey()}:change`, () => run("gm_map", [name]), `Changing the map to ${name}…`);
   };
   const favourite = async () => {
     const r = await postJson<{ error?: string }>("/api/mapflag", { flag: "fav", map: st.map, on: !here?.fav }).catch(() => ({ error: "Couldn't save that." }));
@@ -100,7 +104,7 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
     { label: "Peaceful bots", on: () => run("gm_set", ["bot_zombie", st.peaceful ? "0" : "1"]), pressed: !!st.peaceful },
   ];
   const map: Item[] = [
-    { label: "Restart map", on: () => run("gm_restartmap") },
+    { label: "Restart map", on: () => once(`quick:${targetKey()}:restartmap`, () => run("gm_restartmap"), "Restarting the map…") },
     { label: "Random map", on: randomMap },
     { label: here?.fav ? "Favourite map" : "Favourite this map", on: favourite, pressed: !!here?.fav, show: !!here },
   ];

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { getJson, postJson } from "../api";
-import { Info, SectionHead, Skeleton, useToast } from "../ui";
+import { getJson, postJson, useActions } from "../api";
+import { BusyButton, Info, SectionHead, Skeleton, useToast } from "../ui";
 
 type Data = { style: "builtin" | "custom" | "url"; note: string; html: string | null; url: string | null; max: number; error?: string };
 
@@ -40,6 +40,7 @@ export function Welcome({ target }: { target: string }) {
   const [note, setNote] = useState("");
   const [html, setHtml] = useState("");
   const [url, setUrl] = useState("");
+  const { run, busy } = useActions();
 
   useEffect(() => {
     getJson<Data>("/api/welcome")
@@ -58,11 +59,11 @@ export function Welcome({ target }: { target: string }) {
   if (d.error) return <p className="muted">{d.error}</p>;
   const tooLong = html.length > d.max;
 
-  const save = async () => {
+  const save = () => run(`welcome:${target}:save`, async () => {
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/welcome", { style, note, html, url }).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) return toast(r.error, true);
     toast("Saved. Players see it next time they join.");
-  };
+  }, "Saving the welcome page…");
 
   return (
     <div className="stack">
@@ -122,7 +123,7 @@ export function Welcome({ target }: { target: string }) {
       )}
 
       <div className="row">
-        <button className="btn primary" disabled={style === "custom" && tooLong} onClick={save}>Save</button>
+        <BusyButton className="btn primary" busy={busy(`welcome:${target}:save`)} disabled={style === "custom" && tooLong} label="Save" busyLabel="Saving…" onClick={save} />
       </div>
     </div>
   );

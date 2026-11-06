@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { getJson, postJson } from "../api";
+import { getJson, postJson, targetKey, useActions, useActivity } from "../api";
 import { Icon } from "../icons";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
-import { Info, SectionHead, useCommand, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, SectionHead, useCommand, useConfirm, useToast } from "../ui";
 import { MapCard } from "./Maps";
 import { MatchMode } from "./MatchMode";
 
@@ -16,7 +16,11 @@ const GAME_NAME = (id?: string) => (id === "cstrike" ? "Counter-Strike 1.6" : "C
 
 export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppInfo | null; reason: string; gameOpen: boolean; maps: MapInfo[]; openSetup: () => void }) {
   const toast = useToast();
-  const [starting, setStarting] = useState(false);
+  const { run, busy } = useActions();
+  const key = (what: string) => `play:${targetKey()}:${what}`;
+  // after a start is sent, the button keeps saying Starting… while the game loads
+  const [held, setHeld] = useState(false);
+  const starting = busy(key("launch")) || held;
   const game = GAME_NAME(app?.game?.id);
   const [pick, setPick] = useState("");
   const [botsPick, setBotsPick] = useState<number | null>(null);
@@ -27,25 +31,25 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
   useEffect(() => {
     getJson<StartOptions>("/api/app/start-options").then((o) => setOpts(Array.isArray(o.modes) ? o : null)).catch(() => setOpts(null));
   }, [app?.game?.id]);
-  const launchMenu = async () => {
+  const launchMenu = () => run(key("open"), async () => {
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { menu: true }).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) toast(r.error, true);
     else toast(`Opening ${game}…`);
-  };
-  const launch = async (map?: string, bots?: number) => {
+  }, `Opening ${game}…`);
+  const launch = (map?: string, bots?: number) => {
     if (starting) return;
-    setStarting(true);
     // never chosen before: start with the defaults shown, so they're saved like a choice
     const fresh = Object.fromEntries(Object.entries(DEFAULTS).filter(([k]) => !changed[k] && mode?.settings[k] == null));
     const start = mode ? { mode: mode.id, settings: { ...fresh, ...changed } } : {};
-    const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}), ...start }).catch(() => ({ error: "Couldn't reach the app." }));
-    if (r.error) {
-      toast(r.error, true);
-      setStarting(false);
-    } else {
-      toast(`Starting ${game}…`);
-      setTimeout(() => setStarting(false), 20000);
-    }
+    return run(key("launch"), async () => {
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}), ...start }).catch(() => ({ error: "Couldn't reach the app." }));
+      if (r.error) toast(r.error, true);
+      else {
+        toast(`Starting ${game}…`);
+        setHeld(true);
+        setTimeout(() => setHeld(false), 20000);
+      }
+    }, `Starting ${game}${map ? ` on ${map}` : ""}…`);
   };
   const bots = app?.bots ?? null;
   const modes = opts ? [...opts.modes].sort((a, b) => a.name.localeCompare(b.name)) : [];
@@ -68,7 +72,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
             Set it up
           </button>
           <div className="last">
-            Or <button className="link inline" onClick={() => launch()}>start {game} without it</button>.
+            Or <button className="link inline" disabled={starting} aria-busy={starting} onClick={() => launch()}>{starting ? "starting…" : `start ${game} without it`}</button>.
           </div>
         </div>
       </div>
@@ -157,13 +161,16 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
             </div>
           )}
         </div>
-        <button className="btn launch" disabled={starting} onClick={() => launch(map, botCount)}>
-          <Icon name="play" size={22} />
-          {starting ? "Starting…" : mode ? `Play ${mode.name} on ${map}` : `Play ${map}`}
-        </button>
+        <BusyButton
+          className="btn launch"
+          busy={starting}
+          label={<><Icon name="play" size={22} />{mode ? `Play ${mode.name} on ${map}` : `Play ${map}`}</>}
+          busyLabel="Starting…"
+          onClick={() => launch(map, botCount)}
+        />
         <div className="last">
           You can change all of this once you're in, here or with F3 in the game.{" "}
-          <button className="link inline" onClick={() => launchMenu()}>Just open {game}</button>
+          <button className="link inline" disabled={busy(key("open"))} aria-busy={busy(key("open"))} onClick={() => launchMenu()}>{busy(key("open")) ? `Opening ${game}…` : `Just open ${game}`}</button>
         </div>
       </div>
       {(recent.length > 0 || favs.length > 0) && (
@@ -186,11 +193,22 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
   const st = data.state;
   const recent = maps.filter((m) => m.recent >= 0 && m.name.toLowerCase() !== st.map.toLowerCase()).sort((a, b) => a.recent - b.recent).slice(0, 6);
   const [switching, setSwitching] = useState<Mode | null>(null);
+  const { run: once } = useActions();
+  const t = targetKey();
+  const active = useActivity();
+  // a mode switch or preset in progress (only one at a time), and a map change (same key as the Maps page)
+  const modeBusy = active.find(([k]) => k.startsWith(`play:${t}:mode:`))?.[0].slice(`play:${t}:mode:`.length) ?? null;
+  const presetBusy = active.find(([k]) => k.startsWith(`play:${t}:preset:`))?.[0].slice(`play:${t}:preset:`.length) ?? null;
+  const changeMap = (map: string) => once(`maps:${t}:change`, () => run("gm_map", [map]), `Changing the map to ${map}…`);
+  const switchMode = (m: Mode, map: string | null) => {
+    if (modeBusy) return;
+    once(`play:${t}:mode:${m.id}`, () => run("gm_mode", map ? [m.id, map] : [m.id]), `Switching to ${m.name}${map ? ` on ${map}` : ""}…`);
+  };
 
   return (
     <div className="stack">
       {st.mode === "match" && <MatchMode />}
-      {switching && <SwitchMode mode={switching} current={st.mode} map={st.map} maps={maps} onClose={() => setSwitching(null)} onGo={(map) => { setSwitching(null); if (switching.id === st.mode) { if (map) run("gm_map", [map]); } else run("gm_mode", map ? [switching.id, map] : [switching.id]); }} />}
+      {switching && <SwitchMode mode={switching} current={st.mode} map={st.map} maps={maps} onClose={() => setSwitching(null)} onGo={(map) => { setSwitching(null); if (switching.id === st.mode) { if (map) changeMap(map); } else switchMode(switching, map); }} />}
       {data.presets.length > 0 && (
         <section>
           <SectionHead title="Presets" note="One click sets the mode, its settings and the bots." />
@@ -200,9 +218,11 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
                 key={p.id}
                 className="preset"
                 aria-pressed={st.preset === p.id}
-                onClick={async () => (await ask(`Play "${p.name}"? This resets that mode's settings to the preset.`, { ok: "Play it" })) && run("gm_preset", [p.id])}
+                disabled={!!presetBusy}
+                aria-busy={presetBusy === p.id}
+                onClick={async () => (await ask(`Play "${p.name}"? This resets that mode's settings to the preset.`, { ok: "Play it" })) && once(`play:${t}:preset:${p.id}`, () => run("gm_preset", [p.id]), `Loading the "${p.name}" preset…`)}
               >
-                <span className="preset-name">{p.name}</span>
+                <span className="preset-name">{presetBusy === p.id && <span className="spinner" aria-hidden="true" />}{p.name}</span>
                 <span className="preset-desc">{p.desc}</span>
               </button>
             ))}
@@ -219,12 +239,14 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
                 key={m.id}
                 className="mode"
                 aria-pressed={st.mode === m.id}
+                disabled={!!modeBusy}
+                aria-busy={modeBusy === m.id}
                 onClick={() => setSwitching(m)}
               >
                 <span className="mode-icon">
                   <Icon name={m.id} size={26} />
                 </span>
-                <span className="mode-name">{m.name}</span>
+                <span className="mode-name">{modeBusy === m.id && <span className="spinner" aria-hidden="true" />}{m.name}</span>
                 <span className="mode-desc">{m.desc}</span>
                 <span className={`bots-note ${rating}`}>{BOT_NOTE[rating]}</span>
               </button>
@@ -239,7 +261,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
           </SectionHead>
           <div className="maps">
             {recent.map((m) => (
-              <MapCard key={m.name} map={m} onClick={() => run("gm_map", [m.name])} />
+              <MapCard key={m.name} map={m} onClick={() => changeMap(m.name)} />
             ))}
           </div>
         </section>

@@ -56,6 +56,11 @@ pub fn unit(id: &str) -> String {
     format!("lonerstrike-{id}")
 }
 
+/// The HLTV service that goes with a server (started and stopped with it).
+pub fn hltv_unit(id: &str) -> String {
+    format!("lonerstrike-{id}-hltv")
+}
+
 // ---- the connection --------------------------------------------------------------------
 
 // open sessions, with the fingerprint each one was verified against
@@ -519,7 +524,11 @@ echo "@@STEP ready"
 
 /// Is the server's service running, and for how many seconds?
 pub fn active(r: &RemoteInfo, id: &str) -> (bool, u64) {
-    let u = unit(id);
+    unit_active(r, &unit(id))
+}
+
+/// Is a service running, and for how many seconds?
+pub fn unit_active(r: &RemoteInfo, u: &str) -> (bool, u64) {
     let Ok((_, out)) = exec(r, &format!("systemctl is-active {u}; ps -o etimes= -p \"$(systemctl show -p MainPID --value {u})\" 2>/dev/null")) else { return (false, 0) };
     let mut lines = out.lines();
     let on = lines.next().map(|l| l.trim() == "active").unwrap_or(false);
@@ -547,12 +556,89 @@ pub fn remove(r: &RemoteInfo, id: &str) -> Result<(), String> {
     let u = unit(id);
     let (code, out) = exec(
         r,
-        &format!("sudo systemctl disable --now {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service; sudo systemctl daemon-reload; rm -rf \"$HOME/{}\"", server_dir(id)),
+        &format!(
+            "sudo systemctl disable --now {u}-hltv {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service /etc/systemd/system/{u}-hltv.service; sudo systemctl daemon-reload; rm -rf \"$HOME/{}\"",
+            server_dir(id)
+        ),
     )?;
     if code != 0 {
         return Err(format!("Couldn't remove it from the server ({}).", out.trim()));
     }
     Ok(())
+}
+
+/// HLTV's settings and service on the machine. `cfg` is what it runs at start (with the
+/// admin password, so only this user can read it); the admin password also goes in a
+/// file of its own for lsrcon. With `on`, the service starts whenever the server does
+/// (and now, if the server is up); without, it's stopped and left off.
+pub fn hltv_sh(id: &str, cfg: &str, admin: &str, port: u16, on: bool) -> String {
+    let main = unit(id);
+    let u = hltv_unit(id);
+    let dir = server_dir(id);
+    let switch = if on {
+        format!("sudo systemctl enable {u} >/dev/null 2>&1\nif systemctl is-active --quiet {main}; then sudo systemctl restart {u}; fi")
+    } else {
+        format!("sudo systemctl disable --now {u} >/dev/null 2>&1 || true")
+    };
+    format!(
+        r#"set -eu
+SRV="$HOME/{dir}"
+umask 077
+cat > "$SRV/loner-strike-hltv.cfg" <<'LSCFG'
+{cfg}
+LSCFG
+printf '%s\n' {admin} > "$SRV/hltv_admin.txt"
+umask 022
+sudo tee /etc/systemd/system/{u}.service >/dev/null <<EOF
+[Unit]
+Description=Loner-Strike HLTV {id}
+After={main}.service
+BindsTo={main}.service
+
+[Service]
+User=$(whoami)
+WorkingDirectory=$SRV
+Environment=LD_LIBRARY_PATH=$SRV
+ExecStartPre=/bin/sleep 5
+ExecStart=$SRV/hltv -port {port} +exec loner-strike-hltv.cfg
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy={main}.service
+EOF
+sudo systemctl daemon-reload
+{switch}
+"#,
+        admin = shell_quote(admin)
+    )
+}
+
+/// HLTV's demos on the machine: (name, size, modified) for the .dem files in the server's
+/// folder and its game folders.
+pub fn demos(r: &RemoteInfo, id: &str, game: &str) -> Vec<(String, u64, u64)> {
+    let cmd = format!("cd \"$HOME/{}\" && stat -c '%n|%s|%Y' {game}/*.dem *.dem cstrike/*.dem 2>/dev/null", server_dir(id));
+    let Ok((_, out)) = exec(r, &cmd) else { return Vec::new() };
+    let mut seen = std::collections::HashSet::new();
+    out.lines()
+        .filter_map(|l| {
+            let mut p = l.rsplitn(3, '|');
+            let when = p.next()?.trim().parse().ok()?;
+            let size = p.next()?.trim().parse().ok()?;
+            let path = p.next()?;
+            let name = path.rsplit('/').next()?.to_string();
+            seen.insert(name.clone()).then_some((name, size, when))
+        })
+        .collect()
+}
+
+/// Where a demo is on the machine (relative to the server's folder), if it's there.
+pub fn find_demo(r: &RemoteInfo, id: &str, game: &str, name: &str) -> Option<String> {
+    let q = shell_quote(name);
+    let cmd = format!("cd \"$HOME/{}\" && for d in {game} . cstrike; do [ -f \"$d\"/{q} ] && {{ echo \"$d\"; break; }}; done", server_dir(id));
+    let (_, out) = exec(r, &cmd).ok()?;
+    let d = out.lines().next()?.trim().to_string();
+    (!d.is_empty()).then(|| format!("{}/{d}/{name}", server_dir(id)))
 }
 
 /// The env assignments for SETUP_SH.

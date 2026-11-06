@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { getJson, postJson, useQueuedSave } from "../api";
+import { getJson, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import type { Online } from "../types";
-import { Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Role = "owner" | "admin" | "moderator" | "vip";
 type Person = { id: string; name: string; role: Role; expires: string | null; note: string; expired: boolean };
@@ -126,6 +126,9 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
   }, []);
 
   const queue = useQueuedSave<RoleSettings>();
+  const { run, busy: busyKey } = useActions();
+  const act = (what: string, fn: () => Promise<unknown>, label: string) => run(`admins:${targetKey()}:${what}`, fn, label);
+  const busy = (what: string) => busyKey(`admins:${targetKey()}:${what}`);
   /** Posts a change; the answer is the new list. */
   const send = async (path: string, body: unknown, done?: string) => {
     const r = await postJson<Reply>(path, body).catch(() => null);
@@ -139,34 +142,37 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
   if (failed) return <div className="stack"><SectionHead title="Admins" /><p className="muted">{failed}</p></div>;
   if (!d) return <Skeleton />;
 
-  const save = async () => {
+  const save = () => act("save", async () => {
     if (!draft) return;
     const ok = await send("/api/admins/person", { ...draft, id: draft.id.trim(), expires: draft.expires || null }, "Saved. Takes effect right away in a running game.");
     if (ok) setDraft(null);
-  };
-  const remove = async (p: Person) => (await ask(`Take ${p.name || p.id} off the list?`, { ok: "Remove", danger: true })) && send("/api/admins/remove", { id: p.id }, "Removed");
+  }, `Saving ${draft?.name || draft?.id.trim() || "them"}…`);
+  const remove = async (p: Person) => (await ask(`Take ${p.name || p.id} off the list?`, { ok: "Remove", danger: true })) && act(`remove:${p.id}`, () => send("/api/admins/remove", { id: p.id }, "Removed"), `Removing ${p.name || p.id}…`);
   const grant = (pl: { steamid: string; name: string }, role: Role, days?: number) => {
     const existing = d.people.find((p) => p.id === pl.steamid);
-    send(
+    act(`grant:${pl.steamid}`, () => send(
       "/api/admins/person",
       { id: pl.steamid, name: existing?.name || pl.name, role, expires: days ? addDays(d.today, days) : null, note: existing?.note ?? "", was: existing?.id },
       role === "vip" ? `${pl.name} is a VIP for ${days} days` : `${pl.name} is now ${role === "admin" ? "an admin" : `a ${roleName(role).toLowerCase()}`}`,
-    );
+    ), `Giving ${pl.name} a role…`);
   };
-  const ban = async (id: string, minutes: number, name?: string) => {
+  const ban = async (id: string, minutes: number, name?: string, after?: () => void) => {
     const what = minutes ? BAN_TIMES.find((t) => t[0] === minutes)?.[1].toLowerCase() : "for good";
-    if (!(await ask(`Ban ${name || id} ${minutes ? `for ${what}` : "for good"}? They're kicked if they're playing.`, { ok: "Ban", danger: true }))) return false;
-    return send("/api/admins/ban", { id: id.trim(), minutes }, "Banned");
+    if (!(await ask(`Ban ${name || id} ${minutes ? `for ${what}` : "for good"}? They're kicked if they're playing.`, { ok: "Ban", danger: true }))) return;
+    await act(`ban:${id.trim()}`, async () => {
+      if (await send("/api/admins/ban", { id: id.trim(), minutes }, "Banned")) after?.();
+    }, `Banning ${name || id.trim()}…`);
   };
   const settings = (change: (s: RoleSettings) => RoleSettings, done?: string) =>
     queue({ donate: d.donate, perks: d.perks, abilities: d.abilities }, change, (full) => send("/api/admins/settings", full, done));
-  const setPerks = (p: Partial<Perks>) => settings((s) => ({ ...s, perks: { ...s.perks, ...p } }));
-  const saveDonate = () => settings((s) => ({ ...s, donate: donate ?? s.donate }), "Saved").then((ok) => ok && setDonate(null));
+  // each control is off while its own change is saving; different ones still queue up
+  const setPerks = (p: Partial<Perks>) => act(`perk:${Object.keys(p).join(",")}`, () => settings((s) => ({ ...s, perks: { ...s.perks, ...p } })), "Saving VIP perks…");
+  const saveDonate = () => act("donate", () => settings((s) => ({ ...s, donate: donate ?? s.donate }), "Saved").then((ok) => ok && setDonate(null)), "Saving the donate link…");
   const toggle = (key: AbilityKey, role: Role, on: boolean) =>
-    settings((s) => {
+    act(`ability:${key}:${role}`, () => settings((s) => {
       const now = s.abilities[key].filter((r) => r !== role);
       return { ...s, abilities: { ...s.abilities, [key]: on ? [...now, role] : now } };
-    });
+    }), "Saving what each role gets…");
   const noHook = !!installed && !installed.includes("addon-hook");
 
   // who's playing now first, then everyone who's been here
@@ -198,7 +204,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
           <button className="btn primary" onClick={() => setDraft({ ...EMPTY })}>Add someone</button>
         </SectionHead>
         {!d.users_ini && <p className="err-text">AMX Mod X isn't set up for this game yet, so these can't take effect. Run Setup from Settings first.</p>}
-        {draft && <Editor draft={draft} setDraft={setDraft} today={d.today} onSave={save} />}
+        {draft && <Editor draft={draft} setDraft={setDraft} today={d.today} onSave={save} saving={busy("save")} />}
         <ul className="people">
           {people.map((p) => (
             <li key={p.id} className={p.expired ? "expired" : ""}>
@@ -214,9 +220,16 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
                 </span>
               </div>
               <div className="row">
-                {p.role === "vip" && <button className="btn" onClick={() => send("/api/admins/person", { ...p, expires: addDays(p.expired || !p.expires ? d.today : p.expires, 30), was: p.id }, "30 more days")}>+30 days</button>}
+                {p.role === "vip" && (
+                  <BusyButton
+                    busy={busy(`extend:${p.id}`)}
+                    label="+30 days"
+                    busyLabel="Saving…"
+                    onClick={() => act(`extend:${p.id}`, () => send("/api/admins/person", { ...p, expires: addDays(p.expired || !p.expires ? d.today : p.expires, 30), was: p.id }, "30 more days"), `Adding 30 days for ${p.name || p.id}…`)}
+                  />
+                )}
                 <button className="btn" onClick={() => setDraft({ id: p.id, name: p.name, role: p.role, expires: p.expires ?? "", note: p.note, was: p.id })}>Edit</button>
-                <button className="btn danger" onClick={() => remove(p)}>Remove</button>
+                <BusyButton className="btn danger" busy={busy(`remove:${p.id}`)} label="Remove" busyLabel="Removing…" onClick={() => remove(p)} />
               </div>
             </li>
           ))}
@@ -258,6 +271,8 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
                   <div className="row">
                     <select
                       value=""
+                      disabled={busy(`grant:${pl.id}`)}
+                      aria-busy={busy(`grant:${pl.id}`)}
                       aria-label={`Give ${pl.name} a role`}
                       onChange={(e) => {
                         const g = GIVE.find((x) => x.key === e.target.value);
@@ -267,7 +282,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
                       <option value="">{listed ? "Change role…" : "Give…"}</option>
                       {GIVE.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
                     </select>
-                    {!banned && <button className="btn danger" onClick={() => ban(pl.id, 0, pl.name)}>Ban</button>}
+                    {!banned && <BusyButton className="btn danger" busy={busy(`ban:${pl.id}`)} label="Ban" busyLabel="Banning…" onClick={() => ban(pl.id, 0, pl.name)} />}
                   </div>
                 </li>
               );
@@ -288,7 +303,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
           <select value={banTime} onChange={(e) => setBanTime(Number(e.target.value))} aria-label="How long">
             {BAN_TIMES.map(([m, l]) => <option key={m} value={m}>{l}</option>)}
           </select>
-          <button className="btn danger" disabled={!STEAMID.test(banId.trim())} onClick={() => ban(banId, banTime).then((ok) => ok && setBanId(""))}>Ban</button>
+          <BusyButton className="btn danger" busy={busy(`ban:${banId.trim()}`)} disabled={!STEAMID.test(banId.trim())} label="Ban" busyLabel="Banning…" onClick={() => ban(banId, banTime, undefined, () => setBanId(""))} />
         </div>
         <ul className="people">
           {d.bans.map((b) => {
@@ -299,7 +314,12 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
                   <span className="person-name">{who?.name || <span className="mono">{b.value}</span>}</span>
                   <span className="person-sub">{b.kind === "ip" ? "IP address" : "SteamID"}{who ? <> · <span className="mono">{b.value}</span></> : null} · for good</span>
                 </div>
-                <button className="btn" onClick={async () => (await ask(`Unban ${b.value}?`, { ok: "Unban" })) && send("/api/admins/unban", b, "Unbanned")}>Unban</button>
+                <BusyButton
+                  busy={busy(`unban:${b.value}`)}
+                  label="Unban"
+                  busyLabel="Unbanning…"
+                  onClick={async () => (await ask(`Unban ${b.value}?`, { ok: "Unban" })) && act(`unban:${b.value}`, () => send("/api/admins/unban", b, "Unbanned"), `Unbanning ${who?.name || b.value}…`)}
+                />
               </li>
             );
           })}
@@ -334,6 +354,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
                       <input
                         type="checkbox"
                         checked={d.abilities[a.key].includes(r)}
+                        disabled={busy(`ability:${a.key}:${r}`)}
                         onChange={(e) => toggle(a.key, r, e.target.checked)}
                         aria-label={`${a.name} for ${roleName(r)}`}
                       />
@@ -356,7 +377,8 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
             label="Allow in every mode"
             note="Double jump, respawn, noclip and god mode are normally off in Zombie, Hide and Seek, Deathrun, Kreedz, Knife Arena, Base Builder, Soccer Jam, Paintball and Tour of Duty, where they'd spoil the game."
             on={d.abilities.every_mode}
-            set={(v) => settings((s) => ({ ...s, abilities: { ...s.abilities, every_mode: v } }))}
+            busy={busy("ability:every_mode")}
+            set={(v) => act("ability:every_mode", () => settings((s) => ({ ...s, abilities: { ...s.abilities, every_mode: v } })), "Saving what each role gets…")}
           />
         </div>
         <p className="muted small-note">
@@ -380,23 +402,23 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
             <span className="name">Donate link<span className="note">Shown when someone says /donate. Leave empty for none.</span></span>
             <div className="row">
               <input className="search" placeholder="https://ko-fi.com/yourname" value={donate ?? d.donate} onChange={(e) => setDonate(e.target.value)} aria-label="Donate link" />
-              {donate !== null && donate !== d.donate && <button className="btn primary" onClick={saveDonate}>Save</button>}
+              {donate !== null && donate !== d.donate && <BusyButton className="btn primary" busy={busy("donate")} label="Save" busyLabel="Saving…" onClick={saveDonate} />}
             </div>
           </div>
-          <Perk label="Free armor + helmet" note="Every spawn." on={d.perks.armor} set={(v) => setPerks({ armor: v })} />
-          <Perk label="Defuse kit" note="For VIPs on the CT side." on={d.perks.defuse} set={(v) => setPerks({ defuse: v })} />
-          <Perk label="Free grenades" note="HE, flash and smoke each spawn." on={d.perks.nades} set={(v) => setPerks({ nades: v })} />
+          <Perk label="Free armor + helmet" note="Every spawn." on={d.perks.armor} busy={busy("perk:armor")} set={(v) => setPerks({ armor: v })} />
+          <Perk label="Defuse kit" note="For VIPs on the CT side." on={d.perks.defuse} busy={busy("perk:defuse")} set={(v) => setPerks({ defuse: v })} />
+          <Perk label="Free grenades" note="HE, flash and smoke each spawn." on={d.perks.nades} busy={busy("perk:nades")} set={(v) => setPerks({ nades: v })} />
           <div className="setting">
             <span className="name">Extra money<span className="note">Added at the start of each round.</span></span>
             <div className="seg" role="group" aria-label="Extra money">
               {MONEY.map((m) => (
-                <button key={m} type="button" aria-pressed={d.perks.money === m} onClick={() => setPerks({ money: m })}>{m ? `$${m}` : "Off"}</button>
+                <button key={m} type="button" aria-pressed={d.perks.money === m} disabled={busy("perk:money")} onClick={() => setPerks({ money: m })}>{m ? `$${m}` : "Off"}</button>
               ))}
             </div>
           </div>
-          <Perk label="VIP on the scoreboard" note="The scoreboard's VIP column." on={d.perks.tag} set={(v) => setPerks({ tag: v })} />
-          <Perk label="[VIP] chat tag" note="A green tag in front of their name in chat." on={d.perks.chat} set={(v) => setPerks({ chat: v })} />
-          <Perk label="You get the perks too" note="As the host you're counted as an owner, for spawn gear and the abilities above." on={d.perks.host} set={(v) => setPerks({ host: v })} />
+          <Perk label="VIP on the scoreboard" note="The scoreboard's VIP column." on={d.perks.tag} busy={busy("perk:tag")} set={(v) => setPerks({ tag: v })} />
+          <Perk label="[VIP] chat tag" note="A green tag in front of their name in chat." on={d.perks.chat} busy={busy("perk:chat")} set={(v) => setPerks({ chat: v })} />
+          <Perk label="You get the perks too" note="As the host you're counted as an owner, for spawn gear and the abilities above." on={d.perks.host} busy={busy("perk:host")} set={(v) => setPerks({ host: v })} />
         </div>
         <p className="muted small-note">
           To keep things fair, modes like Zombie, Hide and Seek, Deathrun, Kreedz and Knife Arena skip the spawn perks, and deathmatch and one-weapon modes only give
@@ -408,16 +430,16 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
   );
 }
 
-function Perk({ label, note, on, set }: { label: string; note: string; on: boolean; set: (v: boolean) => void }) {
+function Perk({ label, note, on, set, busy }: { label: string; note: string; on: boolean; set: (v: boolean) => void; busy?: boolean }) {
   return (
     <div className="setting">
       <span className="name">{label}<span className="note">{note}</span></span>
-      <Switch on={on} onChange={set} label={label} />
+      <Switch on={on} onChange={set} label={label} disabled={busy} />
     </div>
   );
 }
 
-function Editor({ draft, setDraft, today, onSave }: { draft: Draft; setDraft: (d: Draft | null) => void; today: string; onSave: () => void }) {
+function Editor({ draft, setDraft, today, onSave, saving }: { draft: Draft; setDraft: (d: Draft | null) => void; today: string; onSave: () => void; saving: boolean }) {
   const set = (p: Partial<Draft>) => setDraft({ ...draft, ...p });
   const validId = STEAMID.test(draft.id.trim().toUpperCase());
   return (
@@ -466,7 +488,7 @@ function Editor({ draft, setDraft, today, onSave }: { draft: Draft; setDraft: (d
         <input className="search" placeholder="e.g. donated $5 on Ko-fi" value={draft.note} maxLength={120} onChange={(e) => set({ note: e.target.value })} />
       </label>
       <div className="row">
-        <button className="btn primary" disabled={!validId} onClick={onSave}>Save</button>
+        <BusyButton className="btn primary" busy={saving} disabled={!validId} label="Save" busyLabel="Saving…" onClick={onSave} />
         <button className="btn" onClick={() => setDraft(null)}>Cancel</button>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, useOnce } from "../api";
-import { Banner, SectionHead, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
+import { getJson, ON_THIS_COMPUTER, postJson, useActions, useActivity } from "../api";
+import { Banner, BusyButton, SectionHead, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
 import type { Job } from "./Setup";
 
 type Track = { name: string; size: number; on: boolean; kind: "mp3" | "wav"; pack?: string | null; problem?: string | null };
@@ -49,8 +49,11 @@ export function Sounds({ target }: { target: string }) {
   const [changed, setChanged] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
   const [setupJob, setSetupJob] = useState<Job | null>(null);
-  const [installing, setInstalling] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { run: once, busy: isBusy } = useActions();
+  const key = (what: string) => `sounds:${target}:${what}`;
+  const installing = isBusy(key("install-music"));
+  // one track change at a time
+  const busy = useActivity().some(([k]) => k.startsWith(key("track:")));
   const audio = useRef<HTMLAudioElement | null>(null);
   const seen = useRef(new Set<string>());
 
@@ -105,22 +108,15 @@ export function Sounds({ target }: { target: string }) {
     return () => clearInterval(t);
   }, [packBusy, toast, load]);
 
-  // follow the setup job (installing the round-end music add-on)
+  // show the setup job's progress (installing the round-end music add-on)
   useEffect(() => {
     if (!installing) return;
     const t = setInterval(async () => {
       const j = await getJson<Job>("/api/setup/job").catch(() => null);
-      if (!j) return;
-      setSetupJob(j);
-      if (j.state === "done" || j.state === "error") {
-        clearInterval(t);
-        setInstalling(false);
-        toast(j.state === "done" ? "Round-end music is installed. It starts on the next map." : j.error || "That stopped.", j.state === "error");
-        load();
-      }
+      if (j) setSetupJob(j);
     }, 800);
     return () => clearInterval(t);
-  }, [installing, toast, load]);
+  }, [installing]);
 
   function stop() {
     audio.current?.pause();
@@ -146,24 +142,24 @@ export function Sounds({ target }: { target: string }) {
     a.play().then(() => setPlaying(key)).catch(() => setPlaying(null));
   };
 
-  const track = async (body: Record<string, unknown>, done?: string) => {
+  const track = async (body: Record<string, unknown>, label: string, done?: string) => {
     if (busy) return;
-    setBusy(true);
-    const r = await postJson<Reply>("/api/sounds/track", body).catch(failed);
-    setBusy(false);
-    if (r.error) return toast(r.error, true);
-    if (done) toast(done);
-    setChanged(true);
-    load();
+    await once(key(`track:${body.pool}/${body.off ? "off/" : ""}${body.name}`), async () => {
+      const r = await postJson<Reply>("/api/sounds/track", body).catch(failed);
+      if (r.error) return toast(r.error, true);
+      if (done) toast(done);
+      setChanged(true);
+      load();
+    }, label);
   };
 
   const remove = async (pool: string, t: Track) => {
     if (!(await ask(`Remove ${t.name}? The file is deleted.${t.pack ? ` It came with ${t.pack}.` : ""}`, { ok: "Remove", danger: true }))) return;
     stop();
-    track({ action: "remove", pool, name: t.name, off: !t.on }, "Removed");
+    track({ action: "remove", pool, name: t.name, off: !t.on }, `Removing ${t.name}…`, "Removed");
   };
 
-  const add = async (pool: string) => {
+  const add = (pool: string) => once(key(`add:${pool}`), async () => {
     const r = await postJson<Reply>("/api/sounds/add", { pool }).catch(failed);
     if (r.cancelled) return;
     if (r.error) return toast(r.error, true);
@@ -174,31 +170,41 @@ export function Sounds({ target }: { target: string }) {
     }
     for (const note of r.notes ?? []) toast(note, true);
     load();
-  };
+  }, "Adding tracks…");
 
-  const setAddon = async (id: "roundmusic" | "quakesounds", on: boolean, name: string) => {
+  const setAddon = (id: "roundmusic" | "quakesounds", on: boolean, name: string) => once(key(`addon:${id}`), async () => {
     const r = await postJson<Reply>("/api/sounds/addon", { id, on }).catch(failed);
     if (r.error) return toast(r.error, true);
     toast(r.how === "live" ? `${name} ${on ? "on" : "off"}. It changes after a map restart.` : `${name} ${on ? "on" : "off"}. It changes the next time a map starts.`);
     if (r.how === "live") setChanged(true);
     load();
-  };
+  }, `Turning ${name.toLowerCase()} ${on ? "on" : "off"}…`);
 
-  const installMusic = async () => {
+  const installMusic = () => once(key("install-music"), async () => {
     if (!d) return;
+    setSetupJob(null);
     const r = await postJson<Reply>("/api/setup/install", { hl: d.hl, games: [d.game], components: ["addon-roundmusic"] }).catch(failed);
     if (r.error) return toast(r.error, true);
-    setSetupJob(null);
-    setInstalling(true);
-  };
+    // follow the setup job to its end
+    for (;;) {
+      await new Promise((res) => setTimeout(res, 800));
+      const j = await getJson<Job>("/api/setup/job").catch(() => null);
+      if (!j || (j.state !== "done" && j.state !== "error")) continue;
+      toast(j.state === "done" ? "Round-end music is installed. It starts on the next map." : j.error || "That stopped.", j.state === "error");
+      load();
+      return;
+    }
+  }, "Installing round-end music…");
 
-  const once = useOnce();
-  const packAction = (p: Pack, action: "install" | "remove") => once(String(p.id), () => packStep(p, action));
-  const packStep = async (p: Pack, action: "install" | "remove") => {
+  const packAction = async (p: Pack, action: "install" | "remove") => {
+    if (isBusy(key(`pack:${p.id}`))) return;
     if (action === "remove") {
       const what = p.kind === "music" ? "Its tracks are deleted." : "The game's original sounds are put back.";
       if (!(await ask(`Remove ${p.name}? ${what}`, { ok: "Remove", danger: true }))) return;
     }
+    await once(key(`pack:${p.id}`), () => packStep(p, action), `${action === "remove" ? "Removing" : "Installing"} ${p.name}…`);
+  };
+  const packStep = async (p: Pack, action: "install" | "remove") => {
     const r = await postJson<Reply>("/api/sounds/pack", { id: p.id, action }).catch(failed);
     if (r.error) return toast(r.error, true);
     if (action === "remove") {
@@ -220,7 +226,7 @@ export function Sounds({ target }: { target: string }) {
       <SectionHead title="Sounds" note={`Round-end music, Quake sounds and sound packs on ${where}. Players download custom sounds the first time they join.`} />
 
       {changed && (
-        <Banner action={<button className="btn primary" onClick={() => run("gm_restartmap").then((ok) => ok && setChanged(false))}>Restart map</button>}>
+        <Banner action={<BusyButton className="btn primary" busy={isBusy(key("restartmap"))} label="Restart map" busyLabel="Restarting…" onClick={() => once(key("restartmap"), () => run("gm_restartmap").then((ok) => ok && setChanged(false)), "Restarting the map…")} />}>
           Sound changes start on the next map.
         </Banner>
       )}
@@ -242,7 +248,7 @@ export function Sounds({ target }: { target: string }) {
           {m.installed && (
             <label className="sounds-switch">
               <span>{m.on ? "On" : "Off"}</span>
-              <Switch on={m.on} label="Round-end music" onChange={(v) => setAddon("roundmusic", v, "Round-end music")} />
+              <Switch on={m.on} label="Round-end music" disabled={isBusy(key("addon:roundmusic"))} onChange={(v) => setAddon("roundmusic", v, "Round-end music")} />
             </label>
           )}
         </div>
@@ -255,7 +261,7 @@ export function Sounds({ target }: { target: string }) {
             {d.setup ? (
               <>
                 <p className="muted measure">It comes with eight free tracks to start with, and you can add your own.</p>
-                <div className="row"><button className="btn primary" onClick={installMusic}>Install round-end music</button></div>
+                <div className="row"><BusyButton className="btn primary" busy={installing} label="Install round-end music" busyLabel="Installing…" onClick={installMusic} /></div>
               </>
             ) : (
               <p className="muted measure">Set up Loner-Strike on {where} first, from Mods. Then round-end music can be added.</p>
@@ -282,7 +288,7 @@ export function Sounds({ target }: { target: string }) {
                       <h3 className={`pool-${p.id}`}>{p.label}</h3>
                       <p className="muted small-note">{POOL_NOTE[p.id]}</p>
                     </div>
-                    {ON_THIS_COMPUTER && <button className="btn" onClick={() => add(p.id)}>Add tracks</button>}
+                    {ON_THIS_COMPUTER && <BusyButton busy={isBusy(key(`add:${p.id}`))} label="Add tracks" busyLabel="Adding…" onClick={() => add(p.id)} />}
                   </div>
                   {p.over && <p className="err-text small-note">{p.on} tracks are on; the game uses a random {m.limit} of them each map.</p>}
                   {p.tracks.length === 0 ? (
@@ -312,13 +318,13 @@ export function Sounds({ target }: { target: string }) {
                                 aria-label={`Move ${t.name}`}
                                 value=""
                                 disabled={busy}
-                                onChange={(e) => e.target.value && track({ action: "move", pool: p.id, name: t.name, off: !t.on, to: e.target.value }, "Moved")}
+                                onChange={(e) => e.target.value && track({ action: "move", pool: p.id, name: t.name, off: !t.on, to: e.target.value }, `Moving ${t.name}…`, "Moved")}
                               >
                                 <option value="">Move to…</option>
                                 {m.pools.filter((o) => o.id !== p.id).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                               </select>
-                              <Switch on={t.on} label={`${t.name} ${t.on ? "on" : "off"}`} onChange={(v) => track({ action: v ? "on" : "off", pool: p.id, name: t.name, off: !t.on })} />
-                              <button className="btn danger" disabled={busy} onClick={() => remove(p.id, t)}>Remove</button>
+                              <Switch on={t.on} label={`${t.name} ${t.on ? "on" : "off"}`} disabled={busy} onChange={(v) => track({ action: v ? "on" : "off", pool: p.id, name: t.name, off: !t.on }, `Turning ${t.name} ${v ? "on" : "off"}…`)} />
+                              <BusyButton className="btn danger" busy={isBusy(`sounds:${target}:track:${key}`)} disabled={busy} label="Remove" busyLabel="Removing…" onClick={() => remove(p.id, t)} />
                             </div>
                           </li>
                         );
@@ -348,7 +354,7 @@ export function Sounds({ target }: { target: string }) {
           {d.quake.installed && (
             <label className="sounds-switch">
               <span>{d.quake.on ? "On" : "Off"}</span>
-              <Switch on={d.quake.on} label="Quake sounds" onChange={(v) => setAddon("quakesounds", v, "Quake sounds")} />
+              <Switch on={d.quake.on} label="Quake sounds" disabled={isBusy(key("addon:quakesounds"))} onChange={(v) => setAddon("quakesounds", v, "Quake sounds")} />
             </label>
           )}
         </div>
@@ -383,9 +389,9 @@ export function Sounds({ target }: { target: string }) {
                     {job ? (
                       <span className="muted">{job.message}{job.size ? ` ${Math.round((job.got / job.size) * 100)}%` : ""}</span>
                     ) : p.installed ? (
-                      <button className="btn danger" onClick={() => packAction(p, "remove")}>Remove</button>
+                      <BusyButton className="btn danger" busy={isBusy(key(`pack:${p.id}`))} label="Remove" busyLabel="Removing…" onClick={() => packAction(p, "remove")} />
                     ) : (
-                      <button className="btn primary" onClick={() => packAction(p, "install")}>Install</button>
+                      <BusyButton className="btn primary" busy={isBusy(key(`pack:${p.id}`))} label="Install" busyLabel="Installing…" onClick={() => packAction(p, "install")} />
                     )}
                     <a className="btn" href={p.url} target="_blank" rel="noreferrer">On GameBanana</a>
                   </div>

@@ -113,6 +113,14 @@ export type ServerInfo = {
   /** on another machine (a VPS): its address */
   host?: string | null;
   address?: string;
+  /** new files went up to its machine: used after a restart or map change */
+  pending_restart?: boolean;
+  listen_ip?: string;
+  extra_args?: string;
+  /** the join password ("" for none) */
+  password?: string;
+  /** component ids installed on it */
+  installed?: string[];
   game: "cstrike" | "czero";
   port: number;
   visibility: "lan" | "unlisted" | "listed";

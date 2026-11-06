@@ -173,6 +173,8 @@ h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; white-
 }
 .mode:hover { background: var(--panel-2); }
 .mode[aria-pressed="true"] { border-color: var(--signal); background: var(--panel-2); }
+.mode:disabled, .preset:disabled { cursor: progress; }
+.mode:disabled:not([aria-busy="true"]), .preset:disabled:not([aria-busy="true"]) { opacity: .6; }
 .mode-icon { color: var(--bone-dim); margin-bottom: 6px; }
 .mode[aria-pressed="true"] .mode-icon { color: var(--signal); }
 .mode-name { font-weight: 700; font-size: 17px; }
@@ -267,6 +269,7 @@ select, .search {
 .seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
 .seg button { border: 0; background: transparent; color: var(--bone-dim); padding: 5px 11px; font-size: 14px; font-weight: 600; border-radius: 2px; }
 .seg button:hover { color: var(--bone); }
+.seg button:disabled { opacity: .55; cursor: progress; }
 .seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--signal); box-shadow: var(--raised); }
 
 .switch {
@@ -744,6 +747,7 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .first-row .field { margin-bottom: 8px; }
 .first-row select { min-width: 180px; }
 .link.inline { margin: 0; padding: 0; font: inherit; color: var(--signal); text-decoration: underline; cursor: pointer; }
+.link.inline:disabled { cursor: progress; opacity: .7; }
 
 /* ---- Steam's old scrollbar: sunken olive track, raised thumb, arrow buttons ---------- */
 ::-webkit-scrollbar { width: 16px; height: 16px; background: var(--bg); }
@@ -1213,4 +1217,8 @@ select option, select optgroup { background: var(--panel); color: var(--bone); }
 .where-to-host > summary h2::before { content: "\25B8"; display: inline-block; width: 1em; color: var(--bone-dim); transition: transform .15s; }
 .where-to-host[open] > summary h2::before { transform: rotate(90deg); }
 .where-to-host > section { margin-top: 12px; }
+details.advanced { margin: 4px 0 12px; }
+details.advanced > summary { cursor: pointer; color: var(--bone-dim); font-size: 13px; padding: 4px 0; }
+details.advanced[open] > summary { margin-bottom: 8px; }
+code.secret { padding: 5px 8px; background: var(--line); box-shadow: var(--sunken); user-select: all; word-break: break-all; }
 .follow-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--bone-dim); }

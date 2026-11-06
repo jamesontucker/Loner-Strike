@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Run a server on a VPS · Loner-Strike</title>
+<meta name="description" content="How to set up an always-on Loner-Strike server on a rented Linux machine: choosing a host, making an SSH key, opening the game ports and managing it.">
+<meta name="theme-color" content="#3e4637">
+<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="fonts/barlow.css">
+
+<!-- Plausible (self-hosted) -->
+<script defer data-domain="lonerstrike.com" src="https://analytics.nanoshrine.com/js/script.file-downloads.hash.outbound-links.pageview-props.tagged-events.js"></script>
+<script>window.plausible = window.plausible || function () { (window.plausible.q = window.plausible.q || []).push(arguments) }</script>
+
+<style>
+@font-face { font-family: "Counter-Strike"; src: url("fonts/counter-strike.ttf") format("truetype"); font-display: swap; }
+:root { --bg: #3e4637; --side: #353c2f; --panel: #4c5844; --bone: #d8ded3; --dim: #c2c9b7; --faint: #aeb7a2; --signal: #c4b550;
+  --raised: inset 1px 1px 0 rgba(136,145,128,.55), inset -1px -1px 0 #292c21; --sunken: inset 1px 1px 0 #292c21, inset -1px -1px 0 rgba(136,145,128,.55); }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--bone); font: 500 18px/1.6 "Barlow Semi Condensed", "Arial Narrow", sans-serif; -webkit-font-smoothing: antialiased; }
+main { width: min(760px, 100% - 32px); margin: 0 auto; padding: 40px 0 64px; }
+.back { color: var(--signal); text-decoration: none; font-weight: 600; }
+h1 { font: 400 40px/1.1 "Counter-Strike", Impact, sans-serif; margin: 22px 0 4px; }
+h2 { font-size: 22px; margin: 38px 0 6px; }
+h3 { font-size: 19px; margin: 22px 0 4px; }
+p, li, td { color: var(--dim); text-wrap: pretty; }
+ul, ol { padding-left: 22px; }
+li + li { margin-top: 4px; }
+b, strong { color: var(--bone); }
+.lead { font-size: 20px; margin: 10px 0 0; }
+a { color: var(--signal); }
+code { font: 15px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--side); padding: 1px 5px; border-radius: 2px; color: var(--bone); overflow-wrap: anywhere; }
+pre { background: #23271c; box-shadow: var(--sunken); padding: 12px 14px; border-radius: 2px; overflow-x: auto; margin: 10px 0 14px; }
+pre code { background: none; padding: 0; font-size: 14px; white-space: pre; overflow-wrap: normal; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 17px; }
+th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid rgba(0,0,0,.2); vertical-align: top; }
+th { color: var(--faint); font-weight: 600; font-size: 15px; }
+.box { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 4px 18px; margin: 14px 0; }
+.box h3 { margin-top: 14px; }
+dt { font-weight: 700; color: var(--bone); margin-top: 14px; }
+dd { margin: 2px 0 0; color: var(--dim); }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+footer { width: min(760px, 100% - 32px); margin: 0 auto; padding: 24px 0 48px; color: var(--faint); font-size: 15px; box-shadow: inset 0 1px 0 #292c21; }
+footer a { color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<a class="back" href="/">Back to lonerstrike.com</a>
+<h1>Run a server on a VPS</h1>
+<p class="lead">Loner-Strike can set up an always-on server on a Linux machine you rent. It connects over SSH, installs Valve's server and Loner-Strike, and runs it as a service that keeps going when your computer is off.</p>
+<p>You rent the machine, make an SSH key, open the game ports in the provider's firewall and fill in a form in the app. It takes 15 to 30 minutes, mostly waiting for downloads.</p>
+
+<h2>What you need</h2>
+<ul>
+  <li>Loner-Strike on Windows, or on a Mac with the game in CrossOver (the server's plugins are built on your computer).</li>
+  <li>A machine with <b>Ubuntu or Debian</b> (Ubuntu 22.04 or 24.04 is safest) on an <b>x86 (AMD or Intel)</b> CPU, with a <b>public IPv4 address</b>.</li>
+  <li>Not ARM: Oracle Ampere A1, AWS Graviton, Hetzner CAX and Raspberry Pi can't run the Counter-Strike server.</li>
+</ul>
+
+<h2>1. Choose a host and size</h2>
+<table>
+  <thead><tr><th>Players (bots included)</th><th>CPU</th><th>Memory</th></tr></thead>
+  <tbody>
+    <tr><td>Up to about 10, a few bots</td><td>1 vCPU</td><td>1 GB</td></tr>
+    <tr><td>20 to 32, with bots</td><td>2 vCPU</td><td>2 to 4 GB</td></tr>
+  </tbody>
+</table>
+<p>The game uses one core, so a fast core beats many. About 2 GB of disk plus your maps.</p>
+<ul>
+  <li><b>Free:</b> Oracle Cloud's Always Free AMD machines (VM.Standard.E2.1.Micro), when Oracle has capacity. Oracle's trial credits cover bigger machines for a while.</li>
+  <li><b>Cheap:</b> Hetzner, Vultr, DigitalOcean, OVH and Linode have x86 plans at around $4 to $7 a month. Pick a location near your players.</li>
+</ul>
+
+<h2>2. Make an SSH key</h2>
+<p><b>Mac or Linux</b>, in Terminal:</p>
+<pre><code>mkdir -p ~/.ssh
+ssh-keygen -t ed25519 -f ~/.ssh/loner-strike -N "" -C loner-strike
+cat ~/.ssh/loner-strike.pub</code></pre>
+<p><b>Windows 10 or 11</b>, in PowerShell (press Enter twice when it asks for a passphrase):</p>
+<pre><code>mkdir $HOME\.ssh -Force
+ssh-keygen -t ed25519 -f $HOME\.ssh\loner-strike -C loner-strike
+Get-Content $HOME\.ssh\loner-strike.pub</code></pre>
+<p>The last line it prints, starting with <code>ssh-ed25519</code>, is the public key. Copy it for the next step. Keys with a passphrase aren't supported yet. A PuTTY key (<code>.ppk</code>) needs converting in PuTTYgen first (Conversions &gt; Export OpenSSH key).</p>
+
+<h2>3. Create the machine</h2>
+<ol>
+  <li>Create a new server (instance, droplet) with <b>Ubuntu 24.04 or 22.04</b> on an <b>x86</b> plan.</li>
+  <li>Make sure it gets a <b>public IPv4 address</b>.</li>
+  <li>Under SSH keys, paste the public key.</li>
+  <li>Once it's running, note its <b>public IP</b> and <b>SSH user</b>: <code>ubuntu</code> on Oracle and AWS, <code>root</code> on Hetzner, DigitalOcean and Vultr.</li>
+</ol>
+
+<div class="box">
+  <h3>Oracle Cloud</h3>
+  <p>Shape: AMD, VM.Standard.E2.1.Micro (not Ampere). Turn on <b>Assign a public IPv4 address</b>; if it ends up without one, add an <b>ephemeral public IP</b> on the instance's VNIC (Attached VNICs &gt; IPv4 addresses &gt; edit). Firewall: the subnet's <b>security list</b> (Virtual cloud networks &gt; your network &gt; Security). "Out of capacity" means no free machines there right now: try another availability domain, another shape, or later.</p>
+  <h3>Hetzner Cloud</h3>
+  <p>Shared vCPU x86 (CX or CPX), not Arm (CAX). Keep Public IPv4 on. No firewall by default; if you attach one (Firewalls), allow inbound UDP 27015-27020.</p>
+  <h3>DigitalOcean</h3>
+  <p>Any Basic droplet with Ubuntu. No firewall by default; if you use one (Networking &gt; Firewalls), add inbound UDP 27015-27020.</p>
+  <h3>Vultr</h3>
+  <p>Cloud Compute, an Intel or AMD plan. No firewall by default; if the server is in a firewall group (Network &gt; Firewall), add inbound UDP 27015-27020.</p>
+  <h3>AWS Lightsail</h3>
+  <p>Linux/Unix, OS only, Ubuntu. Upload your key under Change SSH key pair. Firewall: the instance's <b>Networking</b> tab &gt; IPv4 firewall &gt; Add rule (Custom, UDP, 27015-27020). Attach a static IP so the address doesn't change when the instance restarts.</p>
+</div>
+
+<h2>4. Open UDP 27015-27020</h2>
+<p>The app opens the ports in the machine's own firewall (iptables or ufw) during setup. It can't reach your <b>provider's</b> firewall (security list, security group, firewall group), so add an inbound rule there: protocol <b>UDP</b>, ports <b>27015-27020</b>, source anywhere (<code>0.0.0.0/0</code>). Leave SSH (TCP 22) open; the app uses it for everything else.</p>
+
+<h2>5. Add it in Loner-Strike</h2>
+<ol>
+  <li>Servers &gt; <b>New server</b>, and pick <b>A Linux server (VPS)</b>.</li>
+  <li><b>Address:</b> the public IP. <b>User:</b> <code>ubuntu</code> or <code>root</code>.</li>
+  <li><b>SSH key:</b> Browse to the private key, the file without <code>.pub</code>. On a Mac, press Cmd+Shift+G in the picker and type <code>~/.ssh</code>.</li>
+  <li><b>Check the server.</b> It shows the machine's fingerprint (<code>SHA256:...</code>) and whether it matches your computer's <code>~/.ssh/known_hosts</code>. To check a new one, run <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code> in your provider's web console and compare.</li>
+  <li>Pick a <b>name</b>, the <b>game</b>, and <b>Set it up like</b>: My game (your modes, settings, admins and maps) or Start fresh.</li>
+  <li><b>Who can join:</b> Listed on Steam shows it in the server browser. Anyone with the address keeps it unlisted. A join password keeps strangers out either way.</li>
+  <li><b>Make the server.</b></li>
+</ol>
+<p>Setup takes 5 to 15 minutes. It installs the 32-bit libraries, opens the ports, downloads Valve's server with SteamCMD, installs Metamod-P, AMX Mod X and ReGameDLL, builds Loner-Strike on your computer, uploads it, and starts a service called <code>lonerstrike-&lt;name&gt;</code>. The server runs on UDP 27015, keeps running with the app closed and restarts after a crash or reboot.</p>
+
+<h2>6. Join and manage it</h2>
+<ul>
+  <li><b>Join</b>, <b>Start</b>, <b>Stop</b> and <b>Open</b> are in Servers. Join on a listed server works with the game open; on an unlisted one it restarts the game to connect.</li>
+  <li>Friends use <code>connect &lt;address&gt;:27015</code> in the game console, or Find Servers if it's listed.</li>
+  <li>The server's Overview tab has its <b>console</b>, where you can send commands like <code>status</code>.</li>
+</ul>
+<p>Over SSH (<code>ssh -i ~/.ssh/loner-strike ubuntu@&lt;address&gt;</code>), the <code>lsctl</code> helper manages it:</p>
+<pre><code>lsctl list        the servers on the machine
+lsctl status      running or not
+lsctl restart     also start, stop
+lsctl logs        the last 100 console lines</code></pre>
+
+<h2>Updating</h2>
+<ul>
+  <li><b>The machine:</b> <code>sudo apt update &amp;&amp; sudo apt upgrade</code>, then <code>sudo reboot</code> if asked. The server starts again by itself.</li>
+  <li><b>Valve's server files:</b> stop the server and press Update in its Maintenance panel. SteamCMD checks Valve's files on the machine; your settings, admins and stats stay.</li>
+  <li><b>Mods, plugins, maps and sounds:</b> changes in the app reach the machine within a few seconds, and only what changed is sent. New plugins and maps load on the next map, or press Restart now on the server's page.</li>
+  <li><b>Rebuild:</b> sets the server up again from scratch and wipes its folder on the machine first. Use it only when something is broken.</li>
+</ul>
+
+<h2>Troubleshooting</h2>
+<dl>
+  <dt>"Failed to contact game server"</dt>
+  <dd>The provider's firewall doesn't allow UDP 27015-27020 inbound, or the server is stopped.</dd>
+  <dt>Can't reach the machine on port 22</dt>
+  <dd>It's off, the address is wrong, or (on Oracle) it has no public IP.</dd>
+  <dt>The server didn't accept the key</dt>
+  <dd>Wrong user, the key wasn't added at creation, or you picked the <code>.pub</code> file.</dd>
+  <dt>The key has a passphrase</dt>
+  <dd>Not supported yet. Make one without a passphrase and add it to <code>~/.ssh/authorized_keys</code> on the machine.</dd>
+  <dt>The server's identity has changed</dt>
+  <dd>Expected if you rebuilt the machine: run <code>ssh-keygen -R &lt;address&gt;</code> and add the server again. Otherwise, don't connect.</dd>
+  <dt>The machine is aarch64</dt>
+  <dd>It's ARM. Make an x86 (AMD or Intel) one.</dd>
+  <dt>Setup stopped part way</dt>
+  <dd><b>Try again</b> carries on where it stopped. <b>Rebuild from scratch</b> wipes the server's folder on the machine and starts over.</dd>
+</dl>
+
+<h2>Removing it</h2>
+<p>Delete the server in the app; that stops the service and removes its folder on the machine. Then delete the machine at your provider so it stops costing money.</p>
+<p>The full guide, with more detail, is <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/docs/linux-server.md">on GitHub</a>.</p>
+</main>
+<footer>
+  <a href="/">lonerstrike.com</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a>
+</footer>
+</body>
+</html>

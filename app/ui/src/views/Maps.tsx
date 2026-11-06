@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
-import { addFromFile, ON_THIS_COMPUTER, postJson, withTarget } from "../api";
+import { addFromFile, ON_THIS_COMPUTER, postJson, targetKey, useActions, withTarget } from "../api";
 import type { MapInfo, Online } from "../types";
-import { Info, SectionHead, useCommand, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, SectionHead, useCommand, useConfirm, useToast } from "../ui";
 
 const CATS: [string, string][] = [
   ["all", "All"], ["fav", "Favourites"], ["recent", "Recently played"], ["defuse", "Bomb defusal"],
@@ -80,7 +80,9 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
     }
   };
   const [picked, setPicked] = useState<MapInfo | null>(null);
-  const [adding, setAdding] = useState(false);
+  const { run: once, busy } = useActions();
+  const key = (what: string) => `maps:${targetKey()}:${what}`;
+  const changeMap = (name: string) => once(key("change"), () => run("gm_map", [name]), `Changing the map to ${name}…`);
   const current = data?.state.map.toLowerCase();
 
   const shown = useMemo(() => {
@@ -115,40 +117,40 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
       ? `${map.name} came in "${map.modName ?? "a pack"}" with ${others.length} other map${others.length === 1 ? "" : "s"} (${others.slice(0, 6).join(", ")}${others.length > 6 ? "…" : ""}). Removing it removes the whole download. Continue?`
       : `Remove ${map.name}? Its files are deleted.`;
     if (!(await ask(msg, { ok: "Remove", danger: true }))) return;
-    const r = await postJson<{ ok?: boolean; error?: string; maps?: string[] }>("/api/gb/uninstall", { mod: map.mod, section: "maps" }).catch((): { ok?: boolean; error?: string; maps?: string[] } => ({ error: "Couldn't remove it." }));
-    if (r.error) return toast(r.error, true);
-    toast(`Removed ${(r.maps ?? [map.name]).join(", ")}`);
-    setPicked(null);
-    reload();
+    await once(key(`remove:${map.mod}`), async () => {
+      const r = await postJson<{ ok?: boolean; error?: string; maps?: string[] }>("/api/gb/uninstall", { mod: map.mod, section: "maps" }).catch((): { ok?: boolean; error?: string; maps?: string[] } => ({ error: "Couldn't remove it." }));
+      if (r.error) return toast(r.error, true);
+      toast(`Removed ${(r.maps ?? [map.name]).join(", ")}`);
+      setPicked(null);
+      reload();
+    }, `Removing ${map.name}…`);
   };
 
-  const flag = async (map: MapInfo, f: "fav" | "hidden", on: boolean) => {
+  const flag = (map: MapInfo, f: "fav" | "hidden", on: boolean) => once(key(`flag:${f}:${map.name}`), async () => {
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/mapflag", { flag: f, map: map.name, on }).catch(() => ({ error: "Couldn't save that." }));
     if (r.error) return toast(r.error, true);
     if (f === "hidden") toast(on ? `${map.name} is hidden. Find it under Hidden.` : `${map.name} is back in the list.`);
     if (f === "fav") toast(on ? `${map.name} added to favourites` : `${map.name} removed from favourites`);
     setPicked(null);
     reload();
-  };
+  }, f === "fav" ? (on ? `Adding ${map.name} to favourites…` : `Removing ${map.name} from favourites…`) : on ? `Hiding ${map.name}…` : `Showing ${map.name} again…`);
 
   return (
     <div className="stack">
       <div>
         <SectionHead title="Maps" note={data ? "Pick a map to play it in the current mode." : "Start the game to change maps."}>
           {ON_THIS_COMPUTER && (
-            <button className="btn" disabled={adding} onClick={async () => {
-              setAdding(true);
+            <BusyButton busy={busy(key("add-file"))} label="Add a map file…" busyLabel="Adding…" onClick={() => once(key("add-file"), async () => {
               const r = await addFromFile("maps");
-              setAdding(false);
               if (r) toast(r.message, !r.ok);
               if (r?.ok) reload();
-            }}>{adding ? "Adding…" : "Add a map file…"}</button>
+            }, "Adding a map file…")} />
           )}
-          <button className="btn" onClick={() => {
+          <BusyButton busy={busy(key("change"))} label="Random map" busyLabel="Changing…" onClick={() => {
             const pool = shown.filter((m) => m.name.toLowerCase() !== current);
             if (!pool.length || !data) return;
-            run("gm_map", [pool[Math.floor(Math.random() * pool.length)].name]);
-          }}>Random map</button>
+            changeMap(pool[Math.floor(Math.random() * pool.length)].name);
+          }} />
         </SectionHead>
         <div className="toolbar">
           <input className="search" type="search" placeholder="Search maps, authors or names like “cobble”" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -196,14 +198,12 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
               </p>
               <div className="row">
                 {data && (
-                  <button className="btn primary" onClick={() => { setPicked(null); run("gm_map", [picked.name]); }}>
-                    Play {picked.name}
-                  </button>
+                  <BusyButton className="btn primary" busy={busy(key("change"))} label={`Play ${picked.name}`} busyLabel="Changing…" onClick={() => { setPicked(null); changeMap(picked.name); }} />
                 )}
-                <button className="btn" onClick={() => flag(picked, "fav", !picked.fav)}>{picked.fav ? "Unfavourite" : "Favourite"}</button>
-                <button className="btn" onClick={() => flag(picked, "hidden", !picked.hidden)}>{picked.hidden ? "Show again" : "Hide"}</button>
+                <BusyButton busy={busy(key(`flag:fav:${picked.name}`))} label={picked.fav ? "Unfavourite" : "Favourite"} busyLabel="Saving…" onClick={() => flag(picked, "fav", !picked.fav)} />
+                <BusyButton busy={busy(key(`flag:hidden:${picked.name}`))} label={picked.hidden ? "Show again" : "Hide"} busyLabel={picked.hidden ? "Showing…" : "Hiding…"} onClick={() => flag(picked, "hidden", !picked.hidden)} />
                 {picked.source === "download" && picked.mod && (
-                  <button className="btn danger" onClick={() => remove(picked)}>Remove</button>
+                  <BusyButton className="btn danger" busy={busy(key(`remove:${picked.mod}`))} label="Remove" busyLabel="Removing…" onClick={() => remove(picked)} />
                 )}
                 <button className="btn" onClick={() => setPicked(null)}>Close</button>
               </div>

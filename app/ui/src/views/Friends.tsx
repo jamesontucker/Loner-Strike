@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { getJson, postJson } from "../api";
+import { getJson, postJson, targetKey, useActions } from "../api";
 import type { Online } from "../types";
-import { Info, SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 
 type Share = {
   installed: boolean;
@@ -36,6 +36,17 @@ const METHODS: { id: Method; name: string; blurb: string; tag?: string }[] = [
 ];
 
 const GAME = "Counter-Strike";
+
+/** What the top bar says while a sharing action runs. */
+const SHARE_LABEL: Record<string, string> = {
+  connect: "Connecting to playit.gg…",
+  disconnect: "Disconnecting from playit.gg…",
+  cancel: "Cancelling…",
+  start: "Starting sharing…",
+  stop: "Stopping sharing…",
+  server: "Saving your server…",
+  method: "Switching how friends connect…",
+};
 
 /** What each virtual LAN is, for its "?" */
 const VLAN_INFO: Record<"zerotier" | "radmin" | "hamachi", string> = {
@@ -93,7 +104,10 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   const [pw, setPw] = useState<string | null>(null);
   const [lanAddr, setLanAddr] = useState<string | null>(null);
   const [direct, setDirect] = useState<Direct | null>(null);
-  const [directBusy, setDirectBusy] = useState(false);
+  const { run: once, busy: busyKey } = useActions();
+  const key = (what: string) => `friends:${targetKey()}:${what}`;
+  const busy = (what: string) => busyKey(key(what));
+  const directBusy = busy("direct");
   const [vlans, setVlans] = useState<VLans>({});
 
   useEffect(() => {
@@ -112,24 +126,26 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   }, []);
 
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
-    const r = await postJson<Share & { error?: string }>("/api/share", { action, ...extra }).catch(() => null);
-    if (!r || (r.ok === false && r.error)) return toast(r?.error || "That didn't work.", true), null;
-    setSh(r);
-    return r;
+    let out: Share | null = null;
+    await once(key(action), async () => {
+      const r = await postJson<Share & { error?: string }>("/api/share", { action, ...extra }).catch(() => null);
+      if (!r || (r.ok === false && r.error)) return toast(r?.error || "That didn't work.", true);
+      setSh(r);
+      out = r;
+    }, SHARE_LABEL[action] ?? "Working…");
+    return out as Share | null;
   };
   const setMethod = (m: Method) => {
     setMethodRaw(m);
     try { localStorage.setItem("ls.method", m); } catch { /* private window */ }
     if (m === "playit" || m === "tailscale") act("method", { method: m });
   };
-  const setDirectOn = async (on: boolean) => {
-    setDirectBusy(true);
+  const setDirectOn = (on: boolean) => once(key("direct"), async () => {
     const r = await postJson<Direct>("/api/app/direct", { on }).catch(() => null);
-    setDirectBusy(false);
     if (!r) return toast("Couldn't reach the app.", true);
     setDirect(r);
     if (r.error) toast(r.error, true);
-  };
+  }, on ? "Asking your router to open the port…" : "Closing the port on your router…");
 
   if (missing) return <div className="stack"><SectionHead title="Play with friends" /><p className="muted">Sharing isn't in this version of the app yet.</p></div>;
   if (!sh) return <Skeleton />;
@@ -199,9 +215,9 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
           <p>Loner-Strike asks your router to send game traffic to this computer (UPnP), and closes it again when you stop or quit.</p>
           {directElsewhere && <p className="muted">Direct is open for port {direct?.port} right now. Starting it here moves it to this {server ? "server" : "game"}.</p>}
           {directHere ? (
-            <button className="btn danger" disabled={directBusy} onClick={() => setDirectOn(false)}>Stop</button>
+            <BusyButton className="btn danger" busy={directBusy} label="Stop" busyLabel="Stopping…" onClick={() => setDirectOn(false)} />
           ) : (
-            <button className="btn primary" disabled={directBusy} onClick={() => setDirectOn(true)}>{directBusy ? "Asking your router…" : "Start"}</button>
+            <BusyButton className="btn primary" busy={directBusy} label="Start" busyLabel="Asking your router…" onClick={() => setDirectOn(true)} />
           )}
           {direct?.error && <p className="err-text">{direct.error}</p>}
           {direct?.shared_address && (
@@ -227,13 +243,13 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
         <li className={sh.connected ? "done" : "now"}>
           <strong>Connect this computer to your account</strong>
           {sh.connected ? (
-            <p>Done. <button className="btn small" onClick={async () => (await ask("Disconnect from playit.gg? You'll need to approve it again.", { ok: "Disconnect", danger: true })) && act("disconnect")}>Disconnect</button></p>
+            <p>Done. <BusyButton className="btn small" busy={busy("disconnect")} label="Disconnect" busyLabel="Disconnecting…" onClick={async () => (await ask("Disconnect from playit.gg? You'll need to approve it again.", { ok: "Disconnect", danger: true })) && act("disconnect")} /></p>
           ) : sh.claim?.step === "failed" ? (
-            <><p className="err-text">{sh.claim.error}</p><button className="btn primary" onClick={() => act("connect")}>Try again</button></>
+            <><p className="err-text">{sh.claim.error}</p><BusyButton className="btn primary" busy={busy("connect")} label="Try again" busyLabel="Connecting…" onClick={() => act("connect")} /></>
           ) : sh.claim ? (
-            <><p><a href={sh.claim.url} target="_blank" rel="noreferrer">Open playit.gg to approve this computer</a>, then come back. {sh.claim.step === "approve" ? "Waiting for you to approve…" : "Waiting for the page to open…"}</p><button className="btn" onClick={() => act("cancel")}>Cancel</button></>
+            <><p><a href={sh.claim.url} target="_blank" rel="noreferrer">Open playit.gg to approve this computer</a>, then come back. {sh.claim.step === "approve" ? "Waiting for you to approve…" : "Waiting for the page to open…"}</p><BusyButton busy={busy("cancel")} label="Cancel" busyLabel="Cancelling…" onClick={() => act("cancel")} /></>
           ) : (
-            <button className="btn primary" onClick={async () => { const r = await act("connect"); if (r?.claim) window.open(r.claim.url, "_blank"); }}>Connect to playit.gg</button>
+            <BusyButton className="btn primary" busy={busy("connect")} label="Connect to playit.gg" busyLabel="Connecting…" onClick={async () => { const r = await act("connect"); if (r?.claim) window.open(r.claim.url, "_blank"); }} />
           )}
         </li>
         <li className={isLive ? "done" : sh.connected ? "now" : ""}>
@@ -241,8 +257,8 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
           <p>{sh.connected ? "Sharing runs only while Loner-Strike is open." : "Available once this computer is connected."}</p>
           {playitElsewhere && <p className="muted">playit.gg is sharing {server ? "your game or another server" : "a server"} right now. Starting it here moves it.</p>}
           {sh.connected && (isLive || (sh.phase === "starting" && !playitElsewhere)
-            ? <button className="btn danger" onClick={() => act("stop")}>Stop sharing</button>
-            : <button className="btn primary" onClick={() => act("start")}>Start sharing</button>)}
+            ? <BusyButton className="btn danger" busy={busy("stop")} disabled={busy("start")} label="Stop sharing" busyLabel="Stopping…" onClick={() => act("stop")} />
+            : <BusyButton className="btn primary" busy={busy("start")} disabled={busy("stop")} label="Start sharing" busyLabel="Starting…" onClick={() => act("start")} />)}
           {sh.error && <p className="err-text">{sh.error}</p>}
         </li>
       </ol>
@@ -317,7 +333,9 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
               </div>
               <small>Letters, numbers, - and _. Leave it empty to let in anyone who has the address.</small>
             </label>
-            <button className="btn primary" type="submit">Save</button>
+            <button className="btn primary" type="submit" disabled={busy("server")} aria-busy={busy("server")}>
+              {busy("server") ? <><span className="spinner" aria-hidden="true" />Saving…</> : "Save"}
+            </button>
           </form>
 
           {live && address && (
@@ -327,7 +345,13 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
               {full && st && (
                 <div className="banner">
                   <div>The server is full of bots, so there's no room for friends.</div>
-                  <button className="btn primary" onClick={() => run("gm_bots", ["count", String(Math.max(0, Math.min(st.bots, st.maxplayers - st.humans - 2)))])}>Make room</button>
+                  <BusyButton
+                    className="btn primary"
+                    busy={busy("make-room")}
+                    label="Make room"
+                    busyLabel="Making room…"
+                    onClick={() => once(key("make-room"), () => run("gm_bots", ["count", String(Math.max(0, Math.min(st.bots, st.maxplayers - st.humans - 2)))]), "Kicking bots to make room…")}
+                  />
                 </div>
               )}
               {friends.length > 0 && <p>In your game: {friends.join(", ")}</p>}

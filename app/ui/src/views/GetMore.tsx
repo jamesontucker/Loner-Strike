@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addFromFile, getJson, ON_THIS_COMPUTER, postJson, useStable } from "../api";
+import { addFromFile, getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable } from "../api";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
-import { SectionHead, Skeleton, useConfirm, useToast } from "../ui";
+import { BusyButton, SectionHead, Skeleton, useConfirm, useToast } from "../ui";
 
 const SORTS: [string, string][] = [["popular", "Most downloaded"], ["new", "Newest"], ["liked", "Most liked"]];
 // Shown until the server sends its own list
@@ -10,6 +10,8 @@ const NOTES: Record<string, string> = {
   maps: "Only map files are copied in, and nothing you have is replaced.",
   default: "These replace the game's own files. Everything they replace is backed up, and removing one puts the originals back.",
 };
+/** Shared by the browser and the Installed list, so removing shows on both. */
+const removeKey = (section: string, mod: number) => `getmore:${targetKey()}:remove:${section}:${mod}`;
 const size = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 /** GameBanana's Counter-Strike 1.6 section: maps, skins, models, sounds and more. */
@@ -31,6 +33,8 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
   const [error, setError] = useState("");
   const [open, setOpen] = useState<GbDetails | null>(null);
   const [jobs, setJobs] = useState<GbJob[]>([]);
+  const { run, busy } = useActions();
+  const key = (what: string) => `getmore:${targetKey()}:${what}`;
   const seenDone = useRef(new Set<string>());
   const cats = sections.find((s) => s[0] === section)?.[2] ?? [];
 
@@ -94,27 +98,29 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
     return () => clearInterval(t);
   }, [toast, onInstalled]);
 
-  const details = async (id: number) => {
+  const details = (id: number, name: string) => run(key(`details:${id}`), async () => {
     const d = await getJson<GbDetails>(`/api/gb/mod/${id}?section=${section}`).catch(() => null);
     if (d && !(d as unknown as { error?: string }).error) setOpen(d);
     else toast("Couldn't load that page.", true);
-  };
-  const install = async (mod: number, file: number) => {
+  }, `Opening ${name}…`);
+  const install = (mod: number, file: number, name: string) => run(key(`install:${mod}:${file}`), async () => {
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/gb/install", { mod, file, section }).catch(() => ({ error: "Couldn't start the download." }));
     if (r.error) toast(r.error, true);
     else {
       toast("Downloading…");
       setOpen(null);
     }
-  };
+  }, `Installing ${name}…`);
   const remove = async (mod: number, name: string) => {
     if (!(await ask(`Remove ${name}? ${section === "maps" ? "Its maps are deleted." : "The game's original files are put back."}`, { ok: "Remove", danger: true }))) return;
-    const r = await postJson<{ ok?: boolean; error?: string }>("/api/gb/uninstall", { mod, section }).catch(() => ({ error: "Couldn't remove it." }));
-    if (r.error) return toast(r.error, true);
-    toast(`Removed ${name}`);
-    setOpen(null);
-    setItems((old) => old.map((m) => (m.id === mod ? { ...m, installed: false } : m)));
-    onInstalled();
+    await run(removeKey(section, mod), async () => {
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/gb/uninstall", { mod, section }).catch(() => ({ error: "Couldn't remove it." }));
+      if (r.error) return toast(r.error, true);
+      toast(`Removed ${name}`);
+      setOpen(null);
+      setItems((old) => old.map((m) => (m.id === mod ? { ...m, installed: false } : m)));
+      onInstalled();
+    }, `Removing ${name}…`);
   };
 
   // one sound preview at a time, straight from the grid
@@ -144,12 +150,12 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
       <div>
         <SectionHead title={only ? "Get maps" : "Get more"} note={`From GameBanana's Counter-Strike 1.6 section. ${NOTES[section] ?? NOTES.default}`}>
           {ON_THIS_COMPUTER && !showInstalled && (
-            <button className="btn" onClick={async () => {
+            <BusyButton busy={busy(key(`add-file:${section}`))} label="Add from a file…" busyLabel="Adding…" onClick={() => run(key(`add-file:${section}`), async () => {
               const r = await addFromFile(section);
               if (!r) return;
               toast(r.message, !r.ok);
               if (r.ok) onInstalled();
-            }}>Add from a file…</button>
+            }, `Adding ${label.toLowerCase()} from a file…`)} />
           )}
         </SectionHead>
         <div className="chips section-tabs" role="tablist" aria-label="What to get" hidden={!!only}>
@@ -189,7 +195,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
           {error && <p className="muted">{error}</p>}
           <div className="maps grid">
             {items.map((m) => (
-              <button key={m.id} className="map-card" onClick={() => details(m.id)} title={m.name}>
+              <button key={m.id} className="map-card" aria-busy={busy(key(`details:${m.id}`))} onClick={() => details(m.id, m.name)} title={m.name}>
                 <div className="map-pic">
                   {m.image ? (
                     <img src={m.image} alt="" loading="lazy" />
@@ -240,7 +246,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
               {open.installed ? (
                 <div className="banner">
                   <div>Installed.</div>
-                  <button className="btn danger" onClick={() => remove(open.id, open.name)}>Remove</button>
+                  <BusyButton className="btn danger" busy={busy(removeKey(section, open.id))} label="Remove" busyLabel="Removing…" onClick={() => remove(open.id, open.name)} />
                 </div>
               ) : (
                 <ul className="files">
@@ -257,7 +263,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
                         {f.listed === false && <p className="muted small-note">Its contents are checked after downloading.</p>}
                       </div>
                       {f.virus ? <span className="muted">Flagged by GameBanana's virus scan</span> : f.supported ? (
-                        <button className="btn primary" onClick={() => install(open.id, f.id)}>Install</button>
+                        <BusyButton className="btn primary" busy={busy(key(`install:${open.id}:${f.id}`))} label="Install" busyLabel="Installing…" onClick={() => install(open.id, f.id, open.name)} />
                       ) : <span className="muted">Can't open this kind of file</span>}
                     </li>
                   ))}
@@ -282,6 +288,7 @@ const SECTION_NAME: Record<string, string> = { maps: "Map", skins: "Weapon skin"
 function InstalledList({ onChanged }: { onChanged: () => void }) {
   const toast = useToast();
   const ask = useConfirm();
+  const { run, busy } = useActions();
   const [list, setList] = useState<Installed[] | null>(null);
   const load = () => getJson<Installed[]>("/api/gb/installed").then((l) => setList(Array.isArray(l) ? l : [])).catch(() => setList([]));
   useEffect(() => {
@@ -290,11 +297,13 @@ function InstalledList({ onChanged }: { onChanged: () => void }) {
   const remove = async (it: Installed) => {
     const what = it.section === "maps" ? `Its map${(it.maps?.length ?? 0) === 1 ? " is" : "s are"} deleted.` : "The game's original files are put back.";
     if (!(await ask(`Remove ${it.name}? ${what}`, { ok: "Remove", danger: true }))) return;
-    const r = await postJson<{ ok?: boolean; error?: string }>("/api/gb/uninstall", { mod: it.mod, section: it.section }).catch(() => ({ error: "Couldn't remove it." }));
-    if (r.error) return toast(r.error, true);
-    toast(`Removed ${it.name}`);
-    load();
-    onChanged();
+    await run(removeKey(it.section, it.mod), async () => {
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/gb/uninstall", { mod: it.mod, section: it.section }).catch(() => ({ error: "Couldn't remove it." }));
+      if (r.error) return toast(r.error, true);
+      toast(`Removed ${it.name}`);
+      load();
+      onChanged();
+    }, `Removing ${it.name}…`);
   };
   if (!list) return <Skeleton />;
   if (!list.length) return <p className="muted">Nothing downloaded yet. Anything you install from here shows up in this list.</p>;
@@ -315,7 +324,7 @@ function InstalledList({ onChanged }: { onChanged: () => void }) {
           </div>
           <div className="row">
             {it.url && <a className="btn" href={it.url} target="_blank" rel="noreferrer">Page</a>}
-            <button className="btn danger" onClick={() => remove(it)}>Remove</button>
+            <BusyButton className="btn danger" busy={busy(removeKey(it.section, it.mod))} label="Remove" busyLabel="Removing…" onClick={() => remove(it)} />
           </div>
         </li>
       ))}

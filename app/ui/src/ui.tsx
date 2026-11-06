@@ -111,17 +111,19 @@ export function Segmented({
   current,
   onPick,
   label,
+  disabled,
 }: {
   values: string;
   labels: string;
   current: string;
   onPick: (v: string) => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
-    <div className="seg" role="group" aria-label={label}>
+    <div className="seg" role="group" aria-label={label} aria-busy={disabled || undefined}>
       {options(values, labels).map(([v, l]) => (
-        <button key={v} type="button" aria-pressed={sameValue(current, v)} onClick={() => onPick(v)}>
+        <button key={v} type="button" aria-pressed={sameValue(current, v)} disabled={disabled} onClick={() => onPick(v)}>
           {l}
         </button>
       ))}
@@ -129,8 +131,8 @@ export function Segmented({
   );
 }
 
-export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
-  return <button type="button" role="switch" aria-checked={on} aria-label={label} className="switch" onClick={() => onChange(!on)} />;
+export function Switch({ on, onChange, label, disabled }: { on: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
+  return <button type="button" role="switch" aria-checked={on} aria-label={label} className="switch" disabled={disabled} aria-busy={disabled || undefined} onClick={() => onChange(!on)} />;
 }
 
 /** A small "?" that explains a field: shown on hover, or on click/tap (phones). Safe

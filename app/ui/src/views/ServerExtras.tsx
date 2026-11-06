@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, useQueuedSave } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import type { MapInfo } from "../types";
-import { Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Color = "default" | "green" | "red" | "blue" | "grey";
 type Ad = { text: string; color: Color };
@@ -72,6 +72,9 @@ function Glyph({ d }: { d: string }) {
     </svg>
   );
 }
+/** Action keys for this page, per game or server. */
+const xk = (what: string) => `extras:${targetKey()}:${what}`;
+
 const UP = "M6 15l6-6 6 6";
 const DOWN = "M6 9l6 6 6-6";
 const CROSS = "M6 6l12 12M18 6L6 18";
@@ -165,6 +168,7 @@ type SaveSettings = (s: Partial<Settings>, done?: string) => Promise<boolean>;
 
 function Rotation({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; send: (p: string, b: unknown, done?: string) => Promise<boolean>; saveSettings: SaveSettings }) {
   const ask = useConfirm();
+  const { run, busy } = useActions();
   const [scope, setScope] = useState("");
   const [draft, setDraft] = useState<string[] | null>(null);
   const [query, setQuery] = useState("");
@@ -211,12 +215,16 @@ function Rotation({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
     setDraft(null);
     setQuery("");
   };
-  const save = async () => {
+  const rotKey = (what: string) => xk(`rotation:${scope || "main"}:${what}`);
+  const rotBusy = busy(rotKey("save")) || busy(rotKey("drop"));
+  const save = () => run(rotKey("save"), async () => {
     if (await send("/api/extras/rotation", { mode: scope, maps: list }, "Rotation saved. It counts from the next map change.")) setDraft(null);
-  };
+  }, `Saving the ${scope ? `${modeName(scope)} ` : ""}rotation…`);
   const dropOwn = async () => {
     if (!(await ask(`Remove ${modeName(scope)}'s own list? It goes back to the main rotation.`, { ok: "Remove", danger: true }))) return;
-    if (await send("/api/extras/rotation", { mode: scope, maps: [] }, `${modeName(scope)} uses the main rotation again.`)) setDraft(null);
+    await run(rotKey("drop"), async () => {
+      if (await send("/api/extras/rotation", { mode: scope, maps: [] }, `${modeName(scope)} uses the main rotation again.`)) setDraft(null);
+    }, `Removing ${modeName(scope)}'s own rotation…`);
   };
   const missing = list.filter((m) => maps.length > 0 && !installed.has(m.toLowerCase()));
 
@@ -323,10 +331,10 @@ function Rotation({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
             {missing.length > 0 && <p className="err-text">Remove the maps that aren't installed before saving.</p>}
 
             <div className="row">
-              <button className="btn primary" disabled={!dirty || missing.length > 0 || (!scope && list.length === 0)} onClick={save}>Save rotation</button>
+              <BusyButton className="btn primary" busy={busy(rotKey("save"))} disabled={rotBusy || !dirty || missing.length > 0 || (!scope && list.length === 0)} label="Save rotation" busyLabel="Saving…" onClick={save} />
               <button className="btn" disabled={list.length < 2} onClick={shuffle}>Shuffle</button>
               {dirty && <button className="btn" onClick={() => setDraft(null)}>Undo changes</button>}
-              {scope && own && <button className="btn danger push" onClick={dropOwn}>Use the main rotation</button>}
+              {scope && own && <BusyButton className="btn danger push" busy={busy(rotKey("drop"))} disabled={rotBusy} label="Use the main rotation" busyLabel="Removing…" onClick={dropOwn} />}
             </div>
             <p className="muted small-note">Drag maps to reorder them, or use the buttons. {list.length} {list.length === 1 ? "map" : "maps"}.</p>
           </>
@@ -354,6 +362,8 @@ function Rotation({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
 
 function Messages({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) {
   const ads = d.settings.ads;
+  const { run, busy } = useActions();
+  const pick = (what: string, p: Partial<typeof ads>, label: string) => run(xk(`ads:${what}`), () => saveSettings({ ads: { ...ads, ...p } }), label);
   const [draft, setDraft] = useState<{ prefix: string; messages: Ad[] } | null>(null);
   const [focus, setFocus] = useState(0);
   const cur = draft ?? { prefix: ads.prefix, messages: ads.messages };
@@ -377,10 +387,10 @@ function Messages({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) 
     const i = Math.min(focus, cur.messages.length - 1);
     setMsg(i, { text: `${cur.messages[i].text}${cur.messages[i].text.endsWith(" ") || !cur.messages[i].text ? "" : " "}${ph}`.slice(0, 150) });
   };
-  const save = async () => {
+  const save = () => run(xk("ads:messages"), async () => {
     const messages = cur.messages.map((m) => ({ ...m, text: m.text.trim() })).filter((m) => m.text);
     if (await saveSettings({ ads: { ...ads, prefix: cur.prefix, messages } }, "Messages saved")) setDraft(null);
-  };
+  }, "Saving chat messages…");
   const fill = (t: string) => Object.entries(SAMPLE).reduce((s, [k, v]) => s.split(k).join(v), t);
   const shown = cur.messages.filter((m) => m.text.trim());
 
@@ -393,15 +403,15 @@ function Messages({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) 
           <span className="name">How often<span className="note">One message each time.</span></span>
           <div className="seg" role="group" aria-label="How often">
             {MINUTES.map((m) => (
-              <button key={m} type="button" aria-pressed={ads.minutes === m} onClick={() => saveSettings({ ads: { ...ads, minutes: m } })}>{m} min</button>
+              <button key={m} type="button" aria-pressed={ads.minutes === m} disabled={busy(xk("ads:minutes"))} onClick={() => pick("minutes", { minutes: m }, "Saving how often messages show…")}>{m} min</button>
             ))}
           </div>
         </div>
         <div className="setting">
           <span className="name">Order</span>
           <div className="seg" role="group" aria-label="Order">
-            <button type="button" aria-pressed={!ads.random} onClick={() => saveSettings({ ads: { ...ads, random: false } })}>In order</button>
-            <button type="button" aria-pressed={ads.random} onClick={() => saveSettings({ ads: { ...ads, random: true } })}>Random</button>
+            <button type="button" aria-pressed={!ads.random} disabled={busy(xk("ads:random"))} onClick={() => pick("random", { random: false }, "Saving the message order…")}>In order</button>
+            <button type="button" aria-pressed={ads.random} disabled={busy(xk("ads:random"))} onClick={() => pick("random", { random: true }, "Saving the message order…")}>Random</button>
           </div>
         </div>
       </div>
@@ -472,7 +482,7 @@ function Messages({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) 
           </div>
         )}
         <div className="row">
-          <button className="btn primary" disabled={!dirty} onClick={save}>Save messages</button>
+          <BusyButton className="btn primary" busy={busy(xk("ads:messages"))} disabled={!dirty} label="Save messages" busyLabel="Saving…" onClick={save} />
           {dirty && <button className="btn" onClick={() => setDraft(null)}>Undo changes</button>}
         </div>
       </div>
@@ -612,6 +622,8 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
 function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; send: (p: string, b: unknown, done?: string) => Promise<boolean>; saveSettings: SaveSettings }) {
   const empty = d.settings.empty;
   const [time, setTime] = useState<string | null>(null);
+  const { run, busy } = useActions();
+  const pickEmpty = (what: "map" | "mode", v: string) => run(xk(`empty:${what}`), () => saveSettings({ empty: { ...empty, [what]: v } }), what === "map" ? `Saving the map to go back to…` : "Saving the mode to go back to…");
   const names = useMemo(() => maps.map((m) => m.name).filter((n) => MAP_NAME.test(n)).sort((a, b) => a.localeCompare(b)), [maps]);
   const options = empty.map && !names.some((n) => n.toLowerCase() === empty.map.toLowerCase()) ? [empty.map, ...names] : names;
   const firstMap = d.rotation.main.find((m) => names.includes(m)) ?? names[0] ?? "de_dust2";
@@ -637,7 +649,7 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
               <Choice label="After" note="With nobody playing." values={EMPTY_MINUTES} current={empty.minutes} show={(v) => `${v} min`} pick={(v) => saveSettings({ empty: { ...empty, minutes: v } })} />
               <div className="setting">
                 <span className="name">Map</span>
-                <select className="sched-select" aria-label="Map to go back to" value={empty.map} onChange={(e) => saveSettings({ empty: { ...empty, map: e.target.value } })}>
+                <select className="sched-select" aria-label="Map to go back to" value={empty.map} disabled={busy(xk("empty:map"))} onChange={(e) => pickEmpty("map", e.target.value)}>
                   {options.map((n) => (
                     <option key={n} value={n}>{n}</option>
                   ))}
@@ -646,7 +658,7 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
               {d.modes.length > 0 && (
                 <div className="setting">
                   <span className="name">Mode<span className="note">Keep the mode, or switch to one.</span></span>
-                  <select className="sched-select" aria-label="Mode to go back to" value={empty.mode} onChange={(e) => saveSettings({ empty: { ...empty, mode: e.target.value } })}>
+                  <select className="sched-select" aria-label="Mode to go back to" value={empty.mode} disabled={busy(xk("empty:mode"))} onChange={(e) => pickEmpty("mode", e.target.value)}>
                     <option value="">Keep the current mode</option>
                     {byName(d.modes).map((m) => (
                       <option key={m.id} value={m.id}>{m.name}</option>
@@ -667,7 +679,13 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
               <span className="name">At<span className="note">This computer's time. Pick a quiet hour.</span></span>
               <div className="row sched-time">
                 <input type="time" className="search" aria-label="Restart time" value={at} onChange={(e) => setTime(e.target.value)} />
-                <button className="btn" disabled={time === null || time === sched.time || !/^\d{2}:\d{2}$/.test(at)} onClick={() => saveRestart(sched.on, at)}>Save time</button>
+                <BusyButton
+                  busy={busy(xk("schedule:time"))}
+                  disabled={time === null || time === sched.time || !/^\d{2}:\d{2}$/.test(at)}
+                  label="Save time"
+                  busyLabel="Saving…"
+                  onClick={() => run(xk("schedule:time"), () => saveRestart(sched.on, at), "Saving the restart time…")}
+                />
               </div>
             </div>
           </div>
@@ -682,21 +700,19 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
 function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) {
   const toast = useToast();
   const [url, setUrl] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { run, busy } = useActions();
   const value = url ?? d.settings.fastdl;
   const ok = !value.trim() || URL_OK.test(value.trim());
-  const save = async () => {
+  const save = () => run(xk("fastdl"), async () => {
     if (await saveSettings({ fastdl: value.trim() }, value.trim() ? "Saved. It's used from the next map." : "Fast downloads are off")) setUrl(null);
-  };
-  const exportFiles = async () => {
-    setBusy(true);
+  }, "Saving the fast download address…");
+  const exportFiles = () => run(xk("export"), async () => {
     type Done = { ok?: boolean; cancelled?: boolean; files?: number; mb?: number; dir?: string; error?: string };
     const r = await postJson<Done>("/api/extras/export").catch((): Done => ({ error: "Couldn't reach the app." }));
-    setBusy(false);
     if (r.error) return toast(r.error, true);
     if (r.cancelled) return;
     toast(r.files ? `Copied ${r.files} files (${r.mb} MB). Upload that folder's contents to your web server.` : "There's no custom content to copy: everything here comes with the game.");
-  };
+  }, "Copying files for your web server…");
   return (
     <section>
       <SectionHead title="Fast downloads" />
@@ -711,9 +727,9 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
           <small className={ok ? undefined : "err-text"}>{ok ? "Leave it empty to turn fast downloads off." : "Start with http:// or https://, with no spaces or quotes."}</small>
         </label>
         <div className="row">
-          <button className="btn primary" disabled={url === null || url.trim() === d.settings.fastdl || !ok} onClick={save}>Save</button>
+          <BusyButton className="btn primary" busy={busy(xk("fastdl"))} disabled={url === null || url.trim() === d.settings.fastdl || !ok} label="Save" busyLabel="Saving…" onClick={save} />
           {ON_THIS_COMPUTER && (
-            <button className="btn" disabled={busy} onClick={exportFiles}>{busy ? "Copying..." : "Copy files for your web server"}</button>
+            <BusyButton busy={busy(xk("export"))} label="Copy files for your web server" busyLabel="Copying…" onClick={exportFiles} />
           )}
         </div>
         {ON_THIS_COMPUTER && <p className="muted small-note">Copies the custom maps and what they need, plus the sounds and models of your game modes, into a folder you pick, ready to upload.</p>}
@@ -724,16 +740,21 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
 
 // ---- small pieces ------------------------------------------------------------------------
 
-function Toggle({ label, note, on, set }: { label: string; note: ReactNode; on: boolean; set: (v: boolean) => void }) {
+// Each setting is off while its own change saves; different settings still queue up.
+function Toggle({ label, note, on, set }: { label: string; note: ReactNode; on: boolean; set: (v: boolean) => unknown }) {
+  const { run, busy } = useActions();
+  const k = xk(`setting:${label}`);
   return (
     <div className="setting">
       <span className="name">{label}<span className="note">{note}</span></span>
-      <Switch on={on} onChange={set} label={label} />
+      <Switch on={on} onChange={(v) => run(k, async () => { await set(v); }, `Saving ${label.toLowerCase()}…`)} label={label} disabled={busy(k)} />
     </div>
   );
 }
 
-function Choice({ label, note, values, current, show, pick }: { label: string; note: string; values: number[]; current: number; show: (v: number) => string; pick: (v: number) => void }) {
+function Choice({ label, note, values, current, show, pick }: { label: string; note: string; values: number[]; current: number; show: (v: number) => string; pick: (v: number) => unknown }) {
+  const { run, busy } = useActions();
+  const k = xk(`setting:${label}`);
   // a value set elsewhere still shows as picked
   const all = values.includes(current) ? values : [...values, current].sort((a, b) => (a || Infinity) - (b || Infinity));
   return (
@@ -741,7 +762,7 @@ function Choice({ label, note, values, current, show, pick }: { label: string; n
       <span className="name">{label}<span className="note">{note}</span></span>
       <div className="seg" role="group" aria-label={label}>
         {all.map((v) => (
-          <button key={v} type="button" aria-pressed={current === v} onClick={() => pick(v)}>{show(v)}</button>
+          <button key={v} type="button" aria-pressed={current === v} disabled={busy(k)} onClick={() => run(k, async () => { await pick(v); }, `Saving ${label.toLowerCase()}…`)}>{show(v)}</button>
         ))}
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getJson, ON_THIS_COMPUTER, postJson, useActions, useOnce, useStable } from "../api";
 import type { AppInfo, MapInfo, Online, ServerInfo, ServerList } from "../types";
+import { HostingGuide } from "./HostingGuide";
 import { BusyButton, Info, SectionHead, SteamProgress, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
 import { Bots } from "./Bots";
@@ -26,7 +27,7 @@ const VISIBILITY = [
 ] as const;
 const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up", failed: "Not finished" };
 
-type Reply = { ok?: boolean; error?: string; job?: string; id?: string; path?: string; note?: string | null; admins?: number; loner?: boolean; dir?: string | null; lines?: string[]; reply?: string };
+type Reply = { ok?: boolean; error?: string; job?: string; id?: string; path?: string; note?: string | null; admins?: number; loner?: boolean; dir?: string | null; lines?: string[]; reply?: string; need_restart_game?: boolean; restart?: boolean; password?: string };
 const post = (path: string, body: unknown = {}) => postJson<Reply>(path, body).catch((): Reply => ({ error: "Couldn't reach the app." }));
 
 function uptime(s: number) {
@@ -65,6 +66,16 @@ export function JobProgress({ onEnd: onEndProp }: { onEnd: (ok: boolean) => void
   );
 }
 
+/** An unlisted server can't be joined from a game that's already open (it doesn't answer
+ *  the game's lookups), so the game is closed and started again with the address. */
+function useJoinRestart() {
+  const ask = useConfirm();
+  return async (s: ServerInfo) => {
+    if (!(await ask(`Counter-Strike is open. Restart it and join ${s.name}? Unlisted servers can only be joined as the game starts.`, { ok: "Restart and join" }))) return null;
+    return post(`/api/servers/${s.id}/join`, { restart: true });
+  };
+}
+
 /** Every server, and making or adding one. Opening a server shows its own page. */
 export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; list: ServerList | null; onOpen: (id: string) => void; onChanged: () => void }) {
   const ask = useConfirm();
@@ -73,10 +84,13 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
   const [importing, setImporting] = useState(false);
 
   const { run: once, busy } = useActions();
+  const joinRestart = useJoinRestart();
   const act = (s: ServerInfo, action: string) => once(`${s.id}:${action}`, async () => {
     if (action === "delete" && !(await ask(s.imported ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.` : `Delete "${s.name}"? Its folder, maps, settings and admins are deleted.`, { ok: s.imported ? "Remove" : "Delete", danger: true }))) return;
     if (action === "rebuild" && !(await ask(`Rebuild "${s.name}" from scratch? Everything in its folder on ${s.host} is deleted (settings, admins, bans, stats, added maps) and it's set up again like when you made it.`, { ok: "Wipe and rebuild", danger: true }))) return;
-    const r = await post(`/api/servers/${s.id}/${action}`);
+    let r: Reply | null = await post(`/api/servers/${s.id}/${action}`);
+    if (r.need_restart_game) r = await joinRestart(s);
+    if (!r) return;
     if (r.error) return toast(r.error, true);
     if (action === "retry") toast("Trying again. It carries on from where it got to.");
     if (action === "rebuild") toast("Rebuilding from scratch. It takes a few minutes.");
@@ -147,6 +161,12 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
       </div>
 
       <WhereToHost />
+      {ON_THIS_COMPUTER && (
+        <details className="where-to-host">
+          <summary><h2>Setting up a Linux server</h2><span className="muted">Step by step, from renting a machine to the first game</span></summary>
+          <HostingGuide />
+        </details>
+      )}
 
       {creating && (
         <NewServer
@@ -185,6 +205,7 @@ const TAB_GROUPS = [...new Set(TABS.map((t) => t.group))];
 /** One server's own control panel. Every request from here names the server. */
 export function ServerPage(props: {
   server: ServerInfo;
+  others: ServerInfo[];
   data: Online | null;
   reason: string;
   app: AppInfo | null;
@@ -197,12 +218,13 @@ export function ServerPage(props: {
   onBack: () => void;
 }) {
   const ask = useConfirm();
-  const { server: s, data, app, scan, maps, refresh, reloadMaps, reloadApp, onChanged, onBack } = props;
+  const { server: s, others, data, app, scan, maps, refresh, reloadMaps, reloadApp, onChanged, onBack } = props;
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("overview");
   const [busyJob, setBusyJob] = useState(false);
 
   const { run: once, busy: busyKey } = useActions();
+  const joinRestart = useJoinRestart();
   // same keys as the server list, so a spinner follows the server, not the page
   const busy = (action: string) => busyKey(`${s.id}:${action}`);
   const act = (action: string) => once(`${s.id}:${action}`, async () => {
@@ -212,7 +234,9 @@ export function ServerPage(props: {
         : `Delete "${s.name}"? Its folder, maps and settings are deleted.`;
       if (!(await ask(msg, { ok: s.imported ? "Remove" : "Delete", danger: true }))) return;
     }
-    const r = await post(`/api/servers/${s.id}/${action}`);
+    let r: Reply | null = await post(`/api/servers/${s.id}/${action}`);
+    if (r.need_restart_game) r = await joinRestart(s);
+    if (!r) return;
     if (r.error) return toast(r.error, true);
     if (action === "join") toast(`Joining ${s.name}…`);
     if (action === "start") toast(`Starting ${s.name}…`);
@@ -252,6 +276,14 @@ export function ServerPage(props: {
               {s.host ? `Server on ${s.host}` : "Dedicated server"} · {GAME[s.game]} · {s.host ? s.address : `port ${s.port}`} · <span className={`live inline${s.state === "running" ? " on" : ""}`}>{STATE[s.state]}</span>
             </p>
           </div>
+          {s.pending_restart && s.state === "running" && (
+            <div className="files-bar" role="status">
+              <span>New files are on the server. They're used after a restart (or the next map).</span>
+              <span className="files-bar-actions">
+                <BusyButton className="btn small primary" busy={busy("restart")} label="Restart now" busyLabel="Restarting…" onClick={() => act("restart")} />
+              </span>
+            </div>
+          )}
           <div className="row">
             {s.state === "running" ? (
               <>
@@ -293,6 +325,7 @@ export function ServerPage(props: {
           {tab === "overview" && (
             <>
               <ServerDetails server={s} onChanged={onChanged} act={act} />
+              <CopyMods server={s} others={others} onStarted={() => setBusyJob(true)} />
               <Maintenance server={s} installed={app?.game?.installed ?? []} act={act} rebuild={rebuild} />
             </>
           )}
@@ -353,12 +386,15 @@ function ServerDetails({ server, onChanged, act }: { server: ServerInfo; onChang
   const [slots, setSlots] = useState(server.maxplayers);
   const [port, setPort] = useState(server.port);
   const [vis, setVis] = useState(server.visibility);
+  const [password, setPassword] = useState(server.password ?? "");
+  const [listenIp, setListenIp] = useState(server.listen_ip ?? "");
+  const [extra, setExtra] = useState(server.extra_args ?? "");
   const { run, busy } = useActions();
   const saving = busy(`${server.id}:save`);
   const save = () => run(`${server.id}:save`, async () => {
-    const r = await post(`/api/servers/${server.id}`, { name, map, maxplayers: slots, port, visibility: vis });
+    const r = await post(`/api/servers/${server.id}`, { name, map, maxplayers: slots, port, visibility: vis, password, listen_ip: listenIp, extra_args: extra });
     if (r.error) return toast(r.error, true);
-    toast(server.state === "running" ? `${server.name} saved. Restart the server to use it.` : `${server.name} saved`);
+    toast(r.restart ? `${server.name} saved. Restart the server to use the new start options.` : `${server.name} saved`);
     onChanged();
   }, server.host ? `Saving and uploading to ${server.name}…` : `Saving ${server.name}…`);
   return (
@@ -378,6 +414,11 @@ function ServerDetails({ server, onChanged, act }: { server: ServerInfo; onChang
           </div>
           <small>{VISIBILITY.find((v) => v.id === vis)?.note}. Friends outside your network also need a way in: see Play with friends.</small>
         </div>
+        <label className="field">
+          <span>Join password<Info text="Players type this to get in. Leave it empty for no password. It takes effect straight away, and Join in this app uses it for you." /></span>
+          <input className="search" maxLength={24} placeholder="None" value={password} onChange={(e) => setPassword(e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} spellCheck={false} autoComplete="off" />
+          <small>Letters, numbers, - and _.</small>
+        </label>
         <div className="row">
           <label className="field">
             <span>Starting map<Info text="The map the server loads when it starts. After that, the map rotation decides what comes next." /></span>
@@ -387,16 +428,100 @@ function ServerDetails({ server, onChanged, act }: { server: ServerInfo; onChang
             <span>Player slots<Info text="The most players the server holds at once, bots included. Each bot takes a slot, so leave room for people." /></span>
             <input className="search narrow" type="number" min={2} max={32} value={slots} onChange={(e) => setSlots(+e.target.value)} />
           </label>
-          <label className="field">
-            <span>Port<Info text="The network port the server listens on; each server needs its own. Change it only if something else uses it, and open the new port on your router if friends connect to you directly." /></span>
-            <input className="search narrow" type="number" min={1024} max={65000} value={port} onChange={(e) => setPort(+e.target.value)} />
-          </label>
         </div>
+        <details className="advanced">
+          <summary>Advanced</summary>
+          <div className="stack-tight">
+            <div className="row">
+              <label className="field">
+                <span>Port<Info text={server.host ? "The port players connect to. On a Linux server it's 27015 to 27019 (setup opened 27015-27020 on the machine; 27020 is for HLTV). Open it in your provider's firewall too." : "The network port the server listens on; each server needs its own. Change it only if something else uses it, and open the new port on your router if friends connect to you directly."} /></span>
+                <input className="search narrow" type="number" min={server.host ? 27015 : 1024} max={server.host ? 27019 : 65000} value={port} onChange={(e) => setPort(+e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Listen address<Info text={server.host ? "Leave empty so the server answers on every address the machine has, which is what you want on a VPS. Set it only if the machine has several addresses and the server should use one." : "Leave empty to answer on every network this computer is on. Set it to one of this computer's addresses to use only that network."} /></span>
+                <input className="search" placeholder="All addresses" value={listenIp} onChange={(e) => setListenIp(e.target.value.trim())} spellCheck={false} />
+              </label>
+            </div>
+            <label className="field">
+              <span>Extra start options<Info text="Added to the server's command line, like +sv_gravity 600 or -pingboost 2. Options the app sets itself (port, map, players, passwords) are changed above instead. Used from the next start." /></span>
+              <input className="search" placeholder="e.g. -pingboost 2 +sys_ticrate 1000" value={extra} onChange={(e) => setExtra(e.target.value)} spellCheck={false} />
+            </label>
+            {ON_THIS_COMPUTER && <ConsolePassword server={server} />}
+          </div>
+        </details>
         <div className="row">
           <BusyButton className="btn primary" busy={saving} label="Save" busyLabel={server.host ? "Saving and uploading…" : "Saving…"} onClick={save} />
         </div>
       </div>
       <Console server={server} />
+    </div>
+  );
+}
+
+/** The console (RCON) password, for HLSW and other server tools. */
+function ConsolePassword({ server }: { server: ServerInfo }) {
+  const toast = useToast();
+  const [shown, setShown] = useState<string | null>(null);
+  const [typed, setTyped] = useState("");
+  const { run, busy } = useActions();
+  const show = async () => {
+    if (shown !== null) return setShown(null);
+    const r = await getJson<Reply>(`/api/servers/${server.id}/rcon-password`).catch((): Reply => ({ error: "Couldn't reach the app." }));
+    if (r.error) return toast(r.error, true);
+    setShown(r.password ?? "");
+  };
+  const change = (password?: string) => run(`${server.id}:rcon`, async () => {
+    const r = await postJson<Reply>(`/api/servers/${server.id}/rcon-password`, password ? { password } : {}).catch((): Reply => ({ error: "Couldn't reach the app." }));
+    if (r.error) return toast(r.error, true);
+    setShown(r.password ?? "");
+    setTyped("");
+    toast("Console password changed");
+  }, `Changing ${server.name}'s console password…`);
+  const changing = busy(`${server.id}:rcon`);
+  return (
+    <div className="field">
+      <span>Console password<Info text="The RCON password, for running the server from other tools like HLSW. The app sets a random one and uses it itself. Changing it applies straight away." /></span>
+      <div className="row">
+        <code className="secret">{shown ?? "••••••••••••"}</code>
+        <button className="btn small" type="button" onClick={show}>{shown === null ? "Show" : "Hide"}</button>
+        <BusyButton className="btn small" busy={changing} label="New random one" busyLabel="Changing…" onClick={() => change()} />
+      </div>
+      <form className="row" onSubmit={(e) => { e.preventDefault(); if (typed.length >= 8) change(typed); }}>
+        <input className="search" placeholder="Or type your own (8 to 32 characters)" maxLength={32} value={typed} onChange={(e) => setTyped(e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} spellCheck={false} autoComplete="off" />
+        <BusyButton className="btn small" busy={changing} label="Set" busyLabel="Setting…" disabled={typed.length < 8} onClick={() => change(typed)} />
+      </form>
+    </div>
+  );
+}
+
+/** Another server's modes and add-ons, installed on this one too (its settings stay). */
+function CopyMods({ server, others, onStarted }: { server: ServerInfo; others: ServerInfo[]; onStarted: () => void }) {
+  const toast = useToast();
+  const sources = others.filter((o) => o.game === server.game && o.ready && o.loner);
+  const [from, setFrom] = useState(sources[0]?.id ?? "");
+  const { run, busy } = useActions();
+  if (!server.loner || !sources.length) return null;
+  const source = sources.find((o) => o.id === from) ?? sources[0];
+  const have = new Set(server.installed ?? []);
+  const missing = (source.installed ?? []).filter((c) => c !== "foundation" && c !== "core" && !have.has(c));
+  const copy = () => run(`${server.id}:copy-mods`, async () => {
+    if (!missing.length) return toast(`${server.name} already has everything ${source.name} has.`);
+    const r = await post("/api/setup/install", { hl: server.dir, games: [server.game], components: missing });
+    if (r.error) return toast(r.error, true);
+    toast(`Installing ${missing.length} from ${source.name}…`);
+    onStarted();
+  }, `Copying mods to ${server.name}…`);
+  return (
+    <div className="panel">
+      <h3>Copy mods from another server</h3>
+      <p className="muted measure">Installs the modes and add-ons another server has and this one doesn't. Nothing on this server is removed, and its settings stay.{server.host ? " New mods load after a restart." : ""}</p>
+      <div className="row">
+        <select value={source.id} onChange={(e) => setFrom(e.target.value)} aria-label="Copy from">
+          {sources.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+        <span className="muted small-note">{missing.length ? `${missing.length} to add` : "Nothing to add"}</span>
+        <BusyButton className="btn" busy={busy(`${server.id}:copy-mods`)} label="Copy mods" busyLabel="Starting…" disabled={!missing.length} onClick={copy} />
+      </div>
     </div>
   );
 }
@@ -484,6 +609,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
   const [game, setGame] = useState<"cstrike" | "czero">(games.includes("cstrike") || !games.length ? "cstrike" : "czero");
   const [template, setTemplate] = useState(games.includes(game) ? "local" : "fresh");
   const [vis, setVis] = useState<string>("unlisted");
+  const [password, setPassword] = useState("");
   const [sending, setSending] = useState(false);
   // where it runs: this computer, or a Linux machine (a VPS) reached over SSH
   const [where, setWhere] = useState<"here" | "vps">("here");
@@ -515,8 +641,8 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
   const create = async () => {
     setSending(true);
     const r = where === "vps"
-      ? await post("/api/servers/remote", { name, game, template, visibility: vis, host, user, key, host_key: probe?.fingerprint ?? "" })
-      : await post("/api/servers", { name, game, template, visibility: vis });
+      ? await post("/api/servers/remote", { name, game, template, visibility: vis, password, host, user, key, host_key: probe?.fingerprint ?? "" })
+      : await post("/api/servers", { name, game, template, visibility: vis, password });
     setSending(false);
     if (r.error) return toast(r.error, true);
     toast(where === "vps" ? "Setting up the server on your machine. It takes 5 to 15 minutes." : "Setting up the server. It takes a few minutes.");
@@ -607,6 +733,10 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
             </div>
             <small>{VISIBILITY.find((v) => v.id === vis)?.note}. You can change it later.</small>
           </div>
+          <label className="field">
+            <span>Join password<Info text="Players type this to get in. Leave it empty for no password. You can change it later on the server's page." /></span>
+            <input className="search" maxLength={24} placeholder="None" value={password} onChange={(e) => setPassword(e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} spellCheck={false} autoComplete="off" />
+          </label>
           <p className="muted">
             {where === "vps"
               ? "Connects to the machine, installs Valve's free server and Loner-Strike there, opens the game ports in its firewall and runs it as a service that keeps going on its own. Ubuntu or Debian on an x86 (AMD or Intel) machine. Open UDP ports 27015-27020 in your provider's firewall too."
@@ -651,7 +781,7 @@ function ImportServer({ onClose, onDone }: { onClose: () => void; onDone: () => 
             <input className="search grow" placeholder="Server folder" value={dir} onChange={(e) => setDir(e.target.value)} spellCheck={false} />
             <button className="btn" onClick={pick}>Browse…</button>
           </div>
-          <p className="muted">On a Mac the folder has to be inside a CrossOver bottle, so it can run. Servers on a Linux VPS come in a later version.</p>
+          <p className="muted">On a Mac the folder has to be inside a CrossOver bottle, so it can run. For a server on a Linux VPS, use New server instead.</p>
           <div className="row">
             <button className="btn primary" disabled={!dir.trim()} onClick={go}>Add server</button>
             <button className="btn" onClick={onClose}>Cancel</button>

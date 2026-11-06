@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { cmd, getJson, postJson, useQueuedSave } from "../api";
-import { Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { cmd, getJson, postJson, useActions, useActivity, useQueuedSave } from "../api";
+import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Settings = {
   max_rounds: number;
@@ -62,7 +62,10 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
   const ask = useConfirm();
   const [d, setD] = useState<Data | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const { run, busy: isBusy } = useActions();
+  const key = (what: string) => `matchmode:${target}:${what}`;
+  // one match action at a time
+  const busy = useActivity().some(([k]) => k.startsWith(key("act:")));
   const loading = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -91,9 +94,7 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
 
   const queue = useQueuedSave<Settings>();
   const post = async (path: string, body: unknown, done?: string) => {
-    setBusy(true);
     const r = await postJson<Reply>(path, body).catch(() => ({ ok: false as const, error: "Couldn't reach the app." }));
-    setBusy(false);
     if (failed(r)) {
       toast(r.error, true);
       return;
@@ -103,20 +104,19 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
   };
   const save = (s: Partial<Settings>) => d && queue(d.settings, (cur) => ({ ...cur, ...s }), (full) => post("/api/scrim/settings", full, "Saved"));
   const act = async (action: string, done: string, confirm?: string) => {
+    if (busy) return;
     if (confirm && !(await ask(confirm, { ok: "Yes", danger: true }))) return;
-    post("/api/scrim/action", { action }, done);
+    await run(key(`act:${action}`), () => post("/api/scrim/action", { action }, done), `${ACTING[action] ?? "Sending"}…`);
   };
-  const switchMode = async () => {
-    setBusy(true);
+  const switchMode = () => run(key("act:switch"), async () => {
     try {
       await cmd("gm_mode", [MODE]);
       toast("Switching to Match mode. The map reloads.");
     } catch (e) {
       toast((e as Error).message, true);
     }
-    setBusy(false);
     setTimeout(refresh, 4000);
-  };
+  }, "Switching to Match mode…");
 
   if (error && !d) return <p className="muted">{error}</p>;
   if (!d) return <Skeleton rows={6} />;
@@ -126,8 +126,8 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
       {!d.installed && (
         <p className="panel match-note">This game doesn't have Match mode yet. Run Setup again from Settings to add it. Your settings here are kept until then.</p>
       )}
-      <Now d={d} busy={busy} act={act} switchMode={switchMode} />
-      <MatchSettings s={d.settings} save={save} />
+      <Now d={d} busy={busy} acting={(a) => isBusy(key(`act:${a}`))} act={act} switchMode={switchMode} />
+      <MatchSettings s={d.settings} save={save} target={target} />
       <History matches={d.matches} />
       <section>
         <SectionHead title="In-game commands" note="Players type these in chat. A dot works too, like .ready" />
@@ -145,8 +145,16 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
 }
 
 type Act = (action: string, done: string, confirm?: string) => void;
+/** What the top bar says while a match action is sent. */
+const ACTING: Record<string, string> = {
+  start: "Starting the match",
+  unpause: "Ending the pause",
+  pause: "Calling a pause",
+  restart: "Restarting the match",
+  warmup: "Stopping the match",
+};
 
-function Now({ d, busy, act, switchMode }: { d: Data; busy: boolean; act: Act; switchMode: () => void }) {
+function Now({ d, busy, acting, act, switchMode }: { d: Data; busy: boolean; acting: (action: string) => boolean; act: Act; switchMode: () => void }) {
   const on = d.current_mode === MODE;
   const s = d.status;
   if (!on) {
@@ -156,7 +164,7 @@ function Now({ d, busy, act, switchMode }: { d: Data; busy: boolean; act: Act; s
         <div className="panel match-now">
           <p>Match mode isn't on. Switch to it when your players are on the server; everyone gets a warmup until they type /ready.</p>
           {d.installed && (
-            <button className="btn primary" disabled={busy} onClick={switchMode}>Switch to Match mode</button>
+            <BusyButton className="btn primary" busy={acting("switch")} disabled={busy} label="Switch to Match mode" busyLabel="Switching…" onClick={switchMode} />
           )}
         </div>
       </section>
@@ -208,22 +216,31 @@ function Now({ d, busy, act, switchMode }: { d: Data; busy: boolean; act: Act; s
         {spec.length > 0 && <p className="muted match-spec">Watching: {spec.map((p) => p.name).join(", ")}</p>}
         <div className="row match-actions">
           {s.phase === "warmup" && (
-            <button className="btn primary" disabled={busy} onClick={() => act("start", "Starting the match")}>Start now</button>
+            <BusyButton className="btn primary" busy={acting("start")} disabled={busy} label="Start now" busyLabel="Starting…" onClick={() => act("start", "Starting the match")} />
           )}
           {s.phase === "live" &&
             (s.paused || s.pause_pending ? (
-              <button className="btn primary" disabled={busy} onClick={() => act("unpause", "Pause ended")}>End the pause</button>
+              <BusyButton className="btn primary" busy={acting("unpause")} disabled={busy} label="End the pause" busyLabel="Ending…" onClick={() => act("unpause", "Pause ended")} />
             ) : (
-              <button className="btn" disabled={busy} onClick={() => act("pause", "Pause called")}>Pause</button>
+              <BusyButton busy={acting("pause")} disabled={busy} label="Pause" busyLabel="Pausing…" onClick={() => act("pause", "Pause called")} />
             ))}
           {s.phase !== "warmup" && s.phase !== "none" && (
             <>
-              <button className="btn" disabled={busy} onClick={() => act("restart", "Restarted", s.phase === "live" ? "Restart the match from 0 - 0?" : undefined)}>
-                {s.phase === "knife" || s.phase === "vote" ? "Redo the knife round" : "Restart the match"}
-              </button>
-              <button className="btn danger" disabled={busy} onClick={() => act("warmup", "Back to warmup", s.phase === "live" ? "Stop the match and go back to warmup? The score is lost." : undefined)}>
-                Stop the match
-              </button>
+              <BusyButton
+                busy={acting("restart")}
+                disabled={busy}
+                label={s.phase === "knife" || s.phase === "vote" ? "Redo the knife round" : "Restart the match"}
+                busyLabel="Restarting…"
+                onClick={() => act("restart", "Restarted", s.phase === "live" ? "Restart the match from 0 - 0?" : undefined)}
+              />
+              <BusyButton
+                className="btn danger"
+                busy={acting("warmup")}
+                disabled={busy}
+                label="Stop the match"
+                busyLabel="Stopping…"
+                onClick={() => act("warmup", "Back to warmup", s.phase === "live" ? "Stop the match and go back to warmup? The score is lost." : undefined)}
+              />
             </>
           )}
         </div>
@@ -254,7 +271,12 @@ function Roster({ title, players, warmup }: { title: string; players: Player[]; 
   );
 }
 
-function MatchSettings({ s, save }: { s: Settings; save: (s: Partial<Settings>) => void }) {
+function MatchSettings({ s, save: send, target }: { s: Settings; save: (s: Partial<Settings>) => unknown; target: string }) {
+  // each setting is off while its own change saves
+  const { run, busy } = useActions();
+  const key = (s: Partial<Settings>) => `matchmode:${target}:setting:${Object.keys(s).join(",")}`;
+  const save = (s: Partial<Settings>) => run(key(s), async () => { await send(s); }, "Saving match settings…");
+  const saving = (k: keyof Settings) => busy(key({ [k]: true }));
   return (
     <section>
       <SectionHead
@@ -267,16 +289,18 @@ function MatchSettings({ s, save }: { s: Settings; save: (s: Partial<Settings>) 
           note="First to 16 (MR15) or first to 13 (MR12). Teams swap sides at half-time."
           values={[30, 24]}
           current={s.max_rounds}
+          busy={saving("max_rounds")}
           show={(v) => (v === 30 ? "MR15, 30 rounds" : "MR12, 24 rounds")}
           pick={(v) => save({ max_rounds: v })}
         />
-        <Toggle label="Overtime" note="On a tie: blocks of 6 rounds with $10000, first to 4 wins. Off: a tie is a draw." on={s.overtime} set={(v) => save({ overtime: v })} />
-        <Toggle label="Knife round" note="Knives only before the match. The winners vote to stay or switch sides." on={s.knife} set={(v) => save({ knife: v })} />
+        <Toggle label="Overtime" note="On a tie: blocks of 6 rounds with $10000, first to 4 wins. Off: a tie is a draw." on={s.overtime} busy={saving("overtime")} set={(v) => save({ overtime: v })} />
+        <Toggle label="Knife round" note="Knives only before the match. The winners vote to stay or switch sides." on={s.knife} busy={saving("knife")} set={(v) => save({ knife: v })} />
         <Choice
           label="Players to start"
           note="Both teams together. The match starts once this many are ready."
           values={PLAYERS}
           current={s.players}
+          busy={saving("players")}
           show={(v) => `${Math.floor(v / 2)}v${Math.ceil(v / 2)}`}
           pick={(v) => save({ players: v })}
         />
@@ -284,14 +308,16 @@ function MatchSettings({ s, save }: { s: Settings; save: (s: Partial<Settings>) 
           label="Fill with bots"
           note="Off: no bots in this mode. On: bots fill the empty spots during warmup and always count as ready. Changes right away."
           on={s.bots}
+          busy={saving("bots")}
           set={(v) => save({ bots: v })}
         />
-        <Choice label="Pauses per team" note="Tactical pauses a captain can call in one match. Admins can always pause." values={PAUSES} current={s.pauses} show={(v) => (v ? `${v}` : "None")} pick={(v) => save({ pauses: v })} />
+        <Choice label="Pauses per team" note="Tactical pauses a captain can call in one match. Admins can always pause." values={PAUSES} current={s.pauses} busy={saving("pauses")} show={(v) => (v ? `${v}` : "None")} pick={(v) => save({ pauses: v })} />
         <Choice
           label="Pause length"
           note="After this, anyone can end a team's pause by typing /unpause."
           values={PAUSE_SECONDS}
           current={s.pause_seconds}
+          busy={saving("pause_seconds")}
           show={(v) => (v < 60 ? `${v} sec` : v % 60 ? `${Math.floor(v / 60)}:${String(v % 60).padStart(2, "0")}` : `${v / 60} min`)}
           pick={(v) => save({ pause_seconds: v })}
         />
@@ -343,23 +369,23 @@ function Side({ team, won }: { team: Team; won: boolean }) {
   );
 }
 
-function Toggle({ label, note, on, set }: { label: string; note: ReactNode; on: boolean; set: (v: boolean) => void }) {
+function Toggle({ label, note, on, set, busy }: { label: string; note: ReactNode; on: boolean; set: (v: boolean) => void; busy?: boolean }) {
   return (
     <div className="setting">
       <span className="name">{label}<span className="note">{note}</span></span>
-      <Switch on={on} onChange={set} label={label} />
+      <Switch on={on} onChange={set} label={label} disabled={busy} />
     </div>
   );
 }
 
-function Choice({ label, note, values, current, show, pick }: { label: string; note: string; values: number[]; current: number; show: (v: number) => string; pick: (v: number) => void }) {
+function Choice({ label, note, values, current, show, pick, busy }: { label: string; note: string; values: number[]; current: number; show: (v: number) => string; pick: (v: number) => void; busy?: boolean }) {
   const all = values.includes(current) ? values : [...values, current].sort((a, b) => a - b);
   return (
     <div className="setting">
       <span className="name">{label}<span className="note">{note}</span></span>
       <div className="seg" role="group" aria-label={label}>
         {all.map((v) => (
-          <button key={v} type="button" aria-pressed={current === v} onClick={() => pick(v)}>{show(v)}</button>
+          <button key={v} type="button" aria-pressed={current === v} disabled={busy} onClick={() => pick(v)}>{show(v)}</button>
         ))}
       </div>
     </div>

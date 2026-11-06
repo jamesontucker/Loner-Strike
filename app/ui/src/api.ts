@@ -19,6 +19,9 @@ export function setTarget(id: string | null) {
   window.dispatchEvent(new Event("ls-target"));
 }
 export const targetGen = () => GEN;
+/** The open target as part of an action key ("local" for the player's own game), so the
+ *  same action on two servers doesn't share a spinner. */
+export const targetKey = () => TARGET ?? "local";
 /** For URLs the browser loads by itself (images). */
 export function withTarget(url: string) {
   return TARGET ? `${url}${url.includes("?") ? "&" : "?"}target=${encodeURIComponent(TARGET)}` : url;

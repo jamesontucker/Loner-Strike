@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, useOnce } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
-import { Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Settings = { enabled: boolean; port: number; delay: number; max_spectators: number; name: string; password: string; record: boolean };
 type Demo = { name: string; size: number; modified: number };
@@ -18,7 +18,9 @@ type Status = {
   slots: number | null;
   recording: string | null;
   server_running: boolean;
-  addresses: { computer: string; network: string | null };
+  /** on a Linux server: the address to watch from is the machine's */
+  remote?: boolean;
+  addresses: { computer: string | null; network: string | null; internet?: string };
   visibility: "lan" | "unlisted" | "listed";
   demos: Demo[];
   console: string[];
@@ -45,7 +47,9 @@ export function Hltv({ server }: { server: ServerInfo }) {
   const ask = useConfirm();
   const [st, setSt] = useState<Status | null>(null);
   const [form, setForm] = useState<Settings | null>(null);
-  const [saving, setSaving] = useState(false);
+  const { run, busy } = useActions();
+  const key = (what: string) => `hltv:${server.id}:${what}`;
+  const saving = busy(key("save"));
   const dirty = useRef(false);
   const [failed, setFailed] = useState("");
 
@@ -71,25 +75,26 @@ export function Hltv({ server }: { server: ServerInfo }) {
     setForm((f) => (f ? { ...f, ...patch } : f));
   };
 
-  const save = async (next: Settings | null = form) => {
-    if (!next || saving) return;
-    setSaving(true);
+  const save = (next: Settings | null = form) => run(key("save"), async () => {
+    if (!next) return;
     const r = await post(`/api/servers/${server.id}/hltv`, next);
-    setSaving(false);
     if (r.error) return toast(r.error, true);
     dirty.current = false;
     toast(r.restart ? "Saved. Restart HLTV to use the new settings." : "Saved");
     load();
-  };
+  }, `Saving HLTV settings for ${server.name}…`);
 
-  const once = useOnce();
-  const act = (action: "start" | "stop" | "restart") =>
-    once("act", async () => {
+  // one start, stop or restart at a time
+  const acting = busy(key("act:start")) || busy(key("act:stop")) || busy(key("act:restart"));
+  const act = (action: "start" | "stop" | "restart") => {
+    if (acting) return;
+    run(key(`act:${action}`), async () => {
       const r = await post(`/api/servers/${server.id}/hltv/${action}`);
       if (r.error) return toast(r.error, true);
       toast(action === "stop" ? "HLTV stopped" : "Starting HLTV…");
       setTimeout(load, 1200);
-    });
+    }, `${action === "stop" ? "Stopping" : action === "restart" ? "Restarting" : "Starting"} HLTV on ${server.name}…`);
+  };
 
   if (!st || !form) {
     return (
@@ -144,11 +149,11 @@ export function Hltv({ server }: { server: ServerInfo }) {
             <div className="row">
               {running ? (
                 <>
-                  <button className="btn" onClick={() => act("restart")}>Restart HLTV</button>
-                  <button className="btn danger" onClick={() => act("stop")}>Stop HLTV</button>
+                  <BusyButton busy={busy(key("act:restart"))} disabled={acting} label="Restart HLTV" busyLabel="Restarting…" onClick={() => act("restart")} />
+                  <BusyButton className="btn danger" busy={busy(key("act:stop"))} disabled={acting} label="Stop HLTV" busyLabel="Stopping…" onClick={() => act("stop")} />
                 </>
               ) : (
-                st.state !== "starting" && <button className="btn primary" onClick={() => act("start")} disabled={!st.available}>Start HLTV</button>
+                st.state !== "starting" && <BusyButton className="btn primary" busy={busy(key("act:start"))} disabled={acting || !st.available} label="Start HLTV" busyLabel="Starting…" onClick={() => act("start")} />
               )}
             </div>
           )}
@@ -158,7 +163,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
           <h3>Settings</h3>
           <div className="setting">
             <span className="name">HLTV<span className="note">Starts and stops with the server</span></span>
-            <Switch on={form.enabled} onChange={(v) => { const next = { ...form, enabled: v }; setForm(next); save(next); }} label="HLTV" />
+            <Switch on={form.enabled} disabled={saving} onChange={(v) => { const next = { ...form, enabled: v }; setForm(next); save(next); }} label="HLTV" />
           </div>
           <label className="field">
             <span>Name</span>
@@ -181,7 +186,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
             </label>
             <label className="field">
               <span>Port<Info text="HLTV listens on its own port, separate from the server's. Change it only if something else already uses it." /></span>
-              <input className="search narrow" type="number" min={1024} max={65000} value={form.port} onChange={(e) => set({ port: Math.round(+e.target.value) })} />
+              <input className="search narrow" type="number" min={st.remote ? 27015 : 1024} max={st.remote ? 27020 : 65000} value={form.port} onChange={(e) => set({ port: Math.round(+e.target.value) })} />
             </label>
           </div>
           <p className="muted small-note">Each spectator uses about 3 KB/s of upload. The port is {st.default_port} unless you change it.</p>
@@ -194,7 +199,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
             <Switch on={form.record} onChange={(v) => set({ record: v })} label="Record demos" />
           </div>
           <div className="row">
-            <button className="btn primary" disabled={saving} onClick={() => save()}>{saving ? "Saving…" : "Save"}</button>
+            <BusyButton className="btn primary" busy={saving} label="Save" busyLabel="Saving…" onClick={() => save()} />
           </div>
         </div>
       </div>
@@ -231,6 +236,20 @@ function Addresses({ st }: { st: Status }) {
     }
   };
   const port = st.settings.port;
+  if (st.addresses.internet) {
+    const at = st.addresses.internet;
+    return (
+      <div className="hltv-addresses">
+        <p className="muted">To watch, open the game's console and type:</p>
+        {st.settings.password && <code className="hltv-cmd">password {st.settings.password}</code>}
+        <div className="hltv-address">
+          <code className="hltv-cmd">connect {at}</code>
+          <button className="btn small" onClick={() => copy(at)}>Copy</button>
+        </div>
+        <p className="muted small-note">Setup opened UDP 27015 to 27020 on the machine. If your provider has its own firewall, open port {port} there too.</p>
+      </div>
+    );
+  }
   return (
     <div className="hltv-addresses">
       <p className="muted">To watch, open the game's console and type:</p>
@@ -244,7 +263,7 @@ function Addresses({ st }: { st: Status }) {
       )}
       <div className="hltv-address">
         <code className="hltv-cmd">connect {st.addresses.computer}</code>
-        <button className="btn small" onClick={() => copy(st.addresses.computer)}>Copy</button>
+        <button className="btn small" onClick={() => copy(st.addresses.computer ?? "")}>Copy</button>
         <span className="muted">from this computer</span>
       </div>
       {st.visibility !== "lan" && (
@@ -256,13 +275,23 @@ function Addresses({ st }: { st: Status }) {
 
 function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; reload: () => void; ask: ReturnType<typeof useConfirm> }) {
   const toast = useToast();
+  const { run, busy } = useActions();
+  const key = (d: Demo) => `hltv:${server.id}:delete:${d.name}`;
   const remove = async (d: Demo) => {
     if (!(await ask(`Delete ${d.name}?`, { ok: "Delete", danger: true }))) return;
-    const r = await post(`/api/servers/${server.id}/hltv/delete-demo`, { name: d.name });
-    if (r.error) return toast(r.error, true);
-    toast("Deleted");
-    reload();
+    await run(key(d), async () => {
+      const r = await post(`/api/servers/${server.id}/hltv/delete-demo`, { name: d.name });
+      if (r.error) return toast(r.error, true);
+      toast("Deleted");
+      reload();
+    }, `Deleting ${d.name}…`);
   };
+  const fetchKey = (d: Demo) => `hltv:${server.id}:fetch:${d.name}`;
+  const fetchDemo = (d: Demo) => run(fetchKey(d), async () => {
+    const r = await post(`/api/servers/${server.id}/hltv/fetch-demo`, { name: d.name });
+    if (r.error) return toast(r.error, true);
+    toast(`${d.name} is in your game's ${server.game} folder. Type viewdemo ${d.name.replace(/\.dem$/i, "")} in the console.`);
+  }, `Downloading ${d.name}…`);
   const show = async (name = "") => {
     const r = await post(`/api/servers/${server.id}/hltv-folder`, { name });
     if (r.error) toast(r.error.includes("forbidden") ? "That only works on the computer running Loner-Strike." : r.error, true);
@@ -271,7 +300,7 @@ function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; re
     <div className="panel">
       <div className="row between">
         <h3>Demos</h3>
-        {ON_THIS_COMPUTER && st.demos.length > 0 && <button className="btn" onClick={() => show()}>Open folder</button>}
+        {ON_THIS_COMPUTER && !st.remote && st.demos.length > 0 && <button className="btn" onClick={() => show()}>Open folder</button>}
       </div>
       {st.demos.length === 0 ? (
         <p className="muted">
@@ -289,18 +318,20 @@ function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; re
                     <span className="muted">{size(d.size)} · {when(d.modified)}{live ? " · recording now" : ""}</span>
                   </div>
                   <div className="row">
-                    {ON_THIS_COMPUTER ? (
+                    {ON_THIS_COMPUTER && st.remote ? (
+                      <BusyButton className="btn" busy={busy(fetchKey(d))} label="Get it" busyLabel="Downloading…" onClick={() => fetchDemo(d)} />
+                    ) : ON_THIS_COMPUTER ? (
                       <button className="btn" onClick={() => show(d.name)}>Show</button>
                     ) : (
                       <a className="btn" href={`/api/servers/${encodeURIComponent(server.id)}/hltv/demos/${encodeURIComponent(d.name)}`} download={d.name}>Download</a>
                     )}
-                    <button className="btn danger" disabled={live} onClick={() => remove(d)}>Delete</button>
+                    <BusyButton className="btn danger" busy={busy(key(d))} disabled={live} label="Delete" busyLabel="Deleting…" onClick={() => remove(d)} />
                   </div>
                 </li>
               );
             })}
           </ul>
-          <p className="muted small-note">To watch one, put it in your game's {server.game} folder and type viewdemo followed by its name in the console.</p>
+          <p className="muted small-note">{st.remote ? "Get it copies a demo into your game's folder. Then type viewdemo followed by its name in the console." : `To watch one, put it in your game's ${server.game} folder and type viewdemo followed by its name in the console.`}</p>
         </>
       )}
     </div>

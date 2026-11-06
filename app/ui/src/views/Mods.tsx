@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, useStable } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions, useActivity, useStable } from "../api";
 import { Icon } from "../icons";
 import type { AppInfo } from "../types";
-import { Info, SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
 import type { Job, Scan } from "./Setup";
 
 const BOT_NOTE = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" };
@@ -48,31 +48,26 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
   const ask = useConfirm();
   const toast = useToast();
   const [job, setJob] = useState<Job | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const { run } = useActions();
+  // the mod being installed or removed here ("core" for the basics), kept app-wide so it
+  // still shows after leaving the page and coming back
+  const prefix = `mods:${targetKey()}:change:`;
+  const busy = useActivity().find(([k]) => k.startsWith(prefix))?.[0].slice(prefix.length) ?? null;
   const [sort, setSortRaw] = useState(() => stored("ls.modsSort", "name"));
   const [filter, setFilterRaw] = useState(() => stored("ls.modsFilter", "all"));
   const setSort = (v: string) => (setSortRaw(v), store("ls.modsSort", v));
   const setFilter = (v: string) => (setFilterRaw(v), store("ls.modsFilter", v));
   const game = app?.game;
 
-  // follow the setup job while one runs
+  // show the setup job's progress while one runs (the action itself waits for the end)
   useEffect(() => {
     if (!busy) return;
-    let ended = false;
     const t = setInterval(async () => {
       const j = await getJson<Job>("/api/setup/job").catch(() => null);
-      if (!j || ended) return;
-      setJob(j);
-      if (j.state === "done" || j.state === "error") {
-        ended = true;
-        clearInterval(t);
-        toast(j.state === "done" ? (running ? "Done. It loads on the next map." : "Done") : j.error || "That stopped.", j.state === "error");
-        setBusy(null);
-        onChanged();
-      }
+      if (j) setJob(j);
     }, 800);
     return () => clearInterval(t);
-  }, [busy, running, toast, onChanged]);
+  }, [busy]);
 
   if (!game || !scan) return (scan ? <p className="muted">No game found.</p> : <Skeleton />);
   const installed = new Set(game.installed ?? []);
@@ -96,13 +91,25 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
     });
   const where = game.dedicated ? "this server" : game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero";
 
-  const change = async (id: string | null, remove: boolean) => {
+  const change = async (id: string | null, remove: boolean, name?: string) => {
+    if (busy) return;
     if (remove && !(await ask(id ? "Remove it? Its files go, and anything it replaced is put back." : `Remove Loner-Strike from ${where}? Everything it changed is put back.`, { ok: "Remove", danger: true }))) return;
     const body = { hl: game.hl, games: [game.id], ...(id ? { components: [id] } : remove ? {} : { components: [] }) };
-    const r = await postJson<{ ok?: boolean; error?: string }>(remove ? "/api/setup/uninstall" : "/api/setup/install", body).catch(() => ({ error: "Couldn't reach the app." }));
-    if (r.error) return toast(r.error, true);
-    setJob(null);
-    setBusy(id ?? "core");
+    const label = id ? `${remove ? "Removing" : "Installing"} ${name ?? id}…` : remove ? `Removing Loner-Strike from ${where}…` : "Installing the basics…";
+    await run(`${prefix}${id ?? "core"}`, async () => {
+      setJob(null);
+      const r = await postJson<{ ok?: boolean; error?: string }>(remove ? "/api/setup/uninstall" : "/api/setup/install", body).catch(() => ({ error: "Couldn't reach the app." }));
+      if (r.error) return toast(r.error, true);
+      // follow the setup job to its end
+      for (;;) {
+        await new Promise((res) => setTimeout(res, 800));
+        const j = await getJson<Job>("/api/setup/job").catch(() => null);
+        if (!j || (j.state !== "done" && j.state !== "error")) continue;
+        toast(j.state === "done" ? (running ? "Done. It loads on the next map." : "Done") : j.error || "That stopped.", j.state === "error");
+        onChanged();
+        return;
+      }
+    }, label);
   };
 
   const now = job?.steps.find((s) => s.state === "running");
@@ -126,7 +133,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
           <h3>Loner-Strike isn't on {where} yet</h3>
           <p className="muted measure">The basics come first: Metamod-P, AMX Mod X, ReGameDLL and the Game Mode Menu, with the built-in modes. Then add whatever you like below.</p>
           <div className="row">
-            <button className="btn primary" disabled={!!busy} onClick={() => change(null, false)}>Install the basics</button>
+            <BusyButton className="btn primary" busy={busy === "core"} disabled={!!busy} label="Install the basics" busyLabel="Installing…" onClick={() => change(null, false)} />
           </div>
         </div>
       ) : (
@@ -155,9 +162,9 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
                   {c.builtin ? (
                     <span className="muted small-note">Comes with Loner-Strike</span>
                   ) : on ? (
-                    <button className="btn danger" disabled={!!busy} onClick={() => change(c.id, true)}>{busy === c.id ? "Removing…" : "Remove"}</button>
+                    <BusyButton className="btn danger" busy={busy === c.id} disabled={!!busy} label="Remove" busyLabel="Removing…" onClick={() => change(c.id, true, c.name)} />
                   ) : (
-                    <button className="btn primary" disabled={!!busy} onClick={() => change(c.id, false)}>{busy === c.id ? "Installing…" : "Install"}</button>
+                    <BusyButton className="btn primary" busy={busy === c.id} disabled={!!busy} label="Install" busyLabel="Installing…" onClick={() => change(c.id, false, c.name)} />
                   )}
                   {rating && <span className={`bots-note ${rating}`}>{BOT_NOTE[rating]}</span>}
                 </div>
@@ -174,7 +181,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
       {setUp && (
         <div className="panel row between">
           <p className="muted">Take Loner-Strike off {where} completely: every mod, the menu and the bot setup.</p>
-          <button className="btn danger" disabled={!!busy} onClick={() => change(null, true)}>Remove Loner-Strike</button>
+          <BusyButton className="btn danger" busy={busy === "core"} disabled={!!busy} label="Remove Loner-Strike" busyLabel="Removing…" onClick={() => change(null, true)} />
         </div>
       )}
     </div>
@@ -186,30 +193,31 @@ function OwnPlugins() {
   const toast = useToast();
   const ask = useConfirm();
   const [list, setList] = useState<string[] | null>(null);
-  const [adding, setAdding] = useState(false);
+  const { run, busy } = useActions();
+  const key = (what: string) => `mods:${targetKey()}:plugin:${what}`;
   useEffect(() => {
     getJson<{ plugins: string[] }>("/api/mods/plugins").then((r) => setList(r.plugins ?? [])).catch(() => setList([]));
   }, []);
   type R = { ok?: boolean; error?: string; cancelled?: boolean; name?: string; plugins?: string[] };
-  const add = async () => {
-    setAdding(true);
+  const add = () => run(key("add"), async () => {
     const r = await postJson<R>("/api/mods/plugins/add").catch((): R => ({ error: "Couldn't reach the app." }));
-    setAdding(false);
     if (r.cancelled) return;
     if (r.error) return toast(r.error, true);
     setList(r.plugins ?? []);
     toast(`Added ${r.name}. It loads on the next map.`);
-  };
+  }, "Adding a plugin…");
   const remove = async (name: string) => {
     if (!(await ask(`Remove ${name}? Its files are deleted and it stops loading on the next map.`, { ok: "Remove", danger: true }))) return;
-    const r = await postJson<R>("/api/mods/plugins/remove", { name }).catch((): R => ({ error: "Couldn't reach the app." }));
-    if (r.error) return toast(r.error, true);
-    setList(r.plugins ?? []);
+    await run(key(`remove:${name}`), async () => {
+      const r = await postJson<R>("/api/mods/plugins/remove", { name }).catch((): R => ({ error: "Couldn't reach the app." }));
+      if (r.error) return toast(r.error, true);
+      setList(r.plugins ?? []);
+    }, `Removing ${name}…`);
   };
   return (
     <section>
       <SectionHead title="Your own plugins" note="AMX Mod X plugins you have as a file. They load in every mode. A .sma source is compiled for you.">
-        {ON_THIS_COMPUTER && <button className="btn" disabled={adding} onClick={add}>{adding ? "Adding…" : "Add a plugin…"}</button>}
+        {ON_THIS_COMPUTER && <BusyButton busy={busy(key("add"))} label="Add a plugin…" busyLabel="Adding…" onClick={add} />}
       </SectionHead>
       {list === null ? (
         <Skeleton rows={2} />
@@ -221,7 +229,7 @@ function OwnPlugins() {
                 <span className="person-name">{n}</span>
                 <span className="person-sub mono">addons/amxmodx/plugins/{n}.amxx</span>
               </div>
-              <button className="btn danger" onClick={() => remove(n)}>Remove</button>
+              <BusyButton className="btn danger" busy={busy(key(`remove:${n}`))} label="Remove" busyLabel="Removing…" onClick={() => remove(n)} />
             </li>
           ))}
         </ul>

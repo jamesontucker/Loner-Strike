@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MatchMode } from "./MatchMode";
-import { getJson, postJson, useQueuedSave } from "../api";
-import { Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { getJson, postJson, targetKey, useActions, useQueuedSave } from "../api";
+import { BusyButton, Info, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type FilterMode = "off" | "replace" | "block";
 type Settings = { filter: FilterMode; words: string[]; chatlog: boolean; reports: boolean; stats_bots: boolean };
@@ -64,6 +64,17 @@ function left(until: number, now: number) {
   if (m < 1440 * 2) return `${Math.floor(m / 60)} h ${m % 60} min left`;
   return `${Math.round(m / 1440)} days left`;
 }
+
+/** Action keys for this page, per game or server. */
+const ck = (what: string) => `community:${targetKey()}:${what}`;
+const settingKey = (s: Partial<Settings>) => ck(`settings:${Object.keys(s).join(",")}`);
+const SAVING: Record<keyof Settings, string> = {
+  filter: "Saving the swear filter…",
+  words: "Saving the word list…",
+  chatlog: "Saving the chat log setting…",
+  reports: "Saving the reports setting…",
+  stats_bots: "Saving the stats setting…",
+};
 
 const teamClass = (t: string) => (t === "T" ? "t" : t === "CT" ? "ct" : "");
 
@@ -153,15 +164,17 @@ function usePollError() {
 function useSettings(d: Data, setD: SetData) {
   const toast = useToast();
   const queue = useQueuedSave<Settings>();
+  const { run } = useActions();
   return async (s: Partial<Settings>, done?: string) => {
-    const r = await queue(d.settings, (cur) => ({ ...cur, ...s }), (full) => postJson<Data | Err>("/api/community/settings", full).catch(() => OFFLINE));
-    if (failed(r)) {
-      toast(r.error, true);
-      return false;
-    }
-    setD(r);
-    if (done) toast(done);
-    return true;
+    let ok = false;
+    await run(settingKey(s), async () => {
+      const r = await queue(d.settings, (cur) => ({ ...cur, ...s }), (full) => postJson<Data | Err>("/api/community/settings", full).catch(() => OFFLINE));
+      if (failed(r)) return toast(r.error, true);
+      setD(r);
+      if (done) toast(done);
+      ok = true;
+    }, SAVING[Object.keys(s)[0] as keyof Settings] ?? "Saving…");
+    return ok;
   };
 }
 
@@ -169,13 +182,23 @@ function useSettings(d: Data, setD: SetData) {
 function useBan() {
   const ask = useConfirm();
   const toast = useToast();
+  const { run } = useActions();
   return async (id: string, name: string) => {
     if (!STEAMID.test(id)) return toast("Only players with a SteamID can be banned. LAN players and bots can't.", true);
     if (!(await ask(`Ban ${name || id} for good? They're kicked if they're playing. You can unban them on the Admins page.`, { ok: "Ban", danger: true }))) return;
-    const r = await postJson<{ error?: string }>("/api/admins/ban", { id, minutes: 0 }).catch(() => OFFLINE);
-    if (failed(r)) toast(r.error, true);
-    else toast(`${name || id} is banned`);
+    await run(ck(`ban:${id}`), async () => {
+      const r = await postJson<{ error?: string }>("/api/admins/ban", { id, minutes: 0 }).catch(() => OFFLINE);
+      if (failed(r)) toast(r.error, true);
+      else toast(`${name || id} is banned`);
+    }, `Banning ${name || id}…`);
   };
+}
+
+/** A Ban button for one player, busy while that ban is sent. */
+function BanButton({ id, name, label = "Ban" }: { id: string; name: string; label?: string }) {
+  const ban = useBan();
+  const { busy } = useActions();
+  return <BusyButton className="btn danger" busy={busy(ck(`ban:${id}`))} label={label} busyLabel="Banning…" onClick={() => ban(id, name)} />;
 }
 
 // ---- mute controls (also used by the Players page) -----------------------------------
@@ -185,16 +208,14 @@ export function MuteControl({ steamid, name, onDone, compact }: { steamid: strin
   const toast = useToast();
   const [minutes, setMinutes] = useState(30);
   const [what, setWhat] = useState("chat");
-  const [busy, setBusy] = useState(false);
+  const { run, busy } = useActions();
   if (!STEAMID.test(steamid)) return null;
-  const mute = async () => {
-    setBusy(true);
+  const mute = () => run(ck(`mute:${steamid}`), async () => {
     const r = await postJson<Data | Err>("/api/community/gag", { id: steamid, name, minutes, chat: what !== "voice", voice: what !== "chat" }).catch(() => OFFLINE);
-    setBusy(false);
     if (failed(r)) return toast(r.error, true);
     toast(minutes ? `${name || steamid} is muted for ${MUTE_TIMES.find((m) => m[0] === minutes)?.[1]}` : `${name || steamid} is muted until you unmute them`);
     onDone?.(r);
-  };
+  }, `Muting ${name || steamid}…`);
   return (
     <div className={`row cm-mute${compact ? " compact" : ""}`}>
       <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} aria-label={`How long to mute ${name}`}>
@@ -203,7 +224,7 @@ export function MuteControl({ steamid, name, onDone, compact }: { steamid: strin
       <select value={what} onChange={(e) => setWhat(e.target.value)} aria-label="Mute what">
         {MUTE_WHAT.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
       </select>
-      <button className="btn" disabled={busy} onClick={mute}>Mute</button>
+      <BusyButton busy={busy(ck(`mute:${steamid}`))} label="Mute" busyLabel="Muting…" onClick={mute} />
     </div>
   );
 }
@@ -218,6 +239,7 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
   const toast = useToast();
   const ask = useConfirm();
   const save = useSettings(d, setD);
+  const { run, busy: isBusy } = useActions();
   const [s, setS] = useState<Stats | null>(null);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
@@ -246,16 +268,18 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
 
   const reset = async () => {
     if (!(await ask("Reset everyone's stats and ranks? This can't be undone. /rank and /top15 in the game start over too.", { ok: "Reset stats", danger: true }))) return;
-    const r = await postJson<{ ok?: boolean; message?: string; error?: string }>("/api/community/stats/reset").catch(() => OFFLINE);
-    if (failed(r)) return toast(r.error, true);
-    toast(r.message || "Stats reset");
-    load(false);
+    await run(ck("stats:reset"), async () => {
+      const r = await postJson<{ ok?: boolean; message?: string; error?: string }>("/api/community/stats/reset").catch(() => OFFLINE);
+      if (failed(r)) return toast(r.error, true);
+      toast(r.message || "Stats reset");
+      load(false);
+    }, "Resetting stats…");
   };
 
   return (
     <section>
       <SectionHead title="Stats & ranks" note="Everyone who has played here, ranked the same way as /rank and /top15 in the game. Bots are left out.">
-        <button className="btn" disabled={busy} onClick={() => load(true)}>{busy ? "Loading..." : "Refresh"}</button>
+        <BusyButton busy={busy} label="Refresh" busyLabel="Refreshing…" onClick={() => load(true)} />
       </SectionHead>
       {!s ? (
         <Skeleton rows={5} />
@@ -330,11 +354,12 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
           label="Count games against bots"
           note="Kills and deaths against bots count toward everyone's stats. Turn it off to rank only games between people. From the next map."
           on={d.settings.stats_bots}
+          busy={isBusy(settingKey({ stats_bots: true }))}
           set={(v) => save({ stats_bots: v })}
         />
         <div className="setting">
           <span className="name">Start over<span className="note">Clears every player's stats and rank, here and in the game's /rank and /top15.</span></span>
-          <div><button className="btn danger" onClick={reset}>Reset stats</button></div>
+          <div><BusyButton className="btn danger" busy={isBusy(ck("stats:reset"))} label="Reset stats" busyLabel="Resetting…" onClick={reset} /></div>
         </div>
       </div>
     </section>
@@ -342,7 +367,6 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
 }
 
 function StatDetail({ p, d, setD }: { p: StatRow; d: Data; setD: SetData }) {
-  const ban = useBan();
   const hits = p.body.head + p.body.chest + p.body.stomach + p.body.arms + p.body.legs;
   const parts: [string, number][] = [["Head", p.body.head], ["Chest", p.body.chest], ["Stomach", p.body.stomach], ["Arms", p.body.arms], ["Legs", p.body.legs]];
   const muted = d.gags.find((g) => g.id === p.auth);
@@ -374,7 +398,7 @@ function StatDetail({ p, d, setD }: { p: StatRow; d: Data; setD: SetData }) {
       {p.steam && (
         <div className="row">
           <MuteControl steamid={p.auth} name={p.name} onDone={setD} />
-          <button className="btn danger" onClick={() => ban(p.auth, p.name)}>Ban</button>
+          <BanButton id={p.auth} name={p.name} />
         </div>
       )}
     </div>
@@ -387,7 +411,7 @@ const STATUS: Record<string, string> = { muted: "muted, not sent", filtered: "wo
 
 function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string }) {
   const save = useSettings(d, setD);
-  const ban = useBan();
+  const { busy } = useActions();
   const [q, setQ] = useState(initial);
   const [lines, setLines] = useState<ChatLine[] | null>(null);
   const [more, setMore] = useState(false);
@@ -420,7 +444,7 @@ function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string
     <section>
       <SectionHead title="Chat log" note="What people said, newest first, with the time and their SteamID. Select a line to mute or ban who said it." />
       <div className="settings cm-settings top">
-        <Toggle label="Keep a chat log" note="Every chat line is saved on this computer. Older lines are dropped as it grows." on={d.settings.chatlog} set={(v) => save({ chatlog: v })} />
+        <Toggle label="Keep a chat log" note="Every chat line is saved on this computer. Older lines are dropped as it grows." on={d.settings.chatlog} busy={busy(settingKey({ chatlog: true }))} set={(v) => save({ chatlog: v })} />
       </div>
       <input className="search full" type="search" placeholder="Search names, SteamIDs or words" value={q} onChange={(e) => (setQ(e.target.value), setLimit(200))} aria-label="Search the chat log" />
       {!lines ? (
@@ -452,7 +476,7 @@ function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string
                     {STEAMID.test(c.id) ? (
                       <div className="row">
                         <MuteControl steamid={c.id} name={c.name} onDone={setD} />
-                        <button className="btn danger" onClick={() => ban(c.id, c.name)}>Ban</button>
+                        <BanButton id={c.id} name={c.name} />
                         <button className="btn" onClick={() => setQ(c.id)}>Everything they said</button>
                       </div>
                     ) : (
@@ -480,7 +504,7 @@ function ReportsTab({ d, setD, reload, showChat }: { d: Data; setD: SetData; rel
   const toast = useToast();
   const ask = useConfirm();
   const save = useSettings(d, setD);
-  const ban = useBan();
+  const { run, busy } = useActions();
   const [list, setList] = useState<Report[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -498,12 +522,13 @@ function ReportsTab({ d, setD, reload, showChat }: { d: Data; setD: SetData; rel
     return () => clearInterval(every);
   }, [load]);
 
-  const act = async (action: string, r?: Report) => {
+  const reportKey = (r?: Report) => ck(r ? `report:${r.t}-${r.from_id}-${r.about}` : "reports:clear");
+  const act = (action: string, r?: Report) => run(reportKey(r), async () => {
     const res = await postJson<{ reports: Report[] } | Err>("/api/community/reports", { action, t: r?.t ?? 0, from_id: r?.from_id ?? "", about: r?.about ?? "" }).catch(() => OFFLINE);
     if (failed(res)) return toast(res.error, true);
     setList(res.reports);
     reload();
-  };
+  }, action === "clear_done" ? "Removing handled reports…" : action === "done" ? "Marking the report handled…" : "Reopening the report…");
 
   const handled = list?.filter((r) => r.done).length ?? 0;
 
@@ -511,7 +536,7 @@ function ReportsTab({ d, setD, reload, showChat }: { d: Data; setD: SetData; rel
     <section>
       <SectionHead title="Reports" note="Players report someone with /report <name> <what happened>. You get a desktop notification for each one." />
       <div className="settings cm-settings top">
-        <Toggle label="Let players report" note="Say /report in the game. One report a minute per player. Admins playing see them too." on={d.settings.reports} set={(v) => save({ reports: v })} />
+        <Toggle label="Let players report" note="Say /report in the game. One report a minute per player. Admins playing see them too." on={d.settings.reports} busy={busy(settingKey({ reports: true }))} set={(v) => save({ reports: v })} />
       </div>
       {!list ? (
         <Skeleton rows={4} />
@@ -538,14 +563,14 @@ function ReportsTab({ d, setD, reload, showChat }: { d: Data; setD: SetData; rel
                   {open === key && STEAMID.test(r.about_id) && (
                     <div className="row cm-report-actions">
                       <MuteControl steamid={r.about_id} name={r.about} onDone={setD} />
-                      <button className="btn danger" onClick={() => ban(r.about_id, r.about)}>Ban {r.about}</button>
+                      <BanButton id={r.about_id} name={r.about} label={`Ban ${r.about}`} />
                     </div>
                   )}
                 </div>
                 <div className="row cm-report-buttons">
                   <button className="btn" onClick={() => showChat(STEAMID.test(r.about_id) ? r.about_id : r.about)}>Their chat</button>
                   {STEAMID.test(r.about_id) && <button className="btn" aria-expanded={open === key} onClick={() => setOpen(open === key ? null : key)}>Mute or ban</button>}
-                  <button className="btn" onClick={() => act(r.done ? "open" : "done", r)}>{r.done ? "Reopen" : "Mark handled"}</button>
+                  <BusyButton busy={busy(reportKey(r))} label={r.done ? "Reopen" : "Mark handled"} busyLabel="Saving…" onClick={() => act(r.done ? "open" : "done", r)} />
                 </div>
               </li>
             );
@@ -554,9 +579,12 @@ function ReportsTab({ d, setD, reload, showChat }: { d: Data; setD: SetData; rel
       )}
       {handled > 0 && (
         <div className="row">
-          <button className="btn" onClick={async () => (await ask(`Remove the ${handled} handled ${handled === 1 ? "report" : "reports"}?`, { ok: "Remove" })) && act("clear_done")}>
-            Remove handled reports
-          </button>
+          <BusyButton
+            busy={busy(reportKey())}
+            label="Remove handled reports"
+            busyLabel="Removing…"
+            onClick={async () => (await ask(`Remove the ${handled} handled ${handled === 1 ? "report" : "reports"}?`, { ok: "Remove" })) && act("clear_done")}
+          />
         </div>
       )}
     </section>
@@ -569,6 +597,7 @@ function ModTab({ d, setD }: { d: Data; setD: SetData }) {
   const toast = useToast();
   const ask = useConfirm();
   const save = useSettings(d, setD);
+  const { run, busy } = useActions();
   const [id, setId] = useState("");
   const [draft, setDraft] = useState<string[] | null>(null);
   const [word, setWord] = useState("");
@@ -577,10 +606,12 @@ function ModTab({ d, setD }: { d: Data; setD: SetData }) {
 
   const unmute = async (g: Gag) => {
     if (!(await ask(`Unmute ${g.name || g.id}?`, { ok: "Unmute" }))) return;
-    const r = await postJson<Data | Err>("/api/community/ungag", { id: g.id }).catch(() => OFFLINE);
-    if (failed(r)) return toast(r.error, true);
-    setD(r);
-    toast(`${g.name || g.id} can talk again`);
+    await run(ck(`unmute:${g.id}`), async () => {
+      const r = await postJson<Data | Err>("/api/community/ungag", { id: g.id }).catch(() => OFFLINE);
+      if (failed(r)) return toast(r.error, true);
+      setD(r);
+      toast(`${g.name || g.id} can talk again`);
+    }, `Unmuting ${g.name || g.id}…`);
   };
   const addWord = () => {
     const parts = word.toLowerCase().split(/[\s,]+/).filter(Boolean);
@@ -608,7 +639,7 @@ function ModTab({ d, setD }: { d: Data; setD: SetData }) {
                   {g.name ? <> · <span className="mono">{g.id}</span></> : null}
                 </span>
               </div>
-              <button className="btn" onClick={() => unmute(g)}>Unmute</button>
+              <BusyButton busy={busy(ck(`unmute:${g.id}`))} label="Unmute" busyLabel="Unmuting…" onClick={() => unmute(g)} />
             </li>
           ))}
           {!d.gags.length && <li className="empty">Nobody is muted.</li>}
@@ -637,7 +668,7 @@ function ModTab({ d, setD }: { d: Data; setD: SetData }) {
             <span className="name">When someone swears<Info text="Star it out still sends the message, with the word hidden behind stars. Don't send it drops the whole message and tells the sender why." /><span className="note">{words.length ? `${words.length} ${words.length === 1 ? "word" : "words"} on the list.` : "Add words below first."}</span></span>
             <div className="seg" role="group" aria-label="When someone swears">
               {([["off", "Nothing"], ["replace", "Star it out"], ["block", "Don't send it"]] as [FilterMode, string][]).map(([m, l]) => (
-                <button key={m} type="button" aria-pressed={d.settings.filter === m} onClick={() => save({ filter: m })}>{l}</button>
+                <button key={m} type="button" aria-pressed={d.settings.filter === m} disabled={busy(settingKey({ filter: m }))} onClick={() => save({ filter: m })}>{l}</button>
               ))}
             </div>
           </div>
@@ -671,7 +702,7 @@ function ModTab({ d, setD }: { d: Data; setD: SetData }) {
             </div>
           )}
           <div className="row">
-            <button className="btn primary" disabled={!dirty} onClick={saveWords}>Save word list</button>
+            <BusyButton className="btn primary" busy={busy(settingKey({ words }))} disabled={!dirty} label="Save word list" busyLabel="Saving…" onClick={saveWords} />
             {dirty && <button className="btn" onClick={() => setDraft(null)}>Undo changes</button>}
             {words.length > 0 && <button className="btn danger push" onClick={() => setDraft([])}>Remove all</button>}
           </div>
@@ -692,11 +723,11 @@ function Glyph({ d }: { d: string }) {
   );
 }
 
-function Toggle({ label, note, on, set }: { label: string; note: ReactNode; on: boolean; set: (v: boolean) => void }) {
+function Toggle({ label, note, on, set, busy }: { label: string; note: ReactNode; on: boolean; set: (v: boolean) => void; busy?: boolean }) {
   return (
     <div className="setting">
       <span className="name">{label}<span className="note">{note}</span></span>
-      <Switch on={on} onChange={set} label={label} />
+      <Switch on={on} onChange={set} label={label} disabled={busy} />
     </div>
   );
 }

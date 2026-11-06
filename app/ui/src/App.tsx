@@ -1,6 +1,6 @@
 import { FilesUpdate } from "./views/FilesUpdate";
 import { useCallback, useEffect, useState } from "react";
-import { clock, getJson, ON_THIS_COMPUTER, postJson, setTarget, withTarget, useActivity } from "./api";
+import { clock, getJson, ON_THIS_COMPUTER, postJson, setTarget, withTarget, useActions, useActivity } from "./api";
 import { useGameState } from "./api";
 import { Icon } from "./icons";
 import type { AppInfo, MapInfo, Online, ServerList } from "./types";
@@ -87,6 +87,7 @@ function Shell() {
   // the dedicated server open in the Servers area; everything else is always your game
   const [openServer, setOpenServer] = useState<string | null>(null);
   const toast = useToast();
+  const { run: once, busy } = useActions();
 
   const setSection = (s: Section) => {
     if (s !== "servers" && openServer) enterServer(null);
@@ -137,13 +138,15 @@ function Shell() {
     reloadMaps(true);
   };
   // CS 1.6 / Condition Zero: which of your games the app is about
-  const switchGame = async (game: string) => {
+  const switchGame = (game: string) => {
     if (app?.game?.id === game) return;
-    const r = await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id: `local:${game}` }).catch(() => ({ error: "Couldn't reach the app." }));
-    if (r.error) return toast(r.error, true);
-    reloadApp();
-    reloadMaps(true);
-    refresh();
+    once("app:switch-game", async () => {
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id: `local:${game}` }).catch(() => ({ error: "Couldn't reach the app." }));
+      if (r.error) return toast(r.error, true);
+      reloadApp();
+      reloadMaps(true);
+      refresh();
+    }, `Switching to ${game === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}…`);
   };
   const current = openServer ? servers?.servers.find((x) => x.id === openServer) ?? null : null;
   // the open server was deleted (or its folder went away): back to your own game
@@ -163,10 +166,13 @@ function Shell() {
         if (NAV.some((n) => n.id === id)) setSection(id);
       } else if (what === "updates") {
         setSection("settings");
-        const r = await postJson<{ available?: boolean; version?: string; error?: string }>("/api/app/update/check").catch((): { available?: boolean; version?: string; error?: string } => ({ error: "Couldn't check for updates." }));
-        if (r.error) toast(r.error, true);
-        else toast(r.available ? `Loner-Strike ${r.version} is out. Install it from Settings.` : "You're on the latest version.");
-        reloadApp();
+        // same key as Settings' Check now button, so it shows there too
+        await once("app:update:check", async () => {
+          const r = await postJson<{ available?: boolean; version?: string; error?: string }>("/api/app/update/check").catch((): { available?: boolean; version?: string; error?: string } => ({ error: "Couldn't check for updates." }));
+          if (r.error) toast(r.error, true);
+          else toast(r.available ? `Loner-Strike ${r.version} is out. Install it from Settings.` : "You're on the latest version.");
+          reloadApp();
+        }, "Checking for updates…");
       }
     };
     window.addEventListener("ls-menu", onMenu);
@@ -230,7 +236,7 @@ function Shell() {
         {localGames.length > 1 && (
           <div className="game-switch" role="group" aria-label="Your game">
             {localGames.map((g) => (
-              <button key={g} title={g === "cstrike" ? "Counter-Strike 1.6" : "Counter-Strike: Condition Zero"} aria-pressed={myGame === g} disabled={!!openServer} onClick={() => switchGame(g)}>
+              <button key={g} title={g === "cstrike" ? "Counter-Strike 1.6" : "Counter-Strike: Condition Zero"} aria-pressed={myGame === g} disabled={!!openServer || busy("app:switch-game")} onClick={() => switchGame(g)}>
                 {g === "cstrike" ? "CS 1.6" : "CZ"}
               </button>
             ))}
@@ -292,6 +298,7 @@ function Shell() {
                   <ServerPage
                     key={current.id}
                     server={current}
+                    others={(servers?.servers ?? []).filter((o) => o.id !== current.id)}
                     data={online}
                     reason={state.online ? "" : state.reason}
                     app={app}

@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { targetKey, useActions } from "../api";
 import type { Online, Player } from "../types";
-import { SectionHead, useCommand, useConfirm } from "../ui";
+import { BusyButton, SectionHead, useCommand, useConfirm } from "../ui";
 import { MuteControl } from "./Community";
 
 const WEAPONS: [string, string][] = [
@@ -10,32 +11,51 @@ const WEAPONS: [string, string][] = [
   ["weapon_elite", "Dual Elites"], ["nades", "Grenade pack"], ["armor", "Kevlar + helmet"],
 ];
 
+// What a player action says while it's sent: [on the button, in the top bar before the name]
+const DOING: Record<string, [string, string]> = {
+  god: ["Switching…", "Switching god mode for"], noclip: ["Switching…", "Switching noclip for"], heal: ["Healing…", "Healing"],
+  money: ["Giving…", "Giving $16,000 to"], respawn: ["Respawning…", "Respawning"], team: ["Switching…", "Switching the team of"],
+  give: ["Giving…", "Giving a weapon to"], bring: ["Bringing…", "Bringing"], goto: ["Going…", "Going to"], freeze: ["Freezing…", "Freezing"],
+  slap: ["Slapping…", "Slapping"], slay: ["Slaying…", "Slaying"], kick: ["Kicking…", "Kicking"],
+};
+
 export function Players({ data, refresh }: { data: Online; refresh: () => void }) {
   const ask = useConfirm();
   const run = useCommand(refresh);
+  const { run: once, busy } = useActions();
+  const key = (what: string) => `players:${targetKey()}:${what}`;
+  const all = (what: string, command: string, args: string[], label: string) => once(key(what), () => run(command, args), label);
   const [open, setOpen] = useState<number | null>(null);
   const [gun, setGun] = useState(WEAPONS[0][0]);
   const teams: [string, string, string][] = [["T", "Terrorists", "t"], ["CT", "Counter-Terrorists", "ct"], ["SPEC", "Spectators", "spec"]];
 
   const act = async (p: Player, a: string) => {
     if (a === "kick" && !(await ask(`Kick ${p.name}?`, { ok: "Kick", danger: true }))) return;
-    run("gm_player", [String(p.uid), a], true);
+    const doing = a === "freeze" && p.frozen ? "Unfreezing" : DOING[a]?.[1] ?? "Sending to";
+    once(key(`${p.uid}:${a}`), () => run("gm_player", [String(p.uid), a], true), `${doing} ${p.name}…`);
   };
+  // a button for one player's action
+  const pb = (p: Player, a: string, label: string, className?: string) => (
+    <BusyButton className={className} busy={busy(key(`${p.uid}:${a}`))} label={label} busyLabel={a === "freeze" && p.frozen ? "Unfreezing…" : DOING[a]?.[0] ?? "Sending…"} onClick={() => act(p, a)} />
+  );
 
   return (
     <div className="stack">
       <div>
         <SectionHead title="Players" note="Select someone for god mode, weapons, teleporting and more." />
         <div className="row">
-          <button className="btn" onClick={() => run("gm_player", ["all", "respawn"])}>Respawn the dead</button>
-          <button className="btn" onClick={() => run("gm_player", ["all", "heal"])}>Heal everyone</button>
+          <BusyButton busy={busy(key("all:respawn"))} label="Respawn the dead" busyLabel="Respawning…" onClick={() => all("all:respawn", "gm_player", ["all", "respawn"], "Respawning the dead…")} />
+          <BusyButton busy={busy(key("all:heal"))} label="Heal everyone" busyLabel="Healing…" onClick={() => all("all:heal", "gm_player", ["all", "heal"], "Healing everyone…")} />
           <span className="spacer" />
-          <button className="btn" onClick={() => run("gm_team", ["t"])}>Join Terrorists</button>
-          <button className="btn" onClick={() => run("gm_team", ["ct"])}>Join CTs</button>
-          <button className="btn" onClick={() => run("gm_team", ["spec"])}>Spectate</button>
-          <button className="btn" onClick={async () => (await ask("Swap everyone to the other team? The round restarts.", { ok: "Swap teams" })) && run("gm_team", ["swap"])}>
-            Swap teams
-          </button>
+          <BusyButton busy={busy(key("team:t"))} label="Join Terrorists" busyLabel="Joining…" onClick={() => all("team:t", "gm_team", ["t"], "Joining the Terrorists…")} />
+          <BusyButton busy={busy(key("team:ct"))} label="Join CTs" busyLabel="Joining…" onClick={() => all("team:ct", "gm_team", ["ct"], "Joining the CTs…")} />
+          <BusyButton busy={busy(key("team:spec"))} label="Spectate" busyLabel="Moving…" onClick={() => all("team:spec", "gm_team", ["spec"], "Moving you to spectators…")} />
+          <BusyButton
+            busy={busy(key("team:swap"))}
+            label="Swap teams"
+            busyLabel="Swapping…"
+            onClick={async () => (await ask("Swap everyone to the other team? The round restarts.", { ok: "Swap teams" })) && all("team:swap", "gm_team", ["swap"], "Swapping teams…")}
+          />
         </div>
       </div>
       <div className="teams">
@@ -67,27 +87,27 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
                     {open === p.uid && (
                       <div className="pactions">
                         <div className="row">
-                          <button className="btn" onClick={() => act(p, "god")}>{p.god ? "God mode off" : "God mode"}</button>
-                          <button className="btn" onClick={() => act(p, "noclip")}>{p.noclip ? "Noclip off" : "Noclip"}</button>
-                          <button className="btn" onClick={() => act(p, "heal")}>Heal + armor</button>
-                          <button className="btn" onClick={() => act(p, "money")}>Give $16,000</button>
-                          <button className="btn" onClick={() => act(p, "respawn")}>Respawn</button>
-                          <button className="btn" onClick={() => act(p, "team")}>Switch team</button>
+                          {pb(p, "god", p.god ? "God mode off" : "God mode")}
+                          {pb(p, "noclip", p.noclip ? "Noclip off" : "Noclip")}
+                          {pb(p, "heal", "Heal + armor")}
+                          {pb(p, "money", "Give $16,000")}
+                          {pb(p, "respawn", "Respawn")}
+                          {pb(p, "team", "Switch team")}
                         </div>
                         <div className="row">
                           <select value={gun} onChange={(e) => setGun(e.target.value)} aria-label="Weapon">
                             {WEAPONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                           </select>
-                          <button className="btn" onClick={() => run("gm_player", [String(p.uid), "give", gun], true)}>Give</button>
+                          <BusyButton busy={busy(key(`${p.uid}:give`))} label="Give" busyLabel="Giving…" onClick={() => once(key(`${p.uid}:give`), () => run("gm_player", [String(p.uid), "give", gun], true), `Giving ${WEAPONS.find(([v]) => v === gun)?.[1] ?? "a weapon"} to ${p.name}…`)} />
                         </div>
                         {!p.host && (
                           <div className="row">
-                            <button className="btn" onClick={() => act(p, "bring")}>Bring to me</button>
-                            <button className="btn" onClick={() => act(p, "goto")}>Go to them</button>
-                            <button className="btn" onClick={() => act(p, "freeze")}>{p.frozen ? "Unfreeze" : "Freeze"}</button>
-                            <button className="btn" onClick={() => act(p, "slap")}>Slap</button>
-                            <button className="btn danger" onClick={() => act(p, "slay")}>Slay</button>
-                            <button className="btn danger" onClick={() => act(p, "kick")}>Kick</button>
+                            {pb(p, "bring", "Bring to me")}
+                            {pb(p, "goto", "Go to them")}
+                            {pb(p, "freeze", p.frozen ? "Unfreeze" : "Freeze")}
+                            {pb(p, "slap", "Slap")}
+                            {pb(p, "slay", "Slay", "btn danger")}
+                            {pb(p, "kick", "Kick", "btn danger")}
                           </div>
                         )}
                         {!p.host && !p.bot && p.steamid && <MuteControl steamid={p.steamid} name={p.name} />}

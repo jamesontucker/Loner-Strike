@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { getJson, postJson } from "../api";
+import { useEffect, useState } from "react";
+import { getJson, postJson, useActions } from "../api";
 import type { AppInfo, PhoneInfo } from "../types";
 import { ON_THIS_COMPUTER } from "../api";
-import { applyScale, savedScale, Info, SCALES, SectionHead, Switch, useConfirm, useToast } from "../ui";
+import { applyScale, savedScale, BusyButton, Info, SCALES, SectionHead, Switch, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
 
 type Prefs = { auto_update: boolean; keep_servers: boolean; game_folders: string[]; notify_joins: boolean };
@@ -13,11 +13,10 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
   const ask = useConfirm();
   const toast = useToast();
   const [phone, setPhone] = useState<PhoneInfo | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [installing, setInstalling] = useState(false);
+  const { run, busy } = useActions();
+  // the update installed and the app is restarting: the button stays busy until it does
+  const [restarting, setRestarting] = useState(false);
   const [checked, setChecked] = useState<string>("");
-  const removing = useRef<number | undefined>(undefined);
-  useEffect(() => () => clearInterval(removing.current), []);
 
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [storage, setStorage] = useState<Storage | null>(null);
@@ -31,27 +30,31 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
 
   type R = { ok?: boolean; error?: string; cancelled?: boolean };
   const post = <T extends R>(path: string, body: unknown = {}) => postJson<T>(path, body).catch((): T => ({ error: "Couldn't reach the app." }) as T);
-  const setPref = async (p: Partial<Prefs>) => {
+  const setPref = (p: Partial<Prefs>) => run(`app:pref:${Object.keys(p).join(",")}`, async () => {
     const r = await post<Prefs & R>("/api/app/prefs", p);
     if (r.error) return toast(r.error, true);
     setPrefs(r);
-  };
+  }, "Saving the setting…");
   const resetPhones = async () => {
     if (!(await ask("Sign out every phone? Each one will need to scan the new code to connect again.", { ok: "Sign out phones", danger: true }))) return;
-    const r = await post<PhoneInfo & R>("/api/app/phone/reset");
-    if (r.error) return toast(r.error, true);
-    setPhone(r);
-    toast("All phones signed out. Scan the new code to connect again.");
+    await run("app:phones:reset", async () => {
+      const r = await post<PhoneInfo & R>("/api/app/phone/reset");
+      if (r.error) return toast(r.error, true);
+      setPhone(r);
+      toast("All phones signed out. Scan the new code to connect again.");
+    }, "Signing out all phones…");
   };
   const clear = async (what: "downloads" | "pictures") => {
     const msg = what === "downloads" ? "Delete the downloaded mods and maps? They're downloaded again if you reinstall something." : "Delete the saved map pictures? They're looked up again as you browse maps.";
     if (!(await ask(msg, { ok: "Delete", danger: true }))) return;
-    const r = await post("/api/app/storage/clear", { what });
-    if (r.error) return toast(r.error, true);
-    toast("Cleared");
-    loadStorage();
+    await run(`app:clear:${what}`, async () => {
+      const r = await post("/api/app/storage/clear", { what });
+      if (r.error) return toast(r.error, true);
+      toast("Cleared");
+      loadStorage();
+    }, what === "downloads" ? "Clearing downloads…" : "Clearing map pictures…");
   };
-  const copyDiagnostics = async () => {
+  const copyDiagnostics = () => run("app:diagnostics", async () => {
     const r = await getJson<{ text: string }>("/api/app/diagnostics").catch(() => null);
     if (!r) return toast("Couldn't collect them.", true);
     try {
@@ -60,7 +63,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
     } catch {
       toast("Couldn't copy.", true);
     }
-  };
+  }, "Collecting diagnostics…");
   const addFolder = async () => {
     const picked = await post<{ dir?: string | null } & R>("/api/servers/pick-folder");
     if (!picked.dir) return;
@@ -73,47 +76,66 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
     const r = await post<Prefs & R>("/api/app/game-folder/remove", { dir });
     if (!r.error) setPrefs((p) => (p ? { ...p, game_folders: r.game_folders } : p));
   };
-  const exportSetup = async () => {
+  const exportSetup = () => run("app:export", async () => {
     const r = await post<{ files?: number } & R>("/api/app/export");
     if (r.error) return toast(r.error, true);
     if (r.ok) toast("Saved your setup.");
-  };
+  }, "Exporting your setup…");
   const importSetup = async () => {
     if (!(await ask("Bring in a setup file? It replaces this game's mode settings, presets, admins and welcome page with the ones in the file.", { ok: "Choose a file" }))) return;
-    const r = await post<{ missing?: string[]; hl?: string; game?: string } & R>("/api/app/import");
-    if (r.error) return toast(r.error, true);
-    if (r.cancelled) return;
-    if (r.missing?.length && (await ask(`Done. The setup also uses ${r.missing.length} mode${r.missing.length === 1 ? "" : "s"} or add-on${r.missing.length === 1 ? "" : "s"} that aren't installed here. Install them now?`, { ok: "Install them" }))) {
-      const i = await post<{ job?: string } & R>("/api/setup/install", { hl: r.hl, games: [r.game], components: r.missing });
-      if (i.error) return toast(i.error, true);
-      toast("Installing… see Mods for progress.");
-    } else toast("Setup brought in. It applies on the next map.");
-    reloadApp();
+    await run("app:import", async () => {
+      const r = await post<{ missing?: string[]; hl?: string; game?: string } & R>("/api/app/import");
+      if (r.error) return toast(r.error, true);
+      if (r.cancelled) return;
+      if (r.missing?.length && (await ask(`Done. The setup also uses ${r.missing.length} mode${r.missing.length === 1 ? "" : "s"} or add-on${r.missing.length === 1 ? "" : "s"} that aren't installed here. Install them now?`, { ok: "Install them" }))) {
+        const i = await post<{ job?: string } & R>("/api/setup/install", { hl: r.hl, games: [r.game], components: r.missing });
+        if (i.error) return toast(i.error, true);
+        toast("Installing… see Mods for progress.");
+      } else toast("Setup brought in. It applies on the next map.");
+      reloadApp();
+    }, "Importing a setup…");
   };
 
-  const setPhoneOn = async (enabled: boolean) => {
+  const setPhoneOn = (enabled: boolean) => run("app:phone", async () => {
     const r = await postJson<PhoneInfo>("/api/app/phone", { enabled }).catch(() => null);
     if (!r) return toast("Couldn't change phone access.", true);
     setPhone(r);
     if (r.error) toast(r.error, true);
-  };
+  }, enabled ? "Turning on phone access…" : "Turning off phone access…");
 
-  const check = async () => {
-    setChecking(true);
+  const check = () => run("app:update:check", async () => {
     const r = await postJson<{ available?: boolean; version?: string; error?: string }>("/api/app/update/check").catch((): { available?: boolean; error?: string } => ({ error: "Couldn't check for updates." }));
-    setChecking(false);
     if (r.error) return toast(r.error, true);
     setChecked(r.available ? "" : "You're on the latest version.");
     reloadApp();
-  };
+  }, "Checking for updates…");
 
-  const install = async () => {
-    setInstalling(true);
+  const install = () => run("app:update:install", async () => {
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/update/install").catch(() => ({ error: "The update didn't install." }));
-    if (r.error) {
-      setInstalling(false);
-      toast(r.error, true);
-    } else toast("Installed. Restarting…");
+    if (r.error) toast(r.error, true);
+    else {
+      setRestarting(true);
+      toast("Installed. Restarting…");
+    }
+  }, `Installing Loner-Strike ${app?.update?.version ?? "update"}…`);
+  const removeAll = async () => {
+    const inst = scan?.installs.find((i) => app?.game && app.game.dir.startsWith(i.hl));
+    if (!app?.game || !inst || !(await ask("Remove Loner-Strike from this game and restore the original files? Close the game first.", { ok: "Remove", danger: true }))) return;
+    const game = app.game.id;
+    await run("app:uninstall", async () => {
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/uninstall", { hl: inst.hl, games: [game] }).catch(() => ({ error: "Couldn't start." }));
+      if (r.error) return toast(r.error, true);
+      toast("Removing… the app restarts when it's done.");
+      // runs on even if you leave this page, so the spinner stays until it's done
+      for (;;) {
+        await new Promise((res) => setTimeout(res, 1000));
+        const j = await getJson<{ state: string; error?: string }>("/api/setup/job").catch(() => null);
+        if (!j || j.state === "running") continue;
+        if (j.state === "error") toast(j.error || "Couldn't remove everything. Nothing was restarted.", true);
+        else await postJson("/api/app/restart");
+        return;
+      }
+    }, "Removing Loner-Strike…");
   };
 
   return (
@@ -135,10 +157,13 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
                 i.games
                   .filter((g) => !(app?.game && app.game.id === g.id && app.game.dir.startsWith(i.hl)))
                   .map((g) => (
-                    <button key={i.hl + g.id} className="btn" onClick={() => postJson("/api/app/game", { hl: i.hl, game: g.id }).then(() => switchTo(`local:${g.id}`))}>
-                      Switch to {g.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}
-                      {g.installed ? "" : " (not set up)"}
-                    </button>
+                    <BusyButton
+                      key={i.hl + g.id}
+                      busy={busy(`app:game:${i.hl}:${g.id}`)}
+                      label={<>Switch to {g.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}{g.installed ? "" : " (not set up)"}</>}
+                      busyLabel="Switching…"
+                      onClick={() => run(`app:game:${i.hl}:${g.id}`, () => postJson("/api/app/game", { hl: i.hl, game: g.id }).then(() => switchTo(`local:${g.id}`)), `Switching to ${g.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}…`)}
+                    />
                   )),
               )}
             </div>
@@ -169,26 +194,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
           <div className="row">
             <button className="btn primary" onClick={openSetup}>Run setup</button>
             {app?.game && scan && (
-              <button
-                className="btn danger"
-                onClick={async () => {
-                  const inst = scan.installs.find((i) => app.game!.dir.startsWith(i.hl));
-                  if (!inst || !(await ask("Remove Loner-Strike from this game and restore the original files? Close the game first.", { ok: "Remove", danger: true }))) return;
-                  const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/uninstall", { hl: inst.hl, games: [app.game!.id] }).catch(() => ({ error: "Couldn't start." }));
-                  if (r.error) return toast(r.error, true);
-                  toast("Removing… the app restarts when it's done.");
-                  clearInterval(removing.current);
-                  removing.current = window.setInterval(async () => {
-                    const j = await getJson<{ state: string; error?: string }>("/api/setup/job").catch(() => null);
-                    if (!j || j.state === "running") return;
-                    clearInterval(removing.current);
-                    if (j.state === "error") toast(j.error || "Couldn't remove everything. Nothing was restarted.", true);
-                    else postJson("/api/app/restart");
-                  }, 1000);
-                }}
-              >
-                Remove Loner-Strike
-              </button>
+              <BusyButton className="btn danger" busy={busy("app:uninstall")} label="Remove Loner-Strike" busyLabel="Removing…" onClick={removeAll} />
             )}
           </div>
         </div>
@@ -202,7 +208,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
               <b>Phone access</b>
               <p className="muted">Only phones that scan the code can connect. Turn it off when you don't need it.</p>
             </div>
-            <Switch on={!!phone?.enabled} label="Phone access" onChange={setPhoneOn} />
+            <Switch on={!!phone?.enabled} label="Phone access" disabled={busy("app:phone")} onChange={setPhoneOn} />
           </div>
           {phone?.enabled && phone.qr && (
             <div className="qr-row">
@@ -222,7 +228,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
                 <b>Sign out all phones</b>
                 <p className="muted">For a lost phone, or a code you shared by mistake. Every phone has to scan the new code.</p>
               </div>
-              <button className="btn danger" onClick={resetPhones}>Sign out phones</button>
+              <BusyButton className="btn danger" busy={busy("app:phones:reset")} label="Sign out phones" busyLabel="Signing out…" onClick={resetPhones} />
             </div>
           )}
         </div>
@@ -247,14 +253,14 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
               <b>Tell me when someone joins</b>
               <p className="muted">A notification when a person (not a bot) joins your game or one of your servers, while Loner-Strike is in the background.</p>
             </div>
-            <Switch on={prefs?.notify_joins ?? true} label="Tell me when someone joins" onChange={(v) => setPref({ notify_joins: v })} />
+            <Switch on={prefs?.notify_joins ?? true} label="Tell me when someone joins" disabled={busy("app:pref:notify_joins")} onChange={(v) => setPref({ notify_joins: v })} />
           </div>
           <div className="row between setting-line toggle">
             <div>
               <b>Keep servers running when I close Loner-Strike</b>
               <p className="muted">Off: closing the app stops your dedicated servers. On: they keep going, and the app picks them up again next time.</p>
             </div>
-            <Switch on={!!prefs?.keep_servers} label="Keep servers running" onChange={(v) => setPref({ keep_servers: v })} />
+            <Switch on={!!prefs?.keep_servers} label="Keep servers running" disabled={busy("app:pref:keep_servers")} onChange={(v) => setPref({ keep_servers: v })} />
           </div>
         </div>
       </section>
@@ -265,8 +271,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
           <p className="muted">Passwords aren't included.</p>
           {ON_THIS_COMPUTER ? (
             <div className="row">
-              <button className="btn" onClick={exportSetup}>Export…</button>
-              <button className="btn" onClick={importSetup}>Import…</button>
+              <BusyButton busy={busy("app:export")} label="Export…" busyLabel="Exporting…" onClick={exportSetup} />
+              <BusyButton busy={busy("app:import")} label="Import…" busyLabel="Importing…" onClick={importSetup} />
             </div>
           ) : (
             <p className="muted">Only on the computer running Loner-Strike.</p>
@@ -282,14 +288,14 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
               <b>Downloads</b> <span className="muted">{mb(storage?.downloads)}</span>
               <p className="muted">Mods and maps kept so reinstalling doesn't download them again.</p>
             </div>
-            {ON_THIS_COMPUTER && <button className="btn" disabled={!storage?.downloads} onClick={() => clear("downloads")}>Clear</button>}
+            {ON_THIS_COMPUTER && <BusyButton busy={busy("app:clear:downloads")} disabled={!storage?.downloads} label="Clear" busyLabel="Clearing…" onClick={() => clear("downloads")} />}
           </div>
           <div className="row between setting-line">
             <div>
               <b>Map pictures</b> <span className="muted">{mb(storage?.pictures)}</span>
               <p className="muted">Screenshots for the map browser. They're fetched again as needed.</p>
             </div>
-            {ON_THIS_COMPUTER && <button className="btn" disabled={!storage?.pictures} onClick={() => clear("pictures")}>Clear</button>}
+            {ON_THIS_COMPUTER && <BusyButton busy={busy("app:clear:pictures")} disabled={!storage?.pictures} label="Clear" busyLabel="Clearing…" onClick={() => clear("pictures")} />}
           </div>
           {ON_THIS_COMPUTER && (
             <div className="row between setting-line">
@@ -311,7 +317,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
             <p className="muted">Version, game folders, what's installed and recent errors, for a bug report. No passwords.</p>
           </div>
           <div className="row">
-            <button className="btn" onClick={copyDiagnostics}>Copy</button>
+            <BusyButton busy={busy("app:diagnostics")} label="Copy" busyLabel="Collecting…" onClick={copyDiagnostics} />
             <a className="btn" href="https://github.com/jamesontucker/Loner-Strike/issues" target="_blank" rel="noreferrer">Report a problem</a>
           </div>
         </div>
@@ -326,9 +332,9 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
               {app?.update ? <p>Version {app.update.version} is available.</p> : <p className="muted">{checked || "You're up to date as of the last check."}</p>}
             </div>
             {app?.update ? (
-              <button className="btn primary" disabled={installing} onClick={install}>{installing ? "Installing…" : `Install ${app.update.version}`}</button>
+              <BusyButton className="btn primary" busy={busy("app:update:install") || restarting} label={`Install ${app.update.version}`} busyLabel={restarting ? "Restarting…" : "Installing…"} onClick={install} />
             ) : (
-              <button className="btn" disabled={checking} onClick={check}>{checking ? "Checking…" : "Check now"}</button>
+              <BusyButton busy={busy("app:update:check")} label="Check now" busyLabel="Checking…" onClick={check} />
             )}
           </div>
           <div className="row between setting-line toggle">
@@ -336,7 +342,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
               <b>Check when Loner-Strike starts</b>
               <p className="muted">It asks before installing anything.</p>
             </div>
-            <Switch on={prefs?.auto_update ?? true} label="Check for updates when Loner-Strike starts" onChange={(v) => setPref({ auto_update: v })} />
+            <Switch on={prefs?.auto_update ?? true} label="Check for updates when Loner-Strike starts" disabled={busy("app:pref:auto_update")} onChange={(v) => setPref({ auto_update: v })} />
           </div>
         </div>
       </section>

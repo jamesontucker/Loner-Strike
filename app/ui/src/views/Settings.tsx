@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
+import { targetKey, useActions } from "../api";
 import type { Online, Setting } from "../types";
-import { Info, SectionHead, Segmented, useCommand, useConfirm } from "../ui";
+import { BusyButton, Info, SectionHead, Segmented, useCommand, useConfirm } from "../ui";
 
 // Short explanations under settings, as in the old panel
 const NOTES: Record<string, string> = {
@@ -65,6 +66,8 @@ const STYLE_NOTES: Record<string, string> = {
 
 export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat: number; refresh: () => void; q?: string }) {
   const run = useCommand(refresh);
+  const { run: act, busy } = useActions();
+  const key = (cvar: string) => `settings:${targetKey()}:${cvar}`;
   const all = data.settings.filter((s) => s.cat === cat && s.visible);
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const list = all.filter((s) => {
@@ -89,7 +92,8 @@ export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat
             values={s.values}
             labels={s.labels}
             current={s.value}
-            onPick={(v) => run("gm_set", [s.cvar, v], true)}
+            disabled={busy(key(s.cvar))}
+            onPick={(v) => act(key(s.cvar), () => run("gm_set", [s.cvar, v], true), `Changing ${s.name}…`)}
           />
         </div>
       ))}
@@ -134,14 +138,20 @@ export function SettingsPage({
 export function MatchButtons({ refresh }: { refresh: () => void }) {
   const ask = useConfirm();
   const run = useCommand(refresh);
+  const { run: act, busy } = useActions();
+  const key = (what: string) => `match:${targetKey()}:${what}`;
   return (
     <div className="row">
-      <button className="btn primary" onClick={() => run("gm_match", ["restart"])}>Restart round</button>
-      <button className="btn" onClick={() => run("gm_do", ["endround"])}>End round now</button>
-      <button className="btn" onClick={() => run("gm_do", ["addtime"])}>Add 10 minutes</button>
-      <button className="btn danger" onClick={async () => (await ask("Reset every match and fun setting for this mode to its defaults?", { ok: "Reset", danger: true })) && run("gm_match", ["reset"])}>
-        Reset this mode's settings
-      </button>
+      <BusyButton className="btn primary" busy={busy(key("restart"))} label="Restart round" busyLabel="Restarting…" onClick={() => act(key("restart"), () => run("gm_match", ["restart"]), "Restarting the round…")} />
+      <BusyButton busy={busy(key("endround"))} label="End round now" busyLabel="Ending…" onClick={() => act(key("endround"), () => run("gm_do", ["endround"]), "Ending the round…")} />
+      <BusyButton busy={busy(key("addtime"))} label="Add 10 minutes" busyLabel="Adding…" onClick={() => act(key("addtime"), () => run("gm_do", ["addtime"]), "Adding 10 minutes…")} />
+      <BusyButton
+        className="btn danger"
+        busy={busy(key("reset"))}
+        label="Reset this mode's settings"
+        busyLabel="Resetting…"
+        onClick={async () => (await ask("Reset every match and fun setting for this mode to its defaults?", { ok: "Reset", danger: true })) && act(key("reset"), () => run("gm_match", ["reset"]), "Resetting this mode's settings…")}
+      />
     </div>
   );
 }

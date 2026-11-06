@@ -56,6 +56,12 @@ Everything it changes is backed up. Remove one mode, or all of Loner-Strike, fro
 
 Only the Steam versions of the games are supported.
 
+## Run a server on a VPS
+
+The app can set up an always-on server on a Linux machine you rent (Ubuntu or Debian, x86). In Servers > New server, pick "A Linux server (VPS)" and give it the machine's address, user and SSH key. It installs Valve's server and Loner-Strike over SSH and runs it as a service on UDP 27015, so it keeps going with the app closed. Oracle's free tier works, as does any VPS at around $4 to $7 a month.
+
+[docs/linux-server.md](docs/linux-server.md) walks through it: picking a host and size, making an SSH key, opening UDP 27015-27020 in the provider's firewall, managing the server and fixing common problems.
+
 ## How it works
 
 Setup installs [Metamod-P](https://github.com/Bots-United/metamod-p), [AMX Mod X](https://www.amxmodx.org) and [ReGameDLL](https://github.com/rehlds/ReGameDLL_CS), then our plugins and the mods you pick from [catalog/](catalog). Mods are downloaded from their original sources and checked against pinned checksums. The app talks to the game over RCON on your computer; nothing goes through a server of ours.

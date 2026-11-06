@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { getJson, postJson } from "../api";
+import { getJson, postJson, useActions } from "../api";
 import { Icon } from "../icons";
-import { Info, SteamProgress, useToast } from "../ui";
+import { BusyButton, Info, SteamProgress, useToast } from "../ui";
 import logo from "../assets/logo.svg";
 
 // ---- what the setup API returns -------------------------------------------------
@@ -62,19 +62,16 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
 
   const chosen = preset === "all" ? usable : preset === "basics" ? [] : usable.filter((c) => picked.has(c.id));
 
-  const starting = useRef(false);
-  const start = async () => {
-    if (starting.current) return;
-    starting.current = true;
+  const { run, busy } = useActions();
+  const start = () => run("setup:install", async () => {
     const r = await postJson<{ ok?: boolean; job?: string; error?: string }>("/api/setup/install", {
       hl: install.hl,
       games,
       components: chosen.map((c) => c.id),
     }).catch((): { ok?: boolean; job?: string; error?: string } => ({ error: "Setup couldn't start." }));
-    starting.current = false;
     if (!r.ok) return toast(r.error || "Setup couldn't start.", true);
     setStage("install");
-  };
+  }, "Starting setup…");
 
   useEffect(() => {
     if (stage !== "install") return;
@@ -89,10 +86,10 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
     return () => window.clearInterval(timer.current);
   }, [stage]);
 
-  const finish = async () => {
+  const finish = () => run("setup:finish", async () => {
     await postJson("/api/app/game", { hl: install.hl, game: games[0] }).catch(() => null);
     onDone();
-  };
+  }, "Opening the panel…");
 
   if (!scan.installs.length) return <NoGame nativeMac={scan.native_mac} onRescan={onRescan} onClose={onClose} />;
 
@@ -219,7 +216,7 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
                 <div>Counter-Strike is open. Close it to continue: setup can't change the game's files while it's running.</div>
               </div>
             )}
-            <Nav back={() => setStage("content")} next={start} nextLabel="Install" canNext={!gameOpen} />
+            <Nav back={() => setStage("content")} next={start} nextLabel="Install" canNext={!gameOpen} busy={busy("setup:install")} busyLabel="Starting…" />
           </section>
         )}
 
@@ -265,7 +262,7 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
             </ul>
             {!!job?.failed_compiles?.length && <p className="err-text">These didn't build, so they won't load: {job.failed_compiles.join(", ")}.</p>}
             {job?.notes?.map((n) => <p key={n} className="muted">{n}</p>)}
-            <button className="btn primary big-btn" onClick={finish}>Open the panel</button>
+            <BusyButton className="btn primary big-btn" busy={busy("setup:finish")} label="Open the panel" busyLabel="Opening…" onClick={finish} />
           </section>
         )}
       </div>
@@ -277,11 +274,11 @@ function order(s: Stage) {
   return ["welcome", "games", "content", "review", "install", "done"].indexOf(s);
 }
 
-function Nav({ back, next, canNext = true, nextLabel = "Continue" }: { back: () => void; next: () => void; canNext?: boolean; nextLabel?: string }) {
+function Nav({ back, next, canNext = true, nextLabel = "Continue", busy = false, busyLabel = "" }: { back: () => void; next: () => void; canNext?: boolean; nextLabel?: string; busy?: boolean; busyLabel?: string }) {
   return (
     <div className="setup-nav">
-      <button className="btn" onClick={back}>Back</button>
-      <button className="btn primary" disabled={!canNext} onClick={next}>{nextLabel}</button>
+      <button className="btn" disabled={busy} onClick={back}>Back</button>
+      <BusyButton className="btn primary" busy={busy} disabled={!canNext} label={nextLabel} busyLabel={busyLabel} onClick={next} />
     </div>
   );
 }
@@ -300,7 +297,7 @@ function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan
             <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Steam in CrossOver" : ""}. Install one, then reopen Loner-Strike.</p>
           )}
           <div className="row">
-            <button className="btn primary" disabled={looking} onClick={() => { setLooking(true); onRescan(); setTimeout(() => setLooking(false), 1500); }}>{looking ? "Looking…" : "Look again"}</button>
+            <BusyButton className="btn primary" busy={looking} label="Look again" busyLabel="Looking…" onClick={() => { setLooking(true); onRescan(); setTimeout(() => setLooking(false), 1500); }} />
             <button className="btn" onClick={onClose}>Continue anyway</button>
           </div>
         </section>
