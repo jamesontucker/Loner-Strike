@@ -17,6 +17,11 @@
    "src": "hns/hidenseek.sma",
    "out": "hidenseek",
    "include": null
+  },
+  {
+   "src": "hns/hns_bot_stealth.sma",
+   "out": "hns_bot_stealth",
+   "include": null
   }
  ],
  "maps": [
@@ -35,5 +40,5 @@
    ]
   }
  ],
- "credits": "HideNSeek 2.8 by Exolent (https://forums.alliedmods.net/showthread.php?t=65370), copy from https://github.com/evandrocoan/MultiModServer, GPL; CZ bot patches by Loner-Strike"
+ "credits": "HideNSeek 2.8 by Exolent (https://forums.alliedmods.net/showthread.php?t=65370), copy from https://github.com/evandrocoan/MultiModServer, GPL; CZ bot patches by Loner-Strike; hns_bot_stealth (darkness hides still hiders from bot seekers)"
 }

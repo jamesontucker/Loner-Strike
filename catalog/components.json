@@ -342,7 +342,8 @@
    "name": "Hide and Seek",
    "mode_id": "hns",
    "plugins": [
-    "hidenseek.amxx"
+    "hidenseek.amxx",
+    "hns_bot_stealth.amxx"
    ],
    "source": "https://github.com/evandrocoan/MultiModServer (HideNSeek 2.8 by Exolent)",
    "bot_patched": true
