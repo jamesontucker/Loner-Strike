@@ -84,6 +84,69 @@ impl Progress for Quiet {
 }
 
 /// Everything an install step needs.
+/// A fingerprint of what Loner-Strike ships for a part ("core" is our plugins, the rest
+/// are catalog components): a hash of its files. Kept in the install record when it's
+/// installed, so after an app update the parts whose files changed can be found and
+/// put in again (`outdated`). Computed once per app run.
+pub fn shipped_version(res: &Path, id: &str) -> String {
+    use sha2::{Digest, Sha256};
+    static CACHE: Mutex<Option<std::collections::HashMap<String, String>>> = Mutex::new(None);
+    let key = format!("{}|{id}", res.display());
+    if let Some(v) = CACHE.lock().unwrap().as_ref().and_then(|c| c.get(&key).cloned()) {
+        return v;
+    }
+    let mut h = Sha256::new();
+    let tree = |h: &mut Sha256, root: &Path| {
+        let mut files = crate::archive::walk(root);
+        files.sort();
+        for f in files {
+            h.update(f.strip_prefix(root).unwrap_or(&f).to_string_lossy().replace('\\', "/").as_bytes());
+            h.update(std::fs::read(&f).unwrap_or_default());
+        }
+    };
+    if id == "core" {
+        tree(&mut h, &res.join("plugins"));
+    } else if let Some(c) = components::load_catalog(res).ok().and_then(|cat| cat.into_iter().find(|c| c["id"] == id)) {
+        h.update(c.to_string().as_bytes());
+        if let Some(v) = c["vendor"].as_str() {
+            tree(&mut h, &res.join(v));
+        }
+    }
+    let v = format!("{:x}", h.finalize())[..16].to_string();
+    CACHE.lock().unwrap().get_or_insert_with(Default::default).insert(key, v.clone());
+    v
+}
+
+/// Installed parts (core and components, not the foundation) whose shipped files have
+/// changed since they were put in.
+pub fn outdated(res: &Path, rec: &Record) -> Vec<String> {
+    rec.data
+        .components
+        .iter()
+        .filter(|(id, _)| id.as_str() != "foundation")
+        .filter(|(id, info)| info.get("version").and_then(|v| v.as_str()) != Some(shipped_version(res, id).as_str()))
+        .map(|(id, _)| id.clone())
+        .collect()
+}
+
+/// Catalog mods that are in the game already but weren't put there by Loner-Strike
+/// (the player had them before): their plugin is there, without our bot fixes.
+/// Installing ours backs theirs up first.
+pub fn unmanaged(res: &Path, game_dir: &Path, rec: &Record) -> Vec<String> {
+    let plugins = game_dir.join("addons/amxmodx/plugins");
+    let Ok(cat) = components::load_catalog(res) else { return vec![] };
+    cat.iter()
+        .filter(|c| c["installable"].as_bool().unwrap_or(true) && matches!(c["kind"].as_str(), Some("mode") | Some("addon")))
+        .filter(|c| !c["id"].as_str().is_some_and(|id| rec.data.components.contains_key(id)))
+        .filter(|c| {
+            let listed = c["plugins"].as_array().into_iter().flatten().filter_map(|p| p.as_str()).map(String::from);
+            let built = c["compile"].as_array().into_iter().flatten().filter_map(|b| b["out"].as_str()).map(|o| format!("{o}.amxx"));
+            listed.chain(built).any(|p| plugins.join(&p).is_file())
+        })
+        .filter_map(|c| c["id"].as_str().map(String::from))
+        .collect()
+}
+
 pub struct Ctx<'a> {
     pub install: &'a Install,
     /// Loner-Strike's files: plugins/, mods/, catalog/
@@ -474,7 +537,7 @@ fn install_game_with(job: &Job, plan: &InstallPlan, ctx: &Ctx, g: &str, rec: &mu
     run_step(job, &format!("{g}/core-configs"), || core::configs(rec, ctx, &modes, &addons))?;
     run_step(job, &format!("{g}/core-bots"), || core::bot_styles(rec, ctx, g))?;
     run_step(job, &format!("{g}/core-keys"), || core::binds(rec))?;
-    rec.done("core", json!(1))
+    rec.done("core", json!(shipped_version(ctx.res, "core")))
 }
 
 /// Runs an install plan on this thread, reporting to job.

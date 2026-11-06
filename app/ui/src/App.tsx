@@ -1,3 +1,4 @@
+import { FilesUpdate } from "./views/FilesUpdate";
 import { useCallback, useEffect, useState } from "react";
 import { clock, getJson, ON_THIS_COMPUTER, postJson, setTarget, withTarget } from "./api";
 import { useGameState } from "./api";
@@ -262,6 +263,7 @@ function Shell() {
         {online && <QuickBar data={online} maps={maps} refresh={refresh} reloadMaps={() => reloadMaps(true)} />}
         <main className="content">
           <HomeScreenHint />
+          {!setupOpen && <FilesUpdate app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} />}
           {state === null ? (
             <p className="muted">Connecting…</p>
           ) : needsGame ? (

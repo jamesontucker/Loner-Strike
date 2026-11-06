@@ -219,10 +219,23 @@ static PENDING: Mutex<Option<tauri_plugin_updater::Update>> = Mutex::new(None);
 async fn api_app(State(st): State<Shared>) -> Json<Value> {
     let version = st.app.get().map(|a| a.package_info().version.to_string()).unwrap_or_default();
     let pending = PENDING.lock().unwrap().as_ref().map(|u| json!({"version": u.version, "notes": u.body}));
-    let game = st.game().map(|g| {
-        let installed = crate::setup::record::Record::open(&g.dir).component_ids();
-        json!({"id": g.name, "dir": g.dir, "hl": g.hl, "dedicated": g.dedicated, "port": g.port, "installed": installed})
-    });
+    let res = crate::setup_api::resources_for(&st).ok();
+    let game = match st.game() {
+        Some(g) => tokio::task::spawn_blocking(move || {
+            let rec = crate::setup::record::Record::open(&g.dir);
+            // parts whose files changed in an app update (hashing is cached after the first time)
+            let outdated = res.as_ref().map(|r| crate::setup::outdated(r, &rec)).unwrap_or_default();
+            // only once Loner-Strike is set up here: before that, setup shows what it'll replace
+            let theirs = match (&res, rec.data.components.contains_key("core")) {
+                (Some(r), true) => crate::setup::unmanaged(r, &g.dir, &rec),
+                _ => vec![],
+            };
+            json!({"id": g.name, "dir": g.dir, "hl": g.hl, "dedicated": g.dedicated, "port": g.port, "installed": rec.component_ids(), "outdated": outdated, "unmanaged": theirs})
+        })
+        .await
+        .ok(),
+        None => None,
+    };
     Json(json!({"version": version, "update": pending, "game": game,
                 "bots": saved_bots(&st), "lastmap": last_map(&st)}))
 }

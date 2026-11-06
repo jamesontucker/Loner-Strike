@@ -208,7 +208,7 @@ pub fn install_component(rec: &mut Record, ctx: &Ctx, comp: &Value) -> Result<bo
         ok = core::compile_plugin(rec, ctx, src, out, c["include"].as_str())? && ok;
     }
     maps(rec, ctx, comp);
-    rec.done(id, comp.get("version").cloned().unwrap_or(Value::from(1)))?;
+    rec.done(id, Value::from(super::shipped_version(ctx.res, id)))?;
     Ok(ok)
 }
 
