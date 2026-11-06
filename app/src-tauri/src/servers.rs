@@ -147,8 +147,9 @@ fn load_checked() -> Result<Vec<Entry>, String> {
     };
     // servers made before they started at 27016 shared the game's port: move them
     // (saved with the next change)
+    // (not servers on another machine: they're alone there and keep 27015)
     for i in 0..list.len() {
-        if !list[i].imported && list[i].port < FIRST_PORT {
+        if !list[i].imported && list[i].remote.is_none() && list[i].port < FIRST_PORT {
             list[i].port = free_port(&list);
         }
     }
