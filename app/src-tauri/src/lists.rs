@@ -60,7 +60,7 @@ fn watch_bans() {
         std::thread::sleep(std::time::Duration::from_secs(60));
         let Some(group) = load().remove("bans").filter(|g| g.members.len() >= 2) else { continue };
         for m in &group.members {
-            check(m, "bans");
+            check(m, "bans", false);
         }
     });
 }
@@ -173,12 +173,13 @@ fn name_of(target: &str) -> String {
 pub fn after_change(target: &str, list: &str) {
     let member = if target == "local" { local_id() } else { Some(target.to_string()) };
     if let Some(member) = member {
-        check(&member, list);
+        check(&member, list, true);
     }
 }
 
-/// Passes `member`'s list on if it changed since it was last seen.
-fn check(member: &str, list: &str) {
+/// Passes `member`'s list on if it changed since it was last seen. `edited`: the app just
+/// changed it; otherwise it's the minute check, which trusts only a settled ban file.
+fn check(member: &str, list: &str, edited: bool) {
     let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let member = member.to_string();
     let mut c = load();
@@ -192,6 +193,18 @@ fn check(member: &str, list: &str) {
         // what was added or lifted here since the last share, and only that
         // this member's bans couldn't be read: nothing is worked out from that
         let Ok(mine) = crate::admins::ban_set(&g) else { return };
+        if !edited {
+            // the game may be halfway through writing the file: the same answer twice, a
+            // moment apart, or nothing is passed on this time
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            if crate::admins::ban_set(&g).ok().as_ref() != Some(&mine) {
+                return;
+            }
+            // every shared ban gone at once isn't something the game does by itself
+            if mine.is_empty() && !group.base.is_empty() {
+                return;
+            }
+        }
         let mine: Vec<String> = mine.into_iter().collect();
         let add: Vec<String> = mine.iter().filter(|b| !group.base.contains(b)).cloned().collect();
         let lift: Vec<String> = group.base.iter().filter(|b| !mine.contains(b)).cloned().collect();

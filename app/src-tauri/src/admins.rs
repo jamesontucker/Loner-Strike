@@ -478,7 +478,11 @@ fn ban_text(g: &Game, kind: &str) -> Result<String, String> {
         // only a file that isn't there counts as no bans: a failed read must never look
         // like an empty list (it would be written back, or lift every ban when shared)
         Some((r, dir)) => Ok(crate::remote::read_file_opt(r, &format!("{dir}/{}", ban_file(kind)))?.map(|b| crate::rcon::latin1(&b)).unwrap_or_default()),
-        None => Ok(crate::sys::read_latin1(&g.dir.join(ban_file(kind))).unwrap_or_default()),
+        None => match crate::sys::read_latin1(&g.dir.join(ban_file(kind))) {
+            Ok(t) => Ok(t),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+            Err(e) => Err(format!("Couldn't read {} ({e}).", ban_file(kind))),
+        },
     }
 }
 
