@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
-import { SectionHead, useToast } from "../ui";
+import { SectionHead, useConfirm, useToast } from "../ui";
 
 const SORTS: [string, string][] = [["popular", "Most downloaded"], ["new", "Newest"], ["liked", "Most liked"]];
 // Shown until the server sends its own list
@@ -15,6 +15,7 @@ const size = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `$
 /** GameBanana's Counter-Strike 1.6 section: maps, skins, models, sounds and more. */
 /** only: show just one section (a server's "Get maps"). */
 export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?: string }) {
+  const ask = useConfirm();
   const toast = useToast();
   const [section, setSection] = useState("maps");
   const [sections, setSections] = useState<GbSection[]>(FALLBACK_SECTIONS);
@@ -101,7 +102,7 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
     }
   };
   const remove = async (mod: number, name: string) => {
-    if (!confirm(`Remove ${name}? ${section === "maps" ? "Its maps are deleted." : "The game's original files are put back."}`)) return;
+    if (!(await ask(`Remove ${name}? ${section === "maps" ? "Its maps are deleted." : "The game's original files are put back."}`, { ok: "Remove", danger: true }))) return;
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/gb/uninstall", { mod, section }).catch(() => ({ error: "Couldn't remove it." }));
     if (r.error) return toast(r.error, true);
     toast(`Removed ${name}`);
@@ -157,6 +158,7 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
           </button>
         ))}
         {!items.length && !loading && !error && <p className="muted">Nothing here.</p>}
+        {!items.length && loading && Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>)}
       </div>
       {!done && !error && items.length > 0 && (
         <div className="row center">

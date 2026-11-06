@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import type { Online } from "../types";
-import { Banner, useCommand } from "../ui";
+import { Banner, useCommand, useConfirm } from "../ui";
 import { SettingsPage } from "./Settings";
 
 export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
+  const ask = useConfirm();
   const run = useCommand(refresh);
   const st = data.state;
   const [count, setCount] = useState(st.bots);
@@ -42,7 +43,7 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
           <button className="btn" onClick={() => run("gm_bots", ["addt"])}>Add a Terrorist</button>
           <button className="btn" onClick={() => run("gm_bots", ["addct"])}>Add a CT</button>
           <button className="btn" onClick={() => run("gm_bots", ["kill"])}>Kill all</button>
-          <button className="btn danger" onClick={() => confirm("Kick every bot?") && run("gm_bots", ["kick"])}>Kick all</button>
+          <button className="btn danger" onClick={async () => (await ask("Kick every bot?", { ok: "Kick all", danger: true })) && run("gm_bots", ["kick"])}>Kick all</button>
         </div>
       </div>
     </SettingsPage>

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { getJson, postJson } from "../api";
 import type { Online } from "../types";
-import { SectionHead, useCommand, useToast } from "../ui";
+import { SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 
 type Share = {
   installed: boolean;
@@ -76,6 +76,7 @@ function loadMethod(): Method {
 
 /** server: when it's a dedicated server's page (its name and who it lets in). */
 export function Friends({ data, refresh, server }: { data: Online | null; refresh: () => void; server?: { name: string; visibility: string } }) {
+  const ask = useConfirm();
   const toast = useToast();
   const run = useCommand(refresh);
   const [sh, setSh] = useState<Share | null>(null);
@@ -123,7 +124,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   };
 
   if (missing) return <div className="stack"><SectionHead title="Play with friends" /><p className="muted">Sharing isn't in this version of the app yet.</p></div>;
-  if (!sh) return <p className="muted">Loading…</p>;
+  if (!sh) return <Skeleton />;
 
   const serverName = name ?? sh.name;
   const password = pw ?? sh.password;
@@ -218,7 +219,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
         <li className={sh.connected ? "done" : "now"}>
           <strong>Connect this computer to your account</strong>
           {sh.connected ? (
-            <p>Done. <button className="btn small" onClick={() => confirm("Disconnect from playit.gg? You'll need to approve it again.") && act("disconnect")}>Disconnect</button></p>
+            <p>Done. <button className="btn small" onClick={async () => (await ask("Disconnect from playit.gg? You'll need to approve it again.", { ok: "Disconnect", danger: true })) && act("disconnect")}>Disconnect</button></p>
           ) : sh.claim?.step === "failed" ? (
             <><p className="err-text">{sh.claim.error}</p><button className="btn primary" onClick={() => act("connect")}>Try again</button></>
           ) : sh.claim ? (

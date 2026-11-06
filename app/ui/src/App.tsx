@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { clock, getJson, postJson, setTarget, withTarget } from "./api";
+import { clock, getJson, ON_THIS_COMPUTER, postJson, setTarget, withTarget } from "./api";
 import { useGameState } from "./api";
 import { Icon } from "./icons";
 import type { AppInfo, MapInfo, Online, ServerList } from "./types";
-import { ToastProvider, useCommand, useToast } from "./ui";
+import { ConfirmProvider, ToastProvider, useCommand, useToast } from "./ui";
 import { Addons } from "./views/Addons";
 import { AppSettings } from "./views/AppSettings";
 import { Bots } from "./views/Bots";
@@ -50,7 +50,9 @@ function loadSection(): Section {
 export default function App() {
   return (
     <ToastProvider>
-      <Shell />
+      <ConfirmProvider>
+        <Shell />
+      </ConfirmProvider>
     </ToastProvider>
   );
 }
@@ -136,6 +138,25 @@ function Shell() {
   const localGames = (["cstrike", "czero"] as const).filter((g) => scan?.installs.some((i) => i.games.some((x) => x.id === g)));
   const myGame = openServer ? null : app?.game?.id;
 
+  // the macOS menu bar: "section:<id>" or "updates"
+  useEffect(() => {
+    const onMenu = async (e: Event) => {
+      const what = (e as CustomEvent<string>).detail;
+      if (what.startsWith("section:")) {
+        const id = what.slice(8) as Section;
+        if (NAV.some((n) => n.id === id)) setSection(id);
+      } else if (what === "updates") {
+        setSection("settings");
+        const r = await postJson<{ available?: boolean; version?: string; error?: string }>("/api/app/update/check").catch((): { available?: boolean; version?: string; error?: string } => ({ error: "Couldn't check for updates." }));
+        if (r.error) toast(r.error, true);
+        else toast(r.available ? `Loner-Strike ${r.version} is out. Install it from Settings.` : "You're on the latest version.");
+        reloadApp();
+      }
+    };
+    window.addEventListener("ls-menu", onMenu);
+    return () => window.removeEventListener("ls-menu", onMenu);
+  });
+
   // ⌘1-⌘9 switch sections
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -158,6 +179,7 @@ function Shell() {
   }, [navKey, reloadMaps]);
 
   const players = openServer ? 0 : online?.players.length ?? 0;
+  const tabbar = tabbarFor(!!servers?.servers.length);
 
   // First run (nothing set up yet), or opened from Settings
   if (scan && (setupOpen || (!anySetUp(scan) && !setupLater))) {
@@ -217,6 +239,7 @@ function Shell() {
       <div className="main">
         <Strip data={online} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} refresh={refresh} />
         <main className="content">
+          <HomeScreenHint />
           {state === null ? (
             <p className="muted">Connecting…</p>
           ) : needsGame ? (
@@ -271,7 +294,7 @@ function Shell() {
 
       {/* phones: the five most used sections, the rest under More */}
       <nav className="tabbar" aria-label="Sections">
-        {TABBAR.map((id) => {
+        {tabbar.map((id) => {
           const n = NAV.find((x) => x.id === id)!;
           return (
             <button key={id} aria-current={section === id && !moreOpen ? "page" : undefined} onClick={() => setSection(id)}>
@@ -281,7 +304,7 @@ function Shell() {
             </button>
           );
         })}
-        <button aria-current={moreOpen || !TABBAR.includes(section) ? "page" : undefined} onClick={() => setMoreOpen((o) => !o)}>
+        <button aria-current={moreOpen || !tabbar.includes(section) ? "page" : undefined} onClick={() => setMoreOpen((o) => !o)}>
           <Icon name="menu" size={22} />
           <span>More</span>
           {app?.update && <i className="tab-dot" />}
@@ -290,7 +313,7 @@ function Shell() {
       {moreOpen && (
         <div className="sheet-backdrop bottom" onClick={() => setMoreOpen(false)}>
           <div className="more-sheet" onClick={(e) => e.stopPropagation()}>
-            {NAV.filter((n) => !TABBAR.includes(n.id)).map((n) => (
+            {NAV.filter((n) => !tabbar.includes(n.id)).map((n) => (
               <button key={n.id} className="nav-item" aria-current={section === n.id ? "page" : undefined} onClick={() => setSection(n.id)}>
                 <Icon name={n.icon} />
                 {n.label}
@@ -304,7 +327,8 @@ function Shell() {
   );
 }
 
-const TABBAR: Section[] = ["play", "maps", "bots", "players"];
+/** The phone's bottom bar: the most used sections, and Servers for people who host. */
+const tabbarFor = (hosting: boolean): Section[] => (hosting ? ["play", "maps", "players", "servers"] : ["play", "maps", "bots", "players"]);
 
 function Strip({ data, reason, app, server, refresh }: { data: Online | null; reason: string; app: AppInfo | null; server?: string; refresh: () => void }) {
   const run = useCommand(refresh);
@@ -353,6 +377,36 @@ function Waiting({ label, onPlay }: { label: string; onPlay: () => void }) {
       <h2>{label}</h2>
       <p className="muted">This needs a game running.</p>
       <button className="btn primary" onClick={onPlay}>Go to Play</button>
+    </div>
+  );
+}
+
+/** On a phone in the browser: how to put the panel on the home screen, so it opens like an app. */
+function HomeScreenHint() {
+  const [gone, setGone] = useState(() => {
+    try {
+      return localStorage.getItem("ls.homeHint") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
+  if (ON_THIS_COMPUTER || standalone || gone || window.innerWidth > 760) return null;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const hide = () => {
+    setGone(true);
+    try {
+      localStorage.setItem("ls.homeHint", "1");
+    } catch {
+      /* private window */
+    }
+  };
+  return (
+    <div className="banner home-hint">
+      <div>
+        Put Loner-Strike on your home screen: {ios ? <>tap <b>Share</b>, then <b>Add to Home Screen</b></> : <>tap <b>⋮</b>, then <b>Add to Home screen</b></>}. It opens like an app.
+      </div>
+      <button className="btn" onClick={hide}>Got it</button>
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { getJson, postJson } from "../api";
 import type { AppInfo, PhoneInfo } from "../types";
-import { SectionHead, Switch, useToast } from "../ui";
+import { SectionHead, Switch, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
 
 export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app: AppInfo | null; reloadApp: () => void; scan: Scan | null; openSetup: () => void; switchTo: (id: string) => void }) {
+  const ask = useConfirm();
   const toast = useToast();
   const [phone, setPhone] = useState<PhoneInfo | null>(null);
   const [checking, setChecking] = useState(false);
@@ -81,7 +82,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
                 className="btn danger"
                 onClick={async () => {
                   const inst = scan.installs.find((i) => app.game!.dir.startsWith(i.hl));
-                  if (!inst || !confirm("Remove Loner-Strike from this game and restore the original files? Close the game first.")) return;
+                  if (!inst || !(await ask("Remove Loner-Strike from this game and restore the original files? Close the game first.", { ok: "Remove", danger: true }))) return;
                   const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/uninstall", { hl: inst.hl, games: [app.game!.id] }).catch(() => ({ error: "Couldn't start." }));
                   if (r.error) toast(r.error, true);
                   else toast("Removing… the app restarts when it's done.");

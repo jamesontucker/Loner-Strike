@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getJson, postJson } from "../api";
 import { Icon } from "../icons";
 import type { AppInfo } from "../types";
-import { SectionHead, SteamProgress, useToast } from "../ui";
+import { SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
 import type { Job, Scan } from "./Setup";
 
 const BOT_NOTE = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" };
@@ -12,6 +12,7 @@ const BOT_RATING: Record<string, "great" | "ok" | "weak" | "none"> = {
 
 /** Install or remove game modes and add-ons one at a time, on the game or server being managed. */
 export function Mods({ app, scan, running, onChanged, openSetup }: { app: AppInfo | null; scan: Scan | null; running: boolean; onChanged: () => void; openSetup: () => void }) {
+  const ask = useConfirm();
   const toast = useToast();
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -34,14 +35,14 @@ export function Mods({ app, scan, running, onChanged, openSetup }: { app: AppInf
     return () => clearInterval(t);
   }, [busy, running, toast, onChanged]);
 
-  if (!game || !scan) return <p className="muted">{scan ? "No game found." : "Loading…"}</p>;
+  if (!game || !scan) return (scan ? <p className="muted">No game found.</p> : <Skeleton />);
   const installed = new Set(game.installed ?? []);
   const setUp = installed.has("core");
   const items = scan.catalog.filter((c) => !c.games || c.games.includes(game.id));
   const where = game.dedicated ? "this server" : game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero";
 
   const change = async (id: string | null, remove: boolean) => {
-    if (remove && !confirm(id ? "Remove it? Its files go, and anything it replaced is put back." : `Remove Loner-Strike from ${where}? Everything it changed is put back.`)) return;
+    if (remove && !(await ask(id ? "Remove it? Its files go, and anything it replaced is put back." : `Remove Loner-Strike from ${where}? Everything it changed is put back.`, { ok: "Remove", danger: true }))) return;
     const body = { hl: game.hl, games: [game.id], ...(id ? { components: [id] } : remove ? {} : { components: [] }) };
     const r = await postJson<{ ok?: boolean; error?: string }>(remove ? "/api/setup/uninstall" : "/api/setup/install", body).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) return toast(r.error, true);

@@ -1,6 +1,49 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { cmd, options, sameValue } from "./api";
 
+// ---- asking before something can't be undone --------------------------------------
+type Ask = { text: string; ok: string; danger: boolean; done: (yes: boolean) => void };
+const AskCtx = createContext<(text: string, opts?: { ok?: string; danger?: boolean }) => Promise<boolean>>(async () => false);
+/** In-app replacement for window.confirm: `if (!(await ask("Delete it?", { ok: "Delete", danger: true }))) return;` */
+export const useConfirm = () => useContext(AskCtx);
+
+export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const [q, setQ] = useState<Ask | null>(null);
+  const ask = useCallback(
+    (text: string, opts?: { ok?: string; danger?: boolean }) =>
+      new Promise<boolean>((resolve) => setQ({ text, ok: opts?.ok ?? "OK", danger: !!opts?.danger, done: resolve })),
+    [],
+  );
+  const close = (yes: boolean) => {
+    q?.done(yes);
+    setQ(null);
+  };
+  useEffect(() => {
+    if (!q) return;
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close(false);
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  });
+  return (
+    <AskCtx.Provider value={ask}>
+      {children}
+      {q && (
+        <div className="sheet-backdrop" onClick={() => close(false)}>
+          <div className="sheet ask" role="alertdialog" aria-modal="true" aria-label={q.text} onClick={(e) => e.stopPropagation()}>
+            <p>{q.text}</p>
+            <div className="row ask-buttons">
+              <button className="btn" autoFocus={q.danger} onClick={() => close(false)}>Cancel</button>
+              <button className={`btn ${q.danger ? "danger strong" : "primary"}`} autoFocus={!q.danger} onClick={() => close(true)}>{q.ok}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </AskCtx.Provider>
+  );
+}
+
 // ---- toasts --------------------------------------------------------------
 type Toast = { id: number; text: string; error?: boolean };
 const ToastCtx = createContext<(text: string, error?: boolean) => void>(() => {});
@@ -121,6 +164,15 @@ export function SteamProgress({ value, title, text, error }: { value: number; ti
         <span>This may take a few minutes.</span>
         <span>{Math.round(value * 100)}%</span>
       </div>
+    </div>
+  );
+}
+
+/** Grey placeholder bars while something loads. */
+export function Skeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="skeleton" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: rows }, (_, i) => <div key={i} className="skeleton-row" style={{ width: `${92 - ((i * 23) % 40)}%` }} />)}
     </div>
   );
 }

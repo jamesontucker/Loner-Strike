@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { postJson, withTarget } from "../api";
 import type { MapInfo, Online } from "../types";
-import { SectionHead, useCommand, useToast } from "../ui";
+import { SectionHead, useCommand, useConfirm, useToast } from "../ui";
 
 const CATS: [string, string][] = [
   ["all", "All"], ["fav", "Favourites"], ["recent", "Recently played"], ["defuse", "Bomb defusal"],
@@ -38,6 +38,7 @@ export function MapCard({ map, onClick, current }: { map: MapInfo; onClick: () =
 }
 
 export function Maps({ data, maps, reload, refresh }: { data: Online | null; maps: MapInfo[]; reload: () => void; refresh: () => void }) {
+  const ask = useConfirm();
   const run = useCommand(refresh);
   const toast = useToast();
   const [cat, setCat] = useState("all");
@@ -63,7 +64,7 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
     const msg = others.length
       ? `${map.name} came in "${map.modName ?? "a pack"}" with ${others.length} other map${others.length === 1 ? "" : "s"} (${others.slice(0, 6).join(", ")}${others.length > 6 ? "…" : ""}). Removing it removes the whole download. Continue?`
       : `Remove ${map.name}? Its files are deleted.`;
-    if (!confirm(msg)) return;
+    if (!(await ask(msg, { ok: "Remove", danger: true }))) return;
     const r = await postJson<{ ok?: boolean; error?: string; maps?: string[] }>("/api/gb/uninstall", { mod: map.mod, section: "maps" }).catch((): { ok?: boolean; error?: string; maps?: string[] } => ({ error: "Couldn't remove it." }));
     if (r.error) return toast(r.error, true);
     toast(`Removed ${(r.maps ?? [map.name]).join(", ")}`);
@@ -102,7 +103,7 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
         {shown.map((m) => (
           <MapCard key={m.name} map={m} current={m.name.toLowerCase() === current} onClick={() => setPicked(m)} />
         ))}
-        {!shown.length && <p className="muted">{maps.length ? "No maps match." : "Loading maps…"}</p>}
+        {!shown.length && (maps.length ? <p className="muted">No maps match.</p> : Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>))}
       </div>
 
       {picked && (

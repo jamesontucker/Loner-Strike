@@ -730,7 +730,23 @@ fn console(e: &Entry) -> Vec<String> {
         }
     }
     let skip = lines.len().saturating_sub(300);
-    lines.split_off(skip)
+    lines.split_off(skip).into_iter().map(|l| hide_passwords(&l)).collect()
+}
+
+/// The server logs every RCON command with its password ("rcon 1234 "secret" status"),
+/// and rcon_password / sv_password changes too: blank them out before showing the console.
+fn hide_passwords(line: &str) -> String {
+    let lower = line.to_lowercase();
+    for key in ["rcon ", "rcon_password", "sv_password", "password "] {
+        if let Some(i) = lower.find(key) {
+            if let Some(q) = line[i..].find('"').map(|q| i + q) {
+                if let Some(end) = line[q + 1..].find('"').map(|e| q + 1 + e) {
+                    return format!("{}\"••••\"{}", &line[..q], hide_passwords(&line[end + 1..]));
+                }
+            }
+        }
+    }
+    line.to_string()
 }
 
 fn view(e: &Entry) -> Value {
@@ -1091,6 +1107,13 @@ mod tests {
         let cfg = "hostname \"My \"Server\"\nsv_password secret // comment\nsv_passwordx 1\n";
         assert_eq!(cfg_value(cfg, "hostname").unwrap(), "My \"Server");
         assert_eq!(cfg_value(cfg, "sv_password").unwrap(), "secret");
+    }
+
+    #[test]
+    fn console_hides_passwords() {
+        assert_eq!(hide_passwords(r#"rcon 350334764 "6QO7jG8" quit"#), r#"rcon 350334764 "••••" quit"#);
+        assert_eq!(hide_passwords(r#"sv_password "abc""#), r#"sv_password "••••""#);
+        assert_eq!(hide_passwords("Connection to Steam servers successful."), "Connection to Steam servers successful.");
     }
 
     #[test]

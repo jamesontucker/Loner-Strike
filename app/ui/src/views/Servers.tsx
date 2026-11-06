@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { getJson, postJson } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson } from "../api";
 import type { AppInfo, MapInfo, Online, ServerInfo, ServerList } from "../types";
-import { SectionHead, SteamProgress, useToast } from "../ui";
+import { SectionHead, SteamProgress, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
 import { Bots } from "./Bots";
 import { Friends } from "./Friends";
@@ -60,12 +60,13 @@ export function JobProgress({ onEnd }: { onEnd: (ok: boolean) => void }) {
 
 /** Every server, and making or adding one. Opening a server shows its own page. */
 export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; list: ServerList | null; onOpen: (id: string) => void; onChanged: () => void }) {
+  const ask = useConfirm();
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
 
   const act = async (s: ServerInfo, action: string) => {
-    if (action === "delete" && !confirm(s.imported ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.` : `Delete "${s.name}"? Its folder, maps, settings and admins are deleted.`)) return;
+    if (action === "delete" && !(await ask(s.imported ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.` : `Delete "${s.name}"? Its folder, maps, settings and admins are deleted.`, { ok: s.imported ? "Remove" : "Delete", danger: true }))) return;
     const r = await post(`/api/servers/${s.id}/${action}`);
     if (r.error) return toast(r.error, true);
     if (action === "join") toast(`Joining ${s.name}…`);
@@ -77,7 +78,7 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
   return (
     <div className="stack">
       <SectionHead title="Servers" note="Optional: run dedicated servers that keep going without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game.">
-        <button className="btn" onClick={() => setImporting(true)}>Add one you already run</button>
+        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setImporting(true)}>Add one you already run</button>}
         <button className="btn primary" onClick={() => setCreating(true)}>New server</button>
       </SectionHead>
 
@@ -144,20 +145,21 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
 }
 
 type Tab = "overview" | "friends" | "modes" | "maps" | "getmaps" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
-const TABS: { id: Tab; label: string; live?: boolean }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "friends", label: "Play with friends" },
-  { id: "modes", label: "Modes", live: true },
-  { id: "maps", label: "Maps" },
-  { id: "getmaps", label: "Get maps" },
-  { id: "bots", label: "Bots", live: true },
-  { id: "match", label: "Match", live: true },
-  { id: "fun", label: "Fun", live: true },
-  { id: "players", label: "Players", live: true },
-  { id: "mods", label: "Mods" },
-  { id: "admins", label: "Admins" },
-  { id: "welcome", label: "Welcome page" },
+const TABS: { id: Tab; label: string; group: string; live?: boolean }[] = [
+  { id: "overview", label: "Overview", group: "Server" },
+  { id: "friends", label: "Play with friends", group: "Server" },
+  { id: "modes", label: "Modes", group: "Game", live: true },
+  { id: "maps", label: "Maps", group: "Game" },
+  { id: "getmaps", label: "Get maps", group: "Game" },
+  { id: "bots", label: "Bots", group: "Game", live: true },
+  { id: "match", label: "Match", group: "Game", live: true },
+  { id: "fun", label: "Fun", group: "Game", live: true },
+  { id: "players", label: "Players", group: "People", live: true },
+  { id: "admins", label: "Admins", group: "People" },
+  { id: "welcome", label: "Welcome page", group: "People" },
+  { id: "mods", label: "Mods", group: "Mods" },
 ];
+const TAB_GROUPS = [...new Set(TABS.map((t) => t.group))];
 
 /** One server's own control panel. Every request from here names the server. */
 export function ServerPage(props: {
@@ -173,6 +175,7 @@ export function ServerPage(props: {
   onChanged: () => void;
   onBack: () => void;
 }) {
+  const ask = useConfirm();
   const { server: s, data, app, scan, maps, refresh, reloadMaps, reloadApp, onChanged, onBack } = props;
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("overview");
@@ -183,7 +186,7 @@ export function ServerPage(props: {
       const msg = s.imported
         ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.`
         : `Delete "${s.name}"? Its folder, maps and settings are deleted.`;
-      if (!confirm(msg)) return;
+      if (!(await ask(msg, { ok: s.imported ? "Remove" : "Delete", danger: true }))) return;
     }
     const r = await post(`/api/servers/${s.id}/${action}`);
     if (r.error) return toast(r.error, true);
@@ -197,7 +200,7 @@ export function ServerPage(props: {
 
   // reinstall everything that's on the server, keeping its settings
   const rebuild = async () => {
-    if (!confirm(`Rebuild Loner-Strike on ${s.name}? It reinstalls its files; settings, admins and maps stay.`)) return;
+    if (!(await ask(`Rebuild Loner-Strike on ${s.name}? It reinstalls its files; settings, admins and maps stay.`, { ok: "Rebuild" }))) return;
     const components = (app?.game?.installed ?? []).filter((c) => c !== "foundation" && c !== "core");
     const r = await post("/api/setup/install", { hl: s.dir, games: [s.game], components, repair: true });
     if (r.error) return toast(r.error, true);
@@ -227,9 +230,16 @@ export function ServerPage(props: {
             )}
           </div>
         </div>
-        <div className="chips server-tabs" role="tablist" aria-label={`${s.name} sections`}>
-          {TABS.map((t) => (
-            <button key={t.id} role="tab" className="chip" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
+        <div className="server-tabs" role="tablist" aria-label={`${s.name} sections`}>
+          {TAB_GROUPS.map((g) => (
+            <div key={g} className="tab-group">
+              <span className="tab-group-name">{g}</span>
+              <div className="chips">
+                {TABS.filter((t) => t.group === g).map((t) => (
+                  <button key={t.id} role="tab" className="chip" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -275,10 +285,11 @@ export function ServerPage(props: {
 
 /** For an imported server without Loner-Strike: put the basics on it. */
 function AddLoner({ server, onDone }: { server: ServerInfo; onDone: () => void }) {
+  const ask = useConfirm();
   const toast = useToast();
   const [running, setRunning] = useState(false);
   const start = async () => {
-    if (!confirm("Add Loner-Strike to this server? It installs Metamod-P, AMX Mod X, ReGameDLL and the Game Mode Menu. Every file it replaces is backed up, and Settings → Remove puts them back.")) return;
+    if (!(await ask("Add Loner-Strike to this server? It installs Metamod-P, AMX Mod X, ReGameDLL and the Game Mode Menu. Every file it replaces is backed up, and Settings → Remove puts them back.", { ok: "Add Loner-Strike" }))) return;
     const r = await post("/api/setup/install", { hl: server.dir, games: [server.game], components: [] });
     if (r.error) return toast(r.error, true);
     setRunning(true);
@@ -366,7 +377,7 @@ function Maintenance({ server, installed, act, rebuild }: { server: ServerInfo; 
         )}
         {server.loner && (
           <li>
-            <div><b>Rebuild Loner-Strike</b><p className="muted">Reinstalls Metamod, AMX Mod X, ReGameDLL and the {Math.max(0, installed.length - 2)} mode{installed.length - 2 === 1 ? "" : "s"} and add-ons on it. Fixes a server that won't start or lost its mods. Settings, admins and maps stay.</p></div>
+            <div><b>Rebuild Loner-Strike</b><p className="muted">Reinstalls Metamod, AMX Mod X, ReGameDLL{installed.length > 2 ? ` and the ${installed.length - 2} extra mode${installed.length === 3 ? "" : "s"} and add-ons on it` : " and the built-in modes"}. Fixes a server that won't start or lost its mods. Settings, admins and maps stay.</p></div>
             <button className="btn" disabled={running} onClick={rebuild}>Rebuild</button>
           </li>
         )}
@@ -407,10 +418,14 @@ function Console({ server }: { server: ServerInfo }) {
     <div className="panel">
       <h3>Console</h3>
       <pre className="console" ref={box}>{lines.length ? lines.join("\n") : "Nothing yet. Start the server to see its console."}</pre>
-      <form className="row" onSubmit={(e) => { e.preventDefault(); send(); }}>
-        <input className="search grow" placeholder="A server command, e.g. status or changelevel de_inferno" value={cmd} onChange={(e) => setCmd(e.target.value)} spellCheck={false} />
-        <button className="btn" type="submit" disabled={server.state !== "running"}>Send</button>
-      </form>
+      {ON_THIS_COMPUTER ? (
+        <form className="row" onSubmit={(e) => { e.preventDefault(); send(); }}>
+          <input className="search grow" placeholder="A server command, e.g. status or changelevel de_inferno" value={cmd} onChange={(e) => setCmd(e.target.value)} spellCheck={false} />
+          <button className="btn" type="submit" disabled={server.state !== "running"}>Send</button>
+        </form>
+      ) : (
+        <p className="muted small-note">Server commands can only be sent from the computer running Loner-Strike.</p>
+      )}
     </div>
   );
 }
@@ -535,19 +550,19 @@ const HOSTS = [
     name: "A spare PC at home",
     cost: "Free",
     body: "An old Windows PC or laptop that stays on. Install Loner-Strike and Steam with Counter-Strike on it, then make the server there.",
-    you: "Leave it on, and open UDP port 27015 on your router (or use Direct).",
+    you: "Leave it on, and open the server's UDP port on your router (27016 for the first server), or use Direct.",
   },
   {
     name: "Free cloud servers",
     cost: "Free",
     body: "Oracle Cloud's Always Free tier includes two small AMD servers, enough for about 10 players with a few bots. Pick the AMD one: the free Arm servers can't run the game. AWS and Azure give a small server free for 12 months. Google's free tier allows too little traffic.",
-    you: "Sign up (a card is needed), make a server and open UDP 27015 in its firewall.",
+    you: "Sign up (a card is needed), make a server and open its UDP port (27015 or 27016) in the firewall.",
   },
   {
     name: "A cheap server (VPS)",
     cost: "About $4–7 a month",
     body: "Hetzner gives the most for the money; DigitalOcean and Vultr are simple; OVH includes DDoS protection. Pick a plan with an IPv4 address and an x86 (Intel/AMD) CPU, not Arm.",
-    you: "Buy the plan and open UDP 27015. Setting up a Linux server from this app comes in a later version.",
+    you: "Buy the plan and open the game's UDP port. Setting up a Linux server from this app comes in a later version.",
   },
 ];
 
@@ -581,7 +596,7 @@ function HostingGuide() {
         </table>
         <p className="muted measure">
           The game uses one core, so a faster core beats more of them. Bots cost CPU; a full server of bots needs the fast core. Each player uses about 25 KB/s.
-          Disk: about 2 GB plus your maps. It needs a public IPv4 address (IPv6-only servers don't work) and UDP port 27015 open, or 27016 and up for more servers.
+          Disk: about 2 GB plus your maps. It needs a public IPv4 address (IPv6-only servers don't work) and its UDP port open: 27015 for your own game, 27016 and up for servers made here.
           Shared web hosting can't run game servers.
         </p>
       </div>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { postJson } from "../api";
 import { Icon } from "../icons";
 import type { AppInfo, MapInfo, Online } from "../types";
-import { SectionHead, useCommand, useToast } from "../ui";
+import { SectionHead, useCommand, useConfirm, useToast } from "../ui";
 import { MapCard } from "./Maps";
 
 // How well bots handle each mode (shown on the cards)
@@ -70,6 +70,7 @@ export function PlayIdle({ app, reason, maps }: { app: AppInfo | null; reason: s
 }
 
 export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps: MapInfo[]; refresh: () => void; openMaps: () => void }) {
+  const ask = useConfirm();
   const run = useCommand(refresh);
   const st = data.state;
   const recent = maps.filter((m) => m.recent >= 0 && m.name.toLowerCase() !== st.map.toLowerCase()).sort((a, b) => a.recent - b.recent).slice(0, 6);
@@ -85,7 +86,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
                 key={p.id}
                 className="preset"
                 aria-pressed={st.preset === p.id}
-                onClick={() => confirm(`Play "${p.name}"? This resets that mode's settings to the preset.`) && run("gm_preset", [p.id])}
+                onClick={async () => (await ask(`Play "${p.name}"? This resets that mode's settings to the preset.`, { ok: "Play it" })) && run("gm_preset", [p.id])}
               >
                 <span className="preset-name">{p.name}</span>
                 <span className="preset-desc">{p.desc}</span>

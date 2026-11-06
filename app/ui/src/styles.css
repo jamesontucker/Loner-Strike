@@ -288,7 +288,7 @@ select, .search {
 .panel h3 { margin: 0 0 10px; font-size: 17px; }
 .err-text { color: #f0b9a6; }
 
-.toasts { position: fixed; right: 18px; bottom: 18px; display: grid; gap: 8px; z-index: 50; max-width: 420px; }
+.toasts { position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--strip-h) + 12px); display: grid; justify-items: center; gap: 8px; z-index: 60; width: max-content; max-width: min(520px, calc(100vw - 32px)); pointer-events: none; }
 .toast { background: var(--panel-2); box-shadow: var(--raised), 0 6px 20px rgba(0,0,0,.35); padding: 10px 14px; border-radius: 2px; font-weight: 600; }
 .toast.err { border-left: 3px solid #d9826b; }
 
@@ -481,7 +481,7 @@ input[type="range"] { accent-color: var(--signal); }
 
   .sheet-backdrop { align-items: end; padding: 0; }
   .sheet, .sheet.wide { width: 100%; max-height: 92vh; border-radius: 6px 6px 0 0; padding-bottom: env(safe-area-inset-bottom); }
-  .toasts { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; }
+  .toasts { left: 12px; right: 12px; top: auto; transform: none; width: auto; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; }
 }
 
 .section-tabs { margin: 0 0 12px; }
@@ -598,7 +598,8 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .search.grow { flex: 1; max-width: none; }
 .stack-tight > * + * { margin-top: 12px; }
 .measure { max-width: 68ch; text-wrap-style: pretty; }
-.host-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.host-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .host-grid { grid-template-columns: 1fr; } }
 .host h3 { margin: 0; }
 .host p { text-wrap-style: pretty; }
 .tag { font-size: 12px; font-weight: 700; color: var(--signal); background: var(--bg); padding: 1px 7px; border-radius: 2px; white-space: nowrap; }
@@ -695,3 +696,40 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
   .ability-grid tbody th { min-width: 170px; }
   .ability-grid td { width: auto; padding: 9px 6px; }
 }
+
+/* ---- asking before something can't be undone ------------------------------------ */
+.sheet.ask { width: min(460px, 100%); padding: 20px 22px 18px; }
+.ask p { margin: 0 0 18px; font-size: 17px; line-height: 1.45; text-wrap-style: pretty; }
+.ask-buttons { justify-content: flex-end; }
+.btn.danger.strong { background: #8a4636; color: #fbe9e2; }
+.btn.danger.strong:hover { background: #9c513f; color: #fff; }
+
+/* ---- loading placeholders ------------------------------------------------------- */
+@keyframes shimmer { from { opacity: .55; } to { opacity: 1; } }
+.skeleton { display: grid; gap: 10px; padding: 6px 0; }
+.skeleton-row { height: 16px; border-radius: 2px; background: var(--panel); animation: shimmer 1s ease-in-out infinite alternate; }
+.skeleton-row:first-child { height: 26px; width: 40% !important; }
+.map-card.ghost .map-pic { animation: shimmer 1s ease-in-out infinite alternate; }
+.ghost-label { display: block; height: 12px; width: 60%; border-radius: 2px; background: var(--panel); }
+@media (prefers-reduced-motion: reduce) { .skeleton-row, .map-card.ghost .map-pic { animation: none; } }
+
+/* ---- server page tabs: grouped; a sideways strip on phones ------------------------ */
+.server-tabs { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 4px; }
+.tab-group { display: grid; gap: 4px; }
+.tab-group-name { font-size: 12px; font-weight: 700; color: var(--bone-faint); }
+.tab-group .chips { flex-wrap: nowrap; }
+.chip { white-space: nowrap; }
+.home-hint { margin-bottom: 18px; }
+
+@media (max-width: 760px) {
+  .server-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+  .server-tabs::-webkit-scrollbar { display: none; }
+  /* 44px touch targets, and 16px text so phones don't zoom into fields */
+  .btn, .chip, .seg button, .method, .nav-item { min-height: 44px; }
+  .chip { padding: 8px 12px; }
+  input, textarea, select { font-size: 16px; }
+  .upkeep li { flex-direction: column; align-items: stretch; }
+  .server-top .row.between { gap: 10px; }
+}
+.server-details .seg { display: grid; grid-template-columns: repeat(3, 1fr); }
+.server-details .seg button { white-space: normal; line-height: 1.2; }

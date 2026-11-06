@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Online, Setting } from "../types";
-import { SectionHead, Segmented, useCommand } from "../ui";
+import { SectionHead, Segmented, useCommand, useConfirm } from "../ui";
 
 // Short explanations under settings, as in the old panel
 const NOTES: Record<string, string> = {
@@ -83,13 +83,14 @@ export function SettingsPage({
 
 /** Restart / end the round / more time, for the Match page. */
 export function MatchButtons({ refresh }: { refresh: () => void }) {
+  const ask = useConfirm();
   const run = useCommand(refresh);
   return (
     <div className="row">
       <button className="btn primary" onClick={() => run("gm_match", ["restart"])}>Restart round</button>
       <button className="btn" onClick={() => run("gm_do", ["endround"])}>End round now</button>
       <button className="btn" onClick={() => run("gm_do", ["addtime"])}>Add 10 minutes</button>
-      <button className="btn danger" onClick={() => confirm("Reset every match and fun setting for this mode to its defaults?") && run("gm_match", ["reset"])}>
+      <button className="btn danger" onClick={async () => (await ask("Reset every match and fun setting for this mode to its defaults?", { ok: "Reset", danger: true })) && run("gm_match", ["reset"])}>
         Reset this mode's settings
       </button>
     </div>

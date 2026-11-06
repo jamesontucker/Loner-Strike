@@ -4,6 +4,9 @@ import type { GameState } from "./types";
 // Commands only take plain words; the server checks the same rule.
 export const SAFE = /^[A-Za-z0-9_.\-]{1,64}$/;
 
+/** The app window on this computer (not a phone over Wi-Fi). Some things only work here. */
+export const ON_THIS_COMPUTER = ["127.0.0.1", "localhost"].includes(location.hostname);
+
 // The dedicated server the Servers area has open; null is the player's own game.
 // Every request names it (X-Target), so nothing is switched behind the player's back.
 let TARGET: string | null = null;

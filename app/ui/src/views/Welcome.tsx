@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getJson, postJson } from "../api";
-import { SectionHead, useToast } from "../ui";
+import { SectionHead, Skeleton, useToast } from "../ui";
 
 type Data = { style: "builtin" | "custom" | "url"; note: string; html: string | null; url: string | null; max: number; error?: string };
 
@@ -54,7 +54,7 @@ export function Welcome({ target }: { target: string }) {
   }, [target]);
 
   const preview = useMemo(() => Object.entries(SAMPLE).reduce((h, [k, v]) => h.split(k).join(v), html), [html]);
-  if (!d) return <p className="muted">Loading…</p>;
+  if (!d) return <Skeleton />;
   if (d.error) return <p className="muted">{d.error}</p>;
   const tooLong = html.length > d.max;
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Online, Player } from "../types";
-import { SectionHead, useCommand } from "../ui";
+import { SectionHead, useCommand, useConfirm } from "../ui";
 
 const WEAPONS: [string, string][] = [
   ["weapon_ak47", "AK-47"], ["weapon_m4a1", "M4A1"], ["weapon_awp", "AWP"], ["weapon_deagle", "Desert Eagle"],
@@ -10,13 +10,14 @@ const WEAPONS: [string, string][] = [
 ];
 
 export function Players({ data, refresh }: { data: Online; refresh: () => void }) {
+  const ask = useConfirm();
   const run = useCommand(refresh);
   const [open, setOpen] = useState<number | null>(null);
   const [gun, setGun] = useState(WEAPONS[0][0]);
   const teams: [string, string, string][] = [["T", "Terrorists", "t"], ["CT", "Counter-Terrorists", "ct"], ["SPEC", "Spectators", "spec"]];
 
-  const act = (p: Player, a: string) => {
-    if (a === "kick" && !confirm(`Kick ${p.name}?`)) return;
+  const act = async (p: Player, a: string) => {
+    if (a === "kick" && !(await ask(`Kick ${p.name}?`, { ok: "Kick", danger: true }))) return;
     run("gm_player", [String(p.uid), a], true);
   };
 
@@ -31,7 +32,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
           <button className="btn" onClick={() => run("gm_team", ["t"])}>Join Terrorists</button>
           <button className="btn" onClick={() => run("gm_team", ["ct"])}>Join CTs</button>
           <button className="btn" onClick={() => run("gm_team", ["spec"])}>Spectate</button>
-          <button className="btn" onClick={() => confirm("Swap everyone to the other team? The round restarts.") && run("gm_team", ["swap"])}>
+          <button className="btn" onClick={async () => (await ask("Swap everyone to the other team? The round restarts.", { ok: "Swap teams" })) && run("gm_team", ["swap"])}>
             Swap teams
           </button>
         </div>

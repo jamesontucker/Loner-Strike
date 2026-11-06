@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getJson, postJson } from "../api";
 import type { Online } from "../types";
-import { SectionHead, Switch, useToast } from "../ui";
+import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Role = "owner" | "admin" | "moderator" | "vip";
 type Person = { id: string; name: string; role: Role; expires: string | null; note: string; expired: boolean };
@@ -88,6 +88,7 @@ type Draft = { id: string; name: string; role: Role; expires: string; note: stri
 const EMPTY: Draft = { id: "", name: "", role: "vip", expires: "", note: "" };
 
 export function Admins({ data, installed }: { data: Online | null; installed?: string[] }) {
+  const ask = useConfirm();
   const toast = useToast();
   const [d, setD] = useState<Data | null>(null);
   const [failed, setFailed] = useState("");
@@ -116,14 +117,14 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
   };
 
   if (failed) return <div className="stack"><SectionHead title="Admins" /><p className="muted">{failed}</p></div>;
-  if (!d) return <p className="muted">Loading…</p>;
+  if (!d) return <Skeleton />;
 
   const save = async () => {
     if (!draft) return;
     const ok = await send("/api/admins/person", { ...draft, id: draft.id.trim(), expires: draft.expires || null }, "Saved. Takes effect right away in a running game.");
     if (ok) setDraft(null);
   };
-  const remove = (p: Person) => confirm(`Take ${p.name || p.id} off the list?`) && send("/api/admins/remove", { id: p.id }, "Removed");
+  const remove = async (p: Person) => (await ask(`Take ${p.name || p.id} off the list?`, { ok: "Remove", danger: true })) && send("/api/admins/remove", { id: p.id }, "Removed");
   const grant = (pl: { steamid: string; name: string }, role: Role, days?: number) => {
     const existing = d.people.find((p) => p.id === pl.steamid);
     send(
@@ -132,9 +133,9 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
       role === "vip" ? `${pl.name} is a VIP for ${days} days` : `${pl.name} is now ${role === "admin" ? "an admin" : `a ${roleName(role).toLowerCase()}`}`,
     );
   };
-  const ban = (id: string, minutes: number, name?: string) => {
+  const ban = async (id: string, minutes: number, name?: string) => {
     const what = minutes ? BAN_TIMES.find((t) => t[0] === minutes)?.[1].toLowerCase() : "for good";
-    if (!confirm(`Ban ${name || id} ${minutes ? `for ${what}` : "for good"}? They're kicked if they're playing.`)) return Promise.resolve(false);
+    if (!(await ask(`Ban ${name || id} ${minutes ? `for ${what}` : "for good"}? They're kicked if they're playing.`, { ok: "Ban", danger: true }))) return false;
     return send("/api/admins/ban", { id: id.trim(), minutes }, "Banned");
   };
   const setPerks = (p: Partial<Perks>) => send("/api/admins/settings", { donate: d.donate, perks: { ...d.perks, ...p }, abilities: d.abilities });
@@ -261,7 +262,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
                   <span className="person-name">{who?.name || <span className="mono">{b.value}</span>}</span>
                   <span className="person-sub">{b.kind === "ip" ? "IP address" : "SteamID"}{who ? <> · <span className="mono">{b.value}</span></> : null} · for good</span>
                 </div>
-                <button className="btn" onClick={() => confirm(`Unban ${b.value}?`) && send("/api/admins/unban", b, "Unbanned")}>Unban</button>
+                <button className="btn" onClick={async () => (await ask(`Unban ${b.value}?`, { ok: "Unban" })) && send("/api/admins/unban", b, "Unbanned")}>Unban</button>
               </li>
             );
           })}

@@ -51,6 +51,9 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        // the window opens where and how big it was last time
+        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .on_menu_event(|app, event| menu_clicked(app, event.id().as_ref()))
         .setup(move |app| {
             let _ = state.app.set(app.handle().clone());
             tauri::async_runtime::spawn(server::serve(state.clone(), listener));
@@ -59,6 +62,8 @@ fn main() {
             }
             tauri::async_runtime::spawn(check_for_update(app.handle().clone()));
             connect::renew_loop();
+            #[cfg(target_os = "macos")]
+            app.set_menu(mac_menu(app.handle())?)?;
             // LONER_UI_URL points the window at the React dev server while working on the UI
             let url = std::env::var("LONER_UI_URL")
                 .unwrap_or_else(|_| format!("http://127.0.0.1:{port}/"))
@@ -103,5 +108,68 @@ async fn check_for_update(app: tauri::AppHandle) {
         .blocking_show();
     if install && update.download_and_install(|_, _| {}, || {}).await.is_ok() {
         app.restart();
+    }
+}
+
+/// The macOS menu bar: the usual app, Edit and Window menus, plus the panel's sections.
+#[cfg(target_os = "macos")]
+fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+    let about = AboutMetadata {
+        name: Some("Loner-Strike".into()),
+        version: Some(app.package_info().version.to_string()),
+        comments: Some("Re-live the golden days of Counter-Strike locally or with the friends you don't have.".into()),
+        website: Some("https://github.com/jamesontucker/Loner-Strike".into()),
+        ..Default::default()
+    };
+    let app_menu = SubmenuBuilder::new(app, "Loner-Strike")
+        .item(&PredefinedMenuItem::about(app, Some("About Loner-Strike"), Some(about))?)
+        .item(&MenuItemBuilder::with_id("updates", "Check for Updates…").build(app)?)
+        .separator()
+        .item(&MenuItemBuilder::with_id("section:settings", "Settings…").accelerator("CmdOrCtrl+,").build(app)?)
+        .separator()
+        .services()
+        .separator()
+        .hide()
+        .hide_others()
+        .show_all()
+        .separator()
+        .quit()
+        .build()?;
+    let edit = SubmenuBuilder::new(app, "Edit").undo().redo().separator().cut().copy().paste().select_all().build()?;
+    // ⌘1-⌘9 go to the first nine sections, the same as the keys in the window
+    let sections = [
+        ("play", "Play"), ("maps", "Maps"), ("bots", "Bots"), ("match", "Match"), ("fun", "Fun"), ("players", "Players"),
+        ("addons", "Add-ons"), ("friends", "Play with Friends"), ("admins", "Admins"),
+    ];
+    let mut view = SubmenuBuilder::new(app, "Go");
+    for (n, (id, label)) in sections.iter().enumerate() {
+        view = view.item(&MenuItemBuilder::with_id(format!("section:{id}"), *label).accelerator(format!("CmdOrCtrl+{}", n + 1)).build(app)?);
+    }
+    let view = view
+        .separator()
+        .item(&MenuItemBuilder::with_id("section:welcome", "Welcome Page").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:more", "Get More").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:mods", "Mods").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:servers", "Servers").build(app)?)
+        .build()?;
+    let window = SubmenuBuilder::new(app, "Window").minimize().maximize().separator().fullscreen().separator().close_window().build()?;
+    let help = SubmenuBuilder::new(app, "Help").item(&MenuItemBuilder::with_id("github", "Loner-Strike on GitHub").build(app)?).build()?;
+    MenuBuilder::new(app).items(&[&app_menu, &edit, &view, &window, &help]).build()
+}
+
+/// A menu item for the page: it listens for "ls-menu" (section:<id>, updates).
+fn menu_clicked(app: &tauri::AppHandle, id: &str) {
+    use tauri::Manager;
+    if id == "github" {
+        #[cfg(target_os = "macos")]
+        let _ = std::process::Command::new("open").arg("https://github.com/jamesontucker/Loner-Strike").spawn();
+        return;
+    }
+    if !(id == "updates" || id.starts_with("section:")) || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == ':') {
+        return;
+    }
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.eval(&format!("window.dispatchEvent(new CustomEvent('ls-menu', {{ detail: '{id}' }}))"));
     }
 }
