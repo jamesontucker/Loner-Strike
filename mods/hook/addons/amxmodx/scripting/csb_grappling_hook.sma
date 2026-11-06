@@ -11,6 +11,11 @@
  * Inspired by the classic Hook plugin. Independent GPL re-implementation; no
  * original code is reused.
  *
+ * Loner-Strike change: when Loner-Strike's gm_vip.amxx is running, it decides who
+ * may use the hook (the Admins page's ability grid) through its public function
+ * gm_can_hook(id). Without gm_vip the hook works as before (flag t when
+ * csb_hook_viponly is 1).
+ *
  * This program is free software: you can redistribute it and/or modify it under
  * the terms of the GNU General Public License as published by the Free Software
  * Foundation, either version 3 of the License, or (at your option) any later
@@ -77,6 +82,13 @@ bool:hasAccess(id)
     if (!get_pcvar_num(g_pVipOnly))
         return true
 
+    // Loner-Strike: ask gm_vip.amxx when it's loaded; 1 = the function ran
+    if (callfunc_begin("gm_can_hook", "gm_vip.amxx") == 1)
+    {
+        callfunc_push_int(id)
+        return callfunc_end() != 0
+    }
+
     return (get_user_flags(id) & ACCESS_FLAG) != 0
 }
 
@@ -87,7 +99,7 @@ public cmdHookStart(id)
 
     if (!hasAccess(id))
     {
-        client_print(id, print_chat, "[CSB] The grappling hook is a VIP feature.")
+        client_print(id, print_chat, "[CSB] The grappling hook isn't available to you on this server.")
         return PLUGIN_HANDLED
     }
 

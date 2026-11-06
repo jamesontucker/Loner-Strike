@@ -675,3 +675,23 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .no-pic-kind { font: 700 11px/1 var(--text); text-transform: uppercase; letter-spacing: .08em; color: var(--signal); background: var(--bg); padding: 2px 6px; border-radius: 2px; box-shadow: var(--sunken); }
 .no-pic-name { font: 400 19px/1.05 var(--stencil); color: var(--bone-dim); word-break: break-word; }
 .sheet-pic .no-pic-name { font-size: 34px; }
+
+/* ---- admins: which role gets which ability ---------------------------------------- */
+.ability-wrap { overflow-x: auto; background: var(--panel); box-shadow: var(--raised); border-radius: 3px; margin-bottom: 4px; }
+.ability-grid { width: 100%; border-collapse: collapse; }
+.ability-grid th, .ability-grid td { padding: 9px 10px; border-bottom: 1px solid var(--bevel-lo); text-align: center; vertical-align: middle; }
+.ability-grid thead th { font-size: 13px; font-weight: 700; color: var(--bone-dim); text-transform: uppercase; letter-spacing: .04em; background: var(--side); }
+.ability-grid thead th:first-child, .ability-grid tbody th { text-align: left; }
+.ability-grid tbody th { font-weight: 500; min-width: 220px; }
+.ability-grid tbody tr:last-child th, .ability-grid tbody tr:last-child td { border-bottom: 0; }
+.ability-grid td { width: 84px; }
+.ability-grid input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--signal); cursor: pointer; }
+.ability-name { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-weight: 700; }
+.ability-what { display: block; color: var(--bone-dim); font-size: 14px; }
+.ability-how { display: block; color: var(--bone-faint); font-size: 13px; }
+.ability-powers td { font-size: 13px; color: var(--bone-dim); }
+.ability-powers { background: var(--bg); }
+@media (max-width: 760px) {
+  .ability-grid tbody th { min-width: 170px; }
+  .ability-grid td { width: auto; padding: 9px 6px; }
+}

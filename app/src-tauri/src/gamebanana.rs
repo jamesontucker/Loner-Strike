@@ -21,7 +21,7 @@ const API: &str = "https://gamebanana.com/apiv11";
 pub const MAPS_CATEGORY: i64 = 5474; // Counter-Strike 1.6 > Maps
 /// Maps nobody had a picture for (the name changes when the search gets better, so
 /// earlier misses get another try)
-const MISS_FILE: &str = "not_found_v3.json";
+pub const MISS_FILE: &str = "not_found_v3.json";
 /// Marks that pictures found by older, looser searches were cleared (see forget_old_lookups)
 const LOOKUPS_CLEARED: &str = "lookups_v3";
 const MISS_DAYS: f64 = 7.0;

@@ -6,18 +6,42 @@ import { SectionHead, Switch, useToast } from "../ui";
 type Role = "owner" | "admin" | "moderator" | "vip";
 type Person = { id: string; name: string; role: Role; expires: string | null; note: string; expired: boolean };
 type Perks = { armor: boolean; defuse: boolean; nades: boolean; money: number; tag: boolean; chat: boolean; host: boolean };
+type AbilityKey = "gear" | "hook" | "jump" | "respawn" | "noclip" | "god" | "tp";
+type Abilities = Record<AbilityKey, Role[]> & { every_mode: boolean };
 type Ban = { kind: "id" | "ip"; value: string };
 type Seen = { id: string; name: string; aka: string[]; first: number; last: number; visits: number };
-type Data = { people: Person[]; donate: string; perks: Perks; bans: Ban[]; today: string; users_ini: boolean; seen: Seen[] };
+type Data = { people: Person[]; donate: string; perks: Perks; abilities: Abilities; bans: Ban[]; today: string; users_ini: boolean; seen: Seen[] };
 type Reply = Data | { ok: false; error: string };
 
 const ROLES: { id: Role; name: string; what: string }[] = [
   { id: "owner", name: "Owner", what: "Everything, including server settings and RCON. Can't be kicked by other admins." },
-  { id: "admin", name: "Admin", what: "Kick, ban, slay, change maps, votes, admin chat and menus. Gets VIP perks too." },
+  { id: "admin", name: "Admin", what: "Kick, ban, slay, change maps, votes, admin chat and menus. Plus the abilities you pick below." },
   { id: "moderator", name: "Moderator", what: "Kick, slay, votes, admin chat and menus. No bans or map changes." },
-  { id: "vip", name: "VIP", what: "A reserved slot and the VIP perks below. No admin powers." },
+  { id: "vip", name: "VIP", what: "A reserved slot, the VIP tags and the abilities you pick below. No admin powers." },
 ];
 const roleName = (r: Role) => ROLES.find((x) => x.id === r)?.name ?? r;
+
+/** The ability grid's columns, lowest role first. */
+const COLUMNS: Role[] = ["vip", "moderator", "admin", "owner"];
+
+/** What each ability does and how players use it. unfair: off in modes it would break. */
+const ABILITIES: { key: AbilityKey; name: string; what: string; how: string; unfair?: boolean }[] = [
+  { key: "gear", name: "Spawn gear", what: "The armor, kit, grenades and money set up further down.", how: "Given automatically" },
+  { key: "hook", name: "Grappling hook", what: "Shoots a rope and pulls them to wherever they aim.", how: "Bind a key to +hook" },
+  { key: "jump", name: "Double jump", what: "One more jump in mid-air.", how: "Press jump again in the air", unfair: true },
+  { key: "respawn", name: "Respawn", what: "Come back once a round after dying.", how: "Say /respawn while dead", unfair: true },
+  { key: "noclip", name: "Noclip", what: "Fly through walls. Ends when they die or the round restarts.", how: "Say /noclip to switch it on and off", unfair: true },
+  { key: "god", name: "God mode", what: "Nothing can hurt them. Ends when the round restarts.", how: "Say /god to switch it on and off", unfair: true },
+  { key: "tp", name: "Save and teleport", what: "Save a spot and jump back to it any time that map.", how: "Say /save, then /tp" },
+];
+
+/** Admin powers per role (from the role's AMX Mod X flags; not changeable here). */
+const POWERS: Record<Role, string> = {
+  vip: "None",
+  moderator: "Kick, slay, votes",
+  admin: "Also bans and maps",
+  owner: "Everything",
+};
 
 const BAN_TIMES: [number, string][] = [[0, "For good"], [30, "30 minutes"], [180, "3 hours"], [1440, "1 day"], [10080, "1 week"]];
 const MONEY = [0, 300, 500, 1000, 2000];
@@ -63,7 +87,7 @@ const GIVE: { key: string; label: string; role: Role; days?: number }[] = [
 type Draft = { id: string; name: string; role: Role; expires: string; note: string; was?: string };
 const EMPTY: Draft = { id: "", name: "", role: "vip", expires: "", note: "" };
 
-export function Admins({ data }: { data: Online | null }) {
+export function Admins({ data, installed }: { data: Online | null; installed?: string[] }) {
   const toast = useToast();
   const [d, setD] = useState<Data | null>(null);
   const [failed, setFailed] = useState("");
@@ -113,8 +137,14 @@ export function Admins({ data }: { data: Online | null }) {
     if (!confirm(`Ban ${name || id} ${minutes ? `for ${what}` : "for good"}? They're kicked if they're playing.`)) return Promise.resolve(false);
     return send("/api/admins/ban", { id: id.trim(), minutes }, "Banned");
   };
-  const setPerks = (p: Partial<Perks>) => send("/api/admins/settings", { donate: d.donate, perks: { ...d.perks, ...p } });
-  const saveDonate = () => send("/api/admins/settings", { donate: donate ?? d.donate, perks: d.perks }, "Saved").then((ok) => ok && setDonate(null));
+  const setPerks = (p: Partial<Perks>) => send("/api/admins/settings", { donate: d.donate, perks: { ...d.perks, ...p }, abilities: d.abilities });
+  const saveDonate = () => send("/api/admins/settings", { donate: donate ?? d.donate, perks: d.perks, abilities: d.abilities }, "Saved").then((ok) => ok && setDonate(null));
+  const setAbilities = (a: Partial<Abilities>) => send("/api/admins/settings", { donate: d.donate, perks: d.perks, abilities: { ...d.abilities, ...a } });
+  const toggle = (key: AbilityKey, role: Role, on: boolean) => {
+    const now = d.abilities[key].filter((r) => r !== role);
+    setAbilities({ [key]: on ? [...now, role] : now });
+  };
+  const noHook = !!installed && !installed.includes("addon-hook");
 
   // who's playing now first, then everyone who's been here
   const humans = data ? data.players.filter((p) => !p.bot && !p.host && !!p.steamid && STEAMID.test(p.steamid)) : [];
@@ -241,7 +271,62 @@ export function Admins({ data }: { data: Online | null }) {
       </div>
 
       <div>
-        <SectionHead title="VIP & donations" note="What VIPs get, and where people can support your server." />
+        <SectionHead title="What each role gets" note="Tick the abilities each role can use in the game. Changes reach a running game straight away." />
+        <div className="ability-wrap">
+          <table className="ability-grid">
+            <thead>
+              <tr>
+                <th scope="col">Ability</th>
+                {COLUMNS.map((r) => <th key={r} scope="col">{roleName(r)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {ABILITIES.map((a) => (
+                <tr key={a.key}>
+                  <th scope="row">
+                    <span className="ability-name">{a.name}{a.unfair && <i className="role-badge" title="Off in modes it would break, unless you allow it below">Some modes</i>}</span>
+                    <span className="ability-what">{a.what}</span>
+                    <span className="ability-how">{a.how}</span>
+                    {a.key === "hook" && noHook && <span className="ability-how err-text">The hook add-on isn't installed, so this does nothing yet. Add it from Mods.</span>}
+                  </th>
+                  {COLUMNS.map((r) => (
+                    <td key={r}>
+                      <input
+                        type="checkbox"
+                        checked={d.abilities[a.key].includes(r)}
+                        onChange={(e) => toggle(a.key, r, e.target.checked)}
+                        aria-label={`${a.name} for ${roleName(r)}`}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              <tr className="ability-powers">
+                <th scope="row">
+                  <span className="ability-name">Admin powers</span>
+                  <span className="ability-what">Kick, ban, change maps and so on. Set by the role itself; admins open the menu with amxmodmenu in the console.</span>
+                </th>
+                {COLUMNS.map((r) => <td key={r}>{POWERS[r]}</td>)}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="settings">
+          <Perk
+            label="Allow in every mode"
+            note="Double jump, respawn, noclip and god mode are normally off in Zombie, Hide and Seek, Deathrun, Kreedz, Knife Arena, Base Builder, Soccer Jam, Paintball and Tour of Duty, where they'd spoil the game."
+            on={d.abilities.every_mode}
+            set={(v) => setAbilities({ every_mode: v })}
+          />
+        </div>
+        <p className="muted small-note">
+          A player counts as their highest role. Bots never get abilities. You, the host, count as an owner only with "You get the perks too" switched on below. Players
+          can say <b>/vip</b> in the game to see what they can use.
+        </p>
+      </div>
+
+      <div>
+        <SectionHead title="VIP & donations" note="What spawn gear gives, and where people can support your server." />
         <div className="panel vip-note">
           <p>
             Loner-Strike doesn't take payments. If you want donations, set up a page with Ko-fi, PayPal, Patreon or similar, put the link below, and players can say{" "}
@@ -269,7 +354,7 @@ export function Admins({ data }: { data: Online | null }) {
           </div>
           <Perk label="VIP on the scoreboard" note="The scoreboard's VIP column." on={d.perks.tag} set={(v) => setPerks({ tag: v })} />
           <Perk label="[VIP] chat tag" note="A green tag in front of their name in chat." on={d.perks.chat} set={(v) => setPerks({ chat: v })} />
-          <Perk label="You get the perks too" note="As the host you're counted as an owner." on={d.perks.host} set={(v) => setPerks({ host: v })} />
+          <Perk label="You get the perks too" note="As the host you're counted as an owner, for spawn gear and the abilities above." on={d.perks.host} set={(v) => setPerks({ host: v })} />
         </div>
         <p className="muted small-note">
           To keep things fair, modes like Zombie, Hide and Seek, Deathrun, Kreedz and Knife Arena skip the spawn perks, and deathmatch and one-weapon modes only give

@@ -19,5 +19,5 @@
    "include": null
   }
  ],
- "credits": "CSB Grappling Hook 1.0.0 by counter-strike-boost.com (https://counter-strike-boost.com/plugins/csb-grappling-hook), GPLv3. Unmodified."
+ "credits": "CSB Grappling Hook 1.0.0 by counter-strike-boost.com (https://counter-strike-boost.com/plugins/csb-grappling-hook), GPLv3. Patched by Loner-Strike to ask gm_vip who may use the hook (the Admins page's ability grid)."
 }

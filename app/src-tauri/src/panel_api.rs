@@ -357,7 +357,7 @@ mod tests {
         let shots = app.join("cache/gbshots");
         std::fs::create_dir_all(&shots).unwrap();
         let now = crate::sys::now();
-        std::fs::write(shots.join("not_found.json"), json!({"de_alpha": now, "aim_beta": now, "de_gamma": now}).to_string()).unwrap();
+        std::fs::write(shots.join(crate::gamebanana::MISS_FILE), json!({"de_alpha": now, "aim_beta": now, "de_gamma": now}).to_string()).unwrap();
         std::fs::write(app.join("map_sources.json"), json!({"groups": [{"name": "Valve", "maps": ["de_alpha"]}]}).to_string()).unwrap();
         std::fs::write(
             app.join("installed_maps.json"),

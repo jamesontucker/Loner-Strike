@@ -259,7 +259,7 @@ function Shell() {
                 ) : (
                   <Servers scan={scan} list={servers} onOpen={enterServer} onChanged={reloadServers} />
                 ))}
-              {section === "admins" && <Admins data={online} />}
+              {section === "admins" && <Admins data={online} installed={app?.game?.installed} />}
               {section === "welcome" && <Welcome target="local" />}
               {section === "more" && <GetMore onInstalled={() => reloadMaps(true)} />}
               {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={() => setSetupOpen(true)} />}

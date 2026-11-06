@@ -4,7 +4,8 @@
 //!   rewrites a marked Loner-Strike block in addons/amxmodx/configs/users.ini (anything
 //!   else in that file is kept) and asks the running game to reload admins.
 //! - Roles are AMX Mod X access flags; "t" is the VIP flag gm_vip.amxx looks for.
-//! - VIP perks and the donate link go to <data>/vip.cfg, which gm_vip.amxx runs.
+//! - VIP perks, the ability grid (which roles get the hook, noclip...) and the donate
+//!   link go to <data>/vip.cfg, which gm_vip.amxx runs.
 //!   Donations happen outside the app (Ko-fi, PayPal...); the host grants VIP here.
 //! - Bans are the engine's own: banned.cfg (banid) and listip.cfg (addip) in the game folder.
 //!
@@ -50,6 +51,16 @@ impl Role {
 
     /// AMX Mod X access flags (a immunity, b reserved slot, c kick, d ban, e slay, f map,
     /// g cvar, h cfg, i chat, j vote, k sv_password, l rcon, m-t custom, u menu).
+    /// The role's bit in gm_vip's ability cvars.
+    pub fn bit(self) -> u8 {
+        match self {
+            Role::Vip => 1,
+            Role::Moderator => 2,
+            Role::Admin => 4,
+            Role::Owner => 8,
+        }
+    }
+
     pub fn flags(self) -> &'static str {
         match self {
             Role::Owner => "abcdefghijklmnopqrstu",
@@ -92,6 +103,70 @@ impl Default for Perks {
     }
 }
 
+/// Which roles get each ability (the Admins page grid). Missing ones get the defaults.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct Abilities {
+    /// the spawn perks and money (Perks)
+    pub gear: Vec<Role>,
+    /// the grappling hook add-on
+    pub hook: Vec<Role>,
+    pub jump: Vec<Role>,
+    pub respawn: Vec<Role>,
+    pub noclip: Vec<Role>,
+    pub god: Vec<Role>,
+    /// say /save, /tp
+    pub tp: Vec<Role>,
+    /// double jump, respawn, noclip and god in modes they'd break too
+    pub every_mode: bool,
+}
+
+const VIP_UP: [Role; 4] = [Role::Vip, Role::Moderator, Role::Admin, Role::Owner];
+
+impl Default for Abilities {
+    fn default() -> Self {
+        Abilities {
+            gear: VIP_UP.to_vec(),
+            hook: VIP_UP.to_vec(),
+            jump: vec![],
+            respawn: vec![],
+            noclip: vec![Role::Admin, Role::Owner],
+            god: vec![Role::Owner],
+            tp: vec![Role::Admin, Role::Owner],
+            every_mode: false,
+        }
+    }
+}
+
+/// Bitmask of roles for a gm_vip cvar.
+fn role_mask(roles: &[Role]) -> u8 {
+    roles.iter().fold(0, |m, r| m | r.bit())
+}
+
+impl Abilities {
+    /// (gm_vip cvar, roles) for each ability
+    fn cvars(&self) -> [(&'static str, &Vec<Role>); 7] {
+        [
+            ("gm_vip_gear", &self.gear),
+            ("gm_vip_hook", &self.hook),
+            ("gm_vip_jump", &self.jump),
+            ("gm_vip_respawn", &self.respawn),
+            ("gm_vip_noclip", &self.noclip),
+            ("gm_vip_god", &self.god),
+            ("gm_vip_tp", &self.tp),
+        ]
+    }
+
+    /// Each list in VIP..Owner order without repeats.
+    fn tidy(mut self) -> Self {
+        for list in [&mut self.gear, &mut self.hook, &mut self.jump, &mut self.respawn, &mut self.noclip, &mut self.god, &mut self.tp] {
+            let m = role_mask(list);
+            *list = VIP_UP.iter().copied().filter(|r| m & r.bit() != 0).collect();
+        }
+        self
+    }
+}
+
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct Admins {
     #[serde(default)]
@@ -100,6 +175,8 @@ pub struct Admins {
     pub donate: String,
     #[serde(default)]
     pub perks: Perks,
+    #[serde(default)]
+    pub abilities: Abilities,
 }
 
 // ---- checks ------------------------------------------------------------------
@@ -210,10 +287,16 @@ fn vip_cfg(a: &Admins) -> String {
     let p = &a.perks;
     let b = |v: bool| if v { 1 } else { 0 };
     let donate = if valid_url(&a.donate) { a.donate.as_str() } else { "" };
-    format!(
+    let mut out = format!(
         "// Written by Loner-Strike's Admins page. Change it there.\r\ngm_vip_armor {}\r\ngm_vip_defuse {}\r\ngm_vip_nades {}\r\ngm_vip_money {}\r\ngm_vip_tag {}\r\ngm_vip_chat {}\r\ngm_vip_host {}\r\ngm_vip_donate \"{donate}\"\r\n",
         b(p.armor), b(p.defuse), b(p.nades), p.money.min(16000), b(p.tag), b(p.chat), b(p.host)
-    )
+    );
+    // abilities: which roles get each one (1 vip, 2 moderator, 4 admin, 8 owner)
+    for (cvar, roles) in a.abilities.cvars() {
+        out.push_str(&format!("{cvar} {}\r\n", role_mask(roles)));
+    }
+    out.push_str(&format!("gm_vip_anymode {}\r\n", b(a.abilities.every_mode)));
+    out
 }
 
 /// Writes users.ini's block and vip.cfg. Ok(true) when users.ini changed.
@@ -484,7 +567,7 @@ fn listing(g: &Game) -> Value {
             v
         })
         .collect();
-    json!({"people": people, "donate": a.donate, "perks": a.perks, "bans": read_bans(g), "today": today,
+    json!({"people": people, "donate": a.donate, "perks": a.perks, "abilities": a.abilities, "bans": read_bans(g), "today": today,
            "users_ini": g.dir.join("addons/amxmodx/configs").is_dir(), "seen": seen(&g.data)})
 }
 
@@ -589,6 +672,9 @@ async fn api_remove(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
 struct SettingsReq {
     donate: String,
     perks: Perks,
+    /// left out: unchanged
+    #[serde(default)]
+    abilities: Option<Abilities>,
 }
 
 async fn api_settings(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<SettingsReq>) -> Reply {
@@ -601,11 +687,15 @@ async fn api_settings(State(st): State<Shared>, headers: HeaderMap, Json(req): J
     }
     let mut perks = req.perks;
     perks.money = perks.money.min(16000);
+    let abilities = req.abilities.map(Abilities::tidy);
     answer(
         with_game(&st, move |g| {
             change(g, |a| {
                 a.donate = donate;
                 a.perks = perks;
+                if let Some(ab) = abilities {
+                    a.abilities = ab;
+                }
                 Ok(())
             })
         })
@@ -810,5 +900,54 @@ mod tests {
         assert!(cfg.contains("gm_vip_money 500\r\n") && cfg.contains("gm_vip_donate \"https://ko-fi.com/someone\""));
         let a = Admins { donate: "https://x.com/\";quit".into(), ..Default::default() };
         assert!(vip_cfg(&a).contains("gm_vip_donate \"\""));
+    }
+
+    #[test]
+    fn admins_abilities_defaults_and_json() {
+        // an admins.json from before the grid loads with the defaults
+        let old: Admins = serde_json::from_str(r#"{"people":[],"donate":"","perks":{"armor":true,"defuse":true,"nades":true,"money":500,"tag":true,"chat":true,"host":false}}"#).unwrap();
+        assert_eq!(old.abilities, Abilities::default());
+        let d = Abilities::default();
+        assert_eq!(role_mask(&d.gear), 15);
+        assert_eq!(role_mask(&d.hook), 15);
+        assert_eq!(role_mask(&d.jump), 0);
+        assert_eq!(role_mask(&d.respawn), 0);
+        assert_eq!(role_mask(&d.noclip), 12);
+        assert_eq!(role_mask(&d.god), 8);
+        assert_eq!(role_mask(&d.tp), 12);
+        assert!(!d.every_mode);
+
+        // a half-filled grid keeps what's there and defaults the rest
+        let part: Abilities = serde_json::from_str(r#"{"jump":["vip"],"god":[],"every_mode":true}"#).unwrap();
+        assert_eq!(part.jump, vec![Role::Vip]);
+        assert!(part.god.is_empty() && part.every_mode);
+        assert_eq!(part.noclip, vec![Role::Admin, Role::Owner]);
+
+        // written as lowercase role words, and read back the same
+        let v = serde_json::to_value(&d).unwrap();
+        assert_eq!(v["hook"], json!(["vip", "moderator", "admin", "owner"]));
+        assert_eq!(v["god"], json!(["owner"]));
+        let back: Abilities = serde_json::from_value(v).unwrap();
+        assert_eq!(back, d);
+        assert!(serde_json::from_str::<Abilities>(r#"{"god":["superuser"]}"#).is_err(), "unknown roles are refused");
+
+        // tidy: VIP..Owner order, no repeats
+        let messy = Abilities { noclip: vec![Role::Owner, Role::Vip, Role::Owner], ..Default::default() }.tidy();
+        assert_eq!(messy.noclip, vec![Role::Vip, Role::Owner]);
+    }
+
+    #[test]
+    fn admins_abilities_cfg() {
+        let cfg = vip_cfg(&Admins::default());
+        for line in ["gm_vip_gear 15\r\n", "gm_vip_hook 15\r\n", "gm_vip_jump 0\r\n", "gm_vip_respawn 0\r\n", "gm_vip_noclip 12\r\n", "gm_vip_god 8\r\n", "gm_vip_tp 12\r\n", "gm_vip_anymode 0\r\n"] {
+            assert!(cfg.contains(line), "{line}");
+        }
+        let a = Admins {
+            abilities: Abilities { hook: vec![Role::Moderator, Role::Owner], jump: VIP_UP.to_vec(), god: vec![], every_mode: true, ..Default::default() },
+            ..Default::default()
+        };
+        let cfg = vip_cfg(&a);
+        assert!(cfg.contains("gm_vip_hook 10\r\n") && cfg.contains("gm_vip_jump 15\r\n") && cfg.contains("gm_vip_god 0\r\n") && cfg.contains("gm_vip_anymode 1\r\n"));
+        assert!(!cfg.replace("\r\n", "").contains('\n'), "CRLF only");
     }
 }
