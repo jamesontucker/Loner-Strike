@@ -136,12 +136,14 @@ pub fn unmanaged(res: &Path, game_dir: &Path, rec: &Record) -> Vec<String> {
     let plugins = game_dir.join("addons/amxmodx/plugins");
     let Ok(cat) = components::load_catalog(res) else { return vec![] };
     cat.iter()
-        .filter(|c| c["installable"].as_bool().unwrap_or(true) && matches!(c["kind"].as_str(), Some("mode") | Some("addon")))
+        // only what Loner-Strike can put in itself (not modes that come with another part)
+        .filter(|c| components::installable(c) && matches!(c["kind"].as_str(), Some("mode") | Some("addon")))
         .filter(|c| !c["id"].as_str().is_some_and(|id| rec.data.components.contains_key(id)))
         .filter(|c| {
             let listed = c["plugins"].as_array().into_iter().flatten().filter_map(|p| p.as_str()).map(String::from);
             let built = c["compile"].as_array().into_iter().flatten().filter_map(|b| b["out"].as_str()).map(|o| format!("{o}.amxx"));
-            listed.chain(built).any(|p| plugins.join(&p).is_file())
+            // there, and not a file Loner-Strike put there for something else
+            listed.chain(built).any(|p| plugins.join(&p).is_file() && !rec.data.files.contains_key(&format!("addons/amxmodx/plugins/{p}")))
         })
         .filter_map(|c| c["id"].as_str().map(String::from))
         .collect()

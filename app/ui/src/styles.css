@@ -1178,3 +1178,6 @@ select option, select optgroup { background: var(--panel); color: var(--bone); }
 /* ---- game files out of date after an app update -------------------------------------- */
 .files-update { margin-bottom: 18px; border-left: 3px solid var(--signal); }
 .files-update h3 { margin: 0 0 6px; }
+.files-update-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 4px; }
+.files-update-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
+.files-update-row .btn.small { margin-left: 0; }
