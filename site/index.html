@@ -18,8 +18,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 
-<!-- Plausible: paste your site's snippet from Plausible (Site settings → Site installation) here, replacing the next line. -->
-<!-- PLAUSIBLE -->
+<!-- Plausible (self-hosted) -->
+<script defer data-domain="lonerstrike.com" src="https://analytics.nanoshrine.com/js/script.file-downloads.hash.outbound-links.pageview-props.tagged-events.js"></script>
+<script>window.plausible = window.plausible || function () { (window.plausible.q = window.plausible.q || []).push(arguments) }</script>
 
 <style>
 @font-face { font-family: "Counter-Strike"; src: url("fonts/counter-strike.ttf") format("truetype"); font-display: swap; }
@@ -329,15 +330,17 @@ footer a { color: var(--dim); }
   if (POLAR_CHECKOUT) {
     const s = document.createElement("script");
     s.src = "https://cdn.jsdelivr.net/npm/@polar-sh/checkout@0.4.3/dist/embed.global.js";
+    s.integrity = "sha384-e96p3bMSNUJbavzl83jvbh/LCSQfSkbXCpnzovVeJvZR7Cs9PJEEIlJnmC3khotO"; // the browser refuses the file if it ever changes
+    s.crossOrigin = "anonymous";
     s.defer = true;
     s.setAttribute("data-auto-init", "");
     document.head.appendChild(s);
   }
 
-  // Plausible events for the buttons (does nothing until Plausible is added)
+  // Plausible events for the buttons (downloads and outbound links are tracked by the script itself)
   document.addEventListener("click", (e) => {
     const a = e.target.closest("[data-event]");
-    if (a && typeof window.plausible === "function") window.plausible(a.dataset.event);
+    if (a) window.plausible(a.dataset.event);
   });
 
   // The loader fills up once, like Steam connecting in 2004
