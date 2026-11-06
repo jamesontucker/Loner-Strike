@@ -6,9 +6,15 @@
  * close to something that button moves, breaks or triggers. Targets are followed through
  * multi_manager / trigger_relay chains (multi_manager keys are captured while the map loads).
  *
+ * It plays it like a person: each round the activator gets a reaction time (quicker on harder
+ * bot difficulties), a habit of how far ahead it times a trap (so it's sometimes early or late
+ * and misses), and some greed: a greedy one holds a trap while more runners are coming, to get
+ * them together. It sometimes hesitates, and now and then says something when a trap kills or misses.
+ *
  * Cvars:
  *   dr_bot_traps        1     on/off
- *   dr_bot_trap_chance  35    % chance per check (4 checks/second) to press when a CT is in range
+ *   dr_bot_trap_chance  35    how keen it is: % chance to go for a trap once it has seen runners coming
+ *   dr_bot_trap_chat    1     the activator reacts in chat now and then
  *   dr_bot_trap_radius  260   how close (units) a CT must be to a trap part
  *   dr_bot_trap_delay   1.5   minimum seconds between two presses
  *   dr_bot_trap_range   0     max distance bot <-> button (0 = no limit)
@@ -65,7 +71,13 @@ new bool:g_bScanned;
 new g_iMMEnt[ MAX_MM ], g_szMMTargets[ MAX_MM ][ 256 ], g_iMM;
 new g_fwKeyValue;
 
-new g_pOn, g_pChance, g_pRadius, g_pDelay, g_pRange;
+new g_pOn, g_pChance, g_pRadius, g_pDelay, g_pRange, g_pChat;
+
+// this round's activator: reaction time, how far ahead it times a trap, greed (0-100)
+new Float:g_fReact, Float:g_fLeadLo, Float:g_fLeadHi, g_iGreed;
+new Float:g_fSeenAt[ MAX_BUTTONS ];
+new Float:g_fPressedAt, g_iPressKills, bool:g_bPressOpen;
+new g_iActivator;
 new g_iMaxPlayers;
 
 public plugin_precache( ) {
@@ -128,6 +140,7 @@ public plugin_init( ) {
 	g_pRadius = register_cvar( "dr_bot_trap_radius", "260" );
 	g_pDelay  = register_cvar( "dr_bot_trap_delay",  "1.5" );
 	g_pRange  = register_cvar( "dr_bot_trap_range",  "0" );
+	g_pChat   = register_cvar( "dr_bot_trap_chat",   "1" );
 	g_pRun      = register_cvar( "dr_bot_run",       "1" );
 	g_pRunFight = register_cvar( "dr_bot_run_fight", "450" );
 	g_bBotNav = bool:LibraryExists( "gm_botnav", LibType_Library );
@@ -141,7 +154,8 @@ public plugin_init( ) {
 
 	register_event( "HLTV", "EventNewRound", "a", "1=0", "2=0" );
 	register_logevent( "EventRoundStart", 2, "1=Round_Start" );
-	set_task( TICK, "TaskThink", _, _, _, "b" );
+	set_task( 0.1, "TaskThink", _, _, _, "b" );
+	register_event( "DeathMsg", "EventDeath", "a" );
 	set_task( TICK, "TaskRunners", _, _, _, "b" );
 }
 
@@ -155,7 +169,18 @@ public NativeFilter( const szNative[ ], iIndex, iTrap ) {
 
 public EventNewRound( ) {
 	arrayset( _:g_fNextUse, 0, MAX_BUTTONS );
+	arrayset( _:g_fSeenAt, 0, MAX_BUTTONS );
 	g_fNextAny = get_gametime( ) + 3.0;
+	g_bPressOpen = false;
+
+	// a new activator (or the same one in a different mood)
+	new iDiff = clamp( get_cvar_num( "bot_difficulty" ), 0, 3 );
+	g_fReact = random_float( 0.55, 0.9 ) - 0.12 * float( iDiff );
+	new Float:fCentre = random_float( 0.25, 0.55 );
+	new Float:fSpread = 0.35 - 0.07 * float( iDiff );
+	g_fLeadLo = floatmax( 0.05, fCentre - fSpread * 0.5 );
+	g_fLeadHi = fCentre + fSpread * 0.5;
+	g_iGreed = random_num( 0, 70 );
 
 	// runners start over once the round's respawn has put them back at the start
 	for( new i = 1; i <= g_iMaxPlayers; i++ )
@@ -286,6 +311,7 @@ public TaskThink( ) {
 		return;
 
 	new Float:fNow = get_gametime( );
+	CheckPressResult( fNow );
 	if( fNow < g_fNextAny )
 		return;
 
@@ -305,8 +331,7 @@ public TaskThink( ) {
 	if( !iBot || !iNumCT )
 		return;
 
-	if( random_num( 1, 100 ) > get_pcvar_num( g_pChance ) )
-		return;
+	g_iActivator = iBot;
 
 	new Float:fRadius = get_pcvar_float( g_pRadius );
 	new Float:fRange = get_pcvar_float( g_pRange );
@@ -336,17 +361,12 @@ public TaskThink( ) {
 		if( bSelf )
 			continue;
 
-		new bool:bHit, bool:bCTAtButton;
+		// coming up to it, and where each will be by the time the trap goes
+		new iComing, iIn, bool:bCTAtButton;
+		new Float:fLeadT = random_float( g_fLeadLo, g_fLeadHi );
 
-		for( new c = 0; c < iNumCT && !bCTAtButton; c++ ) {
+		for( new c = 0; c < iNumCT; c++ ) {
 			pev( iCTs[ c ], pev_origin, fCT );
-
-			// lead the trap: where the CT will be in ~0.4 s
-			new Float:fVel[ 3 ], Float:fLead[ 3 ];
-			pev( iCTs[ c ], pev_velocity, fVel );
-			fLead[ 0 ] = fCT[ 0 ] + fVel[ 0 ] * 0.4;
-			fLead[ 1 ] = fCT[ 1 ] + fVel[ 1 ] * 0.4;
-			fLead[ 2 ] = fCT[ 2 ] + fVel[ 2 ] * 0.4;
 
 			// a CT standing at the button is probably using it himself - leave it alone
 			if( get_distance_f( fCT, fBtn ) < 120.0 ) {
@@ -354,21 +374,88 @@ public TaskThink( ) {
 				break;
 			}
 
-			for( new p = 0; p < g_iPts[ b ] && !bHit; p++ )
+			new Float:fVel[ 3 ], Float:fLead[ 3 ];
+			pev( iCTs[ c ], pev_velocity, fVel );
+			for( new k = 0; k < 3; k++ )
+				fLead[ k ] = fCT[ k ] + fVel[ k ] * fLeadT;
+
+			new bool:bNear, bool:bIn;
+			for( new p = 0; p < g_iPts[ b ]; p++ ) {
+				if( get_distance_f( fCT, g_fPts[ b ][ p ] ) < fRadius * 2.5 )
+					bNear = true;
 				if( get_distance_f( fLead, g_fPts[ b ][ p ] ) < fRadius )
-					bHit = true;
+					bIn = true;
+			}
+			if( bNear || bIn )
+				iComing++;
+			if( bIn )
+				iIn++;
 		}
 
-		if( !bHit || bCTAtButton )
+		if( bCTAtButton || !iComing ) {
+			g_fSeenAt[ b ] = 0.0;
 			continue;
+		}
+
+		// notice them first, then react
+		if( g_fSeenAt[ b ] == 0.0 ) {
+			// not everyone watches every trap: a less keen activator misses some runners
+			g_fSeenAt[ b ] = ( random_num( 1, 100 ) <= 40 + get_pcvar_num( g_pChance ) ) ? fNow : fNow + random_float( 0.8, 2.0 );
+			continue;
+		}
+		if( fNow - g_fSeenAt[ b ] < g_fReact || !iIn )
+			continue;
+
+		// greedy: more are on the way, so hold it a little longer for them
+		if( iIn < iComing && fNow - g_fSeenAt[ b ] < 2.5 && random_num( 1, 100 ) <= g_iGreed )
+			continue;
+
+		// a moment of doubt
+		if( random_num( 1, 100 ) <= 6 ) {
+			g_fSeenAt[ b ] = fNow;
+			continue;
+		}
 
 		// the same thing a player's +use does: CBaseButton::Use -> ButtonUse (ignored while moving/locked)
 		dllfunc( DLLFunc_Use, iBtn, iBot );
 
-		g_fNextUse[ b ] = fNow + 12.0;
-		g_fNextAny = fNow + get_pcvar_float( g_pDelay );
+		g_fNextUse[ b ] = fNow + random_float( 10.0, 15.0 );
+		g_fNextAny = fNow + get_pcvar_float( g_pDelay ) + random_float( 0.0, 1.0 );
+		g_fSeenAt[ b ] = 0.0;
+		g_fPressedAt = fNow;
+		g_iPressKills = 0;
+		g_bPressOpen = true;
 		return;
 	}
+}
+
+// Runners dying soon after a press count as the trap's
+public EventDeath( ) {
+	if( !g_bPressOpen || get_gametime( ) - g_fPressedAt > 3.0 )
+		return;
+	new iVictim = read_data( 2 );
+	if( iVictim >= 1 && iVictim <= g_iMaxPlayers && get_user_team( iVictim ) == 2 )
+		g_iPressKills++;
+}
+
+// A few seconds after a press: say something now and then, like people do
+CheckPressResult( Float:fNow ) {
+	if( !g_bPressOpen || fNow - g_fPressedAt < 3.0 )
+		return;
+	g_bPressOpen = false;
+	if( !get_pcvar_num( g_pChat ) || !is_user_alive( g_iActivator ) || !is_user_bot( g_iActivator ) )
+		return;
+
+	static const szKill[ ][ ] = { "lol", "gotcha", "rip", "too slow", "ez", "hehe" };
+	static const szMulti[ ][ ] = { "double!!", "lmao 2 for 1", "get rekt", "thanks for waiting together" };
+	static const szMiss[ ][ ] = { "how", "damn", "lucky", "wtf how did u dodge that", "next one" };
+
+	if( g_iPressKills >= 2 && random_num( 1, 100 ) <= 70 )
+		engclient_cmd( g_iActivator, "say", szMulti[ random_num( 0, sizeof szMulti - 1 ) ] );
+	else if( g_iPressKills == 1 && random_num( 1, 100 ) <= 25 )
+		engclient_cmd( g_iActivator, "say", szKill[ random_num( 0, sizeof szKill - 1 ) ] );
+	else if( !g_iPressKills && random_num( 1, 100 ) <= 15 )
+		engclient_cmd( g_iActivator, "say", szMiss[ random_num( 0, sizeof szMiss - 1 ) ] );
 }
 
 /*
