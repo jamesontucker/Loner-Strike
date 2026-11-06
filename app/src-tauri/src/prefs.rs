@@ -395,6 +395,37 @@ async fn api_import(State(st): State<Shared>, headers: HeaderMap) -> Reply {
     }
 }
 
+#[derive(Deserialize)]
+struct AddFileReq {
+    section: String,
+}
+
+/// Picks a file on this computer and installs it like a GameBanana download.
+async fn api_add_file(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<AddFileReq>) -> Reply {
+    use tauri_plugin_dialog::DialogExt;
+    if !from_panel(&headers) {
+        return forbidden();
+    }
+    let (Some(g), Some(app)) = (st.game(), st.app.get().cloned()) else { return err("No game found.") };
+    let Some(sec) = crate::content::section(&req.section) else { return err("Unknown section.") };
+    let r = tokio::task::spawn_blocking(move || {
+        let mut exts: Vec<&str> = crate::gamebanana::local_single(sec.key).iter().map(|e| e.trim_start_matches('.')).collect();
+        exts.extend(["zip", "rar", "7z"]);
+        let title = if sec.key == "maps" { "Add a map".to_string() } else { format!("Add {}", sec.label.to_lowercase()) };
+        let Some(path) = app.dialog().file().set_title(&title).add_filter("Maps and downloads", &exts).blocking_pick_file() else {
+            return Ok(json!({"cancelled": true}));
+        };
+        let path = path.into_path().map_err(|e| e.to_string())?;
+        g.store.start_local_install(sec.key, &path).map(|job| json!({"ok": true, "job": job})).map_err(|e| e.message())
+    })
+    .await
+    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    match r {
+        Ok(v) => ok(v),
+        Err(e) => err(e),
+    }
+}
+
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/app/prefs", get(api_prefs).post(api_prefs_set))
@@ -412,6 +443,7 @@ pub fn local_routes() -> Router<Shared> {
         .route("/api/app/game-folder/remove", post(api_folder_remove))
         .route("/api/app/export", post(api_export))
         .route("/api/app/import", post(api_import))
+        .route("/api/gb/add-file", post(api_add_file))
 }
 
 #[cfg(test)]

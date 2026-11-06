@@ -100,3 +100,18 @@ export function clock(s: number) {
   if (s < 0) return "-";
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
+
+/** Picks a file on this computer and installs it into a section (maps, skins, sounds...),
+ *  then waits for it. Resolves with the result message, or null if nothing was picked. */
+export async function addFromFile(section: string): Promise<{ ok: boolean; message: string } | null> {
+  const r = await postJson<{ ok?: boolean; job?: string; error?: string; cancelled?: boolean }>("/api/gb/add-file", { section }).catch(() => ({ error: "Couldn't reach the app." }) as { error: string; job?: string; cancelled?: boolean });
+  if (r.cancelled) return null;
+  if (r.error || !r.job) return { ok: false, message: r.error || "That didn't work." };
+  for (let i = 0; i < 600; i++) {
+    await new Promise((res) => setTimeout(res, 800));
+    const jobs = await getJson<{ id: string; state: string; message?: string }[]>("/api/gb/jobs").catch(() => []);
+    const j = Array.isArray(jobs) ? jobs.find((x) => x.id === r.job) : undefined;
+    if (j && (j.state === "done" || j.state === "error")) return { ok: j.state === "done", message: j.message || (j.state === "done" ? "Added" : "That didn't work.") };
+  }
+  return { ok: false, message: "Still adding. Check Get more for progress." };
+}

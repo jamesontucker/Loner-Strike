@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getJson, postJson } from "../api";
+import { addFromFile, getJson, ON_THIS_COMPUTER, postJson } from "../api";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
 import { SectionHead, Skeleton, useConfirm, useToast } from "../ui";
 
@@ -135,7 +135,16 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
   return (
     <div className="stack">
       <div>
-        <SectionHead title={only ? "Get maps" : "Get more"} note={`From GameBanana's Counter-Strike 1.6 section. ${NOTES[section] ?? NOTES.default}`} />
+        <SectionHead title={only ? "Get maps" : "Get more"} note={`From GameBanana's Counter-Strike 1.6 section. ${NOTES[section] ?? NOTES.default}`}>
+          {ON_THIS_COMPUTER && !showInstalled && (
+            <button className="btn" onClick={async () => {
+              const r = await addFromFile(section);
+              if (!r) return;
+              toast(r.message, !r.ok);
+              if (r.ok) onInstalled();
+            }}>Add from a file…</button>
+          )}
+        </SectionHead>
         <div className="chips section-tabs" role="tablist" aria-label="What to get" hidden={!!only}>
           {sections.map(([id, name]) => (
             <button key={id} className="chip" role="tab" aria-pressed={section === id && !showInstalled} onClick={() => { setShowInstalled(false); setSection(id); setCat(null); setItems([]); }}>
@@ -259,7 +268,7 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
   );
 }
 
-type Installed = { mod: number; section: string; name: string; author?: string; url?: string; date?: number; maps?: string[]; files?: number };
+type Installed = { mod: number; section: string; name: string; author?: string | null; url?: string | null; date?: number; maps?: string[]; files?: number; local?: boolean };
 const SECTION_NAME: Record<string, string> = { maps: "Map", skins: "Weapon skin", players: "Player model", sounds: "Sound", sprays: "Spray", sprites: "Effect", gui: "HUD & menu" };
 
 /** Everything downloaded into this game, in one place, to remove what you don't want. */
@@ -292,7 +301,7 @@ function InstalledList({ onChanged }: { onChanged: () => void }) {
               <i className="role-badge">{SECTION_NAME[it.section] ?? it.section}</i>
             </span>
             <span className="person-sub">
-              {it.author ? `by ${it.author}` : ""}
+              {it.local ? "Added from a file" : it.author ? `by ${it.author}` : ""}
               {it.maps?.length ? ` · ${it.maps.length > 3 ? `${it.maps.length} maps` : it.maps.join(", ")}` : ""}
               {it.date ? ` · added ${new Date(it.date * 1000).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}` : ""}
             </span>

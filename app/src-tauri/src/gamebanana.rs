@@ -192,6 +192,18 @@ pub struct Job {
     pub replaced: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ended: Option<f64>,
+    /// a file the player picked on their computer, instead of a GameBanana download
+    #[serde(skip)]
+    pub local: Option<PathBuf>,
+}
+
+/// Single files a section takes as they are (anything else has to be an archive).
+pub fn local_single(section: &str) -> &'static [&'static str] {
+    if section == "maps" {
+        &[".bsp"]
+    } else {
+        &[".mdl", ".wav", ".spr", ".wad", ".bmp", ".tga"]
+    }
 }
 
 pub struct MapStore {
@@ -298,15 +310,16 @@ impl MapStore {
             .filter_map(|(id, r)| {
                 let maps = r["maps"].as_array().cloned().unwrap_or_default();
                 (!maps.is_empty()).then(|| {
-                    json!({"mod": id.parse::<i64>().unwrap_or(0), "section": "maps", "name": r["name"], "author": r["author"],
-                           "url": r["url"], "date": r["date"], "maps": maps})
+                    let m = id.parse::<i64>().unwrap_or(0);
+                    json!({"mod": m, "section": "maps", "name": r["name"], "author": if m < 0 { Value::Null } else { r["author"].clone() },
+                           "url": r["url"], "date": r["date"], "maps": maps, "local": m < 0})
                 })
             })
             .collect();
         for (key, r) in self.content.for_game(&self.game_dir) {
             let id = key.rsplit(':').next().and_then(|n| n.parse::<i64>().ok()).unwrap_or(0);
-            out.push(json!({"mod": id, "section": r["section"], "name": r["name"], "author": r["author"], "url": r["url"], "date": r["date"],
-                            "files": r["files"].as_array().map(|f| f.len()).unwrap_or(0)}));
+            out.push(json!({"mod": id, "section": r["section"], "name": r["name"], "author": if id < 0 { Value::Null } else { r["author"].clone() },
+                            "url": r["url"], "date": r["date"], "local": id < 0, "files": r["files"].as_array().map(|f| f.len()).unwrap_or(0)}));
         }
         out.sort_by_key(|v| std::cmp::Reverse(v["date"].as_i64().unwrap_or(0)));
         out
@@ -613,7 +626,7 @@ impl MapStore {
                 id.clone(),
                 Job {
                     id: id.clone(), mod_id, file: file_id, section: sec.key.into(), state: "queued".into(), got: 0, size: 0,
-                    message: "Waiting".into(), maps: vec![], kept: vec![], skipped: vec![], replaced: vec![], ended: None,
+                    message: "Waiting".into(), maps: vec![], kept: vec![], skipped: vec![], replaced: vec![], ended: None, local: None,
                 },
             );
             id
@@ -622,6 +635,63 @@ impl MapStore {
         let id = job_id.clone();
         std::thread::spawn(move || me.install(&id));
         Ok(job_id)
+    }
+
+    /// Installs a file from the player's computer (a .bsp, a sound, a model, or an
+    /// archive of them) the same way as a GameBanana download: checked, recorded, and
+    /// removable later. It gets a negative id so it can't clash with GameBanana's.
+    pub fn start_local_install(self: &Arc<Self>, section: &str, path: &Path) -> Result<String, StoreError> {
+        let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
+        let meta = std::fs::metadata(path).map_err(|_| StoreError::Bad("That file isn't there.".into()))?;
+        if !meta.is_file() || meta.len() > MAX_DOWNLOAD {
+            return Err(StoreError::Bad("That isn't a file the app can add (or it's over 1.5 GB).".into()));
+        }
+        let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let ext = archive::ext_of(&name).to_lowercase();
+        if !(archive::is_archive(&name) || local_single(sec.key).contains(&ext.as_str())) {
+            return Err(StoreError::Bad(format!("Loner-Strike can't add a {ext} file here. Pick a {} or an archive (zip, rar, 7z).", local_single(sec.key).join(", "))));
+        }
+        let mod_id = -(sys::now() * 1000.0) as i64;
+        let id = format!("{}-local-{}", sec.key, -mod_id);
+        self.jobs.lock().unwrap().insert(
+            id.clone(),
+            Job {
+                id: id.clone(), mod_id, file: 0, section: sec.key.into(), state: "queued".into(), got: 0, size: meta.len(),
+                message: format!("Adding {name}"), maps: vec![], kept: vec![], skipped: vec![], replaced: vec![], ended: None, local: Some(path.to_path_buf()),
+            },
+        );
+        let me = self.clone();
+        let job = id.clone();
+        std::thread::spawn(move || me.install(&job));
+        Ok(id)
+    }
+
+    /// The page info and the unpacked files for a job: from GameBanana, or the player's own file.
+    fn source(&self, id: &str, section: &str, mod_id: i64, file_id: i64, tmp: &Path, single: &[&str]) -> Result<(Value, PathBuf, String), StoreError> {
+        let local = self.jobs.lock().unwrap().get(id).and_then(|j| j.local.clone());
+        let Some(path) = local else {
+            let info = self.details(section, mod_id)?;
+            let (src, fname) = self.fetch(id, &info, file_id, tmp, single)?;
+            return Ok((info, src, fname));
+        };
+        let fname = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "file".into());
+        let ext = archive::ext_of(&fname).to_lowercase();
+        self.update(id, |j| {
+            j.state = "unpacking".into();
+            j.message = "Unpacking".into();
+        });
+        let src = tmp.join("x");
+        std::fs::create_dir_all(&src).map_err(|e| StoreError::Bad(e.to_string()))?;
+        if archive::is_archive(&fname) {
+            let copy = tmp.join(format!("download{ext}"));
+            std::fs::copy(&path, &copy).map_err(|e| StoreError::Bad(format!("Couldn't read the file ({e}).")))?;
+            archive::extract(&copy, &src, MAX_UNPACKED).map_err(StoreError::Bad)?;
+            archive::extract_nested(&src).map_err(StoreError::Bad)?;
+        } else {
+            std::fs::copy(&path, src.join(&fname)).map_err(|e| StoreError::Bad(format!("Couldn't read the file ({e}).")))?;
+        }
+        let stem = fname.rsplit_once('.').map(|(a, _)| a.to_string()).unwrap_or_else(|| fname.clone());
+        Ok((json!({"name": stem, "author": "", "url": null}), src, fname))
     }
 
     pub fn job_list(&self) -> Vec<Job> {
@@ -678,8 +748,7 @@ impl MapStore {
     #[allow(clippy::type_complexity)]
     fn install_into(&self, id: &str, mod_id: i64, file_id: i64, tmp: &Path) -> Result<(String, Vec<String>, Vec<String>, Vec<String>), StoreError> {
         let bad = |m: &str| StoreError::Bad(m.to_string());
-        let info = self.details("maps", mod_id)?;
-        let (src, fname) = self.fetch(id, &info, file_id, tmp, &[".bsp"])?;
+        let (info, src, fname) = self.source(id, "maps", mod_id, file_id, tmp, &[".bsp"])?;
 
         self.update(id, |j| j.message = "Copying map files".into());
         let (plan, skipped) = archive::plan(&src);
@@ -843,8 +912,7 @@ impl MapStore {
         if self.content.for_game(&self.game_dir).contains_key(&key) {
             return Err(StoreError::Bad("That's already installed. Remove it first to install another version.".into()));
         }
-        let info = self.details(section, mod_id)?;
-        let (src, fname) = self.fetch(id, &info, file_id, tmp, &[".mdl", ".wav", ".spr", ".wad", ".bmp", ".tga"])?;
+        let (info, src, fname) = self.source(id, section, mod_id, file_id, tmp, &[".mdl", ".wav", ".spr", ".wad", ".bmp", ".tga"])?;
 
         self.update(id, |j| j.message = "Copying files".into());
         let files = archive::walk(&src);
@@ -1028,6 +1096,38 @@ mod tests {
         assert!(hl.join("liblist.gam").exists());
         assert!(store.uninstall_section("maps", 1).is_err());
         assert!(store.records().contains_key("2"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A map file from the player's computer: placed, recorded with a local id, listed, and removable.
+    #[test]
+    fn add_map_from_a_file() {
+        let root = sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "local-").unwrap();
+        let hl = root.join("hl");
+        std::fs::create_dir_all(hl.join("cstrike/maps")).unwrap();
+        std::fs::create_dir_all(hl.join("czero/maps")).unwrap();
+        let file = root.join("de_mytest.bsp");
+        std::fs::write(&file, b"BSP30 not really a map").unwrap();
+        let store = Arc::new(MapStore::new(&hl, &hl.join("czero"), &root.join("app"), Arc::new(Mutex::new(None))));
+        assert!(store.start_local_install("maps", &root.join("nope.exe")).is_err(), "only maps and archives");
+        let job = store.start_local_install("maps", &file).unwrap();
+        let j = loop {
+            std::thread::sleep(Duration::from_millis(100));
+            let j = store.job_list().into_iter().find(|j| j.id == job).unwrap();
+            if j.ended.is_some() {
+                break j;
+            }
+        };
+        assert_eq!(j.state, "done", "{}", j.message);
+        assert!(hl.join("cstrike/maps/de_mytest.bsp").is_file());
+        let listed = store.installed_list();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0]["local"], true);
+        let m = listed[0]["mod"].as_i64().unwrap();
+        assert!(m < 0);
+        store.uninstall_section("maps", m).unwrap();
+        assert!(!hl.join("cstrike/maps/de_mytest.bsp").exists());
+        assert!(store.installed_list().is_empty());
         let _ = std::fs::remove_dir_all(&root);
     }
 

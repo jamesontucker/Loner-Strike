@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { postJson, withTarget } from "../api";
+import { addFromFile, ON_THIS_COMPUTER, postJson, withTarget } from "../api";
 import type { MapInfo, Online } from "../types";
 import { SectionHead, useCommand, useConfirm, useToast } from "../ui";
 
@@ -61,6 +61,7 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
     }
   };
   const [picked, setPicked] = useState<MapInfo | null>(null);
+  const [adding, setAdding] = useState(false);
   const current = data?.state.map.toLowerCase();
 
   const shown = useMemo(() => {
@@ -114,6 +115,15 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
     <div className="stack">
       <div>
         <SectionHead title="Maps" note={data ? "Pick a map to play it in the current mode." : "Start the game to change maps."}>
+          {ON_THIS_COMPUTER && (
+            <button className="btn" disabled={adding} onClick={async () => {
+              setAdding(true);
+              const r = await addFromFile("maps");
+              setAdding(false);
+              if (r) toast(r.message, !r.ok);
+              if (r?.ok) reload();
+            }}>{adding ? "Adding…" : "Add a map file…"}</button>
+          )}
           <button className="btn" onClick={() => {
             const pool = shown.filter((m) => m.name.toLowerCase() !== current);
             if (!pool.length || !data) return;
@@ -157,8 +167,8 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
                 {!picked.nav && " · Bots will learn this map first (a few minutes)"}
               </p>
               <p className="muted">
-                {SOURCE[picked.source]}
-                {picked.source === "download" && picked.modName ? `: ${picked.modName}` : ""}
+                {picked.source === "download" && (picked.mod ?? 0) < 0 ? "Added from a file" : SOURCE[picked.source]}
+                {picked.source === "download" && (picked.mod ?? 0) > 0 && picked.modName ? `: ${picked.modName}` : ""}
                 {picked.pack && picked.pack.length > 1 ? ` (a pack of ${picked.pack.length} maps)` : ""}
               </p>
               <div className="row">
