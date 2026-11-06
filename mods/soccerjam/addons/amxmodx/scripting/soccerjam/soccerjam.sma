@@ -334,7 +334,10 @@ new bool:has_knife[MAX_PLAYER]
 new OFFSET_INTERNALMODEL;
 
 // ---- CZ bot helper (added) ----
-new CVAR_BOTS, CVAR_BOTKICKDIST
+new CVAR_BOTS, CVAR_BOTKICKDIST, CVAR_BOTROLES
+new g_botKeeper[TEAMS]
+new g_botPresser[TEAMS]
+new g_botSlot[MAX_PLAYER]
 new Float:g_botHoldStart[MAX_PLAYER]
 new Float:g_botNextKick[MAX_PLAYER]
 new g_botChaser[TEAMS]
@@ -440,6 +443,7 @@ public plugin_init() {
 		CVAR_RANDOM = register_cvar("sj_random","1")
 		CVAR_BOTS = register_cvar("sj_bots","1")
 		CVAR_BOTKICKDIST = register_cvar("sj_botkickdist","1000")
+		CVAR_BOTROLES = register_cvar("sj_bot_roles","1")
 		set_task(0.3, "BotPickChasers", 7654322, "", 0, "b")
 		register_cvar( "sj_timelimit", "0" );
 		
@@ -2772,6 +2776,16 @@ flameWave(myorig[3]) {
  nearest to a loose ball run to it, makes a bot that holds the ball run toward the enemy goal,
  and kicks it at the goal when close enough (sj_botkickdist) or after holding it for 6 seconds.
  Steering is done by setting the bot's horizontal velocity after its own movement each frame.
+
+ Team roles (sj_bot_roles 1), for teams with two or more bots:
+   keeper    the bot nearest its own goal stands between the ball and the goal, and clears a loose
+             ball that comes within 500 units of the goal
+   presser   when the other team has the ball, the bot nearest the ball runs at the holder (its
+             knife does the tackling)
+   others    spread across the field: ahead of the ball, ready for a pass, while their team has it
+             or it is loose, between the ball and their goal while the other team has it; never
+             within reach of the enemy goal's mascot. An enemy close by is left to the bot's brain.
+   A bot holding the ball with an enemy on it passes to an open teammate nearer the enemy goal.
 ====================================================================================================*/
 GetGoalCenter(team, Float:out[3]) {
 	if(team < 1 || team > 2)
@@ -2790,24 +2804,73 @@ GetGoalCenter(team, Float:out[3]) {
 public BotPickChasers() {
 	g_botChaser[1] = 0
 	g_botChaser[2] = 0
-	if(!get_pcvar_num(CVAR_BOTS) || ballholder != 0 || !is_valid_ent(aball))
+	g_botKeeper[1] = 0
+	g_botKeeper[2] = 0
+	g_botPresser[1] = 0
+	g_botPresser[2] = 0
+	if(!get_pcvar_num(CVAR_BOTS) || !is_valid_ent(aball))
 		return
+	new roles = get_pcvar_num(CVAR_BOTROLES)
 	new Float:borig[3], Float:porig[3], Float:best[TEAMS], id, team, Float:d
+
+	// keeper: the bot nearest its own goal, on teams with at least two bots
+	if(roles) {
+		new Float:goal[3], count
+		for(team=1; team<=2; team++) {
+			if(!GetGoalCenter(team, goal))
+				continue
+			count = 0
+			best[team] = 999999.0
+			for(id=1; id<=maxplayers; id++) {
+				if(!is_user_alive(id) || !is_user_bot(id) || get_user_team(id) != team || id == ballholder)
+					continue
+				count++
+				entity_get_vector(id, EV_VEC_origin, porig)
+				d = get_distance_f(goal, porig)
+				if(d < best[team]) {
+					best[team] = d
+					g_botKeeper[team] = id
+				}
+			}
+			if(count < 2)
+				g_botKeeper[team] = 0
+		}
+	}
+
+	// chaser (loose ball) or presser (the other team has it): the nearest other bot
+	new holderteam = ballholder ? get_user_team(ballholder) : 0
 	entity_get_vector(aball, EV_VEC_origin, borig)
 	best[1] = 999999.0
 	best[2] = 999999.0
+	new pick[TEAMS]
 	for(id=1; id<=maxplayers; id++) {
 		if(!is_user_alive(id) || !is_user_bot(id))
 			continue
 		team = get_user_team(id)
-		if(team != 1 && team != 2)
+		if((team != 1 && team != 2) || id == g_botKeeper[team] || id == ballholder)
 			continue
 		entity_get_vector(id, EV_VEC_origin, porig)
 		d = get_distance_f(borig, porig)
 		if(d < best[team]) {
 			best[team] = d
-			g_botChaser[team] = id
+			pick[team] = id
 		}
+	}
+	for(team=1; team<=2; team++) {
+		if(!holderteam)
+			g_botChaser[team] = pick[team]
+		else if(roles && holderteam != team)
+			g_botPresser[team] = pick[team]
+	}
+
+	// everyone else gets a place across the field
+	new slot[TEAMS]
+	for(id=1; id<=maxplayers; id++) {
+		if(!is_user_alive(id) || !is_user_bot(id))
+			continue
+		team = get_user_team(id)
+		if(team == 1 || team == 2)
+			g_botSlot[id] = slot[team]++
 	}
 }
 
@@ -2859,6 +2922,9 @@ BotThink(id) {
 		entity_get_vector(id, EV_VEC_origin, org)
 		new Float:dist = get_distance_f(org, goal)
 
+		if(get_pcvar_num(CVAR_BOTROLES) && now >= g_botNextKick[id] && dist >= get_pcvar_float(CVAR_BOTKICKDIST) && BotTryPass(id, team, org, goal))
+			return
+
 		if((dist < get_pcvar_float(CVAR_BOTKICKDIST) || now - g_botHoldStart[id] > 6.0) && now >= g_botNextKick[id]) {
 			g_botNextKick[id] = now + 0.3
 			new Float:dir[3], Float:ang[3]
@@ -2885,7 +2951,127 @@ BotThink(id) {
 		new Float:borig[3]
 		entity_get_vector(aball, EV_VEC_origin, borig)
 		BotSteer(id, borig)
+		return
 	}
+
+	if(get_pcvar_num(CVAR_BOTROLES))
+		BotRole(id, team)
+}
+
+bool:BotEnemyNear(id, Float:radius) {
+	new Float:org[3], Float:other[3], team = get_user_team(id), i
+	entity_get_vector(id, EV_VEC_origin, org)
+	for(i=1; i<=maxplayers; i++) {
+		if(i == id || !is_user_alive(i) || get_user_team(i) == team)
+			continue
+		entity_get_vector(i, EV_VEC_origin, other)
+		if(get_distance_f(org, other) < radius)
+			return true
+	}
+	return false
+}
+
+// Holding the ball with an enemy on us: pass to an open teammate nearer the enemy goal
+bool:BotTryPass(id, team, Float:org[3], Float:goal[3]) {
+	if(!BotEnemyNear(id, 260.0))
+		return false
+	new Float:mine = get_distance_f(org, goal)
+	new Float:m[3], Float:ret[3], Float:d, Float:score, Float:bestscore = -999999.0, best, mate
+	for(mate=1; mate<=maxplayers; mate++) {
+		if(mate == id || !is_user_alive(mate) || get_user_team(mate) != team)
+			continue
+		entity_get_vector(mate, EV_VEC_origin, m)
+		d = get_distance_f(org, m)
+		if(d < 200.0 || d > 1100.0)
+			continue
+		new Float:theirs = get_distance_f(m, goal)
+		if(theirs > mine + 150.0 || BotEnemyNear(mate, 180.0))
+			continue
+		new hit = trace_line(id, org, m, ret)
+		if(hit != mate && get_distance_f(ret, m) > 24.0)
+			continue
+		score = mine - theirs - d * 0.2
+		if(score > bestscore) {
+			bestscore = score
+			best = mate
+		}
+	}
+	if(!best)
+		return false
+
+	entity_get_vector(best, EV_VEC_origin, m)
+	new Float:dir[3], Float:ang[3]
+	dir[0] = m[0] - org[0]
+	dir[1] = m[1] - org[1]
+	dir[2] = m[2] - org[2]
+	vector_to_angle(dir, ang)
+	ang[0] = -ang[0] - random_float(2.0, 7.0)
+	ang[1] += random_float(-2.0, 2.0)
+	ang[2] = 0.0
+	entity_set_vector(id, EV_VEC_v_angle, ang)
+	g_botNextKick[id] = get_gametime() + 1.0
+	kickBall(id, 0)
+	return true
+}
+
+BotRole(id, team) {
+	new Float:org[3], Float:borig[3], Float:own[3], Float:enemy[3], Float:target[3]
+	if(!is_valid_ent(aball) || !GetGoalCenter(team, own) || !GetGoalCenter(3 - team, enemy))
+		return
+	entity_get_vector(aball, EV_VEC_origin, borig)
+	entity_get_vector(id, EV_VEC_origin, org)
+	target[2] = org[2]
+
+	if(id == g_botPresser[team]) {
+		// run at the enemy holding the ball; once close, the bot's knife does the rest
+		if(get_distance_f(org, borig) > 110.0)
+			BotSteer(id, borig)
+		return
+	}
+
+	new Float:dx = borig[0] - own[0], Float:dy = borig[1] - own[1]
+	new Float:d = floatsqroot(dx*dx + dy*dy)
+
+	if(id == g_botKeeper[team]) {
+		if(ballholder == 0 && d < 500.0) {
+			BotSteer(id, borig)                 // clear a loose ball near the goal
+			return
+		}
+		// on the line from the goal to the ball
+		new Float:k = d > 1.0 ? floatmin(220.0, d * 0.5) / d : 0.0
+		target[0] = own[0] + dx * k
+		target[1] = own[1] + dy * k
+		if(get_distance_f(org, target) > 40.0)
+			BotSteer(id, target)
+		return
+	}
+
+	// a fight close by: leave it to the bot
+	if(BotEnemyNear(id, 200.0))
+		return
+
+	// field axis from our goal to theirs
+	new Float:ax = enemy[0] - own[0], Float:ay = enemy[1] - own[1]
+	new Float:axis = floatsqroot(ax*ax + ay*ay)
+	if(axis < 300.0)
+		return
+	new Float:ux = ax / axis, Float:uy = ay / axis
+	new Float:along = dx * ux + dy * uy
+	new Float:side = -dx * uy + dy * ux
+	new holderteam = ballholder ? get_user_team(ballholder) : 0
+	if(holderteam && holderteam != team)
+		along *= 0.5                            // defend: between the ball and our goal
+	else
+		along += 350.0                          // attack: ahead of the ball, open for a pass
+	// out of reach of the enemy goal's mascot (sj_goalsafety)
+	new Float:hi = floatmax(axis - get_pcvar_float(CVAR_GOALSAFETY) - 100.0, 250.0)
+	along = floatclamp(along, 250.0, hi)
+	static const Float:SPREAD[5] = { -300.0, 300.0, -150.0, 150.0, 0.0 }
+	side = floatclamp(side * 0.5 + SPREAD[g_botSlot[id] % 5], -350.0, 350.0)
+	target[0] = own[0] + ux * along - uy * side
+	target[1] = own[1] + uy * along + ux * side
+	if(get_distance_f(org, target) > 60.0)
+		BotSteer(id, target)
 }
 
 BotUpgrade(id) {

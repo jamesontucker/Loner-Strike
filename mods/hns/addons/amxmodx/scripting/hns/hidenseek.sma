@@ -26,6 +26,46 @@
 #pragma semicolon 1
 
 
+/* CZ bot patch: gm_botnav (the bot autopilot plugin) natives. Optional: when
+   gm_botnav isn't loaded the native filter lets this plugin load anyway and
+   bot hiders behave as before. */
+native botnav_has_mesh();
+native botnav_path_to(id, const Float:target[3], flags = 0);
+native botnav_stop(id);
+native botnav_hold(id, duck = 1);
+native botnav_status(id);
+native botnav_set_fight(id, Float:radius);
+native botnav_hiding_spot_count();
+native botnav_hiding_spot(index, Float:pos[3]);
+native botnav_spot_area(index);
+native botnav_area_count();
+native botnav_area(index, Float:center[3]);
+native botnav_flood(slot, const Float:origin[3]);
+native Float:botnav_flood_dist(slot, area);
+
+#define TASK_ID_HNSBOTS	98710
+#define BN_ARRIVED	3
+#define BN_FAILED	4
+#define BN_IDLE		0
+
+enum
+{
+	HB_NONE = 0,
+	HB_GOING,
+	HB_HIDDEN,
+	HB_FLEEING
+};
+
+new hns_bot_hide;
+new bool:g_bHbBotNav;
+new bool:g_bHbFloods;
+new g_HbState[33];
+new g_HbTries[33];
+new Float:g_fHbSpot[33][3];
+new Float:g_fHbSpawnTime[33];
+new Float:g_fHbFledAt[33];
+new Float:g_fHbBad[33][3];
+
 /* save memory */
 new const g_sBlank[] = "";
 new const g_sA[] = "a";
@@ -506,12 +546,19 @@ public plugin_init()
 	formatex(g_sScrimMotd, 48, "%s/hidenseek_scrim_help.txt", dir);
 	
 	set_task(1.0, "taskExecuteConfig");
-	
+
+	// CZ bot patch: bot hiders run to a hiding spot and flee from seekers (gm_botnav)
+	hns_bot_hide = register_cvar("hns_bot_hide", "1", 0, 0.0);
+	g_bHbBotNav = bool:LibraryExists("gm_botnav", LibType_Library);
+	set_task(0.25, "taskHnsBots", TASK_ID_HNSBOTS, g_sBlank, 0, g_sB, 0);
+
 	return PLUGIN_CONTINUE;
 }
 
 public plugin_natives()
 {
+	set_native_filter("hnsbot_native_filter");
+
 	register_library("hidenseek");
 	register_native("hns_get_status", "_GetHnsStatus");
 	register_native("hnss_get_status", "_GetScrimStatus");
@@ -1606,7 +1653,9 @@ hns_get_weapon(plr)
 public fwdPlayerSpawn(plr)
 {
 	g_bAlive[plr] = true;
-	
+	hnsbot_release(plr);
+	g_fHbSpawnTime[plr] = get_gametime();
+
 	if( !g_bHnsOn )
 	{
 		return PLUGIN_CONTINUE;
@@ -1776,7 +1825,12 @@ public eventMoney(plr)
 public eventNewRound()
 {
 	g_bWeaponsGiven = false;
-	
+
+	for( new plr = 1; plr <= g_MaxPlayers; plr++ )
+	{
+		hnsbot_release(plr);
+	}
+
 	if( !g_bHnsOn )
 	{
 		return PLUGIN_CONTINUE;
@@ -3565,6 +3619,406 @@ __get_ammo_offset(weapon)
 	
 	return offset;
 }
+/*====================================================================================================
+ CZ bot patch: hiding bots (needs the gm_botnav plugin and a bot navigation mesh for the map)
+
+ During hide time each bot hider runs to a hiding spot from the map's navigation mesh: far (by
+ walking distance) from the seekers' spawn, away from the other hiders, and reachable before the
+ hide time runs out. There it crouches and keeps still. Once the seekers are out it stays put until
+ a seeker comes within 400 units, or looks its way from up to 1200 units with nothing in between;
+ then it runs to another spot away from that seeker. Seekers keep their own bot brain.
+ hns_bot_hide 0 turns it off.
+====================================================================================================*/
+
+public hnsbot_native_filter(const sNative[], index, trap)
+{
+	if( !trap && equal(sNative, "botnav_", 7) )
+	{
+		return PLUGIN_HANDLED;
+	}
+	
+	return PLUGIN_CONTINUE;
+}
+
+hnsbot_release(plr)
+{
+	if( g_HbState[plr] != HB_NONE && g_bHbBotNav )
+	{
+		botnav_stop(plr);
+	}
+	
+	g_HbState[plr] = HB_NONE;
+}
+
+public taskHnsBots()
+{
+	if( !g_bHbBotNav )
+	{
+		return;
+	}
+	
+	new bool:bOn = g_bHnsOn && get_pcvar_num(hns_bot_hide) && botnav_has_mesh();
+	
+	if( bOn && !g_bHbFloods )
+	{
+		g_bHbFloods = true;
+		hnsbot_floods();
+	}
+	
+	new Float:fNow = get_gametime();
+	new seeker;
+	
+	for( new plr = 1; plr <= g_MaxPlayers; plr++ )
+	{
+		if( !bOn || !g_bConnected[plr] || !g_bAlive[plr] || !is_user_bot(plr) || cs_get_user_team(plr) != HNS_TEAM_HIDER )
+		{
+			hnsbot_release(plr);
+			continue;
+		}
+		
+		switch( g_HbState[plr] )
+		{
+			case HB_NONE:
+			{
+				// wait until the round's respawn has put the bot at its spawn
+				if( fNow - g_fHbSpawnTime[plr] >= 0.6 )
+				{
+					g_HbTries[plr] = 0;
+					hnsbot_go_hide(plr);
+				}
+			}
+			case HB_GOING, HB_FLEEING:
+			{
+				new status = botnav_status(plr);
+				
+				if( status == BN_ARRIVED )
+				{
+					botnav_hold(plr, 1);
+					g_HbState[plr] = HB_HIDDEN;
+					g_HbTries[plr] = 0;
+				}
+				else if( status == BN_FAILED || status == BN_IDLE )
+				{
+					g_fHbBad[plr][0] = g_fHbSpot[plr][0];
+					g_fHbBad[plr][1] = g_fHbSpot[plr][1];
+					g_fHbBad[plr][2] = g_fHbSpot[plr][2];
+					
+					if( ++g_HbTries[plr] > 3 )
+					{
+						// nowhere better to go: hide right here
+						botnav_hold(plr, 1);
+						g_HbState[plr] = HB_HIDDEN;
+						g_HbTries[plr] = 0;
+					}
+					else if( g_HideTimer < 0 && (seeker = hnsbot_threat(plr)) )
+					{
+						hnsbot_flee(plr, seeker);
+					}
+					else
+					{
+						hnsbot_go_hide(plr);
+					}
+				}
+				else if( g_HideTimer < 0 && fNow - g_fHbFledAt[plr] > 2.5 && (seeker = hnsbot_threat(plr)) )
+				{
+					hnsbot_flee(plr, seeker);
+				}
+			}
+			case HB_HIDDEN:
+			{
+				if( g_HideTimer < 0 && fNow - g_fHbFledAt[plr] > 1.0 && (seeker = hnsbot_threat(plr)) )
+				{
+					hnsbot_flee(plr, seeker);
+				}
+			}
+		}
+	}
+}
+
+// Walking distances over the map: slot 0 from the seekers' spawn, slot 1 from the hiders'
+hnsbot_floods()
+{
+	new Float:fOrigin[3];
+	new ent = engfunc(EngFunc_FindEntityByString, 0, "classname", "info_player_start");
+	
+	if( ent > 0 )
+	{
+		pev(ent, pev_origin, fOrigin);
+		botnav_flood(0, fOrigin);
+	}
+	
+	ent = engfunc(EngFunc_FindEntityByString, 0, "classname", "info_player_deathmatch");
+	
+	if( ent > 0 )
+	{
+		pev(ent, pev_origin, fOrigin);
+		botnav_flood(1, fOrigin);
+	}
+}
+
+// Places to hide: the mesh's hiding spots, or (a mesh without them) its areas
+hnsbot_candidate_count(&bool:bSpots)
+{
+	new count = botnav_hiding_spot_count();
+	bSpots = count > 0;
+	
+	return bSpots ? count : botnav_area_count();
+}
+
+// Position and area of a place to hide, returns a bonus for how good a place it is
+Float:hnsbot_candidate(i, bool:bSpots, Float:fPos[3], &area)
+{
+	if( bSpots )
+	{
+		area = botnav_spot_area(i);
+		
+		return (botnav_hiding_spot(i, fPos) & 1) ? 200.0 : 0.0; // in cover
+	}
+	
+	area = i;
+	new info = botnav_area(i, fPos);
+	new links = info >> 8;
+	new Float:fBonus = (links <= 1) ? 300.0 : ((links == 2) ? 150.0 : 0.0); // dead ends
+	
+	if( info & 1 )
+	{
+		fBonus += 150.0; // crouch-only places
+	}
+	
+	return fBonus;
+}
+
+bool:hnsbot_pick_hide(plr, Float:fOut[3])
+{
+	new bool:bSpots;
+	new count = hnsbot_candidate_count(bSpots);
+	
+	if( !count )
+	{
+		return false;
+	}
+	
+	// where the other hiders are, or are headed
+	new Float:fOthers[32][3], others;
+	
+	for( new i = 1; i <= g_MaxPlayers && others < 32; i++ )
+	{
+		if( i == plr || !g_bConnected[i] || !g_bAlive[i] || cs_get_user_team(i) != HNS_TEAM_HIDER )
+		{
+			continue;
+		}
+		
+		if( g_HbState[i] != HB_NONE )
+		{
+			fOthers[others][0] = g_fHbSpot[i][0];
+			fOthers[others][1] = g_fHbSpot[i][1];
+			fOthers[others][2] = g_fHbSpot[i][2];
+		}
+		else
+		{
+			pev(i, pev_origin, fOthers[others]);
+		}
+		
+		others++;
+	}
+	
+	// how far a hider can walk before the seekers come out
+	new Float:fReach = (g_HideTimer > 0) ? 230.0 * float(g_HideTimer) : 0.0;
+	new step = count / 2000 + 1;
+	new Float:fPos[3], area, Float:fBest = -999999.0, bool:bFound;
+	
+	for( new pass = 0; pass < 2 && !bFound; pass++ )
+	{
+		for( new i = random(step); i < count; i += step )
+		{
+			new Float:fScore = hnsbot_candidate(i, bSpots, fPos, area);
+			new Float:fFromHiders = botnav_flood_dist(1, area);
+			new Float:fFromSeekers = botnav_flood_dist(0, area);
+			
+			if( pass == 0 )
+			{
+				if( fFromHiders < 0.0 || (fReach > 0.0 && fFromHiders > fReach) )
+				{
+					continue;
+				}
+				
+				if( get_distance_f(fPos, g_fHbBad[plr]) < 96.0 )
+				{
+					continue;
+				}
+			}
+			
+			new Float:fNear = 1500.0;
+			
+			for( new o = 0; o < others; o++ )
+			{
+				fNear = floatmin(fNear, get_distance_f(fPos, fOthers[o]));
+			}
+			
+			if( pass == 0 && fNear < 200.0 )
+			{
+				continue;
+			}
+			
+			fScore += ((fFromSeekers >= 0.0) ? fFromSeekers * 0.6 : 1500.0) + fNear * 0.8 + random_float(0.0, 500.0);
+			
+			if( fScore > fBest )
+			{
+				fBest = fScore;
+				fOut[0] = fPos[0];
+				fOut[1] = fPos[1];
+				fOut[2] = fPos[2];
+				bFound = true;
+			}
+		}
+	}
+	
+	return bFound;
+}
+
+hnsbot_go_hide(plr)
+{
+	new Float:fSpot[3];
+	
+	if( !hnsbot_pick_hide(plr, fSpot) )
+	{
+		botnav_hold(plr, 1);
+		g_HbState[plr] = HB_HIDDEN;
+		return;
+	}
+	
+	g_fHbSpot[plr][0] = fSpot[0];
+	g_fHbSpot[plr][1] = fSpot[1];
+	g_fHbSpot[plr][2] = fSpot[2];
+	
+	botnav_set_fight(plr, 0.0);
+	botnav_path_to(plr, fSpot, 0);
+	g_HbState[plr] = HB_GOING;
+}
+
+// The seeker closest to this hider that is within 400 units, or looking at it from up to 1200
+hnsbot_threat(plr)
+{
+	new Float:fMe[3], Float:fThem[3], Float:fEye[3], Float:fAngles[3], Float:fFrac;
+	pev(plr, pev_origin, fMe);
+	
+	new closest, Float:fClosest = 999999.0;
+	
+	for( new i = 1; i <= g_MaxPlayers; i++ )
+	{
+		if( !g_bConnected[i] || !g_bAlive[i] || cs_get_user_team(i) != HNS_TEAM_SEEKER )
+		{
+			continue;
+		}
+		
+		pev(i, pev_origin, fThem);
+		new Float:fDist = get_distance_f(fMe, fThem);
+		
+		if( fDist >= fClosest || fDist > 1200.0 )
+		{
+			continue;
+		}
+		
+		if( fDist >= 400.0 )
+		{
+			// looking this way...
+			pev(i, pev_v_angle, fAngles);
+			new Float:fYaw = floatatan2(fMe[1] - fThem[1], fMe[0] - fThem[0], degrees) - fAngles[1];
+			
+			while( fYaw > 180.0 )
+			{
+				fYaw -= 360.0;
+			}
+			while( fYaw < -180.0 )
+			{
+				fYaw += 360.0;
+			}
+			
+			if( floatabs(fYaw) > 50.0 )
+			{
+				continue;
+			}
+			
+			// ...with nothing in between
+			pev(i, pev_view_ofs, fEye);
+			fEye[0] += fThem[0];
+			fEye[1] += fThem[1];
+			fEye[2] += fThem[2];
+			engfunc(EngFunc_TraceLine, fEye, fMe, IGNORE_MONSTERS, i, 0);
+			get_tr2(0, TR_flFraction, fFrac);
+			
+			if( fFrac < 1.0 )
+			{
+				continue;
+			}
+		}
+		
+		fClosest = fDist;
+		closest = i;
+	}
+	
+	return closest;
+}
+
+// Run to a place away from the seeker, without running past it
+hnsbot_flee(plr, seeker)
+{
+	new Float:fMe[3], Float:fThem[3], Float:fPos[3], Float:fTo[3], area;
+	pev(plr, pev_origin, fMe);
+	pev(seeker, pev_origin, fThem);
+	g_fHbFledAt[plr] = get_gametime();
+	
+	new Float:fGap = get_distance_f(fMe, fThem);
+	new bool:bSpots;
+	new count = hnsbot_candidate_count(bSpots);
+	new step = count / 2000 + 1;
+	new Float:fBest = -999999.0, bool:bFound;
+	
+	for( new i = random(step); i < count; i += step )
+	{
+		new Float:fScore = hnsbot_candidate(i, bSpots, fPos, area) * 0.5;
+		new Float:fMeDist = get_distance_f(fMe, fPos);
+		new Float:fThemDist = get_distance_f(fThem, fPos);
+		
+		if( fMeDist < 200.0 || fMeDist > 2500.0 || fThemDist < 700.0 )
+		{
+			continue;
+		}
+		
+		// the seeker shouldn't be on the way there
+		if( (fPos[0] - fMe[0]) * (fThem[0] - fMe[0]) + (fPos[1] - fMe[1]) * (fThem[1] - fMe[1]) > 0.3 * fMeDist * fGap )
+		{
+			continue;
+		}
+		
+		fScore += fThemDist - fMeDist * 0.5 + random_float(0.0, 250.0);
+		
+		if( fScore > fBest )
+		{
+			fBest = fScore;
+			fTo[0] = fPos[0];
+			fTo[1] = fPos[1];
+			fTo[2] = fPos[2];
+			bFound = true;
+		}
+	}
+	
+	if( !bFound )
+	{
+		// cornered: keep still and hope
+		botnav_hold(plr, 1);
+		g_HbState[plr] = HB_HIDDEN;
+		return;
+	}
+	
+	g_fHbSpot[plr][0] = fTo[0];
+	g_fHbSpot[plr][1] = fTo[1];
+	g_fHbSpot[plr][2] = fTo[2];
+	
+	botnav_path_to(plr, fTo, 0);
+	g_HbState[plr] = HB_FLEEING;
+}
+
 /* AMXX-Studio Notes - DO NOT MODIFY BELOW HERE
 *{\\ rtf1\\ ansi\\ deff0{\\ fonttbl{\\ f0\\ fnil Tahoma;}}\n\\ viewkind4\\ uc1\\ pard\\ lang1033\\ f0\\ fs16 \n\\ par }
 */

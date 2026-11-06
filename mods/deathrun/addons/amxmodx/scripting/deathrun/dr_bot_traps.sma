@@ -1,5 +1,5 @@
 /*
- * Deathrun: bot trap activator
+ * Deathrun: bot trap activator and bot runners
  *
  * CZ bots don't know how to use deathrun trap buttons. When the terrorist (the activator) is a bot,
  * this plugin "presses" a trap button (func_button / func_rot_button) for it when a living CT is
@@ -12,6 +12,15 @@
  *   dr_bot_trap_radius  260   how close (units) a CT must be to a trap part
  *   dr_bot_trap_delay   1.5   minimum seconds between two presses
  *   dr_bot_trap_range   0     max distance bot <-> button (0 = no limit)
+ *
+ * Bot runners (needs the gm_botnav plugin and a bot navigation mesh, maps/<map>.nav):
+ * CZ bots don't know a deathrun course is something to run. Each CT bot is driven along the
+ * course to its end - the place on the navigation mesh farthest (by walking distance) from the CT
+ * spawn - jumping where the mesh says so. They leave a second or two apart, so the traps above get
+ * a chance at each of them. A bot that sees the terrorist close by fights him, then runs on; at the
+ * end of the course the bot's own brain takes over (and hunts the terrorist).
+ *   dr_bot_run          1     on/off
+ *   dr_bot_run_fight    450   fight the terrorist when he is seen within this many units (0 = never)
  */
 
 #include <amxmodx>
@@ -24,6 +33,27 @@
 #define MAX_MM      256
 #define TICK        0.25
 #define SF_BUTTON_TOUCH_ONLY 256
+
+// gm_botnav natives (optional: without the plugin the bot runners just stay off)
+native botnav_has_mesh( );
+native botnav_path_to( id, const Float:target[ 3 ], flags = 0 );
+native botnav_stop( id );
+native botnav_status( id );
+native botnav_set_fight( id, Float:radius );
+native botnav_flood( slot, const Float:origin[ 3 ] );
+native Float:botnav_flood_dist( slot, area );
+native botnav_farthest( slot, Float:out[ 3 ] );
+
+#define BN_ARRIVED  3
+#define BN_PERSIST  1
+
+enum { RUN_NONE = 0, RUN_WAIT, RUN_GOING, RUN_DONE };
+
+new bool:g_bBotNav, bool:g_bGoalTried, bool:g_bHaveGoal;
+new Float:g_fGoal[ 3 ];
+new g_iRun[ 33 ];
+new Float:g_fRunAt[ 33 ];
+new g_pRun, g_pRunFight;
 
 new g_iButton[ MAX_BUTTONS ], g_iButtons;
 new Float:g_fPts[ MAX_BUTTONS ][ MAX_PTS ][ 3 ], g_iPts[ MAX_BUTTONS ];
@@ -98,6 +128,9 @@ public plugin_init( ) {
 	g_pRadius = register_cvar( "dr_bot_trap_radius", "260" );
 	g_pDelay  = register_cvar( "dr_bot_trap_delay",  "1.5" );
 	g_pRange  = register_cvar( "dr_bot_trap_range",  "0" );
+	g_pRun      = register_cvar( "dr_bot_run",       "1" );
+	g_pRunFight = register_cvar( "dr_bot_run_fight", "450" );
+	g_bBotNav = bool:LibraryExists( "gm_botnav", LibType_Library );
 
 	g_iMaxPlayers = get_maxplayers( );
 
@@ -107,12 +140,36 @@ public plugin_init( ) {
 		return;
 
 	register_event( "HLTV", "EventNewRound", "a", "1=0", "2=0" );
+	register_logevent( "EventRoundStart", 2, "1=Round_Start" );
 	set_task( TICK, "TaskThink", _, _, _, "b" );
+	set_task( TICK, "TaskRunners", _, _, _, "b" );
+}
+
+public plugin_natives( ) {
+	set_native_filter( "NativeFilter" );
+}
+
+public NativeFilter( const szNative[ ], iIndex, iTrap ) {
+	return ( !iTrap && equal( szNative, "botnav_", 7 ) ) ? PLUGIN_HANDLED : PLUGIN_CONTINUE;
 }
 
 public EventNewRound( ) {
 	arrayset( _:g_fNextUse, 0, MAX_BUTTONS );
 	g_fNextAny = get_gametime( ) + 3.0;
+
+	// runners start over once the round's respawn has put them back at the start
+	for( new i = 1; i <= g_iMaxPlayers; i++ )
+		StopRunner( i );
+}
+
+public EventRoundStart( ) {
+	// freeze time is over: leave one after another
+	new Float:fNow = get_gametime( );
+	for( new i = 1; i <= g_iMaxPlayers; i++ ) {
+		StopRunner( i );
+		g_iRun[ i ] = RUN_WAIT;
+		g_fRunAt[ i ] = fNow + random_float( 0.0, 2.5 );
+	}
 }
 
 GetCenter( iEnt, Float:fOut[ 3 ] ) {
@@ -311,5 +368,76 @@ public TaskThink( ) {
 		g_fNextUse[ b ] = fNow + 12.0;
 		g_fNextAny = fNow + get_pcvar_float( g_pDelay );
 		return;
+	}
+}
+
+/*
+ * Bot runners
+ */
+
+StopRunner( id ) {
+	if( g_iRun[ id ] == RUN_GOING && g_bBotNav )
+		botnav_stop( id );
+	g_iRun[ id ] = RUN_NONE;
+}
+
+// The end of the course: the place on the mesh farthest (walking) from the CT spawn
+FindGoal( ) {
+	g_bGoalTried = true;
+	new iEnt = engfunc( EngFunc_FindEntityByString, 0, "classname", "info_player_start" );
+	if( iEnt <= 0 )
+		return;
+
+	new Float:fStart[ 3 ];
+	pev( iEnt, pev_origin, fStart );
+	if( botnav_flood( 0, fStart ) < 2 )
+		return;
+
+	new iArea = botnav_farthest( 0, g_fGoal );
+	if( iArea < 0 || botnav_flood_dist( 0, iArea ) < 400.0 )
+		return;
+
+	g_bHaveGoal = true;
+	log_amx( "Deathrun bots: course end at %.0f %.0f %.0f, %.0f units from the start",
+		g_fGoal[ 0 ], g_fGoal[ 1 ], g_fGoal[ 2 ], botnav_flood_dist( 0, iArea ) );
+}
+
+public TaskRunners( ) {
+	if( !g_bBotNav )
+		return;
+
+	new bool:bOn = get_pcvar_num( g_pRun ) && botnav_has_mesh( );
+	if( bOn && !g_bGoalTried )
+		FindGoal( );
+	bOn = bOn && g_bHaveGoal;
+
+	new Float:fNow = get_gametime( );
+	for( new i = 1; i <= g_iMaxPlayers; i++ ) {
+		if( !bOn || !is_user_alive( i ) || !is_user_bot( i ) || get_user_team( i ) != 2 ) {
+			StopRunner( i );
+			continue;
+		}
+
+		switch( g_iRun[ i ] ) {
+			case RUN_NONE: {
+				// joined or came back to life (deathrun_lifesystem) mid-round
+				g_iRun[ i ] = RUN_WAIT;
+				g_fRunAt[ i ] = fNow + random_float( 0.5, 1.5 );
+			}
+			case RUN_WAIT: {
+				if( fNow >= g_fRunAt[ i ] ) {
+					botnav_set_fight( i, get_pcvar_float( g_pRunFight ) );
+					botnav_path_to( i, g_fGoal, BN_PERSIST );
+					g_iRun[ i ] = RUN_GOING;
+				}
+			}
+			case RUN_GOING: {
+				if( botnav_status( i ) == BN_ARRIVED ) {
+					// made it: the bot's own brain takes it from here
+					botnav_stop( i );
+					g_iRun[ i ] = RUN_DONE;
+				}
+			}
+		}
 	}
 }
