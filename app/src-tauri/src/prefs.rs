@@ -470,7 +470,7 @@ fn game_file(st: &Shared, folders: &[&str], rel: &str) -> Option<PathBuf> {
 
 #[derive(Deserialize)]
 /// The menu music: this game's, then Counter-Strike 1.6's, then Half-Life's; or with
-/// track=hl / hl12 / hl13 / hl17, Half-Life's theme or a piece of its soundtrack (setup
+/// track=hl / hl01 / hl02 / hl12 / hl13 / hl17, Half-Life's theme or a piece of its soundtrack (setup
 /// shuffles them)
 struct ThemeReq {
     /// "hl": Half-Life's theme
@@ -483,6 +483,8 @@ async fn api_theme(State(st): State<Shared>, axum::extract::Query(q): axum::extr
     // setup's playlist: the two menu themes and three pieces from Half-Life's soundtrack
     let (folders, rel): (&'static [&'static str], &'static str) = match q.track.as_str() {
         "hl" => (&["valve"], "media/gamestartup.mp3"),
+        "hl01" => (&["valve"], "media/Half-Life01.mp3"),
+        "hl02" => (&["valve"], "media/Half-Life02.mp3"),
         "hl12" => (&["valve"], "media/Half-Life12.mp3"),
         "hl13" => (&["valve"], "media/Half-Life13.mp3"),
         "hl17" => (&["valve"], "media/Half-Life17.mp3"),

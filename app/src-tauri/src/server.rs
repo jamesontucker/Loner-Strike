@@ -101,6 +101,11 @@ async fn guard_lan(State(st): State<Shared>, req: Request, next: Next) -> Respon
         .unwrap_or(false);
     let query_ok = req.uri().query().map(|q| q.split('&').any(|p| p == format!("t={}", st.token.read().unwrap()))).unwrap_or(false);
     if !cookie_ok && !query_ok {
+        // a phone opening the page: a readable page instead of one bare line
+        let page = req.method() == axum::http::Method::GET && matches!(req.uri().path(), "/" | "/index.html");
+        if page {
+            return (StatusCode::FORBIDDEN, axum::response::Html(SIGNED_OUT_PAGE)).into_response();
+        }
         return (StatusCode::FORBIDDEN, "Scan the QR code in Loner-Strike's Settings to connect.").into_response();
     }
     let mut res = next.run(req).await;
@@ -110,6 +115,12 @@ async fn guard_lan(State(st): State<Shared>, req: Request, next: Next) -> Respon
     }
     res
 }
+
+/// What a phone sees when it isn't signed in (a new code, or never scanned).
+const SIGNED_OUT_PAGE: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Loner-Strike</title>
+<style>html,body{height:100%;margin:0}body{display:grid;place-items:center;padding:24px;box-sizing:border-box;background:#3e4637;color:#d8ded3;font:500 17px/1.45 "Barlow Semi Condensed","Avenir Next Condensed","Arial Narrow",system-ui,sans-serif;text-align:center}
+main{max-width:420px;background:#4c5844;padding:22px 24px;border-radius:3px;box-shadow:inset 1px 1px 0 rgba(136,145,128,.55),inset -1px -1px 0 #292c21}h1{margin:0 0 10px;font-size:22px;color:#c4b550}p{margin:0;color:#c2c9b7}</style></head>
+<body><main><h1>Not signed in</h1><p>This phone isn't signed in any more. Scan the QR code in Settings on the computer.</p></main></body></html>"#;
 
 fn host_of(req: &Request) -> String {
     req.headers().get(header::HOST).and_then(|h| h.to_str().ok()).unwrap_or("").to_lowercase()
