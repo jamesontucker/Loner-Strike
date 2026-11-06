@@ -519,6 +519,22 @@ pub struct NewRemote {
     pub components: Vec<String>,
     #[serde(default)]
     pub visibility: Option<String>,
+    /// The fingerprint the player confirmed (from the probe)
+    #[serde(default)]
+    pub host_key: String,
+}
+
+/// The machine a NewRemote describes (checked; no identity yet).
+fn remote_of(req: &NewRemote) -> Result<crate::remote::RemoteInfo, String> {
+    let host = req.host.trim().to_string();
+    if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || ".-:".contains(c)) {
+        return Err("Enter the machine's address, like 146.235.20.10 or myserver.example.com.".into());
+    }
+    let user = if req.user.trim().is_empty() { "ubuntu".to_string() } else { req.user.trim().to_string() };
+    if !user.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)) {
+        return Err("That user name has characters it can't have.".into());
+    }
+    Ok(crate::remote::RemoteInfo { host, user, key: PathBuf::from(req.key.trim()), ssh_port: req.ssh_port.unwrap_or(22), host_key: None })
 }
 
 /// What of this computer's copy goes up to the machine: Loner-Strike's plugins, configs,
@@ -571,19 +587,15 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
     if !["cstrike", "czero"].contains(&req.game.as_str()) {
         return Err("Pick Counter-Strike 1.6 or Condition Zero.".into());
     }
-    let host = req.host.trim().to_string();
-    if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || ".-:".contains(c)) {
-        return Err("Enter the machine's address, like 146.235.20.10 or myserver.example.com.".into());
+    let mut info = remote_of(&req)?;
+    let host = info.host.clone();
+    // the machine the player confirmed, and no other: its identity is saved and checked
+    // on every connection from now on
+    if crate::remote::host_key(&info)? != req.host_key {
+        return Err("The server's fingerprint isn't the one you confirmed. Check the server again.".into());
     }
-    let user = if req.user.trim().is_empty() { "ubuntu".to_string() } else { req.user.trim().to_string() };
-    if !user.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)) {
-        return Err("That user name has characters it can't have.".into());
-    }
-    let mut info = crate::remote::RemoteInfo { host: host.clone(), user, key: PathBuf::from(req.key.trim()), ssh_port: req.ssh_port.unwrap_or(22), host_key: None };
-    // a quick look first, so a wrong address or key says so straight away
+    info.host_key = Some(req.host_key.clone());
     let (_, arch) = crate::remote::exec(&info, "uname -m")?;
-    // its identity, so every later connection can check it's the same machine
-    info.host_key = Some(crate::remote::host_key(&info)?);
     if arch.trim() != "x86_64" {
         return Err(format!("That machine is {}. The Counter-Strike server only runs on x86 (AMD or Intel) machines.", arch.trim()));
     }
@@ -1294,6 +1306,22 @@ async fn api_create_remote(State(st): State<Shared>, headers: HeaderMap, Json(re
     answer(r)
 }
 
+/// The app window only: a first look at a machine (its fingerprint to confirm, and
+/// whether it can run the server) before setting it up.
+async fn api_probe_remote(headers: HeaderMap, Json(req): Json<NewRemote>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) {
+        return forbidden();
+    }
+    let r = tokio::task::spawn_blocking(move || {
+        let info = remote_of(&req)?;
+        let (fingerprint, known, arch) = crate::remote::probe(&info)?;
+        Ok(json!({"ok": true, "fingerprint": fingerprint, "known": known, "arch": arch, "x86": arch == "x86_64"}))
+    })
+    .await
+    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    answer(r)
+}
+
 /// The app window only: a file picker for the SSH key.
 async fn api_pick_key(State(st): State<Shared>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
     use tauri_plugin_dialog::DialogExt;
@@ -1318,8 +1346,8 @@ async fn api_pick_key(State(st): State<Shared>, headers: HeaderMap) -> (StatusCo
     answer(r)
 }
 
-async fn api_create(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<NewServer>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_create(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<NewServer>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || on.is_none() {
         return forbidden();
     }
     let res = crate::setup_api::resources_for(&st);
@@ -1342,8 +1370,8 @@ struct Change {
     port: Option<u16>,
 }
 
-async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req): Json<Change>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<Change>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || on.is_none() {
         return forbidden();
     }
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
@@ -1356,6 +1384,11 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req):
         if let Some(m) = &req.map {
             if !safe_map(m) {
                 return Err("That isn't a map name.".into());
+            }
+        }
+        if let (Some(p), true) = (req.port, e.remote.is_some()) {
+            if p != e.port {
+                return Err("A server on another machine keeps port 27015.".into());
             }
         }
         if let Some(p) = req.port {
@@ -1389,6 +1422,14 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req):
         if req.port.is_some() {
             forget(&id);
         }
+        // on another machine the start options live in its service: write it again
+        if let Some(e) = get(&id).filter(|e| e.ready && e.remote.is_some()) {
+            let r = e.remote.as_ref().unwrap();
+            let code = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&e.id, &launch_args(&e)).as_bytes(), |_| {})?;
+            if code != 0 {
+                return Err("Saved here, but the server's service couldn't be updated.".into());
+            }
+        }
         Ok(json!({"ok": true, "restart": running(&id)}))
     })
     .await
@@ -1396,9 +1437,14 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req):
     answer(r)
 }
 
-async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
+async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) {
         return forbidden();
+    }
+    // a phone may start, stop and restart servers; changing what's installed or deleting
+    // one (which also reaches a VPS through the SSH key) is for the computer
+    if on.is_none() && !matches!(action.as_str(), "start" | "stop" | "restart" | "join") {
+        return answer(Err("Do that from the computer running Loner-Strike.".into()));
     }
     let st2 = st.clone();
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
@@ -1533,6 +1579,7 @@ pub fn local_routes() -> Router<Shared> {
         .route("/api/servers/:id/console/send", post(api_console_cmd))
         .route("/api/servers/pick-folder", post(api_pick_folder))
         .route("/api/servers/remote", post(api_create_remote))
+        .route("/api/servers/remote/probe", post(api_probe_remote))
         .route("/api/servers/pick-key", post(api_pick_key))
 }
 

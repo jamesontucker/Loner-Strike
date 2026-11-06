@@ -67,13 +67,19 @@ impl AppState {
 
 /// The app window's listener (127.0.0.1): only requests addressed to our own local
 /// host names get in (a web page can point its own domain at 127.0.0.1).
-async fn guard_local(State(st): State<Shared>, req: Request, next: Next) -> Response {
+async fn guard_local(State(st): State<Shared>, mut req: Request, next: Next) -> Response {
     let host = host_of(&req);
     if !st.hosts.read().unwrap().contains(&host) {
         return (StatusCode::FORBIDDEN, "forbidden").into_response();
     }
+    // handlers shared with the phone listener can tell the app window apart
+    req.extensions_mut().insert(OnComputer);
     next.run(req).await
 }
+
+/// Set on requests from the app window (the local listener), never on the phone's.
+#[derive(Clone, Copy)]
+pub struct OnComputer;
 
 /// The phone listener (LAN): always needs the token, whatever the request says
 /// about itself, and only answers to the phone address.

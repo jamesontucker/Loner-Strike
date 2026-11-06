@@ -94,8 +94,42 @@ fn connect(r: &RemoteInfo) -> Result<Session, String> {
     Ok(s)
 }
 
+/// The machine's fingerprint, written the way `ssh` shows it: SHA256:<base64, no padding>.
 fn fingerprint(s: &Session) -> Option<String> {
-    s.host_key_hash(ssh2::HashType::Sha256).map(|h| h.iter().map(|b| format!("{b:02x}")).collect())
+    s.host_key_hash(ssh2::HashType::Sha256).map(|h| format!("SHA256:{}", base64_nopad(h)))
+}
+
+fn base64_nopad(bytes: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for c in bytes.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        for i in 0..=c.len() {
+            out.push(T[((n >> (18 - 6 * i)) & 63) as usize] as char);
+        }
+    }
+    out
+}
+
+/// Whether this computer's SSH has the machine on record (~/.ssh/known_hosts) with this key.
+fn in_known_hosts(s: &Session, r: &RemoteInfo) -> bool {
+    let (Some((key, _)), Some(home)) = (s.host_key(), dirs::home_dir()) else { return false };
+    let Ok(mut kh) = s.known_hosts() else { return false };
+    kh.read_file(&home.join(".ssh/known_hosts"), ssh2::KnownHostFileKind::OpenSSH).is_ok() && matches!(kh.check_port(&r.host, r.ssh_port, key), ssh2::CheckResult::Match)
+}
+
+/// A first look at a machine, before setting anything up: its fingerprint (for the
+/// player to confirm), whether this computer's SSH already knows it, and its CPU type.
+pub fn probe(r: &RemoteInfo) -> Result<(String, bool, String), String> {
+    drop_session(r);
+    let fp = host_key(r)?;
+    let known = {
+        let s = session(r)?;
+        let s = s.lock().unwrap();
+        in_known_hosts(&s, r)
+    };
+    let (_, arch) = exec(r, "uname -m")?;
+    Ok((fp, known, arch.trim().to_string()))
 }
 
 /// Is this really the machine? Its key must match what this computer's SSH has on
@@ -168,10 +202,11 @@ pub fn exec(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
         s.set_timeout(120_000);
         let mut ch = s.channel_session()?;
         ch.exec(&format!("{cmd} 2>&1"))?;
-        let mut out = String::new();
-        let _ = ch.read_to_string(&mut out);
+        // console text is Latin-1 (accented player names): bytes, not UTF-8
+        let mut out = Vec::new();
+        let _ = ch.read_to_end(&mut out);
         ch.wait_close()?;
-        Ok((ch.exit_status()?, out))
+        Ok((ch.exit_status()?, crate::rcon::latin1(&out)))
     })
 }
 
@@ -179,8 +214,9 @@ pub fn exec(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
 pub fn exec_stream(r: &RemoteInfo, cmd: &str, input: &[u8], mut line: impl FnMut(&str)) -> Result<i32, String> {
     let s = session(r)?;
     let s = s.lock().unwrap();
-    // setup can take a long time between lines (Valve's download)
-    s.set_timeout(0);
+    // setup can be quiet for a while (Valve's download), but not forever: a machine that
+    // stops answering ends the job instead of holding the connection
+    s.set_timeout(15 * 60 * 1000);
     let mut run = || -> Result<i32, ssh2::Error> {
         let mut ch = s.channel_session()?;
         ch.exec(&format!("{cmd} 2>&1"))?;
@@ -242,7 +278,13 @@ pub fn upload_dir(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Path) ->
     }
     let (code, out) = {
         let mut last = String::new();
-        let code = exec_stream(r, &format!("mkdir -p {to} && tar xzf - -C {to}", to = shell_quote(to)), &bytes, |l| last = l.to_string())?;
+        // settings (the panel's RCON password, the join password) readable by this user only
+        let code = exec_stream(
+            r,
+            &format!("mkdir -p {to} && tar xzf - -C {to} && chmod -R go-rwx {to}/addons/amxmodx/data 2>/dev/null; true", to = shell_quote(to)),
+            &bytes,
+            |l| last = l.to_string(),
+        )?;
         (code, last)
     };
     if code != 0 {
@@ -291,7 +333,7 @@ if command -v ufw >/dev/null && sudo ufw status | grep -q "Status: active"; then
 
 step steamcmd
 mkdir -p "$BASE/steamcmd"; cd "$BASE/steamcmd"
-[ -x steamcmd.sh ] || curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar xz
+[ -x steamcmd.sh ] || curl -fsSL --proto '=https' https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar xz
 
 step server
 mkdir -p "$SRV"
@@ -307,7 +349,7 @@ ln -sf "$BASE/steamcmd/linux32/steamclient.so" "$HOME/.steam/sdk32/steamclient.s
 
 step foundation
 cd "$SRV/$G"; TMP=$(mktemp -d)
-fetch() { curl -fsSL "$1" -o "$TMP/$2" || fail "Couldn't download $2."; echo "$3  $TMP/$2" | sha256sum -c --quiet - || fail "$2 didn't match its checksum."; }
+fetch() { curl -fsSL --proto '=https' "$1" -o "$TMP/$2" || fail "Couldn't download $2."; echo "$3  $TMP/$2" | sha256sum -c --quiet - || fail "$2 didn't match its checksum."; }
 fetch "$MM_URL" mm.tar.xz "$MM_SHA"; tar xJf "$TMP/mm.tar.xz" -C .
 fetch "$AMXX_URL" amxx.tar.gz "$AMXX_SHA"; tar xzf "$TMP/amxx.tar.gz" -C .
 fetch "$AMXXCS_URL" amxxcs.tar.gz "$AMXXCS_SHA"; tar xzf "$TMP/amxxcs.tar.gz" -C .
@@ -457,6 +499,8 @@ mod tests {
     #[test]
     fn quoting() {
         assert_eq!(shell_quote("a b"), "'a b'");
+        assert_eq!(base64_nopad(b"hello"), "aGVsbG8");
+        assert_eq!(base64_nopad(b"hi!"), "aGkh");
         assert_eq!(shell_quote("it's"), "'it'\\''s'");
         assert!(setup_env("my-server", "czero").contains("GAME='czero'"));
         let svc = service_sh("x", &["-game".into(), "cstrike".into()]);

@@ -462,6 +462,18 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
   const [host, setHost] = useState("");
   const [user, setUser] = useState("ubuntu");
   const [key, setKey] = useState("");
+  // the machine as first seen: its fingerprint to confirm before anything is set up
+  const [probe, setProbe] = useState<{ fingerprint: string; known: boolean; arch: string; x86: boolean } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const check = async () => {
+    setChecking(true);
+    setProbe(null);
+    type Probe = { error?: string; fingerprint?: string; known?: boolean; arch?: string; x86?: boolean };
+    const r = await postJson<Probe>("/api/servers/remote/probe", { name, game, host, user, key }).catch((): Probe => ({ error: "Couldn't reach the app." }));
+    setChecking(false);
+    if (r.error || !r.fingerprint) return toast(r.error || "Couldn't check the server.", true);
+    setProbe({ fingerprint: r.fingerprint, known: !!r.known, arch: r.arch ?? "", x86: !!r.x86 });
+  };
   const pickKey = async () => {
     const r = await post("/api/servers/pick-key");
     if (r.error) return toast(r.error, true);
@@ -475,7 +487,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
   const create = async () => {
     setSending(true);
     const r = where === "vps"
-      ? await post("/api/servers/remote", { name, game, template, visibility: vis, host, user, key })
+      ? await post("/api/servers/remote", { name, game, template, visibility: vis, host, user, key, host_key: probe?.fingerprint ?? "" })
       : await post("/api/servers", { name, game, template, visibility: vis });
     setSending(false);
     if (r.error) return toast(r.error, true);
@@ -500,18 +512,37 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
             <>
               <label className="field">
                 <span>Address<Info text="The machine's public IP address or host name, from your hosting provider's page." /></span>
-                <input className="search" placeholder="e.g. 146.235.20.10" value={host} onChange={(e) => setHost(e.target.value.trim())} spellCheck={false} />
+                <input className="search" placeholder="e.g. 146.235.20.10" value={host} onChange={(e) => { setHost(e.target.value.trim()); setProbe(null); }} spellCheck={false} />
               </label>
               <label className="field">
                 <span>User<Info text="The account you log in with over SSH. On Ubuntu machines from Oracle, AWS and most hosts it's ubuntu; some use root. It needs to be able to use sudo." /></span>
-                <input className="search" value={user} onChange={(e) => setUser(e.target.value.trim())} spellCheck={false} />
+                <input className="search" value={user} onChange={(e) => { setUser(e.target.value.trim()); setProbe(null); }} spellCheck={false} />
               </label>
               <div className="field">
                 <span>SSH key<Info text="The private key you log in with (the file without .pub), usually in the .ssh folder in your home folder. It stays on this computer; the app uses it to connect." /></span>
                 <div className="row">
-                  <input className="search grow" placeholder="Pick your key file" value={key} onChange={(e) => setKey(e.target.value)} spellCheck={false} />
+                  <input className="search grow" placeholder="Pick your key file" value={key} onChange={(e) => { setKey(e.target.value); setProbe(null); }} spellCheck={false} />
                   <button className="btn" type="button" onClick={pickKey}>Browse…</button>
                 </div>
+              </div>
+              <div className="field">
+                <span>Server's identity<Info text="Every SSH server has a fingerprint. Checking it once makes sure you're connected to your machine and not something pretending to be it; the app then refuses to connect if it ever changes." /></span>
+                {!probe ? (
+                  <div className="row">
+                    <button className="btn" type="button" disabled={!host || !key || checking} onClick={check}>{checking ? "Connecting…" : "Check the server"}</button>
+                  </div>
+                ) : (
+                  <div className="probe">
+                    <code>{probe.fingerprint}</code>
+                    {!probe.x86 ? (
+                      <p className="err-text">This machine is {probe.arch}. The Counter-Strike server only runs on x86 (AMD or Intel) machines.</p>
+                    ) : probe.known ? (
+                      <p className="muted small-note">Matches what this computer's SSH has on record for {host}.</p>
+                    ) : (
+                      <p className="muted small-note">First time this computer sees {host}. To be sure it's yours, compare with what the machine shows for <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code> (your provider's web console can run it).</p>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -554,7 +585,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
               : "Downloads Valve's free server with SteamCMD (about 1 GB the first time), then sets it up. Your game isn't touched."}
           </p>
           <div className="row">
-            <button className="btn primary" disabled={!name.trim() || sending || (where === "vps" && (!host || !key))} onClick={create}>{sending ? "Starting…" : "Make the server"}</button>
+            <button className="btn primary" disabled={!name.trim() || sending || (where === "vps" && (!probe || !probe.x86))} onClick={create}>{sending ? "Starting…" : "Make the server"}</button>
             <button className="btn" onClick={onClose}>Cancel</button>
           </div>
         </div>
