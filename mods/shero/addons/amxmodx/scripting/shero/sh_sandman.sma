@@ -195,21 +195,6 @@ public sink(params[])
 
 		set_task(0.1, "sink", id, params, 6)
 	}
-	// CZ patch: victims used to stay buried forever (rounds stalled, bots stuck).
-	else if ( is_user_alive(targetid) ) {
-		if ( params[5] <= 0 && is_user_connected(id) ) {
-			// Fully swallowed by the quicksand
-			shExtraDamage(targetid, id, 1, "quicksand", 0, SH_DMG_KILL)
-		}
-		else {
-			// Sandman gone or powers off mid-sink: pull the victim back out
-			new origin[3]
-			origin[0] = params[0]
-			origin[1] = params[1]
-			origin[2] = params[2] + (40 - params[5])
-			set_user_origin(targetid, origin)
-		}
-	}
 }
 //----------------------------------------------------------------------------------------------
 public sinking_effects(id, targetid)
