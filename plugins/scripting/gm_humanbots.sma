@@ -25,6 +25,16 @@
 	gm_hb_tilt       1 bots on a losing run get sloppier (most) or more careful (some);
 	                   a few kills settle them again. Low health or several enemies at
 	                   once can make one panic: spraying, jumping, missing
+	gm_hb_habits     1 each bot plays like its chat personality (gm_botchat): newbies spray
+	                   and react late, tryhards pre-aim, old-timers tap; favourite guns
+	                   (a Deagle lover, an AWP guy), warming up after joining, getting
+	                   tired late at night, over-swinging at someone behind them,
+	                   nervous reloads, running with the knife out, and a rival (the
+	                   player who keeps killing it) it reacts to faster
+	gm_hb_afk        1 now and then a bot stands still for a few seconds at round start
+	gm_hb_sprays     1 bots spray a logo now and then
+	gm_hb_radio      1 radio calls that fit the moment and the bot (enemy spotted, need
+	                   backup, enemy down; the team's caller says go, follow me)
 	gm_hb_showoff    1 now and then after a kill, when nobody's shooting at it: crouch
 	                   spam over the body, a jump, or the knife out for a moment
 	gm_hb_reaction   1 human reaction times
@@ -39,6 +49,12 @@
 #include <fakemeta>
 #include <cstrike>
 #include <hamsandwich>
+#include <fun>
+#include <amxmisc>
+
+// gm_botchat (optional): the bot's chat personality and its lines
+native botchat_persona(id)
+native botchat_say(id, const section[], other, Float:chance)
 
 #define PLUGIN  "Human bots"
 #define VERSION "1.0"
@@ -84,6 +100,14 @@ new g_pStyle, g_pReaction, g_pAim, g_pMistakes, g_pBhop, g_pFreeForAll, g_pTilt,
 new g_Mix[33]                                   // Mixed lobby: this bot's own style
 new Float:g_Tilt[33], Float:g_TiltWay[33]       // >0 sloppier; some get careful instead
 new Float:g_ShowUntil[33], g_Show[33]           // a show-off moment: 1 crouch spam, 2 jump
+new g_pHabits, g_pAfk, g_pSprays, g_pRadio
+new bool:g_Chat                                 // gm_botchat is running
+new Float:g_JoinedAt[33], Float:g_ReloadAt[33], Float:g_AfkUntil[33], Float:g_NoTargetSince[33], Float:g_NextKnifeTry[33]
+new bool:g_KnifeRun[33], g_Fav[33], g_Rival[33], g_DeathsBy[33][33]
+new g_SprayDecals[8], g_SprayCount, g_RadioCall[33]
+#define PRIMARY_BITS ((1<<CSW_SCOUT)|(1<<CSW_XM1014)|(1<<CSW_MAC10)|(1<<CSW_AUG)|(1<<CSW_UMP45)|(1<<CSW_SG550)|(1<<CSW_GALIL)|(1<<CSW_FAMAS)|(1<<CSW_AWP)|(1<<CSW_MP5NAVY)|(1<<CSW_M249)|(1<<CSW_M3)|(1<<CSW_M4A1)|(1<<CSW_TMP)|(1<<CSW_G3SG1)|(1<<CSW_SG552)|(1<<CSW_AK47)|(1<<CSW_P90))
+#define PISTOL_BITS  ((1<<CSW_P228)|(1<<CSW_ELITE)|(1<<CSW_FIVESEVEN)|(1<<CSW_USP)|(1<<CSW_GLOCK18)|(1<<CSW_DEAGLE))
+
 new g_HopsLeft[33], Float:g_NextHopTry[33]
 new bool:g_Career
 
@@ -109,6 +133,20 @@ public plugin_init()
 	g_pBhop      = register_cvar("gm_hb_bhop", "1")
 	g_pTilt      = register_cvar("gm_hb_tilt", "1")
 	g_pShowoff   = register_cvar("gm_hb_showoff", "1")
+	g_pHabits    = register_cvar("gm_hb_habits", "1")
+	g_pAfk       = register_cvar("gm_hb_afk", "1")
+	g_pSprays    = register_cvar("gm_hb_sprays", "1")
+	g_pRadio     = register_cvar("gm_hb_radio", "1")
+	register_logevent("ev_round_start", 2, "1=Round_Start")
+	g_Chat = bool:LibraryExists("gm_botchat", LibType_Library)
+	// logos to spray: whichever of these the game has
+	static const LOGOS[][] = { "{lambda01", "{lambda02", "{lambda03", "{lambda04", "{lambda05", "{lambda06", "{biohaz", "{smiley" }
+	for (new i = 0; i < sizeof LOGOS && g_SprayCount < sizeof g_SprayDecals; i++)
+	{
+		new d = engfunc(EngFunc_DecalIndex, LOGOS[i])
+		if (d > 0)
+			g_SprayDecals[g_SprayCount++] = d
+	}
 	register_event("DeathMsg", "ev_death", "a")
 
 	register_forward(FM_CmdStart, "fw_cmdstart")
@@ -117,6 +155,95 @@ public plugin_init()
 	register_forward(FM_PlayerPostThink, "fw_postthink_post", 1)
 	register_forward(FM_TraceLine, "fw_traceline")
 	set_task(SCAN_INTERVAL, "task_scan", _, _, _, "b")
+}
+
+public plugin_natives()
+{
+	set_native_filter("native_filter")
+}
+
+public native_filter(const name[], index, trap)
+{
+	return (!trap && equal(name, "botchat_", 8)) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+}
+
+// The bot's chat personality letter, or 0 (gm_botchat isn't running)
+persona(id)
+{
+	return g_Chat ? botchat_persona(id) : 0
+}
+
+say_line(id, const section[], other, Float:chance)
+{
+	if (g_Chat)
+		botchat_say(id, section, other, chance)
+}
+
+bool:has(p, const letters[])
+{
+	return p && contain(letters, fmt("%c", p)) != -1
+}
+
+// How a personality changes a bot's skill (higher = slower and sloppier)
+Float:habit_skill(id)
+{
+	if (!get_pcvar_num(g_pHabits))
+		return 1.0
+	new p = persona(id), Float:k = 1.0
+	if (has(p, "nkuL"))
+		k = 1.12                                   // new, young or down on themselves
+	else if (has(p, "tEiSN"))
+		k = 0.93                                   // tryhards, would-be pros, movement and stats nerds
+	else if (has(p, "O"))
+		k = 1.05                                   // overconfident: peeks too much
+	// warming up: the first couple of minutes after joining are a bit off
+	new Float:on = get_gametime() - g_JoinedAt[id]
+	if (on < 120.0)
+		k *= 1.0 + 0.15 * (1.0 - on / 120.0)
+	// tired: the half-asleep get slower the longer they play, everyone a bit after 1am
+	if (has(p, "dY"))
+		k *= 1.0 + floatmin(on / 60.0 * 0.005, 0.25)
+	new h
+	time(h)
+	if (h >= 1 && h < 5)
+		k *= 1.08
+	return k
+}
+
+// How long a personality holds the trigger
+Float:habit_burst(id)
+{
+	if (!get_pcvar_num(g_pHabits))
+		return 1.0
+	new p = persona(id)
+	if (has(p, "o1"))
+		return 0.6                                 // old-timers and cowboys tap
+	if (has(p, "nkhX"))
+		return 1.6                                 // spray and pray
+	if (has(p, "tE"))
+		return 0.8
+	return 1.0
+}
+
+// A favourite gun, from the bot's name (most have none)
+fav_of(id)
+{
+	new name[32], h = 5381
+	get_user_name(id, name, charsmax(name))
+	for (new i = 0; name[i]; i++)
+		h = ((h << 5) + h + name[i]) & 0xFFFFFF
+	new p = persona(id), r = h % 100
+	if (has(p, "o1") && r < 50)
+		return CSW_DEAGLE
+	if (has(p, "S") && r < 60)
+		return CSW_SCOUT
+	if (r < 8)
+		return CSW_AWP
+	if (r < 14)
+		return CSW_DEAGLE
+	if (r < 17)
+		return CSW_SCOUT
+	return 0
 }
 
 public plugin_cfg()
@@ -155,14 +282,25 @@ bot_style(id)
 // The bot's skill right now (higher = slower and sloppier), with its mood
 Float:skill_of(id)
 {
-	return g_Skill[id] * (1.0 + (get_pcvar_num(g_pTilt) ? g_Tilt[id] * g_TiltWay[id] : 0.0))
+	return g_Skill[id] * habit_skill(id) * (1.0 + (get_pcvar_num(g_pTilt) ? g_Tilt[id] * g_TiltWay[id] : 0.0))
 }
 
 public ev_death()
 {
 	new killer = read_data(1), victim = read_data(2)
 	if (victim >= 1 && victim <= MaxClients && killer != victim)
+	{
 		g_Tilt[victim] = floatmin(g_Tilt[victim] + 0.08, 0.45)
+		// the player who keeps killing this bot becomes its rival
+		if (killer >= 1 && killer <= MaxClients && ++g_DeathsBy[victim][killer] >= 3)
+			g_Rival[victim] = killer
+	}
+	if (killer >= 1 && killer <= MaxClients && killer != victim && is_user_bot(killer) && get_pcvar_num(g_pRadio) && !get_cvar_num("gm_scrim_phase"))
+	{
+		new p = persona(killer)
+		if (random(100) < (has(p, "r") ? 35 : has(p, "it") ? 15 : 6))
+			engclient_cmd(killer, "enemydown")
+	}
 	if (killer < 1 || killer > MaxClients || killer == victim || !is_user_bot(killer))
 		return
 	g_Tilt[killer] = floatmax(g_Tilt[killer] - 0.06, -0.1)
@@ -206,6 +344,11 @@ public client_putinserver(id)
 	g_Tilt[id] = 0.0
 	// most people get sloppy when it goes badly; some get careful
 	g_TiltWay[id] = random(100) < 70 ? 1.0 : -0.5
+	g_JoinedAt[id] = get_gametime()
+	g_Rival[id] = 0
+	g_Fav[id] = -1
+	for (new k = 1; k <= MaxClients; k++)
+		g_DeathsBy[id][k] = g_DeathsBy[k][id] = 0
 }
 
 // each bot gets its own skill within the style (higher = slower and sloppier)
@@ -230,6 +373,8 @@ reset_bot(id)
 	g_Burst[id] = 0
 	g_PauseUntil[id] = g_PanicUntil[id] = 0.0
 	g_Show[id] = 0
+	g_ReloadAt[id] = g_AfkUntil[id] = 0.0
+	g_KnifeRun[id] = false
 }
 
 // ---------------------------------------------------------------------------
@@ -322,7 +467,13 @@ public task_scan()
 				g_LastTarget[id] = g_Target[id]
 				g_LostAt[id] = now
 				g_Target[id] = 0
+				g_NoTargetSince[id] = now
+				// a nervous reload after a fight (sometimes right as someone peeks)
+				if (get_pcvar_num(g_pHabits) && random(100) < (has(persona(id), "nkuH") ? 35 : 12))
+					g_ReloadAt[id] = now + random_float(0.2, 0.9)
 			}
+			else if (get_pcvar_num(g_pHabits) && now >= g_NextKnifeTry[id])
+				knife_run(id, now)
 			continue
 		}
 		// several enemies at once, or nearly dead: some panic for a moment
@@ -373,10 +524,34 @@ engage(id, target, Float:angle, Float:dist, s, Float:now)
 		rt *= 0.85                          // movement catches the eye
 	if (recent)
 		rt *= 0.45                          // knew they were there
+	if (get_pcvar_num(g_pHabits))
+	{
+		if (target == g_Rival[id])
+			rt *= 0.85                      // been waiting for this one
+		if (g_KnifeRun[id])
+		{
+			// running with the knife out: the gun comes back first
+			g_KnifeRun[id] = false
+			engclient_cmd(id, "lastinv")
+			rt += 0.35
+		}
+	}
+	if (get_pcvar_num(g_pRadio) && !recent && !get_cvar_num("gm_scrim_phase"))
+	{
+		new p = persona(id)
+		if (random(100) < (has(p, "itr") ? 20 : 6))
+			engclient_cmd(id, "enemyspot")
+	}
 
 	new Float:over = (angle * STYLES[s][ST_Overshoot] * random_float(0.5, 1.5) + 0.6) * skill
 	if (recent)
 		over *= 0.4
+	// surprised from behind: the first spray goes wide
+	if (get_pcvar_num(g_pHabits) && angle > 100.0 && random(100) < 50)
+	{
+		over *= 1.8
+		rt *= 1.2
+	}
 
 	if (get_pcvar_num(g_pMistakes) && random_float(0.0, 1.0) < STYLES[s][ST_Mistakes] * skill)
 	{
@@ -417,6 +592,7 @@ new_burst(id, s)
 		len = len * 9 / 5                  // up close everyone holds the trigger longer
 	if (g_PanicUntil[id] > get_gametime())
 		len *= 2
+	len = floatround(float(len) * habit_burst(id))
 	g_BurstLen[id] = max(len, 1)
 	g_SprayDrift[id] = random_float(-0.25, 0.25) * skill_of(id)
 }
@@ -449,6 +625,22 @@ public fw_cmdstart(id, uc, seed)
 	new Float:dt = floatclamp(float(get_uc(uc, UC_Msec)) / 1000.0, 0.001, 0.1)
 	update_wobble(id, s, dt, now)
 
+	// standing still for a moment (afk): no shooting either
+	if (g_AfkUntil[id] > 0.0)
+	{
+		if (now < g_AfkUntil[id] && !g_Target[id])
+		{
+			set_uc(uc, UC_Buttons, 0)
+			return FMRES_IGNORED
+		}
+		g_AfkUntil[id] = 0.0
+		say_line(id, "afk_back", 0, 0.5)
+	}
+	if (g_ReloadAt[id] > 0.0 && now >= g_ReloadAt[id])
+	{
+		g_ReloadAt[id] = 0.0
+		set_uc(uc, UC_Buttons, get_uc(uc, UC_Buttons) | IN_RELOAD)
+	}
 	// a show-off moment, only while nobody's in its sights
 	if (g_Show[id])
 	{
@@ -510,6 +702,14 @@ public fw_prethink(id)
 {
 	if (!is_user_alive(id) || !is_user_bot(id))
 		return
+	if (g_AfkUntil[id] > get_gametime() && !g_Target[id])
+	{
+		new Float:v[3]
+		pev(id, pev_velocity, v)
+		v[0] = v[1] = 0.0
+		set_pev(id, pev_velocity, v)
+		return
+	}
 	new s = bot_style(id)
 	// chance per check (every 0.5s of straight running), and hops per chain
 	new Float:chance, Float:gain, Float:cap, hopsLo, hopsHi
@@ -746,4 +946,183 @@ Float:wrap(Float:yaw)
 	while (yaw > 180.0) yaw -= 360.0
 	while (yaw < -180.0) yaw += 360.0
 	return yaw
+}
+
+// ---------------------------------------------------------------------------
+// Round start: favourite guns, afk moments, sprays, the caller's call
+// ---------------------------------------------------------------------------
+
+public ev_round_start()
+{
+	if (style() == STYLE_CLASSIC || get_cvar_num("gm_scrim_phase") > 0 && get_cvar_num("gm_scrim_phase") < 5)
+	{
+		// a match: only the guns, the rest would look silly
+		if (style() != STYLE_CLASSIC)
+			set_task(0.4, "task_favourites")
+		return
+	}
+	set_task(0.4, "task_favourites")
+	new Float:now = get_gametime()
+	new bool:called[3]
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (!is_user_alive(id) || !is_user_bot(id))
+			continue
+		new p = persona(id)
+		if (get_pcvar_num(g_pAfk) && random(1000) < (has(p, "dYLF") ? 60 : 20))
+			g_AfkUntil[id] = now + random_float(3.0, 9.0)
+		if (get_pcvar_num(g_pSprays) && g_SprayCount && random(100) < (has(p, "jkhXS3") ? 25 : 10))
+			set_task(random_float(1.0, 8.0), "task_spray", id)
+		new team = get_user_team(id)
+		if (get_pcvar_num(g_pRadio) && (team == 1 || team == 2) && !called[team] && has(p, "itr") && random(100) < 35)
+		{
+			called[team] = true
+			set_task(random_float(0.3, 2.0), "task_radio", id)
+			g_RadioCall[id] = random(6)
+		}
+	}
+}
+
+
+public task_radio(id)
+{
+	static const CALLS[][] = { "go", "followme", "stormfront", "getinpos", "sticktog", "regroup" }
+	if (is_user_alive(id))
+		engclient_cmd(id, CALLS[g_RadioCall[id] % sizeof CALLS])
+}
+
+// Buying like the bot always does: its favourite, when it can afford it and doesn't have
+// something already (modes with normal buying only)
+public task_favourites()
+{
+	if (!get_pcvar_num(g_pHabits) || get_cvar_float("mp_buytime") <= 0.0 || get_cvar_num("gm_weapons"))
+		return
+	// modes with normal buying only (not Hide and Seek, Zombie Plague, Gun Game...)
+	new mode[32], path[128]
+	get_datadir(path, charsmax(path))
+	new f = fopen(fmt("%s/gamemodes/current.txt", path), "rt")
+	if (f)
+	{
+		fgets(f, mode, charsmax(mode))
+		trim(mode)
+		fclose(f)
+	}
+	if (!equal(mode, "classic") && !equal(mode, "match") && !equal(mode, "war3") && !equal(mode, "shero"))
+		return
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (!is_user_alive(id) || !is_user_bot(id) || !cs_get_user_buyzone(id))
+			continue
+		if (g_Fav[id] < 0)
+			g_Fav[id] = fav_of(id)
+		new fav = g_Fav[id], money = cs_get_user_money(id)
+		switch (fav)
+		{
+			case CSW_DEAGLE:
+			{
+				if (money >= 650 && !user_has_weapon(id, CSW_DEAGLE))
+				{
+					drop_slot(id, 2)
+					give_item(id, "weapon_deagle")
+					cs_set_user_bpammo(id, CSW_DEAGLE, 35)
+					cs_set_user_money(id, money - 650)
+				}
+			}
+			case CSW_AWP, CSW_SCOUT:
+			{
+				new price = fav == CSW_AWP ? 4750 : 2750
+				if (money >= price && !has_primary(id))
+				{
+					give_item(id, fav == CSW_AWP ? "weapon_awp" : "weapon_scout")
+					cs_set_user_bpammo(id, fav, fav == CSW_AWP ? 30 : 90)
+					cs_set_user_money(id, money - price)
+				}
+			}
+		}
+	}
+}
+
+bool:has_primary(id)
+{
+	new weapons[32], n
+	get_user_weapons(id, weapons, n)
+	for (new i = 0; i < n; i++)
+		if ((1 << weapons[i]) & PRIMARY_BITS)
+			return true
+	return false
+}
+
+
+// Takes away the pistol it holds, so a new one fits (slot 2)
+drop_slot(id, slot)
+{
+	if (slot != 2)
+		return
+	new weapons[32], n, name[32]
+	get_user_weapons(id, weapons, n)
+	for (new i = 0; i < n; i++)
+	{
+		if (!((1 << weapons[i]) & PISTOL_BITS))
+			continue
+		get_weaponname(weapons[i], name, charsmax(name))
+		new ent = -1
+		while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", name)) > 0)
+		{
+			if (pev(ent, pev_owner) != id)
+				continue
+			ExecuteHamB(Ham_Weapon_RetireWeapon, ent)
+			if (ExecuteHamB(Ham_RemovePlayerItem, id, ent))
+			{
+				ExecuteHamB(Ham_Item_Kill, ent)
+				set_pev(id, pev_weapons, pev(id, pev_weapons) & ~(1 << weapons[i]))
+			}
+			break
+		}
+	}
+}
+
+// Every few seconds without a fight: some put the knife out to run faster
+knife_run(id, Float:now)
+{
+	g_NextKnifeTry[id] = now + 3.0
+	if (g_KnifeRun[id] || now - g_NoTargetSince[id] < 5.0 || !holding_gun(id))
+		return
+	new p = persona(id)
+	if (random(100) < (has(p, "P") ? 70 : has(p, "SJn") ? 25 : 7))
+	{
+		g_KnifeRun[id] = true
+		engclient_cmd(id, "weapon_knife")
+	}
+}
+
+// A logo on the wall in front of it
+public task_spray(id)
+{
+	if (!is_user_alive(id) || g_Target[id] || !g_SprayCount)
+		return
+	new Float:eye[3], Float:view[3], Float:fwd[3], Float:end[3]
+	eye_pos(id, eye)
+	pev(id, pev_v_angle, view)
+	angle_vector(view, ANGLEVECTOR_FORWARD, fwd)
+	for (new i = 0; i < 3; i++)
+		end[i] = eye[i] + fwd[i] * 128.0
+	new tr = create_tr2()
+	engfunc(EngFunc_TraceLine, eye, end, IGNORE_MONSTERS, id, tr)
+	new Float:frac
+	get_tr2(tr, TR_flFraction, frac)
+	new hit = get_tr2(tr, TR_pHit)
+	get_tr2(tr, TR_vecEndPos, end)
+	free_tr2(tr)
+	// only on a wall close by (not on another entity)
+	if (frac >= 1.0 || (hit > 0 && pev_valid(hit)))
+		return
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_WORLDDECAL)
+	engfunc(EngFunc_WriteCoord, end[0])
+	engfunc(EngFunc_WriteCoord, end[1])
+	engfunc(EngFunc_WriteCoord, end[2])
+	write_byte(g_SprayDecals[random(g_SprayCount)])
+	message_end()
+	emit_sound(id, CHAN_VOICE, "player/sprayer.wav", 1.0, ATTN_NORM, 0, PITCH_NORM)
+	say_line(id, "spray", 0, 0.08)
 }

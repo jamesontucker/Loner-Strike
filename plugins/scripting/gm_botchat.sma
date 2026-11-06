@@ -36,12 +36,20 @@
 	talk to each other in team chat ([clan]: a clanmate's kill, a clanmate joining),
 	and back each other up when one keeps dying.
 
+	Rivals: a player who keeps killing a bot this map becomes its nemesis ([nemesis],
+	and [nemesis_won] when it finally gets them).
+	Memory: bots remember the people they've played with on earlier days (data/vault
+	gm_botmemory) and greet them like old faces ([remember], [remember_rival]).
+	Leaving: a bot that leaves mid-map says so ([leave]); one that left may come back
+	later ([rejoin]). Other plugins use the botchat_say / botchat_persona natives.
+
 	Placeholders in lines: {name} the bot, {other} who it's about or answering,
 	{map} the map, {tag} the bot's clan tag. Edit botchat.ini to add your own; gm_botchat_reload re-reads it.
 */
 
 #include <amxmodx>
 #include <amxmisc>
+#include <nvault>
 
 #define PLUGIN  "Bot chat"
 #define VERSION "1.0"
@@ -75,7 +83,10 @@ new Float:g_NextAny                 // when any bot may start a new line
 new g_RoundKills[33], bool:g_Streaked[33]
 new g_DeathRow[33]                  // deaths since this player's last kill
 new bool:g_Raged[33]
-new Float:g_NextHeard                // bots don't answer every line someone types
+new Float:g_NextHeard
+new g_KilledBy[33][33]               // this map: how often [killer][victim]
+new g_Vault = INVALID_HANDLE
+new Trie:g_Left                      // bots that left mid-map: name -> when                // bots don't answer every line someone types
 
 // lines waiting to be "typed"
 new g_PendBot[MAX_PENDING], g_PendOther[MAX_PENDING], g_PendChain[MAX_PENDING], bool:g_PendTeam[MAX_PENDING]
@@ -103,8 +114,47 @@ public plugin_init()
 	load_lines()
 }
 
+public plugin_natives()
+{
+	register_library("gm_botchat")
+	register_native("botchat_persona", "n_persona")
+	register_native("botchat_say", "n_say")
+}
+
+// botchat_persona(id): the bot's personality letter (0 for people)
+public n_persona(plugin, params)
+{
+	new id = get_param(1)
+	return (id >= 1 && id <= MaxClients && is_user_bot(id)) ? PERSONAS[g_Persona[id]] : 0
+}
+
+// botchat_say(id, const section[], other, Float:chance): a line from `section`, maybe
+public n_say(plugin, params)
+{
+	new id = get_param(1), section[32]
+	get_string(2, section, charsmax(section))
+	strtolower(section)
+	new Float:chance = get_param_f(4)
+	if (equal(section, "leave"))
+	{
+		// remembered, so it can come back later
+		new name[32]
+		get_user_name(id, name, charsmax(name))
+		TrieSetCell(g_Left, name, floatround(get_gametime()))
+		// leaving is said for sure (when chat is on), not left to the usual gaps
+		new text[128]
+		if (get_pcvar_num(g_pLevel) && pick_line(id, "leave", text, charsmax(text)))
+			queue(id, 0, text, MAX_CHAIN, false, random_float(0.3, 1.2))
+		return 1
+	}
+	want(id, section, get_param(3), chance)
+	return 1
+}
+
 public plugin_cfg()
 {
+	g_Vault = nvault_open("gm_botmemory")
+	g_Left = TrieCreate()
 	// Tour of Duty missions keep their designed bots
 	new pass[64], team[8]
 	get_cvar_string("sv_password", pass, charsmax(pass))
@@ -166,10 +216,20 @@ public client_putinserver(id)
 	g_RoundKills[id] = 0
 	g_DeathRow[id] = 0
 	g_Raged[id] = false
+	for (new k = 1; k <= MaxClients; k++)
+		g_KilledBy[id][k] = g_KilledBy[k][id] = 0
 	if (is_user_bot(id))
 	{
 		g_Persona[id] = persona_of(id)
 		habits_of(id)
+		new name[32], when
+		get_user_name(id, name, charsmax(name))
+		if (TrieGetCell(g_Left, name, when))
+		{
+			TrieDeleteKey(g_Left, name)
+			want(id, "rejoin", 0, 0.8, random_float(3.0, 8.0), 1)
+			return
+		}
 		if (random_num(1, 100) <= 30)
 			want(id, "greet", 0, 0.5, random_float(4.0, 12.0))
 		// a clanmate already here says hi to them
@@ -188,8 +248,97 @@ public task_clan_hello(id)
 
 public task_welcome(id)
 {
-	if (is_user_connected(id))
+	if (!is_user_connected(id))
+		return
+	// an old face? the bot that played them most says hi like it
+	new best, bestGames, bool:rival
+	for (new b = 1; b <= MaxClients; b++)
+	{
+		if (!is_user_connected(b) || !is_user_bot(b))
+			continue
+		new k, d, day
+		if (recall(b, id, k, d, day) && day < today() && k + d > bestGames)
+		{
+			best = b
+			bestGames = k + d
+			rival = k + d >= 12
+		}
+	}
+	if (best)
+		want(best, rival ? "remember_rival" : "remember", id, 0.7, -1.0, 1)
+	else
 		want(any_bot(0), "welcome", id, 0.4)
+}
+
+// ---- memory between days --------------------------------------------------------------
+
+today()
+{
+	return get_systime() / 86400
+}
+
+memory_key(bot, human, key[], len)
+{
+	new a[32], b[32]
+	get_user_name(bot, a, charsmax(a))
+	get_user_name(human, b, charsmax(b))
+	formatex(key, len, "%s|%s", a, b)
+}
+
+// What `bot` remembers of `human`: kills each way and the day they last played
+bool:recall(bot, human, &kills, &deaths, &day)
+{
+	if (g_Vault == INVALID_HANDLE)
+		return false
+	new key[72], val[32], ts
+	memory_key(bot, human, key, charsmax(key))
+	if (!nvault_lookup(g_Vault, key, val, charsmax(val), ts))
+		return false
+	new a[12], b[12], c[12]
+	parse(val, a, charsmax(a), b, charsmax(b), c, charsmax(c))
+	kills = str_to_num(a)
+	deaths = str_to_num(b)
+	day = str_to_num(c)
+	return true
+}
+
+// Adds this map's kills between `human` and every bot to what they remember
+remember_all(human)
+{
+	if (g_Vault == INVALID_HANDLE || !is_user_connected(human) || is_user_bot(human))
+		return
+	for (new b = 1; b <= MaxClients; b++)
+	{
+		if (!is_user_connected(b) || !is_user_bot(b))
+			continue
+		new k, d, day
+		recall(b, human, k, d, day)
+		k += g_KilledBy[b][human]
+		d += g_KilledBy[human][b]
+		new key[72]
+		memory_key(b, human, key, charsmax(key))
+		nvault_set(g_Vault, key, fmt("%d %d %d", k, d, today()))
+		g_KilledBy[b][human] = g_KilledBy[human][b] = 0
+	}
+}
+
+public client_disconnected(id)
+{
+	if (!is_user_bot(id))
+		remember_all(id)
+}
+
+public plugin_end()
+{
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_connected(i) && !is_user_bot(i))
+			remember_all(i)
+	if (g_Vault != INVALID_HANDLE)
+	{
+		// faces not seen for two months are forgotten
+		nvault_prune(g_Vault, 0, get_systime() - 60 * 86400)
+		nvault_close(g_Vault)
+	}
 }
 
 // The clan tag in a name, as the clan's letters ("WoW" for "~WoW~ Squishy"): a first
@@ -685,6 +834,13 @@ public ev_death()
 	}
 
 	g_RoundKills[killer]++
+	// rivals: someone who keeps killing a bot this map, and the bot finally getting them
+	new was = g_KilledBy[victim][killer]
+	g_KilledBy[killer][victim]++
+	if (is_user_bot(victim) && g_KilledBy[killer][victim] == 4)
+		want(victim, "nemesis", killer, 0.6, -1.0, 1)
+	else if (is_user_bot(killer) && was >= 4 && random_num(1, 100) <= 70)
+		want(killer, "nemesis_won", victim, 0.8, -1.0, 1)
 	g_DeathRow[killer] = 0
 	g_Raged[killer] = false
 	if (++g_DeathRow[victim] >= 3 && mood(victim))

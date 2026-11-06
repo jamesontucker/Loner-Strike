@@ -56,6 +56,9 @@
 #include <hamsandwich>
 #include <geoip>
 
+// gm_botchat (optional): bots react to a vote in chat (they don't vote; people decide)
+native botchat_say(id, const section[], other, Float:chance)
+
 #define PLUGIN  "Server extras"
 #define VERSION "1.0"
 #define AUTHOR  "gamemodes"
@@ -191,7 +194,7 @@ public module_filter(const module[], LibType:type)
 
 public native_filter(const name[], index, trap)
 {
-	return (!trap && equali(name, "geoip_", 6)) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+	return (!trap && (equali(name, "geoip_", 6) || equali(name, "botchat_", 8))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 public plugin_end()
@@ -1008,8 +1011,23 @@ start_vote(starter, target, bool:ban)
 			menu_display(i, g_VoteMenu, 0, VOTE_TIME)
 	}
 	set_task(VOTE_TIME + 1.0, "task_vote_end", TASK_VOTE)
+	// a couple of bots say what they think: a bot being voted on gets more yeses
+	if (get_cvar_num("gm_botvotes") && LibraryExists("gm_botchat", LibType_Library))
+		for (new i = 1; i <= MaxClients; i++)
+			if (i != target && is_user_connected(i) && is_user_bot(i) && random(100) < 25)
+				set_task(random_float(2.0, 10.0), "task_bot_vote_say", 30000 + i * 64 + target)
 	if (g_VoteYes + g_VoteNo >= g_VoteVoters)
 		end_vote()
+}
+
+public task_bot_vote_say(code)
+{
+	code -= 30000
+	new id = code / 64, target = code % 64
+	if (g_VoteMenu == -1 || !is_user_connected(id) || !is_user_connected(target))
+		return
+	new bool:yes = random(100) < (is_user_bot(target) ? 55 : 20)
+	botchat_say(id, yes ? "votekick_yes" : "votekick_no", target, 0.9)
 }
 
 public vote_handler(id, menu, item)

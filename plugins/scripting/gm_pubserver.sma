@@ -12,13 +12,21 @@
 	            a round starts, a clan member on the other side swaps with a bot with no
 	            clan, so team sizes stay the same. Only in plain team modes, never in a match.
 
-	Cvars: gm_regulars 0/1, gm_churn 0/1/2, gm_rtv 0/1, gm_welcome 0/1/2, gm_clans 0/1
+	Life:       bots join a few at a time when a map starts (gm_botjoin), say they're
+	            going before they leave (gm_churn), and some come back later; now and
+	            then one has tweaked its name. Bots join in on rock the vote and vote
+	            for maps (gm_botvotes); people's votes decide, bots only break ties.
+	Cvars: gm_regulars 0/1, gm_churn 0/1/2, gm_rtv 0/1, gm_welcome 0/1/2, gm_clans 0/1,
+	       gm_botjoin 0/1, gm_botvotes 0/1
 */
 
 #include <amxmodx>
 #include <amxmisc>
 #include <fakemeta>
 #include <cstrike>
+
+// gm_botchat (optional): bots' lines
+native botchat_say(id, const section[], other, Float:chance)
 
 #define PLUGIN  "Pub server"
 #define VERSION "1.0"
@@ -35,7 +43,11 @@
 #define MAX_NOMS     4
 #define NEWCOMER_PCT 35
 
-new g_pRegulars, g_pChurn, g_pRtv, g_pWelcome, g_pClans
+new g_pRegulars, g_pChurn, g_pRtv, g_pWelcome, g_pClans, g_pBotJoin, g_pBotVotes
+new bool:g_Chat
+new Array:g_LeftNames, Array:g_LeftAt   // bots that left this map, and when
+new g_RampTarget, g_RampSet             // joining a few at a time
+new g_BotVote[VOTE_MAPS + 1]            // bots' votes, kept apart from people's
 new bool:g_Career
 new bool:g_Creating
 
@@ -59,6 +71,11 @@ public plugin_init()
 	g_pRtv      = register_cvar("gm_rtv", "1")
 	g_pWelcome  = register_cvar("gm_welcome", "1")
 	g_pClans    = register_cvar("gm_clans", "1")
+	g_pBotJoin  = register_cvar("gm_botjoin", "1")
+	g_pBotVotes = register_cvar("gm_botvotes", "1")
+	g_Chat = bool:LibraryExists("gm_botchat", LibType_Library)
+	g_LeftNames = ArrayCreate(32)
+	g_LeftAt = ArrayCreate(1)
 	// conditions in one register_event must all match, so one per sound
 	register_event("SendAudio", "ev_round_end", "a", "2&%!MRAD_terwin")
 	register_event("SendAudio", "ev_round_end", "a", "2&%!MRAD_ctwin")
@@ -77,8 +94,26 @@ public plugin_init()
 	set_task(15.0, "task_churn", TASK_CHURN, _, _, "b")
 }
 
+public plugin_natives()
+{
+	set_native_filter("native_filter")
+}
+
+public native_filter(const name[], index, trap)
+{
+	return (!trap && equal(name, "botchat_", 8)) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+}
+
+say_line(id, const section[], Float:chance)
+{
+	if (g_Chat)
+		botchat_say(id, section, 0, chance)
+}
+
 public plugin_cfg()
 {
+	// after the Game Mode Menu has put the saved bot count back (1 s and 4 s in)
+	set_task(6.0, "task_ramp_start")
 	// Tour of Duty missions keep their designed bots (same check as gm_humanbots)
 	new pass[64], team[8]
 	get_cvar_string("sv_password", pass, charsmax(pass))
@@ -178,9 +213,11 @@ public fw_create_fake_client(const netname[])
 		// the regular shows up most of the time; otherwise a newcomer takes the profile
 		found = random(100) >= NEWCOMER_PCT && !name_in_use(name)
 		if (!found)
-			found = clan_friend(name, charsmax(name)) || free_name(name, charsmax(name))
+			found = came_back(name, charsmax(name)) || clan_friend(name, charsmax(name)) || free_name(name, charsmax(name))
+		else
+			tweak_name(name, charsmax(name))
 	}
-	else if (clan_friend(name, charsmax(name)) || free_name(name, charsmax(name)))
+	else if (came_back(name, charsmax(name)) || clan_friend(name, charsmax(name)) || free_name(name, charsmax(name)))
 	{
 		found = true
 		TrieSetString(g_Regular, netname, name)
@@ -266,8 +303,84 @@ public task_churn()
 	// (eliminations, the deathrun activator, team swaps); try again later otherwise
 	#pragma unused alive, na
 	new id = nd ? dead[random(nd)] : 0
-	if (id)
-		server_cmd("kick #%d", get_user_userid(id))
+	if (!id)
+		return
+	// say bye first, like people do; remembered so they may come back later
+	say_line(id, "leave", 1.0)
+	new name[32]
+	get_user_name(id, name, charsmax(name))
+	ArrayPushString(g_LeftNames, name)
+	ArrayPushCell(g_LeftAt, floatround(get_gametime()))
+	set_task(random_float(2.5, 5.0), "task_kick", get_user_userid(id))
+}
+
+public task_kick(userid)
+{
+	new id = find_player("k", userid)
+	if (id && is_user_bot(id))
+		server_cmd("kick #%d", userid)
+}
+
+// ---- joining a few at a time ---------------------------------------------------------
+
+public task_ramp_start()
+{
+	new q = get_cvar_num("bot_quota")
+	if (!get_pcvar_num(g_pBotJoin) || g_Career || q < 4 || get_cvar_num("gm_scrim_phase"))
+		return
+	g_RampTarget = q
+	g_RampSet = max(2, q / 3)
+	set_cvar_num("bot_quota", g_RampSet)
+	set_task(random_float(3.0, 9.0), "task_ramp")
+}
+
+public task_ramp()
+{
+	// someone changed the bot count meanwhile: theirs wins
+	if (get_cvar_num("bot_quota") != g_RampSet)
+		return
+	g_RampSet = min(g_RampTarget, g_RampSet + random_num(1, 2))
+	set_cvar_num("bot_quota", g_RampSet)
+	if (g_RampSet < g_RampTarget)
+		set_task(random_float(3.0, 12.0), "task_ramp")
+}
+
+// Someone who left earlier comes back now and then (under the same name)
+bool:came_back(out[], len)
+{
+	new n = ArraySize(g_LeftNames)
+	if (!n || random(100) >= 30)
+		return false
+	new now = floatround(get_gametime())
+	for (new tries = 0; tries < 4; tries++)
+	{
+		new i = random(n)
+		if (now - ArrayGetCell(g_LeftAt, i) < 90)
+			continue
+		ArrayGetString(g_LeftNames, i, out, len)
+		if (name_in_use(out))
+			continue
+		ArrayDeleteItem(g_LeftNames, i)
+		ArrayDeleteItem(g_LeftAt, i)
+		return true
+	}
+	return false
+}
+
+// People change their names now and then: a small tweak on a regular's name
+tweak_name(name[], len)
+{
+	if (random(100) >= 5)
+		return
+	static const ENDS[][] = { "^^", "_", ".", "x", "2", "!", "~", "-" }
+	new try[32]
+	copy(try, charsmax(try), name)
+	if (random(3) == 0)
+		strtolower(try)
+	else
+		add(try, charsmax(try), ENDS[random(sizeof ENDS)])
+	if (strlen(try) < 31 && !name_in_use(try))
+		copy(name, len, try)
 }
 
 // ---------------------------------------------------------------------------
@@ -285,7 +398,18 @@ public cmd_say(id)
 
 	if (equali(word, "rtv") || equali(word, "rockthevote"))
 	{
+		// bots join in once a person has asked; a bot's rtv alone starts nothing
+		if (is_user_bot(id))
+		{
+			if (get_pcvar_num(g_pBotVotes) && human_rocked())
+				rock(id)
+			return PLUGIN_CONTINUE
+		}
 		rock(id)
+		if (get_pcvar_num(g_pBotVotes))
+			for (new b = 1; b <= MaxClients; b++)
+				if (is_user_connected(b) && is_user_bot(b) && random(100) < 30)
+					set_task(random_float(2.0, 9.0), "task_bot_rtv", b)
 		return PLUGIN_CONTINUE      // others see it in chat, like on a real server
 	}
 	if (equali(word, "nominate") || equali(word, "nom"))
@@ -308,6 +432,20 @@ humans()
 		if (is_user_connected(i) && !is_user_bot(i) && !is_user_hltv(i))
 			n++
 	return n
+}
+
+bool:human_rocked()
+{
+	for (new i = 1; i <= MaxClients; i++)
+		if (g_Rocked[i] && is_user_connected(i) && !is_user_bot(i))
+			return true
+	return false
+}
+
+public task_bot_rtv(id)
+{
+	if (is_user_connected(id) && !g_Voting && !g_VoteDone)
+		engclient_cmd(id, "say", "rtv")
 }
 
 rocked()
@@ -708,6 +846,11 @@ public start_vote()
 	get_mapname(cur, charsmax(cur))
 	copy(g_VoteMaps[g_VoteOptions], charsmax(g_VoteMaps[]), cur)   // last option: keep playing
 	arrayset(g_VoteCount, 0, sizeof g_VoteCount)
+	arrayset(g_BotVote, 0, sizeof g_BotVote)
+	if (get_pcvar_num(g_pBotVotes))
+		for (new b = 1; b <= MaxClients; b++)
+			if (is_user_connected(b) && is_user_bot(b) && random(100) < 60)
+				set_task(random_float(2.0, float(VOTE_TIME) - 2.0), "task_bot_vote", b)
 
 	new menu = menu_create(fmt("\yVote for the next map \d(%d seconds)", VOTE_TIME), "vote_handler")
 	for (new i = 0; i < g_VoteOptions; i++)
@@ -722,6 +865,23 @@ public start_vote()
 	set_task(float(VOTE_TIME) + 0.5, "end_vote", TASK_VOTE, data, sizeof data)
 	client_print_color(0, print_team_default, "^4[Server]^1 Vote for the next map. Results in %d seconds.", VOTE_TIME)
 	return PLUGIN_HANDLED
+}
+
+// A bot picks a map like a person would: the nominations and maps it likes a bit more
+public task_bot_vote(id)
+{
+	if (!g_Voting || !is_user_connected(id))
+		return
+	new item = random(g_VoteOptions + 1)
+	if (g_NomCount && random(100) < 40)
+		item = random(min(g_NomCount, g_VoteOptions))
+	g_BotVote[item]++
+	new name[32]
+	get_user_name(id, name, charsmax(name))
+	if (item == g_VoteOptions)
+		client_print_color(0, print_team_default, "^4[Server]^3 %s^1 wants to keep playing.", name)
+	else
+		client_print_color(0, print_team_default, "^4[Server]^3 %s^1 voted for ^4%s^1.", name, g_VoteMaps[item])
 }
 
 public vote_handler(id, menu, item)
@@ -743,14 +903,28 @@ public end_vote(const data[])
 	menu_destroy(data[0])    // also closes it for anyone who didn't vote
 	g_Voting = false
 	g_VoteDone = true
+	// people's votes decide; bots' votes only break a tie between people's favourites
+	// (or decide when no person voted)
 	new best = -1, most = 0, ties
+	new bool:people
+	for (new i = 0; i <= g_VoteOptions; i++)
+		if (g_VoteCount[i])
+			people = true
 	for (new i = 0; i <= g_VoteOptions; i++)
 	{
-		if (g_VoteCount[i] > most)
-			best = i, most = g_VoteCount[i], ties = 1
-		else if (g_VoteCount[i] == most && most > 0 && random(++ties) == 0)
+		new v = people ? g_VoteCount[i] * 100 + g_BotVote[i] : g_BotVote[i]
+		if (people && !g_VoteCount[i])
+			continue
+		if (v > most)
+			best = i, most = v, ties = 1
+		else if (v == most && most > 0 && random(++ties) == 0)
 			best = i
 	}
+	most = best >= 0 ? g_VoteCount[best] + g_BotVote[best] : 0
+	if (best >= 0)
+		for (new b = 1; b <= MaxClients; b++)
+			if (is_user_connected(b) && is_user_bot(b) && random(100) < 12)
+				say_line(b, "map_vote", 0.6)
 	if (best < 0 || best == g_VoteOptions)
 		return client_print_color(0, print_team_default, "^4[Server]^1 Staying on ^4%s^1.", g_VoteMaps[g_VoteOptions])
 	client_print_color(0, print_team_default, "^4[Server]^1 Next map: ^4%s^1 (%d vote%s). Changing in 5 seconds.", g_VoteMaps[best], most, most == 1 ? "" : "s")
