@@ -1446,9 +1446,11 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
         if req.port.is_some() {
             forget(&id);
         }
-        // on another machine the start options live in its service: write it again
+        // on another machine the start options live in its service: write it again (and
+        // bring its files up to date with this computer's copy while at it)
         if let Some(e) = get(&id).filter(|e| e.ready && e.remote.is_some()) {
             let r = e.remote.as_ref().unwrap();
+            upload(&e)?;
             let code = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&e.id, &e.game, &launch_args(&e)).as_bytes(), |_| {})?;
             if code != 0 {
                 return Err("Saved here, but the server's service couldn't be updated.".into());

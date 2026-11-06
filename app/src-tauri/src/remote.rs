@@ -297,7 +297,20 @@ pub fn upload_dir(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Path) ->
                 continue;
             }
             let name = rel.to_string_lossy().replace('\\', "/");
-            tar.append_path_with_name(&file, &name).map_err(|e| format!("Couldn't pack {name} ({e})."))?;
+            let mut data = std::fs::read(&file).map_err(|e| format!("Couldn't read {name} ({e})."))?;
+            // Linux reads a Windows line ending's CR as part of the line (in AMX Mod X's
+            // configs a path ending in CR is a folder that doesn't exist): text goes up
+            // with Linux line endings
+            let lower = name.to_lowercase();
+            if [".ini", ".cfg", ".txt", ".games"].iter().any(|x| lower.ends_with(x)) {
+                data = lf(&data);
+            }
+            let mut h = tar::Header::new_gnu();
+            h.set_size(data.len() as u64);
+            h.set_mode(0o644);
+            h.set_mtime(std::fs::metadata(&file).ok().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0));
+            h.set_cksum();
+            tar.append_data(&mut h, &name, &data[..]).map_err(|e| format!("Couldn't pack {name} ({e})."))?;
             count += 1;
         }
         tar.into_inner().and_then(|gz| gz.finish()).map_err(|e| e.to_string())?;
@@ -317,6 +330,18 @@ pub fn upload_dir(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Path) ->
         return Err(format!("Unpacking on the server failed ({out})."));
     }
     Ok(count)
+}
+
+/// Text with Windows line endings (CR LF) turned into Linux ones (LF).
+fn lf(data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(data.len());
+    for (i, &b) in data.iter().enumerate() {
+        if b == b'\r' && data.get(i + 1) == Some(&b'\n') {
+            continue;
+        }
+        out.push(b);
+    }
+    out
 }
 
 /// 'text' for a shell command line.
@@ -537,6 +562,7 @@ mod tests {
     fn quoting() {
         assert_eq!(shell_quote("a b"), "'a b'");
         assert_eq!(base64_nopad(b"hello"), "aGVsbG8");
+        assert_eq!(lf(b"a\r\nb\r\n\rc"), b"a\nb\n\rc");
         assert_eq!(base64_nopad(b"hi!"), "aGkh");
         assert_eq!(shell_quote("it's"), "'it'\\''s'");
         assert!(setup_env("my-server", "czero").contains("GAME='czero'"));
