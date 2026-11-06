@@ -4,7 +4,11 @@
   "version": "0.1.0",
   "identifier": "gg.lonerstrike.app",
   "build": {
-    "frontendDist": "../../panel/web"
+    "frontendDist": "../ui/dist",
+    "beforeBuildCommand": {
+      "script": "npm ci && npm run build",
+      "cwd": "../ui"
+    }
   },
   "app": {
     "windows": [],
