@@ -406,24 +406,39 @@ async fn api_import(State(st): State<Shared>, headers: HeaderMap) -> Reply {
 
 // ---- the game's menu music ------------------------------------------------------------
 
-/// The player's own copy of the menu music (media/gamestartup.mp3): this game's, then
-/// Counter-Strike 1.6's, then Half-Life's. Never shipped with the app.
-fn theme_file(st: &Shared) -> Option<PathBuf> {
-    let mut halflifes: Vec<(PathBuf, String)> = Vec::new();
+/// The player's own Half-Life folders, this game's first.
+fn half_lifes(st: &Shared) -> Vec<(PathBuf, String)> {
+    let mut out: Vec<(PathBuf, String)> = Vec::new();
     if let Some(g) = st.local_game() {
-        halflifes.push((g.hl.clone(), g.name.clone()));
+        out.push((g.hl.clone(), g.name.clone()));
     }
     for i in crate::steam::find_installs() {
-        halflifes.push((i.hl.clone(), i.games.first().cloned().unwrap_or_default()));
+        out.push((i.hl.clone(), i.games.first().cloned().unwrap_or_default()));
     }
-    halflifes.into_iter().find_map(|(hl, game)| {
-        [game.as_str(), "cstrike", "valve"].iter().filter(|g| !g.is_empty()).map(|g| hl.join(g).join("media/gamestartup.mp3")).find(|p| p.is_file())
+    out
+}
+
+/// A file from the player's own game (never shipped with the app): the first of `folders`
+/// (game folders under Half-Life, "" for this game's) that has `rel`.
+fn game_file(st: &Shared, folders: &[&str], rel: &str) -> Option<PathBuf> {
+    half_lifes(st).into_iter().find_map(|(hl, game)| {
+        folders.iter().map(|g| if g.is_empty() { game.as_str() } else { g }).filter(|g| !g.is_empty()).map(|g| hl.join(g).join(rel)).find(|p| p.is_file())
     })
 }
 
-async fn api_theme(State(st): State<Shared>) -> axum::response::Response {
+#[derive(Deserialize)]
+/// The menu music: this game's, then Counter-Strike 1.6's, then Half-Life's; or with
+/// track=hl, Half-Life's own (setup plays the two in turn)
+struct ThemeReq {
+    /// "hl": Half-Life's theme
+    #[serde(default)]
+    track: String,
+}
+
+async fn api_theme(State(st): State<Shared>, axum::extract::Query(q): axum::extract::Query<ThemeReq>) -> axum::response::Response {
     use axum::response::IntoResponse;
-    let file = tokio::task::spawn_blocking(move || theme_file(&st).and_then(|p| std::fs::read(p).ok())).await.ok().flatten();
+    let folders: &'static [&'static str] = if q.track == "hl" { &["valve"] } else { &["", "cstrike", "valve"] };
+    let file = tokio::task::spawn_blocking(move || game_file(&st, folders, "media/gamestartup.mp3").and_then(|p| std::fs::read(p).ok())).await.ok().flatten();
     match file {
         Some(data) if data.len() < 20_000_000 => (
             [(axum::http::header::CONTENT_TYPE, "audio/mpeg"), (axum::http::header::CACHE_CONTROL, "max-age=3600")],
@@ -431,6 +446,21 @@ async fn api_theme(State(st): State<Shared>) -> axum::response::Response {
         )
             .into_response(),
         _ => (StatusCode::NOT_FOUND, "no music").into_response(),
+    }
+}
+
+/// The game's own menu sounds (hovering and clicking a button), for setup.
+async fn api_menu_sound(State(st): State<Shared>, axum::extract::Path(name): axum::extract::Path<String>) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let rel = match name.as_str() {
+        "rollover" => "sound/UI/buttonrollover.wav",
+        "click" => "sound/UI/buttonclickrelease.wav",
+        _ => return (StatusCode::NOT_FOUND, "no sound").into_response(),
+    };
+    let file = tokio::task::spawn_blocking(move || game_file(&st, &["valve"], rel).and_then(|p| std::fs::read(p).ok())).await.ok().flatten();
+    match file {
+        Some(data) if data.len() < 2_000_000 => ([(axum::http::header::CONTENT_TYPE, "audio/wav"), (axum::http::header::CACHE_CONTROL, "max-age=3600")], data).into_response(),
+        _ => (StatusCode::NOT_FOUND, "no sound").into_response(),
     }
 }
 
@@ -471,6 +501,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/app/storage", get(api_storage))
         .route("/api/app/diagnostics", get(api_diagnostics))
         .route("/api/app/theme.mp3", get(api_theme))
+        .route("/api/app/menu-sound/:name", get(api_menu_sound))
 }
 
 /// The app window only: these open dialogs or folders on this computer, or change who can connect.

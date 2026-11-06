@@ -77,6 +77,7 @@ fn copy_vendor(rec: &mut Record, ctx: &Ctx, vendor: &str) -> Result<(), String> 
 }
 
 /// Copies one fetched file, unless the player already has a file there.
+#[cfg(test)]
 fn place_resource(rec: &mut Record, src: &Path, rel: &str, sha: Option<&str>) -> Result<bool, String> {
     place_resource_as(rec, src, rel, sha, false)
 }

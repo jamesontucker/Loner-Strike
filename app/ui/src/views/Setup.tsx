@@ -332,9 +332,10 @@ function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan
   );
 }
 
-/** The game's own menu music, quietly, while setting up. Only if the player has the
- *  game (it's their copy, never shipped with the app); it starts on the first click,
- *  since the window can't play sound before that. */
+/** The game's own menu music, quietly, while setting up: Counter-Strike's theme, then
+ *  Half-Life's, round and round; and the menu's own hover and click sounds on buttons.
+ *  Only if the player has the game (their copy, never shipped with the app); it starts
+ *  on the first click, since the window can't play sound before that. */
 function ThemeMusic() {
   const [on, setOn] = useState(() => {
     try {
@@ -382,20 +383,57 @@ function ThemeMusic() {
   };
 
   useEffect(() => {
-    let url = "";
+    const urls: string[] = [];
     let cancelled = false;
-    fetch("/api/app/theme.mp3")
-      .then((r) => (r.ok ? r.blob() : null))
-      .then((blob) => {
-        if (!blob || cancelled) return;
-        url = URL.createObjectURL(blob);
-        const a = new Audio(url);
-        a.loop = true;
-        audio.current = a;
-        setReady(true);
-        if (wanted.current) start(a);
-      })
-      .catch(() => {});
+    const load = (path: string) =>
+      fetch(path)
+        .then((r) => (r.ok ? r.blob() : null))
+        .then((blob) => {
+          if (!blob) return null;
+          const url = URL.createObjectURL(blob);
+          urls.push(url);
+          return url;
+        })
+        .catch(() => null);
+    // Counter-Strike's theme first, then Half-Life's (the same file twice is just the one)
+    Promise.all([load("/api/app/theme.mp3"), load("/api/app/theme.mp3?track=hl")]).then(([cs, hl]) => {
+      if (cancelled) return;
+      const tracks = [cs, hl].filter((u): u is string => !!u);
+      if (!tracks.length) return;
+      let i = 0;
+      const a = new Audio(tracks[0]);
+      a.loop = tracks.length === 1;
+      a.addEventListener("ended", () => {
+        i = (i + 1) % tracks.length;
+        a.src = tracks[i];
+        a.volume = level.current;
+        if (wanted.current) a.play().catch(() => {});
+      });
+      audio.current = a;
+      setReady(true);
+      if (wanted.current) start(a);
+    });
+    // the menu's hover and click sounds, on every button while setup is open
+    const sounds: Record<string, string> = {};
+    load("/api/app/menu-sound/rollover").then((u) => u && (sounds.over = u));
+    load("/api/app/menu-sound/click").then((u) => u && (sounds.click = u));
+    const play = (which: string, loud: number) => {
+      if (!wanted.current || !sounds[which]) return;
+      const s = new Audio(sounds[which]);
+      s.volume = Math.min(1, level.current * loud);
+      s.play().catch(() => {});
+    };
+    let lastOver: Element | null = null;
+    const over = (e: PointerEvent) => {
+      const b = (e.target as Element | null)?.closest("button:not(:disabled), a.btn, [role=radio]");
+      if (b && b !== lastOver) play("over", 0.8);
+      lastOver = b ?? null;
+    };
+    const click = (e: PointerEvent) => {
+      if ((e.target as Element | null)?.closest("button:not(:disabled), a.btn, [role=radio]")) play("click", 1);
+    };
+    document.addEventListener("pointerover", over);
+    document.addEventListener("pointerup", click);
     // the window may refuse to play before the first click: try again then
     const firstClick = () => {
       const a = audio.current;
@@ -406,8 +444,10 @@ function ThemeMusic() {
       cancelled = true;
       fade.current++;
       window.removeEventListener("pointerdown", firstClick);
+      document.removeEventListener("pointerover", over);
+      document.removeEventListener("pointerup", click);
       audio.current?.pause();
-      if (url) URL.revokeObjectURL(url);
+      urls.forEach((u) => URL.revokeObjectURL(u));
     };
   }, []);
 
@@ -439,8 +479,8 @@ function ThemeMusic() {
   };
   return (
     <div className="music">
-      <button className="music-toggle" aria-pressed={on} onClick={toggle} title={on ? "Turn the music off" : "Play the menu music"}>
-        <span aria-hidden="true">♪</span> {on ? "Music on" : "Music off"}
+      <button className="music-toggle" aria-pressed={on} onClick={toggle} title={on ? "Turn the music and menu sounds off" : "Play the menu music and sounds"}>
+        <span aria-hidden="true">♪</span> {on ? "Audio on" : "Audio off"}
       </button>
       {on && (
         <input
@@ -451,7 +491,7 @@ function ThemeMusic() {
           step={0.05}
           value={volume}
           onChange={(e) => setVolume(Number(e.target.value))}
-          aria-label="Music volume"
+          aria-label="Volume"
           style={{ "--fill": `${Math.round(((volume - 0.05) / 0.95) * 100)}%` } as CSSProperties}
         />
       )}
