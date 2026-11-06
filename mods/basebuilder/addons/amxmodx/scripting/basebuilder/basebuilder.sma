@@ -202,6 +202,8 @@ public plugin_init(){
 	gCvarBotZombieClasses	= create_cvar("bb_bot_zombie_classes",	"3");
 	gCvarBotWeaponMin	= create_cvar("bb_bot_weapon_min",	"6");
 	gCvarBotWeaponMax	= create_cvar("bb_bot_weapon_max",	"14");
+	// bots never get CurWeapon, where humans' reserve ammo is topped up: refill bots on a timer
+	set_task(1.5, "botRefillAmmo", TASK_BOTWEAPON + 99, _, _, "b");
 	
 	set_cvar_num("mp_freezetime", 0);
 	
@@ -409,6 +411,12 @@ public botGiveWeapon(id){
 	new item = random_num(minW, maxW);
 	userWeaponSelect[id] = item;
 	giveWeapons(id, item);
+}
+
+public botRefillAmmo(){
+	for(new i = 1; i < maxPlayers; i++){
+		if(is_user_alive(i) && is_user_bot(i) && get_user_team(i) == USER_HUMAN) giveAmmo(i);
+	}
 }
 
 public plugin_natives(){

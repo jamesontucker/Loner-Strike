@@ -19,6 +19,7 @@ subzero_freezedamage 35 //how much damage the ice blast does
 
 #include <amxmod>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 #include <Vexd_Utilities>
 #include <xtrafun> 
 
@@ -243,4 +244,10 @@ public RemoveByClass(id){
  	  RemoveEntity(frozenground) 
   	} 
   	  while (frozenground) 
+}
+//----------------------------------------------------------------------------------------------
+// CZ patch: bots never get ResetHUD, run the per-spawn code for them from the core's spawn forward
+public sh_client_spawn(id, bool:isNewRound)
+{
+	if ( is_user_bot(id) ) newRound(id)
 }

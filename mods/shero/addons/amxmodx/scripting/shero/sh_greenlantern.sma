@@ -16,6 +16,7 @@ greenlantern_existance 5 //Shield existance
 #include <engine>
 #include <fakemeta>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 new gHeroName[]="Green Lantern"
 new bool:gHasGreenPower[SH_MAXSLOTS+1]
@@ -220,4 +221,10 @@ public glow_effect(parm[])
 public plugin_precache()
 {
 	precache_model("models/shmod/wall.mdl")
+}
+//----------------------------------------------------------------------------------------------
+// CZ patch: bots never get ResetHUD, run the per-spawn code for them from the core's spawn forward
+public sh_client_spawn(id, bool:isNewRound)
+{
+	if ( is_user_bot(id) ) newSpawn(id)
 }

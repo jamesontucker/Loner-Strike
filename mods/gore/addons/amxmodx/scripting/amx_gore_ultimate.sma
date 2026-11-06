@@ -153,6 +153,7 @@
 #include <amxmodx>
 #include <amxmisc>
 #include <fakemeta>
+#include <hamsandwich>
 #include <dodconst>
 #include <tfcconst>
 #include <tsconst>
@@ -436,6 +437,7 @@ public plugin_init()
 	}
 
 	register_event("ResetHUD","event_respawn","b")
+	RegisterHam(Ham_Spawn,"player","ham_spawn_post",1,true) //Bots get no ResetHUD
 
 	pcvar_gore = register_cvar("amx_gore","abcd")
 	pcvar_gore_exphp = register_cvar("amx_gore_exphp","160")
@@ -858,6 +860,12 @@ public event_respawn(id)
 		//Save clients current Health
 		gHealthIndex[id] = get_user_health(id)
 	}
+}
+
+//Bots get no ResetHUD, so do the respawn reset for them here
+public ham_spawn_post(id)
+{
+	if (is_user_bot(id)) event_respawn(id)
 }
 
 public event_roundstart(id)

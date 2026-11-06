@@ -179,6 +179,7 @@ new SCORED_SOUNDS[MAX_SOUNDS][] = {
 #include <engine>
 #include <fakemeta>
 #include <fun>
+#include <hamsandwich>
 
 static const AUTHOR[] = "OneEyed"
 static const VERSION[] = "2.07a"
@@ -425,6 +426,8 @@ public plugin_init() {
 		register_clcmd("say","handle_say")
 
 		register_event("ResetHUD", "Event_ResetHud", "be")
+		// bots never get ResetHUD: do the same per-spawn setup for them from Ham_Spawn
+		RegisterHam(Ham_Spawn, "player", "Ham_PlayerSpawn_Post", 1, true)
 		register_event("HLTV","Event_StartRound","a","1=0","2=0")
 		register_event("Damage", "Event_Damage", "b", "2!0", "3=0", "4!0" )
 
@@ -1469,8 +1472,9 @@ public Event_Damage()
 						#if defined KNIFE_DISARM_ON
 						}
 						else {
-							new weapon, clip, ammo
-							weapon = get_user_weapon(victim,clip,ammo)
+							// get_user_weapon() is stale for bots: read the held item instead
+							new item = get_pdata_cbase(victim, 373)
+							new weapon = pev_valid(item) ? cs_get_weapon_id(item) : 0
 							if(weapon == CSW_KNIFE)
 							{
 								strip_user_weapons(victim);
@@ -1580,6 +1584,11 @@ public PostPostSetupRound() {
 public Event_ResetHud(id) {
 	goaldied[id] = 0
 	set_task(1.0,"PostResetHud",id)
+}
+
+public Ham_PlayerSpawn_Post(id) {
+	if(is_user_alive(id) && is_user_bot(id))
+		Event_ResetHud(id)
 }
 
 public PostResetHud(id) {

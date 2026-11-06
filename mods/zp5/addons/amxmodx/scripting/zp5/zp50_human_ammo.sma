@@ -40,6 +40,8 @@ new const MAXBPAMMO[] = { -1, 52, -1, 90, 1, 32, 1, 100, 90, 1, 120, 100, 100, 9
 new const MAXCLIP[] = { -1, 13, -1, 10, -1, 7, -1, 30, 30, -1, 30, 20, 25, 30, 35, 25, 12, 20,
 			10, 30, 100, 8, 30, 30, 20, -1, 7, 30, 30, -1, 50 }
 
+#define TASK_BOTAMMO 100
+
 // BP Ammo Refill task
 #define REFILL_WEAPONID args[0]
 
@@ -61,6 +63,52 @@ public plugin_init()
 	register_message(get_user_msgid("CurWeapon"), "message_cur_weapon")
 	
 	g_MsgAmmoPickup = get_user_msgid("AmmoPickup")
+	
+	// CZ setup: CZ bots never get AmmoX/CurWeapon messages, refill them on a timer
+	set_task(1.0, "task_bot_ammo", TASK_BOTAMMO, _, _, "b")
+}
+
+// CZ setup: unlimited ammo for bots (same cvars as for players)
+public task_bot_ammo()
+{
+	static players[32], num, i, id, mode, weapons[32], num_weapons, j, weapon, item
+	get_players(players, num, "ad")
+	for (i = 0; i < num; i++)
+	{
+		id = players[i]
+		if (zp_core_is_zombie(id))
+			continue;
+		
+		if ((LibraryExists(LIBRARY_SURVIVOR, LibType_Library) && zp_class_survivor_get(id) || LibraryExists(LIBRARY_SNIPER, LibType_Library) && zp_class_sniper_get(id)))
+			mode = get_pcvar_num(cvar_survivor_unlimited_ammo)
+		else
+			mode = get_pcvar_num(cvar_human_unlimited_ammo)
+		
+		if (mode < 1)
+			continue;
+		
+		// Unlimited BP ammo
+		num_weapons = 0
+		get_user_weapons(id, weapons, num_weapons)
+		for (j = 0; j < num_weapons; j++)
+		{
+			weapon = weapons[j]
+			if (MAXBPAMMO[weapon] > 2 && cs_get_user_bpammo(id, weapon) < MAXBPAMMO[weapon])
+				ExecuteHamB(Ham_GiveAmmo, id, MAXBPAMMO[weapon], AMMOTYPE[weapon], MAXBPAMMO[weapon])
+		}
+		
+		// Unlimited clip ammo for the held weapon
+		if (mode >= 2)
+		{
+			item = fm_cs_get_current_weapon_ent(id)
+			if (pev_valid(item))
+			{
+				weapon = cs_get_weapon_id(item)
+				if (MAXBPAMMO[weapon] > 2 && MAXCLIP[weapon] > 0)
+					cs_set_weapon_ammo(item, MAXCLIP[weapon])
+			}
+		}
+	}
 }
 
 public plugin_natives()

@@ -24,6 +24,7 @@ sandman_cooldown 20		//Seconds before you can use quicksand again (Default 20)
 #include <amxmod>
 #include <Vexd_Utilities>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 #if defined AMX98
 	#define FL_ONGROUND (1<<9) //Only for the constant
@@ -217,3 +218,9 @@ public sinking_effects(id, targetid)
 	message_end()
 }
 //----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+// CZ patch: bots never get ResetHUD, run the per-spawn code for them from the core's spawn forward
+public sh_client_spawn(id, bool:isNewRound)
+{
+	if ( is_user_bot(id) ) newSpawn(id)
+}

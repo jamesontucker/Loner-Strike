@@ -16,6 +16,7 @@ kraven_stunspeed 1	// Speed at which they can move during stun, 1-999 (Default 1
 
 #include <amxmodx>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 // VARIABLES
 new HeroName[]="Kraven"
@@ -41,6 +42,7 @@ public plugin_init()
 
 	// EVENTS
 	register_event("Damage", "kraven_damage", "b", "2!0")
+	RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage", 1, true)	// CZ patch: Damage event never fires for bot victims
 }
 //----------------------------------------------------------------------------------------------
 public kraven_init()
@@ -62,7 +64,7 @@ public kraven_damage(id)
 	if ( !shModActive() || !is_user_alive(id) )
 		return
 
-	new weapon, attacker = get_user_attacker(id, weapon)
+	new weapon, attacker = sh_dmg_attacker(id, weapon)
 
 	if ( attacker <= 0 || attacker > SH_MAXSLOTS )
 		return
@@ -96,3 +98,13 @@ bool:is_weapon_gun(weapid)
 	return false
 }
 //----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+// CZ patch: the Damage event is never sent for bot victims, run the same handler for them
+public bot_victim_damage(victim, inflictor, attacker, Float:damage, damagebits)
+{
+	if ( sh_bot_damage_begin(victim, inflictor, attacker, damage, damagebits) ) {
+		kraven_damage(victim)
+		sh_bot_damage_end()
+	}
+	return HAM_IGNORED
+}

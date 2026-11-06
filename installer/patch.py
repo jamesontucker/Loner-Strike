@@ -33,8 +33,13 @@ class PatchError(Exception):
 
 
 def parse(diff):
-    """{path: [(old_start, [(op, line)])]} for each file in the diff."""
-    files, path, hunk = {}, None, None
+    """{path: [(old_start, [(op, line)])]} for each file in the diff.
+
+    Each hunk's header says how many old and new lines it has, so hunks are
+    read by count: a removed line that happens to start with "--" can't be
+    mistaken for the next file's header.
+    """
+    files, path = {}, None
     lines = diff.splitlines(keepends=True)
     i = 0
     while i < len(lines):
@@ -42,18 +47,29 @@ def parse(diff):
         if line.startswith("+++ "):
             path = line[4:].strip()
             path = path[2:] if path.startswith("b/") else path
-            files[path] = []
-        elif line.startswith("@@"):
-            m = re.match(r"@@ -(\d+)(?:,\d+)? \+\d+(?:,\d+)? @@", line)
-            hunk = (int(m.group(1)), [])
-            files[path].append(hunk)
-        elif hunk is not None and line[:1] in (" ", "-", "+"):
-            body = line[1:]
-            if i + 1 < len(lines) and lines[i + 1].rstrip("\r\n") == NO_EOL:
-                body = body[:-1] if body.endswith("\n") else body
-                i += 1
-            hunk[1].append((line[0], body))
+            files.setdefault(path, [])
+            i += 1
+            continue
+        m = re.match(r"@@ -(\d+)(?:,(\d+))? \+\d+(?:,(\d+))? @@", line)
+        if not m:
+            i += 1
+            continue
+        old_left = int(m.group(2) if m.group(2) is not None else 1)
+        new_left = int(m.group(3) if m.group(3) is not None else 1)
+        body = []
         i += 1
+        while i < len(lines) and (old_left > 0 or new_left > 0):
+            op, text = lines[i][:1], lines[i][1:]
+            if op not in (" ", "-", "+"):
+                raise PatchError("malformed patch near: %r" % lines[i][:60])
+            if i + 1 < len(lines) and lines[i + 1].rstrip("\r\n") == NO_EOL:
+                text = text[:-1] if text.endswith("\n") else text
+                i += 1
+            body.append((op, text))
+            old_left -= op != "+"
+            new_left -= op != "-"
+            i += 1
+        files[path].append((int(m.group(1)), body))
     return files
 
 

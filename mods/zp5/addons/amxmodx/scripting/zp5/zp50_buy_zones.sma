@@ -24,6 +24,7 @@
 
 #define MAXPLAYERS 32
 #define TASK_WELCOMEMSG 100
+#define TASK_BOTAMMO 101
 
 new const CS_BUYZONE_ENT[] = "func_buyzone"
 
@@ -85,6 +86,34 @@ public plugin_init()
 	
 	// Bots buy ammo automatically
 	register_event("AmmoX", "event_ammo_x", "be")
+	
+	// CZ setup: CZ bots never get AmmoX messages, so check their ammo on a timer
+	set_task(2.0, "task_bot_ammo", TASK_BOTAMMO, _, _, "b")
+}
+
+// CZ setup: bots buy ammo when a weapon's reserve runs low
+public task_bot_ammo()
+{
+	static players[32], num, i, id, weapons[32], num_weapons, j, weapon
+	get_players(players, num, "ad")
+	for (i = 0; i < num; i++)
+	{
+		id = players[i]
+		if (zp_core_is_zombie(id))
+			continue;
+		
+		num_weapons = 0
+		get_user_weapons(id, weapons, num_weapons)
+		for (j = 0; j < num_weapons; j++)
+		{
+			weapon = weapons[j]
+			if (MAXBPAMMO[weapon] > 2 && cs_get_user_bpammo(id, weapon) <= BUYAMMO[weapon])
+			{
+				clcmd_buyammo(id)
+				break;
+			}
+		}
+	}
 }
 
 public plugin_precache()

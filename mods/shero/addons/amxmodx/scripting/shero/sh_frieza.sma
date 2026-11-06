@@ -21,6 +21,7 @@ frieza_disklife 50
 #include <amxmodx>
 #include <engine>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 new gHeroName[] = "Frieza" 
 new bool:g_hasfriezaPowers[SH_MAXSLOTS+1] 
@@ -343,3 +344,9 @@ public client_disconnect(id)  //This makes sure that the disk isn't flying after
 	}
 }
 //------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+// CZ patch: bots never get ResetHUD, run the per-spawn code for them from the core's spawn forward
+public sh_client_spawn(id, bool:isNewRound)
+{
+	if ( is_user_bot(id) ) newSpawn(id)
+}

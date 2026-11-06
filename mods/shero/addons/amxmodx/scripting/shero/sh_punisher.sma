@@ -9,6 +9,7 @@ punisher_rldmode 0		// Endless Ammo mode: 0-server default, 1-no reload, 2-reloa
 */
 
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 // GLOBAL VARIABLES
 new gHeroID
@@ -31,6 +32,7 @@ public plugin_init()
 
 	// REGISTER EVENTS THIS HERO WILL RESPOND TO!
 	register_event("CurWeapon", "change_weapon", "be", "1=1")
+	set_task(1.0, "bot_ammo_loop", _, _, _, "b")	// CZ patch: bots never send CurWeapon
 }
 //----------------------------------------------------------------------------------------------
 public sh_hero_init(id, heroID, mode)
@@ -57,3 +59,12 @@ public change_weapon(id)
 	}
 }
 //----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+// CZ patch: unlimited ammo for bots (they never get the CurWeapon message used above)
+public bot_ammo_loop()
+{
+	if ( !shModActive() ) return
+	for ( new id = 1; id <= SH_MAXSLOTS; id++ ) {
+		if ( gHasPunisher[id] && is_user_alive(id) && is_user_bot(id) ) sh_bot_refill_ammo(id, get_pcvar_num(pCvarRldMode))
+	}
+}

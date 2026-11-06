@@ -10,6 +10,7 @@
 ================================================================================*/
 
 #include <amxmodx>
+#include <cstrike>
 #include <fakemeta>
 #include <hamsandwich>
 #include <xs>
@@ -172,7 +173,9 @@ public fw_TraceAttack_Post(victim, attacker, Float:damage, Float:direction[3], t
 		xs_vec_mul_scalar(direction, damage, direction)
 	
 	// Get attacker's weapon id
-	new attacker_weapon = get_user_weapon(attacker)
+	// CZ setup: read the held weapon from pdata (get_user_weapon is stale for bots)
+	new attacker_item = get_pdata_cbase(attacker, 373)
+	new attacker_weapon = pev_valid(attacker_item) ? cs_get_weapon_id(attacker_item) : 0
 	
 	// Use weapon power on knockback calculation
 	if (get_pcvar_num(cvar_knockback_power) && kb_weapon_power[attacker_weapon] > 0.0)

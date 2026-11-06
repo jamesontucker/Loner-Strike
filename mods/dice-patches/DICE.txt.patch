@@ -1,0 +1,11 @@
+--- a/addons/amxmodx/data/lang/DICE.txt
++++ b/addons/amxmodx/data/lang/DICE.txt
+@@ -21,7 +21,7 @@
+ DICE_FORCE = !g%s !nforced !n%s !nto roll the dice.
+ DICE_LOG = %s rolled the dice and got item #%i: %L
+ 
+-DI_INSTANT_HEALTH = and got some instant HP
++DI_INSTANT_HEALTH = got some instant HP
+ DII_INSTANT_HEALTH = You now have %i health points.
+ DIH_INSTANT_HEALTH = %s won and now has %i HP!
+ 

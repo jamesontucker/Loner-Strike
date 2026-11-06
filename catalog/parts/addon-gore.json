@@ -19,5 +19,5 @@
    "include": null
   }
  ],
- "credits": "Ultimate Gore Enhancement 1.6 by mike_cao / fizzarum / jtp10181 (http://www.jtpage.net; source as published at https://pastebin.com/raw/vUSkR2e6), GPLv2+. Loner-Strike patch: corpses are no longer hidden when a body explodes into gibs. Uses Half-Life's own gib models and blood sprites."
+ "credits": "Ultimate Gore Enhancement 1.6 by mike_cao / fizzarum / jtp10181 (http://www.jtpage.net; source as published at https://pastebin.com/raw/vUSkR2e6), GPLv2+. Loner-Strike patch: corpses are no longer hidden when a body explodes into gibs. Uses Half-Life's own gib models and blood sprites. Bot fix: gibbed bots are made visible again on spawn (bots get no ResetHUD)."
 }

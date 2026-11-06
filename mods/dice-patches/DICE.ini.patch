@@ -1,0 +1,105 @@
+--- a/addons/amxmodx/configs/DICE.ini
++++ b/addons/amxmodx/configs/DICE.ini
+@@ -1,43 +1,58 @@
+-[#all_maps]
+-
+-DICE_ENABLED = 1
+-CHAT_PREFIX = !g< !tD.I.C.E. !g>!n
+-SAY_COMMANDS = rtd, rollthedice, dice, kocka
+-CONSOLE_COMMANDS = rtd, kocka
+-DISABLED_ITEMS = #none
+-
+-ROLL_INTERVAL = 120
+-ROUND_START_DELAY = 0
+-DICE_TEAM = 0
+-DICE_FLAG = 0
+-DICE_COST = 0
+-DICE_COOLDOWN = 3
+-DICE_LEAVE_SOUND = DICE/come_again.wav
+-DICE_LOG = 0
+-
+-GLOW_ENABLED = 1
+-GLOW_ALPHA = 40
+-GLOW_DURATION = 3
+-
+-HUD_X = -1.0
+-HUD_Y = 0.2
+-HUD_EFFECTS = 2
+-HUD_FXTIME = 0.1
+-HUD_HOLDTIME = 5.0
+-HUD_FADEINTIME = 0.01
+-HUD_FADEOUTTIME = 0.1
+-
+-DHUD_ENABLED = 1
+-DHUD_X = -1.0
+-DHUD_Y = 0.85
+-DHUD_EFFECTS = 2
+-DHUD_FXTIME = 0.1
+-DHUD_HOLDTIME = 5.0
+-DHUD_FADEINTIME = 0.01
+-DHUD_FADEOUTTIME = 0.1
+-
+-[35hp_*]
+-DISABLED_ITEMS = fullequip, randomwep, madness
+-
+-[awp_*]
+-DISABLED_ITEMS = fullequip, randomwep, madness
+\ No newline at end of file
++; D.I.C.E. (Roll the Dice) by OciXCrom - settings for the CZ "dice" add-on
++; Players type rtd, /rtd, dice or /dice once per round. Only one player rolls at a time.
++; Per-round limit and bot rolling are cvars (dice_rolls_per_round, dice_bot_chance, dice_bot_delay)
++; set in configs/gamemodes/addons/dice.cfg.
++
++[#all_maps]
++
++DICE_ENABLED = 1
++CHAT_PREFIX = !g[!tDICE!g]!n
++SAY_COMMANDS = rtd, /rtd, dice, /dice, rollthedice, /roll
++CONSOLE_COMMANDS = rtd, dice
++; camera (forced 3rd person view), noclip and zeus (noclip + godmode) are off:
++; nauseating / map-breaking, and bots get stuck in walls with noclip
++DISABLED_ITEMS = camera, noclip, zeus
++
++; seconds between rolls (0 = no timer, the once-per-round cvar limits rolling instead)
++ROLL_INTERVAL = 0
++ROUND_START_DELAY = 0
++DICE_TEAM = 0
++DICE_FLAG = 0
++DICE_COST = 0
++; pause between two players' rolls
++DICE_COOLDOWN = 2
++DICE_LEAVE_SOUND = DICE/come_again.wav
++DICE_LOG = 0
++
++GLOW_ENABLED = 1
++GLOW_ALPHA = 40
++GLOW_DURATION = 3
++
++HUD_X = -1.0
++HUD_Y = 0.2
++HUD_EFFECTS = 2
++HUD_FXTIME = 0.1
++HUD_HOLDTIME = 5.0
++HUD_FADEINTIME = 0.01
++HUD_FADEOUTTIME = 0.1
++
++DHUD_ENABLED = 1
++DHUD_X = -1.0
++DHUD_Y = 0.85
++DHUD_EFFECTS = 2
++DHUD_FXTIME = 0.1
++DHUD_HOLDTIME = 5.0
++DHUD_FADEINTIME = 0.01
++DHUD_FADEOUTTIME = 0.1
++
++[35hp_*]
++DISABLED_ITEMS = fullequip, randomwep, madness
++
++[awp_*]
++DISABLED_ITEMS = fullequip, randomwep, madness
++
++[aim_*]
++DISABLED_ITEMS = fullequip, randomwep, madness
++
++[fy_*]
++DISABLED_ITEMS = fullequip, madness

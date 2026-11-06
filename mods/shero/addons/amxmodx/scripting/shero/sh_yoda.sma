@@ -29,6 +29,7 @@ yoda_selfdmg 0		//Amount of damage using push does to self (def=0)
 #include <amxmod>
 #include <Vexd_Utilities>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 // GLOBAL VARIABLES
 new gHeroName[]="Yoda"
@@ -196,3 +197,9 @@ public move_enemy(parm[])
 	}
 }
 //----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+// CZ patch: bots never get ResetHUD, run the per-spawn code for them from the core's spawn forward
+public sh_client_spawn(id, bool:isNewRound)
+{
+	if ( is_user_bot(id) ) newSpawn(id)
+}

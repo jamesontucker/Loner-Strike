@@ -313,6 +313,43 @@ public on_CurWeapon( id )
 	return;
 }
 
+// [CZ patch] Bots never get CurWeapon: do its weapon-change work when their max speed is reset
+public EVENT_ResetMaxSpeed( id )
+{
+	if ( !WC3_Check() || !is_user_bot( id ) || !is_user_alive( id ) )
+	{
+		return HAM_IGNORED;
+	}
+
+	SHARED_SaveWeapons( id );
+
+	if ( SHARED_ValidPlayer( id ) )
+	{
+		SHARED_INVIS_Set( id );
+		SHARED_SetSpeed( id );
+	}
+
+	return HAM_IGNORED;
+}
+
+// [CZ patch] Bots never get CurWeapon, so fLastShotFired (used by Evasion, Helm and Mole
+// Protectant in TRIGGER_TraceLine) is set here while they hold attack. The shot's traceline runs
+// in the same frame (same halflife_time), and those checks need a difference > 0, hence the offset.
+public TRIGGER_CmdStart( id, uc_handle, seed )
+{
+	if ( id < 1 || id > MAXPLAYERS || !is_user_bot( id ) || !is_user_alive( id ) )
+	{
+		return FMRES_IGNORED;
+	}
+
+	if ( get_uc( uc_handle, UC_Buttons ) & IN_ATTACK )
+	{
+		fLastShotFired[id] = halflife_time() - 0.01;
+	}
+
+	return FMRES_IGNORED;
+}
+
 public on_Drop( id )
 {
 	if ( !WC3_Check() )

@@ -178,6 +178,7 @@ public plugin_init()
 
 	// Register forwards (from fakemeta)
 	register_forward( FM_TraceLine		, "TRIGGER_TraceLine"	);
+	register_forward( FM_CmdStart		, "TRIGGER_CmdStart"	);	// [CZ patch] bot shot times
 
 	register_event( "DeathMsg"			, "on_DeathMsg"		, "a"								);
 	register_event( "CurWeapon"			, "on_CurWeapon"	, "be"	, "1=1"						);
@@ -198,6 +199,9 @@ public plugin_init()
 		gmsgBarTime			= get_user_msgid( "BarTime"		);
 		gmsgStatusText		= get_user_msgid( "StatusText"	);
 		gmsgStatusIcon		= get_user_msgid( "StatusIcon"	);
+
+		// [CZ patch] bots never get CurWeapon, so re-apply speed/invisibility when the game resets their max speed (weapon switch etc.)
+		RegisterHam( Ham_CS_Player_ResetMaxSpeed, "player", "EVENT_ResetMaxSpeed", 1, true );
 
 		register_logevent( "on_PlayerAction"		, 3		, "1=triggered"								);
 		register_logevent( "on_FreezeTimeComplete"	, 2		, "0=World triggered"	, "1=Round_Start"	);

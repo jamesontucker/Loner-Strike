@@ -38,5 +38,5 @@
    }
   }
  ],
- "credits": "GunGame 2.13c by Avalanche (https://gungame-amxx.org/, https://forums.alliedmods.net/showthread.php?t=49983), GPL. Loner-Strike patch: random spawns spread over the map's bot navigation (.nav) areas when there is no spawn file."
+ "credits": "GunGame 2.13c by Avalanche (https://gungame-amxx.org/, https://forums.alliedmods.net/showthread.php?t=49983), GPL. Loner-Strike patch: random spawns spread over the map's bot navigation (.nav) areas when there is no spawn file. Bot fixes: bot kills credited to the weapon actually held, gg_awp_oneshot applied to bots, no temporary level save/restore for bots (they all share the authid BOT)."
 }

@@ -12,6 +12,7 @@ nightc_cliptime 6			//# of seconds NightCrawler has in noclip mode.
 #include <amxmod>
 #include <Vexd_Utilities>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 // GLOBAL VARIABLES
 new gHeroName[]="NightCrawler"
@@ -210,3 +211,9 @@ public positionChangeCheck(id)
 	}
 }
 //----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+// CZ patch: bots never get ResetHUD, run the per-spawn code for them from the core's spawn forward
+public sh_client_spawn(id, bool:isNewRound)
+{
+	if ( is_user_bot(id) ) newRound(id)
+}

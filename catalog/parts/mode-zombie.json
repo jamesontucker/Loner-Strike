@@ -77,5 +77,5 @@
    }
   }
  ],
- "credits": "Zombie Plague 4.3 (Fix5a) by MeRcyLeZZ (https://forums.alliedmods.net/showthread.php?t=72505), GPL. Models and sounds are ZP's own, fetched from https://github.com/ecks3/zp508-similar-to-zod (byte-identical copies). Loner-Strike patch: zp_zombie_health_scale / zp_zombie_speed_scale cvars."
+ "credits": "Zombie Plague 4.3 (Fix5a) by MeRcyLeZZ (https://forums.alliedmods.net/showthread.php?t=72505), GPL. Models and sounds are ZP's own, fetched from https://github.com/ecks3/zp508-similar-to-zod (byte-identical copies). Loner-Strike patch: zp_zombie_health_scale / zp_zombie_speed_scale cvars. Bot fixes: bots refill/buy ammo (and survivor bots get unlimited ammo) from a task, since bots get no AmmoX/CurWeapon; Ham_AddPlayerItem registered for CZ bots."
 }

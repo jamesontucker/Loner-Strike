@@ -43,6 +43,11 @@ new Array:g_ItemCost
 new g_ItemCount
 new g_AdditionalMenuText[32]
 
+// CZ setup: bots buy extra items (like ZP 4.3 did)
+#define TASK_BOTBUY 100
+new g_BotTried[MAXPLAYERS+1]
+new cvar_bot_buy_chance
+
 public plugin_init()
 {
 	register_plugin("[ZP] Items Manager", ZP_VERSION_STRING, "ZP Dev Team")
@@ -52,6 +57,43 @@ public plugin_init()
 	
 	g_Forwards[FW_ITEM_SELECT_PRE] = CreateMultiForward("zp_fw_items_select_pre", ET_CONTINUE, FP_CELL, FP_CELL, FP_CELL)
 	g_Forwards[FW_ITEM_SELECT_POST] = CreateMultiForward("zp_fw_items_select_post", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL)
+	
+	// CZ setup: bots try once per life/role, with this % chance, to buy a random affordable item
+	cvar_bot_buy_chance = register_cvar("zp_items_bot_chance", "50")
+	set_task(5.0, "task_bot_buy", TASK_BOTBUY, _, _, "b")
+}
+
+// CZ setup: a new life or role (human/zombie/special) gives bots another try
+public zp_fw_core_spawn_post(id) g_BotTried[id] = false
+public zp_fw_core_infect_post(id, attacker) g_BotTried[id] = false
+public zp_fw_core_cure_post(id, attacker) g_BotTried[id] = false
+
+public task_bot_buy()
+{
+	static players[32], num, i, id, items[64], count, index
+	get_players(players, num, "ad")
+	for (i = 0; i < num; i++)
+	{
+		id = players[i]
+		if (g_BotTried[id])
+			continue;
+		
+		g_BotTried[id] = true
+		if (random_num(1, 100) > get_pcvar_num(cvar_bot_buy_chance))
+			continue;
+		
+		// Items this bot can buy right now (cost is checked by the item/economy plugins)
+		count = 0
+		for (index = 0; index < g_ItemCount && count < sizeof items; index++)
+		{
+			ExecuteForward(g_Forwards[FW_ITEM_SELECT_PRE], g_ForwardResult, id, index, 0)
+			if (g_ForwardResult < ZP_ITEM_NOT_AVAILABLE)
+				items[count++] = index
+		}
+		
+		if (count > 0)
+			buy_item(id, items[random(count)])
+	}
 }
 
 public plugin_natives()

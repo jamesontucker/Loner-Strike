@@ -20,6 +20,7 @@ thor_cooldown 45		//Amount of time before next available use (def 45)
 
 #include <amxmod>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 // GLOBAL VARIABLES
 new g_heroName[]="Thor"
@@ -47,6 +48,7 @@ public plugin_init()
 	// EVENTS
 	register_event("ResetHUD", "newSpawn", "b")
 	register_event("Damage", "thor_damage", "b", "2!0")
+	RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage", 1, true)	// CZ patch: Damage event never fires for bot victims
 }
 //----------------------------------------------------------------------------------------------
 public plugin_precache()
@@ -80,8 +82,8 @@ public thor_damage(id)
 	if ( !shModActive() || !is_user_connected(id) ) return
 	if ( !g_hasThor[id] || gPlayerUltimateUsed[id] ) return
 
-	new damage = read_data(2)
-	new attacker = get_user_attacker(id)
+	new damage = sh_dmg_amount()
+	new attacker = sh_dmg_attacker(id)
 
 	if ( attacker <= 0 || attacker > SH_MAXSLOTS ) return
 
@@ -154,3 +156,19 @@ public lightning_effect(id, targetid, lineWidth)
 	message_end()
 }
 //----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+// CZ patch: bots never get ResetHUD, run the per-spawn code for them from the core's spawn forward
+public sh_client_spawn(id, bool:isNewRound)
+{
+	if ( is_user_bot(id) ) newSpawn(id)
+}
+//----------------------------------------------------------------------------------------------
+// CZ patch: the Damage event is never sent for bot victims, run the same handler for them
+public bot_victim_damage(victim, inflictor, attacker, Float:damage, damagebits)
+{
+	if ( sh_bot_damage_begin(victim, inflictor, attacker, damage, damagebits) ) {
+		thor_damage(victim)
+		sh_bot_damage_end()
+	}
+	return HAM_IGNORED
+}

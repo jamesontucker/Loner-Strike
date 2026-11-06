@@ -28,6 +28,7 @@ deadpool_armor 105				//How much armor the hero has (no extra ap = 100 - Default
 #include <amxmod>
 #include <Vexd_Utilities>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 /* Changes:
 - Version 2.0
@@ -74,7 +75,9 @@ public plugin_init()
 	// EVENTS
 	register_event("ResetHUD", "newSpawn", "b")
 	register_event("CurWeapon", "weaponChange", "be", "1=1")
+	set_task(1.0, "bot_ammo_loop", _, _, _, "b")	// CZ patch: bots never send CurWeapon
 	register_event("Damage", "deadpool_damage", "b", "2!0")
+	RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage", 1, true)	// CZ patch: Damage event never fires for bot victims
 	register_event("DeathMsg", "deadpool_death", "a")
 
 	// Let Server know about deadpool's Variables
@@ -219,8 +222,8 @@ public deadpool_damage(id)
 {
 	if ( !shModActive() || !is_user_alive(id) ) return
 
-	new damage = read_data(2)
-	new body, weapon, attacker = get_user_attacker(id, weapon, body)
+	new damage = sh_dmg_amount()
+	new body, weapon, attacker = sh_dmg_attacker(id, weapon, body)
 	new headshot = body == 1 ? 1 : 0
 
 	if ( attacker <= 0 || attacker > SH_MAXSLOTS ) return
@@ -360,3 +363,28 @@ public deadpool_death()
 
 }
 //----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+// CZ patch: bots never get ResetHUD, run the per-spawn code for them from the core's spawn forward
+public sh_client_spawn(id, bool:isNewRound)
+{
+	if ( is_user_bot(id) ) newSpawn(id)
+}
+//----------------------------------------------------------------------------------------------
+// CZ patch: unlimited ammo for bots (they never get the CurWeapon message used above)
+public bot_ammo_loop()
+{
+	if ( !shModActive() ) return
+	for ( new id = 1; id <= SH_MAXSLOTS; id++ ) {
+		if ( gHasDeadpoolPower[id] && is_user_alive(id) && is_user_bot(id) ) sh_bot_refill_ammo(id)
+	}
+}
+//----------------------------------------------------------------------------------------------
+// CZ patch: the Damage event is never sent for bot victims, run the same handler for them
+public bot_victim_damage(victim, inflictor, attacker, Float:damage, damagebits)
+{
+	if ( sh_bot_damage_begin(victim, inflictor, attacker, damage, damagebits) ) {
+		deadpool_damage(victim)
+		sh_bot_damage_end()
+	}
+	return HAM_IGNORED
+}

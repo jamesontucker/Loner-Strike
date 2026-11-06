@@ -13,6 +13,7 @@
 #include <amxmisc>
 #include <fakemeta>
 #include <fakemeta_util>
+#include <hamsandwich>
 
 /* YAY! No <cstrike> <csx> <fun> or <engine>!! =D */
 
@@ -397,6 +398,9 @@ public plugin_init()
 	register_forward(FM_AddToFullPack, "fwdAddToFullPackPost", 1);
 	//register_forward(FM_GetGameDescription, "fwdGetGameDescription", 0);
 	register_forward(FM_Voice_SetClientListening, "fwdSetVoice", 0);
+	
+	// CZ bot patch: bots never get ResetHUD, so run the spawn setup for them from Ham_Spawn
+	RegisterHam(Ham_Spawn, "player", "fwdHamPlayerSpawnPost", 1, true);
 	
 	register_event("TextMsg", "eventRestartAttempt", g_sA, "2&#Game_w");
 	register_clcmd("fullupdate", "cmdFullupdate", -1, g_sBlank);
@@ -1258,8 +1262,7 @@ public fwdCmdStart(plr, ucHandle, seed)
 		return FMRES_IGNORED;
 	}
 	
-	static clip, ammo;
-	if( get_user_weapon(plr, clip, ammo) != CSW_KNIFE )
+	if( hns_get_weapon(plr) != CSW_KNIFE )
 	{
 		return FMRES_IGNORED;
 	}
@@ -1567,6 +1570,23 @@ public fwdGetGameDescription()
 	
 	forward_return(FMV_STRING, sGameType);
 	return FMRES_SUPERCEDE;
+}
+
+public fwdHamPlayerSpawnPost(plr)
+{
+	if( is_user_bot(plr) && is_user_alive(plr) )
+	{
+		fwdPlayerSpawn(plr);
+	}
+	
+	return HAM_IGNORED;
+}
+
+// CZ bot patch: get_user_weapon() is stale for bots, read m_pActiveItem instead
+hns_get_weapon(plr)
+{
+	new item = get_pdata_cbase(plr, 373, 5);
+	return (item > 0 && pev_valid(item)) ? get_pdata_int(item, 43, 4) : 0;
 }
 
 public fwdPlayerSpawn(plr)
@@ -3102,8 +3122,7 @@ cs_reset_user_maxspeed(plr)
 {
 	static Float:fMaxSpeed;
 	
-	static clip, ammo;
-	switch( get_user_weapon(plr, clip, ammo) )
+	switch( hns_get_weapon(plr) )
 	{
 		case CSW_SG550, CSW_AWP, CSW_G3SG1:
 		{

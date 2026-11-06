@@ -379,6 +379,7 @@
 #include <amxmodx>
 #include <amxmisc>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers (sh_get_held_weapon)
 
 new const SH_CORE_STR[] =  "SuperHero Core"
 
@@ -623,6 +624,8 @@ public plugin_init()
 	// CZ patch: specialBot=true makes these fire for CZ bots too (AMXX 1.10)
 	RegisterHam(Ham_Spawn, "player", "ham_PlayerSpawn_Post", 1, true)
 	RegisterHam(Ham_TakeDamage, "player", "ham_TakeDamage_Pre", 0, true)
+	// CZ patch: bots never get CurWeapon, re-apply hero speeds whenever the game resets their speed
+	RegisterHam(Ham_CS_Player_ResetMaxSpeed, "player", "ham_ResetMaxSpeed_Post", 1, true)
 
 	// Events to catch shield buying
 	// Old Style Menus
@@ -2556,6 +2559,17 @@ public event_CurWeapon(id)
 	}
 }
 //----------------------------------------------------------------------------------------------
+// CZ patch: speed re-apply for bots (humans keep using event_CurWeapon)
+public ham_ResetMaxSpeed_Post(id)
+{
+	if ( !is_user_bot(id) || !is_user_alive(id) || !get_pcvar_num(sv_superheros) ) return HAM_IGNORED
+
+	gCurrentWeapon[id] = sh_get_held_weapon(id)
+	setSpeedPowers(id, false)
+
+	return HAM_IGNORED
+}
+//----------------------------------------------------------------------------------------------
 public event_SetFOV(id)
 {
 	// Sniper rifle scoping can reset user speed lets fix that
@@ -2927,7 +2941,8 @@ public ham_TakeDamage_Pre(victim, inflictor, attacker, Float:damage, damagebits)
 	else if ( damagebits & DMG_BULLET && inflictor == attacker )
 	{
 		//includes knife and any other weapon
-		weaponID = get_user_weapon(attacker)
+		// CZ patch: get_user_weapon is stale for bots
+		weaponID = is_user_bot(attacker) ? sh_get_held_weapon(attacker) : get_user_weapon(attacker)
 	}
 
 	//Damage not from a CS weapon
@@ -3263,6 +3278,16 @@ public _sh_reload_ammo()
 
 	new clip, ammo
 	new wpnid = get_user_weapon(id, clip, ammo)
+	if ( is_user_bot(id) ) {
+		// CZ patch: get_user_weapon is stale for bots, read the held weapon
+		new item
+		wpnid = sh_get_held_weapon(id, item)
+		if ( !wpnid ) return
+		new slot = sh_get_weapon_slot(wpnid)
+		if ( slot != 1 && slot != 2 ) return
+		clip = cs_get_weapon_ammo(item)
+		ammo = cs_get_user_bpammo(id, wpnid)
+	}
 	new wpnslot = sh_get_weapon_slot(wpnid)
 
 	if ( wpnslot != 1 && wpnslot != 2 ) return

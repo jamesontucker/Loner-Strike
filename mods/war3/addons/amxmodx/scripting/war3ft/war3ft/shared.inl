@@ -65,7 +65,7 @@ public SHARED_INVIS_Set( id )
 public SHARED_IsHoldingKnife( id )
 {
 	new iClip, iAmmo, iWeapon;
-	iWeapon = get_user_weapon( id, iClip, iAmmo );
+	iWeapon = SHARED_GetHeldWeapon( id, iClip, iAmmo );
 
 	// Check for Counter-Strike or Condition Zero
 	if ( g_MOD == GAME_CSTRIKE || g_MOD == GAME_CZERO )
@@ -871,7 +871,7 @@ public SHARED_SetSpeed( id )
 		if ( ITEM_Has( id, ITEM_BOOTS ) > ITEM_NONE )
 		{
 			new iClip, iAmmo;
-			new iWeapon = get_user_weapon( id, iClip, iAmmo );
+			new iWeapon = SHARED_GetHeldWeapon( id, iClip, iAmmo );
 			
 			// Then just apply the bonus!
 			if ( fNewSpeed > 0.0 )
@@ -914,7 +914,7 @@ public SHARED_SetSpeed( id )
 	{
 		// Here we want to reset the user's speed
 		new iClip, iAmmo;
-		new iWeapon = get_user_weapon( id, iClip, iAmmo );
+		new iWeapon = SHARED_GetHeldWeapon( id, iClip, iAmmo );
 		
 		if ( g_iPlayerRole[id] == PLR_VIP )
 		{
@@ -1625,4 +1625,33 @@ public _SHARED_Teleport( parm[] )
 			client_print( id, print_chat, "%s Sorry, I know you're stuck, but I can't move you right now :/", g_MODclient );
 		}
 	}
+}
+// [CZ patch] get_user_weapon() is stale for CZ bots (they never get CurWeapon), so read
+// their active item from private data instead. Humans keep using get_user_weapon().
+SHARED_GetHeldWeapon( id, &iClip, &iAmmo )
+{
+	if ( ( g_MOD == GAME_CSTRIKE || g_MOD == GAME_CZERO ) && is_user_bot( id ) )
+	{
+		new iItem = get_pdata_cbase( id, 373 );
+		iClip = 0;
+		iAmmo = 0;
+
+		if ( !pev_valid( iItem ) )
+		{
+			return 0;
+		}
+
+		new iWeapon = cs_get_weapon_id( iItem );
+		if ( iWeapon <= 0 || iWeapon > CSW_P90 )
+		{
+			return 0;
+		}
+
+		iClip = cs_get_weapon_ammo( iItem );
+		iAmmo = cs_get_user_bpammo( id, iWeapon );
+
+		return iWeapon;
+	}
+
+	return get_user_weapon( id, iClip, iAmmo );
 }

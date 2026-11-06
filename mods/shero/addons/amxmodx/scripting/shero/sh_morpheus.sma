@@ -28,6 +28,7 @@ morpheus_mp5mult 2.0		//Damage multiplyer for his MP5
 //------- Do not edit below this point ------//
 
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 // GLOBAL VARIABLES
 new gHeroID
@@ -62,6 +63,9 @@ public plugin_init()
 	// REGISTER EVENTS THIS HERO WILL RESPOND TO!
 #if AMMO_MODE < 4 || defined USE_WEAPON_MODEL
 	register_event("CurWeapon", "weapon_change", "be", "1=1")
+#endif
+#if AMMO_MODE < 4
+	set_task(1.0, "bot_ammo_loop", _, _, _, "b")	// CZ patch: bots never send CurWeapon
 #endif
 }
 //----------------------------------------------------------------------------------------------
@@ -162,3 +166,14 @@ public weapon_change(id)
 }
 #endif
 //----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+#if AMMO_MODE < 4
+// CZ patch: unlimited ammo for bots (they never get the CurWeapon message used above)
+public bot_ammo_loop()
+{
+	if ( !shModActive() ) return
+	for ( new id = 1; id <= SH_MAXSLOTS; id++ ) {
+		if ( gHasMorpheus[id] && is_user_alive(id) && is_user_bot(id) ) sh_bot_refill_ammo(id, AMMO_MODE, CSW_MP5NAVY)
+	}
+}
+#endif

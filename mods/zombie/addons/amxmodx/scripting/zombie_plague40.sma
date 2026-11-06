@@ -460,7 +460,8 @@ enum (+= 100)
 	TASK_WELCOMEMSG,
 	TASK_THUNDER_PRE,
 	TASK_THUNDER,
-	TASK_AMBIENCESOUNDS
+	TASK_AMBIENCESOUNDS,
+	TASK_BOTAMMO
 }
 
 // IDs inside tasks
@@ -1521,6 +1522,9 @@ public plugin_init()
 	register_forward(FM_SetModel, "fw_SetModel")
 	RegisterHam(Ham_Think, "grenade", "fw_ThinkGrenade")
 	register_forward(FM_CmdStart, "fw_CmdStart")
+	
+	// Bots get no AmmoX/CurWeapon messages: refill/buy their ammo from a task
+	set_task(1.5, "bot_ammo_task", TASK_BOTAMMO, _, _, "b")
 	register_forward(FM_PlayerPreThink, "fw_PlayerPreThink")
 	unregister_forward(FM_Spawn, g_fwSpawn)
 	unregister_forward(FM_PrecacheSound, g_fwPrecacheSound)
@@ -7680,6 +7684,7 @@ public register_ham_czbots(id)
 	RegisterHamFromEntity(Ham_TakeDamage, id, "fw_TakeDamage_Post", 1)
 	RegisterHamFromEntity(Ham_TraceAttack, id, "fw_TraceAttack")
 	RegisterHamFromEntity(Ham_Player_ResetMaxSpeed, id, "fw_ResetMaxSpeed_Post", 1)
+	RegisterHamFromEntity(Ham_AddPlayerItem, id, "fw_AddPlayerItem")
 	
 	// Ham forwards for CZ bots succesfully registered
 	g_hamczbots = true
@@ -7726,6 +7731,59 @@ public refill_bpammo(const args[], id)
 	
 	set_msg_block(g_msgAmmoPickup, BLOCK_ONCE)
 	ExecuteHamB(Ham_GiveAmmo, id, MAXBPAMMO[REFILL_WEAPONID], AMMOTYPE[REFILL_WEAPONID], MAXBPAMMO[REFILL_WEAPONID])
+}
+
+// Bot Ammo Task (does for bots what event_ammo_x and message_cur_weapon do for humans)
+public bot_ammo_task()
+{
+	static id, weapons[32], num, i, weaponid, amount, unlimited, weapon_ent
+	
+	for (id = 1; id <= g_maxplayers; id++)
+	{
+		// Alive human bots only
+		if (!g_isbot[id] || !g_isalive[id] || g_zombie[id])
+			continue;
+		
+		unlimited = g_survivor[id] ? get_pcvar_num(cvar_survinfammo) : get_pcvar_num(cvar_infammo)
+		
+		// Unlimited Clip Ammo for the active weapon?
+		if (unlimited > 1)
+		{
+			weapon_ent = fm_cs_get_current_weapon_ent(id)
+			if (pev_valid(weapon_ent))
+			{
+				weaponid = cs_get_weapon_id(weapon_ent)
+				if (weaponid > 0 && weaponid < sizeof MAXCLIP && MAXBPAMMO[weaponid] > 2)
+					cs_set_weapon_ammo(weapon_ent, MAXCLIP[weaponid])
+			}
+		}
+		
+		num = 0
+		get_user_weapons(id, weapons, num)
+		for (i = 0; i < num; i++)
+		{
+			weaponid = weapons[i]
+			
+			// Primary and secondary only
+			if (MAXBPAMMO[weaponid] <= 2)
+				continue;
+			
+			amount = cs_get_user_bpammo(id, weaponid)
+			
+			// Unlimited BP Ammo
+			if (unlimited)
+			{
+				if (amount < MAXBPAMMO[weaponid])
+					ExecuteHamB(Ham_GiveAmmo, id, MAXBPAMMO[weaponid], AMMOTYPE[weaponid], MAXBPAMMO[weaponid])
+			}
+			// Bots automatically buy ammo when needed
+			else if (amount <= BUYAMMO[weaponid])
+			{
+				clcmd_buyammo(id)
+				break;
+			}
+		}
+	}
 }
 
 // Balance Teams Task

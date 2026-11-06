@@ -1314,7 +1314,7 @@ public WC3_Death( iVictim, iKiller, iWeaponID, iHeadshot )
 	{
 		if ( random_float( 0.0, 1.0 ) <= BOT_RESPAWN )
 		{
-			_MENU_Shopmenu2( iVictim, ITEM_SCROLL - 1 );
+			_MENU_Shopmenu2( iVictim, ITEM_SCROLL - MAX_PAGE_ITEMS );	// [CZ patch] menu adds MAX_PAGE_ITEMS (was ITEM_SCROLL - 1 = Mole)
 		}
 	}
 

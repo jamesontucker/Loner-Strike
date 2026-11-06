@@ -56,6 +56,7 @@ chucky_knifespeed 720    //User speed when knife is out
 #include <cstrike>
 #include <csx>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 #if USE_MODEL
 	#include <fakemeta>
@@ -95,6 +96,7 @@ public plugin_init()
 		register_event("CurWeapon", "weapon_change", "be", "1=1")
 	#endif
 	register_event("Damage", "chucky_damage", "b", "2!0")
+	RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage", 1, true)	// CZ patch: Damage event never fires for bot victims
 	register_event("DeathMsg", "chucky_death", "a")
 
 	// LOG EVENTS
@@ -185,14 +187,14 @@ public chucky_damage(id)
 	if ( !shModActive() || !is_user_alive(id) )
 		return
 
-	new weapon, bodypart, attacker = get_user_attacker(id, weapon, bodypart)
+	new weapon, bodypart, attacker = sh_dmg_attacker(id, weapon, bodypart)
 
 	if ( attacker <= 0 || attacker > SH_MAXSLOTS )
 		return
 
 	if ( HasChucky[attacker] && weapon == CSW_KNIFE && is_user_alive(id) )
 	{
-		new damage = read_data(2)
+		new damage = sh_dmg_amount()
 		new headshot = bodypart == 1 ? 1 : 0
 
 		// Do extra damage
@@ -346,3 +348,13 @@ public client_connect(id)
 	ChuckyPowerUsed[id] = false
 }
 //----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+// CZ patch: the Damage event is never sent for bot victims, run the same handler for them
+public bot_victim_damage(victim, inflictor, attacker, Float:damage, damagebits)
+{
+	if ( sh_bot_damage_begin(victim, inflictor, attacker, damage, damagebits) ) {
+		chucky_damage(victim)
+		sh_bot_damage_end()
+	}
+	return HAM_IGNORED
+}

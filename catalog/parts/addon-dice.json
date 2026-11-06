@@ -85,6 +85,12 @@
  ],
  "credits": "D.I.C.E. by OciXCrom, https://github.com/OciXCrom/DICE (no license file upstream; AMX Mod X plugin). Loner-Strike ships only its changes (mods/dice-patches), applied to the original files at install: CZ bot Ham hooks, once-per-round limit, bots roll automatically, queue for humans.",
  "patches": [
-  "mods/dice-patches/loner-strike.patch"
+  "mods/dice-patches/dice_main.sma.patch",
+  "mods/dice-patches/dice_items_global.sma.patch",
+  "mods/dice-patches/dice_items_cstrike.sma.patch",
+  "mods/dice-patches/dice.inc.patch",
+  "mods/dice-patches/DICE.ini.patch",
+  "mods/dice-patches/DICE.cfg.patch",
+  "mods/dice-patches/DICE.txt.patch"
  ]
 }

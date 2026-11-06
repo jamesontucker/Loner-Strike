@@ -728,7 +728,7 @@ public Create_PaintBall(id, Float:Target[3])
 			
 			static Float:Velocity[3]
 			//get_speed_vector(StartOrigin, TargetOrigin, GunBallSpeed[Gun], Velocity)
-			velocity_by_aim(id, GunBallSpeed[Gun], Velocity)
+			pb_aim_velocity(id, GunBallSpeed[Gun], Velocity)
 			set_pev(Ent, pev_velocity, Velocity)
 			
 			DelayTime[id] = get_gametime()
@@ -781,7 +781,7 @@ public Create_PaintBall(id, Float:Target[3])
 	
 	static Float:Velocity[3]
 	//
-	if(Gun != GUN_SG) velocity_by_aim(id, GunBallSpeed[Gun], Velocity)
+	if(Gun != GUN_SG) pb_aim_velocity(id, GunBallSpeed[Gun], Velocity)
 	else get_speed_vector(StartOrigin, TargetOrigin, float(GunBallSpeed[Gun]), Velocity)
 	
 	set_pev(Ent, pev_velocity, Velocity)
@@ -817,6 +817,18 @@ public fw_Weapon_PrimaryAttack(Ent)
 public fw_Weapon_PrimaryAttack_Post(Ent)
 {
 	static id; id = pev(Ent, pev_owner)
+	
+	// CZ bot patch: the paintball fire rate is set on CurWeapon, which bots never get
+	if(is_user_bot(id))
+	{
+		static CSW; CSW = cs_get_weapon_id(Ent)
+		static Gun; Gun = Get_PaintBallGun(CSW)
+		if(Gun != -1 && CSW != CSW_SCOUT && GunROF[Gun] > 0.0)
+		{
+			set_pdata_float(Ent, 46, GunROF[Gun], 4)
+			set_pdata_float(Ent, 47, GunROF[Gun], 4)
+		}
+	}
 	
 	if(cs_get_weapon_ammo(Ent) >= 0)
 	{
@@ -940,4 +952,26 @@ stock pb_get_weapon(id)
 		return 0
 	new w = get_pdata_cbase(id, 373, 5)
 	return (w > 0 && pev_valid(w)) ? cs_get_weapon_id(w) : 0
+}
+
+// CZ bot patch: paint balls fly along the bot's exact view, so give bots a small
+// human-like spread (more while running or in the air). Humans are unchanged.
+stock pb_aim_velocity(id, speed, Float:Velocity[3])
+{
+	if(!is_user_bot(id))
+	{
+		velocity_by_aim(id, speed, Velocity)
+		return
+	}
+	static Float:Angles[3], Float:Move[3], Float:Spread
+	pev(id, pev_v_angle, Angles)
+	pev(id, pev_velocity, Move)
+	Move[2] = 0.0
+	Spread = 1.0
+	if(vector_length(Move) > 140.0) Spread += 2.0
+	if(!(pev(id, pev_flags) & FL_ONGROUND)) Spread += 3.0
+	Angles[0] += random_float(-Spread, Spread)
+	Angles[1] += random_float(-Spread, Spread)
+	angle_vector(Angles, ANGLEVECTOR_FORWARD, Velocity)
+	xs_vec_mul_scalar(Velocity, float(speed), Velocity)
 }

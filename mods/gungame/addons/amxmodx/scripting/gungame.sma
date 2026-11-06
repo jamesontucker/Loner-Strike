@@ -295,6 +295,7 @@ public plugin_init()
 	RegisterHam(Ham_Spawn,"player","ham_player_spawn",1);
 	RegisterHam(Ham_Killed,"player","ham_player_killed_pre",0);
 	RegisterHam(Ham_Killed,"player","ham_player_killed_post",1);
+	RegisterHam(Ham_Item_PostFrame,"weapon_awp","ham_awp_postframe",1); // gg_awp_oneshot for bots (no CurWeapon)
 
 	// commands
 	register_clcmd("joinclass","cmd_joinclass"); // new menus
@@ -612,8 +613,8 @@ public client_authorized(id)
 	static authid[32];
 	get_gg_authid(id,authid,31);
 
-	// load temporary save
-	if(ggActive && get_pcvar_num(gg_save_temp))
+	// load temporary save (not for bots: they all share the authid "BOT")
+	if(ggActive && get_pcvar_num(gg_save_temp) && !is_user_bot(id))
 	{
 		new i, save = -1;
 
@@ -688,7 +689,7 @@ public client_disconnect(id)
 		new save_temp = get_pcvar_num(gg_save_temp);
 
 		// temporarily save values
-		if(ggActive && save_temp && (level[id] > 1 || score[id] > 0))
+		if(ggActive && save_temp && !is_user_bot(id) && (level[id] > 1 || score[id] > 0))
 		{
 			// keep track of times
 			new team = get_user_team(id);
@@ -926,6 +927,18 @@ public event_curweapon(id)
 		write_byte(1); // clip
 		message_end();
 	}
+}
+
+// bots get no CurWeapon, so keep their AWP clip at one bullet here
+public ham_awp_postframe(wEnt)
+{
+	if(!ggActive || !get_pcvar_num(gg_awp_oneshot) || !pev_valid(wEnt)) return HAM_IGNORED;
+
+	new id = pev(wEnt,pev_owner);
+	if(id >= 1 && id <= maxPlayers && is_user_bot(id) && cs_get_weapon_ammo(wEnt) > 1)
+		cs_set_weapon_ammo(wEnt,1);
+
+	return HAM_IGNORED;
 }
 
 // a new round has begun
@@ -9724,7 +9737,14 @@ stock get_killer_weapon(killer,inflictor,retVar[],retLen)
 			if(inflictor == killer)
 			{
 				// if the inflictor is the killer, then it must be their current weapon doing the damage
-				new weapon = get_user_weapon(killer);
+				// (get_user_weapon is stale for bots, so read their active item instead)
+				new weapon;
+				if(is_user_bot(killer))
+				{
+					new item = get_pdata_cbase(killer,373);
+					weapon = pev_valid(item) ? cs_get_weapon_id(item) : 0;
+				}
+				else weapon = get_user_weapon(killer);
 				get_weaponname(weapon,killer_weapon_name,31);
 			}
 			else pev(inflictor,pev_classname,killer_weapon_name,31); // it's just that easy

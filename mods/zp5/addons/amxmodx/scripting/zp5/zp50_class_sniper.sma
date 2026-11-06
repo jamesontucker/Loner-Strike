@@ -274,8 +274,9 @@ public fw_TakeDamage(victim, inflictor, attacker, Float:damage, damage_type)
 		// (to prevent this from affecting a sub-plugin's rockets e.g.)
 		if (inflictor == attacker)
 		{
-			new plrWeapId, plrClip, plrAmmo    
-			plrWeapId = get_user_weapon(attacker, plrClip, plrAmmo)
+			// CZ setup: read the held weapon from pdata (get_user_weapon is stale for bots)
+			new plrItem = get_pdata_cbase(attacker, OFFSET_ACTIVE_ITEM)
+			new plrWeapId = pev_valid(plrItem) ? cs_get_weapon_id(plrItem) : 0
 			
 			// CZ setup: one-shot kill through the normal damage path instead of
 			// calling Ham_Killed inside TakeDamage (avoids a double kill/death)

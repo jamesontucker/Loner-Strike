@@ -28,6 +28,7 @@ darth_knifemult 2.70		// multiplier for knife damage...
 #include <amxmod>
 #include <Vexd_Utilities>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 // GLOBAL VARIABLES
 new gHeroName[]="Darth Maul"
@@ -58,6 +59,7 @@ public plugin_init()
 	register_event("ResetHUD", "newSpawn", "b")
 	register_event("CurWeapon", "weaponChange", "be", "1=1")
 	register_event("Damage", "darth_damage", "b", "2!0")
+	RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage", 1, true)	// CZ patch: Damage event never fires for bot victims
 
 	// HEAL LOOP
 	set_task(1.0, "darth_loop", 0, "", 0, "b")
@@ -168,8 +170,8 @@ public darth_damage(id)
 {
 	if ( !shModActive() || !is_user_alive(id) ) return
 
-	new damage = read_data(2)
-	new weapon, bodypart, attacker = get_user_attacker(id, weapon, bodypart)
+	new damage = sh_dmg_amount()
+	new weapon, bodypart, attacker = sh_dmg_attacker(id, weapon, bodypart)
 	new headshot = bodypart == 1 ? 1 : 0
 
 	if ( attacker <= 0 || attacker > SH_MAXSLOTS ) return
@@ -181,3 +183,13 @@ public darth_damage(id)
 	}
 }
 //----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+// CZ patch: the Damage event is never sent for bot victims, run the same handler for them
+public bot_victim_damage(victim, inflictor, attacker, Float:damage, damagebits)
+{
+	if ( sh_bot_damage_begin(victim, inflictor, attacker, damage, damagebits) ) {
+		darth_damage(victim)
+		sh_bot_damage_end()
+	}
+	return HAM_IGNORED
+}

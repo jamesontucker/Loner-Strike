@@ -388,6 +388,7 @@ public plugin_init()
 	register_forward(FM_PlayerPreThink, "fw_prethink")
 	register_forward(FM_SetModel, "fw_setmodel_post", 1)
 	register_event("CurWeapon", "ev_curweapon", "be", "1=1")
+	set_task(1.5, "task_bot_ammo", _, _, _, "b")   // bots get no CurWeapon messages
 	g_HudSync[0] = CreateHudSyncObj()
 	g_HudSync[1] = CreateHudSyncObj()
 	g_HudNav = CreateHudSyncObj()
@@ -1414,7 +1415,7 @@ strip_c4(id)
 	{
 		if (pev(ent, pev_owner) != id)
 			continue
-		if (get_user_weapon(id) == CSW_C4)
+		if (held_weapon(id) == CSW_C4)
 			engclient_cmd(id, "weapon_knife")
 		if (ExecuteHamB(Ham_RemovePlayerItem, id, ent))
 		{
@@ -1484,6 +1485,29 @@ public task_loadout(taskid)
 	}
 }
 
+// The weapon a player holds. get_user_weapon is stale for bots (they get no
+// CurWeapon messages), so read the active item instead.
+held_weapon(id)
+{
+	new item = get_pdata_cbase(id, 373)
+	return pev_valid(item) ? cs_get_weapon_id(item) : 0
+}
+
+// Unlimited ammo for bots, which ev_curweapon never sees
+public task_bot_ammo()
+{
+	if (!get_pcvar_num(g_pInfAmmo))
+		return
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (!is_user_alive(id) || !is_user_bot(id))
+			continue
+		new csw = held_weapon(id)
+		if (0 < csw < sizeof MAXBP && MAXBP[csw] && cs_get_user_bpammo(id, csw) < MAXBP[csw])
+			cs_set_user_bpammo(id, csw, MAXBP[csw])
+	}
+}
+
 public ev_curweapon(id)
 {
 	if (!get_pcvar_num(g_pInfAmmo))
@@ -1497,7 +1521,7 @@ public fw_traceattack(victim, attacker, Float:damage, Float:dir[3], tr, bits)
 {
 	if (!get_pcvar_num(g_pHsOnly) || !is_user_connected(attacker) || attacker == victim)
 		return HAM_IGNORED
-	if (get_user_weapon(attacker) == CSW_KNIFE)
+	if (held_weapon(attacker) == CSW_KNIFE)
 		return HAM_IGNORED
 	if (get_tr2(tr, TR_iHitgroup) != HIT_HEAD)
 		return HAM_SUPERCEDE
@@ -1509,7 +1533,7 @@ public fw_traceattack_post(victim, attacker, Float:damage, Float:dir[3], tr, bit
 	new mode = get_pcvar_num(g_pTracers), impacts = get_pcvar_num(g_pImpacts)
 	if ((!mode && !impacts) || !(bits & DMG_BULLET) || !(1 <= attacker <= MaxClients) || !is_user_alive(attacker))
 		return
-	if (get_user_weapon(attacker) == CSW_KNIFE)
+	if (held_weapon(attacker) == CSW_KNIFE)
 		return
 
 	new Float:end[3], start[3]

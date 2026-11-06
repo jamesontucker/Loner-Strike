@@ -81,6 +81,7 @@ masterchief_teamglow 0		//Glow Team Color when player skin in use (0=no 1=yes)
 #include <amxmodx>
 #include <fakemeta>
 #include <superheromod>
+#include <sh_botsupport>	// CZ patch: bot helpers
 
 // GLOBAL VARIABLES
 new HeroName[] = "Master Chief"
@@ -142,6 +143,7 @@ public plugin_init()
 
 	// EVENTS
 	register_event("Damage", "masterchief_damage", "b", "2!0")
+	RegisterHam(Ham_TakeDamage, "player", "bot_victim_damage", 1, true)	// CZ patch: Damage event never fires for bot victims
 
 	#if PLAYER_MODEL > 0 || defined GIVE_WEAPON
 		register_event("ResetHUD", "new_spawn", "b")
@@ -373,14 +375,14 @@ public masterchief_damage(id)
 	if ( !shModActive() || !is_user_alive(id) )
 		return
 
-	new weapon, bodypart, attacker = get_user_attacker(id, weapon, bodypart)
+	new weapon, bodypart, attacker = sh_dmg_attacker(id, weapon, bodypart)
 
 	if ( attacker <= 0 || attacker > SH_MAXSLOTS )
 		return
 
 	if ( HasMasterChief[attacker] && weapon == CSW_P90 )
 	{
-		new damage = read_data(2)
+		new damage = sh_dmg_amount()
 		new headshot = bodypart == 1 ? 1 : 0
 
 		// do extra damage
@@ -496,3 +498,19 @@ public client_connect(id)
 	#endif
 }
 //----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+// CZ patch: bots never get ResetHUD, run the per-spawn code for them from the core's spawn forward
+public sh_client_spawn(id, bool:isNewRound)
+{
+	if ( is_user_bot(id) ) new_spawn(id)
+}
+//----------------------------------------------------------------------------------------------
+// CZ patch: the Damage event is never sent for bot victims, run the same handler for them
+public bot_victim_damage(victim, inflictor, attacker, Float:damage, damagebits)
+{
+	if ( sh_bot_damage_begin(victim, inflictor, attacker, damage, damagebits) ) {
+		masterchief_damage(victim)
+		sh_bot_damage_end()
+	}
+	return HAM_IGNORED
+}
