@@ -186,6 +186,22 @@ export function Info({ text }: { text: ReactNode }) {
   );
 }
 
+/** A button that shows a spinner and another label while its action runs. */
+export function BusyButton({ busy, label, busyLabel, className = "btn", disabled, onClick }: { busy: boolean; label: ReactNode; busyLabel: string; className?: string; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button className={className} disabled={busy || disabled} aria-busy={busy} onClick={onClick}>
+      {busy ? (
+        <>
+          <span className="spinner" aria-hidden="true" />
+          {busyLabel}
+        </>
+      ) : (
+        label
+      )}
+    </button>
+  );
+}
+
 export function SectionHead({ title, note, children }: { title: string; note?: ReactNode; children?: ReactNode }) {
   return (
     <div className="section-head">

@@ -175,3 +175,21 @@ export function useOnce() {
     }
   }, []);
 }
+
+/** Like useOnce, and says which actions are still going (for a spinner on their button). */
+export function useActions() {
+  const going = useRef(new Set<string>());
+  const [busy, setBusy] = useState<string[]>([]);
+  const run = useCallback(async (key: string, fn: () => Promise<unknown>) => {
+    if (going.current.has(key)) return;
+    going.current.add(key);
+    setBusy((b) => [...b, key]);
+    try {
+      await fn();
+    } finally {
+      going.current.delete(key);
+      setBusy((b) => b.filter((k) => k !== key));
+    }
+  }, []);
+  return { run, busy: (key: string) => busy.includes(key) };
+}

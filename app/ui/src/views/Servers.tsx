@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, useOnce, useStable } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, useActions, useOnce, useStable } from "../api";
 import type { AppInfo, MapInfo, Online, ServerInfo, ServerList } from "../types";
-import { Info, SectionHead, SteamProgress, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, SectionHead, SteamProgress, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
 import { Bots } from "./Bots";
 import { Friends } from "./Friends";
@@ -70,7 +70,7 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
 
-  const once = useOnce();
+  const { run: once, busy } = useActions();
   const act = (s: ServerInfo, action: string) => once(`${s.id}:${action}`, async () => {
     if (action === "delete" && !(await ask(s.imported ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.` : `Delete "${s.name}"? Its folder, maps, settings and admins are deleted.`, { ok: s.imported ? "Remove" : "Delete", danger: true }))) return;
     if (action === "rebuild" && !(await ask(`Rebuild "${s.name}" from scratch? Everything in its folder on ${s.host} is deleted (settings, admins, bans, stats, added maps) and it's set up again like when you made it.`, { ok: "Wipe and rebuild", danger: true }))) return;
@@ -122,8 +122,8 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
               <JobProgress onEnd={(ok) => { toast(ok ? `${s.name} is ready` : "Setting up the server stopped", !ok); onChanged(); }} />
             ) : s.state === "failed" ? (
               <div className="row">
-                {s.host && <button className="btn primary" onClick={() => act(s, "retry")}>Try again</button>}
-                {s.host && <button className="btn" onClick={() => act(s, "rebuild")}>Rebuild from scratch</button>}
+                {s.host && <BusyButton className="btn primary" busy={busy(`${s.id}:retry`)} label="Try again" busyLabel="Starting…" onClick={() => act(s, "retry")} />}
+                {s.host && <BusyButton busy={busy(`${s.id}:rebuild`)} label="Rebuild from scratch" busyLabel="Starting…" onClick={() => act(s, "rebuild")} />}
                 <button className="btn danger" onClick={() => act(s, "delete")}>{s.imported ? "Remove" : "Delete"}</button>
               </div>
             ) : (
@@ -131,11 +131,11 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
                 <button className="btn primary" onClick={() => onOpen(s.id)}>Open</button>
                 {s.state === "running" ? (
                   <>
-                    <button className="btn" onClick={() => act(s, "join")}>Join</button>
-                    <button className="btn danger" onClick={() => act(s, "stop")}>Stop</button>
+                    <BusyButton busy={busy(`${s.id}:join`)} label="Join" busyLabel="Joining…" onClick={() => act(s, "join")} />
+                    <BusyButton className="btn danger" busy={busy(`${s.id}:stop`)} label="Stop" busyLabel="Stopping…" onClick={() => act(s, "stop")} />
                   </>
                 ) : (
-                  <button className="btn" onClick={() => act(s, "start")}>Start</button>
+                  <BusyButton busy={busy(`${s.id}:start`)} label="Start" busyLabel="Starting…" onClick={() => act(s, "start")} />
                 )}
                 <button className="btn danger push" onClick={() => act(s, "delete")}>{s.imported ? "Remove" : "Delete"}</button>
               </div>
@@ -200,7 +200,7 @@ export function ServerPage(props: {
   const [tab, setTab] = useState<Tab>("overview");
   const [busyJob, setBusyJob] = useState(false);
 
-  const once = useOnce();
+  const { run: once, busy } = useActions();
   const act = (action: string) => once(action, async () => {
     if (action === "delete") {
       const msg = s.imported
@@ -251,12 +251,12 @@ export function ServerPage(props: {
           <div className="row">
             {s.state === "running" ? (
               <>
-                <button className="btn primary" onClick={() => act("join")}>Join</button>
-                <button className="btn" onClick={() => act("restart")}>Restart</button>
-                <button className="btn danger" onClick={() => act("stop")}>Stop</button>
+                <BusyButton className="btn primary" busy={busy("join")} label="Join" busyLabel="Joining…" onClick={() => act("join")} />
+                <BusyButton busy={busy("restart")} label="Restart" busyLabel="Restarting…" onClick={() => act("restart")} />
+                <BusyButton className="btn danger" busy={busy("stop")} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
               </>
             ) : (
-              <button className="btn primary" onClick={() => act("start")}>Start the server</button>
+              <BusyButton className="btn primary" busy={busy("start")} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} />
             )}
           </div>
         </div>
@@ -282,7 +282,7 @@ export function ServerPage(props: {
         <div className="waiting">
           <h2>{TABS.find((t) => t.id === tab)!.label}</h2>
           <p className="muted">{s.state === "running" ? "Connecting to the server…" : "This needs the server running."}</p>
-          {s.state !== "running" && <button className="btn primary" onClick={() => act("start")}>Start the server</button>}
+          {s.state !== "running" && <BusyButton className="btn primary" busy={busy("start")} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} />}
         </div>
       ) : (
         <>
@@ -349,8 +349,11 @@ function ServerDetails({ server, onChanged, act }: { server: ServerInfo; onChang
   const [slots, setSlots] = useState(server.maxplayers);
   const [port, setPort] = useState(server.port);
   const [vis, setVis] = useState(server.visibility);
+  const [saving, setSaving] = useState(false);
   const save = async () => {
+    setSaving(true);
     const r = await post(`/api/servers/${server.id}`, { name, map, maxplayers: slots, port, visibility: vis });
+    setSaving(false);
     if (r.error) return toast(r.error, true);
     toast(server.state === "running" ? "Saved. Restart the server to use it." : "Saved");
     onChanged();
@@ -387,7 +390,7 @@ function ServerDetails({ server, onChanged, act }: { server: ServerInfo; onChang
           </label>
         </div>
         <div className="row">
-          <button className="btn primary" onClick={save}>Save</button>
+          <BusyButton className="btn primary" busy={saving} label="Save" busyLabel={server.host ? "Saving and uploading…" : "Saving…"} onClick={save} />
         </div>
       </div>
       <Console server={server} />
