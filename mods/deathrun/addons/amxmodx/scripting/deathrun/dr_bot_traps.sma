@@ -348,6 +348,12 @@ public TaskThink( ) {
 		if( fNow < g_fNextUse[ b ] || !pev_valid( iBtn ) )
 			continue;
 
+		// still the button found at map start (an index can be reused after it's removed)
+		static szCls[ 20 ];
+		pev( iBtn, pev_classname, szCls, charsmax( szCls ) );
+		if( !equal( szCls, "func_button" ) && !equal( szCls, "func_rot_button" ) )
+			continue;
+
 		GetCenter( iBtn, fBtn );
 
 		if( fRange > 0.0 && get_distance_f( fBot, fBtn ) > fRange )

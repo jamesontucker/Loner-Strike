@@ -176,6 +176,8 @@ public plugin_end()
 {
 	restore_live()
 	restore_money()
+	// the next mode isn't a match (cvars outlive the plugin)
+	set_cvar_num("gm_scrim_phase", 0)
 }
 
 public task_begin()
@@ -365,7 +367,8 @@ fill_bots()
 	new want = clamp(get_pcvar_num(g_pPlayers), 2, MaxClients)
 	new mode[16]
 	get_cvar_string("bot_quota_mode", mode, charsmax(mode))
-	new quota = equali(mode, "fill") ? want : max(0, want - humans)
+	// "fill": the total; "match": bots per person; "normal": bots on top of the people
+	new quota = equali(mode, "fill") ? want : equali(mode, "match") ? max(0, want - humans) / max(humans, 1) : max(0, want - humans)
 	if (get_cvar_num("bot_quota") != quota)
 		server_cmd("bot_quota %d", quota)
 }

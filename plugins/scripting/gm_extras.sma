@@ -574,7 +574,8 @@ public client_infochanged(id)
 		get_user_info(id, "name", g_Name[id], charsmax(g_Name[]))
 }
 
-// Someone really left (or was kicked): not called on a map change
+// Someone left (or was kicked). Bots also come through here at every map change,
+// so with gm_joins_skipbots 0 each bot "leaves" as the map ends.
 public fw_disconnect(id)
 {
 	if (id < 1 || id > MaxClients || !g_In[id])

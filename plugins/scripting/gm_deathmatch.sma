@@ -310,7 +310,8 @@ public client_putinserver(id)
 // bot that joins.
 public task_bot_hams(id)
 {
-	if (g_BotHams || !is_user_connected(id))
+	// the slot may have gone to a person in the meantime
+	if (g_BotHams || !is_user_connected(id) || !is_user_bot(id))
 		return
 	g_BotHams = true
 	RegisterHamFromEntity(Ham_Spawn, id, "fw_player_spawn", 1)
@@ -385,6 +386,7 @@ public fw_player_spawn(id)
 		set_task(protect, "task_unprotect", id + TASK_PROTECT)
 	}
 	cs_set_user_money(id, 0, 0)
+	remove_task(id + TASK_EQUIP)
 	set_task(0.1, "task_equip", id + TASK_EQUIP)
 }
 

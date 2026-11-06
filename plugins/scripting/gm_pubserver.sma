@@ -100,7 +100,9 @@ load_names()
 		while (fgets(f, line, charsmax(line)))
 		{
 			trim(line)
-			if (line[0] && line[0] != ';' && strlen(line) < 32)
+			// a name with a quote, or starting with #, can't be kicked by name ("bot_kick"),
+			// so such a bot would never leave
+			if (line[0] && line[0] != ';' && line[0] != '#' && contain(line, "^"") == -1 && strlen(line) < 32)
 				ArrayPushString(g_Pool, line)
 		}
 		fclose(f)
