@@ -22,11 +22,29 @@ const failed = (): Reply => ({ error: "Couldn't reach the app." });
 const busyState = (s: string) => !["done", "error"].includes(s);
 
 /** Round-end music, Quake sounds and sound packs, for the player's game or a dedicated server. */
+type SoundTab = "music" | "quake" | "packs";
+const SOUND_TABS: [SoundTab, string][] = [["music", "Round-end music"], ["quake", "Quake sounds"], ["packs", "Sound packs"]];
+
 export function Sounds({ target }: { target: string }) {
   const toast = useToast();
   const ask = useConfirm();
   const run = useCommand();
   const [d, setD] = useState<Data | null>(null);
+  const [tab, setTabRaw] = useState<SoundTab>(() => {
+    try {
+      return (localStorage.getItem("ls.soundTab") as SoundTab) || "music";
+    } catch {
+      return "music";
+    }
+  });
+  const setTab = (t: SoundTab) => {
+    setTabRaw(t);
+    try {
+      localStorage.setItem("ls.soundTab", t);
+    } catch {
+      /* private window */
+    }
+  };
   const [packs, setPacks] = useState<Packs | null>(null);
   const [changed, setChanged] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
@@ -205,7 +223,14 @@ export function Sounds({ target }: { target: string }) {
         </Banner>
       )}
 
+      <div className="chips admin-tabs" role="tablist" aria-label="Sounds sections">
+        {SOUND_TABS.map(([id, label]) => (
+          <button key={id} role="tab" className="chip" aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>
+        ))}
+      </div>
+
       {/* ---- round-end music ---- */}
+      {tab === "music" && (
       <section className="stack-tight">
         <div className="row between sounds-head">
           <div>
@@ -305,8 +330,10 @@ export function Sounds({ target }: { target: string }) {
           </>
         )}
       </section>
+      )}
 
       {/* ---- quake sounds ---- */}
+      {tab === "quake" && (
       <section className="panel">
         <div className="row between sounds-head">
           <div>
@@ -324,8 +351,10 @@ export function Sounds({ target }: { target: string }) {
           )}
         </div>
       </section>
+      )}
 
       {/* ---- sound packs ---- */}
+      {tab === "packs" && (
       <section>
         <SectionHead
           title="Classic sound packs"
@@ -364,6 +393,7 @@ export function Sounds({ target }: { target: string }) {
           </div>
         )}
       </section>
+      )}
     </div>
   );
 }
