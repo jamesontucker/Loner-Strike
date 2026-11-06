@@ -14,9 +14,7 @@
 <meta property="og:url" content="https://lonerstrike.com/">
 <meta property="og:image" content="https://lonerstrike.com/img/maps.jpg">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fonts/barlow.css">
 
 <!-- Plausible (self-hosted) -->
 <script defer data-domain="lonerstrike.com" src="https://analytics.nanoshrine.com/js/script.file-downloads.hash.outbound-links.pageview-props.tagged-events.js"></script>
@@ -307,7 +305,7 @@ footer a { color: var(--dim); }
 
 <footer>
   <div class="wrap">
-    <span>Loner-Strike · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a> · <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md">Credits</a></span>
+    <span>Loner-Strike · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a> · <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md">Credits</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></span>
     <span>Not affiliated with Valve. Counter-Strike is a trademark of Valve Corporation.</span>
   </div>
 </footer>
@@ -329,9 +327,8 @@ footer a { color: var(--dim); }
   }
   if (POLAR_CHECKOUT) {
     const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/@polar-sh/checkout@0.4.3/dist/embed.global.js";
-    s.integrity = "sha384-e96p3bMSNUJbavzl83jvbh/LCSQfSkbXCpnzovVeJvZR7Cs9PJEEIlJnmC3khotO"; // the browser refuses the file if it ever changes
-    s.crossOrigin = "anonymous";
+    // Polar's own embed script, as their dashboard gives it
+    s.src = "https://cdn.jsdelivr.net/npm/@polar-sh/checkout@0.1/dist/embed.global.js";
     s.defer = true;
     s.setAttribute("data-auto-init", "");
     document.head.appendChild(s);
