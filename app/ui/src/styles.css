@@ -531,3 +531,7 @@ input[type="range"] { accent-color: var(--signal); }
   .game-cards { grid-template-columns: 1fr; }
   .setup-pane h1 { font-size: 34px; }
 }
+
+/* ---- word wrapping: no lone words on the last line ------------------------- */
+h1, h2, h3, .tagline, .big, .mode-name, .preset-name, .pick-name, .game-title, .map-title, .address, .banner > div, .toast { text-wrap: balance; }
+p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { text-wrap: pretty; }
