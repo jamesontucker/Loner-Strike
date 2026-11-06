@@ -26,7 +26,7 @@ const VISIBILITY = [
 ] as const;
 const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up", failed: "Not finished" };
 
-type Reply = { ok?: boolean; error?: string; job?: string; id?: string; admins?: number; loner?: boolean; dir?: string | null; lines?: string[]; reply?: string };
+type Reply = { ok?: boolean; error?: string; job?: string; id?: string; path?: string; note?: string | null; admins?: number; loner?: boolean; dir?: string | null; lines?: string[]; reply?: string };
 const post = (path: string, body: unknown = {}) => postJson<Reply>(path, body).catch((): Reply => ({ error: "Couldn't reach the app." }));
 
 function uptime(s: number) {
@@ -76,7 +76,7 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
     const r = await post(`/api/servers/${s.id}/${action}`);
     if (r.error) return toast(r.error, true);
     if (action === "join") toast(`Joining ${s.name}…`);
-    if (action === "delete") toast(`${s.name} ${s.imported ? "removed" : "deleted"}`);
+    if (action === "delete") toast(r.note || `${s.name} ${s.imported ? "removed" : "deleted"}`, !!r.note);
     onChanged();
   });
   const installed = (scan?.installs ?? []).flatMap((i) => i.games.filter((g) => g.installed).map((g) => g.id));
@@ -105,7 +105,7 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
               <div>
                 <h3>{s.name}</h3>
                 <p className="muted">
-                  {GAME[s.game]} · port {s.port} · {VISIBILITY.find((v) => v.id === s.visibility)?.name}
+                  {GAME[s.game]} · {s.host ? `on ${s.host}` : `port ${s.port}`} · {VISIBILITY.find((v) => v.id === s.visibility)?.name}
                   {s.imported ? " · added from your own folder" : ""}
                 </p>
               </div>
@@ -230,7 +230,7 @@ export function ServerPage(props: {
           <div>
             <h2 className="server-title">{s.name}</h2>
             <p className="muted">
-              Dedicated server · {GAME[s.game]} · port {s.port} · <span className={`live inline${s.state === "running" ? " on" : ""}`}>{STATE[s.state]}</span>
+              {s.host ? `Server on ${s.host}` : "Dedicated server"} · {GAME[s.game]} · {s.host ? s.address : `port ${s.port}`} · <span className={`live inline${s.state === "running" ? " on" : ""}`}>{STATE[s.state]}</span>
             </p>
           </div>
           <div className="row">
@@ -457,6 +457,16 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
   const [template, setTemplate] = useState(games.includes(game) ? "local" : "fresh");
   const [vis, setVis] = useState<string>("unlisted");
   const [sending, setSending] = useState(false);
+  // where it runs: this computer, or a Linux machine (a VPS) reached over SSH
+  const [where, setWhere] = useState<"here" | "vps">("here");
+  const [host, setHost] = useState("");
+  const [user, setUser] = useState("ubuntu");
+  const [key, setKey] = useState("");
+  const pickKey = async () => {
+    const r = await post("/api/servers/pick-key");
+    if (r.error) return toast(r.error, true);
+    if (r.path) setKey(String(r.path));
+  };
   const templates = [
     ...(games.includes(game) ? [{ id: "local", name: "My game", note: "Same modes, settings, admins and maps as your own game" }] : []),
     ...servers.filter((s) => s.game === game && s.ready).map((s) => ({ id: s.id, name: s.name, note: "Copy this server's setup" })),
@@ -464,10 +474,12 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
   ];
   const create = async () => {
     setSending(true);
-    const r = await post("/api/servers", { name, game, template, visibility: vis });
+    const r = where === "vps"
+      ? await post("/api/servers/remote", { name, game, template, visibility: vis, host, user, key })
+      : await post("/api/servers", { name, game, template, visibility: vis });
     setSending(false);
     if (r.error) return toast(r.error, true);
-    toast("Setting up the server. It takes a few minutes.");
+    toast(where === "vps" ? "Setting up the server on your machine. It takes 5 to 15 minutes." : "Setting up the server. It takes a few minutes.");
     onCreated();
   };
   return (
@@ -475,6 +487,34 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
       <div className="sheet" role="dialog" aria-label="New server" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-body">
           <h2>New server</h2>
+          {ON_THIS_COMPUTER && (
+            <div className="field">
+              <span>Where it runs<Info text="This computer runs it while it's on. A Linux server is a machine you rent (a VPS, like Oracle's free tier) that runs it all the time; the app sets it up over SSH with your key." /></span>
+              <div className="seg" role="group" aria-label="Where it runs">
+                <button aria-pressed={where === "here"} onClick={() => setWhere("here")}>This computer</button>
+                <button aria-pressed={where === "vps"} onClick={() => setWhere("vps")}>A Linux server (VPS)</button>
+              </div>
+            </div>
+          )}
+          {where === "vps" && (
+            <>
+              <label className="field">
+                <span>Address<Info text="The machine's public IP address or host name, from your hosting provider's page." /></span>
+                <input className="search" placeholder="e.g. 146.235.20.10" value={host} onChange={(e) => setHost(e.target.value.trim())} spellCheck={false} />
+              </label>
+              <label className="field">
+                <span>User<Info text="The account you log in with over SSH. On Ubuntu machines from Oracle, AWS and most hosts it's ubuntu; some use root. It needs to be able to use sudo." /></span>
+                <input className="search" value={user} onChange={(e) => setUser(e.target.value.trim())} spellCheck={false} />
+              </label>
+              <div className="field">
+                <span>SSH key<Info text="The private key you log in with (the file without .pub), usually in the .ssh folder in your home folder. It stays on this computer; the app uses it to connect." /></span>
+                <div className="row">
+                  <input className="search grow" placeholder="Pick your key file" value={key} onChange={(e) => setKey(e.target.value)} spellCheck={false} />
+                  <button className="btn" type="button" onClick={pickKey}>Browse…</button>
+                </div>
+              </div>
+            </>
+          )}
           <label className="field">
             <span>Name</span>
             <input className="search" autoFocus maxLength={48} placeholder="e.g. Friday night frags" value={name} onChange={(e) => setName(e.target.value)} />
@@ -508,9 +548,13 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
             </div>
             <small>{VISIBILITY.find((v) => v.id === vis)?.note}. You can change it later.</small>
           </div>
-          <p className="muted">Downloads Valve's free server with SteamCMD (about 1 GB the first time), then sets it up. Your game isn't touched.</p>
+          <p className="muted">
+            {where === "vps"
+              ? "Connects to the machine, installs Valve's free server and Loner-Strike there, opens the game ports in its firewall and runs it as a service that keeps going on its own. Ubuntu or Debian on an x86 (AMD or Intel) machine. Open UDP ports 27015-27020 in your provider's firewall too."
+              : "Downloads Valve's free server with SteamCMD (about 1 GB the first time), then sets it up. Your game isn't touched."}
+          </p>
           <div className="row">
-            <button className="btn primary" disabled={!name.trim() || sending} onClick={create}>{sending ? "Starting…" : "Make the server"}</button>
+            <button className="btn primary" disabled={!name.trim() || sending || (where === "vps" && (!host || !key))} onClick={create}>{sending ? "Starting…" : "Make the server"}</button>
             <button className="btn" onClick={onClose}>Cancel</button>
           </div>
         </div>

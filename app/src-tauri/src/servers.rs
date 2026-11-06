@@ -67,6 +67,10 @@ pub struct Entry {
     /// a daily restart at a set time (the Schedule tab of Server extras)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restart: Option<DailyRestart>,
+    /// On another machine (a Linux VPS) over SSH; `dir` is then this computer's copy of
+    /// its Loner-Strike files (where plugins are compiled), uploaded after changes
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote: Option<crate::remote::RemoteInfo>,
 }
 
 fn default_visibility() -> String {
@@ -91,7 +95,18 @@ impl Entry {
     /// The panel's RCON password, shared with the plugin (game.rs writes it).
     pub(crate) fn rcon(&self) -> Option<crate::rcon::Rcon> {
         let pw = std::fs::read_to_string(self.dir.join(&self.game).join("addons/amxmodx/data/gamemodes/panel_rcon.txt")).ok()?;
-        Some(crate::rcon::Rcon::new(pw.trim().to_string(), self.port))
+        Some(match &self.remote {
+            Some(r) => crate::rcon::Rcon::at(&r.host, pw.trim().to_string(), self.port),
+            None => crate::rcon::Rcon::new(pw.trim().to_string(), self.port),
+        })
+    }
+
+    /// The address players connect to.
+    pub fn address(&self) -> String {
+        match &self.remote {
+            Some(r) => format!("{}:{}", r.host, self.port),
+            None => format!("127.0.0.1:{}", self.port),
+        }
     }
 }
 
@@ -420,6 +435,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         imported: false,
         hltv: Default::default(),
         restart: None,
+        remote: None,
     };
     let base = root.join(".base");
     let g = req.game.clone();
@@ -475,6 +491,217 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
     })
     .inspect_err(|_| {
         // setup was busy with something else: don't leave a server that never gets set up
+        let _ = edit(|l| l.retain(|e| e.id != entry_id));
+    })?;
+    Ok((id, job))
+}
+
+// ---- a server on another machine (a Linux VPS) ------------------------------------------
+
+#[derive(Deserialize)]
+pub struct NewRemote {
+    pub name: String,
+    pub game: String,
+    pub host: String,
+    #[serde(default)]
+    pub user: String,
+    pub key: String,
+    #[serde(default)]
+    pub ssh_port: Option<u16>,
+    #[serde(default)]
+    pub template: String,
+    #[serde(default)]
+    pub components: Vec<String>,
+    #[serde(default)]
+    pub visibility: Option<String>,
+}
+
+/// What of this computer's copy goes up to the machine: Loner-Strike's plugins, configs,
+/// data and content. Not the Windows engine files (the machine has its own Linux ones),
+/// the plugin sources, or the game's own liblist.gam (set up there for Metamod).
+fn upload_filter(rel: &Path) -> bool {
+    let p = rel.to_string_lossy().replace('\\', "/").to_lowercase();
+    !(p.starts_with("dlls/")
+        || p.starts_with("addons/metamod/")
+        || p.starts_with("addons/amxmodx/dlls/")
+        || p.starts_with("addons/amxmodx/modules/")
+        || p.starts_with("addons/amxmodx/scripting/")
+        || p == "liblist.gam"
+        || p.ends_with(".dll")
+        || p.ends_with(".exe"))
+}
+
+/// After a change on a settings page: the settings and configs go up to the machine,
+/// and the plugins read them again. One sync at a time per server.
+pub fn sync_settings(id: &str) {
+    static SYNCING: Mutex<()> = Mutex::new(());
+    let _g = SYNCING.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(e) = get(id).filter(|e| e.ready) else { return };
+    let Some(r) = &e.remote else { return };
+    let keep = |rel: &Path| {
+        let p = rel.to_string_lossy().replace('\\', "/");
+        (p.starts_with("addons/amxmodx/data/") || p.starts_with("addons/amxmodx/configs/")) && !p.ends_with("status.json")
+    };
+    if crate::remote::upload_dir(r, &e.dir.join(&e.game), &format!("{}/{}", crate::remote::server_dir(&e.id), e.game), &keep).is_ok() {
+        if let Some(rc) = e.rcon() {
+            let _ = rc.send("amx_reloadadmins;gm_vipreload;gm_extrasreload;gm_commreload;gm_scrimreload;gm_botchat_reload");
+        }
+    }
+}
+
+/// Puts this computer's copy of a server's files on its machine.
+pub fn upload(e: &Entry) -> Result<u64, String> {
+    let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
+    crate::remote::upload_dir(r, &e.dir.join(&e.game), &format!("{}/{}", crate::remote::server_dir(&e.id), e.game), &upload_filter)
+}
+
+/// Sets up a server on a Linux machine over SSH: the machine and Valve's server first
+/// (remote::SETUP_SH), then Loner-Strike built here like any server, uploaded, and run
+/// as a service. Returns (id, job).
+pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(String, String), String> {
+    let name = req.name.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect::<String>();
+    if name.is_empty() {
+        return Err("Give the server a name.".into());
+    }
+    if !["cstrike", "czero"].contains(&req.game.as_str()) {
+        return Err("Pick Counter-Strike 1.6 or Condition Zero.".into());
+    }
+    let host = req.host.trim().to_string();
+    if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || ".-:".contains(c)) {
+        return Err("Enter the machine's address, like 146.235.20.10 or myserver.example.com.".into());
+    }
+    let user = if req.user.trim().is_empty() { "ubuntu".to_string() } else { req.user.trim().to_string() };
+    if !user.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)) {
+        return Err("That user name has characters it can't have.".into());
+    }
+    let info = crate::remote::RemoteInfo { host: host.clone(), user, key: PathBuf::from(req.key.trim()), ssh_port: req.ssh_port.unwrap_or(22) };
+    // a quick look first, so a wrong address or key says so straight away
+    let (_, arch) = crate::remote::exec(&info, "uname -m")?;
+    if arch.trim() != "x86_64" {
+        return Err(format!("That machine is {}. The Counter-Strike server only runs on x86 (AMD or Intel) machines.", arch.trim()));
+    }
+    if client.kind == "crossover" && !Path::new(CROSSOVER_WINE).is_file() {
+        return Err("CrossOver isn't installed in Applications. It's needed here to build the server's plugins.".into());
+    }
+    let catalog = setup::components::load_catalog(&res)?;
+    let (source, components) = match template_source(&req.template, &req.game, &client, &catalog) {
+        Some((dir, comps)) => (Some(dir), comps),
+        None if req.template == "fresh" || req.template.is_empty() => (None, req.components.clone()),
+        None => return Err("That template isn't there any more, or it's for the other game.".into()),
+    };
+    let root = root_for(&client)?;
+    let list = load();
+    let id = slug(&name, &list);
+    let entry = Entry {
+        id: id.clone(),
+        name: name.clone(),
+        game: req.game.clone(),
+        // the only server on the machine: the usual port
+        port: 27015,
+        dir: root.join(&id),
+        kind: client.kind.clone(),
+        bottle: client.bottle.clone(),
+        visibility: req.visibility.filter(|v| ["lan", "unlisted", "listed"].contains(&v.as_str())).unwrap_or_else(|| "unlisted".into()),
+        map: default_map(),
+        maxplayers: default_slots(),
+        ready: false,
+        imported: false,
+        hltv: Default::default(),
+        restart: None,
+        remote: Some(info.clone()),
+    };
+    let g = req.game.clone();
+    let steps = vec![
+        setup::server_step(&g, "srv-machine", &format!("Setting up {host}: libraries, firewall, Valve's server"), 10.0),
+        setup::server_step(&g, "srv-settings", "Copying settings and admins", 0.3),
+        setup::server_step(&g, "srv-upload", "Uploading Loner-Strike to the server", 1.5),
+        setup::server_step(&g, "srv-service", "Starting it as a service", 0.3),
+        setup::server_step(&g, "srv-done", "Finishing up", 0.1),
+    ];
+    edit(|l| l.push(entry.clone()))?;
+    let entry_id = entry.id.clone();
+    let job = setup::start_job("server", steps, move |job| {
+        let r = entry.remote.clone().unwrap();
+        job.run(&format!("{g}/srv-machine"), || {
+            // the script reports its stages; Valve's download reports its own progress
+            const STAGES: &[(&str, f64, &str)] = &[
+                ("packages", 0.03, "Installing the 32-bit libraries the server needs"),
+                ("firewall", 0.08, "Opening the game ports in the machine's firewall"),
+                ("steamcmd", 0.1, "Getting SteamCMD"),
+                ("server", 0.15, "Downloading the server from Valve (a few minutes)"),
+                ("foundation", 0.9, "Installing Metamod-P, AMX Mod X and ReGameDLL"),
+                ("ready", 1.0, "The machine is ready"),
+            ];
+            let mut failed = String::new();
+            let mut last = String::new();
+            let script = format!("{} bash -s", crate::remote::setup_env(&entry.id, &g));
+            let code = crate::remote::exec_stream(&r, &script, crate::remote::SETUP_SH.as_bytes(), |line| {
+                if let Some(stage) = line.strip_prefix("@@STEP ") {
+                    if let Some((_, f, text)) = STAGES.iter().find(|(s, _, _)| *s == stage) {
+                        job_progress(job, *f, text);
+                    }
+                } else if let Some(why) = line.strip_prefix("@@FAIL ") {
+                    failed = why.to_string();
+                } else if let Some((f, text)) = parse_progress(line) {
+                    job_progress(job, 0.15 + f * 0.75, &text);
+                } else if !line.trim().is_empty() {
+                    last = line.trim().chars().take(160).collect();
+                }
+            })?;
+            if code != 0 {
+                return Err(if !failed.is_empty() { failed } else if !last.is_empty() { format!("Setup on the server stopped: {last}") } else { "Setup on the server stopped.".into() });
+            }
+            Ok(())
+        })?;
+        // this computer's copy: the game's own liblist.gam from the machine, then Loner-Strike
+        // built into it like any server
+        let gdir = entry.dir.join(&g);
+        std::fs::create_dir_all(&gdir).map_err(|e| e.to_string())?;
+        let liblist = crate::remote::read_file(&r, &format!("{}/{g}/liblist.gam", crate::remote::server_dir(&entry.id)))?;
+        std::fs::write(gdir.join("liblist.gam"), liblist).map_err(|e| e.to_string())?;
+        let plan = setup::plan_install(entry.install(), &[g.clone()], &components, &res, false)?;
+        job.insert_before(&format!("{g}/srv-settings"), plan.step_list());
+        let store = Arc::new(crate::gamebanana::MapStore::new(&entry.dir, &gdir, &sys::app_dir(), Arc::new(Mutex::new(None))));
+        setup::install_into(job, &plan, &res, Some(store))?;
+        let data = gdir.join("addons/amxmodx/data/gamemodes");
+        job.run(&format!("{g}/srv-settings"), || {
+            if let Some(src) = &source {
+                copy_tree(&src.join("addons/amxmodx/data/gamemodes"), &data, true, &settings_filter)?;
+            }
+            let _ = std::fs::create_dir_all(&data);
+            std::fs::write(data.join("friends.json"), json!({"name": entry.name, "password": ""}).to_string()).map_err(|e| e.to_string())?;
+            // the panel's RCON password, which the plugin reads on the machine
+            if !data.join("panel_rcon.txt").is_file() {
+                use rand::Rng;
+                const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+                let mut rng = rand::thread_rng();
+                let pw: String = (0..24).map(|_| CHARS[rng.gen_range(0..CHARS.len())] as char).collect();
+                std::fs::write(data.join("panel_rcon.txt"), format!("{pw}\n")).map_err(|e| e.to_string())?;
+            }
+            for f in ["banned.cfg", "listip.cfg"] {
+                let p = gdir.join(f);
+                if !p.exists() {
+                    let _ = std::fs::write(p, "");
+                }
+            }
+            std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike\nhostname \"{}\"\n", entry.name)).map_err(|e| e.to_string())
+        })?;
+        job.run(&format!("{g}/srv-upload"), || upload(&entry).map(|n| setup::Progress::detail(job, &format!("{n} files uploaded"))))?;
+        job.run(&format!("{g}/srv-service"), || {
+            let mut failed = String::new();
+            let code = crate::remote::exec_stream(&r, "bash -s", crate::remote::service_sh(&entry.id, &launch_args(&entry)).as_bytes(), |line| {
+                if !line.starts_with("@@") && !line.trim().is_empty() {
+                    failed = line.trim().to_string();
+                }
+            })?;
+            if code != 0 {
+                return Err(format!("Couldn't set up the service ({failed})."));
+            }
+            crate::remote::systemctl(&r, &entry.id, "start")
+        })?;
+        job.run(&format!("{g}/srv-done"), || edit(|l| l.iter_mut().filter(|e| e.id == entry.id).for_each(|e| e.ready = true)))
+    })
+    .inspect_err(|_| {
         let _ = edit(|l| l.retain(|e| e.id != entry_id));
     })?;
     Ok((id, job))
@@ -585,6 +812,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         imported: true,
         hltv: Default::default(),
         restart: None,
+        remote: None,
     };
     // name and password as the Friends tab keeps them (it writes friends.cfg only when
     // something changes there, so the server's own server.cfg keeps working meanwhile)
@@ -629,7 +857,24 @@ fn with_runs<T>(f: impl FnOnce(&mut Runs) -> T) -> T {
 }
 
 pub fn running(id: &str) -> bool {
+    if let Some(e) = get(id).filter(|e| e.remote.is_some()) {
+        return remote_active(&e);
+    }
     with_runs(|r| r.procs.contains_key(id)) || get(id).map(|e| left_running(&e)).unwrap_or(false)
+}
+
+/// A server on another machine: is its service running? (asked over SSH, kept a few seconds)
+fn remote_active(e: &Entry) -> bool {
+    static SEEN: Mutex<Option<HashMap<String, (Instant, bool)>>> = Mutex::new(None);
+    let Some(r) = &e.remote else { return false };
+    if let Some((at, on)) = SEEN.lock().unwrap().as_ref().and_then(|m| m.get(&e.id).cloned()) {
+        if at.elapsed() < Duration::from_secs(4) {
+            return on;
+        }
+    }
+    let on = crate::remote::active(r, &e.id);
+    SEEN.lock().unwrap().get_or_insert_with(HashMap::new).insert(e.id.clone(), (Instant::now(), on));
+    on
 }
 
 /// A server still up from before the app last closed ("keep servers running"):
@@ -742,6 +987,9 @@ pub fn start(id: &str) -> Result<(), String> {
     if !e.ready {
         return Err("This server isn't finished setting up.".into());
     }
+    if let Some(r) = &e.remote {
+        return crate::remote::systemctl(r, &e.id, "start");
+    }
     if with_runs(|r| r.procs.contains_key(id)) || left_running(&e) {
         return Ok(());
     }
@@ -763,6 +1011,10 @@ pub fn start(id: &str) -> Result<(), String> {
 /// Asks the server to quit (RCON), then ends it if it hasn't after a few seconds.
 pub fn stop(id: &str) {
     let e = get(id);
+    if let Some(e) = e.as_ref().filter(|e| e.remote.is_some()) {
+        let _ = crate::remote::systemctl(e.remote.as_ref().unwrap(), &e.id, "stop");
+        return;
+    }
     // HLTV first, so its demo is finished properly
     if let Some(e) = &e {
         crate::hltv::stop(e);
@@ -849,6 +1101,9 @@ fn watch() {
 
 /// The last lines of the server's console (qconsole.log, from -condebug).
 fn console(e: &Entry) -> Vec<String> {
+    if let Some(r) = &e.remote {
+        return crate::remote::console(r, &e.id, &e.game).iter().map(|l| hide_passwords(l)).collect();
+    }
     let mut lines = Vec::new();
     for p in [e.dir.join("qconsole.log"), e.dir.join(&e.game).join("qconsole.log"), e.dir.join("loner-strike-server.log")] {
         let Ok(mut f) = std::fs::File::open(&p) else { continue };
@@ -883,12 +1138,16 @@ fn hide_passwords(line: &str) -> String {
 
 fn view(e: &Entry) -> Value {
     let loner = setup::record::Record::open(&e.dir.join(&e.game)).installed("core");
-    let (state, uptime, error) = with_runs(|r| match r.procs.get(&e.id) {
-        Some(p) => ("running", p.started.elapsed().as_secs(), None),
-        None => (if r.errors.contains_key(&e.id) { "crashed" } else { "stopped" }, 0, r.errors.get(&e.id).cloned()),
-    });
+    let (state, uptime, error) = if e.remote.is_some() && e.ready {
+        (if remote_active(e) { "running" } else { "stopped" }, 0, None)
+    } else {
+        with_runs(|r| match r.procs.get(&e.id) {
+            Some(p) => ("running", p.started.elapsed().as_secs(), None),
+            None => (if r.errors.contains_key(&e.id) { "crashed" } else { "stopped" }, 0, r.errors.get(&e.id).cloned()),
+        })
+    };
     // still up from before the app last closed
-    let (state, error) = if state == "stopped" && left_running(e) { ("running", None) } else { (state, error) };
+    let (state, error) = if state == "stopped" && e.remote.is_none() && left_running(e) { ("running", None) } else { (state, error) };
     // not ready: setting up while a server setup job runs; otherwise it stopped part way
     // (an error, or the app closed during it) and can only be deleted
     let (state, error) = if e.ready {
@@ -904,7 +1163,8 @@ fn view(e: &Entry) -> Value {
     };
     json!({"id": e.id, "name": e.name, "game": e.game, "port": e.port, "visibility": e.visibility, "map": e.map,
            "maxplayers": e.maxplayers, "ready": e.ready, "state": state, "uptime": uptime, "error": error,
-           "imported": e.imported, "loner": loner, "dir": e.dir})
+           "imported": e.imported, "loner": loner, "dir": e.dir,
+           "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address()})
 }
 
 // ---- which game the panel controls -----------------------------------------------------
@@ -923,7 +1183,15 @@ pub fn game_for(target: &str, local: impl FnOnce() -> Option<Game>) -> Option<Ar
         local()?
     } else {
         let e = get(target).filter(|e| e.ready)?;
-        Game::on_port(&e.dir, &e.game, e.port, true)
+        let mut g = Game::on_port(&e.dir, &e.game, e.port, true);
+        if let Some(r) = &e.remote {
+            if let Some(rc) = e.rcon() {
+                g.rcon = Arc::new(rc);
+            }
+            // remote paths are relative to the user's home (sftp starts there)
+            g.remote = Some((r.clone(), format!("{}/{}", crate::remote::server_dir(&e.id), e.game)));
+        }
+        g
     };
     let g = Arc::new(g);
     games.insert(target.into(), g.clone());
@@ -1002,6 +1270,45 @@ async fn api_select(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
         return answer(if ok { Ok(json!({"ok": true})) } else { Err("That game isn't installed.".into()) });
     }
     answer(Err("Pick CS 1.6 or Condition Zero.".into()))
+}
+
+async fn api_create_remote(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<NewRemote>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) {
+        return forbidden();
+    }
+    let res = crate::setup_api::resources_for(&st);
+    let st2 = st.clone();
+    let r = tokio::task::spawn_blocking(move || {
+        let client = client(&st2).ok_or("Set up the game on this computer first: the server's plugins are built with it.")?;
+        create_remote(req, client, res?).map(|(id, job)| json!({"ok": true, "id": id, "job": job}))
+    })
+    .await
+    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    answer(r)
+}
+
+/// The app window only: a file picker for the SSH key.
+async fn api_pick_key(State(st): State<Shared>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
+    use tauri_plugin_dialog::DialogExt;
+    if !from_panel(&headers) {
+        return forbidden();
+    }
+    let Some(app) = st.app.get().cloned() else { return answer(Err("Not available.".into())) };
+    let r = tokio::task::spawn_blocking(move || {
+        let start = dirs::home_dir().map(|h| h.join(".ssh")).filter(|p| p.is_dir());
+        let mut d = app.dialog().file().set_title("Pick the SSH key you log in to the server with (the file without .pub)");
+        if let Some(s) = start {
+            d = d.set_directory(s);
+        }
+        match d.blocking_pick_file().and_then(|p| p.into_path().ok()) {
+            Some(p) if p.extension().map(|e| e == "pub").unwrap_or(false) => Err("That's the public half (.pub). Pick the file with the same name without .pub.".to_string()),
+            Some(p) => Ok(json!({"ok": true, "path": p})),
+            None => Ok(json!({"cancelled": true})),
+        }
+    })
+    .await
+    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    answer(r)
 }
 
 async fn api_create(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<NewServer>) -> (StatusCode, Json<Value>) {
@@ -1111,12 +1418,19 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 if let Some(p) = pw {
                     args.extend(["+password".to_string(), p]);
                 }
-                args.extend(["+connect".to_string(), format!("127.0.0.1:{}", e.port)]);
+                args.extend(["+connect".to_string(), e.address()]);
                 let appid = if e.game == "cstrike" { "10" } else { "80" };
                 crate::steam::launch(&client.hl, appid, &args).map(|_| json!({"ok": true}))
             }
             "delete" => {
                 let e = get(&id).ok_or("That server isn't there any more.")?;
+                // on another machine: its service and folder there go too (if it can be reached)
+                let mut note = None;
+                if let Some(r) = &e.remote {
+                    if let Err(err) = crate::remote::remove(r, &e.id) {
+                        note = Some(format!("{err} Its files are still on {}.", r.host));
+                    }
+                }
                 stop(&id);
                 // only ever a folder we made: <servers root>/<id>
                 let ok_dir = !e.imported
@@ -1127,7 +1441,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 }
                 edit(|l| l.retain(|x| x.id != id))?;
                 forget(&id);
-                Ok(json!({"ok": true}))
+                Ok(json!({"ok": true, "note": note}))
             }
             _ => Err("Unknown action.".into()),
         }
@@ -1211,6 +1525,8 @@ pub fn local_routes() -> Router<Shared> {
         .route("/api/servers/import", post(api_import))
         .route("/api/servers/:id/console/send", post(api_console_cmd))
         .route("/api/servers/pick-folder", post(api_pick_folder))
+        .route("/api/servers/remote", post(api_create_remote))
+        .route("/api/servers/pick-key", post(api_pick_key))
 }
 
 // ---- daily restart (Server extras' Schedule tab) ------------------------------------
@@ -1394,7 +1710,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None,
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None,
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -1409,7 +1725,7 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None,
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None,
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));

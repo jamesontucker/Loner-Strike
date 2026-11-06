@@ -30,13 +30,19 @@ impl Rcon {
         Rcon { password, addr: format!("127.0.0.1:{port}"), lock: Mutex::new(()) }
     }
 
+    /// A server on another machine.
+    pub fn at(host: &str, password: String, port: u16) -> Self {
+        Rcon { password, addr: format!("{host}:{port}"), lock: Mutex::new(()) }
+    }
+
     pub fn password(&self) -> &str {
         &self.password
     }
 
     pub fn send(&self, command: &str) -> Result<String, RconError> {
         let _guard = self.lock.lock().unwrap();
-        let sock = UdpSocket::bind("127.0.0.1:0").map_err(|_| RconError::Offline)?;
+        let local = self.addr.starts_with("127.0.0.1:");
+        let sock = UdpSocket::bind(if local { "127.0.0.1:0" } else { "0.0.0.0:0" }).map_err(|_| RconError::Offline)?;
         sock.set_read_timeout(Some(Duration::from_millis(1500))).ok();
         sock.connect(&self.addr).map_err(|_| RconError::Offline)?;
 

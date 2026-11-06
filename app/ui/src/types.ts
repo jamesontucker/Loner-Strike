@@ -110,6 +110,9 @@ export type PhoneInfo = { enabled: boolean; address?: string; url?: string; qr?:
 export type ServerInfo = {
   id: string;
   name: string;
+  /** on another machine (a VPS): its address */
+  host?: string | null;
+  address?: string;
   game: "cstrike" | "czero";
   port: number;
   visibility: "lan" | "unlisted" | "listed";

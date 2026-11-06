@@ -18,6 +18,7 @@ mod panel_api;
 mod plugins;
 mod prefs;
 mod rcon;
+mod remote;
 mod scrim;
 mod server;
 mod servers;

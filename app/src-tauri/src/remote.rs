@@ -1,0 +1,398 @@
+//! Servers on a Linux machine somewhere else (a VPS): everything goes over SSH with the
+//! player's own key, through a session the app keeps open while it's in use (ssh2: the
+//! same on Mac and Windows, nothing needed on the computer). Nothing listens on the
+//! server but the game and SSH.
+//!
+//! On the server (see SETUP_SH): Valve's server under ~/loner-strike/servers/<id>, the
+//! Linux builds of Metamod-P, AMX Mod X and ReGameDLL, a systemd service per server
+//! (lonerstrike-<id>: runs without the app, restarts on a crash or a reboot), and a small
+//! `lsctl` helper for managing it by hand over SSH.
+
+use serde::{Deserialize, Serialize};
+use ssh2::Session;
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+/// Where and how to reach the machine.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RemoteInfo {
+    pub host: String,
+    #[serde(default = "default_user")]
+    pub user: String,
+    /// The private key file on this computer (OpenSSH format, ed25519 or RSA)
+    pub key: PathBuf,
+    #[serde(default = "default_ssh_port")]
+    pub ssh_port: u16,
+}
+
+fn default_user() -> String {
+    "ubuntu".into()
+}
+
+fn default_ssh_port() -> u16 {
+    22
+}
+
+impl RemoteInfo {
+    fn label(&self) -> String {
+        format!("{}@{}:{}", self.user, self.host, self.ssh_port)
+    }
+}
+
+/// A server's folder on the machine (relative to the user's home).
+pub fn server_dir(id: &str) -> String {
+    format!("loner-strike/servers/{id}")
+}
+
+pub fn unit(id: &str) -> String {
+    format!("lonerstrike-{id}")
+}
+
+// ---- the connection --------------------------------------------------------------------
+
+static SESSIONS: Mutex<Option<HashMap<String, Arc<Mutex<Session>>>>> = Mutex::new(None);
+
+fn connect(r: &RemoteInfo) -> Result<Session, String> {
+    let addr = (r.host.as_str(), r.ssh_port)
+        .to_socket_addrs()
+        .map_err(|_| format!("Couldn't find {}. Check the address.", r.host))?
+        .next()
+        .ok_or_else(|| format!("Couldn't find {}.", r.host))?;
+    let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(10))
+        .map_err(|_| format!("Couldn't reach {} on port {}. Is the machine running, and is SSH open?", r.host, r.ssh_port))?;
+    let mut s = Session::new().map_err(|e| e.to_string())?;
+    s.set_tcp_stream(tcp);
+    s.set_timeout(30_000);
+    s.handshake().map_err(|e| format!("SSH didn't start ({e})."))?;
+    if !r.key.is_file() {
+        return Err(format!("The key file {} isn't there.", r.key.display()));
+    }
+    let first = std::fs::read_to_string(&r.key).unwrap_or_default();
+    if first.starts_with("PuTTY-User-Key-File") {
+        return Err("That's a PuTTY key (.ppk). Export it as an OpenSSH key in PuTTYgen (Conversions > Export OpenSSH key) and pick that.".into());
+    }
+    s.userauth_pubkey_file(&r.user, None, &r.key, None).map_err(|e| {
+        if first.contains("ENCRYPTED") || e.message().contains("passphrase") {
+            "That key has a passphrase, which isn't supported yet. Make a key without one for the server.".to_string()
+        } else {
+            format!("The server didn't accept the key for {} ({}). Check the user name and that this key was added to the server.", r.user, e.message())
+        }
+    })?;
+    if !s.authenticated() {
+        return Err("The server didn't accept the key.".into());
+    }
+    s.set_keepalive(true, 30);
+    Ok(s)
+}
+
+/// The open session for a machine (opened on first use, reopened if it dropped).
+fn session(r: &RemoteInfo) -> Result<Arc<Mutex<Session>>, String> {
+    let mut all = SESSIONS.lock().unwrap();
+    let all = all.get_or_insert_with(HashMap::new);
+    if let Some(s) = all.get(&r.label()) {
+        return Ok(s.clone());
+    }
+    let s = Arc::new(Mutex::new(connect(r)?));
+    all.insert(r.label(), s.clone());
+    Ok(s)
+}
+
+fn drop_session(r: &RemoteInfo) {
+    if let Some(all) = SESSIONS.lock().unwrap().as_mut() {
+        all.remove(&r.label());
+    }
+}
+
+/// Runs `f` on the session, once more on a fresh one if the first try failed on the
+/// connection (it may have dropped while idle).
+fn with_session<T>(r: &RemoteInfo, f: impl Fn(&Session) -> Result<T, ssh2::Error>) -> Result<T, String> {
+    for attempt in 0..2 {
+        let s = session(r)?;
+        let s = s.lock().unwrap();
+        match f(&s) {
+            Ok(v) => return Ok(v),
+            Err(e) if attempt == 0 => {
+                drop(s);
+                drop_session(r);
+                let _ = e;
+            }
+            Err(e) => return Err(format!("The connection to {} failed ({e}).", r.host)),
+        }
+    }
+    unreachable!()
+}
+
+/// Runs a shell command; its exit code and output (stderr folded in).
+pub fn exec(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
+    with_session(r, |s| {
+        s.set_timeout(120_000);
+        let mut ch = s.channel_session()?;
+        ch.exec(&format!("{cmd} 2>&1"))?;
+        let mut out = String::new();
+        let _ = ch.read_to_string(&mut out);
+        ch.wait_close()?;
+        Ok((ch.exit_status()?, out))
+    })
+}
+
+/// Runs a command with `input` on its stdin, passing its output on line by line (long jobs).
+pub fn exec_stream(r: &RemoteInfo, cmd: &str, input: &[u8], mut line: impl FnMut(&str)) -> Result<i32, String> {
+    let s = session(r)?;
+    let s = s.lock().unwrap();
+    // setup can take a long time between lines (Valve's download)
+    s.set_timeout(0);
+    let mut run = || -> Result<i32, ssh2::Error> {
+        let mut ch = s.channel_session()?;
+        ch.exec(&format!("{cmd} 2>&1"))?;
+        if !input.is_empty() {
+            ch.write_all(input).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        }
+        ch.send_eof()?;
+        let mut reader = BufReader::new(&mut ch);
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            match reader.read_until(b'\n', &mut buf) {
+                Ok(0) => break,
+                Ok(_) => line(String::from_utf8_lossy(&buf).trim_end()),
+                Err(_) => break,
+            }
+        }
+        drop(reader);
+        ch.wait_close()?;
+        ch.exit_status()
+    };
+    let r2 = run();
+    s.set_timeout(30_000);
+    drop(s);
+    r2.map_err(|e| {
+        drop_session(r);
+        format!("The connection to {} dropped ({e}).", r.host)
+    })
+}
+
+pub fn read_file(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
+    with_session(r, |s| {
+        let sftp = s.sftp()?;
+        let mut f = sftp.open(Path::new(path))?;
+        let mut v = Vec::new();
+        let _ = f.read_to_end(&mut v);
+        Ok(v)
+    })
+}
+
+/// Uploads a folder (the files `keep` lets through) into `to` on the machine, as one
+/// compressed archive unpacked there.
+pub fn upload_dir(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Path) -> bool) -> Result<u64, String> {
+    let mut bytes = Vec::new();
+    let mut count = 0u64;
+    {
+        let gz = flate2::write::GzEncoder::new(&mut bytes, flate2::Compression::fast());
+        let mut tar = tar::Builder::new(gz);
+        for file in crate::archive::walk(from) {
+            let Ok(rel) = file.strip_prefix(from) else { continue };
+            if !keep(rel) || !file.is_file() {
+                continue;
+            }
+            let name = rel.to_string_lossy().replace('\\', "/");
+            tar.append_path_with_name(&file, &name).map_err(|e| format!("Couldn't pack {name} ({e})."))?;
+            count += 1;
+        }
+        tar.into_inner().and_then(|gz| gz.finish()).map_err(|e| e.to_string())?;
+    }
+    let (code, out) = {
+        let mut last = String::new();
+        let code = exec_stream(r, &format!("mkdir -p {to} && tar xzf - -C {to}", to = shell_quote(to)), &bytes, |l| last = l.to_string())?;
+        (code, last)
+    };
+    if code != 0 {
+        return Err(format!("Unpacking on the server failed ({out})."));
+    }
+    Ok(count)
+}
+
+/// 'text' for a shell command line.
+pub fn shell_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+// ---- what runs on the machine --------------------------------------------------------
+
+/// Sets up the machine and the server (safe to run again): the 32-bit libraries the
+/// server needs, the game ports in the machine's own firewall, SteamCMD and Valve's
+/// server, then Metamod-P, AMX Mod X and ReGameDLL (Linux builds, checked by sha256).
+/// Progress lines start with @@STEP; a failure with @@FAIL.
+pub const SETUP_SH: &str = r#"set -eu
+step() { echo "@@STEP $1"; }
+fail() { echo "@@FAIL $*"; exit 3; }
+BASE="$HOME/loner-strike"; SRV="$HOME/$SRVDIR"; G="$GAME"
+[ "$(uname -m)" = x86_64 ] || fail "This machine is $(uname -m). The Counter-Strike server only runs on x86 (AMD or Intel) machines."
+sudo -n true 2>/dev/null || fail "The user $(whoami) can't use sudo without a password, which setup needs."
+
+step packages
+export DEBIAN_FRONTEND=noninteractive
+command -v apt-get >/dev/null || fail "Only Ubuntu and Debian are supported for now."
+sudo dpkg --add-architecture i386
+sudo apt-get update -qq >/dev/null
+sudo apt-get install -y -qq lib32gcc-s1 lib32stdc++6 libc6-i386 curl ca-certificates unzip xz-utils tar >/dev/null
+
+step firewall
+if command -v iptables >/dev/null; then
+  if ! sudo iptables -C INPUT -p udp --dport 27015:27020 -j ACCEPT 2>/dev/null; then
+    # above a final REJECT rule if there is one (Oracle's images have one)
+    pos=$(sudo iptables -L INPUT --line-numbers -n | awk '$2=="REJECT" {print $1; exit}')
+    if [ -n "$pos" ]; then sudo iptables -I INPUT "$pos" -p udp --dport 27015:27020 -j ACCEPT
+    else sudo iptables -A INPUT -p udp --dport 27015:27020 -j ACCEPT; fi
+  fi
+  if command -v netfilter-persistent >/dev/null; then sudo netfilter-persistent save >/dev/null 2>&1 || true
+  elif [ -d /etc/iptables ]; then sudo sh -c 'iptables-save > /etc/iptables/rules.v4'; fi
+fi
+if command -v ufw >/dev/null && sudo ufw status | grep -q "Status: active"; then sudo ufw allow 27015:27020/udp >/dev/null; fi
+
+step steamcmd
+mkdir -p "$BASE/steamcmd"; cd "$BASE/steamcmd"
+[ -x steamcmd.sh ] || curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar xz
+
+step server
+mkdir -p "$SRV"
+MOD=""; [ "$G" = czero ] && MOD="+app_set_config 90 mod czero"
+# Valve's HLDS download often stops part way; running it again carries on
+for i in 1 2 3 4 5; do
+  ./steamcmd.sh +force_install_dir "$SRV" +login anonymous $MOD +app_update 90 validate +quit | grep --line-buffered -E "Update state|Success|ERROR" || true
+  [ -f "$SRV/hlds_linux" ] && [ -f "$SRV/$G/liblist.gam" ] && break
+done
+[ -f "$SRV/hlds_linux" ] && [ -f "$SRV/$G/liblist.gam" ] || fail "Valve's download didn't finish. Try again in a while."
+mkdir -p "$HOME/.steam/sdk32"
+ln -sf "$BASE/steamcmd/linux32/steamclient.so" "$HOME/.steam/sdk32/steamclient.so"
+
+step foundation
+cd "$SRV/$G"; TMP=$(mktemp -d)
+fetch() { curl -fsSL "$1" -o "$TMP/$2" || fail "Couldn't download $2."; echo "$3  $TMP/$2" | sha256sum -c --quiet - || fail "$2 didn't match its checksum."; }
+fetch "$MM_URL" mm.tar.xz "$MM_SHA"; tar xJf "$TMP/mm.tar.xz" -C .
+fetch "$AMXX_URL" amxx.tar.gz "$AMXX_SHA"; tar xzf "$TMP/amxx.tar.gz" -C .
+fetch "$AMXXCS_URL" amxxcs.tar.gz "$AMXXCS_SHA"; tar xzf "$TMP/amxxcs.tar.gz" -C .
+fetch "$RG_URL" rg.zip "$RG_SHA"; unzip -o -q "$TMP/rg.zip" "bin/linux32/cstrike/*" -d "$TMP/rg"; cp -rf "$TMP/rg/bin/linux32/cstrike/." .
+mkdir -p addons/metamod
+echo "linux addons/amxmodx/dlls/amxmodx_mm_i386.so" > addons/metamod/plugins.ini
+if grep -q '^gamedll_linux' liblist.gam; then sed -i 's|^gamedll_linux.*|gamedll_linux "addons/metamod/dlls/metamod.so"|' liblist.gam
+else echo 'gamedll_linux "addons/metamod/dlls/metamod.so"' >> liblist.gam; fi
+rm -rf "$TMP"
+step ready
+"#;
+
+/// Linux builds of the foundation, the same versions as setup/foundation.rs's Windows ones.
+pub const FOUNDATION_ENV: &[(&str, &str)] = &[
+    ("MM_URL", "https://github.com/Bots-United/metamod-p/releases/download/v1.21p109/metamod-p-v1.21p109-linux_ubuntu2404.tar.xz"),
+    ("MM_SHA", "bea62478a9d50023820188bda3893c720e7e7b1b01570292c747c5ef71829365"),
+    ("AMXX_URL", "https://www.amxmodx.org/amxxdrop/1.10/amxmodx-1.10.0-git5487-base-linux.tar.gz"),
+    ("AMXX_SHA", "d82d1d65c907f358c48bdebc07e20084e7e8c4f4d0e95af275e8b43f32815c7e"),
+    ("AMXXCS_URL", "https://www.amxmodx.org/amxxdrop/1.10/amxmodx-1.10.0-git5487-cstrike-linux.tar.gz"),
+    ("AMXXCS_SHA", "6a7541a213ef71c47c1348b3457722e95669c0135c60102d5cb5a876341aa808"),
+    ("RG_URL", "https://github.com/rehlds/ReGameDLL_CS/releases/download/5.30.0.814/regamedll-bin-5.30.0.814.zip"),
+    ("RG_SHA", "457f5c96a4d10280fcad47f106cbd5be86363a47df1ccab91c514e9d1bc6fd18"),
+];
+
+/// The systemd service for one server, and the `lsctl` helper for managing servers by hand.
+pub fn service_sh(id: &str, args: &[String]) -> String {
+    let unit = unit(id);
+    let dir = server_dir(id);
+    let args = args.iter().map(|a| shell_quote(a)).collect::<Vec<_>>().join(" ");
+    format!(
+        r#"set -eu
+SRV="$HOME/{dir}"
+sudo tee /etc/systemd/system/{unit}.service >/dev/null <<EOF
+[Unit]
+Description=Loner-Strike server {id}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=$(whoami)
+WorkingDirectory=$SRV
+Environment=LD_LIBRARY_PATH=$SRV
+ExecStart=$SRV/hlds_linux {args}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo tee /usr/local/bin/lsctl >/dev/null <<'EOF'
+#!/bin/sh
+# lsctl: Loner-Strike servers on this machine.  lsctl list | status | start | stop | restart | logs [server]
+cmd=${{1:-help}}; id=${{2:-}}
+units() {{ systemctl list-unit-files 'lonerstrike-*' --no-legend 2>/dev/null | awk '{{print $1}}' | sed 's/\.service$//; s/^lonerstrike-//'; }}
+[ -z "$id" ] && id=$(units | head -n 1)
+case "$cmd" in
+  list) units ;;
+  status) systemctl is-active "lonerstrike-$id" ;;
+  start|stop|restart) sudo systemctl "$cmd" "lonerstrike-$id" ;;
+  logs) tail -n "${{3:-100}}" "$HOME/loner-strike/servers/$id/"*/qconsole.log ;;
+  *) echo "usage: lsctl list | status | start | stop | restart | logs [server] [lines]" ;;
+esac
+EOF
+sudo chmod 755 /usr/local/bin/lsctl
+sudo systemctl daemon-reload
+sudo systemctl enable {unit} >/dev/null 2>&1
+echo "@@STEP ready"
+"#
+    )
+}
+
+/// Is the server's service running?
+pub fn active(r: &RemoteInfo, id: &str) -> bool {
+    exec(r, &format!("systemctl is-active {}", unit(id))).map(|(_, o)| o.trim() == "active").unwrap_or(false)
+}
+
+pub fn systemctl(r: &RemoteInfo, id: &str, action: &str) -> Result<(), String> {
+    let (code, out) = exec(r, &format!("sudo systemctl {action} {}", unit(id)))?;
+    if code != 0 {
+        return Err(format!("The server didn't {action} ({}).", out.trim()));
+    }
+    Ok(())
+}
+
+/// The last lines of the server's console log.
+pub fn console(r: &RemoteInfo, id: &str, game: &str) -> Vec<String> {
+    exec(r, &format!("tail -n 200 \"$HOME/{}/{game}/qconsole.log\" 2>/dev/null", server_dir(id)))
+        .map(|(_, o)| o.lines().map(String::from).collect())
+        .unwrap_or_default()
+}
+
+/// Takes the server off the machine: the service, its folder.
+pub fn remove(r: &RemoteInfo, id: &str) -> Result<(), String> {
+    let u = unit(id);
+    let (code, out) = exec(
+        r,
+        &format!("sudo systemctl disable --now {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service; sudo systemctl daemon-reload; rm -rf \"$HOME/{}\"", server_dir(id)),
+    )?;
+    if code != 0 {
+        return Err(format!("Couldn't remove it from the server ({}).", out.trim()));
+    }
+    Ok(())
+}
+
+/// The env assignments for SETUP_SH.
+pub fn setup_env(id: &str, game: &str) -> String {
+    let mut env = vec![format!("SRVDIR={}", shell_quote(&server_dir(id))), format!("GAME={}", shell_quote(game))];
+    env.extend(FOUNDATION_ENV.iter().map(|(k, v)| format!("{k}={}", shell_quote(v))));
+    env.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quoting() {
+        assert_eq!(shell_quote("a b"), "'a b'");
+        assert_eq!(shell_quote("it's"), "'it'\\''s'");
+        assert!(setup_env("my-server", "czero").contains("GAME='czero'"));
+        let svc = service_sh("x", &["-game".into(), "cstrike".into()]);
+        assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike'") && svc.contains("lsctl"));
+    }
+}

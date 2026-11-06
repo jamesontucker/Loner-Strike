@@ -124,9 +124,19 @@ async fn with_target(req: Request, next: Next) -> Response {
     if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') || id.len() > 48 {
         return (StatusCode::BAD_REQUEST, axum::Json(serde_json::json!({"error": "Unknown server."}))).into_response();
     }
+    let post = req.method() == axum::http::Method::POST;
+    let id2 = id.clone();
     let game = tokio::task::spawn_blocking(move || crate::servers::game_for(&id, || None)).await.ok().flatten();
     match game {
-        Some(g) => TARGET.scope(Some(g), next.run(req)).await,
+        Some(g) => {
+            let remote = g.remote.is_some();
+            let res = TARGET.scope(Some(g), next.run(req)).await;
+            // a server on another machine: a change made here goes up to it
+            if post && remote && res.status().is_success() {
+                tokio::task::spawn_blocking(move || crate::servers::sync_settings(&id2));
+            }
+            res
+        }
         None => (StatusCode::NOT_FOUND, axum::Json(serde_json::json!({"online": false, "error": "That server isn't there any more, or isn't set up yet.", "reason": "That server isn't there any more."}))).into_response(),
     }
 }

@@ -38,6 +38,8 @@ tar = { version = "0.4", default-features = false }
 flate2 = "1"
 bzip2 = "0.6"
 lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "xz"] }
+# Linux servers (remote.rs): SSH and SFTP with bundled crypto, so ed25519 keys work on Mac and Windows alike
+ssh2 = { version = "0.9", features = ["vendored-openssl", "openssl-on-win32"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -44,6 +44,9 @@ pub struct Game {
     pub port: u16,
     /// A dedicated server (not the game's own listen server)
     pub dedicated: bool,
+    /// On another machine: how to reach it, and its game folder there (files the plugin
+    /// writes, like status.json, are fetched from it)
+    pub remote: Option<(crate::remote::RemoteInfo, String)>,
 }
 
 impl Game {
@@ -87,7 +90,7 @@ impl Game {
         let maps_cache = Arc::new(Mutex::new(None));
         let store = Arc::new(MapStore::new(hl, &dir, app, maps_cache.clone()));
         let sharing = Arc::new(Sharing::new(app, &data, crate::sharing::GAME_PORT));
-        Game { hl: hl.to_path_buf(), name: name.into(), dir, data, app: app.to_path_buf(), rcon, maps_cache, store, sharing, port: crate::sharing::GAME_PORT, dedicated: false }
+        Game { hl: hl.to_path_buf(), name: name.into(), dir, data, app: app.to_path_buf(), rcon, maps_cache, store, sharing, port: crate::sharing::GAME_PORT, dedicated: false, remote: None }
     }
 
     pub fn state(&self) -> Value {
@@ -105,6 +108,15 @@ impl Game {
             Err(RconError::Offline) => return json!({"online": false, "reason": OFFLINE, "game_open": !self.dedicated && crate::sys::game_running()}),
         };
         let path = self.data.join("status.json");
+        // on another machine the file is written there: bring it over first
+        if let (Some((r, dir)), true) = (&self.remote, reply.contains("GM status written")) {
+            match crate::remote::read_file(r, &format!("{dir}/addons/amxmodx/data/gamemodes/status.json")) {
+                Ok(bytes) => {
+                    let _ = std::fs::write(&path, bytes);
+                }
+                Err(e) => return json!({"online": false, "reason": e}),
+            }
+        }
         let lines: Vec<String> = if reply.contains("GM status written") && path.exists() {
             latin1(&std::fs::read(&path).unwrap_or_default()).lines().map(String::from).collect()
         } else {
