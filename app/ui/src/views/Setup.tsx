@@ -165,7 +165,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               })}
             </div>
             <p className="muted">Both use the same bots. Condition Zero adds more bot voices and its own versions of the maps.</p>
-            {IS_MAC && <p className="muted">On a Mac, Counter-Strike runs through CrossOver: Windows Steam installed in a CrossOver bottle. That's where Loner-Strike found your games.</p>}
+            {IS_MAC && <p className="muted">On a Mac, Counter-Strike runs through CrossOver (Windows Steam in a CrossOver bottle), which is where Loner-Strike found your games. With Parallels instead, use the Windows version of Loner-Strike inside Windows.</p>}
             <Nav back={fromSettings ? onClose : () => setStage("welcome")} backLabel={fromSettings ? "Cancel" : "Back"} next={() => setStage("content")} canNext={games.length > 0} />
           </section>
         )}
@@ -318,9 +318,9 @@ function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan
           <img src={logo} alt="" width={96} height={96} />
           <h1>No game found</h1>
           {nativeMac ? (
-            <p>You have the Mac version of Half-Life, which mods can't run on. Install the Windows version of Steam in CrossOver, install Counter-Strike 1.6 or Condition Zero there, then reopen Loner-Strike.</p>
+            <p>You have the Mac version of Half-Life, which mods can't run on. Install the Windows version of Steam in CrossOver, install Counter-Strike 1.6 or Condition Zero there, then reopen Loner-Strike. With Parallels, install the game and the Windows version of Loner-Strike inside Windows instead.</p>
           ) : (
-            <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Steam in CrossOver" : ""}. Install one, then reopen Loner-Strike.</p>
+            <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Steam in CrossOver (or, with Parallels, use the Windows version of Loner-Strike inside Windows)" : ""}. Install one, then reopen Loner-Strike.</p>
           )}
           <div className="row">
             <BusyButton className="btn primary" busy={looking} label="Look again" busyLabel="Looking…" onClick={() => { setLooking(true); onRescan(); setTimeout(() => setLooking(false), 1500); }} />
