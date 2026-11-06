@@ -66,8 +66,9 @@ p { text-wrap: pretty; }
 .hero { padding: 64px 0 40px; }
 .hero .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
 .hero-logo { width: 112px; height: 112px; margin-bottom: 18px; }
-.hero h1 { font: 400 clamp(46px, 6vw, 76px)/.95 var(--stencil); letter-spacing: .01em; }
-.tagline { font-size: 23px; line-height: 1.35; color: var(--dim); margin: 18px 0 26px; max-width: 30ch; }
+.hero h1 { font: 400 clamp(38px, 5.2vw, 66px)/1 var(--stencil); letter-spacing: .01em; white-space: nowrap; }
+.tagline { font-size: 23px; line-height: 1.35; color: var(--dim); margin: 18px 0 26px; max-width: 34ch; text-wrap: balance; }
+.nobr { white-space: nowrap; }
 .ctas { display: flex; flex-wrap: wrap; gap: 10px; }
 .fine { margin: 14px 0 0; color: var(--faint); font-size: 15px; }
 
@@ -91,7 +92,7 @@ p { text-wrap: pretty; }
 .modes ul { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .modes li { background: var(--panel); box-shadow: var(--raised); padding: 6px 12px; border-radius: 2px; font-weight: 600; color: var(--dim); }
 .modes li b { color: var(--bone); font-weight: 700; }
-.lead { color: var(--dim); max-width: 66ch; margin: 10px 0 0; }
+.lead { color: var(--dim); max-width: 58ch; margin: 10px 0 0; text-wrap: pretty; }
 
 /* features */
 .feature { padding: 64px 0; }
@@ -198,15 +199,14 @@ footer a { color: var(--dim); }
       <div>
         <img class="hero-logo" src="img/logo.svg" alt="" width="112" height="112">
         <h1>Loner-Strike</h1>
-        <p class="tagline">Re-live the golden days of Counter-Strike locally or with the friends you don't have.</p>
+        <p class="tagline">Re-live the golden days of <span class="nobr">Counter-Strike</span> locally or with the friends you don't have.</p>
         <div class="ctas">
-          <a class="btn primary polar" href="#get" data-event="Name your price (hero)">Name your price</a>
-          <a class="btn release" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download free (hero)">Download free</a>
+          <a class="btn primary" href="#get" data-event="Get it (hero)">Get Loner-Strike</a>
         </div>
         <p class="fine">For Counter-Strike 1.6 and Condition Zero on Steam. Windows, or Mac through CrossOver.</p>
         <div class="loader" aria-hidden="true">
           <div class="loader-title">Loading…</div>
-          <div class="loader-text">Establishing connection to 2004…</div>
+          <div class="loader-text">Establishing network connection to server…</div>
           <div class="bar" id="bar"></div>
         </div>
       </div>
@@ -219,8 +219,8 @@ footer a { color: var(--dim); }
 
   <section class="modes" id="modes">
     <div class="wrap">
-      <h2>The mods we grew up on</h2>
-      <p class="lead">Classic community mods, set up for you and patched so bots actually play them. Pick a mode, pick a map, and the bots fill the server.</p>
+      <h2>Classic community modes</h2>
+      <p class="lead">The popular mods from the old community servers, installed and set up for you, and patched so bots can play them. Pick a mode and a map, and bots fill the server.</p>
       <ul>
         <li><b>Zombie Plague</b></li><li><b>Warcraft 3</b></li><li><b>SuperHero</b></li><li><b>Gun Game</b></li><li><b>Deathmatch</b></li>
         <li><b>Hide and Seek</b></li><li><b>Deathrun</b></li><li><b>Surf</b></li><li><b>Kreedz</b></li><li><b>Base Builder</b></li><li><b>SoccerJam</b></li>
@@ -233,9 +233,9 @@ footer a { color: var(--dim); }
     <div class="wrap">
       <div class="text">
         <h3>Bots that play like people</h3>
-        <p>Stock bots react instantly and aim like turrets. Loner-Strike gives them reaction times, flicks that overshoot, shaky tracking and the occasional whiff, from a 2003 pub regular up to someone who bunnyhops.</p>
+        <p>The game's own bots react instantly and aim perfectly. Loner-Strike gives them human reaction times and imperfect aim, with skill levels from casual up to players who bunnyhop.</p>
         <ul>
-          <li>The same bots keep coming back, with clan tags, so it feels like a server with regulars</li>
+          <li>A regular cast of bot names and clan tags, so the server has familiar faces</li>
           <li>Bots learn new maps by themselves</li>
           <li>Thousands of maps from GameBanana, one click each</li>
         </ul>
@@ -250,12 +250,12 @@ footer a { color: var(--dim); }
   <section class="feature flip">
     <div class="wrap">
       <div class="text">
-        <h3>Or with friends, if you have them</h3>
-        <p>Name your server, set a password and send a link. Seven ways to connect, from a LAN party in the same room to playit.gg, Tailscale, your router doing the work, and yes, Hamachi.</p>
+        <h3>Play with friends</h3>
+        <p>Set a server name and password, then send friends an invite. There are seven ways for them to connect, from a LAN party in the same room to playit.gg, Tailscale, your router or Hamachi.</p>
         <ul>
-          <li>Run the whole thing from your phone: scan a QR code</li>
-          <li>Admins, VIPs and bans, like real servers</li>
-          <li>Your own welcome page when people join</li>
+          <li>Control everything from your phone by scanning a QR code</li>
+          <li>Admins, VIPs and bans</li>
+          <li>A custom welcome page for people who join</li>
         </ul>
       </div>
       <div class="window">
@@ -268,9 +268,9 @@ footer a { color: var(--dim); }
   <section class="feature">
     <div class="wrap">
       <div class="text">
-        <h3>Run a real server, if you want</h3>
-        <p>A bonus for anyone who wants an always-on server: Loner-Strike downloads Valve's free dedicated server, sets it up like your game and runs it. Each server gets its own modes, maps, admins, VIP perks and console. Bring in one you already run, too.</p>
-        <p>There's a guide in the app to free and cheap places to host one, and how big it needs to be.</p>
+        <h3>Dedicated servers</h3>
+        <p>Optional, for an always-on server: Loner-Strike downloads Valve's free dedicated server, sets it up like your game and runs it. Each server has its own modes, maps, admins, VIP perks and console. You can also bring in a server you already run.</p>
+        <p>The app includes a guide to free and low-cost hosting, and how big a server needs to be.</p>
       </div>
       <div class="pair">
         <div class="window">
@@ -303,19 +303,19 @@ footer a { color: var(--dim); }
     <div class="wrap">
       <div class="box">
         <h3>Name your price</h3>
-        <p>Loner-Strike is free and open source. If it brought back some good memories, chip in whatever feels right. It keeps the lights on and the mods patched.</p>
+        <p>Loner-Strike is free and open source. If you'd like to support it, pay what you like. It helps cover the time spent keeping it and the mods working.</p>
         <div class="price">$0<small>and up</small></div>
         <p class="fine">You get the same download either way.</p>
         <a class="btn primary polar" id="polar" href="#" data-polar-checkout data-polar-checkout-theme="dark" data-event="Name your price">Name your price</a>
       </div>
       <div class="box">
-        <h3>Or just grab it</h3>
-        <p>Rather not pay? No hard feelings. Every release is free on GitHub.</p>
+        <h3>Download free</h3>
+        <p>Every release is also free on GitHub.</p>
         <a class="btn release" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download free">Download from GitHub</a>
         <ol class="steps">
           <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a>.</li>
           <li><b>Open Loner-Strike.</b> It finds the game and walks you through setup. Everything it changes is backed up.</li>
-          <li><b>Press Play.</b> Bots fill the server. Friends optional.</li>
+          <li><b>Press Play.</b> Bots fill the server.</li>
         </ol>
       </div>
     </div>
@@ -326,7 +326,7 @@ footer a { color: var(--dim); }
       <h2>Questions</h2>
       <details>
         <summary>Is it really free?</summary>
-        <p>Yes. The code is open source (GPL-3) and every release is on GitHub. Paying is optional and gets you the same thing, plus our thanks.</p>
+        <p>Yes. The code is open source (GPL-3) and every release is on GitHub. Paying is optional and gets you the same thing.</p>
       </details>
       <details>
         <summary>Do I need to own Counter-Strike?</summary>
@@ -392,11 +392,11 @@ footer a { color: var(--dim); }
   // ---- screenshots ------------------------------------------------------------
   // Add one: put the image in img/gallery/ and add a line here. tall: true for phone shots.
   const GALLERY = [
-    { src: "img/gallery/maps.jpg", caption: "Thousands of maps, with screenshots, filters and favourites" },
-    { src: "img/gallery/play.jpg", caption: "0 friends online. Bots ready." },
-    { src: "img/gallery/friends.jpg", caption: "Seven ways for friends to join, from LAN parties to Hamachi" },
-    { src: "img/gallery/servers.jpg", caption: "Run your own dedicated server, with its own console and settings" },
-    { src: "img/gallery/phone-maps.jpg", caption: "Run it all from your phone", tall: true },
+    { src: "img/gallery/maps.jpg", caption: "Maps with screenshots, filters and favourites" },
+    { src: "img/gallery/play.jpg", caption: "Start a game with bots in one click" },
+    { src: "img/gallery/friends.jpg", caption: "Seven ways for friends to join" },
+    { src: "img/gallery/servers.jpg", caption: "Dedicated servers, each with its own settings and console" },
+    { src: "img/gallery/phone-maps.jpg", caption: "The control panel on a phone", tall: true },
   ];
 
   const list = document.getElementById("shots");
@@ -450,7 +450,7 @@ footer a { color: var(--dim); }
   const add = () => {
     while (bar.children.length < n) bar.appendChild(document.createElement("i"));
     if (n < slots) { n++; setTimeout(add, n < slots * 0.7 ? 70 : 260); }
-    else bar.previousElementSibling.textContent = "Connected. The bots are waiting.";
+    else bar.previousElementSibling.textContent = "Connected.";
   };
   add();
 </script>
