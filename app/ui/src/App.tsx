@@ -217,6 +217,9 @@ function Shell() {
     return <Setup scan={scan} onClose={close} onDone={done} onRescan={reloadScan} />;
   }
   const needsGame = section !== "servers" && NAV.find((n) => n.id === section)?.live && !online;
+  // the game is open here but isn't hosting a map (its main menu, or someone else's server)
+  const gameOpen = !!state && !state.online && !!state.game_open;
+  const gameName = app?.game?.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero";
 
   return (
     <div className="shell">
@@ -255,21 +258,21 @@ function Shell() {
       </aside>
 
       <div className="main">
-        <Strip data={online} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} />
+        <Strip data={online} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} gameOpen={gameOpen} />
         {online && <QuickBar data={online} maps={maps} refresh={refresh} reloadMaps={() => reloadMaps(true)} />}
         <main className="content">
           <HomeScreenHint />
           {state === null ? (
             <p className="muted">Connecting…</p>
           ) : needsGame ? (
-            <Waiting label={NAV.find((n) => n.id === section)!.label} onPlay={() => setSection("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={() => setSetupOpen(true)} />
+            <Waiting label={NAV.find((n) => n.id === section)!.label} game={gameName} gameOpen={gameOpen} onPlay={() => setSection("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={() => setSetupOpen(true)} />
           ) : (
             <>
               {section === "play" &&
                 (online ? (
                   <PlayLive data={online} maps={maps} refresh={refresh} openMaps={() => setSection("maps")} />
                 ) : (
-                  <PlayIdle app={app} reason={state.online ? "" : state.reason} maps={maps} openSetup={() => setSetupOpen(true)} />
+                  <PlayIdle app={app} reason={state.online ? "" : state.reason} gameOpen={gameOpen} maps={maps} openSetup={() => setSetupOpen(true)} />
                 ))}
               {section === "maps" && <Maps data={online} maps={maps} reload={() => reloadMaps(true)} refresh={refresh} />}
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
@@ -352,12 +355,16 @@ function Shell() {
 /** The phone's bottom bar: the most used sections, and Servers for people who host. */
 const tabbarFor = (hosting: boolean): Section[] => (hosting ? ["play", "maps", "players", "servers"] : ["play", "maps", "bots", "players"]);
 
-function Strip({ data, reason, app, server }: { data: Online | null; reason: string; app: AppInfo | null; server?: string }) {
+function Strip({ data, reason, app, server, gameOpen }: { data: Online | null; reason: string; app: AppInfo | null; server?: string; gameOpen: boolean }) {
   if (!data) {
     return (
       <header className="strip" data-tauri-drag-region>
         <div className="strip-meta idle" data-tauri-drag-region>
-          {server ? `${server} isn't running` : app?.game ? `${app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"} isn't running` : reason}
+          {server
+            ? `${server} isn't running`
+            : app?.game
+              ? `${app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"} ${gameOpen ? "is open, but no game is loaded" : "isn't running"}`
+              : reason}
         </div>
         <span className="live">Offline</span>
       </header>
@@ -390,14 +397,18 @@ function Strip({ data, reason, app, server }: { data: Online | null; reason: str
   );
 }
 
-function Waiting({ label, onPlay, setUp, openSetup }: { label: string; onPlay: () => void; setUp: boolean; openSetup: () => void }) {
+function Waiting({ label, game, gameOpen, onPlay, setUp, openSetup }: { label: string; game: string; gameOpen: boolean; onPlay: () => void; setUp: boolean; openSetup: () => void }) {
   return (
     <div className="waiting">
       <h2>{label}</h2>
       {setUp ? (
         <>
-          <p className="muted">This needs a game running.</p>
-          <button className="btn primary" onClick={onPlay}>Go to Play</button>
+          <p className="muted">
+            {gameOpen
+              ? `This works in a game you host. ${game} is open, but no map is loaded: start a game from its New Game menu, or quit it and start one from Play.`
+              : "This works in a game you host. Start one from Play and this page fills in."}
+          </p>
+          {!gameOpen && <button className="btn primary" onClick={onPlay}>Start a game</button>}
         </>
       ) : (
         <>

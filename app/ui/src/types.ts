@@ -68,7 +68,7 @@ export type Online = {
   events: GameEvent[];
   me: { uid?: number; haspos?: number };
 };
-export type Offline = { online: false; reason: string };
+export type Offline = { online: false; reason: string; game_open?: boolean };
 export type GameState = Online | Offline;
 
 export type MapInfo = {

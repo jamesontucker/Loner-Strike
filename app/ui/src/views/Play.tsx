@@ -14,7 +14,7 @@ const BOT_NOTE = { great: "Bots play this well", ok: "Bots are so-so", weak: "Be
 
 const GAME_NAME = (id?: string) => (id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero");
 
-export function PlayIdle({ app, reason, maps, openSetup }: { app: AppInfo | null; reason: string; maps: MapInfo[]; openSetup: () => void }) {
+export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppInfo | null; reason: string; gameOpen: boolean; maps: MapInfo[]; openSetup: () => void }) {
   const toast = useToast();
   const [starting, setStarting] = useState(false);
   const game = GAME_NAME(app?.game?.id);
@@ -93,7 +93,11 @@ export function PlayIdle({ app, reason, maps, openSetup }: { app: AppInfo | null
     <div className="idle">
       <div className="idle-hero">
         <h1>Start a game</h1>
-        <p>{game} isn't running. Pick a mode, a map and the bots, and Loner-Strike starts it and connects by itself.</p>
+        <p>
+          {gameOpen
+            ? `${game} is open, but no game is loaded. Start one from its New Game menu, or quit it and pick everything here.`
+            : `${game} isn't running. Pick a mode, a map and the bots, and Loner-Strike starts it and connects by itself.`}
+        </p>
         <div className="start-box">
           {modes.length > 0 && mode && (
             <label className="field">

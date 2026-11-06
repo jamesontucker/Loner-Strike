@@ -19,8 +19,8 @@ const ALLOWED: &[&str] = &[
     "gm_crash", "gm_do", "gm_announce",
 ];
 const METAMOD_DLL: &str = r"addons\metamod\dlls\metamod.dll";
-const OFFLINE: &str = "Condition Zero isn't running, or no match is loaded.";
-const BAD_PASSWORD: &str = "the game rejected the panel password - restart the map once";
+const OFFLINE: &str = "No game is loaded. Start one from Play.";
+const BAD_PASSWORD: &str = "The game turned down the panel's password. Restart the map once.";
 
 /// Why a command failed: the request was wrong (HTTP 400) or the game didn't take it (503).
 #[derive(Debug)]
@@ -100,7 +100,9 @@ impl Game {
         let reply = match self.rcon.send("gm_status") {
             Ok(r) => r,
             Err(RconError::BadPassword) => return json!({"online": false, "reason": BAD_PASSWORD}),
-            Err(RconError::Offline) => return json!({"online": false, "reason": OFFLINE}),
+            // game_open: the game is open on this computer but not hosting a map (main menu,
+            // or playing on someone else's server)
+            Err(RconError::Offline) => return json!({"online": false, "reason": OFFLINE, "game_open": !self.dedicated && crate::sys::game_running()}),
         };
         let path = self.data.join("status.json");
         let lines: Vec<String> = if reply.contains("GM status written") && path.exists() {
