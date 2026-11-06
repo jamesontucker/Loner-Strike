@@ -70,6 +70,8 @@ export const usePlayDrafts = create<Drafts>()(
     {
       name: "ls.playDraft",
       version: 1,
+      // an older save comes through as it is; merge below keeps only what's well-formed
+      migrate: (saved) => saved as never,
       storage: createJSONStorage(() => safe),
       partialize: (s) => ({ drafts: s.drafts }),
       // only well-formed drafts come back (an older or damaged copy is dropped)

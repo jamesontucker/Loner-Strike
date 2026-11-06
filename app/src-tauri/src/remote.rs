@@ -141,6 +141,8 @@ pub fn probe(r: &RemoteInfo) -> Result<(String, bool, String), String> {
     let mut first = r.clone();
     first.host_key = None;
     let s = connect(&first)?;
+    // it answers now: the next real connection tries straight away
+    forget_down(r);
     let fp = fingerprint(&s).ok_or("The server didn't identify itself.")?;
     let known = in_known_hosts(&s, r);
     let mut arch = String::new();
@@ -186,7 +188,7 @@ fn session(r: &RemoteInfo) -> Result<Arc<Mutex<Session>>, String> {
     // a machine that just didn't answer isn't tried again straight away, so the page's
     // regular checks don't each wait out the connection timeout
     // (with the reason it gave: a changed identity or a refused key is worth seeing as is)
-    if let Some((_, why)) = DOWN.lock().unwrap().as_ref().and_then(|m| m.get(&r.label()).cloned()).filter(|(t, _)| t.elapsed() < Duration::from_secs(20)) {
+    if let Some((_, why)) = DOWN.lock().unwrap().as_ref().and_then(|m| m.get(&down_key(r)).cloned()).filter(|(t, _)| t.elapsed() < Duration::from_secs(20)) {
         return Err(why);
     }
     // connecting happens outside the list's lock (it can take seconds), so other
@@ -194,13 +196,11 @@ fn session(r: &RemoteInfo) -> Result<Arc<Mutex<Session>>, String> {
     let s = match connect(r) {
         Ok(s) => s,
         Err(e) => {
-            DOWN.lock().unwrap().get_or_insert_with(HashMap::new).insert(r.label(), (std::time::Instant::now(), e.clone()));
+            DOWN.lock().unwrap().get_or_insert_with(HashMap::new).insert(down_key(r), (std::time::Instant::now(), e.clone()));
             return Err(e);
         }
     };
-    if let Some(m) = DOWN.lock().unwrap().as_mut() {
-        m.remove(&r.label());
-    }
+    forget_down(r);
     let fp = fingerprint(&s).ok_or("The server didn't identify itself.")?;
     let mut all = SESSIONS.lock().unwrap();
     let all = all.get_or_insert_with(HashMap::new);
@@ -213,6 +213,18 @@ fn session(r: &RemoteInfo) -> Result<Arc<Mutex<Session>>, String> {
     let s = Arc::new(Mutex::new(s));
     all.insert(r.label(), (s.clone(), fp));
     Ok(s)
+}
+
+/// A machine with a given key: fixing the key (or picking another) isn't held back by
+/// the last attempt's refusal
+fn down_key(r: &RemoteInfo) -> String {
+    format!("{}|{}", r.label(), r.key.display())
+}
+
+fn forget_down(r: &RemoteInfo) {
+    if let Some(m) = DOWN.lock().unwrap().as_mut() {
+        m.remove(&down_key(r));
+    }
 }
 
 /// Machines that didn't answer, and when
@@ -261,10 +273,12 @@ pub fn exec(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
 /// something long (an upload, Valve's download) it says so after a few seconds instead
 /// of waiting it out.
 pub fn exec_quick(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
-    with_session_quick(r, |s| {
+    with_session_quick(r, |s, started| {
         s.set_timeout(15_000);
         let mut ch = s.channel_session()?;
         ch.exec(&format!("{cmd} 2>&1"))?;
+        // from here the command has run: never again on a retry (a kick or a ban twice)
+        started.set(true);
         let mut out = Vec::new();
         let _ = ch.read_to_end(&mut out);
         ch.wait_close()?;
@@ -292,7 +306,7 @@ pub fn read_file_opt(r: &RemoteInfo, path: &str) -> Result<Option<Vec<u8>>, Stri
 /// read_file for the regular checks (the game's status file): gives up after a few
 /// seconds if the connection is busy.
 pub fn read_file_quick(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
-    with_session_quick(r, |s| {
+    with_session_quick(r, |s, _| {
         s.set_timeout(15_000);
         let sftp = s.sftp()?;
         let mut f = sftp.open(Path::new(path))?;
@@ -304,16 +318,19 @@ pub fn read_file_quick(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
 
 /// Runs `f` on the session if it's free within a few seconds (a quick command in front is
 /// waited for; something long, like an upload or Valve's download, isn't).
-fn with_session_quick<T>(r: &RemoteInfo, f: impl Fn(&Session) -> Result<T, ssh2::Error>) -> Result<T, String> {
-    match quick_once(r, &f) {
+/// `f` gets a flag to set once its command has started, so a dropped connection after
+/// that isn't retried.
+fn with_session_quick<T>(r: &RemoteInfo, f: impl Fn(&Session, &std::cell::Cell<bool>) -> Result<T, ssh2::Error>) -> Result<T, String> {
+    let started = std::cell::Cell::new(false);
+    match quick_once(r, &f, &started) {
         // a session left idle may have been dropped by the machine: one more try on a fresh one
-        Err((true, _)) => quick_once(r, &f).map_err(|(_, e)| e),
+        Err((true, _)) if !started.get() => quick_once(r, &f, &started).map_err(|(_, e)| e),
         other => other.map_err(|(_, e)| e),
     }
 }
 
 /// One go of with_session_quick; an error says whether a fresh session might do better.
-fn quick_once<T>(r: &RemoteInfo, f: &impl Fn(&Session) -> Result<T, ssh2::Error>) -> Result<T, (bool, String)> {
+fn quick_once<T>(r: &RemoteInfo, f: &impl Fn(&Session, &std::cell::Cell<bool>) -> Result<T, ssh2::Error>, ran: &std::cell::Cell<bool>) -> Result<T, (bool, String)> {
     let s = session(r).map_err(|e| (false, e))?;
     let started = std::time::Instant::now();
     let guard = loop {
@@ -325,7 +342,7 @@ fn quick_once<T>(r: &RemoteInfo, f: &impl Fn(&Session) -> Result<T, ssh2::Error>
         }
         std::thread::sleep(Duration::from_millis(100));
     };
-    let res = f(&guard);
+    let res = f(&guard, ran);
     drop(guard);
     res.map_err(|e| {
         // a missing file isn't a broken connection
@@ -402,6 +419,16 @@ pub fn read_file(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
         f.read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
         Ok(v)
     })
+}
+
+/// The files under `dir` on the machine (relative paths, "/" separated).
+pub fn list_files(r: &RemoteInfo, dir: &str) -> Result<std::collections::HashSet<String>, String> {
+    let (code, out) = exec(r, &format!("cd {} 2>/dev/null && find . -type f -printf '%P\\n'", shell_quote(dir)))?;
+    if code != 0 {
+        // not there yet: nothing on the machine
+        return Ok(Default::default());
+    }
+    Ok(out.lines().filter(|l| !l.is_empty()).map(String::from).collect())
 }
 
 /// Writes a small file on the machine (replacing it).

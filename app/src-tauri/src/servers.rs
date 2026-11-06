@@ -720,6 +720,22 @@ fn clear_pending_restart(id: &str) {
 /// by the app after setup, so they're left alone. `everything`: send it all (setup).
 /// Returns (sent, removed).
 pub fn sync(e: &Entry, everything: bool) -> Result<(usize, usize), String> {
+    sync_as(e, if everything { Send::Everything } else { Send::Changes })
+}
+
+/// What a sync sends.
+#[derive(Clone, Copy, PartialEq)]
+enum Send {
+    /// what changed since the last one (or, with no record of one, what the machine lacks)
+    Changes,
+    /// every file (a fresh setup)
+    Everything,
+    /// every file but the settings, which the machine keeps (after Valve's files were updated)
+    AllButData,
+}
+
+fn sync_as(e: &Entry, mode: Send) -> Result<(usize, usize), String> {
+    let everything = mode == Send::Everything;
     let _g = sync_guard();
     let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
     // deleted or being rebuilt since the caller looked: nothing to send (and nothing to
@@ -737,9 +753,14 @@ pub fn sync(e: &Entry, everything: bool) -> Result<(usize, usize), String> {
             now.iter().filter(|(k, v)| !old.get(*k).is_some_and(|o| same_file(o, v))).map(|(k, _)| k.clone()).collect(),
             old.keys().filter(|k| !now.contains_key(*k)).cloned().collect(),
         ),
-        // a server from before the app kept a record: its settings may have changed on the
-        // machine since setup, so everything but the settings goes up once
-        (None, false) => (now.keys().filter(|k| !k.starts_with("addons/amxmodx/data/")).cloned().collect(), vec![]),
+        _ if mode == Send::AllButData => (now.keys().filter(|k| !k.starts_with("addons/amxmodx/data/")).cloned().collect(), vec![]),
+        // a server from before the app kept a record: only what the machine doesn't have
+        // goes up. What's there stays (it may have changed on the machine, and sending all
+        // of it, maps included, would tie up the connection for minutes)
+        (None, false) => {
+            let there = crate::remote::list_files(r, &to)?;
+            (now.keys().filter(|k| !there.contains(*k)).cloned().collect(), vec![])
+        }
         (_, true) => (now.keys().cloned().collect(), vec![]),
     };
     if !changed.is_empty() {
@@ -1019,10 +1040,9 @@ pub fn update_files(e: Entry) -> Result<String, String> {
         ];
         return setup::start_job("server", steps, move |job| {
             job.run(&format!("{g}/srv-machine"), || machine_setup(job, &r, &e.id, &g))?;
-            // without the record, everything but the settings goes up (the machine's own
-            // stats and bans stay as they are)
-            let _ = std::fs::remove_file(manifest_path(&e));
-            job.run(&format!("{g}/srv-upload"), || sync(&e, false).map(|_| ()))
+            // everything but the settings goes up again over what setup put back (the
+            // machine's own stats and bans stay as they are)
+            job.run(&format!("{g}/srv-upload"), || sync_as(&e, Send::AllButData).map(|_| ()))
         });
     }
     let base = e.dir.parent().ok_or("Bad server folder.")?.join(".base");
@@ -1502,7 +1522,10 @@ fn view(e: &Entry) -> Value {
     let loner = record.installed("core");
     let (state, uptime, error) = if e.remote.is_some() && e.ready {
         let (on, secs) = remote_state(e);
-        (if on { "running" } else { "stopped" }, secs, None)
+        // never had an answer yet (the connection busy with an upload, say): not known
+        // to be stopped either
+        let asked = SEEN.lock().unwrap().as_ref().is_some_and(|m| m.contains_key(&e.id)) || unreachable(&e.id).is_some();
+        (if on { "running" } else if asked { "stopped" } else { "checking" }, secs, None)
     } else {
         with_runs(|r| match r.procs.get(&e.id) {
             Some(p) => ("running", p.started.elapsed().as_secs(), None),
@@ -1904,10 +1927,30 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 let r = e.remote.clone().ok_or("Rebuild from scratch is for servers on another machine.")?;
                 let client = client(&st2).ok_or("Set up the game on this computer first.")?;
                 let res = crate::setup_api::resources_for(&st2)?;
+                // everything that can say no goes first, so a refusal leaves the server as it was
+                if setup::current().state == "running" {
+                    return Err("Something else is being set up. Wait for it to finish, then rebuild.".into());
+                }
+                let mut with = e.setup_with.clone().unwrap_or(SetupWith { template: "local".into(), components: vec![], password: String::new() });
+                // the join password lives in this computer's copy, which is about to go
+                let pw = join_password(&e);
+                if !pw.is_empty() {
+                    with.password = pw;
+                }
+                let catalog = setup::components::load_catalog(&res)?;
+                let (source, components) = match template_source(&with.template, &e.game, &client, &catalog) {
+                    Some((dir, comps)) => (Some(dir), comps),
+                    None => (None, with.components.clone()),
+                };
                 let guard = sync_guard();
-                edit(|l| l.iter_mut().filter(|x| x.id == id).for_each(|x| x.ready = false))?;
-                crate::lists::forget(&id);
                 crate::remote::remove(&r, &e.id)?;
+                edit(|l| {
+                    l.iter_mut().filter(|x| x.id == id).for_each(|x| {
+                        x.ready = false;
+                        x.setup_with = Some(with.clone());
+                    })
+                })?;
+                crate::lists::forget(&id);
                 // this computer's copy too (only ever a folder we made: <servers root>/<id>)
                 let ok_dir = e.dir.file_name().map(|n| n.to_string_lossy() == e.id).unwrap_or(false)
                     && e.dir.parent().and_then(|p| p.file_name()).map(|n| n == FOLDER || n == "Servers").unwrap_or(false);
@@ -1916,14 +1959,9 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 }
                 drop(guard);
                 forget(&id);
-                let with = e.setup_with.clone().unwrap_or(SetupWith { template: "local".into(), components: vec![], password: String::new() });
-                let catalog = setup::components::load_catalog(&res)?;
-                let (source, components) = match template_source(&with.template, &e.game, &client, &catalog) {
-                    Some((dir, comps)) => (Some(dir), comps),
-                    None => (None, with.components.clone()),
-                };
                 let mut e = e;
                 e.ready = false;
+                e.setup_with = Some(with);
                 let job = remote_setup(e, source, components, res)?;
                 Ok(json!({"ok": true, "job": job}))
             }

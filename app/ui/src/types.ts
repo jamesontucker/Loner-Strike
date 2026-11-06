@@ -129,7 +129,7 @@ export type ServerInfo = {
   map: string;
   maxplayers: number;
   ready: boolean;
-  state: "running" | "stopped" | "crashed" | "setting-up" | "failed";
+  state: "running" | "stopped" | "crashed" | "setting-up" | "failed" | "checking";
   uptime: number;
   error: string | null;
   imported: boolean;

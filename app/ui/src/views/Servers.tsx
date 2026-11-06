@@ -27,7 +27,7 @@ const VISIBILITY = [
   { id: "unlisted", name: "Anyone with the address", note: "Not in Steam's server list" },
   { id: "listed", name: "Listed on Steam", note: "Shows up in the Internet tab of Find Servers" },
 ] as const;
-const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up", failed: "Not finished" };
+const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up", failed: "Not finished", checking: "Checking…" };
 
 /** What a phone is told when it tries something only the computer can do. */
 export const ON_COMPUTER_ONLY = "Change this from the computer running Loner-Strike.";

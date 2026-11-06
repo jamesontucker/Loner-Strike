@@ -70,7 +70,20 @@ fn file() -> std::path::PathBuf {
 }
 
 fn load() -> Config {
-    std::fs::read_to_string(file()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+    let mut c: Config = std::fs::read_to_string(file()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    // groups saved before your own game was named by which game it is ("local")
+    if let Some(me) = local_id() {
+        for g in c.values_mut() {
+            for m in g.members.iter_mut().filter(|m| *m == "local") {
+                *m = me.clone();
+            }
+            if let Some(h) = g.hashes.remove("local") {
+                g.hashes.insert(me.clone(), h);
+            }
+            g.members.dedup();
+        }
+    }
+    c
 }
 
 fn save(c: &Config) -> Result<(), String> {
