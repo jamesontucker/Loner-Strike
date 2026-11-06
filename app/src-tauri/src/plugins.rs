@@ -145,7 +145,7 @@ async fn api_add(State(st): State<Shared>, headers: HeaderMap) -> Reply {
         add(&g, &path).map(|name| json!({"ok": true, "name": name, "plugins": load(&g)}))
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     (StatusCode::OK, Json(r.unwrap_or_else(|e| json!({"error": e}))))
 }
 

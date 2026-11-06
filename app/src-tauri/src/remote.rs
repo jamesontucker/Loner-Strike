@@ -75,7 +75,7 @@ fn connect(r: &RemoteInfo) -> Result<Session, String> {
         .next()
         .ok_or_else(|| format!("Couldn't find {}.", r.host))?;
     let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(10))
-        .map_err(|_| format!("Couldn't reach {} on port {}. Is the machine running, and is SSH open?", r.host, r.ssh_port))?;
+        .map_err(|_| format!("Couldn't reach {} on port {}. Check the machine is running and SSH (TCP 22) is open.", r.host, r.ssh_port))?;
     let mut s = Session::new().map_err(|e| e.to_string())?;
     s.set_tcp_stream(tcp);
     s.set_timeout(30_000);
@@ -86,7 +86,7 @@ fn connect(r: &RemoteInfo) -> Result<Session, String> {
     }
     let first = std::fs::read_to_string(&r.key).unwrap_or_default();
     if first.starts_with("PuTTY-User-Key-File") {
-        return Err("That's a PuTTY key (.ppk). Export it as an OpenSSH key in PuTTYgen (Conversions > Export OpenSSH key) and pick that.".into());
+        return Err("That's a PuTTY key (.ppk). Export it as an OpenSSH key in PuTTYgen (Conversions, then Export OpenSSH key) and pick that.".into());
     }
     s.userauth_pubkey_file(&r.user, None, &r.key, None).map_err(|e| {
         if first.contains("ENCRYPTED") || e.message().contains("passphrase") {
@@ -260,7 +260,7 @@ fn with_session<T>(r: &RemoteInfo, f: impl Fn(&Session) -> Result<T, ssh2::Error
                 drop_session(r, false);
                 let _ = e;
             }
-            Err(e) => return Err(format!("The connection to {} failed ({e}).", r.host)),
+            Err(e) => return Err(format!("Couldn't connect to {} ({e}). Check the machine is running.", r.host)),
         }
     }
     unreachable!()
@@ -354,7 +354,7 @@ fn quick_once<T>(r: &RemoteInfo, f: &impl Fn(&Session, &std::cell::Cell<bool>) -
         if broken {
             drop_session(r, true);
         }
-        (broken, format!("The connection to {} failed ({e}).", r.host))
+        (broken, format!("Couldn't connect to {} ({e}). Check the machine is running.", r.host))
     })
 }
 
@@ -383,7 +383,7 @@ fn exec_feed(r: &RemoteInfo, cmd: &str, feed: impl FnOnce(&mut dyn Write) -> Res
                 drop_session(r, false);
                 attempt += 1;
                 if attempt >= 2 {
-                    return Err(format!("The connection to {} failed ({e}).", r.host));
+                    return Err(format!("Couldn't connect to {} ({e}). Check the machine is running.", r.host));
                 }
             }
         }
@@ -522,7 +522,7 @@ pub fn upload_dir(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Path) ->
         |l| last = l.to_string(),
     )?;
     if code != 0 {
-        return Err(format!("Unpacking on the server failed ({last})."));
+        return Err(format!("Couldn't unpack the files on the server ({last}). Try again."));
     }
     Ok(count)
 }

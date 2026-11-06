@@ -759,7 +759,7 @@ async fn api_export(State(st): State<Shared>, headers: HeaderMap) -> Reply {
         Ok(json!({"ok": true, "files": files, "mb": (bytes as f64 / 1_048_576.0 * 10.0).round() / 10.0, "dir": dest.to_string_lossy()}))
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(Some(r))
 }
 

@@ -313,7 +313,7 @@ pub fn start(e: &Entry) -> Result<(), String> {
         return remote_apply(e, true);
     }
     if !exe(e).is_file() {
-        return Err("This server has no hltv.exe. Update Valve's server files (Overview, Maintenance) to get it.".into());
+        return Err("This server's folder doesn't have HLTV. Update Valve's server files in Overview, under Maintenance, to get it.".into());
     }
     let id = e.id.clone();
     let gen = with_runs(|r| {
@@ -626,7 +626,7 @@ fn answer(r: Result<Value, String>) -> (StatusCode, Json<Value>) {
 }
 
 async fn blocking(f: impl FnOnce() -> Result<Value, String> + Send + 'static) -> (StatusCode, Json<Value>) {
-    answer(tokio::task::spawn_blocking(f).await.unwrap_or_else(|_| Err("Something went wrong.".into())))
+    answer(tokio::task::spawn_blocking(f).await.unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into())))
 }
 
 fn entry(id: &str) -> Result<Entry, String> {
@@ -788,7 +788,7 @@ async fn api_folder(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req):
     blocking(move || {
         let e = entry(&id)?;
         if e.remote.is_some() {
-            return Err("The demos are on the server. Use Get it to copy one to your game.".into());
+            return Err("The demos are on the server. Use Copy to my game to copy one to your game.".into());
         }
         let demo = (!req.name.is_empty()).then(|| find_demo(&e, &req.name)).flatten();
         let dir = demos(&e)

@@ -322,7 +322,7 @@ pub fn csstats_path(core_ini: &str) -> String {
 fn reset_stats(g: &Game) -> Result<Value, String> {
     match g.rcon.send(RESET) {
         Ok(_) => Ok(json!({"ok": true, "message": "Stats clear when the map changes."})),
-        Err(RconError::BadPassword) => Err("The game rejected the panel password. Restart the map once.".into()),
+        Err(RconError::BadPassword) => Err("The game didn't accept Loner-Strike's console password. Restart the map once.".into()),
         Err(RconError::Offline) => {
             // the game is off, so nothing holds the ranks in memory
             let core = crate::sys::read_latin1(&g.dir.join("addons/amxmodx/configs/core.ini")).unwrap_or_default();
@@ -510,7 +510,7 @@ fn tell(g: &Game, cmd: &str) -> Result<bool, String> {
     match g.rcon.send(cmd) {
         Ok(_) => Ok(true),
         Err(RconError::Offline) => Ok(false),
-        Err(RconError::BadPassword) => Err("The game rejected the panel password. Restart the map once.".into()),
+        Err(RconError::BadPassword) => Err("The game didn't accept Loner-Strike's console password. Restart the map once.".into()),
     }
 }
 

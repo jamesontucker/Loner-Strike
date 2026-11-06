@@ -502,7 +502,7 @@ pub const PACKS: &[Pack] = &[
     },
     Pack {
         id: 25095, file: 179180, name: "SWAT Radio Voices", author: "Xander9393", kind: "replace", slug: "", ext: "",
-        about: "A new voice for the radio commands (Go go go, Enemy spotted, Fire in the hole...).",
+        about: "A new voice for the radio commands (like Go go go, Enemy spotted and Fire in the hole).",
     },
     Pack {
         id: 31143, file: 173142, name: "CS:GO Radio & Bot Chatter", author: "hellmonja", kind: "replace", slug: "", ext: "",
@@ -746,7 +746,7 @@ fn summary(g: &Game) -> Value {
 
 async fn api_get(State(st): State<Shared>) -> Reply {
     let Some(g) = st.game() else { return err("No game found.") };
-    ok(tokio::task::spawn_blocking(move || summary(&g)).await.unwrap_or_else(|_| json!({"error": "Something went wrong."})))
+    ok(tokio::task::spawn_blocking(move || summary(&g)).await.unwrap_or_else(|_| json!({"error": "Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening."})))
 }
 
 #[derive(Deserialize)]
@@ -779,7 +779,7 @@ async fn api_track(State(st): State<Shared>, headers: HeaderMap, Json(req): Json
         _ => Err("Unknown action.".into()),
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     match r {
         Ok(()) => ok(json!({"ok": true})),
         Err(e) => err(e),
@@ -851,7 +851,7 @@ async fn api_addon(State(st): State<Shared>, headers: HeaderMap, Json(req): Json
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Unknown add-on."})));
     }
     let Some(g) = st.game() else { return err("No game found.") };
-    match tokio::task::spawn_blocking(move || set_addon(&g, &req.id, req.on)).await.unwrap_or_else(|_| Err("Something went wrong.".into())) {
+    match tokio::task::spawn_blocking(move || set_addon(&g, &req.id, req.on)).await.unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into())) {
         Ok(how) => ok(json!({"ok": true, "how": how})),
         Err(e) => err(e),
     }
@@ -892,7 +892,7 @@ async fn api_packs(State(st): State<Shared>) -> Reply {
         json!({"packs": packs, "jobs": jobs})
     })
     .await
-    .unwrap_or_else(|_| json!({"error": "Something went wrong."}));
+    .unwrap_or_else(|_| json!({"error": "Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening."}));
     ok(v)
 }
 
@@ -916,7 +916,7 @@ async fn api_pack(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<
             _ => Err("Unknown action.".into()),
         })
         .await
-        .unwrap_or_else(|_| Err("Something went wrong.".into()));
+        .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
         return match r {
             Ok(v) => ok(v),
             Err(e) => err(e),
@@ -954,7 +954,7 @@ async fn api_pack(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<
             });
             ok(json!({"ok": true, "job": id}))
         }
-        "remove" => match tokio::task::spawn_blocking(move || remove_music(&g, p)).await.unwrap_or_else(|_| Err("Something went wrong.".into())) {
+        "remove" => match tokio::task::spawn_blocking(move || remove_music(&g, p)).await.unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into())) {
             Ok(()) => ok(json!({"ok": true})),
             Err(e) => err(e),
         },
@@ -1002,7 +1002,7 @@ async fn api_add(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<A
         Ok::<Value, String>(json!({"ok": true, "added": added, "notes": notes}))
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     match r {
         Ok(v) => ok(v),
         Err(e) => err(e),

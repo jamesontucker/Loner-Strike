@@ -371,7 +371,7 @@ async fn api_export(State(st): State<Shared>, headers: HeaderMap) -> Reply {
         Ok::<Value, String>(json!({"ok": true, "files": data["files"].as_object().map(|f| f.len()).unwrap_or(0)}))
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     match r {
         Ok(v) => ok(v),
         Err(e) => err(e),
@@ -397,7 +397,7 @@ async fn api_import(State(st): State<Shared>, headers: HeaderMap) -> Reply {
         Ok::<Value, String>(json!({"ok": true, "missing": missing, "hl": g.hl, "game": g.name}))
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     match r {
         Ok(v) => ok(v),
         Err(e) => err(e),
@@ -489,7 +489,7 @@ async fn api_add_file(State(st): State<Shared>, headers: HeaderMap, Json(req): J
         g.store.start_local_install(sec.key, &path).map(|job| json!({"ok": true, "job": job})).map_err(|e| e.message())
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     match r {
         Ok(v) => ok(v),
         Err(e) => err(e),

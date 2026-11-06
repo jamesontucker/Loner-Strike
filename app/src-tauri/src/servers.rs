@@ -1094,7 +1094,7 @@ pub fn update_files(e: Entry) -> Result<String, String> {
             job.run(&format!("{g}/srv-upload"), || sync_as(&e, Send::AllButData).map(|_| ()))
         });
     }
-    let base = e.dir.parent().ok_or("Bad server folder.")?.join(".base");
+    let base = e.dir.parent().ok_or("That isn't a server folder Loner-Strike can use.")?.join(".base");
     let steps = vec![
         setup::server_step(&g, "srv-steamcmd", "Getting SteamCMD", 0.5),
         setup::server_step(&g, "srv-download", "Checking Valve's server files", 8.0),
@@ -1726,7 +1726,7 @@ async fn api_create_remote(State(st): State<Shared>, headers: HeaderMap, Json(re
         create_remote(req, client, res?).map(|(id, job)| json!({"ok": true, "id": id, "job": job}))
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
 }
 
@@ -1742,7 +1742,7 @@ async fn api_probe_remote(headers: HeaderMap, Json(req): Json<NewRemote>) -> (St
         Ok(json!({"ok": true, "fingerprint": fingerprint, "known": known, "arch": arch, "x86": arch == "x86_64"}))
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
 }
 
@@ -1766,7 +1766,7 @@ async fn api_pick_key(State(st): State<Shared>, headers: HeaderMap) -> (StatusCo
         }
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
 }
 
@@ -1781,7 +1781,7 @@ async fn api_create(State(st): State<Shared>, headers: HeaderMap, on: Option<axu
         create(req, client, res?).map(|(id, job)| json!({"ok": true, "id": id, "job": job}))
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
 }
 
@@ -1912,7 +1912,7 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
         Ok(json!({"ok": true, "restart": running(&id) && restart_needed(&e, &now)}))
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
 }
 
@@ -2063,7 +2063,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
         }
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
 }
 
@@ -2127,7 +2127,7 @@ async fn api_set_rcon_password(UrlPath(id): UrlPath<String>, headers: HeaderMap,
         Ok(json!({"ok": true, "password": pw}))
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
 }
 
@@ -2155,10 +2155,10 @@ async fn api_console_cmd(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(
     let r = tokio::task::spawn_blocking(move || {
         let e = get(&id).ok_or("That server isn't there any more.")?;
         let rcon = e.rcon().ok_or("The server isn't set up yet.")?;
-        rcon.send(&cmd).map(|out| json!({"reply": out})).map_err(|_| "The server didn't answer. Is it running?".to_string())
+        rcon.send(&cmd).map(|out| json!({"reply": out})).map_err(|_| "The server didn't answer. Check that it's running.".to_string())
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
 }
 
@@ -2171,7 +2171,7 @@ async fn api_import(headers: HeaderMap, Json(req): Json<ImportReq>) -> (StatusCo
     if !from_panel(&headers) {
         return forbidden();
     }
-    let r = tokio::task::spawn_blocking(move || import(Path::new(req.dir.trim()))).await.unwrap_or_else(|_| Err("Something went wrong.".into()));
+    let r = tokio::task::spawn_blocking(move || import(Path::new(req.dir.trim()))).await.unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
 }
 

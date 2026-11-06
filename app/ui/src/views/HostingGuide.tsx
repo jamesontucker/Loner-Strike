@@ -32,7 +32,7 @@ const PROVIDERS = [
 
 const TROUBLE: { q: string; a: string; match?: RegExp }[] = [
   { q: "\"Failed to contact game server\"", a: "The provider's firewall doesn't allow UDP 27015-27020 inbound, or the server is stopped." },
-  { q: "Couldn't reach it on port 22", a: "The machine is off, the address is wrong, or (on Oracle) it has no public IP.", match: /couldn't reach \S+ on port|couldn't find \S+\. check the address|can't reach (?!the app)|port 22|timed out|connection to .*(failed|dropped)/i },
+  { q: "Couldn't reach it on port 22", a: "The machine is off, the address is wrong, or (on Oracle) it has no public IP.", match: /couldn't reach \S+ on port|couldn't find \S+\. check the address|can't reach (?!the app)|port 22|timed out|connection to .*(failed|dropped)|couldn't connect to/i },
   { q: "The server didn't accept the key", a: "Wrong user (ubuntu or root), the key wasn't added when the machine was made, or you picked the .pub file.", match: /didn't accept the key|key file/i },
   { q: "The key has a passphrase", a: "Not supported yet. Make a key without one and add its .pub line to ~/.ssh/authorized_keys on the machine.", match: /passphrase/i },
   { q: "The server's identity has changed", a: "Expected if you rebuilt the machine: run ssh-keygen -R with its address, then delete the server here and add it again. Otherwise, don't connect.", match: /identity has changed/i },

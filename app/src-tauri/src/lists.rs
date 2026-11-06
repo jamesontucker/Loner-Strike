@@ -305,7 +305,7 @@ async fn api_set(headers: HeaderMap, on: Option<axum::Extension<crate::server::O
         Ok(json!({"ok": true}))
     })
     .await
-    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     match r {
         Ok(v) => (StatusCode::OK, Json(v)),
         Err(e) => (StatusCode::OK, Json(json!({"error": e}))),

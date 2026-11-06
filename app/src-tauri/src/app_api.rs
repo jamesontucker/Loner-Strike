@@ -141,7 +141,7 @@ pub fn start_phone(st: &Shared) {
     let listener = match std::net::TcpListener::bind(("0.0.0.0", PHONE_PORT)) {
         Ok(l) => l,
         Err(_) => {
-            phone.error = Some(format!("Port {PHONE_PORT} is busy (is the old panel running for phones?)."));
+            phone.error = Some(format!("Port {PHONE_PORT} is busy. Close the old phone panel if it's running, then try again."));
             return;
         }
     };
@@ -316,7 +316,7 @@ async fn api_direct_set(State(st): State<Shared>, headers: HeaderMap, Json(req):
     let port = game_port(&st);
     let v = tokio::task::spawn_blocking(move || if req.on { crate::connect::open_direct(port) } else { crate::connect::close_direct() })
         .await
-        .unwrap_or_else(|_| json!({"on": false, "error": "Something went wrong."}));
+        .unwrap_or_else(|_| json!({"on": false, "error": "Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening."}));
     (StatusCode::OK, Json(v))
 }
 

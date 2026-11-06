@@ -22,7 +22,7 @@ const ALLOWED: &[&str] = &[
 ];
 const METAMOD_DLL: &str = r"addons\metamod\dlls\metamod.dll";
 const OFFLINE: &str = "No game is loaded. Start one from Play.";
-const BAD_PASSWORD: &str = "The game turned down the panel's password. Restart the map once.";
+const BAD_PASSWORD: &str = "The game didn't accept Loner-Strike's console password. Restart the map once.";
 
 /// Why a command failed: the request was wrong (HTTP 400) or the game didn't take it (503).
 #[derive(Debug)]

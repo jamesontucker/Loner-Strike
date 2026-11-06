@@ -169,7 +169,7 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
     // ⌘1-⌘9 go to the first nine sections, the same as the keys in the window
     let sections = [
         ("play", "Play"), ("maps", "Maps"), ("bots", "Bots"), ("match", "Match"), ("fun", "Fun"), ("players", "Players"),
-        ("addons", "Add-ons"), ("friends", "Play with Friends"), ("admins", "Admins"),
+        ("addons", "Add-ons"), ("friends", "Play with friends"), ("admins", "Admins"),
     ];
     let mut view = SubmenuBuilder::new(app, "Go");
     for (n, (id, label)) in sections.iter().enumerate() {
@@ -177,8 +177,8 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
     }
     let view = view
         .separator()
-        .item(&MenuItemBuilder::with_id("section:welcome", "Welcome Page").build(app)?)
-        .item(&MenuItemBuilder::with_id("section:more", "Get More").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:welcome", "Welcome page").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:more", "Get more").build(app)?)
         .item(&MenuItemBuilder::with_id("section:mods", "Mods").build(app)?)
         .item(&MenuItemBuilder::with_id("section:servers", "Servers").build(app)?)
         .build()?;

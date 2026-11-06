@@ -179,7 +179,7 @@ async fn ui(uri: Uri, headers: axum::http::HeaderMap) -> Response {
         None if file.starts_with("assets/") => return (StatusCode::NOT_FOUND, "not found").into_response(),
         None => match Ui::get("index.html") {
             Some(f) => ("index.html", f),
-            None => return (StatusCode::NOT_FOUND, "The app's pages are missing - rebuild the UI (npm run build in app/ui).").into_response(),
+            None => return (StatusCode::NOT_FOUND, "The app's pages are missing. Rebuild the UI (npm run build in app/ui).").into_response(),
         },
     };
     let mime = f.metadata.mimetype().to_string();
