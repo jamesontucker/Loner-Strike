@@ -48,6 +48,7 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "mods", label: "Mods", icon: "mods" },
   { id: "sounds", label: "Sounds", icon: "sound" },
   { id: "servers", label: "Servers", icon: "server", group: "Hosting" },
+  // (the sidebar keeps it below the list, always in view)
   { id: "settings", label: "Settings", icon: "settings", group: "App" },
 ];
 
@@ -267,13 +268,15 @@ function Shell() {
           </div>
         )}
         <nav className="nav" aria-label="Sections">
-          {NAV.map((n) => (
+          {NAV.filter((n) => n.id !== "settings").map((n) => (
             <div key={n.id}>
               {n.group && <div className="nav-group">{n.group}</div>}
               {navButton(n)}
             </div>
           ))}
         </nav>
+        {/* Settings stays in view however short the window is */}
+        <div className="nav-pinned">{navButton(NAV.find((n) => n.id === "settings")!)}</div>
         <div className="side-foot">
           {current ? `Server: ${current.name}` : app?.game ? gameTitle(app.game.id) : appQ.isError ? "Couldn't load your game" : "No game found"}
           {app?.version && <span> · v{app.version}</span>}
