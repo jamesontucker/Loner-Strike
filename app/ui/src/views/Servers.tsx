@@ -77,7 +77,7 @@ function useJoinRestart() {
 }
 
 /** Every server, and making or adding one. Opening a server shows its own page. */
-export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; list: ServerList | null; onOpen: (id: string) => void; onChanged: () => void }) {
+export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Scan | null; list: ServerList | null; loadError?: boolean; onOpen: (id: string) => void; onChanged: () => void }) {
   const ask = useConfirm();
   const toast = useToast();
   const [creating, setCreating] = useState(false);

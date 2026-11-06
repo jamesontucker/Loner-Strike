@@ -1,5 +1,90 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cmd, options, sameValue } from "./api";
+
+// ---- dialogs -------------------------------------------------------------------------
+
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+let openSheets = 0;
+
+/** A dialog over the app: Escape and the backdrop close it (unless `onClose` is left
+ *  out), focus moves into it and back when it closes, Tab stays inside, and the app
+ *  behind can't be clicked or reached by screen readers. */
+export function Sheet({
+  label,
+  onClose,
+  children,
+  className = "sheet",
+  bottom,
+  role = "dialog",
+  describedBy,
+}: {
+  label: string;
+  onClose?: () => void;
+  children: ReactNode;
+  className?: string;
+  /** a sheet that slides up from the bottom (the phone's More menu) */
+  bottom?: boolean;
+  role?: "dialog" | "alertdialog";
+  describedBy?: string;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    const back = document.activeElement as HTMLElement | null;
+    const root = document.getElementById("root");
+    openSheets++;
+    root?.setAttribute("inert", "");
+    // focus the first field (or button) unless something inside already asked for it
+    const el = box.current;
+    if (el && !el.contains(document.activeElement)) (el.querySelector<HTMLElement>("[autofocus]") ?? el.querySelector<HTMLElement>(FOCUSABLE) ?? el).focus();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && close.current) {
+        e.stopPropagation();
+        close.current();
+      }
+      if (e.key === "Tab" && el) {
+        const all = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((x) => x.offsetParent !== null);
+        if (!all.length) return;
+        const first = all[0];
+        const last = all[all.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    el?.addEventListener("keydown", key);
+    return () => {
+      el?.removeEventListener("keydown", key);
+      if (--openSheets === 0) root?.removeAttribute("inert");
+      if (back?.isConnected) back.focus();
+    };
+  }, []);
+  return createPortal(
+    <div className={`sheet-backdrop${bottom ? " bottom" : ""}`} onClick={() => close.current?.()}>
+      <div ref={box} className={className} role={role} aria-modal="true" aria-label={label} aria-describedby={describedBy} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** A load that failed: what went wrong and a way to try again. */
+export function LoadError({ text, onRetry, title }: { text: string; onRetry?: () => void; title?: string }) {
+  return (
+    <div className="load-error" role="alert">
+      {title && <h3>{title}</h3>}
+      <p>{text}</p>
+      {onRetry && <button className="btn" onClick={onRetry}>Try again</button>}
+    </div>
+  );
+}
 
 // ---- asking before something can't be undone --------------------------------------
 type Ask = { text: string; ok: string; danger: boolean; done: (yes: boolean) => void };
@@ -25,52 +110,53 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   };
   useEffect(() => {
     if (!q) return;
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close(false);
-    };
     // a question about one page or server never carries over to the next
     const away = () => close(false);
-    const back = document.activeElement as HTMLElement | null;
-    window.addEventListener("keydown", key);
     window.addEventListener("ls-target", away);
     window.addEventListener("ls-nav", away);
     return () => {
-      window.removeEventListener("keydown", key);
       window.removeEventListener("ls-target", away);
       window.removeEventListener("ls-nav", away);
-      if (back?.isConnected) back.focus();
     };
   }, [q]);
   return (
     <AskCtx.Provider value={ask}>
       {children}
       {q && (
-        <div className="sheet-backdrop" onClick={() => close(false)}>
-          <div className="sheet ask" role="alertdialog" aria-modal="true" aria-label={q.text} onClick={(e) => e.stopPropagation()}>
-            <p>{q.text}</p>
-            <div className="row ask-buttons">
-              <button className="btn" autoFocus={q.danger} onClick={() => close(false)}>Cancel</button>
-              <button className={`btn ${q.danger ? "danger strong" : "primary"}`} autoFocus={!q.danger} onClick={() => close(true)}>{q.ok}</button>
-            </div>
+        <Sheet className="sheet ask" role="alertdialog" label={q.ok} describedBy="ask-text" onClose={() => close(false)}>
+          <p id="ask-text">{q.text}</p>
+          <div className="row ask-buttons">
+            <button className="btn" autoFocus={q.danger} onClick={() => close(false)}>Cancel</button>
+            <button className={`btn ${q.danger ? "danger strong" : "primary"}`} autoFocus={!q.danger} onClick={() => close(true)}>{q.ok}</button>
           </div>
-        </div>
+        </Sheet>
       )}
     </AskCtx.Provider>
   );
 }
 
 // ---- toasts --------------------------------------------------------------
-type Toast = { id: number; text: string; error?: boolean };
-const ToastCtx = createContext<(text: string, error?: boolean) => void>(() => {});
+type ToastAction = { label: string; run: () => void };
+type Toast = { id: number; text: string; error?: boolean; action?: ToastAction };
+type Push = (text: string, error?: boolean, action?: ToastAction) => void;
+const ToastCtx = createContext<Push>(() => {});
+/** `toast("Saved")`, `toast("Couldn't save", true)`, or with a button:
+ *  `toast("Couldn't load the maps.", true, { label: "Try again", run: reload })`. */
 export const useToast = () => useContext(ToastCtx);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const push = useCallback((text: string, error?: boolean) => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, text, error }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), error ? 5200 : 2600);
-  }, []);
+  const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
+  const push = useCallback<Push>(
+    (text, error, action) => {
+      const id = Date.now() + Math.random();
+      // the same message twice in a row shows once
+      setToasts((t) => [...t.filter((x) => x.text !== text), { id, text, error, action }]);
+      // errors stay long enough to read (and until dismissed when there's something to do)
+      if (!action) setTimeout(() => dismiss(id), error ? 9000 : 2600);
+    },
+    [dismiss],
+  );
   // errors from actions (useActions) that nothing else reported
   useEffect(() => {
     const on = (e: Event) => push(String((e as CustomEvent).detail), true);
@@ -80,13 +166,26 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={push}>
       {children}
-      <div className="toasts" role="status" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast${t.error ? " err" : ""}`}>
-            {t.text}
-          </div>
-        ))}
-      </div>
+      {createPortal(
+        <div className="toasts">
+          {toasts.map((t) => (
+            <div key={t.id} className={`toast${t.error ? " err" : ""}`} role={t.error ? "alert" : "status"}>
+              <span className="toast-text">{t.text}</span>
+              {t.action && (
+                <button className="btn small" onClick={() => { dismiss(t.id); t.action!.run(); }}>
+                  {t.action.label}
+                </button>
+              )}
+              {(t.error || t.action) && (
+                <button className="toast-x" aria-label="Dismiss" onClick={() => dismiss(t.id)}>
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
     </ToastCtx.Provider>
   );
 }

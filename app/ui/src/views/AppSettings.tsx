@@ -9,7 +9,7 @@ type Prefs = { auto_update: boolean; keep_servers: boolean; game_folders: string
 type Storage = { downloads: number; pictures: number; folder: string };
 const mb = (n?: number) => (n === undefined ? "…" : n < 1048576 ? `${Math.max(0, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(n < 104857600 ? 1 : 0)} MB`);
 
-export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app: AppInfo | null; reloadApp: () => void; scan: Scan | null; openSetup: () => void; switchTo: (id: string) => void }) {
+export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { app: AppInfo | null; reloadApp: () => void; scan: Scan | null; openSetup: () => void; switchGame: (hl: string | null, game: string) => Promise<void> }) {
   const ask = useConfirm();
   const toast = useToast();
   const [phone, setPhone] = useState<PhoneInfo | null>(null);
@@ -162,7 +162,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
                       busy={busy(`app:game:${i.hl}:${g.id}`)}
                       label={<>Switch to {g.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}{g.installed ? "" : " (not set up)"}</>}
                       busyLabel="Switching…"
-                      onClick={() => run(`app:game:${i.hl}:${g.id}`, () => postJson("/api/app/game", { hl: i.hl, game: g.id }).then(() => switchTo(`local:${g.id}`)), `Switching to ${g.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}…`)}
+                      onClick={() => switchGame(i.hl, g.id)}
                     />
                   )),
               )}

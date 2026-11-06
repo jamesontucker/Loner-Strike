@@ -58,7 +58,7 @@ export function MapCard({ map, onClick, current, onFav, selected }: { map: MapIn
   );
 }
 
-export function Maps({ data, maps, reload, refresh }: { data: Online | null; maps: MapInfo[]; reload: () => void; refresh: () => void }) {
+export function Maps({ data, maps, loading, reload, refresh }: { data: Online | null; maps: MapInfo[]; loading?: boolean; reload: () => void; refresh: () => void }) {
   const ask = useConfirm();
   const run = useCommand(refresh);
   const toast = useToast();

@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { GameState } from "./types";
+import { useCallback, useMemo, useRef } from "react";
+import { currentTarget, isAbort, targetSignal, useActivityStore } from "./store";
+
+export { currentTarget, isAbort };
 
 // Commands only take plain words; the server checks the same rule.
 export const SAFE = /^[A-Za-z0-9_.\-]{1,64}$/;
@@ -7,46 +9,36 @@ export const SAFE = /^[A-Za-z0-9_.\-]{1,64}$/;
 /** The app window on this computer (not a phone over Wi-Fi). Some things only work here. */
 export const ON_THIS_COMPUTER = ["127.0.0.1", "localhost"].includes(location.hostname);
 
-// The dedicated server the Servers area has open; null is the player's own game.
-// Every request names it (X-Target), so nothing is switched behind the player's back.
-let TARGET: string | null = null;
-// Bumped on every switch, so replies meant for the previous target are dropped.
-let GEN = 0;
-const stale = () => new Promise<never>(() => {});
-export function setTarget(id: string | null) {
-  if (id !== TARGET) GEN++;
-  TARGET = id;
-  window.dispatchEvent(new Event("ls-target"));
-}
-export const targetGen = () => GEN;
 /** The open target as part of an action key ("local" for the player's own game), so the
  *  same action on two servers doesn't share a spinner. */
-export const targetKey = () => TARGET ?? "local";
+export const targetKey = () => currentTarget() ?? "local";
 /** For URLs the browser loads by itself (images). */
 export function withTarget(url: string) {
-  return TARGET ? `${url}${url.includes("?") ? "&" : "?"}target=${encodeURIComponent(TARGET)}` : url;
+  const t = currentTarget();
+  return t ? `${url}${url.includes("?") ? "&" : "?"}target=${encodeURIComponent(t)}` : url;
 }
-const targetHeader = (): Record<string, string> => (TARGET ? { "X-Target": TARGET } : {});
+const targetHeader = (): Record<string, string> => {
+  const t = currentTarget();
+  return t ? { "X-Target": t } : {};
+};
 
-/** GET as JSON. A reply that arrives after the target changed never resolves, so it can't
- *  land in the newly opened server's page. */
+/** GET as JSON for the open target. Opening another server cancels it (an AbortError),
+ *  so a reply meant for the previous one can't land on the new one's page. */
 export async function getJson<T>(path: string): Promise<T> {
-  const g = GEN;
+  const { signal, done } = targetSignal();
   try {
-    const r = await fetch(path, { credentials: "same-origin", headers: targetHeader() });
+    const r = await fetch(path, { credentials: "same-origin", headers: targetHeader(), signal });
     if (!r.ok && r.status !== 400) throw new Error(`${path}: ${r.status}`);
-    const j = (await r.json()) as T;
-    return g === GEN ? j : stale();
-  } catch (e) {
-    if (g !== GEN) return stale();
-    throw e;
+    return (await r.json()) as T;
+  } finally {
+    done();
   }
 }
 
 /** GET for a set target (the one an action started on), without the switch check: for
  *  following a job to its end, which must finish even if another server is opened. */
-export async function getJsonAt<T>(path: string, target: string | null): Promise<T> {
-  const r = await fetch(path, { credentials: "same-origin", headers: target ? { "X-Target": target } : {} });
+export async function getJsonAt<T>(path: string, target: string | null, signal?: AbortSignal): Promise<T> {
+  const r = await fetch(path, { credentials: "same-origin", headers: target ? { "X-Target": target } : {}, signal });
   if (!r.ok && r.status !== 400) throw new Error(`${path}: ${r.status}`);
   return (await r.json()) as T;
 }
@@ -80,41 +72,6 @@ export async function cmd(command: string, args: string[] = []): Promise<string>
   return (res.output || []).map((l) => l.replace(/^\[Game Mode\]\s*/, "")).filter(Boolean).join(" ");
 }
 
-/** Live game state, polled every 2 seconds while the window is visible. */
-export function useGameState() {
-  const [state, setState] = useState<GameState | null>(null);
-  // The target generation a request is in flight for; a switch lets the next one through.
-  const busy = useRef<number | null>(null);
-
-  const refresh = useCallback(async () => {
-    const g = targetGen();
-    if (busy.current === g) return;
-    busy.current = g;
-    try {
-      setState(await getJson<GameState>("/api/state"));
-    } catch {
-      setState({ online: false, reason: "Lost contact with the app's server. Restart Loner-Strike." });
-    } finally {
-      if (busy.current === g) busy.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-    const t = setInterval(() => !document.hidden && refresh(), 2000);
-    const vis = () => !document.hidden && refresh();
-    document.addEventListener("visibilitychange", vis);
-    window.addEventListener("ls-target", vis);
-    return () => {
-      clearInterval(t);
-      document.removeEventListener("visibilitychange", vis);
-      window.removeEventListener("ls-target", vis);
-    };
-  }, [refresh]);
-
-  return { state, refresh };
-}
-
 /** "values"/"labels" as the plugin sends them: labels split on | when present, else on spaces. */
 export function options(values: string, labels: string): [string, string][] {
   const v = values.split(/\s+/).filter(Boolean);
@@ -140,7 +97,7 @@ export async function addFromFile(section: string): Promise<{ ok: boolean; messa
   const r = await postJson<{ ok?: boolean; job?: string; error?: string; cancelled?: boolean }>("/api/gb/add-file", { section }).catch(() => ({ error: "Couldn't reach the app." }) as { error: string; job?: string; cancelled?: boolean });
   if (r.cancelled) return null;
   if (r.error || !r.job) return { ok: false, message: r.error || "That didn't work." };
-  const target = TARGET;
+  const target = currentTarget();
   for (let i = 0; i < 600; i++) {
     await new Promise((res) => setTimeout(res, 800));
     const jobs = await getJsonAt<{ id: string; state: string; message?: string }[]>("/api/gb/jobs", target).catch(() => []);
@@ -191,42 +148,30 @@ export function useOnce() {
   }, []);
 }
 
-// ---- what's in progress, for the whole app ------------------------------------------
-// Kept outside any page, so a spinner and its label are still there after you switch
-// pages and come back (the work itself carries on regardless).
-const activity = new Map<string, string>();
-const watchers = new Set<() => void>();
-let snapshot: [string, string][] = [];
-function changed() {
-  snapshot = [...activity.entries()];
-  watchers.forEach((w) => w());
-}
-const subscribe = (w: () => void) => {
-  watchers.add(w);
-  return () => watchers.delete(w);
-};
+// ---- what's in progress, for the whole app (store.ts) -------------------------------
+
 /** Everything in progress: [key, label] */
-export function useActivity() {
-  return useSyncExternalStore(subscribe, () => snapshot);
+export function useActivity(): [string, string][] {
+  const running = useActivityStore((s) => s.running);
+  return useMemo(() => Object.entries(running), [running]);
 }
 
 /** Runs an action unless the same one is still going; `busy(key)` says whether it is, on
  *  any page. `label` is what the top bar says while it runs ("Saving…"). */
 export function useActions() {
-  const all = useActivity();
+  const running = useActivityStore((s) => s.running);
   const run = useCallback(async (key: string, fn: () => Promise<unknown>, label = "") => {
-    if (activity.has(key)) return;
-    activity.set(key, label);
-    changed();
+    const { start, end } = useActivityStore.getState();
+    if (!start(key, label)) return;
     try {
       await fn();
-    } catch {
-      // the toast provider shows it: a button never fails without a word
-      window.dispatchEvent(new CustomEvent("ls-error", { detail: "That didn't work: couldn't reach the app." }));
+    } catch (e) {
+      // a request cancelled by opening another server isn't a failure; anything else
+      // gets a word from the toast provider: a button never fails silently
+      if (!isAbort(e)) window.dispatchEvent(new CustomEvent("ls-error", { detail: "That didn't work: couldn't reach the app." }));
     } finally {
-      activity.delete(key);
-      changed();
+      end(key);
     }
   }, []);
-  return { run, busy: (key: string) => all.some(([k]) => k === key) };
+  return { run, busy: (key: string) => key in running };
 }

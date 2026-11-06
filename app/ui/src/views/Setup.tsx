@@ -38,7 +38,9 @@ type Stage = "welcome" | "games" | "content" | "review" | "install" | "done";
 const IS_MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 
 /** onClose: back to the app without setting up; onDone: setup finished. */
-export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose: () => void; onDone: () => void; onRescan: () => void }) {
+/** First-run setup, or (fromSettings) setup run again from Settings: then it starts at
+ *  the game choice and its way out is Cancel. */
+export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan: Scan; fromSettings?: boolean; onClose: () => void; onDone: () => void; onRescan: () => void }) {
   const toast = useToast();
   const [stage, setStage] = useState<Stage>("welcome");
   const [installIdx, setInstallIdx] = useState(0);

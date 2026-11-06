@@ -1,10 +1,12 @@
-import { FilesUpdate } from "./views/FilesUpdate";
-import { useCallback, useEffect, useState } from "react";
-import { clock, getJson, ON_THIS_COMPUTER, postJson, setTarget, withTarget, useActions, useActivity } from "./api";
-import { useGameState } from "./api";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { clock, ON_THIS_COMPUTER, postJson, withTarget, useActions, useActivity } from "./api";
 import { Icon } from "./icons";
-import type { AppInfo, MapInfo, Online, ServerList } from "./types";
-import { applyScale, ConfirmProvider, savedScale, ToastProvider, useToast } from "./ui";
+import { queryClient, reloadAppInfo, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
+import { useNav, type Section } from "./store";
+import type { AppInfo, Online } from "./types";
+import { applyScale, ConfirmProvider, LoadError, savedScale, Sheet, Skeleton, ToastProvider, useToast } from "./ui";
+import { FilesUpdate } from "./views/FilesUpdate";
 import { Addons } from "./views/Addons";
 import { AppSettings } from "./views/AppSettings";
 import { Bots } from "./views/Bots";
@@ -22,9 +24,7 @@ import { ServerExtras } from "./views/ServerExtras";
 import { Sounds } from "./views/Sounds";
 import { MatchButtons, SettingsPage } from "./views/Settings";
 import { Welcome } from "./views/Welcome";
-import { anySetUp, Setup, type Scan } from "./views/Setup";
-
-type Section = "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "servers" | "admins" | "community" | "extras" | "welcome" | "more" | "mods" | "sounds" | "settings";
+import { anySetUp, Setup } from "./views/Setup";
 
 const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean }[] = [
   { id: "play", label: "Play", icon: "play" },
@@ -40,119 +40,68 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "welcome", label: "Welcome page", icon: "welcome" },
   { id: "extras", label: "Rotation & messages", icon: "extras" },
   { id: "more", label: "Get more", icon: "more", group: "Library" },
-  { id: "mods", label: "Mods", icon: "addons" },
+  { id: "mods", label: "Mods", icon: "mods" },
   { id: "sounds", label: "Sounds", icon: "sound" },
-  { id: "settings", label: "Settings", icon: "settings" },
   { id: "servers", label: "Servers", icon: "server", group: "Hosting" },
+  { id: "settings", label: "Settings", icon: "settings", group: "App" },
 ];
 
-function loadSection(): Section {
-  try {
-    const s = localStorage.getItem("ls.section") as Section | null;
-    return s && NAV.some((n) => n.id === s) ? s : "play";
-  } catch {
-    return "play";
-  }
-}
+const gameTitle = (id?: string | null) => (id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero");
 
 applyScale(savedScale());
 
 export default function App() {
   return (
-    <ToastProvider>
-      <ConfirmProvider>
-        <Shell />
-      </ConfirmProvider>
-    </ToastProvider>
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>
+        <ConfirmProvider>
+          <Shell />
+        </ConfirmProvider>
+      </ToastProvider>
+    </QueryClientProvider>
   );
 }
 
 function Shell() {
-  const { state, refresh } = useGameState();
-  const [section, setSectionRaw] = useState<Section>(loadSection);
-  const [app, setApp] = useState<AppInfo | null>(null);
-  const [maps, setMaps] = useState<MapInfo[]>([]);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [scan, setScan] = useState<Scan | null>(null);
-  const [setupOpen, setSetupOpen] = useState(false);
-  // "Set up later" on the first run: the app without the local setup
-  const [setupLater, setSetupLater] = useState(() => {
-    try {
-      return localStorage.getItem("ls.setupLater") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [servers, setServers] = useState<ServerList | null>(null);
-  // the dedicated server open in the Servers area; everything else is always your game
-  const [openServer, setOpenServer] = useState<string | null>(null);
+  const { state, reconnecting, refresh } = useGameState();
+  const { section, server: openServer, moreOpen, setupOpen, setupLater, go, openServer: enterServer, setMoreOpen, setSetupOpen, laterSetup } = useNav();
+  const appQ = useAppInfo();
+  const mapsQ = useMaps();
+  const scanQ = useScan();
+  const serversQ = useServers();
+  const app = appQ.data ?? null;
+  const maps = mapsQ.data ?? [];
+  const scan = scanQ.data ?? null;
+  const servers = serversQ.data ?? null;
   const toast = useToast();
   const { run: once, busy } = useActions();
 
-  const setSection = (s: Section) => {
-    if (s !== "servers" && openServer) enterServer(null);
-    window.dispatchEvent(new Event("ls-nav"));
-    setSectionRaw(s);
-    setMoreOpen(false);
-    document.querySelector(".content")?.scrollTo({ top: 0 });
-    try {
-      localStorage.setItem("ls.section", s);
-    } catch {
-      /* private window */
-    }
-  };
-  const reloadApp = useCallback(() => {
-    getJson<AppInfo>("/api/app").then(setApp).catch(() => setApp(null));
-  }, []);
-  const reloadMaps = useCallback((fresh = false) => {
-    getJson<MapInfo[]>(`/api/maps${fresh ? "?refresh" : ""}`)
-      .then((m) => setMaps(Array.isArray(m) ? m : []))
-      .catch(() => setMaps([]));
-  }, []);
-
-  const reloadScan = useCallback(() => {
-    getJson<Scan>("/api/setup/scan").then(setScan).catch(() => setScan(null));
-  }, []);
-
-  const reloadServers = useCallback(() => {
-    // a failed poll keeps the last list, so an open server page doesn't vanish
-    getJson<ServerList>("/api/servers").then(setServers).catch(() => null);
-  }, []);
-
-  useEffect(() => {
-    reloadApp();
+  const reloadApp = () => void reloadAppInfo();
+  const refreshMaps = () => void reloadMaps();
+  const refreshServers = () => void reloadServers();
+  const refreshAll = () => {
+    reloadAppInfo();
     reloadMaps();
-    reloadScan();
-    reloadServers();
-    const t = setInterval(() => !document.hidden && reloadServers(), 5000);
-    return () => clearInterval(t);
-  }, [reloadApp, reloadMaps, reloadScan, reloadServers]);
-
-  // opens a server's own page (its requests name it), or goes back to your game
-  const enterServer = (id: string | null) => {
-    setTarget(id);
-    setOpenServer(id);
-    setMaps([]);
     refresh();
-    reloadApp();
-    reloadMaps(true);
   };
-  // CS 1.6 / Condition Zero: which of your games the app is about
-  const switchGame = (game: string) => {
-    if (app?.game?.id === game) return;
-    once("app:switch-game", async () => {
-      const r = await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id: `local:${game}` }).catch(() => ({ error: "Couldn't reach the app." }));
+
+  /** Switches your game: CS 1.6 or Condition Zero, in a given Steam library (hl) or the
+   *  one already in use. The one way both the sidebar and Settings do it. */
+  const switchGame = (hl: string | null, game: string) =>
+    once(`app:game:${hl ?? ""}:${game}`, async () => {
+      const r = hl
+        ? await postJson<{ ok?: boolean; error?: string }>("/api/app/game", { hl, game })
+        : await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id: `local:${game}` });
       if (r.error) return toast(r.error, true);
-      reloadApp();
-      reloadMaps(true);
-      refresh();
-    }, `Switching to ${game === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}…`);
-  };
+      await queryClient.invalidateQueries();
+      reloadMaps();
+    }, `Switching to ${gameTitle(game)}…`);
+
   const current = openServer ? servers?.servers.find((x) => x.id === openServer) ?? null : null;
   // the open server was deleted (or its folder went away): back to your own game
   useEffect(() => {
     if (openServer && servers && !current) enterServer(null);
-  });
+  }, [openServer, servers, current, enterServer]);
   // CS 1.6 and Condition Zero on this computer, CS 1.6 first
   const localGames = (["cstrike", "czero"] as const).filter((g) => scan?.installs.some((i) => i.games.some((x) => x.id === g)));
   const myGame = openServer ? null : app?.game?.id;
@@ -163,15 +112,15 @@ function Shell() {
       const what = (e as CustomEvent<string>).detail;
       if (what.startsWith("section:")) {
         const id = what.slice(8) as Section;
-        if (NAV.some((n) => n.id === id)) setSection(id);
+        if (NAV.some((n) => n.id === id)) go(id);
       } else if (what === "updates") {
-        setSection("settings");
+        go("settings", "updates");
         // same key as Settings' Check now button, so it shows there too
         await once("app:update:check", async () => {
           const r = await postJson<{ available?: boolean; version?: string; error?: string }>("/api/app/update/check").catch((): { available?: boolean; version?: string; error?: string } => ({ error: "Couldn't check for updates." }));
           if (r.error) toast(r.error, true);
           else toast(r.available ? `Loner-Strike ${r.version} is out. Install it from Settings.` : "You're on the latest version.");
-          reloadApp();
+          reloadAppInfo();
         }, "Checking for updates…");
       }
     };
@@ -179,14 +128,19 @@ function Shell() {
     return () => window.removeEventListener("ls-menu", onMenu);
   });
 
-  // ⌘1-⌘9 switch sections
+  // ⌘1-⌘9 switch sections (in sidebar order), ⌘, opens Settings
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.key === ",") {
+        e.preventDefault();
+        go("settings");
+        return;
+      }
       const n = Number(e.key);
       if (n >= 1 && n <= 9 && NAV[n - 1]) {
         e.preventDefault();
-        setSection(NAV[n - 1].id);
+        go(NAV[n - 1].id);
       }
     };
     window.addEventListener("keydown", key);
@@ -197,36 +151,68 @@ function Shell() {
   // re-scan maps when the bots finish learning one
   const navKey = online ? `${online.state.map}:${online.state.nav}` : "";
   useEffect(() => {
-    if (navKey) reloadMaps(true);
-  }, [navKey, reloadMaps]);
+    if (navKey) reloadMaps();
+  }, [navKey]);
 
   const players = openServer ? 0 : online?.players.length ?? 0;
   const tabbar = tabbarFor(!!servers?.servers.length);
 
+  // until the app has answered once: one splash, not a flash of "No game found"
+  if (!scanQ.data || (!appQ.data && !appQ.isError)) {
+    if (scanQ.isError) {
+      return (
+        <div className="splash">
+          <LoadError title="Loner-Strike isn't answering" text={ON_THIS_COMPUTER ? "The app's own server didn't start. Restart Loner-Strike." : "Can't reach your computer. Check it's on and on the same Wi-Fi as this phone."} onRetry={() => queryClient.invalidateQueries()} />
+        </div>
+      );
+    }
+    return (
+      <div className="splash" aria-busy="true">
+        <span className="spinner" aria-hidden="true" /> Loading…
+      </div>
+    );
+  }
+
   // First run (nothing set up yet), or opened from Settings
-  if (scan && (setupOpen || (!anySetUp(scan) && !setupLater))) {
-    const close = () => {
-      setSetupOpen(false);
-      setSetupLater(true);
-      try {
-        localStorage.setItem("ls.setupLater", "1");
-      } catch {
-        /* private window */
-      }
-    };
+  if (setupOpen || (!anySetUp(scan) && !setupLater)) {
+    // setup copies files on the computer: a phone can only wait for it
+    if (!ON_THIS_COMPUTER) {
+      return (
+        <div className="splash">
+          <div className="waiting">
+            <h2>Finish setup on your computer</h2>
+            <p className="muted">Loner-Strike isn't set up yet. Open it on the computer the game is on, set it up there, and this page fills in.</p>
+            <button className="btn" onClick={() => reloadScan()}>Check again</button>
+          </div>
+        </div>
+      );
+    }
     const done = () => {
       setSetupOpen(false);
       reloadScan();
-      reloadApp();
-      reloadMaps(true);
-      refresh();
+      refreshAll();
     };
-    return <Setup scan={scan} onClose={close} onDone={done} onRescan={reloadScan} />;
+    return <Setup scan={scan!} fromSettings={setupOpen && anySetUp(scan)} onClose={laterSetup} onDone={done} onRescan={() => reloadScan()} />;
   }
-  const needsGame = section !== "servers" && NAV.find((n) => n.id === section)?.live && !online;
+  const isLive = (id: Section) => !!NAV.find((n) => n.id === id)?.live;
+  const needsGame = section !== "servers" && isLive(section) && !online;
   // the game is open here but isn't hosting a map (its main menu, or someone else's server)
   const gameOpen = !!state && !state.online && !!state.game_open;
-  const gameName = app?.game?.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero";
+  const gameName = gameTitle(app?.game?.id);
+  const navButton = (n: (typeof NAV)[number], cls = "nav-item") => (
+    <button
+      key={n.id}
+      className={`${cls}${n.live && !online ? " needs-game" : ""}`}
+      aria-current={section === n.id ? "page" : undefined}
+      title={n.live && !online ? "Needs a game you're hosting" : undefined}
+      onClick={() => go(n.id)}
+    >
+      <Icon name={n.icon} />
+      {n.label}
+      {n.id === "players" && players > 0 && <span className="count">{players}</span>}
+      {n.id === "settings" && app?.update && <span className="dot" aria-label="Update available" />}
+    </button>
+  );
 
   return (
     <div className="shell">
@@ -236,7 +222,7 @@ function Shell() {
         {localGames.length > 1 && (
           <div className="game-switch" role="group" aria-label="Your game">
             {localGames.map((g) => (
-              <button key={g} title={g === "cstrike" ? "Counter-Strike 1.6" : "Counter-Strike: Condition Zero"} aria-pressed={myGame === g} disabled={!!openServer || busy("app:switch-game")} onClick={() => switchGame(g)}>
+              <button key={g} title={g === "cstrike" ? "Counter-Strike 1.6" : "Counter-Strike: Condition Zero"} aria-pressed={myGame === g} disabled={!!openServer || busy(`app:game::${g}`)} onClick={() => myGame !== g && switchGame(null, g)}>
                 {g === "cstrike" ? "CS 1.6" : "CZ"}
               </button>
             ))}
@@ -246,17 +232,12 @@ function Shell() {
           {NAV.map((n) => (
             <div key={n.id}>
               {n.group && <div className="nav-group">{n.group}</div>}
-              <button className="nav-item" aria-current={section === n.id ? "page" : undefined} onClick={() => setSection(n.id)}>
-                <Icon name={n.icon} />
-                {n.label}
-                {n.id === "players" && players > 0 && <span className="count">{players}</span>}
-                {n.id === "settings" && app?.update && <span className="dot" aria-label="Update available" />}
-              </button>
+              {navButton(n)}
             </div>
           ))}
         </nav>
         <div className="side-foot">
-          {current ? `Server: ${current.name}` : app?.game ? (app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero") : "No game found"}
+          {current ? `Server: ${current.name}` : app?.game ? gameTitle(app.game.id) : appQ.isError ? "Couldn't load your game" : "No game found"}
           {app?.version && <span> · v{app.version}</span>}
           <div className="made-by">
             by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a>
@@ -265,24 +246,25 @@ function Shell() {
       </aside>
 
       <div className="main">
-        <Strip data={online} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} gameOpen={gameOpen} />
-        {online && <QuickBar data={online} maps={maps} refresh={refresh} reloadMaps={() => reloadMaps(true)} />}
+        <Strip data={online} reconnecting={reconnecting} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} gameOpen={gameOpen} />
+        <Working phone />
+        {online && <QuickBar data={online} maps={maps} refresh={refresh} reloadMaps={refreshMaps} />}
         <main className="content">
           <HomeScreenHint />
           {!setupOpen && <FilesUpdate app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} />}
           {state === null ? (
-            <p className="muted">Connecting…</p>
+            <Skeleton rows={4} />
           ) : needsGame ? (
-            <Waiting label={NAV.find((n) => n.id === section)!.label} game={gameName} gameOpen={gameOpen} onPlay={() => setSection("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={() => setSetupOpen(true)} />
+            <Waiting label={NAV.find((n) => n.id === section)!.label} game={gameName} gameOpen={gameOpen} reason={state.online ? "" : state.reason} onPlay={() => go("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={() => setSetupOpen(true)} />
           ) : (
             <>
               {section === "play" &&
                 (online ? (
-                  <PlayLive data={online} maps={maps} refresh={refresh} openMaps={() => setSection("maps")} />
+                  <PlayLive data={online} maps={maps} refresh={refresh} openMaps={() => go("maps")} />
                 ) : (
                   <PlayIdle app={app} reason={state.online ? "" : state.reason} gameOpen={gameOpen} maps={maps} openSetup={() => setSetupOpen(true)} />
                 ))}
-              {section === "maps" && <Maps data={online} maps={maps} reload={() => reloadMaps(true)} refresh={refresh} />}
+              {section === "maps" && <Maps data={online} maps={maps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} />}
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
               {section === "match" && online && (
                 <SettingsPage title="Match" note={`Saved for ${online.modes.find((m) => m.id === online.state.mode)?.name ?? "this mode"}. Round changes take effect next round.`} data={online} cat={2} refresh={refresh}>
@@ -305,71 +287,80 @@ function Shell() {
                     scan={scan}
                     maps={maps}
                     refresh={refresh}
-                    reloadMaps={() => reloadMaps(true)}
+                    reloadMaps={refreshMaps}
                     reloadApp={reloadApp}
-                    onChanged={reloadServers}
+                    onChanged={refreshServers}
                     onBack={() => enterServer(null)}
                   />
                 ) : (
-                  <Servers scan={scan} list={servers} onOpen={enterServer} onChanged={reloadServers} />
+                  <Servers scan={scan} list={servers} loadError={serversQ.isError && !servers} onOpen={enterServer} onChanged={refreshServers} />
                 ))}
               {section === "admins" && <Admins data={online} installed={app?.game?.installed} />}
               {section === "welcome" && <Welcome target="local" />}
               {section === "sounds" && <Sounds target="local" />}
               {section === "extras" && <ServerExtras target="local" />}
               {section === "community" && <Community target="local" />}
-              {section === "more" && <GetMore onInstalled={() => reloadMaps(true)} />}
+              {section === "more" && <GetMore onInstalled={refreshMaps} />}
               {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={() => setSetupOpen(true)} />}
-              {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={() => setSetupOpen(true)} switchTo={(id) => switchGame(id.replace(/^local:/, ""))} />}
+              {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={() => setSetupOpen(true)} switchGame={switchGame} />}
             </>
           )}
         </main>
       </div>
 
-      {/* phones: the five most used sections, the rest under More */}
+      {/* phones: the most used sections, the rest under More */}
       <nav className="tabbar" aria-label="Sections">
         {tabbar.map((id) => {
           const n = NAV.find((x) => x.id === id)!;
           return (
-            <button key={id} aria-current={section === id && !moreOpen ? "page" : undefined} onClick={() => setSection(id)}>
+            <button key={id} aria-current={section === id && !moreOpen ? "page" : undefined} onClick={() => go(id)}>
               <Icon name={n.icon} size={22} />
               <span>{n.label}</span>
               {id === "players" && players > 0 && <i className="tab-count">{players}</i>}
             </button>
           );
         })}
-        <button aria-current={moreOpen || !tabbar.includes(section) ? "page" : undefined} onClick={() => setMoreOpen((o) => !o)}>
+        <button aria-current={moreOpen || !tabbar.includes(section) ? "page" : undefined} aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>
           <Icon name="menu" size={22} />
           <span>More</span>
           {app?.update && <i className="tab-dot" />}
         </button>
       </nav>
       {moreOpen && (
-        <div className="sheet-backdrop bottom" onClick={() => setMoreOpen(false)}>
-          <div className="more-sheet" onClick={(e) => e.stopPropagation()}>
-            {NAV.filter((n) => !tabbar.includes(n.id)).map((n) => (
-              <button key={n.id} className="nav-item" aria-current={section === n.id ? "page" : undefined} onClick={() => setSection(n.id)}>
-                <Icon name={n.icon} />
-                {n.label}
-                {n.id === "settings" && app?.update && <span className="dot" />}
-              </button>
-            ))}
-          </div>
-        </div>
+        <Sheet label="More sections" className="more-sheet" bottom onClose={() => setMoreOpen(false)}>
+          {NAV.filter((n) => !tabbar.includes(n.id)).map((n, i, list) => (
+            <div key={n.id}>
+              {/* the sidebar's groups, so 13 items aren't one long list */}
+              {(i === 0 || groupOf(n.id) !== groupOf(list[i - 1].id)) && groupOf(n.id) && <div className="nav-group">{groupOf(n.id)}</div>}
+              {navButton(n)}
+            </div>
+          ))}
+        </Sheet>
       )}
     </div>
   );
 }
 
+/** The sidebar group a section is listed under ("" for the first, untitled one). */
+function groupOf(id: Section) {
+  let g = "";
+  for (const n of NAV) {
+    if (n.group) g = n.group;
+    if (n.id === id) return g;
+  }
+  return g;
+}
+
 /** The phone's bottom bar: the most used sections, and Servers for people who host. */
 const tabbarFor = (hosting: boolean): Section[] => (hosting ? ["play", "maps", "players", "servers"] : ["play", "maps", "bots", "players"]);
 
-/** What's in progress anywhere in the app, so it's visible from any page. */
-function Working() {
+/** What's in progress anywhere in the app, so it's visible from any page. `phone`: the
+ *  slim line under the top bar on phones (the bar itself has no room for it there). */
+function Working({ phone }: { phone?: boolean }) {
   const acts = useActivity().filter(([, label]) => label);
   if (!acts.length) return null;
   return (
-    <span className="working" role="status">
+    <span className={phone ? "working working-phone" : "working"} role="status">
       <span className="spinner" aria-hidden="true" />
       {acts[0][1]}
       {acts.length > 1 ? ` (+${acts.length - 1} more)` : ""}
@@ -377,7 +368,7 @@ function Working() {
   );
 }
 
-function Strip({ data, reason, app, server, gameOpen }: { data: Online | null; reason: string; app: AppInfo | null; server?: string; gameOpen: boolean }) {
+function Strip({ data, reconnecting, reason, app, server, gameOpen }: { data: Online | null; reconnecting: boolean; reason: string; app: AppInfo | null; server?: string; gameOpen: boolean }) {
   if (!data) {
     return (
       <header className="strip" data-tauri-drag-region>
@@ -385,7 +376,7 @@ function Strip({ data, reason, app, server, gameOpen }: { data: Online | null; r
           {server
             ? `${server} isn't running`
             : app?.game
-              ? `${app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"} ${gameOpen ? "is open, but no game is loaded" : "isn't running"}`
+              ? `${gameTitle(app.game.id)} ${gameOpen ? "is open, but no game is loaded" : "isn't running"}`
               : reason}
         </div>
         <Working />
@@ -415,13 +406,13 @@ function Strip({ data, reason, app, server, gameOpen }: { data: Online | null; r
       </div>
       <div className="strip-actions">
         <Working />
-        <span className="live on">Live</span>
+        <span className={`live${reconnecting ? "" : " on"}`}>{reconnecting ? "Reconnecting…" : "Live"}</span>
       </div>
     </header>
   );
 }
 
-function Waiting({ label, game, gameOpen, onPlay, setUp, openSetup }: { label: string; game: string; gameOpen: boolean; onPlay: () => void; setUp: boolean; openSetup: () => void }) {
+function Waiting({ label, game, gameOpen, reason, onPlay, setUp, openSetup }: { label: string; game: string; gameOpen: boolean; reason: string; onPlay: () => void; setUp: boolean; openSetup: () => void }) {
   return (
     <div className="waiting">
       <h2>{label}</h2>
@@ -432,6 +423,7 @@ function Waiting({ label, game, gameOpen, onPlay, setUp, openSetup }: { label: s
               ? `This works in a game you host. ${game} is open, but no map is loaded: start a game from its New Game menu, or quit it and start one from Play.`
               : "This works in a game you host. Start one from Play and this page fills in."}
           </p>
+          {reason && !gameOpen && <p className="muted small-note">{reason}</p>}
           {!gameOpen && <button className="btn primary" onClick={onPlay}>Start a game</button>}
         </>
       ) : (
@@ -453,8 +445,15 @@ function HomeScreenHint() {
       return false;
     }
   });
+  const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 760px)").matches);
+  useEffect(() => {
+    const m = window.matchMedia("(max-width: 760px)");
+    const on = () => setNarrow(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
   const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
-  if (ON_THIS_COMPUTER || standalone || gone || window.innerWidth > 760) return null;
+  if (ON_THIS_COMPUTER || standalone || gone || !narrow) return null;
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
   const hide = () => {
     setGone(true);

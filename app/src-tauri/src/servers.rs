@@ -1187,8 +1187,17 @@ static SEEN: Mutex<Option<HashMap<String, (Instant, (bool, u64))>>> = Mutex::new
 /// Servers whose state is being asked right now (one question at a time per server)
 static ASKING: Mutex<Option<std::collections::HashSet<String>>> = Mutex::new(None);
 
+/// Servers on other machines that didn't answer the last time they were asked (and why)
+static UNREACHABLE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+
+/// Why the machine a server is on didn't answer last time, if it didn't.
+fn unreachable(id: &str) -> Option<String> {
+    UNREACHABLE.lock().unwrap().as_ref().and_then(|m| m.get(id).cloned())
+}
+
 /// (running, seconds up), asked over SSH and kept a few seconds. While a question is
-/// already out, or the machine is busy or unreachable, the last answer stands.
+/// already out, or the connection is busy, the last answer stands. A machine that
+/// doesn't answer isn't shown as running, and `unreachable` says why.
 fn remote_state(e: &Entry) -> (bool, u64) {
     let Some(r) = &e.remote else { return (false, 0) };
     let last = SEEN.lock().unwrap().as_ref().and_then(|m| m.get(&e.id).cloned());
@@ -1197,16 +1206,23 @@ fn remote_state(e: &Entry) -> (bool, u64) {
         return known();
     }
     if !ASKING.lock().unwrap().get_or_insert_with(Default::default).insert(e.id.clone()) {
-        return known();
+        return if unreachable(&e.id).is_some() { (false, 0) } else { known() };
     }
     let state = crate::remote::active(r, &e.id);
     ASKING.lock().unwrap().get_or_insert_with(Default::default).remove(&e.id);
     match state {
-        Some(state) => {
+        Ok(state) => {
             SEEN.lock().unwrap().get_or_insert_with(HashMap::new).insert(e.id.clone(), (Instant::now(), state));
+            if let Some(m) = UNREACHABLE.lock().unwrap().as_mut() {
+                m.remove(&e.id);
+            }
             state
         }
-        None => known(),
+        Err(err) if crate::remote::is_busy(&err) => known(),
+        Err(err) => {
+            UNREACHABLE.lock().unwrap().get_or_insert_with(HashMap::new).insert(e.id.clone(), err);
+            (false, 0)
+        }
     }
 }
 
@@ -1512,6 +1528,7 @@ fn view(e: &Entry) -> Value {
            "imported": e.imported, "loner": loner, "dir": e.dir,
            "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(), "pending_restart": pending_restart(&e.id),
            "listen_ip": e.listen_ip, "extra_args": e.extra_args, "password": join_password(e),
+           "unreachable": e.remote.as_ref().and_then(|_| unreachable(&e.id)),
            "installed": record.component_ids()})
 }
 

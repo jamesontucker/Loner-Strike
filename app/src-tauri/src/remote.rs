@@ -628,7 +628,7 @@ echo "@@STEP ready"
 }
 
 /// Is the server's service running, and for how many seconds?
-pub fn active(r: &RemoteInfo, id: &str) -> Option<(bool, u64)> {
+pub fn active(r: &RemoteInfo, id: &str) -> Result<(bool, u64), String> {
     unit_state(r, &unit(id))
 }
 
@@ -637,13 +637,19 @@ pub fn unit_active(r: &RemoteInfo, u: &str) -> (bool, u64) {
     unit_state(r, u).unwrap_or((false, 0))
 }
 
-/// (running, seconds up), or None when the machine couldn't be asked right now.
-pub fn unit_state(r: &RemoteInfo, u: &str) -> Option<(bool, u64)> {
-    let (_, out) = exec_quick(r, &format!("systemctl is-active {u}; ps -o etimes= -p \"$(systemctl show -p MainPID --value {u})\" 2>/dev/null")).ok()?;
+/// The connection was busy with something long (an upload, Valve's download), so the
+/// machine wasn't asked: not a sign it's unreachable.
+pub fn is_busy(err: &str) -> bool {
+    err.contains("is busy with something else")
+}
+
+/// (running, seconds up), or why the machine couldn't be asked right now.
+pub fn unit_state(r: &RemoteInfo, u: &str) -> Result<(bool, u64), String> {
+    let (_, out) = exec_quick(r, &format!("systemctl is-active {u}; ps -o etimes= -p \"$(systemctl show -p MainPID --value {u})\" 2>/dev/null"))?;
     let mut lines = out.lines();
     let on = lines.next().map(|l| l.trim() == "active").unwrap_or(false);
     let secs = lines.next().and_then(|l| l.trim().parse().ok()).unwrap_or(0);
-    Some((on, secs))
+    Ok((on, secs))
 }
 
 pub fn systemctl(r: &RemoteInfo, id: &str, action: &str) -> Result<(), String> {
