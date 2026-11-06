@@ -119,6 +119,36 @@ p { text-wrap: pretty; }
   background: var(--bg); box-shadow: var(--sunken); color: var(--bone); }
 .steps b { color: var(--bone); }
 
+/* gallery */
+.gallery { padding: 64px 0 70px; }
+.shots { list-style: none; margin: 22px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.shots button { display: block; width: 100%; padding: 0; border: 0; background: var(--side); box-shadow: var(--raised); border-radius: 3px; cursor: zoom-in; text-align: left; color: inherit; font: inherit; }
+.shots button:hover { outline: 2px solid var(--signal); }
+.shots .frame { aspect-ratio: 16 / 10; overflow: hidden; border-radius: 3px 3px 0 0; background: #23271c; }
+.shots .frame.tall { display: grid; place-items: center; }
+.shots img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.shots .frame.tall img { width: auto; height: 100%; object-fit: contain; }
+.shots span { display: block; padding: 8px 12px 10px; font-weight: 600; color: var(--dim); font-size: 16px; }
+.viewer { width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: rgba(20,22,16,.94); color: var(--bone); }
+.viewer::backdrop { background: rgba(20,22,16,.7); }
+.viewer figure { margin: 0; height: 100%; display: grid; grid-template-rows: 1fr auto; place-items: center; padding: 48px 72px 18px; gap: 12px; }
+.viewer img { max-width: 100%; max-height: calc(100vh - 120px); object-fit: contain; box-shadow: 0 20px 60px rgba(0,0,0,.6); border-radius: 3px; }
+.viewer figcaption { color: var(--dim); font-weight: 600; text-align: center; }
+.viewer button { position: absolute; border: 0; background: var(--panel); color: var(--bone); box-shadow: var(--raised); border-radius: 2px; cursor: pointer; font: 700 28px/1 var(--text); }
+.viewer button:hover { color: var(--signal); }
+.viewer .nav { top: 50%; transform: translateY(-50%); width: 48px; height: 64px; }
+.viewer .prev { left: 14px; }
+.viewer .next { right: 14px; }
+.viewer .close { top: 14px; right: 14px; width: 44px; height: 44px; }
+.viewer .count { position: absolute; top: 24px; left: 18px; color: var(--faint); font-weight: 600; font-size: 15px; }
+@media (max-width: 860px) {
+  .shots { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .viewer figure { padding: 60px 12px 90px; }
+  .viewer .nav { top: auto; bottom: 18px; transform: none; }
+  .viewer .prev { left: calc(50% - 58px); }
+  .viewer .next { right: calc(50% - 58px); }
+}
+
 /* faq */
 .faq { padding: 70px 0; }
 .faq .wrap { max-width: 820px; }
@@ -155,6 +185,7 @@ footer a { color: var(--dim); }
     <nav aria-label="Page">
       <a href="#modes">Modes</a>
       <a href="#features">What's in it</a>
+      <a href="#gallery">Screenshots</a>
       <a href="#faq">FAQ</a>
       <a class="btn primary" href="#get" data-event="Get it (top)">Get it</a>
     </nav>
@@ -250,6 +281,24 @@ footer a { color: var(--dim); }
     </div>
   </section>
 
+  <section class="gallery" id="gallery">
+    <div class="wrap">
+      <h2>Screenshots</h2>
+      <ul class="shots" id="shots"></ul>
+    </div>
+  </section>
+
+  <dialog class="viewer" id="viewer" aria-label="Screenshot">
+    <figure>
+      <img id="viewer-img" alt="">
+      <figcaption id="viewer-cap"></figcaption>
+    </figure>
+    <button class="nav prev" id="prev" aria-label="Previous screenshot">‹</button>
+    <button class="nav next" id="next" aria-label="Next screenshot">›</button>
+    <button class="close" id="close" aria-label="Close">×</button>
+    <span class="count" id="count"></span>
+  </dialog>
+
   <section class="get" id="get">
     <div class="wrap">
       <div class="box">
@@ -338,6 +387,59 @@ footer a { color: var(--dim); }
   document.addEventListener("click", (e) => {
     const a = e.target.closest("[data-event]");
     if (a) window.plausible(a.dataset.event);
+  });
+
+  // ---- screenshots ------------------------------------------------------------
+  // Add one: put the image in img/gallery/ and add a line here. tall: true for phone shots.
+  const GALLERY = [
+    { src: "img/gallery/maps.jpg", caption: "Thousands of maps, with screenshots, filters and favourites" },
+    { src: "img/gallery/play.jpg", caption: "0 friends online. Bots ready." },
+    { src: "img/gallery/friends.jpg", caption: "Seven ways for friends to join, from LAN parties to Hamachi" },
+    { src: "img/gallery/servers.jpg", caption: "Run your own dedicated server, with its own console and settings" },
+    { src: "img/gallery/phone-maps.jpg", caption: "Run it all from your phone", tall: true },
+  ];
+
+  const list = document.getElementById("shots");
+  const viewer = document.getElementById("viewer");
+  const big = document.getElementById("viewer-img");
+  let at = 0;
+  GALLERY.forEach((g, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<button type="button"><div class="frame${g.tall ? " tall" : ""}"><img loading="lazy" alt=""></div><span></span></button>`;
+    li.querySelector("img").src = g.src;
+    li.querySelector("img").alt = g.caption;
+    li.querySelector("span").textContent = g.caption;
+    li.querySelector("button").addEventListener("click", () => open(i));
+    list.appendChild(li);
+  });
+  const show = (i) => {
+    at = (i + GALLERY.length) % GALLERY.length;
+    big.src = GALLERY[at].src;
+    big.alt = GALLERY[at].caption;
+    document.getElementById("viewer-cap").textContent = GALLERY[at].caption;
+    document.getElementById("count").textContent = `${at + 1} / ${GALLERY.length}`;
+  };
+  const open = (i) => {
+    show(i);
+    viewer.showModal();
+    window.plausible("Screenshot", { props: { image: GALLERY[i].src.split("/").pop() } });
+  };
+  document.getElementById("prev").addEventListener("click", () => show(at - 1));
+  document.getElementById("next").addEventListener("click", () => show(at + 1));
+  document.getElementById("close").addEventListener("click", () => viewer.close());
+  viewer.addEventListener("click", (e) => { if (e.target === viewer || e.target.tagName === "FIGURE") viewer.close(); });
+  viewer.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") show(at - 1);
+    if (e.key === "ArrowRight") show(at + 1);
+  });
+  // swipe on phones
+  let x0 = null;
+  viewer.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  viewer.addEventListener("touchend", (e) => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 50) show(at + (dx < 0 ? 1 : -1));
+    x0 = null;
   });
 
   // The loader fills up once, like Steam connecting in 2004
