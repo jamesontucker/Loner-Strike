@@ -16,6 +16,9 @@ const NOTES: Record<string, string> = {
   gm_churn: "Now and then someone leaves and a new player takes the slot",
   gm_rtv: "Say rtv in chat to vote for a new map, nominate <map> to suggest one",
   gm_welcome: "Shown when you or a friend joins. Say /welcome to see it again",
+  mp_autoteambalance: "Moves players at round end to keep the teams even",
+  mp_limitteams: "How many more players one team can have before joining it is blocked",
+  mp_respawn_immunitytime: "Players can't be hurt for a moment after they spawn; good with deathmatch",
 };
 const STYLE_NOTES: Record<string, string> = {
   "0": "CZ's own bots, unchanged",
