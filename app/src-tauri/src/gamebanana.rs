@@ -19,9 +19,9 @@ use std::time::Duration;
 
 const API: &str = "https://gamebanana.com/apiv11";
 pub const MAPS_CATEGORY: i64 = 5474; // Counter-Strike 1.6 > Maps
-/// Maps GameBanana had no picture for (the file name changed when the search started
-/// reading more than one page, so earlier misses get another try)
-const MISS_FILE: &str = "not_found_v2.json";
+/// Maps nobody had a picture for (the name changes when the search gets better, so
+/// earlier misses get another try)
+const MISS_FILE: &str = "not_found_v3.json";
 const MISS_DAYS: f64 = 7.0;
 /// Result pages read when looking for a map's picture (50 a page)
 const SHOT_PAGES: i64 = 4;
@@ -348,11 +348,35 @@ impl MapStore {
                 std::fs::write(self.shots.join(format!("{name}.jpg")), data).ok()?;
                 return self.shot_for(&name);
             }
+            if let Some(p) = self.gametracker_shot(&name) {
+                return Some(p);
+            }
         }
         let _g = self.lock.lock().unwrap();
         let mut m = self.misses();
         m.insert(name, json!(sys::now()));
         let _ = std::fs::write(self.shots.join(MISS_FILE), serde_json::to_string(&m).unwrap_or_default());
+        None
+    }
+
+    /// Not on GameBanana: GameTracker keeps a small picture (160x120) of nearly every
+    /// map public servers have run, at a fixed address. Saved once, like the others.
+    fn gametracker_shot(&self, name: &str) -> Option<PathBuf> {
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c)) {
+            return None;
+        }
+        let cz = self.game_dir.file_name().map(|n| n == "czero").unwrap_or(false);
+        let kinds = if cz { ["czero", "cs"] } else { ["cs", "czero"] };
+        for kind in kinds {
+            let url = format!("https://image.gametracker.com/images/maps/160x120/{kind}/{name}.jpg");
+            if let Some(data) = get_bytes(&url, 512 * 1024) {
+                // a JPEG, not an error page
+                if data.starts_with(&[0xFF, 0xD8]) {
+                    std::fs::write(self.shots.join(format!("{name}.jpg")), data).ok()?;
+                    return self.shot_for(name);
+                }
+            }
+        }
         None
     }
 

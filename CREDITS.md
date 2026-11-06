@@ -37,6 +37,8 @@ Round-end music ships with freely licensed tracks from OpenGameArt; each track's
 ## Maps
 Maps are downloaded from [GameBanana](https://gamebanana.com) and belong to their creators. The panel shows each map's author.
 
+Map pictures come from GameBanana, or from [GameTracker](https://www.gametracker.com)'s map images when GameBanana has none. Each is saved once on your computer.
+
 ## Fonts
 | Font | Author | License |
 |---|---|---|
