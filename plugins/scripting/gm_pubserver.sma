@@ -8,13 +8,17 @@
 	RTV:        "rtv" starts a map vote once enough players want one; "nominate <map>".
 	            With gm_rtv_cycle 1 (gm_extras) both offer only the map rotation's maps.
 	Welcome:    a welcome screen when you join (gm_welcome), replacing the CZ advert.
+	Clans:      bots with the same clan tag play on the same side (gm_clans): just before
+	            a round starts, a clan member on the other side swaps with a bot with no
+	            clan, so team sizes stay the same. Only in plain team modes, never in a match.
 
-	Cvars: gm_regulars 0/1, gm_churn 0/1/2, gm_rtv 0/1, gm_welcome 0/1/2
+	Cvars: gm_regulars 0/1, gm_churn 0/1/2, gm_rtv 0/1, gm_welcome 0/1/2, gm_clans 0/1
 */
 
 #include <amxmodx>
 #include <amxmisc>
 #include <fakemeta>
+#include <cstrike>
 
 #define PLUGIN  "Pub server"
 #define VERSION "1.0"
@@ -24,13 +28,14 @@
 #define TASK_VOTE    5200
 #define TASK_CHANGE  5300
 #define TASK_WELCOME 5400
+#define TASK_CLANS   5500
 
 #define VOTE_TIME    15
 #define VOTE_MAPS    5
 #define MAX_NOMS     4
 #define NEWCOMER_PCT 35
 
-new g_pRegulars, g_pChurn, g_pRtv, g_pWelcome
+new g_pRegulars, g_pChurn, g_pRtv, g_pWelcome, g_pClans
 new bool:g_Career
 new bool:g_Creating
 
@@ -53,6 +58,11 @@ public plugin_init()
 	g_pChurn    = register_cvar("gm_churn", "1")
 	g_pRtv      = register_cvar("gm_rtv", "1")
 	g_pWelcome  = register_cvar("gm_welcome", "1")
+	g_pClans    = register_cvar("gm_clans", "1")
+	// conditions in one register_event must all match, so one per sound
+	register_event("SendAudio", "ev_round_end", "a", "2&%!MRAD_terwin")
+	register_event("SendAudio", "ev_round_end", "a", "2&%!MRAD_ctwin")
+	register_event("SendAudio", "ev_round_end", "a", "2&%!MRAD_rounddraw")
 
 	register_forward(FM_CreateFakeClient, "fw_create_fake_client")
 	register_clcmd("say", "cmd_say")
@@ -168,9 +178,9 @@ public fw_create_fake_client(const netname[])
 		// the regular shows up most of the time; otherwise a newcomer takes the profile
 		found = random(100) >= NEWCOMER_PCT && !name_in_use(name)
 		if (!found)
-			found = free_name(name, charsmax(name))
+			found = clan_friend(name, charsmax(name)) || free_name(name, charsmax(name))
 	}
-	else if (free_name(name, charsmax(name)))
+	else if (clan_friend(name, charsmax(name)) || free_name(name, charsmax(name)))
 	{
 		found = true
 		TrieSetString(g_Regular, netname, name)
@@ -190,6 +200,39 @@ public fw_create_fake_client(const netname[])
 	g_Creating = false
 	forward_return(FMV_CELL, ent)
 	return FMRES_SUPERCEDE
+}
+
+// Now and then someone brings a clanmate: a free name from a clan already on the server
+bool:clan_friend(out[], len)
+{
+	if (!get_pcvar_num(g_pClans) || random(100) >= 40)
+		return false
+	new here[33][16], n
+	for (new id = 1; id <= MaxClients; id++)
+		if (is_user_connected(id))
+		{
+			clan_of(id, here[n], charsmax(here[]))
+			if (here[n][0])
+				n++
+		}
+	if (!n)
+		return false
+	new pick[16], name[32], tag[16], found, seen
+	copy(pick, charsmax(pick), here[random(n)])
+	for (new i = 0, size = ArraySize(g_Pool); i < size; i++)
+	{
+		ArrayGetString(g_Pool, i, name, charsmax(name))
+		clan_of_name(name, tag, charsmax(tag))
+		if (!equali(tag, pick) || name_in_use(name))
+			continue
+		// a random one of the free members
+		if (random(++seen) == 0)
+		{
+			copy(out, len, name)
+			found = true
+		}
+	}
+	return bool:found
 }
 
 // ---------------------------------------------------------------------------
@@ -386,6 +429,130 @@ build_pool()
 	TrieDestroy(hidden)
 	TrieDestroy(seen)
 	TrieDestroy(fav)
+}
+
+// ---- clans: clanmates on the same side ------------------------------------------------
+
+// Plain team modes, where who's on which side doesn't matter to the mode
+new const CLAN_MODES[][] = { "classic", "csdm", "gungame_team", "knife", "pistols", "deagle", "awp", "scoutz", "paintball", "war3", "shero" }
+
+public ev_round_end()
+{
+	// after the round's over, before the next one spawns everyone
+	if (get_pcvar_num(g_pClans) && !g_Career)
+		set_task(3.5, "task_group_clans", TASK_CLANS)
+}
+
+public task_group_clans()
+{
+	if (get_cvar_num("gm_scrim_phase"))
+		return
+	new mode[32]
+	new f = fopen(fmt("%s/current.txt", g_DataDir), "rt")
+	if (f)
+	{
+		fgets(f, mode, charsmax(mode))
+		trim(mode)
+		fclose(f)
+	}
+	new bool:ok
+	for (new i = 0; i < sizeof CLAN_MODES; i++)
+		if (equal(mode, CLAN_MODES[i]))
+			ok = true
+	if (!ok)
+		return
+
+	new tags[33][16]
+	for (new id = 1; id <= MaxClients; id++)
+		if (is_user_connected(id) && is_user_bot(id))
+			clan_of(id, tags[id], charsmax(tags[]))
+
+	// one swap per round is enough to look natural
+	for (new a = 1; a <= MaxClients; a++)
+	{
+		if (!tags[a][0] || !is_user_connected(a))
+			continue
+		new CsTeams:ta = cs_get_user_team(a)
+		if (ta != CS_TEAM_T && ta != CS_TEAM_CT)
+			continue
+		// how many of the clan are on each side
+		new onT, onCT
+		for (new b = 1; b <= MaxClients; b++)
+		{
+			if (!tags[b][0] || !equali(tags[a], tags[b]) || !is_user_connected(b))
+				continue
+			switch (cs_get_user_team(b))
+			{
+				case CS_TEAM_T: onT++
+				case CS_TEAM_CT: onCT++
+			}
+		}
+		if (!onT || !onCT)
+			continue
+		new CsTeams:home = onT >= onCT ? CS_TEAM_T : CS_TEAM_CT
+		if (ta == home)
+			continue
+		// a bot with no clan on the clan's side takes this one's place
+		for (new c = 1; c <= MaxClients; c++)
+		{
+			if (c == a || tags[c][0] || !is_user_connected(c) || !is_user_bot(c) || cs_get_user_team(c) != home)
+				continue
+			cs_set_user_team(a, home)
+			cs_set_user_team(c, ta)
+			return
+		}
+	}
+}
+
+// The clan in a name, as its letters: "~WoW~ Squishy", "[XyZ] Name", "GG | Phantom" (as gm_botchat reads it)
+clan_of(id, tag[], len)
+{
+	new name[32]
+	get_user_name(id, name, charsmax(name))
+	clan_of_name(name, tag, len)
+}
+
+clan_of_name(const source[], tag[], len)
+{
+	tag[0] = 0
+	new name[32]
+	copy(name, charsmax(name), source)
+	trim(name)
+	// "[xDS]Bob", "-=[CoC]=- Bob", "~WoW~ Squishy", "{SoB} Rex": symbols, the clan's letters,
+	// symbols, then the name. A name that's only decorated ("~*Leek*~") has no clan.
+	new i, k
+	while (name[i] && !isalnum(name[i]) && name[i] != ' ')
+		i++
+	if (i > 0)
+	{
+		while (name[i] && isalnum(name[i]) && k < len)
+			tag[k++] = name[i++]
+		tag[k] = 0
+		new sym
+		while (name[i] && !isalnum(name[i]) && name[i] != ' ')
+		{
+			i++
+			sym++
+		}
+		while (name[i] == ' ')
+			i++
+		if (!sym || !name[i])
+			tag[0] = 0
+	}
+	else
+	{
+		// "GG | Phantom", "XyZ|Name": a short word before a bar
+		new bar = contain(name, "|")
+		if (bar > 0 && bar <= 7)
+		{
+			for (new j = 0; j < bar && k < len; j++)
+				if (isalnum(name[j]))
+					tag[k++] = name[j]
+			tag[k] = 0
+		}
+	}
+	if (strlen(tag) < 2)
+		tag[0] = 0
 }
 
 // The rotation gm_extras uses: the current mode's own list, else the game's map cycle
