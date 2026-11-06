@@ -4,7 +4,8 @@
 # Release: push a tag like v0.1.0 (it must match "version" in app/src-tauri/tauri.conf.json),
 # check the draft release on GitHub, then publish it. Published releases are what the
 # in-app updater offers (releases/latest/download/latest.json).
-# Test build without releasing: run this workflow by hand (Actions > Release > Run workflow).
+# Actions are pinned to exact commits (this job holds the signing keys); Dependabot
+# proposes updates. Test build without releasing: run this workflow by hand (Actions > Release > Run workflow).
 
 name: Release
 
@@ -29,17 +30,17 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: app/src-tauri -> target
 
@@ -52,7 +53,7 @@ jobs:
           echo "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
           echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # action-v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Mac signing and notarization
@@ -67,7 +68,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: app
-          tauriScript: npx --yes @tauri-apps/cli@2
+          tauriScript: npx --yes @tauri-apps/cli@2.12.4
           args: ${{ matrix.args }}
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: "Loner-Strike ${{ github.ref_name }}"
@@ -79,7 +80,7 @@ jobs:
       # Manual runs don't make a release; keep the builds as downloadable artifacts instead
       - name: Keep the builds (manual runs)
         if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: loner-strike-${{ matrix.platform }}
           path: |

@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # Keeps the pinned action commits in the release workflow up to date
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
