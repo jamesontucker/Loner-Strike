@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { cmd, options, sameValue } from "./api";
 
 // ---- toasts --------------------------------------------------------------
@@ -78,9 +78,11 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boo
 export function SectionHead({ title, note, children }: { title: string; note?: ReactNode; children?: ReactNode }) {
   return (
     <div className="section-head">
-      <h2>{title}</h2>
+      <div className="section-title">
+        <h2>{title}</h2>
+        {children && <div className="section-actions">{children}</div>}
+      </div>
       {note && <p>{note}</p>}
-      {children && <div className="section-actions">{children}</div>}
     </div>
   );
 }
@@ -90,6 +92,35 @@ export function Banner({ children, action }: { children: ReactNode; action?: Rea
     <div className="banner">
       <div>{children}</div>
       {action}
+    </div>
+  );
+}
+
+/** The classic Steam loader: a sunken bar that fills up with blocks. */
+export function SteamProgress({ value, title, text, error }: { value: number; title: string; text?: string; error?: boolean }) {
+  const bar = useRef<HTMLDivElement>(null);
+  const [slots, setSlots] = useState(40);
+  useEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    const fit = () => setSlots(Math.max(8, Math.floor((el.clientWidth - 6 + 3) / 10)));
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const filled = Math.round(Math.min(1, Math.max(0, value)) * slots);
+  return (
+    <div className={`steam-box${error ? " error" : ""}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(value * 100)} aria-label={title}>
+      <div className="steam-box-title">{title}</div>
+      <p className="steam-box-text">{text}</p>
+      <div className="steam-bar" ref={bar}>
+        {Array.from({ length: filled }, (_, i) => <i key={i} />)}
+      </div>
+      <div className="steam-box-foot">
+        <span>This may take a few minutes.</span>
+        <span>{Math.round(value * 100)}%</span>
+      </div>
     </div>
   );
 }

@@ -26,15 +26,18 @@ The mods are community classics. We added:
 
 ## Install
 
-You need Counter-Strike: Condition Zero and/or Counter-Strike 1.6 on Steam, Python 3, and Windows (or a Mac with the game running in CrossOver).
+You need Counter-Strike 1.6 and/or Condition Zero on Steam.
 
-```
-python3 setup.py
-```
+- **Windows:** download Loner-Strike from [Releases](https://github.com/jamesontucker/Loner-Strike/releases) and open it. Setup finds the game and walks you through the rest.
+- **Mac:** the Mac version of Counter-Strike can't run mods, so play it through [CrossOver](https://www.codeweavers.com/crossover) (paid, with a free trial): install Windows Steam in a CrossOver bottle and Counter-Strike in that. Then download Loner-Strike from Releases; it finds the game inside CrossOver.
 
-It finds the game, asks what you want, and installs it. `python3 setup.py --uninstall` puts everything back the way it was.
+Everything it changes is backed up. Remove one mode, or all of Loner-Strike, from the app's Mods page and your game goes back the way it was.
 
-Then start the game and run `Start Loner-Strike` (made by the installer) to open the control panel.
+Prefer a script? `python3 setup.py` installs the same things from the terminal (Python 3 needed), and `python3 setup.py --uninstall` takes them out.
+
+## Servers
+
+The app can also run dedicated servers: it downloads Valve's free server, sets it up like your game (or another server) and runs it, each with its own modes, maps, admins, VIPs, bans and welcome page. You can bring in a server you already run too. The Servers tab has a guide to free and cheap places to host one and how big it needs to be.
 
 ## How it works
 

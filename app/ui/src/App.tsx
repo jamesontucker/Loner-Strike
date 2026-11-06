@@ -11,6 +11,7 @@ import { Admins } from "./views/Admins";
 import { Friends } from "./views/Friends";
 import { GetMore } from "./views/GetMore";
 import { Maps } from "./views/Maps";
+import { Mods } from "./views/Mods";
 import { PlayIdle, PlayLive } from "./views/Play";
 import { Players } from "./views/Players";
 import { Servers } from "./views/Servers";
@@ -18,7 +19,7 @@ import { SettingsPage } from "./views/Settings";
 import { Welcome } from "./views/Welcome";
 import { anySetUp, Setup, type Scan } from "./views/Setup";
 
-type Section = "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "servers" | "admins" | "welcome" | "more" | "settings";
+type Section = "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "servers" | "admins" | "welcome" | "more" | "mods" | "settings";
 
 const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean }[] = [
   { id: "play", label: "Play", icon: "play" },
@@ -33,6 +34,7 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "admins", label: "Admins", icon: "admins" },
   { id: "welcome", label: "Welcome page", icon: "welcome" },
   { id: "more", label: "Get more", icon: "more", group: "Library" },
+  { id: "mods", label: "Mods", icon: "addons" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];
 
@@ -61,6 +63,14 @@ function Shell() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [scan, setScan] = useState<Scan | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  // "Set up later" on the first run: the app without the local setup
+  const [setupLater, setSetupLater] = useState(() => {
+    try {
+      return localStorage.getItem("ls.setupLater") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [servers, setServers] = useState<ServerList | null>(null);
   const toast = useToast();
 
@@ -103,6 +113,7 @@ function Shell() {
   // switches every section to another game or server
   const selectTarget = async (id: string) => {
     if (id === "__new") return setSection("servers");
+    if (id === targetValue) return;
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id }).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) return toast(r.error, true);
     reloadApp();
@@ -112,6 +123,9 @@ function Shell() {
   };
   const target = servers?.selected ?? "local";
   const current = servers?.servers.find((x) => x.id === target) ?? null;
+  // CS 1.6 and Condition Zero on this computer, CS 1.6 first
+  const localGames = (["cstrike", "czero"] as const).filter((g) => scan?.installs.some((i) => i.games.some((x) => x.id === g)));
+  const targetValue = target === "local" ? `local:${app?.game && !app.game.dedicated ? app.game.id : localGames[0] ?? "cstrike"}` : target;
 
   // ⌘1-⌘9 switch sections
   useEffect(() => {
@@ -137,8 +151,24 @@ function Shell() {
   const players = online?.players.length ?? 0;
 
   // First run (nothing set up yet), or opened from Settings
-  if (scan && (setupOpen || !anySetUp(scan))) {
-    return <Setup scan={scan} onClose={anySetUp(scan) ? () => setSetupOpen(false) : undefined} />;
+  if (scan && (setupOpen || (!anySetUp(scan) && !setupLater))) {
+    const close = () => {
+      setSetupOpen(false);
+      setSetupLater(true);
+      try {
+        localStorage.setItem("ls.setupLater", "1");
+      } catch {
+        /* private window */
+      }
+    };
+    const done = () => {
+      setSetupOpen(false);
+      reloadScan();
+      reloadApp();
+      reloadMaps(true);
+      refresh();
+    };
+    return <Setup scan={scan} onClose={close} onDone={done} />;
   }
   const needsGame = NAV.find((n) => n.id === section)?.live && !online;
 
@@ -147,14 +177,22 @@ function Shell() {
       <aside className="sidebar">
         <div className="drag-strip" data-tauri-drag-region />
         <div className="brand">Loner-Strike</div>
-        {servers && servers.servers.length > 0 && (
+        {localGames.length + (servers?.servers.length ?? 0) > 1 && (
           <label className="target">
             <span>Managing</span>
-            <select value={target} onChange={(e) => selectTarget(e.target.value)}>
-              <option value="local">My game</option>
-              {servers.servers.filter((x) => x.ready).map((x) => (
-                <option key={x.id} value={x.id}>{x.name}{x.state === "running" ? " (running)" : ""}</option>
-              ))}
+            <select value={targetValue} onChange={(e) => selectTarget(e.target.value)}>
+              <optgroup label="My game">
+                {localGames.map((g) => (
+                  <option key={g} value={`local:${g}`}>{g === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}</option>
+                ))}
+              </optgroup>
+              {!!servers?.servers.length && (
+                <optgroup label="Servers">
+                  {servers.servers.filter((x) => x.ready).map((x) => (
+                    <option key={x.id} value={x.id}>{x.name}{x.state === "running" ? " (running)" : ""}</option>
+                  ))}
+                </optgroup>
+              )}
               <option value="__new">New server…</option>
             </select>
           </label>
@@ -211,7 +249,8 @@ function Shell() {
               {section === "admins" && <Admins key={target} data={online} />}
               {section === "welcome" && <Welcome target={target} />}
               {section === "more" && <GetMore onInstalled={() => reloadMaps(true)} />}
-              {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={() => setSetupOpen(true)} />}
+              {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={() => setSetupOpen(true)} />}
+              {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={() => setSetupOpen(true)} switchTo={selectTarget} />}
             </>
           )}
         </main>

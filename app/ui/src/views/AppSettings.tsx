@@ -4,7 +4,7 @@ import type { AppInfo, PhoneInfo } from "../types";
 import { SectionHead, Switch, useToast } from "../ui";
 import type { Scan } from "./Setup";
 
-export function AppSettings({ app, reloadApp, scan, openSetup }: { app: AppInfo | null; reloadApp: () => void; scan: Scan | null; openSetup: () => void }) {
+export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app: AppInfo | null; reloadApp: () => void; scan: Scan | null; openSetup: () => void; switchTo: (id: string) => void }) {
   const toast = useToast();
   const [phone, setPhone] = useState<PhoneInfo | null>(null);
   const [checking, setChecking] = useState(false);
@@ -59,7 +59,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup }: { app: AppInfo 
                 i.games
                   .filter((g) => !(app?.game && app.game.id === g.id && app.game.dir.startsWith(i.hl)))
                   .map((g) => (
-                    <button key={i.hl + g.id} className="btn" onClick={() => postJson("/api/app/game", { hl: i.hl, game: g.id }).then(() => toast("Switching…"))}>
+                    <button key={i.hl + g.id} className="btn" onClick={() => postJson("/api/app/game", { hl: i.hl, game: g.id }).then(() => switchTo(`local:${g.id}`))}>
                       Switch to {g.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}
                       {g.installed ? "" : " (not set up)"}
                     </button>

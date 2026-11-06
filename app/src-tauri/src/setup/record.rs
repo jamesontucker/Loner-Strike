@@ -94,6 +94,11 @@ impl Record {
         Record { game: game_dir.to_path_buf(), dir, path, data, broken, component: None, unsaved: 0 }
     }
 
+    /// Every component installed here ("foundation", "core", "mode-zp5"...).
+    pub fn component_ids(&self) -> Vec<String> {
+        self.data.components.keys().cloned().collect()
+    }
+
     /// GameBanana mod ids of the maps that came with a component.
     pub fn map_mods(&self, component: &str) -> Vec<i64> {
         self.data.maps.get(component).and_then(|v| v.as_array()).into_iter().flatten().filter_map(|v| v.as_i64()).collect()

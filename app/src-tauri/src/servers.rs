@@ -745,6 +745,14 @@ pub fn game_for(target: &str, local: impl FnOnce() -> Option<Game>) -> Option<Ar
     Some(g)
 }
 
+/// Switches the panel to the player's own CS 1.6 or Condition Zero, live.
+pub fn use_local(st: &Shared, hl: &str, game: &str) {
+    crate::app_api::set_local_game(hl, game);
+    forget("local");
+    let s = crate::app_api::load_settings();
+    st.set_game(game_for("local", || crate::app_api::pick_game(&s)));
+}
+
 fn forget(target: &str) {
     if let Some(g) = GAMES.lock().unwrap().as_mut() {
         g.remove(target);
@@ -786,6 +794,24 @@ struct Select {
 async fn api_select(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<Select>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) {
         return forbidden();
+    }
+    // "local:cstrike" / "local:czero": the player's own game
+    if let Some(game) = req.id.strip_prefix("local:") {
+        let game = game.to_string();
+        let st2 = st.clone();
+        let ok = tokio::task::spawn_blocking(move || {
+            let installs = crate::steam::find_installs();
+            let cur = st2.game().filter(|g| !g.dedicated).map(|g| g.hl.clone());
+            let pick = installs
+                .iter()
+                .filter(|i| i.games.contains(&game))
+                .max_by_key(|i| Some(&i.hl) == cur.as_ref())
+                .map(|i| i.hl.to_string_lossy().to_string());
+            pick.map(|hl| use_local(&st2, &hl, &game)).is_some()
+        })
+        .await
+        .unwrap_or(false);
+        return answer(if ok { Ok(json!({"ok": true})) } else { Err("That game isn't installed.".into()) });
     }
     let id = req.id.clone();
     let r = tokio::task::spawn_blocking(move || {

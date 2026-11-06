@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import { Icon } from "../icons";
-import { useToast } from "../ui";
+import { SteamProgress, useToast } from "../ui";
 import logo from "../assets/logo.svg";
 
 // ---- what the setup API returns -------------------------------------------------
@@ -35,12 +35,16 @@ export const anySetUp = (scan: Scan | null) => !!scan?.installs.some((i) => i.ga
 
 type Stage = "welcome" | "games" | "content" | "review" | "install" | "done";
 
-export function Setup({ scan, onClose }: { scan: Scan; onClose?: () => void }) {
+const IS_MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+
+/** onClose: back to the app without setting up; onDone: setup finished. */
+export function Setup({ scan, onClose, onDone }: { scan: Scan; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const [stage, setStage] = useState<Stage>("welcome");
   const [installIdx, setInstallIdx] = useState(0);
   const install = scan.installs[installIdx];
-  const [games, setGames] = useState<string[]>(() => (install?.games.some((g) => g.id === "cstrike") ? ["cstrike"] : install?.games.slice(0, 1).map((g) => g.id) ?? []));
+  // every game this Steam has, CS 1.6 first
+  const [games, setGames] = useState<string[]>(() => (["cstrike", "czero"] as const).filter((id) => install?.games.some((g) => g.id === id)));
   const [preset, setPreset] = useState<"all" | "basics" | "pick">("all");
   const usable = useMemo(() => scan.catalog.filter((c) => !c.games || c.games.some((g) => games.includes(g))), [scan.catalog, games]);
   const [picked, setPicked] = useState<Set<string>>(() => new Set(scan.catalog.map((c) => c.id)));
@@ -72,11 +76,9 @@ export function Setup({ scan, onClose }: { scan: Scan; onClose?: () => void }) {
     return () => window.clearInterval(timer.current);
   }, [stage]);
 
-  const finish = async (play: boolean) => {
-    const g = games[0];
-    await postJson("/api/app/game", { hl: install.hl, game: g }).catch(() => null);
-    if (play) await postJson("/api/app/launch", {}).catch(() => null);
-    // the app restarts into the new setup
+  const finish = async () => {
+    await postJson("/api/app/game", { hl: install.hl, game: games[0] }).catch(() => null);
+    onDone();
   };
 
   if (!scan.installs.length) return <NoGame nativeMac={scan.native_mac} />;
@@ -102,8 +104,9 @@ export function Setup({ scan, onClose }: { scan: Scan; onClose?: () => void }) {
             <p className="muted">Close Counter-Strike before you start.</p>
             <div className="row">
               <button className="btn primary big-btn" onClick={() => setStage("games")}>Set it up</button>
-              {onClose && <button className="btn" onClick={onClose}>Not now</button>}
+              <button className="btn" onClick={onClose}>Set up later</button>
             </div>
+            <p className="muted later">Later, everything here is in the app under Mods and Settings.</p>
           </section>
         )}
 
@@ -113,7 +116,7 @@ export function Setup({ scan, onClose }: { scan: Scan; onClose?: () => void }) {
             {scan.installs.length > 1 && (
               <label className="field">
                 <span>Steam install</span>
-                <select value={installIdx} onChange={(e) => { setInstallIdx(+e.target.value); setGames([]); }}>
+                <select value={installIdx} onChange={(e) => { const n = +e.target.value; setInstallIdx(n); setGames((["cstrike", "czero"] as const).filter((id) => scan.installs[n].games.some((g) => g.id === id))); }}>
                   {scan.installs.map((i, n) => <option key={i.hl} value={n}>{i.kind === "crossover" ? `CrossOver bottle "${i.bottle}"` : "Steam"} – {i.hl}</option>)}
                 </select>
               </label>
@@ -140,6 +143,7 @@ export function Setup({ scan, onClose }: { scan: Scan; onClose?: () => void }) {
               })}
             </div>
             <p className="muted">Both use the same bots. Condition Zero adds more bot voices and its own versions of the maps.</p>
+            {IS_MAC && <p className="muted">On a Mac, Counter-Strike runs through CrossOver: Windows Steam installed in a CrossOver bottle. That's where Loner-Strike found your games.</p>}
             <Nav back={() => setStage("welcome")} next={() => setStage("content")} canNext={games.length > 0} />
           </section>
         )}
@@ -194,8 +198,13 @@ export function Setup({ scan, onClose }: { scan: Scan; onClose?: () => void }) {
 
         {stage === "install" && (
           <section className="setup-pane">
-            <h2>{job?.state === "error" ? "Setup stopped" : "Installing…"}</h2>
-            <progress className="setup-progress" max={1} value={job?.progress ?? 0} />
+            <h2>{job?.state === "error" ? "Setup stopped" : "Installing"}</h2>
+            <SteamProgress
+              value={job?.progress ?? 0}
+              title={job?.state === "error" ? "Setup stopped" : "Installing Loner-Strike…"}
+              text={(() => { const now = job?.steps.find((x) => x.state === "running"); return now ? `${now.label}${now.detail ? ` · ${now.detail}` : ""}` : "Getting ready…"; })()}
+              error={job?.state === "error"}
+            />
             <ul className="job-steps">
               {(job?.steps ?? []).map((s) => (
                 <li key={`${s.game}-${s.id}`} className={s.state}>
@@ -203,7 +212,6 @@ export function Setup({ scan, onClose }: { scan: Scan; onClose?: () => void }) {
                   <span>
                     {s.label}
                     {s.game && games.length > 1 ? <small> · {s.game === "cstrike" ? "CS 1.6" : "CZ"}</small> : null}
-                    {s.detail && <small className="muted"> {s.detail}</small>}
                   </span>
                 </li>
               ))}
@@ -220,19 +228,17 @@ export function Setup({ scan, onClose }: { scan: Scan; onClose?: () => void }) {
 
         {stage === "done" && (
           <section className="setup-pane welcome">
+            <div className="done-mark" aria-hidden="true">✓</div>
             <h1>You're set.</h1>
             <p>Start the game and Loner-Strike connects by itself.</p>
-            <ul className="tips">
-              <li><b>F3</b> in game opens the menu: modes, maps, bots and settings. <b>F4</b> is the quick menu.</li>
-              <li>The first time you play a map, the bots spend a few minutes learning it.</li>
-              <li>Change modes, maps and bots here any time, or from your phone (Settings → Use on your phone).</li>
+            <ul className="done-tips">
+              <li><span className="kbd">F3</span><span>In the game: modes, maps, bots and settings. <b>F4</b> is the quick menu.</span></li>
+              <li><span className="kbd">Maps</span><span>The first time you play a map, the bots spend a few minutes learning it.</span></li>
+              <li><span className="kbd">Phone</span><span>Run everything from here, or from your phone: Settings → Use on your phone.</span></li>
             </ul>
             {!!job?.failed_compiles?.length && <p className="err-text">These didn't build, so they won't load: {job.failed_compiles.join(", ")}.</p>}
             {job?.notes?.map((n) => <p key={n} className="muted">{n}</p>)}
-            <div className="row">
-              <button className="btn primary big-btn" onClick={() => finish(true)}>Play {games[0] === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}</button>
-              <button className="btn" onClick={() => finish(false)}>Open the panel</button>
-            </div>
+            <button className="btn primary big-btn" onClick={finish}>Open the panel</button>
           </section>
         )}
       </div>

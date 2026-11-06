@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import type { ServerInfo, ServerList } from "../types";
-import { SectionHead, useToast } from "../ui";
+import { SectionHead, SteamProgress, useToast } from "../ui";
 import type { Job, Scan } from "./Setup";
 
 const GAME = { cstrike: "Counter-Strike 1.6", czero: "Condition Zero" } as const;
@@ -37,13 +37,14 @@ export function JobProgress({ onEnd }: { onEnd: (ok: boolean) => void }) {
     }, 800);
     return () => clearInterval(t);
   }, [onEnd]);
-  if (!job) return <p className="muted">Starting…</p>;
-  const now = job.steps.find((s) => s.state === "running");
+  const now = job?.steps.find((s) => s.state === "running");
   return (
-    <div className="stack-tight">
-      <progress className="setup-progress" max={1} value={job.progress} />
-      <p className="muted">{job.state === "error" ? <span className="err-text">{job.error}</span> : now ? `${now.label}${now.detail ? `: ${now.detail}` : ""}` : "Finishing…"}</p>
-    </div>
+    <SteamProgress
+      value={job?.progress ?? 0}
+      title={job?.state === "error" ? "Stopped" : job?.kind === "server" ? "Setting up the server…" : "Installing…"}
+      text={job?.state === "error" ? job.error : now ? `${now.label}${now.detail ? ` · ${now.detail}` : ""}` : "Getting ready…"}
+      error={job?.state === "error"}
+    />
   );
 }
 

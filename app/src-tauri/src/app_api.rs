@@ -52,6 +52,14 @@ pub fn load_settings() -> Settings {
 }
 
 /// Remembers which game or server the panel controls.
+pub fn set_local_game(hl: &str, game: &str) {
+    let mut s = load_settings();
+    s.game_hl = Some(hl.into());
+    s.game_id = Some(game.into());
+    s.target = Some("local".into());
+    save_settings(&s);
+}
+
 pub fn set_target(id: &str) {
     let mut s = load_settings();
     s.target = Some(id.into());
@@ -175,7 +183,10 @@ static PENDING: Mutex<Option<tauri_plugin_updater::Update>> = Mutex::new(None);
 async fn api_app(State(st): State<Shared>) -> Json<Value> {
     let version = st.app.get().map(|a| a.package_info().version.to_string()).unwrap_or_default();
     let pending = PENDING.lock().unwrap().as_ref().map(|u| json!({"version": u.version, "notes": u.body}));
-    let game = st.game().map(|g| json!({"id": g.name, "dir": g.dir, "dedicated": g.dedicated, "port": g.port}));
+    let game = st.game().map(|g| {
+        let installed = crate::setup::record::Record::open(&g.dir).component_ids();
+        json!({"id": g.name, "dir": g.dir, "hl": g.hl, "dedicated": g.dedicated, "port": g.port, "installed": installed})
+    });
     Json(json!({"version": version, "update": pending, "game": game,
                 "bots": saved_bots(&st), "lastmap": last_map(&st)}))
 }
@@ -299,12 +310,7 @@ async fn api_use_game(State(st): State<Shared>, headers: HeaderMap, Json(req): J
     if !ok {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "That game isn't on this computer."})));
     }
-    let mut s = load_settings();
-    s.game_hl = Some(req.hl);
-    s.game_id = Some(req.game);
-    s.target = Some("local".into());
-    save_settings(&s);
-    restart_soon(&st);
+    crate::servers::use_local(&st, &req.hl, &req.game);
     (StatusCode::OK, Json(json!({"ok": true})))
 }
 
