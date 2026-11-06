@@ -46,10 +46,10 @@ export function Icon({ name, size = 20 }: { name: string; size?: number }) {
 export function Mark({ size = 26 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 1024 1024" aria-hidden="true">
-      <rect x="64" y="64" width="896" height="896" rx="200" fill="#3A402F" />
-      <circle cx="512" cy="512" r="250" fill="none" stroke="#E8792B" strokeWidth="64" />
-      <path d="M512 150v230M512 644v230M150 512h230M644 512h230" stroke="#E9E3CF" strokeWidth="64" strokeLinecap="round" />
-      <circle cx="512" cy="512" r="34" fill="#E8792B" />
+      <rect x="64" y="64" width="896" height="896" rx="200" fill="#4C5844" />
+      <circle cx="512" cy="512" r="250" fill="none" stroke="#C4B550" strokeWidth="64" />
+      <path d="M512 150v230M512 644v230M150 512h230M644 512h230" stroke="#D8DED3" strokeWidth="64" strokeLinecap="round" />
+      <circle cx="512" cy="512" r="34" fill="#C4B550" />
     </svg>
   );
 }

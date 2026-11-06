@@ -114,7 +114,11 @@ function PlayIdle({ game, onLaunch }: { game: Game; onLaunch: () => void }) {
   return (
     <div className="idle">
       <div className="idle-hero">
-        <h1>Ready when you are.</h1>
+        <h1>
+          0 friends online.
+          <br />
+          {LIVE.bots} bots ready.
+        </h1>
         <p>Start {GAMES[game]} and Loner-Strike connects by itself. Your bots, regulars and settings carry over.</p>
         <button className="btn launch" onClick={onLaunch}>
           <Icon name="play" size={22} />
