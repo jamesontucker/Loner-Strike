@@ -57,7 +57,7 @@ impl AppState {
     /// Switches the player's own game (CS 1.6 / Condition Zero).
     pub fn set_game(&self, g: Option<Arc<Game>>) {
         if let Some(g) = &g {
-            g.sharing.retarget(g.rcon.clone(), &g.data, g.port);
+            g.sharing.retarget(&g.data, g.port);
             // admins/VIPs whose time ran out leave users.ini
             crate::admins::sync(g);
         }

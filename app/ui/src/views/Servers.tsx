@@ -4,6 +4,7 @@ import type { AppInfo, MapInfo, Online, ServerInfo, ServerList } from "../types"
 import { SectionHead, SteamProgress, useToast } from "../ui";
 import { Admins } from "./Admins";
 import { Bots } from "./Bots";
+import { Friends } from "./Friends";
 import { GetMore } from "./GetMore";
 import { Maps } from "./Maps";
 import { Mods } from "./Mods";
@@ -139,9 +140,10 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
   );
 }
 
-type Tab = "overview" | "modes" | "maps" | "getmaps" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
+type Tab = "overview" | "friends" | "modes" | "maps" | "getmaps" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
 const TABS: { id: Tab; label: string; live?: boolean }[] = [
   { id: "overview", label: "Overview" },
+  { id: "friends", label: "Play with friends" },
   { id: "modes", label: "Modes", live: true },
   { id: "maps", label: "Maps" },
   { id: "getmaps", label: "Get maps" },
@@ -234,6 +236,7 @@ export function ServerPage(props: {
       ) : (
         <>
           {tab === "overview" && <ServerDetails server={s} onChanged={onChanged} act={act} />}
+          {tab === "friends" && <Friends data={data} refresh={refresh} server={{ name: s.name, visibility: s.visibility }} />}
           {tab === "modes" && data && <PlayLive data={data} maps={maps} refresh={refresh} openMaps={() => setTab("maps")} />}
           {tab === "maps" && <Maps data={data} maps={maps} reload={reloadMaps} refresh={refresh} />}
           {tab === "getmaps" && <GetMore only="maps" onInstalled={reloadMaps} />}

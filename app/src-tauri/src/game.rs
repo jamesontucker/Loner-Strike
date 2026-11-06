@@ -66,7 +66,7 @@ impl Game {
         g.port = port;
         g.dedicated = dedicated;
         g.rcon = Arc::new(Rcon::new(g.rcon.password().to_string(), port));
-        g.sharing = Sharing::global(&app, &g.data, g.rcon.clone(), port);
+        g.sharing = Sharing::global(&app, &g.data, port);
         g
     }
 
@@ -87,7 +87,7 @@ impl Game {
         let rcon = Arc::new(Rcon::new(pw, 27015));
         let maps_cache = Arc::new(Mutex::new(None));
         let store = Arc::new(MapStore::new(hl, &dir, app, maps_cache.clone()));
-        let sharing = Arc::new(Sharing::new(app, &data, rcon.clone(), crate::sharing::GAME_PORT));
+        let sharing = Arc::new(Sharing::new(app, &data, crate::sharing::GAME_PORT));
         Game { hl: hl.to_path_buf(), name: name.into(), dir, data, app: app.to_path_buf(), rcon, maps_cache, store, sharing, port: crate::sharing::GAME_PORT, dedicated: false }
     }
 

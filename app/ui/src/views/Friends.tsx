@@ -16,9 +16,11 @@ type Share = {
   method: "playit" | "tailscale";
   tailscale: { installed: boolean; state?: string; ip?: string | null; name?: string | null };
   port: number;
+  /** the port the playit tunnel is for right now (another game's or server's when it differs) */
+  shared_port?: number;
   ok?: boolean;
 };
-type Direct = { on: boolean; address: string | null; error: string | null; shared_address: boolean };
+type Direct = { on: boolean; address: string | null; error: string | null; shared_address: boolean; port?: number };
 type VLans = Partial<Record<"zerotier" | "radmin" | "hamachi", string>>;
 
 type Method = "lan" | "direct" | "playit" | "tailscale" | "zerotier" | "radmin" | "hamachi";
@@ -72,7 +74,8 @@ function loadMethod(): Method {
   }
 }
 
-export function Friends({ data, refresh }: { data: Online | null; refresh: () => void }) {
+/** server: when it's a dedicated server's page (its name and who it lets in). */
+export function Friends({ data, refresh, server }: { data: Online | null; refresh: () => void; server?: { name: string; visibility: string } }) {
   const toast = useToast();
   const run = useCommand(refresh);
   const [sh, setSh] = useState<Share | null>(null);
@@ -128,6 +131,13 @@ export function Friends({ data, refresh }: { data: Online | null; refresh: () =>
   const st = data?.state;
   const full = !!st && st.humans + st.bots >= st.maxplayers;
 
+  // playit and Direct each serve one game or server at a time
+  const here = sh.port;
+  const playitElsewhere = sh.phase !== "off" && sh.shared_port !== undefined && sh.shared_port !== here;
+  const directHere = !!direct?.on && (direct.port ?? here) === here;
+  const directElsewhere = !!direct?.on && !directHere;
+  const lanOnly = server?.visibility === "lan";
+
   // address + intro text + whether friends see it in the LAN tab, per method
   let address = "";
   let live = false;
@@ -166,19 +176,20 @@ export function Friends({ data, refresh }: { data: Online | null; refresh: () =>
     steps = (
       <ol className="steps">
         <li className="done"><strong>Get everyone on the same network</strong><p>Same Wi-Fi, or plugged into the same router.</p></li>
-        <li className="now"><strong>Start your game</strong><p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (Wine/CrossOver): click Allow.</p></li>
+        <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong><p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (Wine/CrossOver): click Allow.</p></li>
         <li className="now"><strong>Friends join from the LAN tab</strong><p>In Counter-Strike: <b>Find Servers → LAN</b>, and your server is there{serverName ? ` as "${serverName}"` : ""}.</p></li>
       </ol>
     );
   } else if (method === "direct") {
-    address = direct?.on && direct.address ? direct.address : "";
+    address = directHere && direct?.address ? direct.address : "";
     live = !!address;
     steps = (
       <ol className="steps">
         <li className={direct?.on ? "done" : "now"}>
           <strong>Open the port on your router</strong>
           <p>Loner-Strike asks your router to send game traffic to this computer (UPnP), and closes it again when you stop or quit.</p>
-          {direct?.on ? (
+          {directElsewhere && <p className="muted">Direct is open for port {direct?.port} right now. Starting it here moves it to this {server ? "server" : "game"}.</p>}
+          {directHere ? (
             <button className="btn danger" disabled={directBusy} onClick={() => setDirectOn(false)}>Stop</button>
           ) : (
             <button className="btn primary" disabled={directBusy} onClick={() => setDirectOn(true)}>{directBusy ? "Asking your router…" : "Start"}</button>
@@ -195,7 +206,7 @@ export function Friends({ data, refresh }: { data: Online | null; refresh: () =>
       </ol>
     );
   } else if (method === "playit") {
-    const isLive = sh.method === "playit" && sh.phase === "online";
+    const isLive = sh.method === "playit" && sh.phase === "online" && !playitElsewhere;
     address = isLive && sh.address ? `${sh.address.ip || sh.address.host}:${sh.address.port}` : "";
     live = isLive;
     steps = (
@@ -219,7 +230,8 @@ export function Friends({ data, refresh }: { data: Online | null; refresh: () =>
         <li className={isLive ? "done" : sh.connected ? "now" : ""}>
           <strong>Share the game</strong>
           <p>{sh.connected ? "Sharing runs only while Loner-Strike is open." : "Available once this computer is connected."}</p>
-          {sh.connected && (isLive || sh.phase === "starting"
+          {playitElsewhere && <p className="muted">playit.gg is sharing {server ? "your game or another server" : "a server"} right now. Starting it here moves it.</p>}
+          {sh.connected && (isLive || (sh.phase === "starting" && !playitElsewhere)
             ? <button className="btn danger" onClick={() => act("stop")}>Stop sharing</button>
             : <button className="btn primary" onClick={() => act("start")}>Start sharing</button>)}
           {sh.error && <p className="err-text">{sh.error}</p>}
@@ -255,7 +267,10 @@ export function Friends({ data, refresh }: { data: Online | null; refresh: () =>
 
   return (
     <div className="stack">
-      <SectionHead title="Play with friends" note="They need Counter-Strike on Steam. Pick how they connect." />
+      <SectionHead title="Play with friends" note={server ? `Friends join ${server.name}. They need Counter-Strike on Steam. Pick how they connect.` : "They need Counter-Strike on Steam. Pick how they connect."} />
+      {lanOnly && method !== "lan" && (
+        <div className="banner"><div>This server only lets in people on your network. To use this, change "Who can join" in the server's Overview.</div></div>
+      )}
       <div className="methods" role="radiogroup" aria-label="How friends connect">
         {METHODS.map((m) => (
           <button key={m.id} role="radio" aria-checked={method === m.id} className="method" onClick={() => setMethod(m.id)}>

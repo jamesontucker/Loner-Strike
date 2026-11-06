@@ -252,7 +252,7 @@ async fn gb_uninstall(State(st): State<Shared>, headers: HeaderMap, body: Bytes)
 // ---- playing with friends ---------------------------------------------------------------
 
 async fn share_get(State(st): State<Shared>) -> Response {
-    match with_game(&st, |g| g.sharing.status()).await {
+    match with_game(&st, |g| g.sharing.status_for(&g.data, g.port)).await {
         Some(v) => reply(StatusCode::OK, v),
         None => no_game_found(),
     }
@@ -270,7 +270,7 @@ async fn share_post(State(st): State<Shared>, headers: HeaderMap, body: Bytes) -
         let sh = &g.sharing;
         let s = |k: &str| req.get(k).map(text).unwrap_or_default();
         let done = match req["action"].as_str().unwrap_or("") {
-            "server" => sh.set_server(&s("name"), &s("password")),
+            "server" => sh.set_server(&g.rcon, &g.data, &s("name"), &s("password")),
             "method" => sh.set_method(&s("method")),
             "connect" => {
                 sh.connect();
@@ -284,7 +284,11 @@ async fn share_post(State(st): State<Shared>, headers: HeaderMap, body: Bytes) -
                 sh.disconnect();
                 Ok(())
             }
-            "start" => sh.start(),
+            "start" => {
+                // the one playit agent shares whichever game or server asked last
+                sh.retarget(&g.data, g.port);
+                sh.start()
+            }
             "stop" => {
                 sh.stop();
                 Ok(())
@@ -292,7 +296,7 @@ async fn share_post(State(st): State<Shared>, headers: HeaderMap, body: Bytes) -
             _ => Err("unknown action".to_string()),
         };
         done.map(|()| {
-            let mut v = sh.status();
+            let mut v = sh.status_for(&g.data, g.port);
             v["ok"] = json!(true);
             v
         })

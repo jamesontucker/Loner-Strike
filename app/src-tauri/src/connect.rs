@@ -112,6 +112,7 @@ pub fn direct_status() -> Value {
         "address": d.external.map(|ip| format!("{ip}:{}", d.port)),
         "error": d.error,
         "shared_address": d.shared_address,
+        "port": d.port,
     })
 }
 

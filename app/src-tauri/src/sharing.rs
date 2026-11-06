@@ -119,7 +119,6 @@ struct Run {
 
 /// The game being shared: dedicated servers each have their own port and settings.
 struct Target {
-    rcon: Arc<Rcon>,
     /// the game's data folder: friends.cfg (run by the plugin) and friends.json
     data: PathBuf,
     port: u16,
@@ -167,11 +166,11 @@ fn is_executable(p: &Path) -> bool {
 }
 
 impl Sharing {
-    pub fn new(app_dir: &Path, data: &Path, rcon: Arc<Rcon>, port: u16) -> Sharing {
+    pub fn new(app_dir: &Path, data: &Path, port: u16) -> Sharing {
         let dir = app_dir.join("playit");
         let _ = std::fs::create_dir_all(&dir);
         let sh = Sharing {
-            target: Mutex::new(Target { rcon, data: data.to_path_buf(), port }),
+            target: Mutex::new(Target { data: data.to_path_buf(), port }),
             secret_file: dir.join("secret.txt"),
             state_file: dir.join("sharing.json"),
             pid_file: dir.join("playitd.pid"),
@@ -188,10 +187,10 @@ impl Sharing {
     }
 
     /// The app's one playit.gg agent, shared by every game and server it controls.
-    pub fn global(app_dir: &Path, data: &Path, rcon: Arc<Rcon>, port: u16) -> Arc<Sharing> {
+    pub fn global(app_dir: &Path, data: &Path, port: u16) -> Arc<Sharing> {
         static ONE: std::sync::OnceLock<Arc<Sharing>> = std::sync::OnceLock::new();
         ONE.get_or_init(|| {
-            let sh = Arc::new(Sharing::new(app_dir, data, rcon.clone(), port));
+            let sh = Arc::new(Sharing::new(app_dir, data, port));
             sh.adopt_old_panel();
             sh
         })
@@ -199,16 +198,28 @@ impl Sharing {
     }
 
     /// Points sharing at another game or server. A tunnel for another port stops.
-    pub fn retarget(&self, rcon: Arc<Rcon>, data: &Path, port: u16) {
+    pub fn retarget(&self, data: &Path, port: u16) {
         let old = {
             let mut t = self.target.lock().unwrap();
             let old = t.port;
-            *t = Target { rcon, data: data.to_path_buf(), port };
+            *t = Target { data: data.to_path_buf(), port };
             old
         };
         if old != port && self.run.lock().unwrap().phase != "off" {
             self.stop();
         }
+    }
+
+    /// status() as one game or server sees it: its own name, password and port, and
+    /// shared_port, the port the playit tunnel is for (another game's when they differ).
+    pub fn status_for(&self, data: &Path, port: u16) -> Value {
+        let mut v = self.status();
+        let (name, password) = self.server_settings(data);
+        v["name"] = name;
+        v["password"] = password;
+        v["shared_port"] = json!(self.port());
+        v["port"] = json!(port);
+        v
     }
 
     pub fn port(&self) -> u16 {
@@ -217,8 +228,7 @@ impl Sharing {
 
     /// The server name and password: per game (friends.json), or what the
     /// Friends tab saved before servers had their own.
-    fn server_settings(&self) -> (Value, Value) {
-        let data = self.target.lock().unwrap().data.clone();
+    fn server_settings(&self, data: &Path) -> (Value, Value) {
         if let Some(v) = std::fs::read_to_string(data.join("friends.json")).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
             return (v["name"].clone(), v["password"].clone());
         }
@@ -287,7 +297,8 @@ impl Sharing {
 
     pub fn status(&self) -> Value {
         let saved = self.saved.lock().unwrap().clone();
-        let (name, password) = self.server_settings();
+        let data = self.target.lock().unwrap().data.clone();
+        let (name, password) = self.server_settings(&data);
         let run = self.run.lock().unwrap();
         json!({
             "installed": self.binary().is_some(),
@@ -426,16 +437,13 @@ impl Sharing {
     }
 
     // ---- server name and password ----------------------------------------
-    pub fn set_server(&self, name: &str, password: &str) -> Result<(), String> {
+    /// The server name and password of one game or server (its data folder and RCON).
+    pub fn set_server(&self, rcon: &Rcon, data: &Path, name: &str, password: &str) -> Result<(), String> {
         let name = clean_name(name);
         let password = password.trim().to_string();
         if !password_ok(&password) {
             return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
         }
-        let (rcon, data) = {
-            let t = self.target.lock().unwrap();
-            (t.rcon.clone(), t.data.clone())
-        };
         let _ = std::fs::write(data.join("friends.json"), json!({"name": name, "password": password}).to_string());
         let mut lines = Vec::new();
         if !name.is_empty() {
