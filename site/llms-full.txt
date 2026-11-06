@@ -1,0 +1,91 @@
+# Loner-Strike: full details
+
+Loner-Strike is a free, open-source (GPL-3.0) desktop app for Counter-Strike 1.6 and Counter-Strike: Condition Zero on Steam. Tagline: "Play Counter-Strike like it's 2004, alone or with the friends you don't have."
+
+Website: https://lonerstrike.com/
+Download: https://github.com/jamesontucker/Loner-Strike/releases/latest
+Source: https://github.com/jamesontucker/Loner-Strike
+Made by: nanoshrine (https://x.com/nanoshrine)
+
+## Who it's for
+
+People who still play CS 1.6 or Condition Zero, mostly against bots, and want the old community-server experience: classic mods, bots that feel like real players, and a friend joining now and then. Also people who want to run their own CS 1.6 or CZ server without editing config files.
+
+## Requirements
+
+- Counter-Strike 1.6 and/or Condition Zero, the Steam versions. Non-Steam copies are not supported.
+- Windows: download and open Loner-Strike; setup finds the game.
+- Mac: the Mac version of Counter-Strike can't run mods. Install Windows Steam and the game in CrossOver (paid, free trial), and Loner-Strike finds it there. With Parallels, run the Windows version of Loner-Strike inside the Windows virtual machine.
+- Everything it changes is backed up and can be removed from the app.
+
+## Bots
+
+- Bot styles give bots human reaction times, flicks that overshoot, aim that wobbles and sprays that drift, from a newbie lobby to bunnyhopping pros. A mixed lobby gives each bot its own level.
+- Each bot has a personality and plays and types to match: it chats, replies to other bots and to people, rages after a run of deaths, and cheers up a teammate.
+- A cast of regular bot names with clan tags, and believable pings on the scoreboard instead of "BOT".
+- Bots get tilted, panic, make radio calls, spray their logo, and learn new maps by themselves.
+
+## Modes and content
+
+- 22 game modes: Classic, Match (5v5), Deathmatch, Free for all, Gun Game (solo and teams), Zombie Plague (two versions), Warcraft 3, SuperHero, Hide and Seek, Paintball, Deathrun, Base Builder, SoccerJam, Surf, Kreedz, plus knife, pistol, deagle, AWP and scout modes.
+- The mods are community classics, patched so they notice CZ bots. Some got bot logic they never had: SuperHero bots pick heroes, Deathrun bots trigger traps, SoccerJam bots chase the ball, Roll the Dice bots roll.
+- Thousands of maps from GameBanana with screenshots, favourites and search; skins, player models, sounds and sprays; round-end music, Quake sounds and classic sound packs.
+- Add your own maps, sounds and AMX Mod X plugins from a file.
+- Mods are downloaded from their original sources and checked against pinned checksums.
+
+## Playing with friends
+
+- Seven ways to connect: LAN, your router (port forwarding), playit.gg, Tailscale, ZeroTier, Radmin VPN and Hamachi.
+- Server name, join password and a ready-to-send invite. Friends only need Counter-Strike, not Loner-Strike.
+- A custom welcome page for people who join, and a notification when someone joins while you're away.
+
+## Running a server
+
+- Admins, moderators and VIPs with abilities per role and end dates; bans, gags, a swear filter, a chat log and player reports.
+- Map rotation, timed chat messages, AFK and high-ping kickers, stats and ranks, votekick and voteban, join messages with country.
+- Match mode for 5v5s (ready-up, knife round, half-time swap), HLTV for spectators and demos, fast downloads, scheduled restarts.
+
+## Dedicated servers and hosting
+
+- Dedicated servers on your own computer (Valve's free dedicated server, downloaded and set up for you), or bring in one you already run.
+- Always-on servers on a rented Linux machine (a VPS: Ubuntu or Debian, x86, public IPv4). The app connects over SSH with your key, confirms the machine's identity, installs Valve's server and the mods, opens the game ports and runs it as a service that keeps going without your computer.
+- After that: changes made in the app (settings, admins, mods, maps, sounds) are uploaded automatically, only the files that changed; Valve's server files update from the app; HLTV runs next to it on UDP 27020 and its demos can be copied to your game; the app says when a server stops answering, and why.
+- Admins, bans, the swear filter, the welcome page and chat messages can be shared across servers. Mods and other settings stay per server. One server's mods can be copied to another.
+- Each server has a join password, a console (RCON) password and extra start options.
+- Ports: servers on your computer start at UDP 27016 (27015 is your own game's); on a VPS, 27015 to 27019 for servers and 27020 for HLTV. Open UDP 27015-27020 in the provider's firewall.
+- Cost: free on your own computer. A VPS runs from free (Oracle Cloud's Always Free AMD machines, when available) to roughly $4 to $7 a month at providers like Hetzner, DigitalOcean or Vultr. ARM machines can't run the game server.
+- Guide: https://lonerstrike.com/servers.html
+
+## The app
+
+- Guided setup that finds your game, on Windows or a Mac with CrossOver.
+- An in-game menu on F3, and quick actions in the app while you play (pause, bots, god mode, noclip and more).
+- Control it from your phone by scanning a QR code on the same Wi-Fi. Actions that delete or reinstall stay on the computer.
+- Export your setup to another computer or server. Signed automatic updates.
+- Built with Rust (Tauri) and React. It talks to the game over RCON on your own computer; nothing goes through a server run by the makers.
+
+## FAQ
+
+Is it free?
+Yes. The code is open source (GPL-3.0) and every release is on GitHub. Paying on the website is optional and gets you the same download.
+
+Do I need to own Counter-Strike?
+Yes, on Steam: Counter-Strike 1.6, Condition Zero, or both.
+
+Does it work on a Mac?
+Through CrossOver (Windows Steam inside it), or with Parallels by running the Windows version in the virtual machine. Not with the Mac version of Counter-Strike.
+
+Will it mess up my game?
+No. Every file it changes is backed up first, and you can remove any mode or all of it from the app.
+
+Do my friends need it?
+No. They only need Counter-Strike; the server sends them the maps and sounds.
+
+Do I need a server to play with friends?
+No. Your own game hosts them while you play. A dedicated server is for one that stays up when you're not playing.
+
+Who made the mods?
+Their original authors: the AMX Mod X, Metamod and ReGameDLL teams and the community modders behind Zombie Plague, Warcraft 3, SuperHero and the rest. Loner-Strike sets them up and patches them for bots. Everyone is credited in CREDITS.md on GitHub.
+
+Is it affiliated with Valve?
+No. Counter-Strike and Condition Zero are Valve's trademarks. No game files are included.

@@ -3,10 +3,96 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Run a server on a VPS · Loner-Strike</title>
-<meta name="description" content="How to set up an always-on Loner-Strike server on a rented Linux machine: choosing a host, making an SSH key, opening the game ports and managing it.">
+<title>How to run a Counter-Strike 1.6 server on a VPS · Loner-Strike</title>
+<meta name="description" content="Set up an always-on Counter-Strike 1.6 or Condition Zero server with bots and classic mods on a rented Linux machine: choosing a host and size, making an SSH key, opening the game ports and managing it from the free Loner-Strike app.">
+<link rel="canonical" href="https://lonerstrike.com/servers.html">
+<meta name="author" content="nanoshrine">
+<meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#3e4637">
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta property="og:site_name" content="Loner-Strike">
+<meta property="og:title" content="How to run a Counter-Strike 1.6 server on a VPS">
+<meta property="og:description" content="An always-on CS 1.6 or Condition Zero server with bots and classic mods on a rented Linux machine, set up by the free Loner-Strike app.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://lonerstrike.com/servers.html">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://lonerstrike.com/img/og-servers.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Run a server: an always-on Counter-Strike 1.6 or Condition Zero server on a rented Linux machine, set up by the app.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:creator" content="@nanoshrine">
+<meta name="twitter:title" content="How to run a Counter-Strike 1.6 server on a VPS">
+<meta name="twitter:description" content="An always-on CS 1.6 or Condition Zero server with bots and classic mods on a rented Linux machine, set up by the free Loner-Strike app.">
+<meta name="twitter:image" content="https://lonerstrike.com/img/og-servers.jpg">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "HowTo",
+ "name": "How to run a Counter-Strike 1.6 or Condition Zero server on a VPS with Loner-Strike",
+ "description": "Set up an always-on Counter-Strike 1.6 or Condition Zero server, with bots and classic community mods, on a rented Linux machine using the free Loner-Strike app.",
+ "image": "https://lonerstrike.com/img/og-servers.jpg",
+ "totalTime": "PT30M",
+ "tool": [
+  {
+   "@type": "HowToTool",
+   "name": "Loner-Strike (free)"
+  },
+  {
+   "@type": "HowToTool",
+   "name": "An SSH key"
+  }
+ ],
+ "supply": [
+  {
+   "@type": "HowToSupply",
+   "name": "A Linux VPS (Ubuntu or Debian, x86, public IPv4)"
+  }
+ ],
+ "step": [
+  {
+   "@type": "HowToStep",
+   "position": 1,
+   "name": "Choose a host and size",
+   "text": "Players (bots included)CPUMemory Up to about 10, a few bots1 vCPU1 GB 20 to 32, with bots2 vCPU2 to 4 GB The game uses one core, so a fast core beats many. About 2 GB of disk plus your maps. Free: Oracle Cloud's Always Free AMD machines (VM.Standard.E2.1.Micro), when Oracle has capacity. Oracle's trial credits cover bigger machines for a while. Cheap: Hetzner, Vultr, DigitalOcean, OVH and Linode have x86 plans at around $4 to $7 a month. Pick a location near your players."
+  },
+  {
+   "@type": "HowToStep",
+   "position": 2,
+   "name": "Make an SSH key",
+   "text": "Mac or Linux, in Terminal: mkdir -p ~/.ssh ssh-keygen -t ed25519 -f ~/.ssh/loner-strike -N \"\" -C loner-strike cat ~/.ssh/loner-strike.pub Windows 10 or 11, in PowerShell (press Enter twice when it asks for a passphrase): mkdir $HOME\\.ssh -Force ssh-keygen -t ed25519 -f $HOME\\.ssh\\loner-strike -C loner-strike Get-Content $HOME\\.ssh\\loner-strike.pub The last line it prints, starting with ssh-ed25519, is the public key. Copy it for the next step. Keys with a passphrase aren't supported yet. A PuTTY"
+  },
+  {
+   "@type": "HowToStep",
+   "position": 3,
+   "name": "Create the machine",
+   "text": "Create a new server (instance, droplet) with Ubuntu 24.04 or 22.04 on an x86 plan. Make sure it gets a public IPv4 address. Under SSH keys, paste the public key. Once it's running, note its public IP and SSH user: ubuntu on Oracle and AWS, root on Hetzner, DigitalOcean and Vultr. Oracle Cloud Shape: AMD, VM.Standard.E2.1.Micro (not Ampere). Turn on Assign a public IPv4 address; if it ends up without one, add an ephemeral public IP on the instance's VNIC (Attached VNICs > IPv4 addresses > edit). "
+  },
+  {
+   "@type": "HowToStep",
+   "position": 4,
+   "name": "Open UDP 27015-27020",
+   "text": "The app opens the ports in the machine's own firewall (iptables or ufw) during setup. It can't reach your provider's firewall (security list, security group, firewall group), so add an inbound rule there: protocol UDP, ports 27015-27020, source anywhere (0.0.0.0/0). Leave SSH (TCP 22) open; the app uses it for everything else."
+  },
+  {
+   "@type": "HowToStep",
+   "position": 5,
+   "name": "Add it in Loner-Strike",
+   "text": "Servers > New server, and pick A Linux server (VPS). Address: the public IP. User: ubuntu or root. SSH key: Browse to the private key, the file without .pub. On a Mac, press Cmd+Shift+G in the picker and type ~/.ssh. Check the server. It shows the machine's fingerprint (SHA256:...) and whether it matches your computer's ~/.ssh/known_hosts. To check a new one, run ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub in your provider's web console and compare. Pick a name, the game, and Set it up like"
+  },
+  {
+   "@type": "HowToStep",
+   "position": 6,
+   "name": "Join and manage it",
+   "text": "Join, Start, Stop and Open are in Servers. Join on a listed server works with the game open; on an unlisted one it restarts the game to connect. Friends use connect <address>:27015 in the game console, or Find Servers if it's listed. The server's Overview tab has its console, where you can send commands like status. Over SSH (ssh -i ~/.ssh/loner-strike ubuntu@<address>), the lsctl helper manages it: lsctl list the servers on the machine lsctl status running or not lsctl restart also start, stop "
+  }
+ ]
+}
+</script>
+<script type="application/ld+json">
+{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Loner-Strike", "item": "https://lonerstrike.com/"}, {"@type": "ListItem", "position": 2, "name": "Run a server on a VPS", "item": "https://lonerstrike.com/servers.html"}]}
+</script>
 <link rel="stylesheet" href="fonts/barlow.css">
 
 <!-- Plausible (self-hosted) -->

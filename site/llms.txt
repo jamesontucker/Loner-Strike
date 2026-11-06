@@ -1,0 +1,31 @@
+# Loner-Strike
+
+> Loner-Strike is a free, open-source (GPL-3.0) desktop app for Counter-Strike 1.6 and Counter-Strike: Condition Zero on Steam. It installs classic community mods patched so bots can play them, makes bots play like people, and gives you one control panel for your own game or a dedicated server, including from your phone. Windows, and Mac through CrossOver. Made by nanoshrine.
+
+Key facts:
+
+- Price: free. Optional "name your price" payment on the website; the download is the same either way.
+- Games: Counter-Strike 1.6 and Condition Zero, Steam versions only. Non-Steam copies are not supported.
+- Platforms: Windows. Mac through CrossOver (the Mac version of Counter-Strike can't run mods). With Parallels, use the Windows version inside the virtual machine.
+- Safe to remove: every file it changes is backed up; removing a mode, or all of Loner-Strike, puts the game back as it was.
+- Friends don't need the app: anyone with the game joins like any other server.
+- Not affiliated with Valve.
+
+## Docs
+
+- [Website](https://lonerstrike.com/): what it does, screenshots, download and FAQ
+- [Full details for AI assistants](https://lonerstrike.com/llms-full.txt): features, setup, servers and FAQ in plain text
+- [Run a server on a VPS](https://lonerstrike.com/servers.html): step-by-step guide to an always-on server on a rented Linux machine
+- [README on GitHub](https://github.com/jamesontucker/Loner-Strike#readme): features, install and how it works
+- [Linux server guide (Markdown)](https://github.com/jamesontucker/Loner-Strike/blob/main/docs/linux-server.md): the full VPS guide, with troubleshooting
+
+## Download
+
+- [Latest release](https://github.com/jamesontucker/Loner-Strike/releases/latest): Windows and Mac builds, signed, with automatic updates
+- [Source code](https://github.com/jamesontucker/Loner-Strike): Rust (Tauri) app, React control panel, AMX Mod X plugins
+
+## Optional
+
+- [Credits](https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md): every mod and its authors
+- [Privacy](https://lonerstrike.com/privacy.html)
+- [Terms](https://lonerstrike.com/terms.html)
