@@ -515,7 +515,7 @@ fn pack(id: i64) -> Option<&'static Pack> {
 }
 
 /// Short and stable per game folder, so a music pack can be on the game and a server at once.
-fn folder_tag(game: &Path) -> String {
+pub fn folder_tag(game: &Path) -> String {
     let mut h: u32 = 0x811c9dc5;
     for b in game.to_string_lossy().bytes() {
         h ^= b as u32;
@@ -593,7 +593,6 @@ struct MusicJob {
 
 static MUSIC_JOB: Mutex<Option<MusicJob>> = Mutex::new(None);
 /// One change to the content record at a time from here.
-static RECORD: Mutex<()> = Mutex::new(());
 
 fn job_update(f: impl FnOnce(&mut MusicJob)) {
     if let Some(j) = MUSIC_JOB.lock().unwrap().as_mut() {
@@ -655,7 +654,7 @@ fn install_music(g: &Game, p: &Pack) -> Result<String, String> {
             return Err("There were no tracks the game can play in that download.".into());
         }
         job_update(|j| j.message = "Copying tracks".into());
-        let _g = RECORD.lock().unwrap();
+        let _g = crate::gamebanana::RECORDS.lock().unwrap_or_else(|e| e.into_inner());
         let (entries, _) = g.store.content.install(&g.dir, &key, &plan)?;
         let mut rec = g.store.content.load();
         let seq = rec.values().filter_map(|r| r["seq"].as_i64()).max().unwrap_or(0) + 1;
@@ -682,7 +681,7 @@ fn remove_music(g: &Game, p: &Pack) -> Result<(), String> {
     if !g.store.content.for_game(&g.dir).contains_key(&key) {
         return Err("That pack isn't in.".into());
     }
-    let _g = RECORD.lock().unwrap();
+    let _g = crate::gamebanana::RECORDS.lock().unwrap_or_else(|e| e.into_inner());
     let r = g.store.content.uninstall(&key)?;
     // tracks that were turned off sit in the off folder beside where they were put
     for f in r["files"].as_array().into_iter().flatten() {
@@ -867,7 +866,7 @@ async fn api_packs(State(st): State<Shared>) -> Reply {
         let packs: Vec<Value> = PACKS
             .iter()
             .map(|p| {
-                let installed = if p.kind == "music" { mine.contains_key(&music_key(p.id, &g.dir)) } else { theirs.contains_key(&format!("Sound:{}", p.id)) };
+                let installed = if p.kind == "music" { mine.contains_key(&music_key(p.id, &g.dir)) } else { local.as_ref().is_some_and(|l| theirs.contains_key(&crate::content::record_key(crate::content::section("sounds").unwrap(), p.id, &l.dir))) };
                 let mut v = json!({
                     "id": p.id, "name": p.name, "author": p.author, "kind": p.kind, "about": p.about, "installed": installed,
                     "url": format!("https://gamebanana.com/sounds/{}", p.id),
@@ -938,7 +937,7 @@ async fn api_pack(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<
             }
             let id = MUSIC_JOB.lock().unwrap().as_ref().map(|j| j.id.clone()).unwrap_or_default();
             std::thread::spawn(move || {
-                let r = install_music(&g, p);
+                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| install_music(&g, p))).unwrap_or_else(|_| Err("Something went wrong adding the pack.".into()));
                 job_update(|j| {
                     j.ended = Some(crate::sys::now());
                     match r {

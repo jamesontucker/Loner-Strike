@@ -41,7 +41,16 @@ fn not_public(ip: Ipv4Addr) -> bool {
 }
 
 /// Opens the game port on the router (UDP port → this computer). Blocking: call from a thread.
+// Bumped when the port is closed, so a renewal that was already talking to the
+// router doesn't open it again afterwards.
+static CLOSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 pub fn open_direct(port: u16) -> Value {
+    open_unless_closed(port, None)
+}
+
+fn open_unless_closed(port: u16, since: Option<u64>) -> Value {
+    use std::sync::atomic::Ordering;
     let old = DIRECT.lock().unwrap().port;
     if old != port && DIRECT.lock().unwrap().on {
         close_direct();
@@ -67,6 +76,13 @@ pub fn open_direct(port: u16) -> Value {
         Ok((external, not_public(external)))
     })();
     let mut d = DIRECT.lock().unwrap();
+    if since.is_some_and(|g| g != CLOSED.load(Ordering::SeqCst)) {
+        drop(d);
+        if result.is_ok() {
+            close_direct();
+        }
+        return direct_status();
+    }
     match result {
         Ok((ip, shared)) => {
             *d = Direct { on: true, port, external: Some(ip), error: None, shared_address: shared };
@@ -81,6 +97,7 @@ pub fn open_direct(port: u16) -> Value {
 
 /// Closes the port again (sharing stopped, or the app quits).
 pub fn close_direct() -> Value {
+    CLOSED.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let port = DIRECT.lock().unwrap().port;
     let mut opts = igd_next::SearchOptions::default();
     opts.timeout = Some(Duration::from_secs(3));
@@ -99,8 +116,9 @@ pub fn renew_loop() {
             let d = DIRECT.lock().unwrap();
             (d.on, d.port)
         };
+        let since = CLOSED.load(std::sync::atomic::Ordering::SeqCst);
         if on {
-            open_direct(port);
+            open_unless_closed(port, Some(since));
         }
     });
 }

@@ -56,33 +56,50 @@ fn settings_path() -> PathBuf {
     dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Loner-Strike").join("settings.json")
 }
 
+// one change to settings.json at a time (read, change, write)
+static SETTINGS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 pub fn load_settings() -> Settings {
-    let mut s: Settings = std::fs::read_to_string(settings_path())
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default();
+    let p = settings_path();
+    let mut s: Settings = match std::fs::read_to_string(&p) {
+        Ok(t) => serde_json::from_str(&t).unwrap_or_else(|_| {
+            crate::sys::set_aside(&p);
+            Settings::default()
+        }),
+        Err(_) => Settings::default(),
+    };
     if s.token.len() < 16 {
+        let _g = SETTINGS.lock().unwrap_or_else(|e| e.into_inner());
         s.token = new_token();
         save_settings(&s);
     }
     s
 }
 
-/// Remembers which game or server the panel controls.
-pub fn set_local_game(hl: &str, game: &str) {
+/// Changes settings in one step, so two changes at once can't undo each other.
+pub fn edit_settings(f: impl FnOnce(&mut Settings)) -> Settings {
     let mut s = load_settings();
-    s.game_hl = Some(hl.into());
-    s.game_id = Some(game.into());
-    s.target = Some("local".into());
+    let _g = SETTINGS.lock().unwrap_or_else(|e| e.into_inner());
+    // read again under the lock: load_settings may have written a new token
+    if let Some(fresh) = std::fs::read_to_string(settings_path()).ok().and_then(|t| serde_json::from_str::<Settings>(&t).ok()) {
+        s = fresh;
+    }
+    f(&mut s);
     save_settings(&s);
+    s
 }
 
-pub fn save_settings(s: &Settings) {
-    let p = settings_path();
-    if let Some(d) = p.parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
-    let _ = std::fs::write(p, serde_json::to_string_pretty(s).unwrap_or_default());
+/// Remembers which game or server the panel controls.
+pub fn set_local_game(hl: &str, game: &str) {
+    edit_settings(|s| {
+        s.game_hl = Some(hl.into());
+        s.game_id = Some(game.into());
+        s.target = Some("local".into());
+    });
+}
+
+fn save_settings(s: &Settings) {
+    let _ = crate::sys::write_atomic(&settings_path(), serde_json::to_string_pretty(s).unwrap_or_default().as_bytes());
 }
 
 // ---- phone access --------------------------------------------------------
@@ -182,9 +199,7 @@ async fn api_phone_set(State(st): State<Shared>, headers: HeaderMap, Json(req): 
     } else {
         stop_phone(&st);
     }
-    let mut s = load_settings();
-    s.phone = req.enabled;
-    save_settings(&s);
+    edit_settings(|s| s.phone = req.enabled);
     (StatusCode::OK, Json(phone_status(&st)))
 }
 
@@ -317,11 +332,19 @@ async fn api_use_game(State(st): State<Shared>, headers: HeaderMap, Json(req): J
     if !from_panel(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
-    let ok = crate::steam::find_installs().iter().any(|i| i.hl.to_string_lossy() == req.hl && i.games.contains(&req.game));
+    // finding installs and switching sharing over can take seconds
+    let ok = tokio::task::spawn_blocking(move || {
+        let ok = crate::steam::find_installs().iter().any(|i| i.hl.to_string_lossy() == req.hl && i.games.contains(&req.game));
+        if ok {
+            crate::servers::use_local(&st, &req.hl, &req.game);
+        }
+        ok
+    })
+    .await
+    .unwrap_or(false);
     if !ok {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "That game isn't on this computer."})));
     }
-    crate::servers::use_local(&st, &req.hl, &req.game);
     (StatusCode::OK, Json(json!({"ok": true})))
 }
 

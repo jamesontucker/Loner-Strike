@@ -244,12 +244,19 @@ fn valid_url(s: &str) -> bool {
 // ---- files ---------------------------------------------------------------------
 
 fn load(data: &Path) -> Admins {
-    std::fs::read_to_string(data.join("admins.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+    let file = data.join("admins.json");
+    match std::fs::read_to_string(&file) {
+        Ok(t) => serde_json::from_str(&t).unwrap_or_else(|_| {
+            crate::sys::set_aside(&file);
+            Admins::default()
+        }),
+        Err(_) => Admins::default(),
+    }
 }
 
 fn save(data: &Path, a: &Admins) -> Result<(), String> {
     let text = serde_json::to_string_pretty(a).map_err(|e| e.to_string())?;
-    std::fs::write(data.join("admins.json"), text).map_err(|e| format!("Couldn't save the admin list ({e})."))
+    crate::sys::write_atomic(&data.join("admins.json"), text.as_bytes()).map_err(|e| format!("Couldn't save the admin list ({e})."))
 }
 
 /// The Loner-Strike block for users.ini (expired people left out).

@@ -180,7 +180,7 @@ fn menu_clicked(app: &tauri::AppHandle, id: &str) {
     use tauri::Manager;
     if id == "github" {
         #[cfg(target_os = "macos")]
-        let _ = std::process::Command::new("open").arg("https://github.com/jamesontucker/Loner-Strike").spawn();
+        let _ = std::process::Command::new("open").arg("https://github.com/jamesontucker/Loner-Strike").spawn().map(crate::sys::reap);
         return;
     }
     if !(id == "updates" || id.starts_with("section:")) || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == ':') {

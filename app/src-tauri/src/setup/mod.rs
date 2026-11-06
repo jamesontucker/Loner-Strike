@@ -621,18 +621,28 @@ fn begin(kind: &str, steps: Vec<Step>) -> Result<Arc<Job>, String> {
     Ok(job)
 }
 
+/// Runs a job on its own thread. A panic fails the job instead of leaving it
+/// "running" forever (which would block every later install).
+fn spawn_job(job: Arc<Job>, f: impl FnOnce(&Job) + Send + 'static) {
+    std::thread::spawn(move || {
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&job))).is_err() && job.view().state == "running" {
+            job.fail("Something went wrong inside setup. Try again, and copy the diagnostics from Settings if it keeps happening.");
+        }
+    });
+}
+
 /// Starts an install in the background. Returns the job id.
 pub fn start_install(plan: InstallPlan, res: PathBuf, store: Option<Arc<MapStore>>) -> Result<String, String> {
     let job = begin("install", plan.steps.clone())?;
     let id = job.view().id;
-    std::thread::spawn(move || run_install(&job, &plan, &res, store));
+    spawn_job(job, move |job| run_install(job, &plan, &res, store));
     Ok(id)
 }
 
 pub fn start_uninstall(plan: UninstallPlan, res: PathBuf, store: Option<Arc<MapStore>>) -> Result<String, String> {
     let job = begin("uninstall", plan.steps.clone())?;
     let id = job.view().id;
-    std::thread::spawn(move || run_uninstall(&job, &plan, &res, store));
+    spawn_job(job, move |job| run_uninstall(job, &plan, &res, store));
     Ok(id)
 }
 
@@ -665,7 +675,7 @@ pub fn server_step(game: &str, id: &str, label: impl Into<String>, weight: f64) 
 pub fn start_job(kind: &str, steps: Vec<Step>, f: impl FnOnce(&Job) -> Result<(), String> + Send + 'static) -> Result<String, String> {
     let job = begin(kind, steps)?;
     let id = job.view().id;
-    std::thread::spawn(move || match f(&job) {
+    spawn_job(job, move |job| match f(job) {
         Ok(()) => job.complete(),
         Err(e) => job.fail(&e),
     });

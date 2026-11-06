@@ -206,6 +206,10 @@ pub fn local_single(section: &str) -> &'static [&'static str] {
     }
 }
 
+/// installed_maps.json and content/record.json are app-wide: every game, server and
+/// temporary store writes them under this one lock.
+pub static RECORDS: Mutex<()> = Mutex::new(());
+
 pub struct MapStore {
     cstrike: PathBuf,
     game_dir: PathBuf,
@@ -213,7 +217,6 @@ pub struct MapStore {
     pub shots: PathBuf,
     work: PathBuf,
     /// Guards installed_maps.json and the misses file
-    lock: Mutex<()>,
     lookups: Semaphore,
     jobs: Mutex<HashMap<String, Job>>,
     /// The game's cached map list: emptied after an install so the next list is fresh
@@ -232,7 +235,6 @@ impl MapStore {
             record_path: app_dir.join("installed_maps.json"),
             shots,
             work: app_dir.join("cache").join("downloads"),
-            lock: Mutex::new(()),
             lookups: Semaphore { left: Mutex::new(3), cv: Condvar::new() },
             jobs: Mutex::new(HashMap::new()),
             maps_cache,
@@ -242,22 +244,13 @@ impl MapStore {
         store
     }
 
-    // ---- install record -------------------------------------------------
+        // ---- install record -------------------------------------------------
     pub fn records(&self) -> Map<String, Value> {
-        std::fs::read_to_string(&self.record_path)
-            .ok()
-            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .and_then(|v| v.as_object().cloned())
-            .unwrap_or_default()
+        sys::read_json_map(&self.record_path)
     }
 
     fn save_records(&self, rec: &Map<String, Value>) -> std::io::Result<()> {
-        if let Some(d) = self.record_path.parent() {
-            std::fs::create_dir_all(d)?;
-        }
-        let tmp = self.record_path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_string_pretty(rec).unwrap_or_default())?;
-        std::fs::rename(&tmp, &self.record_path)
+        sys::write_atomic(&self.record_path, serde_json::to_string_pretty(rec).unwrap_or_default().as_bytes())
     }
 
     /// map name -> author, for maps installed from here.
@@ -317,7 +310,7 @@ impl MapStore {
             })
             .collect();
         for (key, r) in self.content.for_game(&self.game_dir) {
-            let id = key.rsplit(':').next().and_then(|n| n.parse::<i64>().ok()).unwrap_or(0);
+            let id = content::key_id(&key);
             out.push(json!({"mod": id, "section": r["section"], "name": r["name"], "author": if id < 0 { Value::Null } else { r["author"].clone() },
                             "url": r["url"], "date": r["date"], "local": id < 0, "files": r["files"].as_array().map(|f| f.len()).unwrap_or(0)}));
         }
@@ -351,7 +344,7 @@ impl MapStore {
             return Some(p);
         }
         let missed_at = {
-            let _g = self.lock.lock().unwrap();
+            let _g = RECORDS.lock().unwrap_or_else(|e| e.into_inner());
             self.misses().get(&name).and_then(|v| v.as_f64()).unwrap_or(0.0)
         };
         if sys::now() - missed_at < MISS_DAYS * 86400.0 {
@@ -418,7 +411,7 @@ impl MapStore {
                 return self.shot_for(&name);
             }
         }
-        let _g = self.lock.lock().unwrap();
+        let _g = RECORDS.lock().unwrap_or_else(|e| e.into_inner());
         let mut m = self.misses();
         m.insert(name, json!(sys::now()));
         let _ = std::fs::write(self.shots.join(MISS_FILE), serde_json::to_string(&m).unwrap_or_default());
@@ -456,7 +449,7 @@ impl MapStore {
         for r in d["_aRecords"].as_array().into_iter().flatten() {
             let id = r["_idRow"].clone();
             let Some(n) = id.as_i64() else { continue };
-            let key = if is_maps { n.to_string() } else { content::record_key(sec, n) };
+            let key = if is_maps { n.to_string() } else { content::record_key(sec, n, &self.game_dir) };
             let name = s(&r["_sName"]);
             let guess = name.trim().split(|c: char| c.is_whitespace() || c == '[' || c == '(').next().unwrap_or("").to_lowercase();
             let kind = r["_aSubCategory"]["_sName"].as_str().or(r["_aRootCategory"]["_sName"].as_str()).unwrap_or("");
@@ -516,7 +509,7 @@ impl MapStore {
         let rec = if is_maps {
             self.records().get(&mod_id.to_string()).cloned()
         } else {
-            self.content.for_game(&self.game_dir).get(&content::record_key(sec, mod_id)).cloned()
+            self.content.for_game(&self.game_dir).get(&content::record_key(sec, mod_id, &self.game_dir)).cloned()
         };
         let images: Vec<String> = d["_aPreviewMedia"]["_aImages"]
             .as_array()
@@ -785,7 +778,7 @@ impl MapStore {
 
         if !maps.is_empty() || !installed.is_empty() {
             self.save_shot(&info, &maps);
-            let _g = self.lock.lock().unwrap();
+            let _g = RECORDS.lock().unwrap_or_else(|e| e.into_inner());
             let mut rec = self.records();
             let old = rec.get(&mod_id.to_string()).cloned().unwrap_or(json!({}));
             let merge = |key: &str, new: &[String]| {
@@ -908,7 +901,7 @@ impl MapStore {
     #[allow(clippy::type_complexity)]
     fn install_content(&self, id: &str, section: &str, mod_id: i64, file_id: i64, tmp: &Path) -> Result<(String, Vec<String>, Vec<String>, Vec<String>, Vec<String>), StoreError> {
         let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
-        let key = content::record_key(sec, mod_id);
+        let key = content::record_key(sec, mod_id, &self.game_dir);
         if self.content.for_game(&self.game_dir).contains_key(&key) {
             return Err(StoreError::Bad("That's already installed. Remove it first to install another version.".into()));
         }
@@ -942,7 +935,7 @@ impl MapStore {
         if chosen.is_empty() {
             return Err(StoreError::Bad(format!("Nothing in that download fits {}.", sec.label.to_lowercase())));
         }
-        let _g = self.lock.lock().unwrap();
+        let _g = RECORDS.lock().unwrap_or_else(|e| e.into_inner());
         let (entries, replaced) = self.content.install(&self.game_dir, &key, &chosen).map_err(StoreError::Bad)?;
         let mut rec = self.content.load();
         let seq = rec.values().filter_map(|r| r["seq"].as_i64()).max().unwrap_or(0) + 1;
@@ -958,7 +951,7 @@ impl MapStore {
         );
         if let Err(e) = self.content.save(&rec) {
             // without a record it couldn't be undone later, so undo it now
-            let _ = self.content.uninstall_entry(&self.game_dir, &rec[&content::record_key(sec, mod_id)]);
+            let _ = self.content.uninstall_entry(&self.game_dir, &rec[&content::record_key(sec, mod_id, &self.game_dir)]);
             return Err(StoreError::Bad(e.to_string()));
         }
         let msg = match (count, replaced.len()) {
@@ -982,11 +975,11 @@ impl MapStore {
         if sec.key == "maps" {
             return self.uninstall_maps(mod_id).map(|m| json!({"maps": m}));
         }
-        let key = content::record_key(sec, mod_id);
+        let key = content::record_key(sec, mod_id, &self.game_dir);
         if !self.content.for_game(&self.game_dir).contains_key(&key) {
             return Err(StoreError::Bad("That download isn't installed from the app.".into()));
         }
-        let _g = self.lock.lock().unwrap();
+        let _g = RECORDS.lock().unwrap_or_else(|e| e.into_inner());
         let r = self.content.uninstall(&key).map_err(StoreError::Bad)?;
         let files: Vec<String> = r["files"].as_array().into_iter().flatten().map(|f| s(&f["path"])).collect();
         Ok(json!({"maps": [], "files": files}))
@@ -994,7 +987,7 @@ impl MapStore {
 
     fn uninstall_maps(&self, mod_id: i64) -> Result<Vec<String>, StoreError> {
         let maps = {
-            let _g = self.lock.lock().unwrap();
+            let _g = RECORDS.lock().unwrap_or_else(|e| e.into_inner());
             let mut rec = self.records();
             let r = rec.remove(&mod_id.to_string()).ok_or_else(|| StoreError::Bad("That download isn't installed from the app.".into()))?;
             // files another download also needs stay

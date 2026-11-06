@@ -182,7 +182,6 @@ impl Sharing {
             ts: Mutex::new((Value::Null, None)),
         };
         *sh.saved.lock().unwrap() = sh.load();
-        sh.stop_leftover();
         sh
     }
 
@@ -191,6 +190,9 @@ impl Sharing {
         static ONE: std::sync::OnceLock<Arc<Sharing>> = std::sync::OnceLock::new();
         ONE.get_or_init(|| {
             let sh = Arc::new(Sharing::new(app_dir, data, port));
+            // only here, once: a Sharing is built with every Game, and the pid file
+            // belongs to the live agent once sharing is on
+            sh.stop_leftover();
             sh.adopt_old_panel();
             sh
         })
@@ -274,15 +276,11 @@ impl Sharing {
 
     // ---- saved state ----------------------------------------------------
     fn load(&self) -> Map<String, Value> {
-        std::fs::read_to_string(&self.state_file)
-            .ok()
-            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .and_then(|v| v.as_object().cloned())
-            .unwrap_or_default()
+        crate::sys::read_json_map(&self.state_file)
     }
 
     fn save(&self, saved: &Map<String, Value>) {
-        let _ = std::fs::write(&self.state_file, serde_json::to_string_pretty(saved).unwrap_or_default());
+        let _ = crate::sys::write_atomic(&self.state_file, serde_json::to_string_pretty(saved).unwrap_or_default().as_bytes());
     }
 
     fn edit_saved(&self, f: impl FnOnce(&mut Map<String, Value>)) {

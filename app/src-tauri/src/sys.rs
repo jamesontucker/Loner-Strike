@@ -17,6 +17,50 @@ pub fn old_panel_dir() -> Option<PathBuf> {
 }
 
 /// Copies `from` to `to` if `to` doesn't exist yet (one-time move from the old panel).
+/// Writes a file so readers only ever see the old or the new version: a temporary
+/// file beside it (unique to this write), then renamed over it.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    if let Some(d) = path.parent() {
+        std::fs::create_dir_all(d)?;
+    }
+    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let tmp = path.with_file_name(format!(".{name}.{}-{}.tmp", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })
+}
+
+/// A JSON file that's there but doesn't parse is kept aside (name.bad) rather than
+/// silently replaced by an empty one on the next save.
+pub fn set_aside(path: &Path) {
+    if path.is_file() {
+        let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let _ = std::fs::rename(path, path.with_file_name(format!("{name}.bad")));
+    }
+}
+
+/// A JSON object file; missing is empty, and one that doesn't parse is set aside first.
+pub fn read_json_map(path: &Path) -> serde_json::Map<String, serde_json::Value> {
+    match std::fs::read_to_string(path) {
+        Ok(t) => serde_json::from_str::<serde_json::Value>(&t).ok().and_then(|v| v.as_object().cloned()).unwrap_or_else(|| {
+            set_aside(path);
+            Default::default()
+        }),
+        Err(_) => Default::default(),
+    }
+}
+
+/// Waits for a program we started and don't need anything back from, on its own
+/// thread, so it doesn't stay behind as a zombie until the app quits.
+pub fn reap(mut child: Child) {
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+}
+
 pub fn adopt(from: &Path, to: &Path) {
     if !to.exists() && from.is_file() {
         if let Some(d) = to.parent() {

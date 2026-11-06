@@ -135,7 +135,7 @@ pub fn launch(hl: &Path, appid: &str, args: &[String]) -> Result<(), String> {
         let mut cmd = std::process::Command::new("/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine");
         cmd.args(["--bottle", &bottle, &steam_exe, "-applaunch", appid]).args(args);
         cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-        cmd.spawn().map(|_| ()).map_err(|e| format!("Couldn't start CrossOver ({e})."))
+        cmd.spawn().map(crate::sys::reap).map_err(|e| format!("Couldn't start CrossOver ({e})."))
     }
     #[cfg(windows)]
     {
@@ -144,7 +144,7 @@ pub fn launch(hl: &Path, appid: &str, args: &[String]) -> Result<(), String> {
         let mut cmd = std::process::Command::new("cmd");
         let url = format!("steam://run/{}//{}", appid, args.join(" "));
         cmd.args(["/C", "start", "", &url]);
-        cmd.spawn().map(|_| ()).map_err(|e| format!("Couldn't start Steam ({e})."))
+        cmd.spawn().map(crate::sys::reap).map_err(|e| format!("Couldn't start Steam ({e})."))
     }
     #[cfg(not(any(target_os = "macos", windows)))]
     {

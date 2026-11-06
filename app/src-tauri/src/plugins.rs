@@ -52,7 +52,7 @@ pub fn rewrite_ini(text: &str, names: &[String]) -> String {
 }
 
 fn save(g: &crate::game::Game, names: &[String]) -> Result<(), String> {
-    std::fs::write(list_path(g), serde_json::to_string_pretty(names).unwrap_or_default()).map_err(|e| e.to_string())?;
+    crate::sys::write_atomic(&list_path(g), serde_json::to_string_pretty(names).unwrap_or_default().as_bytes()).map_err(|e| e.to_string())?;
     let ini = g.dir.join("addons/amxmodx/configs/plugins.ini");
     let old = crate::sys::read_latin1(&ini).unwrap_or_default();
     crate::sys::write_latin1(&ini, &rewrite_ini(&old, names)).map_err(|e| format!("Couldn't update plugins.ini ({e})."))

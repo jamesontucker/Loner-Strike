@@ -85,10 +85,16 @@ pub fn section(key: &str) -> Option<&'static Section> {
     SECTIONS.iter().find(|s| s.key == key)
 }
 
-/// Record key: the GameBanana item ("Mod:223124", "Sound:21584"), so the same item
-/// can't be installed twice through two sections.
-pub fn record_key(sec: &Section, id: i64) -> String {
-    format!("{}:{id}", sec.kind)
+/// Record key: the GameBanana item and the game folder ("Mod:223124:1a2b3c4d"), so the
+/// same item can't be installed twice through two sections, and installing it into
+/// CS 1.6 and Condition Zero keeps two records and two sets of backups.
+pub fn record_key(sec: &Section, id: i64, game: &Path) -> String {
+    format!("{}:{id}:{}", sec.kind, crate::sounds::folder_tag(game))
+}
+
+/// The GameBanana id in a record key.
+pub fn key_id(key: &str) -> i64 {
+    key.split(':').nth(1).and_then(|n| n.parse().ok()).unwrap_or(0)
 }
 
 // ---- what may go where -------------------------------------------------------------
@@ -293,18 +299,19 @@ impl Records {
     }
 
     pub fn load(&self) -> Map<String, Value> {
-        std::fs::read_to_string(self.path())
-            .ok()
-            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .and_then(|v| v.as_object().cloned())
-            .unwrap_or_default()
+        let rec = crate::sys::read_json_map(&self.path());
+        // records from before keys named their game folder ("Mod:123"); saved that way next time.
+        // Their backups stay where they are: each file entry names its own backup path.
+        rec.into_iter()
+            .map(|(k, r)| match (k.matches(':').count(), r["game"].as_str()) {
+                (1, Some(g)) => (format!("{k}:{}", crate::sounds::folder_tag(Path::new(g))), r),
+                _ => (k, r),
+            })
+            .collect()
     }
 
     pub fn save(&self, rec: &Map<String, Value>) -> std::io::Result<()> {
-        std::fs::create_dir_all(&self.dir)?;
-        let tmp = self.dir.join("record.json.tmp");
-        std::fs::write(&tmp, serde_json::to_string_pretty(rec).unwrap_or_default())?;
-        std::fs::rename(&tmp, self.path())
+        crate::sys::write_atomic(&self.path(), serde_json::to_string_pretty(rec).unwrap_or_default().as_bytes())
     }
 
     fn backup_root(&self, key: &str) -> PathBuf {
@@ -602,6 +609,8 @@ mod tests {
         let game = root.join("czero");
         put(&game.join("models/V_AK47.mdl"), "original");
         let recs = Records::new(&root.join("app"));
+        let tag = crate::sounds::folder_tag(&game);
+        let k = |n: i64| format!("Mod:{n}:{tag}");
         let src = root.join("src");
         put(&src.join("a"), "skin A");
         put(&src.join("b"), "skin B");
@@ -617,31 +626,31 @@ mod tests {
         let read = |rel: &str| std::fs::read_to_string(game.join(rel)).ok();
 
         // A replaces the original (matching its case) and adds a new sound
-        let r = install("Mod:1", vec![(src.join("a"), "models/v_ak47.mdl".into()), (src.join("snd"), "sound/new/x.wav".into())], 1);
+        let r = install(&k(1), vec![(src.join("a"), "models/v_ak47.mdl".into()), (src.join("snd"), "sound/new/x.wav".into())], 1);
         assert_eq!(r, vec!["models/V_AK47.mdl".to_string()]);
         assert_eq!(read("models/V_AK47.mdl").as_deref(), Some("skin A"));
         // B replaces A
-        install("Mod:2", vec![(src.join("b"), "models/v_ak47.mdl".into())], 2);
+        install(&k(2), vec![(src.join("b"), "models/v_ak47.mdl".into())], 2);
         assert_eq!(read("models/V_AK47.mdl").as_deref(), Some("skin B"));
-        assert_eq!(recs.owners(&game)["models/v_ak47.mdl"].0, "Mod:2");
+        assert_eq!(recs.owners(&game)["models/v_ak47.mdl"].0, k(2));
 
         // removing A (underneath) keeps B on disk; removing B then brings back the original
-        recs.uninstall("Mod:1").unwrap();
+        recs.uninstall(&k(1)).unwrap();
         assert_eq!(read("models/V_AK47.mdl").as_deref(), Some("skin B"));
         assert_eq!(read("sound/new/x.wav"), None);
         assert!(!game.join("sound").exists(), "emptied folders are removed");
-        recs.uninstall("Mod:2").unwrap();
+        recs.uninstall(&k(2)).unwrap();
         assert_eq!(read("models/V_AK47.mdl").as_deref(), Some("original"));
         assert!(recs.load().is_empty());
 
         // the other order: A, B, remove B (A comes back), remove A (original)
-        install("Mod:1", vec![(src.join("a"), "models/v_ak47.mdl".into())], 3);
-        install("Mod:2", vec![(src.join("b"), "models/v_ak47.mdl".into())], 4);
-        recs.uninstall("Mod:2").unwrap();
+        install(&k(1), vec![(src.join("a"), "models/v_ak47.mdl".into())], 3);
+        install(&k(2), vec![(src.join("b"), "models/v_ak47.mdl".into())], 4);
+        recs.uninstall(&k(2)).unwrap();
         assert_eq!(read("models/V_AK47.mdl").as_deref(), Some("skin A"));
-        recs.uninstall("Mod:1").unwrap();
+        recs.uninstall(&k(1)).unwrap();
         assert_eq!(read("models/V_AK47.mdl").as_deref(), Some("original"));
-        assert!(recs.uninstall("Mod:1").is_err());
+        assert!(recs.uninstall(&k(1)).is_err());
 
         // read-only files (as archives often have) are still put back
         #[cfg(unix)]
@@ -649,16 +658,22 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             put(&src.join("ro"), "read-only skin");
             std::fs::set_permissions(src.join("ro"), std::fs::Permissions::from_mode(0o444)).unwrap();
-            install("Mod:4", vec![(src.join("ro"), "models/v_ak47.mdl".into())], 5);
-            recs.uninstall("Mod:4").unwrap();
+            install(&k(4), vec![(src.join("ro"), "models/v_ak47.mdl".into())], 5);
+            recs.uninstall(&k(4)).unwrap();
             assert_eq!(read("models/V_AK47.mdl").as_deref(), Some("original"));
         }
 
         // a failed install leaves nothing behind
-        let bad = recs.install(&game, "Mod:3", &[(src.join("a"), "models/v_ak47.mdl".into()), (src.join("missing"), "models/v_m4a1.mdl".into())]);
+        let bad = recs.install(&game, &k(3), &[(src.join("a"), "models/v_ak47.mdl".into()), (src.join("missing"), "models/v_m4a1.mdl".into())]);
         assert!(bad.is_err());
         assert_eq!(read("models/V_AK47.mdl").as_deref(), Some("original"));
         assert!(!game.join("models/v_m4a1.mdl").exists());
+        // a record saved before keys named the game folder is read under the new key
+        let mut old = Map::new();
+        old.insert("Mod:9".into(), json!({"game": game.to_string_lossy(), "seq": 9, "files": []}));
+        recs.save(&old).unwrap();
+        assert!(recs.for_game(&game).contains_key(&k(9)));
+        assert_eq!(key_id(&k(9)), 9);
         let _ = std::fs::remove_dir_all(&root);
     }
 }

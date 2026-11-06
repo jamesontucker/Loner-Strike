@@ -58,7 +58,9 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
         let errors: Vec<&str> = all.lines().filter(|l| l.to_lowercase().contains("error")).take(5).collect();
         let why = if errors.is_empty() {
             let t = all.trim();
-            t[t.len().saturating_sub(300)..].to_string()
+            // the last 300 characters (not bytes: the output can hold any character)
+            let from = t.char_indices().rev().nth(299).map(|(i, _)| i).unwrap_or(0);
+            t[from..].to_string()
         } else {
             errors.join(" / ")
         };

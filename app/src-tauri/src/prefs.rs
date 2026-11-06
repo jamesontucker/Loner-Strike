@@ -2,7 +2,7 @@
 //! sign-out, storage, game folders added by hand, diagnostics, and exporting or
 //! importing a game's or server's setup.
 
-use crate::app_api::{load_settings, save_settings};
+use crate::app_api::{edit_settings, load_settings};
 use crate::panel_api::from_panel;
 use crate::server::Shared;
 use axum::extract::State;
@@ -43,17 +43,17 @@ async fn api_prefs_set(headers: HeaderMap, Json(req): Json<PrefsReq>) -> Reply {
     if !from_panel(&headers) {
         return forbidden();
     }
-    let mut s = load_settings();
-    if let Some(v) = req.auto_update {
-        s.manual_updates = !v;
-    }
-    if let Some(v) = req.keep_servers {
-        s.keep_servers = v;
-    }
-    if let Some(v) = req.notify_joins {
-        s.mute_joins = !v;
-    }
-    save_settings(&s);
+    let s = edit_settings(|s| {
+        if let Some(v) = req.auto_update {
+            s.manual_updates = !v;
+        }
+        if let Some(v) = req.keep_servers {
+            s.keep_servers = v;
+        }
+        if let Some(v) = req.notify_joins {
+            s.mute_joins = !v;
+        }
+    });
     ok(json!({"auto_update": !s.manual_updates, "keep_servers": s.keep_servers, "game_folders": s.game_folders, "notify_joins": !s.mute_joins}))
 }
 
@@ -65,9 +65,7 @@ async fn api_phone_reset(State(st): State<Shared>, headers: HeaderMap) -> Reply 
         return forbidden();
     }
     let token = crate::app_api::new_token();
-    let mut s = load_settings();
-    s.token = token.clone();
-    save_settings(&s);
+    edit_settings(|s| s.token = token.clone());
     *st.token.write().unwrap() = token;
     ok(crate::app_api::phone_status(&st))
 }
@@ -147,9 +145,9 @@ async fn api_open_folder(headers: HeaderMap) -> Reply {
     let dir = crate::sys::app_dir();
     let _ = std::fs::create_dir_all(&dir);
     #[cfg(target_os = "macos")]
-    let r = std::process::Command::new("open").arg(&dir).spawn();
+    let r = std::process::Command::new("open").arg(&dir).spawn().map(crate::sys::reap);
     #[cfg(windows)]
-    let r = std::process::Command::new("explorer").arg(&dir).spawn();
+    let r = std::process::Command::new("explorer").arg(&dir).spawn().map(crate::sys::reap);
     #[cfg(not(any(target_os = "macos", windows)))]
     let r: std::io::Result<()> = Err(std::io::Error::other("unsupported"));
     match r {
@@ -191,11 +189,11 @@ async fn api_folder_add(headers: HeaderMap, Json(req): Json<FolderReq>) -> Reply
         let mac = if cfg!(target_os = "macos") { " On a Mac it also has to be inside a CrossOver bottle." } else { "" };
         return err(format!("That isn't a Half-Life folder with Counter-Strike 1.6 or Condition Zero in it (it should have a cstrike or czero folder).{mac}"));
     }
-    let mut s = load_settings();
-    if !s.game_folders.contains(&dir) {
-        s.game_folders.push(dir);
-    }
-    save_settings(&s);
+    let s = edit_settings(|s| {
+        if !s.game_folders.contains(&dir) {
+            s.game_folders.push(dir);
+        }
+    });
     ok(json!({"ok": true, "game_folders": s.game_folders}))
 }
 
@@ -203,9 +201,7 @@ async fn api_folder_remove(headers: HeaderMap, Json(req): Json<FolderReq>) -> Re
     if !from_panel(&headers) {
         return forbidden();
     }
-    let mut s = load_settings();
-    s.game_folders.retain(|d| d != req.dir.trim());
-    save_settings(&s);
+    let s = edit_settings(|s| s.game_folders.retain(|d| d != req.dir.trim()));
     ok(json!({"ok": true, "game_folders": s.game_folders}))
 }
 

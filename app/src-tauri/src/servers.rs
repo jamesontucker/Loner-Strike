@@ -100,15 +100,20 @@ fn list_file() -> PathBuf {
 }
 
 pub fn load() -> Vec<Entry> {
-    let mut list: Vec<Entry> = std::fs::read_to_string(list_file()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let file = list_file();
+    let mut list: Vec<Entry> = match std::fs::read_to_string(&file) {
+        Ok(t) => serde_json::from_str(&t).unwrap_or_else(|_| {
+            sys::set_aside(&file);
+            Vec::new()
+        }),
+        Err(_) => Vec::new(),
+    };
     // servers made before they started at 27016 shared the game's port: move them
-    if list.iter().any(|e| !e.imported && e.port < FIRST_PORT) {
-        for i in 0..list.len() {
-            if !list[i].imported && list[i].port < FIRST_PORT {
-                list[i].port = free_port(&list);
-            }
+    // (saved with the next change)
+    for i in 0..list.len() {
+        if !list[i].imported && list[i].port < FIRST_PORT {
+            list[i].port = free_port(&list);
         }
-        let _ = save(&list);
     }
     list
 }
@@ -119,10 +124,7 @@ pub fn running_on(port: u16) -> Option<String> {
 }
 
 fn save(list: &[Entry]) -> Result<(), String> {
-    let _ = std::fs::create_dir_all(sys::app_dir());
-    let tmp = list_file().with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_string_pretty(list).unwrap_or_default()).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, list_file()).map_err(|e| e.to_string())
+    sys::write_atomic(&list_file(), serde_json::to_string_pretty(list).unwrap_or_default().as_bytes()).map_err(|e| e.to_string())
 }
 
 static LIST_LOCK: Mutex<()> = Mutex::new(());
@@ -423,6 +425,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         setup::server_step(&g, "srv-done", "Finishing up", 0.1),
     ];
     edit(|l| l.push(entry.clone()))?;
+    let entry_id = entry.id.clone();
     let job = setup::start_job("server", steps, move |job| {
         job.run(&format!("{g}/srv-steamcmd"), || ensure_steamcmd(job))?;
         job.run(&format!("{g}/srv-download"), || download_hlds(job, &base, &g))?;
@@ -462,6 +465,10 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
             None => Ok(()),
         })?;
         job.run(&format!("{g}/srv-done"), || edit(|l| l.iter_mut().filter(|e| e.id == entry.id).for_each(|e| e.ready = true)))
+    })
+    .inspect_err(|_| {
+        // setup was busy with something else: don't leave a server that never gets set up
+        let _ = edit(|l| l.retain(|e| e.id != entry_id));
     })?;
     Ok((id, job))
 }
@@ -675,14 +682,16 @@ fn spawn(e: &Entry) -> Result<Child, String> {
         .stdout(log.try_clone().map_err(|err| err.to_string())?)
         .stderr(log);
     let child = cmd.spawn().map_err(|err| format!("The server didn't start ({err})."))?;
-    // servers stop with the app, unless the player chose to keep them running
-    if !crate::app_api::load_settings().keep_servers {
-        sys::tie_to_app(&child);
-    }
+    // not tied to the app: whether servers stop with it is decided when it quits
+    // (main.rs), so turning "Keep servers running" on also keeps the ones already going
     Ok(child)
 }
 
 pub fn start(id: &str) -> Result<(), String> {
+    // one start at a time, so a double click (or the crash watcher racing a restart)
+    // can't launch two copies
+    static STARTING: Mutex<()> = Mutex::new(());
+    let _g = STARTING.lock().unwrap_or_else(|e| e.into_inner());
     let e = get(id).ok_or("That server isn't there any more.")?;
     if !e.ready {
         return Err("This server isn't finished setting up.".into());
@@ -883,8 +892,14 @@ fn client(st: &Shared) -> Option<Install> {
 }
 
 async fn api_list() -> Json<Value> {
-    let list: Vec<Value> = load().iter().map(view).collect();
-    Json(json!({"servers": list, "steamcmd": steamcmd_exe().is_file()}))
+    // view() can ask a server left running over RCON: not on the async workers
+    let v = tokio::task::spawn_blocking(|| {
+        let list: Vec<Value> = load().iter().map(view).collect();
+        json!({"servers": list, "steamcmd": steamcmd_exe().is_file()})
+    })
+    .await
+    .unwrap_or_else(|_| json!({"servers": [], "steamcmd": false}));
+    Json(v)
 }
 
 #[derive(Deserialize)]
@@ -945,7 +960,7 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req):
     if !from_panel(&headers) {
         return forbidden();
     }
-    let r = (|| {
+    let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
         let e = get(&id).ok_or("That server isn't there any more.")?;
         if let Some(v) = &req.visibility {
             if !["lan", "unlisted", "listed"].contains(&v.as_str()) {
@@ -989,7 +1004,9 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req):
             forget(&id);
         }
         Ok(json!({"ok": true, "restart": running(&id)}))
-    })();
+    })
+    .await
+    .unwrap_or_else(|_| Err("Something went wrong.".into()));
     answer(r)
 }
 

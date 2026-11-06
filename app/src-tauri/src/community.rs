@@ -148,7 +148,7 @@ fn load(data: &Path) -> Settings {
 fn save(data: &Path, s: &Settings) -> Result<(), String> {
     std::fs::create_dir_all(data).map_err(|e| e.to_string())?;
     let text = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
-    std::fs::write(data.join("community.json"), text).map_err(|e| format!("Couldn't save the settings ({e})."))?;
+    crate::sys::write_atomic(&data.join("community.json"), text.as_bytes()).map_err(|e| format!("Couldn't save the settings ({e})."))?;
     std::fs::write(data.join("community.cfg"), cfg(s)).map_err(|e| format!("Couldn't write community.cfg ({e})."))?;
     // chat arrives as UTF-8, so the words are written that way too
     std::fs::write(data.join("filter.txt"), filter_txt(&s.words)).map_err(|e| format!("Couldn't write the word list ({e})."))
@@ -434,7 +434,7 @@ pub fn fold_reports(mut list: Vec<Report>, log: &[String]) -> Vec<Report> {
 }
 
 fn save_reports(data: &Path, list: &[Report]) -> Result<(), String> {
-    std::fs::write(data.join("reports.json"), serde_json::to_string(list).unwrap_or_default()).map_err(|e| format!("Couldn't save the reports ({e})."))
+    crate::sys::write_atomic(&data.join("reports.json"), serde_json::to_string(list).unwrap_or_default().as_bytes()).map_err(|e| format!("Couldn't save the reports ({e})."))
 }
 
 /// The reports, after taking in what the plugin wrote since last time. Call with LOCK held.

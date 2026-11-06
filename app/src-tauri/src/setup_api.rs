@@ -47,8 +47,9 @@ fn resources(st: &Shared) -> Result<PathBuf, String> {
 
 /// The map store for an install: the panel's own when it's the same game folder,
 /// so its map list refreshes too.
-fn store_for(st: &Shared, hl: &Path, game: &str) -> Arc<MapStore> {
-    if let Some(g) = st.game().filter(|g| g.hl == hl) {
+/// `target` is read before spawn_blocking: the request's X-Target isn't visible there.
+fn store_for(target: Option<Arc<crate::game::Game>>, hl: &Path, game: &str) -> Arc<MapStore> {
+    if let Some(g) = target.filter(|g| g.hl == hl) {
         return g.store.clone();
     }
     Arc::new(MapStore::new(hl, &hl.join(game), &crate::sys::app_dir(), Arc::new(Mutex::new(None))))
@@ -109,6 +110,7 @@ async fn install(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Re
         Err(r) => return r,
     };
     let st2 = st.clone();
+    let target = st.game();
     let r = tokio::task::spawn_blocking(move || -> Result<String, String> {
         let res = resources(&st2)?;
         let install = find_install(req["hl"].as_str().unwrap_or(""))?;
@@ -116,7 +118,7 @@ async fn install(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Re
             return Err(CLOSE_GAME.into());
         }
         let plan = setup::plan_install(install, &list(&req["games"]), &list(&req["components"]), &res, req["repair"].as_bool() == Some(true))?;
-        let store = store_for(&st2, &plan.install.hl, &plan.games[0]);
+        let store = store_for(target, &plan.install.hl, &plan.games[0]);
         setup::start_install(plan, res, Some(store))
     })
     .await;
@@ -132,6 +134,7 @@ async fn uninstall(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> 
         Err(r) => return r,
     };
     let st2 = st.clone();
+    let target = st.game();
     let r = tokio::task::spawn_blocking(move || -> Result<String, String> {
         let res = resources(&st2)?;
         let install = find_install(req["hl"].as_str().unwrap_or(""))?;
@@ -140,7 +143,7 @@ async fn uninstall(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> 
         }
         let comps = req.get("components").filter(|c| c.is_array()).map(list);
         let plan = setup::plan_uninstall(install, &list(&req["games"]), comps, &res)?;
-        let store = store_for(&st2, &plan.install.hl, &plan.games[0]);
+        let store = store_for(target, &plan.install.hl, &plan.games[0]);
         setup::start_uninstall(plan, res, Some(store))
     })
     .await;

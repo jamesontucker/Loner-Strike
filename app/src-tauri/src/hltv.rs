@@ -342,10 +342,7 @@ fn spawn(e: &Entry) -> Result<Child, String> {
         .stdout(log.try_clone().map_err(|err| err.to_string())?)
         .stderr(log);
     let child = cmd.spawn().map_err(|err| format!("HLTV didn't start ({err})."))?;
-    // like its server: stops with the app unless the player keeps servers running
-    if !crate::app_api::load_settings().keep_servers {
-        sys::tie_to_app(&child);
-    }
+    // like its server: stopped with it when the app quits, unless servers are kept running
     Ok(child)
 }
 
@@ -666,13 +663,13 @@ async fn api_folder(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req):
             .unwrap_or_else(|| e.dir.join(&e.game));
         #[cfg(target_os = "macos")]
         let r = match &demo {
-            Some(p) => std::process::Command::new("open").arg("-R").arg(p).spawn(),
-            None => std::process::Command::new("open").arg(&dir).spawn(),
+            Some(p) => std::process::Command::new("open").arg("-R").arg(p).spawn().map(crate::sys::reap),
+            None => std::process::Command::new("open").arg(&dir).spawn().map(crate::sys::reap),
         };
         #[cfg(windows)]
         let r = match &demo {
-            Some(p) => std::process::Command::new("explorer").arg(format!("/select,{}", p.display())).spawn(),
-            None => std::process::Command::new("explorer").arg(&dir).spawn(),
+            Some(p) => std::process::Command::new("explorer").arg(format!("/select,{}", p.display())).spawn().map(crate::sys::reap),
+            None => std::process::Command::new("explorer").arg(&dir).spawn().map(crate::sys::reap),
         };
         #[cfg(not(any(target_os = "macos", windows)))]
         let r: std::io::Result<()> = {

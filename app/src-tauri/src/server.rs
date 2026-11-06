@@ -160,10 +160,19 @@ pub fn router(state: Shared, listener: Listener) -> Router {
         .merge(crate::plugins::routes())
         .merge(crate::sounds::routes())
         .fallback(ui);
-    let routes = routes.layer(middleware::from_fn(with_target));
+    // X-Target is applied after the computer-only routes are merged (a layer only covers
+    // routes already there), and the listener's guard stays outermost
     let routes = match listener {
-        Listener::Local => routes.merge(crate::servers::local_routes()).merge(crate::hltv::local_routes()).merge(crate::prefs::local_routes()).merge(crate::plugins::local_routes()).merge(crate::sounds::local_routes()).merge(crate::extras::local_routes()).layer(middleware::from_fn_with_state(state.clone(), guard_local)),
-        Listener::Lan => routes.layer(middleware::from_fn_with_state(state.clone(), guard_lan)),
+        Listener::Local => routes
+            .merge(crate::servers::local_routes())
+            .merge(crate::hltv::local_routes())
+            .merge(crate::prefs::local_routes())
+            .merge(crate::plugins::local_routes())
+            .merge(crate::sounds::local_routes())
+            .merge(crate::extras::local_routes())
+            .layer(middleware::from_fn(with_target))
+            .layer(middleware::from_fn_with_state(state.clone(), guard_local)),
+        Listener::Lan => routes.layer(middleware::from_fn(with_target)).layer(middleware::from_fn_with_state(state.clone(), guard_lan)),
     };
     routes.with_state(state)
 }
