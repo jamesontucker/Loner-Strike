@@ -123,6 +123,10 @@ fn scan() -> Vec<Install> {
 /// Hands Steam a steam:// link (in the game's bottle on a Mac). A running game is told
 /// by Steam to act on it.
 pub fn open_steam_url(hl: &Path, url: &str) -> Result<(), String> {
+    // it goes through a shell on Windows: plain characters only
+    if !url.starts_with("steam://") || !url.chars().all(|c| c.is_ascii_alphanumeric() || ":/._-".contains(c)) {
+        return Err("That address can't be opened.".into());
+    }
     #[cfg(target_os = "macos")]
     {
         let s = hl.to_string_lossy().to_string();
@@ -153,6 +157,10 @@ pub fn open_steam_url(hl: &Path, url: &str) -> Result<(), String> {
 }
 
 pub fn launch(hl: &Path, appid: &str, args: &[String]) -> Result<(), String> {
+    // on Windows these go through a shell (Steam's URL handler): plain characters only
+    if !appid.chars().all(|c| c.is_ascii_digit()) || !args.iter().all(|a| a.chars().all(|c| c.is_ascii_alphanumeric() || "+-_.:/".contains(c))) {
+        return Err("Those launch options can't be used.".into());
+    }
     #[cfg(target_os = "macos")]
     {
         // .../Bottles/<bottle>/drive_c/<steam>/steamapps/common/Half-Life
