@@ -970,7 +970,8 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
   // where it runs: this computer, or a Linux machine (a VPS) reached over SSH
   const [where, setWhere] = useState<"here" | "vps">("here");
   const [host, setHost] = useState("");
-  const [user, setUser] = useState("ubuntu");
+  // no guess: it's ubuntu on some hosts and root on others, and a wrong one just fails
+  const [user, setUser] = useState("");
   const [key, setKey] = useState("");
   // the machine as first seen: its fingerprint to confirm before anything is set up
   const [probe, setProbe] = useState<{ fingerprint: string; known: boolean; arch: string; x86: boolean } | null>(null);
@@ -1056,8 +1057,9 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
               <input ref={hostBox} className="search" placeholder="e.g. 146.235.20.10" value={host} onChange={(e) => { setHost(e.target.value.trim()); machineChanged(); }} spellCheck={false} />
             </label>
             <label className="field">
-              <span>User<Info text="The account you log in with over SSH. On Ubuntu machines from Oracle, AWS and most hosts it's ubuntu; some use root. It needs to be able to use sudo." /></span>
-              <input className="search" value={user} onChange={(e) => { setUser(e.target.value.trim()); machineChanged(); }} spellCheck={false} />
+              <span>User<Info text="The account you log in with over SSH: ubuntu on Oracle and AWS, root on Hetzner, DigitalOcean and Vultr. It needs to be root or able to use sudo." /></span>
+              <input className="search" placeholder="ubuntu or root" value={user} onChange={(e) => { setUser(e.target.value.trim()); machineChanged(); }} spellCheck={false} />
+              {user === "root" && <small>Works. The game server then runs as root too; the guide shows how to add a separate user if you'd rather it didn't.</small>}
             </label>
             <div className="field">
               <span>SSH key<Info text="The private key you log in with (the file without .pub), usually in the .ssh folder in your home folder. It stays on this computer; the app uses it to connect." /></span>
@@ -1071,8 +1073,8 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
               {!probe ? (
                 <>
                   <div className="row">
-                    <BusyButton className="btn" busy={checking} disabled={!host || !key} label="Check the server" busyLabel="Connecting…" onClick={check} />
-                    {(!host || !key) && <span className="muted small-note">Fill in the address and the key first.</span>}
+                    <BusyButton className="btn" busy={checking} disabled={!host || !key || !user} label="Check the server" busyLabel="Connecting…" onClick={check} />
+                    {(!host || !key || !user) && <span className="muted small-note">Fill in the address, user and key first.</span>}
                   </div>
                   {checkErr && <ErrorWithFix error={checkErr} />}
                 </>
@@ -1084,7 +1086,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
                   ) : probe.known ? (
                     <p className="muted small-note">Matches what this computer's SSH has on record for {host}.</p>
                   ) : (
-                    <p className="muted small-note">First time this computer sees {host}. To be sure it's yours, compare with what the machine shows for <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code> (your provider's web console can run it).</p>
+                    <p className="muted small-note">First time this computer sees {host}. To be sure it's yours, compare with what the machine shows for <code>{"for f in /etc/ssh/ssh_host_*_key.pub; do ssh-keygen -lf $f; done"}</code> (your provider's web console can run it): one of those lines should match.</p>
                   )}
                 </div>
               )}

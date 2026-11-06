@@ -74,6 +74,15 @@ The steps are much the same everywhere:
 
 The user is `ubuntu` on Ubuntu images from Oracle and AWS, and `root` on Hetzner, DigitalOcean and Vultr. Either works; the user needs to be able to use `sudo` without a password, which is how these images come.
 
+Logged in as `root`, the game server runs as root too. That works, but if you'd rather it ran as its own user, make one before adding the server (here called `cs`) and use it as the User in the app:
+
+```
+adduser --disabled-password --gecos "" cs
+usermod -aG sudo cs
+echo 'cs ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/cs
+mkdir -p /home/cs/.ssh && cp ~/.ssh/authorized_keys /home/cs/.ssh/ && chown -R cs:cs /home/cs/.ssh
+```
+
 ### Oracle Cloud
 
 - Shape: under Change shape, pick **AMD** and **VM.Standard.E2.1.Micro** (Always Free) or a Flex shape if you have credits. Not Ampere.
@@ -216,7 +225,7 @@ The machine's host key is different from last time. If you rebuilt or replaced t
 It's an ARM machine. Make a new one with an x86 (AMD or Intel) plan.
 
 **"The user ... can't use sudo without a password."**
-Use `root`, or the image's default user (`ubuntu`). On a minimal Debian image logged in as root, `sudo` may be missing: run `apt install sudo`.
+Use `root`, or the image's default user (`ubuntu`).
 
 **"Only Ubuntu and Debian are supported for now."**
 Make the machine again with an Ubuntu image.

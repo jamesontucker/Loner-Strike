@@ -90,7 +90,17 @@ fn connect(r: &RemoteInfo) -> Result<Session, String> {
         if first.contains("ENCRYPTED") || e.message().contains("passphrase") {
             "That key has a passphrase, which isn't supported yet. Make a key without one for the server.".to_string()
         } else {
-            format!("The server didn't accept the key for {} ({}). Check the user name and that this key was added to the server.", r.user, e.message())
+            format!(
+                "The server didn't accept the key for {} ({}). Check the user name{} and that this key was added to the server.",
+                r.user,
+                e.message(),
+                // the usual mix-up: hosts differ in which account they give you
+                match r.user.as_str() {
+                    "ubuntu" => " (Hetzner, DigitalOcean and Vultr use root)",
+                    "root" => " (Oracle and AWS use ubuntu)",
+                    _ => "",
+                }
+            )
         }
     })?;
     if !s.authenticated() {
@@ -481,14 +491,20 @@ step() { echo "@@STEP $1"; }
 fail() { echo "@@FAIL $*"; exit 3; }
 BASE="$HOME/loner-strike"; SRV="$HOME/$SRVDIR"; G="$GAME"
 [ "$(uname -m)" = x86_64 ] || fail "This machine is $(uname -m). The Counter-Strike server only runs on x86 (AMD or Intel) machines."
+# root on an image without sudo: run the commands directly
+[ "$(id -u)" = 0 ] && ! command -v sudo >/dev/null && sudo() { [ "$1" = -n ] && shift; "$@"; }
 sudo -n true 2>/dev/null || fail "The user $(whoami) can't use sudo without a password, which setup needs."
 
 step packages
-export DEBIAN_FRONTEND=noninteractive
 command -v apt-get >/dev/null || fail "Only Ubuntu and Debian are supported for now."
+# a machine that just booted is often still setting itself up and installing updates:
+# wait for that instead of failing on apt's lock. No questions asked (sudo drops the
+# environment, so it goes through env), and nothing may read this script from stdin.
+command -v cloud-init >/dev/null && sudo cloud-init status --wait >/dev/null 2>&1 || true
+apt_get() { sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o DPkg::Lock::Timeout=600 "$@" </dev/null; }
 sudo dpkg --add-architecture i386
-sudo apt-get update -qq >/dev/null
-sudo apt-get install -y -qq lib32gcc-s1 lib32stdc++6 libc6-i386 curl ca-certificates unzip xz-utils tar python3 >/dev/null
+for i in 1 2 3 4 5; do apt_get update -qq >/dev/null 2>&1 && break; sleep 20; done
+apt_get install -y -qq lib32gcc-s1 lib32stdc++6 libc6-i386 curl ca-certificates unzip xz-utils tar python3 >/dev/null
 
 step firewall
 if command -v iptables >/dev/null; then
@@ -512,7 +528,7 @@ mkdir -p "$SRV"
 MOD=""; [ "$G" = czero ] && MOD="+app_set_config 90 mod czero"
 # Valve's HLDS download often stops part way; running it again carries on
 for i in 1 2 3 4 5; do
-  ./steamcmd.sh +force_install_dir "$SRV" +login anonymous $MOD +app_update 90 validate +quit | grep --line-buffered -E "Update state|Success|ERROR" || true
+  ./steamcmd.sh +force_install_dir "$SRV" +login anonymous $MOD +app_update 90 validate +quit </dev/null | grep --line-buffered -E "Update state|Success|ERROR" || true
   [ -f "$SRV/hlds_linux" ] && [ -f "$SRV/$G/liblist.gam" ] && break
 done
 [ -f "$SRV/hlds_linux" ] && [ -f "$SRV/$G/liblist.gam" ] || fail "Valve's download didn't finish. Try again in a while."
@@ -562,6 +578,7 @@ pub fn service_sh(id: &str, game: &str, args: &[String]) -> String {
     let args = args.iter().map(|a| shell_quote(a)).collect::<Vec<_>>().join(" ");
     format!(
         r#"set -eu
+[ "$(id -u)" = 0 ] && ! command -v sudo >/dev/null && sudo() {{ [ "$1" = -n ] && shift; "$@"; }}
 SRV="$HOME/{dir}"
 PW="$SRV/{game}/addons/amxmodx/data/gamemodes/panel_rcon.txt"
 if [ -f "$PW" ]; then
@@ -709,6 +726,7 @@ pub fn hltv_sh(id: &str, cfg: &str, admin: &str, port: u16, on: bool) -> String 
     };
     format!(
         r#"set -eu
+[ "$(id -u)" = 0 ] && ! command -v sudo >/dev/null && sudo() {{ [ "$1" = -n ] && shift; "$@"; }}
 SRV="$HOME/{dir}"
 # Valve's Linux server comes with HLTV; an old or partial download may not
 [ -x "$SRV/hltv" ] || exit 3
