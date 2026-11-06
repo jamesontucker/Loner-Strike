@@ -288,14 +288,12 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
                     {[4, 9, 15].map((n) => <button key={n} aria-pressed={firstBots === n} onClick={() => setFirstBots(n)}>{n}</button>)}
                   </div>
                 </div>
+                <button className="btn primary first-play" onClick={() => finish(true)}>
+                  <Icon name="play" size={18} /> Play
+                </button>
               </div>
             </div>
-            <div className="row center">
-              <button className="btn primary big-btn" onClick={() => finish(true)}>
-                <Icon name="play" size={20} /> Play
-              </button>
-              <button className="btn" onClick={() => finish(false)}>Open the panel</button>
-            </div>
+            <button className="link inline" onClick={() => finish(false)}>Or open the panel</button>
           </section>
         )}
       </div>

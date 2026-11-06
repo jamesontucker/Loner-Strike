@@ -919,3 +919,15 @@ a.btn.primary { color: var(--signal-ink); }
   .ad-tools select { flex: 1; min-height: 44px; font-size: 16px; }
   .extras .setting .seg { display: grid; grid-template-columns: repeat(3, 1fr); }
 }
+
+/* setup's last step fits the card without scrolling */
+.setup-pane.welcome:has(.first-game) { gap: 2px; padding: 0; }
+.setup-pane.welcome:has(.first-game) h1 { margin: 6px 0 4px; font-size: 38px; }
+.setup-pane.welcome:has(.first-game) > p { margin: 0; }
+.done-mark { width: 46px; height: 46px; font-size: 24px; margin-bottom: 0; }
+.done-tips { margin: 10px 0 12px; gap: 6px; }
+.done-tips li { padding: 7px 12px; font-size: 15px; }
+.first-game { margin: 0 0 10px; padding: 10px 14px 10px; }
+.first-row .field { margin-bottom: 0; }
+.first-play { align-self: end; min-height: 38px; padding: 7px 20px; font-size: 16px; display: inline-flex; gap: 6px; align-items: center; }
+@media (max-width: 760px) { .first-play { flex: 1 1 100%; justify-content: center; } }
