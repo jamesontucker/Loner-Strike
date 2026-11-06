@@ -1,6 +1,6 @@
 import { FilesUpdate } from "./views/FilesUpdate";
 import { useCallback, useEffect, useState } from "react";
-import { clock, getJson, ON_THIS_COMPUTER, postJson, setTarget, withTarget } from "./api";
+import { clock, getJson, ON_THIS_COMPUTER, postJson, setTarget, withTarget, useActivity } from "./api";
 import { useGameState } from "./api";
 import { Icon } from "./icons";
 import type { AppInfo, MapInfo, Online, ServerList } from "./types";
@@ -357,6 +357,19 @@ function Shell() {
 /** The phone's bottom bar: the most used sections, and Servers for people who host. */
 const tabbarFor = (hosting: boolean): Section[] => (hosting ? ["play", "maps", "players", "servers"] : ["play", "maps", "bots", "players"]);
 
+/** What's in progress anywhere in the app, so it's visible from any page. */
+function Working() {
+  const acts = useActivity().filter(([, label]) => label);
+  if (!acts.length) return null;
+  return (
+    <span className="working" role="status">
+      <span className="spinner" aria-hidden="true" />
+      {acts[0][1]}
+      {acts.length > 1 ? ` (+${acts.length - 1} more)` : ""}
+    </span>
+  );
+}
+
 function Strip({ data, reason, app, server, gameOpen }: { data: Online | null; reason: string; app: AppInfo | null; server?: string; gameOpen: boolean }) {
   if (!data) {
     return (
@@ -368,6 +381,7 @@ function Strip({ data, reason, app, server, gameOpen }: { data: Online | null; r
               ? `${app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"} ${gameOpen ? "is open, but no game is loaded" : "isn't running"}`
               : reason}
         </div>
+        <Working />
         <span className="live">Offline</span>
       </header>
     );
@@ -393,6 +407,7 @@ function Strip({ data, reason, app, server, gameOpen }: { data: Online | null; r
         <span className="ct">{score("CT")}</span>
       </div>
       <div className="strip-actions">
+        <Working />
         <span className="live on">Live</span>
       </div>
     </header>

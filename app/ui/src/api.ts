@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { GameState } from "./types";
 
 // Commands only take plain words; the server checks the same rule.
@@ -176,20 +176,39 @@ export function useOnce() {
   }, []);
 }
 
-/** Like useOnce, and says which actions are still going (for a spinner on their button). */
+// ---- what's in progress, for the whole app ------------------------------------------
+// Kept outside any page, so a spinner and its label are still there after you switch
+// pages and come back (the work itself carries on regardless).
+const activity = new Map<string, string>();
+const watchers = new Set<() => void>();
+let snapshot: [string, string][] = [];
+function changed() {
+  snapshot = [...activity.entries()];
+  watchers.forEach((w) => w());
+}
+const subscribe = (w: () => void) => {
+  watchers.add(w);
+  return () => watchers.delete(w);
+};
+/** Everything in progress: [key, label] */
+export function useActivity() {
+  return useSyncExternalStore(subscribe, () => snapshot);
+}
+
+/** Runs an action unless the same one is still going; `busy(key)` says whether it is, on
+ *  any page. `label` is what the top bar says while it runs ("Saving…"). */
 export function useActions() {
-  const going = useRef(new Set<string>());
-  const [busy, setBusy] = useState<string[]>([]);
-  const run = useCallback(async (key: string, fn: () => Promise<unknown>) => {
-    if (going.current.has(key)) return;
-    going.current.add(key);
-    setBusy((b) => [...b, key]);
+  const all = useActivity();
+  const run = useCallback(async (key: string, fn: () => Promise<unknown>, label = "") => {
+    if (activity.has(key)) return;
+    activity.set(key, label);
+    changed();
     try {
       await fn();
     } finally {
-      going.current.delete(key);
-      setBusy((b) => b.filter((k) => k !== key));
+      activity.delete(key);
+      changed();
     }
   }, []);
-  return { run, busy: (key: string) => busy.includes(key) };
+  return { run, busy: (key: string) => all.some(([k]) => k === key) };
 }

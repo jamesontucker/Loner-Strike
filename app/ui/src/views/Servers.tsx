@@ -36,6 +36,8 @@ function uptime(s: number) {
 }
 
 /** The setup job's progress, polled until it ends. */
+const ACTION_LABEL: Record<string, string> = { start: "Starting", stop: "Stopping", restart: "Restarting", join: "Joining", retry: "Setting up", rebuild: "Rebuilding", delete: "Deleting", update: "Updating" };
+
 export function JobProgress({ onEnd: onEndProp }: { onEnd: (ok: boolean) => void }) {
   const onEnd = useStable(onEndProp);
   const [job, setJob] = useState<Job | null>(null);
@@ -81,7 +83,7 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
     if (action === "join") toast(`Joining ${s.name}…`);
     if (action === "delete") toast(r.note || `${s.name} ${s.imported ? "removed" : "deleted"}`, !!r.note);
     onChanged();
-  });
+  }, `${ACTION_LABEL[action] ?? "Working on"} ${s.name}…`);
   const installed = (scan?.installs ?? []).flatMap((i) => i.games.filter((g) => g.installed).map((g) => g.id));
 
   return (
@@ -200,8 +202,10 @@ export function ServerPage(props: {
   const [tab, setTab] = useState<Tab>("overview");
   const [busyJob, setBusyJob] = useState(false);
 
-  const { run: once, busy } = useActions();
-  const act = (action: string) => once(action, async () => {
+  const { run: once, busy: busyKey } = useActions();
+  // same keys as the server list, so a spinner follows the server, not the page
+  const busy = (action: string) => busyKey(`${s.id}:${action}`);
+  const act = (action: string) => once(`${s.id}:${action}`, async () => {
     if (action === "delete") {
       const msg = s.imported
         ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.`
@@ -216,7 +220,7 @@ export function ServerPage(props: {
     if (action === "delete") return onBack(), onChanged();
     onChanged();
     setTimeout(refresh, 1500);
-  });
+  }, `${ACTION_LABEL[action] ?? "Working on"} ${s.name}…`);
 
   // reinstall everything that's on the server, keeping its settings
   const rebuild = async () => {
@@ -349,15 +353,14 @@ function ServerDetails({ server, onChanged, act }: { server: ServerInfo; onChang
   const [slots, setSlots] = useState(server.maxplayers);
   const [port, setPort] = useState(server.port);
   const [vis, setVis] = useState(server.visibility);
-  const [saving, setSaving] = useState(false);
-  const save = async () => {
-    setSaving(true);
+  const { run, busy } = useActions();
+  const saving = busy(`${server.id}:save`);
+  const save = () => run(`${server.id}:save`, async () => {
     const r = await post(`/api/servers/${server.id}`, { name, map, maxplayers: slots, port, visibility: vis });
-    setSaving(false);
     if (r.error) return toast(r.error, true);
-    toast(server.state === "running" ? "Saved. Restart the server to use it." : "Saved");
+    toast(server.state === "running" ? `${server.name} saved. Restart the server to use it.` : `${server.name} saved`);
     onChanged();
-  };
+  }, server.host ? `Saving and uploading to ${server.name}…` : `Saving ${server.name}…`);
   return (
     <div className="server-details">
       <div className="panel">
