@@ -63,11 +63,29 @@ const DOWN = "M6 9l6 6 6-6";
 const CROSS = "M6 6l12 12M18 6L6 18";
 
 /** Map rotation, chat messages, away and ping kicks, and fast downloads for the game or server being managed. */
+type ExtrasTab = "rotation" | "chat" | "kickers" | "downloads";
+const EXTRAS_TABS: [ExtrasTab, string][] = [["rotation", "Map rotation"], ["chat", "Chat messages"], ["kickers", "Kickers"], ["downloads", "Fast downloads"]];
+
 export function ServerExtras({ target }: { target: string }) {
   const toast = useToast();
   const [d, setD] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [maps, setMaps] = useState<MapInfo[]>([]);
+  const [tab, setTabRaw] = useState<ExtrasTab>(() => {
+    try {
+      return (localStorage.getItem("ls.extrasTab") as ExtrasTab) || "rotation";
+    } catch {
+      return "rotation";
+    }
+  });
+  const setTab = (t: ExtrasTab) => {
+    setTabRaw(t);
+    try {
+      localStorage.setItem("ls.extrasTab", t);
+    } catch {
+      /* private window */
+    }
+  };
 
   useEffect(() => {
     setD(null);
@@ -103,10 +121,15 @@ export function ServerExtras({ target }: { target: string }) {
           This game doesn't have the extras plugin yet. Run Setup again from Settings to add it. Until then your settings are saved here, but the game doesn't use them.
         </p>
       )}
-      <Rotation key={`rot-${target}`} d={d} maps={maps} send={send} saveSettings={saveSettings} />
-      <Messages key={`ads-${target}`} d={d} saveSettings={saveSettings} />
-      <Kickers d={d} saveSettings={saveSettings} />
-      <FastDownloads key={`dl-${target}`} d={d} saveSettings={saveSettings} />
+      <div className="chips admin-tabs" role="tablist" aria-label="Rotation and chat sections">
+        {EXTRAS_TABS.map(([id, label]) => (
+          <button key={id} role="tab" className="chip" aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>
+        ))}
+      </div>
+      {tab === "rotation" && <Rotation key={`rot-${target}`} d={d} maps={maps} send={send} saveSettings={saveSettings} />}
+      {tab === "chat" && <Messages key={`ads-${target}`} d={d} saveSettings={saveSettings} />}
+      {tab === "kickers" && <Kickers d={d} saveSettings={saveSettings} />}
+      {tab === "downloads" && <FastDownloads key={`dl-${target}`} d={d} saveSettings={saveSettings} />}
     </div>
   );
 }
