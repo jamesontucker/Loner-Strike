@@ -28,7 +28,11 @@ fn main() {
     let state = Arc::new(server::AppState { game, hosts });
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .setup(move |app| {
+            tauri::async_runtime::spawn(check_for_update(app.handle().clone()));
             tauri::async_runtime::spawn(server::run(state.clone(), listener));
             // LONER_UI_URL points the window at the React dev server while building the new UI
             let url = std::env::var("LONER_UI_URL")
@@ -44,4 +48,26 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("Loner-Strike couldn't start");
+}
+
+/// Looks for a newer release on GitHub and offers to install it.
+/// Updates are signed; the updater refuses anything not signed with Loner-Strike's key.
+async fn check_for_update(app: tauri::AppHandle) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+    use tauri_plugin_updater::UpdaterExt;
+
+    let Ok(updater) = app.updater() else { return };
+    let Ok(Some(update)) = updater.check().await else { return };
+    let install = app
+        .dialog()
+        .message(format!(
+            "Loner-Strike {} is out (you have {}). Install it now? The app restarts when it's done.",
+            update.version, update.current_version
+        ))
+        .title("Update available")
+        .buttons(MessageDialogButtons::OkCancelCustom("Install".into(), "Later".into()))
+        .blocking_show();
+    if install && update.download_and_install(|_, _| {}, || {}).await.is_ok() {
+        app.restart();
+    }
 }

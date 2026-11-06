@@ -14,7 +14,12 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg", "nsis", "msi"],
+    "targets": [
+      "app",
+      "dmg",
+      "nsis",
+      "msi"
+    ],
     "category": "Game",
     "shortDescription": "Solo Counter-Strike with bots that play like people.",
     "icon": [
@@ -23,6 +28,23 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true,
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMxNDc0NkE1MEU0QUNBMTAKUldRUXlrb09wVVpITWFkeC8zTlArNnYxWnV4WlZ1N0JIQnh2M29xdGNwMWMyc3VRSVhhdjFEZEcK",
+      "endpoints": [
+        "https://github.com/jamesontucker/Loner-Strike/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

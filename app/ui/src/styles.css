@@ -201,7 +201,8 @@ h2 { margin: 0; font: 700 21px/1.2 var(--text); }
   box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526;
   font-size: 19px; font-weight: 700;
 }
-.launch:hover { filter: brightness(1.07); border-color: var(--signal); }
+.launch:hover { filter: brightness(1.07); color: var(--signal-ink); }
+.launch:active { box-shadow: inset 1px 1px 0 #6e6526, inset -1px -1px 0 rgba(255,255,230,.55); }
 .last { margin-top: 18px; color: var(--bone-faint); font-size: 15px; }
 .last strong { color: var(--bone-dim); font-weight: 600; }
 .idle h2 { margin-bottom: 14px; }
