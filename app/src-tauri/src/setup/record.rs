@@ -59,6 +59,7 @@ pub struct Record {
     /// record.json exists but couldn't be read: nothing may be installed or removed
     pub broken: bool,
     component: Option<String>,
+    unsaved: usize,
 }
 
 /// A path inside the game folder from a '/'-separated relative path, or None if it
@@ -90,7 +91,7 @@ impl Record {
                 Err(_) => (Data::default(), true),
             },
         };
-        Record { game: game_dir.to_path_buf(), dir, path, data, broken, component: None }
+        Record { game: game_dir.to_path_buf(), dir, path, data, broken, component: None, unsaved: 0 }
     }
 
     /// GameBanana mod ids of the maps that came with a component.
@@ -128,10 +129,19 @@ impl Record {
                     if let Some(d) = dst.parent() {
                         std::fs::create_dir_all(d).map_err(|e| couldnt("back up", &rel, e))?;
                     }
-                    copy2(&full, &dst).map_err(|e| couldnt("back up", &rel, e))?;
+                    // a backup without a record entry is from a run that was cut short:
+                    // it holds the original, so it's kept
+                    if !dst.exists() {
+                        copy2(&full, &dst).map_err(|e| couldnt("back up", &rel, e))?;
+                    }
                     backup = Some(b);
                 }
                 self.data.files.insert(rel.clone(), FileInfo { backup, components: Some(vec![me]), component: None });
+                // save now and then, so a crash halfway leaves little untracked
+                self.unsaved += 1;
+                if self.unsaved >= 200 {
+                    self.save()?;
+                }
             }
             Some(info) => {
                 // several components can ship the same file (ZP 4.3 and ZP 5 share sounds)
@@ -185,7 +195,8 @@ impl Record {
         self.data.components.contains_key(component)
     }
 
-    pub fn save(&self) -> Result<(), String> {
+    pub fn save(&mut self) -> Result<(), String> {
+        self.unsaved = 0;
         std::fs::create_dir_all(&self.dir).map_err(|e| couldnt("save", "the install record", e))?;
         let tmp = self.path.with_extension("json.tmp");
         let text = serde_json::to_string_pretty(&self.data).unwrap_or_default();

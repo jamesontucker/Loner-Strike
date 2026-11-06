@@ -144,3 +144,75 @@ pub fn routes() -> Router<Shared> {
         .route("/api/setup/install", post(install))
         .route("/api/setup/uninstall", post(uninstall))
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::server::{self, AppState, Listener};
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use serde_json::{json, Value};
+    use std::sync::{Arc, Mutex, OnceLock, RwLock};
+    use tower::ServiceExt;
+
+    const HOST: &str = "127.0.0.1:8027";
+
+    fn state() -> server::Shared {
+        Arc::new(AppState {
+            game: None,
+            hosts: RwLock::new(vec![HOST.into()]),
+            lan_hosts: RwLock::new(vec![]),
+            token: "testtoken0123456789".into(),
+            app: OnceLock::new(),
+            phone: Mutex::new(crate::app_api::Phone::default()),
+        })
+    }
+
+    async fn call(st: &server::Shared, method: &str, uri: &str, body: Option<Value>, panel: bool) -> (StatusCode, Value) {
+        let mut req = Request::builder().method(method).uri(uri).header("host", HOST);
+        if panel {
+            req = req.header("x-panel", "1");
+        }
+        let req = req.body(body.map(|b| Body::from(b.to_string())).unwrap_or_else(Body::empty)).unwrap();
+        let res = server::router(st.clone(), Listener::Local).oneshot(req).await.unwrap();
+        let status = res.status();
+        let bytes = axum::body::to_bytes(res.into_body(), 1 << 24).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    }
+
+    #[tokio::test]
+    async fn scan_job_and_guards() {
+        let st = state();
+        let (code, v) = call(&st, "GET", "/api/setup/scan", None, false).await;
+        assert_eq!(code, StatusCode::OK);
+        assert!(v["installs"].is_array() && v["native_mac"].is_boolean());
+        for i in v["installs"].as_array().unwrap() {
+            let ids: Vec<&str> = i["games"].as_array().unwrap().iter().filter_map(|g| g["id"].as_str()).collect();
+            assert!(ids != ["czero", "cstrike"], "CS 1.6 comes first");
+            for g in i["games"].as_array().unwrap() {
+                assert!(g["installed"].is_boolean() && g["foreign"].is_boolean() && g["components"].is_array());
+            }
+        }
+        let pb = v["catalog"].as_array().unwrap().iter().find(|c| c["id"] == "mode-paintball").unwrap();
+        assert_eq!(pb["kind"], "mode");
+        assert_eq!(pb["games"], json!(["cstrike", "czero"]));
+        assert_eq!(pb["modes"], json!(["paintball"]));
+
+        let (code, v) = call(&st, "GET", "/api/setup/job", None, false).await;
+        assert_eq!(code, StatusCode::OK);
+        assert_eq!(v["state"], "idle");
+        assert!(v["steps"].is_array() && v["failed_compiles"].is_array());
+
+        let body = json!({"hl": "/nowhere/Half-Life", "games": ["czero"], "components": []});
+        let (code, _) = call(&st, "POST", "/api/setup/install", Some(body.clone()), false).await;
+        assert_eq!(code, StatusCode::FORBIDDEN);
+        let (code, v) = call(&st, "POST", "/api/setup/install", Some(body.clone()), true).await;
+        assert_eq!(code, StatusCode::BAD_REQUEST);
+        assert!(v["error"].as_str().unwrap().contains("wasn't found"));
+        let (code, _) = call(&st, "POST", "/api/setup/uninstall", Some(body.clone()), false).await;
+        assert_eq!(code, StatusCode::FORBIDDEN);
+        let (code, _) = call(&st, "POST", "/api/setup/uninstall", Some(body), true).await;
+        assert_eq!(code, StatusCode::BAD_REQUEST);
+        let (code, _) = call(&st, "POST", "/api/setup/install", Some(json!([1])), true).await;
+        assert_eq!(code, StatusCode::BAD_REQUEST);
+    }
+}

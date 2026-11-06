@@ -34,6 +34,12 @@
       "icons/icon.ico"
     ],
     "createUpdaterArtifacts": true,
+    "resources": {
+      "../../plugins/": "plugins/",
+      "../../mods/": "mods/",
+      "../../catalog/": "catalog/",
+      "../../panel/botstyles.py": "panel/botstyles.py"
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser"

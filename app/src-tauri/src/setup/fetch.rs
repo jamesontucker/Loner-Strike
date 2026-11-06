@@ -34,11 +34,6 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-#[cfg(test)]
-pub fn hex_sha256(data: &[u8]) -> String {
-    hex(&Sha256::digest(data))
-}
-
 pub fn sha256(path: &Path) -> std::io::Result<String> {
     let mut f = std::fs::File::open(path)?;
     let mut h = Sha256::new();

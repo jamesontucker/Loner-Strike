@@ -23,10 +23,6 @@ use tauri::{WebviewUrl, WebviewWindowBuilder};
 const PORT: u16 = 8027;
 
 fn main() {
-    // First install with a game in it; the setup wizard will let you choose
-    let game = steam::find_installs()
-        .into_iter()
-        .find_map(|i| i.games.first().map(|g| game::Game::new(&i.hl, g)));
 
     // Bind before opening the window so the page never loads too early.
     // If the Python panel already has 8027, take any free port.
@@ -35,6 +31,7 @@ fn main() {
         .expect("couldn't open a local port");
     let port = listener.local_addr().unwrap().port();
     let settings = app_api::load_settings();
+    let game = app_api::pick_game(&settings);
     let state = Arc::new(server::AppState {
         game,
         hosts: RwLock::new(vec![format!("127.0.0.1:{port}"), format!("localhost:{port}")]),

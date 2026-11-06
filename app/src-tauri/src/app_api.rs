@@ -22,6 +22,11 @@ pub struct Settings {
     pub phone: bool,
     #[serde(default)]
     pub token: String,
+    /// The game the panel controls: its Half-Life folder and "cstrike" or "czero"
+    #[serde(default)]
+    pub game_hl: Option<String>,
+    #[serde(default)]
+    pub game_id: Option<String>,
 }
 
 fn settings_path() -> PathBuf {
@@ -210,6 +215,68 @@ async fn api_update_install(State(st): State<Shared>, headers: HeaderMap) -> (St
     }
 }
 
+// ---- choosing the game ---------------------------------------------------------
+/// Which game the panel controls: the one picked last, else one Loner-Strike set up
+/// (CS 1.6 first), else the first one found.
+pub fn pick_game(settings: &Settings) -> Option<crate::game::Game> {
+    let installs = crate::steam::find_installs();
+    if let (Some(hl), Some(id)) = (&settings.game_hl, &settings.game_id) {
+        if let Some(i) = installs.iter().find(|i| i.hl.to_string_lossy() == *hl && i.games.contains(id)) {
+            return Some(crate::game::Game::new(&i.hl, id));
+        }
+    }
+    let set_up = |i: &crate::steam::Install, g: &str| i.hl.join(g).join("addons/loner-strike/record.json").is_file();
+    for g in ["cstrike", "czero"] {
+        if let Some(i) = installs.iter().find(|i| i.games.iter().any(|x| x == g) && set_up(i, g)) {
+            return Some(crate::game::Game::new(&i.hl, g));
+        }
+    }
+    installs.into_iter().find_map(|i| {
+        let g = if i.games.iter().any(|x| x == "cstrike") { "cstrike".to_string() } else { i.games.first()?.clone() };
+        Some(crate::game::Game::new(&i.hl, &g))
+    })
+}
+
+#[derive(Deserialize)]
+struct UseGame {
+    hl: String,
+    game: String,
+}
+
+/// Switches the panel to another game (remembered), then restarts the app to load it.
+async fn api_use_game(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<UseGame>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    let ok = crate::steam::find_installs().iter().any(|i| i.hl.to_string_lossy() == req.hl && i.games.contains(&req.game));
+    if !ok {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "That game isn't on this computer."})));
+    }
+    let mut s = load_settings();
+    s.game_hl = Some(req.hl);
+    s.game_id = Some(req.game);
+    save_settings(&s);
+    restart_soon(&st);
+    (StatusCode::OK, Json(json!({"ok": true})))
+}
+
+async fn api_restart(State(st): State<Shared>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    restart_soon(&st);
+    (StatusCode::OK, Json(json!({"ok": true})))
+}
+
+fn restart_soon(st: &Shared) {
+    if let Some(app) = st.app.get().cloned() {
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            app.restart();
+        });
+    }
+}
+
 // ---- launching the game -----------------------------------------------------
 fn data_file(st: &Shared, name: &str) -> Option<String> {
     let g = st.game.as_ref()?;
@@ -268,4 +335,6 @@ pub fn routes() -> Router<Shared> {
         .route("/api/app/update/install", post(api_update_install))
         .route("/api/app/phone", get(api_phone).post(api_phone_set))
         .route("/api/app/launch", post(api_launch))
+        .route("/api/app/game", post(api_use_game))
+        .route("/api/app/restart", post(api_restart))
 }

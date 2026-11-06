@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { getJson, postJson } from "../api";
 import type { AppInfo, PhoneInfo } from "../types";
 import { SectionHead, Switch, useToast } from "../ui";
+import type { Scan } from "./Setup";
 
-export function AppSettings({ app, reloadApp }: { app: AppInfo | null; reloadApp: () => void }) {
+export function AppSettings({ app, reloadApp, scan, openSetup }: { app: AppInfo | null; reloadApp: () => void; scan: Scan | null; openSetup: () => void }) {
   const toast = useToast();
   const [phone, setPhone] = useState<PhoneInfo | null>(null);
   const [checking, setChecking] = useState(false);
@@ -52,6 +53,48 @@ export function AppSettings({ app, reloadApp }: { app: AppInfo | null; reloadApp
           ) : (
             <p>Couldn't find Condition Zero or Counter-Strike 1.6 on this computer.</p>
           )}
+          {scan && (
+            <div className="row" style={{ marginTop: 12 }}>
+              {scan.installs.flatMap((i) =>
+                i.games
+                  .filter((g) => !(app?.game && app.game.id === g.id && app.game.dir.startsWith(i.hl)))
+                  .map((g) => (
+                    <button key={i.hl + g.id} className="btn" onClick={() => postJson("/api/app/game", { hl: i.hl, game: g.id }).then(() => toast("Switching…"))}>
+                      Switch to {g.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"}
+                      {g.installed ? "" : " (not set up)"}
+                    </button>
+                  )),
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section>
+        <SectionHead title="Setup" note="Add or remove game modes and add-ons, or set up another game." />
+        <div className="panel row between">
+          <p className="muted">Everything Loner-Strike changed is backed up, so removing it puts your game back the way it was.</p>
+          <div className="row">
+            <button className="btn primary" onClick={openSetup}>Run setup</button>
+            {app?.game && scan && (
+              <button
+                className="btn danger"
+                onClick={async () => {
+                  const inst = scan.installs.find((i) => app.game!.dir.startsWith(i.hl));
+                  if (!inst || !confirm("Remove Loner-Strike from this game and restore the original files? Close the game first.")) return;
+                  const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/uninstall", { hl: inst.hl, games: [app.game!.id] }).catch(() => ({ error: "Couldn't start." }));
+                  if (r.error) toast(r.error, true);
+                  else toast("Removing… the app restarts when it's done.");
+                  const wait = setInterval(async () => {
+                    const j = await getJson<{ state: string }>("/api/setup/job").catch(() => null);
+                    if (j && j.state !== "running") { clearInterval(wait); postJson("/api/app/restart"); }
+                  }, 1000);
+                }}
+              >
+                Remove Loner-Strike
+              </button>
+            )}
+          </div>
         </div>
       </section>
 

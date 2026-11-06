@@ -482,3 +482,52 @@ input[type="range"] { accent-color: var(--signal); }
 .section-tabs { margin: 0 0 12px; }
 .small-note { font-size: 13px; margin: 3px 0 0; }
 .preview { width: 100%; margin: 6px 0 10px; }
+
+/* ---- setup wizard ---------------------------------------------------------- */
+.setup { min-height: 100%; display: grid; place-items: center; padding: 40px 20px; overflow: auto; height: 100%; }
+.setup-card { width: min(880px, 100%); background: var(--panel); box-shadow: var(--raised), 0 20px 60px rgba(0,0,0,.35); border-radius: 4px; padding: 26px 30px 28px; }
+.setup-steps { list-style: none; margin: 0 0 22px; padding: 0 0 16px; display: flex; gap: 22px; flex-wrap: wrap; border-bottom: 1px solid var(--bevel-lo); color: var(--bone-faint); font-weight: 600; font-size: 14px; }
+.setup-steps li { display: flex; align-items: center; gap: 8px; }
+.setup-steps span { width: 22px; height: 22px; display: grid; place-items: center; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; font-size: 12px; }
+.setup-steps li.now { color: var(--bone); }
+.setup-steps li.now span { background: var(--signal); color: var(--signal-ink); box-shadow: none; }
+.setup-steps li.done span { background: var(--ok); color: #1f2412; box-shadow: none; }
+.setup-pane h1 { font: 400 46px/1 var(--stencil); margin: 14px 0 10px; }
+.setup-pane h2 { margin-bottom: 16px; font-size: 26px; }
+.setup-pane.welcome { text-align: center; display: grid; justify-items: center; gap: 4px; padding: 10px 0; }
+.setup-pane.welcome p { max-width: 560px; }
+.tagline { color: var(--signal); font-weight: 700; font-size: 18px; }
+.big-btn { font-size: 18px; padding: 12px 26px; }
+.setup-nav { display: flex; justify-content: space-between; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--bevel-lo); }
+.game-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.game-card { position: relative; text-align: left; display: grid; gap: 6px; padding: 18px; border: 1px solid transparent; border-radius: 3px; background: var(--bg); box-shadow: var(--raised); }
+.game-card[aria-pressed="true"] { border-color: var(--signal); background: var(--panel-2); }
+.game-card:disabled { opacity: .45; cursor: default; }
+.game-title { font: 400 22px/1.1 var(--stencil); }
+.check { position: absolute; top: 12px; right: 14px; color: var(--signal); font-weight: 800; font-size: 20px; }
+.presets-seg { margin-bottom: 10px; }
+.pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; max-height: 46vh; overflow: auto; padding: 2px; }
+.pick { display: grid; grid-template-columns: 26px 1fr; gap: 2px 10px; text-align: left; padding: 10px 12px; border: 1px solid transparent; background: var(--bg); box-shadow: var(--raised); border-radius: 3px; color: var(--bone-faint); }
+.pick > svg { grid-row: span 3; margin-top: 2px; }
+.pick[aria-pressed="true"] { color: var(--bone); border-color: rgba(196,181,80,.6); background: var(--panel-2); }
+.pick:disabled { cursor: default; }
+.pick-name { font-weight: 700; }
+.pick-name small { margin-left: 6px; color: var(--bone-faint); font-weight: 600; font-size: 12px; }
+.pick-desc { font-size: 13px; color: var(--bone-faint); line-height: 1.3; }
+.pick .bots-note { grid-column: 2; margin-top: 2px; }
+.review { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 6px; }
+.setup-progress { width: 100%; height: 12px; accent-color: var(--signal); margin-bottom: 14px; }
+.job-steps { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow: auto; display: grid; gap: 4px; }
+.job-steps li { display: flex; gap: 10px; align-items: baseline; color: var(--bone-faint); }
+.job-steps li.running { color: var(--bone); }
+.job-steps li.done { color: var(--bone-dim); }
+.job-steps li.error { color: #f0b9a6; }
+.dot-state { width: 16px; text-align: center; font-weight: 800; color: var(--ok); }
+.job-steps li.running .dot-state { color: var(--signal); }
+.tips { text-align: left; max-width: 560px; display: grid; gap: 6px; margin: 10px 0 18px; }
+@media (max-width: 760px) {
+  .setup { padding: 0; place-items: stretch; }
+  .setup-card { border-radius: 0; padding: 18px 16px 24px; min-height: 100vh; }
+  .game-cards { grid-template-columns: 1fr; }
+  .setup-pane h1 { font-size: 34px; }
+}

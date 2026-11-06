@@ -131,7 +131,7 @@ fn apply_patches(rec: &mut Record, ctx: &Ctx, comp: &Value) -> Result<(), String
             let Some(text) = rec.read(&rel) else {
                 return Err(format!("{p} needs {rel}, which wasn't downloaded."));
             };
-            let new = patch::apply(&text, &hunks).map_err(|e| format!("Loner-Strike's changes to {rel} don't fit the downloaded file: {e}."))?;
+            let new = patch::apply(&text, &hunks).map_err(|e| format!("Loner-Strike's bot fixes for {rel} don't fit the downloaded file ({e})."))?;
             rec.write(&rel, &new)?;
         }
     }
@@ -211,4 +211,31 @@ pub fn install_component(rec: &mut Record, ctx: &Ctx, comp: &Value) -> Result<bo
     maps(rec, ctx, comp);
     rec.done(id, comp.get("version").cloned().unwrap_or(Value::from(1)))?;
     Ok(ok)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resources_are_checked_and_players_files_kept() {
+        let root = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "res-").unwrap();
+        let game = root.join("cstrike");
+        std::fs::create_dir_all(game.join("sound")).unwrap();
+        std::fs::write(game.join("sound/mine.wav"), b"the player's own").unwrap();
+        let src = root.join("download.wav");
+        std::fs::write(&src, b"fetched").unwrap();
+        let sha = fetch::sha256(&src).unwrap();
+        let mut rec = Record::open(&game);
+        rec.begin("mode-x");
+        let err = place_resource(&mut rec, &src, "sound/new.wav", Some(&"0".repeat(64))).unwrap_err();
+        assert!(err.contains("changed upstream"), "{err}");
+        assert!(!place_resource(&mut rec, &src, "sound/mine.wav", Some(&sha)).unwrap());
+        assert_eq!(std::fs::read(game.join("sound/mine.wav")).unwrap(), b"the player's own");
+        assert!(place_resource(&mut rec, &src, "sound/new.wav", Some(&sha)).unwrap());
+        // a file that's ours gets replaced on a repair
+        assert!(place_resource(&mut rec, &src, "sound/new.wav", Some(&sha)).unwrap());
+        assert!(rec.prepare("../outside.txt").is_err());
+        let _ = std::fs::remove_dir_all(root);
+    }
 }

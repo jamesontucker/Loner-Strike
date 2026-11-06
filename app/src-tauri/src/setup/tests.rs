@@ -190,29 +190,12 @@ fn setup_end_to_end() {
 
         // the same as the Python installer made from the same starting files
         if let Some(py) = std::env::var_os("LS_SETUP_TEST_PYTHON_HL").map(PathBuf::from) {
-            // compiled plugins carry the source's full path: compare their unpacked
-            // code with the game folder's path taken out
-            let unpacked_amxx = |path: &Path, root: &Path| -> String {
-                use std::io::Read;
-                let b = std::fs::read(path).unwrap();
-                for i in 0..b.len().saturating_sub(1) {
-                    if b[i] == 0x78 && [0x01, 0x5e, 0x9c, 0xda].contains(&b[i + 1]) {
-                        let mut out = Vec::new();
-                        if flate2::read::ZlibDecoder::new(&b[i..]).read_to_end(&mut out).is_ok() {
-                            let text: String = out.iter().map(|&c| c as char).collect();
-                            let _ = root;
-                            // (as Z:\...\Half-Life\ through wine; same-length scratch paths keep the sizes equal)
-                            let re = regex::Regex::new(r"[A-Za-z]:\\[^\x00]*?\\Half-Life\\").unwrap();
-                            return fetch::hex_sha256(re.replace_all(&text, "<hl>").as_bytes());
-                        }
-                    }
-                }
-                panic!("no code in {}", path.display());
-            };
+            // amxxpc's output isn't reproducible (it embeds the source path and stray
+            // memory that changes with the environment), so plugins only need to exist
             let skip = |root: &Path, m: BTreeMap<String, String>| -> BTreeMap<String, String> {
                 m.into_iter()
                     .filter(|(k, _)| k != "addons/loner-strike/record.json")
-                    .map(|(k, v)| if k.ends_with(".amxx") { (k.clone(), unpacked_amxx(&root.join(&k), root)) } else { (k, v) })
+                    .map(|(k, v)| if k.ends_with(".amxx") { (k.clone(), format!("compiled: {}", root.join(&k).metadata().unwrap().len() > 0)) } else { (k, v) })
                     .collect()
             };
             let mine = skip(&dir, snapshot(&dir));
@@ -257,4 +240,69 @@ fn setup_end_to_end() {
     for g in &games {
         assert!(!hl.join(g).join("addons").exists(), "{g}/addons left behind");
     }
+}
+
+/// Removing an install the Python installer made (same record format).
+///   LS_SETUP_TEST_PY_HL=/path/to/scratch/Half-Life cargo test uninstall_python_install -- --ignored
+#[test]
+#[ignore]
+fn uninstall_python_install() {
+    let hl = PathBuf::from(std::env::var_os("LS_SETUP_TEST_PY_HL").expect("set LS_SETUP_TEST_PY_HL"));
+    assert!(!hl.to_string_lossy().contains("/steamapps/common/"), "use a scratch copy, not the real game");
+    let install = install_at(&hl);
+    let games = install.games.clone();
+    let plan = plan_uninstall(install, &games, None, &repo_root()).unwrap();
+    let job = job_for_test("uninstall", plan.steps());
+    run_uninstall(&job, &plan, &repo_root(), None);
+    assert_eq!(job.view().state, "done", "{:?}", job.view().error);
+    for g in &games {
+        let dir = hl.join(g);
+        assert!(!dir.join("addons").exists());
+        let lib = std::fs::read_to_string(dir.join("liblist.gam")).unwrap();
+        assert!(lib.contains("gamedll \"dlls\\mp.dll\""));
+        let files: Vec<_> = crate::archive::walk(&dir).into_iter().map(|p| p.strip_prefix(&dir).unwrap().to_string_lossy().to_string()).collect();
+        println!("{g}: {files:?}");
+    }
+}
+
+/// A mode that comes with GameBanana maps: they're installed through the map store
+/// and removed again with the mode.
+///   LS_SETUP_TEST_HL=<scratch Half-Life> LS_SETUP_TEST_APP=<scratch app folder> cargo test mode_with_maps -- --ignored
+#[test]
+#[ignore]
+fn mode_with_maps() {
+    let hl = PathBuf::from(std::env::var_os("LS_SETUP_TEST_HL").expect("set LS_SETUP_TEST_HL"));
+    let app = PathBuf::from(std::env::var_os("LS_SETUP_TEST_APP").expect("set LS_SETUP_TEST_APP"));
+    assert!(!hl.to_string_lossy().contains("/steamapps/common/"), "use a scratch copy, not the real game");
+    let before = snapshot(&hl);
+    let install = install_at(&hl);
+    let res = repo_root();
+    let store = Arc::new(MapStore::new(&hl, &hl.join("cstrike"), &app, Arc::new(Mutex::new(None))));
+    let games = vec!["cstrike".to_string()];
+    let plan = plan_install(install.clone(), &games, &["mode-hns".into()], &res, false).unwrap();
+    let job = job_for_test("install", plan.steps());
+    run_install(&job, &plan, &res, Some(store.clone()));
+    let v = job.view();
+    println!("{:?} notes {:?}", v.error, v.notes);
+    assert_eq!(v.state, "done");
+    let rec = Record::open(&hl.join("cstrike"));
+    let mods = rec.map_mods("mode-hns");
+    assert_eq!(mods.len(), 2, "{mods:?}");
+    for m in ["hns_floppytown", "hns_2k12"] {
+        assert!(hl.join(format!("cstrike/maps/{m}.bsp")).is_file(), "{m}");
+    }
+    assert!(store.records().contains_key(&mods[0].to_string()));
+
+    let plan = plan_uninstall(install.clone(), &games, Some(vec!["mode-hns".into()]), &res).unwrap();
+    let job = job_for_test("uninstall", plan.steps());
+    run_uninstall(&job, &plan, &res, Some(store.clone()));
+    assert_eq!(job.view().state, "done", "{:?}", job.view().error);
+    assert!(!hl.join("cstrike/maps/hns_2k12.bsp").exists());
+    assert!(store.records().is_empty());
+    assert!(Record::open(&hl.join("cstrike")).data.maps.is_empty());
+
+    let plan = plan_uninstall(install, &games, None, &res).unwrap();
+    let job = job_for_test("uninstall", plan.steps());
+    run_uninstall(&job, &plan, &res, Some(store));
+    assert_eq!(snapshot(&hl), before);
 }

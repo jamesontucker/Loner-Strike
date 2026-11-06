@@ -13,6 +13,7 @@ import { Maps } from "./views/Maps";
 import { PlayIdle, PlayLive } from "./views/Play";
 import { Players } from "./views/Players";
 import { SettingsPage } from "./views/Settings";
+import { anySetUp, Setup, type Scan } from "./views/Setup";
 
 type Section = "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "more" | "settings";
 
@@ -52,6 +53,8 @@ function Shell() {
   const [app, setApp] = useState<AppInfo | null>(null);
   const [maps, setMaps] = useState<MapInfo[]>([]);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [scan, setScan] = useState<Scan | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
 
   const setSection = (s: Section) => {
     setSectionRaw(s);
@@ -72,10 +75,15 @@ function Shell() {
       .catch(() => setMaps([]));
   }, []);
 
+  const reloadScan = useCallback(() => {
+    getJson<Scan>("/api/setup/scan").then(setScan).catch(() => setScan(null));
+  }, []);
+
   useEffect(() => {
     reloadApp();
     reloadMaps();
-  }, [reloadApp, reloadMaps]);
+    reloadScan();
+  }, [reloadApp, reloadMaps, reloadScan]);
 
   // ⌘1-⌘9 switch sections
   useEffect(() => {
@@ -99,6 +107,11 @@ function Shell() {
   }, [navKey, reloadMaps]);
 
   const players = online?.players.length ?? 0;
+
+  // First run (nothing set up yet), or opened from Settings
+  if (scan && (setupOpen || !anySetUp(scan))) {
+    return <Setup scan={scan} onClose={anySetUp(scan) ? () => setSetupOpen(false) : undefined} />;
+  }
   const needsGame = NAV.find((n) => n.id === section)?.live && !online;
 
   return (
@@ -148,7 +161,7 @@ function Shell() {
               {section === "addons" && online && <Addons data={online} refresh={refresh} />}
               {section === "friends" && <Friends data={online} refresh={refresh} />}
               {section === "more" && <GetMore onInstalled={() => reloadMaps(true)} />}
-              {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} />}
+              {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={() => setSetupOpen(true)} />}
             </>
           )}
         </main>
