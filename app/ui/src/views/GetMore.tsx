@@ -111,6 +111,23 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
     onInstalled();
   };
 
+  // one sound preview at a time, straight from the grid
+  const player = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState<number | null>(null);
+  const preview = (id: number, url: string) => {
+    player.current?.pause();
+    if (playing === id) return setPlaying(null);
+    const a = new Audio(url);
+    a.onended = () => setPlaying(null);
+    a.play().then(() => setPlaying(id)).catch(() => toast("Couldn't play the preview.", true));
+    player.current = a;
+  };
+  useEffect(() => () => player.current?.pause(), []);
+  useEffect(() => {
+    player.current?.pause();
+    setPlaying(null);
+  }, [section]);
+
   const active = jobs.filter((j) => !["done", "error"].includes(j.state));
   const label = sections.find((s) => s[0] === section)?.[1] ?? "Maps";
 
@@ -150,7 +167,26 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
         {items.map((m) => (
           <button key={m.id} className="map-card" onClick={() => details(m.id)} title={m.name}>
             <div className="map-pic">
-              {m.image && <img src={m.image} alt="" loading="lazy" />}
+              {m.image ? (
+                <img src={m.image} alt="" loading="lazy" />
+              ) : (
+                <div className="no-pic" aria-hidden="true">
+                  <span className="no-pic-kind">{label.replace(/s$/, "")}</span>
+                  <span className="no-pic-name small-name">{m.name}</span>
+                </div>
+              )}
+              {m.audio && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className={`play-preview${playing === m.id ? " on" : ""}`}
+                  aria-label={playing === m.id ? `Stop ${m.name}` : `Play ${m.name}`}
+                  onClick={(e) => { e.stopPropagation(); preview(m.id, m.audio!); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); preview(m.id, m.audio!); } }}
+                >
+                  {playing === m.id ? "■" : "▶"}
+                </span>
+              )}
               {m.installed && <span className="badge">Installed</span>}
             </div>
             <span className="map-label">{m.name}</span>
