@@ -1606,10 +1606,11 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
     answer(r)
 }
 
-async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
+async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, body: Option<Json<Value>>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) {
         return forbidden();
     }
+    let body = body.map(|Json(b)| b).unwrap_or_default();
     // a phone may start, stop and restart servers; changing what's installed or deleting
     // one (which also reaches a VPS through the SSH key) is for the computer
     if on.is_none() && !matches!(action.as_str(), "start" | "stop" | "restart" | "join") {
@@ -1637,7 +1638,14 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                     .and_then(|v| v["password"].as_str().map(String::from))
                     .filter(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || "-_".contains(c)));
                 // the game already open: Steam tells it to join; otherwise it starts joining
-                if sys::game_running() {
+                if sys::game_running() && e.visibility == "unlisted" {
+                    // an unlisted server doesn't answer the game's lookups, so the open game
+                    // can't be told to join it: it has to start again with the address
+                    if !body["restart"].as_bool().unwrap_or(false) {
+                        return Ok(json!({"ok": true, "need_restart_game": true}));
+                    }
+                    sys::close_game()?;
+                } else if sys::game_running() {
                     let url = match &pw {
                         Some(p) => format!("steam://connect/{}/{p}", e.address()),
                         None => format!("steam://connect/{}", e.address()),

@@ -306,6 +306,31 @@ mod tests {
 
 /// Whether Counter-Strike or Condition Zero (hl.exe) is running. Setup won't change
 /// the game's files while it is: Windows locks them, and the game would crash.
+/// Closes the game (hl.exe) and waits up to 15 seconds for it to be gone.
+pub fn close_game() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut c = command("/usr/bin/pkill");
+        c.args(["-if", r"\\hl\.exe"]);
+        let _ = run_output(c, Duration::from_secs(5));
+    }
+    #[cfg(windows)]
+    {
+        let mut c = command("taskkill");
+        c.args(["/IM", "hl.exe", "/F"]);
+        let _ = run_output(c, Duration::from_secs(5));
+    }
+    for _ in 0..30 {
+        if !game_running() {
+            // Steam takes a moment to see the game has gone before it starts it again
+            std::thread::sleep(Duration::from_secs(3));
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    Err("Counter-Strike didn't close. Quit it and press Join again.".into())
+}
+
 pub fn game_running() -> bool {
     #[cfg(target_os = "macos")]
     {
