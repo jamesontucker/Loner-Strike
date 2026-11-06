@@ -404,11 +404,12 @@ pub const FOUNDATION_ENV: &[(&str, &str)] = &[
 pub fn service_sh(id: &str, game: &str, args: &[String]) -> String {
     let unit = unit(id);
     let dir = server_dir(id);
+    // (the game's command line splits words at "-", so file names here have none)
     // all addresses: left to itself the server picks the name entry's 127.0.1.1 and
     // doesn't answer from outside; and the panel's RCON password from a file only this
     // user can read (the plugin sets it too, but the console shouldn't depend on it)
     let mut args = args.to_vec();
-    args.extend(["+ip".into(), "0.0.0.0".into(), "+exec".into(), "loner-strike-rcon.cfg".into()]);
+    args.extend(["+ip".into(), "0.0.0.0".into(), "+exec".into(), "lsrcon.cfg".into()]);
     let args = args.iter().map(|a| shell_quote(a)).collect::<Vec<_>>().join(" ");
     format!(
         r#"set -eu
@@ -416,7 +417,7 @@ SRV="$HOME/{dir}"
 PW="$SRV/{game}/addons/amxmodx/data/gamemodes/panel_rcon.txt"
 if [ -f "$PW" ]; then
   umask 077
-  printf 'rcon_password "%s"\n' "$(tr -d '\r\n"' < "$PW")" > "$SRV/{game}/loner-strike-rcon.cfg"
+  printf 'rcon_password "%s"\n' "$(tr -d '\r\n"' < "$PW")" > "$SRV/{game}/lsrcon.cfg"
 fi
 sudo tee /etc/systemd/system/{unit}.service >/dev/null <<EOF
 [Unit]
