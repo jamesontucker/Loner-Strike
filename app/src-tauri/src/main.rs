@@ -30,7 +30,11 @@ fn main() {
     tauri::Builder::default()
         .setup(move |app| {
             tauri::async_runtime::spawn(server::run(state.clone(), listener));
-            let url = format!("http://127.0.0.1:{port}/").parse().unwrap();
+            // LONER_UI_URL points the window at the React dev server while building the new UI
+            let url = std::env::var("LONER_UI_URL")
+                .unwrap_or_else(|_| format!("http://127.0.0.1:{port}/"))
+                .parse()
+                .unwrap();
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("Loner-Strike")
                 .inner_size(1240.0, 880.0)
