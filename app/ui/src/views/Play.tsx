@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { postJson } from "../api";
+import { useEffect, useState } from "react";
+import { getJson, postJson } from "../api";
 import { Icon } from "../icons";
-import type { AppInfo, MapInfo, Online } from "../types";
+import type { AppInfo, MapInfo, Mode, Online } from "../types";
 import { SectionHead, useCommand, useConfirm, useToast } from "../ui";
 import { MapCard } from "./Maps";
 
@@ -122,9 +122,11 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
   const run = useCommand(refresh);
   const st = data.state;
   const recent = maps.filter((m) => m.recent >= 0 && m.name.toLowerCase() !== st.map.toLowerCase()).sort((a, b) => a.recent - b.recent).slice(0, 6);
+  const [switching, setSwitching] = useState<Mode | null>(null);
 
   return (
     <div className="stack">
+      {switching && <SwitchMode mode={switching} current={st.mode} map={st.map} maps={maps} onClose={() => setSwitching(null)} onGo={(map) => { setSwitching(null); if (switching.id === st.mode) { if (map) run("gm_map", [map]); } else run("gm_mode", map ? [switching.id, map] : [switching.id]); }} />}
       {data.presets.length > 0 && (
         <section>
           <SectionHead title="Presets" note="One click sets the mode, its settings and the bots." />
@@ -153,7 +155,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
                 key={m.id}
                 className="mode"
                 aria-pressed={st.mode === m.id}
-                onClick={() => st.mode !== m.id && run("gm_mode", [m.id])}
+                onClick={() => setSwitching(m)}
               >
                 <span className="mode-icon">
                   <Icon name={m.id} size={26} />
@@ -178,6 +180,77 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+// Map names that suit a mode, for modes without their own map list
+const MODE_PREFIX: Record<string, string[]> = {
+  zombie: ["zm_", "zp_", "ze_"], zp5: ["zm_", "zp_", "ze_"], hns: ["hns_", "hide_", "hide"], deathrun: ["deathrun_", "dr_"],
+  kreedz: ["kz_", "bkz_", "xc_", "kzm_"], surf: ["surf_"], soccerjam: ["soccerjam", "sj_"], basebuilder: ["bb_", "basebuilder"],
+  paintball: ["pb_", "paintball", "cspaintball"], knife: ["ka_", "knife", "35hp"], awp: ["awp_"], scoutz: ["scoutz", "scout"],
+  pistols: ["aim_", "fy_", "pistol"], deagle: ["aim_", "fy_", "deagle"], classic: ["de_", "cs_", "as_"], war3: ["de_", "cs_"], shero: ["de_", "cs_"],
+};
+
+/** Switching mode, with the map to play it on: the mode's own maps first, or the current one. */
+function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; current: string; map: string; maps: MapInfo[]; onClose: () => void; onGo: (map: string | null) => void }) {
+  const [listed, setListed] = useState<string[] | null>(null);
+  const [pick, setPick] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    getJson<string[]>(`/api/modes/${encodeURIComponent(mode.id)}/maps`).then((l) => setListed(Array.isArray(l) ? l : [])).catch(() => setListed([]));
+  }, [mode.id]);
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+  const have = maps.filter((m) => !m.hidden);
+  const byName = new Map(have.map((m) => [m.name.toLowerCase(), m]));
+  const prefixes = MODE_PREFIX[mode.id] ?? [];
+  const suggested = listed?.length
+    ? listed.map((n) => byName.get(n.toLowerCase())).filter((m): m is MapInfo => !!m)
+    : have.filter((m) => prefixes.some((p) => m.name.toLowerCase().startsWith(p)));
+  const query = q.trim().toLowerCase();
+  const shown = (query ? have.filter((m) => m.name.toLowerCase().includes(query)) : suggested).slice(0, 60);
+  const fits = !listed?.length && (!prefixes.length || prefixes.some((p) => map.toLowerCase().startsWith(p)));
+  const same = mode.id === current;
+  const chosen = pick ?? (same ? null : fits ? null : suggested[0]?.name ?? null);
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet wide switch-mode" role="dialog" aria-label={`Play ${mode.name}`} onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-body">
+          <div className="row between">
+            <h2>{mode.name}</h2>
+            <span className="muted">{mode.desc}</span>
+          </div>
+          <p className="muted">{same ? "You're playing this mode. Pick a map to change to." : "Pick the map to play it on. The mode remembers its own settings."}</p>
+          <div className="toolbar">
+            {!same && (
+              <button className="chip" aria-pressed={chosen === null} onClick={() => setPick(null)}>
+                Keep {map}{fits ? "" : " (may not suit this mode)"}
+              </button>
+            )}
+            <input className="search grow" type="search" placeholder="Search all maps" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          {!query && (
+            <p className="muted small-note">
+              {listed === null ? "Finding maps for this mode…" : listed.length ? `${mode.name}'s own map list` : suggested.length ? "Maps that look made for this mode" : "No maps that look made for this mode yet. Search, or get some from Get more."}
+            </p>
+          )}
+          <div className="maps grid switch-maps">
+            {shown.map((m) => (
+              <MapCard key={m.name} map={m} selected={chosen === m.name} onClick={() => setPick(m.name)} />
+            ))}
+          </div>
+          <div className="row">
+            <button className="btn primary" disabled={same && !chosen} onClick={() => onGo(chosen)}>
+              {same ? `Change to ${chosen ?? "a map"}` : `Play ${mode.name} on ${chosen ?? map}`}
+            </button>
+            <button className="btn" onClick={onClose}>Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

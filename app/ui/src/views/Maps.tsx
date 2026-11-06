@@ -25,14 +25,28 @@ function NoPicture({ name }: { name: string }) {
   );
 }
 
-export function MapCard({ map, onClick, current }: { map: MapInfo; onClick: () => void; current?: boolean }) {
+export function MapCard({ map, onClick, current, onFav, selected }: { map: MapInfo; onClick: () => void; current?: boolean; onFav?: () => void; selected?: boolean }) {
   const [broken, setBroken] = useState(false);
   return (
-    <button className="map-card" onClick={onClick} aria-current={current ? "true" : undefined} title={map.title || map.name}>
+    <button className={`map-card${selected ? " selected" : ""}`} onClick={onClick} aria-current={current ? "true" : undefined} aria-pressed={selected === undefined ? undefined : selected} title={map.title || map.name}>
       <div className={`map-pic${map.thumb === "radar" ? " radar" : ""}`}>
         {(map.thumb !== "radar" || broken) && <NoPicture name={map.name} />}
         {map.thumb && !broken && <img src={withTarget(`/thumb/${encodeURIComponent(map.name)}.png`)} alt="" loading="lazy" onError={() => setBroken(true)} />}
-        {map.fav && <span className="fav-star" aria-label="Favourite">★</span>}
+        {onFav ? (
+          <span
+            role="button"
+            tabIndex={0}
+            className={`fav-toggle${map.fav ? " on" : ""}`}
+            aria-label={map.fav ? `Remove ${map.name} from favourites` : `Add ${map.name} to favourites`}
+            title={map.fav ? "Remove from favourites" : "Add to favourites"}
+            onClick={(e) => { e.stopPropagation(); onFav(); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onFav(); } }}
+          >
+            {map.fav ? "★" : "☆"}
+          </span>
+        ) : (
+          map.fav && <span className="fav-star" aria-label="Favourite">★</span>
+        )}
       </div>
       <span className="map-label">{map.name}</span>
     </button>
@@ -107,6 +121,7 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/mapflag", { flag: f, map: map.name, on }).catch(() => ({ error: "Couldn't save that." }));
     if (r.error) return toast(r.error, true);
     if (f === "hidden") toast(on ? `${map.name} is hidden. Find it under Hidden.` : `${map.name} is back in the list.`);
+    if (f === "fav") toast(on ? `${map.name} added to favourites` : `${map.name} removed from favourites`);
     setPicked(null);
     reload();
   };
@@ -147,7 +162,7 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
       </div>
       <div className="maps grid">
         {shown.map((m) => (
-          <MapCard key={m.name} map={m} current={m.name.toLowerCase() === current} onClick={() => setPicked(m)} />
+          <MapCard key={m.name} map={m} current={m.name.toLowerCase() === current} onClick={() => setPicked(m)} onFav={() => flag(m, "fav", !m.fav)} />
         ))}
         {!shown.length && (maps.length ? <p className="muted">No maps match.</p> : Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>))}
       </div>

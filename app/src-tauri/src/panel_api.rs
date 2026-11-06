@@ -198,6 +198,27 @@ async fn gb_mod(State(st): State<Shared>, Path(id): Path<String>, Query(q): Quer
     }
 }
 
+/// The maps a mode lists for itself (configs/gamemodes/maps/<mode>.txt), if it has a list.
+async fn mode_maps(State(st): State<Shared>, Path(mode): Path<String>) -> Response {
+    if !mode.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') || mode.len() > 32 {
+        return reply(StatusCode::BAD_REQUEST, json!({"error": "unknown mode"}));
+    }
+    let list = with_game(&st, move |g| {
+        std::fs::read_to_string(g.dir.join("addons/amxmodx/configs/gamemodes/maps").join(format!("{mode}.txt")))
+            .unwrap_or_default()
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty() && !l.starts_with(';') && !l.starts_with("//") && crate::maps::safe_arg(l))
+            .map(String::from)
+            .collect::<Vec<_>>()
+    })
+    .await;
+    match list {
+        Some(l) => reply(StatusCode::OK, json!(l)),
+        None => no_game_found(),
+    }
+}
+
 async fn gb_installed(State(st): State<Shared>) -> Response {
     match with_game(&st, |g| g.store.installed_list()).await {
         Some(list) => reply(StatusCode::OK, json!(list)),
@@ -327,6 +348,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/gb/browse", get(gb_browse))
         .route("/api/gb/jobs", get(gb_jobs))
         .route("/api/gb/installed", get(gb_installed))
+        .route("/api/modes/:id/maps", get(mode_maps))
         .route("/api/gb/mod/:id", get(gb_mod))
         .route("/api/gb/install", post(gb_install))
         .route("/api/gb/uninstall", post(gb_uninstall))
