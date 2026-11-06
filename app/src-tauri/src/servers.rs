@@ -148,6 +148,9 @@ fn load_checked() -> Result<Vec<Entry>, String> {
     // servers made before they started at 27016 shared the game's port: move them
     // (saved with the next change)
     // (not servers on another machine: they're alone there and keep 27015)
+    for e in list.iter_mut().filter(|e| e.remote.is_some()) {
+        e.port = 27015;
+    }
     for i in 0..list.len() {
         if !list[i].imported && list[i].remote.is_none() && list[i].port < FIRST_PORT {
             list[i].port = free_port(&list);
@@ -732,7 +735,7 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
         job.run(&format!("{g}/srv-upload"), || upload(&entry).map(|n| setup::Progress::detail(job, &format!("{n} files uploaded"))))?;
         job.run(&format!("{g}/srv-service"), || {
             let mut failed = String::new();
-            let code = crate::remote::exec_stream(&r, "bash -s", crate::remote::service_sh(&entry.id, &launch_args(&entry)).as_bytes(), |line| {
+            let code = crate::remote::exec_stream(&r, "bash -s", crate::remote::service_sh(&entry.id, &entry.game, &launch_args(&entry)).as_bytes(), |line| {
                 if !line.starts_with("@@") && !line.trim().is_empty() {
                     failed = line.trim().to_string();
                 }
@@ -1446,7 +1449,7 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
         // on another machine the start options live in its service: write it again
         if let Some(e) = get(&id).filter(|e| e.ready && e.remote.is_some()) {
             let r = e.remote.as_ref().unwrap();
-            let code = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&e.id, &launch_args(&e)).as_bytes(), |_| {})?;
+            let code = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&e.id, &e.game, &launch_args(&e)).as_bytes(), |_| {})?;
             if code != 0 {
                 return Err("Saved here, but the server's service couldn't be updated.".into());
             }

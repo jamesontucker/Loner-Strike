@@ -401,13 +401,23 @@ pub const FOUNDATION_ENV: &[(&str, &str)] = &[
 ];
 
 /// The systemd service for one server, and the `lsctl` helper for managing servers by hand.
-pub fn service_sh(id: &str, args: &[String]) -> String {
+pub fn service_sh(id: &str, game: &str, args: &[String]) -> String {
     let unit = unit(id);
     let dir = server_dir(id);
+    // all addresses: left to itself the server picks the name entry's 127.0.1.1 and
+    // doesn't answer from outside; and the panel's RCON password from a file only this
+    // user can read (the plugin sets it too, but the console shouldn't depend on it)
+    let mut args = args.to_vec();
+    args.extend(["+ip".into(), "0.0.0.0".into(), "+exec".into(), "loner-strike-rcon.cfg".into()]);
     let args = args.iter().map(|a| shell_quote(a)).collect::<Vec<_>>().join(" ");
     format!(
         r#"set -eu
 SRV="$HOME/{dir}"
+PW="$SRV/{game}/addons/amxmodx/data/gamemodes/panel_rcon.txt"
+if [ -f "$PW" ]; then
+  umask 077
+  printf 'rcon_password "%s"\n' "$(tr -d '\r\n"' < "$PW")" > "$SRV/{game}/loner-strike-rcon.cfg"
+fi
 sudo tee /etc/systemd/system/{unit}.service >/dev/null <<EOF
 [Unit]
 Description=Loner-Strike server {id}
@@ -529,7 +539,7 @@ mod tests {
         assert_eq!(base64_nopad(b"hi!"), "aGkh");
         assert_eq!(shell_quote("it's"), "'it'\\''s'");
         assert!(setup_env("my-server", "czero").contains("GAME='czero'"));
-        let svc = service_sh("x", &["-game".into(), "cstrike".into()]);
+        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()]);
         assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike'") && svc.contains("lsctl") && svc.contains("b\"\\xff\\xff\\xff\\xff\""));
     }
 }
