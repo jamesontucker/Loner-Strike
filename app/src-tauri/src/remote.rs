@@ -27,6 +27,10 @@ pub struct RemoteInfo {
     pub key: PathBuf,
     #[serde(default = "default_ssh_port")]
     pub ssh_port: u16,
+    /// The machine's identity (SHA-256 of its host key), saved on first connect; a
+    /// different one later means something is pretending to be it, so the app won't connect
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_key: Option<String>,
 }
 
 fn default_user() -> String {
@@ -68,6 +72,7 @@ fn connect(r: &RemoteInfo) -> Result<Session, String> {
     s.set_tcp_stream(tcp);
     s.set_timeout(30_000);
     s.handshake().map_err(|e| format!("SSH didn't start ({e})."))?;
+    check_identity(&s, r)?;
     if !r.key.is_file() {
         return Err(format!("The key file {} isn't there.", r.key.display()));
     }
@@ -87,6 +92,37 @@ fn connect(r: &RemoteInfo) -> Result<Session, String> {
     }
     s.set_keepalive(true, 30);
     Ok(s)
+}
+
+fn fingerprint(s: &Session) -> Option<String> {
+    s.host_key_hash(ssh2::HashType::Sha256).map(|h| h.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Is this really the machine? Its key must match what this computer's SSH has on
+/// record for it (~/.ssh/known_hosts) and what the app saved the first time.
+fn check_identity(s: &Session, r: &RemoteInfo) -> Result<(), String> {
+    const CHANGED: &str = "The server's identity has changed since this computer last connected, so the app won't connect. If you rebuilt the machine, remove its line from ~/.ssh/known_hosts and add the server again; otherwise someone may be intercepting the connection.";
+    let (key, _) = s.host_key().ok_or("The server didn't identify itself.")?;
+    if let (Some(home), Ok(mut kh)) = (dirs::home_dir(), s.known_hosts()) {
+        if kh.read_file(&home.join(".ssh/known_hosts"), ssh2::KnownHostFileKind::OpenSSH).is_ok() {
+            if let ssh2::CheckResult::Mismatch = kh.check_port(&r.host, r.ssh_port, key) {
+                return Err(CHANGED.into());
+            }
+        }
+    }
+    if let Some(expected) = &r.host_key {
+        if fingerprint(s).as_deref() != Some(expected.as_str()) {
+            return Err(CHANGED.into());
+        }
+    }
+    Ok(())
+}
+
+/// The machine's identity as this session saw it (saved with the server on first connect).
+pub fn host_key(r: &RemoteInfo) -> Result<String, String> {
+    let s = session(r)?;
+    let s = s.lock().unwrap();
+    fingerprint(&s).ok_or_else(|| "The server didn't identify itself.".into())
 }
 
 /// The open session for a machine (opened on first use, reopened if it dropped).

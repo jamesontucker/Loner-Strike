@@ -574,9 +574,11 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
     if !user.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)) {
         return Err("That user name has characters it can't have.".into());
     }
-    let info = crate::remote::RemoteInfo { host: host.clone(), user, key: PathBuf::from(req.key.trim()), ssh_port: req.ssh_port.unwrap_or(22) };
+    let mut info = crate::remote::RemoteInfo { host: host.clone(), user, key: PathBuf::from(req.key.trim()), ssh_port: req.ssh_port.unwrap_or(22), host_key: None };
     // a quick look first, so a wrong address or key says so straight away
     let (_, arch) = crate::remote::exec(&info, "uname -m")?;
+    // its identity, so every later connection can check it's the same machine
+    info.host_key = Some(crate::remote::host_key(&info)?);
     if arch.trim() != "x86_64" {
         return Err(format!("That machine is {}. The Counter-Strike server only runs on x86 (AMD or Intel) machines.", arch.trim()));
     }
