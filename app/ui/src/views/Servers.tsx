@@ -65,9 +65,11 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
   const [importing, setImporting] = useState(false);
 
   const act = async (s: ServerInfo, action: string) => {
+    if (action === "delete" && !confirm(s.imported ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.` : `Delete "${s.name}"? Its folder, maps, settings and admins are deleted.`)) return;
     const r = await post(`/api/servers/${s.id}/${action}`);
     if (r.error) return toast(r.error, true);
     if (action === "join") toast(`Joining ${s.name}…`);
+    if (action === "delete") toast(`${s.name} ${s.imported ? "removed" : "deleted"}`);
     onChanged();
   };
   const installed = (scan?.installs ?? []).flatMap((i) => i.games.filter((g) => g.installed).map((g) => g.id));
@@ -119,6 +121,7 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
                 ) : (
                   <button className="btn" onClick={() => act(s, "start")}>Start</button>
                 )}
+                <button className="btn danger push" onClick={() => act(s, "delete")}>{s.imported ? "Remove" : "Delete"}</button>
               </div>
             )}
           </div>

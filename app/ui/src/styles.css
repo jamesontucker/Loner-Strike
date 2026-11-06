@@ -665,3 +665,4 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .upkeep li { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid var(--bevel-lo); }
 .upkeep li:first-child { border-top: 0; }
 .upkeep p { margin: 2px 0 0; font-size: 14px; }
+.row > .push { margin-left: auto; }
