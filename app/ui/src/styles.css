@@ -666,3 +666,12 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .upkeep li:first-child { border-top: 0; }
 .upkeep p { margin: 2px 0 0; font-size: 14px; }
 .row > .push { margin-left: auto; }
+
+/* maps without a screenshot: the map's type and name instead of an empty box */
+.map-pic > img, .sheet-pic > img { position: absolute; inset: 0; }
+.sheet-pic { position: relative; }
+.no-pic { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 4px; padding: 10px; text-align: center;
+  background: repeating-linear-gradient(135deg, #3a4233 0 10px, #363e30 10px 20px); color: var(--bone-faint); }
+.no-pic-kind { font: 700 11px/1 var(--text); text-transform: uppercase; letter-spacing: .08em; color: var(--signal); background: var(--bg); padding: 2px 6px; border-radius: 2px; box-shadow: var(--sunken); }
+.no-pic-name { font: 400 19px/1.05 var(--stencil); color: var(--bone-dim); word-break: break-word; }
+.sheet-pic .no-pic-name { font-size: 34px; }

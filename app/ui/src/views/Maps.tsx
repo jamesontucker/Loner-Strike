@@ -11,11 +11,24 @@ const CATS: [string, string][] = [
 ];
 const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by hand" };
 
+/** What a map without a screenshot shows: its type and name, like a map-loading screen. */
+function NoPicture({ name }: { name: string }) {
+  const i = name.indexOf("_");
+  const kind = i > 0 && i <= 5 ? name.slice(0, i) : "";
+  return (
+    <div className="no-pic" aria-hidden="true">
+      {kind && <span className="no-pic-kind">{kind}</span>}
+      <span className="no-pic-name">{kind ? name.slice(i + 1) : name}</span>
+    </div>
+  );
+}
+
 export function MapCard({ map, onClick, current }: { map: MapInfo; onClick: () => void; current?: boolean }) {
   const [broken, setBroken] = useState(false);
   return (
     <button className="map-card" onClick={onClick} aria-current={current ? "true" : undefined} title={map.title || map.name}>
       <div className={`map-pic${map.thumb === "radar" ? " radar" : ""}`}>
+        {(map.thumb !== "radar" || broken) && <NoPicture name={map.name} />}
         {map.thumb && !broken && <img src={withTarget(`/thumb/${encodeURIComponent(map.name)}.png`)} alt="" loading="lazy" onError={() => setBroken(true)} />}
         {map.fav && <span className="fav-star" aria-label="Favourite">★</span>}
       </div>
@@ -96,6 +109,7 @@ export function Maps({ data, maps, reload, refresh }: { data: Online | null; map
         <div className="sheet-backdrop" onClick={() => setPicked(null)}>
           <div className="sheet" role="dialog" aria-label={picked.name} onClick={(e) => e.stopPropagation()}>
             <div className={`sheet-pic${picked.thumb === "radar" ? " radar" : ""}`}>
+              {picked.thumb !== "radar" && <NoPicture name={picked.name} />}
               {picked.thumb && <img src={withTarget(`/thumb/${encodeURIComponent(picked.name)}.png`)} alt="" />}
             </div>
             <div className="sheet-body">

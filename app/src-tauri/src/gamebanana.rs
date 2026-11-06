@@ -19,6 +19,12 @@ use std::time::Duration;
 
 const API: &str = "https://gamebanana.com/apiv11";
 pub const MAPS_CATEGORY: i64 = 5474; // Counter-Strike 1.6 > Maps
+/// Maps GameBanana had no picture for (the file name changed when the search started
+/// reading more than one page, so earlier misses get another try)
+const MISS_FILE: &str = "not_found_v2.json";
+const MISS_DAYS: f64 = 7.0;
+/// Result pages read when looking for a map's picture (50 a page)
+const SHOT_PAGES: i64 = 4;
 const PER_PAGE: i64 = 24;
 const MAX_DOWNLOAD: u64 = 1536 * 1024 * 1024;
 const USER_AGENT: &str = "LonerStrike/1.0 (local map browser)";
@@ -255,22 +261,23 @@ impl MapStore {
 
     // ---- pictures for maps that came without one ------------------------
     pub fn misses(&self) -> Map<String, Value> {
-        std::fs::read_to_string(self.shots.join("not_found.json"))
+        std::fs::read_to_string(self.shots.join(MISS_FILE))
             .ok()
             .and_then(|t| serde_json::from_str::<Value>(&t).ok())
             .and_then(|v| v.as_object().cloned())
             .unwrap_or_default()
     }
 
-    /// True if GameBanana had no picture for this map in the last month.
+    /// True if GameBanana had no picture for this map in the last week.
     pub fn missed_recently(misses: &Map<String, Value>, name: &str) -> bool {
-        sys::now() - misses.get(&name.to_lowercase()).and_then(|v| v.as_f64()).unwrap_or(0.0) < 30.0 * 86400.0
+        sys::now() - misses.get(&name.to_lowercase()).and_then(|v| v.as_f64()).unwrap_or(0.0) < MISS_DAYS * 86400.0
     }
 
     /// Looks for the map on GameBanana and saves its first screenshot.
     ///
     /// Only takes a page whose title is the map's own name, so a search for "aim_map"
-    /// doesn't pick up "aim_map_usp". Misses are remembered for a month so GameBanana
+    /// doesn't pick up "aim_map_usp". Common names match hundreds of uploads, so it
+    /// reads a few pages of results. Misses are remembered for a week so GameBanana
     /// isn't asked again on every visit.
     pub fn find_shot(&self, name: &str) -> Option<PathBuf> {
         let name = name.to_lowercase();
@@ -281,49 +288,61 @@ impl MapStore {
             let _g = self.lock.lock().unwrap();
             self.misses().get(&name).and_then(|v| v.as_f64()).unwrap_or(0.0)
         };
-        if sys::now() - missed_at < 30.0 * 86400.0 {
+        if sys::now() - missed_at < MISS_DAYS * 86400.0 {
             return None;
         }
         {
             let _slot = self.lookups.acquire();
             let alnum = |t: &str| t.chars().filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit()).collect::<String>();
             let mut found: Option<String> = None;
+            let mut close: Option<String> = None;
             // CZ remakes (de_dust_cz) share the original map's page
             let mut wants = vec![name.clone()];
             if let Some(base) = name.strip_suffix("_cz") {
                 wants.push(base.to_string());
             }
             for want in wants {
-                let d = match get_json(
-                    "/Mod/Index",
-                    &[
-                        ("_nPage", "1".into()),
-                        ("_nPerpage", "40".into()),
-                        ("_aFilters[Generic_Category]", MAPS_CATEGORY.to_string()),
-                        ("_aFilters[Generic_Name]", format!("contains,{want}")),
-                    ],
-                ) {
-                    Ok(d) => d,
-                    Err(_) => return None, // offline or GameBanana busy: try again next time
-                };
                 let key = alnum(&want);
-                for r in d["_aRecords"].as_array().into_iter().flatten() {
-                    let title = s(&r["_sName"]).trim().to_lowercase();
-                    let words_match = title
-                        .split(|c: char| c.is_whitespace() || c == '[' || c == '(' || c == ',')
-                        .filter(|w| !w.is_empty())
-                        .any(|w| alnum(w) == key);
-                    if words_match || alnum(&title) == key {
-                        found = image(&r["_aPreviewMedia"], "_sFile530");
-                        if found.is_some() {
-                            break;
+                for page in 1..=SHOT_PAGES {
+                    let d = match get_json(
+                        "/Mod/Index",
+                        &[
+                            ("_nPage", page.to_string()),
+                            ("_nPerpage", "50".into()),
+                            ("_aFilters[Generic_Category]", MAPS_CATEGORY.to_string()),
+                            ("_aFilters[Generic_Name]", format!("contains,{want}")),
+                        ],
+                    ) {
+                        Ok(d) => d,
+                        Err(_) => return None, // offline or GameBanana busy: try again next time
+                    };
+                    let records = d["_aRecords"].as_array().cloned().unwrap_or_default();
+                    for r in &records {
+                        let title = s(&r["_sName"]).trim().to_lowercase();
+                        // "aim_map" itself beats "Aim_Map Night Version", which only counts if nothing better turns up
+                        if alnum(&title) == key {
+                            if let Some(url) = image(&r["_aPreviewMedia"], "_sFile530") {
+                                found = Some(url);
+                                break;
+                            }
                         }
+                        let words_match = title
+                            .split(|c: char| c.is_whitespace() || c == '[' || c == '(' || c == ',')
+                            .filter(|w| !w.is_empty())
+                            .any(|w| alnum(w) == key);
+                        if words_match && close.is_none() {
+                            close = image(&r["_aPreviewMedia"], "_sFile530");
+                        }
+                    }
+                    if found.is_some() || records.len() < 50 {
+                        break;
                     }
                 }
                 if found.is_some() {
                     break;
                 }
             }
+            let found = found.or(close);
             if let Some(url) = found {
                 let data = get_bytes(&url, 4 * 1024 * 1024)?;
                 std::fs::write(self.shots.join(format!("{name}.jpg")), data).ok()?;
@@ -333,7 +352,7 @@ impl MapStore {
         let _g = self.lock.lock().unwrap();
         let mut m = self.misses();
         m.insert(name, json!(sys::now()));
-        let _ = std::fs::write(self.shots.join("not_found.json"), serde_json::to_string(&m).unwrap_or_default());
+        let _ = std::fs::write(self.shots.join(MISS_FILE), serde_json::to_string(&m).unwrap_or_default());
         None
     }
 
