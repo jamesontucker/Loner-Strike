@@ -434,7 +434,10 @@ pub fn service_sh(id: &str, game: &str, args: &[String]) -> String {
     // doesn't answer from outside; and the panel's RCON password from a file only this
     // user can read (the plugin sets it too, but the console shouldn't depend on it)
     let mut args = args.to_vec();
-    args.extend(["+ip".into(), "0.0.0.0".into(), "+exec".into(), "lsrcon.cfg".into()]);
+    if !args.iter().any(|a| a == "+ip") {
+        args.extend(["+ip".into(), "0.0.0.0".into()]);
+    }
+    args.extend(["+exec".into(), "lsrcon.cfg".into()]);
     let args = args.iter().map(|a| shell_quote(a)).collect::<Vec<_>>().join(" ");
     format!(
         r#"set -eu

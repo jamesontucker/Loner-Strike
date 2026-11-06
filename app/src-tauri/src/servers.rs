@@ -74,6 +74,12 @@ pub struct Entry {
     /// How it was set up (template and mods), so a setup that stopped can run again
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub setup_with: Option<SetupWith>,
+    /// The address it listens on (empty: every address the machine has)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub listen_ip: String,
+    /// More start options the player added (checked by `extra_args`)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub extra_args: String,
 }
 
 fn default_visibility() -> String {
@@ -91,6 +97,9 @@ pub struct SetupWith {
     pub template: String,
     #[serde(default)]
     pub components: Vec<String>,
+    /// the join password picked in the New server form
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub password: String,
 }
 
 impl Entry {
@@ -125,6 +134,55 @@ impl Entry {
     }
 }
 
+/// Ports a server on another machine can use: setup opens 27015-27020 there, and 27020
+/// is HLTV's
+const REMOTE_PORTS: std::ops::RangeInclusive<u16> = 27015..=27019;
+
+/// Start options the app sets itself, so they can't be added again by hand
+const OWN_ARGS: &[&str] = &["-game", "-port", "-console", "-condebug", "-nomaster", "+ip", "+map", "+maxplayers", "+sv_lan", "+rcon_password", "+sv_password", "+exec"];
+
+/// The player's extra start options, split up, or why they can't be used.
+pub fn extra_args(text: &str) -> Result<Vec<String>, String> {
+    let words: Vec<String> = text.split_whitespace().map(String::from).collect();
+    if text.len() > 300 || words.len() > 30 {
+        return Err("That's too many start options.".into());
+    }
+    for w in &words {
+        if !w.chars().all(|c| c.is_ascii_alphanumeric() || "+-_.:/".contains(c)) {
+            return Err(format!("\"{w}\" can't be used: start options are letters, numbers and + - _ . : /"));
+        }
+        if OWN_ARGS.contains(&w.to_ascii_lowercase().as_str()) {
+            return Err(format!("{w} is set by the app. Change it with the settings above."));
+        }
+    }
+    if words.first().is_some_and(|w| !w.starts_with(['-', '+'])) {
+        return Err("Start options begin with - or +, like +sv_gravity 600.".into());
+    }
+    Ok(words)
+}
+
+/// The join password, as the Friends tab keeps it (empty: none).
+pub(crate) fn join_password(e: &Entry) -> String {
+    std::fs::read_to_string(e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes/friends.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| v["password"].as_str().map(String::from))
+        .filter(|p| crate::sharing::password_ok(p))
+        .unwrap_or_default()
+}
+
+/// The name and join password in friends.json and friends.cfg (which the plugin runs
+/// after every map change), the same files the Friends tab writes.
+fn write_join(data: &Path, name: &str, password: &str) -> Result<(), String> {
+    if !crate::sharing::password_ok(password) {
+        return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
+    }
+    let name = crate::sharing::clean_name(name);
+    std::fs::create_dir_all(data).map_err(|e| e.to_string())?;
+    std::fs::write(data.join("friends.json"), json!({"name": name, "password": password}).to_string()).map_err(|e| e.to_string())?;
+    std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike\nhostname \"{name}\"\nsv_password \"{password}\"\n")).map_err(|e| e.to_string())
+}
+
 fn list_file() -> PathBuf {
     sys::app_dir().join("servers.json")
 }
@@ -147,8 +205,8 @@ fn load_checked() -> Result<Vec<Entry>, String> {
     };
     // servers made before they started at 27016 shared the game's port: move them
     // (saved with the next change)
-    // (not servers on another machine: they're alone there and keep 27015)
-    for e in list.iter_mut().filter(|e| e.remote.is_some()) {
+    // (not servers on another machine: they're alone there, on 27015 to 27019)
+    for e in list.iter_mut().filter(|e| e.remote.is_some() && !REMOTE_PORTS.contains(&e.port)) {
         e.port = 27015;
     }
     for i in 0..list.len() {
@@ -380,6 +438,9 @@ pub struct NewServer {
     pub components: Vec<String>,
     #[serde(default)]
     pub visibility: Option<String>,
+    /// to join it (empty: none)
+    #[serde(default)]
+    pub password: String,
 }
 
 /// The game folder a template copies from, and the components installed there.
@@ -429,6 +490,10 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
     if !["cstrike", "czero"].contains(&req.game.as_str()) {
         return Err("Pick Counter-Strike 1.6 or Condition Zero.".into());
     }
+    let join_pw = req.password.trim().to_string();
+    if !crate::sharing::password_ok(&join_pw) {
+        return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
+    }
     if client.kind == "crossover" && !Path::new(CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The server runs through it, like the game.".into());
     }
@@ -458,6 +523,8 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         restart: None,
         remote: None,
         setup_with: None,
+        listen_ip: String::new(),
+        extra_args: String::new(),
     };
     let base = root.join(".base");
     let g = req.game.clone();
@@ -495,7 +562,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
                 copy_tree(&src.join("addons/amxmodx/data/gamemodes"), &data, true, &settings_filter)?;
             }
             let _ = std::fs::create_dir_all(&data);
-            std::fs::write(data.join("friends.json"), json!({"name": entry.name, "password": ""}).to_string()).map_err(|e| e.to_string())?;
+            write_join(&data, &entry.name, &join_pw)?;
             // empty ban lists, so the server doesn't complain it has none
             for f in ["banned.cfg", "listip.cfg"] {
                 let p = entry.dir.join(&g).join(f);
@@ -503,7 +570,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
                     let _ = std::fs::write(p, "");
                 }
             }
-            std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike\nhostname \"{}\"\n", entry.name)).map_err(|e| e.to_string())
+            Ok(())
         })?;
         job.run(&format!("{g}/srv-maps"), || match &source {
             Some(src) => copy_tree(src, &entry.dir.join(&g), false, &content_filter).map(|_| ()),
@@ -538,7 +605,9 @@ pub struct NewRemote {
     pub visibility: Option<String>,
     /// The fingerprint the player confirmed (from the probe)
     #[serde(default)]
-    pub host_key: String,
+    pub host_key: String,    /// to join it (empty: none)
+    #[serde(default)]
+    pub password: String,
 }
 
 /// The machine a NewRemote describes (checked; no identity yet).
@@ -716,6 +785,10 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
     if !["cstrike", "czero"].contains(&req.game.as_str()) {
         return Err("Pick Counter-Strike 1.6 or Condition Zero.".into());
     }
+    let join_pw = req.password.trim().to_string();
+    if !crate::sharing::password_ok(&join_pw) {
+        return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
+    }
     let mut info = remote_of(&req)?;
     // the machine the player confirmed, and no other: connecting checks its identity
     // against this fingerprint, now and every time after
@@ -757,7 +830,9 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         hltv: Default::default(),
         restart: None,
         remote: Some(info.clone()),
-        setup_with: Some(SetupWith { template: req.template.clone(), components: req.components.clone() }),
+        setup_with: Some(SetupWith { template: req.template.clone(), components: req.components.clone(), password: join_pw.clone() }),
+        listen_ip: String::new(),
+        extra_args: String::new(),
     };
     edit(|l| l.push(entry.clone()))?;
     let job = remote_setup(entry, source, components, res).inspect_err(|_| {
@@ -832,7 +907,9 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
                 copy_tree(&src.join("addons/amxmodx/data/gamemodes"), &data, true, &settings_filter)?;
             }
             let _ = std::fs::create_dir_all(&data);
-            std::fs::write(data.join("friends.json"), json!({"name": entry.name, "password": ""}).to_string()).map_err(|e| e.to_string())?;
+            // the password from the form, or the one it has now when this runs again
+            let pw = Some(join_password(&entry)).filter(|p| !p.is_empty()).or(entry.setup_with.as_ref().map(|w| w.password.clone())).unwrap_or_default();
+            write_join(&data, &entry.name, &pw)?;
             // the panel's RCON password, which the plugin reads on the machine
             if !data.join("panel_rcon.txt").is_file() {
                 use rand::Rng;
@@ -847,7 +924,7 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
                     let _ = std::fs::write(p, "");
                 }
             }
-            std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike\nhostname \"{}\"\n", entry.name)).map_err(|e| e.to_string())
+            Ok(())
         })?;
         job.run(&format!("{g}/srv-upload"), || upload(&entry).map(|n| setup::Progress::detail(job, &format!("{n} files uploaded"))))?;
         job.run(&format!("{g}/srv-service"), || {
@@ -989,6 +1066,8 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         restart: None,
         remote: None,
         setup_with: None,
+        listen_ip: String::new(),
+        extra_args: String::new(),
     };
     // name and password as the Friends tab keeps them (it writes friends.cfg only when
     // something changes there, so the server's own server.cfg keeps working meanwhile)
@@ -1080,6 +1159,10 @@ fn launch_args(e: &Entry) -> Vec<String> {
         "+map".into(),
         map,
     ]);
+    if !e.listen_ip.is_empty() {
+        a.extend(["+ip".into(), e.listen_ip.clone()]);
+    }
+    a.extend(extra_args(&e.extra_args).unwrap_or_default());
     a
 }
 
@@ -1350,7 +1433,8 @@ fn view(e: &Entry) -> Value {
     json!({"id": e.id, "name": e.name, "game": e.game, "port": e.port, "visibility": e.visibility, "map": e.map,
            "maxplayers": e.maxplayers, "ready": e.ready, "state": state, "uptime": uptime, "error": error,
            "imported": e.imported, "loner": loner, "dir": e.dir,
-           "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(), "pending_restart": pending_restart(&e.id)})
+           "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(), "pending_restart": pending_restart(&e.id),
+           "listen_ip": e.listen_ip, "extra_args": e.extra_args, "password": join_password(e)})
 }
 
 // ---- which game the panel controls -----------------------------------------------------
@@ -1535,6 +1619,10 @@ struct Change {
     map: Option<String>,
     maxplayers: Option<u32>,
     port: Option<u16>,
+    /// the join password ("" for none)
+    password: Option<String>,
+    listen_ip: Option<String>,
+    extra_args: Option<String>,
 }
 
 async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<Change>) -> (StatusCode, Json<Value>) {
@@ -1553,19 +1641,34 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 return Err("That isn't a map name.".into());
             }
         }
-        if let (Some(p), true) = (req.port, e.remote.is_some()) {
-            if p != e.port {
-                return Err("A server on another machine keeps port 27015.".into());
-            }
-        }
+        let host = |o: &Entry| o.remote.as_ref().map(|r| r.host.clone());
         if let Some(p) = req.port {
-            if !(1024..=65000).contains(&p) || load().iter().any(|o| o.id != id && o.port == p) {
+            let taken = load().iter().any(|o| o.id != id && o.port == p && host(o) == host(&e));
+            if e.remote.is_some() && (!REMOTE_PORTS.contains(&p) || taken) {
+                return Err("Pick a port from 27015 to 27019 that no other server on that machine uses (27020 is for HLTV).".into());
+            }
+            if e.remote.is_none() && (!(1024..=65000).contains(&p) || taken) {
                 return Err("Pick a port from 1024 to 65000 that no other server uses.".into());
             }
             if running(&id) && p != e.port {
                 return Err("Stop the server to change its port.".into());
             }
         }
+        let listen_ip = req.listen_ip.as_ref().map(|t| t.trim().to_string());
+        if let Some(ip) = listen_ip.as_ref().filter(|t| !t.is_empty()) {
+            if ip.parse::<std::net::Ipv4Addr>().is_err() {
+                return Err("The listen address is an IP address like 192.168.1.20, or empty for all of them.".into());
+            }
+        }
+        let extra = req.extra_args.as_ref().map(|t| t.split_whitespace().collect::<Vec<_>>().join(" "));
+        if let Some(t) = &extra {
+            extra_args(t)?;
+        }
+        let password = req.password.as_ref().map(|p| p.trim().to_string());
+        if password.as_ref().is_some_and(|p| !crate::sharing::password_ok(p)) {
+            return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
+        }
+        let restart_needed = |old: &Entry, new: &Entry| old.port != new.port || old.visibility != new.visibility || old.maxplayers != new.maxplayers || old.listen_ip != new.listen_ip || old.extra_args != new.extra_args;
         let name = req.name.as_ref().map(|n| n.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect::<String>()).filter(|n| !n.is_empty());
         edit(|l| {
             if let Some(e) = l.iter_mut().find(|e| e.id == id) {
@@ -1584,9 +1687,26 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 if let Some(p) = req.port {
                     e.port = p;
                 }
+                if let Some(ip) = &listen_ip {
+                    e.listen_ip = ip.clone();
+                }
+                if let Some(t) = &extra {
+                    e.extra_args = t.clone();
+                }
             }
         })?;
-        if req.port.is_some() {
+        let now = get(&id).ok_or("That server isn't there any more.")?;
+        // the name players see and the join password, applied now if it's running
+        if name.is_some() || password.is_some() {
+            let pw = password.clone().unwrap_or_else(|| join_password(&now));
+            write_join(&now.dir.join(&now.game).join("addons/amxmodx/data/gamemodes"), &now.name, &pw)?;
+            if running(&id) {
+                if let Some(rc) = now.rcon() {
+                    let _ = rc.send(&format!("hostname \"{}\";sv_password \"{pw}\"", crate::sharing::clean_name(&now.name)));
+                }
+            }
+        }
+        if now.port != e.port {
             forget(&id);
         }
         // on another machine the start options live in its service: write it again (and
@@ -1599,7 +1719,7 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 return Err("Saved here, but the server's service couldn't be updated.".into());
             }
         }
-        Ok(json!({"ok": true, "restart": running(&id)}))
+        Ok(json!({"ok": true, "restart": running(&id) && restart_needed(&e, &now)}))
     })
     .await
     .unwrap_or_else(|_| Err("Something went wrong.".into()));
@@ -1632,11 +1752,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
             "join" => {
                 let e = get(&id).ok_or("That server isn't there any more.")?;
                 let client = client(&st2).ok_or("Couldn't find the game to join with.")?;
-                let pw = std::fs::read_to_string(e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes/friends.json"))
-                    .ok()
-                    .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-                    .and_then(|v| v["password"].as_str().map(String::from))
-                    .filter(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || "-_".contains(c)));
+                let pw = Some(join_password(&e)).filter(|p| !p.is_empty());
                 // the game already open: Steam tells it to join; otherwise it starts joining
                 if sys::game_running() && e.visibility == "unlisted" {
                     // an unlisted server doesn't answer the game's lookups, so the open game
@@ -1675,7 +1791,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 }
                 edit(|l| l.iter_mut().filter(|x| x.id == id).for_each(|x| x.ready = false))?;
                 forget(&id);
-                let with = e.setup_with.clone().unwrap_or(SetupWith { template: "local".into(), components: vec![] });
+                let with = e.setup_with.clone().unwrap_or(SetupWith { template: "local".into(), components: vec![], password: String::new() });
                 let catalog = setup::components::load_catalog(&res)?;
                 let (source, components) = match template_source(&with.template, &e.game, &client, &catalog) {
                     Some((dir, comps)) => (Some(dir), comps),
@@ -1694,7 +1810,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 }
                 let client = client(&st2).ok_or("Set up the game on this computer first.")?;
                 let res = crate::setup_api::resources_for(&st2)?;
-                let with = e.setup_with.clone().unwrap_or(SetupWith { template: "local".into(), components: vec![] });
+                let with = e.setup_with.clone().unwrap_or(SetupWith { template: "local".into(), components: vec![], password: String::new() });
                 let catalog = setup::components::load_catalog(&res)?;
                 let (source, components) = match template_source(&with.template, &e.game, &client, &catalog) {
                     Some((dir, comps)) => (Some(dir), comps),
@@ -1726,6 +1842,67 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
             }
             _ => Err("Unknown action.".into()),
         }
+    })
+    .await
+    .unwrap_or_else(|_| Err("Something went wrong.".into()));
+    answer(r)
+}
+
+/// The console (RCON) password, for using the server from another tool. Computer only.
+async fn api_rcon_password(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || on.is_none() {
+        return forbidden();
+    }
+    let pw = get(&id).and_then(|e| std::fs::read_to_string(e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes/panel_rcon.txt")).ok());
+    answer(pw.map(|p| json!({"ok": true, "password": p.trim()})).ok_or_else(|| "This server has no console password yet.".to_string()))
+}
+
+#[derive(Deserialize)]
+struct NewRconPassword {
+    #[serde(default)]
+    password: Option<String>,
+}
+
+/// A new console password: the one given, or a random one. The running server gets it
+/// straight away (over the old one), then the file the app and the plugin read it from.
+async fn api_set_rcon_password(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<NewRconPassword>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || on.is_none() {
+        return forbidden();
+    }
+    let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
+        let e = get(&id).ok_or("That server isn't there any more.")?;
+        let pw = match req.password.map(|p| p.trim().to_string()) {
+            Some(p) => {
+                if !(8..=32).contains(&p.len()) || !p.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_') {
+                    return Err("Console passwords are 8 to 32 letters, numbers, - and _.".into());
+                }
+                p
+            }
+            None => {
+                use rand::Rng;
+                const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+                let mut rng = rand::thread_rng();
+                (0..24).map(|_| CHARS[rng.gen_range(0..CHARS.len())] as char).collect()
+            }
+        };
+        if running(&id) {
+            if let Some(rc) = e.rcon() {
+                let _ = rc.send(&format!("rcon_password \"{pw}\""));
+            }
+        }
+        let data = e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes");
+        std::fs::create_dir_all(&data).map_err(|err| err.to_string())?;
+        sys::write_atomic(&data.join("panel_rcon.txt"), format!("{pw}\n").as_bytes()).map_err(|err| err.to_string())?;
+        forget(&id);
+        // on another machine: the file goes up, and the service's copy (read at start) too
+        if let Some(r) = e.remote.as_ref().filter(|_| e.ready) {
+            sync(&e, false)?;
+            let code = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&e.id, &e.game, &launch_args(&e)).as_bytes(), |_| {})?;
+            if code != 0 {
+                return Err("Changed here, but the server's service couldn't be updated.".into());
+            }
+        }
+        Ok(json!({"ok": true, "password": pw}))
     })
     .await
     .unwrap_or_else(|_| Err("Something went wrong.".into()));
@@ -1796,6 +1973,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/servers/select", post(api_select))
         .route("/api/servers/:id", post(api_change))
         .route("/api/servers/:id/console", route_get(api_console))
+        .route("/api/servers/:id/rcon-password", route_get(api_rcon_password).post(api_set_rcon_password))
         .route("/api/servers/:id/:action", post(api_action))
 }
 
@@ -1992,7 +2170,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None,
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(),
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -2007,13 +2185,24 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None,
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(),
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));
         e.visibility = "listed".into();
         let a = launch_args(&e).join(" ");
         assert!(!a.contains("-nomaster") && a.contains("+sv_lan 0") && a.contains("-port 27016"));
+    }
+
+    #[test]
+    fn extra_start_options() {
+        assert_eq!(extra_args("  -pingboost 2   +sv_gravity 600 ").unwrap(), ["-pingboost", "2", "+sv_gravity", "600"]);
+        assert!(extra_args("").unwrap().is_empty());
+        assert!(extra_args("+map de_dust2").is_err(), "the app sets the map");
+        assert!(extra_args("+RCON_PASSWORD x").is_err());
+        assert!(extra_args("+say $(reboot)").is_err());
+        assert!(extra_args("+say \"hi\"").is_err());
+        assert!(extra_args("hello").is_err(), "starts with - or +");
     }
 
     #[test]
