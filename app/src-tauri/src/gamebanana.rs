@@ -22,7 +22,11 @@ pub const MAPS_CATEGORY: i64 = 5474; // Counter-Strike 1.6 > Maps
 /// Maps nobody had a picture for (the name changes when the search gets better, so
 /// earlier misses get another try)
 const MISS_FILE: &str = "not_found_v3.json";
+/// Marks that pictures found by older, looser searches were cleared (see forget_old_lookups)
+const LOOKUPS_CLEARED: &str = "lookups_v3";
 const MISS_DAYS: f64 = 7.0;
+/// Words a map page's title may have around the map's name ("aim_map (CS 1.6)")
+const TITLE_TAGS: &[&str] = &["cs", "16", "cs16", "cz", "czero", "condition", "zero", "counterstrike", "map", "final", "fixed", "remake"];
 /// Result pages read when looking for a map's picture (50 a page)
 const SHOT_PAGES: i64 = 4;
 const PER_PAGE: i64 = 24;
@@ -210,7 +214,7 @@ impl MapStore {
     pub fn new(hl: &Path, game_dir: &Path, app_dir: &Path, maps_cache: Arc<Mutex<Option<Vec<Value>>>>) -> MapStore {
         let shots = app_dir.join("cache").join("gbshots");
         let _ = std::fs::create_dir_all(&shots);
-        MapStore {
+        let store = MapStore {
             cstrike: hl.join("cstrike"),
             game_dir: game_dir.to_path_buf(),
             record_path: app_dir.join("installed_maps.json"),
@@ -221,7 +225,9 @@ impl MapStore {
             jobs: Mutex::new(HashMap::new()),
             maps_cache,
             content: content::Records::new(app_dir),
-        }
+        };
+        store.forget_old_lookups();
+        store
     }
 
     // ---- install record -------------------------------------------------
@@ -252,6 +258,30 @@ impl MapStore {
             }
         }
         out
+    }
+
+    /// Once: drops pictures earlier versions found by searching, which sometimes took a
+    /// similarly named map's page. Pictures that came with installed maps stay; the
+    /// rest are looked up again with the stricter search.
+    pub fn forget_old_lookups(&self) {
+        let marker = self.shots.join(LOOKUPS_CLEARED);
+        if marker.exists() || !self.shots.is_dir() {
+            return;
+        }
+        let installed: std::collections::HashSet<String> = self
+            .records()
+            .values()
+            .flat_map(|r| r["maps"].as_array().cloned().unwrap_or_default())
+            .filter_map(|m| m.as_str().map(|m| m.to_lowercase()))
+            .collect();
+        for e in std::fs::read_dir(&self.shots).into_iter().flatten().flatten() {
+            let p = e.path();
+            let stem = p.file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+            if p.extension().map(|x| x == "jpg").unwrap_or(false) && !installed.contains(&stem) {
+                let _ = std::fs::remove_file(&p);
+            }
+        }
+        let _ = std::fs::write(marker, "");
     }
 
     pub fn shot_for(&self, name: &str) -> Option<PathBuf> {
@@ -326,11 +356,14 @@ impl MapStore {
                                 break;
                             }
                         }
-                        let words_match = title
-                            .split(|c: char| c.is_whitespace() || c == '[' || c == '(' || c == ',')
+                        // "aim_map (CS 1.6)" or "[CZ] de_dust2_cz" also count, but not "Aim_Map Night Version"
+                        let words: Vec<String> = title
+                            .split(|c: char| c.is_whitespace() || "[](),|".contains(c))
+                            .map(alnum)
                             .filter(|w| !w.is_empty())
-                            .any(|w| alnum(w) == key);
-                        if words_match && close.is_none() {
+                            .collect();
+                        let only_tags = words.iter().all(|w| *w == key || TITLE_TAGS.contains(&w.as_str()));
+                        if only_tags && words.iter().any(|w| *w == key) && close.is_none() {
                             close = image(&r["_aPreviewMedia"], "_sFile530");
                         }
                     }
@@ -348,35 +381,11 @@ impl MapStore {
                 std::fs::write(self.shots.join(format!("{name}.jpg")), data).ok()?;
                 return self.shot_for(&name);
             }
-            if let Some(p) = self.gametracker_shot(&name) {
-                return Some(p);
-            }
         }
         let _g = self.lock.lock().unwrap();
         let mut m = self.misses();
         m.insert(name, json!(sys::now()));
         let _ = std::fs::write(self.shots.join(MISS_FILE), serde_json::to_string(&m).unwrap_or_default());
-        None
-    }
-
-    /// Not on GameBanana: GameTracker keeps a small picture (160x120) of nearly every
-    /// map public servers have run, at a fixed address. Saved once, like the others.
-    fn gametracker_shot(&self, name: &str) -> Option<PathBuf> {
-        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c)) {
-            return None;
-        }
-        let cz = self.game_dir.file_name().map(|n| n == "czero").unwrap_or(false);
-        let kinds = if cz { ["czero", "cs"] } else { ["cs", "czero"] };
-        for kind in kinds {
-            let url = format!("https://image.gametracker.com/images/maps/160x120/{kind}/{name}.jpg");
-            if let Some(data) = get_bytes(&url, 512 * 1024) {
-                // a JPEG, not an error page
-                if data.starts_with(&[0xFF, 0xD8]) {
-                    std::fs::write(self.shots.join(format!("{name}.jpg")), data).ok()?;
-                    return self.shot_for(name);
-                }
-            }
-        }
         None
     }
 
