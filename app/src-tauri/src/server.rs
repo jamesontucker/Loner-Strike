@@ -247,6 +247,8 @@ pub fn router(state: Shared, listener: Listener) -> Router {
     // routes already there), and the listener's guard stays outermost
     let routes = match listener {
         Listener::Local => routes
+            .merge(crate::setup_api::local_routes())
+            .merge(crate::app_api::local_routes())
             .merge(crate::servers::local_routes())
             .merge(crate::hltv::local_routes())
             .merge(crate::prefs::local_routes())

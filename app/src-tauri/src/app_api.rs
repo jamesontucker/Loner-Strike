@@ -200,7 +200,11 @@ struct PhoneReq {
     enabled: bool,
 }
 
-async fn api_phone_set(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<PhoneReq>) -> (StatusCode, Json<Value>) {
+async fn api_phone_set(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<PhoneReq>) -> (StatusCode, Json<Value>) {
+    // a phone switching phone access off would lock itself out: the computer decides
+    if on.is_none() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Do that from the computer running Loner-Strike."})));
+    }
     if !from_panel(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
@@ -578,16 +582,21 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
     }
 }
 
+/// The app window only: updating or restarting the app and switching its game.
+pub fn local_routes() -> Router<Shared> {
+    Router::new()
+        .route("/api/app/update/install", post(api_update_install))
+        .route("/api/app/game", post(api_use_game))
+        .route("/api/app/restart", post(api_restart))
+}
+
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/app", get(api_app))
         .route("/api/app/update/check", post(api_update_check))
-        .route("/api/app/update/install", post(api_update_install))
         .route("/api/app/phone", get(api_phone).post(api_phone_set))
         .route("/api/app/launch", post(api_launch))
         .route("/api/app/start-options", get(api_start_options))
-        .route("/api/app/game", post(api_use_game))
-        .route("/api/app/restart", post(api_restart))
         .route("/api/app/lan", get(api_lan))
         .route("/api/app/direct", get(api_direct).post(api_direct_set))
         .route("/api/app/vlans", get(api_vlans))

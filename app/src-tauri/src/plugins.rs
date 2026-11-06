@@ -164,12 +164,12 @@ async fn api_remove(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
 }
 
 pub fn routes() -> Router<Shared> {
-    Router::new().route("/api/mods/plugins", get(api_list)).route("/api/mods/plugins/remove", post(api_remove))
+    Router::new().route("/api/mods/plugins", get(api_list))
 }
 
-/// The app window only: it opens a file picker.
+/// The app window only: adding opens a file picker, and removing changes the game's files.
 pub fn local_routes() -> Router<Shared> {
-    Router::new().route("/api/mods/plugins/add", post(api_add))
+    Router::new().route("/api/mods/plugins/add", post(api_add)).route("/api/mods/plugins/remove", post(api_remove))
 }
 
 #[cfg(test)]

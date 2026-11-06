@@ -164,6 +164,12 @@ pub fn routes() -> Router<Shared> {
         .route("/api/setup/scan", get(scan))
         .route("/api/setup/job", get(job))
         .route("/api/setup/running", get(running))
+}
+
+/// The app window only: installing and removing change the game's files, so a phone
+/// can watch (scan, job) but not start them.
+pub fn local_routes() -> Router<Shared> {
+    Router::new()
         .route("/api/setup/install", post(install))
         .route("/api/setup/uninstall", post(uninstall))
 }
