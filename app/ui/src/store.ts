@@ -52,8 +52,9 @@ export const useNav = create<Nav>((set, get) => ({
   setupLater: saved<string>("ls.setupLater", "0") === "1",
   focus: null,
   go: (section, focus) => {
-    // only the Servers area works on a server; every other page is your own game
-    if (section !== "servers" && get().server) get().openServer(null);
+    // only the Servers area works on a server; every other page is your own game (and
+    // Servers again, from a server's page, is the list)
+    if (get().server && (section !== "servers" || get().section === "servers")) get().openServer(null);
     keep("ls.section", section);
     set({ section, moreOpen: false, focus: focus ?? null });
     // an open question about the old page closes (ConfirmProvider)

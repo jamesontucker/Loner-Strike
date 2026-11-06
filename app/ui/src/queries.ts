@@ -28,6 +28,14 @@ const LOST = ON_THIS_COMPUTER
   ? "Lost contact with Loner-Strike. If it keeps happening, restart the app."
   : "Can't reach your computer. Check it's on and on the same Wi-Fi as this phone.";
 
+/** Bumped when your game switches (CS 1.6 / Condition Zero share the "local" target), so
+ *  one game's live state is never shown, even briefly, as the other's. */
+let liveGen = 0;
+export const forgetLive = () => {
+  liveGen++;
+  queryClient.removeQueries({ queryKey: ["state"] });
+};
+
 /** How long a game that stops answering still shows as live (a map change, a slow reply). */
 const GRACE_MS = 6000;
 
@@ -42,7 +50,7 @@ export function useGameState() {
     refetchInterval: 2000,
     retry: 0,
   });
-  const last = useRef<{ target: string | null; data: Online; at: number } | null>(null);
+  const last = useRef<{ target: string | null; gen: number; data: Online; at: number } | null>(null);
   // re-render once the grace period runs out, even if no new answer comes
   const [, tick] = useState(0);
   const data = q.data;
@@ -51,11 +59,11 @@ export function useGameState() {
   let state: GameState | null = null;
   let reconnecting = false;
   if (data?.online && !failing) {
-    last.current = { target, data, at: q.dataUpdatedAt };
+    last.current = { target, gen: liveGen, data, at: q.dataUpdatedAt };
     state = data;
   } else if (data || q.isError) {
     const l = last.current;
-    if (l && l.target === target && Date.now() - l.at < GRACE_MS) {
+    if (l && l.target === target && l.gen === liveGen && Date.now() - l.at < GRACE_MS) {
       state = l.data;
       reconnecting = true;
     } else if (failing) {
@@ -156,4 +164,18 @@ export async function waitForSetupJob(): Promise<Job | null> {
     // never started (or the app restarted before it showed): stop asking after ~8 s
     if (j.state === "idle" && ++idle >= 10) return null;
   }
+}
+
+// ---- what needs looking at (the sidebar's small counts) --------------------------------
+
+/** Open player reports on your own game, checked once a minute. */
+export function useOpenReports() {
+  return useQuery({
+    queryKey: ["reports", "local"],
+    queryFn: async ({ signal }) => {
+      const r = await getJsonAt<{ reports?: { done: boolean }[] }>("/api/community/reports", null, signal);
+      return (r.reports ?? []).filter((x) => !x.done).length;
+    },
+    refetchInterval: 60_000,
+  });
 }

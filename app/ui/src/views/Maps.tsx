@@ -1,4 +1,4 @@
-import { memo, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { memo, useDeferredValue, useMemo, useState } from "react";
 import { addFromFile, currentTarget, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable, withTarget } from "../api";
 import { useMaps } from "../queries";
 import { useNav } from "../store";
@@ -91,7 +91,6 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   const [q, setQ] = useState("");
   // typing stays quick: the list filters a moment behind the box
   const search = useDeferredValue(q);
-  const [limit, setLimit] = useState(PAGE);
   const [sort, setSortRaw] = useState(() => {
     try {
       return localStorage.getItem("ls.mapSort") || "name";
@@ -99,6 +98,12 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
       return "name";
     }
   });
+  // how many cards to draw: back to one page as soon as the filters change (in the same
+  // render, so a big list never draws at the old limit first)
+  const filterKey = `${cat}|${show}|${search}|${sort}`;
+  const [lim, setLim] = useState({ key: filterKey, n: PAGE });
+  const limit = lim.key === filterKey ? lim.n : PAGE;
+  const setLimit = (n: number) => setLim({ key: filterKey, n });
   const setSort = (v: string) => {
     setSortRaw(v);
     try {
@@ -138,7 +143,6 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
     return list;
   }, [maps, cat, show, search, sort]);
   // other filters start from the top again
-  useEffect(() => setLimit(PAGE), [cat, show, search, sort]);
 
   const remove = async (map: MapInfo) => {
     if (!map.mod) return;
@@ -240,7 +244,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
         <Sheet label={picked.name} onClose={() => setPicked(null)}>
           <div className={`sheet-pic${picked.thumb === "radar" ? " radar" : ""}`}>
             {picked.thumb !== "radar" && <NoPicture name={picked.name} />}
-            {picked.thumb && <img src={withTarget(`/thumb/${encodeURIComponent(picked.name)}.png?v=${picked.thumb}`)} alt="" />}
+            {picked.thumb && <img src={withTarget(`/thumb/${encodeURIComponent(picked.name)}.png?v=${picked.thumb}`)} alt="" onError={(e) => (e.currentTarget.style.display = "none")} />}
           </div>
           <div className="sheet-body">
             <h2 className="map-title">{picked.name}</h2>

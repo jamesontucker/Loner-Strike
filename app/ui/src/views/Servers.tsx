@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { getJson, ON_THIS_COMPUTER, postJson, useActions, useOnce, usePoll } from "../api";
 import { reloadServers } from "../queries";
@@ -6,7 +6,7 @@ import { useDirty, useDirtyStore } from "../store";
 import type { AppInfo, MapInfo, Online, ServerInfo, ServerList } from "../types";
 import { HostingGuide, SizingTable, troubleFor } from "./HostingGuide";
 import { JobProgress } from "./JobProgress";
-import { BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, lazyPage, LoadError, PageBoundary, SectionHead, Sheet, Skeleton, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
 import { Bots } from "./Bots";
 import { Friends } from "./Friends";
@@ -23,7 +23,7 @@ import { Sounds } from "./Sounds";
 import { Welcome } from "./Welcome";
 
 // only servers that use it open this tab
-const Hltv = lazy(() => import("./Hltv").then((m) => ({ default: m.Hltv })));
+const Hltv = lazyPage(() => import("./Hltv").then((m) => ({ default: m.Hltv })));
 
 const GAME = { cstrike: "Counter-Strike 1.6", czero: "Condition Zero" } as const;
 const VISIBILITY = [
@@ -502,7 +502,7 @@ export function ServerPage(props: {
           {tab === "welcome" && <Welcome target={s.id} />}
           {tab === "sounds" && <Sounds target={s.id} />}
           {tab === "extras" && <ServerExtras target={s.id} />}
-          {tab === "hltv" && <Suspense fallback={<Skeleton rows={4} />}><Hltv server={s} /></Suspense>}
+          {tab === "hltv" && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><Hltv server={s} /></Suspense></PageBoundary>}
           {tab === "community" && <Community target={s.id} />}
         </>
       )}

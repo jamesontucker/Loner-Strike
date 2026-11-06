@@ -1322,3 +1322,8 @@ code.secret { padding: 5px 8px; background: var(--line); box-shadow: var(--sunke
   .server-tabs.more-left { -webkit-mask-image: linear-gradient(to right, transparent, #000 36px); mask-image: linear-gradient(to right, transparent, #000 36px); }
   .server-tabs.more-left.more-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
 }
+
+/* ---- attention counts in the sidebar: something in that section needs a look ---- */
+.attn { margin-left: auto; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--signal); color: var(--signal-ink); font: 700 12px/18px var(--text); text-align: center; }
+.nav-item .count + .attn { margin-left: 6px; }
+.tab-count.attn-tab { background: var(--signal); color: var(--signal-ink); left: auto; right: 22%; }

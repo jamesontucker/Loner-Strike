@@ -1,13 +1,13 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { clock, ON_THIS_COMPUTER, postJson, withTarget, useActions, useActivity } from "./api";
 import { gameTitle } from "./games";
 import { Icon } from "./icons";
-import { queryClient, reloadAppInfo, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
+import { forgetLive, queryClient, reloadAppInfo, useOpenReports, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
 import { hasUnsavedEdits, useNav, type Section } from "./store";
 import { usePlayDrafts } from "./stores/playDraft";
 import type { AppInfo, Online } from "./types";
-import { applyScale, ConfirmProvider, useConfirm, LoadError, savedScale, Sheet, Skeleton, ToastProvider, useToast } from "./ui";
+import { applyScale, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, ToastProvider, useConfirm, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
 import { Addons } from "./views/Addons";
 import { AppSettings } from "./views/AppSettings";
@@ -24,12 +24,12 @@ import { Welcome } from "./views/Welcome";
 import { anySetUp, Setup } from "./views/Setup";
 
 // The bigger pages load the first time they're opened, so the app starts on a smaller bundle
-const Servers = lazy(() => import("./views/Servers").then((m) => ({ default: m.Servers })));
-const ServerPage = lazy(() => import("./views/Servers").then((m) => ({ default: m.ServerPage })));
-const Community = lazy(() => import("./views/Community").then((m) => ({ default: m.Community })));
-const ServerExtras = lazy(() => import("./views/ServerExtras").then((m) => ({ default: m.ServerExtras })));
-const Admins = lazy(() => import("./views/Admins").then((m) => ({ default: m.Admins })));
-const GetMore = lazy(() => import("./views/GetMore").then((m) => ({ default: m.GetMore })));
+const Servers = lazyPage(() => import("./views/Servers").then((m) => ({ default: m.Servers })));
+const ServerPage = lazyPage(() => import("./views/Servers").then((m) => ({ default: m.ServerPage })));
+const Community = lazyPage(() => import("./views/Community").then((m) => ({ default: m.Community })));
+const ServerExtras = lazyPage(() => import("./views/ServerExtras").then((m) => ({ default: m.ServerExtras })));
+const Admins = lazyPage(() => import("./views/Admins").then((m) => ({ default: m.Admins })));
+const GetMore = lazyPage(() => import("./views/GetMore").then((m) => ({ default: m.GetMore })));
 
 const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean }[] = [
   { id: "play", label: "Play", icon: "play" },
@@ -84,6 +84,8 @@ function Shell() {
   const { run: once, busy } = useActions();
   /** Goes to a section, asking first when a page has edits that aren't saved. */
   const nav = async (s: Section, focus?: string) => {
+    // a dialog is open (the app behind it is inert): shortcuts and the menu wait
+    if (document.getElementById("root")?.hasAttribute("inert")) return;
     if (hasUnsavedEdits() && !(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
     go(s, focus);
   };
@@ -101,12 +103,14 @@ function Shell() {
    *  one already in use. The one way both the sidebar and Settings do it. */
   const switchGame = (hl: string | null, game: string) =>
     once(`app:game:${hl ?? ""}:${game}`, async () => {
+      if (hasUnsavedEdits() && !(await ask("Switch game without saving your changes?", { ok: "Switch", danger: true }))) return;
       const r = hl
         ? await postJson<{ ok?: boolean; error?: string }>("/api/app/game", { hl, game })
         : await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id: `local:${game}` });
       if (r.error) return toast(r.error, true);
-      // a start sent to the other game isn't this one's
+      // a start sent to the other game isn't this one's, and neither is its live state
       usePlayDrafts.getState().endLaunch("local");
+      forgetLive();
       await queryClient.invalidateQueries();
       reloadMaps();
     }, `Switching to ${gameTitle(game)}…`);
@@ -169,6 +173,21 @@ function Shell() {
   }, [navKey]);
 
   const players = openServer ? 0 : online?.players.length ?? 0;
+  // things to look at, shown as a small count on their section
+  const reports = useOpenReports().data ?? 0;
+  const attention: Partial<Record<Section, { n: number; why: string }>> = {
+    servers: {
+      n: (servers?.servers ?? []).filter((x) => x.unreachable || x.state === "crashed" || x.state === "failed" || (x.state === "running" && x.pending_restart)).length,
+      why: "servers that need a look (not answering, stopped by a crash, not set up, or waiting for a restart)",
+    },
+    mods: { n: app?.game?.outdated?.length ?? 0, why: "updates waiting" },
+    community: { n: reports, why: "player reports nobody has looked at" },
+    settings: { n: app?.update ? 1 : 0, why: "an update for Loner-Strike" },
+  };
+  const pill = (id: Section, cls = "attn") => {
+    const a = attention[id];
+    return a && a.n > 0 ? <span className={cls} title={`${a.n} ${a.why}`} aria-label={`${a.n} ${a.why}`}>{a.n}</span> : null;
+  };
   const tabbar = tabbarFor(!!servers?.servers.length);
 
   // until the app has answered once: one splash, not a flash of "No game found" (later,
@@ -229,7 +248,7 @@ function Shell() {
       <Icon name={n.icon} />
       {n.label}
       {n.id === "players" && players > 0 && <span className="count">{players}</span>}
-      {n.id === "settings" && app?.update && <span className="dot" aria-label="Update available" />}
+      {pill(n.id)}
     </button>
   );
 
@@ -270,12 +289,13 @@ function Shell() {
         {online && <QuickBar data={online} maps={maps} refresh={refresh} reloadMaps={refreshMaps} />}
         <main className="content">
           <HomeScreenHint />
-          {!setupOpen && <FilesUpdate app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} />}
+          {!setupOpen && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} />}
           {state === null ? (
             <Skeleton rows={4} />
           ) : needsGame ? (
             <Waiting label={NAV.find((n) => n.id === section)!.label} game={gameName} gameOpen={gameOpen} reason={state.online ? "" : state.reason} onPlay={() => go("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={openSetup} />
           ) : (
+            <PageBoundary key={`${section}:${openServer ?? ""}:${app?.game?.id ?? ""}`}>
             <Suspense fallback={<Skeleton rows={4} />}>
               {section === "play" &&
                 (online ? (
@@ -323,6 +343,7 @@ function Shell() {
               {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={openSetup} />}
               {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={openSetup} switchGame={switchGame} />}
             </Suspense>
+            </PageBoundary>
           )}
         </main>
       </div>
@@ -336,13 +357,18 @@ function Shell() {
               <Icon name={n.icon} size={22} />
               <span>{n.label}</span>
               {id === "players" && players > 0 && <i className="tab-count">{players}</i>}
+              {pill(id, "tab-count attn-tab")}
             </button>
           );
         })}
         <button aria-current={moreOpen || !tabbar.includes(section) ? "page" : undefined} aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>
           <Icon name="menu" size={22} />
           <span>More</span>
-          {app?.update && <i className="tab-dot" />}
+          {/* what needs a look in the sections under More, added up */}
+          {(() => {
+            const n = NAV.filter((x) => !tabbar.includes(x.id)).reduce((t, x) => t + (attention[x.id]?.n ?? 0), 0);
+            return n > 0 ? <i className="tab-count attn-tab" aria-label={`${n} things need a look`}>{n}</i> : null;
+          })()}
         </button>
       </nav>
       {moreOpen && (

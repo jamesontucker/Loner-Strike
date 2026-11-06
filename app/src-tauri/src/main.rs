@@ -88,11 +88,11 @@ fn main() {
                 .unwrap();
             // a little roomier than before, but never taller or wider than the screen
             // (a 13" laptop is about 900 points tall, menu bar and Dock included)
-            let (mut w, mut h) = (1320.0, 940.0);
+            let (mut w, mut h) = (1320.0, 980.0);
             if let Ok(Some(m)) = app.primary_monitor() {
                 let size = m.size().to_logical::<f64>(m.scale_factor());
                 w = f64::min(w, size.width - 40.0);
-                h = f64::min(h, size.height - 80.0);
+                h = f64::min(h, size.height - 60.0);
             }
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("Loner-Strike")

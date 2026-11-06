@@ -72,6 +72,7 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
   const { run: once, busy } = useActions();
   const toast = useToast();
   const go = useNav((s) => s.go);
+  const onServer = useNav((s) => s.server !== null);
   const [announcing, setAnnouncing] = useState(false);
   const announceButton = useRef<HTMLButtonElement>(null);
   const [text, setText] = useState("");
@@ -126,7 +127,8 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
   ];
   const botMenu: Item[] = [
     { label: "Peaceful bots", on: () => run("gm_set", ["bot_zombie", st.peaceful ? "0" : "1"]), pressed: !!st.peaceful },
-    { label: "All bot settings", on: () => go("bots") },
+    // (on a server's page its own Bots tab has them; this would leave the server)
+    ...(onServer ? [] : [{ label: "All bot settings", on: () => go("bots") }]),
   ];
   const map: Item[] = [
     { label: "Restart map", on: () => once(`quick:${targetKey()}:restartmap`, () => run("gm_restartmap"), "Restarting the map…") },
@@ -148,7 +150,8 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
   return (
     <div className="quick" aria-label="Quick actions">
       <div className="quick-inner">
-        <button className="qb" aria-pressed={!!st.paused} onClick={() => run("gm_pause")}>{st.paused ? "Resume" : "Pause"}</button>
+        {/* toggles: a double click would undo itself, so one at a time */}
+        <button className="qb" aria-pressed={!!st.paused} disabled={busy(`quick:${targetKey()}:pause`)} onClick={() => once(`quick:${targetKey()}:pause`, () => run("gm_pause"), st.paused ? "Resuming…" : "Pausing…")}>{st.paused ? "Resume" : "Pause"}</button>
         {!career && <Menu label="Round" items={round} />}
         {!career && <Menu label="Map" items={map} />}
         {!career && (
@@ -160,7 +163,7 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
         )}
         <Menu label="You" items={you} active={!!me?.god || !!me?.noclip} />
         <button ref={announceButton} className="qb" aria-pressed={announcing} onClick={() => setAnnouncing((a) => !a)}>Announce</button>
-        <button className="qb" aria-pressed={!!st.recording} onClick={() => run("gm_do", ["demo"])}>{st.recording ? "● Stop recording" : "Record demo"}</button>
+        <button className="qb" aria-pressed={!!st.recording} disabled={busy(`quick:${targetKey()}:demo`)} onClick={() => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…")}>{st.recording ? "● Stop recording" : "Record demo"}</button>
       </div>
       {announcing && (
         <form className="quick-announce" onSubmit={(e) => { e.preventDefault(); announce(); }} onKeyDown={(e) => e.key === "Escape" && closeAnnounce()}>

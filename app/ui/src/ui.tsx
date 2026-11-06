@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Component, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cmd, options, sameValue } from "./api";
 
@@ -92,6 +92,49 @@ export function LoadError({ text, onRetry, title }: { text: string; onRetry?: ()
       {onRetry && <button className="btn" onClick={onRetry}>Try again</button>}
     </div>
   );
+}
+
+// ---- pages loaded on first open ---------------------------------------------------
+
+/** React.lazy for a page, which reloads the app once if its file can't be loaded (a
+ *  phone left open across an app update asks for files that are gone). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function lazyPage<T extends ComponentType<any>>(load: () => Promise<{ default: T }>) {
+  return lazy(() =>
+    load().then((m) => {
+      // loaded fine: a later update may reload again
+      try {
+        sessionStorage.removeItem("ls.reloaded");
+      } catch {
+        /* private window */
+      }
+      return m;
+    }).catch((e) => {
+      let tried = false;
+      try {
+        tried = sessionStorage.getItem("ls.reloaded") === "1";
+        sessionStorage.setItem("ls.reloaded", "1");
+      } catch {
+        /* private window: no reload loop guard, so don't reload */
+        tried = true;
+      }
+      if (!tried) location.reload();
+      throw e;
+    }),
+  );
+}
+
+/** Catches a page that failed to load or crashed while drawing, so the rest of the app
+ *  stays usable: says so, with a way to reload. */
+export class PageBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return <LoadError title="This page didn't load" text="Loner-Strike may have been updated since this page was opened, or the connection dropped." onRetry={() => location.reload()} />;
+  }
 }
 
 // ---- asking before something can't be undone --------------------------------------
