@@ -1,0 +1,39 @@
+{
+ "id": "mode-hns",
+ "name": "Hide and Seek",
+ "kind": "mode",
+ "modes": [
+  "hns"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "Hide and Seek: Terrorists hide with grenades, CTs hunt them with knives; teams swap when the seekers win",
+ "installable": true,
+ "vendor": "mods/hns",
+ "compile": [
+  {
+   "src": "hns/hidenseek.sma",
+   "out": "hidenseek",
+   "include": null
+  }
+ ],
+ "maps": [
+  {
+   "mod": 93209,
+   "file": 294265,
+   "maps": [
+    "hns_floppytown"
+   ]
+  },
+  {
+   "mod": 93176,
+   "file": 299838,
+   "maps": [
+    "hns_2k12"
+   ]
+  }
+ ],
+ "credits": "HideNSeek 2.8 by Exolent (https://forums.alliedmods.net/showthread.php?t=65370), copy from https://github.com/evandrocoan/MultiModServer, GPL; CZ bot patches by Loner-Strike"
+}

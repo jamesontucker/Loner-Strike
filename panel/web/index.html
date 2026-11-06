@@ -1,0 +1,1719 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2C3124">
+<title>CZ Control Panel</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%233A402F'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23E8792B' stroke-width='2.5'/%3E%3Cpath d='M16 3v8M16 21v8M3 16h8M21 16h8' stroke='%23E9E3CF' stroke-width='2.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Big+Shoulders+Stencil+Display:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #2C3124;
+  --panel: #3A402F;
+  --panel-2: #454C38;
+  --line: #5A624A;
+  --bone: #E9E3CF;
+  --bone-dim: #B5B09C;
+  --bone-faint: #8C8A78;
+  --signal: #E8792B;
+  --signal-ink: #2A1A0C;
+  --t: #D6A23A;
+  --ct: #6F9CC6;
+  --danger: #D0583F;
+  --ok: #9DB062;
+  --stencil: "Big Shoulders Stencil Display", "Impact", sans-serif;
+  --text: "Barlow Semi Condensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;
+  --r-small: 3px;
+  --r-card: 6px;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--bone);
+  font: 500 17px/1.4 var(--text);
+  min-height: 100vh;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---- Now playing ---------------------------------------------------- */
+.hero {
+  position: relative;
+  min-height: 260px;
+  display: grid;
+  align-items: end;
+  overflow: hidden;
+  isolation: isolate;
+  /* faint tactical grid, visible when a map has no picture */
+  background-color: #262A1F;
+  background-image: linear-gradient(rgba(233,227,207,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(233,227,207,.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.hero-pic {
+  position: absolute; inset: 0; z-index: -2;
+  background-size: cover; background-position: center 40%;
+  filter: saturate(0.85);
+}
+.hero-pic.radar { background-size: contain; background-repeat: no-repeat; background-position: right 8% center; opacity: .55; filter: sepia(.4) saturate(.8); }
+.hero::after {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(180deg, rgba(44,49,36,.15) 0%, rgba(44,49,36,.55) 45%, var(--bg) 100%);
+}
+.hero-inner { padding: 28px clamp(16px, 4vw, 48px) 22px; max-width: 1280px; width: 100%; margin: 0 auto; }
+.hero-map {
+  font: 800 clamp(52px, 10vw, 128px)/0.86 var(--stencil);
+  letter-spacing: .01em;
+  margin: 0;
+  word-break: break-word;
+  text-shadow: 0 2px 18px rgba(0,0,0,.35);
+}
+.hero-meta { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 14px; align-items: center; color: var(--bone-dim); font-weight: 600; }
+.hero-meta strong { color: var(--bone); font-weight: 700; }
+.tally { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; }
+.tally .t { color: var(--t); }
+.tally .ct { color: var(--ct); }
+.tally .vs { color: var(--bone-faint); font-weight: 500; }
+.link-state { display: inline-flex; align-items: center; gap: 7px; }
+.link-state::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(157,176,98,.25); }
+.link-state.off::before { background: var(--danger); box-shadow: 0 0 0 3px rgba(208,88,63,.25); }
+
+/* ---- Tabs ------------------------------------------------------------ */
+.tabs {
+  position: sticky; top: 0; z-index: 20;
+  background: rgba(44,49,36,.96);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+}
+.tabs-inner { display: flex; gap: 4px; max-width: 1280px; margin: 0 auto; padding: 0 clamp(8px, 4vw, 40px); overflow-x: auto; scrollbar-width: none; }
+.tabs-inner::-webkit-scrollbar { display: none; }
+.tab {
+  background: none; border: 0; padding: 14px 12px 12px; color: var(--bone-dim);
+  font-weight: 600; font-size: 17px; white-space: nowrap; border-bottom: 3px solid transparent;
+}
+.tab:hover { color: var(--bone); }
+.tab[aria-selected="true"] { color: var(--bone); border-bottom-color: var(--signal); }
+.tab .count { color: var(--bone-faint); font-weight: 500; margin-left: 4px; }
+
+main { max-width: 1280px; margin: 0 auto; padding: 26px clamp(16px, 4vw, 48px) 120px; }
+section[hidden] { display: none; }
+h2 { font: 700 26px/1.1 var(--text); margin: 0 0 4px; }
+.lede { color: var(--bone-dim); margin: 0 0 22px; max-width: 62ch; }
+h3 { font: 700 19px/1.2 var(--text); margin: 0 0 10px; }
+
+.banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; justify-content: space-between;
+  padding: 12px 16px; margin: 0 0 22px; border-radius: var(--r-card);
+  background: var(--panel-2); border-left: 4px solid var(--signal);
+}
+.banner p { margin: 0; }
+
+/* ---- Buttons & controls --------------------------------------------- */
+.btn {
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--bone);
+  padding: 9px 14px; border-radius: var(--r-small); font-weight: 600; line-height: 1.1;
+}
+.btn:hover { border-color: var(--bone-dim); }
+.btn.primary { background: var(--signal); border-color: var(--signal); color: var(--signal-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: #F2B6A8; border-color: #7A3E31; }
+.btn:disabled { opacity: .45; cursor: default; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: var(--r-small); overflow: hidden; background: var(--bg); }
+.seg button { border: 0; background: none; padding: 8px 13px; color: var(--bone-dim); font-weight: 600; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button:hover { color: var(--bone); background: rgba(233,227,207,.05); }
+.seg button[aria-pressed="true"] { background: var(--bone); color: var(--bg); }
+
+.settings { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.setting { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 10px 20px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.setting .name { font-weight: 600; }
+.setting .note { display: block; color: var(--bone-faint); font-weight: 500; font-size: 15px; }
+@media (max-width: 620px) { .setting { grid-template-columns: 1fr; gap: 8px; } }
+
+.slider { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.slider input[type=range] { width: min(420px, 100%); accent-color: var(--signal); }
+.slider output { font: 800 38px/1 var(--stencil); min-width: 2ch; }
+
+.panel { background: var(--panel); border-radius: var(--r-card); padding: 18px; }
+
+/* ---- Play with friends ---------------------------------------------- */
+.friends { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 26px; align-items: start; }
+@media (max-width: 860px) { .friends { grid-template-columns: 1fr; } }
+.friends h3 { margin: 0 0 6px; font-size: 20px; }
+.friends .lede { margin-bottom: 16px; }
+.field { display: grid; gap: 6px; margin-bottom: 14px; }
+.field label { font-weight: 600; }
+.field .search { max-width: none; }
+.field small { color: var(--bone-faint); font-size: 15px; }
+.steps { list-style: none; counter-reset: step; margin: 0; padding: 0; }
+.steps > li { counter-increment: step; position: relative; padding: 0 0 20px 44px; }
+.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: -2px; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; font: 800 18px/1 var(--stencil); background: var(--panel-2); color: var(--bone-dim);
+}
+.steps > li.done::before { content: "\2713"; background: var(--ok); color: var(--signal-ink); font-family: var(--text); }
+.steps > li.now::before { background: var(--signal); color: var(--signal-ink); }
+.steps strong { display: block; margin-bottom: 4px; }
+.steps p { margin: 0 0 10px; color: var(--bone-dim); }
+.steps a, .friends a { color: var(--signal); }
+.live { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.live::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--bone-faint); }
+.live.on::before { background: var(--ok); box-shadow: 0 0 0 4px rgba(157,176,98,.25); }
+.live.wait::before { background: var(--signal); }
+.address { font: 800 clamp(28px, 4.4vw, 44px)/1 var(--stencil); letter-spacing: .02em; margin: 12px 0 4px; word-break: break-all; }
+.invite { width: 100%; min-height: 176px; resize: vertical; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-small); padding: 10px 12px; color: var(--bone); font: 500 15px/1.45 var(--text); }
+.howto { margin: 14px 0 0; padding-left: 20px; color: var(--bone-dim); }
+.howto li { margin-bottom: 8px; }
+.howto code, .steps code { background: var(--bg); padding: 1px 6px; border-radius: var(--r-small); color: var(--bone); font-size: 15px; }
+.err-text { color: #F2B6A8; margin: 8px 0 0; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+.stack > * + * { margin-top: 26px; }
+
+/* ---- Game mode cards -------------------------------------------------- */
+.modes { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.mode {
+  position: relative; text-align: left; border: 1px solid var(--line); background: var(--panel);
+  border-radius: var(--r-card); padding: 16px 16px 18px; display: grid; gap: 8px; align-content: start; min-height: 150px; overflow: hidden;
+}
+.mode:hover { border-color: var(--bone-dim); }
+.mode svg { width: 34px; height: 34px; color: var(--bone-dim); }
+.mode .mname { font: 800 30px/0.95 var(--stencil); letter-spacing: .01em; }
+.mode .mdesc { color: var(--bone-dim); font-size: 16px; }
+.mode.current { border-color: var(--signal); }
+.mode.current::before {
+  content: ""; position: absolute; top: 0; right: 0; width: 96px; height: 14px;
+  background: repeating-linear-gradient(-45deg, var(--signal) 0 8px, var(--signal-ink) 8px 16px);
+}
+.mode.current .now { color: var(--signal); font-weight: 700; font-size: 15px; }
+
+/* ---- Quick bar --------------------------------------------------------- */
+.quick { border-top: 1px solid var(--line); }
+.quick-inner { display: flex; gap: 6px; max-width: 1280px; margin: 0 auto; padding: 8px clamp(8px, 4vw, 40px); overflow-x: auto; scrollbar-width: none; }
+.quick-inner::-webkit-scrollbar { display: none; }
+.qb { flex: none; border: 1px solid var(--line); background: var(--panel); color: var(--bone); border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 15px; }
+.qb:hover { border-color: var(--bone-dim); }
+.qb[aria-pressed="true"] { background: var(--bone); color: var(--bg); border-color: var(--bone); }
+.qb:disabled { opacity: .4; cursor: default; }
+.qb.count { font-variant-numeric: tabular-nums; cursor: default; background: none; border-color: transparent; color: var(--bone-dim); padding: 6px 4px; }
+
+/* ---- Feed --------------------------------------------------------------- */
+.feed { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); max-width: 760px; }
+.feed li { display: grid; grid-template-columns: 54px 1fr; gap: 12px; padding: 9px 2px; border-bottom: 1px solid var(--line); align-items: baseline; }
+.feed time { color: var(--bone-faint); font-size: 14px; font-variant-numeric: tabular-nums; }
+.feed .T { color: var(--t); font-weight: 700; }
+.feed .CT { color: var(--ct); font-weight: 700; }
+.feed .SPEC { color: var(--bone-dim); font-weight: 700; }
+.feed .wpn { color: var(--bone-dim); margin: 0 6px; }
+.feed .hs { color: var(--signal); font-weight: 700; font-size: 13px; margin-left: 6px; }
+.feed .quiet { color: var(--bone-dim); }
+.feed .say { color: var(--bone); }
+
+/* ---- Setup status ------------------------------------------------------- */
+.health { background: none; border: 0; padding: 0; color: var(--bone-dim); font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
+.health:hover { color: var(--bone); }
+.health.warn { color: #F3C29E; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.checks li { display: flex; gap: 10px; align-items: baseline; }
+.checks .ok { color: var(--ok); font-weight: 700; }
+.checks .bad { color: var(--danger); font-weight: 700; }
+
+/* ---- Presets ---------------------------------------------------------- */
+.presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.preset {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; text-align: left;
+  border: 1px solid var(--line); background: var(--panel); border-radius: var(--r-card); padding: 12px 14px;
+}
+.preset:hover { border-color: var(--bone-dim); }
+.preset .pn { font-weight: 700; font-size: 18px; }
+.preset .pd { grid-column: 1; color: var(--bone-dim); font-size: 15px; }
+.preset .pgo { grid-row: 1; grid-column: 2; color: var(--signal); font-weight: 700; }
+.preset.mine { border-style: dashed; }
+.preset-wrap { position: relative; }
+.preset-del { position: absolute; bottom: 4px; right: 8px; background: none; border: 0; color: var(--bone-faint); font-size: 14px; padding: 4px 6px; }
+.preset-del:hover { color: #F2B6A8; }
+.save-preset { margin-top: 16px; display: grid; gap: 6px; max-width: 520px; }
+.save-preset label { color: var(--bone-dim); font-weight: 600; }
+
+/* ---- Maps ------------------------------------------------------------- */
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 18px; }
+.search { flex: 1 1 240px; max-width: 360px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-small); padding: 9px 12px; }
+.search::placeholder { color: var(--bone-faint); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: none; color: var(--bone-dim); padding: 6px 11px; border-radius: 999px; font-weight: 600; font-size: 15px; }
+.chip[aria-pressed="true"] { background: var(--bone); color: var(--bg); border-color: var(--bone); }
+.chip .n { opacity: .7; margin-left: 3px; }
+.byrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: -6px 0 18px; }
+.byrow[hidden] { display: none; }
+.bylabel { color: var(--bone-faint); font-weight: 600; }
+.chip.by { padding: 4px 10px; font-size: 14px; }
+.maps-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px 16px; }
+.gb-select { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-small); padding: 8px 10px; }
+.gcard .pic { aspect-ratio: 16 / 10; }
+.gcard .pic img { object-fit: cover; }
+.gcard .gmeta { display: block; color: var(--bone-faint); font-size: 14px; }
+.gb-status { color: var(--bone-dim); margin: 16px 0 0; }
+.gb-status:empty { display: none; }
+.gb-status.err { color: #F2B6A8; }
+.gb-more { justify-content: center; margin-top: 18px; }
+.job { display: grid; gap: 6px; padding: 12px 16px; margin: 0 0 18px; border-radius: var(--r-card); background: var(--panel-2); border-left: 4px solid var(--signal); }
+.job.err { border-left-color: var(--danger); }
+.job.done { border-left-color: var(--ok); }
+.job p { margin: 0; }
+.job .row { justify-content: space-between; }
+.bar { height: 6px; border-radius: 3px; background: var(--bg); overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--signal); width: 0; transition: width .4s; }
+.gb-text { white-space: pre-line; max-height: 170px; overflow: auto; font-size: 15px; }
+.gb-files { display: grid; gap: 8px; }
+.gb-file { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-small); }
+.gb-file .fname { font-weight: 600; word-break: break-all; }
+.gb-file .fmeta { color: var(--bone-faint); font-size: 14px; display: block; }
+.gb-thumbs { display: flex; gap: 6px; overflow-x: auto; }
+.gb-thumbs img { height: 64px; border-radius: var(--r-small); cursor: zoom-in; }
+.sheet a { color: var(--bone-dim); }
+.maps { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+.tile-wrap { position: relative; }
+.star { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(38,42,31,.72); color: var(--bone-dim); display: grid; place-items: center; }
+.star:hover { color: var(--bone); }
+.star[aria-pressed="true"] { color: var(--t); }
+.star svg { width: 18px; height: 18px; }
+.tile { display: block; width: 100%; text-align: left; border: 0; padding: 0; background: none; border-radius: var(--r-card); }
+.pic {
+  display: block; width: 100%;
+  aspect-ratio: 256 / 110; border-radius: var(--r-card); overflow: hidden; position: relative;
+  background: var(--panel);
+  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+.pic img, .pic canvas { width: 100%; height: 100%; display: block; object-fit: cover; }
+.pic canvas { object-fit: contain; filter: sepia(.35) saturate(.85); }
+.pic .initials { position: absolute; inset: 0; display: grid; place-items: center; font: 800 38px/1 var(--stencil); color: var(--bone-faint); letter-spacing: .02em; }
+.tile:hover .pic, .tile:focus-visible .pic { outline: 2px solid var(--bone-dim); outline-offset: -2px; }
+.tile .tname { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-top: 7px; font-weight: 600; word-break: break-all; }
+.tile .tby { display: block; color: var(--bone-faint); font-size: 14px; font-weight: 600; margin-top: 1px; }
+.sheet-by { color: var(--bone-dim); margin-top: -4px; }
+.tag { font-size: 13px; font-weight: 700; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+.tag.warn { background: #5B3A24; color: #F3C29E; }
+.tag.here { background: var(--signal); color: var(--signal-ink); }
+.empty { color: var(--bone-dim); padding: 30px 0; }
+
+/* ---- Players ---------------------------------------------------------- */
+.teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
+.team h3 { display: flex; align-items: baseline; gap: 10px; }
+.team.t h3 { color: var(--t); }
+.team.ct h3 { color: var(--ct); }
+.team h3 span { color: var(--bone-faint); font-weight: 500; font-size: 16px; }
+.plist { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.player { border-bottom: 1px solid var(--line); }
+.prow { width: 100%; display: grid; grid-template-columns: 1fr 86px 64px 54px; gap: 10px; align-items: center; background: none; border: 0; padding: 10px 4px; text-align: left; }
+.prow:hover { background: rgba(233,227,207,.04); }
+.pname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pname small { color: var(--bone-faint); font-weight: 500; margin-left: 6px; }
+.dead .pname { color: var(--bone-faint); text-decoration: line-through; text-decoration-thickness: 1px; }
+.hp { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.hp i { display: block; height: 100%; background: var(--ok); }
+.hp.low i { background: var(--danger); }
+.num { color: var(--bone-dim); font-variant-numeric: tabular-nums; text-align: right; font-size: 15px; }
+.pactions { padding: 4px 4px 14px; display: grid; gap: 10px; }
+.flag { color: var(--signal); font-weight: 700; font-size: 13px; margin-left: 6px; }
+
+/* ---- Add-ons ---------------------------------------------------------- */
+.addon { padding: 16px 0; border-bottom: 1px solid var(--line); display: grid; gap: 12px; }
+.addon-head { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.addon-head p { margin: 2px 0 0; color: var(--bone-dim); }
+.switch { position: relative; width: 52px; height: 30px; border-radius: 15px; border: 1px solid var(--line); background: var(--bg); flex: none; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--bone-faint); transition: transform .15s; }
+.switch[aria-checked="true"] { background: var(--signal); border-color: var(--signal); }
+.switch[aria-checked="true"]::after { transform: translateX(22px); background: var(--signal-ink); }
+
+/* ---- Sheet (dialog) --------------------------------------------------- */
+dialog { border: 0; padding: 0; background: var(--panel); color: var(--bone); border-radius: 10px; width: min(560px, calc(100vw - 24px)); box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+dialog::backdrop { background: rgba(20,22,16,.7); }
+.sheet .pic { border-radius: 10px 10px 0 0; }
+.sheet-body { padding: 18px 20px 20px; display: grid; gap: 14px; }
+.sheet-title { font: 800 46px/0.9 var(--stencil); margin: 0; word-break: break-word; }
+.sheet-body p { margin: 0; color: var(--bone-dim); }
+select { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-small); padding: 9px 10px; }
+
+/* ---- Offline ---------------------------------------------------------- */
+.offline { max-width: 560px; margin: 40px auto; text-align: left; }
+.offline h2 { font: 800 54px/0.9 var(--stencil); margin-bottom: 14px; }
+.offline p { color: var(--bone-dim); }
+
+/* ---- Toast ------------------------------------------------------------ */
+.toasts { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); display: grid; gap: 8px; z-index: 50; width: min(520px, calc(100vw - 24px)); pointer-events: none; }
+.toast { background: var(--bone); color: var(--bg); padding: 11px 16px; border-radius: var(--r-card); font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.toast.err { background: #F2C9BE; color: #4A1C12; }
+
+@media (max-width: 700px) {
+  body { font-size: 16px; }
+  .hero { min-height: 210px; }
+  .tabs { position: fixed; top: auto; bottom: 0; left: 0; right: 0; border-top: 1px solid var(--line); border-bottom: 0; padding-bottom: env(safe-area-inset-bottom); }
+  .tab { border-bottom: 0; border-top: 3px solid transparent; padding: 12px 10px 14px; }
+  .tab[aria-selected="true"] { border-top-color: var(--signal); }
+  .toasts { bottom: calc(130px + env(safe-area-inset-bottom)); }
+  .quick { border-top: 0; border-bottom: 1px solid var(--line); }
+  main { padding-bottom: 170px; }
+  .prow { grid-template-columns: 1fr 70px 56px; }
+  .prow .kd { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="hero" id="hero">
+  <div class="hero-pic" id="heroPic"></div>
+  <div class="hero-inner">
+    <h1 class="hero-map" id="heroMap">Condition Zero</h1>
+    <div class="hero-meta" id="heroMeta"><span class="link-state off">Connecting to the game…</span></div>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Sections">
+  <div class="quick" id="quickWrap" hidden><div class="quick-inner" id="quick" aria-label="Quick actions"></div></div>
+  <div class="tabs-inner" role="tablist" id="tabs"></div>
+</nav>
+
+<main id="main">
+  <div id="careerBanner"></div>
+  <div id="crashBanner"></div>
+  <div id="healthBanner"></div>
+  <div id="offline" hidden></div>
+
+  <section id="sec-modes" hidden>
+    <h2>Presets</h2>
+    <p class="lede">One click sets the mode, its settings and the bots. The map reloads if the mode or map changes.</p>
+    <div class="presets" id="presets"></div>
+    <form class="save-preset" id="savePreset">
+      <label for="presetName">Save what you're playing now</label>
+      <div class="row">
+        <input class="search" id="presetName" maxlength="32" placeholder="Name, e.g. Friday night" autocomplete="off">
+        <button class="btn" type="submit">Save preset</button>
+      </div>
+    </form>
+    <h2 style="margin-top:38px">Game mode</h2>
+    <p class="lede">Switching reloads the map. Your settings are remembered separately for each mode.</p>
+    <div id="pickBanner"></div>
+    <div class="modes" id="modes"></div>
+  </section>
+
+  <section id="sec-maps" hidden>
+    <div class="maps-head">
+      <h2>Maps</h2>
+      <div class="seg" role="group" aria-label="Maps view">
+        <button type="button" data-maps-view="yours" aria-pressed="true">Your maps</button>
+        <button type="button" data-maps-view="get" aria-pressed="false">Get maps</button>
+      </div>
+    </div>
+    <div id="getMaps" hidden>
+      <p class="lede">Maps from GameBanana's Counter-Strike 1.6 section. Installing copies only map files into your game, and never replaces files you already have.</p>
+      <div id="gbJobs"></div>
+      <div class="toolbar">
+        <label class="sr" for="gbSearch">Search GameBanana maps</label>
+        <input class="search" id="gbSearch" type="search" placeholder="Search GameBanana" autocomplete="off">
+        <label class="sr" for="gbCat">Map type</label>
+        <select id="gbCat" class="gb-select"></select>
+        <div class="seg" role="group" aria-label="Sort" id="gbSort">
+          <button type="button" data-gb-sort="popular" aria-pressed="true">Most downloaded</button>
+          <button type="button" data-gb-sort="new" aria-pressed="false">Newest</button>
+          <button type="button" data-gb-sort="liked" aria-pressed="false">Most liked</button>
+        </div>
+      </div>
+      <div class="maps" id="gbGrid"></div>
+      <p class="gb-status" id="gbStatus"></p>
+      <div class="row gb-more"><button type="button" class="btn" id="gbMore" hidden>Show more</button></div>
+    </div>
+    <div id="yourMaps">
+    <p class="lede" id="mapsLede">Pick a map to play it in the current mode.</p>
+    <div id="mapPickBanner"></div>
+    <div class="toolbar">
+      <label class="sr" for="mapSearch">Search maps</label>
+      <input class="search" id="mapSearch" type="search" placeholder="Search maps, authors or names like “cobble”" autocomplete="off">
+      <div class="chips" id="mapChips"></div>
+      <button type="button" class="btn" data-random-map="list">Random map</button>
+    </div>
+    <div class="byrow" id="authorRow"><span class="bylabel" id="byLabel">Made by</span><div class="chips" id="authorChips" role="group" aria-labelledby="byLabel"></div></div>
+    <div class="maps" id="maps"></div>
+    </div>
+  </section>
+
+  <section id="sec-bots" hidden>
+    <div class="stack">
+      <div>
+        <h2>Bots</h2>
+        <p class="lede">Difficulty changes re-add the bots so they pick it up straight away.</p>
+        <div class="slider">
+          <label for="botCount" class="sr">Number of bots</label>
+          <input type="range" id="botCount" min="0" max="31" step="1">
+          <output id="botCountOut" for="botCount">0</output>
+          <span class="row">
+            <button class="btn" data-cmd="gm_bots addt">Add a Terrorist</button>
+            <button class="btn" data-cmd="gm_bots addct">Add a CT</button>
+            <button class="btn" data-cmd="gm_bots kill">Kill all</button>
+            <button class="btn danger" data-cmd="gm_bots kick">Kick all</button>
+          </span>
+        </div>
+      </div>
+      <div class="settings" id="set-1"></div>
+      <div class="panel" id="navPanel"></div>
+    </div>
+  </section>
+
+  <section id="sec-match" hidden>
+    <h2>Match settings</h2>
+    <p class="lede" id="matchLede">Round changes take effect next round.</p>
+    <div class="row" style="margin-bottom:18px">
+      <button class="btn primary" data-cmd="gm_match restart">Restart round</button>
+      <button class="btn" data-cmd="gm_do endround">End round now</button>
+      <button class="btn" data-cmd="gm_do addtime">Add 10 minutes</button>
+      <button class="btn danger" data-cmd="gm_match reset" data-confirm="Reset every match and fun setting for this mode to its defaults?">Reset this mode's settings</button>
+    </div>
+    <div class="settings" id="set-2"></div>
+  </section>
+
+  <section id="sec-fun" hidden>
+    <h2>Fun &amp; effects</h2>
+    <p class="lede">These apply immediately. Tracers, damage numbers and bunnyhop are shared by every mode.</p>
+    <div class="settings" id="set-3"></div>
+  </section>
+
+  <section id="sec-players" hidden>
+    <h2>Players</h2>
+    <p class="lede">Select a player for god mode, weapons, teleporting and more.</p>
+    <div class="row" style="margin-bottom:18px">
+      <button class="btn" data-cmd="gm_player all respawn">Respawn the dead</button>
+      <button class="btn" data-cmd="gm_player all heal">Heal everyone</button>
+    </div>
+    <div class="row" style="margin-bottom:18px" id="teamTools">
+      <button class="btn" data-cmd="gm_team t">Join Terrorists</button>
+      <button class="btn" data-cmd="gm_team ct">Join Counter-Terrorists</button>
+      <button class="btn" data-cmd="gm_team spec">Spectate</button>
+      <button class="btn" data-cmd="gm_team swap" data-confirm="Swap everyone to the other team? The round restarts.">Swap teams</button>
+    </div>
+    <div class="teams" id="teams"></div>
+  </section>
+
+  <section id="sec-feed" hidden>
+    <h2>Feed</h2>
+    <p class="lede">Kills, chat and round results from the current map, newest first.</p>
+    <ul class="feed" id="feed"></ul>
+  </section>
+
+  <section id="sec-friends" hidden>
+    <h2>Play with friends</h2>
+    <p class="lede">Friends join over the internet, with nothing to change on your router. Pick how they connect below. Either way they need Condition Zero on Steam.</p>
+    <div class="friends">
+      <div class="stack">
+        <div id="shareMethod"></div>
+        <ol class="steps" id="shareSteps"></ol>
+      </div>
+      <div class="stack">
+        <form class="panel" id="serverForm" autocomplete="off">
+          <h3>Your server</h3>
+          <p class="lede">Only people you send the address to can find the game, and the password keeps it to the friends you give it to.</p>
+          <div class="field">
+            <label for="srvName">Server name</label>
+            <input class="search" id="srvName" maxlength="48" placeholder="e.g. Friday night frags">
+          </div>
+          <div class="field">
+            <label for="srvPass">Password</label>
+            <div class="row">
+              <input class="search" id="srvPass" maxlength="24" placeholder="No password" spellcheck="false">
+              <button type="button" class="btn" id="srvPassMake">Make one</button>
+            </div>
+            <small>Letters, numbers, - and _. Leave it empty to let in anyone who has the address.</small>
+          </div>
+          <button class="btn primary" type="submit">Save</button>
+        </form>
+        <div id="shareLive"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-addons" hidden>
+    <h2>Add-ons</h2>
+    <p class="lede">Add-ons work in every mode. Turning one on or off needs a map restart.</p>
+    <div id="addonBanner"></div>
+    <div id="addons" style="border-top:1px solid var(--line)"></div>
+  </section>
+</main>
+
+<dialog id="sheet" class="sheet" aria-labelledby="sheetTitle"></dialog>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+"use strict";
+
+const TABS = [
+  ["modes", "Game mode"], ["maps", "Maps"], ["bots", "Bots"], ["match", "Match"],
+  ["fun", "Fun"], ["players", "Players"], ["feed", "Feed"], ["addons", "Add-ons"], ["friends", "Play with friends"],
+];
+const CATS = [
+  ["all", "All"], ["fav", "Favourites"], ["recent", "Recently played"], ["defuse", "Bomb defusal"], ["hostage", "Hostage rescue"], ["objective", "Objectives"],
+  ["surf", "Surf"], ["arena", "Arena & fun"], ["other", "Other"], ["nonav", "Needs bot nav"], ["hidden", "Hidden"],
+];
+const STAR = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.5 1.3 6.6L12 17.2l-5.9 3.3 1.3-6.6-4.9-4.5 6.6-.8z"/></svg>';
+const WEAPONS = [
+  ["weapon_ak47", "AK-47"], ["weapon_m4a1", "M4A1"], ["weapon_awp", "AWP"], ["weapon_deagle", "Desert Eagle"],
+  ["weapon_scout", "Scout"], ["weapon_m249", "M249"], ["weapon_mp5navy", "MP5"], ["weapon_p90", "P90"],
+  ["weapon_xm1014", "Auto shotgun"], ["weapon_sg552", "SG-552"], ["weapon_aug", "AUG"], ["weapon_g3sg1", "G3SG1"],
+  ["weapon_elite", "Dual Elites"], ["nades", "Grenade pack"], ["armor", "Kevlar + helmet"],
+];
+const SAFE = /^[A-Za-z0-9_.\-]{1,64}$/;
+
+// Small line icons for the mode cards (24x24, stroke only).
+const ICONS = {
+  classic: '<circle cx="12" cy="13" r="7"/><path d="M12 6V3M9 3h6M17 8l2-2"/>',
+  csdm: '<circle cx="12" cy="12" r="8"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>',
+  csdm_ffa: '<path d="M12 2l2.5 6.5L21 9l-5 4.5L17.5 21 12 17l-5.5 4L8 13.5 3 9l6.5-.5z"/>',
+  gungame: '<path d="M4 20h4v-4H4zM10 20h4v-9h-4zM16 20h4V4h-4z"/>',
+  gungame_team: '<path d="M4 20h4v-4H4zM10 20h4v-9h-4zM16 20h4V4h-4z"/><path d="M3 22h18"/>',
+  zombie: '<circle cx="12" cy="11" r="7"/><circle cx="9.5" cy="10" r="1.3"/><circle cx="14.5" cy="10" r="1.3"/><path d="M9 15h6M10 15v2M12 15v2M14 15v2"/>',
+  knife: '<path d="M4 20L15 9l3-6 2 2-6 3L5 21z"/>',
+  pistols: '<path d="M3 8h15v4h-6l-1 6H7l1-6H3z"/>',
+  deagle: '<path d="M3 8h17v4h-7l-1 6H8l1-6H3z"/><path d="M18 8V6"/>',
+  awp: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4"/>',
+  scoutz: '<path d="M3 17c4-1 6-4 9-10 2 5 5 8 9 10"/><path d="M3 21h18"/>',
+  surf: '<path d="M2 17c3 0 3-2 6-2s3 2 6 2 3-2 6-2M2 21c3 0 3-2 6-2s3 2 6 2 3-2 6-2M5 13c2-5 6-8 13-9-3 3-4 6-4 9"/>',
+  war3: '<path d="M12 2l3 6 6 1-4.5 4 1 6.5L12 16l-5.5 3.5 1-6.5L3 9l6-1z"/><path d="M12 7v5"/>',
+  zp5: '<circle cx="12" cy="11" r="7"/><path d="M9 9l2 2M11 9l-2 2M13 9l2 2M15 9l-2 2M9 15h6"/>',
+  hns: '<circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L21 21"/>',
+  paintball: '<circle cx="9" cy="9" r="4"/><circle cx="17" cy="15" r="3"/><circle cx="7" cy="18" r="2"/>',
+  kreedz: '<path d="M3 21l6-10 4 5 3-4 5 9z"/><path d="M14 6l2-3 2 3"/>',
+  deathrun: '<path d="M4 20h16M6 20V10l6-6 6 6v10"/><path d="M10 20v-5h4v5"/>',
+  basebuilder: '<path d="M3 21h18M5 21V11h14v10M9 11V7h6v4"/>',
+  soccerjam: '<circle cx="12" cy="12" r="9"/><path d="M12 7l4 3-1.5 5h-5L8 10z"/>',
+  shero: '<path d="M4 4h16l-3 7 3 9H4l3-9z"/><path d="M10 9h4l-2 5z"/>',
+};
+
+const S = {
+  tab: localGet("tab") || "modes",
+  data: null,
+  maps: [],
+  mapFilter: "all",
+  mapAuthor: "all",
+  mapsView: "yours",
+  jobNames: {},
+  dismissed: new Set(),
+  gbSheet: null,
+  gbDetail: null,
+  gb: { cat: 5474, sort: "popular", q: "", items: [], page: 0, total: 0, done: false, loading: false, error: "", cats: [], loaded: false },
+  jobs: [],
+  offlineGet: false,
+  mapQuery: "",
+  pickMode: null,     // mode id while choosing a map for it
+  openPlayer: null,   // uid of the expanded player row
+  sliderBusy: false,
+  health: null,
+  share: null,        // /api/share: playit setup and sharing state
+  shareFormSet: false,
+  lastRender: {},
+};
+
+function localGet(k) { try { return localStorage.getItem("czp." + k); } catch (e) { return null; } }
+function localSet(k, v) { try { localStorage.setItem("czp." + k, v); } catch (e) {} }
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// ---- talking to the helper -------------------------------------------
+async function api(path, opts) {
+  opts = Object.assign({ credentials: "same-origin" }, opts);
+  opts.headers = Object.assign({ "X-Panel": "1" }, opts.headers);
+  const r = await fetch(path, opts);
+  return r.json();
+}
+async function cmd(command, args = [], quiet = false) {
+  if (command !== "gm_announce" && !args.every((a) => SAFE.test(a))) return toast("That value can't be sent to the game.", true);
+  let res;
+  try {
+    res = await api("/api/cmd", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cmd: command, args }) });
+  } catch (e) {
+    return toast("The panel helper isn't running.", true);
+  }
+  if (!res.ok) return toast(res.error || "The game didn't accept that.", true);
+  const msg = (res.output || []).map((l) => l.replace(/^\[Game Mode\]\s*/, "")).filter(Boolean).join(" ");
+  if (!quiet && msg) toast(msg);
+  setTimeout(refresh, 250);
+  return res;
+}
+
+let refreshing = false;
+async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    S.data = await api("/api/state");
+  } catch (e) {
+    S.data = { online: false, reason: "The panel helper stopped. Start it again with panel.py." };
+  }
+  refreshing = false;
+  render();
+}
+
+function toast(text, err) {
+  const el = document.createElement("div");
+  el.className = "toast" + (err ? " err" : "");
+  el.textContent = text;
+  $("toasts").appendChild(el);
+  setTimeout(() => el.remove(), err ? 5200 : 2600);
+}
+
+// ---- values & labels (same rules as the in-game menu) -----------------
+function tokens(s) { return (s || "").split(/\s+/).filter(Boolean); }
+function labelsFor(values, labels) {
+  const v = tokens(values);
+  const l = labels.includes("|") ? labels.split("|") : tokens(labels);
+  return v.map((x, i) => [x, l[i] ?? x]);
+}
+function sameValue(a, b) {
+  if (String(a).toLowerCase() === String(b).toLowerCase()) return true;
+  const fa = parseFloat(a), fb = parseFloat(b);
+  return !isNaN(fa) && !isNaN(fb) && /^[\d.]/.test(a) && /^[\d.]/.test(b) && Math.abs(fa - fb) < 0.01;
+}
+function segmented(values, labels, current, attrs) {
+  return '<div class="seg" role="group">' + labelsFor(values, labels).map(([v, l]) =>
+    `<button type="button" ${attrs(v)} aria-pressed="${sameValue(current, v)}">${esc(l)}</button>`).join("") + "</div>";
+}
+
+// ---- rendering --------------------------------------------------------
+function changed(key, value) {
+  const s = JSON.stringify(value);
+  if (S.lastRender[key] === s) return false;
+  S.lastRender[key] = s;
+  return true;
+}
+
+// Rebuild a container but keep keyboard focus on the same control.
+function paint(el, html) {
+  const focused = document.activeElement && el.contains(document.activeElement) ? document.activeElement.dataset.key : null;
+  el.innerHTML = html;
+  if (focused) {
+    const again = el.querySelector(`[data-key="${CSS.escape(focused)}"]`);
+    if (again) again.focus();
+  }
+}
+
+function renderTabs() {
+  const d = S.data, players = d && d.online ? d.players.length : 0;
+  const sharing = !!(S.share && S.share.phase === "online");
+  const html = TABS.map(([id, name]) =>
+    `<button class="tab" role="tab" id="tab-${id}" aria-controls="sec-${id}" aria-selected="${S.tab === id}" data-tab="${id}">${esc(name)}${id === "players" && players ? `<span class="count">${players}</span>` : ""}${id === "friends" && sharing ? `<span class="count">on</span>` : ""}</button>`).join("");
+  if (changed("tabs", [S.tab, players, sharing])) $("tabs").innerHTML = html;
+}
+
+function renderHero() {
+  const d = S.data;
+  if (!d || !d.online) {
+    $("heroMap").textContent = "Condition Zero";
+    $("heroMeta").innerHTML = `<span class="link-state off">${d ? "Not connected" : "Connecting to the game…"}</span>` + healthChip();
+    $("heroPic").style.backgroundImage = "";
+    return;
+  }
+  const st = d.state, mode = d.modes.find((m) => m.id === st.mode);
+  const t = d.players.filter((p) => p.team === "T").length, ct = d.players.filter((p) => p.team === "CT").length;
+  const mins = Math.floor(st.timeleft / 60), secs = String(st.timeleft % 60).padStart(2, "0");
+  $("heroMap").textContent = st.map;
+  $("heroMeta").innerHTML = [
+    `<span class="link-state">Live</span>`,
+    st.career ? `<span><strong>Tour of Duty</strong> mission</span>` : `<span>Mode <strong>${esc(mode ? mode.name : st.mode)}</strong></span>`,
+    st.timeleft > 0 ? `<span><strong>${mins}:${secs}</strong> left on this map</span>` : "",
+    `<span class="tally"><span class="t">${t} T</span><span class="vs">vs</span><span class="ct">${ct} CT</span></span>`,
+    st.nav ? "" : `<span class="tag warn">No bot navigation on this map</span>`,
+    healthChip(),
+  ].join("");
+  if (changed("heroPic", st.map)) {
+    const info = S.maps.find((m) => m.name.toLowerCase() === st.map.toLowerCase());
+    const pic = $("heroPic");
+    pic.className = "hero-pic" + (info && info.thumb === "radar" ? " radar" : "");
+    pic.style.backgroundImage = info && info.thumb && SAFE.test(st.map) ? `url("/thumb/${encodeURIComponent(st.map)}.png")` : "";
+  }
+}
+
+function healthChip() {
+  const h = S.health;
+  if (!h) return "";
+  if (h.fixed.length) return `<button class="health warn" data-health>Setup repaired. Restart Condition Zero</button>`;
+  return h.ok ? `<button class="health" data-health>Setup OK</button>` : `<button class="health warn" data-health>Setup needs attention</button>`;
+}
+
+function renderBanners() {
+  const st = S.data.state;
+  if (changed("crash", st.crashmap)) {
+    $("crashBanner").innerHTML = st.crashmap ? `<div class="banner"><p>The last session ended unexpectedly on <strong>${esc(st.crashmap)}</strong>. That's usually a broken bot navigation file for the map.</p>
+      <span class="row"><button class="btn primary" data-cmd="gm_crash rebuild">Load it and rebuild navigation</button>
+      <button class="btn" data-cmd="gm_crash hide">Hide this map</button><button class="btn" data-cmd="gm_crash dismiss">Dismiss</button></span></div>` : "";
+  }
+  if (changed("healthBanner", S.health && S.health.fixed)) {
+    $("healthBanner").innerHTML = S.health && S.health.fixed.length ? `<div class="banner"><p>${S.health.fixed.map(esc).join(" ")}</p></div>` : "";
+  }
+}
+
+function renderQuick() {
+  const d = S.data, wrap = $("quickWrap");
+  const online = d && d.online;
+  wrap.hidden = !online;
+  if (!online) return;
+  const st = d.state, me = d.players.find((p) => p.host) || {};
+  const here = (S.maps || []).find((m) => m.name.toLowerCase() === (st.map || "").toLowerCase());
+  const fav = !!(here && here.fav);
+  const key = [st.bots, st.peaceful, st.paused, st.career, me.god, me.noclip, me.alive, d.me.haspos, me.uid, st.map, fav, st.recording, st.timelimit > 0];
+  if (!changed("quick", key)) return;
+  const uid = me.uid;
+  const b = (attrs, label, pressed) => `<button class="qb" ${attrs}${pressed === undefined ? "" : ` aria-pressed="${!!pressed}"`}>${label}</button>`;
+  paint($("quick"), [
+    st.career ? "" : b(`data-cmd="gm_match restart" data-key="q-restart"`, "Restart round"),
+    b(`data-cmd="gm_pause" data-key="q-pause"`, st.paused ? "Resume game" : "Pause game", !!st.paused),
+    st.career ? "" : b(`data-cmd="gm_restartmap" data-key="q-restartmap"`, "Restart map"),
+    st.career ? "" : b(`data-random-map="quick" data-key="q-random"`, "Random map"),
+    st.map ? b(`data-fav="${esc(st.map)}" data-on="${fav ? 0 : 1}" data-key="q-fav" aria-label="${fav ? "Remove this map from" : "Add this map to"} favourites"`, fav ? "Favourite map" : "Favourite this map", fav) : "",
+    st.career ? "" : b(`data-cmd="gm_do endround" data-key="q-endround"`, "End round"),
+    st.career || !(st.timelimit > 0) ? "" : b(`data-cmd="gm_do addtime" data-key="q-addtime"`, "+10 minutes"),
+    st.career ? "" : b(`data-cmd="gm_bots count ${Math.max(0, st.bots - 1)}" data-key="q-botdown" aria-label="One bot fewer"`, "Bots −"),
+    st.career ? "" : `<span class="qb count">${st.bots} bots</span>`,
+    st.career ? "" : b(`data-cmd="gm_bots count ${Math.min(st.maxplayers - 1, st.bots + 1)}" data-key="q-botup" aria-label="One more bot"`, "Bots +"),
+    uid ? b(`data-player="${uid}" data-act="god" data-key="q-god"`, "God mode", me.god) : "",
+    uid ? b(`data-player="${uid}" data-act="noclip" data-key="q-noclip"`, "Noclip", me.noclip) : "",
+    uid ? b(`data-player="${uid}" data-act="respawn" data-key="q-respawn"`, "Respawn me") : "",
+    b(`data-cmd="gm_pos save" data-key="q-save"`, "Save my spot"),
+    `<button class="qb" data-cmd="gm_pos load" data-key="q-load"${d.me.haspos ? "" : " disabled"}>Back to my spot</button>`,
+    st.career ? "" : b(`data-set="bot_zombie" data-val="${st.peaceful ? 0 : 1}" data-key="q-peace"`, "Peaceful bots", st.peaceful),
+    uid && me.alive ? b(`data-cmd="gm_do heal" data-key="q-heal"`, "Heal me") : "",
+    st.career || !uid ? "" : b(`data-cmd="gm_do money" data-key="q-money"`, "$16000"),
+    b(`data-announce data-key="q-announce"`, "Announce…"),
+    b(`data-cmd="gm_do demo" data-key="q-demo"`, st.recording ? "Stop recording" : "Record demo", !!st.recording),
+  ].join(""));
+}
+
+function timeOf(t) {
+  const d = new Date(t * 1000);
+  return d.getHours().toString().padStart(2, "0") + ":" + d.getMinutes().toString().padStart(2, "0");
+}
+
+function renderFeed() {
+  const ev = S.data.events || [];
+  if (!changed("feed", ev.length ? ev[ev.length - 1].seq : -1)) return;
+  if (!ev.length) { $("feed").innerHTML = `<li><span></span><span class="quiet">Nothing yet. Kills and chat show up here as they happen.</span></li>`; return; }
+  $("feed").innerHTML = ev.slice().reverse().map((e) => {
+    let body;
+    if (e.kind === "kill") {
+      const killer = e.killer ? `<span class="${esc(e.kteam)}">${esc(e.killer)}</span>` : "";
+      body = `${killer}<span class="wpn">${esc(e.weapon || "")}</span><span class="${esc(e.vteam)}">${esc(e.victim)}</span>${e.hs ? '<span class="hs">headshot</span>' : ""}`;
+      if (!e.killer) body = `<span class="${esc(e.vteam)}">${esc(e.victim)}</span><span class="wpn">died</span>`;
+    } else if (e.kind === "chat") {
+      body = `<span class="${esc(e.team)}">${esc(e.name)}</span>${e.teamonly ? ' <span class="quiet">(team)</span>' : ""}: <span class="say">${esc(e.text)}</span>`;
+    } else {
+      body = `<span class="quiet">${esc(e.text)}</span>`;
+    }
+    return `<li><time>${timeOf(e.time)}</time><span>${body}</span></li>`;
+  }).join("");
+}
+
+function openHealthSheet() {
+  const h = S.health;
+  if (!h) return;
+  $("sheet").innerHTML = `<div class="sheet-body">
+    <h2 class="sheet-title" id="sheetTitle">Setup</h2>
+    <p>Checked every time the panel starts. Steam updates sometimes undo part of the install; the panel repairs what it safely can.</p>
+    ${h.fixed.length ? `<p><strong>${h.fixed.map(esc).join(" ")}</strong></p>` : ""}
+    <ul class="checks">${h.checks.map((c) => `<li><span class="${c.ok ? "ok" : "bad"}">${c.ok ? "OK" : "Problem"}</span><span>${esc(c.name)}${c.detail ? ` <span class="quiet">(${esc(c.detail)})</span>` : ""}</span></li>`).join("")}</ul>
+    <div class="row"><button class="btn" data-close>Close</button></div>
+  </div>`;
+  $("sheet").showModal();
+}
+
+function renderOffline() {
+  const d = S.data, off = $("offline");
+  const online = d && d.online;
+  off.hidden = online || !d || S.tab === "friends"; // nothing to say until the first answer arrives
+  const getOnly = !online && S.offlineGet;
+  document.querySelectorAll("main section").forEach((s) => { s.hidden = online ? s.id !== "sec-" + S.tab : !((getOnly && s.id === "sec-maps") || (S.tab === "friends" && s.id === "sec-friends")); });
+  if (!online && changed("offline", [d && d.reason, S.offlineGet])) {
+    off.innerHTML = `<div class="offline"><h2>No match running</h2>
+      <p>${esc(d ? d.reason : "")}</p>
+      <p>Start a New Game in Condition Zero. This page connects by itself as soon as the map has loaded.</p>
+      ${S.offlineGet ? "" : `<p><button class="btn" data-offline-get>Get new maps while you wait</button></p>`}</div>`;
+  }
+}
+
+function renderCareer() {
+  const career = S.data && S.data.online && S.data.state.career;
+  if (changed("career", career)) {
+    $("careerBanner").innerHTML = career ? `<div class="banner"><p>A Tour of Duty mission is running, so game modes, bots and match settings are paused. Effects, add-ons and player tools still work.</p></div>` : "";
+  }
+}
+
+function renderPresets() {
+  const d = S.data, list = d.presets || [];
+  if (!changed("presets", list)) return;
+  const modeName = (id) => (d.modes.find((m) => m.id === id) || {}).name || id;
+  paint($("presets"), list.map((p) => {
+    const bits = [modeName(p.mode), p.map || null, p.bots >= 0 ? `${p.bots} bot${p.bots === 1 ? "" : "s"}` : null].filter(Boolean).join(", ");
+    return `<div class="preset-wrap">
+      <button type="button" class="preset${p.user ? " mine" : ""}" data-preset="${esc(p.id)}" data-key="preset-${esc(p.id)}">
+        <span class="pn">${esc(p.name)}</span>
+        <span class="pgo">Play</span>
+        <span class="pd">${esc(p.user ? bits : p.desc)}</span>
+      </button>
+      ${p.user ? `<button type="button" class="preset-del" data-delpreset="${esc(p.id)}" aria-label="Delete ${esc(p.name)}">Delete</button>` : ""}
+    </div>`;
+  }).join(""));
+}
+
+function renderModes() {
+  renderPresets();
+  const d = S.data;
+  if (!changed("modes", [d.modes, d.state.mode, d.state.map, S.pickMode])) return;
+  $("pickBanner").innerHTML = "";
+  $("modes").innerHTML = d.modes.map((m) => {
+    const current = m.id === d.state.mode;
+    const icon = ICONS[m.id] || ICONS.csdm;
+    return `<button type="button" class="mode${current ? " current" : ""}" data-mode="${esc(m.id)}" data-key="mode-${esc(m.id)}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg>
+      <span class="mname">${esc(m.name)}</span>
+      <span class="mdesc">${esc(m.desc)}</span>
+      ${current ? `<span class="now">Playing now</span>` : ""}
+    </button>`;
+  }).join("");
+}
+
+function renderMaps() {
+  const visible = S.maps.filter((m) => !m.hidden);
+  const counts = { all: visible.length, nonav: visible.filter((m) => !m.nav).length,
+    fav: visible.filter((m) => m.fav).length, recent: visible.filter((m) => m.recent >= 0).length, hidden: S.maps.length - visible.length };
+  visible.forEach((m) => { counts[m.cat] = (counts[m.cat] || 0) + 1; });
+  const authors = {};
+  visible.forEach((m) => { authors[m.by] = (authors[m.by] || 0) + 1; });
+  const byList = Object.keys(authors).sort((a, b) => authors[b] - authors[a] || a.localeCompare(b));
+  if (S.mapAuthor !== "all" && !authors[S.mapAuthor]) S.mapAuthor = "all";
+  if (changed("authorChips", [authors, S.mapAuthor])) {
+    $("authorRow").hidden = byList.length < 2;
+    $("authorChips").innerHTML = [["all", "Anyone", visible.length], ...byList.map((b) => [b, b, authors[b]])].map(([id, name, n]) =>
+      `<button type="button" class="chip by" data-by="${esc(id)}" aria-pressed="${S.mapAuthor === id}">${esc(name)}<span class="n">${n}</span></button>`).join("");
+  }
+  const pickName = S.pickMode && S.data.modes.find((m) => m.id === S.pickMode);
+  if (changed("mapChips", [counts, S.mapFilter])) {
+    $("mapChips").innerHTML = CATS.filter(([id]) => counts[id]).map(([id, name]) =>
+      `<button type="button" class="chip" data-cat="${id}" aria-pressed="${S.mapFilter === id}">${esc(name)}<span class="n">${counts[id]}</span></button>`).join("");
+  }
+  if (changed("mapPick", [S.pickMode])) {
+    $("mapPickBanner").innerHTML = pickName ? `<div class="banner"><p>Choose a map for <strong>${esc(pickName.name)}</strong>.</p><button class="btn" data-cancel-pick>Cancel</button></div>` : "";
+    $("mapsLede").textContent = pickName ? `The game switches to ${pickName.name} on the map you pick.` : "Pick a map to play it in the current mode.";
+  }
+  const q = S.mapQuery.trim().toLowerCase();
+  const f = S.mapFilter;
+  const list = S.maps.filter((m) =>
+    (f === "hidden" ? m.hidden : !m.hidden) &&
+    (f === "all" || f === "hidden" || (f === "nonav" ? !m.nav : f === "fav" ? m.fav : f === "recent" ? m.recent >= 0 : m.cat === f)) &&
+    (S.mapAuthor === "all" || m.by === S.mapAuthor) &&
+    (!q || m.name.toLowerCase().includes(q) || (m.by || "").toLowerCase().includes(q) || (m.title || "").toLowerCase().includes(q)));
+  if (f === "recent") list.sort((a, b) => a.recent - b.recent);
+  S.mapsShown = list;
+  const here = S.data.state.map.toLowerCase();
+  if (!changed("mapGrid", [list.map((m) => m.name + m.nav + m.fav + m.hidden), here, f, S.mapAuthor])) return;
+  const empty = f === "fav" ? "No favourites yet. Star a map to keep it here." : f === "hidden" ? "No hidden maps." :
+    q ? `No maps match “${esc(S.mapQuery)}”.` : `No maps by ${esc(S.mapAuthor)} here. Choose Anyone or another category.`;
+  paint($("maps"), list.length ? list.map((m) => `
+    <div class="tile-wrap">
+      <button type="button" class="tile" data-map="${esc(m.name)}" data-key="map-${esc(m.name)}">
+        ${picHtml(m)}
+        <span class="tname"><span>${esc(m.name)}</span>${m.name.toLowerCase() === here ? `<span class="tag here">Playing</span>` : (m.nav ? "" : `<span class="tag warn">No bot nav</span>`)}</span>
+        ${m.by ? `<span class="tby">${esc(m.by)}</span>` : ""}
+      </button>
+      <button type="button" class="star" data-fav="${esc(m.name)}" data-on="${m.fav ? 0 : 1}" aria-pressed="${!!m.fav}" aria-label="${m.fav ? "Remove from" : "Add to"} favourites" data-key="star-${esc(m.name)}">${STAR}</button>
+    </div>`).join("") : `<p class="empty">${empty}</p>`);
+  observePics($("maps"));
+}
+
+function picHtml(m) {
+  const initials = esc(m.name.replace(/^(de|cs|as|es|fy|aim|awp|ka|he|gg|zm|dm|mg|surf|35hp)_/i, "").slice(0, 3).toUpperCase());
+  if (!m.thumb || !SAFE.test(m.name)) return `<span class="pic"><span class="initials">${initials}</span></span>`;
+  return `<span class="pic" data-pic="${esc(m.name)}" data-kind="${m.thumb}"><span class="initials">${initials}</span></span>`;
+}
+
+// Load pictures as tiles scroll into view. Radar overviews have a pure green
+// background in the game files; it is keyed out so the grid shows through.
+const radarCache = new Map();
+const io = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
+  entries.forEach((e) => { if (e.isIntersecting) { io.unobserve(e.target); loadPic(e.target); } });
+}, { rootMargin: "200px" }) : null;
+function observePics(root) {
+  root.querySelectorAll("[data-pic]").forEach((el) => (io ? io.observe(el) : loadPic(el)));
+}
+function loadPic(el) {
+  const name = el.dataset.pic, url = `/thumb/${encodeURIComponent(name)}.png`;
+  if (el.dataset.kind === "shot") {
+    const img = new Image();
+    img.alt = "";
+    img.onload = () => { el.innerHTML = ""; el.appendChild(img); };
+    img.src = url;
+    return;
+  }
+  const draw = (src) => {
+    const c = document.createElement("canvas");
+    c.width = src.width; c.height = src.height;
+    c.getContext("2d").drawImage(src, 0, 0);
+    el.innerHTML = ""; el.appendChild(c);
+  };
+  if (radarCache.has(name)) return draw(radarCache.get(name));
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const g = c.getContext("2d");
+    g.drawImage(img, 0, 0);
+    const px = g.getImageData(0, 0, c.width, c.height), a = px.data;
+    for (let i = 0; i < a.length; i += 4) if (a[i + 1] > 180 && a[i] < 90 && a[i + 2] < 90) a[i + 3] = 0;
+    g.putImageData(px, 0, 0);
+    radarCache.set(name, c);
+    draw(c);
+  };
+  img.src = url;
+}
+
+function renderSettings(cat) {
+  const d = S.data;
+  const list = d.settings.filter((s) => s.cat === cat && s.visible);
+  if (!changed("set" + cat, list)) return;
+  const notes = {
+    bot_profile_db: "Takes effect on the next map",
+    gm_bot_weapons: "What bots buy and use",
+    gm_weapons: "Restricts buying and hands out the gun",
+    sv_airaccelerate: "Surf / bhop for surf maps",
+    gm_hb_reaction: "Bots wait a human reaction time before shooting",
+    gm_hb_aim: "Flicks that overshoot, aim wobble, sprays in bursts",
+    gm_hb_mistakes: "The odd whiffed shot, late reaction or panic spray",
+    gm_hb_bhop: "Locked In, Hackers and Gods hop between fights",
+    gm_regulars: "The same regulars keep coming back, plus the odd newcomer. Applies as bots join",
+    gm_churn: "Now and then someone leaves and a new player takes the slot",
+    gm_rtv: "Say rtv in chat to vote for a new map, nominate <map> to suggest one",
+    gm_welcome: "Shown when you or a friend joins. Say /welcome to see it again",
+  };
+  // the Bot style note follows the chosen style
+  const styleNotes = {
+    "0": "CZ's own bots, unchanged",
+    "4": "Slow to notice you, wobbly aim, spray until empty",
+    "1": "Mixed skill: a couple of sharp players, lots of average, some bad",
+    "2": "Fair human reactions, controlled bursts, good teamwork",
+    "3": "Quick and accurate, but no instant headshots",
+    "5": "Pro players on a good day, with the occasional bunnyhop",
+    "6": "Almost an aimbot: they react instantly and bunnyhop everywhere",
+    "7": "Everything maxed: instant reactions, every shot a headshot, nonstop bunnyhops",
+  };
+  notes.gm_botstyle = (styleNotes[(list.find((s) => s.cvar === "gm_botstyle") || {}).value] || "") +
+    ". Personalities change on the next map";
+  paint($("set-" + cat), list.map((s) => `
+    <div class="setting">
+      <div class="name">${esc(s.name)}${notes[s.cvar] ? `<span class="note">${esc(notes[s.cvar])}</span>` : ""}</div>
+      ${segmented(s.values, s.labels, s.value, (v) => `data-set="${esc(s.cvar)}" data-val="${esc(v)}" data-key="set-${esc(s.cvar)}-${esc(v)}"`)}
+    </div>`).join(""));
+}
+
+function renderBots() {
+  const st = S.data.state, slider = $("botCount");
+  slider.max = Math.max(1, st.maxplayers - 1);
+  if (!S.sliderBusy) { slider.value = st.bots; $("botCountOut").textContent = st.bots; }
+  renderSettings(1);
+  const missing = S.maps.filter((m) => !m.nav).length;
+  if (!changed("nav", [st.nav, st.navbatch, st.navleft, st.map, missing])) return;
+  $("navPanel").innerHTML = `
+    <h3>Bot navigation</h3>
+    <p class="lede" style="margin-bottom:14px">${st.nav
+      ? `Bots know their way around ${esc(st.map)}.`
+      : `${esc(st.map)} has no navigation yet, so bots stand still. Learning it takes a few minutes and restarts the map.`}
+      ${st.navbatch ? ` Preparing every map: ${st.navleft} left.` : (missing ? ` ${missing} installed maps still need it.` : "")}</p>
+    <div class="row">
+      ${st.nav ? "" : `<button class="btn primary" data-cmd="gm_nav learn">Learn this map</button>`}
+      <button class="btn" data-cmd="gm_nav analyze">Analyze this map</button>
+      ${st.nav ? `<button class="btn" data-cmd="gm_nav rebuild" data-confirm="Throw away this map's navigation and learn it again? The map restarts. Use this if bots act strangely here or the game crashed on this map.">Rebuild navigation</button>` : ""}
+      ${st.navbatch ? `<button class="btn danger" data-cmd="gm_nav stop">Stop preparing maps</button>`
+        : (missing ? `<button class="btn" data-cmd="gm_nav batch" data-confirm="Load and learn all ${missing} maps one after another? Leave the game running; it takes a few minutes per map.">Prepare all ${missing} maps</button>` : "")}
+    </div>`;
+}
+
+function renderMatch() {
+  renderSettings(2);
+  const m = S.data.modes.find((x) => x.id === S.data.state.mode);
+  $("matchLede").textContent = `Saved for ${m ? m.name : "this mode"}. Round changes take effect next round.`;
+}
+
+function renderPlayers() {
+  const d = S.data;
+  if (!changed("players", [d.players, S.openPlayer])) return;
+  const groups = [["t", "Terrorists", "T"], ["ct", "Counter-Terrorists", "CT"], ["spec", "Spectators", "SPEC"]];
+  paint($("teams"), groups.map(([cls, title, team]) => {
+    const list = d.players.filter((p) => p.team === team).sort((a, b) => b.frags - a.frags);
+    if (!list.length && team === "SPEC") return "";
+    return `<div class="team ${cls}"><h3>${title}<span>${list.length}</span></h3><ul class="plist">${list.map(playerRow).join("") ||
+      `<li class="empty" style="padding:12px 4px">Nobody yet</li>`}</ul></div>`;
+  }).join(""));
+}
+
+function playerRow(p) {
+  const open = S.openPlayer === p.uid;
+  const flags = [p.god && "god", p.noclip && "noclip", p.frozen && "frozen"].filter(Boolean).map((f) => `<span class="flag">${f}</span>`).join("");
+  const a = (action, label, extra = "") => `<button class="btn ${extra}" data-player="${p.uid}" data-act="${action}" data-key="p${p.uid}-${action}">${label}</button>`;
+  return `<li class="player${p.alive ? "" : " dead"}">
+    <button type="button" class="prow" data-open="${p.uid}" aria-expanded="${open}" data-key="prow-${p.uid}">
+      <span class="pname">${esc(p.name)}${p.bot ? "<small>bot</small>" : ""}${p.host ? "<small>you</small>" : ""}${flags}</span>
+      <span class="hp${p.hp && p.hp < 35 ? " low" : ""}" aria-label="${p.hp} health"><i style="width:${Math.min(100, p.hp)}%"></i></span>
+      <span class="num">$${p.money.toLocaleString()}</span>
+      <span class="num kd">${p.frags}/${p.deaths}</span>
+    </button>
+    ${open ? `<div class="pactions">
+      <div class="row">
+        ${a("god", p.god ? "God mode off" : "God mode")}
+        ${a("noclip", p.noclip ? "Noclip off" : "Noclip")}
+        ${a("heal", "Heal + armor")}
+        ${a("money", "Give $16,000")}
+        ${a("respawn", "Respawn")}
+        ${a("team", "Switch team")}
+      </div>
+      <div class="row">
+        <label class="sr" for="give-${p.uid}">Weapon</label>
+        <select id="give-${p.uid}" data-key="give-${p.uid}">${WEAPONS.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("")}</select>
+        <button class="btn" data-give="${p.uid}" data-key="giveb-${p.uid}">Give</button>
+      </div>
+      ${p.host ? "" : `<div class="row">
+        ${a("bring", "Bring to me")}
+        ${a("goto", "Go to them")}
+        ${a("freeze", p.frozen ? "Unfreeze" : "Freeze")}
+        ${a("slap", "Slap")}
+        ${a("slay", "Slay", "danger")}
+        ${a("kick", "Kick", "danger")}
+      </div>`}
+    </div>` : ""}
+  </li>`;
+}
+
+function renderAddons() {
+  const d = S.data;
+  if (!changed("addons", [d.addons, d.addonsets])) return;
+  const pending = d.addons.some((a) => a.on !== a.loaded);
+  $("addonBanner").innerHTML = pending ? `<div class="banner"><p>Restart the map to apply your add-on changes.</p><button class="btn primary" data-cmd="gm_restartmap">Restart map</button></div>` : "";
+  paint($("addons"), d.addons.map((a) => {
+    const sets = d.addonsets.filter((s) => s.addon === a.id);
+    return `<div class="addon">
+      <div class="addon-head">
+        <div><h3 style="margin:0">${esc(a.name)}</h3><p>${esc(a.desc)}${a.on !== a.loaded ? ` · applies after a map restart` : ""}</p></div>
+        <button type="button" class="switch" role="switch" aria-checked="${!!a.on}" aria-label="${esc(a.name)}" data-addon="${esc(a.id)}" data-on="${a.on ? 0 : 1}" data-key="addon-${esc(a.id)}"></button>
+      </div>
+      ${sets.length ? `<div class="settings">${sets.map((s) => `<div class="setting"><div class="name">${esc(s.name)}</div>
+        ${segmented(s.values, s.labels, s.value, (v) => `data-addonset="${esc(a.id)}" data-cvar="${esc(s.cvar)}" data-val="${esc(v)}" data-key="as-${esc(s.cvar)}-${esc(v)}"`)}</div>`).join("")}</div>` : ""}
+    </div>`;
+  }).join(""));
+}
+
+// ---- play with friends (playit.gg) ---------------------------------------
+async function loadShare() {
+  try { S.share = await api("/api/share"); } catch (e) { S.share = null; }
+  if (S.share && S.share.error === undefined) S.share = null; // older helper
+  renderTabs();
+  if (S.tab === "friends") renderFriends();
+}
+async function shareAction(action, extra) {
+  let res;
+  try {
+    res = await api("/api/share", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({ action }, extra)) });
+  } catch (e) { return toast("The panel helper isn't running.", true); }
+  if (!res.ok) return toast(res.error || "That didn't work.", true);
+  S.share = res;
+  renderTabs();
+  renderFriends();
+  return res;
+}
+function shareAddress(sh) {
+  if (!sh) return "";
+  if (sh.method === "tailscale") {
+    const ts = sh.tailscale || {};
+    return ts.state === "Running" && ts.ip ? `${ts.ip}:${sh.port}` : "";
+  }
+  const a = sh.address;
+  return a ? `${a.ip || a.host}:${a.port}` : "";
+}
+function inviteText(sh) {
+  const addr = shareAddress(sh), pw = sh.password;
+  return [
+    `Join my Counter-Strike: Condition Zero game${sh.name ? ` "${sh.name}"` : ""}!`,
+    ...(sh.method === "tailscale" ? ["", "Have Tailscale running and signed in to the network I shared with you first (tailscale.com/download)."] : []),
+    "",
+    `Paste this into your browser's address bar and Steam opens the game and joins:`,
+    `steam://connect/${addr}${pw ? "/" + pw : ""}`,
+    "",
+    `Or in the game, open the console (~) and type:`,
+    `${pw ? `password ${pw}; ` : ""}connect ${addr}`,
+    "",
+    `Or go to Find Servers > Favorites > Add a server and enter ${addr}${pw ? ` (password: ${pw})` : ""}`,
+    "",
+    `You need Counter-Strike: Condition Zero on Steam. The first time you join it downloads my maps, which can take a minute.`,
+  ].join("\n");
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return toast("Copied"); } catch (e) {}
+  // phones on the plain-http link have no clipboard API
+  const t = document.createElement("textarea");
+  t.value = text; document.body.appendChild(t); t.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) {}
+  t.remove();
+  toast(ok ? "Copied" : "Couldn't copy. Select the text and copy it yourself.", !ok);
+}
+
+function renderFriends() {
+  const sh = S.share;
+  if (!sh) {
+    if (changed("friends", null)) {
+      $("shareSteps").innerHTML = `<li class="now"><strong>Restart the panel helper</strong><p>Close the panel's Terminal window and open Start Panel.command again to turn this on.</p></li>`;
+      $("shareLive").innerHTML = "";
+    }
+    return;
+  }
+  if (!S.shareFormSet) {
+    $("srvName").value = sh.name;
+    $("srvPass").value = sh.password;
+    S.shareFormSet = true;
+  }
+  const d = S.data, online = d && d.online;
+  const st = online ? d.state : null;
+  const friends = online ? d.players.filter((p) => !p.bot && !p.host).map((p) => p.name) : [];
+  if (!changed("friends", [sh, friends, st && [st.humans, st.bots, st.maxplayers], online])) return;
+
+  const ts = sh.tailscale || {}, viaTs = sh.method === "tailscale";
+  $("shareMethod").innerHTML = `<div class="seg" role="group" aria-label="How friends connect">
+      <button type="button" data-share-method="playit" aria-pressed="${!viaTs}">playit.gg</button>
+      <button type="button" data-share-method="tailscale" aria-pressed="${viaTs}">Tailscale</button></div>
+    <p class="lede" style="margin:10px 0 18px">${viaTs ?
+      "A private network that you and your friends join. Everyone installs the free Tailscale app, and the game is only visible to people in it." :
+      "A free relay that gives your game a public address. Friends don't install anything, and the password keeps strangers out."}</p>`;
+  if (viaTs) return renderTailscale(sh, ts, online, friends, st);
+  const c = sh.claim, live = sh.phase === "online", starting = sh.phase === "starting";
+  const step1 = sh.connected ? "done" : "now", step2 = sh.connected ? "done" : "now", step3 = live ? "done" : sh.connected ? "now" : "";
+  let connect = "";
+  if (!sh.connected) {
+    if (c && c.step === "failed") connect = `<p class="err-text">${esc(c.error)}</p><button class="btn primary" data-share="connect">Try again</button>`;
+    else if (c) connect = `<p><a href="${esc(c.url)}" target="_blank" rel="noopener">Open playit.gg to approve this Mac</a>, then come back. ${c.step === "approve" ? "Waiting for you to press approve…" : "Waiting for the page to open…"}</p>
+      <button class="btn" data-share="cancel">Cancel</button>`;
+    else connect = `<button class="btn primary" data-share="connect">Connect to playit.gg</button>`;
+  }
+  $("shareSteps").innerHTML = `
+    <li class="${step1}"><strong>Make a free playit.gg account</strong>
+      <p>${sh.connected ? "Done." : `<a href="https://playit.gg/login/create" target="_blank" rel="noopener">Sign up at playit.gg</a> with an email and password, then confirm the email they send you. The free plan is enough. If you already have an account, skip this.`}</p></li>
+    <li class="${step2}"><strong>Connect this Mac to your account</strong>
+      <p>${sh.connected ? `Done${sh.account === "guest" ? ". You're on a guest account: sign up on playit.gg so it doesn't expire" : ""}. <button class="btn" data-share="disconnect" style="margin-left:6px">Disconnect</button>` :
+        "You approve it once on playit.gg. The panel keeps the key it gets on this Mac."}</p>${connect}</li>
+    <li class="${step3}"><strong>Share the game</strong>
+      <p>${sh.connected ? "Sharing runs only while the panel is open, and stops when you close it or press Stop." : "Available once this Mac is connected."}</p>
+      ${sh.connected ? (live || starting ? `<button class="btn danger" data-share="stop">Stop sharing</button>` : `<button class="btn primary" data-share="start">Start sharing</button>`) : ""}
+      ${sh.error ? `<p class="err-text">${esc(sh.error)}</p>` : ""}</li>`;
+
+  let html = "";
+  if (live || starting) {
+    const addr = shareAddress(sh);
+    const full = st && st.humans + st.bots >= st.maxplayers;
+    html = `<div class="panel">
+      <span class="live ${live ? "on" : "wait"}">${live ? "Friends can join now" : "Starting…"}</span>
+      ${addr ? `<div class="address">${esc(addr)}</div>` : `<p class="lede" style="margin:10px 0 0">playit.gg is getting an address ready. This takes a few seconds the first time.</p>`}
+      ${!online ? `<p class="err-text">Condition Zero isn't hosting a game right now. Start a New Game and friends can join.</p>` : ""}
+      ${full ? `<div class="banner" style="margin-top:12px"><p>The server is full of bots, so there's no room for friends.</p><button class="btn primary" data-share-room>Make room</button></div>` : ""}
+      ${online && friends.length ? `<p>In your game: ${friends.map(esc).join(", ")}</p>` : ""}
+      ${addr ? `<h3 style="margin-top:16px">Send this to your friends</h3>
+      <label class="sr" for="invite">Invite message</label>
+      <textarea class="invite" id="invite" readonly>${esc(inviteText(sh))}</textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" data-copy="invite">Copy message</button>
+        <button class="btn" data-copy="addr">Copy address</button>
+      </div>
+      <ol class="howto">
+        <li>The easiest way: your friend pastes the <code>steam://</code> link into their browser, and Steam opens Condition Zero and joins.</li>
+        <li>From the game: in <em>Find Servers</em>, open <em>Favorites</em>, choose <em>Add a server</em> and enter <code>${esc(addr)}</code>. The game asks for the password when they join.</li>
+        <li>The address stays the same next time, so friends can keep it as a favourite.</li>
+      </ol>` : ""}
+    </div>`;
+  }
+  $("shareLive").innerHTML = html;
+}
+
+function renderTailscale(sh, ts, online, friends, st) {
+  const running = ts.state === "Running" && ts.ip;
+  const step = (done, now) => done ? "done" : now ? "now" : "";
+  $("shareSteps").innerHTML = `
+    <li class="${step(ts.installed, !ts.installed)}"><strong>Install Tailscale on this computer</strong>
+      <p>${ts.installed ? "Installed." : `<a href="https://tailscale.com/download" target="_blank" rel="noopener">Download Tailscale</a> (free) and sign in.`}</p></li>
+    <li class="${step(running, ts.installed && !running)}"><strong>Turn it on</strong>
+      <p>${running ? `Connected as <code>${esc(ts.name || ts.ip)}</code>.` :
+        ts.installed ? `Tailscale is ${ts.state === "NeedsLogin" ? "waiting for you to sign in" : "off"}. Open the Tailscale app from the menu bar and connect.` : "After installing."}</p></li>
+    <li class="${step(false, running)}"><strong>Let your friend in</strong>
+      <p>Your friend installs Tailscale too. Then either share this computer with them (in the Tailscale admin console, open <em>Machines</em>, pick this computer and choose <em>Share</em>), or invite them to your network. <a href="https://login.tailscale.com/admin/machines" target="_blank" rel="noopener">Open the admin console</a>.</p></li>`;
+  const addr = shareAddress(sh);
+  const full = st && st.humans + st.bots >= st.maxplayers;
+  $("shareLive").innerHTML = running ? `<div class="panel">
+      <span class="live on">Ready for friends on your network</span>
+      <div class="address">${esc(addr)}</div>
+      ${!online ? `<p class="err-text">Condition Zero isn't hosting a game right now. Start a New Game and friends can join.</p>` : ""}
+      ${full ? `<div class="banner" style="margin-top:12px"><p>The server is full of bots, so there's no room for friends.</p><button class="btn primary" data-share-room>Make room</button></div>` : ""}
+      ${online && friends.length ? `<p>In your game: ${friends.map(esc).join(", ")}</p>` : ""}
+      <h3 style="margin-top:16px">Send this to your friends</h3>
+      <label class="sr" for="invite">Invite message</label>
+      <textarea class="invite" id="invite" readonly>${esc(inviteText(sh))}</textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" data-copy="invite">Copy message</button>
+        <button class="btn" data-copy="addr">Copy address</button>
+      </div>
+    </div>` : "";
+}
+
+function render() {
+  renderTabs();
+  renderHero();
+  renderOffline();
+  if (S.tab === "friends") renderFriends();
+  const d = S.data;
+  if (!d || !d.online) { renderQuick(); if (S.offlineGet) renderMapsArea(); return; }
+  renderCareer();
+  renderBanners();
+  renderQuick();
+  if (S.tab === "modes") renderModes();
+  if (S.tab === "maps") renderMapsArea();
+  if (S.tab === "bots") renderBots();
+  if (S.tab === "match") renderMatch();
+  if (S.tab === "fun") renderSettings(3);
+  if (S.tab === "players") renderPlayers();
+  if (S.tab === "feed") renderFeed();
+  if (S.tab === "addons") renderAddons();
+}
+
+// ---- get maps (GameBanana) -------------------------------------------
+function fmtSize(n) {
+  if (!n) return "";
+  return n >= 1048576 ? `${(n / 1048576).toFixed(n >= 104857600 ? 0 : 1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+function fmtCount(n) { return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n || 0); }
+const activeJob = (j) => ["queued", "downloading", "unpacking"].includes(j.state);
+
+function renderMapsArea() {
+  const online = S.data && S.data.online;
+  const view = online ? S.mapsView : "get";
+  $("getMaps").hidden = view !== "get";
+  $("yourMaps").hidden = view === "get";
+  const seg = document.querySelector("#sec-maps .maps-head .seg");
+  seg.hidden = !online;
+  seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mapsView === view));
+  if (view === "get") {
+    if (!S.gb.loaded && !S.gb.loading) loadGB(true);
+    renderGB();
+  } else {
+    renderMaps();
+  }
+  renderJobs();
+}
+
+async function loadGB(reset) {
+  const g = S.gb;
+  if (g.loading) return;
+  g.loading = true; g.error = "";
+  if (reset) { g.items = []; g.page = 0; g.done = false; }
+  renderGB();
+  const want = [g.cat, g.sort, g.q];
+  try {
+    const q = new URLSearchParams({ cat: g.cat, sort: g.sort, q: g.q, page: g.page + 1 });
+    const res = await api("/api/gb/browse?" + q);
+    if (res.error) throw new Error(res.error);
+    // ignore answers for a search the person has since changed
+    if (JSON.stringify(want) === JSON.stringify([g.cat, g.sort, g.q])) {
+      g.items = g.items.concat(res.items); g.page = res.page; g.total = res.total;
+      g.done = res.done || g.items.length >= res.total; g.cats = res.categories; g.loaded = true;
+    }
+  } catch (e) {
+    g.error = e.message && !/fetch|JSON/i.test(e.message) ? e.message : "Couldn't reach GameBanana. Check your internet connection, or restart the panel helper if it was started before this update.";
+  }
+  g.loading = false;
+  renderGB();
+}
+
+function renderGB() {
+  const g = S.gb;
+  if (g.cats.length && changed("gbCats", g.cats)) {
+    $("gbCat").innerHTML = g.cats.map(([id, name]) => `<option value="${id}"${id === g.cat ? " selected" : ""}>${esc(name)}</option>`).join("");
+  }
+  $("gbSort").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.gbSort === g.sort));
+  const jobsFor = new Set(S.jobs.filter(activeJob).map((j) => j.mod));
+  if (changed("gbGrid", [g.items.map((i) => i.id + (i.installed ? "i" : "")), [...jobsFor]])) {
+    paint($("gbGrid"), g.items.map((i) => `
+      <div class="tile-wrap">
+        <button type="button" class="tile gcard" data-gb="${i.id}" data-key="gb-${i.id}">
+          <span class="pic">${i.image ? `<img loading="lazy" referrerpolicy="no-referrer" alt="" src="${esc(i.image)}">` : `<span class="initials">${esc(i.name.slice(0, 3).toUpperCase())}</span>`}</span>
+          <span class="tname"><span>${esc(i.name)}</span>${jobsFor.has(i.id) ? `<span class="tag here">Installing</span>` : (i.installed ? `<span class="tag">Installed</span>` : "")}</span>
+          <span class="tby">${esc(i.author)}</span>
+          <span class="gmeta">${esc(i.type)}${i.likes ? `, ${i.likes} like${i.likes === 1 ? "" : "s"}` : ""}</span>
+        </button>
+      </div>`).join(""));
+  }
+  $("gbStatus").textContent = g.error ? g.error : g.loading ? "Loading maps from GameBanana…" :
+    (g.loaded && !g.items.length ? (g.q ? `No GameBanana maps match “${g.q}”.` : "No maps of this type.") : "");
+  $("gbStatus").classList.toggle("err", !!g.error);
+  $("gbMore").hidden = g.loading || g.done || !g.items.length;
+}
+
+function renderJobs() {
+  const list = S.jobs.filter((j) => !S.dismissed.has(j.id));
+  if (!changed("jobs", [list, S.data && S.data.online])) return;
+  const online = S.data && S.data.online;
+  paint($("gbJobs"), list.map((j) => {
+    const name = esc(S.jobNames[j.mod] || "Map");
+    if (activeJob(j)) {
+      const pct = j.size ? Math.min(100, Math.round((j.got / j.size) * 100)) : 0;
+      const what = j.state === "downloading" ? `Downloading ${name}${j.size ? `, ${pct}% of ${fmtSize(j.size)}` : ""}` : `${esc(j.message)} for ${name}`;
+      return `<div class="job" role="status"><p>${what}</p><div class="bar"><span style="width:${j.state === "downloading" ? pct : 100}%"></span></div></div>`;
+    }
+    const play = online ? j.maps.slice(0, 4).map((m) => `<button class="btn primary" data-go-map="${esc(m)}">Play ${esc(m)}</button>`).join("") : "";
+    const kept = j.kept && j.kept.length ? `<p>Kept your existing ${j.kept.length === 1 ? esc(j.kept[0]) : `${j.kept.length} files`} instead of replacing ${j.kept.length === 1 ? "it" : "them"}.</p>` : "";
+    return `<div class="job ${j.state === "error" ? "err" : "done"}" role="status">
+      <p>${j.state === "error" ? `Couldn't install ${name}: ${esc(j.message)}` : esc(j.message)}</p>${kept}
+      <div class="row"><span class="row">${play}</span><button class="btn" data-dismiss-job="${esc(j.id)}">Dismiss</button></div></div>`;
+  }).join(""));
+}
+
+let jobTimer = null;
+async function pollJobs() {
+  clearTimeout(jobTimer);
+  let jobs;
+  try { jobs = await api("/api/gb/jobs"); } catch (e) { return; }
+  if (!Array.isArray(jobs)) return;
+  const before = new Map(S.jobs.map((j) => [j.id, j.state]));
+  S.jobs = jobs;
+  let finished = false;
+  jobs.forEach((j) => {
+    const was = before.get(j.id);
+    if (was && activeJob({ state: was }) && !activeJob(j)) {
+      finished = true;
+      toast(j.state === "error" ? `Couldn't install ${S.jobNames[j.mod] || "the map"}.` : j.message, j.state === "error");
+      const item = S.gb.items.find((i) => i.id === j.mod);
+      if (item && j.state === "done") item.installed = true;
+      if (S.gbSheet === j.mod) openGBSheet(j.mod, true);
+    }
+  });
+  if (finished) loadMaps(true);
+  renderJobs();
+  if (S.tab === "maps") renderGB();
+  if (S.gbSheet && S.gbDetail && jobs.some((j) => j.mod === S.gbSheet && activeJob(j))) renderGBSheet();
+  if (jobs.some(activeJob)) jobTimer = setTimeout(pollJobs, 1000);
+}
+
+async function openGBSheet(id, quiet) {
+  const sheet = $("sheet");
+  S.gbSheet = id;
+  if (!quiet) {
+    const i = S.gb.items.find((x) => x.id === id) || { name: "" };
+    S.gbDetail = null;
+    sheet.innerHTML = `<div class="sheet-body"><h2 class="sheet-title" id="sheetTitle">${esc(i.name)}</h2><p>Loading from GameBanana…</p></div>`;
+    if (!sheet.open) sheet.showModal();
+  }
+  let d;
+  try { d = await api(`/api/gb/mod/${id}`); } catch (e) { d = { error: "Couldn't reach GameBanana." }; }
+  if (S.gbSheet !== id || !sheet.open) return;
+  if (d.error) {
+    sheet.querySelector(".sheet-body p").textContent = d.error;
+    return;
+  }
+  S.gbDetail = d;
+  S.jobNames[id] = d.name;
+  renderGBSheet();
+}
+
+function renderGBSheet() {
+  const d = S.gbDetail, sheet = $("sheet");
+  if (!d || !sheet.open) return;
+  const online = S.data && S.data.online;
+  const job = S.jobs.find((j) => j.mod === d.id && activeJob(j));
+  const rec = d.installed;
+  const files = d.files.map((f) => {
+    let action;
+    if (job) action = job.file === f.id ? `<span class="fmeta">${job.state === "downloading" && job.size ? `Downloading ${Math.round((job.got / job.size) * 100)}%` : esc(job.message)}</span>` : "";
+    else if (!f.supported) action = `<span class="fmeta">Not an archive the panel can open</span>`;
+    else action = `<button class="btn${rec ? "" : " primary"}" data-gb-install="${d.id}" data-file="${f.id}" data-size="${f.size}">${rec ? "Install again" : "Install"}</button>`;
+    return `<div class="gb-file"><span><span class="fname">${esc(f.file)}</span>
+      <span class="fmeta">${fmtSize(f.size)}${f.downloads ? `, downloaded ${fmtCount(f.downloads)} times` : ""}${f.virus ? ". GameBanana's virus scan flagged this file" : ""}</span></span>${action}</div>`;
+  }).join("");
+  const installed = rec ? `<div class="banner"><p>Installed ${esc(rec.maps.join(", ") || "files")}.</p>
+      <span class="row">${online ? rec.maps.slice(0, 3).map((m) => `<button class="btn primary" data-go-map="${esc(m)}">Play ${esc(m)}</button>`).join("") : ""}
+      <button class="btn danger" data-gb-uninstall="${d.id}">Uninstall</button></span></div>` : "";
+  const pic = d.images[0] ? `<span class="pic gcard-pic"><img referrerpolicy="no-referrer" alt="" src="${esc(d.images[0])}" id="gbBig"></span>` : "";
+  const thumbs = d.images.length > 1 ? `<div class="gb-thumbs">${d.images.map((u) => `<img referrerpolicy="no-referrer" alt="Screenshot" src="${esc(u)}" data-gb-shot="${esc(u)}">`).join("")}</div>` : "";
+  const scroll = sheet.querySelector(".gb-text") ? sheet.querySelector(".gb-text").scrollTop : 0;
+  sheet.innerHTML = `${pic}
+    <div class="sheet-body">
+      <h2 class="sheet-title" id="sheetTitle">${esc(d.name)}</h2>
+      <p class="sheet-by">Made by ${esc(d.author)}${d.type ? `. ${esc(d.type)}` : ""}${d.downloads ? `, downloaded ${fmtCount(d.downloads)} times` : ""}</p>
+      ${thumbs}
+      ${installed}
+      ${d.text ? `<p class="gb-text">${esc(d.text)}</p>` : ""}
+      <div class="gb-files">${files || "<p>This upload has no files to download.</p>"}</div>
+      <div class="row"><a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">Open on GameBanana</a><span style="flex:1"></span><button class="btn" data-close>Close</button></div>
+    </div>`;
+  const t = sheet.querySelector(".gb-text");
+  if (t) t.scrollTop = scroll;
+}
+
+async function gbInstall(mod, file, size) {
+  if (size > 200 * 1048576 && !confirm(`This download is ${fmtSize(size)}. Download and install it?`)) return;
+  let res;
+  try {
+    res = await api("/api/gb/install", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mod, file }) });
+  } catch (e) { return toast("The panel helper isn't running.", true); }
+  if (!res.ok) return toast(res.error || "Couldn't start the download.", true);
+  S.jobs.push({ id: res.job, mod, file, state: "queued", got: 0, size, message: "Waiting", maps: [], kept: [] });
+  renderJobs(); renderGBSheet(); renderGB();
+  pollJobs();
+}
+
+async function gbUninstall(mod) {
+  const d = S.gbDetail;
+  if (!confirm(`Uninstall ${d ? d.name : "this download"}? Its map files are deleted from your game.`)) return;
+  let res;
+  try {
+    res = await api("/api/gb/uninstall", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mod }) });
+  } catch (e) { return toast("The panel helper isn't running.", true); }
+  if (!res.ok) return toast(res.error || "Couldn't uninstall that.", true);
+  toast(`Uninstalled ${res.maps.join(", ") || "it"}`);
+  const item = S.gb.items.find((i) => i.id === mod);
+  if (item) item.installed = false;
+  loadMaps(true);
+  openGBSheet(mod, true);
+}
+
+// ---- sheets -----------------------------------------------------------
+function openMapSheet(name) {
+  const d = S.data, m = S.maps.find((x) => x.name === name) || { name, nav: true };
+  const here = d.state.map.toLowerCase() === name.toLowerCase();
+  const sheet = $("sheet");
+  sheet.innerHTML = `${picHtml(m)}
+    <div class="sheet-body">
+      <h2 class="sheet-title" id="sheetTitle">${esc(name)}</h2>
+      ${m.by || m.title ? `<p class="sheet-by">${m.title ? `“${esc(m.title)}”${m.by ? ", made by " : ""}` : "Made by "}${esc(m.by || "")}</p>` : ""}
+      ${m.nav ? "" : `<p>Bots haven't learned this map yet. After it loads, open Bots and choose “Learn this map”.</p>`}
+      <div class="row">
+        <button class="btn primary" data-go-map="${esc(name)}">${here ? "Restart this map" : "Play this map"}</button>
+        <span class="row">
+          <label class="sr" for="sheetMode">Mode</label>
+          <select id="sheetMode">${d.modes.map((x) => `<option value="${esc(x.id)}"${x.id === d.state.mode ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select>
+          <button class="btn" data-go-mode-map="${esc(name)}">Play in this mode</button>
+        </span>
+      </div>
+      <div class="row">
+        <button class="btn" data-fav="${esc(name)}" data-on="${m.fav ? 0 : 1}" data-close-after>${m.fav ? "Remove from favourites" : "Add to favourites"}</button>
+        <button class="btn" data-hide="${esc(name)}" data-on="${m.hidden ? 0 : 1}">${m.hidden ? "Show this map again" : "Hide this map"}</button>
+        <button class="btn" data-close>Cancel</button>
+      </div>
+    </div>`;
+  observePics(sheet);
+  sheet.showModal();
+}
+
+function openModeSheet(id) {
+  const d = S.data, m = d.modes.find((x) => x.id === id);
+  const sheet = $("sheet");
+  const current = id === d.state.mode;
+  sheet.innerHTML = `<div class="sheet-body">
+      <h2 class="sheet-title" id="sheetTitle">${esc(m.name)}</h2>
+      <p>${esc(m.desc)}</p>
+      <div class="row">
+        <button class="btn primary" data-start-mode="${esc(id)}">${current ? "Restart on" : "Play on"} ${esc(d.state.map)}</button>
+        <button class="btn" data-pick-map="${esc(id)}">Choose a map</button>
+        <button class="btn" data-close>Cancel</button>
+      </div>
+    </div>`;
+  sheet.showModal();
+}
+
+// ---- events -----------------------------------------------------------
+function setTab(id) {
+  S.tab = id;
+  localSet("tab", id);
+  S.lastRender = {};
+  render();
+  window.scrollTo({ top: Math.min(window.scrollY, $("hero").offsetHeight) });
+}
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  const ds = t.dataset;
+  if (ds.tab) return setTab(ds.tab);
+  if (ds.share) {
+    if (ds.share === "disconnect" && !confirm("Disconnect this Mac from playit.gg? You'll need to approve it again to share.")) return;
+    if (ds.share === "connect") {
+      // open the approval page straight away, from the click, so the browser doesn't block it
+      const win = window.open("about:blank", "_blank");
+      return shareAction("connect").then((res) => {
+        if (res && res.claim && win) win.location = res.claim.url; else if (win) win.close();
+      });
+    }
+    return shareAction(ds.share);
+  }
+  if (ds.shareMethod) return shareAction("method", { method: ds.shareMethod });
+  if (ds.copy) return copyText(ds.copy === "addr" ? shareAddress(S.share) : $("invite").value);
+  if ("shareRoom" in ds) {
+    const st = S.data.state, n = Math.max(0, st.maxplayers - st.humans - 2);
+    return cmd("gm_bots", ["count", String(Math.min(st.bots, n))]);
+  }
+  if ("health" in ds) return openHealthSheet();
+  if (ds.fav) { if ("closeAfter" in ds) $("sheet").close(); return mapFlag("fav", ds.fav, ds.on === "1"); }
+  if ("announce" in ds) {
+    const text = (prompt("Message to show in the middle of the screen:") || "").trim();
+    if (text) cmd("gm_announce", [text.slice(0, 120)]);
+    return;
+  }
+  if (ds.hide) { $("sheet").close(); return mapFlag("hidden", ds.hide, ds.on === "1"); }
+  if (ds.confirm && !confirm(ds.confirm)) return;
+  if (ds.cmd) { const [c, ...args] = ds.cmd.split(" "); return cmd(c, args); }
+  if (ds.set) return cmd("gm_set", [ds.set, ds.val]);
+  if (ds.addonset) return cmd("gm_addonset", [ds.addonset, ds.cvar, ds.val]);
+  if (ds.addon) return cmd("gm_addon", [ds.addon, ds.on]);
+  if (ds.preset) {
+    const p = (S.data.presets || []).find((x) => x.id === ds.preset);
+    if (p && !confirm(`Play "${p.name}"? This resets that mode's settings to the preset.`)) return;
+    return cmd("gm_preset", [ds.preset]);
+  }
+  if (ds.delpreset) {
+    if (!confirm("Delete this preset?")) return;
+    return cmd("gm_presetdel", [ds.delpreset]);
+  }
+  if (ds.cat) { S.mapFilter = ds.cat; return renderMaps(); }
+  if (ds.by) { S.mapAuthor = ds.by; return renderMaps(); }
+  if (ds.randomMap) return randomMap(ds.randomMap);
+  if (ds.mapsView) { S.mapsView = ds.mapsView; S.lastRender = {}; return renderMapsArea(); }
+  if ("offlineGet" in ds) { S.offlineGet = true; S.lastRender = {}; return render(); }
+  if (ds.gbSort) { S.gb.sort = ds.gbSort; return loadGB(true); }
+  if (ds.gb) return openGBSheet(Number(ds.gb));
+  if (ds.gbInstall) return gbInstall(Number(ds.gbInstall), Number(ds.file), Number(ds.size));
+  if (ds.gbUninstall) return gbUninstall(Number(ds.gbUninstall));
+  if (ds.dismissJob) { S.dismissed.add(ds.dismissJob); return renderJobs(); }
+  if ("cancelPick" in ds) { S.pickMode = null; return renderMaps(); }
+  if (ds.mode) return openModeSheet(ds.mode);
+  if (ds.map) {
+    if (S.pickMode) { const id = S.pickMode; S.pickMode = null; return cmd("gm_mode", [id, ds.map]); }
+    return openMapSheet(ds.map);
+  }
+  if (ds.open) { S.openPlayer = S.openPlayer === +ds.open ? null : +ds.open; return renderPlayers(); }
+  if (ds.player) {
+    if (ds.act === "kick" && !confirm("Kick this player?")) return;
+    return cmd("gm_player", [ds.player, ds.act], true);
+  }
+  if (ds.give) return cmd("gm_player", [ds.give, "give", $("give-" + ds.give).value], true);
+  if ("close" in ds) return $("sheet").close();
+  if (ds.goMap) { $("sheet").close(); return cmd("gm_map", [ds.goMap]); }
+  if (ds.goModeMap) { const mode = $("sheetMode").value; $("sheet").close(); return cmd("gm_mode", [mode, ds.goModeMap]); }
+  if (ds.startMode) { $("sheet").close(); return cmd("gm_mode", [ds.startMode]); }
+  if (ds.pickMap) { $("sheet").close(); S.pickMode = ds.pickMap; S.mapFilter = "all"; return setTab("maps"); }
+});
+
+$("savePreset").addEventListener("submit", (e) => {
+  e.preventDefault();
+  // the game command only takes simple words, so spaces travel as underscores
+  const name = $("presetName").value.trim().replace(/[^A-Za-z0-9 .\-]/g, "").replace(/\s+/g, "_").slice(0, 32);
+  if (!name) return toast("Give the preset a name first.", true);
+  $("presetName").value = "";
+  cmd("gm_presetsave", [name]);
+});
+
+$("serverForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const pw = $("srvPass").value.trim();
+  if (!/^[A-Za-z0-9_\-]{0,24}$/.test(pw)) return toast("Passwords can use letters, numbers, - and _.", true);
+  const res = await shareAction("server", { name: $("srvName").value.trim(), password: pw });
+  if (res) { $("srvName").value = res.name; toast(S.data && S.data.online ? "Saved and applied to the game" : "Saved. It applies when you start a game."); }
+});
+$("srvPassMake").addEventListener("click", () => {
+  const words = ["alpha", "bravo", "delta", "echo", "foxtrot", "kilo", "lima", "oscar", "sierra", "tango", "victor", "zulu"];
+  const w = words[Math.floor(Math.random() * words.length)];
+  $("srvPass").value = w + "-" + String(Math.floor(100 + Math.random() * 900));
+  $("srvPass").focus();
+});
+
+$("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) $("sheet").close(); });
+$("mapSearch").addEventListener("input", (e) => { S.mapQuery = e.target.value; renderMaps(); });
+let gbSearchTimer = null;
+$("gbSearch").addEventListener("input", (e) => {
+  clearTimeout(gbSearchTimer);
+  gbSearchTimer = setTimeout(() => { S.gb.q = e.target.value.trim(); loadGB(true); }, 450);
+});
+$("gbCat").addEventListener("change", (e) => { S.gb.cat = Number(e.target.value); loadGB(true); });
+$("gbMore").addEventListener("click", () => loadGB(false));
+$("sheet").addEventListener("close", () => { S.gbSheet = null; S.gbDetail = null; });
+$("sheet").addEventListener("click", (e) => {
+  const shot = e.target.closest("[data-gb-shot]");
+  if (shot && $("gbBig")) $("gbBig").src = shot.dataset.gbShot;
+});
+
+const slider = $("botCount");
+slider.addEventListener("input", () => { S.sliderBusy = true; $("botCountOut").textContent = slider.value; });
+slider.addEventListener("change", async () => {
+  await cmd("gm_bots", ["count", slider.value], true);
+  toast(`Bots set to ${slider.value}`);
+  setTimeout(() => { S.sliderBusy = false; }, 1500);
+});
+
+// "list" picks from what the Maps tab currently shows; the quick bar picks
+// from favourites when there are a few, otherwise from every visible map.
+function randomMap(from) {
+  const here = S.data.state.map.toLowerCase();
+  let pool = from === "list" ? S.mapsShown || [] : S.maps.filter((m) => m.fav && !m.hidden);
+  if (from !== "list" && pool.length < 3) pool = S.maps.filter((m) => !m.hidden);
+  pool = pool.filter((m) => m.name.toLowerCase() !== here && SAFE.test(m.name));
+  if (!pool.length) return toast("No other maps to pick from here.", true);
+  const m = pool[Math.floor(Math.random() * pool.length)];
+  toast(`Loading ${m.name}`);
+  cmd("gm_map", [m.name]);
+}
+
+async function mapFlag(flag, map, on) {
+  try {
+    await api("/api/mapflag", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ flag, map, on }) });
+  } catch (e) { return toast("The panel helper isn't running.", true); }
+  if (flag === "hidden") toast(on ? `${map} is hidden. Find it under Hidden.` : `${map} is back in the list.`);
+  loadMaps();
+}
+
+async function loadHealth() {
+  try { S.health = await api("/api/health"); } catch (e) { S.health = null; }
+  if (!S.health || !Array.isArray(S.health.checks)) S.health = null; // older helper without the check
+  renderHero();
+  if (S.data && S.data.online) renderBanners();
+}
+
+// ---- start ------------------------------------------------------------
+async function loadMaps(force) {
+  try { S.maps = await api("/api/maps" + (force ? "?refresh" : "")); } catch (e) { S.maps = []; }
+  S.lastRender = {};
+  render();
+}
+let lastNavKey = "";
+setInterval(() => {
+  if (document.hidden) return;
+  refresh();
+  // Rescan maps when bot navigation was just learned.
+  const st = S.data && S.data.online && S.data.state;
+  const key = st ? st.map + st.nav + st.navleft : "";
+  if (key && lastNavKey && key !== lastNavKey) loadMaps(true);
+  lastNavKey = key;
+  loadShare();
+}, 2000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+
+loadMaps().then(refresh);
+loadShare();
+pollJobs();
+loadHealth();
+setInterval(loadHealth, 60000);
+})();
+</script>
+</body>
+</html>

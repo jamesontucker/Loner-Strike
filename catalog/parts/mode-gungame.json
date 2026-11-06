@@ -1,0 +1,42 @@
+{
+ "id": "mode-gungame",
+ "name": "Gun Game",
+ "kind": "mode",
+ "modes": [
+  "gungame",
+  "gungame_team"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "Gun Game - climb through every weapon by getting kills; first to the knife level wins (free-for-all or teams)",
+ "installable": true,
+ "vendor": "mods/gungame",
+ "compile": [
+  {
+   "src": "gungame.sma",
+   "out": "gungame",
+   "include": null
+  }
+ ],
+ "fetch": [
+  {
+   "archive": "https://gungame-amxx.org/files/download.php?file=v213c/gg_213c_full.zip",
+   "sha256": "6e693826f5eaf2173470c16e009cef02f5205ec80bdb225f76c7526aaf5ebd9c",
+   "strip": "",
+   "files": {
+    "sound/gungame/gg_brass_bell.wav": "818ce90dc03f34664aee15f28efd30a5873e852043957b8be11c37f65c39eaa7",
+    "sound/gungame/gg_knife_level.wav": "33183e49d6a877d5b3d604838c392d904cf19eb23b675912a07558c20662f84e",
+    "sound/gungame/gg_levelup.wav": "7e03c12c2af7671cf6ebcfbe1cf4ad964cbeb979439afaad9a8b4b55a0976b62",
+    "sound/gungame/gg_lostlead.wav": "e2210ef24033762ad4ea2f71b7cbc2e0c6e23dc1e0511147cdb3d14b61e1c9ca",
+    "sound/gungame/gg_nade_level.wav": "6f89f7b9ce94a9e7762eb3733f7b8d26dd55fe167155102081c6cd2b121054ac",
+    "sound/gungame/gg_takenlead.wav": "c68b8dcefc4db9e22b2dc5dca6c2865a4a31744bffae268c9f0c726bf4dbb27d",
+    "sound/gungame/gg_tiedlead.wav": "87dfb48d7398a2c75db64e55a834ef0f7107f85d14bd62f70cc55a8652c829a5",
+    "sound/gungame/gg_triple.wav": "301d63628d74952c347b55e036914a62255a3a8a3f766db4ff61124286c3092b",
+    "sound/gungame/gg_welcome.wav": "1544afd42fc7926ce923ad499a264cec24e0aaae4884926d399457fc80956003"
+   }
+  }
+ ],
+ "credits": "GunGame 2.13c by Avalanche (https://gungame-amxx.org/, https://forums.alliedmods.net/showthread.php?t=49983), GPL. Loner-Strike patch: random spawns spread over the map's bot navigation (.nav) areas when there is no spawn file."
+}

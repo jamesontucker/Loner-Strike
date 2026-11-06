@@ -1,0 +1,90 @@
+{
+ "id": "addon-dice",
+ "name": "Roll the Dice",
+ "kind": "addon",
+ "addons": [
+  "dice"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "Type /rtd once per round for a random buff or curse; bots roll too",
+ "installable": true,
+ "compile": [
+  {
+   "src": "dice/dice_main.sma",
+   "out": "dice_main",
+   "include": "dice_include"
+  },
+  {
+   "src": "dice/dice_items_global.sma",
+   "out": "dice_items_global",
+   "include": "dice_include"
+  },
+  {
+   "src": "dice/dice_items_cstrike.sma",
+   "out": "dice_items_cstrike",
+   "include": "dice_include"
+  }
+ ],
+ "fetch": [
+  {
+   "archive": "https://codeload.github.com/OciXCrom/DICE/tar.gz/7a99a9fe3cef092c53b4986fce467e440f7b51ca",
+   "strip": "DICE-7a99a9fe3cef092c53b4986fce467e440f7b51ca/",
+   "files": {
+    "sound/DICE/applause.wav": "d492fbe8dfb6e39fabdc153ecf7ef2d8a1c48be826e1b03bfbfc05b95711a204",
+    "sound/DICE/bomber.wav": "a382c5586e85f6e9cfa3cbe08b9d930177246342e38c764de9c0ce7cdd05ee95",
+    "sound/DICE/bury.wav": "fdea9e94b018f6518f50ee32a6678017e1fa5970663c7e8b77b913d9ad86731d",
+    "sound/DICE/camera.wav": "75ecb0949b188ee0e83b20d0883775d5b17fb112f50d17aec6be59d6ad0b7d32",
+    "sound/DICE/come_again.wav": "d4376bd1850702bcaae85697e3022cae85983c2180a634c2f29ee507a548408f",
+    "sound/DICE/fall.wav": "5dde4388fc1df1ca4e559f49cdac4e89544c508977c554c0ac60d38f0b0c3d91",
+    "sound/DICE/godmode.wav": "9dd697c8039f87907154cf4be281b0c7d30b08155cc91e688603086b720cbd03",
+    "sound/DICE/invis.wav": "d2e9605b6040723fd561123038c8ae3273891aca98a189b76c5c0ad861b210b7",
+    "sound/DICE/jump.wav": "6a1a3dc4447234063557480b3d11be546a8a06a49037f1db937c2fe374882873",
+    "sound/DICE/laugh.wav": "ee0929ee64f041855b5d38cc0f332ce4904635c3bdf21fe159bf779fa2704ff6",
+    "sound/DICE/madness.wav": "b9bd5367dd76b175e3848622378d30f2b3c41ee8565d9c26f82689e73e31ca43",
+    "sound/DICE/noclip.wav": "fec0b154c2e9ad0c0601c73047a2e05eb58384708e888487c7e08019a437edcc",
+    "sound/DICE/oldman.wav": "cd6a51e74e39ce24c58e0f92dcd4e0dc58c894706e01cc373f5e9ea8daa315da",
+    "sound/DICE/slap.wav": "d5efd43dbc8223002dbe9f2086253462d24ffd65d417932983eec5383411343e",
+    "sound/DICE/speed.wav": "1aa90892d9ace6d8f2a6af729eac2c888daf761d8e3c8bcb09f2b25a78700815",
+    "sound/DICE/teleport.wav": "e11b48a84f22d06e2118a38975480026602a115eebe27e44e0f1fc2586523da3",
+    "sound/DICE/thunder.wav": "f6102dc082bbfaf7c0d70f528f7eb5a5a0389b31cea2e7d41d2d06a1ca502807",
+    "sound/DICE/zeus.wav": "b6b68a9fed9413e6afddcf8d66b94af50a5b96868755c37575073f3767094bdc",
+    "models/DICE/scorpion.mdl": "31e22d5b1d57953e3851607ae1260e2ed4a9310e72bf691eb41b40437dbdd2f9",
+    "addons/amxmodx/scripting/dice/dice_main.sma": {
+     "from": "addons/amxmodx/scripting/dice_main.sma",
+     "sha256": "15c17025de8b610c72c4ac399c04aabdec067ac963f8bf5930765285061e3b06"
+    },
+    "addons/amxmodx/scripting/dice/dice_items_global.sma": {
+     "from": "addons/amxmodx/scripting/dice_items_global.sma",
+     "sha256": "0dd85889c625c4a56d0836ae22e5d93124f7372966aa0c357ff3dd11aeea6155"
+    },
+    "addons/amxmodx/scripting/dice/dice_items_cstrike.sma": {
+     "from": "addons/amxmodx/scripting/dice_items_cstrike.sma",
+     "sha256": "95070eafd969c6c85f46808a6a6aa06a7137b7767d438ab847ad15956c2aec83"
+    },
+    "addons/amxmodx/scripting/dice_include/dice.inc": {
+     "from": "addons/amxmodx/scripting/include/DICE.inc",
+     "sha256": "0c2fbcea84b714314df021094e49f9ea7865146dbb992380a21dab957d05e3d8"
+    },
+    "addons/amxmodx/configs/DICE.ini": {
+     "from": "addons/amxmodx/configs/DICE.ini",
+     "sha256": "2f402fbe6918f56c3d0a835bcf51cc4ffe7c325d697ce7d0d3c68f4e493e296b"
+    },
+    "addons/amxmodx/configs/DICE.cfg": {
+     "from": "addons/amxmodx/configs/DICE.cfg",
+     "sha256": "141a8dff26048c58e4989e3e7cf7c6638227aef69d5f5000e64166c3daa70402"
+    },
+    "addons/amxmodx/data/lang/DICE.txt": {
+     "from": "addons/amxmodx/data/lang/DICE.txt",
+     "sha256": "53a68a25fdb57efd31b711124bf7e4749267399216b524e2858a644f239618a9"
+    }
+   }
+  }
+ ],
+ "credits": "D.I.C.E. by OciXCrom, https://github.com/OciXCrom/DICE (no license file upstream; AMX Mod X plugin). Loner-Strike ships only its changes (mods/dice-patches), applied to the original files at install: CZ bot Ham hooks, once-per-round limit, bots roll automatically, queue for humans.",
+ "patches": [
+  "mods/dice-patches/loner-strike.patch"
+ ]
+}

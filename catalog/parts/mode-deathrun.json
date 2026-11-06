@@ -1,0 +1,84 @@
+{
+ "id": "mode-deathrun",
+ "name": "Deathrun",
+ "kind": "mode",
+ "modes": [
+  "deathrun"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "One player triggers the traps, everyone else runs the course (bots press traps too)",
+ "installable": true,
+ "vendor": "mods/deathrun",
+ "compile": [
+  {
+   "src": "deathrun/DeathrunManager.sma",
+   "out": "DeathrunManager",
+   "include": null
+  },
+  {
+   "src": "deathrun/DRM_trigger_hurt_fix.sma",
+   "out": "DRM_trigger_hurt_fix",
+   "include": null
+  },
+  {
+   "src": "deathrun/ResetButtons.sma",
+   "out": "ResetButtons",
+   "include": null
+  },
+  {
+   "src": "deathrun/dr_bot_traps.sma",
+   "out": "dr_bot_traps",
+   "include": null
+  }
+ ],
+ "fetch": [],
+ "maps": [
+  {
+   "mod": 90787,
+   "file": 317539,
+   "maps": [
+    "deathrun_dojo"
+   ]
+  },
+  {
+   "mod": 90772,
+   "file": 315298,
+   "maps": [
+    "deathrun_death"
+   ]
+  },
+  {
+   "mod": 91346,
+   "file": 320192,
+   "maps": [
+    "deathrun_temple"
+   ]
+  },
+  {
+   "mod": 91006,
+   "file": 296562,
+   "maps": [
+    "deathrun_jigsaw2"
+   ]
+  },
+  {
+   "mod": 90744,
+   "file": 303202,
+   "maps": [
+    "deathrun_crash_egypt"
+   ]
+  },
+  {
+   "mod": 91311,
+   "file": 302601,
+   "maps": [
+    "deathrun_starwars"
+   ]
+  }
+ ],
+ "dirs": [],
+ "credits": "Deathrun Manager 3.0.3, DRM trigger_hurt fix and Reset Buttons by xPaw / coderiz (AlliedModders), taken from https://github.com/evandrocoan/MultiModServer (commit 5073cacd70da48a52953e8f9d9a39ec2d5fadd62), GPL. Loner-Strike: fake player removed (ReGameDLL crash), safe terrorist pick, CZ bot hooks, dr_bot_traps (bot trap activator)."
+}

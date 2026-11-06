@@ -1,0 +1,270 @@
+{
+ "id": "mode-basebuilder",
+ "name": "Base Builder",
+ "kind": "mode",
+ "modes": [
+  "basebuilder"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "Humans build a base from blocks, then zombies are released (menus are in Polish)",
+ "installable": true,
+ "vendor": "mods/basebuilder",
+ "compile": [
+  {
+   "src": "basebuilder/basebuilder.sma",
+   "out": "basebuilder",
+   "include": "basebuilder_include"
+  },
+  {
+   "src": "basebuilder/blockBarrierTURBO.sma",
+   "out": "blockBarrierTURBO",
+   "include": "basebuilder_include"
+  },
+  {
+   "src": "basebuilder/frostNadeTURBO.sma",
+   "out": "frostNadeTURBO",
+   "include": "basebuilder_include"
+  },
+  {
+   "src": "basebuilder/napalmNadeTURBO.sma",
+   "out": "napalmNadeTURBO",
+   "include": "basebuilder_include"
+  },
+  {
+   "src": "basebuilder/granadePushTURBO.sma",
+   "out": "granadePushTURBO",
+   "include": "basebuilder_include"
+  }
+ ],
+ "fetch": [
+  {
+   "archive": "https://codeload.github.com/KoRrNiK/BaseBuilder-TURBO/tar.gz/9927f7ad8da126ef70155cff00737045a1ca31d1",
+   "strip": "BaseBuilder-TURBO-9927f7ad8da126ef70155cff00737045a1ca31d1/cstrike/",
+   "files": {
+    "models/basebuildervt/v_death.mdl": "a8db91b1d45156819a70718688790a6085b0d6904c3ea6b45e07465ec42e10d6",
+    "models/basebuildervt/v_terminator.mdl": "1fddb4b4a7a055a62c170e8dad0316627789a998cc17c77fcacf66ad0e755ed4",
+    "models/basebuildervt/chest.mdl": "3d8db2444b9927ee57f5674594a4832a51958a81c57270368127d8ab80a24e66",
+    "models/basebuildervt/field.mdl": "0d8002584ffbdba49eef29c542fe31d6a84f53f201549c9291a355cca2165ce6",
+    "models/basebuildervt/bottle.mdl": "ce486b6e7e25d660c2937b10989d8ed42abab6ffd87ea07ebb0a4873cc3d1545",
+    "models/basebuildervt/v_demon.mdl": "370b23fe74d2373a6e5adb554a4c828e90cbdff18092efbd557e9ec70457081a",
+    "models/basebuildervt/v_poison.mdl": "db88c6799019643a9ac33e057ef542ac4e47273a653d30f2f40565b84c68ac8c",
+    "models/basebuildervt/bombertrap.mdl": "fa28246a66e5c9ef9ed89514fd34725b75902d719ce4ef51299798768275f04d",
+    "models/basebuildervt/v_devil.mdl": "ed2891ac6201e08ac510e9d52085d0a51c9b12c2d3ca6d107c2ccf2c59792303",
+    "models/basebuildervt/v_zombie_guerilla.mdl": "92620bd0eb47549b492bf60c700311b8f0fd67f695b17369eb210582e49e185e",
+    "models/basebuildervt/trap.mdl": "b0383ba910c89d76300530b7ec7b4998d797844c9ef6e86993b93dc2d2f7f7d1",
+    "models/basebuildervt/v_cso_tank2.mdl": "b34dc49c82488a7dad916a0fb560e85b9ce73b64ed648247ba49bcaa147a4967",
+    "models/basebuildervt/gibcegla.mdl": "698e21c0d795f7dee8cac64856e697174fc8cef70dc4c581b334ee752aa2e7f7",
+    "models/basebuildervt/v_hands.mdl": "0fbb9b8682cd82df75917374444c47a9b22df0a1fb6156eddc6c34187672a13f",
+    "models/basebuildervt/icebonus.mdl": "64347776194939111583108b800c4e5001cb00f8ff4d873b33e0b71e27f5984c",
+    "models/basebuildervt/bomb.mdl": "b87b7a1fb1d064f205c9b7ffa69e4928efeb0beb75db66ce937d2d3f494e54b0",
+    "models/basebuildervt/v_nurse.mdl": "ee11923a1cd4b4f75c543aeab379b6b44648bacc295ba1ab265bd19f54da52e3",
+    "models/basebuildervt/firebonus.mdl": "8b19e42f72cb48731ad07b9ee101f9ff93cc0f696c30d166310626f62572424b",
+    "models/basebuildervt/ammobox.mdl": "eee4a9e58b9a06ccb2857326d51d2f5aa158b0be28faece80e51dee5968a554f",
+    "models/basebuildervt/v_snowman.mdl": "a75f2dd022c42f0d6c2c6388b75a119f8898728a2d31e87146c0bc00ac09bfb8",
+    "models/basebuildervt/brick.mdl": "e54e21196a75e5c96d7ff2b84c647fd0a939adde1393177a02a71149a233705c",
+    "models/basebuildervt/brylka.mdl": "85e18cfb444ad54716a9580ab34afc85d5cabd282184fb657673270f2c9f3e55",
+    "models/basebuildervt/ch_c2.mdl": "be1b311c26c09176db90d8eea189145dac3b997e4f95ef32ea1eec442790d7fd",
+    "models/basebuildervt/grzybeku.mdl": "70c047241eecef7c810634e02db938b0941eaee7c99fbd4062c1068ff240c933",
+    "models/basebuildervt/ch_c3.mdl": "3c5247f2e070734ad0fd8f618548da1ad1768a665abf734145b58f29609021d7",
+    "models/basebuildervt/ch_c1.mdl": "c9465a009062acff78d0a93bd3f72519a2aa2d72c64dc5f7cbda6d9f80472611",
+    "models/basebuildervt/ch_c4.mdl": "7d698fc619f8532bd04582108814b0259c8a298d430d7dcfb1066a8e971643d3",
+    "models/basebuildervt/v_knive_zombie.mdl": "6523e8f9af412e3e28e54d3e1c7dcc69d5a646a99b96c28abc341b2b61978b76",
+    "models/basebuildervt/rocket.mdl": "51d035b120961c7b7b759ed637758de6b33dc7634bc959b73f4dd59ec9f4d7be",
+    "models/basebuildervt/christmas/w_snowball.mdl": "b294a22d33cb8417645027e8b281546af51cb30ab4d7397dae72afd8a20373e5",
+    "models/basebuildervt/christmas/v_snowball.mdl": "a96b8bfcdeeac6d9ed952ab0aa0bd1a6ddfb1c521ab70b8d7451e9752eb12eee",
+    "models/basebuildervt/christmas/treeNew.mdl": "e1b94d338c9e4320f2b419eab4995def7427a9daf7fb054e4dac2069aef0ceb1",
+    "models/basebuildervt/christmas/tree.mdl": "b425b0849314966dcdf1be1649149279b711c4175d67751c2245cc5ef0697771",
+    "models/basebuildervt/kosa/p_budowniczy.mdl": "6f58bdebe21af3941547ae13e45336142dcbbd40dc2899568dcfaf29e1b8e4da",
+    "models/basebuildervt/kosa/v_poszukiwacz.mdl": "e0a2cb933c3d5d4d64c62699e679e20d54d20da9c98c2dd808710a9a099514cc",
+    "models/basebuildervt/kosa/p_pickaxe.mdl": "634259f087c3c1338c89836d918b4f3f6def9395f2106b664c3edab5629db003",
+    "models/basebuildervt/kosa/v_budowniczy.mdl": "1b8f3c5f557836c07eb7c5db1a225ea6eb3647166a855903ae8f2f4de7b1e03f",
+    "models/basebuildervt/kosa/p_lekarz.mdl": "2cb5f51ff855880d6923fdd3fbfb92b8d745426072b7d096aa5b29ca0d0f33f0",
+    "models/basebuildervt/kosa/v_bomberman.mdl": "f5fb467cf8dea66bb10669027371c3c1d0a612dc9b6fd69e41eb7c3d95d975b1",
+    "models/basebuildervt/kosa/p_aim.mdl": "01cda830bc055584557ef07ec0727082cd142b51658ad03360ef1fe4457a7745",
+    "models/basebuildervt/kosa/p_poszukiwacz.mdl": "dab006d72a6f5032a83c9ac41f3c1a9300da09269a2e99abc81d0f10f792e583",
+    "models/basebuildervt/kosa/v_elektryk.mdl": "9b584a79d391d8657bcc86de88d542099b08c46161f8d71b2775ffe7d3785ac3",
+    "models/basebuildervt/kosa/v_buldozer.mdl": "1f6d5d801f12f71fcd8bbab387cc16fca659f9dd6c1b5c9fc1f5916dd8d196d4",
+    "models/basebuildervt/kosa/v_pickaxe.mdl": "4801edb12677bfa33c02b6f4a94fcfc97d82648add23ea45f39609b52215eba3",
+    "models/basebuildervt/kosa/p_naukowiec.mdl": "9f5ba844606376ae5381c21f260e4b858e3ee93a5f363a0935085afa71f2e250",
+    "models/basebuildervt/kosa/v_hand.mdl": "5aef30179a458a68eae16a285d29b60e8028ff135c09730d4f33cf13f5beedf4",
+    "models/basebuildervt/kosa/p_buldozer.mdl": "6bf8565327c297a9253efa3bbb9ee9604d63480bbfd24e93c405af42c3e7da2a",
+    "models/basebuildervt/kosa/p_elektryk.mdl": "37696f87a4168d4cd85943e7ed7921e79d3dfb926dde0c7328dabb30f59aaf96",
+    "models/basebuildervt/kosa/v_truposz.mdl": "9a57ccdb254c12fe9a4289d9cea8c56e1f457efe7b023e87a982904516d44e16",
+    "models/basebuildervt/kosa/v_icemag2.mdl": "9f06ee01369fc49e31623f4711c3368b80c537b9eb3b23090722bb3897de86c7",
+    "models/basebuildervt/kosa/v_firemag.mdl": "9836f7e5249de41f6db141f7c9d5c3895d9c5d10d670fae1761c49b0050ed066",
+    "models/basebuildervt/kosa/v_mysliwy.mdl": "86619cd56bf3d859e20e6dcf89d4cc51a5f0957668c8c4da71f74d5934464c17",
+    "models/basebuildervt/kosa/v_naukowiec.mdl": "546652f0655e7d796e7125ce0c342b52cb37f632487646707138de08dc0f703d",
+    "models/basebuildervt/kosa/p_truposz.mdl": "53a54ba76596028c2eb8ce75a9dd31f30488378a9170d40ac5f540c3a3b6f216",
+    "models/basebuildervt/kosa/v_strzelec.mdl": "579a08c68607f5dc66348a894f1c340f3740049bb49d5a9ef8ec3ddeb13bfa11",
+    "models/basebuildervt/kosa/p_icemag2.mdl": "3bd3301ccc97052df7f781a24650b88f13bd6c3e59cc081911c54d077a2dec4a",
+    "models/basebuildervt/kosa/v_lekarz.mdl": "07465ac0f50162aad0bcfe875e44003402a5eac529f27d143f2266ee1ff76d99",
+    "models/basebuildervt/kosa/p_mysliwy.mdl": "c8522da5fd9eeb2144a6cc95d1b226afae6ffe98e805e1ee70c685104cbab1c1",
+    "models/basebuildervt/kosa/p_firemag.mdl": "c64dc3de14adec7ae70bfe7f241aa6d9812a808994408c5ee6ff70eec1f3113a",
+    "models/basebuildervt/kosa/v_aim.mdl": "dcfbf5cff4704d1a875308c06f9a4548879efb9b129d153dc205e783edbbc705",
+    "models/basebuildervt/kosa/p_bomberman.mdl": "5b55cdcbfa3edb5f95e1f27389a70a2028b9c3d57c1145ef0a0c3edc94412a30",
+    "models/basebuildervt/kosa/p_strzelec.mdl": "f41be66266013363882f276a23da487e2bb8bfed5f05998ae691244812d4a535",
+    "models/player/bb_nbh/bb_nbh.mdl": "ce7dfa4fdd453a9104609219912f510fbead917ed234b5a3fcf28da889257f21",
+    "models/player/bb_nnurse/bb_nnurse.mdl": "ef86a38904d667c9df0d2da6632ea0e99a2b25b47f26db519ffa1c884b085cdd",
+    "models/player/bb_classic/bb_classic.mdl": "b54170fa020d13d2a538e0dadd0f6ca5d4a7fa07b1ef8ac21928b369ac5d4bf2",
+    "models/player/bb_nwitch/bb_nwitch.mdl": "36134eb0aeca359877de7d55cbe4d5e942c7d4db16b4d17c6dfe57be0ffa59e4",
+    "models/player/bb_nterminator/bb_nterminator.mdl": "306ae903886d479c0c36839eeaa604972f34f4bf27f8989560fe113071f8d7be",
+    "models/player/bb_snowman/bb_snowman.mdl": "6de42ac2481f86a9c1f8cb4dba651be7467d22060a8a401c91fb8f0fffa06c3a",
+    "models/player/bb_ndeath/bb_ndeath.mdl": "89a36fab88fe432dfebf5f346d6cda5380c372bf2f1337716dbb086b6bfdc904",
+    "models/player/bb_devil/bb_devil.mdl": "cc033a983b1b91e154905c2baaa73712e586b8387c76dcb619f9d581cb585911",
+    "models/player/bb_ntank/bb_ntank.mdl": "4413ae67409f058c659788411466caf54f6ba78b017c8300c5984cc67ce0f7f7",
+    "models/player/bb_ntanko/bb_ntanko.mdl": "c060ecd6e2c6b515667933aeb6cddb153e30f24eed788232e41d89c0b27b33ac",
+    "models/player/bb_npoisoner/bb_npoisoner.mdl": "643acb3cce4c20e3e4cc82370dc57bf6de0bf2277c250e3fcdbddf9162155ecd",
+    "models/player/bb_ndemon/bb_ndemon.mdl": "69469f93976f5b6ae1bd7610208ffa139a63962baaf725d769822edac82a4c73",
+    "sound/basebuildervt/round_start.wav": "0d19863fd6eac1c8c892eaff0a5c9130783b7ab4c676b85684c89fc079db2872",
+    "sound/basebuildervt/win_zombies2.wav": "6340520dc05e86096513e83f72f8e89fab4ccca57aa5949246ee510d58d25a2c",
+    "sound/basebuildervt/block_drop.wav": "521f889d766594e1008ec4d1c3d86968e3621257ce99cd5733d5be8c18b2cfad",
+    "sound/basebuildervt/quaddamage.wav": "b9636aba2628fd9b787e2b729745c9278321715c639e3ed92ff5d4cfc678b5ca",
+    "sound/basebuildervt/correct.wav": "aa8a768d275e8238662697ee0feae24bde7758db23357ff82d1d4f26a35bc201",
+    "sound/basebuildervt/pickupgem.wav": "e31820b7c3ca19b9b74457cee12b32e0c4b8b1315f7ad4c2ddbdc7d9486412f6",
+    "sound/basebuildervt/win_builders2.wav": "611e9023e29dddcb5e8f87c05fca1891e197a6ea305e29051340a09c5765beba",
+    "sound/basebuildervt/trap.wav": "39b06360a35cc28b898a73510c022c182bf37bc5aa72cd306c376a3c352dc59b",
+    "sound/basebuildervt/block_grab.wav": "4aac16b6f6a099ca49f0ce2b2844182dea755a40a8967ae64e9f576c808182f9",
+    "sound/basebuildervt/phase_prep3.wav": "3022fc428a50ce2a462744da025fc69d8d604471945f54dec270ea4a4310b7b5",
+    "sound/basebuildervt/laugh1.wav": "9374dbd521ff54f2a54bdff3ddd1864ec0bab74b7505cd5fbe7886fcd1caa4e4",
+    "sound/basebuildervt/round_start2.wav": "69ca5c4c3a39d25af7aa047bea2389b541869a814210bd99fd07ccfba2ae3d2b",
+    "sound/basebuildervt/brick.wav": "05d4590c05099f79d62426ff2cfd9ba738c7f9082d7b431a9e4733ccaf1012e7",
+    "sound/basebuildervt/phase_build3.wav": "2515e9f5761f23f3809423f1ce23f7d460ddeb52412f1b2ecb5933b448f962dd",
+    "sound/basebuildervt/fail.wav": "c1943e7eb367a05ff5f200337ed2523560304629bb20420434ce247945d38778",
+    "sound/basebuildervt/iceboltexplode.wav": "c86d33c5ac5f2546fe5bad6e84d6f89f6a2170f6fa8ac1dfd1a762b3a786f23b",
+    "sound/basebuildervt/thick.wav": "596f9969b2d81f69adb81952eb45b1234bea46b07458089a1bc12eb32517af50",
+    "sound/basebuildervt/electroshock.wav": "9eef026a71b3a04b460b17efefa891ea1de59b4cef8f3c37ce34d3b8ef8fe08f",
+    "sound/basebuildervt/glasspoison.wav": "f76b006b83de3dd51fe80584ae7cdb4264d8d2910b53dae5fbea8129fceea40c",
+    "sound/basebuildervt/thock.wav": "214857ebc7d4c39f52ebf869944a41f33552b9ed33b0c82c6b04636014829293",
+    "sound/basebuildervt/push.wav": "a0f0fbc952887657de6a35d380e80de15cf55218e631c477d790624cea467d94",
+    "sound/basebuildervt/hello.wav": "08e3e5675d67ca6851795c93242d79b46ad667d7f387a58369903bc8b22337c5",
+    "sound/basebuildervt/fireballexplode.wav": "fa5a738b3cdfe5350d1cdb0afe262600db4a5787843b9bc7a320335af19a07ec",
+    "sound/basebuildervt/zombie/idle/idle1.wav": "5452cea9316f8fa895ebec710f270e1d280546b98755a79450fa62706908612b",
+    "sound/basebuildervt/zombie/idle/idle2.wav": "69b90aae6ebb04188f0e3ba6fdc26e4b004d3c53c8fd62ab23ee3db7e4ce8dc6",
+    "sound/basebuildervt/zombie/idle/idle3.wav": "4ef930420d6c504634330be93548881ee02220e23553c55f7de907ccf25fc72a",
+    "sound/basebuildervt/zombie/hit/hit3.wav": "2927113812d70f261daac470a0833f22c4dec075458529b236a6a04d6d611f89",
+    "sound/basebuildervt/zombie/hit/hit2.wav": "8d21913e0a8b235a57657640675b17601086739869b8feab560282e226df857d",
+    "sound/basebuildervt/zombie/hit/hit1.wav": "dc86499dd1b28033ae8c059ff7a52f48c2a97b6a217893ec9a1b4ae0b69d6422",
+    "sound/basebuildervt/zombie/death/death1.wav": "318ccc618231f6792a3513d80b83c55aa0d3292b9e6fc2020964a1950303da44",
+    "sound/basebuildervt/zombie/death/death2.wav": "88ec9be5e12f559a176b83508a97587c52494fa5752a5bac17ed33ca1a4430b3",
+    "sound/basebuildervt/zombie/miss/miss2.wav": "ba195150d17a07727e3de0d3b5890175023ce6932418299652b8b70bc5f43b86",
+    "sound/basebuildervt/zombie/miss/miss3.wav": "9a055b642eb14ea188ffd7573f7d2b13d4ff934bd7c8a8e458daac441ade9e00",
+    "sound/basebuildervt/zombie/miss/miss1.wav": "2c5d2578967285ef47bf81cdd2b1c4699e7b23bfa8ab1da2622da0106ef6adec",
+    "sound/basebuildervt/zombie/pain/pain1.wav": "c94b5b1981f33355170894a3e35323d181a95e7d29d67c93fdabbcce20754aef",
+    "sound/basebuildervt/zombie/pain/pain3.wav": "87d8afa25644588f98baf3cd8589165e68ef0a3e747960baf520278c97b388f2",
+    "sound/basebuildervt/zombie/pain/pain2.wav": "6cbcccbf54f0c2b69f32558237636273030413e3857080610a25518915aedb3d",
+    "sound/basebuildervt/christmas/7.mp3": "ce815ae6a0df40569891a65f129be263d20ee46bea7c545eb9d70df992f61958",
+    "sound/basebuildervt/christmas/6.mp3": "679efecf26ce2415502ed3a4415dad02c206b30bd05cc3645995e5b30cef4743",
+    "sound/basebuildervt/christmas/4.mp3": "36a399f625163094c590fc4c695aec57ee22b245be874581e2ae4b0c946a56b8",
+    "sound/basebuildervt/christmas/5.mp3": "1bac90325c4c10a42b6b5eb94c2ccf4a855c36677c23dd62bae4c56b6625f75d",
+    "sound/basebuildervt/christmas/1.mp3": "07b23a6e3481e66c59d16417baecd6a763af56f0ce4dbb9f6b2487e0a939a304",
+    "sound/basebuildervt/christmas/2.mp3": "e1591b06a2eaa94e0cc4a902a648eb5161ac5ad437e4bd42f1d7ea978e73dc19",
+    "sound/basebuildervt/christmas/3.mp3": "3a9e3ec7ca6fea7d1969549e633ff8a98a01a0a1af431fbbe18bad182c2b4f2f",
+    "sound/basebuildervt/christmas/21.mp3": "528ff138066f11e448109acbec83e5b8f360105ae6cf95730e90d82f1ebe16c6",
+    "sound/basebuildervt/christmas/20.mp3": "e06bc13bd3d23ad804702babea7ec10ee493b7f1681ffd771b733f42b149355c",
+    "sound/basebuildervt/christmas/18.mp3": "2bab820710eb8ed0d2c2bf6406c8b33a05152a75f77800fca40c4f3a2de11b99",
+    "sound/basebuildervt/christmas/19.mp3": "63cb0cd3ec577bbe1a365eecaf27b9617118b8965dd94c7ea053fe09fa264776",
+    "sound/basebuildervt/christmas/17.mp3": "25882afaae5c8ccee2c44a60888909b3ab026a2d35e8d4fa4ec2ad6d3f86e535",
+    "sound/basebuildervt/christmas/16.mp3": "e01c50b4bb98ea2bb19d88371e7180bd6ecadf84ad25577ef7829a5087ebd2d4",
+    "sound/basebuildervt/christmas/14.mp3": "e4d0c233d17149364a8ad462d641a60bdb8a14d7af0bc4975188433e4d2128c0",
+    "sound/basebuildervt/christmas/15.mp3": "74fdd22be4a6d3e18ffe49cebcb814f468d487988b1d971bb4f097245c2b840c",
+    "sound/basebuildervt/christmas/11.mp3": "91f1cd1ec1f50bf8a0db0681a62f418673a5ae44b44e81aecf94f8d63ea4b74b",
+    "sound/basebuildervt/christmas/10.mp3": "7132a51e7d7929a52681ca4f55e3ad50eb0685d824c0d62806f89d6e67e63438",
+    "sound/basebuildervt/christmas/12.mp3": "9f7541b9592509de0af2f3cba7efd89f698d5a62af6d46c50cf652f1d60139ee",
+    "sound/basebuildervt/christmas/13.mp3": "51175a17f8ee446b0cc014611c576b2b8fee51ec8646a7d5b625f3a52a26482c",
+    "sound/basebuildervt/christmas/8.mp3": "d9b287d92ef6b6dc68fa8c76a07eb152c80f26c3d532fdf53f6bbae3db9a466c",
+    "sound/basebuildervt/christmas/9.mp3": "a9ce71966f685bf953742d9a9b9e3bd4bbba66b525c9bc2d56b3e6aca5b2e5dd",
+    "sprites/basebuildervt/iceboltexplode.spr": "161f4a49a9efa80599bab21d174c4649a6377638e8db45593b37411833871299",
+    "sprites/basebuildervt/falseCounter.spr": "1e32991b22e5a1b313453561247b620a9f318d4f51e745076c1bae50c11996b1",
+    "sprites/basebuildervt/white.spr": "2f073bf96d8adbff7c1fc0f6a21e68ef5f78463a698c1360cb38eb60bdc3b2fd",
+    "sprites/basebuildervt/explo.spr": "032f49e6ca314571b1cc6f79a24416b2535e573b19a56d70a00db29e97ce1945",
+    "sprites/basebuildervt/trueCounter.spr": "ba54a67c78dee799dd950d499837fefa3ee02cc123488c4849804de1c7df3ed9",
+    "sprites/basebuildervt/sleepshroom.spr": "9d94eccd38b1f054efce14a14d1010040b660c762019fba6682e56bea4836346",
+    "sprites/basebuildervt/fireball.spr": "6e76d5142d12ce7b732993150aaad2c0625a7cdde7dcb91b05b181f52f350a20",
+    "sprites/basebuildervt/whitenew.spr": "01fe11f0ba961c2153b5e8bf5ee9d6df26654a288360dce9cdc913948b10aa50",
+    "sprites/basebuildervt/shar.spr": "033de61742cee0beb6a6551d58819ac27cdaa3df2b668086a6d6d8ac88457078",
+    "sprites/basebuildervt/bluez.spr": "1fdad416868a4ea5ecc625bc7c03d453c5fbe0b90f8e5fd00bb9b081bbccc998",
+    "sprites/basebuildervt/pasek.spr": "cc352d7a4261fe0910f411c46d5a18a33bb584645aaa3d20f9ddf116b6eb98cb",
+    "sprites/basebuildervt/barhp.spr": "00755c8b5cdf3a6216bc337250167a7d2ef7346954f6264b7904a2cbb6464c9c",
+    "sprites/basebuildervt/poison.spr": "b69192b056c9b191955fde80f495d26b8e9c25e672be0094efeae2423987eb88",
+    "sprites/basebuildervt/boxsprite.spr": "156d5860b772347a9a5bf3e6612c0cd8f114652b89e9e429d1658b06710eada0",
+    "sprites/basebuildervt/iceBoltPou.spr": "cf619e4670409d7ac46479421facd7a1fa6d46dec59098df1b67077dcea43680",
+    "sprites/basebuildervt/digitalCounter.spr": "96b542ecafa1cc331f21b4aab667566683119b80a0182cc08d3a840d3070b21b",
+    "sprites/basebuildervt/barriersprite.spr": "d6fa11d7e4dd6ba60218da98d9f08aed050e47500d11627ac107b75b108a73b1",
+    "sprites/basebuildervt/team12.spr": "1bc0b3c348917d1bf7a6c7ee05442ec9a5754cbc4c28c658c4c92992c777b24c",
+    "sprites/basebuildervt/teams3.spr": "2ca20d8468152d636a3ae62729272f10b50a494c4c336f65479f0b6a1f37d620",
+    "sprites/basebuildervt/icebolt.spr": "b775fd4b9876d600044e2a2291f6eca19cdee0fb3433b0517c3bab1c0489f50e",
+    "sprites/basebuildervt/pousprite.spr": "75250fd55e8beb8474f45c9528a602b171ea42db05ee5a64681b5dfd5ec6a7e9",
+    "sprites/basebuildervt/laserbeam.spr": "34d3aab696880d190485490cd46c914a8017eb59a52f475372df47aed4171674",
+    "sprites/basebuildervt/lgtning.spr": "44c18837cf85a810f31222665ba00267fb6c8822637c0e7ed57203aa853b58be",
+    "sprites/basebuildervt/flameburn.spr": "07e2a34be06e96bc566e122dc7ab8a44dffbb0542d6cda882fb4044a0bb741ff",
+    "sprites/basebuildervt/barrierwall.spr": "dab2f45e010a6338dc57622bcea66ea5a76a0918f9804316e0d095ae9b275806",
+    "sprites/basebuildervt/christmas/treespot.spr": "6027702bf0b74b58c298894863d0ac2e5763faf495611dc291d4de8bdd040076",
+    "motd/reg_admin.txt": "2644a485d74a53b986f9ce2b1c8acedc16118d230fb612d0707d42705840c722",
+    "motd/reg_zombie.txt": "023466e0f369a72be9bf16b5f3bad36ebcac4406e9b60abde2c03f6ab4d94f19",
+    "motd/reg_human.txt": "d3dc2d918df1a75727d11f1b1d6889142116948af6884c8643650c3f72bf95e8",
+    "motd/reg_global.txt": "e756fb63947c22d2bdff66639873292fecd611a030f26527dea041ccbcd3d8f9",
+    "motd/commands.txt": "013e4853e167ec7519505f0e99dab85f98c594891c52ec7c6dde24b2f02ae881",
+    "motd/binds.txt": "ba7265df9954a9cac55680456263e69a339fe37057020d669aef32cbbd92423f"
+   }
+  },
+  {
+   "url": "https://raw.githubusercontent.com/ecks3/zp508-similar-to-zod/9f74a1455538ca9d6f3bbf4d91cfca515c1dbb48/sound/warcraft3/frostnova.wav",
+   "to": "sound/warcraft3/frostnova.wav",
+   "sha256": "85a3328b347db847c05407ae771a2d4b7c65e25aeff7c34ef75f5634643fe86d"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/ecks3/zp508-similar-to-zod/9f74a1455538ca9d6f3bbf4d91cfca515c1dbb48/sound/warcraft3/impalehit.wav",
+   "to": "sound/warcraft3/impalehit.wav",
+   "sha256": "c86d33c5ac5f2546fe5bad6e84d6f89f6a2170f6fa8ac1dfd1a762b3a786f23b"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/ecks3/zp508-similar-to-zod/9f74a1455538ca9d6f3bbf4d91cfca515c1dbb48/sound/warcraft3/impalelaunch1.wav",
+   "to": "sound/warcraft3/impalelaunch1.wav",
+   "sha256": "219e69a7e3ee441760860762f7c0845b1edee6b358448859c5a81ff60954fa84"
+  }
+ ],
+ "maps": [
+  {
+   "mod": 92733,
+   "file": 279361,
+   "maps": [
+    "bb_castle_final"
+   ]
+  },
+  {
+   "mod": 92807,
+   "file": 317206,
+   "maps": [
+    "bb_dust_iplay"
+   ]
+  },
+  {
+   "mod": 92878,
+   "file": 317082,
+   "maps": [
+    "bb_inferno_iplay"
+   ]
+  },
+  {
+   "mod": 92695,
+   "file": 316966,
+   "maps": [
+    "bb_aztec"
+   ]
+  },
+  {
+   "mod": 93013,
+   "file": 302196,
+   "maps": [
+    "bb_street"
+   ]
+  }
+ ],
+ "dirs": [
+  "addons/amxmodx/data/sqlite3"
+ ],
+ "credits": "BaseBuilder TURBO by KoRrNiK (Albertd, R3X for the barrier plugin), https://github.com/KoRrNiK/BaseBuilder-TURBO (commit 9927f7ad8da126ef70155cff00737045a1ca31d1). Loner-Strike: SQLite instead of MySQL, optional accounts, CZ bot support (spawn hooks, bot zombie classes and guns), open barrier while bots learn a map. Frost grenade sounds (warcraft3/*.wav, from War3FT) fetched from https://github.com/ecks3/zp508-similar-to-zod."
+}

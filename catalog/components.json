@@ -1,0 +1,446 @@
+{
+ "_note": "Draft. Describes every installable piece; the installer and the panel's Get more area will read this. Install steps (downloads, patches, file lists) are still to be filled in.",
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "components": [
+  {
+   "id": "foundation",
+   "kind": "foundation",
+   "name": "Metamod-P, AMX Mod X, ReGameDLL",
+   "required": true,
+   "sources": [
+    "https://github.com/theAsmodai/metamod-p",
+    "https://www.amxmodx.org/downloads.php",
+    "https://github.com/s1lentq/ReGameDLL_CS/releases"
+   ]
+  },
+  {
+   "id": "gamemodes",
+   "kind": "core",
+   "name": "Game Mode Menu + control panel",
+   "required": true,
+   "plugins": [
+    "gamemodes.amxx"
+   ],
+   "source": "this repo"
+  },
+  {
+   "id": "botstyles",
+   "kind": "feature",
+   "name": "Bot styles (human-like bots)",
+   "plugins": [
+    "gm_humanbots.amxx"
+   ],
+   "source": "this repo"
+  },
+  {
+   "id": "pubserver",
+   "kind": "feature",
+   "name": "Pub server: regulars, come & go, rtv, welcome screen",
+   "plugins": [
+    "gm_pubserver.amxx"
+   ],
+   "source": "this repo"
+  },
+  {
+   "id": "friends",
+   "kind": "feature",
+   "name": "Play with friends (playit.gg / Tailscale)",
+   "source": "this repo + https://github.com/playit-cloud/playit-agent"
+  },
+  {
+   "id": "mode-classic",
+   "kind": "mode",
+   "name": "Classic",
+   "mode_id": "classic",
+   "plugins": [],
+   "source": "this repo / built in",
+   "bot_patched": false
+  },
+  {
+   "id": "mode-csdm",
+   "kind": "mode",
+   "name": "Deathmatch",
+   "mode_id": "csdm",
+   "plugins": [
+    "gm_deathmatch.amxx"
+   ],
+   "source": "this repo / built in",
+   "bot_patched": false
+  },
+  {
+   "id": "mode-csdm_ffa",
+   "kind": "mode",
+   "name": "Free for all",
+   "mode_id": "csdm_ffa",
+   "plugins": [
+    "gm_deathmatch.amxx"
+   ],
+   "source": "this repo / built in",
+   "bot_patched": false
+  },
+  {
+   "id": "mode-gungame",
+   "kind": "mode",
+   "name": "Gun Game",
+   "mode_id": "gungame",
+   "plugins": [
+    "gungame.amxx"
+   ],
+   "source": "AlliedModders: Gun Game by Avalanche",
+   "bot_patched": true
+  },
+  {
+   "id": "mode-gungame_team",
+   "kind": "mode",
+   "name": "Gun Game (Teams)",
+   "mode_id": "gungame_team",
+   "plugins": [
+    "gungame.amxx"
+   ],
+   "source": "AlliedModders: Gun Game by Avalanche",
+   "bot_patched": true
+  },
+  {
+   "id": "mode-zombie",
+   "kind": "mode",
+   "name": "Zombie Plague",
+   "mode_id": "zombie",
+   "plugins": [
+    "zombie_plague40.amxx",
+    "zp_zclasses40.amxx"
+   ],
+   "source": "AlliedModders: Zombie Plague 4.3 by MeRcyLeZZ",
+   "bot_patched": true
+  },
+  {
+   "id": "mode-zp5",
+   "kind": "mode",
+   "name": "Zombie Plague Advanced",
+   "mode_id": "zp5",
+   "plugins": [
+    "zp50_core.amxx",
+    "zp5_amx_settings_api.amxx",
+    "zp5_cs_player_models_api.amxx",
+    "zp5_cs_teams_api.amxx",
+    "zp5_cs_maxspeed_api.amxx",
+    "zp5_cs_weap_models_api.amxx",
+    "zp5_cs_weap_restrict_api.amxx",
+    "zp5_cs_ham_bots_api.amxx",
+    "zp50_class_zombie.amxx",
+    "zp50_class_human.amxx",
+    "zp50_class_nemesis.amxx",
+    "zp50_class_assassin.amxx",
+    "zp50_class_survivor.amxx",
+    "zp50_class_sniper.amxx",
+    "zp50_class_zombie_classic.amxx",
+    "zp50_class_zombie_raptor.amxx",
+    "zp50_class_zombie_light.amxx",
+    "zp50_class_zombie_fat.amxx",
+    "zp50_class_zombie_leech.amxx",
+    "zp50_class_zombie_rage.amxx",
+    "zp50_class_human_classic.amxx",
+    "zp50_class_human_raptor.amxx",
+    "zp50_human_armor.amxx",
+    "zp50_gamemodes.amxx",
+    "zp50_gamemode_infection.amxx",
+    "zp50_gamemode_multi.amxx",
+    "zp50_gamemode_swarm.amxx",
+    "zp50_gamemode_nemesis.amxx",
+    "zp50_gamemode_assassin.amxx",
+    "zp50_gamemode_survivor.amxx",
+    "zp50_gamemode_sniper.amxx",
+    "zp50_gamemode_plague.amxx",
+    "zp50_gamemode_armageddon.amxx",
+    "zp50_items.amxx",
+    "zp50_items_ammopacks.amxx",
+    "zp50_item_weapons.amxx",
+    "zp50_item_nightvision.amxx",
+    "zp50_item_antidote.amxx",
+    "zp50_item_zombie_madness.amxx",
+    "zp50_item_infection_bomb.amxx",
+    "zp50_admin_commands.amxx",
+    "zp50_admin_menu.amxx",
+    "zp50_buy_menus.amxx",
+    "zp50_buy_zones.amxx",
+    "zp50_rewards_ammopacks.amxx",
+    "zp50_rewards_frags_hp.amxx",
+    "zp50_deathmatch.amxx",
+    "zp50_random_spawn.amxx",
+    "zp50_spawn_protection.amxx",
+    "zp50_zombie_features.amxx",
+    "zp50_zombie_sounds.amxx",
+    "zp50_zombie_damage.amxx",
+    "zp50_human_ammo.amxx",
+    "zp50_flashlight.amxx",
+    "zp50_nightvision.amxx",
+    "zp50_leap.amxx",
+    "zp50_painshockfree.amxx",
+    "zp50_knockback.amxx",
+    "zp50_weapon_drop_strip.amxx",
+    "zp50_effects_infect.amxx",
+    "zp50_effects_cure.amxx",
+    "zp50_effects_lighting.amxx",
+    "zp50_ambience_effects.amxx",
+    "zp50_ambience_sounds.amxx",
+    "zp50_main_menu.amxx",
+    "zp50_objective_remover.amxx",
+    "zp50_gameplay_fixes.amxx",
+    "zp50_team_scoring.amxx",
+    "zp50_hud_info.amxx",
+    "zp50_serverbrowser_info.amxx",
+    "zp50_ammopacks.amxx",
+    "zp50_grenade_fire.amxx",
+    "zp50_grenade_frost.amxx",
+    "zp50_grenade_flare.amxx"
+   ],
+   "source": "https://github.com/evandrocoan/MultiModServer (ZP 5.0.8) + https://github.com/ecks3/zp508-similar-to-zod (Sniper, Assassin)",
+   "bot_patched": true
+  },
+  {
+   "id": "mode-knife",
+   "kind": "mode",
+   "name": "Knife Arena",
+   "mode_id": "knife",
+   "plugins": [],
+   "source": "this repo / built in",
+   "bot_patched": false
+  },
+  {
+   "id": "mode-pistols",
+   "kind": "mode",
+   "name": "Pistols Only",
+   "mode_id": "pistols",
+   "plugins": [],
+   "source": "this repo / built in",
+   "bot_patched": false
+  },
+  {
+   "id": "mode-deagle",
+   "kind": "mode",
+   "name": "Deagle Only",
+   "mode_id": "deagle",
+   "plugins": [],
+   "source": "this repo / built in",
+   "bot_patched": false
+  },
+  {
+   "id": "mode-awp",
+   "kind": "mode",
+   "name": "AWP Only",
+   "mode_id": "awp",
+   "plugins": [],
+   "source": "this repo / built in",
+   "bot_patched": false
+  },
+  {
+   "id": "mode-scoutz",
+   "kind": "mode",
+   "name": "Scoutz & Knivez",
+   "mode_id": "scoutz",
+   "plugins": [],
+   "source": "this repo / built in",
+   "bot_patched": false
+  },
+  {
+   "id": "mode-surf",
+   "kind": "mode",
+   "name": "Surf",
+   "mode_id": "surf",
+   "plugins": [],
+   "source": "this repo / built in",
+   "bot_patched": false
+  },
+  {
+   "id": "mode-war3",
+   "kind": "mode",
+   "name": "Warcraft 3",
+   "mode_id": "war3",
+   "plugins": [
+    "war3ft.amxx"
+   ],
+   "source": "https://github.com/wc3mods/war3ft",
+   "bot_patched": true
+  },
+  {
+   "id": "mode-shero",
+   "kind": "mode",
+   "name": "SuperHero",
+   "mode_id": "shero",
+   "plugins": [
+    "superheromodnvault.amxx",
+    "sh_superman.amxx",
+    "sh_flash.amxx",
+    "sh_batman.amxx",
+    "sh_captaina.amxx",
+    "sh_hulk.amxx",
+    "sh_spiderman.amxx",
+    "sh_mystique.amxx",
+    "sh_kamikaze.amxx",
+    "sh_blackpanther.amxx",
+    "sh_daredevil.amxx",
+    "sh_kraven.amxx",
+    "sh_punisher.amxx",
+    "sh_dracula.amxx",
+    "sh_bomberman.amxx",
+    "sh_deadpool.amxx",
+    "sh_nightcrawler.amxx",
+    "sh_wolverine.amxx",
+    "sh_ironman.amxx",
+    "sh_humantorch.amxx",
+    "sh_invisman.amxx",
+    "sh_masterchief.amxx",
+    "sh_thing.amxx",
+    "sh_cyclops.amxx",
+    "sh_colossus.amxx",
+    "sh_greenlantern.amxx",
+    "sh_sonic.amxx",
+    "sh_darthmaul.amxx",
+    "sh_xavier.amxx",
+    "sh_morpheus.amxx",
+    "sh_beast.amxx",
+    "sh_subzero.amxx",
+    "sh_juggernaut.amxx",
+    "sh_magneto.amxx",
+    "sh_thor.amxx",
+    "sh_sandman.amxx",
+    "sh_phoenix.amxx",
+    "sh_yoda.amxx",
+    "sh_chucky.amxx",
+    "sh_zeus.amxx",
+    "sh_frieza.amxx",
+    "sh_botpowers.amxx"
+   ],
+   "source": "https://github.com/evandrocoan/MultiModServer + hero resources from https://github.com/OneAimlessRobot/my_amxx_plugins",
+   "bot_patched": true
+  },
+  {
+   "id": "mode-hns",
+   "kind": "mode",
+   "name": "Hide and Seek",
+   "mode_id": "hns",
+   "plugins": [
+    "hidenseek.amxx"
+   ],
+   "source": "https://github.com/evandrocoan/MultiModServer (HideNSeek 2.8 by Exolent)",
+   "bot_patched": true
+  },
+  {
+   "id": "mode-paintball",
+   "kind": "mode",
+   "name": "Paintball",
+   "mode_id": "paintball",
+   "plugins": [
+    "pb_gameplay.amxx",
+    "pb_weapons.amxx",
+    "pb_grenades.amxx",
+    "pb_movement.amxx",
+    "pb_elimination.amxx"
+   ],
+   "source": "https://github.com/GlobalModders/CS1.6-AMXX-PaintBall-Elimination-2016-By-Sneaky.amxx",
+   "bot_patched": true
+  },
+  {
+   "id": "mode-kreedz",
+   "kind": "mode",
+   "name": "Kreedz (climb)",
+   "mode_id": "kreedz",
+   "plugins": [
+    "prokreedz.amxx",
+    "kz_gm_nobots.amxx"
+   ],
+   "source": "AlliedModders archive: ProKreedz 2.31",
+   "bot_patched": true
+  },
+  {
+   "id": "mode-deathrun",
+   "kind": "mode",
+   "name": "Deathrun",
+   "mode_id": "deathrun",
+   "plugins": [
+    "DeathrunManager.amxx",
+    "DRM_trigger_hurt_fix.amxx",
+    "ResetButtons.amxx",
+    "dr_bot_traps.amxx"
+   ],
+   "source": "https://github.com/evandrocoan/MultiModServer (Deathrun Manager by xPaw)",
+   "bot_patched": true
+  },
+  {
+   "id": "mode-basebuilder",
+   "kind": "mode",
+   "name": "Base Builder",
+   "mode_id": "basebuilder",
+   "plugins": [
+    "basebuilder.amxx",
+    "blockBarrierTURBO.amxx",
+    "frostNadeTURBO.amxx",
+    "napalmNadeTURBO.amxx",
+    "granadePushTURBO.amxx"
+   ],
+   "source": "https://github.com/KoRrNiK/BaseBuilder-TURBO",
+   "bot_patched": true
+  },
+  {
+   "id": "mode-soccerjam",
+   "kind": "mode",
+   "name": "SoccerJam",
+   "mode_id": "soccerjam",
+   "plugins": [
+    "soccerjam.amxx"
+   ],
+   "source": "https://github.com/OneAimlessRobot/my_amxx_plugins (soccerjam.sma, kickball resources)",
+   "bot_patched": true
+  },
+  {
+   "id": "addon-hook",
+   "kind": "addon",
+   "name": "Grappling hook",
+   "plugins": [
+    "csb_grappling_hook.amxx"
+   ],
+   "source": "AlliedModders"
+  },
+  {
+   "id": "addon-quakesounds",
+   "kind": "addon",
+   "name": "Quake sounds",
+   "plugins": [
+    "miscstats.amxx"
+   ],
+   "source": "AMX Mod X (bundled)"
+  },
+  {
+   "id": "addon-gore",
+   "kind": "addon",
+   "name": "Ultimate gore",
+   "plugins": [
+    "amx_gore_ultimate.amxx"
+   ],
+   "source": "AlliedModders"
+  },
+  {
+   "id": "addon-dice",
+   "kind": "addon",
+   "name": "Roll the Dice",
+   "plugins": [
+    "dice_main.amxx",
+    "dice_items_global.amxx",
+    "dice_items_cstrike.amxx"
+   ],
+   "source": "https://github.com/OciXCrom/DICE",
+   "bot_patched": true
+  },
+  {
+   "id": "addon-roundmusic",
+   "kind": "addon",
+   "name": "Round-end music",
+   "plugins": [
+    "roundmusic.amxx"
+   ],
+   "source": "this repo (based on https://github.com/OciXCrom/REMusic) + CC0/CC-BY tracks from OpenGameArt"
+  }
+ ]
+}

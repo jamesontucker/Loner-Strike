@@ -1,0 +1,324 @@
+{
+ "id": "mode-shero",
+ "name": "SuperHero",
+ "kind": "mode",
+ "modes": [
+  "shero"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "Level up and pick superheroes (40 heroes); bots pick heroes and use powers; XP is saved",
+ "installable": true,
+ "vendor": "mods/shero",
+ "compile": [
+  {
+   "src": "shero/superheromodnvault.sma",
+   "out": "superheromodnvault",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_superman.sma",
+   "out": "sh_superman",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_flash.sma",
+   "out": "sh_flash",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_batman.sma",
+   "out": "sh_batman",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_captaina.sma",
+   "out": "sh_captaina",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_hulk.sma",
+   "out": "sh_hulk",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_spiderman.sma",
+   "out": "sh_spiderman",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_mystique.sma",
+   "out": "sh_mystique",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_kamikaze.sma",
+   "out": "sh_kamikaze",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_blackpanther.sma",
+   "out": "sh_blackpanther",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_daredevil.sma",
+   "out": "sh_daredevil",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_kraven.sma",
+   "out": "sh_kraven",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_punisher.sma",
+   "out": "sh_punisher",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_dracula.sma",
+   "out": "sh_dracula",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_bomberman.sma",
+   "out": "sh_bomberman",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_deadpool.sma",
+   "out": "sh_deadpool",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_nightcrawler.sma",
+   "out": "sh_nightcrawler",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_wolverine.sma",
+   "out": "sh_wolverine",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_ironman.sma",
+   "out": "sh_ironman",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_humantorch.sma",
+   "out": "sh_humantorch",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_invisman.sma",
+   "out": "sh_invisman",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_masterchief.sma",
+   "out": "sh_masterchief",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_thing.sma",
+   "out": "sh_thing",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_cyclops.sma",
+   "out": "sh_cyclops",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_colossus.sma",
+   "out": "sh_colossus",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_greenlantern.sma",
+   "out": "sh_greenlantern",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_sonic.sma",
+   "out": "sh_sonic",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_darthmaul.sma",
+   "out": "sh_darthmaul",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_xavier.sma",
+   "out": "sh_xavier",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_morpheus.sma",
+   "out": "sh_morpheus",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_beast.sma",
+   "out": "sh_beast",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_subzero.sma",
+   "out": "sh_subzero",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_juggernaut.sma",
+   "out": "sh_juggernaut",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_magneto.sma",
+   "out": "sh_magneto",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_thor.sma",
+   "out": "sh_thor",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_sandman.sma",
+   "out": "sh_sandman",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_phoenix.sma",
+   "out": "sh_phoenix",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_yoda.sma",
+   "out": "sh_yoda",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_chucky.sma",
+   "out": "sh_chucky",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_zeus.sma",
+   "out": "sh_zeus",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_frieza.sma",
+   "out": "sh_frieza",
+   "include": "shero_include"
+  },
+  {
+   "src": "shero/sh_botpowers.sma",
+   "out": "sh_botpowers",
+   "include": "shero_include"
+  }
+ ],
+ "fetch": [
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/player/masterchief/masterchief.mdl",
+   "to": "models/player/masterchief/masterchief.mdl",
+   "sha256": "2139162389f4bfec7fc5f1da7ed3a742efc7960c436e1d321818101af7227dd2"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/player/masterchief_ct/masterchief_ct.mdl",
+   "to": "models/player/masterchief_ct/masterchief_ct.mdl",
+   "sha256": "27fbfbd9e38fcb2b07f81cbcf36aa74e00baee8cf0f36218f8cd38c312f531ea"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/player/masterchief_t/masterchief_t.mdl",
+   "to": "models/player/masterchief_t/masterchief_t.mdl",
+   "sha256": "dabf91bea07deb85e6eb8d3ef8e4b4ec5a1f30e3d7065a1006fcd17463b06ff3"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/shmod/bomberman_bomb.mdl",
+   "to": "models/shmod/bomberman_bomb.mdl",
+   "sha256": "28094dbda5fd1c669e9e5d9cee62f88ff3ae9f9e6662c4c970b4d8864b2a92a8"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/shmod/chucky_knife.mdl",
+   "to": "models/shmod/chucky_knife.mdl",
+   "sha256": "eff3e28801f2b800a0d16e7650125b0f8165b90a509ecdf077f2b7450eed685f"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/shmod/darthmaul_knife.mdl",
+   "to": "models/shmod/darthmaul_knife.mdl",
+   "sha256": "8a062f56e6dc2f4c16478f060ff09af316257b8d603ec0c89738c09bde548f74"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/shmod/darthmaul_p_knife.mdl",
+   "to": "models/shmod/darthmaul_p_knife.mdl",
+   "sha256": "ce8c4fba5df9892aefbfc76c663ba3e6acf801cccdd5a32f23e839bae10dd654"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/shmod/freezed.mdl",
+   "to": "models/shmod/freezed.mdl",
+   "sha256": "2f6e2e411094ac4f72e0cdf58f0792b932e0481e0d17e2bdd66c1f6cc133e22c"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/shmod/frieza_friezadisc.mdl",
+   "to": "models/shmod/frieza_friezadisc.mdl",
+   "sha256": "0cd7a2a24d34a235fffbfea1d4a2a7d2bdc8fcebb132b5c8c934e5b97d4dfd53"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/shmod/masterchief_p_p90.mdl",
+   "to": "models/shmod/masterchief_p_p90.mdl",
+   "sha256": "e533bd12a61bbffa56da377755e3e9ca8da57ecf38a85f465a30e3b169180f8b"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/shmod/masterchief_v_p90.mdl",
+   "to": "models/shmod/masterchief_v_p90.mdl",
+   "sha256": "0a2947e817cf111ea142c0edbe9a3e42e1dfa0224a34da7cbbc76dd5330da720"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/shmod/morpheus_mp5.mdl",
+   "to": "models/shmod/morpheus_mp5.mdl",
+   "sha256": "a4a367468851da3f95f66a9979d48fbe5d93b4ef26917a8261b899364c4123e9"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/shmod/wall.mdl",
+   "to": "models/shmod/wall.mdl",
+   "sha256": "b39ccc53b448e281507e04047bc4ea852d932c5ba5a3fa9d31619f04d6d85e5b"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/models/shmod/wolv_knife.mdl",
+   "to": "models/shmod/wolv_knife.mdl",
+   "sha256": "b9caab340932edb6ff761c3a1d67d086e41af1e09937ddd9b587ba958810e461"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/sound/shmod/freezed.wav",
+   "to": "sound/shmod/freezed.wav",
+   "sha256": "baaaa8d898c976f7ab01f7f8163d494a3bd188c4b935c3c11513e9ef7bde48d3"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/sound/shmod/frieza_destructodisc.wav",
+   "to": "sound/shmod/frieza_destructodisc.wav",
+   "sha256": "92a3a799e04060f737581ff7144a78f335d187d5a83a4b1ac7cea7c0ebb363cd"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/sound/shmod/yoda_forcepush.wav",
+   "to": "sound/shmod/yoda_forcepush.wav",
+   "sha256": "616188177b56e52f5aa6c99da4a60e5054bb55c1b17e56ba00493653ed10ec26"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/cstrike/sprites/shmod/iceball.spr",
+   "to": "sprites/shmod/iceball.spr",
+   "sha256": "b775fd4b9876d600044e2a2291f6eca19cdee0fb3433b0517c3bab1c0489f50e"
+  }
+ ],
+ "maps": [],
+ "dirs": [
+  "addons/amxmodx/data/vault"
+ ],
+ "credits": "SuperHero Mod 1.2.1 by {HOJ}Batman, JTP10181, vittu, AssKicR and the SuperHero Team (http://shero.alliedmods.net/); hero plugins by their respective authors; sources from https://github.com/evandrocoan/MultiModServer @ 5073cacd70da48a52953e8f9d9a39ec2d5fadd62; hero models/sounds from https://github.com/OneAimlessRobot/my_amxx_plugins @ ce0a4157ee82044c741fc7da22c19ba3fc656e3a. GPL. CZ bot support (sh_botpowers, core patches) by Loner-Strike."
+}

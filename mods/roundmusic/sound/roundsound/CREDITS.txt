@@ -1,0 +1,41 @@
+Round end music - seeded tracks
+===============================
+Drop your own .mp3 / .wav files into these folders - the roundmusic add-on finds them
+automatically at the next map change (no config needed):
+  t_win/    played when the Terrorists win
+  ct_win/   played when the Counter-Terrorists win
+  (this folder itself) played for either team
+File names: no spaces. wav must be 8/16-bit PCM, mono, 11025 or 22050 Hz. mp3: plain CBR mp3.
+Max 16 files per folder are used per map (a random 16 if there are more).
+
+The seeded tracks below are short excerpts (cut to 7-14 s, faded out, loudness-normalised
+to -16 LUFS, re-encoded as 112 kbps mp3). All are free licences; CC-BY tracks require the
+credit below. Excerpting/fading is the only modification.
+
+t_win/tritachyon_3hr_mt3.mp3
+  "Heavy Metal Riffs - 3HR.MT3" by Tri-Tachyon - CC-BY 4.0
+  https://opengameart.org/node/47765
+t_win/tritachyon_monolith.mp3
+  "Heavy Metal Riffs - Monolith" by Tri-Tachyon - CC-BY 4.0
+  https://opengameart.org/content/heavy-metal-riffs-monolith
+t_win/emma_ma_megasong.mp3
+  "Megasong" by Emma_MA - CC0 1.0 (public domain)
+  https://opengameart.org/content/megasong
+t_win/marcelofg55_black_rock.mp3
+  "Black Rock" by marcelofg55 - CC-BY 4.0
+  https://opengameart.org/content/black-rock
+ct_win/umplix_rock_theme.mp3
+  "Rock Theme Song" by Umplix - CC0 1.0 (public domain)
+  https://opengameart.org/content/rock-theme-song
+ct_win/zanelittle_stick_to_it.mp3
+  "Stick to it - Day 17" by Zane Little Music - CC0 1.0 (public domain)
+  https://opengameart.org/content/stick-to-it-day-17
+ct_win/owlishmedia_guitar_fanfare.mp3
+  "Smooth Guitar Fanfare" by OwlishMedia - CC-BY 4.0
+  https://opengameart.org/content/smooth-guitar-fanfare
+ct_win/tritachyon_4hr_dm8.mp3
+  "Heavy Metal Riffs - 4HR.DM8" by Tri-Tachyon (submitted by Ellary) - CC-BY 4.0
+  https://opengameart.org/node/88859
+
+CC-BY 4.0: https://creativecommons.org/licenses/by/4.0/
+CC0 1.0:   https://creativecommons.org/publicdomain/zero/1.0/

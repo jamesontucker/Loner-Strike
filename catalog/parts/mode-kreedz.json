@@ -1,0 +1,69 @@
+{
+ "id": "mode-kreedz",
+ "name": "Kreedz (climb)",
+ "kind": "mode",
+ "modes": [
+  "kreedz"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "Kreedz: solo climbing maps with a timer, checkpoints and local Top 15 records (no bots)",
+ "installable": true,
+ "vendor": "mods/kreedz",
+ "compile": [
+  {
+   "src": "kreedz/prokreedz.sma",
+   "out": "prokreedz",
+   "include": "kreedz_include"
+  },
+  {
+   "src": "kreedz/kz_gm_nobots.sma",
+   "out": "kz_gm_nobots",
+   "include": null
+  }
+ ],
+ "maps": [
+  {
+   "mod": 97293,
+   "file": 298475,
+   "maps": [
+    "bkz_goldbhop"
+   ]
+  },
+  {
+   "mod": 97370,
+   "file": 295876,
+   "maps": [
+    "kz_beginner"
+   ]
+  },
+  {
+   "mod": 96907,
+   "file": 293712,
+   "maps": [
+    "kz_summercliff2"
+   ]
+  },
+  {
+   "mod": 96850,
+   "file": 272203,
+   "maps": [
+    "kz_airmountain"
+   ]
+  },
+  {
+   "mod": 96914,
+   "file": 287023,
+   "maps": [
+    "kz_urban"
+   ]
+  }
+ ],
+ "dirs": [
+  "addons/amxmodx/configs/kz/top15",
+  "addons/amxmodx/configs/kz/savepos"
+ ],
+ "credits": "ProKreedz 2.31 by nucLeaR & p4ddY (https://forums.alliedmods.net/showthread.php?t=130417), GPL; kz_gm_nobots by Loner-Strike"
+}

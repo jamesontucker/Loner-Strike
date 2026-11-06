@@ -1,0 +1,181 @@
+{
+ "id": "mode-soccerjam",
+ "name": "SoccerJam",
+ "kind": "mode",
+ "modes": [
+  "soccerjam"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "Knife football: kick the ball into the enemy goal (bots chase and shoot the ball)",
+ "installable": true,
+ "vendor": "mods/soccerjam",
+ "compile": [
+  {
+   "src": "soccerjam/soccerjam.sma",
+   "out": "soccerjam",
+   "include": null
+  }
+ ],
+ "fetch": [
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/models/shmod/roberto_carlos/kickball/ball.mdl",
+   "to": "models/kickball/ball.mdl",
+   "sha256": "447d655682587a3c1703ba900c58f76ef3882809856deb2b4cd7673af72b6121"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/amaze.wav",
+   "to": "sound/kickball/amaze.wav",
+   "sha256": "d28ff2c7a53ec8c92648191dfcb3c4464ea2cbefb2163df95006daee0171037e"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/bday.wav",
+   "to": "sound/kickball/bday.wav",
+   "sha256": "1f3bd80843767d8093471c20e201e8bac2ee67f7319f0c8bd3e34e8c61bfa009"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/boomchakalaka.WAV",
+   "to": "sound/kickball/boomchakalaka.wav",
+   "sha256": "275316712d366e7c0c33db2177e135faed72d61cc81d0cba5c91c18bc85a9d2c"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/bounce.wav",
+   "to": "sound/kickball/bounce.wav",
+   "sha256": "d80fc2c38187560cdc12d6dc2dc2408f609c475267446209f21e33a171cd40fe"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/cheer1.wav",
+   "to": "sound/kickball/cheer1.wav",
+   "sha256": "bfb3af881566ec0f990af4314fbb6428c81bbb56166b470eb3d0b1360529c5c5"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/cheer2.wav",
+   "to": "sound/kickball/cheer2.wav",
+   "sha256": "8b2405be41db5d38b7d2fa7b838f80d180d86dcc4576a90592a98d993db324ca"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/cheer3.wav",
+   "to": "sound/kickball/cheer3.wav",
+   "sha256": "77ac4487c5d69a9cadacb7fc8116ff6cef93f4231b69f0cd4cb57b152d1d248f"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/cheer4.wav",
+   "to": "sound/kickball/cheer4.wav",
+   "sha256": "96a55df99e4dcb7f833fb03250b1925156820f2ee1a391707ab013fb19d84a34"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/cheer5.wav",
+   "to": "sound/kickball/cheer5.wav",
+   "sha256": "afaf6cc5d578f8dcb30642cbcbf84e3e4d0b3e8bdb495a381bfa0d4b1c5953e2"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/cheer6.wav",
+   "to": "sound/kickball/cheer6.wav",
+   "sha256": "dfedb878fa4f59467f53c9544ab682d75e2f8e327f490eee5df234fcacb2ee46"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/diebitch.wav",
+   "to": "sound/kickball/diebitch.wav",
+   "sha256": "841cd9aaa5ed0671950dc52ead974d49c6ec89de25d515f0f742bc89796fef62"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/distress.wav",
+   "to": "sound/kickball/distress.wav",
+   "sha256": "e7bc668f1c94f0c375f4e9c6df6ae044f94850693847df6dba8dfec34ac6f4ce"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/gotball.wav",
+   "to": "sound/kickball/gotball.wav",
+   "sha256": "ed49d2594f9b04c3ff29e0d6b423945ab7e90f4a722cc6a48310e21f0f90561a"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/kicked.wav",
+   "to": "sound/kickball/kicked.wav",
+   "sha256": "3b120972eaa8c7029f33e0549d1b7ef8ec7b8b885bce40778b92a937452ec7f5"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/kicked1.wav",
+   "to": "sound/kickball/kicked1.wav",
+   "sha256": "21e90bcd670105ab7e88b0c5700932c069032c3dfee6cfaa4ba9ff0d3498352e"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/laugh.wav",
+   "to": "sound/kickball/laugh.wav",
+   "sha256": "94208ba2a82b5d2770ee6ab109647825a71ebf5384f69480b1f50e34b1ec0523"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/levelup.wav",
+   "to": "sound/kickball/levelup.wav",
+   "sha256": "e82ca20c3b237c508ea4426c30c8c9f89a800bcdb04442e1717691f0204ae196"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/perfect.wav",
+   "to": "sound/kickball/perfect.wav",
+   "sha256": "c4ebff5f1e87e45ea187c9e0e277f7c626df3da71ff4edd00d4fc85da25062a4"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/prepare.wav",
+   "to": "sound/kickball/prepare.wav",
+   "sha256": "65d97908d533dee98c912f63957c449efefbca639f3b1fb26f7e5987a3ea936e"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/pussy.wav",
+   "to": "sound/kickball/pussy.wav",
+   "sha256": "561e7d879de9e16c96d24e52ad44031912d8b747877ca0f007754111245cf1b1"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/returned.wav",
+   "to": "sound/kickball/returned.wav",
+   "sha256": "52b3e45c3baa3a191da2fbe7b8e239bd7217eccec9618bbe50909b4a17069ee7"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/vastaps.wav",
+   "to": "sound/kickball/vastaps.wav",
+   "sha256": "a05184175902e75ce17f98d8dbe5e81a4a9bdc6de5a7f7616322d26a5be870d4"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/whistle.wav",
+   "to": "sound/kickball/whistle.wav",
+   "sha256": "52c54e689f7b0f69134b096be01b01744ffc1224beb42bb0d8feeff087744951"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/OneAimlessRobot/my_amxx_plugins/ce0a4157ee82044c741fc7da22c19ba3fc656e3a/superhero_pack_folder/sound/shmod/roberto_carlos/kickball/whistle_endgame.wav",
+   "to": "sound/kickball/whistle_endgame.wav",
+   "sha256": "6468c72e21c06962ce8a51e8f9cad0f057ace971f1d1d3d25acc47f95a7cab5e"
+  }
+ ],
+ "maps": [
+  {
+   "mod": 90484,
+   "file": 297959,
+   "maps": [
+    "sj_monumental"
+   ]
+  },
+  {
+   "mod": 90551,
+   "file": 273564,
+   "maps": [
+    "soccerjam2"
+   ]
+  },
+  {
+   "mod": 90520,
+   "file": 297960,
+   "maps": [
+    "sj_stadium"
+   ]
+  },
+  {
+   "mod": 90555,
+   "file": 304034,
+   "maps": [
+    "soccerjam_minecraft"
+   ]
+  }
+ ],
+ "dirs": [],
+ "credits": "SoccerJam 2.07a by OneEyed, from https://github.com/OneAimlessRobot/my_amxx_plugins (commit ce0a4157ee82044c741fc7da22c19ba3fc656e3a; ball model from its superhero pack). English language files and bot ball-chasing by Loner-Strike."
+}

@@ -1,0 +1,23 @@
+{
+ "id": "addon-gore",
+ "name": "Ultimate gore",
+ "kind": "addon",
+ "addons": [
+  "gore"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "Ultimate Gore - extra blood, gibs and splatter",
+ "installable": true,
+ "vendor": "mods/gore",
+ "compile": [
+  {
+   "src": "amx_gore_ultimate.sma",
+   "out": "amx_gore_ultimate",
+   "include": null
+  }
+ ],
+ "credits": "Ultimate Gore Enhancement 1.6 by mike_cao / fizzarum / jtp10181 (http://www.jtpage.net; source as published at https://pastebin.com/raw/vUSkR2e6), GPLv2+. Loner-Strike patch: corpses are no longer hidden when a body explodes into gibs. Uses Half-Life's own gib models and blood sprites."
+}

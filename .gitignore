@@ -1,0 +1,25 @@
+# local state that must never be published
+panel/cache/
+panel/tools/
+panel/installed_maps.json
+panel/map_sources.json
+panel/panel.log
+panel_rcon.txt
+secret.txt
+sharing.json
+*.vault
+*.sq3
+regulars.ini
+favorites.txt
+hidden_maps.txt
+recent.txt
+status.json
+
+# build output
+*.amxx
+__pycache__/
+.DS_Store
+
+# made by setup.py for this computer
+Start Loner-Strike.command
+Start Loner-Strike.bat

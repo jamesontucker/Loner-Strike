@@ -1,0 +1,23 @@
+{
+  "id": "addon-roundmusic",
+  "name": "Round-end music",
+  "kind": "addon",
+  "addons": [
+    "roundmusic"
+  ],
+  "games": [
+    "czero",
+    "cstrike"
+  ],
+  "description": "Classic pub-style music for the winning team at round end (drop your own mp3s in sound/roundsound)",
+  "installable": true,
+  "vendor": "mods/roundmusic",
+  "compile": [
+    {
+      "src": "roundmusic/roundmusic.sma",
+      "out": "roundmusic",
+      "include": null
+    }
+  ],
+  "credits": "Plugin based on REMusic by OciXCrom, https://github.com/OciXCrom/REMusic. Seeded tracks (trimmed, normalised excerpts) from OpenGameArt.org: Tri-Tachyon, marcelofg55, OwlishMedia (CC-BY 4.0); Emma_MA, Umplix, Zane Little Music (CC0) - see sound/roundsound/CREDITS.txt."
+}

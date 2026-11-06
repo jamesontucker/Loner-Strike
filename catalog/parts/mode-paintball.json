@@ -1,0 +1,109 @@
+{
+ "id": "mode-paintball",
+ "name": "Paintball",
+ "kind": "mode",
+ "modes": [
+  "paintball"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "Paintball Elimination: paint-ball guns, one hit and you're out until your killer is; sprint with right-click",
+ "installable": true,
+ "vendor": "mods/paintball",
+ "compile": [
+  {
+   "src": "paintball/pb_gameplay.sma",
+   "out": "pb_gameplay",
+   "include": null
+  },
+  {
+   "src": "paintball/pb_weapons.sma",
+   "out": "pb_weapons",
+   "include": null
+  },
+  {
+   "src": "paintball/pb_grenades.sma",
+   "out": "pb_grenades",
+   "include": null
+  },
+  {
+   "src": "paintball/pb_movement.sma",
+   "out": "pb_movement",
+   "include": null
+  },
+  {
+   "src": "paintball/pb_elimination.sma",
+   "out": "pb_elimination",
+   "include": null
+  }
+ ],
+ "fetch": [
+  {
+   "archive": "https://codeload.github.com/GlobalModders/CS1.6-AMXX-PaintBall-Elimination-2016-By-Sneaky.amxx/tar.gz/69394e062334c24d32a125f5059e9032a9491192",
+   "strip": "CS1.6-AMXX-PaintBall-Elimination-2016-By-Sneaky.amxx-69394e062334c24d32a125f5059e9032a9491192/",
+   "files": {
+    "models/paintballR/p_glock.mdl": "d5cba709f5c30a59da6b2c7f4a700dc4a41d78c12e2e3c0de059475e094bf0ea",
+    "models/paintballR/p_grenade.mdl": "39dee60b4b25ddd377e5d8aa3954b72af8fad1c58989c9be355eb6607273517d",
+    "models/paintballR/p_knife.mdl": "6212171aae1ae04c39dfc68c07976d770665b1d3737fee5f4a7c38a9c1367868",
+    "models/paintballR/p_launcher.mdl": "3f3b6c5e92b62c21b6f9b7a7b8644514c7269e5ba357d2a10b5a19009134357d",
+    "models/paintballR/p_marker.mdl": "3973f9f9ba14aba7c745348779e6488422b7b126ca01f7c968a716faf94795b2",
+    "models/paintballR/p_shotgun.mdl": "3f3b6c5e92b62c21b6f9b7a7b8644514c7269e5ba357d2a10b5a19009134357d",
+    "models/paintballR/p_sniper.mdl": "943ff52f159b9f4ca9c78558b794e94ebef956acef8835aa27c827dc61af149f",
+    "models/paintballR/p_superlauncher.mdl": "3f3b6c5e92b62c21b6f9b7a7b8644514c7269e5ba357d2a10b5a19009134357d",
+    "models/paintballR/p_usp.mdl": "d613f4d00b2c3e501ffd59016d29bc65df710dcfa458344dc54bf496321e22a8",
+    "models/paintballR/p_vendetta.mdl": "3973f9f9ba14aba7c745348779e6488422b7b126ca01f7c968a716faf94795b2",
+    "models/paintballR/s_launcher.mdl": "f5da65c64b20abd3ea02813e89f51e8776a7d8ecd9309fae2f48b263bc059947",
+    "models/paintballR/v_glock.mdl": "f3aa7b381d60c3d6d9c0103f00c56e6780e560d57eb5c9d0ab787a474820b21e",
+    "models/paintballR/v_hegrenade.mdl": "c98370ab2c83fb03e385d1f1a52f20682cdff196a51e72b2b4a311f5e9cfd22f",
+    "models/paintballR/v_knife.mdl": "0d351351f0ee10b8c1bca33546b89e9950478a17f8658f83d2440c9c381b85fb",
+    "models/paintballR/v_launcher.mdl": "bff47fbd08986c315ee8e6ffddbd4bfc925d63d90352aa72a8f0b46c5f1f3584",
+    "models/paintballR/v_marker_b.mdl": "51d34ccb279364f4c0e8db14ff734014aa25d8f91846491f454ff8dd92cd9c2f",
+    "models/paintballR/v_marker_r.mdl": "6c0131175a16f412e41ae175f3400db3557c8b805164ae8c7c132c7938a784c5",
+    "models/paintballR/v_shotgun.mdl": "aabec5d98e20866aaef6bf6d840455d469a566c35c93f0d853c07a523cbabc97",
+    "models/paintballR/v_smokegrenade.mdl": "989791588915df58f4e2fd7e72c5d788a56815791f42b6a9aadf0afeae22ae73",
+    "models/paintballR/v_sniper.mdl": "2908d6d6cc622c44d3bf4e0560b0985aa203cd7e5a01a1d0ae5feb7f55b8e128",
+    "models/paintballR/v_superlauncher.mdl": "47c279bcf91c87d165eceee9f59edc8501dce064f4fad25b07fd7cefe677ecdb",
+    "models/paintballR/v_usp.mdl": "d92b192ad31afa9fff44b585dc7b362158361afd46934c1351bcb6a6d5b95c78",
+    "models/paintballR/v_vendetta_b.mdl": "5ceacfec0a8aa640572df58c615610d4de741274f10b26c1043049a57a618481",
+    "models/paintballR/v_vendetta_r.mdl": "b506842f74eb27e1c5df894317b5b80b2ebff7ca17ba5b62379e5e8a743619f9",
+    "models/paintballR/w_grenade.mdl": "5454ebc55268a93e3071f5f0912b83abb4881a2f7f541122f3f100bfaa4d1cb7",
+    "models/paintballR/w_launcher.mdl": "f788ffe1ec601006c2c046954b96042e480abe81559bac5dd323e9f47243aacb",
+    "models/paintballR/w_marker.mdl": "8fefe7074325e3ca3936023bd51300aca51a7d7c2a2cd25bc9278b2c1cab18ee",
+    "models/paintballR/w_paintball.mdl": "e3af384cab0fcae0e815da28830bb5b5696600498cef0a04bd1accb519c31a2c",
+    "models/paintballR/w_pbsnade.mdl": "113140fa540060cb31d015a6e8d9e5e532f86e06dc440679fb42915b09612af4",
+    "models/paintballR/w_shotgun.mdl": "f909d0274da6ca821547127b014411fcda9392c03aa446e5c008570c51b6dfd2",
+    "models/paintballR/w_sniper.mdl": "599dbba1ab9c9a1a12ddcf652fa9c9fd9d5a5498cdcdec39de13f8d099d9f814",
+    "models/paintballR/w_vendetta.mdl": "8fefe7074325e3ca3936023bd51300aca51a7d7c2a2cd25bc9278b2c1cab18ee",
+    "models/paintball_parachute.mdl": "b0629f4cf05b7dd62ae139e2c978def2cc357ea00079b4a8ac4579660ae88fe2",
+    "models/player/paintballer/paintballer.mdl": "f7431f27b1a69d7b69b3b40454cc156fa99f7ef0b3c31460e58b414d218f35b4",
+    "sound/paintballR/gasp1.wav": "fcf13f3702a15f77caff5e6a3a0b99a53172723841bb0580902e7011a4eb8fe9",
+    "sound/paintballR/sprint.wav": "314e133ede835a9523b3cc01169f9ec88a9fafafb3f81108e11f8a40625890f3",
+    "sound/paintballR/weapons/bulldog_shoot.wav": "dce9b55224d308db78aa04b01e07192af0c3148afca67ee3b52ec0ec25e259fe",
+    "sound/paintballR/weapons/pb1.wav": "625f409b059a9b9fdef50936e70f8cd3a475c85e3b48070f2d2ef05dff824041",
+    "sound/paintballR/weapons/pb2.wav": "507d0878b50bd4e65c7d625e02d2b929b2d46d8f404a78215cb29a59afd300d7",
+    "sound/paintballR/weapons/pb3.wav": "30168d46135b0603e996a041019663aa3637eda8f2013377180e73f23f2a0eb8",
+    "sound/paintballR/weapons/pb4.wav": "79922d80a15707450c03b967316bffc0b7caddb0656001ed464b2e98b70d7500",
+    "sound/paintballR/weapons/pb_launcher.wav": "ca6aea12506cfb156ccf1d4cf365738ce92ed717d74a55ecb86197aa30eeea5a",
+    "sound/paintballR/weapons/pbg.wav": "16fd593f7b800ffcacd3df51ce5d1d5fc5e27f70e7718be672f51f019f84ba33",
+    "sound/weapons/Magin.wav": "bbeb40a85f5dff162b9e89007ac460c9298f070d6eed7fe5ef2ee08c99dd10bc",
+    "sound/weapons/Magout.wav": "b15970824c216d7353d38f8a679b2a1f7a6b787ec5bbea6a9d2cee9cbf0908af",
+    "sound/weapons/bulldog_draw.wav": "2ffb5d0f759a091a35ab93662514a6edcefec3a14ca9c880f1df8e155038bcd9",
+    "sound/weapons/draw.wav": "8720343035e8f8f6e1ed02e9e292cdb55a6851589ddc5a63543d332635a6cd6c",
+    "sound/weapons/insert.wav": "821310ff084e7febbda2d8dff54a668927f3d31b4dc37070a0ca29cabed7bdea",
+    "sound/weapons/magrel.wav": "d5571e824865722a0bc874956be2dd51290952cadfcf664948a50d0f1b8e598d",
+    "sound/weapons/pullout.wav": "817bc0f0fd8b5011eb3252947b1d7c4470d112827516743c0e7d7e5e1e3b7b15",
+    "sound/weapons/roll.wav": "395ac20630f6e0e07bc9fd8fbadd65d200d17e4928877baa1b7c2296dd099d1a",
+    "sprites/paintballR/gas_puff_01b.spr": "d62e1120df5e5eae6f6d438f92d13855502b68f5483910e8b0cccfd28cd8ff74",
+    "sprites/paintballR/gas_puff_01g.spr": "16ddd621aceed6effc36bf050b73f33a99321aed2f00aad2a8ec495ee4669ec6",
+    "sprites/paintballR/gas_puff_01m.spr": "8b86233e4e4984a0c8c3368573ebef57c6b61de96a97aac022825d391c816740",
+    "sprites/paintballR/gas_puff_01o.spr": "64912b39342633cb409aad63f3228df1999c6541f96153c20927451c9432ea4a",
+    "sprites/paintballR/gas_puff_01r.spr": "5efa36223e37fd15ab27ecbcb39d442c59393fc256b3b7b554a0440ac8bd76d8",
+    "sprites/paintballR/gas_puff_01y.spr": "0d836557284995ad9ed625cbd5dd18cf9c230d7bef50f07322d71b840fcc8a61",
+    "sprites/paintballR/paintball.spr": "1a8d7913fd737e597cb56d6904874bf2afa186129611c1d760a1d914abaf3782"
+   }
+  }
+ ],
+ "credits": "PaintBall Elimination 2016 by Sneaky.amxx (Dias), https://github.com/GlobalModders/CS1.6-AMXX-PaintBall-Elimination-2016-By-Sneaky.amxx GPL-3.0; CZ bot patches by Loner-Strike"
+}

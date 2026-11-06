@@ -1,0 +1,23 @@
+{
+ "id": "addon-hook",
+ "name": "Grappling hook",
+ "kind": "addon",
+ "addons": [
+  "hook"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "Grappling hook - bind a key to +hook and swing around the map",
+ "installable": true,
+ "vendor": "mods/hook",
+ "compile": [
+  {
+   "src": "csb_grappling_hook.sma",
+   "out": "csb_grappling_hook",
+   "include": null
+  }
+ ],
+ "credits": "CSB Grappling Hook 1.0.0 by counter-strike-boost.com (https://counter-strike-boost.com/plugins/csb-grappling-hook), GPLv3. Unmodified."
+}

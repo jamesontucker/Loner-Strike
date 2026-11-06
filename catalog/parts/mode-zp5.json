@@ -1,0 +1,484 @@
+{
+ "id": "mode-zp5",
+ "name": "Zombie Plague Advanced",
+ "kind": "mode",
+ "modes": [
+  "zp5"
+ ],
+ "games": [
+  "czero",
+  "cstrike"
+ ],
+ "description": "Zombie Plague 5.0.8 with Sniper, Assassin, Nemesis, Survivor, Swarm, Plague and Armageddon rounds",
+ "installable": true,
+ "vendor": "mods/zp5",
+ "compile": [
+  {
+   "src": "zp5/zp50_core.sma",
+   "out": "zp50_core",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/amx_settings_api.sma",
+   "out": "zp5_amx_settings_api",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/cs_player_models_api.sma",
+   "out": "zp5_cs_player_models_api",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/cs_teams_api.sma",
+   "out": "zp5_cs_teams_api",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/cs_maxspeed_api.sma",
+   "out": "zp5_cs_maxspeed_api",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/cs_weap_models_api.sma",
+   "out": "zp5_cs_weap_models_api",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/cs_weap_restrict_api.sma",
+   "out": "zp5_cs_weap_restrict_api",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/cs_ham_bots_api.sma",
+   "out": "zp5_cs_ham_bots_api",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_zombie.sma",
+   "out": "zp50_class_zombie",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_human.sma",
+   "out": "zp50_class_human",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_nemesis.sma",
+   "out": "zp50_class_nemesis",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_assassin.sma",
+   "out": "zp50_class_assassin",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_survivor.sma",
+   "out": "zp50_class_survivor",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_sniper.sma",
+   "out": "zp50_class_sniper",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_zombie_classic.sma",
+   "out": "zp50_class_zombie_classic",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_zombie_raptor.sma",
+   "out": "zp50_class_zombie_raptor",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_zombie_light.sma",
+   "out": "zp50_class_zombie_light",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_zombie_fat.sma",
+   "out": "zp50_class_zombie_fat",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_zombie_leech.sma",
+   "out": "zp50_class_zombie_leech",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_zombie_rage.sma",
+   "out": "zp50_class_zombie_rage",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_human_classic.sma",
+   "out": "zp50_class_human_classic",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_class_human_raptor.sma",
+   "out": "zp50_class_human_raptor",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_human_armor.sma",
+   "out": "zp50_human_armor",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_gamemodes.sma",
+   "out": "zp50_gamemodes",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_gamemode_infection.sma",
+   "out": "zp50_gamemode_infection",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_gamemode_multi.sma",
+   "out": "zp50_gamemode_multi",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_gamemode_swarm.sma",
+   "out": "zp50_gamemode_swarm",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_gamemode_nemesis.sma",
+   "out": "zp50_gamemode_nemesis",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_gamemode_assassin.sma",
+   "out": "zp50_gamemode_assassin",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_gamemode_survivor.sma",
+   "out": "zp50_gamemode_survivor",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_gamemode_sniper.sma",
+   "out": "zp50_gamemode_sniper",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_gamemode_plague.sma",
+   "out": "zp50_gamemode_plague",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_gamemode_armageddon.sma",
+   "out": "zp50_gamemode_armageddon",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_items.sma",
+   "out": "zp50_items",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_items_ammopacks.sma",
+   "out": "zp50_items_ammopacks",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_item_weapons.sma",
+   "out": "zp50_item_weapons",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_item_nightvision.sma",
+   "out": "zp50_item_nightvision",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_item_antidote.sma",
+   "out": "zp50_item_antidote",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_item_zombie_madness.sma",
+   "out": "zp50_item_zombie_madness",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_item_infection_bomb.sma",
+   "out": "zp50_item_infection_bomb",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_admin_commands.sma",
+   "out": "zp50_admin_commands",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_admin_menu.sma",
+   "out": "zp50_admin_menu",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_buy_menus.sma",
+   "out": "zp50_buy_menus",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_buy_zones.sma",
+   "out": "zp50_buy_zones",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_rewards_ammopacks.sma",
+   "out": "zp50_rewards_ammopacks",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_rewards_frags_hp.sma",
+   "out": "zp50_rewards_frags_hp",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_deathmatch.sma",
+   "out": "zp50_deathmatch",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_random_spawn.sma",
+   "out": "zp50_random_spawn",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_spawn_protection.sma",
+   "out": "zp50_spawn_protection",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_zombie_features.sma",
+   "out": "zp50_zombie_features",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_zombie_sounds.sma",
+   "out": "zp50_zombie_sounds",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_zombie_damage.sma",
+   "out": "zp50_zombie_damage",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_human_ammo.sma",
+   "out": "zp50_human_ammo",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_flashlight.sma",
+   "out": "zp50_flashlight",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_nightvision.sma",
+   "out": "zp50_nightvision",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_leap.sma",
+   "out": "zp50_leap",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_painshockfree.sma",
+   "out": "zp50_painshockfree",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_knockback.sma",
+   "out": "zp50_knockback",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_weapon_drop_strip.sma",
+   "out": "zp50_weapon_drop_strip",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_effects_infect.sma",
+   "out": "zp50_effects_infect",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_effects_cure.sma",
+   "out": "zp50_effects_cure",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_effects_lighting.sma",
+   "out": "zp50_effects_lighting",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_ambience_effects.sma",
+   "out": "zp50_ambience_effects",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_ambience_sounds.sma",
+   "out": "zp50_ambience_sounds",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_main_menu.sma",
+   "out": "zp50_main_menu",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_objective_remover.sma",
+   "out": "zp50_objective_remover",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_gameplay_fixes.sma",
+   "out": "zp50_gameplay_fixes",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_team_scoring.sma",
+   "out": "zp50_team_scoring",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_hud_info.sma",
+   "out": "zp50_hud_info",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_serverbrowser_info.sma",
+   "out": "zp50_serverbrowser_info",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_ammopacks.sma",
+   "out": "zp50_ammopacks",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_grenade_fire.sma",
+   "out": "zp50_grenade_fire",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_grenade_frost.sma",
+   "out": "zp50_grenade_frost",
+   "include": "zp5_include"
+  },
+  {
+   "src": "zp5/zp50_grenade_flare.sma",
+   "out": "zp50_grenade_flare",
+   "include": "zp5_include"
+  }
+ ],
+ "fetch": [
+  {
+   "archive": "https://codeload.github.com/ecks3/zp508-similar-to-zod/tar.gz/9f74a1455538ca9d6f3bbf4d91cfca515c1dbb48",
+   "strip": "zp508-similar-to-zod-9f74a1455538ca9d6f3bbf4d91cfca515c1dbb48/",
+   "files": {
+    "models/player/z_fast/z_fast.mdl": "883ebd6c503a5f78f7704dad412a36cbda9821a03bb4784a73808051f1d7fed1",
+    "models/player/z_nemesis/z_nemesis.mdl": "30ed245adac1f8b76d085673dee5397ea66818e12bc7d822406b22e63e5455ae",
+    "models/player/zombie_source/zombie_source.mdl": "e1b2a27420db72c6b37f23f699544c69f032c14d2e8eb05fd56f2544d37c43c4",
+    "models/player/zow_assassin2/zow_assassin2.mdl": "05d4f7a435bc8e960fc0c962f116489a84ce4545c166e46d41c88b4d77a11aa3",
+    "models/player/zow_fat/zow_fat.mdl": "9bc992860662cf5cb2dc81eab3184f726ec36d0d04452868d5b8c642ad6bee3f",
+    "models/zombie_plague/v_grenade_fire.mdl": "e40404eeebac8a3e46a8f0786551369c6899135b17d32098c3932ab4895f5cb3",
+    "models/zombie_plague/v_grenade_flare.mdl": "23e4d97350b682c58fbd84d86e3ee5223a94966223b239d244d7cb388758e1b6",
+    "models/zombie_plague/v_grenade_frost.mdl": "b735cf6c85483311ae0ce312bb634076038d6031b7b14cd76a3b257a41f15d1b",
+    "models/zombie_plague/v_grenade_infect.mdl": "448a0ce265ae4547928123c32a3ef3a7becce31168d80e82e397219b17d63f76",
+    "models/zombie_plague/v_knife_NoZ_nemesis.mdl": "a29ab8e92fca5dd526149117e172c0233982f0bd6d93f5ef2081ee565fbe80ca",
+    "models/zombie_plague/v_knife_zombie.mdl": "ac1fec303d01c987bfbebf0736c08f97dec2e8299b257b85e6d2dd15eba26d7e",
+    "models/zombie_plague/zow_claws.mdl": "7fec4c2196e9d4e67d9297fef777e85b20d729886ac467a3af0fb636e0f161a4",
+    "sound/warcraft3/frostnova.wav": "85a3328b347db847c05407ae771a2d4b7c65e25aeff7c34ef75f5634643fe86d",
+    "sound/warcraft3/impalehit.wav": "c86d33c5ac5f2546fe5bad6e84d6f89f6a2170f6fa8ac1dfd1a762b3a786f23b",
+    "sound/warcraft3/impalelaunch1.wav": "219e69a7e3ee441760860762f7c0845b1edee6b358448859c5a81ff60954fa84",
+    "sound/zombie_plague/ambience.wav": "9f546a9b72b7ca5ee42ee47832e9985c941f950691b598e153e4dde87897d68c",
+    "sound/zombie_plague/grenade_explode.wav": "b77e091ade1982812d948aa0f853d8580a91112f71e1bfe48e50faa02fe408f7",
+    "sound/zombie_plague/grenade_infect.wav": "11d0ff05d678b61be44fb6c00c950fad9b34b815804cbe2ec4192b883c2de79e",
+    "sound/zombie_plague/nemesis1.wav": "3cdba2cedbdc49d866d0356458769769106a191603bcd094f30ccc3e699a3bfb",
+    "sound/zombie_plague/nemesis2.wav": "de2e60034cd0c1ac66c125d01757f7d4c934160dae33e996ce1261cdb73c8073",
+    "sound/zombie_plague/nemesis_pain1.wav": "2b346ac1f768581a09826a345a18e6a66dcf85f23c9b2523222d229d22ee676a",
+    "sound/zombie_plague/nemesis_pain2.wav": "11c455dcd9fec36f7658465b19c16a6ef887eb1d07a71eb5a98f47cfbdbe83fc",
+    "sound/zombie_plague/nemesis_pain3.wav": "302be1d0504687605c499e5b9d98285a80fb985ed8e8cb2b081224087c55e37e",
+    "sound/zombie_plague/survivor1.wav": "363fa3a1d34cc1aec81d438b19193dabf01602ecd9f99944231ab1ba5bddb843",
+    "sound/zombie_plague/survivor2.wav": "b6632aac5507e15fc8e6d09e4f9494007dc9e4fd66144c013ab528425117e4f6",
+    "sound/zombie_plague/thunder1.wav": "b8caa1f5f67bbb74585134a34ac01e81876d39ce3f0daba88216b30c8d0717b6",
+    "sound/zombie_plague/thunder2.wav": "5977bc3a0fee708bdfa92749e64fea6e81b8f9c3f3a7408e5195e1f3a58851ad",
+    "sound/zombie_plague/win_humans1.wav": "b968a647d1b0dc4966601147c325df3c36210972a055d6fddefb9f14f05d7a97",
+    "sound/zombie_plague/win_humans2.wav": "cbcc11db8eca672d0231723a9ea04fe50f952607e80a6bf472df557d7cfc03b2",
+    "sound/zombie_plague/zombie_brains1.wav": "109a5ab0bae94081e29dcbe580b8b1784ce41f1b7b0aeeb1ce7051448817f2a7",
+    "sound/zombie_plague/zombie_brains2.wav": "95e459ab23f802259fc237c73fed6aa2da66578d14374b728f80bb5a16c4c9e8",
+    "sound/zombie_plague/zombie_burn3.wav": "5452cea9316f8fa895ebec710f270e1d280546b98755a79450fa62706908612b",
+    "sound/zombie_plague/zombie_burn4.wav": "69b90aae6ebb04188f0e3ba6fdc26e4b004d3c53c8fd62ab23ee3db7e4ce8dc6",
+    "sound/zombie_plague/zombie_burn5.wav": "4ef930420d6c504634330be93548881ee02220e23553c55f7de907ccf25fc72a",
+    "sound/zombie_plague/zombie_burn6.wav": "fe51152b71d03f6297ba56c626477592e7f2d547e656ac5d22c9db192e04ed72",
+    "sound/zombie_plague/zombie_burn7.wav": "9896a792d529b484d0045606dab071e60d74bc07d4ea4fe78f177bc54c64581d",
+    "sound/zombie_plague/zombie_die1.wav": "318ccc618231f6792a3513d80b83c55aa0d3292b9e6fc2020964a1950303da44",
+    "sound/zombie_plague/zombie_die2.wav": "a72845f93a0fdfb7b0eafddbd2e6fca98b09582a099c83f177dcc5162b8c4c46",
+    "sound/zombie_plague/zombie_die3.wav": "1b2ae085f497b7e801a4bfc18d2b61ab7afa6a5e44530d25b5f1793bc55b734d",
+    "sound/zombie_plague/zombie_die4.wav": "60cd1690f269e5f1536a08bbe2d282a39f33441a5edf00c84e58939254fe4df9",
+    "sound/zombie_plague/zombie_die5.wav": "88ec9be5e12f559a176b83508a97587c52494fa5752a5bac17ed33ca1a4430b3",
+    "sound/zombie_plague/zombie_fall1.wav": "de7e75a9e2a10f7cd459c047a1aee1770dac527dcd96d5cb371a0c3724d5265e",
+    "sound/zombie_plague/zombie_infec1.wav": "9656c878324196c905fda5a0d9cf9b5c92f73c59793b848ba4a7cc9367d39f1a",
+    "sound/zombie_plague/zombie_infec2.wav": "f36bf0c385ff9164d0a87d8d4b025671936a3716be2bb0e631b5f6efc97a95cd",
+    "sound/zombie_plague/zombie_infec3.wav": "b84f20c269602d1270e461dc0d43cf5e1f82e902c69546cdd5baec40937be053",
+    "sound/zombie_plague/zombie_madness1.wav": "b9bd5367dd76b175e3848622378d30f2b3c41ee8565d9c26f82689e73e31ca43",
+    "sound/zombie_plague/zombie_pain1.wav": "e435d2b9904c0b05d680609b40e9ed5f69aa4e67005630dcb5fbba558e6f5ac7",
+    "sound/zombie_plague/zombie_pain2.wav": "516d0e26d6f9efc3cd160337557483dd8ce89e75cfb85900f518d723aac1f357",
+    "sound/zombie_plague/zombie_pain3.wav": "e09eb401433d17498b0b7055ccdf4f265f26d39457a93e5ecadb6bfc43a56e10",
+    "sound/zombie_plague/zombie_pain4.wav": "29baf330a22c25aa5523d9132ee46e77ece7868616d05daac91686d88c81c570",
+    "sound/zombie_plague/zombie_pain5.wav": "ea469ae74d92dafe6f4da1c19be86994f8e3360882d102c4086dfb6ee477b7d4"
+   }
+  }
+ ],
+ "maps": [
+  {
+   "mod": 88934,
+   "file": 321121,
+   "maps": [
+    "zm_silent_hill"
+   ]
+  },
+  {
+   "mod": 88469,
+   "file": 281237,
+   "maps": [
+    "zm_halloween"
+   ]
+  },
+  {
+   "mod": 88532,
+   "file": 292832,
+   "maps": [
+    "zm_ice_attack3"
+   ]
+  },
+  {
+   "mod": 89041,
+   "file": 282133,
+   "maps": [
+    "zm_tehina"
+   ]
+  },
+  {
+   "mod": 88204,
+   "file": 289762,
+   "maps": [
+    "zm_deko2"
+   ]
+  }
+ ],
+ "credits": "Zombie Plague 5.0.8 by MeRcyLeZZ and the ZP Dev Team (GPL), sources from github.com/evandrocoan/MultiModServer @ 5073cacd70da48a52953e8f9d9a39ec2d5fadd62; Sniper/Assassin classes and modes, models and resources from github.com/ecks3/zp508-similar-to-zod @ 9f74a1455538ca9d6f3bbf4d91cfca515c1dbb48; CZ bot fixes and Advance-style patches by Loner-Strike. Maps from GameBanana: zm_silent_hill, zm_halloween, zm_ice_attack3, zm_tehina, zm_deko2 (by their authors)."
+}

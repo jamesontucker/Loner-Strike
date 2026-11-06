@@ -1,0 +1,36 @@
+GAME MODE MENU - press F3, or say /gm
+
+ 1 Presets     One-click setups. Save your own from here too.
+ 2 Game mode   Switch modes. The map reloads.
+ 3 Maps        Browse by type, random map, bot navigation,
+               map presets (surf/scoutz maps pick their mode)
+ 4 Bots        Count, difficulty, weapons, roster, chatter
+ 5 Match       Round time, money, friendly fire, limits
+ 6 Fun         Gravity, air control, weapons, unlimited ammo,
+               headshots only, bunnyhop, tracers, damage numbers,
+               zombie darkness
+ 7 Players     God, noclip, give weapons, money, teleport, kick
+ 8 Add-ons     Grappling hook, Quake sounds, gore
+ 9 Admin       Every AMX Mod X menu, and this help
+
+KEYS
+ F3  this menu        F4  quick actions
+ V   grappling hook (when the add-on is on)
+
+PRACTICE
+ F4 > Save my spot / Back to my saved spot
+ Fun > Respawn me instantly, Unlimited money
+ Bots > Peaceful bots (they don't move or shoot)
+
+CHAT
+ /gm  menu   zpmenu  zombie menu   /guns  deathmatch guns
+ /rank /top15 /statsme  stats      /hp  who killed you
+
+BOTS STAND STILL ON A MAP?
+ The map has no bot navigation yet. Maps > Bot navigation
+ > Learn this map, or let it prepare every map at once.
+ Maps marked * in the browser still need it.
+
+TOUR OF DUTY
+ Mission packs are picked on CZ's Tour of Duty screen.
+ Game modes pause automatically during missions.
