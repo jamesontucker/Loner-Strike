@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, useStable } from "../api";
 import { Icon } from "../icons";
 import type { AppInfo } from "../types";
 import { SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
@@ -43,7 +43,8 @@ const store = (k: string, v: string) => {
 };
 
 /** Install or remove game modes and add-ons one at a time, on the game or server being managed. */
-export function Mods({ app, scan, running, onChanged, openSetup }: { app: AppInfo | null; scan: Scan | null; running: boolean; onChanged: () => void; openSetup: () => void }) {
+export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }: { app: AppInfo | null; scan: Scan | null; running: boolean; onChanged: () => void; openSetup: () => void }) {
+  const onChanged = useStable(onChangedProp);
   const ask = useConfirm();
   const toast = useToast();
   const [job, setJob] = useState<Job | null>(null);
@@ -57,11 +58,13 @@ export function Mods({ app, scan, running, onChanged, openSetup }: { app: AppInf
   // follow the setup job while one runs
   useEffect(() => {
     if (!busy) return;
+    let ended = false;
     const t = setInterval(async () => {
       const j = await getJson<Job>("/api/setup/job").catch(() => null);
-      if (!j) return;
+      if (!j || ended) return;
       setJob(j);
       if (j.state === "done" || j.state === "error") {
+        ended = true;
         clearInterval(t);
         toast(j.state === "done" ? (running ? "Done. It loads on the next map." : "Done") : j.error || "That stopped.", j.state === "error");
         setBusy(null);

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MatchMode } from "./MatchMode";
-import { getJson, postJson } from "../api";
+import { getJson, postJson, useQueuedSave } from "../api";
 import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type FilterMode = "off" | "replace" | "block";
@@ -101,8 +101,8 @@ export function Community({ target }: { target: string }) {
     reload();
   }, [target, reload]);
 
-  if (error) return <p className="muted">{error}</p>;
-  if (!d) return <Skeleton rows={6} />;
+  // a failed reload keeps the page; the error only replaces it before anything loaded
+  if (!d) return error ? <p className="muted">{error}</p> : <Skeleton rows={6} />;
 
   const showChat = (q: string) => {
     setChatQuery(q);
@@ -118,7 +118,7 @@ export function Community({ target }: { target: string }) {
       )}
       <div className="chips admin-tabs" role="tablist" aria-label="Community sections">
         {TABS.map(([id, label]) => (
-          <button key={id} role="tab" className="chip" aria-pressed={tab === id} onClick={() => setTab(id)}>
+          <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>
             {label}
             {id === "reports" && d.open_reports > 0 && <i className="tab-n">{d.open_reports}</i>}
             {id === "mod" && d.gags.length > 0 && <i className="tab-n">{d.gags.length}</i>}
@@ -139,8 +139,9 @@ type SetData = (d: Data) => void;
 /** Saves a change of settings; the reply is the new state. */
 function useSettings(d: Data, setD: SetData) {
   const toast = useToast();
+  const queue = useQueuedSave<Settings>();
   return async (s: Partial<Settings>, done?: string) => {
-    const r = await postJson<Data | Err>("/api/community/settings", { ...d.settings, ...s }).catch(() => OFFLINE);
+    const r = await queue(d.settings, (cur) => ({ ...cur, ...s }), (full) => postJson<Data | Err>("/api/community/settings", full).catch(() => OFFLINE));
     if (failed(r)) {
       toast(r.error, true);
       return false;
@@ -381,8 +382,11 @@ function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string
   const [limit, setLimit] = useState(200);
   const [open, setOpen] = useState<string | null>(null);
 
+  const latest = useRef(0);
   const load = useCallback(async () => {
+    const mine = ++latest.current;
     const r = await getJson<{ lines: ChatLine[]; more: boolean } | Err>(`/api/community/chat?q=${encodeURIComponent(q.trim())}&limit=${limit}`).catch(() => OFFLINE);
+    if (mine !== latest.current) return;
     if (failed(r)) return toast(r.error, true);
     setLines(r.lines);
     setMore(r.more);

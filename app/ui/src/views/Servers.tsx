@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, useOnce, useStable } from "../api";
 import type { AppInfo, MapInfo, Online, ServerInfo, ServerList } from "../types";
 import { SectionHead, SteamProgress, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
@@ -36,7 +36,8 @@ function uptime(s: number) {
 }
 
 /** The setup job's progress, polled until it ends. */
-export function JobProgress({ onEnd }: { onEnd: (ok: boolean) => void }) {
+export function JobProgress({ onEnd: onEndProp }: { onEnd: (ok: boolean) => void }) {
+  const onEnd = useStable(onEndProp);
   const [job, setJob] = useState<Job | null>(null);
   const ended = useRef(false);
   useEffect(() => {
@@ -69,14 +70,15 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
 
-  const act = async (s: ServerInfo, action: string) => {
+  const once = useOnce();
+  const act = (s: ServerInfo, action: string) => once(`${s.id}:${action}`, async () => {
     if (action === "delete" && !(await ask(s.imported ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.` : `Delete "${s.name}"? Its folder, maps, settings and admins are deleted.`, { ok: s.imported ? "Remove" : "Delete", danger: true }))) return;
     const r = await post(`/api/servers/${s.id}/${action}`);
     if (r.error) return toast(r.error, true);
     if (action === "join") toast(`Joining ${s.name}…`);
     if (action === "delete") toast(`${s.name} ${s.imported ? "removed" : "deleted"}`);
     onChanged();
-  };
+  });
   const installed = (scan?.installs ?? []).flatMap((i) => i.games.filter((g) => g.installed).map((g) => g.id));
 
   return (
@@ -189,7 +191,8 @@ export function ServerPage(props: {
   const [tab, setTab] = useState<Tab>("overview");
   const [busyJob, setBusyJob] = useState(false);
 
-  const act = async (action: string) => {
+  const once = useOnce();
+  const act = (action: string) => once(action, async () => {
     if (action === "delete") {
       const msg = s.imported
         ? `Remove "${s.name}" from Loner-Strike? Its folder stays where it is.`
@@ -204,7 +207,7 @@ export function ServerPage(props: {
     if (action === "delete") return onBack(), onChanged();
     onChanged();
     setTimeout(refresh, 1500);
-  };
+  });
 
   // reinstall everything that's on the server, keeping its settings
   const rebuild = async () => {
@@ -244,7 +247,7 @@ export function ServerPage(props: {
               <span className="tab-group-name">{g}</span>
               <div className="chips">
                 {TABS.filter((t) => t.group === g).map((t) => (
-                  <button key={t.id} role="tab" className="chip" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
+                  <button key={t.id} role="tab" className="chip" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
                 ))}
               </div>
             </div>
@@ -419,13 +422,14 @@ function Console({ server }: { server: ServerInfo }) {
   useEffect(() => {
     box.current?.scrollTo({ top: box.current.scrollHeight });
   }, [lines]);
-  const send = async () => {
+  const once = useOnce();
+  const send = () => once("send", async () => {
     if (!cmd.trim()) return;
     const r = await post(`/api/servers/${server.id}/console/send`, { command: cmd });
     if (r.error) return toast(r.error.includes("forbidden") || r.error.includes("Couldn't reach") ? "The console only works on this computer." : r.error, true);
     setCmd("");
     if (r.reply?.trim()) setLines((l) => [...l, `] ${cmd}`, ...r.reply!.trim().split("\n")]);
-  };
+  });
   return (
     <div className="panel">
       <h3>Console</h3>

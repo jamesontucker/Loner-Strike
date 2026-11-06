@@ -10,19 +10,34 @@ export const ON_THIS_COMPUTER = ["127.0.0.1", "localhost"].includes(location.hos
 // The dedicated server the Servers area has open; null is the player's own game.
 // Every request names it (X-Target), so nothing is switched behind the player's back.
 let TARGET: string | null = null;
+// Bumped on every switch, so replies meant for the previous target are dropped.
+let GEN = 0;
+const stale = () => new Promise<never>(() => {});
 export function setTarget(id: string | null) {
+  if (id !== TARGET) GEN++;
   TARGET = id;
+  window.dispatchEvent(new Event("ls-target"));
 }
+export const targetGen = () => GEN;
 /** For URLs the browser loads by itself (images). */
 export function withTarget(url: string) {
   return TARGET ? `${url}${url.includes("?") ? "&" : "?"}target=${encodeURIComponent(TARGET)}` : url;
 }
 const targetHeader = (): Record<string, string> => (TARGET ? { "X-Target": TARGET } : {});
 
+/** GET as JSON. A reply that arrives after the target changed never resolves, so it can't
+ *  land in the newly opened server's page. */
 export async function getJson<T>(path: string): Promise<T> {
-  const r = await fetch(path, { credentials: "same-origin", headers: targetHeader() });
-  if (!r.ok && r.status !== 400) throw new Error(`${path}: ${r.status}`);
-  return r.json() as Promise<T>;
+  const g = GEN;
+  try {
+    const r = await fetch(path, { credentials: "same-origin", headers: targetHeader() });
+    if (!r.ok && r.status !== 400) throw new Error(`${path}: ${r.status}`);
+    const j = (await r.json()) as T;
+    return g === GEN ? j : stale();
+  } catch (e) {
+    if (g !== GEN) return stale();
+    throw e;
+  }
 }
 
 export async function postJson<T>(path: string, body: unknown = {}): Promise<T> {
@@ -54,17 +69,19 @@ export async function cmd(command: string, args: string[] = []): Promise<string>
 /** Live game state, polled every 2 seconds while the window is visible. */
 export function useGameState() {
   const [state, setState] = useState<GameState | null>(null);
-  const busy = useRef(false);
+  // The target generation a request is in flight for; a switch lets the next one through.
+  const busy = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
-    if (busy.current) return;
-    busy.current = true;
+    const g = targetGen();
+    if (busy.current === g) return;
+    busy.current = g;
     try {
       setState(await getJson<GameState>("/api/state"));
     } catch {
       setState({ online: false, reason: "Lost contact with the app's server. Restart Loner-Strike." });
     } finally {
-      busy.current = false;
+      if (busy.current === g) busy.current = null;
     }
   }, []);
 
@@ -73,9 +90,11 @@ export function useGameState() {
     const t = setInterval(() => !document.hidden && refresh(), 2000);
     const vis = () => !document.hidden && refresh();
     document.addEventListener("visibilitychange", vis);
+    window.addEventListener("ls-target", vis);
     return () => {
       clearInterval(t);
       document.removeEventListener("visibilitychange", vis);
+      window.removeEventListener("ls-target", vis);
     };
   }, [refresh]);
 
@@ -114,4 +133,41 @@ export async function addFromFile(section: string): Promise<{ ok: boolean; messa
     if (j && (j.state === "done" || j.state === "error")) return { ok: j.state === "done", message: j.message || (j.state === "done" ? "Added" : "That didn't work.") };
   }
   return { ok: false, message: "Still adding. Check Get more for progress." };
+}
+
+/** Saves of one settings object, quickly one after another: each builds on the last one
+ *  sent rather than on what's on screen, so two quick changes don't undo each other. */
+export function useQueuedSave<S>() {
+  const want = useRef<S | null>(null);
+  return useCallback(async <T,>(current: S, change: (s: S) => S, send: (s: S) => Promise<T>): Promise<T> => {
+    const next = change(want.current ?? current);
+    want.current = next;
+    try {
+      return await send(next);
+    } finally {
+      if (want.current === next) want.current = null;
+    }
+  }, []);
+}
+
+/** A function that keeps the same identity across renders but always calls the latest
+ *  version, so an inline callback prop doesn't restart a polling effect. */
+export function useStable<A extends unknown[], R>(fn: (...a: A) => R) {
+  const latest = useRef(fn);
+  latest.current = fn;
+  return useCallback((...a: A) => latest.current(...a), []);
+}
+
+/** Runs an action unless the same one is still going, so a double click sends it once. */
+export function useOnce() {
+  const going = useRef(new Set<string>());
+  return useCallback(async (key: string, fn: () => Promise<unknown>) => {
+    if (going.current.has(key)) return;
+    going.current.add(key);
+    try {
+      await fn();
+    } finally {
+      going.current.delete(key);
+    }
+  }, []);
 }

@@ -93,7 +93,8 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     const load = () => {
       getJson<Share>("/api/share")
         .then((s) => ("phase" in s ? setSh(s) : setMissing(true)))
-        .catch(() => setMissing(true));
+        // only an app without sharing at all; a missed poll keeps what's shown
+        .catch((e: Error) => e.message.endsWith(": 404") && setMissing(true));
       getJson<VLans>("/api/app/vlans").then(setVlans).catch(() => setVlans({}));
     };
     load();

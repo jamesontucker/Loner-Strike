@@ -315,7 +315,7 @@ input[type="range"] { accent-color: var(--signal); }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip { border: 0; border-radius: 2px; padding: 4px 10px; font-size: 14px; font-weight: 600; background: var(--panel); color: var(--bone-dim); box-shadow: var(--raised); }
-.chip[aria-pressed="true"] { color: var(--signal); background: var(--panel-2); }
+.chip[aria-pressed="true"], .chip[aria-selected="true"] { color: var(--signal); background: var(--panel-2); }
 .maps.grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 .map-card { display: grid; gap: 2px; }
 .map-pic { position: relative; overflow: hidden; }
@@ -945,7 +945,7 @@ a.btn.primary { color: var(--signal-ink); }
 .quick-inner { overflow: visible; flex-wrap: wrap; }
 .qmenu { position: relative; flex: none; }
 .caret { font-size: 10px; margin-left: 2px; opacity: .8; }
-.qmenu-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 190px; display: grid; padding: 4px; background: var(--panel); box-shadow: var(--raised), 0 10px 28px rgba(0,0,0,.45); border-radius: 2px; }
+.qmenu-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 190px; max-width: calc(100vw - 16px); display: grid; padding: 4px; background: var(--panel); box-shadow: var(--raised), 0 10px 28px rgba(0,0,0,.45); border-radius: 2px; }
 .qmenu-list button { display: flex; align-items: center; gap: 8px; border: 0; background: none; color: var(--bone); text-align: left; padding: 7px 10px; font: 600 14px/1.2 var(--text); border-radius: 2px; cursor: pointer; white-space: nowrap; }
 .qmenu-list button:hover:not(:disabled) { background: var(--panel-2); color: var(--signal); }
 .qmenu-list button:disabled { opacity: .45; cursor: default; }

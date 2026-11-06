@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, useOnce } from "../api";
 import type { ServerInfo } from "../types";
 import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
@@ -47,10 +47,12 @@ export function Hltv({ server }: { server: ServerInfo }) {
   const [form, setForm] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const dirty = useRef(false);
+  const [failed, setFailed] = useState("");
 
   const load = async () => {
     const r = await getJson<Status & { error?: string }>(`/api/servers/${server.id}/hltv`).catch(() => null);
-    if (!r || !r.settings) return;
+    if (!r || !r.settings) return setFailed(r?.error || "Couldn't reach the app.");
+    setFailed("");
     setSt(r);
     if (!dirty.current) setForm(r.settings);
   };
@@ -70,7 +72,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
   };
 
   const save = async (next: Settings | null = form) => {
-    if (!next) return;
+    if (!next || saving) return;
     setSaving(true);
     const r = await post(`/api/servers/${server.id}/hltv`, next);
     setSaving(false);
@@ -80,18 +82,20 @@ export function Hltv({ server }: { server: ServerInfo }) {
     load();
   };
 
-  const act = async (action: "start" | "stop" | "restart") => {
-    const r = await post(`/api/servers/${server.id}/hltv/${action}`);
-    if (r.error) return toast(r.error, true);
-    toast(action === "stop" ? "HLTV stopped" : "Starting HLTV…");
-    setTimeout(load, 1200);
-  };
+  const once = useOnce();
+  const act = (action: "start" | "stop" | "restart") =>
+    once("act", async () => {
+      const r = await post(`/api/servers/${server.id}/hltv/${action}`);
+      if (r.error) return toast(r.error, true);
+      toast(action === "stop" ? "HLTV stopped" : "Starting HLTV…");
+      setTimeout(load, 1200);
+    });
 
   if (!st || !form) {
     return (
       <div className="stack">
         <SectionHead title="HLTV" />
-        <Skeleton rows={4} />
+        {failed ? <p className="muted">{failed}</p> : <Skeleton rows={4} />}
       </div>
     );
   }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addFromFile, getJson, ON_THIS_COMPUTER, postJson } from "../api";
+import { addFromFile, getJson, ON_THIS_COMPUTER, postJson, useStable } from "../api";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
 import { SectionHead, Skeleton, useConfirm, useToast } from "../ui";
 
@@ -14,7 +14,8 @@ const size = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `$
 
 /** GameBanana's Counter-Strike 1.6 section: maps, skins, models, sounds and more. */
 /** only: show just one section (a server's "Get maps"). */
-export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?: string }) {
+export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: () => void; only?: string }) {
+  const onInstalled = useStable(onInstalledProp);
   const ask = useConfirm();
   const toast = useToast();
   const [section, setSection] = useState("maps");
@@ -33,8 +34,11 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
   const seenDone = useRef(new Set<string>());
   const cats = sections.find((s) => s[0] === section)?.[2] ?? [];
 
+  // only the newest browse request may fill the grid (searches and tabs change fast)
+  const latest = useRef(0);
   const load = useCallback(
     async (reset: boolean) => {
+      const mine = ++latest.current;
       setLoading(true);
       setError("");
       const next = reset ? 1 : page + 1;
@@ -42,15 +46,17 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
         const r = await getJson<GbPage & { error?: string }>(
           `/api/gb/browse?section=${section}${cat ? `&cat=${cat}` : ""}&sort=${sort}&q=${encodeURIComponent(query)}&page=${next}`,
         );
+        if (mine !== latest.current) return;
         if (r.error) throw new Error(r.error);
         setItems((old) => (reset ? r.items : [...old, ...r.items]));
         if (r.sections?.length) setSections(r.sections);
         setPage(next);
         setDone(r.done || !r.items.length);
       } catch (e) {
+        if (mine !== latest.current) return;
         setError((e as Error).message.includes("Start") || (e as Error).message.includes("game") ? (e as Error).message : "Couldn't reach GameBanana. Check your internet connection.");
       } finally {
-        setLoading(false);
+        if (mine === latest.current) setLoading(false);
       }
     },
     [section, cat, sort, query, page],
@@ -119,7 +125,8 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
     if (playing === id) return setPlaying(null);
     const a = new Audio(url);
     a.onended = () => setPlaying(null);
-    a.play().then(() => setPlaying(id)).catch(() => toast("Couldn't play the preview.", true));
+    // a pause from the next click rejects play() with AbortError: that's not a failure
+    a.play().then(() => setPlaying(id)).catch((e: Error) => e.name !== "AbortError" && toast("Couldn't play the preview.", true));
     player.current = a;
   };
   useEffect(() => () => player.current?.pause(), []);
@@ -147,11 +154,11 @@ export function GetMore({ onInstalled, only }: { onInstalled: () => void; only?:
         </SectionHead>
         <div className="chips section-tabs" role="tablist" aria-label="What to get" hidden={!!only}>
           {sections.map(([id, name]) => (
-            <button key={id} className="chip" role="tab" aria-pressed={section === id && !showInstalled} onClick={() => { setShowInstalled(false); setSection(id); setCat(null); setItems([]); }}>
+            <button key={id} className="chip" role="tab" aria-selected={section === id && !showInstalled} onClick={() => { setShowInstalled(false); setSection(id); setCat(null); setItems([]); }}>
               {name}
             </button>
           ))}
-          <button className="chip" role="tab" aria-pressed={showInstalled} onClick={() => setShowInstalled(true)}>Installed</button>
+          <button className="chip" role="tab" aria-selected={showInstalled} onClick={() => setShowInstalled(true)}>Installed</button>
         </div>
         {active.map((j) => (
           <div className="job" key={j.id}>

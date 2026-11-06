@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, useQueuedSave } from "../api";
 import type { MapInfo } from "../types";
 import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
@@ -117,6 +117,7 @@ export function ServerExtras({ target }: { target: string }) {
       .catch(() => setMaps([]));
   }, [target]);
 
+  const queue = useQueuedSave<Settings>();
   /** Sends one change; the reply is the new state. */
   const send = async (path: string, body: unknown, done?: string) => {
     const r = await postJson<Reply>(path, body).catch(() => ({ ok: false as const, error: "Couldn't reach the app." }));
@@ -128,7 +129,7 @@ export function ServerExtras({ target }: { target: string }) {
     if (done) toast(done);
     return true;
   };
-  const saveSettings = (s: Partial<Settings>, done?: string) => (d ? send("/api/extras/settings", { ...d.settings, ...s }, done) : Promise.resolve(false));
+  const saveSettings = (s: Partial<Settings>, done?: string) => (d ? queue(d.settings, (cur) => ({ ...cur, ...s }), (full) => send("/api/extras/settings", full, done)) : Promise.resolve(false));
 
   if (error) return <p className="muted">{error}</p>;
   if (!d) return <Skeleton rows={6} />;
@@ -142,7 +143,7 @@ export function ServerExtras({ target }: { target: string }) {
       )}
       <div className="chips admin-tabs" role="tablist" aria-label="Rotation and chat sections">
         {EXTRAS_TABS.map(([id, label]) => (
-          <button key={id} role="tab" className="chip" aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>
+          <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
         ))}
       </div>
       {tab === "rotation" && <Rotation key={`rot-${target}`} d={d} maps={maps} send={send} saveSettings={saveSettings} />}
@@ -261,7 +262,7 @@ function Rotation({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
               <ol className="rot-list" aria-label="Maps in the rotation">
                 {list.map((m, i) => (
                   <li
-                    key={m}
+                    key={`${i}-${m}`}
                     className={`rot-item${dragOver === i ? " drop" : ""}`}
                     draggable
                     onDragStart={(e) => {

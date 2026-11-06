@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, useOnce } from "../api";
 import { Banner, SectionHead, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
 import type { Job } from "./Setup";
 
@@ -192,7 +192,9 @@ export function Sounds({ target }: { target: string }) {
     setInstalling(true);
   };
 
-  const packAction = async (p: Pack, action: "install" | "remove") => {
+  const once = useOnce();
+  const packAction = (p: Pack, action: "install" | "remove") => once(String(p.id), () => packStep(p, action));
+  const packStep = async (p: Pack, action: "install" | "remove") => {
     if (action === "remove") {
       const what = p.kind === "music" ? "Its tracks are deleted." : "The game's original sounds are put back.";
       if (!(await ask(`Remove ${p.name}? ${what}`, { ok: "Remove", danger: true }))) return;
@@ -225,7 +227,7 @@ export function Sounds({ target }: { target: string }) {
 
       <div className="chips admin-tabs" role="tablist" aria-label="Sounds sections">
         {SOUND_TABS.map(([id, label]) => (
-          <button key={id} role="tab" className="chip" aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>
+          <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
         ))}
       </div>
 

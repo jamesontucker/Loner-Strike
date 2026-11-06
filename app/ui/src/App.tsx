@@ -89,6 +89,7 @@ function Shell() {
 
   const setSection = (s: Section) => {
     if (s !== "servers" && openServer) enterServer(null);
+    window.dispatchEvent(new Event("ls-nav"));
     setSectionRaw(s);
     setMoreOpen(false);
     document.querySelector(".content")?.scrollTo({ top: 0 });
@@ -112,7 +113,8 @@ function Shell() {
   }, []);
 
   const reloadServers = useCallback(() => {
-    getJson<ServerList>("/api/servers").then(setServers).catch(() => setServers(null));
+    // a failed poll keeps the last list, so an open server page doesn't vanish
+    getJson<ServerList>("/api/servers").then(setServers).catch(() => null);
   }, []);
 
   useEffect(() => {
@@ -143,6 +145,10 @@ function Shell() {
     refresh();
   };
   const current = openServer ? servers?.servers.find((x) => x.id === openServer) ?? null : null;
+  // the open server was deleted (or its folder went away): back to your own game
+  useEffect(() => {
+    if (openServer && servers && !current) enterServer(null);
+  });
   // CS 1.6 and Condition Zero on this computer, CS 1.6 first
   const localGames = (["cstrike", "czero"] as const).filter((g) => scan?.installs.some((i) => i.games.some((x) => x.id === g)));
   const myGame = openServer ? null : app?.game?.id;

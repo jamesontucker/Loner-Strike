@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { cmd, getJson, postJson } from "../api";
+import { cmd, getJson, postJson, useQueuedSave } from "../api";
 import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Settings = {
@@ -89,6 +89,7 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
     return () => clearInterval(t);
   }, [refresh, target]);
 
+  const queue = useQueuedSave<Settings>();
   const post = async (path: string, body: unknown, done?: string) => {
     setBusy(true);
     const r = await postJson<Reply>(path, body).catch(() => ({ ok: false as const, error: "Couldn't reach the app." }));
@@ -100,7 +101,7 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
     setD(r);
     if (done) toast(done);
   };
-  const save = (s: Partial<Settings>) => d && post("/api/scrim/settings", { ...d.settings, ...s }, "Saved");
+  const save = (s: Partial<Settings>) => d && queue(d.settings, (cur) => ({ ...cur, ...s }), (full) => post("/api/scrim/settings", full, "Saved"));
   const act = async (action: string, done: string, confirm?: string) => {
     if (confirm && !(await ask(confirm, { ok: "Yes", danger: true }))) return;
     post("/api/scrim/action", { action }, done);
@@ -307,7 +308,7 @@ function History({ matches }: { matches: Match[] }) {
         <p className="muted">No finished matches yet. Results show up here when a match ends.</p>
       ) : (
         <ul className="match-history">
-          {matches.map((m, i) => (
+          {matches.filter((m) => m.teams?.length >= 2).map((m, i) => (
             <li key={`${m.ts}-${i}`} className="panel">
               <div className="match-history-head">
                 <b>{m.map}</b>

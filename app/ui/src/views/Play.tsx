@@ -197,6 +197,7 @@ const MODE_PREFIX: Record<string, string[]> = {
 /** Switching mode, with the map to play it on: the mode's own maps first, or the current one. */
 function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; current: string; map: string; maps: MapInfo[]; onClose: () => void; onGo: (map: string | null) => void }) {
   const [listed, setListed] = useState<string[] | null>(null);
+  // null: not chosen yet; "": keep the current map
   const [pick, setPick] = useState<string | null>(null);
   const [q, setQ] = useState("");
   useEffect(() => {
@@ -217,7 +218,7 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
   const shown = (query ? have.filter((m) => m.name.toLowerCase().includes(query)) : suggested).slice(0, 60);
   const fits = !listed?.length && (!prefixes.length || prefixes.some((p) => map.toLowerCase().startsWith(p)));
   const same = mode.id === current;
-  const chosen = pick ?? (same ? null : fits ? null : suggested[0]?.name ?? null);
+  const chosen = pick === "" ? null : pick ?? (same || fits ? null : suggested[0]?.name ?? null);
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet wide switch-mode" role="dialog" aria-label={`Play ${mode.name}`} onClick={(e) => e.stopPropagation()}>
@@ -229,7 +230,7 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
           <p className="muted">{same ? "You're playing this mode. Pick a map to change to." : "Pick the map to play it on. The mode remembers its own settings."}</p>
           <div className="toolbar">
             {!same && (
-              <button className="chip" aria-pressed={chosen === null} onClick={() => setPick(null)}>
+              <button className="chip" aria-pressed={chosen === null} onClick={() => setPick("")}>
                 Keep {map}{fits ? "" : " (may not suit this mode)"}
               </button>
             )}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { postJson } from "../api";
 import type { MapInfo, Online } from "../types";
 import { useCommand, useToast } from "../ui";
@@ -9,10 +9,25 @@ type Item = { label: string; on: () => void; pressed?: boolean; disabled?: boole
 function Menu({ label, items, active }: { label: string; items: Item[]; active?: boolean }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  // keep the list on screen: under the button, moved left if it would run off the edge
+  useLayoutEffect(() => {
+    const l = list.current;
+    const b = button.current;
+    if (!open || !l || !b) return;
+    const room = window.innerWidth - 8 - b.getBoundingClientRect().left - l.offsetWidth;
+    l.style.left = room < 0 ? `${room}px` : "0";
+    l.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  }, [open]);
+  const close = () => {
+    setOpen(false);
+    button.current?.focus();
+  };
   useEffect(() => {
     if (!open) return;
     const away = (e: Event) => !box.current?.contains(e.target as Node) && setOpen(false);
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && close();
     document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", esc);
     return () => {
@@ -24,20 +39,20 @@ function Menu({ label, items, active }: { label: string; items: Item[]; active?:
   if (!shown.length) return null;
   return (
     <div className="qmenu" ref={box}>
-      <button className="qb" aria-haspopup="menu" aria-expanded={open} aria-pressed={active || undefined} onClick={() => setOpen((o) => !o)}>
+      <button ref={button} className="qb" aria-haspopup="menu" aria-expanded={open} aria-pressed={active || undefined} onClick={() => setOpen((o) => !o)}>
         {label} <span className="caret" aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className="qmenu-list" role="menu">
+        <div className="qmenu-list" role="menu" ref={list}>
           {shown.map((i) => (
             <button
               key={i.label}
-              role="menuitemcheckbox"
-              aria-checked={i.pressed ?? false}
+              role={i.pressed === undefined ? "menuitem" : "menuitemcheckbox"}
+              aria-checked={i.pressed}
               disabled={i.disabled}
               onClick={() => {
                 i.on();
-                setOpen(false);
+                close();
               }}
             >
               <span className="tick" aria-hidden="true">{i.pressed ? "✓" : ""}</span>

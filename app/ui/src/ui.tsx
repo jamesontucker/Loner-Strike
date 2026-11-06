@@ -11,7 +11,12 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [q, setQ] = useState<Ask | null>(null);
   const ask = useCallback(
     (text: string, opts?: { ok?: string; danger?: boolean }) =>
-      new Promise<boolean>((resolve) => setQ({ text, ok: opts?.ok ?? "OK", danger: !!opts?.danger, done: resolve })),
+      new Promise<boolean>((resolve) =>
+        setQ((old) => {
+          old?.done(false);
+          return { text, ok: opts?.ok ?? "OK", danger: !!opts?.danger, done: resolve };
+        }),
+      ),
     [],
   );
   const close = (yes: boolean) => {
@@ -23,9 +28,19 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") close(false);
     };
+    // a question about one page or server never carries over to the next
+    const away = () => close(false);
+    const back = document.activeElement as HTMLElement | null;
     window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  });
+    window.addEventListener("ls-target", away);
+    window.addEventListener("ls-nav", away);
+    return () => {
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("ls-target", away);
+      window.removeEventListener("ls-nav", away);
+      if (back?.isConnected) back.focus();
+    };
+  }, [q]);
   return (
     <AskCtx.Provider value={ask}>
       {children}

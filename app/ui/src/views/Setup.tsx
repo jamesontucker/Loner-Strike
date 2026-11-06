@@ -62,12 +62,16 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
 
   const chosen = preset === "all" ? usable : preset === "basics" ? [] : usable.filter((c) => picked.has(c.id));
 
+  const starting = useRef(false);
   const start = async () => {
+    if (starting.current) return;
+    starting.current = true;
     const r = await postJson<{ ok?: boolean; job?: string; error?: string }>("/api/setup/install", {
       hl: install.hl,
       games,
       components: chosen.map((c) => c.id),
     }).catch((): { ok?: boolean; job?: string; error?: string } => ({ error: "Setup couldn't start." }));
+    starting.current = false;
     if (!r.ok) return toast(r.error || "Setup couldn't start.", true);
     setStage("install");
   };
@@ -331,8 +335,12 @@ function ThemeMusic() {
   const wanted = useRef(on);
   wanted.current = on;
 
+  // each fade takes over from the one before, so a quick off-on doesn't end up paused
+  const fade = useRef(0);
   const fadeTo = (a: HTMLAudioElement, target: number) => {
+    const mine = ++fade.current;
     const step = () => {
+      if (mine !== fade.current) return;
       const d = target - a.volume;
       if (Math.abs(d) < 0.02) {
         a.volume = target;
@@ -345,8 +353,9 @@ function ThemeMusic() {
     step();
   };
   const start = (a: HTMLAudioElement) => {
-    a.volume = 0;
-    a.play().then(() => fadeTo(a, level.current)).catch(() => {});
+    const mine = ++fade.current;
+    if (a.paused) a.volume = 0;
+    a.play().then(() => mine === fade.current && fadeTo(a, level.current)).catch(() => {});
   };
 
   useEffect(() => {
@@ -372,6 +381,7 @@ function ThemeMusic() {
     window.addEventListener("pointerdown", firstClick, { once: true });
     return () => {
       cancelled = true;
+      fade.current++;
       window.removeEventListener("pointerdown", firstClick);
       audio.current?.pause();
       if (url) URL.revokeObjectURL(url);
@@ -399,7 +409,10 @@ function ThemeMusic() {
     } catch {
       /* private window */
     }
-    if (audio.current && on) audio.current.volume = v;
+    if (audio.current && on) {
+      fade.current++;
+      audio.current.volume = v;
+    }
   };
   return (
     <div className="music">

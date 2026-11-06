@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import type { AppInfo, PhoneInfo } from "../types";
 import { ON_THIS_COMPUTER } from "../api";
@@ -16,6 +16,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [checked, setChecked] = useState<string>("");
+  const removing = useRef<number | undefined>(undefined);
+  useEffect(() => () => clearInterval(removing.current), []);
 
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [storage, setStorage] = useState<Storage | null>(null);
@@ -172,11 +174,15 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchTo }: { app
                   const inst = scan.installs.find((i) => app.game!.dir.startsWith(i.hl));
                   if (!inst || !(await ask("Remove Loner-Strike from this game and restore the original files? Close the game first.", { ok: "Remove", danger: true }))) return;
                   const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/uninstall", { hl: inst.hl, games: [app.game!.id] }).catch(() => ({ error: "Couldn't start." }));
-                  if (r.error) toast(r.error, true);
-                  else toast("Removing… the app restarts when it's done.");
-                  const wait = setInterval(async () => {
-                    const j = await getJson<{ state: string }>("/api/setup/job").catch(() => null);
-                    if (j && j.state !== "running") { clearInterval(wait); postJson("/api/app/restart"); }
+                  if (r.error) return toast(r.error, true);
+                  toast("Removing… the app restarts when it's done.");
+                  clearInterval(removing.current);
+                  removing.current = window.setInterval(async () => {
+                    const j = await getJson<{ state: string; error?: string }>("/api/setup/job").catch(() => null);
+                    if (!j || j.state === "running") return;
+                    clearInterval(removing.current);
+                    if (j.state === "error") toast(j.error || "Couldn't remove everything. Nothing was restarted.", true);
+                    else postJson("/api/app/restart");
                   }, 1000);
                 }}
               >

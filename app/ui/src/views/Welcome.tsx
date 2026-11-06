@@ -50,7 +50,7 @@ export function Welcome({ target }: { target: string }) {
         setHtml(r.html ?? "");
         setUrl(r.url ?? "");
       })
-      .catch(() => null);
+      .catch(() => setD({ error: "Couldn't reach the app." } as Data));
   }, [target]);
 
   const preview = useMemo(() => Object.entries(SAMPLE).reduce((h, [k, v]) => h.split(k).join(v), html), [html]);

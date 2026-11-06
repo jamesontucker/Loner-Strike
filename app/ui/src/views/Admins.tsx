@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getJson, postJson } from "../api";
+import { getJson, postJson, useQueuedSave } from "../api";
 import type { Online } from "../types";
 import { SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
@@ -10,6 +10,7 @@ type AbilityKey = "gear" | "hook" | "jump" | "respawn" | "noclip" | "god" | "tp"
 type Abilities = Record<AbilityKey, Role[]> & { every_mode: boolean };
 type Ban = { kind: "id" | "ip"; value: string };
 type Seen = { id: string; name: string; aka: string[]; first: number; last: number; visits: number };
+type RoleSettings = { donate: string; perks: Perks; abilities: Abilities };
 type Data = { people: Person[]; donate: string; perks: Perks; abilities: Abilities; bans: Ban[]; today: string; users_ini: boolean; seen: Seen[] };
 type Reply = Data | { ok: false; error: string };
 
@@ -124,6 +125,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
     load();
   }, []);
 
+  const queue = useQueuedSave<RoleSettings>();
   /** Posts a change; the answer is the new list. */
   const send = async (path: string, body: unknown, done?: string) => {
     const r = await postJson<Reply>(path, body).catch(() => null);
@@ -156,13 +158,15 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
     if (!(await ask(`Ban ${name || id} ${minutes ? `for ${what}` : "for good"}? They're kicked if they're playing.`, { ok: "Ban", danger: true }))) return false;
     return send("/api/admins/ban", { id: id.trim(), minutes }, "Banned");
   };
-  const setPerks = (p: Partial<Perks>) => send("/api/admins/settings", { donate: d.donate, perks: { ...d.perks, ...p }, abilities: d.abilities });
-  const saveDonate = () => send("/api/admins/settings", { donate: donate ?? d.donate, perks: d.perks, abilities: d.abilities }, "Saved").then((ok) => ok && setDonate(null));
-  const setAbilities = (a: Partial<Abilities>) => send("/api/admins/settings", { donate: d.donate, perks: d.perks, abilities: { ...d.abilities, ...a } });
-  const toggle = (key: AbilityKey, role: Role, on: boolean) => {
-    const now = d.abilities[key].filter((r) => r !== role);
-    setAbilities({ [key]: on ? [...now, role] : now });
-  };
+  const settings = (change: (s: RoleSettings) => RoleSettings, done?: string) =>
+    queue({ donate: d.donate, perks: d.perks, abilities: d.abilities }, change, (full) => send("/api/admins/settings", full, done));
+  const setPerks = (p: Partial<Perks>) => settings((s) => ({ ...s, perks: { ...s.perks, ...p } }));
+  const saveDonate = () => settings((s) => ({ ...s, donate: donate ?? s.donate }), "Saved").then((ok) => ok && setDonate(null));
+  const toggle = (key: AbilityKey, role: Role, on: boolean) =>
+    settings((s) => {
+      const now = s.abilities[key].filter((r) => r !== role);
+      return { ...s, abilities: { ...s.abilities, [key]: on ? [...now, role] : now } };
+    });
   const noHook = !!installed && !installed.includes("addon-hook");
 
   // who's playing now first, then everyone who's been here
@@ -180,7 +184,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
     <div className="stack narrow">
       <div className="chips admin-tabs" role="tablist" aria-label="Admins sections">
         {TABS.map(([id, label]) => (
-          <button key={id} role="tab" className="chip" aria-pressed={tab === id} onClick={() => setTab(id)}>
+          <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>
             {label}
             {id === "people" && d.people.length > 0 && <i className="tab-n">{d.people.length}</i>}
             {id === "players" && players.length > 0 && <i className="tab-n">{players.length}</i>}
@@ -352,7 +356,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
             label="Allow in every mode"
             note="Double jump, respawn, noclip and god mode are normally off in Zombie, Hide and Seek, Deathrun, Kreedz, Knife Arena, Base Builder, Soccer Jam, Paintball and Tour of Duty, where they'd spoil the game."
             on={d.abilities.every_mode}
-            set={(v) => setAbilities({ every_mode: v })}
+            set={(v) => settings((s) => ({ ...s, abilities: { ...s.abilities, every_mode: v } }))}
           />
         </div>
         <p className="muted small-note">
