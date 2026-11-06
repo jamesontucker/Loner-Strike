@@ -78,12 +78,18 @@ fn copy_vendor(rec: &mut Record, ctx: &Ctx, vendor: &str) -> Result<(), String> 
 
 /// Copies one fetched file, unless the player already has a file there.
 fn place_resource(rec: &mut Record, src: &Path, rel: &str, sha: Option<&str>) -> Result<bool, String> {
+    place_resource_as(rec, src, rel, sha, false)
+}
+
+/// `patched`: our bot fixes go onto this file, so it's always the downloaded original
+/// (the player's own copy is backed up, not patched: it may be another version)
+fn place_resource_as(rec: &mut Record, src: &Path, rel: &str, sha: Option<&str>, patched: bool) -> Result<bool, String> {
     if let Some(s) = sha {
         if !fetch::sha256(src).map(|h| h.eq_ignore_ascii_case(s)).unwrap_or(false) {
             return Err(format!("{rel} changed upstream (its checksum differs), so setup stopped to keep your game safe."));
         }
     }
-    if rec.exists(rel) && !rec.ours(rel) {
+    if !patched && rec.exists(rel) && !rec.ours(rel) {
         return Ok(false);
     }
     rec.copy(src, rel)?;
@@ -92,6 +98,14 @@ fn place_resource(rec: &mut Record, src: &Path, rel: &str, sha: Option<&str>) ->
 
 fn fetch_all(rec: &mut Record, ctx: &Ctx, comp: &Value, tmp: &TempDir) -> Result<(), String> {
     let name = comp["name"].as_str().unwrap_or("this mode");
+    // the files our patches change
+    let patched: std::collections::HashSet<String> = strs(&comp["patches"])
+        .iter()
+        .filter_map(|p| inside(ctx.res, p))
+        .filter_map(|p| crate::sys::read_latin1(&p).ok())
+        .filter_map(|t| patch::parse(&t).ok())
+        .flat_map(|files| files.into_iter().map(|(rel, _)| rel.to_lowercase()))
+        .collect();
     let items = comp["fetch"].as_array().cloned().unwrap_or_default();
     for (i, item) in items.iter().enumerate() {
         ctx.progress.fraction(0.6 * i as f64 / items.len().max(1) as f64);
@@ -110,12 +124,12 @@ fn fetch_all(rec: &mut Record, ctx: &Ctx, comp: &Value, tmp: &TempDir) -> Result
                 let Some(src) = src else {
                     return Err(format!("{rel} is missing from the download of {name}."));
                 };
-                place_resource(rec, &src, rel, sha)?;
+                place_resource_as(rec, &src, rel, sha, patched.contains(&rel.to_lowercase()))?;
             }
         } else if let (Some(url), Some(to)) = (item["url"].as_str(), item["to"].as_str()) {
             let sha = item["sha256"].as_str();
             let file = fetch::download(url, sha, &what, ctx.progress)?;
-            place_resource(rec, &file, to, sha)?;
+            place_resource_as(rec, &file, to, sha, patched.contains(&to.to_lowercase()))?;
         }
     }
     Ok(())
@@ -208,7 +222,11 @@ pub fn install_component(rec: &mut Record, ctx: &Ctx, comp: &Value) -> Result<bo
         ok = core::compile_plugin(rec, ctx, src, out, c["include"].as_str())? && ok;
     }
     maps(rec, ctx, comp);
-    rec.done(id, Value::from(super::shipped_version(ctx.res, id)))?;
+    // a mode whose plugin didn't build stays out of the menu (it would load its settings
+    // without its plugin); setup says it failed, and running it again tries again
+    if ok {
+        rec.done(id, Value::from(super::shipped_version(ctx.res, id)))?;
+    }
     Ok(ok)
 }
 

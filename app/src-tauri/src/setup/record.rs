@@ -238,6 +238,8 @@ impl Record {
                 let _ = std::fs::create_dir_all(d);
             }
             copy2(&self.dir.join(b), &full).map_err(|e| couldnt("restore", rel, e))?;
+            // restored: gone, so a later install backs up the file as it is then
+            let _ = std::fs::remove_file(self.dir.join(b));
         } else if full.exists() {
             std::fs::remove_file(&full).map_err(|e| couldnt("remove", rel, e))?;
             if let Some(d) = full.parent() {

@@ -111,6 +111,11 @@ pub fn shipped_version(res: &Path, id: &str) -> String {
         if let Some(v) = c["vendor"].as_str() {
             tree(&mut h, &res.join(v));
         }
+        // our bot fixes for a downloaded mod: a change to them is an update too
+        for p in c["patches"].as_array().into_iter().flatten().filter_map(|p| p.as_str()) {
+            h.update(p.as_bytes());
+            h.update(std::fs::read(res.join(p)).unwrap_or_default());
+        }
     }
     let v = format!("{:x}", h.finalize())[..16].to_string();
     CACHE.lock().unwrap().get_or_insert_with(Default::default).insert(key, v.clone());
@@ -621,7 +626,23 @@ fn uninstall_game(job: &Job, plan: &UninstallPlan, ctx: &Ctx, g: &str) -> Result
                 return Ok(());
             }
             let maps = rec.all_map_mods();
-            run_step(job, &format!("{g}/remove"), || rec.uninstall(None))?;
+            run_step(job, &format!("{g}/remove"), || {
+                rec.uninstall(None)?;
+                // what the Game Mode Menu and the admin list write themselves, outside the
+                // record (left in place only when AMX Mod X was the player's own)
+                let configs = plan.install.hl.join(g).join("addons/amxmodx/configs");
+                for f in ["plugins-gamemode.ini", "plugins-gmaddons.ini"] {
+                    let _ = std::fs::remove_file(configs.join(f));
+                }
+                let users = configs.join("users.ini");
+                if let Ok(text) = crate::sys::read_latin1(&users) {
+                    let stripped = crate::admins::strip_users(&text);
+                    if stripped != text {
+                        let _ = crate::sys::write_latin1(&users, &stripped);
+                    }
+                }
+                Ok(())
+            })?;
             if has("maps") {
                 job.start(&format!("{g}/maps"));
                 let n = remove_maps(&ctx.store, &maps);

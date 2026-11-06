@@ -274,6 +274,19 @@ fn users_block(people: &[Person], today: &str, nl: &str) -> String {
 }
 
 /// users.ini with our block replaced (or added at the end); everything else is kept.
+/// users.ini without Loner-Strike's block (removing Loner-Strike from a game whose
+/// AMX Mod X was there before it: the admins it added stop being admins).
+pub fn strip_users(text: &str) -> String {
+    if let (Some(s), Some(e)) = (text.find(BEGIN), text.find(END)) {
+        if e > s {
+            let rest = format!("{}{}", &text[..s], &text[e + END.len()..]);
+            let nl = if text.contains("\r\n") { "\r\n" } else { "\n" };
+            return format!("{}{nl}", rest.trim_end_matches(['\r', '\n']));
+        }
+    }
+    text.to_string()
+}
+
 pub fn rewrite_users(text: &str, people: &[Person], today: &str) -> String {
     let nl = if text.contains("\r\n") || text.is_empty() { "\r\n" } else { "\n" };
     let block = users_block(people, today, nl);
