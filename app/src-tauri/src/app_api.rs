@@ -406,9 +406,13 @@ struct LaunchReq {
 /// or per mode (mode_<id>.cfg), and the values the in-game menu offers.
 const START_SETTINGS: &[(&str, bool, &[&str])] = &[
     ("bot_difficulty", true, &["0", "1", "2", "3"]),
+    ("gm_botstyle", true, &["0", "1", "2", "3", "4", "5", "6", "7"]),
     ("mp_timelimit", false, &["0", "10", "20", "30", "45", "60"]),
     ("mp_friendlyfire", false, &["0", "1"]),
 ];
+
+/// gm_botstyle's personality files, by its value (as gamemodes.sma lists them).
+const BOT_STYLE_FILES: &[&str] = &["", "BotProfile_Pub.db", "BotProfile_Matchmaking.db", "BotProfile_Veterans.db", "BotProfile_Newbie.db", "BotProfile_LockedIn.db", "BotProfile_Hackers.db", "BotProfile_Gods.db"];
 
 /// `cvar "value"` lines from a config file.
 fn cfg_values(path: &std::path::Path) -> Vec<(String, String)> {
@@ -537,6 +541,12 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
     // the game's console goes to qconsole.log, so a crash can be looked into afterwards
     let mut game_args: Vec<String> = vec!["-condebug".into()];
     if let (false, Some(m)) = (req.menu, map) {
+        // a bot style's personalities are read when the map loads, so they go in first
+        // (the plugin only switches them from the next map)
+        let style = req.settings.get("gm_botstyle").cloned().or_else(|| effective(&g, &current_mode(&g), "gm_botstyle")).and_then(|s| s.parse::<usize>().ok()).and_then(|i| BOT_STYLE_FILES.get(i)).filter(|f| !f.is_empty() && g.dir.join(f).is_file());
+        if let Some(f) = style {
+            game_args.extend(["+bot_profile_db".into(), f.to_string()]);
+        }
         game_args.extend(["+maxplayers".into(), "32".into(), "+map".into(), m]);
     }
     match crate::steam::launch(&g.hl, appid, &game_args) {

@@ -52,8 +52,8 @@ export function PlayIdle({ app, reason, maps, openSetup }: { app: AppInfo | null
   const change = (cvar: string, v: string) => setChanged((c) => ({ ...c, [cvar]: v }));
   const pickMode = (id: string) => {
     setModePick(id);
-    // time limit and friendly fire belong to the mode: show the new mode's own
-    setChanged((c): Record<string, string> => (c.bot_difficulty ? { bot_difficulty: c.bot_difficulty } : {}));
+    // time limit and friendly fire belong to the mode: show the new mode's own (bot settings stay)
+    setChanged((c): Record<string, string> => Object.fromEntries(Object.entries(c).filter(([k]) => k === "bot_difficulty" || k === "gm_botstyle")));
   };
   if (app?.game && !app.game.installed?.includes("core")) {
     return (
@@ -122,6 +122,14 @@ export function PlayIdle({ app, reason, maps, openSetup }: { app: AppInfo | null
                 {["Easy", "Normal", "Hard", "Expert"].map((l, i) => <button key={l} aria-pressed={value("bot_difficulty") === String(i)} onClick={() => change("bot_difficulty", String(i))}>{l}</button>)}
               </div>
             </div>
+          )}
+          {mode && botCount > 0 && (
+            <label className="field">
+              <span>Bot style</span>
+              <select value={value("gm_botstyle") ?? "0"} onChange={(e) => change("gm_botstyle", e.target.value)}>
+                {BOT_STYLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
           )}
           {mode && (
             <label className="field">
@@ -234,6 +242,8 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
 }
 
 type StartOptions = { modes: { id: string; name: string; settings: Record<string, string | null> }[]; mode: string };
+// gm_botstyle values, in the order the in-game menu shows them
+const BOT_STYLES: [string, string][] = [["0", "Classic"], ["4", "Newbie lobby"], ["1", "Pub server"], ["2", "Matchmaking"], ["3", "Veterans"], ["5", "Locked In"], ["6", "Hackers"], ["7", "Gods"]];
 const TIME_LIMITS: [string, string][] = [["0", "None"], ["10", "10 min"], ["20", "20 min"], ["30", "30 min"], ["45", "45 min"], ["60", "60 min"]];
 
 /** A map list you can type into: the mode's maps, recent and favourites first. */
