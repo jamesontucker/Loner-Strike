@@ -109,7 +109,11 @@ fn host_of(req: &Request) -> String {
 async fn with_target(req: Request, next: Next) -> Response {
     let header = req.headers().get("x-target").and_then(|v| v.to_str().ok()).map(String::from);
     let query = req.uri().query().and_then(|q| q.split('&').find_map(|p| p.strip_prefix("target=").map(String::from)));
-    let Some(id) = header.or(query).filter(|t| !t.is_empty() && t != "local") else {
+    // the server list and per-server routes name their server in the path: they never
+    // depend on (or fail because of) the one that's open
+    let path = req.uri().path();
+    let by_path = path == "/api/servers" || path.starts_with("/api/servers/");
+    let Some(id) = header.or(query).filter(|t| !t.is_empty() && t != "local" && !by_path) else {
         return next.run(req).await;
     };
     if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') || id.len() > 48 {

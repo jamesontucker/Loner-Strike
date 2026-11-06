@@ -61,12 +61,14 @@ static SETTINGS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub fn load_settings() -> Settings {
     let p = settings_path();
-    let mut s: Settings = match std::fs::read_to_string(&p) {
-        Ok(t) => serde_json::from_str(&t).unwrap_or_else(|_| {
+    let mut s: Settings = match crate::sys::read_text(&p) {
+        Ok(Some(t)) => serde_json::from_str(&t).unwrap_or_else(|_| {
             crate::sys::set_aside(&p);
             Settings::default()
         }),
-        Err(_) => Settings::default(),
+        Ok(None) => Settings::default(),
+        // there but unreadable for now: use defaults this time, never save them over it
+        Err(_) => return Settings::default(),
     };
     if s.token.len() < 16 {
         let _g = SETTINGS.lock().unwrap_or_else(|e| e.into_inner());
@@ -81,8 +83,15 @@ pub fn edit_settings(f: impl FnOnce(&mut Settings)) -> Settings {
     let mut s = load_settings();
     let _g = SETTINGS.lock().unwrap_or_else(|e| e.into_inner());
     // read again under the lock: load_settings may have written a new token
-    if let Some(fresh) = std::fs::read_to_string(settings_path()).ok().and_then(|t| serde_json::from_str::<Settings>(&t).ok()) {
-        s = fresh;
+    match crate::sys::read_text(&settings_path()) {
+        Ok(Some(t)) => {
+            if let Ok(fresh) = serde_json::from_str::<Settings>(&t) {
+                s = fresh;
+            }
+        }
+        Ok(None) => {}
+        // couldn't read it: don't write a default over it
+        Err(_) => return s,
     }
     f(&mut s);
     save_settings(&s);

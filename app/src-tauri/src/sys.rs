@@ -43,8 +43,25 @@ pub fn set_aside(path: &Path) {
 }
 
 /// A JSON object file; missing is empty, and one that doesn't parse is set aside first.
+/// A text file: None if it isn't there. Other errors (often another program, like an
+/// antivirus, holding it for a moment on Windows) are retried briefly first.
+pub fn read_text(path: &Path) -> std::io::Result<Option<String>> {
+    let mut tries = 0;
+    loop {
+        match std::fs::read_to_string(path) {
+            Ok(t) => return Ok(Some(t)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) if tries >= 5 => return Err(e),
+            Err(_) => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(60));
+            }
+        }
+    }
+}
+
 pub fn read_json_map(path: &Path) -> serde_json::Map<String, serde_json::Value> {
-    match std::fs::read_to_string(path) {
+    match read_text(path).ok().flatten().ok_or(()) {
         Ok(t) => serde_json::from_str::<serde_json::Value>(&t).ok().and_then(|v| v.as_object().cloned()).unwrap_or_else(|| {
             set_aside(path);
             Default::default()

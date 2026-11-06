@@ -139,11 +139,15 @@ export async function addFromFile(section: string): Promise<{ ok: boolean; messa
  *  sent rather than on what's on screen, so two quick changes don't undo each other. */
 export function useQueuedSave<S>() {
   const want = useRef<S | null>(null);
+  // one save at a time, in order, so the last reply is the last change
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
   return useCallback(async <T,>(current: S, change: (s: S) => S, send: (s: S) => Promise<T>): Promise<T> => {
     const next = change(want.current ?? current);
     want.current = next;
+    const mine = chain.current.catch(() => null).then(() => send(next));
+    chain.current = mine;
     try {
-      return await send(next);
+      return await mine;
     } finally {
       if (want.current === next) want.current = null;
     }

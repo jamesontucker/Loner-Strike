@@ -136,6 +136,19 @@ export function Community({ target }: { target: string }) {
 
 type SetData = (d: Data) => void;
 
+/** For pages that refresh by themselves: an error is shown once, not on every refresh. */
+function usePollError() {
+  const toast = useToast();
+  const last = useRef<string | null>(null);
+  return useCallback(
+    (error: string | null) => {
+      if (error && error !== last.current) toast(error, true);
+      last.current = error;
+    },
+    [toast],
+  );
+}
+
 /** Saves a change of settings; the reply is the new state. */
 function useSettings(d: Data, setD: SetData) {
   const toast = useToast();
@@ -373,7 +386,6 @@ function StatDetail({ p, d, setD }: { p: StatRow; d: Data; setD: SetData }) {
 const STATUS: Record<string, string> = { muted: "muted, not sent", filtered: "words starred out", blocked: "not sent: swearing", report: "report" };
 
 function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string }) {
-  const toast = useToast();
   const save = useSettings(d, setD);
   const ban = useBan();
   const [q, setQ] = useState(initial);
@@ -382,15 +394,17 @@ function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string
   const [limit, setLimit] = useState(200);
   const [open, setOpen] = useState<string | null>(null);
 
+  const pollError = usePollError();
   const latest = useRef(0);
   const load = useCallback(async () => {
     const mine = ++latest.current;
     const r = await getJson<{ lines: ChatLine[]; more: boolean } | Err>(`/api/community/chat?q=${encodeURIComponent(q.trim())}&limit=${limit}`).catch(() => OFFLINE);
     if (mine !== latest.current) return;
-    if (failed(r)) return toast(r.error, true);
+    if (failed(r)) return pollError(r.error);
+    pollError(null);
     setLines(r.lines);
     setMore(r.more);
-  }, [q, limit, toast]);
+  }, [q, limit, pollError]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -470,11 +484,13 @@ function ReportsTab({ d, setD, reload, showChat }: { d: Data; setD: SetData; rel
   const [list, setList] = useState<Report[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
+  const pollError = usePollError();
   const load = useCallback(async () => {
     const r = await getJson<{ reports: Report[] } | Err>("/api/community/reports").catch(() => OFFLINE);
-    if (failed(r)) return toast(r.error, true);
+    if (failed(r)) return pollError(r.error);
+    pollError(null);
     setList(r.reports);
-  }, [toast]);
+  }, [pollError]);
 
   useEffect(() => {
     load();

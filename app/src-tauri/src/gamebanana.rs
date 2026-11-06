@@ -625,7 +625,7 @@ impl MapStore {
         };
         let me = self.clone();
         let id = job_id.clone();
-        std::thread::spawn(move || me.install(&id));
+        me.spawn_install(id);
         Ok(job_id)
     }
 
@@ -654,7 +654,7 @@ impl MapStore {
         );
         let me = self.clone();
         let job = id.clone();
-        std::thread::spawn(move || me.install(&job));
+        me.spawn_install(job);
         Ok(id)
     }
 
@@ -696,7 +696,21 @@ impl MapStore {
         v
     }
 
-    fn update(&self, id: &str, f: impl FnOnce(&mut Job)) {
+/// Runs an install on its own thread. A panic fails the job instead of leaving it
+    /// "unpacking" forever (and blocking that mod's installs until a restart).
+    fn spawn_install(self: Arc<Self>, id: String) {
+        std::thread::spawn(move || {
+            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.install(&id))).is_err() {
+                self.update(&id, |j| {
+                    j.state = "error".into();
+                    j.message = "Something went wrong installing it. Try again.".into();
+                    j.ended = Some(sys::now());
+                });
+            }
+        });
+    }
+
+        fn update(&self, id: &str, f: impl FnOnce(&mut Job)) {
         if let Some(j) = self.jobs.lock().unwrap().get_mut(id) {
             f(j);
         }

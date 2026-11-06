@@ -100,13 +100,20 @@ fn list_file() -> PathBuf {
 }
 
 pub fn load() -> Vec<Entry> {
+    load_checked().unwrap_or_default()
+}
+
+/// The list, or an error if the file is there but couldn't be read (another program
+/// holding it for a moment): a change must not save an empty list over it then.
+fn load_checked() -> Result<Vec<Entry>, String> {
     let file = list_file();
-    let mut list: Vec<Entry> = match std::fs::read_to_string(&file) {
-        Ok(t) => serde_json::from_str(&t).unwrap_or_else(|_| {
+    let mut list: Vec<Entry> = match sys::read_text(&file) {
+        Ok(Some(t)) => serde_json::from_str(&t).unwrap_or_else(|_| {
             sys::set_aside(&file);
             Vec::new()
         }),
-        Err(_) => Vec::new(),
+        Ok(None) => Vec::new(),
+        Err(e) => return Err(format!("Couldn't read the server list ({e}). Try again in a moment.")),
     };
     // servers made before they started at 27016 shared the game's port: move them
     // (saved with the next change)
@@ -115,7 +122,7 @@ pub fn load() -> Vec<Entry> {
             list[i].port = free_port(&list);
         }
     }
-    list
+    Ok(list)
 }
 
 /// A running server on `port`, by name (the game's own port is 27015).
@@ -130,8 +137,8 @@ fn save(list: &[Entry]) -> Result<(), String> {
 static LIST_LOCK: Mutex<()> = Mutex::new(());
 
 pub(crate) fn edit(f: impl FnOnce(&mut Vec<Entry>)) -> Result<(), String> {
-    let _g = LIST_LOCK.lock().unwrap();
-    let mut list = load();
+    let _g = LIST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut list = load_checked()?;
     f(&mut list);
     save(&list)
 }
@@ -683,8 +690,47 @@ fn spawn(e: &Entry) -> Result<Child, String> {
         .stderr(log);
     let child = cmd.spawn().map_err(|err| format!("The server didn't start ({err})."))?;
     // not tied to the app: whether servers stop with it is decided when it quits
-    // (main.rs), so turning "Keep servers running" on also keeps the ones already going
+    // (main.rs), so turning "Keep servers running" on also keeps the ones already going.
+    // Its pid is kept, so one the app lost track of (a crash) can still be ended.
+    let _ = std::fs::write(pid_file(e), child.id().to_string());
     Ok(child)
+}
+
+fn pid_file(e: &Entry) -> PathBuf {
+    e.dir.join("loner-strike-server.pid")
+}
+
+/// Ends this server's process from an earlier session that the app lost track of
+/// (it crashed or was force-quit), if it's still there: only when the pid is still
+/// this server (its path in the command line on a Mac, hlds.exe on Windows).
+fn end_leftover(e: &Entry) {
+    let file = pid_file(e);
+    let Ok(text) = std::fs::read_to_string(&file) else { return };
+    let _ = std::fs::remove_file(&file);
+    #[cfg(unix)]
+    if let Ok(pid) = text.trim().parse::<i32>() {
+        let mut c = sys::command("ps");
+        c.args(["-p", &pid.to_string(), "-o", "command="]);
+        if let Some((_, out, _)) = sys::run_output(c, Duration::from_secs(3)) {
+            // CrossOver's wine is given the server's Windows path (C:\...\hlds.exe)
+            let win = windows_path(&e.hlds());
+            if out.contains(&*e.dir.to_string_lossy()) || win.is_some_and(|w| !w.is_empty() && out.contains(&w)) {
+                unsafe { libc::kill(pid, libc::SIGKILL) };
+            }
+        }
+    }
+    #[cfg(windows)]
+    if let Ok(pid) = text.trim().parse::<u32>() {
+        let mut c = sys::command("tasklist");
+        c.args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"]);
+        if let Some((_, out, _)) = sys::run_output(c, Duration::from_secs(3)) {
+            if out.to_lowercase().contains("hlds.exe") {
+                let mut k = sys::command("taskkill");
+                k.args(["/PID", &pid.to_string(), "/F"]);
+                let _ = sys::run_output(k, Duration::from_secs(5));
+            }
+        }
+    }
 }
 
 pub fn start(id: &str) -> Result<(), String> {
@@ -699,6 +745,8 @@ pub fn start(id: &str) -> Result<(), String> {
     if with_runs(|r| r.procs.contains_key(id)) || left_running(&e) {
         return Ok(());
     }
+    // one from before that doesn't answer (hung, or still shutting down) would hold the port
+    end_leftover(&e);
     if let Some(other) = load().iter().find(|o| o.id != e.id && o.port == e.port && with_runs(|r| r.procs.contains_key(&o.id))) {
         return Err(format!("\"{}\" is using port {} already. Stop it first, or change this server's port.", other.name, e.port));
     }
@@ -724,9 +772,19 @@ pub fn stop(id: &str) {
         r.procs.remove(id).map(|p| p.child)
     });
     let Some(mut child) = child else {
-        // one left running from before: ask it to quit
-        if let Some(rcon) = e.as_ref().and_then(|e| e.rcon()) {
-            let _ = rcon.send("quit");
+        // one left running from before: ask it to quit, and wait until it has (so a
+        // restart right after doesn't find it still there and skip starting it)
+        if let Some(e) = &e {
+            if let Some(rcon) = e.rcon() {
+                let _ = rcon.send("quit");
+            }
+            for _ in 0..30 {
+                if !left_running(e) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(500));
+            }
+            end_leftover(e);
         }
         return;
     };
@@ -743,10 +801,12 @@ pub fn stop(id: &str) {
     sys::stop_child(child, Duration::from_secs(3));
 }
 
+/// Stops every server this session started, all at once (each can take seconds).
 pub fn stop_all() {
     let ids: Vec<String> = with_runs(|r| r.procs.keys().cloned().collect());
-    for id in ids {
-        stop(&id);
+    let threads: Vec<_> = ids.into_iter().map(|id| std::thread::spawn(move || stop(&id))).collect();
+    for t in threads {
+        let _ = t.join();
     }
 }
 
@@ -829,7 +889,19 @@ fn view(e: &Entry) -> Value {
     });
     // still up from before the app last closed
     let (state, error) = if state == "stopped" && left_running(e) { ("running", None) } else { (state, error) };
-    let state = if e.ready { state } else { "setting-up" };
+    // not ready: setting up while a server setup job runs; otherwise it stopped part way
+    // (an error, or the app closed during it) and can only be deleted
+    let (state, error) = if e.ready {
+        (state, error)
+    } else {
+        let job = setup::current();
+        if job.kind == "server" && job.state == "running" {
+            ("setting-up", None)
+        } else {
+            let why = (job.kind == "server").then_some(job.error).flatten();
+            ("failed", Some(why.map(|w| format!("Setting it up stopped: {w}")).unwrap_or_else(|| "Setting it up didn't finish. Delete it and make it again.".into())))
+        }
+    };
     json!({"id": e.id, "name": e.name, "game": e.game, "port": e.port, "visibility": e.visibility, "map": e.map,
            "maxplayers": e.maxplayers, "ready": e.ready, "state": state, "uptime": uptime, "error": error,
            "imported": e.imported, "loner": loner, "dir": e.dir})
@@ -1271,13 +1343,6 @@ fn restart_now(id: &str) {
     }
     std::thread::sleep(Duration::from_secs(3));
     stop(id);
-    // one left running from before the app started was only asked to quit
-    for _ in 0..60 {
-        if !get(id).map(|e| left_running(&e)).unwrap_or(false) {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(500));
-    }
     if let Err(err) = start(id) {
         with_runs(|r| r.errors.insert(id.to_string(), format!("The daily restart couldn't start it again: {err}")));
     }

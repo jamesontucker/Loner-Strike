@@ -24,7 +24,7 @@ const VISIBILITY = [
   { id: "unlisted", name: "Anyone with the address", note: "Not in Steam's server list" },
   { id: "listed", name: "Listed on Steam", note: "Shows up in the Internet tab of Find Servers" },
 ] as const;
-const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up" };
+const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up", failed: "Not finished" };
 
 type Reply = { ok?: boolean; error?: string; job?: string; id?: string; admins?: number; loner?: boolean; dir?: string | null; lines?: string[]; reply?: string };
 const post = (path: string, body: unknown = {}) => postJson<Reply>(path, body).catch((): Reply => ({ error: "Couldn't reach the app." }));
@@ -117,6 +117,10 @@ export function Servers({ scan, list, onOpen, onChanged }: { scan: Scan | null; 
             {s.error && <p className="err-text">{s.error}</p>}
             {s.state === "setting-up" ? (
               <JobProgress onEnd={(ok) => { toast(ok ? `${s.name} is ready` : "Setting up the server stopped", !ok); onChanged(); }} />
+            ) : s.state === "failed" ? (
+              <div className="row">
+                <button className="btn danger" onClick={() => act(s, "delete")}>{s.imported ? "Remove" : "Delete"}</button>
+              </div>
             ) : (
               <div className="row">
                 <button className="btn primary" onClick={() => onOpen(s.id)}>Open</button>

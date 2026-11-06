@@ -296,11 +296,15 @@ impl Sharing {
         let saved = self.saved.lock().unwrap().clone();
         let data = self.target.lock().unwrap().data.clone();
         let (name, password) = self.server_settings(&data);
+        // the slow parts (a tailscale subprocess, file checks) before taking `run`,
+        // which starting and stopping the tunnel wait on
+        let (installed, connected, tailscale, port) = (self.binary().is_some(), self.key().is_some(), self.tailscale(), self.port());
+        let claim = self.claim.lock().unwrap().clone();
         let run = self.run.lock().unwrap();
         json!({
-            "installed": self.binary().is_some(),
-            "connected": self.key().is_some(),
-            "claim": self.claim.lock().unwrap().clone(),
+            "installed": installed,
+            "connected": connected,
+            "claim": claim,
             "phase": run.phase,
             "error": run.error,
             "address": run.address,
@@ -308,8 +312,8 @@ impl Sharing {
             "name": name,
             "password": password,
             "method": saved.get("method").cloned().unwrap_or(json!("playit")),
-            "tailscale": self.tailscale(),
-            "port": self.port(),
+            "tailscale": tailscale,
+            "port": port,
         })
     }
 
@@ -406,6 +410,9 @@ impl Sharing {
         let key = loop {
             if !self.with_claim(code, |_| {}) {
                 return Ok(());
+            }
+            if Instant::now() > give_up {
+                return Err("The setup link expired. Start again.".into());
             }
             match call("/claim/exchange", json!({"code": code}), None) {
                 Ok(d) => break d["secret_key"].as_str().map(String::from).ok_or("playit.gg sent no key.")?,
