@@ -187,10 +187,10 @@ function Shell() {
         <div className="drag-strip" data-tauri-drag-region />
         <div className="brand">Loner-Strike</div>
         {localGames.length > 1 && (
-          <div className="seg game-switch" role="group" aria-label="Your game">
+          <div className="game-switch" role="group" aria-label="Your game">
             {localGames.map((g) => (
-              <button key={g} aria-pressed={myGame === g} disabled={!!openServer} onClick={() => switchGame(g)}>
-                {g === "cstrike" ? "CS 1.6" : "Condition Zero"}
+              <button key={g} title={g === "cstrike" ? "Counter-Strike 1.6" : "Counter-Strike: Condition Zero"} aria-pressed={myGame === g} disabled={!!openServer} onClick={() => switchGame(g)}>
+                {g === "cstrike" ? "CS 1.6" : "CZ"}
               </button>
             ))}
           </div>

@@ -67,7 +67,7 @@ fn main() {
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("Loner-Strike")
                 .inner_size(1240.0, 860.0)
-                .min_inner_size(820.0, 560.0)
+                .min_inner_size(820.0, 660.0) // the sidebar fits without scrolling
                 .build()?;
             Ok(())
         })

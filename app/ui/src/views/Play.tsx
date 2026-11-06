@@ -37,7 +37,7 @@ export function PlayIdle({ app, reason, maps }: { app: AppInfo | null; reason: s
         <h1>
           0 friends online.
           <br />
-          {bots === null ? "Bots" : bots} bot{bots === 1 ? "" : "s"} ready.
+          {bots === null ? "Bots ready." : `${bots} bot${bots === 1 ? "" : "s"} ready.`}
         </h1>
         <p>
           {app?.game ? `Start ${game} and Loner-Strike connects by itself.` : reason}

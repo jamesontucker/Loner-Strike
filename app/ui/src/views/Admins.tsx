@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { getJson, postJson } from "../api";
-import type { Online, Player } from "../types";
+import type { Online } from "../types";
 import { SectionHead, Switch, useToast } from "../ui";
 
 type Role = "owner" | "admin" | "moderator" | "vip";
 type Person = { id: string; name: string; role: Role; expires: string | null; note: string; expired: boolean };
 type Perks = { armor: boolean; defuse: boolean; nades: boolean; money: number; tag: boolean; chat: boolean; host: boolean };
 type Ban = { kind: "id" | "ip"; value: string };
-type Data = { people: Person[]; donate: string; perks: Perks; bans: Ban[]; today: string; users_ini: boolean };
+type Seen = { id: string; name: string; aka: string[]; first: number; last: number; visits: number };
+type Data = { people: Person[]; donate: string; perks: Perks; bans: Ban[]; today: string; users_ini: boolean; seen: Seen[] };
 type Reply = Data | { ok: false; error: string };
 
 const ROLES: { id: Role; name: string; what: string }[] = [
@@ -41,6 +42,24 @@ function expiry(p: Person, today: string) {
   return `${roleName(p.role)} until ${niceDate(p.expires, today)}`;
 }
 
+function ago(t: number) {
+  const s = Date.now() / 1000 - t;
+  if (s < 3600) return "just now";
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  if (s < 86400 * 30) return `${Math.floor(s / 86400)} d ago`;
+  return new Date(t * 1000).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** What the "Give…" menu offers: a role, and for VIP how long. */
+const GIVE: { key: string; label: string; role: Role; days?: number }[] = [
+  { key: "vip30", label: "VIP for 30 days", role: "vip", days: 30 },
+  { key: "vip90", label: "VIP for 90 days", role: "vip", days: 90 },
+  { key: "vip", label: "VIP for good", role: "vip" },
+  { key: "moderator", label: "Moderator", role: "moderator" },
+  { key: "admin", label: "Admin", role: "admin" },
+  { key: "owner", label: "Owner", role: "owner" },
+];
+
 type Draft = { id: string; name: string; role: Role; expires: string; note: string; was?: string };
 const EMPTY: Draft = { id: "", name: "", role: "vip", expires: "", note: "" };
 
@@ -52,6 +71,7 @@ export function Admins({ data }: { data: Online | null }) {
   const [banId, setBanId] = useState("");
   const [banTime, setBanTime] = useState(0);
   const [donate, setDonate] = useState<string | null>(null);
+  const [q, setQ] = useState("");
 
   const load = () =>
     getJson<Reply>("/api/admins")
@@ -80,7 +100,7 @@ export function Admins({ data }: { data: Online | null }) {
     if (ok) setDraft(null);
   };
   const remove = (p: Person) => confirm(`Take ${p.name || p.id} off the list?`) && send("/api/admins/remove", { id: p.id }, "Removed");
-  const grant = (pl: Player, role: Role, days?: number) => {
+  const grant = (pl: { steamid: string; name: string }, role: Role, days?: number) => {
     const existing = d.people.find((p) => p.id === pl.steamid);
     send(
       "/api/admins/person",
@@ -96,7 +116,15 @@ export function Admins({ data }: { data: Online | null }) {
   const setPerks = (p: Partial<Perks>) => send("/api/admins/settings", { donate: d.donate, perks: { ...d.perks, ...p } });
   const saveDonate = () => send("/api/admins/settings", { donate: donate ?? d.donate, perks: d.perks }, "Saved").then((ok) => ok && setDonate(null));
 
-  const humans = data ? data.players.filter((p) => !p.bot && !p.host) : [];
+  // who's playing now first, then everyone who's been here
+  const humans = data ? data.players.filter((p) => !p.bot && !p.host && !!p.steamid && STEAMID.test(p.steamid)) : [];
+  const players = [
+    ...humans.map((h) => {
+      const s = d.seen.find((x) => x.id === h.steamid);
+      return { id: h.steamid!, name: h.name, aka: s?.aka ?? [], last: s?.last ?? 0, visits: s?.visits ?? 1, online: true };
+    }),
+    ...d.seen.filter((x) => !humans.some((h) => h.steamid === x.id)).map((x) => ({ ...x, online: false })),
+  ];
   const people = [...d.people].sort((a, b) => ROLES.findIndex((r) => r.id === a.role) - ROLES.findIndex((r) => r.id === b.role) || (a.name || a.id).localeCompare(b.name || b.id));
 
   return (
@@ -136,42 +164,54 @@ export function Admins({ data }: { data: Online | null }) {
         </p>
       </div>
 
-      {data && (
-        <div>
-          <SectionHead title="Playing now" note="Quick ways to promote, reward or ban people in your game." />
-          <ul className="people">
-            {humans.map((pl) => {
-              const usable = !!pl.steamid && STEAMID.test(pl.steamid);
-              const listed = d.people.find((p) => p.id === pl.steamid);
+      <div>
+        <SectionHead title="Players" note="Everyone who's joined, newest first. Give someone a role, or ban them, in one click." />
+        <input className="search" type="search" placeholder="Search names or SteamIDs" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search players" />
+        <ul className="people">
+          {players
+            .filter((pl) => !q.trim() || `${pl.name} ${pl.aka.join(" ")} ${pl.id}`.toLowerCase().includes(q.trim().toLowerCase()))
+            .slice(0, 200)
+            .map((pl) => {
+              const listed = d.people.find((p) => p.id === pl.id);
+              const banned = d.bans.some((b) => b.value === pl.id);
               return (
-                <li key={pl.uid}>
+                <li key={pl.id}>
                   <div className="person">
                     <span className="person-name">
                       {pl.name}
+                      {pl.online && <i className="role-badge online">Playing now</i>}
                       {listed && <i className={`role-badge ${listed.role}`}>{roleName(listed.role)}</i>}
+                      {banned && <i className="role-badge banned">Banned</i>}
                     </span>
-                    <span className="person-sub mono">{pl.steamid || "No SteamID (update the Game Mode Menu plugin)"}</span>
+                    <span className="person-sub">
+                      <span className="mono">{pl.id}</span>
+                      {pl.last ? ` · ${pl.online ? "joined" : "last seen"} ${ago(pl.last)} · ${pl.visits} visit${pl.visits === 1 ? "" : "s"}` : ""}
+                      {pl.aka.length > 0 && ` · also ${pl.aka.slice(0, 3).join(", ")}`}
+                    </span>
                   </div>
-                  {usable ? (
-                    <div className="row">
-                      <button className="btn" onClick={() => grant(pl, "admin")}>Make admin</button>
-                      <button className="btn" onClick={() => grant(pl, "vip", 30)}>Give VIP for 30 days</button>
-                      <button className="btn danger" onClick={() => ban(pl.steamid!, 0, pl.name)}>Ban</button>
-                    </div>
-                  ) : (
-                    <span className="muted small-note">Can't be used: no real SteamID</span>
-                  )}
+                  <div className="row">
+                    <select
+                      value=""
+                      aria-label={`Give ${pl.name} a role`}
+                      onChange={(e) => {
+                        const g = GIVE.find((x) => x.key === e.target.value);
+                        if (g) grant({ steamid: pl.id, name: pl.name }, g.role, g.days);
+                      }}
+                    >
+                      <option value="">{listed ? "Change role…" : "Give…"}</option>
+                      {GIVE.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+                    </select>
+                    {!banned && <button className="btn danger" onClick={() => ban(pl.id, 0, pl.name)}>Ban</button>}
+                  </div>
                 </li>
               );
             })}
-            {!humans.length && <li className="empty">No other people in your game right now. Bots can't be admins.</li>}
-          </ul>
-          <p className="muted small-note">
-            On a LAN or offline game, players show up as STEAM_ID_LAN or VALVE_ID_LAN and bots as BOT. Those aren't real SteamIDs and can't be given powers or banned
-            here. People joining over the internet through Steam have proper ones.
-          </p>
-        </div>
-      )}
+          {!players.length && <li className="empty">Nobody has joined yet. People show up here the first time they connect.</li>}
+        </ul>
+        <p className="muted small-note">
+          Only people joining through Steam have a SteamID. On a LAN or offline game they show up as STEAM_ID_LAN and can't be listed, given roles or banned here.
+        </p>
+      </div>
 
       <div>
         <SectionHead title="Bans" note="People who can't join your server." />

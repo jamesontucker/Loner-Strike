@@ -1635,6 +1635,25 @@ public client_putinserver(id)
 		set_task(0.1, "task_bot_hams", id)
 }
 
+// Who joined, for the app's Players list (the app folds seen.log into its own list).
+public client_authorized(id)
+{
+	if (is_user_bot(id) || is_user_hltv(id))
+		return
+	new auth[40], name[32]
+	get_user_authid(id, auth, charsmax(auth))
+	// real SteamIDs only: not STEAM_ID_LAN / STEAM_ID_PENDING / BOT
+	if (!equal(auth, "STEAM_", 6) || equal(auth, "STEAM_ID", 8))
+		return
+	get_user_name(id, name, charsmax(name))
+	new f = fopen(fmt("%s/seen.log", g_DataDir), "at")
+	if (f)
+	{
+		fprintf(f, "%d^t%s^t%s^n", get_systime(), auth, name)
+		fclose(f)
+	}
+}
+
 // Condition Zero bots are a different class from human players, so hooks
 // registered on "player" never fire for them. Register them again on the first
 // bot that joins.

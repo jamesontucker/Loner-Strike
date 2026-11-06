@@ -13,8 +13,9 @@
   --bevel-hi: rgba(136, 145, 128, .55);
   --bevel-lo: #292c21;
   --bone: #d8ded3;
-  --bone-dim: #a0aa95;
-  --bone-faint: #7f8a74;
+  /* readable on every panel: dim ~4.4:1, faint ~3.7:1 on --panel, more on --bg */
+  --bone-dim: #c2c9b7;
+  --bone-faint: #aeb7a2;
   --signal: #c4b550;
   --signal-ink: #26240f;
   --t: #d9a441;
@@ -58,27 +59,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .drag-strip { height: 38px; flex: none; } /* room for the macOS window buttons */
 .brand {
-  padding: 6px 0 22px;
+  padding: 0 0 14px;
   text-align: center;
-  font: 400 25px/1 var(--stencil);
+  font: 400 24px/1 var(--stencil);
   color: var(--bone);
   letter-spacing: .01em;
   white-space: nowrap;
 }
-.nav { flex: 1; overflow-y: auto; }
+.nav { flex: 1; overflow-y: auto; scrollbar-width: none; }
+.nav::-webkit-scrollbar { display: none; }
 .nav-group {
-  margin: 16px 10px 6px;
+  margin: 10px 10px 3px;
   color: var(--bone-faint);
   font-size: 13px; font-weight: 600;
 }
 .nav-item {
   width: 100%;
   display: flex; align-items: center; gap: 11px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   border: 0; border-radius: 3px;
   background: transparent;
   color: var(--bone-dim);
-  font-weight: 600; font-size: 16px;
+  font-weight: 600; font-size: 15px;
   text-align: left;
 }
 .nav-item:hover { background: rgba(233, 227, 207, .06); color: var(--bone); }
@@ -91,14 +93,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .game-switch {
   display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
+  margin: 0 4px 8px;
   padding: 3px; border-radius: 3px;
   background: var(--bg);
   box-shadow: var(--sunken);
 }
 .game-switch button {
-  border: 0; border-radius: 5px; padding: 6px 0;
+  border: 0; border-radius: 2px; padding: 4px 0;
   background: transparent; color: var(--bone-faint);
-  font-weight: 700;
+  font-weight: 700; font-size: 14px; white-space: nowrap;
 }
 .game-switch button[aria-pressed="true"] { background: var(--panel-2); color: var(--signal); box-shadow: var(--raised); }
 
@@ -649,5 +652,12 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .server-title { font-size: 28px; }
 .server-tabs { margin-top: 4px; }
 .live.inline { display: inline-flex; font-size: inherit; }
-.game-switch { margin: 0 6px 16px; display: flex; }
-.game-switch button { flex: 1; }
+
+/* short windows: tighter still, so the sidebar never needs to scroll */
+@media (max-height: 760px) {
+  .nav-item { padding: 4px 10px; }
+  .nav-group { margin: 6px 10px 1px; font-size: 12px; }
+  .brand { padding-bottom: 10px; font-size: 21px; }
+}
+.role-badge.online { background: var(--ok); color: #1f2412; box-shadow: none; }
+.role-badge.banned { background: #8a4636; color: #f6dcd2; box-shadow: none; }

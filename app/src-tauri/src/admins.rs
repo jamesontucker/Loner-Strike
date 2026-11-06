@@ -408,6 +408,70 @@ async fn with_game<T: Send + 'static>(st: &Shared, f: impl FnOnce(&Game) -> T + 
     tokio::task::spawn_blocking(move || f(&g)).await.ok()
 }
 
+// ---- everyone who's played here ---------------------------------------------------
+
+/// Someone who joined (from the plugin's seen.log, kept in seen.json).
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct Seen {
+    pub id: String,
+    pub name: String,
+    /// other names they've used, newest first
+    #[serde(default)]
+    pub aka: Vec<String>,
+    pub first: i64,
+    pub last: i64,
+    pub visits: u32,
+}
+
+const MAX_SEEN: usize = 5000;
+
+/// Folds new seen.log lines into the list (newest first).
+pub fn fold_seen(mut list: Vec<Seen>, log: &str) -> Vec<Seen> {
+    for line in log.lines() {
+        let mut parts = line.splitn(3, '\t');
+        let (Some(t), Some(id), Some(name)) = (parts.next(), parts.next(), parts.next()) else { continue };
+        let (Ok(t), id, name) = (t.trim().parse::<i64>(), id.trim(), clean_text(name, 32)) else { continue };
+        if !valid_steamid(id) {
+            continue;
+        }
+        match list.iter_mut().find(|s| s.id == id) {
+            Some(s) => {
+                if s.name != name && !name.is_empty() {
+                    let old = std::mem::replace(&mut s.name, name.clone());
+                    s.aka.retain(|n| *n != old && *n != name);
+                    s.aka.insert(0, old);
+                    s.aka.truncate(5);
+                }
+                s.last = s.last.max(t);
+                s.first = s.first.min(t);
+                s.visits += 1;
+            }
+            None => list.push(Seen { id: id.into(), name, aka: vec![], first: t, last: t, visits: 1 }),
+        }
+    }
+    list.sort_by(|a, b| b.last.cmp(&a.last));
+    list.truncate(MAX_SEEN);
+    list
+}
+
+/// The list, after taking in whatever the plugin wrote since last time.
+fn seen(data: &Path) -> Vec<Seen> {
+    let file = data.join("seen.json");
+    let list: Vec<Seen> = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    // move the log aside first, so lines the plugin writes meanwhile start a new one
+    let log = data.join("seen.log");
+    let taking = data.join("seen.log.reading");
+    if !taking.exists() && std::fs::rename(&log, &taking).is_err() {
+        return list;
+    }
+    let text = crate::sys::read_latin1(&taking).unwrap_or_default();
+    let list = fold_seen(list, &text);
+    if std::fs::write(&file, serde_json::to_string(&list).unwrap_or_default()).is_ok() {
+        let _ = std::fs::remove_file(&taking);
+    }
+    list
+}
+
 fn listing(g: &Game) -> Value {
     let a = load(&g.data);
     let today = today();
@@ -421,7 +485,7 @@ fn listing(g: &Game) -> Value {
         })
         .collect();
     json!({"people": people, "donate": a.donate, "perks": a.perks, "bans": read_bans(g), "today": today,
-           "users_ini": g.dir.join("addons/amxmodx/configs").is_dir()})
+           "users_ini": g.dir.join("addons/amxmodx/configs").is_dir(), "seen": seen(&g.data)})
 }
 
 type Reply = (StatusCode, Json<Value>);
@@ -694,6 +758,18 @@ mod tests {
         // LF files stay LF; a bad id never gets in
         let lf = rewrite_users("; x\n", &[person("STEAM_ID_LAN", Role::Owner, None), people[0].clone()], "2026-11-06");
         assert!(!lf.contains('\r') && !lf.contains("STEAM_ID_LAN") && lf.contains("STEAM_0:1:111"));
+    }
+
+    #[test]
+    fn seen_list() {
+        let log = "100\tSTEAM_0:1:5\tBob\n200\tSTEAM_0:1:5\tBobby\n150\tSTEAM_0:0:7\tAnn\n160\tSTEAM_ID_LAN\tLan\nbad line\n";
+        let l = fold_seen(vec![], log);
+        assert_eq!(l.len(), 2);
+        assert_eq!(l[0].id, "STEAM_0:1:5");
+        assert_eq!((l[0].name.as_str(), l[0].aka.clone(), l[0].visits, l[0].first, l[0].last), ("Bobby", vec!["Bob".to_string()], 2, 100, 200));
+        let l = fold_seen(l, "300\tSTEAM_0:0:7\tAnn\n");
+        assert_eq!(l[0].id, "STEAM_0:0:7");
+        assert_eq!(l[0].visits, 2);
     }
 
     #[test]
