@@ -144,6 +144,16 @@ p { text-wrap: pretty; }
 @media (max-width: 1060px) { .feature-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .feature-groups { grid-template-columns: 1fr; } }
 
+/* play on our server */
+.ourserver { padding: 0 0 64px; }
+.server-card { display: flex; gap: 24px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: var(--panel); box-shadow: var(--raised); padding: 24px 26px; border-radius: 3px; }
+.server-card h2 { margin: 0 0 6px; }
+.server-card .lead { margin: 0 0 8px; }
+.server-live { margin: 0 0 6px; font-weight: 600; color: var(--bone); }
+.server-live .dot { display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; background: #8fbf5a; vertical-align: 1px; }
+.server-addr { margin: 0; color: var(--faint); font-size: 15px; }
+.server-addr code { color: var(--dim); user-select: all; }
+
 /* gallery */
 .gallery { padding: 64px 0 70px; }
 .shots { list-style: none; margin: 22px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
@@ -246,7 +256,7 @@ footer a { color: var(--dim); }
       <h2>Why this exists</h2>
       <div class="why-grid">
       <div class="why-text">
-        <p>I still play Counter-Strike 1.6 and Condition Zero. Mostly late at night, mostly against bots.</p>
+        <p>I still play Counter-Strike 1.6 and Condition Zero.<br>Mostly late at night, mostly against bots.</p>
         <p>The problem is the bots. Out of the box they spin around and headshot you before you've seen them. And the fun stuff, Zombie Plague, Warcraft 3, Surf, means digging through forum threads from 2009, fixing config files, and then finding out half the mods don't even notice bots exist.</p>
         <p>So I fixed it for myself. Bots that hesitate and miss like real people. The old mods, patched to work with them. A panel so I never have to open another .cfg file. And on the rare night a friend wants to play, they can join in a click.</p>
         <p>It turned out pretty good, so here it is. It's free, because none of it would exist without the people who made these mods in the first place.</p>
@@ -311,15 +321,35 @@ footer a { color: var(--dim); }
     <div class="wrap">
       <div class="text">
         <h3>Dedicated servers</h3>
-        <p>Optional, for an always-on server: Loner-Strike downloads Valve's free dedicated server, sets it up like your game and runs it. Each server has its own modes, maps, admins, VIP perks and console. You can also bring in a server you already run.</p>
-        <p>The app includes a guide to free and low-cost hosting, and how big a server needs to be.</p>
-        <p>It can also set one up on a Linux machine you rent. <a href="servers.html">How to run a server on a VPS</a></p>
+        <p>For a server that's always on, even when your computer isn't. Rent a small Linux machine (Oracle's free tier, or about $4 to $7 a month at Hetzner, DigitalOcean or Vultr), give the app its address and SSH key, and it sets up the rest: Valve's server, the mods, the firewall and a service that keeps it running.</p>
+        <ul>
+          <li>Change modes, maps, admins and mods in the app; only what changed is sent</li>
+          <li>Share admins, bans and the swear filter across all your servers</li>
+          <li>HLTV for spectators, with demos you can copy to your game</li>
+          <li>Update Valve's files or rebuild it from the same page</li>
+        </ul>
+        <p style="margin-top:12px">You can also run one on your own computer, or bring in a server you already run. Each one has its own modes, maps, admins, VIP perks and console.</p>
+        <p><a class="btn" href="servers.html">How to set one up, step by step</a></p>
       </div>
       <div class="pair">
         <div class="window">
           <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
           <img src="img/servers.jpg" alt="A dedicated server's page with settings, console and maintenance" width="1280" height="800" loading="lazy">
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ourserver" id="play-online" hidden>
+    <div class="wrap">
+      <div class="server-card">
+        <div>
+          <h2>Play on our server</h2>
+          <p class="lead" id="ourserver-name">Loner-Strike's own server, with bots and the community modes.</p>
+          <p class="server-live" id="ourserver-live" hidden></p>
+          <p class="server-addr">Or in the game's console: <code id="ourserver-addr"></code></p>
+        </div>
+        <a class="btn primary" id="ourserver-join" href="#">Join the server</a>
       </div>
     </div>
   </section>
@@ -353,13 +383,15 @@ footer a { color: var(--dim); }
         <div class="group">
           <h3>Running a server</h3>
           <ul>
-            <li>Dedicated servers downloaded and set up for you, or bring your own</li>
+            <li>Dedicated servers on your computer or a rented Linux machine, set up for you, or bring your own</li>
+            <li>Admins, bans, the swear filter, welcome page and chat messages shared across servers</li>
             <li>Admins, moderators and VIPs, with abilities per role and end dates</li>
             <li>Bans, gags, a swear filter, a chat log and player reports</li>
             <li>Map rotation, timed chat messages, AFK and high-ping kickers</li>
             <li>Stats and ranks, votekick and voteban, join messages with country</li>
             <li>Match mode for 5v5s: ready-up, knife round, half-time swap</li>
             <li>HLTV for spectators and demos, fast downloads, scheduled restarts</li>
+            <li>The app tells you when a rented server stops answering, and why</li>
           </ul>
         </div>
         <div class="group">
@@ -441,6 +473,18 @@ footer a { color: var(--dim); }
         <p>No. They only need Counter-Strike. They join your game like any other server, and it sends them the maps.</p>
       </details>
       <details>
+        <summary>Do I need a server to play with friends?</summary>
+        <p>No. Your own game can host them while you play; Loner-Strike has seven ways for friends to connect. A dedicated server is for one that stays up when you're not playing.</p>
+      </details>
+      <details>
+        <summary>What does a server cost?</summary>
+        <p>On your own computer, nothing. A rented Linux machine runs from free (Oracle's free tier, when it has room) to about $4 to $7 a month for a server with 20 to 32 players and bots. <a href="servers.html">The guide</a> covers where to rent one and what size to pick.</p>
+      </details>
+      <details>
+        <summary>Can people join without Loner-Strike?</summary>
+        <p>Yes. Anyone with Counter-Strike 1.6 (or Condition Zero, for a CZ server) joins like any other server, and it sends them the maps and sounds they need.</p>
+      </details>
+      <details>
         <summary>Who made the mods?</summary>
         <p>Their original authors: AMX Mod X, Metamod and ReGameDLL teams, and the community modders behind Zombie Plague, Warcraft 3, SuperHero and the rest. Loner-Strike sets them up and patches them for bots. Everyone is credited on GitHub.</p>
       </details>
@@ -457,8 +501,38 @@ footer a { color: var(--dim); }
 
 <script>
   // ---- settings -------------------------------------------------------------
+  // The public server: its address (ip:port) shows the "Play on our server" block. STATUS
+  // is an https URL that answers {name, map, players, max_players} (optional: without it
+  // the block just has the Join button).
+  const OUR_SERVER = { address: "", status: "" };
   // Your Polar checkout link (in Polar: Products, your product, Checkout Links).
   const POLAR_CHECKOUT = "https://buy.polar.sh/polar_cl_Z1Ps6X1fYyIsMLnpunW5IkbF5rQTA2klPjfiZ1Dq8yn";
+
+  // "Play on our server": shown once an address is set above
+  if (OUR_SERVER.address) {
+    const box = document.getElementById("play-online");
+    box.hidden = false;
+    document.getElementById("ourserver-join").href = `steam://connect/${OUR_SERVER.address}`;
+    document.getElementById("ourserver-addr").textContent = `connect ${OUR_SERVER.address}`;
+    const live = document.getElementById("ourserver-live");
+    const show = async () => {
+      if (!OUR_SERVER.status || document.hidden) return;
+      try {
+        const r = await fetch(OUR_SERVER.status, { cache: "no-store" });
+        const s = await r.json();
+        live.replaceChildren();
+        const dot = document.createElement("span");
+        dot.className = "dot";
+        live.append(dot, `${s.players}/${s.max_players} playing on ${s.map}`);
+        live.hidden = false;
+        if (s.name) document.getElementById("ourserver-name").textContent = s.name;
+      } catch {
+        live.hidden = true;
+      }
+    };
+    show();
+    setInterval(show, 30000);
+  }
 
   // Name your price: Polar's checkout opens over the page. Without a link yet, it goes to the download.
   for (const a of document.querySelectorAll("a.polar")) {
