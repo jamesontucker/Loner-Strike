@@ -147,7 +147,7 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
     let about = AboutMetadata {
         name: Some("Loner-Strike".into()),
         version: Some(app.package_info().version.to_string()),
-        comments: Some("Re-live the golden days of Counter-Strike locally or with the friends you don't have.".into()),
+        comments: Some("Play Counter-Strike like it's 2004, alone or with the friends you don't have.".into()),
         website: Some("https://github.com/jamesontucker/Loner-Strike".into()),
         ..Default::default()
     };

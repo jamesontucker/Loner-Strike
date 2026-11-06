@@ -120,7 +120,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
           <section className="setup-pane welcome">
             <img src={logo} alt="" width={112} height={112} />
             <h1>Loner-Strike</h1>
-            <p className="tagline">Re-live the golden days of Counter-Strike locally or with the friends you don't have.</p>
+            <p className="tagline">Play Counter-Strike like it's 2004,<br />alone or with the friends you don't have.</p>
             <p>Setup adds bots that play like people, 20 classic community modes and this control panel to your game. Everything it changes is backed up and can be removed again.</p>
             <p className="muted">Close Counter-Strike before you start.</p>
             <div className="row">
