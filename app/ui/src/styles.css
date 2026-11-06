@@ -958,3 +958,16 @@ a.btn.primary { color: var(--signal-ink); }
   .qmenu-list { min-width: 200px; }
   .qmenu-list button { min-height: 44px; font-size: 15px; }
 }
+
+/* ---- favourite from the map grid; picking a map when switching mode ---------------------- */
+.fav-toggle { position: absolute; top: 4px; right: 4px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; font-size: 18px; line-height: 1;
+  color: var(--bone); background: rgba(20,22,16,.55); text-shadow: 0 1px 2px #000; opacity: 0; transition: opacity .12s; cursor: pointer; }
+.fav-toggle.on { color: var(--signal); opacity: 1; }
+.map-card:hover .fav-toggle, .map-card:focus-within .fav-toggle { opacity: 1; }
+.fav-toggle:hover { background: rgba(20,22,16,.8); }
+@media (hover: none) { .fav-toggle { opacity: .85; } }
+.map-card.selected .map-pic { outline: 3px solid var(--signal); }
+.map-card.selected .map-label { color: var(--signal); }
+.switch-mode .sheet-body { display: grid; gap: 12px; }
+.switch-maps { max-height: 46vh; overflow-y: auto; padding: 4px 2px; }
+@media (prefers-reduced-motion: reduce) { .fav-toggle { transition: none; } }
