@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cmd, options, sameValue } from "./api";
 
 // ---- asking before something can't be undone --------------------------------------
@@ -141,6 +141,19 @@ export function Info({ text }: { text: ReactNode }) {
   const [pinned, setOpen] = useState(false);
   const open = hover || pinned;
   const box = useRef<HTMLSpanElement>(null);
+  const pop = useRef<HTMLSpanElement>(null);
+  // placed against the window, so it's never cut off and never makes the page scroll sideways
+  useLayoutEffect(() => {
+    const b = box.current?.querySelector("button")?.getBoundingClientRect();
+    const p = pop.current;
+    if (!open || !b || !p) return;
+    const w = p.offsetWidth, h = p.offsetHeight, m = 8;
+    const left = Math.min(Math.max(b.left + b.width / 2 - w / 2, m), window.innerWidth - w - m);
+    const above = b.top - h - m;
+    p.style.left = `${left}px`;
+    p.style.top = `${above >= m ? above : b.bottom + m}px`;
+    p.style.visibility = "visible";
+  }, [open]);
   useEffect(() => {
     if (!pinned) return;
     const away = (e: Event) => !box.current?.contains(e.target as Node) && setOpen(false);
@@ -168,7 +181,7 @@ export function Info({ text }: { text: ReactNode }) {
       >
         ?
       </button>
-      {open && <span className="info-pop" role="tooltip">{text}</span>}
+      {open && <span className="info-pop" role="tooltip" ref={pop}>{text}</span>}
     </span>
   );
 }
