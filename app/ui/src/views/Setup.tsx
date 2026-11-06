@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import { Icon } from "../icons";
 import { useToast } from "../ui";
+import logo from "../assets/logo.svg";
 
 // ---- what the setup API returns -------------------------------------------------
 export type SetupGame = { id: "cstrike" | "czero"; name: string; installed: boolean; components: string[]; foreign: boolean };
@@ -94,7 +95,7 @@ export function Setup({ scan, onClose }: { scan: Scan; onClose?: () => void }) {
 
         {stage === "welcome" && (
           <section className="setup-pane welcome">
-            <img src="/logo.svg" alt="" width={112} height={112} />
+            <img src={logo} alt="" width={112} height={112} />
             <h1>Loner-Strike</h1>
             <p className="tagline">Re-live the golden days of Counter-Strike locally or with the friends you don't have.</p>
             <p>Setup adds bots that play like people, 20 classic community modes and this control panel to your game. Everything it changes is backed up and can be removed again.</p>
@@ -257,7 +258,7 @@ function NoGame({ nativeMac }: { nativeMac: boolean }) {
     <div className="setup">
       <div className="setup-card">
         <section className="setup-pane welcome">
-          <img src="/logo.svg" alt="" width={96} height={96} />
+          <img src={logo} alt="" width={96} height={96} />
           <h1>No game found</h1>
           {nativeMac ? (
             <p>You have the Mac version of Half-Life, which mods can't run on. Install the Windows version of Steam in CrossOver, install Counter-Strike 1.6 or Condition Zero there, then reopen Loner-Strike.</p>

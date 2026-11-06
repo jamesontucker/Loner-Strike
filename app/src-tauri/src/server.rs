@@ -81,7 +81,8 @@ async fn ui(uri: Uri) -> Response {
     match Ui::get(file).or_else(|| Ui::get("index.html")) {
         Some(f) => {
             let mime = f.metadata.mimetype().to_string();
-            let cache = if file == "index.html" { "no-store" } else { "public, max-age=31536000, immutable" };
+            // only Vite's hashed build files never change; everything else (logo, icons) may
+            let cache = if file.starts_with("assets/") { "public, max-age=31536000, immutable" } else { "no-cache" };
             ([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, cache.to_string())], f.data).into_response()
         }
         None => (StatusCode::NOT_FOUND, "The app's pages are missing - rebuild the UI (npm run build in app/ui).").into_response(),
