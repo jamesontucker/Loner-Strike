@@ -8,7 +8,7 @@ const WEAPONS: [string, string][] = [
   ["weapon_ak47", "AK-47"], ["weapon_m4a1", "M4A1"], ["weapon_awp", "AWP"], ["weapon_deagle", "Desert Eagle"],
   ["weapon_scout", "Scout"], ["weapon_m249", "M249"], ["weapon_mp5navy", "MP5"], ["weapon_p90", "P90"],
   ["weapon_xm1014", "Auto shotgun"], ["weapon_sg552", "SG-552"], ["weapon_aug", "AUG"], ["weapon_g3sg1", "G3SG1"],
-  ["weapon_elite", "Dual Elites"], ["nades", "Grenade pack"], ["armor", "Kevlar + helmet"],
+  ["weapon_elite", "Dual Elites"], ["nades", "Grenade pack"], ["armor", "Kevlar and helmet"],
 ];
 
 // What a player action says while it's sent: [on the button, in the top bar before the name]
@@ -105,7 +105,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
                         <div className="row">
                           {pb(p, "god", p.god ? "God mode off" : "God mode")}
                           {pb(p, "noclip", p.noclip ? "Noclip off" : "Noclip")}
-                          {pb(p, "heal", "Heal + armor")}
+                          {pb(p, "heal", "Heal and armour")}
                           {pb(p, "money", "Give $16,000")}
                           {pb(p, "respawn", "Respawn")}
                           {pb(p, "team", "Switch team")}

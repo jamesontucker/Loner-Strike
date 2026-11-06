@@ -52,7 +52,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
         <JobProgress
           title="Updating Loner-Strike's files…"
           // a failed update stays on screen with its reason until closed
-          onEnd={(ok) => { if (ok) setRunning(false); toast(ok ? "Up to date" : "The update stopped. The bar shows why.", !ok); reloadApp(); }}
+          onEnd={(ok) => { if (ok) setRunning(false); toast(ok ? "Updated" : "The update stopped. The bar shows why.", !ok); reloadApp(); }}
           onClose={() => setRunning(false)}
         />
       </div>
@@ -83,7 +83,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
             {theirs.length > 0 && (
               <>
                 <p className="muted">These were in your game before Loner-Strike, without its bot fixes. Its fixed version goes in; yours is backed up and comes back if you remove it.</p>
-                <ul className="files-update-list">{theirs.map((id) => row(id, "Put in the fixed one"))}</ul>
+                <ul className="files-update-list">{theirs.map((id) => row(id, "Use the fixed version"))}</ul>
               </>
             )}
             {blocked && <p className="muted small-note">Close {gameTitle(g.id)} first.</p>}

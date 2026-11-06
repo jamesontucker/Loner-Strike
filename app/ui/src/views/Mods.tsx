@@ -94,8 +94,8 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
       const r = await postJson<{ ok?: boolean; error?: string }>(remove ? "/api/setup/uninstall" : "/api/setup/install", body).catch(() => ({ error: "Couldn't reach the app." }));
       if (r.error) return toast(r.error, true);
       const j = await waitForSetupJob();
-      if (!j) toast("Lost track of the install. Check Mods to see if it finished.", true);
-      else toast(j.state === "done" ? (running ? "Done. It loads on the next map." : "Done") : j.error || "That stopped.", j.state === "error");
+      if (!j) toast("Lost track of the install. Open Mods again to see if it finished.", true);
+      else toast(j.state === "done" ? (running ? "Done. It loads on the next map." : "Done") : j.error || "The install stopped.", j.state === "error");
       onChanged();
     }, label);
   };
@@ -172,7 +172,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
               </div>
             );
           })}
-          {!items.length && <p className="muted">Nothing here.</p>}
+          {!items.length && <p className="muted">Nothing matches this filter.</p>}
         </div>
         </>
       )}
@@ -181,7 +181,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
 
       {setUp && (
         <div className="panel row between">
-          <p className="muted">Take Loner-Strike off {where} completely: every mod, the menu and the bot setup.</p>
+          <p className="muted">Take Loner-Strike off {where} completely: every mod, the Game Mode Menu and the bot setup.</p>
           <BusyButton className="btn danger" busy={busy === "core"} disabled={!!busy} label="Remove Loner-Strike" busyLabel="Removing…" onClick={() => change(null, true)} />
         </div>
       )}
@@ -221,7 +221,7 @@ function OwnPlugins() {
   return (
     <section>
       <SectionHead title="Your own plugins" note="AMX Mod X plugins you have as a file. They load in every mode. A .sma source is compiled for you.">
-        {ON_THIS_COMPUTER && <BusyButton busy={busy(key("add"))} label="Add a plugin…" busyLabel="Adding…" onClick={add} />}
+        {ON_THIS_COMPUTER && <BusyButton busy={busy(key("add"))} label="Add a plugin" busyLabel="Adding…" onClick={add} />}
       </SectionHead>
       {list === null && failed ? (
         <LoadError text="Couldn't load your plugins." onRetry={load} />

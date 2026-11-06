@@ -34,7 +34,7 @@ type Report = { t: number; from_id: string; from: string; about_id: string; abou
 const STARTER = ["fuck", "fucking", "shit", "bitch", "cunt", "asshole", "bastard", "motherfucker", "retard", "faggot", "nigger", "whore", "slut"];
 
 type Tab = "stats" | "matches" | "chat" | "reports" | "mod";
-const TABS: [Tab, string][] = [["stats", "Stats"], ["matches", "Matches"], ["chat", "Chat log"], ["reports", "Reports"], ["mod", "Gags & filter"]];
+const TABS: [Tab, string][] = [["stats", "Stats"], ["matches", "Matches"], ["chat", "Chat log"], ["reports", "Reports"], ["mod", "Mutes & filter"]];
 
 function clockTime(t: number) {
   const d = new Date(t * 1000);
@@ -153,9 +153,9 @@ export function Community({ target }: { target: string }) {
   return (
     <div className="stack narrow community">
       {!d.plugin && (
-        <NeedsSetup text="This game doesn't have the community plugin yet." after="Until then your settings are saved here, but the game doesn't use them." />
+        <NeedsSetup text="This game is missing the Loner-Strike plugin for stats and moderation." after="Until then your settings are saved here, but the game doesn't use them." />
       )}
-      <div className="chips admin-tabs" role="tablist" aria-label="Community sections">
+      <div className="chips admin-tabs" role="tablist" aria-label="Stats & moderation sections">
         {TABS.map(([id, label]) => (
           <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>
             {label}
@@ -494,7 +494,7 @@ function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string
     <section>
       <SectionHead title="Chat log" note="What people said, newest first, with the time and their SteamID. Select a line to mute or ban who said it." />
       <div className="settings cm-settings top">
-        <Toggle label="Keep a chat log" note="Every chat line is saved on this computer. Older lines are dropped as it grows." on={d.settings.chatlog} busy={busy(settingKey({ chatlog: true }))} set={(v) => save({ chatlog: v })} />
+        <Toggle label="Keep a chat log" note="Every chat line is kept. The oldest lines are dropped as the log grows." on={d.settings.chatlog} busy={busy(settingKey({ chatlog: true }))} set={(v) => save({ chatlog: v })} />
       </div>
       <input className="search full" type="search" placeholder="Search names, SteamIDs or words" value={q} onChange={(e) => (setQ(e.target.value), setLimit(200))} aria-label="Search the chat log" />
       {!lines ? (
@@ -706,7 +706,7 @@ function ModTab({ d, setD, reload, onDirty }: { d: Data; setD: SetData; reload: 
         </ul>
         <div className="panel stack-tight">
           <label className="field">
-            <span>Mute by SteamID<Info text="Mutes them for everyone on the server. Players can still mute someone just for themselves from the scoreboard." /></span>
+            <span>Mute by SteamID<Info text="Mutes them for everyone on the server. Players can still mute someone only for themselves from the scoreboard." /></span>
             <input className="search" placeholder="SteamID, like STEAM_0:1:12345" value={id} onChange={(e) => setId(e.target.value)} spellCheck={false} />
             <small>Or select someone on the Players page, in the chat log or in the stats.</small>
           </label>

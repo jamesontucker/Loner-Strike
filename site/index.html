@@ -65,7 +65,7 @@
   "22 classic community modes patched so bots can play them",
   "Thousands of maps from GameBanana",
   "Seven ways for friends to connect: LAN, router, playit.gg, Tailscale, ZeroTier, Radmin VPN, Hamachi",
-  "Admins, VIPs, bans, gags, swear filter, chat log, stats and ranks",
+  "Admins, VIPs, bans, mutes, swear filter, chat log, stats and ranks",
   "Match mode for 5v5s and HLTV for spectators and demos",
   "Dedicated servers on your computer or a rented Linux machine",
   "Control from your phone with a QR code"
@@ -112,7 +112,7 @@
    "name": "Does it work on a Mac?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in CrossOver (paid, with a free trial), and Loner-Strike finds it there. With Parallels (a Windows virtual machine), it's just Windows: install the Windows version of Loner-Strike inside it."
+    "text": "Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in CrossOver (paid, with a free trial), and Loner-Strike finds it there. With Parallels (a Windows virtual machine), install the Windows version of Loner-Strike inside Windows."
    }
   },
   {
@@ -160,7 +160,7 @@
    "name": "Who made the mods?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Their original authors: AMX Mod X, Metamod and ReGameDLL teams, and the community modders behind Zombie Plague, Warcraft 3, SuperHero and the rest. Loner-Strike sets them up and patches them for bots. Everyone is credited on GitHub."
+    "text": "Their original authors: the AMX Mod X, Metamod and ReGameDLL teams, and the community modders behind Zombie Plague, Warcraft 3, SuperHero and the rest. Loner-Strike sets them up and patches them for bots. Everyone is credited on GitHub."
    }
   }
  ]
@@ -514,7 +514,7 @@ footer a { color: var(--dim); }
     <div class="wrap">
       <div class="text">
         <h3>Play with friends</h3>
-        <p>Set a server name and password, then send friends an invite. There are seven ways for them to connect, from a LAN party in the same room to playit.gg, Tailscale, your router or Hamachi.</p>
+        <p>Set a server name and join password, then send friends an invite. There are seven ways for them to connect, from a LAN party in the same room to playit.gg, Tailscale, your router or Hamachi.</p>
         <ul>
           <li>Control everything from your phone by scanning a QR code</li>
           <li>Admins, VIPs and bans</li>
@@ -594,7 +594,7 @@ footer a { color: var(--dim); }
           <h3>Friends</h3>
           <ul>
             <li>Seven ways to connect: LAN, your router, playit.gg, Tailscale, ZeroTier, Radmin VPN and Hamachi</li>
-            <li>Server name, password and a ready-to-send invite</li>
+            <li>Server name, join password and a ready-to-send invite</li>
             <li>A custom welcome page when people join</li>
             <li>A notification when someone joins while you're away</li>
           </ul>
@@ -603,7 +603,7 @@ footer a { color: var(--dim); }
           <h3>Running a server</h3>
           <ul>
             <li>Admins, moderators and VIPs, with abilities per role and end dates</li>
-            <li>Bans, gags, a swear filter, a chat log and player reports</li>
+            <li>Bans, mutes, a swear filter, a chat log and player reports</li>
             <li>Map rotation, timed chat messages, AFK and high-ping kickers</li>
             <li>Stats and ranks, votekick and voteban, join messages with country</li>
             <li>Match mode for 5v5s: ready-up, knife round, half-time swap</li>
@@ -625,7 +625,7 @@ footer a { color: var(--dim); }
           <h3>The app</h3>
           <ul>
             <li>Guided setup that finds your game, on Windows or a Mac with CrossOver</li>
-            <li>An in-game menu on F3, and quick actions in the app while you play</li>
+            <li>The Game Mode Menu in the game (F3), and quick actions in the app while you play</li>
             <li>Control everything from your phone by scanning a QR code</li>
             <li>Export your setup to another computer or server</li>
             <li>Automatic updates, signed and checked</li>
@@ -668,7 +668,7 @@ footer a { color: var(--dim); }
         <p>Every release is also free on GitHub.</p>
         <a class="btn release" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download free">Download from GitHub</a>
         <ol class="steps">
-          <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a>.</li>
+          <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a>, or use the Windows version of Loner-Strike in Parallels.</li>
           <li><b>Open Loner-Strike.</b> It finds the game and walks you through setup. Everything it changes is backed up.</li>
           <li><b>Press Play.</b> Bots fill the server.</li>
         </ol>
@@ -689,7 +689,7 @@ footer a { color: var(--dim); }
       </details>
       <details>
         <summary>Does it work on a Mac?</summary>
-        <p>Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in <b>CrossOver</b> (paid, with a free trial), and Loner-Strike finds it there. With <b>Parallels</b> (a Windows virtual machine), it's just Windows: install the Windows version of Loner-Strike inside it.</p>
+        <p>Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in <b>CrossOver</b> (paid, with a free trial), and Loner-Strike finds it there. With <b>Parallels</b> (a Windows virtual machine), install the Windows version of Loner-Strike inside Windows.</p>
       </details>
       <details>
         <summary>Will it mess up my game?</summary>
@@ -713,7 +713,7 @@ footer a { color: var(--dim); }
       </details>
       <details>
         <summary>Who made the mods?</summary>
-        <p>Their original authors: AMX Mod X, Metamod and ReGameDLL teams, and the community modders behind Zombie Plague, Warcraft 3, SuperHero and the rest. Loner-Strike sets them up and patches them for bots. Everyone is credited on GitHub.</p>
+        <p>Their original authors: the AMX Mod X, Metamod and ReGameDLL teams, and the community modders behind Zombie Plague, Warcraft 3, SuperHero and the rest. Loner-Strike sets them up and patches them for bots. Everyone is credited on GitHub.</p>
       </details>
     </div>
   </section>

@@ -168,7 +168,7 @@ export function ServerExtras({ target }: { target: string }) {
   return (
     <div className="stack narrow extras">
       {!d.plugin && (
-        <NeedsSetup text="This game doesn't have the extras plugin yet." after="Until then your settings are saved here, but the game doesn't use them." />
+        <NeedsSetup text="This game is missing the Loner-Strike plugin for these settings." after="Until then your settings are saved here, but the game doesn't use them." />
       )}
       <div className="chips admin-tabs" role="tablist" aria-label="Rotation and chat sections">
         {EXTRAS_TABS.map(([id, label]) => (
@@ -373,7 +373,7 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
       <div className="settings">
         <Toggle
           label="Random order"
-          note="Each map picks a random one from the list instead of the next, skipping the ones played just before."
+          note="The next map is a random one from the list, skipping the ones played recently."
           on={d.settings.rotation_random}
           set={(v) => saveSettings({ rotation_random: v })}
         />
@@ -433,7 +433,7 @@ function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSetting
         <Toggle label="Show messages" note={ads.messages.length ? `${ads.messages.length} ${ads.messages.length === 1 ? "message" : "messages"}.` : "Write some below first."} on={ads.on} set={(v) => saveSettings({ ads: { ...ads, on: v } })} />
         <Toggle
           label="Mention Loner-Strike"
-          note="Every 20 minutes while people are on: “This server runs on Loner-Strike, free for CS 1.6 and Condition Zero at lonerstrike.com”. Separate from your own messages."
+          note="Every 20 minutes while other people are playing: “This server runs on Loner-Strike, free for CS 1.6 and Condition Zero at lonerstrike.com”. Separate from your own messages."
           on={ads.credit ?? true}
           set={(v) => saveSettings({ ads: { ...ads, credit: v } })}
         />
@@ -483,7 +483,7 @@ function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSetting
                 onChange={(e) => setMsg(i, { text: e.target.value })}
               />
               <div className="ad-tools">
-                <select value={m.color} aria-label={`Color of message ${i + 1}`} onChange={(e) => setMsg(i, { color: e.target.value as Color })}>
+                <select value={m.color} aria-label={`Colour of message ${i + 1}`} onChange={(e) => setMsg(i, { color: e.target.value as Color })}>
                   {COLORS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <button className="btn icon" aria-label={`Move message ${i + 1} up`} disabled={i === 0} onClick={() => move(i, i - 1)}><Glyph d={UP} /></button>
@@ -516,7 +516,7 @@ function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSetting
                 </p>
               ))}
             </div>
-            <small>With example details. Red and blue show as the team colors.</small>
+            <small>With example details. Red and blue show as the team colours.</small>
           </div>
         )}
         <div className="row">
@@ -587,7 +587,7 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
               {d.geoip ? (
                 <Toggle
                   label="Show the country"
-                  note="Players on your own network show none, and people joining through the app's internet link may not either."
+                  note="Players on your own network show none, and people joining through playit.gg may not either."
                   on={joins.country}
                   set={(v) => saveSettings({ joins: { ...joins, country: v } })}
                 />
@@ -606,7 +606,7 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
       <section>
         <SectionHead
           title="Player votes"
-          note={`Players say /votekick or /voteban, pick someone from a menu, and everyone else votes for 20 seconds. Owners with immunity${host} and the TV relay can't be voted on.`}
+          note={`Players say /votekick or /voteban, pick someone from a menu, and everyone else votes for 20 seconds. Owners with immunity${host} and HLTV can't be voted on.`}
         />
         <div className="settings">
           <Toggle label="Vote kick" note="Someone kicked this way can join again straight away." on={votes.kick} set={(v) => saveSettings({ votes: { ...votes, kick: v } })} />

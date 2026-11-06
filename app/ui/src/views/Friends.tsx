@@ -137,7 +137,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     let out: Share | null = null;
     await once(key(action), async () => {
       const r = await postJson<Share & { error?: string }>("/api/share", { action, ...extra }).catch(() => null);
-      if (!r || (r.ok === false && r.error)) return toast(r?.error || "That didn't work.", true);
+      if (!r || (r.ok === false && r.error)) return toast(r?.error || "Couldn't change sharing. Try again.", true);
       setSh(r);
       out = r;
     }, SHARE_LABEL[action] ?? "Working…");
@@ -209,7 +209,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     steps = (
       <ol className="steps">
         <li className="done"><strong>Get everyone on the same network</strong><p>Same Wi-Fi, or plugged into the same router.</p></li>
-        <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong>{OS === "mac" ? <p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (Wine/CrossOver): click Allow.</p> : OS === "windows" ? <p>The first time, Windows may ask whether to let the game through its firewall: allow it on private networks.</p> : null}</li>
+        <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong>{OS === "mac" ? <p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (CrossOver): click Allow.</p> : OS === "windows" ? <p>The first time, Windows may ask whether to let the game through its firewall: allow it on private networks.</p> : null}</li>
         <li className="now"><strong>Friends join from the LAN tab</strong><p>In Counter-Strike, open <b>Find Servers</b> and the <b>LAN</b> tab, and your server is there{serverName ? ` as "${serverName}"` : ""}.</p></li>
       </ol>
     );
@@ -229,12 +229,12 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
           )}
           {direct?.error && <p className="err-text">{direct.error}</p>}
           {direct?.shared_address && (
-            <p className="err-text">Your internet connection shares its address with other customers (common with mobile and some fiber providers), so friends can't reach you directly. Use playit.gg instead.</p>
+            <p className="err-text">Your internet connection shares its address with other customers (common with mobile and some fibre providers), so friends can't reach you directly. Use playit.gg instead.</p>
           )}
         </li>
         <li className={live ? "now" : ""}>
           <strong>Send friends your address</strong>
-          <p>It's your home's internet address, so only share it with friends. Set a password above.</p>
+          <p>It's your home's internet address, so only share it with friends, and set a join password.</p>
         </li>
       </ol>
     );
@@ -313,10 +313,10 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
       <h3>Your server</h3>
       <label className="field">
         <span>Server name</span>
-        <input className="search" maxLength={48} placeholder="e.g. Friday night frags" value={serverName} onChange={(e) => setName(e.target.value)} />
+        <input className="search" maxLength={48} placeholder="Like Friday night frags" value={serverName} onChange={(e) => setName(e.target.value)} />
       </label>
       <label className="field">
-        <span>Password</span>
+        <span>Join password</span>
         <div className="row">
           <input className="search" maxLength={24} placeholder="No password" spellCheck={false} value={password} onChange={(e) => setPw(e.target.value)} />
           <button type="button" className="btn" onClick={() => {

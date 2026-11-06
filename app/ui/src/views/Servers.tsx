@@ -113,7 +113,7 @@ function Unreachable({ s, onGuide }: { s: ServerInfo; onGuide?: () => void }) {
         {onGuide ? (
           <button className="btn small" onClick={onGuide}>Troubleshooting</button>
         ) : (
-          ON_THIS_COMPUTER && <span className="muted small-note">More fixes: All servers, Setting up a Linux server, Troubleshooting.</span>
+          ON_THIS_COMPUTER && <span className="muted small-note">More fixes: in All servers, open Setting up a Linux server, then Troubleshooting.</span>
         )}
       </div>
     </div>
@@ -534,7 +534,7 @@ function AddLoner({ server, onDone }: { server: ServerInfo; onDone: () => void }
     />
   ) : (
     <div className="banner">
-      <div>This server doesn't have Loner-Strike yet, so the panel can only start, stop and manage admins. Add it to get modes, bots and the rest.</div>
+      <div>This server doesn't have Loner-Strike yet, so here you can only start it, stop it and manage admins. Add Loner-Strike to get modes, bots and the rest.</div>
       <button className="btn primary" onClick={start}>Add Loner-Strike</button>
     </div>
   );
@@ -646,7 +646,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
           <div className="stack-tight">
             <div className="row">
               <label className="field">
-                <span>Port<Info text={server.host ? "The port players connect to. On a Linux server it's 27015 to 27019 (setup opened 27015-27020 on the machine; 27020 is for HLTV). Open it in your provider's firewall too." : "The network port the server listens on; each server needs its own, from 27016 up (your own game uses 27015). Change it only if something else uses it, and open the new port on your router if friends connect to you directly."} /></span>
+                <span>Port<Info text={server.host ? "The port players connect to: 27015 to 27019 on a Linux server (27020 is for HLTV). Open it in your provider's firewall too." : "The port the server listens on, from 27016 up (your own game uses 27015). If friends connect to you directly, open the new port on your router too."} /></span>
                 <input
                   className="search narrow" type="number" disabled={ro} min={portMin} max={portMax} value={port.text}
                   onChange={(e) => { port.setText(e.target.value); setProblem((p) => ({ ...p, port: "" })); }}
@@ -663,15 +663,15 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
             </div>
             {problem.port && <p className="err-text small-note">{problem.port}</p>}
             <label className="field">
-              <span>Extra start options<Info text="Added to the server's command line, like +sv_gravity 600 or -pingboost 2. Options the app sets itself (port, map, players, passwords) are changed above instead. Used from the next start." /></span>
-              <input className="search" disabled={ro} placeholder="e.g. -pingboost 2 +sys_ticrate 1000" value={extra} onChange={(e) => setExtra(e.target.value)} spellCheck={false} />
+              <span>Extra start options<Info text="Added to the server's command line, like -pingboost 2, from the next start. Port, map, player slots and passwords are set above instead." /></span>
+              <input className="search" disabled={ro} placeholder="Like -pingboost 2 +sys_ticrate 1000" value={extra} onChange={(e) => setExtra(e.target.value)} spellCheck={false} />
             </label>
             {ON_THIS_COMPUTER && <ConsolePassword server={server} />}
           </div>
         </details>
         {!ro && (
           <div className="row">
-            <BusyButton className="btn primary" busy={saving} label="Save" busyLabel={server.host ? "Saving and uploading…" : "Saving…"} onClick={save} />
+            <BusyButton className="btn primary" busy={saving} label="Save changes" busyLabel={server.host ? "Saving and uploading…" : "Saving…"} onClick={save} />
             {dirty && !saving && <span className="muted small-note">Unsaved changes</span>}
           </div>
         )}
@@ -703,11 +703,11 @@ function ConsolePassword({ server }: { server: ServerInfo }) {
   const changing = busy(`${server.id}:rcon`);
   return (
     <div className="field">
-      <span>Console password<Info text="The RCON password, for running the server from other tools like HLSW. The app sets a random one and uses it itself. Changing it applies straight away." /></span>
+      <span>Console password<Info text="The RCON password, for running the server from tools like HLSW. The app sets a random one and uses it too; a change applies straight away." /></span>
       <div className="row">
         <code className="secret">{shown ?? "••••••••••••"}</code>
         <button className="btn small" type="button" onClick={show}>{shown === null ? "Show" : "Hide"}</button>
-        <BusyButton className="btn small" busy={changing} label="New random one" busyLabel="Changing…" onClick={() => change()} />
+        <BusyButton className="btn small" busy={changing} label="Make a random one" busyLabel="Changing…" onClick={() => change()} />
       </div>
       <form className="row" onSubmit={(e) => { e.preventDefault(); if (typed.length >= 8) change(typed); }}>
         <input className="search" placeholder="Or type your own (8 to 32 characters)" maxLength={32} value={typed} onChange={(e) => setTyped(e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} spellCheck={false} autoComplete="off" />
@@ -765,7 +765,7 @@ function Maintenance({ server, installed, act, rebuild, wipeRebuild, busy }: { s
         )}
         {server.loner && !server.host && (
           <li>
-            <div><b>Rebuild Loner-Strike</b><p className="muted">Reinstalls Metamod, AMX Mod X, ReGameDLL{installed.length > 2 ? ` and the ${installed.length - 2} extra mode${installed.length === 3 ? "" : "s"} and add-ons on it` : " and the built-in modes"}. Fixes a server that won't start or lost its mods. Settings, admins and maps stay.</p></div>
+            <div><b>Rebuild Loner-Strike</b><p className="muted">Reinstalls Metamod-P, AMX Mod X, ReGameDLL{installed.length > 2 ? ` and the ${installed.length - 2} extra mode${installed.length === 3 ? "" : "s"} and add-ons on it` : " and the built-in modes"}. Fixes a server that won't start or lost its mods. Settings, admins and maps stay.</p></div>
             <BusyButton className="btn" busy={busy("reinstall")} disabled={running} label="Rebuild" busyLabel="Starting…" onClick={rebuild} />
           </li>
         )}
@@ -836,7 +836,7 @@ function Console({ server }: { server: ServerInfo }) {
       {failed && shown.length > 0 && <p className="muted small-note">Can't read the console right now. These are the last lines it showed.</p>}
       {ON_THIS_COMPUTER ? (
         <form className="row" onSubmit={(e) => { e.preventDefault(); send(); }}>
-          <input className="search grow" placeholder="A server command, e.g. status or changelevel de_inferno" value={cmd} onChange={(e) => setCmd(e.target.value)} spellCheck={false} />
+          <input className="search grow" placeholder="A server command, like status or changelevel de_inferno" value={cmd} onChange={(e) => setCmd(e.target.value)} spellCheck={false} />
           <button className="btn" type="submit" disabled={server.state !== "running"}>Send</button>
         </form>
       ) : (
@@ -952,7 +952,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
           <>
             <label className="field">
               <span>Address<Info text="The machine's public IP address or host name, from your hosting provider's page." /></span>
-              <input ref={hostBox} className="search" placeholder="e.g. 146.235.20.10" value={host} onChange={(e) => { setHost(e.target.value.trim()); machineChanged(); }} spellCheck={false} />
+              <input ref={hostBox} className="search" placeholder="Like 146.235.20.10" value={host} onChange={(e) => { setHost(e.target.value.trim()); machineChanged(); }} spellCheck={false} />
             </label>
             <label className="field">
               <span>User<Info text="The account you log in with over SSH: ubuntu on Oracle and AWS, root on Hetzner, DigitalOcean and Vultr. It needs to be root or able to use sudo." /></span>
@@ -963,7 +963,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
               <span>SSH key<Info text="The private key you log in with (the file without .pub), usually in the .ssh folder in your home folder. It stays on this computer; the app uses it to connect." /></span>
               <div className="row">
                 <input className="search grow" placeholder="Pick your key file" value={key} onChange={(e) => { setKey(e.target.value); machineChanged(); }} spellCheck={false} />
-                <button className="btn" type="button" onClick={pickKey}>Browse…</button>
+                <button className="btn" type="button" onClick={pickKey}>Browse</button>
               </div>
             </div>
             <div className="field">
@@ -993,7 +993,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
         )}
         <label className="field">
           <span>Name</span>
-          <input ref={nameBox} className="search" autoFocus maxLength={48} placeholder="e.g. Friday night frags" value={name} onChange={(e) => setName(e.target.value)} />
+          <input ref={nameBox} className="search" autoFocus maxLength={48} placeholder="Like Friday night frags" value={name} onChange={(e) => setName(e.target.value)} />
           <small>Shown in the server browser and on the welcome page.</small>
         </label>
         <div className="field">
@@ -1071,7 +1071,7 @@ function ImportServer({ onClose, onDone }: { onClose: () => void; onDone: () => 
         </ul>
         <div className="row">
           <input className="search grow" placeholder="Server folder" value={dir} onChange={(e) => setDir(e.target.value)} spellCheck={false} />
-          <button className="btn" onClick={pick}>Browse…</button>
+          <button className="btn" onClick={pick}>Browse</button>
         </div>
         <p className="muted">On a Mac the folder has to be inside a CrossOver bottle, so it can run. For a server on a Linux VPS, use New server instead.</p>
         <div className="row">
@@ -1105,7 +1105,7 @@ const HOSTS = [
   {
     name: "A cheap server (VPS)",
     cost: "About $4 to $7 a month",
-    body: "Hetzner gives the most for the money; DigitalOcean and Vultr are simple; OVH includes DDoS protection. Pick a plan with an IPv4 address and an x86 (Intel/AMD) CPU, not Arm.",
+    body: "Hetzner gives the most for the money; DigitalOcean and Vultr are simple; OVH includes DDoS protection. Pick a plan with an IPv4 address and an x86 (AMD or Intel) CPU, not Arm.",
     you: "Buy an Ubuntu plan, open UDP ports 27015-27020 in its firewall, then add it here: New server, A Linux server (VPS).",
   },
 ];

@@ -192,7 +192,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
         title="Spectators & demos"
         note="HLTV lets people watch this server's matches live, a little behind the action, without taking a player slot. It can also record every map to a demo file you can replay later."
       />
-      {failed && <p className="muted small-note" role="status">Can't reach the server, showing the last known state.</p>}
+      {failed && <p className="muted small-note" role="status">Can't reach the server. Showing what it last reported.</p>}
       {restartAt !== undefined && running && (
         <div className="files-bar" role="status">
           <span>New HLTV settings are saved. They're used after HLTV restarts.</span>
@@ -204,7 +204,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
 
       {!st.available && (
         <div className="banner">
-          <div>This server's folder has no hltv.exe. Update Valve's server files in Overview, under Maintenance, to get it.</div>
+          <div>This server's folder doesn't have HLTV. Update Valve's server files in Overview, under Maintenance, to get it.</div>
         </div>
       )}
 
@@ -269,7 +269,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
           </div>
           <div className="row hltv-numbers">
             <label className="field">
-              <span>Spectators<Info text="The most people who can watch at once. Watchers don't take player slots. 0 lets nobody watch, but it can still record demos." /></span>
+              <span>Spectators<Info text="The most people who can watch at once, without taking player slots. At 0 nobody can watch, but HLTV still records demos." /></span>
               <input className="search narrow" type="number" min={0} max={255} value={nums.spectators} onChange={(e) => setNum({ spectators: e.target.value })} onBlur={() => setNums({ ...nums, spectators: clampText(nums.spectators, 0, 255) })} />
             </label>
             <label className="field">
@@ -288,7 +288,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
             <Switch on={form.record} onChange={(v) => set({ record: v })} label="Record demos" />
           </div>
           <div className="row">
-            <BusyButton className="btn primary" busy={saving} label="Save" busyLabel="Saving…" onClick={save} />
+            <BusyButton className="btn primary" busy={saving} label="Save changes" busyLabel="Saving…" onClick={save} />
             {isDirty && !saving && <span className="muted small-note">Unsaved changes</span>}
           </div>
         </div>

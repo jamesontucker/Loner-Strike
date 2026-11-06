@@ -63,7 +63,7 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
         <output htmlFor="botCount">{count}</output>
         <div className="row">
           <BusyButton busy={busy(key("addt"))} label="Add a Terrorist" busyLabel="Adding…" onClick={() => bots("addt", "Adding a Terrorist bot…")} />
-          <BusyButton busy={busy(key("addct"))} label="Add a CT" busyLabel="Adding…" onClick={() => bots("addct", "Adding a CT bot…")} />
+          <BusyButton busy={busy(key("addct"))} label="Add a Counter-Terrorist" busyLabel="Adding…" onClick={() => bots("addct", "Adding a Counter-Terrorist bot…")} />
           <BusyButton busy={busy(key("kill"))} label="Kill all" busyLabel="Killing…" onClick={() => bots("kill", "Killing all bots…")} />
           <BusyButton className="btn danger" busy={busy(key("kick"))} label="Kick all" busyLabel="Kicking…" onClick={async () => (await ask("Kick every bot? They stay out until you add more.", { ok: "Kick all", danger: true })) && bots("kick", "Kicking all bots…")} />
           <Info text="Kill all only kills the bots, and they're back next round. Kick all takes every bot out until you add more." />

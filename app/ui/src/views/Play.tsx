@@ -75,8 +75,8 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
     return (
       <div className="idle">
         <div className="idle-hero">
-          <h1>Not set up yet.</h1>
-          <p>Loner-Strike adds the bots, the modes and the in-game menu to {game}. Setup takes a couple of minutes, and everything it changes is backed up.</p>
+          <h1>Not set up yet</h1>
+          <p>Loner-Strike adds the bots, the modes and the Game Mode Menu to {game}. Setup takes a couple of minutes, and everything it changes is backed up.</p>
           <button className="btn launch" onClick={openSetup}>
             <Icon name="play" size={22} />
             Set it up
@@ -100,7 +100,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
     return (
       <div className="idle">
         <div className="idle-hero">
-          <h1>No game yet.</h1>
+          <h1>No game yet</h1>
           <p>{reason || "Loner-Strike couldn't find Counter-Strike 1.6 or Condition Zero on this computer."}</p>
         </div>
       </div>
@@ -122,7 +122,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           )}
           {modes.length > 0 && mode && (
             <label className="field">
-              <span>Mode<Info text="The game mode the game starts in. It remembers its own settings; you can switch modes once you're in, too." /></span>
+              <span>Mode<Info text="The mode the game starts in. Each mode remembers its own settings, and you can switch once you're in." /></span>
               <select value={mode.id} onChange={(e) => pickMode(e.target.value)}>
                 {modes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
@@ -169,7 +169,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           )}
           {mode && (
             <div className="field">
-              <span>Friendly fire<Info text="Whether you can hurt your own team." /></span>
+              <span>Friendly fire<Info text="On: bullets and grenades hurt your own team." /></span>
               <div className="seg" role="group" aria-label="Friendly fire">
                 {[["0", "Off"], ["1", "On"]].map(([v, l]) => <button key={v} aria-pressed={(value("mp_friendlyfire") ?? "0") === v} onClick={() => change("mp_friendlyfire", v)}>{l}</button>)}
               </div>
@@ -185,7 +185,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
         />
         <div className="last">
           You can change all of this once you're in, here or with F3 in the game.{" "}
-          <button className="link inline" disabled={busy(key("open"))} aria-busy={busy(key("open"))} onClick={() => launchMenu()}>{busy(key("open")) ? `Opening ${game}…` : `Just open ${game}`}</button>
+          <button className="link inline" disabled={busy(key("open"))} aria-busy={busy(key("open"))} onClick={() => launchMenu()}>{busy(key("open")) ? `Opening ${game}…` : `Open ${game} to its main menu`}</button>
         </div>
       </div>
       {(recent.length > 0 || favs.length > 0) && (

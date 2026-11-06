@@ -11,7 +11,7 @@ You do four things by hand: rent the machine, make an SSH key, open the game por
 - A **public IPv4 address**. IPv6-only machines don't work.
 - About 15 to 30 minutes, most of it waiting for downloads.
 
-ARM machines can't run the Counter-Strike server. That rules out Oracle's Ampere A1 shapes, AWS Graviton instances, Hetzner's CAX plans and a Raspberry Pi.
+Arm machines can't run the Counter-Strike server. That rules out Oracle's Ampere A1 shapes, AWS Graviton instances, Hetzner's CAX plans and a Raspberry Pi.
 
 ## 1. Choose a host and size
 
@@ -59,7 +59,7 @@ Notes:
 
 - Keys with a passphrase aren't supported yet. Use a key without one for the server.
 - A key you already have works if it's in OpenSSH format (ed25519 or RSA) and has no passphrase.
-- A PuTTY key (`.ppk`) has to be converted first: open it in PuTTYgen and use Conversions > Export OpenSSH key.
+- A PuTTY key (`.ppk`) has to be converted first: open it in PuTTYgen and use Conversions, then Export OpenSSH key.
 
 ## 3. Create the machine
 
@@ -87,9 +87,9 @@ mkdir -p /home/cs/.ssh && cp ~/.ssh/authorized_keys /home/cs/.ssh/ && chown -R c
 
 - Shape: under Change shape, pick **AMD** and **VM.Standard.E2.1.Micro** (Always Free) or a Flex shape if you have credits. Not Ampere.
 - Image: Canonical Ubuntu 22.04 or 24.04. User: `ubuntu`.
-- Networking: let it create a new virtual cloud network with a public subnet, and check that **Assign a public IPv4 address** is on. If the instance ends up without a public IP, open the instance, then Attached VNICs > the VNIC > IPv4 addresses, edit the private IP and pick **Ephemeral public IP**.
+- Networking: let it create a new virtual cloud network with a public subnet, and check that **Assign a public IPv4 address** is on. If the instance ends up without a public IP, open the instance, then Attached VNICs, the VNIC and IPv4 addresses, edit the private IP and pick **Ephemeral public IP**.
 - SSH keys: Paste public keys.
-- Firewall: the subnet's **security list** (Networking > Virtual cloud networks > your network > Security > the default security list > Add ingress rules).
+- Firewall: the subnet's **security list** (Networking, Virtual cloud networks, your network, Security, the default security list, then Add ingress rules).
 - "Out of capacity" means Oracle has no free machines of that shape there right now. Try another availability domain, try again later, or use another shape.
 
 ### Hetzner Cloud
@@ -101,25 +101,25 @@ mkdir -p /home/cs/.ssh && cp ~/.ssh/authorized_keys /home/cs/.ssh/ && chown -R c
 
 ### DigitalOcean
 
-- Create > Droplets, Ubuntu, any Basic plan (they're all x86).
-- Authentication: SSH key > New SSH key, paste the public key.
+- Create, then Droplets, Ubuntu, any Basic plan (they're all x86).
+- Authentication: SSH key, then New SSH key, and paste the public key.
 - User: `root`.
-- Firewall: none by default. If you use a cloud firewall (Networking > Firewalls), add an inbound rule: Custom, UDP, ports 27015-27020.
+- Firewall: none by default. If you use a cloud firewall (Networking, then Firewalls), add an inbound rule: Custom, UDP, ports 27015-27020.
 
 ### Vultr
 
-- Deploy > Cloud Compute, an x86 (Intel or AMD) plan, Ubuntu.
+- Deploy, then Cloud Compute, an x86 (Intel or AMD) plan, Ubuntu.
 - SSH keys: add the public key at deploy.
 - User: `root`.
-- Firewall: none by default. If the server is in a firewall group (Network > Firewall), add an inbound rule: UDP, port range 27015-27020, source anywhere.
+- Firewall: none by default. If the server is in a firewall group (Network, then Firewall), add an inbound rule: UDP, port range 27015-27020, source anywhere.
 
 ### AWS Lightsail
 
-- Create instance > Linux/Unix > OS only > Ubuntu.
-- SSH key pair: Change SSH key pair > Upload new, and pick `loner-strike.pub`.
+- Create instance, then Linux/Unix, OS only and Ubuntu.
+- SSH key pair: Change SSH key pair, then Upload new, and pick `loner-strike.pub`.
 - User: `ubuntu`.
-- Firewall: the instance's **Networking** tab > IPv4 firewall > Add rule: Custom, UDP, port range 27015-27020.
-- Its public IP changes when the instance is stopped and started. Attach a static IP (Networking > Create static IP) so the address stays the same.
+- Firewall: the instance's **Networking** tab, then IPv4 firewall and Add rule: Custom, UDP, port range 27015-27020.
+- Its public IP changes when the instance is stopped and started. Attach a static IP (Networking, then Create static IP) so the address stays the same.
 
 ## 4. Open UDP 27015-27020
 
@@ -136,7 +136,7 @@ Leave SSH (TCP 22) open as it is. The app uses it to set up and manage the serve
 
 ## 5. Add it in Loner-Strike
 
-1. Open **Servers > New server**.
+1. Open **Servers**, then **New server**.
 2. Where it runs: **A Linux server (VPS)**.
 3. **Address:** the machine's public IP address.
 4. **User:** `ubuntu` or `root`, as above.
@@ -175,7 +175,7 @@ In **Servers**, each server has **Join**, **Start** and **Stop**, and **Open** f
 - **Console:** the server's Overview tab shows its console, and you can send server commands from there (`status`, `changelevel de_dust2`).
 - Changes you save in the server's pages are uploaded to the machine. Player slots, who can join and the start options need a restart; the app says so.
 - **Advanced** (on the Overview, under Settings): the port (27015 to 27019), the listen address, extra start options like `-pingboost 2`, and the console (RCON) password for tools like HLSW.
-- **HLTV:** turn it on in the server's HLTV tab. It runs as its own service next to the server, on port 27020, and starts and stops with it. Spectators use `connect <address>:27020`. Recorded demos stay on the machine; **Get it** copies one into your game so you can watch it with `viewdemo`.
+- **HLTV:** turn it on in the server's **Spectators & demos** tab. It runs as its own service next to the server, on port 27020, and starts and stops with it. Spectators use `connect <address>:27020`. Recorded demos stay on the machine; **Copy to my game** puts one in your game so you can watch it with `viewdemo`.
 
 You can also manage it over SSH:
 
@@ -199,32 +199,32 @@ With more than one server, add its name: `lsctl restart friday-night-frags`. The
 - **The machine:** log in over SSH and run `sudo apt update && sudo apt upgrade`. If it asks for a reboot, run `sudo reboot`; the server starts again by itself.
 - **Valve's server files** rarely change. Stop the server, then press **Update** in its Maintenance panel. SteamCMD checks Valve's files on the machine and the app sends Loner-Strike's files again; settings, admins, bans and stats stay.
 - **Mods, plugins, maps and sounds:** changes you make in the app go to the machine by themselves within a few seconds, and only the files that changed are sent. Settings and admins take effect right away. New plugins, mods, maps and sounds load when the map changes; the server's page shows a **Restart now** button when there are some waiting.
-- **Rebuild** in the Maintenance panel sets the server up again from scratch. It deletes everything in the server's folder on the machine first (settings, admins, bans, stats, added maps) and takes about as long as the first setup. Use it only when the server is broken.
+- **Wipe and rebuild** in the Maintenance panel sets the server up again from scratch. It deletes everything in the server's folder on the machine first (settings, admins, bans, stats, added maps) and takes about as long as the first setup. Use it only when the server is broken.
 
 ## Troubleshooting
 
 **"Failed to contact game server" or the server doesn't show up.**
 The port is closed or the server is stopped. Check that the provider's firewall allows inbound UDP 27015-27020 (step 4), and that the server shows as Running in the app (or `lsctl status` says `active`).
 
-**"Couldn't reach ... on port 22."**
+**"Couldn't reach (address) on port 22."**
 The machine is off, the address is wrong, or the provider's firewall blocks SSH. On Oracle, check the instance has a public IP (see the Oracle notes).
 
 **"The server didn't accept the key."**
 The user name is wrong (`ubuntu` or `root`), or the public key wasn't added when the machine was created. Check that you picked the private key, not the `.pub` file.
 
-**"That key has a passphrase."**
+**"That key has a passphrase, which isn't supported yet."**
 Passphrase keys aren't supported yet. Make a key without one (step 2) and add it to the machine: on most providers you can add a key from the web console, or log in another way and append the `.pub` line to `~/.ssh/authorized_keys`.
 
 **"That's a PuTTY key (.ppk)."**
-Export it from PuTTYgen with Conversions > Export OpenSSH key, and pick the exported file.
+Export it from PuTTYgen with Conversions, then Export OpenSSH key, and pick the exported file.
 
 **"The server's identity has changed."**
 The machine's host key is different from last time. If you rebuilt or replaced the machine, that's expected: remove the old entry with `ssh-keygen -R <address>`, then delete the server in the app and add it again. If you didn't, don't connect: something else may be answering at that address.
 
 **"This machine is aarch64."**
-It's an ARM machine. Make a new one with an x86 (AMD or Intel) plan.
+It's an Arm machine. Make a new one with an x86 (AMD or Intel) plan.
 
-**"The user ... can't use sudo without a password."**
+**"The user (name) can't use sudo without a password."**
 Use `root`, or the image's default user (`ubuntu`).
 
 **"Only Ubuntu and Debian are supported for now."**

@@ -36,7 +36,7 @@ const TROUBLE: { q: string; a: string; match?: RegExp }[] = [
   { q: "The server didn't accept the key", a: "Wrong user (ubuntu or root), the key wasn't added when the machine was made, or you picked the .pub file.", match: /didn't accept the key|key file/i },
   { q: "The key has a passphrase", a: "Not supported yet. Make a key without one and add its .pub line to ~/.ssh/authorized_keys on the machine.", match: /passphrase/i },
   { q: "The server's identity has changed", a: "Expected if you rebuilt the machine: run ssh-keygen -R with its address, then delete the server here and add it again. Otherwise, don't connect.", match: /identity has changed/i },
-  { q: "The machine is aarch64", a: "It's ARM. Make an x86 (AMD or Intel) one.", match: /aarch64|arm64|only runs on x86/i },
+  { q: "The machine is aarch64", a: "It's an Arm machine. Make an x86 (AMD or Intel) one.", match: /aarch64|arm64|only runs on x86/i },
   { q: "Setup stopped part way", a: "Try again carries on where it stopped. Rebuild from scratch wipes the server's folder on the machine and starts over." },
 ];
 
@@ -67,7 +67,7 @@ export function HostingGuide() {
       <h3>Run a server on a VPS</h3>
       <p className="muted measure">
         Loner-Strike can set up an always-on server on a Linux machine you rent. It connects over SSH, installs Valve's server and Loner-Strike there and runs it as a
-        service that keeps going when your computer is off. You need Ubuntu or Debian on an x86 (AMD or Intel) machine with a public IPv4 address. ARM machines (Oracle
+        service that keeps going when your computer is off. You need Ubuntu or Debian on an x86 (AMD or Intel) machine with a public IPv4 address. Arm machines (Oracle
         Ampere, AWS Graviton, Hetzner CAX, Raspberry Pi) can't run the game server.
       </p>
 

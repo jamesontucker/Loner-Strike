@@ -94,7 +94,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
     for (const j of list) {
       if ((j.state === "done" || j.state === "error") && !seenDone.current.has(j.id)) {
         seenDone.current.add(j.id);
-        toast(j.message || (j.state === "done" ? "Installed" : "Install failed"), j.state === "error");
+        toast(j.message || (j.state === "done" ? "Installed" : "Couldn't install that."), j.state === "error");
         if (j.state === "done") {
           onInstalled();
           setItems((old) => old.map((m) => (m.id === j.mod ? { ...m, installed: true } : m)));
@@ -108,7 +108,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
     const d = await getJson<GbDetails>(`/api/gb/mod/${id}?section=${section}`).catch((e) => (isAbort(e) ? undefined : null));
     if (d === undefined) return;
     if (d && !(d as unknown as { error?: string }).error) setOpen(d);
-    else toast("Couldn't load that page.", true);
+    else toast("Couldn't load the details from GameBanana. Try again.", true);
   }, `Opening ${name}…`);
   const install = (mod: number, file: number, name: string) => run(key(`install:${mod}:${file}`), async () => {
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/gb/install", { mod, file, section }).catch(() => ({ error: "Couldn't start the download." }));
@@ -159,7 +159,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
       <div>
         <SectionHead title={only ? "Get maps" : "Get more"} note={`From GameBanana's Counter-Strike 1.6 section. ${NOTES[section] ?? NOTES.default}`}>
           {ON_THIS_COMPUTER && !showInstalled && (
-            <BusyButton busy={busy(key(`add-file:${section}`))} label="Add from a file…" busyLabel="Adding…" onClick={() => run(key(`add-file:${section}`), async () => {
+            <BusyButton busy={busy(key(`add-file:${section}`))} label="Add from a file" busyLabel="Adding…" onClick={() => run(key(`add-file:${section}`), async () => {
               const r = await addFromFile(section);
               if (!r) return;
               toast(r.message, !r.ok);
@@ -245,7 +245,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
                 </div>
               );
             })}
-            {!items.length && !loading && !error && <p className="muted">Nothing here.</p>}
+            {!items.length && !loading && !error && <p className="muted">Nothing found. Try another search or type.</p>}
             {!items.length && loading && Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>)}
           </div>
           {!done && items.length > 0 && (
@@ -277,7 +277,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
                     <div>
                       <span>{f.file} <small>{size(f.size)}</small></span>
                       {f.replaces && f.replaces.length > 0 && (
-                        <p className="muted small-note">Replaces {f.replaces.length === 1 ? f.replaces[0] : `${f.replaces.length} game files (${f.replaces.slice(0, 3).join(", ")}${f.replaces.length > 3 ? "…" : ""})`}. Backed up first.</p>
+                        <p className="muted small-note">Replaces {f.replaces.length === 1 ? f.replaces[0] : `${f.replaces.length} game files (${f.replaces.slice(0, 3).join(", ")}${f.replaces.length > 3 ? " and more" : ""})`}. Backed up first.</p>
                       )}
                       {f.conflicts && f.conflicts.length > 0 && (
                         <p className="err-text small-note">Also changes files from {[...new Set(f.conflicts.map((c) => c.name))].join(", ")}. Removing either later puts things back in order.</p>
@@ -351,7 +351,7 @@ function InstalledList({ onChanged }: { onChanged: () => void }) {
             </span>
           </div>
           <div className="row">
-            {it.url && <a className="btn" href={it.url} target="_blank" rel="noreferrer">Page</a>}
+            {it.url && <a className="btn" href={it.url} target="_blank" rel="noreferrer">Open on GameBanana</a>}
             <BusyButton className="btn danger" busy={busy(removeKey(it.section, it.mod))} label="Remove" busyLabel="Removing…" onClick={() => remove(it)} />
           </div>
         </li>

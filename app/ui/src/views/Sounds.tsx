@@ -109,7 +109,7 @@ export function Sounds({ target }: { target: string }) {
     for (const j of p.jobs) {
       if (!busyState(j.state) && !seen.current.has(j.id)) {
         seen.current.add(j.id);
-        toast(j.message || (j.state === "done" ? "Installed" : "That didn't work."), j.state === "error");
+        toast(j.message || (j.state === "done" ? "Installed" : "Couldn't install that pack."), j.state === "error");
         if (j.id.startsWith("roundsound-") && j.state === "done") music = true;
       }
     }
@@ -187,7 +187,7 @@ export function Sounds({ target }: { target: string }) {
     if (r.error) return toast(r.error, true);
     const j = await waitForSetupJob();
     if (!j) toast("Lost track of the install. Check Mods to see if it finished.", true);
-    else toast(j.state === "done" ? "Round-end music is installed. It starts on the next map." : j.error || "That stopped.", j.state === "error");
+    else toast(j.state === "done" ? "Round-end music is installed. It starts on the next map." : j.error || "The install stopped.", j.state === "error");
     load();
   }, "Installing round-end music…");
 
@@ -324,7 +324,7 @@ export function Sounds({ target }: { target: string }) {
                                 disabled={busy}
                                 onChange={(e) => e.target.value && track({ action: "move", pool: p.id, name: t.name, off: !t.on, to: e.target.value }, `Moving ${t.name}…`, "Moved")}
                               >
-                                <option value="">Move to…</option>
+                                <option value="">Move to</option>
                                 {m.pools.filter((o) => o.id !== p.id).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                               </select>
                               <Switch on={t.on} label={`${t.name} ${t.on ? "on" : "off"}`} disabled={busy} onChange={(v) => track({ action: v ? "on" : "off", pool: p.id, name: t.name, off: !t.on }, `Turning ${t.name} ${v ? "on" : "off"}…`)} />
@@ -400,7 +400,7 @@ export function Sounds({ target }: { target: string }) {
                     ) : (
                       <BusyButton className="btn primary" busy={isBusy(key(`pack:${p.id}`))} label="Install" busyLabel="Installing…" onClick={() => packAction(p, "install")} />
                     )}
-                    <a className="btn" href={p.url} target="_blank" rel="noreferrer">On GameBanana</a>
+                    <a className="btn" href={p.url} target="_blank" rel="noreferrer">Open on GameBanana</a>
                   </div>
                 </div>
               );

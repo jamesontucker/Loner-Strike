@@ -179,11 +179,11 @@ function Shell() {
   const attention: Partial<Record<Section, { n: number; why: string }>> = {
     servers: {
       n: (servers?.servers ?? []).filter((x) => x.unreachable || x.state === "crashed" || x.state === "failed" || (x.state === "running" && x.pending_restart)).length,
-      why: "servers that need a look (not answering, stopped by a crash, not set up, or waiting for a restart)",
+      why: "to look at: servers not answering, stopped by a crash, not finished setting up or waiting for a restart",
     },
-    mods: { n: app?.game?.outdated?.length ?? 0, why: "updates waiting" },
-    community: { n: reports, why: "player reports nobody has looked at" },
-    settings: { n: app?.update ? 1 : 0, why: "an update for Loner-Strike" },
+    mods: { n: app?.game?.outdated?.length ?? 0, why: "to update: parts of Loner-Strike with fixes waiting" },
+    community: { n: reports, why: "to read: player reports nobody has looked at yet" },
+    settings: { n: app?.update ? 1 : 0, why: "update for Loner-Strike" },
   };
   const pill = (id: Section, cls = "attn") => {
     const a = attention[id];
@@ -370,7 +370,7 @@ function Shell() {
           {/* what needs a look in the sections under More, added up */}
           {(() => {
             const n = NAV.filter((x) => !tabbar.includes(x.id)).reduce((t, x) => t + (attention[x.id]?.n ?? 0), 0);
-            return n > 0 ? <i className="tab-count attn-tab" aria-label={`${n} things need a look`}>{n}</i> : null;
+            return n > 0 ? <i className="tab-count attn-tab" aria-label={`${n} to look at`}>{n}</i> : null;
           })()}
         </button>
       </nav>

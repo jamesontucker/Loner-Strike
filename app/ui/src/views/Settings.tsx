@@ -37,7 +37,7 @@ const NOTES: Record<string, string> = {
 // A "?" for settings whose name and choices don't explain them and that have no note
 const INFO: Record<string, string> = {
   bot_quota_mode: "Fixed keeps exactly the number of bots you set. Fill server counts people too, so a bot leaves each time someone joins. Per human adds that many bots for each person playing.",
-  bot_chatter: "The bots' voice lines, like calling out enemies. Minimal keeps only the important ones, Radio uses just the standard radio messages.",
+  bot_chatter: "The bots' voice lines, like calling out enemies. Minimal keeps only the important ones. Radio keeps only the standard radio messages.",
   bot_stop: "Every bot stops dead where it is until you turn this off. Handy for looking around a map or lining up a shot.",
   bot_defer_to_human: "When a person is on their team, bots leave the objective to them: planting, defusing and rescuing hostages.",
   bot_walk: "Bots never run, so they're slower and quieter. Good for practising.",
@@ -54,14 +54,15 @@ const INFO: Record<string, string> = {
   sh_maxbinds: "How many heroes with a power you trigger with a key each player can pick. The rest of their heroes work on their own.",
 };
 const STYLE_NOTES: Record<string, string> = {
-  "0": "CZ's own bots, unchanged",
-  "4": "Slow to notice you, wobbly aim, spray until empty",
-  "1": "Mixed skill: a couple of sharp players, lots of average, some bad",
-  "2": "Quick, accurate, controlled bursts, play as a team",
-  "3": "Seasoned: fast reactions, tight aim, few mistakes",
-  "5": "Pro level: crisp flicks, short bursts, the occasional bunnyhop",
-  "6": "Nearly an aimbot: snaps to heads, bunnyhops often",
-  "7": "Everything maxed",
+  "0": "The game's own bots: instant reactions, perfect aim",
+  "4": "New players: slow to react, they spray and miss a lot",
+  "1": "A typical public server: a few sharp players, most average, some bad",
+  "8": "Everyone different, from new to very good. A regular keeps their level",
+  "2": "Solid players who work as a team",
+  "3": "Experienced: quick, accurate, short bursts",
+  "5": "Very good and focused. They bunnyhop between fights",
+  "6": "Suspiciously good: most bullets find you and they notice you from behind",
+  "7": "Everything maxed. Every bullet near you is a headshot",
 };
 
 /** How long a picked value shows before the game's own answer wins regardless. */
@@ -173,7 +174,7 @@ export function MatchButtons({ refresh }: { refresh: () => void }) {
   return (
     <div className="row">
       <BusyButton className="btn primary" busy={busy(key("restart"))} label="Restart round" busyLabel="Restarting…" onClick={() => act(key("restart"), () => run("gm_match", ["restart"]), "Restarting the round…")} />
-      <BusyButton busy={busy(key("endround"))} label="End round now" busyLabel="Ending…" onClick={() => act(key("endround"), () => run("gm_do", ["endround"]), "Ending the round…")} />
+      <BusyButton busy={busy(key("endround"))} label="End round" busyLabel="Ending…" onClick={() => act(key("endround"), () => run("gm_do", ["endround"]), "Ending the round…")} />
       <BusyButton busy={busy(key("addtime"))} label="Add 10 minutes" busyLabel="Adding…" onClick={() => act(key("addtime"), () => run("gm_do", ["addtime"]), "Adding 10 minutes…")} />
       <BusyButton
         className="btn danger"

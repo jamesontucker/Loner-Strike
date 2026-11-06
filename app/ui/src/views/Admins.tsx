@@ -29,7 +29,7 @@ const COLUMNS: Role[] = ["vip", "moderator", "admin", "owner"];
 
 /** What each ability does and how players use it. unfair: off in modes it would break. */
 const ABILITIES: { key: AbilityKey; name: string; what: string; how: string; unfair?: boolean }[] = [
-  { key: "gear", name: "Spawn gear", what: "The armor, kit, grenades and money set up further down.", how: "Given automatically" },
+  { key: "gear", name: "Spawn gear", what: "The armour, defuse kit, grenades and money set up under VIP & donations.", how: "Given automatically" },
   { key: "hook", name: "Grappling hook", what: "Shoots a rope and pulls them to wherever they aim.", how: "Bind a key to +hook" },
   { key: "jump", name: "Double jump", what: "One more jump in mid-air.", how: "Press jump again in the air", unfair: true },
   { key: "respawn", name: "Respawn", what: "Come back once a round after dying.", how: "Say /respawn while dead", unfair: true },
@@ -149,7 +149,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
   const send = async (path: string, body: unknown, done?: string) => {
     const r = await postJson<Reply>(path, body).catch(() => null);
     if (!r) return toast("Couldn't reach the app.", true), false;
-    if (!("people" in r)) return toast(r.error || "That didn't work.", true), false;
+    if (!("people" in r)) return toast(r.error || "Couldn't save that. Try again.", true), false;
     setD(r);
     if (done) toast(done);
     return true;
@@ -306,7 +306,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
                         if (g) grant({ steamid: pl.id, name: pl.name }, g.role, g.days);
                       }}
                     >
-                      <option value="">{listed ? "Change role…" : "Give…"}</option>
+                      <option value="">{listed ? "Change role" : "Give a role"}</option>
                       {GIVE.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
                     </select>
                     {!banned && <BusyButton className="btn danger" busy={busy(`ban:${pl.id}`)} label="Ban" busyLabel="Banning…" onClick={() => ban(pl.id, 0, pl.name)} />}
@@ -441,7 +441,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
               {donate !== null && donate !== d.donate && <BusyButton className="btn primary" busy={busy("donate")} label="Save" busyLabel="Saving…" onClick={saveDonate} />}
             </div>
           </div>
-          <Perk label="Free armor + helmet" note="Every spawn." on={d.perks.armor} busy={busy("perk:armor")} set={(v) => setPerks({ armor: v })} />
+          <Perk label="Free armour and helmet" note="Every spawn." on={d.perks.armor} busy={busy("perk:armor")} set={(v) => setPerks({ armor: v })} />
           <Perk label="Defuse kit" note="For VIPs on the CT side." on={d.perks.defuse} busy={busy("perk:defuse")} set={(v) => setPerks({ defuse: v })} />
           <Perk label="Free grenades" note="HE, flash and smoke each spawn." on={d.perks.nades} busy={busy("perk:nades")} set={(v) => setPerks({ nades: v })} />
           <div className="setting">
@@ -458,7 +458,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
         </div>
         <p className="muted small-note">
           To keep things fair, modes like Zombie, Hide and Seek, Deathrun, Kreedz and Knife Arena skip the spawn perks, and deathmatch and one-weapon modes only give
-          armor and the kit. Changes reach a running game straight away; the mode check happens on the next map.
+          armour and the kit. Changes reach a running game straight away; the mode check happens on the next map.
         </p>
       </div>
       )}
@@ -529,7 +529,7 @@ function Editor({ draft, setDraft, today, onSave, saving }: { draft: Draft; setD
       </div>
       <label className="field">
         <span>Note<Info text="Only for you, to remember why they have the role. Players never see it." /></span>
-        <input className="search" placeholder="e.g. donated $5 on Ko-fi" value={draft.note} maxLength={120} onChange={(e) => set({ note: e.target.value })} />
+        <input className="search" placeholder="Like donated $5 on Ko-fi" value={draft.note} maxLength={120} onChange={(e) => set({ note: e.target.value })} />
       </label>
       <div className="row">
         <BusyButton className="btn primary" busy={saving} disabled={!validId} label="Save" busyLabel="Saving…" onClick={onSave} />

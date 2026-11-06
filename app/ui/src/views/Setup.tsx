@@ -121,7 +121,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             <img src={logo} alt="" width={112} height={112} />
             <h1>Loner-Strike</h1>
             <p className="tagline">Play Counter-Strike like it's 2004,<br />alone or with the friends you don't have.</p>
-            <p>Setup adds bots that play like people, 20 classic community modes and this control panel to your game. Everything it changes is backed up and can be removed again.</p>
+            <p>Setup adds bots that play like people, 22 classic community modes and this control panel to your game. Everything it changes is backed up and can be removed again.</p>
             <p className="muted">Close Counter-Strike before you start.</p>
             <div className="row">
               <button className="btn primary big-btn" onClick={() => setStage("games")}>Set it up</button>
@@ -175,7 +175,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             <h2>What to install</h2>
             <div className="seg presets-seg" role="group" aria-label="How much">
               <button aria-pressed={preset === "all"} onClick={() => setPreset("all")}>Everything ({usable.length})</button>
-              <button aria-pressed={preset === "basics"} onClick={() => setPreset("basics")}>Just the basics</button>
+              <button aria-pressed={preset === "basics"} onClick={() => setPreset("basics")}>Only the basics</button>
               <button aria-pressed={preset === "pick"} onClick={() => setPreset("pick")}>Let me pick</button>
             </div>
             <p className="muted">The basics are always included: {BASICS}. You can add or remove anything later under Mods.</p>
@@ -210,7 +210,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             <ul className="review">
               <li><b>Game{games.length > 1 ? "s" : ""}:</b> {games.map(gameTitle).join(" and ")}</li>
               <li><b>Mods:</b> Metamod-P, AMX Mod X and ReGameDLL (the pieces that let mods run)</li>
-              <li><b>Loner-Strike:</b> bot styles, regular bots (the same names keep coming back, like on a real server), the in-game menu (F3) and this panel</li>
+              <li><b>Loner-Strike:</b> bot styles, regular bots (the same names keep coming back, like on a real server), the Game Mode Menu (F3 in the game) and this app</li>
               <li><b>Modes and add-ons:</b> the basics{chosen.length ? ` plus ${chosen.map((c) => c.name).join(", ")}` : ""}</li>
             </ul>
             <p className="muted">It downloads from the original projects (GameBanana for maps), compiles the plugins, and backs up every file it replaces.</p>
@@ -265,7 +265,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             {job?.state === "error" && (
               <>
                 <p className="err-text">{job.error}</p>
-                <p className="muted">Nothing that finished is lost; run setup again to retry.</p>
+                <p className="muted">Nothing that finished is lost. Try again to carry on.</p>
                 <div className="row">
                   <button className="btn primary" onClick={() => setStage("review")}>Try again</button>
                   <button className="btn" onClick={onClose}>Close</button>
@@ -279,7 +279,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
         {stage === "done" && (
           <section className="setup-pane welcome">
             <div className="done-mark" aria-hidden="true">✓</div>
-            <h1>You're set.</h1>
+            <h1>You're set</h1>
             <p>Start the game and Loner-Strike connects by itself.</p>
             <ul className="done-tips">
               <li><span className="kbd">F3</span><span>In the game: modes, maps, bots and settings. <b>F4</b> is the quick menu.</span></li>

@@ -123,7 +123,7 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
   const round: Item[] = [
     { label: "Restart round", on: () => run("gm_match", ["restart"]) },
     { label: "End round", on: () => run("gm_do", ["endround"]) },
-    { label: "+10 minutes", on: () => run("gm_do", ["addtime"]), show: st.timelimit > 0 },
+    { label: "Add 10 minutes", on: () => run("gm_do", ["addtime"]), show: st.timelimit > 0 },
   ];
   const botMenu: Item[] = [
     { label: "Peaceful bots", on: () => run("gm_set", ["bot_zombie", st.peaceful ? "0" : "1"]), pressed: !!st.peaceful },

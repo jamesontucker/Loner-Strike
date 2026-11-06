@@ -88,12 +88,12 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
   };
   const copyDiagnostics = () => run("app:diagnostics", async () => {
     const r = await getJson<{ text: string }>("/api/app/diagnostics").catch(() => null);
-    if (!r) return toast("Couldn't collect them.", true);
+    if (!r) return toast("Couldn't collect the diagnostics. Try again.", true);
     try {
       await navigator.clipboard.writeText(r.text);
       toast("Copied. Paste it into a GitHub issue.");
     } catch {
-      toast("Couldn't copy.", true);
+      toast("Couldn't copy them to the clipboard. Try again.", true);
     }
   }, "Collecting diagnostics…");
   const addFolder = async () => {
@@ -102,7 +102,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
     const r = await post<Prefs & R>("/api/app/game-folder", { dir: picked.dir });
     if (r.error) return toast(r.error, true);
     setPrefsData((p) => ({ ...p, game_folders: r.game_folders }));
-    toast("Added. Run setup to set it up.");
+    toast("Added. Run setup to set up the game in it.");
   };
   const removeFolder = async (dir: string) => {
     const r = await post<Prefs & R>("/api/app/game-folder/remove", { dir });
@@ -111,10 +111,10 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
   const exportSetup = () => run("app:export", async () => {
     const r = await post<{ files?: number } & R>("/api/app/export");
     if (r.error) return toast(r.error, true);
-    if (r.ok) toast("Saved your setup.");
+    if (r.ok) toast("Exported your setup");
   }, "Exporting your setup…");
   const importSetup = async () => {
-    if (!(await ask("Bring in a setup file? It replaces this game's mode settings, presets, admins and welcome page with the ones in the file.", { ok: "Choose a file" }))) return;
+    if (!(await ask("Import a setup file? It replaces this game's mode settings, presets, admins and welcome page with the ones in the file.", { ok: "Choose a file" }))) return;
     await run("app:import", async () => {
       const r = await post<{ missing?: string[]; hl?: string; game?: string } & R>("/api/app/import");
       if (r.error) return toast(r.error, true);
@@ -122,8 +122,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
       if (r.missing?.length && (await ask(`Done. The setup also uses ${r.missing.length} mode${r.missing.length === 1 ? "" : "s"} or add-on${r.missing.length === 1 ? "" : "s"} that aren't installed here. Install them now?`, { ok: "Install them" }))) {
         const i = await post<{ job?: string } & R>("/api/setup/install", { hl: r.hl, games: [r.game], components: r.missing });
         if (i.error) return toast(i.error, true);
-        toast("Installing… see Mods for progress.");
-      } else toast("Setup brought in. It applies on the next map.");
+        toast("Installing them. Mods shows the progress.");
+      } else toast("Imported. It applies on the next map.");
       reloadApp();
     }, "Importing a setup…");
   };
@@ -155,9 +155,9 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
     if (!app?.game || !inst || !(await ask("Remove Loner-Strike from this game and restore the original files? Close the game first.", { ok: "Remove", danger: true }))) return;
     const game = app.game.id;
     await run("app:uninstall", async () => {
-      const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/uninstall", { hl: inst.hl, games: [game] }).catch(() => ({ error: "Couldn't start." }));
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/uninstall", { hl: inst.hl, games: [game] }).catch(() => ({ error: "Couldn't reach the app." }));
       if (r.error) return toast(r.error, true);
-      toast("Removing… the app restarts when it's done.");
+      toast("Removing Loner-Strike. The app restarts when it's done.");
       // runs on even if you leave this page, so the spinner stays until it's done
       const j = await waitForSetupJob();
       if (!j) return toast("Lost track of the removal. Check Mods to see if it finished, then restart Loner-Strike.", true);
@@ -341,8 +341,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           <p className="muted">Passwords aren't included.</p>
           {ON_THIS_COMPUTER ? (
             <div className="row">
-              <BusyButton busy={busy("app:export")} label="Export…" busyLabel="Exporting…" onClick={exportSetup} />
-              <BusyButton busy={busy("app:import")} label="Import…" busyLabel="Importing…" onClick={importSetup} />
+              <BusyButton busy={busy("app:export")} label="Export" busyLabel="Exporting…" onClick={exportSetup} />
+              <BusyButton busy={busy("app:import")} label="Import" busyLabel="Importing…" onClick={importSetup} />
             </div>
           ) : (
             <p className="muted">{COMPUTER_ONLY}</p>

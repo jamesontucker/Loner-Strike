@@ -9,7 +9,7 @@ type Data = { style: "builtin" | "custom" | "url"; note: string; html: string | 
 const STYLES = [
   { id: "builtin", name: "Built-in page", blurb: "The server, mode, map and commands, plus your own message" },
   { id: "custom", name: "Your own page", blurb: "Write it in HTML, with the live details filled in" },
-  { id: "url", name: "A web page", blurb: "The game's browser opens a page you host (rules, Discord…)" },
+  { id: "url", name: "A web page", blurb: "The game's browser opens a page you host, like your rules or Discord" },
 ] as const;
 
 const PLACEHOLDERS: [string, string][] = [

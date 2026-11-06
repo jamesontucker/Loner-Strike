@@ -15,7 +15,7 @@ const SHOW: [string, string][] = [
   ["all", "All maps"], ["stock", "Came with the game"], ["download", "Downloaded"], ["added", "Added by hand"],
   ["nonav", "Bots haven't learned it"], ["hidden", "Hidden"],
 ];
-const SHOW_INFO = "Bots haven't learned it: the first time you play one of these, the bots spend a few minutes learning it before they can move around. Hidden: maps you hid. They stay installed but are left out of the other lists, the in-game map menu and map votes.";
+const SHOW_INFO = "Bots haven't learned it: the first time you play one, the bots spend a few minutes learning it. Hidden: maps you hid, left out of the other lists, the in-game map menu and map votes.";
 const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favourites first"], ["type", "By type"], ["source", "Downloaded first"]];
 const SOURCE_ORDER = ["download", "added", "stock"];
 const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by hand" };
@@ -148,7 +148,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
     if (!map.mod) return;
     const others = (map.pack ?? []).filter((n) => n.toLowerCase() !== map.name.toLowerCase());
     const msg = others.length
-      ? `${map.name} came in "${map.modName ?? "a pack"}" with ${others.length} other map${others.length === 1 ? "" : "s"} (${others.slice(0, 6).join(", ")}${others.length > 6 ? "…" : ""}). Removing it removes the whole download. Continue?`
+      ? `${map.name} came in "${map.modName ?? "a pack"}" with ${others.length} other map${others.length === 1 ? "" : "s"} (${others.slice(0, 6).join(", ")}${others.length > 6 ? " and more" : ""}). Removing it removes the whole download. Continue?`
       : `Remove ${map.name}? Its files are deleted.`;
     if (!(await ask(msg, { ok: "Remove", danger: true }))) return;
     await once(key(`remove:${map.mod}`), async () => {
@@ -177,7 +177,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
       <div>
         <SectionHead title="Maps" note={live ? "Pick a map to play it in the current mode." : "Start the game to change maps."}>
           {ON_THIS_COMPUTER && (
-            <BusyButton busy={busy(key("add-file"))} label="Add a map file…" busyLabel="Adding…" onClick={() => once(key("add-file"), async () => {
+            <BusyButton busy={busy(key("add-file"))} label="Add a map file" busyLabel="Adding…" onClick={() => once(key("add-file"), async () => {
               const r = await addFromFile("maps");
               if (r) toast(r.message, !r.ok);
               if (r?.ok) reload();
@@ -222,7 +222,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           <p className="muted measure">
             {currentTarget()
               ? "This server has no maps. Get some from Get maps, or check the server's game files."
-              : "Your game has no maps we can see. Get some from Get more, or add a map file."}
+              : "Loner-Strike can't find any maps in your game. Get some from Get more, or add a map file."}
           </p>
           {!currentTarget() && <div className="row"><button className="btn primary" onClick={() => go("more")}>Get more maps</button></div>}
         </div>

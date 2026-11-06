@@ -214,9 +214,9 @@ function Now({ d, busy, acting, act, switchMode }: { d: Data; busy: boolean; act
       <section>
         <SectionHead title="Now" />
         {d.plugin ? (
-          <p className="panel match-now muted">The game isn't running, or the match plugin hasn't answered yet.</p>
+          <p className="panel match-now muted">The game isn't running, or Match mode hasn't answered yet.</p>
         ) : (
-          <NeedsSetup className="panel match-now" text="The match plugin isn't installed." />
+          <NeedsSetup className="panel match-now" text="This game doesn't have Match mode yet." />
         )}
       </section>
     );
@@ -334,7 +334,7 @@ function MatchSettings({ s, save: send, target }: { s: Settings; save: (s: Parti
           show={(v) => (v === 30 ? "MR15, 30 rounds" : "MR12, 24 rounds")}
           pick={(v) => save({ max_rounds: v })}
         />
-        <Toggle label="Overtime" note="On a tie: blocks of 6 rounds with $10000, first to 4 wins. Off: a tie is a draw." on={s.overtime} busy={saving("overtime")} set={(v) => save({ overtime: v })} />
+        <Toggle label="Overtime" note="On a tie: blocks of 6 rounds with $10,000, first to 4 wins. Off: a tie is a draw." on={s.overtime} busy={saving("overtime")} set={(v) => save({ overtime: v })} />
         <Toggle label="Knife round" note="Knives only before the match. The winners vote to stay or switch sides." on={s.knife} busy={saving("knife")} set={(v) => save({ knife: v })} />
         <Choice
           label="Players to start"

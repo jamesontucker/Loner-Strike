@@ -2,9 +2,9 @@
 
 **Play Counter-Strike like it's 2004, alone or with the friends you don't have.**
 
-Counter-Strike 1.6 and Condition Zero set up like an old community server, except it's just you, your bots, and maybe a friend.
+Counter-Strike 1.6 and Condition Zero set up like an old community server, except it's only you, your bots and maybe a friend.
 
-Loner-Strike is a desktop app for Windows and Mac that installs the mods, runs the game for you and gives you a control panel for all of it.
+Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, that installs the mods, runs the game for you and gives you a control panel for all of it.
 
 [lonerstrike.com](https://lonerstrike.com)
 
@@ -17,16 +17,16 @@ Loner-Strike is a desktop app for Windows and Mac that installs the mods, runs t
 - Thousands of maps from GameBanana with pictures, favourites and search, plus skins, models, sounds and sprays
 - Round-end music, Quake sounds and classic sound packs
 - Add your own maps, sounds and AMX Mod X plugins from a file
-- An in-game menu on F3 and quick actions in the app while you play
+- The Game Mode Menu in the game (F3) and quick actions in the app while you play
 
 **Friends**
-- Seven ways to connect: LAN, your router, [playit.gg](https://playit.gg), [Tailscale](https://tailscale.com), ZeroTier, Radmin VPN and Hamachi
-- Server name, password, an invite to send and a custom welcome page
+- Seven ways to connect: the same network, Direct (your router), [playit.gg](https://playit.gg), [Tailscale](https://tailscale.com), ZeroTier, Radmin VPN and Hamachi
+- Server name, join password, an invite to send and a custom welcome page
 
 **Servers**
 - Dedicated servers on your computer, or on a rented Linux machine (a VPS) that the app sets up over SSH and that keeps running without it
 - Bring a server you already run, or copy one server's mods to another
-- Admins, moderators and VIPs with abilities per role, bans, gags, a swear filter, a chat log and player reports
+- Admins, moderators and VIPs with abilities per role, bans, mutes, a swear filter, a chat log and player reports
 - Share the admin list, bans, swear filter, welcome page and chat messages across servers; mods and settings stay per server
 - Map rotation, timed chat messages, AFK and high-ping kickers, stats and ranks, votekick and voteban
 - Match mode for 5v5s, HLTV spectators and demos, fast downloads and scheduled restarts
@@ -50,7 +50,7 @@ The mods are community classics. We added:
 
 ## Install
 
-You need Counter-Strike 1.6 and/or Condition Zero on Steam.
+You need Counter-Strike 1.6, Condition Zero or both, on Steam.
 
 - **Windows:** download Loner-Strike from [Releases](https://github.com/jamesontucker/Loner-Strike/releases) and open it. Setup finds the game and walks you through the rest.
 - **Mac:** the Mac version of Counter-Strike can't run mods, so play it through [CrossOver](https://www.codeweavers.com/crossover) (paid, with a free trial): install Windows Steam in a CrossOver bottle and Counter-Strike in that. Then download Loner-Strike from Releases; it finds the game inside CrossOver. With Parallels, run the Windows version of Loner-Strike inside the Windows virtual machine instead.

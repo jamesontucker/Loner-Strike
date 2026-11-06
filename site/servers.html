@@ -67,7 +67,7 @@
    "@type": "HowToStep",
    "position": 3,
    "name": "Create the machine",
-   "text": "Create a new server (instance, droplet) with Ubuntu 24.04 or 22.04 on an x86 plan. Make sure it gets a public IPv4 address. Under SSH keys, paste the public key. Once it's running, note its public IP and SSH user: ubuntu on Oracle and AWS, root on Hetzner, DigitalOcean and Vultr. Oracle Cloud Shape: AMD, VM.Standard.E2.1.Micro (not Ampere). Turn on Assign a public IPv4 address; if it ends up without one, add an ephemeral public IP on the instance's VNIC (Attached VNICs > IPv4 addresses > edit). "
+   "text": "Create a new server (instance, droplet) with Ubuntu 24.04 or 22.04 on an x86 plan. Make sure it gets a public IPv4 address. Under SSH keys, paste the public key. Once it's running, note its public IP and SSH user: ubuntu on Oracle and AWS, root on Hetzner, DigitalOcean and Vultr. Oracle Cloud Shape: AMD, VM.Standard.E2.1.Micro (not Ampere). Turn on Assign a public IPv4 address; if it ends up without one, add an ephemeral public IP on the instance's VNIC (Attached VNICs, then IPv4 addresses, then edit). "
   },
   {
    "@type": "HowToStep",
@@ -79,7 +79,7 @@
    "@type": "HowToStep",
    "position": 5,
    "name": "Add it in Loner-Strike",
-   "text": "Servers > New server, and pick A Linux server (VPS). Address: the public IP. User: ubuntu or root. SSH key: Browse to the private key, the file without .pub. On a Mac, press Cmd+Shift+G in the picker and type ~/.ssh. Check the server. It shows the machine's fingerprint (SHA256:...) and whether it matches your computer's ~/.ssh/known_hosts. To check a new one, run ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub in your provider's web console and compare. Pick a name, the game, and Set it up like"
+   "text": "In Servers, choose New server and pick A Linux server (VPS). Address: the public IP. User: ubuntu or root. SSH key: Browse to the private key, the file without .pub. On a Mac, press Cmd+Shift+G in the picker and type ~/.ssh. Check the server. It shows the machine's fingerprint (SHA256:...) and whether it matches your computer's ~/.ssh/known_hosts. To check a new one, run ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub in your provider's web console and compare. Pick a name, the game, and Set it up like"
   },
   {
    "@type": "HowToStep",
@@ -142,7 +142,7 @@ footer a { color: var(--dim); }
 <ul>
   <li>Loner-Strike on Windows, or on a Mac with the game in CrossOver (the server's plugins are built on your computer).</li>
   <li>A machine with <b>Ubuntu or Debian</b> (Ubuntu 22.04 or 24.04 is safest) on an <b>x86 (AMD or Intel)</b> CPU, with a <b>public IPv4 address</b>.</li>
-  <li>Not ARM: Oracle Ampere A1, AWS Graviton, Hetzner CAX and Raspberry Pi can't run the Counter-Strike server.</li>
+  <li>Not Arm: Oracle Ampere A1, AWS Graviton, Hetzner CAX and Raspberry Pi can't run the Counter-Strike server.</li>
 </ul>
 
 <h2>1. Choose a host and size</h2>
@@ -168,7 +168,7 @@ cat ~/.ssh/loner-strike.pub</code></pre>
 <pre><code>mkdir $HOME\.ssh -Force
 ssh-keygen -t ed25519 -f $HOME\.ssh\loner-strike -C loner-strike
 Get-Content $HOME\.ssh\loner-strike.pub</code></pre>
-<p>The last line it prints, starting with <code>ssh-ed25519</code>, is the public key. Copy it for the next step. Keys with a passphrase aren't supported yet. A PuTTY key (<code>.ppk</code>) needs converting in PuTTYgen first (Conversions &gt; Export OpenSSH key).</p>
+<p>The last line it prints, starting with <code>ssh-ed25519</code>, is the public key. Copy it for the next step. Keys with a passphrase aren't supported yet. A PuTTY key (<code>.ppk</code>) needs converting in PuTTYgen first (Conversions, then Export OpenSSH key).</p>
 
 <h2>3. Create the machine</h2>
 <ol>
@@ -180,15 +180,15 @@ Get-Content $HOME\.ssh\loner-strike.pub</code></pre>
 
 <div class="box">
   <h3>Oracle Cloud</h3>
-  <p>Shape: AMD, VM.Standard.E2.1.Micro (not Ampere). Turn on <b>Assign a public IPv4 address</b>; if it ends up without one, add an <b>ephemeral public IP</b> on the instance's VNIC (Attached VNICs &gt; IPv4 addresses &gt; edit). Firewall: the subnet's <b>security list</b> (Virtual cloud networks &gt; your network &gt; Security). "Out of capacity" means no free machines there right now: try another availability domain, another shape, or later.</p>
+  <p>Shape: AMD, VM.Standard.E2.1.Micro (not Ampere). Turn on <b>Assign a public IPv4 address</b>; if it ends up without one, add an <b>ephemeral public IP</b> on the instance's VNIC (Attached VNICs, then IPv4 addresses, then edit). Firewall: the subnet's <b>security list</b> (Virtual cloud networks, your network, then Security). "Out of capacity" means no free machines there right now: try another availability domain, another shape, or later.</p>
   <h3>Hetzner Cloud</h3>
   <p>Shared vCPU x86 (CX or CPX), not Arm (CAX). Keep Public IPv4 on. No firewall by default; if you attach one (Firewalls), allow inbound UDP 27015-27020.</p>
   <h3>DigitalOcean</h3>
-  <p>Any Basic droplet with Ubuntu. No firewall by default; if you use one (Networking &gt; Firewalls), add inbound UDP 27015-27020.</p>
+  <p>Any Basic droplet with Ubuntu. No firewall by default; if you use one (Networking, then Firewalls), add inbound UDP 27015-27020.</p>
   <h3>Vultr</h3>
-  <p>Cloud Compute, an Intel or AMD plan. No firewall by default; if the server is in a firewall group (Network &gt; Firewall), add inbound UDP 27015-27020.</p>
+  <p>Cloud Compute, an Intel or AMD plan. No firewall by default; if the server is in a firewall group (Network, then Firewall), add inbound UDP 27015-27020.</p>
   <h3>AWS Lightsail</h3>
-  <p>Linux/Unix, OS only, Ubuntu. Upload your key under Change SSH key pair. Firewall: the instance's <b>Networking</b> tab &gt; IPv4 firewall &gt; Add rule (Custom, UDP, 27015-27020). Attach a static IP so the address doesn't change when the instance restarts.</p>
+  <p>Linux/Unix, OS only, Ubuntu. Upload your key under Change SSH key pair. Firewall: the instance's <b>Networking</b> tab, then IPv4 firewall and Add rule (Custom, UDP, 27015-27020). Attach a static IP so the address doesn't change when the instance restarts.</p>
 </div>
 
 <h2>4. Open UDP 27015-27020</h2>
@@ -196,7 +196,7 @@ Get-Content $HOME\.ssh\loner-strike.pub</code></pre>
 
 <h2>5. Add it in Loner-Strike</h2>
 <ol>
-  <li>Servers &gt; <b>New server</b>, and pick <b>A Linux server (VPS)</b>.</li>
+  <li>In Servers, choose <b>New server</b> and pick <b>A Linux server (VPS)</b>.</li>
   <li><b>Address:</b> the public IP. <b>User:</b> <code>ubuntu</code> or <code>root</code>.</li>
   <li><b>SSH key:</b> Browse to the private key, the file without <code>.pub</code>. On a Mac, press Cmd+Shift+G in the picker and type <code>~/.ssh</code>.</li>
   <li><b>Check the server.</b> It shows the machine's fingerprint (<code>SHA256:...</code>) and whether it matches your computer's <code>~/.ssh/known_hosts</code>. To check a new one, run <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code> in your provider's web console and compare.</li>
@@ -223,7 +223,7 @@ lsctl logs        the last 100 console lines</code></pre>
   <li><b>The machine:</b> <code>sudo apt update &amp;&amp; sudo apt upgrade</code>, then <code>sudo reboot</code> if asked. The server starts again by itself.</li>
   <li><b>Valve's server files:</b> stop the server and press Update in its Maintenance panel. SteamCMD checks Valve's files on the machine; your settings, admins and stats stay.</li>
   <li><b>Mods, plugins, maps and sounds:</b> changes in the app reach the machine within a few seconds, and only what changed is sent. New plugins and maps load on the next map, or press Restart now on the server's page.</li>
-  <li><b>Rebuild:</b> sets the server up again from scratch and wipes its folder on the machine first. Use it only when something is broken.</li>
+  <li><b>Wipe and rebuild:</b> sets the server up again from scratch and wipes its folder on the machine first. Use it only when something is broken.</li>
 </ul>
 
 <h2>Troubleshooting</h2>
@@ -239,7 +239,7 @@ lsctl logs        the last 100 console lines</code></pre>
   <dt>The server's identity has changed</dt>
   <dd>Expected if you rebuilt the machine: run <code>ssh-keygen -R &lt;address&gt;</code> and add the server again. Otherwise, don't connect.</dd>
   <dt>The machine is aarch64</dt>
-  <dd>It's ARM. Make an x86 (AMD or Intel) one.</dd>
+  <dd>It's an Arm machine. Make an x86 (AMD or Intel) one.</dd>
   <dt>Setup stopped part way</dt>
   <dd><b>Try again</b> carries on where it stopped. <b>Rebuild from scratch</b> wipes the server's folder on the machine and starts over.</dd>
 </dl>
