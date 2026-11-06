@@ -68,7 +68,7 @@ new const SETTINGS[][SettingData] =
 	{ "gm_bot_weapons",     "Bot weapons",      "0 1 2 3",                  "Any Pistols Snipers Knives",          CAT_BOT,    SC_MODE,   "" },
 	{ "bot_chatter",        "Bot chatter",      "normal minimal radio off", "Normal Minimal Radio Off",            CAT_BOT,    SC_GLOBAL, "" },
 	{ "bot_join_team",      "Bots join",        "any T CT",                 "Any Terrorists CTs",                  CAT_BOT,    SC_GLOBAL, "" },
-	{ "gm_botstyle",        "Bot style",        "0 4 1 2 3 5 6 7",          "Classic|Newbie lobby|Pub server|Matchmaking|Veterans|Locked In|Hackers|Gods", CAT_BOT, SC_GLOBAL, "" },
+	{ "gm_botstyle",        "Bot style",        "0 4 1 8 2 3 5 6 7",        "Classic|Newbie lobby|Pub server|Mixed lobby|Matchmaking|Veterans|Locked In|Hackers|Gods", CAT_BOT, SC_GLOBAL, "" },
 	{ "gm_hb_reaction",     "Human reaction times", "1 0",                  "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_aim",          "Human aim & bursts", "1 0",                    "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_mistakes",     "Bot mistakes",     "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
@@ -1436,7 +1436,9 @@ strip_c4(id)
 // Each bot style (gm_humanbots.amxx) has its own personality file. CZ reads
 // bot_profile_db when a map loads, so the personalities follow on the next map.
 new const BOTSTYLE_FILES[][] = { "", "BotProfile_Pub.db", "BotProfile_Matchmaking.db", "BotProfile_Veterans.db", "BotProfile_Newbie.db",
-	"BotProfile_LockedIn.db", "BotProfile_Hackers.db", "BotProfile_Gods.db" }
+	"BotProfile_LockedIn.db", "BotProfile_Hackers.db", "BotProfile_Gods.db",
+	// Mixed lobby: the Pub server file has the widest spread of personalities
+	"BotProfile_Pub.db" }
 
 apply_botstyle()
 {

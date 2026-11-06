@@ -247,7 +247,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
 
 type StartOptions = { modes: { id: string; name: string; settings: Record<string, string | null> }[]; mode: string };
 // gm_botstyle values, in the order the in-game menu shows them
-const BOT_STYLES: [string, string][] = [["0", "Classic"], ["4", "Newbie lobby"], ["1", "Pub server"], ["2", "Matchmaking"], ["3", "Veterans"], ["5", "Locked In"], ["6", "Hackers"], ["7", "Gods"]];
+const BOT_STYLES: [string, string][] = [["0", "Classic"], ["4", "Newbie lobby"], ["1", "Pub server"], ["8", "Mixed lobby"], ["2", "Matchmaking"], ["3", "Veterans"], ["5", "Locked In"], ["6", "Hackers"], ["7", "Gods"]];
 const TIME_LIMITS: [string, string][] = [["0", "None"], ["10", "10 min"], ["20", "20 min"], ["30", "30 min"], ["45", "45 min"], ["60", "60 min"]];
 
 /** A map list you can type into: the mode's maps, recent and favourites first. */

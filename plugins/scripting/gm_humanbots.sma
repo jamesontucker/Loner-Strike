@@ -19,7 +19,14 @@
 
 	gm_botstyle      0 Classic (off), 1 Pub server, 2 Matchmaking, 3 Veterans, 4 Newbie lobby,
 	                 5 Locked In, 6 Hackers (most bullets snap to you, notice you behind them),
-	                 7 Gods (everything maxed: every bullet near you is a headshot)
+	                 7 Gods (everything maxed: every bullet near you is a headshot),
+	                 8 Mixed lobby (each bot plays at its own level, newbie to Locked In,
+	                   and keeps it while it's on the server)
+	gm_hb_tilt       1 bots on a losing run get sloppier (most) or more careful (some);
+	                   a few kills settle them again. Low health or several enemies at
+	                   once can make one panic: spraying, jumping, missing
+	gm_hb_showoff    1 now and then after a kill, when nobody's shooting at it: crouch
+	                   spam over the body, a jump, or the knife out for a moment
 	gm_hb_reaction   1 human reaction times
 	gm_hb_aim        1 flicks, wobble and bursts
 	gm_hb_mistakes   1 occasional mistakes
@@ -38,6 +45,7 @@
 #define AUTHOR  "gamemodes"
 
 #define SCAN_INTERVAL 0.1
+#define STYLE_MIXED   8
 #define OFFSET_ACTIVE_ITEM 373
 
 enum { STYLE_CLASSIC, STYLE_PUB, STYLE_MM, STYLE_VET, STYLE_NEWBIE, STYLE_LOCKED, STYLE_HACKER, STYLE_GOD, STYLE_COUNT }
@@ -72,7 +80,10 @@ new const STYLES[STYLE_COUNT][StyleData] =
 	{ 0.03, 0.005, 0.0,  0.0,  0.0,  0.01, 999, 999, 0.0,  0.0,  0.0,  180.0, 100, 0  }   // Gods
 }
 
-new g_pStyle, g_pReaction, g_pAim, g_pMistakes, g_pBhop, g_pFreeForAll
+new g_pStyle, g_pReaction, g_pAim, g_pMistakes, g_pBhop, g_pFreeForAll, g_pTilt, g_pShowoff
+new g_Mix[33]                                   // Mixed lobby: this bot's own style
+new Float:g_Tilt[33], Float:g_TiltWay[33]       // >0 sloppier; some get careful instead
+new Float:g_ShowUntil[33], g_Show[33]           // a show-off moment: 1 crouch spam, 2 jump
 new g_HopsLeft[33], Float:g_NextHopTry[33]
 new bool:g_Career
 
@@ -96,6 +107,9 @@ public plugin_init()
 	g_pAim       = register_cvar("gm_hb_aim", "1")
 	g_pMistakes  = register_cvar("gm_hb_mistakes", "1")
 	g_pBhop      = register_cvar("gm_hb_bhop", "1")
+	g_pTilt      = register_cvar("gm_hb_tilt", "1")
+	g_pShowoff   = register_cvar("gm_hb_showoff", "1")
+	register_event("DeathMsg", "ev_death", "a")
 
 	register_forward(FM_CmdStart, "fw_cmdstart")
 	register_forward(FM_PlayerPreThink, "fw_prethink")
@@ -120,13 +134,78 @@ style()
 	if (g_Career)
 		return STYLE_CLASSIC
 	new s = get_pcvar_num(g_pStyle)
-	return (STYLE_CLASSIC < s < STYLE_COUNT) ? s : STYLE_CLASSIC
+	return (STYLE_CLASSIC < s < STYLE_COUNT || s == STYLE_MIXED) ? s : STYLE_CLASSIC
+}
+
+// The style a bot plays with: the server's, or in a Mixed lobby its own
+bot_style(id)
+{
+	new s = style()
+	if (s != STYLE_MIXED)
+		return s
+	if (!g_Mix[id])
+	{
+		// like a real lobby: lots of average players, some new, a few very good
+		new r = random(100)
+		g_Mix[id] = r < 22 ? STYLE_NEWBIE : r < 57 ? STYLE_PUB : r < 80 ? STYLE_MM : r < 95 ? STYLE_VET : STYLE_LOCKED
+	}
+	return g_Mix[id]
+}
+
+// The bot's skill right now (higher = slower and sloppier), with its mood
+Float:skill_of(id)
+{
+	return g_Skill[id] * (1.0 + (get_pcvar_num(g_pTilt) ? g_Tilt[id] * g_TiltWay[id] : 0.0))
+}
+
+public ev_death()
+{
+	new killer = read_data(1), victim = read_data(2)
+	if (victim >= 1 && victim <= MaxClients && killer != victim)
+		g_Tilt[victim] = floatmin(g_Tilt[victim] + 0.08, 0.45)
+	if (killer < 1 || killer > MaxClients || killer == victim || !is_user_bot(killer))
+		return
+	g_Tilt[killer] = floatmax(g_Tilt[killer] - 0.06, -0.1)
+	// a show-off moment, now and then (not in a match)
+	if (!get_pcvar_num(g_pShowoff) || get_cvar_num("gm_scrim_phase") || style() == STYLE_CLASSIC)
+		return
+	new chance
+	switch (bot_style(killer))
+	{
+		case STYLE_NEWBIE, STYLE_PUB: chance = 10
+		case STYLE_HACKER, STYLE_GOD: chance = 14
+		case STYLE_LOCKED: chance = 6
+		default: chance = 4
+	}
+	if (random(100) >= chance)
+		return
+	new Float:now = get_gametime()
+	switch (random(4))
+	{
+		case 0, 1: { g_Show[killer] = 1; g_ShowUntil[killer] = now + random_float(1.2, 2.2); }
+		case 2: { g_Show[killer] = 2; g_ShowUntil[killer] = now + 0.3; }
+		default:
+		{
+			engclient_cmd(killer, "weapon_knife")
+			set_task(random_float(1.5, 3.0), "task_lastinv", killer)
+		}
+	}
+}
+
+public task_lastinv(id)
+{
+	if (is_user_alive(id) && is_user_bot(id) && !g_Target[id])
+		engclient_cmd(id, "lastinv")
 }
 
 public client_putinserver(id)
 {
 	reset_bot(id)
 	g_SkillStyle[id] = STYLE_CLASSIC
+	g_Mix[id] = 0
+	g_Tilt[id] = 0.0
+	// most people get sloppy when it goes badly; some get careful
+	g_TiltWay[id] = random(100) < 70 ? 1.0 : -0.5
 }
 
 // each bot gets its own skill within the style (higher = slower and sloppier)
@@ -150,6 +229,7 @@ reset_bot(id)
 	g_WobbleYaw[id] = g_WobblePitch[id] = 0.0
 	g_Burst[id] = 0
 	g_PauseUntil[id] = g_PanicUntil[id] = 0.0
+	g_Show[id] = 0
 }
 
 // ---------------------------------------------------------------------------
@@ -197,14 +277,14 @@ bool:can_see(id, const Float:from[3], target)
 
 public task_scan()
 {
-	new s = style()
-	if (s == STYLE_CLASSIC)
+	if (style() == STYLE_CLASSIC)
 		return
 	new Float:now = get_gametime()
 	for (new id = 1; id <= MaxClients; id++)
 	{
 		if (!is_user_alive(id) || !is_user_bot(id))
 			continue
+		new s = bot_style(id), seen
 
 		new Float:eye[3], Float:view[3], Float:fwd[3]
 		eye_pos(id, eye)
@@ -225,6 +305,8 @@ public task_scan()
 				continue
 			new Float:dot = (dir[0] * fwd[0] + dir[1] * fwd[1] + dir[2] * fwd[2]) / dist
 			new Float:angle = floatacos(floatclamp(dot, -1.0, 1.0), degrees)
+			if (angle < STYLES[s][ST_ViewFov] && can_see(id, eye, e))
+				seen++
 			if (angle < bestAngle && can_see(id, eye, e))
 			{
 				best = e
@@ -243,6 +325,10 @@ public task_scan()
 			}
 			continue
 		}
+		// several enemies at once, or nearly dead: some panic for a moment
+		if (get_pcvar_num(g_pTilt) && get_pcvar_num(g_pMistakes) && g_PanicUntil[id] < now
+			&& (seen >= 2 || get_user_health(id) < 30) && random_float(0.0, 1.0) < 0.02 * skill_of(id))
+			g_PanicUntil[id] = now + random_float(1.0, 2.0)
 		g_TargetDist[id] = bestDist
 		g_TargetAngVel[id] = angular_speed(id, best, bestDist)
 		if (best != g_Target[id])
@@ -278,7 +364,7 @@ engage(id, target, Float:angle, Float:dist, s, Float:now)
 	if (g_SkillStyle[id] != s)
 		sample_skill(id, s)
 
-	new Float:skill = g_Skill[id]
+	new Float:skill = skill_of(id)
 	new Float:rt = ex_gaussian(STYLES[s][ST_RtMu], STYLES[s][ST_RtSigma], STYLES[s][ST_RtTau]) * skill
 	rt *= (1.0 + dist / 3000.0) * (1.0 + angle / 90.0)
 	new Float:vel[3]
@@ -332,7 +418,7 @@ new_burst(id, s)
 	if (g_PanicUntil[id] > get_gametime())
 		len *= 2
 	g_BurstLen[id] = max(len, 1)
-	g_SprayDrift[id] = random_float(-0.25, 0.25) * g_Skill[id]
+	g_SprayDrift[id] = random_float(-0.25, 0.25) * skill_of(id)
 }
 
 // ---------------------------------------------------------------------------
@@ -355,13 +441,33 @@ public fw_cmdstart(id, uc, seed)
 {
 	if (!is_user_alive(id) || !is_user_bot(id))
 		return FMRES_IGNORED
-	new s = style()
+	new s = bot_style(id)
 	if (s == STYLE_CLASSIC)
 		return FMRES_IGNORED
 
 	new Float:now = get_gametime()
 	new Float:dt = floatclamp(float(get_uc(uc, UC_Msec)) / 1000.0, 0.001, 0.1)
 	update_wobble(id, s, dt, now)
+
+	// a show-off moment, only while nobody's in its sights
+	if (g_Show[id])
+	{
+		if (now >= g_ShowUntil[id] || g_Target[id])
+			g_Show[id] = 0
+		else
+		{
+			new b = get_uc(uc, UC_Buttons) & ~IN_ATTACK
+			if (g_Show[id] == 1)
+				b = (floatround(now * 7.0) % 2) ? (b | IN_DUCK) : (b & ~IN_DUCK)
+			else
+				b |= IN_JUMP
+			set_uc(uc, UC_Buttons, b)
+			return FMRES_IGNORED
+		}
+	}
+	// panicking players jump about
+	if (g_PanicUntil[id] > now && (s == STYLE_PUB || s == STYLE_NEWBIE) && random(100) < 2)
+		set_uc(uc, UC_Buttons, get_uc(uc, UC_Buttons) | IN_JUMP)
 
 	new buttons = get_uc(uc, UC_Buttons)
 	if (!(buttons & IN_ATTACK) || !holding_gun(id))
@@ -384,7 +490,7 @@ update_wobble(id, s, Float:dt, Float:now)
 	new Float:own = floatsqroot(vel[0] * vel[0] + vel[1] * vel[1])
 	if (g_SkillStyle[id] != s)
 		sample_skill(id, s)
-	new Float:sigma = STYLES[s][ST_Wobble] * g_Skill[id] * (1.0 + g_TargetAngVel[id] / 40.0 + own / 260.0)
+	new Float:sigma = STYLES[s][ST_Wobble] * skill_of(id) * (1.0 + g_TargetAngVel[id] / 40.0 + own / 260.0)
 	if (g_PanicUntil[id] > now)
 		sigma *= 1.6
 	// Ornstein-Uhlenbeck: pulled back toward zero, pushed by noise; std settles at sigma
@@ -404,7 +510,7 @@ public fw_prethink(id)
 {
 	if (!is_user_alive(id) || !is_user_bot(id))
 		return
-	new s = style()
+	new s = bot_style(id)
 	// chance per check (every 0.5s of straight running), and hops per chain
 	new Float:chance, Float:gain, Float:cap, hopsLo, hopsHi
 	switch (s)
@@ -517,7 +623,7 @@ public fw_postthink_post(id)
 			g_Burst[id] = 0                      // let go of the trigger: recoil resets
 		return
 	}
-	new s = style()
+	new s = bot_style(id)
 	new Float:now = get_gametime()
 	g_Fired[id] = false
 	g_LastFire[id] = now
@@ -555,12 +661,12 @@ public fw_traceline(const Float:start[3], const Float:end[3], cond, skip, tr)
 			pitch += g_OverPitch[id] * left
 		}
 	}
-	new s = style()
+	new s = bot_style(id)
 	new n = STYLES[s][ST_HeadPct] ? 0 : g_Burst[id] - 2
 	if (n > 0)
 	{
 		yaw += g_SprayDrift[id] * float(n)
-		pitch += 0.18 * float(n) * g_Skill[id]   // recoil not fully pulled down
+		pitch += 0.18 * float(n) * skill_of(id)   // recoil not fully pulled down
 	}
 
 	new Float:ang[3], Float:fwd[3], Float:newend[3]
