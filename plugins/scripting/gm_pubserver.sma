@@ -632,9 +632,66 @@ current_mode(name[], nlen, desc[], dlen, opts[] = "", olen = 0)
 	fclose(f)
 }
 
+// The host's own welcome page from the app (data/gamemodes): welcome_url.txt (a web
+// page the game's browser opens) or welcome.html with {server} {player} {map}
+// {mode} {players} filled in. Returns 0 when there's neither.
+custom_welcome(const hostesc[], const pesc[], const map[], const mode[], players, out[], len)
+{
+	new f = fopen(fmt("%s/welcome_url.txt", g_DataDir), "rt")
+	if (f)
+	{
+		fgets(f, out, len)
+		fclose(f)
+		trim(out)
+		if (equali(out, "http://", 7) || equali(out, "https://", 8))
+			return 1
+	}
+	f = fopen(fmt("%s/welcome.html", g_DataDir), "rt")
+	if (!f)
+		return 0
+	new n
+	out[0] = 0
+	while (n < len - 1 && fgets(f, out[n], len - n))
+		n = strlen(out)
+	fclose(f)
+	if (!out[0])
+		return 0
+	new num[8], modesc[96]
+	num_to_str(players, num, charsmax(num))
+	html_escape(mode, modesc, charsmax(modesc))
+	replace_string(out, len, "{server}", hostesc)
+	replace_string(out, len, "{player}", pesc)
+	replace_string(out, len, "{map}", map)
+	replace_string(out, len, "{mode}", modesc)
+	replace_string(out, len, "{players}", num)
+	return 1
+}
+
+// welcome_note.txt: the host's own line(s) under the built-in page
+welcome_note(out[], len)
+{
+	new raw[320], line[160], f = fopen(fmt("%s/welcome_note.txt", g_DataDir), "rt")
+	if (!f)
+		return 0
+	while (fgets(f, line, charsmax(line)))
+	{
+		trim(line)
+		if (raw[0])
+			add(raw, charsmax(raw), "^n")
+		add(raw, charsmax(raw), line)
+	}
+	fclose(f)
+	trim(raw)
+	if (!raw[0])
+		return 0
+	html_escape(raw, out, len)
+	replace_string(out, len, "^n", "<br>")
+	return 1
+}
+
 show_welcome(id)
 {
-	static html[1536], host[64], hostesc[96], pname[32], pesc[64], mode[48], desc[96], map[32], opts[48]
+	static html[1536], host[64], hostesc[96], pname[32], pesc[64], mode[48], desc[96], map[32], opts[48], note[400]
 	get_cvar_string("hostname", host, charsmax(host))
 	html_escape(host, hostesc, charsmax(hostesc))
 	get_user_name(id, pname, charsmax(pname))
@@ -646,6 +703,11 @@ show_welcome(id)
 		if (is_user_connected(i) && !is_user_hltv(i))
 			players++
 	new bool:admin = bool:(get_user_flags(id) & ADMIN_CFG)
+	if (custom_welcome(hostesc, pesc, map, mode, players, html, charsmax(html)))
+	{
+		show_motd(id, html, hostesc[0] ? host : "Welcome")
+		return
+	}
 
 	new len = formatex(html, charsmax(html),
 		"<html><head><meta charset=^"utf-8^"><style>\
@@ -667,7 +729,7 @@ show_welcome(id)
 		"<tr><td><b>/gm</b></td><td>game modes, maps, bots and settings</td></tr><tr><td><b>/q</b></td><td>quick menu</td></tr>" :
 		"<tr><td><b>/guns</b></td><td>pick your guns (deathmatch modes)</td></tr>")
 	len += formatex(html[len], charsmax(html) - len,
-		"<tr><td><b>/welcome</b></td><td>show this again</td></tr></table>\
-		<p class=d>Play fair, have fun. gl hf!</p></body></html>")
+		"<tr><td><b>/welcome</b></td><td>show this again</td></tr></table><p class=d>%s</p></body></html>",
+		welcome_note(note, charsmax(note)) ? note : "Play fair, have fun. gl hf!")
 	show_motd(id, html, hostesc[0] ? host : "Welcome")
 }

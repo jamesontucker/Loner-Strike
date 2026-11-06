@@ -27,6 +27,9 @@ pub struct Settings {
     pub game_hl: Option<String>,
     #[serde(default)]
     pub game_id: Option<String>,
+    /// What the panel controls: "local" (the game) or a dedicated server's id
+    #[serde(default)]
+    pub target: Option<String>,
 }
 
 fn settings_path() -> PathBuf {
@@ -46,6 +49,13 @@ pub fn load_settings() -> Settings {
         save_settings(&s);
     }
     s
+}
+
+/// Remembers which game or server the panel controls.
+pub fn set_target(id: &str) {
+    let mut s = load_settings();
+    s.target = Some(id.into());
+    save_settings(&s);
 }
 
 fn save_settings(s: &Settings) {
@@ -165,7 +175,7 @@ static PENDING: Mutex<Option<tauri_plugin_updater::Update>> = Mutex::new(None);
 async fn api_app(State(st): State<Shared>) -> Json<Value> {
     let version = st.app.get().map(|a| a.package_info().version.to_string()).unwrap_or_default();
     let pending = PENDING.lock().unwrap().as_ref().map(|u| json!({"version": u.version, "notes": u.body}));
-    let game = st.game.as_ref().map(|g| json!({"id": g.name, "dir": g.dir}));
+    let game = st.game().map(|g| json!({"id": g.name, "dir": g.dir, "dedicated": g.dedicated, "port": g.port}));
     Json(json!({"version": version, "update": pending, "game": game,
                 "bots": saved_bots(&st), "lastmap": last_map(&st)}))
 }
@@ -217,8 +227,12 @@ async fn api_update_install(State(st): State<Shared>, headers: HeaderMap) -> (St
 
 // ---- LAN parties -------------------------------------------------------------------
 /// This computer's address on the local network, for friends in the same room.
-async fn api_lan() -> Json<Value> {
-    Json(json!({"ip": lan_ip(), "port": 27015}))
+async fn api_lan(State(st): State<Shared>) -> Json<Value> {
+    Json(json!({"ip": lan_ip(), "port": game_port(&st)}))
+}
+
+fn game_port(st: &Shared) -> u16 {
+    st.game().map(|g| g.port).unwrap_or(crate::connect::GAME_PORT)
 }
 
 /// Direct (UPnP): GET the status, POST {on} to open or close the router port.
@@ -231,19 +245,21 @@ struct DirectReq {
     on: bool,
 }
 
-async fn api_direct_set(headers: HeaderMap, Json(req): Json<DirectReq>) -> (StatusCode, Json<Value>) {
+async fn api_direct_set(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<DirectReq>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
-    let v = tokio::task::spawn_blocking(move || if req.on { crate::connect::open_direct() } else { crate::connect::close_direct() })
+    let port = game_port(&st);
+    let v = tokio::task::spawn_blocking(move || if req.on { crate::connect::open_direct(port) } else { crate::connect::close_direct() })
         .await
         .unwrap_or_else(|_| json!({"on": false, "error": "Something went wrong."}));
     (StatusCode::OK, Json(v))
 }
 
 /// This computer's address on ZeroTier, Radmin VPN or Hamachi, when they're running.
-async fn api_vlans() -> Json<Value> {
-    Json(tokio::task::spawn_blocking(crate::connect::virtual_lans).await.unwrap_or_else(|_| json!({})))
+async fn api_vlans(State(st): State<Shared>) -> Json<Value> {
+    let port = game_port(&st);
+    Json(tokio::task::spawn_blocking(move || crate::connect::virtual_lans(port)).await.unwrap_or_else(|_| json!({})))
 }
 
 // ---- choosing the game ---------------------------------------------------------
@@ -286,6 +302,7 @@ async fn api_use_game(State(st): State<Shared>, headers: HeaderMap, Json(req): J
     let mut s = load_settings();
     s.game_hl = Some(req.hl);
     s.game_id = Some(req.game);
+    s.target = Some("local".into());
     save_settings(&s);
     restart_soon(&st);
     (StatusCode::OK, Json(json!({"ok": true})))
@@ -310,7 +327,7 @@ fn restart_soon(st: &Shared) {
 
 // ---- launching the game -----------------------------------------------------
 fn data_file(st: &Shared, name: &str) -> Option<String> {
-    let g = st.game.as_ref()?;
+    let g = st.game()?;
     std::fs::read_to_string(g.dir.join("addons/amxmodx/data/gamemodes").join(name)).ok()
 }
 
@@ -341,9 +358,12 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
     if !from_panel(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
-    let Some(g) = st.game.as_ref() else {
+    let Some(g) = st.game() else {
         return (StatusCode::OK, Json(json!({"error": "Couldn't find the game."})));
     };
+    if g.dedicated {
+        return (StatusCode::OK, Json(json!({"error": "Start dedicated servers from the Servers tab."})));
+    }
     let appid = if g.name == "cstrike" { "10" } else { "80" };
     let map = req
         .map

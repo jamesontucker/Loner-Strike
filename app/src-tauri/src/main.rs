@@ -2,6 +2,7 @@
 // small local web server (which phones on the same Wi-Fi can use too).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod admins;
 mod app_api;
 mod connect;
 mod archive;
@@ -12,6 +13,8 @@ mod maps;
 mod panel_api;
 mod rcon;
 mod server;
+mod servers;
+mod welcome;
 mod setup;
 mod setup_api;
 mod sharing;
@@ -32,15 +35,19 @@ fn main() {
         .expect("couldn't open a local port");
     let port = listener.local_addr().unwrap().port();
     let settings = app_api::load_settings();
-    let game = app_api::pick_game(&settings);
+    // the game or server the panel was on last time (the game if that server is gone)
+    let target = settings.target.clone().unwrap_or_else(|| "local".into());
+    let game = servers::game_for(&target, || app_api::pick_game(&settings))
+        .or_else(|| servers::game_for("local", || app_api::pick_game(&settings)));
     let state = Arc::new(server::AppState {
-        game,
+        current: RwLock::new(None),
         hosts: RwLock::new(vec![format!("127.0.0.1:{port}"), format!("localhost:{port}")]),
         lan_hosts: RwLock::new(Vec::new()),
         token: settings.token.clone(),
         app: OnceLock::new(),
         phone: Mutex::new(app_api::Phone::default()),
     });
+    state.set_game(game);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -69,8 +76,9 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("Loner-Strike couldn't start")
         .run(|_, event| {
-            // close the router port again when the app quits
+            // stop dedicated servers and close the router port when the app quits
             if let tauri::RunEvent::Exit = event {
+                servers::stop_all();
                 if connect::DIRECT.lock().map(|d| d.on).unwrap_or(false) {
                     connect::close_direct();
                 }

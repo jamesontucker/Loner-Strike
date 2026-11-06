@@ -117,14 +117,21 @@ struct Run {
     proc: Option<Child>,
 }
 
-pub struct Sharing {
+/// The game being shared: dedicated servers each have their own port and settings.
+struct Target {
     rcon: Arc<Rcon>,
+    /// the game's data folder: friends.cfg (run by the plugin) and friends.json
+    data: PathBuf,
+    port: u16,
+}
+
+pub struct Sharing {
+    target: Mutex<Target>,
     dir: PathBuf,
     secret_file: PathBuf,
     state_file: PathBuf,
     pid_file: PathBuf,
     log_file: PathBuf,
-    cfg_file: PathBuf,
     run: Mutex<Run>,
     /// {"code", "url", "step", "error"} while setting up
     claim: Mutex<Option<Map<String, Value>>>,
@@ -160,16 +167,15 @@ fn is_executable(p: &Path) -> bool {
 }
 
 impl Sharing {
-    pub fn new(app_dir: &Path, data: &Path, rcon: Arc<Rcon>) -> Sharing {
+    pub fn new(app_dir: &Path, data: &Path, rcon: Arc<Rcon>, port: u16) -> Sharing {
         let dir = app_dir.join("playit");
         let _ = std::fs::create_dir_all(&dir);
         let sh = Sharing {
-            rcon,
+            target: Mutex::new(Target { rcon, data: data.to_path_buf(), port }),
             secret_file: dir.join("secret.txt"),
             state_file: dir.join("sharing.json"),
             pid_file: dir.join("playitd.pid"),
             log_file: dir.join("playitd.log"),
-            cfg_file: data.join("friends.cfg"),
             dir,
             run: Mutex::new(Run { phase: "off".into(), address: Value::Null, ..Default::default() }),
             claim: Mutex::new(None),
@@ -179,6 +185,60 @@ impl Sharing {
         *sh.saved.lock().unwrap() = sh.load();
         sh.stop_leftover();
         sh
+    }
+
+    /// The app's one playit.gg agent, shared by every game and server it controls.
+    pub fn global(app_dir: &Path, data: &Path, rcon: Arc<Rcon>, port: u16) -> Arc<Sharing> {
+        static ONE: std::sync::OnceLock<Arc<Sharing>> = std::sync::OnceLock::new();
+        ONE.get_or_init(|| {
+            let sh = Arc::new(Sharing::new(app_dir, data, rcon.clone(), port));
+            sh.adopt_old_panel();
+            sh
+        })
+        .clone()
+    }
+
+    /// Points sharing at another game or server. A tunnel for another port stops.
+    pub fn retarget(&self, rcon: Arc<Rcon>, data: &Path, port: u16) {
+        let old = {
+            let mut t = self.target.lock().unwrap();
+            let old = t.port;
+            *t = Target { rcon, data: data.to_path_buf(), port };
+            old
+        };
+        if old != port && self.run.lock().unwrap().phase != "off" {
+            self.stop();
+        }
+    }
+
+    pub fn port(&self) -> u16 {
+        self.target.lock().unwrap().port
+    }
+
+    /// The server name and password: per game (friends.json), or what the
+    /// Friends tab saved before servers had their own.
+    fn server_settings(&self) -> (Value, Value) {
+        let data = self.target.lock().unwrap().data.clone();
+        if let Some(v) = std::fs::read_to_string(data.join("friends.json")).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
+            return (v["name"].clone(), v["password"].clone());
+        }
+        let saved = self.saved.lock().unwrap();
+        (saved.get("name").cloned().unwrap_or(json!("")), saved.get("password").cloned().unwrap_or(json!("")))
+    }
+
+    /// The playit tunnel's key in sharing.json: one tunnel per game port.
+    fn tunnel_key(&self) -> String {
+        match self.port() {
+            GAME_PORT => "tunnel_id".into(),
+            p => format!("tunnel_id_{p}"),
+        }
+    }
+
+    fn tunnel_name(&self) -> String {
+        match self.port() {
+            GAME_PORT => TUNNEL_NAME.into(),
+            p => format!("{TUNNEL_NAME}-{p}"),
+        }
     }
 
     /// Brings over the old panel's playit key and settings the first time.
@@ -227,6 +287,7 @@ impl Sharing {
 
     pub fn status(&self) -> Value {
         let saved = self.saved.lock().unwrap().clone();
+        let (name, password) = self.server_settings();
         let run = self.run.lock().unwrap();
         json!({
             "installed": self.binary().is_some(),
@@ -236,11 +297,11 @@ impl Sharing {
             "error": run.error,
             "address": run.address,
             "account": run.account,
-            "name": saved.get("name").cloned().unwrap_or(json!("")),
-            "password": saved.get("password").cloned().unwrap_or(json!("")),
+            "name": name,
+            "password": password,
             "method": saved.get("method").cloned().unwrap_or(json!("playit")),
             "tailscale": self.tailscale(),
-            "port": GAME_PORT,
+            "port": self.port(),
         })
     }
 
@@ -346,7 +407,7 @@ impl Sharing {
         };
         write_secret(&self.secret_file, &key).map_err(|e| e.to_string())?;
         self.edit_saved(|s| {
-            s.remove("tunnel_id");
+            s.retain(|k, _| !k.starts_with("tunnel_id"));
         });
         let mut claim = self.claim.lock().unwrap();
         if claim.as_ref().map(|c| c["code"] == code).unwrap_or(false) {
@@ -359,7 +420,7 @@ impl Sharing {
         self.stop();
         let _ = std::fs::remove_file(&self.secret_file);
         self.edit_saved(|s| {
-            s.remove("tunnel_id");
+            s.retain(|k, _| !k.starts_with("tunnel_id"));
         });
         self.run.lock().unwrap().account.clear();
     }
@@ -371,19 +432,20 @@ impl Sharing {
         if !password_ok(&password) {
             return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
         }
-        self.edit_saved(|s| {
-            s.insert("name".into(), json!(name));
-            s.insert("password".into(), json!(password));
-        });
+        let (rcon, data) = {
+            let t = self.target.lock().unwrap();
+            (t.rcon.clone(), t.data.clone())
+        };
+        let _ = std::fs::write(data.join("friends.json"), json!({"name": name, "password": password}).to_string());
         let mut lines = Vec::new();
         if !name.is_empty() {
             lines.push(format!("hostname \"{name}\""));
         }
         lines.push(format!("sv_password \"{password}\""));
         // The plugin runs this after every map change (see task_reapply_saved)
-        std::fs::write(&self.cfg_file, format!("// Written by Loner-Strike's Friends tab\n{}\n", lines.join("\n"))).map_err(|e| e.to_string())?;
+        std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike's Friends tab\n{}\n", lines.join("\n"))).map_err(|e| e.to_string())?;
         for line in &lines {
-            if self.rcon.send(line).is_err() {
+            if rcon.send(line).is_err() {
                 break; // applied when the game next loads a map
             }
         }
@@ -448,15 +510,16 @@ impl Sharing {
                         "ports": {"type": "custom-udp", "details": 1},
                         "origin": {"type": "agent", "data": {"agent_id": data["agent_id"], "config": {"fields": [
                             {"name": "local_ip", "value": "127.0.0.1"},
-                            {"name": "local_port", "value": GAME_PORT.to_string()},
+                            {"name": "local_port", "value": self.port().to_string()},
                         ]}}},
-                        "enabled": true, "alloc": null, "name": TUNNEL_NAME, "firewall_id": null,
+                        "enabled": true, "alloc": null, "name": self.tunnel_name(), "firewall_id": null,
                     }),
                     Some(key),
                 )?;
                 let id = if created.is_object() { created["id"].clone() } else { created };
+                let key = self.tunnel_key();
                 self.edit_saved(|s| {
-                    s.insert("tunnel_id".into(), id);
+                    s.insert(key, id);
                 });
             }
             Ok(())
@@ -531,13 +594,15 @@ impl Sharing {
 
     fn find_tunnel(&self, key: &str) -> Result<Option<Value>, String> {
         let list = call("/v1/tunnels/list", json!({}), Some(key))?;
-        let want = self.saved.lock().unwrap().get("tunnel_id").cloned().unwrap_or(Value::Null);
+        let key = self.tunnel_key();
+        let name = self.tunnel_name();
+        let want = self.saved.lock().unwrap().get(&key).cloned().unwrap_or(Value::Null);
         for t in list["tunnels"].as_array().into_iter().flatten() {
-            if t["id"] == want || (want.is_null() && t["name"] == TUNNEL_NAME) {
+            if t["id"] == want || (want.is_null() && t["name"] == name.as_str()) {
                 if t["id"] != want {
                     let id = t["id"].clone();
                     self.edit_saved(|s| {
-                        s.insert("tunnel_id".into(), id);
+                        s.insert(key, id);
                     });
                 }
                 return Ok(Some(t.clone()));

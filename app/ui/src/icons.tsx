@@ -30,6 +30,9 @@ const P: Record<string, string> = {
   deagle: '<path d="M2 7h19v4h-8l-1 2.2H9l-1 4.8H4.8l1.4-7H2z"/><path d="M18.5 7V5"/>',
   awp: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="1.6"/><path d="M12 3.5v5M12 15.5v5M3.5 12h5M15.5 12h5"/>',
   scoutz: '<path d="M12 21V8M7.5 12.5 12 8l4.5 4.5"/><path d="M5 4.5c4.5-1.8 9.5-1.8 14 0"/>',
+  admins: '<path d="M12 3l7 2.8V11c0 4.8-3 8.3-7 10-4-1.7-7-5.2-7-10V5.8z"/><path d="M12 8l1.2 2.5 2.7.3-2 1.9.5 2.7-2.4-1.3-2.4 1.3.5-2.7-2-1.9 2.7-.3z"/>',
+  server: '<rect x="4" y="4" width="16" height="6.5" rx="1"/><rect x="4" y="13.5" width="16" height="6.5" rx="1"/><path d="M7.5 7.25h.01M7.5 16.75h.01M11 7.25h5M11 16.75h5"/>',
+  welcome: '<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 8.5h17M7 12.5h10M7 15.5h6"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   kreedz: '<path d="M3 21l6-10 4 5 3-4 5 9z"/><path d="M14 6l2-3 2 3"/>',
 };

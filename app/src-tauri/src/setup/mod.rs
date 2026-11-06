@@ -655,6 +655,53 @@ impl UninstallPlan {
     }
 }
 
+// ---- dedicated servers (servers.rs) ---------------------------------------------------------
+
+pub fn server_step(game: &str, id: &str, label: impl Into<String>, weight: f64) -> Step {
+    step(game, id, label, weight)
+}
+
+/// Runs f as the one setup job (its steps show in the same progress view).
+pub fn start_job(kind: &str, steps: Vec<Step>, f: impl FnOnce(&Job) -> Result<(), String> + Send + 'static) -> Result<String, String> {
+    let job = begin(kind, steps)?;
+    let id = job.view().id;
+    std::thread::spawn(move || match f(&job) {
+        Ok(()) => job.complete(),
+        Err(e) => job.fail(&e),
+    });
+    Ok(id)
+}
+
+impl Job {
+    /// Runs one step of a custom job ("<game>/<id>").
+    pub fn run<T>(&self, id: &str, f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+        run_step(self, id, f)
+    }
+
+    /// Adds steps before the step `id` once it's known what they'll be.
+    pub fn insert_before(&self, id: &str, steps: Vec<Step>) {
+        let mut v = self.view.lock().unwrap();
+        let at = v.steps.iter().position(|s| s.id == id).unwrap_or(v.steps.len());
+        v.steps.splice(at..at, steps);
+        Self::recompute(&mut v);
+    }
+}
+
+impl InstallPlan {
+    pub fn step_list(&self) -> Vec<Step> {
+        self.steps.clone()
+    }
+}
+
+/// Runs an install plan as part of a bigger job (no complete() at the end).
+pub fn install_into(job: &Job, plan: &InstallPlan, res: &Path, store: Option<Arc<MapStore>>) -> Result<(), String> {
+    let ctx = Ctx { install: &plan.install, res, progress: job, store };
+    for g in &plan.games {
+        install_game(job, plan, &ctx, g)?;
+    }
+    Ok(())
+}
+
 // ---- test helpers ------------------------------------------------------------------------
 
 /// Runs python3 -I -c script and returns its stdout, or None if Python isn't available

@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
-import { clock, getJson } from "./api";
+import { clock, getJson, postJson } from "./api";
 import { useGameState } from "./api";
 import { Icon } from "./icons";
-import type { AppInfo, MapInfo, Online } from "./types";
-import { ToastProvider, useCommand } from "./ui";
+import type { AppInfo, MapInfo, Online, ServerList } from "./types";
+import { ToastProvider, useCommand, useToast } from "./ui";
 import { Addons } from "./views/Addons";
 import { AppSettings } from "./views/AppSettings";
 import { Bots } from "./views/Bots";
+import { Admins } from "./views/Admins";
 import { Friends } from "./views/Friends";
 import { GetMore } from "./views/GetMore";
 import { Maps } from "./views/Maps";
 import { PlayIdle, PlayLive } from "./views/Play";
 import { Players } from "./views/Players";
+import { Servers } from "./views/Servers";
 import { SettingsPage } from "./views/Settings";
+import { Welcome } from "./views/Welcome";
 import { anySetUp, Setup, type Scan } from "./views/Setup";
 
-type Section = "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "more" | "settings";
+type Section = "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "servers" | "admins" | "welcome" | "more" | "settings";
 
 const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean }[] = [
   { id: "play", label: "Play", icon: "play" },
@@ -26,6 +29,9 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "players", label: "Players", icon: "players", live: true },
   { id: "addons", label: "Add-ons", icon: "addons", live: true },
   { id: "friends", label: "Play with friends", icon: "friends", group: "Online" },
+  { id: "servers", label: "Servers", icon: "server" },
+  { id: "admins", label: "Admins", icon: "admins" },
+  { id: "welcome", label: "Welcome page", icon: "welcome" },
   { id: "more", label: "Get more", icon: "more", group: "Library" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];
@@ -55,6 +61,8 @@ function Shell() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [scan, setScan] = useState<Scan | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [servers, setServers] = useState<ServerList | null>(null);
+  const toast = useToast();
 
   const setSection = (s: Section) => {
     setSectionRaw(s);
@@ -79,11 +87,31 @@ function Shell() {
     getJson<Scan>("/api/setup/scan").then(setScan).catch(() => setScan(null));
   }, []);
 
+  const reloadServers = useCallback(() => {
+    getJson<ServerList>("/api/servers").then(setServers).catch(() => setServers(null));
+  }, []);
+
   useEffect(() => {
     reloadApp();
     reloadMaps();
     reloadScan();
-  }, [reloadApp, reloadMaps, reloadScan]);
+    reloadServers();
+    const t = setInterval(() => !document.hidden && reloadServers(), 5000);
+    return () => clearInterval(t);
+  }, [reloadApp, reloadMaps, reloadScan, reloadServers]);
+
+  // switches every section to another game or server
+  const selectTarget = async (id: string) => {
+    if (id === "__new") return setSection("servers");
+    const r = await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id }).catch(() => ({ error: "Couldn't reach the app." }));
+    if (r.error) return toast(r.error, true);
+    reloadApp();
+    reloadMaps(true);
+    reloadServers();
+    refresh();
+  };
+  const target = servers?.selected ?? "local";
+  const current = servers?.servers.find((x) => x.id === target) ?? null;
 
   // ⌘1-⌘9 switch sections
   useEffect(() => {
@@ -119,6 +147,18 @@ function Shell() {
       <aside className="sidebar">
         <div className="drag-strip" data-tauri-drag-region />
         <div className="brand">Loner-Strike</div>
+        {servers && servers.servers.length > 0 && (
+          <label className="target">
+            <span>Managing</span>
+            <select value={target} onChange={(e) => selectTarget(e.target.value)}>
+              <option value="local">My game</option>
+              {servers.servers.filter((x) => x.ready).map((x) => (
+                <option key={x.id} value={x.id}>{x.name}{x.state === "running" ? " (running)" : ""}</option>
+              ))}
+              <option value="__new">New server…</option>
+            </select>
+          </label>
+        )}
         <nav className="nav" aria-label="Sections">
           {NAV.map((n) => (
             <div key={n.id}>
@@ -133,13 +173,14 @@ function Shell() {
           ))}
         </nav>
         <div className="side-foot">
+          {current ? `${current.name} · ` : ""}
           {app?.game ? (app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero") : "No game found"}
           {app?.version && <span> · v{app.version}</span>}
         </div>
       </aside>
 
       <div className="main">
-        <Strip data={online} reason={state && !state.online ? state.reason : ""} app={app} refresh={refresh} />
+        <Strip data={online} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} refresh={refresh} />
         <main className="content">
           {state === null ? (
             <p className="muted">Connecting…</p>
@@ -148,7 +189,13 @@ function Shell() {
           ) : (
             <>
               {section === "play" &&
-                (online ? <PlayLive data={online} maps={maps} refresh={refresh} openMaps={() => setSection("maps")} /> : <PlayIdle app={app} reason={state.online ? "" : state.reason} maps={maps} />)}
+                (online ? (
+                  <PlayLive data={online} maps={maps} refresh={refresh} openMaps={() => setSection("maps")} />
+                ) : current ? (
+                  <ServerIdle name={current.name} id={current.id} state={current.state} after={reloadServers} />
+                ) : (
+                  <PlayIdle app={app} reason={state.online ? "" : state.reason} maps={maps} />
+                ))}
               {section === "maps" && <Maps data={online} maps={maps} reload={() => reloadMaps(true)} refresh={refresh} />}
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
               {section === "match" && online && (
@@ -160,6 +207,9 @@ function Shell() {
               {section === "players" && online && <Players data={online} refresh={refresh} />}
               {section === "addons" && online && <Addons data={online} refresh={refresh} />}
               {section === "friends" && <Friends data={online} refresh={refresh} />}
+              {section === "servers" && <Servers scan={scan} selected={target} onSelect={selectTarget} onChanged={reloadServers} />}
+              {section === "admins" && <Admins key={target} data={online} />}
+              {section === "welcome" && <Welcome target={target} />}
               {section === "more" && <GetMore onInstalled={() => reloadMaps(true)} />}
               {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={() => setSetupOpen(true)} />}
             </>
@@ -204,13 +254,13 @@ function Shell() {
 
 const TABBAR: Section[] = ["play", "maps", "bots", "players"];
 
-function Strip({ data, reason, app, refresh }: { data: Online | null; reason: string; app: AppInfo | null; refresh: () => void }) {
+function Strip({ data, reason, app, server, refresh }: { data: Online | null; reason: string; app: AppInfo | null; server?: string; refresh: () => void }) {
   const run = useCommand(refresh);
   if (!data) {
     return (
       <header className="strip" data-tauri-drag-region>
         <div className="strip-meta idle" data-tauri-drag-region>
-          {app?.game ? `${app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"} isn't running` : reason}
+          {server ? `${server} isn't running` : app?.game ? `${app.game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero"} isn't running` : reason}
         </div>
         <span className="live">Offline</span>
       </header>
@@ -265,6 +315,34 @@ function Waiting({ label, onPlay }: { label: string; onPlay: () => void }) {
       <h2>{label}</h2>
       <p className="muted">This needs a game running.</p>
       <button className="btn primary" onClick={onPlay}>Go to Play</button>
+    </div>
+  );
+}
+
+/** Play, when the panel is managing a dedicated server that isn't up. */
+function ServerIdle({ name, id, state, after }: { name: string; id: string; state: string; after: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const start = async () => {
+    setBusy(true);
+    const r = await postJson<{ ok?: boolean; error?: string }>(`/api/servers/${id}/start`).catch(() => ({ error: "Couldn't reach the app." }));
+    setBusy(false);
+    if (r.error) return toast(r.error, true);
+    toast(`Starting ${name}…`);
+    after();
+  };
+  return (
+    <div className="idle">
+      <div className="idle-hero">
+        <h1>{name}</h1>
+        <p>{state === "running" ? "The server is starting. The panel connects in a few seconds." : "This server is stopped. Start it, then join from the Servers tab."}</p>
+        {state !== "running" && (
+          <button className="btn launch" disabled={busy} onClick={start}>
+            <Icon name="play" size={22} />
+            {busy ? "Starting…" : "Start the server"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

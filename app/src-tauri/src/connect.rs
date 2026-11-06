@@ -15,13 +15,15 @@ const LEASE_SECS: u32 = 3600;
 #[derive(Default)]
 pub struct Direct {
     pub on: bool,
+    /// the game port that's forwarded
+    pub port: u16,
     pub external: Option<Ipv4Addr>,
     pub error: Option<String>,
     /// the router reports an address that isn't really public (shared/CGNAT or double NAT)
     pub shared_address: bool,
 }
 
-pub static DIRECT: Mutex<Direct> = Mutex::new(Direct { on: false, external: None, error: None, shared_address: false });
+pub static DIRECT: Mutex<Direct> = Mutex::new(Direct { on: false, port: GAME_PORT, external: None, error: None, shared_address: false });
 
 fn local_ipv4() -> Option<Ipv4Addr> {
     let s = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
@@ -38,8 +40,12 @@ fn not_public(ip: Ipv4Addr) -> bool {
     ip.is_private() || (o[0] == 100 && (64..128).contains(&o[1])) || ip.is_loopback() || ip.is_link_local()
 }
 
-/// Opens the game port on the router (UDP 27015 → this computer). Blocking: call from a thread.
-pub fn open_direct() -> Value {
+/// Opens the game port on the router (UDP port → this computer). Blocking: call from a thread.
+pub fn open_direct(port: u16) -> Value {
+    let old = DIRECT.lock().unwrap().port;
+    if old != port && DIRECT.lock().unwrap().on {
+        close_direct();
+    }
     let result = (|| -> Result<(Ipv4Addr, bool), String> {
         let local = local_ipv4().ok_or("This computer isn't on a network right now.")?;
         let mut opts = igd_next::SearchOptions::default();
@@ -52,8 +58,8 @@ pub fn open_direct() -> Value {
         };
         gw.add_port(
             igd_next::PortMappingProtocol::UDP,
-            GAME_PORT,
-            SocketAddr::V4(SocketAddrV4::new(local, GAME_PORT)),
+            port,
+            SocketAddr::V4(SocketAddrV4::new(local, port)),
             LEASE_SECS,
             DESCRIPTION,
         )
@@ -63,10 +69,10 @@ pub fn open_direct() -> Value {
     let mut d = DIRECT.lock().unwrap();
     match result {
         Ok((ip, shared)) => {
-            *d = Direct { on: true, external: Some(ip), error: None, shared_address: shared };
+            *d = Direct { on: true, port, external: Some(ip), error: None, shared_address: shared };
         }
         Err(e) => {
-            *d = Direct { on: false, external: None, error: Some(e), shared_address: false };
+            *d = Direct { on: false, port, external: None, error: Some(e), shared_address: false };
         }
     }
     drop(d);
@@ -75,12 +81,13 @@ pub fn open_direct() -> Value {
 
 /// Closes the port again (sharing stopped, or the app quits).
 pub fn close_direct() -> Value {
+    let port = DIRECT.lock().unwrap().port;
     let mut opts = igd_next::SearchOptions::default();
     opts.timeout = Some(Duration::from_secs(3));
     if let Ok(gw) = igd_next::search_gateway(opts) {
-        let _ = gw.remove_port(igd_next::PortMappingProtocol::UDP, GAME_PORT);
+        let _ = gw.remove_port(igd_next::PortMappingProtocol::UDP, port);
     }
-    *DIRECT.lock().unwrap() = Direct::default();
+    *DIRECT.lock().unwrap() = Direct { port, ..Direct::default() };
     direct_status()
 }
 
@@ -88,8 +95,12 @@ pub fn close_direct() -> Value {
 pub fn renew_loop() {
     std::thread::spawn(|| loop {
         std::thread::sleep(Duration::from_secs((LEASE_SECS / 2) as u64));
-        if DIRECT.lock().unwrap().on {
-            open_direct();
+        let (on, port) = {
+            let d = DIRECT.lock().unwrap();
+            (d.on, d.port)
+        };
+        if on {
+            open_direct(port);
         }
     });
 }
@@ -98,7 +109,7 @@ pub fn direct_status() -> Value {
     let d = DIRECT.lock().unwrap();
     json!({
         "on": d.on,
-        "address": d.external.map(|ip| format!("{ip}:{GAME_PORT}")),
+        "address": d.external.map(|ip| format!("{ip}:{}", d.port)),
         "error": d.error,
         "shared_address": d.shared_address,
     })
@@ -106,7 +117,7 @@ pub fn direct_status() -> Value {
 
 /// Addresses on virtual LAN apps, found by their network adapters:
 /// Hamachi uses 25.x.x.x, Radmin VPN 26.x.x.x, ZeroTier names its adapters zt… (or "ZeroTier One" on Windows).
-pub fn virtual_lans() -> Value {
+pub fn virtual_lans(port: u16) -> Value {
     let mut out = serde_json::Map::new();
     for iface in if_addrs::get_if_addrs().unwrap_or_default() {
         let IpAddr::V4(ip) = iface.ip() else { continue };
@@ -121,7 +132,7 @@ pub fn virtual_lans() -> Value {
             None
         };
         if let Some(k) = kind {
-            out.entry(k).or_insert(json!(format!("{ip}:{GAME_PORT}")));
+            out.entry(k).or_insert(json!(format!("{ip}:{port}")));
         }
     }
     Value::Object(out)

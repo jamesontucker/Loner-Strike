@@ -11,6 +11,8 @@ pub struct Install {
     pub kind: String,
     pub bottle: Option<String>,
     pub games: Vec<String>,
+    /// A Loner-Strike dedicated server folder (servers.rs), not a Steam game
+    pub dedicated: bool,
 }
 
 fn games_in(hl: &Path) -> Vec<String> {
@@ -39,7 +41,7 @@ fn libraries(steam_root: &Path) -> Vec<String> {
 fn push(found: &mut Vec<Install>, hl: PathBuf, kind: &str, bottle: Option<String>) {
     if hl.is_dir() && !found.iter().any(|i| i.hl == hl) {
         let games = games_in(&hl);
-        found.push(Install { hl, kind: kind.into(), bottle, games });
+        found.push(Install { hl, kind: kind.into(), bottle, games, dedicated: false });
     }
 }
 

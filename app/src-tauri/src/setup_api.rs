@@ -30,6 +30,10 @@ fn bad(msg: impl Into<String>) -> Response {
 }
 
 /// Loner-Strike's mod files: the app's bundled resources, or the repo in dev.
+pub fn resources_for(st: &Shared) -> Result<PathBuf, String> {
+    resources(st)
+}
+
 fn resources(st: &Shared) -> Result<PathBuf, String> {
     use tauri::path::BaseDirectory;
     use tauri::Manager;
@@ -44,7 +48,7 @@ fn resources(st: &Shared) -> Result<PathBuf, String> {
 /// The map store for an install: the panel's own when it's the same game folder,
 /// so its map list refreshes too.
 fn store_for(st: &Shared, hl: &Path, game: &str) -> Arc<MapStore> {
-    if let Some(g) = st.game.as_ref().filter(|g| g.hl == hl) {
+    if let Some(g) = st.game().filter(|g| g.hl == hl) {
         return g.store.clone();
     }
     Arc::new(MapStore::new(hl, &hl.join(game), &crate::sys::app_dir(), Arc::new(Mutex::new(None))))
@@ -69,6 +73,7 @@ fn find_install(hl: &str) -> Result<crate::steam::Install, String> {
     crate::steam::find_installs()
         .into_iter()
         .find(|i| i.hl == Path::new(hl))
+        .or_else(|| crate::servers::find_install(Path::new(hl)))
         .ok_or_else(|| "That game folder wasn't found any more. Scan again.".into())
 }
 
@@ -158,7 +163,7 @@ mod tests {
 
     fn state() -> server::Shared {
         Arc::new(AppState {
-            game: None,
+            current: RwLock::new(None),
             hosts: RwLock::new(vec![HOST.into()]),
             lan_hosts: RwLock::new(vec![]),
             token: "testtoken0123456789".into(),

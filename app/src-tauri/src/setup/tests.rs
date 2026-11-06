@@ -27,7 +27,7 @@ fn fake_game(root: &Path, game: &str) {
 
 fn install_at(hl: &Path) -> Install {
     let games = GAMES.iter().map(|(g, _)| g.to_string()).filter(|g| hl.join(g).join("liblist.gam").is_file()).collect();
-    Install { hl: hl.to_path_buf(), kind: "crossover".into(), bottle: Some("Steam".into()), games }
+    Install { hl: hl.to_path_buf(), kind: "crossover".into(), bottle: Some("Steam".into()), games, dedicated: false }
 }
 
 /// The parts that need no downloads: core settings, bot styles, keys, liblist;

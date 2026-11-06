@@ -30,6 +30,10 @@ impl Rcon {
         Rcon { password, addr: format!("127.0.0.1:{port}"), lock: Mutex::new(()) }
     }
 
+    pub fn password(&self) -> &str {
+        &self.password
+    }
+
     pub fn send(&self, command: &str) -> Result<String, RconError> {
         let _guard = self.lock.lock().unwrap();
         let sock = UdpSocket::bind("127.0.0.1:0").map_err(|_| RconError::Offline)?;

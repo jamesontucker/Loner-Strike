@@ -3108,13 +3108,15 @@ public srv_status()
 		}
 	}
 
-	new pname[32], team[8]
+	new pname[32], team[8], auth[40], authesc[80]
 	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_connected(p) || is_user_hltv(p))
 			continue
 		get_user_name(p, pname, charsmax(pname))
 		json_escape(pname, esc, charsmax(esc))
+		get_user_authid(p, auth, charsmax(auth))
+		json_escape(auth, authesc, charsmax(authesc))
 		switch (cs_get_user_team(p))
 		{
 			case CS_TEAM_T:  copy(team, charsmax(team), "T")
@@ -3122,10 +3124,10 @@ public srv_status()
 			default:         copy(team, charsmax(team), "SPEC")
 		}
 		new bool:alive = bool:is_user_alive(p)
-		fprintf(f, "{^"t^":^"player^",^"uid^":%d,^"name^":^"%s^",^"team^":^"%s^",^"bot^":%d,^"alive^":%d,^"hp^":%d,^"armor^":%d,^"money^":%d,^"frags^":%d,^"deaths^":%d,^"god^":%d,^"noclip^":%d,^"frozen^":%d,^"host^":%d}^n",
+		fprintf(f, "{^"t^":^"player^",^"uid^":%d,^"name^":^"%s^",^"team^":^"%s^",^"bot^":%d,^"alive^":%d,^"hp^":%d,^"armor^":%d,^"money^":%d,^"frags^":%d,^"deaths^":%d,^"god^":%d,^"noclip^":%d,^"frozen^":%d,^"host^":%d,^"steamid^":^"%s^"}^n",
 			get_user_userid(p), esc, team, is_user_bot(p), alive, alive ? get_user_health(p) : 0, alive ? get_user_armor(p) : 0,
 			cs_get_user_money(p), get_user_frags(p), cs_get_user_deaths(p), g_God[p], g_Noclip[p],
-			(pev(p, pev_flags) & FL_FROZEN) != 0, p == host_player())
+			(pev(p, pev_flags) & FL_FROZEN) != 0, p == host_player(), authesc)
 	}
 	write_preset_status(f)
 	write_event_status(f)

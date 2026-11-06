@@ -45,6 +45,15 @@
    "source": "this repo"
   },
   {
+   "id": "vip",
+   "kind": "feature",
+   "name": "Admins, VIP perks and bans (Admins page)",
+   "plugins": [
+    "gm_vip.amxx"
+   ],
+   "source": "this repo"
+  },
+  {
    "id": "friends",
    "kind": "feature",
    "name": "Play with friends (playit.gg / Tailscale)",

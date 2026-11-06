@@ -31,9 +31,8 @@ fn no_game_found() -> Response {
 
 /// Runs f with the game on a blocking thread (file scans, RCON and HTTPS all block).
 async fn with_game<T: Send + 'static>(st: &Shared, f: impl FnOnce(&Game) -> T + Send + 'static) -> Option<T> {
-    st.game.as_ref()?;
-    let st = st.clone();
-    tokio::task::spawn_blocking(move || f(st.game.as_ref().unwrap())).await.ok()
+    let g = st.game()?;
+    tokio::task::spawn_blocking(move || f(&g)).await.ok()
 }
 
 /// Only the app's own pages send X-Panel; another site can't add it without a CORS preflight.
@@ -200,7 +199,7 @@ async fn gb_mod(State(st): State<Shared>, Path(id): Path<String>, Query(q): Quer
 }
 
 async fn gb_jobs(State(st): State<Shared>) -> Response {
-    let jobs = st.game.as_ref().map(|g| g.store.job_list()).unwrap_or_default();
+    let jobs = st.game().map(|g| g.store.job_list()).unwrap_or_default();
     reply(StatusCode::OK, json!(jobs))
 }
 
@@ -216,7 +215,7 @@ async fn gb_install(State(st): State<Shared>, headers: HeaderMap, body: Bytes) -
         return reply(StatusCode::BAD_REQUEST, json!({"ok": false, "error": "invalid mod or file"}));
     };
     let section = req.get("section").map(text).unwrap_or_else(|| "maps".into());
-    match st.game.as_ref().map(|g| g.store.start_section_install(&section, m, f)) {
+    match st.game().map(|g| g.store.start_section_install(&section, m, f)) {
         None => no_game_found(),
         Some(Ok(job)) => reply(StatusCode::OK, json!({"ok": true, "job": job})),
         Some(Err(e)) => store_error(e, true),
@@ -358,7 +357,7 @@ mod tests {
         .unwrap();
         let game = crate::game::Game::with_app_dir(&hl, "czero", &app);
         let st = Arc::new(AppState {
-            game: Some(game),
+            current: RwLock::new(Some(Arc::new(game))),
             hosts: RwLock::new(vec![HOST.into()]),
             lan_hosts: RwLock::new(vec![]),
             token: "testtoken0123456789".into(),
@@ -429,7 +428,7 @@ mod tests {
         assert_eq!(call(&st, "POST", "/api/mapflag", Some(bad), true).await.0, StatusCode::BAD_REQUEST);
         let (_, b, _) = call(&st, "GET", "/api/maps", None, false).await;
         assert_eq!(j(&b).as_array().unwrap().iter().find(|m| m["name"] == "de_alpha").unwrap()["fav"], true);
-        assert!(st.game.as_ref().unwrap().read_list("fav") == vec!["de_alpha".to_string()]);
+        assert!(st.game().unwrap().read_list("fav") == vec!["de_alpha".to_string()]);
 
         // pictures
         let req = Request::builder().uri("/thumb/aim_beta.png").header("host", HOST).body(Body::empty()).unwrap();

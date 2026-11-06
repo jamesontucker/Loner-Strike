@@ -22,7 +22,8 @@ use std::sync::{Arc, Mutex, OnceLock, RwLock};
 struct Ui;
 
 pub struct AppState {
-    pub game: Option<Game>,
+    /// The game or dedicated server the panel controls right now (see servers.rs)
+    pub current: RwLock<Option<Arc<Game>>>,
     /// Host names the app window's listener answers to (127.0.0.1 / localhost).
     pub hosts: RwLock<Vec<String>>,
     /// Host names the phone listener answers to (this computer's LAN address).
@@ -34,6 +35,22 @@ pub struct AppState {
 }
 
 pub type Shared = Arc<AppState>;
+
+impl AppState {
+    pub fn game(&self) -> Option<Arc<Game>> {
+        self.current.read().unwrap().clone()
+    }
+
+    /// Switches the panel to another game or server.
+    pub fn set_game(&self, g: Option<Arc<Game>>) {
+        if let Some(g) = &g {
+            g.sharing.retarget(g.rcon.clone(), &g.data, g.port);
+            // admins/VIPs whose time ran out leave users.ini
+            crate::admins::sync(g);
+        }
+        *self.current.write().unwrap() = g;
+    }
+}
 
 /// The app window's listener (127.0.0.1): only requests addressed to our own local
 /// host names get in (a web page can point its own domain at 127.0.0.1).
@@ -100,10 +117,13 @@ pub fn router(state: Shared, listener: Listener) -> Router {
     let routes = Router::new()
         .merge(crate::panel_api::routes())
         .merge(crate::app_api::routes())
+        .merge(crate::admins::routes())
         .merge(crate::setup_api::routes())
+        .merge(crate::servers::routes())
+        .merge(crate::welcome::routes())
         .fallback(ui);
     let routes = match listener {
-        Listener::Local => routes.layer(middleware::from_fn_with_state(state.clone(), guard_local)),
+        Listener::Local => routes.merge(crate::servers::local_routes()).layer(middleware::from_fn_with_state(state.clone(), guard_local)),
         Listener::Lan => routes.layer(middleware::from_fn_with_state(state.clone(), guard_lan)),
     };
     routes.with_state(state)

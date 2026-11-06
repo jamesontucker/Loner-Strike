@@ -7,7 +7,7 @@ import logo from "../assets/logo.svg";
 // ---- what the setup API returns -------------------------------------------------
 export type SetupGame = { id: "cstrike" | "czero"; name: string; installed: boolean; components: string[]; foreign: boolean };
 export type SetupInstall = { hl: string; kind: string; bottle: string | null; games: SetupGame[] };
-type CatalogItem = {
+export type CatalogItem = {
   id: string;
   name: string;
   kind: "mode" | "addon";
@@ -16,8 +16,8 @@ type CatalogItem = {
   bots?: "great" | "ok" | "weak" | "none";
 };
 export type Scan = { installs: SetupInstall[]; catalog: CatalogItem[]; native_mac: boolean };
-type Step = { id: string; label: string; state: "pending" | "running" | "done" | "error"; detail?: string; game?: string };
-type Job = { id?: string; state: "idle" | "running" | "done" | "error"; kind?: string; steps: Step[]; progress: number; error?: string; failed_compiles?: string[]; notes?: string[] };
+export type Step = { id: string; label: string; state: "pending" | "running" | "done" | "error"; detail?: string; game?: string };
+export type Job = { id?: string; state: "idle" | "running" | "done" | "error"; kind?: string; steps: Step[]; progress: number; error?: string; failed_compiles?: string[]; notes?: string[] };
 
 const BOT_NOTE = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" };
 // Same ratings as the mode cards on the Play screen

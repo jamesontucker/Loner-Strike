@@ -50,6 +50,8 @@ export type Player = {
   noclip: number;
   frozen: number;
   host: number;
+  /** SteamID (STEAM_0:1:123), or STEAM_ID_LAN / BOT / VALVE_ID_LAN when there isn't one */
+  steamid?: string;
 };
 export type Preset = { id: string; name: string; desc: string; mode: string; map: string; bots: number; user: number };
 export type GameEvent = { seq: number; time: number; kind?: string; [k: string]: unknown };
@@ -98,9 +100,27 @@ export type GbJob = { id: string; mod: number; file: number; state: string; mess
 export type AppInfo = {
   version: string;
   update: { version: string; notes?: string } | null;
-  game: { id: string; dir: string } | null;
+  game: { id: string; dir: string; dedicated?: boolean; port?: number } | null;
   bots?: number | null;
   lastmap?: string | null;
 };
 
 export type PhoneInfo = { enabled: boolean; address?: string; url?: string; qr?: string; error?: string | null };
+
+export type ServerInfo = {
+  id: string;
+  name: string;
+  game: "cstrike" | "czero";
+  port: number;
+  visibility: "lan" | "unlisted" | "listed";
+  map: string;
+  maxplayers: number;
+  ready: boolean;
+  state: "running" | "stopped" | "crashed" | "setting-up";
+  uptime: number;
+  error: string | null;
+  imported: boolean;
+  loner: boolean;
+  dir: string;
+};
+export type ServerList = { selected: string; local: string | null; servers: ServerInfo[]; steamcmd: boolean };

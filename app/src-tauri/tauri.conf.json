@@ -5,6 +5,10 @@
   "identifier": "gg.lonerstrike.app",
   "build": {
     "frontendDist": "../ui/dist",
+    "beforeDevCommand": {
+      "script": "npm run build",
+      "cwd": "../ui"
+    },
     "beforeBuildCommand": {
       "script": "npm ci && npm run build",
       "cwd": "../ui"

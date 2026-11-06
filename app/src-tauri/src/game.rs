@@ -41,10 +41,20 @@ pub struct Game {
     pub(crate) maps_cache: Arc<Mutex<Option<Vec<Value>>>>,
     pub store: Arc<MapStore>,
     pub sharing: Arc<Sharing>,
+    /// The game's UDP port: 27015, or another for a second dedicated server
+    pub port: u16,
+    /// A dedicated server (not the game's own listen server)
+    pub dedicated: bool,
 }
 
 impl Game {
-    pub fn new(hl: &PathBuf, name: &str) -> Game {
+    pub fn new(hl: &Path, name: &str) -> Game {
+        Game::on_port(hl, name, crate::sharing::GAME_PORT, false)
+    }
+
+    /// A game or dedicated server answering on `port`. They all share the app's
+    /// one playit.gg agent.
+    pub fn on_port(hl: &Path, name: &str, port: u16, dedicated: bool) -> Game {
         let app = sys::app_dir();
         // first run: bring over what the old Python panel knew
         if let Some(old) = sys::old_panel_dir() {
@@ -52,8 +62,11 @@ impl Game {
                 sys::adopt(&old.join(f), &app.join(f));
             }
         }
-        let g = Game::with_app_dir(hl, name, &app);
-        g.sharing.adopt_old_panel();
+        let mut g = Game::with_app_dir(hl, name, &app);
+        g.port = port;
+        g.dedicated = dedicated;
+        g.rcon = Arc::new(Rcon::new(g.rcon.password().to_string(), port));
+        g.sharing = Sharing::global(&app, &g.data, g.rcon.clone(), port);
         g
     }
 
@@ -74,8 +87,8 @@ impl Game {
         let rcon = Arc::new(Rcon::new(pw, 27015));
         let maps_cache = Arc::new(Mutex::new(None));
         let store = Arc::new(MapStore::new(hl, &dir, app, maps_cache.clone()));
-        let sharing = Arc::new(Sharing::new(app, &data, rcon.clone()));
-        Game { hl: hl.to_path_buf(), name: name.into(), dir, data, app: app.to_path_buf(), rcon, maps_cache, store, sharing }
+        let sharing = Arc::new(Sharing::new(app, &data, rcon.clone(), crate::sharing::GAME_PORT));
+        Game { hl: hl.to_path_buf(), name: name.into(), dir, data, app: app.to_path_buf(), rcon, maps_cache, store, sharing, port: crate::sharing::GAME_PORT, dedicated: false }
     }
 
     pub fn state(&self) -> Value {
