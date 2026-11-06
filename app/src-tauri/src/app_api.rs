@@ -352,6 +352,20 @@ struct LaunchReq {
     map: Option<String>,
     #[serde(default)]
     menu: bool,
+    /// how many bots to start with (saved, like the Bots page does)
+    #[serde(default)]
+    bots: Option<u32>,
+}
+
+/// Saves the bot count where the Game Mode Menu keeps it (global.cfg: bot_quota "9").
+fn save_bots(dir: &std::path::Path, bots: u32) -> std::io::Result<()> {
+    let data = dir.join("addons/amxmodx/data/gamemodes");
+    std::fs::create_dir_all(&data)?;
+    let path = data.join("global.cfg");
+    let old = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut lines: Vec<String> = old.lines().filter(|l| !l.trim_start().starts_with("bot_quota")).map(String::from).collect();
+    lines.push(format!("bot_quota \"{}\"", bots.min(31)));
+    std::fs::write(path, lines.join("\n") + "\n")
 }
 
 async fn api_launch(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<LaunchReq>) -> (StatusCode, Json<Value>) {
@@ -363,6 +377,11 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
     };
     if g.dedicated {
         return (StatusCode::OK, Json(json!({"error": "Start dedicated servers from the Servers tab."})));
+    }
+    if let Some(n) = req.bots {
+        if let Err(e) = save_bots(&g.dir, n) {
+            return (StatusCode::OK, Json(json!({"error": format!("Couldn't save the bot count ({e}).")})));
+        }
     }
     let appid = if g.name == "cstrike" { "10" } else { "80" };
     let map = req

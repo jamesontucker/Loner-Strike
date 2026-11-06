@@ -35,10 +35,14 @@ export const anySetUp = (scan: Scan | null) => !!scan?.installs.some((i) => i.ga
 
 type Stage = "welcome" | "games" | "content" | "review" | "install" | "done";
 
+// Maps every copy of the game has, for the first game
+const FIRST_MAPS = ["de_dust2", "de_inferno", "de_nuke", "de_train", "de_aztec", "cs_office", "cs_italy"];
+const FIRST_MAPS_CZ = ["de_dust2_cz", "de_inferno_cz", "de_aztec_cz", "de_dust_cz", "cs_office_cz", "cs_italy_cz"];
+
 const IS_MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 
 /** onClose: back to the app without setting up; onDone: setup finished. */
-export function Setup({ scan, onClose, onDone }: { scan: Scan; onClose: () => void; onDone: () => void }) {
+export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose: () => void; onDone: () => void; onRescan: () => void }) {
   const toast = useToast();
   const [stage, setStage] = useState<Stage>("welcome");
   const [installIdx, setInstallIdx] = useState(0);
@@ -49,6 +53,15 @@ export function Setup({ scan, onClose, onDone }: { scan: Scan; onClose: () => vo
   const usable = useMemo(() => scan.catalog.filter((c) => !c.games || c.games.some((g) => games.includes(g))), [scan.catalog, games]);
   const [picked, setPicked] = useState<Set<string>>(() => new Set(scan.catalog.map((c) => c.id)));
   const [job, setJob] = useState<Job | null>(null);
+  // setup can't change the game's files while it runs: checked on the review step
+  const [gameOpen, setGameOpen] = useState(false);
+  useEffect(() => {
+    if (stage !== "review") return;
+    const check = () => getJson<{ running: boolean }>("/api/setup/running").then((r) => setGameOpen(!!r.running)).catch(() => setGameOpen(false));
+    check();
+    const t = setInterval(check, 2000);
+    return () => clearInterval(t);
+  }, [stage]);
   const timer = useRef<number>();
 
   const chosen = preset === "all" ? usable : preset === "basics" ? [] : usable.filter((c) => picked.has(c.id));
@@ -76,12 +89,21 @@ export function Setup({ scan, onClose, onDone }: { scan: Scan; onClose: () => vo
     return () => window.clearInterval(timer.current);
   }, [stage]);
 
-  const finish = async () => {
+  // the first game: a stock map and a few bots, straight from the last step
+  const [firstMap, setFirstMap] = useState("");
+  const [firstBots, setFirstBots] = useState(9);
+  const firstMaps = games[0] === "czero" ? FIRST_MAPS_CZ : FIRST_MAPS;
+  const finish = async (play: boolean) => {
     await postJson("/api/app/game", { hl: install.hl, game: games[0] }).catch(() => null);
+    if (play) {
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { map: firstMap || firstMaps[0], bots: firstBots }).catch(() => ({ error: "Couldn't start the game." }));
+      if (r.error) toast(r.error, true);
+      else toast("Starting the game…");
+    }
     onDone();
   };
 
-  if (!scan.installs.length) return <NoGame nativeMac={scan.native_mac} />;
+  if (!scan.installs.length) return <NoGame nativeMac={scan.native_mac} onRescan={onRescan} onClose={onClose} />;
 
   return (
     <div className="setup">
@@ -191,8 +213,20 @@ export function Setup({ scan, onClose, onDone }: { scan: Scan; onClose: () => vo
               <li><b>Loner-Strike:</b> bot styles, regulars, the in-game menu (F3) and this panel</li>
               <li><b>Modes and add-ons:</b> the basics{chosen.length ? ` plus ${chosen.map((c) => c.name).join(", ")}` : ""}</li>
             </ul>
-            <p className="muted">It downloads from the original projects (GameBanana for maps), compiles the plugins, and backs up every file it replaces. Make sure Counter-Strike is closed.</p>
-            <Nav back={() => setStage("content")} next={start} nextLabel="Install" />
+            <p className="muted">It downloads from the original projects (GameBanana for maps), compiles the plugins, and backs up every file it replaces.</p>
+            <p className="estimate">
+              {preset === "basics"
+                ? "About 15 MB to download. Usually under a minute."
+                : preset === "all"
+                  ? "About 100 MB to download. Usually 2 to 5 minutes."
+                  : `Between 15 and 100 MB, depending on what you picked. A few minutes at most.`}
+            </p>
+            {gameOpen && (
+              <div className="banner">
+                <div>Counter-Strike is open. Close it to continue: setup can't change the game's files while it's running.</div>
+              </div>
+            )}
+            <Nav back={() => setStage("content")} next={start} nextLabel="Install" canNext={!gameOpen} />
           </section>
         )}
 
@@ -238,7 +272,29 @@ export function Setup({ scan, onClose, onDone }: { scan: Scan; onClose: () => vo
             </ul>
             {!!job?.failed_compiles?.length && <p className="err-text">These didn't build, so they won't load: {job.failed_compiles.join(", ")}.</p>}
             {job?.notes?.map((n) => <p key={n} className="muted">{n}</p>)}
-            <button className="btn primary big-btn" onClick={finish}>Open the panel</button>
+            <div className="first-game">
+              <h3>Your first game</h3>
+              <div className="first-row">
+                <label className="field">
+                  <span>Map</span>
+                  <select value={firstMap || firstMaps[0]} onChange={(e) => setFirstMap(e.target.value)}>
+                    {firstMaps.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </label>
+                <div className="field">
+                  <span>Bots</span>
+                  <div className="seg" role="group" aria-label="Bots">
+                    {[4, 9, 15].map((n) => <button key={n} aria-pressed={firstBots === n} onClick={() => setFirstBots(n)}>{n}</button>)}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="row center">
+              <button className="btn primary big-btn" onClick={() => finish(true)}>
+                <Icon name="play" size={20} /> Play
+              </button>
+              <button className="btn" onClick={() => finish(false)}>Open the panel</button>
+            </div>
           </section>
         )}
       </div>
@@ -259,7 +315,8 @@ function Nav({ back, next, canNext = true, nextLabel = "Continue" }: { back: () 
   );
 }
 
-function NoGame({ nativeMac }: { nativeMac: boolean }) {
+function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan: () => void; onClose: () => void }) {
+  const [looking, setLooking] = useState(false);
   return (
     <div className="setup">
       <div className="setup-card">
@@ -271,6 +328,10 @@ function NoGame({ nativeMac }: { nativeMac: boolean }) {
           ) : (
             <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Steam in CrossOver" : ""}. Install one, then reopen Loner-Strike.</p>
           )}
+          <div className="row">
+            <button className="btn primary" disabled={looking} onClick={() => { setLooking(true); onRescan(); setTimeout(() => setLooking(false), 1500); }}>{looking ? "Looking…" : "Look again"}</button>
+            <button className="btn" onClick={onClose}>Continue anyway</button>
+          </div>
         </section>
       </div>
     </div>

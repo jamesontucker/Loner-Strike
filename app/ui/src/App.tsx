@@ -199,7 +199,7 @@ function Shell() {
       reloadMaps(true);
       refresh();
     };
-    return <Setup scan={scan} onClose={close} onDone={done} />;
+    return <Setup scan={scan} onClose={close} onDone={done} onRescan={reloadScan} />;
   }
   const needsGame = section !== "servers" && NAV.find((n) => n.id === section)?.live && !online;
 
@@ -243,14 +243,14 @@ function Shell() {
           {state === null ? (
             <p className="muted">Connecting…</p>
           ) : needsGame ? (
-            <Waiting label={NAV.find((n) => n.id === section)!.label} onPlay={() => setSection("play")} />
+            <Waiting label={NAV.find((n) => n.id === section)!.label} onPlay={() => setSection("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={() => setSetupOpen(true)} />
           ) : (
             <>
               {section === "play" &&
                 (online ? (
                   <PlayLive data={online} maps={maps} refresh={refresh} openMaps={() => setSection("maps")} />
                 ) : (
-                  <PlayIdle app={app} reason={state.online ? "" : state.reason} maps={maps} />
+                  <PlayIdle app={app} reason={state.online ? "" : state.reason} maps={maps} openSetup={() => setSetupOpen(true)} />
                 ))}
               {section === "maps" && <Maps data={online} maps={maps} reload={() => reloadMaps(true)} refresh={refresh} />}
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
@@ -371,12 +371,21 @@ function Strip({ data, reason, app, server, refresh }: { data: Online | null; re
   );
 }
 
-function Waiting({ label, onPlay }: { label: string; onPlay: () => void }) {
+function Waiting({ label, onPlay, setUp, openSetup }: { label: string; onPlay: () => void; setUp: boolean; openSetup: () => void }) {
   return (
     <div className="waiting">
       <h2>{label}</h2>
-      <p className="muted">This needs a game running.</p>
-      <button className="btn primary" onClick={onPlay}>Go to Play</button>
+      {setUp ? (
+        <>
+          <p className="muted">This needs a game running.</p>
+          <button className="btn primary" onClick={onPlay}>Go to Play</button>
+        </>
+      ) : (
+        <>
+          <p className="muted">Loner-Strike isn't set up on this game yet, so there's nothing to control.</p>
+          <button className="btn primary" onClick={openSetup}>Set it up</button>
+        </>
+      )}
     </div>
   );
 }

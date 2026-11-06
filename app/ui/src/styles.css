@@ -734,3 +734,34 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .server-details .seg { display: grid; grid-template-columns: repeat(3, 1fr); }
 .server-details .seg button { white-space: normal; line-height: 1.2; }
 .search.full { width: 100%; max-width: none; margin-bottom: 4px; }
+
+/* ---- setup: estimate and the first game ------------------------------------------- */
+.estimate { font-weight: 600; color: var(--bone); margin: 4px 0 10px; }
+.first-game { width: min(460px, 100%); background: var(--bg); box-shadow: var(--sunken); padding: 12px 16px 6px; margin: 4px 0 16px; text-align: left; }
+.first-game h3 { margin: 0 0 8px; font-size: 16px; }
+.first-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: end; }
+.first-row .field { margin-bottom: 8px; }
+.first-row select { min-width: 180px; }
+.link.inline { margin: 0; padding: 0; font: inherit; color: var(--signal); text-decoration: underline; cursor: pointer; }
+
+/* ---- Steam's old scrollbar: sunken olive track, raised thumb, arrow buttons ---------- */
+::-webkit-scrollbar { width: 16px; height: 16px; background: var(--bg); }
+::-webkit-scrollbar-track { background: #353c2f; box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 rgba(136,145,128,.3); }
+::-webkit-scrollbar-thumb { background: var(--panel-2); box-shadow: var(--raised); min-height: 28px; }
+::-webkit-scrollbar-thumb:hover { background: #66785b; }
+::-webkit-scrollbar-thumb:active { background: #727f5f; }
+::-webkit-scrollbar-button:single-button { display: block; width: 16px; height: 16px; background-color: var(--panel); background-repeat: no-repeat; background-position: center; box-shadow: var(--raised); }
+::-webkit-scrollbar-button:single-button:hover { background-color: var(--panel-2); }
+::-webkit-scrollbar-button:single-button:active { box-shadow: var(--sunken); }
+::-webkit-scrollbar-button:single-button:vertical:decrement { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M8 5l4 5H4z' fill='%23c2c9b7'/%3E%3C/svg%3E"); }
+::-webkit-scrollbar-button:single-button:vertical:increment { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M8 11L4 6h8z' fill='%23c2c9b7'/%3E%3C/svg%3E"); }
+::-webkit-scrollbar-button:single-button:horizontal:decrement { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M5 8l5-4v8z' fill='%23c2c9b7'/%3E%3C/svg%3E"); }
+::-webkit-scrollbar-button:single-button:horizontal:increment { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M11 8L6 12V4z' fill='%23c2c9b7'/%3E%3C/svg%3E"); }
+::-webkit-scrollbar-corner { background: var(--bg); }
+/* narrow areas (console, lists) and phones get a slimmer bar without arrows */
+.console::-webkit-scrollbar, .pick-grid::-webkit-scrollbar, .job-steps::-webkit-scrollbar { width: 12px; }
+.console::-webkit-scrollbar-button, .pick-grid::-webkit-scrollbar-button, .job-steps::-webkit-scrollbar-button { display: none; }
+@media (max-width: 760px) {
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-button { display: none; }
+}

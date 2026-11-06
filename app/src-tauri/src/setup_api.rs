@@ -88,6 +88,14 @@ async fn scan(State(st): State<Shared>) -> Response {
     }
 }
 
+/// Whether the game is open (setup asks people to close it first).
+async fn running() -> Response {
+    let r = tokio::task::spawn_blocking(crate::sys::game_running).await.unwrap_or(false);
+    reply(StatusCode::OK, json!({"running": r}))
+}
+
+const CLOSE_GAME: &str = "Counter-Strike is open. Close it, then try again: setup can't change the game's files while it's running.";
+
 async fn job() -> Response {
     reply(StatusCode::OK, serde_json::to_value(setup::current()).unwrap_or(Value::Null))
 }
@@ -104,6 +112,9 @@ async fn install(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Re
     let r = tokio::task::spawn_blocking(move || -> Result<String, String> {
         let res = resources(&st2)?;
         let install = find_install(req["hl"].as_str().unwrap_or(""))?;
+        if !install.dedicated && crate::sys::game_running() {
+            return Err(CLOSE_GAME.into());
+        }
         let plan = setup::plan_install(install, &list(&req["games"]), &list(&req["components"]), &res, req["repair"].as_bool() == Some(true))?;
         let store = store_for(&st2, &plan.install.hl, &plan.games[0]);
         setup::start_install(plan, res, Some(store))
@@ -124,6 +135,9 @@ async fn uninstall(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> 
     let r = tokio::task::spawn_blocking(move || -> Result<String, String> {
         let res = resources(&st2)?;
         let install = find_install(req["hl"].as_str().unwrap_or(""))?;
+        if !install.dedicated && crate::sys::game_running() {
+            return Err(CLOSE_GAME.into());
+        }
         let comps = req.get("components").filter(|c| c.is_array()).map(list);
         let plan = setup::plan_uninstall(install, &list(&req["games"]), comps, &res)?;
         let store = store_for(&st2, &plan.install.hl, &plan.games[0]);
@@ -146,6 +160,7 @@ pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/setup/scan", get(scan))
         .route("/api/setup/job", get(job))
+        .route("/api/setup/running", get(running))
         .route("/api/setup/install", post(install))
         .route("/api/setup/uninstall", post(uninstall))
 }

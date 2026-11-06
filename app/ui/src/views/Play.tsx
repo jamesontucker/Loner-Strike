@@ -13,7 +13,7 @@ const BOT_NOTE = { great: "Bots play this well", ok: "Bots are so-so", weak: "Be
 
 const GAME_NAME = (id?: string) => (id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero");
 
-export function PlayIdle({ app, reason, maps }: { app: AppInfo | null; reason: string; maps: MapInfo[] }) {
+export function PlayIdle({ app, reason, maps, openSetup }: { app: AppInfo | null; reason: string; maps: MapInfo[]; openSetup: () => void }) {
   const toast = useToast();
   const [starting, setStarting] = useState(false);
   const game = GAME_NAME(app?.game?.id);
@@ -29,6 +29,23 @@ export function PlayIdle({ app, reason, maps }: { app: AppInfo | null; reason: s
     }
   };
   const bots = app?.bots ?? null;
+  if (app?.game && !app.game.installed?.includes("core")) {
+    return (
+      <div className="idle">
+        <div className="idle-hero">
+          <h1>Not set up yet.</h1>
+          <p>Loner-Strike adds the bots, the modes and the in-game menu to {game}. Setup takes a couple of minutes, and everything it changes is backed up.</p>
+          <button className="btn launch" onClick={openSetup}>
+            <Icon name="play" size={22} />
+            Set it up
+          </button>
+          <div className="last">
+            Or <button className="link inline" onClick={() => launch()}>start {game} without it</button>.
+          </div>
+        </div>
+      </div>
+    );
+  }
   const recent = maps.filter((m) => m.recent >= 0).sort((a, b) => a.recent - b.recent).slice(0, 6);
 
   return (

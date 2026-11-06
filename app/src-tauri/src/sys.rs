@@ -242,3 +242,23 @@ mod tests {
         assert!(s.starts_with("20"));
     }
 }
+
+/// Whether Counter-Strike or Condition Zero (hl.exe) is running. Setup won't change
+/// the game's files while it is: Windows locks them, and the game would crash.
+pub fn game_running() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        // under CrossOver the game shows up as ...\Half-Life\hl.exe (not hlds.exe, the server)
+        let mut c = command("/usr/bin/pgrep");
+        c.args(["-if", r"\\hl\.exe"]);
+        matches!(run_output(c, Duration::from_secs(3)), Some((true, out, _)) if !out.trim().is_empty())
+    }
+    #[cfg(windows)]
+    {
+        let mut c = command("tasklist");
+        c.args(["/FI", "IMAGENAME eq hl.exe", "/NH"]);
+        matches!(run_output(c, Duration::from_secs(5)), Some((_, out, _)) if out.to_lowercase().contains("hl.exe"))
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    false
+}
