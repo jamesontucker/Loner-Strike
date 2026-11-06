@@ -1142,3 +1142,18 @@ button.cm-stat[aria-expanded="true"] { background: var(--panel); }
 .made-by a { color: inherit; text-decoration: none; }
 .made-by a:hover { color: var(--signal); text-decoration: underline; }
 .setup-by { margin-top: 18px; }
+
+/* ---- start a game: map picker you can type into ----------------------------------- */
+.start-settings { margin-top: -6px; }
+.map-picker { position: relative; }
+.map-picker-button { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 240px; font: 16px var(--text); padding: 8px 10px; color: var(--bone); background: var(--bg); box-shadow: var(--sunken); border: 0; border-radius: 2px; cursor: pointer; text-align: left; }
+.map-picker-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; width: min(340px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 6px; padding: 6px; background: var(--panel); box-shadow: var(--raised), 0 10px 28px rgba(0,0,0,.45); border-radius: 2px; }
+.map-picker-list { max-height: 300px; overflow-y: auto; display: grid; }
+.map-picker-group { padding: 8px 8px 3px; font-size: 12px; font-weight: 700; color: var(--bone-dim); }
+.map-picker-list button { display: block; width: 100%; border: 0; background: none; color: var(--bone); text-align: left; padding: 6px 8px; font: 500 14px/1.2 var(--text); border-radius: 2px; cursor: pointer; }
+.map-picker-list button.active { background: var(--panel-2); color: var(--signal); }
+.map-picker-list button[aria-selected="true"] { font-weight: 700; }
+@media (max-width: 760px) {
+  .map-picker-button { min-width: 0; width: 100%; }
+  .map-picker-list button { min-height: 40px; font-size: 15px; }
+}

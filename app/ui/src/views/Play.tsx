@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import { Icon } from "../icons";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
@@ -20,14 +20,23 @@ export function PlayIdle({ app, reason, maps, openSetup }: { app: AppInfo | null
   const game = GAME_NAME(app?.game?.id);
   const [pick, setPick] = useState("");
   const [botsPick, setBotsPick] = useState<number | null>(null);
+  const [opts, setOpts] = useState<StartOptions | null>(null);
+  const [modePick, setModePick] = useState<string | null>(null);
+  // only what was changed here is saved; the rest stays as the mode has it
+  const [changed, setChanged] = useState<Record<string, string>>({});
+  useEffect(() => {
+    getJson<StartOptions>("/api/app/start-options").then((o) => setOpts(Array.isArray(o.modes) ? o : null)).catch(() => setOpts(null));
+  }, [app?.game?.id]);
   const launchMenu = async () => {
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { menu: true }).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) toast(r.error, true);
     else toast(`Opening ${game}…`);
   };
   const launch = async (map?: string, bots?: number) => {
+    if (starting) return;
     setStarting(true);
-    const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}) }).catch(() => ({ error: "Couldn't reach the app." }));
+    const start = mode ? { mode: mode.id, settings: changed } : {};
+    const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}), ...start }).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) {
       toast(r.error, true);
       setStarting(false);
@@ -37,6 +46,15 @@ export function PlayIdle({ app, reason, maps, openSetup }: { app: AppInfo | null
     }
   };
   const bots = app?.bots ?? null;
+  const modes = opts ? [...opts.modes].sort((a, b) => a.name.localeCompare(b.name)) : [];
+  const mode = modes.find((m) => m.id === (modePick ?? opts?.mode)) ?? modes.find((m) => m.id === "classic") ?? modes[0];
+  const value = (cvar: string) => changed[cvar] ?? mode?.settings[cvar] ?? null;
+  const change = (cvar: string, v: string) => setChanged((c) => ({ ...c, [cvar]: v }));
+  const pickMode = (id: string) => {
+    setModePick(id);
+    // time limit and friendly fire belong to the mode: show the new mode's own
+    setChanged((c): Record<string, string> => (c.bot_difficulty ? { bot_difficulty: c.bot_difficulty } : {}));
+  };
   if (app?.game && !app.game.installed?.includes("core")) {
     return (
       <div className="idle">
@@ -56,7 +74,6 @@ export function PlayIdle({ app, reason, maps, openSetup }: { app: AppInfo | null
   }
   const recent = maps.filter((m) => m.recent >= 0).sort((a, b) => a.recent - b.recent).slice(0, 10);
   const favs = maps.filter((m) => m.fav && !m.hidden).sort((a, b) => a.name.localeCompare(b.name));
-  const others = maps.filter((m) => !m.hidden && m.recent < 0 && !m.fav).sort((a, b) => a.name.localeCompare(b.name));
   const stock = app?.game?.id === "czero" ? "de_dust2_cz" : "de_dust2";
   const map = pick || app?.lastmap || recent[0]?.name || favs[0]?.name || (maps.some((m) => m.name === stock) ? stock : maps[0]?.name) || stock;
   const botCount = botsPick ?? bots ?? 9;
@@ -76,31 +93,61 @@ export function PlayIdle({ app, reason, maps, openSetup }: { app: AppInfo | null
     <div className="idle">
       <div className="idle-hero">
         <h1>Start a game</h1>
-        <p>{game} isn't running. Pick a map and how many bots, and Loner-Strike starts it and connects by itself.</p>
+        <p>{game} isn't running. Pick a mode, a map and the bots, and Loner-Strike starts it and connects by itself.</p>
         <div className="start-box">
-          <label className="field">
-            <span>Map</span>
-            <select value={map} onChange={(e) => setPick(e.target.value)}>
-              {recent.length > 0 && <optgroup label="Recently played">{recent.map((m) => <option key={"r" + m.name} value={m.name}>{m.name}</option>)}</optgroup>}
-              {favs.length > 0 && <optgroup label="Favourites">{favs.map((m) => <option key={"f" + m.name} value={m.name}>{m.name}</option>)}</optgroup>}
-              <optgroup label="All maps">
-                {(others.length ? others : [{ name: stock }]).map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
-              </optgroup>
-            </select>
-          </label>
+          {modes.length > 0 && mode && (
+            <label className="field">
+              <span>Mode</span>
+              <select value={mode.id} onChange={(e) => pickMode(e.target.value)}>
+                {modes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </label>
+          )}
+          <div className="field">
+            <span id="start-map">Map</span>
+            <MapPicker value={map} maps={maps} mode={mode?.id} modeName={mode?.name} recent={recent} favs={favs} onPick={setPick} labelledBy="start-map" />
+          </div>
+        </div>
+        <div className="start-box start-settings">
           <div className="field">
             <span>Bots</span>
             <div className="seg" role="group" aria-label="Bots">
               {[0, 5, 9, 15].map((n) => <button key={n} aria-pressed={botCount === n} onClick={() => setBotsPick(n)}>{n === 0 ? "None" : n}</button>)}
             </div>
           </div>
+          {mode && botCount > 0 && (
+            <div className="field">
+              <span>Bot skill</span>
+              <div className="seg" role="group" aria-label="Bot skill">
+                {["Easy", "Normal", "Hard", "Expert"].map((l, i) => <button key={l} aria-pressed={value("bot_difficulty") === String(i)} onClick={() => change("bot_difficulty", String(i))}>{l}</button>)}
+              </div>
+            </div>
+          )}
+          {mode && (
+            <label className="field">
+              <span>Time limit</span>
+              <select value={value("mp_timelimit") ?? ""} onChange={(e) => change("mp_timelimit", e.target.value)}>
+                {value("mp_timelimit") === null && <option value="">As the mode has it</option>}
+                {TIME_LIMITS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                {value("mp_timelimit") !== null && !TIME_LIMITS.some(([v]) => v === value("mp_timelimit")) && <option value={value("mp_timelimit")!}>{value("mp_timelimit")} min</option>}
+              </select>
+            </label>
+          )}
+          {mode && (
+            <div className="field">
+              <span>Friendly fire</span>
+              <div className="seg" role="group" aria-label="Friendly fire">
+                {[["0", "Off"], ["1", "On"]].map(([v, l]) => <button key={v} aria-pressed={(value("mp_friendlyfire") ?? "0") === v} onClick={() => change("mp_friendlyfire", v)}>{l}</button>)}
+              </div>
+            </div>
+          )}
         </div>
         <button className="btn launch" disabled={starting} onClick={() => launch(map, botCount)}>
           <Icon name="play" size={22} />
-          {starting ? "Starting…" : `Play ${map}`}
+          {starting ? "Starting…" : mode ? `Play ${mode.name} on ${map}` : `Play ${map}`}
         </button>
         <div className="last">
-          Change the mode once you're in, here or with F3 in the game.{" "}
+          You can change all of this once you're in, here or with F3 in the game.{" "}
           <button className="link inline" onClick={() => launchMenu()}>Just open {game}</button>
         </div>
       </div>
@@ -181,6 +228,90 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
             ))}
           </div>
         </section>
+      )}
+    </div>
+  );
+}
+
+type StartOptions = { modes: { id: string; name: string; settings: Record<string, string | null> }[]; mode: string };
+const TIME_LIMITS: [string, string][] = [["0", "None"], ["10", "10 min"], ["20", "20 min"], ["30", "30 min"], ["45", "45 min"], ["60", "60 min"]];
+
+/** A map list you can type into: the mode's maps, recent and favourites first. */
+function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelledBy }: { value: string; maps: MapInfo[]; mode?: string; modeName?: string; recent: MapInfo[]; favs: MapInfo[]; onPick: (m: string) => void; labelledBy: string }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [active, setActive] = useState(0);
+  const box = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: Event) => !box.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [open]);
+  const have = maps.filter((m) => !m.hidden);
+  const query = q.trim().toLowerCase();
+  const prefixes = (mode && MODE_PREFIX[mode]) || [];
+  const groups: [string, MapInfo[]][] = query
+    ? [["", have.filter((m) => m.name.toLowerCase().includes(query)).sort((a, b) => a.name.toLowerCase().indexOf(query) - b.name.toLowerCase().indexOf(query) || a.name.localeCompare(b.name))]]
+    : [
+        [`Maps for ${modeName ?? "this mode"}`, prefixes.length ? have.filter((m) => prefixes.some((p) => m.name.toLowerCase().startsWith(p))).sort((a, b) => a.name.localeCompare(b.name)) : []],
+        ["Recently played", recent],
+        ["Favourites", favs],
+        ["All maps", [...have].sort((a, b) => a.name.localeCompare(b.name))],
+      ];
+  const shown = groups.map(([label, list]) => [label, list.slice(0, query ? 80 : 200)] as [string, MapInfo[]]).filter(([, l]) => l.length);
+  const flat = shown.flatMap(([, l]) => l);
+  const choose = (name: string) => {
+    onPick(name);
+    setOpen(false);
+    setQ("");
+    button.current?.focus();
+  };
+  const key = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((a) => Math.max(0, Math.min(flat.length - 1, a + (e.key === "ArrowDown" ? 1 : -1))));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (flat[active]) choose(flat[active].name);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      button.current?.focus();
+    }
+  };
+  useEffect(() => {
+    box.current?.querySelector(".map-picker-list .active")?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+  let n = -1;
+  return (
+    <div className="map-picker" ref={box}>
+      <button ref={button} type="button" className="map-picker-button" aria-haspopup="listbox" aria-expanded={open} aria-labelledby={labelledBy} onClick={() => { setOpen((o) => !o); setActive(0); }}>
+        <span>{value}</span>
+        <span className="caret" aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="map-picker-pop">
+          <input className="search" type="search" autoFocus placeholder={`Search ${have.length} maps`} value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={key} aria-label="Search maps" />
+          <div className="map-picker-list" role="listbox" aria-label="Maps">
+            {flat.length === 0 && <p className="muted small-note">No map called that. Get more from Get more.</p>}
+            {shown.map(([label, list]) => (
+              <div key={label || "results"}>
+                {label && <div className="map-picker-group">{label}</div>}
+                {list.map((m) => {
+                  n++;
+                  const i = n;
+                  return (
+                    <button key={label + m.name} type="button" role="option" aria-selected={m.name === value} className={i === active ? "active" : ""} onMouseEnter={() => setActive(i)} onClick={() => choose(m.name)}>
+                      {m.name}
+                      {m.fav && <span className="muted" aria-label="favourite"> ★</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
