@@ -413,24 +413,45 @@ function ThemeMusic() {
       setReady(true);
       if (wanted.current) start(a);
     });
-    // the menu's hover and click sounds, on every button while setup is open
-    const sounds: Record<string, string> = {};
-    load("/api/app/menu-sound/rollover").then((u) => u && (sounds.over = u));
-    load("/api/app/menu-sound/click").then((u) => u && (sounds.click = u));
+    // the menu's hover and click sounds, on every button while setup is open. Web Audio,
+    // not <audio>: the window only lets an <audio> play from a click, and a hover never
+    // is one; an audio context, once the first click has woken it, plays both at once.
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const ctx = Ctx ? new Ctx() : null;
+    const sounds: Record<string, AudioBuffer> = {};
+    const loadSound = (name: string, key: string) =>
+      fetch(`/api/app/menu-sound/${name}`)
+        .then((r) => (r.ok ? r.arrayBuffer() : null))
+        .then((buf) => (buf && ctx ? ctx.decodeAudioData(buf) : null))
+        .then((b) => b && (sounds[key] = b))
+        .catch(() => {});
+    loadSound("rollover", "over");
+    loadSound("click", "click");
     const play = (which: string, loud: number) => {
-      if (!wanted.current || !sounds[which]) return;
-      const s = new Audio(sounds[which]);
-      s.volume = Math.min(1, level.current * loud);
-      s.play().catch(() => {});
+      const b = sounds[which];
+      if (!ctx || !b || !wanted.current || ctx.state !== "running") return;
+      const src = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      gain.gain.value = Math.min(1, level.current * loud * 1.6);
+      src.buffer = b;
+      src.connect(gain).connect(ctx.destination);
+      src.start();
     };
+    const wake = () => {
+      if (ctx && ctx.state !== "running") ctx.resume().catch(() => {});
+    };
+    window.addEventListener("pointerdown", wake);
+    window.addEventListener("keydown", wake);
+    const BUTTONS = "button:not(:disabled), a.btn, [role=radio]";
     let lastOver: Element | null = null;
     const over = (e: PointerEvent) => {
-      const b = (e.target as Element | null)?.closest("button:not(:disabled), a.btn, [role=radio]");
+      const b = (e.target as Element | null)?.closest(BUTTONS);
       if (b && b !== lastOver) play("over", 0.8);
       lastOver = b ?? null;
     };
     const click = (e: PointerEvent) => {
-      if ((e.target as Element | null)?.closest("button:not(:disabled), a.btn, [role=radio]")) play("click", 1);
+      wake();
+      if ((e.target as Element | null)?.closest(BUTTONS)) play("click", 1);
     };
     document.addEventListener("pointerover", over);
     document.addEventListener("pointerup", click);
@@ -446,6 +467,9 @@ function ThemeMusic() {
       window.removeEventListener("pointerdown", firstClick);
       document.removeEventListener("pointerover", over);
       document.removeEventListener("pointerup", click);
+      window.removeEventListener("pointerdown", wake);
+      window.removeEventListener("keydown", wake);
+      ctx?.close().catch(() => {});
       audio.current?.pause();
       urls.forEach((u) => URL.revokeObjectURL(u));
     };
