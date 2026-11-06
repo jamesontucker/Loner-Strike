@@ -31,6 +31,7 @@ Loner-Strike only exists because of these projects and their authors. The mods a
 | D.I.C.E. (Roll the Dice) | OciXCrom | [GitHub](https://github.com/OciXCrom/DICE) |
 | Round-end music | based on REMusic by OciXCrom | [GitHub](https://github.com/OciXCrom/REMusic) |
 | Grappling hook, Ultimate Gore, Quake sounds | their original AlliedModders authors | AlliedModders |
+| Bot pings on the scoreboard (gm_botping): the pings message is done the way Ping Faker does it | MeRcyLeZZ | AlliedModders |
 
 Round-end music ships with freely licensed tracks from OpenGameArt; each track's author and license is listed in `sound/roundsound/CREDITS.txt`.
 

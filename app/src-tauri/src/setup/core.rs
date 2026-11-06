@@ -13,9 +13,9 @@ use std::time::Duration;
 pub const CORE_MODES: &[&str] = &["classic", "csdm", "csdm_ffa", "knife", "pistols", "deagle", "awp", "scoutz", "surf", "match"];
 /// miscstats.amxx comes with AMX Mod X
 pub const CORE_ADDONS: &[&str] = &["quakesounds"];
-pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat"];
+pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat", "gm_botping"];
 /// listed in plugins.ini
-pub const ALWAYS_ON: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_vip", "gm_extras", "gm_community", "gm_botchat"];
+pub const ALWAYS_ON: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_vip", "gm_extras", "gm_community", "gm_botchat", "gm_botping"];
 pub const BINDS: &[&str] = &["bind \"F3\" \"gamemenu\"", "bind \"F4\" \"gamequick\""];
 
 const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
