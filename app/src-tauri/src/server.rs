@@ -125,11 +125,13 @@ async fn with_target(req: Request, next: Next) -> Response {
     let path = req.uri().path();
     let by_path = path == "/api/servers" || path.starts_with("/api/servers/");
     let post = req.method() == axum::http::Method::POST;
+    // a request that edits a list shared between servers passes the edit on
+    let list = if post { crate::lists::list_for(path) } else { None };
     let Some(id) = header.or(query).filter(|t| !t.is_empty() && t != "local" && !by_path) else {
         let res = next.run(req).await;
         // the player's own game: a list it shares with servers goes to them
-        if post && !by_path && res.status().is_success() {
-            tokio::task::spawn_blocking(|| crate::lists::after_change("local"));
+        if let Some(list) = list.filter(|_| res.status().is_success()) {
+            tokio::task::spawn_blocking(move || crate::lists::after_change("local", list));
         }
         return res;
     };
@@ -147,7 +149,9 @@ async fn with_target(req: Request, next: Next) -> Response {
                 tokio::task::spawn_blocking(move || {
                     // a list it shares goes to the others first, then a server on another
                     // machine gets the change uploaded
-                    crate::lists::after_change(&id2);
+                    if let Some(list) = list {
+                        crate::lists::after_change(&id2, list);
+                    }
                     if remote {
                         crate::servers::sync_settings(&id2);
                     }

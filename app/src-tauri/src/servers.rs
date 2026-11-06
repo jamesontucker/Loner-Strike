@@ -121,15 +121,20 @@ impl Entry {
                 pw.trim().to_string(),
                 self.port,
             ),
-            None => crate::rcon::Rcon::new(pw.trim().to_string(), self.port),
+            None => crate::rcon::Rcon::at(pw.trim().to_string(), &self.local_host(), self.port),
         })
+    }
+
+    /// Where on this computer the server answers: its listen address, or 127.0.0.1.
+    pub(crate) fn local_host(&self) -> String {
+        if self.listen_ip.is_empty() || self.listen_ip == "0.0.0.0" { "127.0.0.1".into() } else { self.listen_ip.clone() }
     }
 
     /// The address players connect to.
     pub fn address(&self) -> String {
         match &self.remote {
             Some(r) => format!("{}:{}", r.host, self.port),
-            None => format!("127.0.0.1:{}", self.port),
+            None => format!("{}:{}", self.local_host(), self.port),
         }
     }
 }
@@ -139,7 +144,9 @@ impl Entry {
 const REMOTE_PORTS: std::ops::RangeInclusive<u16> = 27015..=27019;
 
 /// Start options the app sets itself, so they can't be added again by hand
-const OWN_ARGS: &[&str] = &["-game", "-port", "-console", "-condebug", "-nomaster", "+ip", "+map", "+maxplayers", "+sv_lan", "+rcon_password", "+sv_password", "+exec"];
+const OWN_ARGS: &[&str] = &[
+    "-game", "-port", "+port", "-ip", "+ip", "+hostport", "+clientport", "-console", "-condebug", "-nomaster", "+map", "+maxplayers", "-maxplayers", "+sv_lan", "+rcon_password", "+sv_password", "+exec",
+];
 
 /// The player's extra start options, split up, or why they can't be used.
 pub fn extra_args(text: &str) -> Result<Vec<String>, String> {
@@ -219,7 +226,8 @@ fn load_checked() -> Result<Vec<Entry>, String> {
 
 /// A running server on `port`, by name (the game's own port is 27015).
 pub fn running_on(port: u16) -> Option<String> {
-    load().into_iter().find(|e| e.port == port && running(&e.id)).map(|e| e.name)
+    // (servers on other machines use their machine's ports, not this computer's)
+    load().into_iter().find(|e| e.remote.is_none() && e.port == port && running(&e.id)).map(|e| e.name)
 }
 
 fn save(list: &[Entry]) -> Result<(), String> {
@@ -654,6 +662,19 @@ fn manifest_path(e: &Entry) -> PathBuf {
     e.dir.join(".uploaded.json")
 }
 
+/// The same file as recorded (records from before kept whole seconds)
+fn same_file(old: &(u64, u64), now: &(u64, u64)) -> bool {
+    old.0 == now.0 && (old.1 == now.1 || (old.1 < 100_000_000_000 && now.1 / 1_000_000_000 == old.1))
+}
+
+/// Files the server on the machine writes itself: never sent from this computer's copy
+/// (the ban lists are edited on the machine directly, see admins.rs).
+fn server_owned(key: &str) -> bool {
+    matches!(key, "banned.cfg" | "listip.cfg" | "addons/amxmodx/data/gamemodes/status.json")
+        || key.starts_with("addons/amxmodx/logs/")
+        || key.ends_with(".log")
+}
+
 /// This computer's copy as it is now (what upload_filter lets through, minus files the
 /// app brings back from the machine).
 fn current_files(e: &Entry) -> Manifest {
@@ -665,11 +686,12 @@ fn current_files(e: &Entry) -> Manifest {
             continue;
         }
         let key = rel.to_string_lossy().replace('\\', "/");
-        if key.ends_with("gamemodes/status.json") {
+        if server_owned(&key) {
             continue;
         }
         let Ok(meta) = std::fs::metadata(&f) else { continue };
-        let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
+        // nanoseconds: two saves within the same second still differ
+        let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos() as u64).unwrap_or(0);
         m.insert(key, (meta.len(), modified));
     }
     m
@@ -698,16 +720,21 @@ fn clear_pending_restart(id: &str) {
 /// by the app after setup, so they're left alone. `everything`: send it all (setup).
 /// Returns (sent, removed).
 pub fn sync(e: &Entry, everything: bool) -> Result<(usize, usize), String> {
-    static SYNCING: Mutex<()> = Mutex::new(());
-    let _g = SYNCING.lock().unwrap_or_else(|e| e.into_inner());
+    let _g = sync_guard();
     let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
+    // deleted or being rebuilt since the caller looked: nothing to send (and nothing to
+    // make again on either side)
+    match get(&e.id) {
+        Some(now) if (everything || now.ready) && e.dir.join(&e.game).is_dir() => {}
+        _ => return Ok((0, 0)),
+    }
     copy_navs(e);
     let to = format!("{}/{}", crate::remote::server_dir(&e.id), e.game);
     let saved: Option<Manifest> = std::fs::read_to_string(manifest_path(e)).ok().and_then(|t| serde_json::from_str(&t).ok());
     let now = current_files(e);
     let (changed, gone): (std::collections::HashSet<String>, Vec<String>) = match (&saved, everything) {
         (Some(old), false) => (
-            now.iter().filter(|(k, v)| old.get(*k) != Some(*v)).map(|(k, _)| k.clone()).collect(),
+            now.iter().filter(|(k, v)| !old.get(*k).is_some_and(|o| same_file(o, v))).map(|(k, _)| k.clone()).collect(),
             old.keys().filter(|k| !now.contains_key(*k)).cloned().collect(),
         ),
         // a server from before the app kept a record: its settings may have changed on the
@@ -738,6 +765,16 @@ pub fn sync(e: &Entry, everything: bool) -> Result<(usize, usize), String> {
 
 /// Every few seconds: servers on other machines get what changed here (a mod installed,
 /// a map downloaded, a plugin added), whichever page did it.
+static SYNCING: Mutex<()> = Mutex::new(());
+/// When sync_loop tries a server again after it failed
+static RETRY_AT: Mutex<Option<HashMap<String, Instant>>> = Mutex::new(None);
+
+/// Held while a server's files go up, and while one is deleted or wiped, so the two
+/// never cross.
+fn sync_guard() -> std::sync::MutexGuard<'static, ()> {
+    SYNCING.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 pub fn sync_loop() {
     static STARTED: std::sync::Once = std::sync::Once::new();
     STARTED.call_once(|| {
@@ -747,8 +784,21 @@ pub fn sync_loop() {
             if setup::current().state == "running" {
                 continue;
             }
+            // a machine that failed is left alone for a minute
+            let mut wait = RETRY_AT.lock().unwrap_or_else(|e| e.into_inner());
+            let wait = wait.get_or_insert_with(HashMap::new);
             for e in load().into_iter().filter(|e| e.ready && e.remote.is_some()) {
-                let _ = sync(&e, false);
+                if wait.get(&e.id).is_some_and(|t| Instant::now() < *t) {
+                    continue;
+                }
+                match sync(&e, false) {
+                    Ok(_) => {
+                        wait.remove(&e.id);
+                    }
+                    Err(_) => {
+                        wait.insert(e.id.clone(), Instant::now() + Duration::from_secs(60));
+                    }
+                }
             }
         });
     });
@@ -757,6 +807,16 @@ pub fn sync_loop() {
 /// The bots' navigation files this computer's game has learned (CS 1.6 ships none), so
 /// the server's bots know those maps without learning them again. Only ones missing there.
 fn copy_navs(e: &Entry) {
+    // looking for the game means scanning Steam's folders: once a minute is plenty
+    static LAST: Mutex<Option<HashMap<String, Instant>>> = Mutex::new(None);
+    {
+        let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+        let last = last.get_or_insert_with(HashMap::new);
+        if last.get(&e.id).is_some_and(|t| t.elapsed() < Duration::from_secs(60)) {
+            return;
+        }
+        last.insert(e.id.clone(), Instant::now());
+    }
     let Some(game) = crate::steam::find_installs().into_iter().find(|i| i.games.iter().any(|g| g == &e.game)) else { return };
     let (from, to) = (game.hl.join(&e.game).join("maps"), e.dir.join(&e.game).join("maps"));
     let Ok(list) = std::fs::read_dir(&from) else { return };
@@ -1124,18 +1184,30 @@ fn remote_active(e: &Entry) -> bool {
 }
 
 static SEEN: Mutex<Option<HashMap<String, (Instant, (bool, u64))>>> = Mutex::new(None);
+/// Servers whose state is being asked right now (one question at a time per server)
+static ASKING: Mutex<Option<std::collections::HashSet<String>>> = Mutex::new(None);
 
-/// (running, seconds up), asked over SSH and kept a few seconds.
+/// (running, seconds up), asked over SSH and kept a few seconds. While a question is
+/// already out, or the machine is busy or unreachable, the last answer stands.
 fn remote_state(e: &Entry) -> (bool, u64) {
     let Some(r) = &e.remote else { return (false, 0) };
-    if let Some((at, (on, secs))) = SEEN.lock().unwrap().as_ref().and_then(|m| m.get(&e.id).cloned()) {
-        if at.elapsed() < Duration::from_secs(4) {
-            return (on, secs + at.elapsed().as_secs());
-        }
+    let last = SEEN.lock().unwrap().as_ref().and_then(|m| m.get(&e.id).cloned());
+    let known = || last.map(|(at, (on, secs))| (on, if on { secs + at.elapsed().as_secs() } else { 0 })).unwrap_or((false, 0));
+    if last.is_some_and(|(at, _)| at.elapsed() < Duration::from_secs(4)) {
+        return known();
+    }
+    if !ASKING.lock().unwrap().get_or_insert_with(Default::default).insert(e.id.clone()) {
+        return known();
     }
     let state = crate::remote::active(r, &e.id);
-    SEEN.lock().unwrap().get_or_insert_with(HashMap::new).insert(e.id.clone(), (Instant::now(), state));
-    state
+    ASKING.lock().unwrap().get_or_insert_with(Default::default).remove(&e.id);
+    match state {
+        Some(state) => {
+            SEEN.lock().unwrap().get_or_insert_with(HashMap::new).insert(e.id.clone(), (Instant::now(), state));
+            state
+        }
+        None => known(),
+    }
 }
 
 
@@ -1466,6 +1538,11 @@ pub fn game_for(target: &str, local: impl FnOnce() -> Option<Game>) -> Option<Ar
             }
             // remote paths are relative to the user's home (sftp starts there)
             g.remote = Some((r.clone(), format!("{}/{}", crate::remote::server_dir(&e.id), e.game)));
+        } else if !e.listen_ip.is_empty() {
+            // a server bound to one address doesn't answer on 127.0.0.1
+            if let Some(rc) = e.rcon() {
+                g.rcon = Arc::new(rc);
+            }
         }
         g
     };
@@ -1649,12 +1726,20 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
         }
         let host = |o: &Entry| o.remote.as_ref().map(|r| r.host.clone());
         if let Some(p) = req.port {
-            let taken = load().iter().any(|o| o.id != id && o.port == p && host(o) == host(&e));
+            let all = load();
+            let taken = all.iter().any(|o| o.id != id && o.port == p && host(o) == host(&e));
+            // HLTV's ports count too, this server's own included
+            let hltv = all.iter().any(|o| host(o) == host(&e) && o.hltv.enabled && (if o.id == id { o.hltv.port == Some(p) } else { crate::hltv::port_of(o) == p }));
+            if hltv {
+                return Err(format!("Port {p} is used by HLTV. Pick another one."));
+            }
             if e.remote.is_some() && (!REMOTE_PORTS.contains(&p) || taken) {
                 return Err("Pick a port from 27015 to 27019 that no other server on that machine uses (27020 is for HLTV).".into());
             }
-            if e.remote.is_none() && (!(1024..=65000).contains(&p) || taken) {
-                return Err("Pick a port from 1024 to 65000 that no other server uses.".into());
+            // (servers this app made start at 27016: 27015 is your own game's)
+            let lowest = if e.imported { 1024 } else { FIRST_PORT };
+            if e.remote.is_none() && (!(lowest..=65000).contains(&p) || taken) {
+                return Err(format!("Pick a port from {lowest} to 65000 that no other server uses."));
             }
             if running(&id) && p != e.port {
                 return Err("Stop the server to change its port.".into());
@@ -1662,6 +1747,9 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
         }
         let listen_ip = req.listen_ip.as_ref().map(|t| t.trim().to_string());
         if let Some(ip) = listen_ip.as_ref().filter(|t| !t.is_empty()) {
+            if e.remote.is_some() {
+                return Err("A server on a Linux machine listens on all of its addresses. Leave the listen address empty.".into());
+            }
             if ip.parse::<std::net::Ipv4Addr>().is_err() {
                 return Err("The listen address is an IP address like 192.168.1.20, or empty for all of them.".into());
             }
@@ -1717,12 +1805,17 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
         }
         // on another machine the start options live in its service: write it again (and
         // bring its files up to date with this computer's copy while at it)
+        let old = e.clone();
         if let Some(e) = get(&id).filter(|e| e.ready && e.remote.is_some()) {
             let r = e.remote.as_ref().unwrap();
             sync(&e, false)?;
             let code = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&e.id, &e.game, &launch_args(&e)).as_bytes(), |_| {})?;
             if code != 0 {
                 return Err("Saved here, but the server's service couldn't be updated.".into());
+            }
+            // HLTV's settings name the server's port and password: written again to match
+            if e.hltv.enabled && (old.port != e.port || old.visibility != e.visibility || password.is_some()) {
+                crate::hltv::remote_apply(&e, true)?;
             }
         }
         Ok(json!({"ok": true, "restart": running(&id) && restart_needed(&e, &now)}))
@@ -1743,6 +1836,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
         return answer(Err("Do that from the computer running Loner-Strike.".into()));
     }
     let st2 = st.clone();
+    let on_computer = on.is_some();
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
         match action.as_str() {
             "start" => start(&id).map(|_| json!({"ok": true})),
@@ -1766,6 +1860,10 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                     if !body["restart"].as_bool().unwrap_or(false) {
                         return Ok(json!({"ok": true, "need_restart_game": true}));
                     }
+                    // closing the game is for the person at the computer, not a phone
+                    if !on_computer {
+                        return Err("Close the game on the computer first, then press Join.".into());
+                    }
                     sys::close_game()?;
                 } else if sys::game_running() {
                     let url = match &pw {
@@ -1788,6 +1886,9 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 let r = e.remote.clone().ok_or("Rebuild from scratch is for servers on another machine.")?;
                 let client = client(&st2).ok_or("Set up the game on this computer first.")?;
                 let res = crate::setup_api::resources_for(&st2)?;
+                let guard = sync_guard();
+                edit(|l| l.iter_mut().filter(|x| x.id == id).for_each(|x| x.ready = false))?;
+                crate::lists::forget(&id);
                 crate::remote::remove(&r, &e.id)?;
                 // this computer's copy too (only ever a folder we made: <servers root>/<id>)
                 let ok_dir = e.dir.file_name().map(|n| n.to_string_lossy() == e.id).unwrap_or(false)
@@ -1795,7 +1896,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 if ok_dir && e.dir.is_dir() {
                     std::fs::remove_dir_all(&e.dir).map_err(|err| format!("Couldn't clear this computer's copy ({err})."))?;
                 }
-                edit(|l| l.iter_mut().filter(|x| x.id == id).for_each(|x| x.ready = false))?;
+                drop(guard);
                 forget(&id);
                 let with = e.setup_with.clone().unwrap_or(SetupWith { template: "local".into(), components: vec![], password: String::new() });
                 let catalog = setup::components::load_catalog(&res)?;
@@ -1827,6 +1928,8 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
             }
             "delete" => {
                 let e = get(&id).ok_or("That server isn't there any more.")?;
+                // no upload starts while it goes (one would make its folders again)
+                let _guard = sync_guard();
                 // on another machine: its service and folder there go too (if it can be reached)
                 let mut note = None;
                 if let Some(r) = &e.remote {
@@ -1892,9 +1995,12 @@ async fn api_set_rcon_password(UrlPath(id): UrlPath<String>, headers: HeaderMap,
                 (0..24).map(|_| CHARS[rng.gen_range(0..CHARS.len())] as char).collect()
             }
         };
+        // the running server takes it first: if it can't be told, nothing changes (the app
+        // would otherwise lose its way in)
         if running(&id) {
-            if let Some(rc) = e.rcon() {
-                let _ = rc.send(&format!("rcon_password \"{pw}\""));
+            let told = e.rcon().map(|rc| rc.send(&format!("rcon_password \"{pw}\"")).is_ok()).unwrap_or(false);
+            if !told {
+                return Err("The server didn't take the new password, so it wasn't changed. Try again, or stop the server and change it then.".into());
             }
         }
         let data = e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes");
@@ -2210,6 +2316,18 @@ mod tests {
         assert!(extra_args("+say $(reboot)").is_err());
         assert!(extra_args("+say \"hi\"").is_err());
         assert!(extra_args("hello").is_err(), "starts with - or +");
+        assert!(extra_args("+port 27030").is_err(), "the app sets the port");
+    }
+
+    #[test]
+    fn sync_records() {
+        // the machine's own files never go up from this computer's copy
+        assert!(server_owned("banned.cfg") && server_owned("listip.cfg") && server_owned("addons/amxmodx/logs/L1106.log"));
+        assert!(!server_owned("addons/amxmodx/configs/plugins.ini") && !server_owned("maps/de_dust2.bsp"));
+        // a record from before (whole seconds) still matches the same file
+        assert!(same_file(&(10, 1_700_000_000), &(10, 1_700_000_000_123_456_789)));
+        assert!(!same_file(&(10, 1_700_000_000), &(11, 1_700_000_000_123_456_789)));
+        assert!(!same_file(&(10, 1_700_000_000_000_000_001), &(10, 1_700_000_000_000_000_002)), "two saves in one second");
     }
 
     #[test]

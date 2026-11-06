@@ -466,10 +466,18 @@ pub fn parse_bans(text: &str, kind: &'static str) -> Vec<Ban> {
 fn read_bans(g: &Game) -> Vec<Ban> {
     let mut out = Vec::new();
     for kind in ["id", "ip"] {
-        let text = crate::sys::read_latin1(&g.dir.join(ban_file(kind))).unwrap_or_default();
-        out.extend(parse_bans(&text, kind));
+        out.extend(parse_bans(&ban_text(g, kind), kind));
     }
     out
+}
+
+/// A ban file as the server has it: on a Linux server, the one on the machine (the game
+/// adds to it itself), not this computer's copy.
+fn ban_text(g: &Game, kind: &str) -> String {
+    match &g.remote {
+        Some((r, dir)) => crate::remote::read_file(r, &format!("{dir}/{}", ban_file(kind))).map(|b| crate::rcon::latin1(&b)).unwrap_or_default(),
+        None => crate::sys::read_latin1(&g.dir.join(ban_file(kind))).unwrap_or_default(),
+    }
 }
 
 /// The ban file without lines for value.
@@ -481,9 +489,14 @@ pub fn remove_ban_line(text: &str, value: &str) -> String {
 
 fn edit_ban_file(g: &Game, kind: &str, f: impl FnOnce(&str) -> String) -> Result<(), String> {
     let path = g.dir.join(ban_file(kind));
-    let old = crate::sys::read_latin1(&path).unwrap_or_default();
+    let old = ban_text(g, kind);
     let new = f(&old);
     if new != old {
+        if let Some((r, dir)) = &g.remote {
+            let bytes: Vec<u8> = new.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
+            crate::remote::write_file(r, &format!("{dir}/{}", ban_file(kind)), &bytes)?;
+        }
+        // (on a Linux server this computer's copy is only kept for sharing the list)
         crate::sys::write_latin1(&path, &new).map_err(|e| format!("Couldn't write {} ({e}).", ban_file(kind)))?;
     }
     Ok(())
@@ -812,6 +825,52 @@ pub(crate) fn shared_bans(g: &Game) -> String {
     v.join("\n")
 }
 
+/// The bans as "id STEAM_..." / "ip 1.2.3.4" lines.
+pub(crate) fn ban_set(g: &Game) -> std::collections::BTreeSet<String> {
+    read_bans(g).into_iter().map(|b| format!("{} {}", b.kind, b.value)).collect()
+}
+
+/// Adds and lifts bans on `to` ("id STEAM_..." / "ip 1.2.3.4" lines), leaving its other
+/// bans alone (ones made in the game there stay).
+pub(crate) fn apply_bans(to: &Game, add: &[String], lift: &[String]) -> Result<(), String> {
+    let _l = LOCK.lock().unwrap();
+    let parse = |l: &String| {
+        l.split_once(' ')
+            .map(|(k, v)| (if k == "ip" { "ip" } else { "id" }, v.to_string()))
+            .filter(|(k, v)| if *k == "ip" { v.parse::<Ipv4Addr>().is_ok() } else { valid_steamid(v) })
+    };
+    let mut cmds = Vec::new();
+    for kind in ["id", "ip"] {
+        let adds: Vec<String> = add.iter().filter_map(parse).filter(|(k, _)| *k == kind).map(|(_, v)| v).collect();
+        let lifts: Vec<String> = lift.iter().filter_map(parse).filter(|(k, _)| *k == kind).map(|(_, v)| v).collect();
+        if adds.is_empty() && lifts.is_empty() {
+            continue;
+        }
+        let word = if kind == "ip" { "addip" } else { "banid" };
+        edit_ban_file(to, kind, |t| {
+            let mut text = t.to_string();
+            for v in &lifts {
+                text = remove_ban_line(&text, v);
+            }
+            let have: Vec<String> = parse_bans(&text, if kind == "ip" { "ip" } else { "id" }).into_iter().map(|b| b.value).collect();
+            let nl = if text.contains("\r\n") || text.is_empty() { "\r\n" } else { "\n" };
+            for v in adds.iter().filter(|v| !have.contains(v)) {
+                let base = text.trim_end_matches(['\r', '\n']).to_string();
+                text = format!("{base}{}{word} 0.0 {v}{nl}", if base.is_empty() { "" } else { nl });
+            }
+            text
+        })?;
+        cmds.extend(lifts.iter().map(|v| format!("{} {v}", if kind == "ip" { "removeip" } else { "removeid" })));
+        cmds.extend(adds.iter().map(|v| format!("{word} 0 {v}")));
+    }
+    for chunk in cmds.chunks(20) {
+        if !tell_game(to, &chunk.join(";"))? {
+            break;
+        }
+    }
+    Ok(())
+}
+
 /// Gives `to` the same bans as `from` (the running game is told about each one that
 /// came or went).
 pub(crate) fn copy_bans(from: &Game, to: &Game) -> Result<(), String> {
@@ -819,7 +878,7 @@ pub(crate) fn copy_bans(from: &Game, to: &Game) -> Result<(), String> {
     let old = read_bans(to);
     let new = read_bans(from);
     for kind in ["id", "ip"] {
-        let text = crate::sys::read_latin1(&from.dir.join(ban_file(kind))).unwrap_or_default();
+        let text = ban_text(from, kind);
         edit_ban_file(to, kind, |_| text)?;
     }
     let mut cmds = Vec::new();

@@ -437,10 +437,12 @@ function ServerDetails({ server, onChanged, act }: { server: ServerInfo; onChang
                 <span>Port<Info text={server.host ? "The port players connect to. On a Linux server it's 27015 to 27019 (setup opened 27015-27020 on the machine; 27020 is for HLTV). Open it in your provider's firewall too." : "The network port the server listens on; each server needs its own. Change it only if something else uses it, and open the new port on your router if friends connect to you directly."} /></span>
                 <input className="search narrow" type="number" min={server.host ? 27015 : 1024} max={server.host ? 27019 : 65000} value={port} onChange={(e) => setPort(+e.target.value)} />
               </label>
-              <label className="field">
-                <span>Listen address<Info text={server.host ? "Leave empty so the server answers on every address the machine has, which is what you want on a VPS. Set it only if the machine has several addresses and the server should use one." : "Leave empty to answer on every network this computer is on. Set it to one of this computer's addresses to use only that network."} /></span>
-                <input className="search" placeholder="All addresses" value={listenIp} onChange={(e) => setListenIp(e.target.value.trim())} spellCheck={false} />
-              </label>
+              {!server.host && (
+                <label className="field">
+                  <span>Listen address<Info text="Leave empty to answer on every network this computer is on. Set it to one of this computer's addresses to use only that network." /></span>
+                  <input className="search" placeholder="All addresses" value={listenIp} onChange={(e) => setListenIp(e.target.value.trim())} spellCheck={false} />
+                </label>
+              )}
             </div>
             <label className="field">
               <span>Extra start options<Info text="Added to the server's command line, like +sv_gravity 600 or -pingboost 2. Options the app sets itself (port, map, players, passwords) are changed above instead. Used from the next start." /></span>

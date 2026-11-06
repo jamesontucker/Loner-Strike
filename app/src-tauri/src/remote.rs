@@ -168,20 +168,44 @@ fn check_identity(s: &Session, r: &RemoteInfo) -> Result<(), String> {
 /// setup uses its own connection that's never kept.
 fn session(r: &RemoteInfo) -> Result<Arc<Mutex<Session>>, String> {
     let expected = r.host_key.clone().ok_or("The server's identity hasn't been confirmed.")?;
+    if let Some((s, fp)) = SESSIONS.lock().unwrap().as_ref().and_then(|m| m.get(&r.label()).cloned()) {
+        if fp == expected {
+            return Ok(s);
+        }
+    }
+    // a machine that just didn't answer isn't tried again straight away, so the page's
+    // regular checks don't each wait out the connection timeout
+    if DOWN.lock().unwrap().as_ref().and_then(|m| m.get(&r.label())).is_some_and(|t| t.elapsed() < Duration::from_secs(20)) {
+        return Err(format!("Can't reach {} right now.", r.host));
+    }
+    // connecting happens outside the list's lock (it can take seconds), so other
+    // machines aren't held up; connect() checks the identity against r.host_key
+    let s = match connect(r) {
+        Ok(s) => s,
+        Err(e) => {
+            DOWN.lock().unwrap().get_or_insert_with(HashMap::new).insert(r.label(), std::time::Instant::now());
+            return Err(e);
+        }
+    };
+    if let Some(m) = DOWN.lock().unwrap().as_mut() {
+        m.remove(&r.label());
+    }
+    let fp = fingerprint(&s).ok_or("The server didn't identify itself.")?;
     let mut all = SESSIONS.lock().unwrap();
     let all = all.get_or_insert_with(HashMap::new);
+    // another thread may have connected meanwhile: use one session per machine
     if let Some((s, fp)) = all.get(&r.label()) {
         if *fp == expected {
             return Ok(s.clone());
         }
     }
-    // connect() checks the identity against r.host_key
-    let s = connect(r)?;
-    let fp = fingerprint(&s).ok_or("The server didn't identify itself.")?;
     let s = Arc::new(Mutex::new(s));
     all.insert(r.label(), (s.clone(), fp));
     Ok(s)
 }
+
+/// Machines that didn't answer, and when
+static DOWN: Mutex<Option<HashMap<String, std::time::Instant>>> = Mutex::new(None);
 
 fn drop_session(r: &RemoteInfo) {
     if let Some(all) = SESSIONS.lock().unwrap().as_mut() {
@@ -219,6 +243,59 @@ pub fn exec(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
         let _ = ch.read_to_end(&mut out);
         ch.wait_close()?;
         Ok((ch.exit_status()?, crate::rcon::latin1(&out)))
+    })
+}
+
+/// Like exec, for status checks and server commands: if the connection is busy with
+/// something long (an upload, Valve's download) it says so after a few seconds instead
+/// of waiting it out.
+pub fn exec_quick(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
+    with_session_quick(r, |s| {
+        s.set_timeout(15_000);
+        let mut ch = s.channel_session()?;
+        ch.exec(&format!("{cmd} 2>&1"))?;
+        let mut out = Vec::new();
+        let _ = ch.read_to_end(&mut out);
+        ch.wait_close()?;
+        Ok((ch.exit_status()?, crate::rcon::latin1(&out)))
+    })
+}
+
+/// read_file for the regular checks (the game's status file): gives up after a few
+/// seconds if the connection is busy.
+pub fn read_file_quick(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
+    with_session_quick(r, |s| {
+        s.set_timeout(15_000);
+        let sftp = s.sftp()?;
+        let mut f = sftp.open(Path::new(path))?;
+        let mut v = Vec::new();
+        f.read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        Ok(v)
+    })
+}
+
+/// Runs `f` on the session if it's free within a few seconds (a quick command in front is
+/// waited for; something long, like an upload or Valve's download, isn't).
+fn with_session_quick<T>(r: &RemoteInfo, f: impl Fn(&Session) -> Result<T, ssh2::Error>) -> Result<T, String> {
+    let s = session(r)?;
+    let started = std::time::Instant::now();
+    let guard = loop {
+        if let Ok(g) = s.try_lock() {
+            break g;
+        }
+        if started.elapsed() > Duration::from_secs(3) {
+            return Err(format!("{} is busy with something else. Try again in a moment.", r.host));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    let res = f(&guard);
+    drop(guard);
+    res.map_err(|e| {
+        // a missing file isn't a broken connection
+        if !matches!(e.code(), ssh2::ErrorCode::SFTP(_)) {
+            drop_session(r);
+        }
+        format!("The connection to {} failed ({e}).", r.host)
     })
 }
 
@@ -283,8 +360,19 @@ pub fn read_file(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
         let sftp = s.sftp()?;
         let mut f = sftp.open(Path::new(path))?;
         let mut v = Vec::new();
-        let _ = f.read_to_end(&mut v);
+        // a read cut off part way is an error, not a shorter file
+        f.read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
         Ok(v)
+    })
+}
+
+/// Writes a small file on the machine (replacing it).
+pub fn write_file(r: &RemoteInfo, path: &str, data: &[u8]) -> Result<(), String> {
+    with_session(r, |s| {
+        let sftp = s.sftp()?;
+        let mut f = sftp.create(Path::new(path))?;
+        f.write_all(data).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        Ok(())
     })
 }
 
@@ -523,17 +611,22 @@ echo "@@STEP ready"
 }
 
 /// Is the server's service running, and for how many seconds?
-pub fn active(r: &RemoteInfo, id: &str) -> (bool, u64) {
-    unit_active(r, &unit(id))
+pub fn active(r: &RemoteInfo, id: &str) -> Option<(bool, u64)> {
+    unit_state(r, &unit(id))
 }
 
 /// Is a service running, and for how many seconds?
 pub fn unit_active(r: &RemoteInfo, u: &str) -> (bool, u64) {
-    let Ok((_, out)) = exec(r, &format!("systemctl is-active {u}; ps -o etimes= -p \"$(systemctl show -p MainPID --value {u})\" 2>/dev/null")) else { return (false, 0) };
+    unit_state(r, u).unwrap_or((false, 0))
+}
+
+/// (running, seconds up), or None when the machine couldn't be asked right now.
+pub fn unit_state(r: &RemoteInfo, u: &str) -> Option<(bool, u64)> {
+    let (_, out) = exec_quick(r, &format!("systemctl is-active {u}; ps -o etimes= -p \"$(systemctl show -p MainPID --value {u})\" 2>/dev/null")).ok()?;
     let mut lines = out.lines();
     let on = lines.next().map(|l| l.trim() == "active").unwrap_or(false);
     let secs = lines.next().and_then(|l| l.trim().parse().ok()).unwrap_or(0);
-    (on, secs)
+    Some((on, secs))
 }
 
 pub fn systemctl(r: &RemoteInfo, id: &str, action: &str) -> Result<(), String> {
@@ -546,7 +639,7 @@ pub fn systemctl(r: &RemoteInfo, id: &str, action: &str) -> Result<(), String> {
 
 /// The last lines of the server's console log.
 pub fn console(r: &RemoteInfo, id: &str, game: &str) -> Vec<String> {
-    exec(r, &format!("tail -n 200 \"$HOME/{}/{game}/qconsole.log\" 2>/dev/null", server_dir(id)))
+    exec_quick(r, &format!("tail -n 200 \"$HOME/{}/{game}/qconsole.log\" 2>/dev/null", server_dir(id)))
         .map(|(_, o)| o.lines().map(String::from).collect())
         .unwrap_or_default()
 }
@@ -618,7 +711,7 @@ sudo systemctl daemon-reload
 /// folder and its game folders.
 pub fn demos(r: &RemoteInfo, id: &str, game: &str) -> Vec<(String, u64, u64)> {
     let cmd = format!("cd \"$HOME/{}\" && stat -c '%n|%s|%Y' {game}/*.dem *.dem cstrike/*.dem 2>/dev/null", server_dir(id));
-    let Ok((_, out)) = exec(r, &cmd) else { return Vec::new() };
+    let Ok((_, out)) = exec_quick(r, &cmd) else { return Vec::new() };
     let mut seen = std::collections::HashSet::new();
     out.lines()
         .filter_map(|l| {

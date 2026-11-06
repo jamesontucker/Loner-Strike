@@ -31,7 +31,12 @@ pub fn latin1(bytes: &[u8]) -> String {
 
 impl Rcon {
     pub fn new(password: String, port: u16) -> Self {
-        Rcon { password, addr: format!("127.0.0.1:{port}"), lock: Mutex::new(()), via: None }
+        Self::at(password, "127.0.0.1", port)
+    }
+
+    /// A game on this computer listening on one address of its own (a server's listen address).
+    pub fn at(password: String, host: &str, port: u16) -> Self {
+        Rcon { password, addr: format!("{host}:{port}"), lock: Mutex::new(()), via: None }
     }
 
     /// A server on another machine, reached through SSH (`pw_file`: its password file there).
@@ -48,7 +53,7 @@ impl Rcon {
         if let Some((r, pw_file)) = &self.via {
             let port = self.addr.rsplit(':').next().unwrap_or("27015");
             let cmd = format!("lsrcon {port} {} {}", crate::remote::shell_quote(pw_file), crate::remote::shell_quote(command));
-            return match crate::remote::exec(r, &cmd) {
+            return match crate::remote::exec_quick(r, &cmd) {
                 Ok((0, out)) if out.contains("Bad rcon_password") => Err(RconError::BadPassword),
                 Ok((0, out)) => Ok(out),
                 _ => Err(RconError::Offline),

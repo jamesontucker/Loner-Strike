@@ -10,8 +10,9 @@ type Data = { lists: Record<ListId, string[]>; names: Record<ListId, string>; ta
 export function ShareList({ list, onShared }: { list: ListId; onShared?: () => void }) {
   const toast = useToast();
   const ask = useConfirm();
-  const me = targetKey();
   const [data, setData] = useState<Data | null>(null);
+  // your own game is "local:cstrike" or "local:czero" (each shares on its own)
+  const me = targetKey() === "local" ? (data?.targets.find((t) => t.id.startsWith("local:"))?.id ?? "local") : targetKey();
   const { run, busy } = useActions();
   const load = () => getJson<Data>("/api/lists").then(setData).catch(() => null);
   useEffect(() => {

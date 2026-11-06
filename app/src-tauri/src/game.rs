@@ -110,7 +110,7 @@ impl Game {
         let path = self.data.join("status.json");
         // on another machine the file is written there: bring it over first
         if let (Some((r, dir)), true) = (&self.remote, reply.contains("GM status written")) {
-            match crate::remote::read_file(r, &format!("{dir}/addons/amxmodx/data/gamemodes/status.json")) {
+            match crate::remote::read_file_quick(r, &format!("{dir}/addons/amxmodx/data/gamemodes/status.json")) {
                 Ok(bytes) => {
                     let _ = std::fs::write(&path, bytes);
                 }

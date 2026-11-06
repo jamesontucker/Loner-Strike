@@ -64,9 +64,18 @@ export function Hltv({ server }: { server: ServerInfo }) {
     dirty.current = false;
     setSt(null);
     setForm(null);
-    load();
-    const t = setInterval(() => !document.hidden && load(), 4000);
-    return () => clearInterval(t);
+    // the next check only after the last one answered (a slow server doesn't pile them up)
+    let t = 0;
+    let live = true;
+    const tick = async () => {
+      if (!document.hidden) await load();
+      if (live) t = window.setTimeout(tick, 4000);
+    };
+    tick();
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [server.id]);
 

@@ -195,7 +195,7 @@ fn config(e: &Entry, admin: &str, server_password: Option<&str>) -> String {
     if let Some(pw) = server_password.filter(|p| safe_password(p)) {
         c.push(format!("serverpassword \"{pw}\""));
     }
-    c.push(format!("connect 127.0.0.1:{}", e.port));
+    c.push(format!("connect {}:{}", e.local_host(), e.port));
     if s.record {
         c.push(format!("record {DEMO_NAME}"));
     }
@@ -249,7 +249,7 @@ fn new_admin() -> String {
 
 /// On a Linux server: writes HLTV's settings and service there, and turns it on or off.
 /// A copy of the settings stays here, for the admin password.
-fn remote_apply(e: &Entry, on: bool) -> Result<(), String> {
+pub(crate) fn remote_apply(e: &Entry, on: bool) -> Result<(), String> {
     let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
     let admin = new_admin();
     let cfg = config(e, &admin, server_password(e).as_deref());
@@ -511,7 +511,7 @@ fn demos(e: &Entry) -> Vec<Value> {
 fn console(e: &Entry) -> Vec<String> {
     if let Some(r) = &e.remote {
         let cmd = format!("tail -c 24576 \"$HOME/{}/{CONSOLE_LOG}\" 2>/dev/null", crate::remote::server_dir(&e.id));
-        let out = crate::remote::exec(r, &cmd).map(|(_, o)| o).unwrap_or_default();
+        let out = crate::remote::exec_quick(r, &cmd).map(|(_, o)| o).unwrap_or_default();
         let lines: Vec<String> = out
             .lines()
             .filter(|l| !l.contains("Executing rcon") && !l.to_lowercase().contains("password") && !l.trim().is_empty())
