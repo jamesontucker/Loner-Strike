@@ -569,22 +569,120 @@ fn upload_filter(rel: &Path) -> bool {
         || p.ends_with(".exe"))
 }
 
-/// After a change on a settings page: the settings and configs go up to the machine,
-/// and the plugins read them again. One sync at a time per server.
+/// After a change on a settings page (or anything else here): what changed goes up.
 pub fn sync_settings(id: &str) {
+    if let Some(e) = get(id).filter(|e| e.ready && e.remote.is_some()) {
+        let _ = sync(&e, false);
+    }
+}
+
+// ---- keeping a server on another machine in step with this computer's copy --------------
+
+/// What was last uploaded: path -> (size, modified seconds).
+type Manifest = std::collections::BTreeMap<String, (u64, u64)>;
+
+fn manifest_path(e: &Entry) -> PathBuf {
+    e.dir.join(".uploaded.json")
+}
+
+/// This computer's copy as it is now (what upload_filter lets through, minus files the
+/// app brings back from the machine).
+fn current_files(e: &Entry) -> Manifest {
+    let gdir = e.dir.join(&e.game);
+    let mut m = Manifest::new();
+    for f in crate::archive::walk(&gdir) {
+        let Ok(rel) = f.strip_prefix(&gdir) else { continue };
+        if !upload_filter(rel) {
+            continue;
+        }
+        let key = rel.to_string_lossy().replace('\\', "/");
+        if key.ends_with("gamemodes/status.json") {
+            continue;
+        }
+        let Ok(meta) = std::fs::metadata(&f) else { continue };
+        let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
+        m.insert(key, (meta.len(), modified));
+    }
+    m
+}
+
+// servers with new files that need a map change or restart to be used
+static PENDING_RESTART: Mutex<Option<std::collections::HashSet<String>>> = Mutex::new(None);
+
+pub fn pending_restart(id: &str) -> bool {
+    PENDING_RESTART.lock().unwrap().as_ref().is_some_and(|s| s.contains(id))
+}
+
+fn clear_pending_restart(id: &str) {
+    // and ask the machine again next time rather than show what it was a moment ago
+    if let Some(m) = SEEN.lock().unwrap().as_mut() {
+        m.remove(id);
+    }
+    if let Some(s) = PENDING_RESTART.lock().unwrap().as_mut() {
+        s.remove(id);
+    }
+}
+
+/// Brings the machine in step with this computer's copy: uploads files that are new or
+/// changed since the last upload and removes ones the app uploaded that are gone here.
+/// Files the server writes itself (stats, its saved settings, logs) were never uploaded
+/// by the app after setup, so they're left alone. `everything`: send it all (setup).
+/// Returns (sent, removed).
+pub fn sync(e: &Entry, everything: bool) -> Result<(usize, usize), String> {
     static SYNCING: Mutex<()> = Mutex::new(());
     let _g = SYNCING.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(e) = get(id).filter(|e| e.ready) else { return };
-    let Some(r) = &e.remote else { return };
-    let keep = |rel: &Path| {
-        let p = rel.to_string_lossy().replace('\\', "/");
-        (p.starts_with("addons/amxmodx/data/") || p.starts_with("addons/amxmodx/configs/")) && !p.ends_with("status.json")
+    let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
+    copy_navs(e);
+    let to = format!("{}/{}", crate::remote::server_dir(&e.id), e.game);
+    let saved: Option<Manifest> = std::fs::read_to_string(manifest_path(e)).ok().and_then(|t| serde_json::from_str(&t).ok());
+    let now = current_files(e);
+    let (changed, gone): (std::collections::HashSet<String>, Vec<String>) = match (&saved, everything) {
+        (Some(old), false) => (
+            now.iter().filter(|(k, v)| old.get(*k) != Some(*v)).map(|(k, _)| k.clone()).collect(),
+            old.keys().filter(|k| !now.contains_key(*k)).cloned().collect(),
+        ),
+        // a server from before the app kept a record: its settings may have changed on the
+        // machine since setup, so everything but the settings goes up once
+        (None, false) => (now.keys().filter(|k| !k.starts_with("addons/amxmodx/data/")).cloned().collect(), vec![]),
+        (_, true) => (now.keys().cloned().collect(), vec![]),
     };
-    if crate::remote::upload_dir(r, &e.dir.join(&e.game), &format!("{}/{}", crate::remote::server_dir(&e.id), e.game), &keep).is_ok() {
+    if !changed.is_empty() {
+        crate::remote::upload_dir(r, &e.dir.join(&e.game), &to, &|rel: &Path| changed.contains(&rel.to_string_lossy().replace('\\', "/")))?;
+    }
+    for chunk in gone.chunks(80) {
+        let list = chunk.iter().map(|g| crate::remote::shell_quote(g)).collect::<Vec<_>>().join(" ");
+        crate::remote::exec(r, &format!("cd {} && rm -f -- {list}", crate::remote::shell_quote(&to)))?;
+    }
+    let _ = sys::write_atomic(&manifest_path(e), serde_json::to_string(&now).unwrap_or_default().as_bytes());
+    let touched = || changed.iter().chain(gone.iter());
+    if touched().any(|p| p.starts_with("addons/amxmodx/data/") || p.starts_with("addons/amxmodx/configs/")) {
         if let Some(rc) = e.rcon() {
             let _ = rc.send("amx_reloadadmins;gm_vipreload;gm_extrasreload;gm_commreload;gm_scrimreload;gm_botchat_reload");
         }
     }
+    // plugins, modules, models, sounds, maps: only loaded when a map starts
+    if !everything && touched().any(|p| !p.starts_with("addons/amxmodx/data/") && !p.starts_with("addons/amxmodx/configs/") && !p.ends_with(".nav")) {
+        PENDING_RESTART.lock().unwrap().get_or_insert_with(Default::default).insert(e.id.clone());
+    }
+    Ok((changed.len(), gone.len()))
+}
+
+/// Every few seconds: servers on other machines get what changed here (a mod installed,
+/// a map downloaded, a plugin added), whichever page did it.
+pub fn sync_loop() {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        std::thread::spawn(|| loop {
+            std::thread::sleep(Duration::from_secs(6));
+            // not while a setup job runs (it may be writing the copy)
+            if setup::current().state == "running" {
+                continue;
+            }
+            for e in load().into_iter().filter(|e| e.ready && e.remote.is_some()) {
+                let _ = sync(&e, false);
+            }
+        });
+    });
 }
 
 /// The bots' navigation files this computer's game has learned (CS 1.6 ships none), so
@@ -602,11 +700,9 @@ fn copy_navs(e: &Entry) {
     }
 }
 
-/// Puts this computer's copy of a server's files on its machine.
+/// Puts this computer's copy of a server's files on its machine, all of it (setup).
 pub fn upload(e: &Entry) -> Result<u64, String> {
-    let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
-    copy_navs(e);
-    crate::remote::upload_dir(r, &e.dir.join(&e.game), &format!("{}/{}", crate::remote::server_dir(&e.id), e.game), &upload_filter)
+    sync(e, true).map(|(n, _)| n as u64)
 }
 
 /// Sets up a server on a Linux machine over SSH: the machine and Valve's server first
@@ -670,6 +766,41 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
     Ok((id, job))
 }
 
+/// Runs remote::SETUP_SH on the machine (the machine, Valve's server and the engine
+/// add-ons; safe to run again, which is also how Valve's updates come in), showing its
+/// stages and Valve's download on the job.
+fn machine_setup(job: &setup::Job, r: &crate::remote::RemoteInfo, id: &str, g: &str) -> Result<(), String> {
+    // the script reports its stages; Valve's download reports its own progress
+    const STAGES: &[(&str, f64, &str)] = &[
+        ("packages", 0.03, "Installing the 32-bit libraries the server needs"),
+        ("firewall", 0.08, "Opening the game ports in the machine's firewall"),
+        ("steamcmd", 0.1, "Getting SteamCMD"),
+        ("server", 0.15, "Downloading the server from Valve (a few minutes)"),
+        ("foundation", 0.9, "Installing Metamod-P, AMX Mod X and ReGameDLL"),
+        ("ready", 1.0, "The machine is ready"),
+    ];
+    let mut failed = String::new();
+    let mut last = String::new();
+    let script = format!("{} bash -s", crate::remote::setup_env(id, g));
+    let code = crate::remote::exec_stream(r, &script, crate::remote::SETUP_SH.as_bytes(), |line| {
+        if let Some(stage) = line.strip_prefix("@@STEP ") {
+            if let Some((_, f, text)) = STAGES.iter().find(|(s, _, _)| *s == stage) {
+                job_progress(job, *f, text);
+            }
+        } else if let Some(why) = line.strip_prefix("@@FAIL ") {
+            failed = why.to_string();
+        } else if let Some((f, text)) = parse_progress(line) {
+            job_progress(job, 0.15 + f * 0.75, &text);
+        } else if !line.trim().is_empty() {
+            last = line.trim().chars().take(160).collect();
+        }
+    })?;
+    if code != 0 {
+        return Err(if !failed.is_empty() { failed } else if !last.is_empty() { format!("Setup on the server stopped: {last}") } else { "Setup on the server stopped.".into() });
+    }
+    Ok(())
+}
+
 /// The setup job for a server on another machine (also "Try again" after a setup that
 /// stopped: every step is safe to run again). Returns the job id.
 fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, res: PathBuf) -> Result<String, String> {
@@ -684,37 +815,7 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
     ];
     setup::start_job("server", steps, move |job| {
         let r = entry.remote.clone().unwrap();
-        job.run(&format!("{g}/srv-machine"), || {
-            // the script reports its stages; Valve's download reports its own progress
-            const STAGES: &[(&str, f64, &str)] = &[
-                ("packages", 0.03, "Installing the 32-bit libraries the server needs"),
-                ("firewall", 0.08, "Opening the game ports in the machine's firewall"),
-                ("steamcmd", 0.1, "Getting SteamCMD"),
-                ("server", 0.15, "Downloading the server from Valve (a few minutes)"),
-                ("foundation", 0.9, "Installing Metamod-P, AMX Mod X and ReGameDLL"),
-                ("ready", 1.0, "The machine is ready"),
-            ];
-            let mut failed = String::new();
-            let mut last = String::new();
-            let script = format!("{} bash -s", crate::remote::setup_env(&entry.id, &g));
-            let code = crate::remote::exec_stream(&r, &script, crate::remote::SETUP_SH.as_bytes(), |line| {
-                if let Some(stage) = line.strip_prefix("@@STEP ") {
-                    if let Some((_, f, text)) = STAGES.iter().find(|(s, _, _)| *s == stage) {
-                        job_progress(job, *f, text);
-                    }
-                } else if let Some(why) = line.strip_prefix("@@FAIL ") {
-                    failed = why.to_string();
-                } else if let Some((f, text)) = parse_progress(line) {
-                    job_progress(job, 0.15 + f * 0.75, &text);
-                } else if !line.trim().is_empty() {
-                    last = line.trim().chars().take(160).collect();
-                }
-            })?;
-            if code != 0 {
-                return Err(if !failed.is_empty() { failed } else if !last.is_empty() { format!("Setup on the server stopped: {last}") } else { "Setup on the server stopped.".into() });
-            }
-            Ok(())
-        })?;
+        job.run(&format!("{g}/srv-machine"), || machine_setup(job, &r, &entry.id, &g))?;
         // this computer's copy: the game's own liblist.gam from the machine, then Loner-Strike
         // built into it like any server
         let gdir = entry.dir.join(&g);
@@ -771,6 +872,22 @@ pub fn update_files(e: Entry) -> Result<String, String> {
         return Err("Stop the server first.".into());
     }
     let g = e.game.clone();
+    if let Some(r) = e.remote.clone() {
+        // on the machine: the setup script again (SteamCMD checks Valve's files, the add-ons
+        // are put back), then every Loner-Strike file sent again over whatever it replaced
+        let host = r.host.clone();
+        let steps = vec![
+            setup::server_step(&g, "srv-machine", &format!("Updating {host}: Valve's server files"), 10.0),
+            setup::server_step(&g, "srv-upload", "Sending Loner-Strike's files again", 1.5),
+        ];
+        return setup::start_job("server", steps, move |job| {
+            job.run(&format!("{g}/srv-machine"), || machine_setup(job, &r, &e.id, &g))?;
+            // without the record, everything but the settings goes up (the machine's own
+            // stats and bans stay as they are)
+            let _ = std::fs::remove_file(manifest_path(&e));
+            job.run(&format!("{g}/srv-upload"), || sync(&e, false).map(|_| ()))
+        });
+    }
     let base = e.dir.parent().ok_or("Bad server folder.")?.join(".base");
     let steps = vec![
         setup::server_step(&g, "srv-steamcmd", "Getting SteamCMD", 0.5),
@@ -924,17 +1041,24 @@ pub fn running(id: &str) -> bool {
 
 /// A server on another machine: is its service running? (asked over SSH, kept a few seconds)
 fn remote_active(e: &Entry) -> bool {
-    static SEEN: Mutex<Option<HashMap<String, (Instant, bool)>>> = Mutex::new(None);
-    let Some(r) = &e.remote else { return false };
-    if let Some((at, on)) = SEEN.lock().unwrap().as_ref().and_then(|m| m.get(&e.id).cloned()) {
+    remote_state(e).0
+}
+
+static SEEN: Mutex<Option<HashMap<String, (Instant, (bool, u64))>>> = Mutex::new(None);
+
+/// (running, seconds up), asked over SSH and kept a few seconds.
+fn remote_state(e: &Entry) -> (bool, u64) {
+    let Some(r) = &e.remote else { return (false, 0) };
+    if let Some((at, (on, secs))) = SEEN.lock().unwrap().as_ref().and_then(|m| m.get(&e.id).cloned()) {
         if at.elapsed() < Duration::from_secs(4) {
-            return on;
+            return (on, secs + at.elapsed().as_secs());
         }
     }
-    let on = crate::remote::active(r, &e.id);
-    SEEN.lock().unwrap().get_or_insert_with(HashMap::new).insert(e.id.clone(), (Instant::now(), on));
-    on
+    let state = crate::remote::active(r, &e.id);
+    SEEN.lock().unwrap().get_or_insert_with(HashMap::new).insert(e.id.clone(), (Instant::now(), state));
+    state
 }
+
 
 /// A server still up from before the app last closed ("keep servers running"):
 /// it answers on its port with its RCON password.
@@ -1047,6 +1171,7 @@ pub fn start(id: &str) -> Result<(), String> {
         return Err("This server isn't finished setting up.".into());
     }
     if let Some(r) = &e.remote {
+        clear_pending_restart(&e.id);
         return crate::remote::systemctl(r, &e.id, "start");
     }
     if with_runs(|r| r.procs.contains_key(id)) || left_running(&e) {
@@ -1071,6 +1196,7 @@ pub fn start(id: &str) -> Result<(), String> {
 pub fn stop(id: &str) {
     let e = get(id);
     if let Some(e) = e.as_ref().filter(|e| e.remote.is_some()) {
+        clear_pending_restart(&e.id);
         let _ = crate::remote::systemctl(e.remote.as_ref().unwrap(), &e.id, "stop");
         return;
     }
@@ -1198,7 +1324,8 @@ fn hide_passwords(line: &str) -> String {
 fn view(e: &Entry) -> Value {
     let loner = setup::record::Record::open(&e.dir.join(&e.game)).installed("core");
     let (state, uptime, error) = if e.remote.is_some() && e.ready {
-        (if remote_active(e) { "running" } else { "stopped" }, 0, None)
+        let (on, secs) = remote_state(e);
+        (if on { "running" } else { "stopped" }, secs, None)
     } else {
         with_runs(|r| match r.procs.get(&e.id) {
             Some(p) => ("running", p.started.elapsed().as_secs(), None),
@@ -1223,7 +1350,7 @@ fn view(e: &Entry) -> Value {
     json!({"id": e.id, "name": e.name, "game": e.game, "port": e.port, "visibility": e.visibility, "map": e.map,
            "maxplayers": e.maxplayers, "ready": e.ready, "state": state, "uptime": uptime, "error": error,
            "imported": e.imported, "loner": loner, "dir": e.dir,
-           "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address()})
+           "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(), "pending_restart": pending_restart(&e.id)})
 }
 
 // ---- which game the panel controls -----------------------------------------------------
@@ -1466,7 +1593,7 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
         // bring its files up to date with this computer's copy while at it)
         if let Some(e) = get(&id).filter(|e| e.ready && e.remote.is_some()) {
             let r = e.remote.as_ref().unwrap();
-            upload(&e)?;
+            sync(&e, false)?;
             let code = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&e.id, &e.game, &launch_args(&e)).as_bytes(), |_| {})?;
             if code != 0 {
                 return Err("Saved here, but the server's service couldn't be updated.".into());

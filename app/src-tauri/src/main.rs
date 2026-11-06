@@ -76,6 +76,7 @@ fn main() {
             connect::renew_loop();
             // dedicated servers' daily restarts (Server extras, Schedule)
             servers::schedule_restarts();
+            servers::sync_loop();
             notify::watch(app.handle().clone(), state.clone());
             #[cfg(target_os = "macos")]
             app.set_menu(mac_menu(app.handle())?)?;

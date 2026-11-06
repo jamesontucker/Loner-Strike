@@ -514,9 +514,14 @@ echo "@@STEP ready"
     )
 }
 
-/// Is the server's service running?
-pub fn active(r: &RemoteInfo, id: &str) -> bool {
-    exec(r, &format!("systemctl is-active {}", unit(id))).map(|(_, o)| o.trim() == "active").unwrap_or(false)
+/// Is the server's service running, and for how many seconds?
+pub fn active(r: &RemoteInfo, id: &str) -> (bool, u64) {
+    let u = unit(id);
+    let Ok((_, out)) = exec(r, &format!("systemctl is-active {u}; ps -o etimes= -p \"$(systemctl show -p MainPID --value {u})\" 2>/dev/null")) else { return (false, 0) };
+    let mut lines = out.lines();
+    let on = lines.next().map(|l| l.trim() == "active").unwrap_or(false);
+    let secs = lines.next().and_then(|l| l.trim().parse().ok()).unwrap_or(0);
+    (on, secs)
 }
 
 pub fn systemctl(r: &RemoteInfo, id: &str, action: &str) -> Result<(), String> {
