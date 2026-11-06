@@ -11,6 +11,7 @@ mod game;
 mod gamebanana;
 mod maps;
 mod panel_api;
+mod prefs;
 mod rcon;
 mod server;
 mod servers;
@@ -41,7 +42,7 @@ fn main() {
         current: RwLock::new(None),
         hosts: RwLock::new(vec![format!("127.0.0.1:{port}"), format!("localhost:{port}")]),
         lan_hosts: RwLock::new(Vec::new()),
-        token: settings.token.clone(),
+        token: RwLock::new(settings.token.clone()),
         app: OnceLock::new(),
         phone: Mutex::new(app_api::Phone::default()),
     });
@@ -60,7 +61,9 @@ fn main() {
             if settings.phone {
                 app_api::start_phone(&state);
             }
-            tauri::async_runtime::spawn(check_for_update(app.handle().clone()));
+            if !settings.manual_updates {
+                tauri::async_runtime::spawn(check_for_update(app.handle().clone()));
+            }
             connect::renew_loop();
             #[cfg(target_os = "macos")]
             app.set_menu(mac_menu(app.handle())?)?;
@@ -81,7 +84,10 @@ fn main() {
         .run(|_, event| {
             // stop dedicated servers and close the router port when the app quits
             if let tauri::RunEvent::Exit = event {
-                servers::stop_all();
+                // unless the player wants them left running
+                if !app_api::load_settings().keep_servers {
+                    servers::stop_all();
+                }
                 if connect::DIRECT.lock().map(|d| d.on).unwrap_or(false) {
                     connect::close_direct();
                 }

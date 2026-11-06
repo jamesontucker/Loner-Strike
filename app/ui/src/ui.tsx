@@ -176,3 +176,21 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
     </div>
   );
 }
+
+// ---- text size (per device: a phone and the computer can differ) --------------------
+export const SCALES: [string, number][] = [["Small", 0.9], ["Normal", 1], ["Large", 1.15], ["Larger", 1.3]];
+export function savedScale() {
+  try {
+    return Number(localStorage.getItem("ls.scale")) || 1;
+  } catch {
+    return 1;
+  }
+}
+export function applyScale(v: number) {
+  (document.documentElement.style as CSSStyleDeclaration & { zoom: string }).zoom = String(v);
+  try {
+    localStorage.setItem("ls.scale", String(v));
+  } catch {
+    /* private window */
+  }
+}

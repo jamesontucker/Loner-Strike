@@ -181,7 +181,7 @@ mod tests {
             current: RwLock::new(None),
             hosts: RwLock::new(vec![HOST.into()]),
             lan_hosts: RwLock::new(vec![]),
-            token: "testtoken0123456789".into(),
+            token: RwLock::new("testtoken0123456789".into()),
             app: OnceLock::new(),
             phone: Mutex::new(crate::app_api::Phone::default()),
         })

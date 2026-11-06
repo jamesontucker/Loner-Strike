@@ -38,6 +38,19 @@ fn libraries(steam_root: &Path) -> Vec<String> {
     out
 }
 
+/// The scan, plus Half-Life folders added by hand in Settings.
+pub fn find_installs() -> Vec<Install> {
+    let mut found = scan();
+    for dir in crate::app_api::load_settings().game_folders {
+        if let Some(i) = crate::prefs::custom_install(&dir) {
+            if !found.iter().any(|f| f.hl == i.hl) {
+                found.push(i);
+            }
+        }
+    }
+    found
+}
+
 fn push(found: &mut Vec<Install>, hl: PathBuf, kind: &str, bottle: Option<String>) {
     if hl.is_dir() && !found.iter().any(|i| i.hl == hl) {
         let games = games_in(&hl);
@@ -46,7 +59,7 @@ fn push(found: &mut Vec<Install>, hl: PathBuf, kind: &str, bottle: Option<String
 }
 
 #[cfg(target_os = "macos")]
-pub fn find_installs() -> Vec<Install> {
+fn scan() -> Vec<Install> {
     let mut found = Vec::new();
     let Some(home) = dirs::home_dir() else { return found };
     let bottles = home.join("Library/Application Support/CrossOver/Bottles");
@@ -77,7 +90,7 @@ pub fn find_installs() -> Vec<Install> {
 }
 
 #[cfg(windows)]
-pub fn find_installs() -> Vec<Install> {
+fn scan() -> Vec<Install> {
     use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
     use winreg::RegKey;
     let mut roots: Vec<PathBuf> = Vec::new();
@@ -101,7 +114,7 @@ pub fn find_installs() -> Vec<Install> {
 }
 
 #[cfg(not(any(target_os = "macos", windows)))]
-pub fn find_installs() -> Vec<Install> {
+fn scan() -> Vec<Install> {
     Vec::new()
 }
 

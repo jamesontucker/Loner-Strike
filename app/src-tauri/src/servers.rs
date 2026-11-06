@@ -496,6 +496,34 @@ fn cfg_value(text: &str, key: &str) -> Option<String> {
 
 /// Registers an existing HLDS folder (nothing in it is moved or deleted) and brings
 /// its name, password and SteamID admins into the app.
+/// The server's own welcome page (motd.txt, motd.html or its motdfile) becomes the
+/// welcome page, since Loner-Strike's own replaces it once it's added. Valve's
+/// stock one is left out. Returns "url", "page" or "" (nothing, or too long).
+fn import_motd(game_dir: &Path, cfg: &str, data: &Path) -> &'static str {
+    if data.join("welcome.html").exists() || data.join("welcome_url.txt").exists() {
+        return "";
+    }
+    let named = cfg_value(cfg, "motdfile").filter(|f| !f.is_empty() && !f.contains("..") && !f.contains(':'));
+    for name in named.into_iter().chain(["motd.html".to_string(), "motd.txt".to_string()]) {
+        let Ok(text) = sys::read_latin1(&game_dir.join(&name)) else { continue };
+        let t = text.trim();
+        let lower = t.to_lowercase();
+        if t.is_empty() || lower.contains("counter-strike.net") || lower.contains("steampowered.com") || lower.contains("no_motd") {
+            continue;
+        }
+        if (lower.starts_with("http://") || lower.starts_with("https://")) && !t.contains(char::is_whitespace) {
+            let _ = sys::write_latin1(&data.join("welcome_url.txt"), t);
+            return "url";
+        }
+        if t.len() <= crate::welcome::MAX_HTML {
+            let _ = sys::write_latin1(&data.join("welcome.html"), t);
+            return "page";
+        }
+        return "";
+    }
+    ""
+}
+
 pub fn import(dir: &Path) -> Result<Value, String> {
     let dir = dir.canonicalize().map_err(|_| "That folder isn't there.".to_string())?;
     if !dir.join("hlds.exe").is_file() {
@@ -541,10 +569,15 @@ pub fn import(dir: &Path) -> Result<Value, String> {
     if !data.join("friends.json").exists() {
         let _ = std::fs::write(data.join("friends.json"), json!({"name": name, "password": password}).to_string());
     }
+    // the panel uses the server's own RCON password, so existing admin tools keep working
+    if let Some(pw) = cfg_value(&cfg, "rcon_password").filter(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_graphic() && c != '"')) {
+        let _ = std::fs::write(data.join("panel_rcon.txt"), format!("{pw}\n"));
+    }
+    let welcome = import_motd(&dir.join(game), &cfg, &data);
     let admins = crate::admins::import_users(&dir.join(game), &data);
     edit(|l| l.push(entry.clone()))?;
     let loner = setup::record::Record::open(&dir.join(game)).installed("core");
-    Ok(json!({"ok": true, "id": id, "admins": admins, "loner": loner}))
+    Ok(json!({"ok": true, "id": id, "admins": admins, "loner": loner, "welcome": welcome}))
 }
 
 // ---- running servers ------------------------------------------------------------------
@@ -572,7 +605,13 @@ fn with_runs<T>(f: impl FnOnce(&mut Runs) -> T) -> T {
 }
 
 pub fn running(id: &str) -> bool {
-    with_runs(|r| r.procs.contains_key(id))
+    with_runs(|r| r.procs.contains_key(id)) || get(id).map(|e| left_running(&e)).unwrap_or(false)
+}
+
+/// A server still up from before the app last closed ("keep servers running"):
+/// it answers on its port with its RCON password.
+fn left_running(e: &Entry) -> bool {
+    e.ready && e.rcon().map(|r| r.send("status").is_ok()).unwrap_or(false)
 }
 
 fn launch_args(e: &Entry) -> Vec<String> {
@@ -626,7 +665,10 @@ fn spawn(e: &Entry) -> Result<Child, String> {
         .stdout(log.try_clone().map_err(|err| err.to_string())?)
         .stderr(log);
     let child = cmd.spawn().map_err(|err| format!("The server didn't start ({err})."))?;
-    sys::tie_to_app(&child);
+    // servers stop with the app, unless the player chose to keep them running
+    if !crate::app_api::load_settings().keep_servers {
+        sys::tie_to_app(&child);
+    }
     Ok(child)
 }
 
@@ -635,10 +677,10 @@ pub fn start(id: &str) -> Result<(), String> {
     if !e.ready {
         return Err("This server isn't finished setting up.".into());
     }
-    if running(id) {
+    if with_runs(|r| r.procs.contains_key(id)) || left_running(&e) {
         return Ok(());
     }
-    if let Some(other) = load().iter().find(|o| o.id != e.id && o.port == e.port && running(&o.id)) {
+    if let Some(other) = load().iter().find(|o| o.id != e.id && o.port == e.port && with_runs(|r| r.procs.contains_key(&o.id))) {
         return Err(format!("\"{}\" is using port {} already. Stop it first, or change this server's port.", other.name, e.port));
     }
     let child = spawn(&e)?;
@@ -657,7 +699,13 @@ pub fn stop(id: &str) {
         r.procs.get_mut(id).map(|p| p.stopping = true);
         r.procs.remove(id).map(|p| p.child)
     });
-    let Some(mut child) = child else { return };
+    let Some(mut child) = child else {
+        // one left running from before: ask it to quit
+        if let Some(rcon) = e.as_ref().and_then(|e| e.rcon()) {
+            let _ = rcon.send("quit");
+        }
+        return;
+    };
     if let Some(rcon) = e.as_ref().and_then(|e| e.rcon()) {
         let _ = rcon.send("quit");
     }
@@ -755,6 +803,8 @@ fn view(e: &Entry) -> Value {
         Some(p) => ("running", p.started.elapsed().as_secs(), None),
         None => (if r.errors.contains_key(&e.id) { "crashed" } else { "stopped" }, 0, r.errors.get(&e.id).cloned()),
     });
+    // still up from before the app last closed
+    let (state, error) = if state == "stopped" && left_running(e) { ("running", None) } else { (state, error) };
     let state = if e.ready { state } else { "setting-up" };
     json!({"id": e.id, "name": e.name, "game": e.game, "port": e.port, "visibility": e.visibility, "map": e.map,
            "maxplayers": e.maxplayers, "ready": e.ready, "state": state, "uptime": uptime, "error": error,

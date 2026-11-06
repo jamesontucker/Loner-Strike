@@ -30,6 +30,23 @@ pub struct Settings {
     /// What the panel controls: "local" (the game) or a dedicated server's id
     #[serde(default)]
     pub target: Option<String>,
+    /// don't look for updates when the app starts
+    #[serde(default)]
+    pub manual_updates: bool,
+    /// dedicated servers keep running when the app closes
+    #[serde(default)]
+    pub keep_servers: bool,
+    /// Half-Life folders added by hand (the scan didn't find them)
+    #[serde(default)]
+    pub game_folders: Vec<String>,
+}
+
+/// A new phone access key.
+pub fn new_token() -> String {
+    use rand::Rng;
+    const C: &[u8] = b"abcdefghijkmnpqrstuvwxyz23456789";
+    let mut r = rand::thread_rng();
+    (0..20).map(|_| C[r.gen_range(0..C.len())] as char).collect()
 }
 
 fn settings_path() -> PathBuf {
@@ -42,10 +59,7 @@ pub fn load_settings() -> Settings {
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or_default();
     if s.token.len() < 16 {
-        use rand::Rng;
-        const C: &[u8] = b"abcdefghijkmnpqrstuvwxyz23456789";
-        let mut r = rand::thread_rng();
-        s.token = (0..20).map(|_| C[r.gen_range(0..C.len())] as char).collect();
+        s.token = new_token();
         save_settings(&s);
     }
     s
@@ -60,7 +74,7 @@ pub fn set_local_game(hl: &str, game: &str) {
     save_settings(&s);
 }
 
-fn save_settings(s: &Settings) {
+pub fn save_settings(s: &Settings) {
     let p = settings_path();
     if let Some(d) = p.parent() {
         let _ = std::fs::create_dir_all(d);
@@ -136,11 +150,11 @@ fn qr_svg(text: &str) -> String {
         .unwrap_or_default()
 }
 
-fn phone_status(st: &Shared) -> Value {
+pub fn phone_status(st: &Shared) -> Value {
     let phone = st.phone.lock().unwrap();
     match &phone.host {
         Some(h) => {
-            let url = format!("http://{h}/?t={}", st.token);
+            let url = format!("http://{h}/?t={}", st.token.read().unwrap());
             json!({"enabled": true, "address": format!("http://{h}"), "url": url, "qr": qr_svg(&url)})
         }
         None => json!({"enabled": false, "error": phone.error}),

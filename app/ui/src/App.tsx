@@ -3,7 +3,7 @@ import { clock, getJson, ON_THIS_COMPUTER, postJson, setTarget, withTarget } fro
 import { useGameState } from "./api";
 import { Icon } from "./icons";
 import type { AppInfo, MapInfo, Online, ServerList } from "./types";
-import { ConfirmProvider, ToastProvider, useCommand, useToast } from "./ui";
+import { applyScale, ConfirmProvider, savedScale, ToastProvider, useToast } from "./ui";
 import { Addons } from "./views/Addons";
 import { AppSettings } from "./views/AppSettings";
 import { Bots } from "./views/Bots";
@@ -14,6 +14,7 @@ import { Maps } from "./views/Maps";
 import { Mods } from "./views/Mods";
 import { PlayIdle, PlayLive } from "./views/Play";
 import { Players } from "./views/Players";
+import { QuickBar } from "./views/QuickBar";
 import { ServerPage, Servers } from "./views/Servers";
 import { MatchButtons, SettingsPage } from "./views/Settings";
 import { Welcome } from "./views/Welcome";
@@ -46,6 +47,8 @@ function loadSection(): Section {
     return "play";
   }
 }
+
+applyScale(savedScale());
 
 export default function App() {
   return (
@@ -237,7 +240,8 @@ function Shell() {
       </aside>
 
       <div className="main">
-        <Strip data={online} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} refresh={refresh} />
+        <Strip data={online} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} />
+        {online && <QuickBar data={online} maps={maps} refresh={refresh} reloadMaps={() => reloadMaps(true)} />}
         <main className="content">
           <HomeScreenHint />
           {state === null ? (
@@ -330,8 +334,7 @@ function Shell() {
 /** The phone's bottom bar: the most used sections, and Servers for people who host. */
 const tabbarFor = (hosting: boolean): Section[] => (hosting ? ["play", "maps", "players", "servers"] : ["play", "maps", "bots", "players"]);
 
-function Strip({ data, reason, app, server, refresh }: { data: Online | null; reason: string; app: AppInfo | null; server?: string; refresh: () => void }) {
-  const run = useCommand(refresh);
+function Strip({ data, reason, app, server }: { data: Online | null; reason: string; app: AppInfo | null; server?: string }) {
   if (!data) {
     return (
       <header className="strip" data-tauri-drag-region>
@@ -363,8 +366,6 @@ function Strip({ data, reason, app, server, refresh }: { data: Online | null; re
         <span className="ct">{score("CT")}</span>
       </div>
       <div className="strip-actions">
-        <button className="btn" onClick={() => run("gm_restartmap")}>Restart map</button>
-        <button className="btn" onClick={() => run("gm_do", ["endround"])}>End round</button>
         <span className="live on">Live</span>
       </div>
     </header>

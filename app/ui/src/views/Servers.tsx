@@ -18,7 +18,7 @@ const GAME = { cstrike: "Counter-Strike 1.6", czero: "Condition Zero" } as const
 const VISIBILITY = [
   { id: "lan", name: "This network", note: "Only people on your Wi-Fi or LAN" },
   { id: "unlisted", name: "Anyone with the address", note: "Not in Steam's server list" },
-  { id: "listed", name: "Listed on Steam", note: "Shows up in Find Servers → Internet" },
+  { id: "listed", name: "Listed on Steam", note: "Shows up in the Internet tab of Find Servers" },
 ] as const;
 const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up" };
 
@@ -210,7 +210,7 @@ export function ServerPage(props: {
   return (
     <div className="stack">
       <div className="server-top">
-        <button className="link back" onClick={onBack}>← All servers</button>
+        <button className="link back" onClick={onBack}>All servers</button>
         <div className="row between">
           <div>
             <h2 className="server-title">{s.name}</h2>
@@ -289,7 +289,7 @@ function AddLoner({ server, onDone }: { server: ServerInfo; onDone: () => void }
   const toast = useToast();
   const [running, setRunning] = useState(false);
   const start = async () => {
-    if (!(await ask("Add Loner-Strike to this server? It installs Metamod-P, AMX Mod X, ReGameDLL and the Game Mode Menu. Every file it replaces is backed up, and Settings → Remove puts them back.", { ok: "Add Loner-Strike" }))) return;
+    if (!(await ask("Add Loner-Strike to this server? It installs Metamod-P, AMX Mod X, ReGameDLL and the Game Mode Menu. Every file it replaces is backed up, and removing it in Mods puts them back.", { ok: "Add Loner-Strike" }))) return;
     const r = await post("/api/setup/install", { hl: server.dir, games: [server.game], components: [] });
     if (r.error) return toast(r.error, true);
     setRunning(true);

@@ -164,7 +164,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
         </li>
         <li className={ip ? "now" : ""}>
           <strong>Start your game</strong>
-          <p>On the same {app} network, friends see your server in <b>Find Servers → LAN</b>, or use the address below.</p>
+          <p>On the same {app} network, friends see your server in the <b>LAN</b> tab of <b>Find Servers</b>, or use the address below.</p>
         </li>
       </ol>
     );
@@ -178,7 +178,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
       <ol className="steps">
         <li className="done"><strong>Get everyone on the same network</strong><p>Same Wi-Fi, or plugged into the same router.</p></li>
         <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong><p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (Wine/CrossOver): click Allow.</p></li>
-        <li className="now"><strong>Friends join from the LAN tab</strong><p>In Counter-Strike: <b>Find Servers → LAN</b>, and your server is there{serverName ? ` as "${serverName}"` : ""}.</p></li>
+        <li className="now"><strong>Friends join from the LAN tab</strong><p>In Counter-Strike, open <b>Find Servers</b> and the <b>LAN</b> tab, and your server is there{serverName ? ` as "${serverName}"` : ""}.</p></li>
       </ol>
     );
   } else if (method === "direct") {
@@ -258,7 +258,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   } else if (method === "radmin") {
     steps = vlanSteps("Radmin VPN", "radmin-vpn.com", "https://www.radmin-vpn.com/",
       <b>Radmin VPN only runs on Windows, so it won't work from a Mac.</b>,
-      "In Radmin VPN, choose Network → Create network, give it a name and password, and send both to your friends so they can join.");
+      "In Radmin VPN, choose Create network from the Network menu, give it a name and password, and send both to your friends so they can join.");
   } else if (method === "hamachi") {
     steps = vlanSteps("Hamachi", "vpn.net", "https://vpn.net/", <span className="muted">The free plan allows 5 people per network.</span>,
       "In Hamachi, create a new network with an ID and password, and send both to your friends so they can join it.");

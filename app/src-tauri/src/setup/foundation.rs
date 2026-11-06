@@ -68,9 +68,24 @@ fn need(path: std::path::PathBuf, what: &str) -> Result<std::path::PathBuf, Stri
     }
 }
 
+/// A file the game already had that Loner-Strike didn't put there.
+fn theirs(rec: &Record, rel: &str) -> bool {
+    rec.exists(rel) && !rec.ours(rel)
+}
+
+/// Whether a file contains `needle` (to recognise ReGameDLL and Metamod builds).
+fn mentions(rec: &Record, rel: &str, needle: &[u8]) -> bool {
+    rec.full(rel).ok().and_then(|p| std::fs::read(p).ok()).map(|d| d.windows(needle.len()).any(|w| w == needle)).unwrap_or(false)
+}
+
 pub fn metamod(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
-    let mm = get(&METAMOD, ctx, tmp, "mm")?;
-    rec.copy(&need(mm.join("addons/metamod/dlls/metamod.dll"), "Metamod-P")?, "addons/metamod/dlls/metamod.dll")?;
+    // a server that already runs Metamod (often Metamod-R) keeps its own
+    if theirs(rec, "addons/metamod/dlls/metamod.dll") {
+        ctx.progress.note("Kept the Metamod that was already there.");
+    } else {
+        let mm = get(&METAMOD, ctx, tmp, "mm")?;
+        rec.copy(&need(mm.join("addons/metamod/dlls/metamod.dll"), "Metamod-P")?, "addons/metamod/dlls/metamod.dll")?;
+    }
     let plugins_ini = rec.read("addons/metamod/plugins.ini").unwrap_or_default();
     if !plugins_ini.to_lowercase().contains("amxmodx_mm.dll") {
         let sep = if plugins_ini.trim().is_empty() { "" } else { "\r\n" };
@@ -100,7 +115,12 @@ pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
 /// ReGameDLL replaces the game's own server code (mp.dll); the original is backed up.
 pub fn regamedll(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
     let rg = get(&REGAMEDLL, ctx, tmp, "rg")?;
-    rec.copy(&need(rg.join("bin/win32/cstrike/dlls/mp.dll"), "ReGameDLL")?, "dlls/mp.dll")?;
+    // a server that already runs ReGameDLL (maybe a newer one) keeps its own
+    if theirs(rec, "dlls/mp.dll") && mentions(rec, "dlls/mp.dll", b"ReGameDLL") {
+        ctx.progress.note("Kept the ReGameDLL that was already there.");
+    } else {
+        rec.copy(&need(rg.join("bin/win32/cstrike/dlls/mp.dll"), "ReGameDLL")?, "dlls/mp.dll")?;
+    }
     for cfg in ["game.cfg", "game_init.cfg"] {
         if !rec.exists(cfg) {
             rec.copy(&need(rg.join("bin/win32/cstrike").join(cfg), "ReGameDLL")?, cfg)?;

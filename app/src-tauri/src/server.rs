@@ -35,7 +35,7 @@ pub struct AppState {
     /// Host names the phone listener answers to (this computer's LAN address).
     pub lan_hosts: RwLock<Vec<String>>,
     /// Phone access token, kept between runs so a saved QR keeps working.
-    pub token: String,
+    pub token: RwLock<String>,
     pub app: OnceLock<tauri::AppHandle>,
     pub phone: Mutex<crate::app_api::Phone>,
 }
@@ -86,15 +86,15 @@ async fn guard_lan(State(st): State<Shared>, req: Request, next: Next) -> Respon
         .headers()
         .get(header::COOKIE)
         .and_then(|c| c.to_str().ok())
-        .map(|c| c.split(';').any(|p| p.trim() == format!("ls_token={}", st.token)))
+        .map(|c| c.split(';').any(|p| p.trim() == format!("ls_token={}", st.token.read().unwrap())))
         .unwrap_or(false);
-    let query_ok = req.uri().query().map(|q| q.split('&').any(|p| p == format!("t={}", st.token))).unwrap_or(false);
+    let query_ok = req.uri().query().map(|q| q.split('&').any(|p| p == format!("t={}", st.token.read().unwrap()))).unwrap_or(false);
     if !cookie_ok && !query_ok {
         return (StatusCode::FORBIDDEN, "Scan the QR code in Loner-Strike's Settings to connect.").into_response();
     }
     let mut res = next.run(req).await;
     if query_ok {
-        let c = format!("ls_token={}; Path=/; SameSite=Strict; Max-Age=31536000", st.token);
+        let c = format!("ls_token={}; Path=/; SameSite=Strict; Max-Age=31536000", st.token.read().unwrap());
         res.headers_mut().insert(header::SET_COOKIE, c.parse().unwrap());
     }
     res
@@ -152,10 +152,11 @@ pub fn router(state: Shared, listener: Listener) -> Router {
         .merge(crate::setup_api::routes())
         .merge(crate::servers::routes())
         .merge(crate::welcome::routes())
+        .merge(crate::prefs::routes())
         .fallback(ui);
     let routes = routes.layer(middleware::from_fn(with_target));
     let routes = match listener {
-        Listener::Local => routes.merge(crate::servers::local_routes()).layer(middleware::from_fn_with_state(state.clone(), guard_local)),
+        Listener::Local => routes.merge(crate::servers::local_routes()).merge(crate::prefs::local_routes()).layer(middleware::from_fn_with_state(state.clone(), guard_local)),
         Listener::Lan => routes.layer(middleware::from_fn_with_state(state.clone(), guard_lan)),
     };
     routes.with_state(state)

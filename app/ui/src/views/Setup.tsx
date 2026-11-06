@@ -268,7 +268,7 @@ export function Setup({ scan, onClose, onDone, onRescan }: { scan: Scan; onClose
             <ul className="done-tips">
               <li><span className="kbd">F3</span><span>In the game: modes, maps, bots and settings. <b>F4</b> is the quick menu.</span></li>
               <li><span className="kbd">Maps</span><span>The first time you play a map, the bots spend a few minutes learning it.</span></li>
-              <li><span className="kbd">Phone</span><span>Run everything from here, or from your phone: Settings → Use on your phone.</span></li>
+              <li><span className="kbd">Phone</span><span>Run everything from here, or from your phone (see Use on your phone in Settings).</span></li>
             </ul>
             {!!job?.failed_compiles?.length && <p className="err-text">These didn't build, so they won't load: {job.failed_compiles.join(", ")}.</p>}
             {job?.notes?.map((n) => <p key={n} className="muted">{n}</p>)}
