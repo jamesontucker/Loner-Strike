@@ -154,6 +154,7 @@ async fn with_target(req: Request, next: Next) -> Response {
                     }
                     if remote {
                         crate::servers::sync_settings(&id2);
+                        crate::hltv::refresh_remote(&id2);
                     }
                 });
             }

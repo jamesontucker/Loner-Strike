@@ -693,6 +693,8 @@ pub fn hltv_sh(id: &str, cfg: &str, admin: &str, port: u16, on: bool) -> String 
     format!(
         r#"set -eu
 SRV="$HOME/{dir}"
+# Valve's Linux server comes with HLTV; an old or partial download may not
+[ -x "$SRV/hltv" ] || exit 3
 umask 077
 cat > "$SRV/loner-strike-hltv.cfg" <<'LSCFG'
 {cfg}

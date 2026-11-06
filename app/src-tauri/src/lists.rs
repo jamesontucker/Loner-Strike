@@ -47,7 +47,22 @@ static LOCK: Mutex<()> = Mutex::new(());
 static STATE: OnceLock<Shared> = OnceLock::new();
 
 pub fn init(st: &Shared) {
-    let _ = STATE.set(st.clone());
+    if STATE.set(st.clone()).is_ok() {
+        watch_bans();
+    }
+}
+
+/// Bans made in the game (amx_ban, the vote ban's permanent ones) are written to the
+/// game's own ban files, not through the app: shared ban lists are looked at once a
+/// minute so those reach the other servers too.
+fn watch_bans() {
+    std::thread::spawn(|| loop {
+        std::thread::sleep(std::time::Duration::from_secs(60));
+        let Some(group) = load().remove("bans").filter(|g| g.members.len() >= 2) else { continue };
+        for m in &group.members {
+            check(m, "bans");
+        }
+    });
 }
 
 fn file() -> std::path::PathBuf {
@@ -156,9 +171,16 @@ fn name_of(target: &str) -> String {
 /// After a request that edits `list` on `target` ("local" or a server id): if this
 /// member's list really changed, the change goes to the other members.
 pub fn after_change(target: &str, list: &str) {
-    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let member = if target == "local" { local_id() } else { Some(target.to_string()) };
-    let Some(member) = member else { return };
+    if let Some(member) = member {
+        check(&member, list);
+    }
+}
+
+/// Passes `member`'s list on if it changed since it was last seen.
+fn check(member: &str, list: &str) {
+    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let member = member.to_string();
     let mut c = load();
     let Some(group) = c.get_mut(list).filter(|g| g.members.len() >= 2 && g.members.contains(&member)) else { return };
     let Some(g) = game(&member) else { return };

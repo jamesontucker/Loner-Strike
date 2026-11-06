@@ -258,10 +258,23 @@ pub(crate) fn remote_apply(e: &Entry, on: bool) -> Result<(), String> {
         allow_proxies(e);
     }
     let code = crate::remote::exec_stream(r, "bash -s", crate::remote::hltv_sh(&e.id, cfg.trim_end(), &admin, port_of(e), on).as_bytes(), |_| {})?;
-    if code != 0 {
-        return Err("Couldn't set up HLTV on the server.".into());
+    match code {
+        0 => Ok(()),
+        3 => Err("HLTV isn't in this server's files. Stop the server and press Update in Overview, Maintenance, then try again.".into()),
+        _ => Err("Couldn't set up HLTV on the server.".into()),
     }
-    Ok(())
+}
+
+/// After a change to a server on another machine: if HLTV's settings there no longer
+/// match it (the join password from Play with friends, the name, who can join), they're
+/// written again. Nothing happens when they still match.
+pub fn refresh_remote(id: &str) {
+    let Some(e) = servers::get(id).filter(|e| e.remote.is_some() && e.hltv.enabled && e.ready) else { return };
+    let Ok(now) = std::fs::read_to_string(e.dir.join(CFG)) else { return };
+    let admin = now.lines().find_map(|l| l.strip_prefix("adminpassword ")).map(|p| p.trim().trim_matches('"').to_string()).unwrap_or_default();
+    if config(&e, &admin, server_password(&e).as_deref()) != now {
+        let _ = remote_apply(&e, true);
+    }
 }
 
 /// The server's join password (Play with friends keeps it), which HLTV needs too.
