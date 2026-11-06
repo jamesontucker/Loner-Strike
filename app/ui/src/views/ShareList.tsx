@@ -45,13 +45,17 @@ export function ShareList({ list, onShared }: { list: ListId; onShared?: () => v
   const turn = async (v: boolean) => {
     if (!v) {
       if (picking && !on) return setPicking(false);
-      return set(members.filter((m) => m !== me), me, `This one's ${label} are its own again`);
+      // the ones who stay keep sharing (they all have the same list, so any of them is the source)
+      const rest = members.filter((m) => m !== me);
+      return set(rest, rest.find((m) => data.targets.some((t) => t.id === m)) ?? rest[0] ?? me, `This one's ${label} are its own again`);
     }
     // a group already shares it: join that one and take its list
     if (members.length >= 2) {
       const names = members.map(nameOf).join(", ");
       if (!(await ask(`Use the ${label} shared by ${names}? This one's are replaced with theirs.`, { ok: "Use the shared list" }))) return;
-      return set([...members, me], members[0], `Now sharing the ${label} with ${names}`);
+      // the source has to be one the app can open right now (your other game may not be)
+      const from = members.find((m) => data.targets.some((t) => t.id === m)) ?? members[0];
+      return set([...members, me], from, `Now sharing the ${label} with ${names}`);
     }
     // nothing shared yet: pick which servers to share with
     setPicking(true);

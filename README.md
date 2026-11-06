@@ -24,15 +24,18 @@ Loner-Strike is a desktop app for Windows and Mac that installs the mods, runs t
 - Server name, password, an invite to send and a custom welcome page
 
 **Servers**
-- Dedicated servers downloaded and set up for you, or bring one you already run
+- Dedicated servers on your computer, or on a rented Linux machine (a VPS) that the app sets up over SSH and that keeps running without it
+- Bring a server you already run, or copy one server's mods to another
 - Admins, moderators and VIPs with abilities per role, bans, gags, a swear filter, a chat log and player reports
+- Share the admin list, bans, swear filter, welcome page and chat messages across servers; mods and settings stay per server
 - Map rotation, timed chat messages, AFK and high-ping kickers, stats and ranks, votekick and voteban
-- Match mode for 5v5s, HLTV, fast downloads and scheduled restarts
-- A guide in the app to free and cheap places to host and how big a server needs to be
+- Match mode for 5v5s, HLTV spectators and demos, fast downloads and scheduled restarts
+- Join password, console password and extra start options per server
+- A step-by-step guide in the app to renting a server: where, what size and how to set it up
 
 **The app**
 - Guided setup that finds your game
-- Control it from your phone by scanning a QR code
+- Control it from your phone by scanning a QR code (anything that deletes or reinstalls stays on the computer)
 - Export your setup to another computer or server
 - Signed automatic updates
 
@@ -58,7 +61,13 @@ Only the Steam versions of the games are supported.
 
 ## Run a server on a VPS
 
-The app can set up an always-on server on a Linux machine you rent (Ubuntu or Debian, x86). In Servers > New server, pick "A Linux server (VPS)" and give it the machine's address, user and SSH key. It installs Valve's server and Loner-Strike over SSH and runs it as a service on UDP 27015, so it keeps going with the app closed. Oracle's free tier works, as does any VPS at around $4 to $7 a month.
+The app can set up an always-on server on a Linux machine you rent (Ubuntu or Debian, x86). In Servers, choose New server, pick "A Linux server (VPS)" and give it the machine's address, user and SSH key. It checks the machine's identity, installs Valve's server and Loner-Strike over SSH and runs it as a service on UDP 27015, so it keeps going with the app closed. Oracle's free tier works, as does any VPS at around $4 to $7 a month (Hetzner, DigitalOcean, Vultr).
+
+After that it's managed like any other server:
+- Changes you make in the app (settings, admins, mods, maps, sounds) go up by themselves, and only the files that changed. New plugins and maps load on the next map, or with Restart now.
+- Update gets Valve's latest server files on the machine. Bans and stats made on the server stay there.
+- HLTV runs next to it on UDP 27020, and its demos can be copied to your game.
+- If the machine stops answering, the app says so instead of showing it as running.
 
 [docs/linux-server.md](docs/linux-server.md) walks through it: picking a host and size, making an SSH key, opening UDP 27015-27020 in the provider's firewall, managing the server and fixing common problems.
 

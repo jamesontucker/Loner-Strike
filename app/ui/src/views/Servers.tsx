@@ -155,7 +155,7 @@ export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, remote 
     <div className="job-progress">
       <SteamProgress
         value={job?.progress ?? 0}
-        title={failed ? `Stopped: ${name.replace(/…$/, "").toLowerCase()}` : name}
+        title={failed ? `Stopped: ${name.charAt(0).toLowerCase()}${name.slice(1).replace(/…$/, "")}` : name}
         text={lost ? "Lost track of it. The app stopped answering; check the server's page to see if it finished." : job?.state === "error" ? job.error : now ? `${now.label}${now.detail ? ` · ${now.detail}` : ""}` : "Getting ready…"}
         error={failed}
         foot={foot}
@@ -174,7 +174,13 @@ export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, remote 
  *  the game's lookups), so the game is closed and started again with the address. */
 function useJoinRestart() {
   const ask = useConfirm();
+  const toast = useToast();
   return async (s: ServerInfo) => {
+    // closing the game is for the person at the computer
+    if (!ON_THIS_COMPUTER) {
+      toast(`${s.name} is unlisted, so the game has to start with its address. Close Counter-Strike on the computer, then press Join.`, true);
+      return null;
+    }
     if (!(await ask(`Counter-Strike is open. Restart it and join ${s.name}? Unlisted servers can only be joined as the game starts.`, { ok: "Restart and join" }))) return null;
     return post(`/api/servers/${s.id}/join`, { restart: true });
   };
@@ -461,7 +467,7 @@ export function ServerPage(props: {
   // reinstall everything that's on the server, keeping its settings
   const rebuild = async () => {
     if (!(await ask(`Rebuild Loner-Strike on ${s.name}? It reinstalls its files; settings, admins and maps stay.`, { ok: "Rebuild Loner-Strike" }))) return;
-    reinstall();
+    once(`${s.id}:reinstall`, reinstall, `Rebuilding Loner-Strike on ${s.name}…`);
   };
   const reinstall = async () => {
     const components = (app?.game?.installed ?? []).filter((c) => c !== "foundation" && c !== "core");
@@ -470,13 +476,16 @@ export function ServerPage(props: {
     setJob({ title: "Rebuilding Loner-Strike…", done: `Loner-Strike is rebuilt on ${s.name}`, retry: reinstall });
   };
   // a server on another machine: wipe it and set it up again with the same details
+  // (same key as the server list's Rebuild, so either shows it's under way)
   const wipeRebuild = async () => {
     if (!(await ask(wipeQuestion(s), { ok: "Wipe and rebuild", danger: true }))) return;
+    await once(`${s.id}:rebuild`, async () => {
     const r = await post(`/api/servers/${s.id}/rebuild`);
     if (r.error) return toast(r.error, true);
     toast(`Rebuilding on ${s.host}. It takes 5 to 15 minutes.`);
     onChanged();
     onBack();
+    }, `Wiping ${s.name}…`);
   };
 
   // a live tab waits for the server's answer; after a few seconds it says why it's waiting
@@ -570,7 +579,7 @@ export function ServerPage(props: {
             <>
               <ServerDetails server={s} maps={maps} onChanged={onChanged} />
               {ON_THIS_COMPUTER && <CopyMods server={s} others={others} onStarted={(title) => setJob({ title, done: `Mods copied to ${s.name}` })} />}
-              {ON_THIS_COMPUTER && <Maintenance server={s} installed={app?.game?.installed ?? []} act={act} rebuild={rebuild} wipeRebuild={wipeRebuild} />}
+              {ON_THIS_COMPUTER && <Maintenance server={s} installed={app?.game?.installed ?? []} act={act} rebuild={rebuild} wipeRebuild={wipeRebuild} busy={busy} />}
             </>
           )}
           {tab === "friends" && <Friends data={data} refresh={refresh} server={{ name: s.name, visibility: s.visibility }} />}
@@ -675,7 +684,8 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
       const r = await post(`/api/servers/${server.id}`, { name, map, maxplayers: slots.value, port: port.value, visibility: vis, password, listen_ip: listenIp, extra_args: extra });
       if (r.error) return toast(r.error, true);
       setBase(sent);
-      if (r.restart) mark(server.id, server.uptime);
+      // (an uptime of 0 means it's unknown: a restart couldn't be told apart, so no bar)
+      if (r.restart && server.uptime > 0) mark(server.id, server.uptime);
       toast(r.restart ? `${name} saved. Restart it to use the new start options.` : `${name} saved`);
       onChanged();
     }, server.host ? `Saving and uploading to ${server.name}…` : `Saving ${server.name}…`);
@@ -837,7 +847,7 @@ function CopyMods({ server, others, onStarted }: { server: ServerInfo; others: S
 }
 
 /** Updating, rebuilding and deleting a server (on the computer running Loner-Strike). */
-function Maintenance({ server, installed, act, rebuild, wipeRebuild }: { server: ServerInfo; installed: string[]; act: (a: string) => void; rebuild: () => void; wipeRebuild: () => void }) {
+function Maintenance({ server, installed, act, rebuild, wipeRebuild, busy }: { server: ServerInfo; installed: string[]; act: (a: string) => void; rebuild: () => void; wipeRebuild: () => void; busy: (action: string) => boolean }) {
   const running = server.state === "running";
   return (
     <div className="panel">
@@ -847,19 +857,19 @@ function Maintenance({ server, installed, act, rebuild, wipeRebuild }: { server:
         {!server.imported && (
           <li>
             <div><b>Update Valve's server files</b><p className="muted">Gets the latest version of the server from Valve. Your mods and settings stay.</p></div>
-            <button className="btn" disabled={running} onClick={() => act("update")}>Update</button>
+            <BusyButton className="btn" busy={busy("update")} disabled={running} label="Update" busyLabel="Starting…" onClick={() => act("update")} />
           </li>
         )}
         {server.loner && !server.host && (
           <li>
             <div><b>Rebuild Loner-Strike</b><p className="muted">Reinstalls Metamod, AMX Mod X, ReGameDLL{installed.length > 2 ? ` and the ${installed.length - 2} extra mode${installed.length === 3 ? "" : "s"} and add-ons on it` : " and the built-in modes"}. Fixes a server that won't start or lost its mods. Settings, admins and maps stay.</p></div>
-            <button className="btn" disabled={running} onClick={rebuild}>Rebuild</button>
+            <BusyButton className="btn" busy={busy("reinstall")} disabled={running} label="Rebuild" busyLabel="Starting…" onClick={rebuild} />
           </li>
         )}
         {server.host && (
           <li>
             <div><b>Wipe and rebuild</b><p className="muted">Deletes everything in its folder on {server.host} (settings, admins, bans, stats and added maps) and sets it up again like when you made it. For a server that won't start or is badly broken. Takes 5 to 15 minutes.</p></div>
-            <button className="btn danger" disabled={running} onClick={wipeRebuild}>Wipe and rebuild</button>
+            <BusyButton className="btn danger" busy={busy("rebuild")} disabled={running} label="Wipe and rebuild" busyLabel="Wiping…" onClick={wipeRebuild} />
           </li>
         )}
         <li>
@@ -873,7 +883,7 @@ function Maintenance({ server, installed, act, rebuild, wipeRebuild }: { server:
                   : "Deletes its folder, maps, settings and admins. Your own game isn't touched."}
             </p>
           </div>
-          <button className="btn danger" onClick={() => act("delete")}>{server.imported ? "Remove" : "Delete"}</button>
+          <BusyButton className="btn danger" busy={busy("delete")} label={server.imported ? "Remove" : "Delete"} busyLabel={server.imported ? "Removing…" : "Deleting…"} onClick={() => act("delete")} />
         </li>
       </ul>
     </div>
@@ -910,7 +920,7 @@ function Console({ server }: { server: ServerInfo }) {
   const once = useOnce();
   const send = () => once("send", async () => {
     const c = cmd.trim();
-    if (!c) return;
+    if (!c || server.state !== "running") return;
     const r = await post(`/api/servers/${server.id}/console/send`, { command: c });
     if (r.error) return toast(r.error === ON_COMPUTER_ONLY || r.error.includes("Couldn't reach") ? "The console only works on this computer." : r.error, true);
     setCmd("");
