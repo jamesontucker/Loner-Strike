@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getJson, postJson } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson } from "../api";
 import { Icon } from "../icons";
 import type { AppInfo } from "../types";
 import { SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
@@ -164,6 +164,8 @@ export function Mods({ app, scan, running, onChanged, openSetup }: { app: AppInf
         </>
       )}
 
+      {setUp && <OwnPlugins />}
+
       {setUp && (
         <div className="panel row between">
           <p className="muted">Take Loner-Strike off {where} completely: every mod, the menu and the bot setup.</p>
@@ -171,5 +173,56 @@ export function Mods({ app, scan, running, onChanged, openSetup }: { app: AppInf
         </div>
       )}
     </div>
+  );
+}
+
+/** AMX Mod X plugins the player adds themselves: a .amxx, or a .sma compiled here. */
+function OwnPlugins() {
+  const toast = useToast();
+  const ask = useConfirm();
+  const [list, setList] = useState<string[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  useEffect(() => {
+    getJson<{ plugins: string[] }>("/api/mods/plugins").then((r) => setList(r.plugins ?? [])).catch(() => setList([]));
+  }, []);
+  type R = { ok?: boolean; error?: string; cancelled?: boolean; name?: string; plugins?: string[] };
+  const add = async () => {
+    setAdding(true);
+    const r = await postJson<R>("/api/mods/plugins/add").catch((): R => ({ error: "Couldn't reach the app." }));
+    setAdding(false);
+    if (r.cancelled) return;
+    if (r.error) return toast(r.error, true);
+    setList(r.plugins ?? []);
+    toast(`Added ${r.name}. It loads on the next map.`);
+  };
+  const remove = async (name: string) => {
+    if (!(await ask(`Remove ${name}? Its files are deleted and it stops loading on the next map.`, { ok: "Remove", danger: true }))) return;
+    const r = await postJson<R>("/api/mods/plugins/remove", { name }).catch((): R => ({ error: "Couldn't reach the app." }));
+    if (r.error) return toast(r.error, true);
+    setList(r.plugins ?? []);
+  };
+  return (
+    <section>
+      <SectionHead title="Your own plugins" note="AMX Mod X plugins you have as a file. They load in every mode. A .sma source is compiled for you.">
+        {ON_THIS_COMPUTER && <button className="btn" disabled={adding} onClick={add}>{adding ? "Adding…" : "Add a plugin…"}</button>}
+      </SectionHead>
+      {list === null ? (
+        <Skeleton rows={2} />
+      ) : list.length ? (
+        <ul className="people">
+          {list.map((n) => (
+            <li key={n}>
+              <div className="person">
+                <span className="person-name">{n}</span>
+                <span className="person-sub mono">addons/amxmodx/plugins/{n}.amxx</span>
+              </div>
+              <button className="btn danger" onClick={() => remove(n)}>Remove</button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">None yet.{ON_THIS_COMPUTER ? "" : " Add them from the computer running Loner-Strike."}</p>
+      )}
+    </section>
   );
 }

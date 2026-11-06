@@ -12,6 +12,7 @@ mod gamebanana;
 mod maps;
 mod notify;
 mod panel_api;
+mod plugins;
 mod prefs;
 mod rcon;
 mod server;
