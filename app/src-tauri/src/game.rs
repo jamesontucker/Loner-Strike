@@ -92,6 +92,12 @@ impl Game {
     }
 
     pub fn state(&self) -> Value {
+        // a dedicated server on the game's port isn't the game: don't knock with the wrong password
+        if !self.dedicated {
+            if let Some(name) = crate::servers::running_on(self.port) {
+                return json!({"online": false, "reason": format!("The server \"{name}\" is using your game's port ({}). Stop it to host from your game.", self.port)});
+            }
+        }
         let reply = match self.rcon.send("gm_status") {
             Ok(r) => r,
             Err(RconError::BadPassword) => return json!({"online": false, "reason": BAD_PASSWORD}),

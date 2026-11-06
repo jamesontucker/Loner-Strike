@@ -28,7 +28,8 @@ use std::time::{Duration, Instant};
 
 const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
 const FOLDER: &str = "Loner-Strike Servers";
-const FIRST_PORT: u16 = 27015;
+/// The player's own game hosts on 27015, so servers start above it and never clash
+const FIRST_PORT: u16 = 27016;
 /// Restarts after a crash before giving up (within CRASH_WINDOW)
 const MAX_RESTARTS: usize = 3;
 const CRASH_WINDOW: Duration = Duration::from_secs(600);
@@ -93,7 +94,22 @@ fn list_file() -> PathBuf {
 }
 
 pub fn load() -> Vec<Entry> {
-    std::fs::read_to_string(list_file()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+    let mut list: Vec<Entry> = std::fs::read_to_string(list_file()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    // servers made before they started at 27016 shared the game's port: move them
+    if list.iter().any(|e| !e.imported && e.port < FIRST_PORT) {
+        for i in 0..list.len() {
+            if !list[i].imported && list[i].port < FIRST_PORT {
+                list[i].port = free_port(&list);
+            }
+        }
+        let _ = save(&list);
+    }
+    list
+}
+
+/// A running server on `port`, by name (the game's own port is 27015).
+pub fn running_on(port: u16) -> Option<String> {
+    load().into_iter().find(|e| e.port == port && running(&e.id)).map(|e| e.name)
 }
 
 fn save(list: &[Entry]) -> Result<(), String> {
@@ -158,7 +174,7 @@ fn slug(name: &str, taken: &[Entry]) -> String {
 }
 
 fn free_port(taken: &[Entry]) -> u16 {
-    (FIRST_PORT..FIRST_PORT + 100).find(|p| !taken.iter().any(|e| e.port == *p)).unwrap_or(FIRST_PORT)
+    (FIRST_PORT..FIRST_PORT + 100).find(|p| !taken.iter().any(|e| e.port == *p && e.port >= FIRST_PORT)).unwrap_or(FIRST_PORT)
 }
 
 fn safe_map(m: &str) -> bool {
@@ -1071,7 +1087,10 @@ mod tests {
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
         assert_eq!(slug("¿?", &[]), "server");
-        assert_eq!(free_port(&[e("a")]), 27016);
+        assert_eq!(free_port(&[e("a")]), 27016, "the game's 27015 is never handed out");
+        let mut b = e("b");
+        b.port = 27016;
+        assert_eq!(free_port(&[b]), 27017);
     }
 
     #[test]
