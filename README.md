@@ -2,7 +2,9 @@
 
 **Re-live the golden days of Counter-Strike locally or with the friends you don't have.**
 
-Counter-Strike 1.6 and Condition Zero set up like an old community server, except it's just you, your bots, and maybe a friend. Loner-Strike is a desktop app for Windows and Mac that installs the mods, runs the game for you and gives you a control panel for all of it.
+Counter-Strike 1.6 and Condition Zero set up like an old community server, except it's just you, your bots, and maybe a friend.
+
+Loner-Strike is a desktop app for Windows and Mac that installs the mods, runs the game for you and gives you a control panel for all of it.
 
 [lonerstrike.com](https://lonerstrike.com)
 
