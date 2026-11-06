@@ -197,7 +197,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
 
       <div>
         <SectionHead title="Players" note="Everyone who's joined, newest first. Give someone a role, or ban them, in one click." />
-        <input className="search" type="search" placeholder="Search names or SteamIDs" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search players" />
+        <input className="search full" type="search" placeholder="Search names or SteamIDs" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search players" />
         <ul className="people">
           {players
             .filter((pl) => !q.trim() || `${pl.name} ${pl.aka.join(" ")} ${pl.id}`.toLowerCase().includes(q.trim().toLowerCase()))

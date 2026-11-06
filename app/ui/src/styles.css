@@ -733,3 +733,4 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 }
 .server-details .seg { display: grid; grid-template-columns: repeat(3, 1fr); }
 .server-details .seg button { white-space: normal; line-height: 1.2; }
+.search.full { width: 100%; max-width: none; margin-bottom: 4px; }

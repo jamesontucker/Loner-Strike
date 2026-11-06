@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Loner-Strike</title>
+<meta name="description" content="Re-live the golden days of Counter-Strike locally or with the friends you don't have. Bots that play like people, classic community mods and a control panel for CS 1.6 and Condition Zero.">
+<meta name="theme-color" content="#3e4637">
+<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta property="og:title" content="Loner-Strike">
+<meta property="og:description" content="Re-live the golden days of Counter-Strike locally or with the friends you don't have.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lonerstrike.com/">
+<meta property="og:image" content="https://lonerstrike.com/img/maps.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+
+<!-- Plausible: paste your site's snippet from Plausible (Site settings → Site installation) here, replacing the next line. -->
+<!-- PLAUSIBLE -->
+
+<style>
+@font-face { font-family: "Counter-Strike"; src: url("fonts/counter-strike.ttf") format("truetype"); font-display: swap; }
+:root {
+  /* Steam's original skin, the same as the app */
+  --bg: #3e4637; --side: #353c2f; --panel: #4c5844; --panel-2: #5a6a50;
+  --bevel-hi: rgba(136,145,128,.55); --bevel-lo: #292c21;
+  --bone: #d8ded3; --dim: #c2c9b7; --faint: #aeb7a2;
+  --signal: #c4b550; --ink: #26240f;
+  --raised: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
+  --sunken: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
+  --stencil: "Counter-Strike", Impact, sans-serif;
+  --text: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--bg); color: var(--bone); font: 500 18px/1.5 var(--text); -webkit-font-smoothing: antialiased; }
+a { color: var(--signal); }
+img { max-width: 100%; display: block; }
+.wrap { width: min(1140px, 100% - 32px); margin: 0 auto; }
+h1, h2, h3 { font-weight: 400; margin: 0; text-wrap: balance; }
+h2 { font: 400 34px/1.1 var(--stencil); letter-spacing: .02em; }
+p { text-wrap: pretty; }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+/* buttons, as in the app */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 10px 20px; border: 0; border-radius: 2px;
+  background: var(--panel-2); color: var(--bone); box-shadow: var(--raised); font: 700 18px/1.1 var(--text); text-decoration: none; cursor: pointer; white-space: nowrap; }
+.btn:hover { color: var(--signal); }
+.btn:active { box-shadow: var(--sunken); }
+.btn.primary { background: var(--signal); color: var(--ink); box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
+.btn.primary:hover { background: #d4c55d; color: var(--ink); }
+
+/* top */
+.top { position: sticky; top: 0; z-index: 5; background: rgba(53,60,47,.94); backdrop-filter: blur(6px); box-shadow: 0 1px 0 var(--bevel-lo); }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; height: 58px; gap: 16px; }
+.wordmark { font: 400 22px/1 var(--stencil); color: var(--bone); text-decoration: none; letter-spacing: .01em; white-space: nowrap; }
+.top nav { display: flex; gap: 22px; align-items: center; }
+.top nav a:not(.btn) { color: var(--dim); text-decoration: none; font-weight: 600; }
+.top nav a:not(.btn):hover { color: var(--bone); }
+.top .btn { min-height: 38px; padding: 7px 14px; font-size: 16px; }
+
+/* hero */
+.hero { padding: 64px 0 40px; }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
+.hero-logo { width: 112px; height: 112px; margin-bottom: 18px; }
+.hero h1 { font: 400 clamp(46px, 6vw, 76px)/.95 var(--stencil); letter-spacing: .01em; }
+.tagline { font-size: 23px; line-height: 1.35; color: var(--dim); margin: 18px 0 26px; max-width: 30ch; }
+.ctas { display: flex; flex-wrap: wrap; gap: 10px; }
+.fine { margin: 14px 0 0; color: var(--faint); font-size: 15px; }
+
+/* the classic Steam loader, our one bit of theatre */
+.loader { margin-top: 30px; max-width: 420px; background: var(--panel); box-shadow: var(--raised), 0 10px 30px rgba(0,0,0,.25); padding: 10px 12px 12px; }
+.loader-title { font-weight: 700; font-size: 15px; }
+.loader-text { color: var(--faint); font-size: 14px; margin: 2px 0 8px; }
+.bar { height: 18px; padding: 3px; background: var(--bg); box-shadow: var(--sunken); display: flex; gap: 3px; overflow: hidden; }
+.bar i { flex: none; width: 7px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; animation: block .01s both; }
+@keyframes block { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .bar i { animation: none; } }
+
+/* the app in an old window frame */
+.window { background: var(--side); box-shadow: var(--raised), 0 24px 70px rgba(0,0,0,.45); padding: 4px; border-radius: 3px; }
+.window-bar { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; font-size: 13px; color: var(--faint); font-weight: 600; }
+.window-bar span { width: 9px; height: 9px; border-radius: 50%; background: var(--panel-2); box-shadow: var(--sunken); }
+.window img { border-radius: 2px; width: 100%; height: auto; }
+
+/* modes */
+.modes { padding: 36px 0 20px; }
+.modes ul { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.modes li { background: var(--panel); box-shadow: var(--raised); padding: 6px 12px; border-radius: 2px; font-weight: 600; color: var(--dim); }
+.modes li b { color: var(--bone); font-weight: 700; }
+.lead { color: var(--dim); max-width: 66ch; margin: 10px 0 0; }
+
+/* features */
+.feature { padding: 64px 0; }
+.feature .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
+.feature.flip .text { order: 2; }
+.feature h3 { font: 400 28px/1.1 var(--stencil); margin-bottom: 12px; }
+.feature p { color: var(--dim); margin: 0 0 12px; }
+.feature ul { margin: 0; padding-left: 20px; color: var(--dim); }
+.feature li + li { margin-top: 4px; }
+.phone { width: min(300px, 100%); margin: 0 auto; border-radius: 22px; padding: 10px; background: #23271c; box-shadow: var(--raised), 0 24px 60px rgba(0,0,0,.45); }
+.phone img { border-radius: 14px; }
+.pair { display: grid; grid-template-columns: 1fr; gap: 18px; }
+
+/* get it */
+.get { padding: 70px 0; background: var(--side); box-shadow: inset 0 1px 0 var(--bevel-lo), inset 0 -1px 0 var(--bevel-lo); }
+.get .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+.box { background: var(--panel); box-shadow: var(--raised); padding: 24px 26px; border-radius: 3px; }
+.box h3 { font: 400 26px/1.1 var(--stencil); margin-bottom: 8px; }
+.box p { color: var(--dim); margin: 0 0 18px; }
+.price { font: 400 54px/1 var(--stencil); margin: 6px 0 4px; }
+.price small { font: 600 16px var(--text); color: var(--faint); margin-left: 6px; }
+.steps { list-style: none; margin: 18px 0 0; padding: 0; counter-reset: s; }
+.steps li { counter-increment: s; position: relative; padding: 0 0 14px 40px; color: var(--dim); }
+.steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px; display: grid; place-items: center; font: 400 15px var(--stencil);
+  background: var(--bg); box-shadow: var(--sunken); color: var(--bone); }
+.steps b { color: var(--bone); }
+
+/* faq */
+.faq { padding: 70px 0; }
+.faq .wrap { max-width: 820px; }
+details { background: var(--panel); box-shadow: var(--raised); border-radius: 2px; margin-top: 10px; }
+summary { cursor: pointer; padding: 14px 18px; font-weight: 700; font-size: 19px; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--signal); font-weight: 700; }
+details[open] summary::after { content: "–"; }
+details p { margin: 0; padding: 0 18px 16px; color: var(--dim); }
+
+footer { padding: 34px 0 48px; color: var(--faint); font-size: 15px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; }
+footer a { color: var(--dim); }
+
+@media (max-width: 860px) {
+  body { font-size: 17px; }
+  .top nav a:not(.btn) { display: none; }
+  .hero { padding: 36px 0 24px; }
+  .hero .wrap, .feature .wrap, .get .wrap { grid-template-columns: 1fr; gap: 28px; }
+  .feature.flip .text { order: 0; }
+  .feature { padding: 40px 0; }
+  .hero-logo { width: 84px; height: 84px; }
+  .tagline { font-size: 20px; }
+  .ctas .btn { flex: 1 1 100%; }
+  h2 { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="wordmark" href="#">Loner-Strike</a>
+    <nav aria-label="Page">
+      <a href="#modes">Modes</a>
+      <a href="#features">What's in it</a>
+      <a href="#faq">FAQ</a>
+      <a class="btn primary" href="#get" data-event="Get it (top)">Get it</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <img class="hero-logo" src="img/logo.svg" alt="" width="112" height="112">
+        <h1>Loner-Strike</h1>
+        <p class="tagline">Re-live the golden days of Counter-Strike locally or with the friends you don't have.</p>
+        <div class="ctas">
+          <a class="btn primary polar" href="#get" data-event="Name your price (hero)">Name your price</a>
+          <a class="btn release" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download free (hero)">Download free</a>
+        </div>
+        <p class="fine">For Counter-Strike 1.6 and Condition Zero on Steam. Windows, or Mac through CrossOver.</p>
+        <div class="loader" aria-hidden="true">
+          <div class="loader-title">Loading…</div>
+          <div class="loader-text">Establishing connection to 2004…</div>
+          <div class="bar" id="bar"></div>
+        </div>
+      </div>
+      <div class="window">
+        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
+        <img src="img/maps.jpg" alt="Loner-Strike's map browser: a grid of classic maps with screenshots, filters and search" width="1280" height="800">
+      </div>
+    </div>
+  </section>
+
+  <section class="modes" id="modes">
+    <div class="wrap">
+      <h2>The mods we grew up on</h2>
+      <p class="lead">Classic community mods, set up for you and patched so bots actually play them. Pick a mode, pick a map, and the bots fill the server.</p>
+      <ul>
+        <li><b>Zombie Plague</b></li><li><b>Warcraft 3</b></li><li><b>SuperHero</b></li><li><b>Gun Game</b></li><li><b>Deathmatch</b></li>
+        <li><b>Hide and Seek</b></li><li><b>Deathrun</b></li><li><b>Surf</b></li><li><b>Kreedz</b></li><li><b>Base Builder</b></li><li><b>SoccerJam</b></li>
+        <li><b>Paintball</b></li><li><b>Knife Arena</b></li><li>AWP, Scoutz, Deagle and pistol-only</li><li>Roll the Dice</li><li>Round-end music</li><li>Grappling hook</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="feature" id="features">
+    <div class="wrap">
+      <div class="text">
+        <h3>Bots that play like people</h3>
+        <p>Stock bots react instantly and aim like turrets. Loner-Strike gives them reaction times, flicks that overshoot, shaky tracking and the occasional whiff, from a 2003 pub regular up to someone who bunnyhops.</p>
+        <ul>
+          <li>The same bots keep coming back, with clan tags, so it feels like a server with regulars</li>
+          <li>Bots learn new maps by themselves</li>
+          <li>Thousands of maps from GameBanana, one click each</li>
+        </ul>
+      </div>
+      <div class="window">
+        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
+        <img src="img/play.jpg" alt="The Play screen: 0 friends online, bots ready, and a big Play button" width="1280" height="800" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <section class="feature flip">
+    <div class="wrap">
+      <div class="text">
+        <h3>Or with friends, if you have them</h3>
+        <p>Name your server, set a password and send a link. Seven ways to connect, from a LAN party in the same room to playit.gg, Tailscale, your router doing the work, and yes, Hamachi.</p>
+        <ul>
+          <li>Run the whole thing from your phone: scan a QR code</li>
+          <li>Admins, VIPs and bans, like real servers</li>
+          <li>Your own welcome page when people join</li>
+        </ul>
+      </div>
+      <div class="window">
+        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
+        <img src="img/friends.jpg" alt="Play with friends: seven ways to connect, with step-by-step instructions" width="1280" height="800" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <section class="feature">
+    <div class="wrap">
+      <div class="text">
+        <h3>Run a real server, if you want</h3>
+        <p>A bonus for anyone who wants an always-on server: Loner-Strike downloads Valve's free dedicated server, sets it up like your game and runs it. Each server gets its own modes, maps, admins, VIP perks and console. Bring in one you already run, too.</p>
+        <p>There's a guide in the app to free and cheap places to host one, and how big it needs to be.</p>
+      </div>
+      <div class="pair">
+        <div class="window">
+          <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
+          <img src="img/servers.jpg" alt="A dedicated server's page with settings, console and maintenance" width="1280" height="800" loading="lazy">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="get" id="get">
+    <div class="wrap">
+      <div class="box">
+        <h3>Name your price</h3>
+        <p>Loner-Strike is free and open source. If it brought back some good memories, chip in whatever feels right. It keeps the lights on and the mods patched.</p>
+        <div class="price">$0<small>and up</small></div>
+        <p class="fine">You get the same download either way.</p>
+        <a class="btn primary polar" id="polar" href="#" data-polar-checkout data-polar-checkout-theme="dark" data-event="Name your price">Name your price</a>
+      </div>
+      <div class="box">
+        <h3>Or just grab it</h3>
+        <p>Rather not pay? No hard feelings. Every release is free on GitHub.</p>
+        <a class="btn release" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download free">Download from GitHub</a>
+        <ol class="steps">
+          <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a>.</li>
+          <li><b>Open Loner-Strike.</b> It finds the game and walks you through setup. Everything it changes is backed up.</li>
+          <li><b>Press Play.</b> Bots fill the server. Friends optional.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="faq" id="faq">
+    <div class="wrap">
+      <h2>Questions</h2>
+      <details>
+        <summary>Is it really free?</summary>
+        <p>Yes. The code is open source (GPL-3) and every release is on GitHub. Paying is optional and gets you the same thing, plus our thanks.</p>
+      </details>
+      <details>
+        <summary>Do I need to own Counter-Strike?</summary>
+        <p>Yes. Loner-Strike adds to the game you already have on Steam: Counter-Strike 1.6, Condition Zero, or both.</p>
+      </details>
+      <details>
+        <summary>Does it work on a Mac?</summary>
+        <p>Through CrossOver. The Mac version of Counter-Strike can't run mods, so install Windows Steam in CrossOver and the game in that. Loner-Strike finds it there.</p>
+      </details>
+      <details>
+        <summary>Will it mess up my game?</summary>
+        <p>Every file it changes is backed up first. Remove one mode, or all of Loner-Strike, from the app and your game goes back the way it was. The mods only run in games you host.</p>
+      </details>
+      <details>
+        <summary>Do my friends need it too?</summary>
+        <p>No. They only need Counter-Strike. They join your game like any other server, and it sends them the maps.</p>
+      </details>
+      <details>
+        <summary>Who made the mods?</summary>
+        <p>Their original authors: AMX Mod X, Metamod and ReGameDLL teams, and the community modders behind Zombie Plague, Warcraft 3, SuperHero and the rest. Loner-Strike sets them up and patches them for bots. Everyone is credited on GitHub.</p>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Loner-Strike · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a> · <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md">Credits</a></span>
+    <span>Not affiliated with Valve. Counter-Strike is a trademark of Valve Corporation.</span>
+  </div>
+</footer>
+
+<script>
+  // ---- settings -------------------------------------------------------------
+  // Your Polar checkout link (Polar → Products → your product → Checkout Links).
+  const POLAR_CHECKOUT = "";
+
+  // Name your price: Polar's checkout opens over the page. Without a link yet, it goes to the download.
+  for (const a of document.querySelectorAll("a.polar")) {
+    if (POLAR_CHECKOUT) {
+      a.href = POLAR_CHECKOUT;
+      a.setAttribute("data-polar-checkout", "");
+      a.setAttribute("data-polar-checkout-theme", "dark");
+    } else if (a.id === "polar") {
+      a.href = "https://github.com/jamesontucker/Loner-Strike/releases/latest";
+    }
+  }
+  if (POLAR_CHECKOUT) {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/@polar-sh/checkout@0.4.3/dist/embed.global.js";
+    s.defer = true;
+    s.setAttribute("data-auto-init", "");
+    document.head.appendChild(s);
+  }
+
+  // Plausible events for the buttons (does nothing until Plausible is added)
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest("[data-event]");
+    if (a && typeof window.plausible === "function") window.plausible(a.dataset.event);
+  });
+
+  // The loader fills up once, like Steam connecting in 2004
+  const bar = document.getElementById("bar");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const slots = Math.max(8, Math.floor((bar.clientWidth - 3) / 10));
+  let n = reduce ? slots : 0;
+  const add = () => {
+    while (bar.children.length < n) bar.appendChild(document.createElement("i"));
+    if (n < slots) { n++; setTimeout(add, n < slots * 0.7 ? 70 : 260); }
+    else bar.previousElementSibling.textContent = "Connected. The bots are waiting.";
+  };
+  add();
+</script>
+</body>
+</html>
