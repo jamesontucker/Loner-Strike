@@ -16,8 +16,30 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Big+Shoulders+Stencil+Display:wght@700;800&display=swap" rel="stylesheet">
 </head>
-<body>
-<div id="root"></div>
+<body style="margin:0;background:#3e4637">
+<!-- If the app's script can't load (an old page left open across an update, a dropped
+     connection), this shows after a few seconds instead of a blank window; the app
+     replaces it as soon as it starts. One automatic reload is tried first. -->
+<div id="root"><div style="opacity:0;animation:ls-boot 0s 4s forwards;font:500 16px/1.5 'Barlow Semi Condensed',sans-serif;color:#d8ded3;padding:48px 32px;text-align:center">
+  <p>Loner-Strike didn't load.</p>
+  <button onclick="location.reload()" style="font:inherit;font-weight:700;padding:8px 18px;border:0;border-radius:2px;background:#c4b550;color:#26240f;cursor:pointer">Reload</button>
+</div></div>
+<style>@keyframes ls-boot { to { opacity: 1 } }</style>
+<script>
+  window.addEventListener("error", function (e) {
+    var t = e.target;
+    if (!t || (t.tagName !== "SCRIPT" && t.tagName !== "LINK")) return;
+    try {
+      if (sessionStorage.getItem("ls.bootReload") === "1") return;
+      sessionStorage.setItem("ls.bootReload", "1");
+    } catch (_) { return; }
+    location.reload();
+  }, true);
+  // a page that started fine may reload again after a later update
+  window.addEventListener("load", function () {
+    setTimeout(function () { try { sessionStorage.removeItem("ls.bootReload"); } catch (_) {} }, 10000);
+  });
+</script>
 <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
