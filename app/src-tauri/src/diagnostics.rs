@@ -28,6 +28,10 @@ const REPEAT_AFTER: Duration = Duration::from_secs(600);
 
 /// Notes an error in the app's log. `place`: where it came from (an API path, "sync").
 pub fn log_error(place: &str, msg: &str) {
+    // tests exercise error paths on purpose: never into the real app's log
+    if cfg!(test) {
+        return;
+    }
     log_error_to(&log_path(), place, msg)
 }
 
