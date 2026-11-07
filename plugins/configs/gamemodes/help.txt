@@ -25,6 +25,8 @@ PRACTICE
 CHAT
  /gm  menu   zpmenu  zombie menu   /guns  deathmatch guns
  /rank /top15 /statsme  stats      /hp  who killed you
+ rtv  vote for a new map (and mode)   rtm  vote for a different mode
+ nominate <map>   nominatemode <mode>   suggest one for the vote
 
 BOTS STAND STILL ON A MAP?
  The map has no bot navigation yet. Maps > Bot navigation

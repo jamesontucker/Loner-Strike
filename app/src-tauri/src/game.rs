@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 const ALLOWED: &[&str] = &[
     "gm_mode", "gm_map", "gm_set", "gm_addon", "gm_addonset", "gm_restartmap", "gm_bots", "gm_match",
     "gm_player", "gm_nav", "gm_pause", "gm_team", "gm_preset", "gm_presetsave", "gm_presetdel", "gm_pos",
-    "gm_crash", "gm_do", "gm_announce",
+    "gm_crash", "gm_do", "gm_announce", "gm_votemode",
 ];
 const METAMOD_DLL: &str = r"addons\metamod\dlls\metamod.dll";
 const OFFLINE: &str = "No game is loaded. Start one from Play.";

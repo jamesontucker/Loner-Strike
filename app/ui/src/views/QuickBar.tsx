@@ -75,6 +75,12 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
     { label: "Restart map", on: () => once(`quick:${targetKey()}:restartmap`, () => run("gm_restartmap"), "Restarting the map…") },
     { label: "Random map", on: randomMap },
     { label: here?.fav ? "Favourite map" : "Favourite this map", on: favourite, pressed: !!here?.fav, show: !!here },
+    {
+      label: "Start a mode vote",
+      on: () => once(`quick:${targetKey()}:modevote`, () => run("gm_votemode"), "Starting a mode vote…"),
+      show: data.settings.some((s) => s.cvar === "gm_modevote"),
+      title: "Everyone votes for the next mode, then a map for it",
+    },
   ];
   const you: Item[] = me
     ? [

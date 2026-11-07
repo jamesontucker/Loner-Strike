@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type ReactNode } from "react";
 import { options, sameValue, targetKey, useActions } from "../api";
 import { BOT_STYLE_NOTE, BOT_STYLES } from "../games";
 import type { Online, Setting } from "../types";
+import { ModeVoteList } from "./ModeVote";
 import { BusyButton, Info, SectionHead, Segmented, useCommand, useConfirm } from "../ui";
 
 // Short explanations under settings, as in the old panel
@@ -53,6 +54,8 @@ const INFO: Record<string, string> = {
   zp_nem_enabled: "Rounds where one zombie, the Nemesis, has huge health and takes on all the humans.",
   zp_surv_enabled: "Rounds where one human, the Survivor, gets a powerful gun and lots of health against all the zombies.",
   bb_build_time: "How long the builders have to put up barricades before the zombies are let out.",
+  gm_modevote: "Players type rtv or rtm in chat to vote for a different mode. If it passes they pick the mode, then a map for it.",
+  gm_modevote_every: "Every few maps, the vote near the end of the map picks the mode first, then a map for it. Needs mode voting on.",
   sh_maxbinds: "How many heroes with a power you trigger with a key each player can pick. The rest of their heroes work on their own.",
 };
 
@@ -158,6 +161,7 @@ export function SettingsPage({
           <input className="search full" type="search" placeholder={`Filter ${count} settings, like "round" or "gravity"`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter settings" />
         )}
         <SettingsList data={data} cat={cat} refresh={refresh} q={q} />
+        {cat === 2 && <ModeVoteList data={data} />}
       </div>
     </div>
   );
@@ -174,6 +178,7 @@ export function MatchButtons({ refresh }: { refresh: () => void }) {
       <BusyButton className="btn primary" busy={busy(key("restart"))} label="Restart round" busyLabel="Restarting…" onClick={() => act(key("restart"), () => run("gm_match", ["restart"]), "Restarting the round…")} />
       <BusyButton busy={busy(key("endround"))} label="End round" busyLabel="Ending…" onClick={() => act(key("endround"), () => run("gm_do", ["endround"]), "Ending the round…")} />
       <BusyButton busy={busy(key("addtime"))} label="Add 10 minutes" busyLabel="Adding…" onClick={() => act(key("addtime"), () => run("gm_do", ["addtime"]), "Adding 10 minutes…")} />
+      <BusyButton busy={busy(key("modevote"))} label="Start a mode vote" busyLabel="Starting…" onClick={() => act(key("modevote"), () => run("gm_votemode"), "Starting a mode vote…")} />
       <BusyButton
         className="btn danger"
         busy={busy(key("reset"))}

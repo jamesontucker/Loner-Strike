@@ -98,6 +98,8 @@ new const SETTINGS[][SettingData] =
 	{ "gm_botvotes",        "Bots vote for maps", "1 0",                    "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botping",         "Bots show a ping", "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_rtv",             "Rock the vote",    "1 0",                      "On Off",                              CAT_MATCH,  SC_GLOBAL, "" },
+	{ "gm_modevote",        "Mode voting",      "1 0",                      "On Off",                              CAT_MATCH,  SC_GLOBAL, "" },
+	{ "gm_modevote_every",  "Mode vote at map end", "0 2 3 5",              "Off|Every 2 maps|Every 3 maps|Every 5 maps", CAT_MATCH, SC_GLOBAL, "" },
 	{ "gm_welcome",         "Welcome screen",   "1 2 0",                    "Once per session|Every map|Off",      CAT_MATCH,  SC_GLOBAL, "" },
 	{ "wc3_xp_multiplier",     "Leveling speed",      "0.1 0.25 0.5 1.0",          "Very fast|Fast|Normal|Slow (original)", CAT_MATCH, SC_MODE, "" },
 	{ "wc3_start_level",       "Starting level",      "0 2 4 6",                   "0|2|4|6",                               CAT_MATCH, SC_MODE, "" },
@@ -241,6 +243,7 @@ new const ADMIN_MENUS[][][] =
 	{ "amx_teammenu",        "Move players to a team" },
 	{ "amx_clcmdmenu",       "Client commands" },
 	{ "amx_votemapmenu",     "Start a map vote" },
+	{ "gm_votemode",         "Start a mode vote" },
 	{ "amx_restmenu",        "Weapon restrictions" },
 	{ "amx_statscfgmenu",    "Stats & announcements" },
 	{ "amx_cvarmenu",        "Server cvars" },
@@ -323,6 +326,8 @@ new bool:g_Career
 new bool:g_LearnGuard, Float:g_LearnTimelimit
 new bool:g_Reloading
 new g_GoMode = -1                 // the mode picked for the next map (-1: the current one)
+new g_NextMode = -1, g_NextMap[32] // a vote's mode for when this map ends (gm_pubserver), and its map
+new Float:g_MapsAt = -100.0       // when g_Maps was last read from the maps folders
 new g_pBotPlay                    // gm_botplay: how bots play together on this map (botplay.ini)
 new g_ReloadNote[96]
 new g_NavPolls
@@ -358,6 +363,14 @@ public plugin_precache()
 
 public plugin_natives()
 {
+	// for gm_pubserver's mode vote: the modes, the maps that suit one, and switching
+	register_library("gm_modes")
+	register_native("gm_modes_count", "n_modes_count")
+	register_native("gm_modes_info", "n_modes_info")
+	register_native("gm_modes_current", "n_modes_current")
+	register_native("gm_modes_maps", "n_modes_maps")
+	register_native("gm_modes_go", "n_modes_go")
+	register_native("gm_modes_next", "n_modes_next")
 	// still loads without gm_community
 	set_native_filter("native_filter")
 }
@@ -576,6 +589,7 @@ public fw_setmodel_post(ent, const model[])
 public plugin_end()
 {
 	write_data_line("session.txt", "clean")
+	apply_next_mode()
 	if (g_Maps != Invalid_Array)
 	{
 		ArrayDestroy(g_Maps)
@@ -1612,6 +1626,12 @@ apply_botstyle()
 		get_cvar_string("amx_nextmap", map, charsmax(map))
 	if (!map[0] || !is_map_valid(map))
 		get_mapname(map, charsmax(map))
+	// a mode vote picked the mode for that map
+	if (g_NextMode >= 0 && equali(map, g_NextMap))
+	{
+		apply_botstyle_for(g_NextMode, map, false)
+		return
+	}
 	apply_botstyle_for(g_Cur, map, true)
 }
 
@@ -2203,6 +2223,7 @@ public sort_maps(Array:array, const a[], const b[])
 // Builds the list of all playable maps (czero + cstrike) with their nav status.
 build_maps()
 {
+	g_MapsAt = get_gametime()
 	if (g_Maps != Invalid_Array)
 	{
 		ArrayDestroy(g_Maps)
@@ -2458,6 +2479,8 @@ do_go(mode, const map[])
 // next map is still starting)
 public task_changelevel(const map[])
 {
+	// a change made here wins over a mode vote's pick for the end of the map
+	g_NextMode = -1
 	// the bot personalities for how they play in that mode on that map
 	apply_botstyle_for(g_GoMode >= 0 ? g_GoMode : g_Cur, map, g_GoMode < 0)
 	engine_changelevel(map)
@@ -4617,4 +4640,311 @@ write_event_status(f)
 		new i = n % MAX_EVENTS
 		fprintf(f, "{^"t^":^"event^",^"seq^":%d,^"time^":%d,%s}^n", n, g_EvTime[i], g_EvBody[i])
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Mode vote (gm_pubserver runs it): the maps that suit a mode, and switching to
+// it the usual way (the mode's own saved settings, plugins and bot personalities;
+// the bot count stays). Votes are on modes, not presets: a preset resets settings
+// and the bot count, which a vote shouldn't do.
+// ---------------------------------------------------------------------------
+
+// Map names that suit a mode without its own map list (the app's Play page uses the same)
+new const MODE_PREFIXES[][][] =
+{
+	{ "zombie",      "zm_ zp_ ze_" },
+	{ "zp5",         "zm_ zp_ ze_" },
+	{ "hns",         "hns_ hide_ hide" },
+	{ "deathrun",    "deathrun_ dr_" },
+	{ "kreedz",      "kz_ bkz_ xc_ kzm_" },
+	{ "surf",        "surf_" },
+	{ "soccerjam",   "soccerjam sj_" },
+	{ "basebuilder", "bb_ basebuilder" },
+	{ "paintball",   "pb_ paintball cspaintball" },
+	{ "knife",       "ka_ knife 35hp" },
+	{ "awp",         "awp_" },
+	{ "scoutz",      "scoutz scout" },
+	{ "pistols",     "aim_ fy_ pistol" },
+	{ "deagle",      "aim_ fy_ deagle" },
+	{ "classic",     "de_ cs_ as_" },
+	{ "war3",        "de_ cs_" },
+	{ "shero",       "de_ cs_" }
+}
+
+// Modes that only work on maps made for them: never offered on an everyday map
+new const MAP_MODES[][] = { "kreedz", "surf", "soccerjam", "basebuilder", "deathrun" }
+// Modes with a look of their own: their maps aren't everyday maps for other modes
+new const THEMED_MODES[][] = { "zombie", "zp5", "hns", "paintball" }
+
+bool:needs_maps(const id[])
+{
+	for (new i = 0; i < sizeof MAP_MODES; i++)
+		if (equali(id, MAP_MODES[i]))
+			return true
+	return false
+}
+
+bool:name_fits(const id[], const map[])
+{
+	new tok[24], pos
+	for (new i = 0; i < sizeof MODE_PREFIXES; i++)
+	{
+		if (!equali(id, MODE_PREFIXES[i][0]))
+			continue
+		pos = 0
+		while ((pos = argparse(MODE_PREFIXES[i][1], pos, tok, charsmax(tok))) != -1)
+			if (equali(map, tok, strlen(tok)))
+				return true
+	}
+	return false
+}
+
+// mappresets.ini, read once per look-up: patterns and the mode id each one picks
+read_preset_list(Array:pats, Array:ids)
+{
+	new line[128], pattern[64], id[32]
+	new f = fopen(fmt("%s/gamemodes/mappresets.ini", g_CfgDir), "rt")
+	if (!f)
+		return
+	while (fgets(f, line, charsmax(line)))
+	{
+		trim(line)
+		if (!line[0] || line[0] == ';' || line[0] == '/')
+			continue
+		pattern[0] = id[0] = 0
+		parse(line, pattern, charsmax(pattern), id, charsmax(id))
+		if (pattern[0] && id[0])
+		{
+			ArrayPushString(pats, pattern)
+			ArrayPushString(ids, id)
+		}
+	}
+	fclose(f)
+}
+
+// The mode id a map preset gives this map ("" for none)
+preset_id_of(Array:pats, Array:ids, const map[], out[], len)
+{
+	new pattern[64]
+	out[0] = 0
+	for (new i = 0; i < ArraySize(pats); i++)
+	{
+		ArrayGetString(pats, i, pattern, charsmax(pattern))
+		new plen = strlen(pattern)
+		if ((plen && pattern[plen - 1] == '*') ? equali(map, pattern, plen - 1) : equali(map, pattern))
+		{
+			ArrayGetString(ids, i, out, len)
+			return
+		}
+	}
+}
+
+// Made for this mode: its map preset says so, or (no preset) its name fits the mode
+bool:made_for(const id[], const map[], Array:pats, Array:ids)
+{
+	new preset[32]
+	preset_id_of(pats, ids, map, preset, charsmax(preset))
+	if (preset[0])
+		return bool:equali(preset, id)
+	return name_fits(id, map)
+}
+
+// Made for a mode that needs its own maps, or one with its own look
+bool:special_map(const map[], Array:pats, Array:ids)
+{
+	for (new i = 0; i < sizeof MAP_MODES; i++)
+		if (made_for(MAP_MODES[i], map, pats, ids))
+			return true
+	for (new i = 0; i < sizeof THEMED_MODES; i++)
+		if (made_for(THEMED_MODES[i], map, pats, ids))
+			return true
+	return false
+}
+
+// Maps in a list file (one per line, ; and // comments, a .bsp ending is fine)
+read_map_file(const path[], Array:into)
+{
+	new f = fopen(path, "rt")
+	if (!f)
+		return
+	new line[64], map[32]
+	while (fgets(f, line, charsmax(line)))
+	{
+		trim(line)
+		if (!line[0] || line[0] == ';' || line[0] == '/')
+			continue
+		parse(line, map, charsmax(map))
+		new len = strlen(map)
+		if (len > 4 && equali(map[len - 4], ".bsp"))
+			map[len - 4] = 0
+		if (map[0] && is_map_valid(map))
+			ArrayPushString(into, map)
+	}
+	fclose(f)
+}
+
+add_suited(const map[], bool:nav, Array:withNav, Array:without, Trie:seen, Trie:hidden)
+{
+	new key[32]
+	copy(key, charsmax(key), map)
+	strtolower(key)
+	if (TrieKeyExists(seen, key) || TrieKeyExists(hidden, key))
+		return
+	TrieSetCell(seen, key, 1)
+	ArrayPushString(nav ? withNav : without, map)
+}
+
+// The maps that suit a mode, added to `out`: the host's rotation for the mode, else the
+// mode's own map list (maps/<id>.txt), else maps made for it (map presets, then names);
+// a mode that plays anywhere also gets everyday maps when few are made for it. Maps bots
+// know come first, the rest only when fewer than two do. Hidden maps never. Returns how many.
+mode_maps(mode, Array:out)
+{
+	if (mode < 0 || mode >= g_ModeCount || out == Invalid_Array)
+		return 0
+	new Float:now = get_gametime()
+	if (g_Maps == Invalid_Array || now < g_MapsAt || now - g_MapsAt > 60.0)
+		build_maps()
+	new id[32], map[32], key[32]
+	copy(id, charsmax(id), g_ModeId[mode])
+	new Trie:hidden = TrieCreate(), Trie:seen = TrieCreate()
+	new Array:list = ArrayCreate(32), Array:withNav = ArrayCreate(32), Array:without = ArrayCreate(32)
+	list_read("hidden_maps.txt", list)
+	for (new i = 0; i < ArraySize(list); i++)
+	{
+		ArrayGetString(list, i, key, charsmax(key))
+		strtolower(key)
+		TrieSetCell(hidden, key, 1)
+	}
+	ArrayClear(list)
+	read_map_file(fmt("%s/rotation_%s.txt", g_DataDir, id), list)
+	if (!ArraySize(list))
+		read_map_file(fmt("%s/gamemodes/maps/%s.txt", g_CfgDir, id), list)
+	for (new i = 0; i < ArraySize(list); i++)
+	{
+		ArrayGetString(list, i, map, charsmax(map))
+		add_suited(map, has_nav(map), withNav, without, seen, hidden)
+	}
+	if (!ArraySize(withNav) && !ArraySize(without))
+	{
+		new Array:pats = ArrayCreate(64), Array:ids = ArrayCreate(32)
+		read_preset_list(pats, ids)
+		for (new i = 0; i < ArraySize(g_Maps); i++)
+		{
+			ArrayGetString(g_Maps, i, map, charsmax(map))
+			if (made_for(id, map, pats, ids))
+				add_suited(map, bool:ArrayGetCell(g_MapNav, i), withNav, without, seen, hidden)
+		}
+		if (!needs_maps(id) && ArraySize(withNav) < 3)
+		{
+			for (new i = 0; i < ArraySize(g_Maps); i++)
+			{
+				ArrayGetString(g_Maps, i, map, charsmax(map))
+				if (ArrayGetCell(g_MapNav, i) && !special_map(map, pats, ids))
+					add_suited(map, true, withNav, without, seen, hidden)
+			}
+		}
+		ArrayDestroy(pats)
+		ArrayDestroy(ids)
+	}
+	new before = ArraySize(out)
+	for (new i = 0; i < ArraySize(withNav); i++)
+	{
+		ArrayGetString(withNav, i, map, charsmax(map))
+		ArrayPushString(out, map)
+	}
+	if (ArraySize(withNav) < 2)
+		for (new i = 0; i < ArraySize(without); i++)
+		{
+			ArrayGetString(without, i, map, charsmax(map))
+			ArrayPushString(out, map)
+		}
+	TrieDestroy(hidden)
+	TrieDestroy(seen)
+	ArrayDestroy(list)
+	ArrayDestroy(withNav)
+	ArrayDestroy(without)
+	return ArraySize(out) - before
+}
+
+// gm_modes_count()
+public n_modes_count(plugin, params)
+{
+	return g_ModeCount
+}
+
+// gm_modes_info(mode, id[], idlen, name[], namelen)
+public n_modes_info(plugin, params)
+{
+	new i = get_param(1)
+	if (i < 0 || i >= g_ModeCount)
+		return 0
+	set_string(2, g_ModeId[i], get_param(3))
+	set_string(4, g_ModeName[i], get_param(5))
+	return 1
+}
+
+// gm_modes_current(): the mode playing now (-1 in a Tour of Duty match)
+public n_modes_current(plugin, params)
+{
+	return g_Career ? -1 : g_Cur
+}
+
+// gm_modes_maps(mode, Array:out): adds the maps that suit the mode, returns how many
+public n_modes_maps(plugin, params)
+{
+	return mode_maps(get_param(1), Array:get_param(2))
+}
+
+bool:vote_target_ok(mode, const map[])
+{
+	return !g_Career && mode >= 0 && mode < g_ModeCount && map[0] && is_map_valid(map)
+}
+
+// gm_modes_go(mode, map): switch now, the same way as the menu and the app
+public n_modes_go(plugin, params)
+{
+	new mode = get_param(1), map[32]
+	get_string(2, map, charsmax(map))
+	if (!vote_target_ok(mode, map))
+		return 0
+	do_go(mode, map)
+	return 1
+}
+
+// gm_modes_next(mode, map): the map (and mode) for when this map ends. The map goes in
+// amx_nextmap, which nextmap.amxx changes to; the mode is put in place as the map ends.
+public n_modes_next(plugin, params)
+{
+	new mode = get_param(1), map[32]
+	get_string(2, map, charsmax(map))
+	if (!vote_target_ok(mode, map))
+		return 0
+	g_NextMode = mode == g_Cur ? -1 : mode
+	copy(g_NextMap, charsmax(g_NextMap), map)
+	if (get_cvar_pointer("amx_nextmap"))
+		set_cvar_string("amx_nextmap", map)
+	// CZ reads the bot personalities when the next map loads
+	apply_botstyle_for(mode, map, mode == g_Cur)
+	return 1
+}
+
+// The map is ending: a mode a vote picked starts with the next map, if that's still the
+// voted map (a change made since, or one to another map, keeps the mode)
+apply_next_mode()
+{
+	if (g_NextMode < 0 || g_Career)
+		return
+	new next[32]
+	if (get_cvar_pointer("amx_nextmap"))
+		get_cvar_string("amx_nextmap", next, charsmax(next))
+	if (equali(next, g_NextMap))
+	{
+		write_mode_plugins(g_NextMode)
+		// an explicit choice wins over map presets
+		write_data_line("lastmap.txt", g_NextMap)
+		write_data_line("premode.txt", "")
+		write_data_line("reloadnote.txt", fmt("Players voted for %s", g_ModeName[g_NextMode]))
+	}
+	g_NextMode = -1
 }

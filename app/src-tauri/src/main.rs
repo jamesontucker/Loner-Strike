@@ -14,6 +14,7 @@ mod gamebanana;
 mod hltv;
 mod lists;
 mod maps;
+mod modevote;
 mod notify;
 mod panel_api;
 mod plugins;

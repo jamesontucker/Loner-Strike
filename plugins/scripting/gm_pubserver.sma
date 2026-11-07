@@ -14,12 +14,27 @@
 	            a round starts, a clan member on the other side swaps with a bot with no
 	            clan, so team sizes stay the same. Only in plain team modes, never in a match.
 
+	Modes:      with gm_modevote 1, rock the vote picks the mode too: "rtv" (or "rtm",
+	            "rockthemode", "votemode") starts it once gm_modevote_ratio percent of the
+	            people want it (not in a map's first 3 minutes, nor for 10 minutes after a
+	            vote that changed nothing). First the mode ("Keep <mode>", then up to 4 others:
+	            nominated ones first, "nominatemode <name>"), then a map for it: the maps that
+	            suit the winning mode (gamemodes.amxx's gm_modes_maps). Keep wins: the usual
+	            map vote. The switch goes through the Game Mode Menu, so the mode's own saved
+	            settings, plugins and bot personalities apply and the bot count stays.
+	            Votable modes: data/gamemodes/votemodes.ini (the app's Rules page), else
+	            configs/gamemodes/votemodes.ini, else the built-in list; a mode with no map
+	            that suits it is left out. gm_modevote_every N: every Nth map ends with the
+	            same mode-then-map vote instead of mapchooser's (paused for that map); the
+	            pick waits for the map to end. "gm_votemode" (admin, or the app) starts one.
+	            With gm_modevote 0 rock the vote and the end of the map work as before.
 	Life:       bots join a few at a time when a map starts (gm_botjoin), say they're
 	            going before they leave (gm_churn), and some come back later; now and
 	            then one has tweaked its name. Bots join in on rock the vote and vote
 	            for maps (gm_botvotes); people's votes decide, bots only break ties.
 	Cvars: gm_regulars 0/1, gm_churn 0/1/2, gm_rtv 0/1, gm_welcome 0/1/2, gm_clans 0/1,
-	       gm_botjoin 0/1, gm_botvotes 0/1
+	       gm_botjoin 0/1, gm_botvotes 0/1, gm_modevote 0/1, gm_modevote_ratio 1-100,
+       gm_modevote_every 0/2/3/5
 */
 
 #include <amxmodx>
@@ -30,6 +45,14 @@
 // gm_botchat (optional): bots' lines
 native botchat_say(id, const section[], other, Float:chance)
 
+// gamemodes.amxx (library gm_modes): the modes, the maps that suit one, switching
+native gm_modes_count()
+native gm_modes_info(mode, id[], idlen, name[], namelen)
+native gm_modes_current()
+native gm_modes_maps(mode, Array:out)
+native gm_modes_go(mode, const map[])
+native gm_modes_next(mode, const map[])
+
 #define PLUGIN  "Pub server"
 #define VERSION "1.0"
 #define AUTHOR  "gamemodes"
@@ -39,11 +62,16 @@ native botchat_say(id, const section[], other, Float:chance)
 #define TASK_CHANGE  5300
 #define TASK_WELCOME 5400
 #define TASK_CLANS   5500
+#define TASK_ENDVOTE 5600
 
 #define VOTE_TIME    15
 #define VOTE_MAPS    5
 #define MAX_NOMS     4
 #define NEWCOMER_PCT 35
+#define VOTE_MODES   4      // modes in the mode vote besides "Keep"
+#define MODE_WAIT    180    // seconds into a map before a vote that can change the mode
+#define MODE_RETRY   600    // seconds after a vote that changed nothing
+#define END_LEAD     140    // the map-end vote starts with this much time left (mapchooser: 129)
 
 new g_pRegulars, g_pChurn, g_pRtv, g_pWelcome, g_pClans, g_pBotJoin, g_pBotVotes, g_pRampTarget
 new bool:g_Chat
@@ -66,6 +94,20 @@ new g_VoteMaps[VOTE_MAPS + 1][32], g_VoteCount[VOTE_MAPS + 1], g_VoteOptions
 new Float:g_MapStart
 new Array:g_MapPool
 
+// the mode vote
+new g_pModeVote, g_pModeRatio, g_pModeEvery
+new g_MNomBy[MAX_NOMS], g_MNoms[MAX_NOMS], g_MNomCount        // nominated modes (mode indexes)
+new g_MVMode[VOTE_MODES + 1], g_MVCount[VOTE_MODES + 1], g_MVBot[VOTE_MODES + 1], g_MVOptions
+new bool:g_ModeFlow          // this vote can change the mode (rtv with mode voting on)
+new bool:g_EndVote           // this vote runs because the map is ending
+new bool:g_EndDue            // this map ends with a mode-then-map vote
+new bool:g_EndStarted        // ... and it has started
+new bool:g_McPaused          // mapchooser paused for this map
+new bool:g_Changing          // a vote's map change is on its way
+new bool:g_BothZombies       // "zombie" and "zp5" are both in the vote (zp5 keeps its full name)
+new g_StageMode = -1         // the map stage: maps for this mode
+new g_Score[2]
+
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR)
@@ -76,6 +118,9 @@ public plugin_init()
 	g_pClans    = register_cvar("gm_clans", "1")
 	g_pBotJoin  = register_cvar("gm_botjoin", "1")
 	g_pBotVotes = register_cvar("gm_botvotes", "1")
+	g_pModeVote  = register_cvar("gm_modevote", "1")
+	g_pModeRatio = register_cvar("gm_modevote_ratio", "50")
+	g_pModeEvery = register_cvar("gm_modevote_every", "0")
 	// the full bot count while they trickle in (0 otherwise), so the Game Mode Menu
 	// saves that and not the low live bot_quota; it sets this to 0 to end the ramp
 	g_pRampTarget = register_cvar("gm_botjoin_target", "0")
@@ -92,6 +137,8 @@ public plugin_init()
 	register_clcmd("say", "cmd_say")
 	register_clcmd("say_team", "cmd_say")
 	register_clcmd("gm_welcome_show", "cmd_welcome")
+	register_concmd("gm_votemode", "cmd_votemode", ADMIN_VOTE, "- starts a game mode vote, then a map vote")
+	register_event("TeamScore", "ev_teamscore", "a")
 
 	get_datadir(g_DataDir, charsmax(g_DataDir))
 	add(g_DataDir, charsmax(g_DataDir), "/gamemodes")
@@ -99,6 +146,7 @@ public plugin_init()
 	load_names()
 	g_MapStart = get_gametime()
 	set_task(15.0, "task_churn", TASK_CHURN, _, _, "b")
+	set_task(5.0, "task_end_check", TASK_ENDVOTE, _, _, "b")
 }
 
 public plugin_natives()
@@ -108,7 +156,7 @@ public plugin_natives()
 
 public native_filter(const name[], index, trap)
 {
-	return (!trap && equal(name, "botchat_", 8)) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+	return (!trap && (equal(name, "botchat_", 8) || equal(name, "gm_modes_", 9))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 say_line(id, const section[], Float:chance)
@@ -130,6 +178,11 @@ public plugin_cfg()
 	// doesn't exist means no window, and our own welcome screen takes its place.
 	if (!g_Career)
 		set_cvar_string("motdfile", "addons/amxmodx/data/gamemodes/no_motd.txt")
+	remember_mode()
+	// every Nth map ends with a mode-then-map vote (maps played since the last one)
+	new every = get_pcvar_num(g_pModeEvery), since[8]
+	get_localinfo("gm_mvmaps", since, charsmax(since))
+	g_EndDue = every > 0 && str_to_num(since) >= every - 1
 }
 
 public plugin_end()
@@ -140,6 +193,13 @@ public plugin_end()
 	if (g_RampTarget && get_cvar_num("bot_quota") == g_RampSet)
 		set_cvar_num("bot_quota", g_RampTarget)
 	set_pcvar_num(g_pRampTarget, 0)
+	// count the maps played to the end (not a reload a moment after loading)
+	if (get_gametime() - g_MapStart > 60.0)
+	{
+		new since[8]
+		get_localinfo("gm_mvmaps", since, charsmax(since))
+		set_localinfo("gm_mvmaps", g_EndStarted ? "0" : fmt("%d", min(str_to_num(since) + 1, 99)))
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -490,21 +550,27 @@ public cmd_say(id)
 	if (word[0] == '/' || word[0] == '!')
 		copy(word, charsmax(word), word[1])
 
-	if (equali(word, "rtv") || equali(word, "rockthevote"))
+	new bool:modeWord = equali(word, "rtm") || equali(word, "rockthemode") || equali(word, "votemode")
+	if (modeWord || equali(word, "rtv") || equali(word, "rockthevote"))
 	{
 		// bots join in once a person has asked; a bot's rtv alone starts nothing
 		if (is_user_bot(id))
 		{
 			if (get_pcvar_num(g_pBotVotes) && human_rocked())
-				rock(id)
+				rock(id, modeWord)
 			return PLUGIN_CONTINUE
 		}
-		rock(id)
+		rock(id, modeWord)
 		if (get_pcvar_num(g_pBotVotes))
 			for (new b = 1; b <= MaxClients; b++)
-				if (is_user_connected(b) && is_user_bot(b) && random(100) < 30)
-					set_task(random_float(2.0, 9.0), "task_bot_rtv", get_user_userid(b))
+				if (is_user_connected(b) && is_user_bot(b) && random(100) < (modeWord ? 20 : 30))
+					set_task(random_float(2.0, 9.0), modeWord ? "task_bot_rtm" : "task_bot_rtv", get_user_userid(b))
 		return PLUGIN_CONTINUE      // others see it in chat, like on a real server
+	}
+	if (equali(word, "nominatemode") || equali(word, "nommode"))
+	{
+		nominate_mode(id, rest)
+		return PLUGIN_HANDLED
 	}
 	if (equali(word, "nominate") || equali(word, "nom"))
 	{
@@ -538,12 +604,23 @@ bool:human_rocked()
 
 public task_bot_rtv(userid)
 {
+	bot_rock(userid, false)
+}
+
+public task_bot_rtm(userid)
+{
+	bot_rock(userid, true)
+}
+
+bot_rock(userid, bool:modeWord)
+{
 	new id = find_player("k", userid)
-	if (!id || !is_user_bot(id) || g_Voting || g_VoteDone)
+	if (!id || !is_user_bot(id) || g_Voting || g_Changing || (g_VoteDone && !mode_voting()))
 		return
-	// shown in chat, and counted (a bot's own command doesn't reach the say hook)
-	engclient_cmd(id, "say", "rtv")
-	rock(id)
+	// shown in chat (a bot's own command doesn't reach the say hook); like every bot's
+	// rtv it doesn't count towards the vote
+	engclient_cmd(id, "say", modeWord ? "rtm" : "rtv")
+	rock(id, modeWord)
 }
 
 // people only, like needed(): a bot's rtv is chat flavour and doesn't count
@@ -558,20 +635,43 @@ rocked()
 
 needed()
 {
+	// with mode voting: gm_modevote_ratio percent of the people (half by default), rounded up
+	if (mode_voting())
+		return max(1, (humans() * clamp(get_pcvar_num(g_pModeRatio), 1, 100) + 99) / 100)
 	return max(1, floatround(humans() * 0.6, floatround_ceil))
 }
 
-rock(id)
+rock(id, bool:modeWord = false)
 {
-	if (!get_pcvar_num(g_pRtv))
+	new bool:modes = mode_voting()
+	if (modeWord && !modes)
+		return client_print_color(id, print_team_default, "^4[Server]^1 Mode voting is turned off.")
+	if (!modeWord && !get_pcvar_num(g_pRtv))
 		return client_print_color(id, print_team_default, "^4[Server]^1 Rock the vote is turned off.")
 	if (g_Voting)
-		return client_print_color(id, print_team_default, "^4[Server]^1 A map vote is already running.")
-	if (g_VoteDone)
-		return client_print_color(id, print_team_default, "^4[Server]^1 The map vote already happened on this map.")
-	new wait = 30 - floatround(get_gametime() - g_MapStart)
-	if (wait > 0)
-		return client_print_color(id, print_team_default, "^4[Server]^1 You can rock the vote in %d seconds.", wait)
+		return client_print_color(id, print_team_default, "^4[Server]^1 A vote is already running.")
+	if (g_Changing)
+		return client_print_color(id, print_team_default, "^4[Server]^1 The map is about to change.")
+	new wait
+	if (modes)
+	{
+		if (g_EndStarted)
+			return client_print_color(id, print_team_default, "^4[Server]^1 The next map is already picked.")
+		wait = MODE_WAIT - floatround(get_gametime() - g_MapStart)
+		if (wait > 0)
+			return client_print_color(id, print_team_default, "^4[Server]^1 You can rock the vote in %d:%02d.", wait / 60, wait % 60)
+		wait = mode_cooldown()
+		if (wait > 0)
+			return client_print_color(id, print_team_default, "^4[Server]^1 The last vote kept everything as it was. The next one can start in %d:%02d.", wait / 60, wait % 60)
+	}
+	else
+	{
+		if (g_VoteDone)
+			return client_print_color(id, print_team_default, "^4[Server]^1 The map vote already happened on this map.")
+		wait = 30 - floatround(get_gametime() - g_MapStart)
+		if (wait > 0)
+			return client_print_color(id, print_team_default, "^4[Server]^1 You can rock the vote in %d seconds.", wait)
+	}
 	if (g_Rocked[id])
 		return client_print_color(id, print_team_default, "^4[Server]^1 You already rocked the vote (%d of %d).", rocked(), needed())
 
@@ -580,18 +680,30 @@ rock(id)
 	get_user_name(id, name, charsmax(name))
 	if (rocked() >= needed())
 	{
-		client_print_color(0, print_team_default, "^4[Server]^3 %s^1 rocked the vote. Starting a map vote...", name)
-		set_task(1.5, "start_vote", TASK_VOTE)
+		client_print_color(0, print_team_default, "^4[Server]^3 %s^1 rocked the vote. Starting a %s vote...", name, modes ? "mode" : "map")
+		set_task(1.5, modes ? "start_mode_vote" : "start_vote", TASK_VOTE)
 		g_Voting = true
 	}
 	else
-		client_print_color(0, print_team_default, "^4[Server]^3 %s^1 wants a new map (%d of %d). Say ^4rtv^1 to agree.", name, rocked(), needed())
+		client_print_color(0, print_team_default, "^4[Server]^3 %s^1 wants a %s (%d of %d). Say ^4%s^1 to agree.", name, modes ? "different mode or map" : "new map", rocked(), needed(), modeWord ? "rtm" : "rtv")
 	return PLUGIN_HANDLED
 }
 
 public client_disconnected(id)
 {
 	g_Rocked[id] = false
+	for (new i = 0; i < g_MNomCount; i++)
+	{
+		if (g_MNomBy[i] != id)
+			continue
+		g_MNomCount--
+		for (new j = i; j < g_MNomCount; j++)
+		{
+			g_MNomBy[j] = g_MNomBy[j + 1]
+			g_MNoms[j] = g_MNoms[j + 1]
+		}
+		break
+	}
 	for (new i = 0; i < g_NomCount; i++)
 	{
 		if (g_NomBy[i] != id)
@@ -940,6 +1052,7 @@ public start_vote()
 	if (!g_VoteOptions)
 	{
 		g_Voting = false
+		vote_settled(false)
 		return client_print_color(0, print_team_default, "^4[Server]^1 There are no other maps to vote for.")
 	}
 	new cur[32]
@@ -1027,7 +1140,12 @@ public end_vote(const data[])
 			if (is_user_connected(b) && is_user_bot(b) && random(100) < 12)
 				say_line(b, "map_vote", 0.6)
 	if (best < 0 || best == g_VoteOptions)
+	{
+		vote_settled(false)
 		return client_print_color(0, print_team_default, "^4[Server]^1 Staying on ^4%s^1.", g_VoteMaps[g_VoteOptions])
+	}
+	vote_settled(true)
+	g_Changing = true
 	client_print_color(0, print_team_default, "^4[Server]^1 Next map: ^4%s^1 (%d vote%s). Changing in 5 seconds.", g_VoteMaps[best], most, most == 1 ? "" : "s")
 	set_task(5.0, "task_change", TASK_CHANGE, g_VoteMaps[best], sizeof g_VoteMaps[])
 	return PLUGIN_HANDLED
@@ -1037,6 +1155,707 @@ public task_change(const map[])
 {
 	// through the Game Mode Menu so the current mode carries over
 	server_cmd("gm_map %s", map)
+}
+
+// ---------------------------------------------------------------------------
+// Mode vote: rock the vote with the mode first, then a map for it
+// ---------------------------------------------------------------------------
+
+// Votable modes when neither votemodes.ini exists (zp5 shows as "Zombie Plague")
+new const DEFAULT_VOTE_MODES[][] = { "classic", "csdm", "csdm_ffa", "gungame", "gungame_team", "deathrun", "basebuilder",
+	"soccerjam", "zp5", "scoutz", "war3", "hns", "paintball", "shero" }
+
+new g_Phase                   // 1: voting on modes, 2: voting on a map for a mode
+
+bool:mode_voting()
+{
+	return get_pcvar_num(g_pModeVote) && !g_Career && !get_cvar_num("gm_scrim_phase")
+		&& LibraryExists("gm_modes", LibType_Library) && gm_modes_current() >= 0
+}
+
+// Seconds until a vote may start after one that kept everything as it was
+mode_cooldown()
+{
+	new buf[16]
+	get_localinfo("gm_mvfail", buf, charsmax(buf))
+	new at = str_to_num(buf), now = get_systime()
+	if (at <= 0 || at > now)
+		return 0
+	return max(0, MODE_RETRY - (now - at))
+}
+
+// A vote that could change the mode is over. One that kept everything means a pause
+// before the next; either way people can rock the vote again later on this map.
+vote_settled(bool:changed)
+{
+	if (!g_ModeFlow)
+		return
+	g_ModeFlow = false
+	if (!changed)
+		set_localinfo("gm_mvfail", fmt("%d", get_systime()))
+	g_VoteDone = false
+	arrayset(g_Rocked, false, sizeof g_Rocked)
+	g_NomCount = 0
+	g_MNomCount = 0
+}
+
+current_mode_id(out[], len)
+{
+	out[0] = 0
+	new f = fopen(fmt("%s/current.txt", g_DataDir), "rt")
+	if (f)
+	{
+		fgets(f, out, len)
+		trim(out)
+		fclose(f)
+	}
+}
+
+// The last three modes played (localinfo outlasts the map change), newest first
+remember_mode()
+{
+	new id[32], list[100], out[100], tok[32], pos, n = 1
+	current_mode_id(id, charsmax(id))
+	if (!id[0] || !plain_name(id))
+		return
+	get_localinfo("gm_mvrecent", list, charsmax(list))
+	copy(out, charsmax(out), id)
+	while (n < 3 && (pos = argparse(list, pos, tok, charsmax(tok))) != -1)
+	{
+		if (equali(tok, id))
+			continue
+		add(out, charsmax(out), fmt(" %s", tok))
+		n++
+	}
+	set_localinfo("gm_mvrecent", out)
+}
+
+bool:recent_mode(const id[])
+{
+	new list[100], tok[32], pos
+	get_localinfo("gm_mvrecent", list, charsmax(list))
+	while ((pos = argparse(list, pos, tok, charsmax(tok))) != -1)
+		if (equali(tok, id))
+			return true
+	return false
+}
+
+// One mode id per line; ; # and // comments. Whether it named any.
+bool:read_vote_list(const path[], Array:ids)
+{
+	new f = fopen(path, "rt")
+	if (!f)
+		return false
+	new line[64], id[32]
+	while (fgets(f, line, charsmax(line)))
+	{
+		trim(line)
+		if (!line[0] || line[0] == ';' || line[0] == '#' || line[0] == '/')
+			continue
+		parse(line, id, charsmax(id))
+		// "kind:id" lines are kept for later (presets in the vote); not modes
+		if (id[0] && contain(id, ":") == -1)
+			ArrayPushString(ids, id)
+	}
+	fclose(f)
+	return ArraySize(ids) > 0
+}
+
+find_mode_id(const id[])
+{
+	new mid[32], name[2]
+	for (new m = 0, n = gm_modes_count(); m < n; m++)
+		if (gm_modes_info(m, mid, charsmax(mid), name, charsmax(name)) && equali(mid, id))
+			return m
+	return -1
+}
+
+// The modes people can vote for now (mode indexes): the server's list, installed ones
+// only, not the one playing, and only ones with a map that suits them
+allowed_modes(Array:out)
+{
+	new Array:ids = ArrayCreate(32)
+	if (!read_vote_list(fmt("%s/votemodes.ini", g_DataDir), ids) && !read_vote_list(fmt("%s/gamemodes/votemodes.ini", g_CfgDir), ids))
+		for (new i = 0; i < sizeof DEFAULT_VOTE_MODES; i++)
+			ArrayPushString(ids, DEFAULT_VOTE_MODES[i])
+	new cur = gm_modes_current(), id[32], cid[32], name[2]
+	new bool:zombie, bool:zp5
+	gm_modes_info(cur, cid, charsmax(cid), name, charsmax(name))
+	zombie = bool:equali(cid, "zombie")
+	zp5 = bool:equali(cid, "zp5")
+	new Array:maps = ArrayCreate(32)
+	for (new i = 0; i < ArraySize(ids); i++)
+	{
+		ArrayGetString(ids, i, id, charsmax(id))
+		new m = find_mode_id(id)
+		if (m < 0 || m == cur || ArrayFindValue(out, m) != -1)
+			continue
+		ArrayClear(maps)
+		if (!gm_modes_maps(m, maps))
+			continue
+		ArrayPushCell(out, m)
+		if (equali(id, "zombie"))
+			zombie = true
+		else if (equali(id, "zp5"))
+			zp5 = true
+	}
+	g_BothZombies = zombie && zp5
+	ArrayDestroy(maps)
+	ArrayDestroy(ids)
+}
+
+// The name in the vote: Zombie Plague Advanced is just "Zombie Plague" unless both are in it
+vote_name(mode, out[], len)
+{
+	new id[32]
+	out[0] = 0
+	gm_modes_info(mode, id, charsmax(id), out, len)
+	if (equali(id, "zp5") && !g_BothZombies)
+		copy(out, len, "Zombie Plague")
+}
+
+// How much bots like a mode, roughly how busy those servers were
+mode_pop(mode)
+{
+	new id[32], name[2]
+	gm_modes_info(mode, id, charsmax(id), name, charsmax(name))
+	new const POP[][] = { "classic", "csdm", "gungame", "zp5", "zombie", "war3", "deathrun", "hns", "csdm_ffa", "shero" }
+	new const W[] = { 5, 5, 4, 4, 4, 3, 3, 3, 3, 2 }
+	for (new i = 0; i < sizeof POP; i++)
+		if (equali(id, POP[i]))
+			return W[i]
+	return 1
+}
+
+// ---- nominating a mode -------------------------------------------------------------
+
+nominate_mode(id, const query[])
+{
+	if (!mode_voting())
+		return client_print_color(id, print_team_default, "^4[Server]^1 Mode voting is turned off.")
+	if (g_Voting || g_Changing || g_EndStarted)
+		return client_print_color(id, print_team_default, "^4[Server]^1 Too late to nominate a mode now.")
+	new Array:allowed = ArrayCreate(1)
+	allowed_modes(allowed)
+	new menu = menu_create(query[0] ? fmt("\yNominate a mode^n\dMatching ^"%s^"", query) : "\yNominate a mode", "nominate_mode_handler")
+	new name[48], mid[32], skip[2], found, only = -1
+	for (new i = 0; i < ArraySize(allowed); i++)
+	{
+		new m = ArrayGetCell(allowed, i)
+		vote_name(m, name, charsmax(name))
+		gm_modes_info(m, mid, charsmax(mid), skip, charsmax(skip))
+		if (query[0] && containi(name, query) < 0 && containi(mid, query) < 0)
+			continue
+		menu_additem(menu, name, fmt("%d", m))
+		only = m
+		found++
+	}
+	ArrayDestroy(allowed)
+	if (!found)
+	{
+		menu_destroy(menu)
+		if (query[0])
+			return client_print_color(id, print_team_default, "^4[Server]^1 No mode in the vote matches ^"%s^".", query)
+		return client_print_color(id, print_team_default, "^4[Server]^1 There are no other modes to vote for here.")
+	}
+	if (found == 1)
+	{
+		menu_destroy(menu)
+		return add_mode_nomination(id, only)
+	}
+	menu_display(id, menu)
+	return PLUGIN_HANDLED
+}
+
+public nominate_mode_handler(id, menu, item)
+{
+	if (item >= 0)
+	{
+		new info[8], access, cb
+		menu_item_getinfo(menu, item, access, info, charsmax(info), _, _, cb)
+		add_mode_nomination(id, str_to_num(info))
+	}
+	menu_destroy(menu)
+	return PLUGIN_HANDLED
+}
+
+add_mode_nomination(id, mode)
+{
+	new name[48]
+	vote_name(mode, name, charsmax(name))
+	for (new i = 0; i < g_MNomCount; i++)
+		if (g_MNoms[i] == mode)
+			return client_print_color(id, print_team_default, "^4[Server]^1 %s is already nominated.", name)
+	new slot = -1
+	for (new i = 0; i < g_MNomCount; i++)
+		if (g_MNomBy[i] == id)
+			slot = i                       // replace your earlier nomination
+	if (slot < 0)
+	{
+		if (g_MNomCount >= MAX_NOMS)
+			return client_print_color(id, print_team_default, "^4[Server]^1 The mode nomination list is full.")
+		slot = g_MNomCount++
+	}
+	g_MNomBy[slot] = id
+	g_MNoms[slot] = mode
+	new who[32]
+	get_user_name(id, who, charsmax(who))
+	client_print_color(0, print_team_default, "^4[Server]^3 %s^1 nominated ^4%s^1.", who, name)
+	return PLUGIN_HANDLED
+}
+
+// ---- stage 1: the mode ---------------------------------------------------------------
+
+public start_mode_vote()
+{
+	begin_mode_vote(false)
+}
+
+begin_mode_vote(bool:end)
+{
+	g_EndVote = end
+	g_ModeFlow = !end
+	g_Voting = true
+	new cur = gm_modes_current()
+	if (cur < 0)
+	{
+		g_Voting = false
+		g_ModeFlow = false
+		return
+	}
+	new Array:allowed = ArrayCreate(1)
+	allowed_modes(allowed)
+	g_MVOptions = 0
+	g_MVMode[g_MVOptions++] = cur
+	// nominated modes first
+	for (new i = 0; i < g_MNomCount && g_MVOptions <= VOTE_MODES; i++)
+		if (ArrayFindValue(allowed, g_MNoms[i]) != -1)
+			add_mode_option(g_MNoms[i])
+	// then a random few, the ones not played lately first
+	new n = ArraySize(allowed), id[32], name[2]
+	for (new i = n - 1; i > 0; i--)
+		ArraySwap(allowed, i, random(i + 1))
+	for (new pass = 0; pass < 2; pass++)
+		for (new i = 0; i < n && g_MVOptions <= VOTE_MODES; i++)
+		{
+			new m = ArrayGetCell(allowed, i)
+			gm_modes_info(m, id, charsmax(id), name, charsmax(name))
+			if (recent_mode(id) == (pass == 1))
+				add_mode_option(m)
+		}
+	ArrayDestroy(allowed)
+
+	if (g_MVOptions == 1)
+	{
+		client_print_color(0, print_team_default, "^4[Server]^1 There are no other modes to vote for, so it's a map vote.")
+		set_task(1.0, "task_keep_stage", TASK_VOTE)
+		return
+	}
+	arrayset(g_MVCount, 0, sizeof g_MVCount)
+	arrayset(g_MVBot, 0, sizeof g_MVBot)
+	g_Phase = 1
+	new menu = menu_create(fmt("\yVote for the next mode \d(%d seconds)", VOTE_TIME), "mode_vote_handler")
+	new label[64]
+	for (new i = 0; i < g_MVOptions; i++)
+	{
+		vote_name(g_MVMode[i], label, charsmax(label))
+		menu_additem(menu, i ? label : fmt("Keep %s", label))
+	}
+	menu_setprop(menu, MPROP_EXIT, MEXIT_NEVER)
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_connected(i) && !is_user_bot(i) && !is_user_hltv(i))
+			menu_display(i, menu, 0, VOTE_TIME)
+	if (get_pcvar_num(g_pBotVotes))
+		for (new b = 1; b <= MaxClients; b++)
+			if (is_user_connected(b) && is_user_bot(b) && random(100) < 60)
+				set_task(random_float(2.0, float(VOTE_TIME) - 2.0), "task_bot_mode_vote", get_user_userid(b))
+	new data[1]
+	data[0] = menu
+	set_task(float(VOTE_TIME) + 0.5, "end_mode_vote", TASK_VOTE, data, sizeof data)
+	if (end)
+		client_print_color(0, print_team_default, "^4[Server]^1 The map ends soon. Vote for the next mode, then a map. Results in %d seconds.", VOTE_TIME)
+	else
+		client_print_color(0, print_team_default, "^4[Server]^1 Vote for the next mode, then a map. Results in %d seconds.", VOTE_TIME)
+}
+
+add_mode_option(mode)
+{
+	for (new j = 0; j < g_MVOptions; j++)
+		if (g_MVMode[j] == mode)
+			return
+	g_MVMode[g_MVOptions++] = mode
+}
+
+bool:mode_nominated(mode)
+{
+	for (new i = 0; i < g_MNomCount; i++)
+		if (g_MNoms[i] == mode)
+			return true
+	return false
+}
+
+say_mode_vote(id, item)
+{
+	new who[32], name[48]
+	get_user_name(id, who, charsmax(who))
+	vote_name(g_MVMode[item], name, charsmax(name))
+	if (item == 0)
+		client_print_color(0, print_team_default, "^4[Server]^3 %s^1 wants to keep ^4%s^1.", who, name)
+	else
+		client_print_color(0, print_team_default, "^4[Server]^3 %s^1 voted for ^4%s^1.", who, name)
+}
+
+// A bot leans toward the modes people are voting for and the busy ones; its vote only
+// breaks a tie between people's favourites
+public task_bot_mode_vote(userid)
+{
+	new id = find_player("k", userid)
+	if (g_Phase != 1 || !id || !is_user_bot(id))
+		return
+	new w[VOTE_MODES + 1], total
+	for (new i = 0; i < g_MVOptions; i++)
+	{
+		w[i] = (i == 0 ? 3 : mode_pop(g_MVMode[i])) + g_MVCount[i] * 3 + (mode_nominated(g_MVMode[i]) ? 2 : 0)
+		total += w[i]
+	}
+	new r = random(max(total, 1)), item
+	for (item = 0; item < g_MVOptions - 1 && r >= w[item]; item++)
+		r -= w[item]
+	g_MVBot[item]++
+	say_mode_vote(id, item)
+}
+
+public mode_vote_handler(id, menu, item)
+{
+	if (g_Phase != 1 || item < 0 || item >= g_MVOptions)
+		return PLUGIN_HANDLED
+	g_MVCount[item]++
+	say_mode_vote(id, item)
+	return PLUGIN_HANDLED
+}
+
+// People's votes decide; bots' votes only break a tie between people's favourites (or
+// decide when no person voted). -1: nobody voted.
+tally(const people[], const bots[], n)
+{
+	new best = -1, most = 0, ties
+	new bool:any
+	for (new i = 0; i < n; i++)
+		if (people[i])
+			any = true
+	for (new i = 0; i < n; i++)
+	{
+		if (any && !people[i])
+			continue
+		new v = any ? people[i] * 100 + bots[i] : bots[i]
+		if (v > most)
+		{
+			best = i
+			most = v
+			ties = 1
+		}
+		else if (v == most && most > 0 && random(++ties) == 0)
+			best = i
+	}
+	return best
+}
+
+public end_mode_vote(const data[])
+{
+	menu_destroy(data[0])    // also closes it for anyone who didn't vote
+	g_Phase = 0
+	new best = tally(g_MVCount, g_MVBot, g_MVOptions)
+	if (best >= 0)
+		for (new b = 1; b <= MaxClients; b++)
+			if (is_user_connected(b) && is_user_bot(b) && random(100) < 12)
+				say_line(b, "mode_vote", 0.6)
+	new name[48]
+	if (best <= 0)
+	{
+		vote_name(g_MVMode[0], name, charsmax(name))
+		client_print_color(0, print_team_default, "^4[Server]^1 Keeping ^4%s^1. Now vote for the map.", name)
+		set_task(2.0, "task_keep_stage", TASK_VOTE)
+		return
+	}
+	new votes = g_MVCount[best] + g_MVBot[best]
+	vote_name(g_MVMode[best], name, charsmax(name))
+	client_print_color(0, print_team_default, "^4[Server]^1 Next mode: ^4%s^1 (%d vote%s). Now pick a map for it.", name, votes, votes == 1 ? "" : "s")
+	g_StageMode = g_MVMode[best]
+	set_task(2.0, "task_mode_stage", TASK_VOTE)
+}
+
+// ---- stage 2: the map ----------------------------------------------------------------
+
+// The mode stays: the usual map vote (at the end of a map: without "keep playing")
+public task_keep_stage()
+{
+	if (g_EndVote)
+		start_map_stage(gm_modes_current(), true)
+	else
+		start_vote()
+}
+
+public task_mode_stage()
+{
+	start_map_stage(g_StageMode, false)
+}
+
+bool:option_listed(const map[])
+{
+	for (new j = 0; j < g_VoteOptions; j++)
+		if (equali(g_VoteMaps[j], map))
+			return true
+	return false
+}
+
+// `usual`: rock the vote's own map list; else the maps that suit the mode
+start_map_stage(mode, bool:usual)
+{
+	g_StageMode = mode
+	new Array:pool = ArrayCreate(32), map[32], cur[32]
+	if (usual)
+	{
+		build_pool()
+		for (new i = 0; i < ArraySize(g_MapPool); i++)
+		{
+			ArrayGetString(g_MapPool, i, map, charsmax(map))
+			ArrayPushString(pool, map)
+		}
+	}
+	else
+		gm_modes_maps(mode, pool)
+	// the map that's ending isn't one to pick again; for a switch now it counts if it suits
+	get_mapname(cur, charsmax(cur))
+	new bool:curFits
+	for (new i = ArraySize(pool) - 1; i >= 0; i--)
+	{
+		ArrayGetString(pool, i, map, charsmax(map))
+		if (!equali(map, cur))
+			continue
+		ArrayDeleteItem(pool, i)
+		curFits = !g_EndVote
+	}
+	g_VoteOptions = 0
+	if (curFits)
+		copy(g_VoteMaps[g_VoteOptions++], charsmax(g_VoteMaps[]), cur)
+	// nominated maps that suit come next
+	for (new i = 0; i < g_NomCount && g_VoteOptions < VOTE_MAPS; i++)
+		for (new k = 0; k < ArraySize(pool); k++)
+		{
+			ArrayGetString(pool, k, map, charsmax(map))
+			if (equali(map, g_Noms[i]) && !option_listed(map))
+				copy(g_VoteMaps[g_VoteOptions++], charsmax(g_VoteMaps[]), map)
+		}
+	new n = ArraySize(pool)
+	for (new tries = 0; g_VoteOptions < VOTE_MAPS && tries < 200 && n; tries++)
+	{
+		ArrayGetString(pool, random(n), map, charsmax(map))
+		if (!option_listed(map))
+			copy(g_VoteMaps[g_VoteOptions++], charsmax(g_VoteMaps[]), map)
+	}
+	ArrayDestroy(pool)
+	if (g_VoteOptions <= 1)
+	{
+		finish_stage(g_VoteOptions ? 0 : -1)
+		return
+	}
+	arrayset(g_VoteCount, 0, sizeof g_VoteCount)
+	arrayset(g_BotVote, 0, sizeof g_BotVote)
+	g_Phase = 2
+	new name[48]
+	vote_name(mode, name, charsmax(name))
+	new menu = menu_create(usual ? fmt("\yVote for the next map \d(%d seconds)", VOTE_TIME) : fmt("\yPick a map for %s \d(%d seconds)", name, VOTE_TIME), "stage_handler")
+	for (new i = 0; i < g_VoteOptions; i++)
+		menu_additem(menu, (curFits && i == 0) ? fmt("%s \d(this map)", cur) : g_VoteMaps[i])
+	menu_setprop(menu, MPROP_EXIT, MEXIT_NEVER)
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_connected(i) && !is_user_bot(i) && !is_user_hltv(i))
+			menu_display(i, menu, 0, VOTE_TIME)
+	if (get_pcvar_num(g_pBotVotes))
+		for (new b = 1; b <= MaxClients; b++)
+			if (is_user_connected(b) && is_user_bot(b) && random(100) < 60)
+				set_task(random_float(2.0, float(VOTE_TIME) - 2.0), "task_bot_stage", get_user_userid(b))
+	new data[1]
+	data[0] = menu
+	set_task(float(VOTE_TIME) + 0.5, "end_stage", TASK_VOTE, data, sizeof data)
+	client_print_color(0, print_team_default, "^4[Server]^1 Vote for the map. Results in %d seconds.", VOTE_TIME)
+}
+
+bool:map_nominated(const map[])
+{
+	for (new i = 0; i < g_NomCount; i++)
+		if (equali(g_Noms[i], map))
+			return true
+	return false
+}
+
+say_map_vote(id, item)
+{
+	new who[32]
+	get_user_name(id, who, charsmax(who))
+	client_print_color(0, print_team_default, "^4[Server]^3 %s^1 voted for ^4%s^1.", who, g_VoteMaps[item])
+}
+
+public task_bot_stage(userid)
+{
+	new id = find_player("k", userid)
+	if (g_Phase != 2 || !id || !is_user_bot(id))
+		return
+	new w[VOTE_MAPS + 1], total
+	for (new i = 0; i < g_VoteOptions; i++)
+	{
+		w[i] = 2 + g_VoteCount[i] * 3 + (map_nominated(g_VoteMaps[i]) ? 2 : 0)
+		total += w[i]
+	}
+	new r = random(max(total, 1)), item
+	for (item = 0; item < g_VoteOptions - 1 && r >= w[item]; item++)
+		r -= w[item]
+	g_BotVote[item]++
+	say_map_vote(id, item)
+}
+
+public stage_handler(id, menu, item)
+{
+	if (g_Phase != 2 || item < 0 || item >= g_VoteOptions)
+		return PLUGIN_HANDLED
+	g_VoteCount[item]++
+	say_map_vote(id, item)
+	return PLUGIN_HANDLED
+}
+
+public end_stage(const data[])
+{
+	menu_destroy(data[0])
+	g_Phase = 0
+	new best = tally(g_VoteCount, g_BotVote, g_VoteOptions)
+	if (best >= 0)
+		for (new b = 1; b <= MaxClients; b++)
+			if (is_user_connected(b) && is_user_bot(b) && random(100) < 10)
+				say_line(b, "map_vote", 0.6)
+	finish_stage(best)
+}
+
+// The map is picked (-1: nobody voted, or there was nothing to pick)
+finish_stage(best)
+{
+	new mode = g_StageMode, cur = gm_modes_current(), name[48]
+	vote_name(mode, name, charsmax(name))
+	g_Voting = false
+	if (best < 0 && g_VoteOptions && (!g_EndVote || mode != cur))
+		best = random(g_VoteOptions)     // the mode won: it needs a map
+	if (g_EndVote)
+	{
+		g_EndVote = false
+		g_VoteDone = true
+		if (best < 0)
+			return client_print_color(0, print_team_default, "^4[Server]^1 Nobody voted for a map. The next one comes from the rotation.")
+		gm_modes_next(mode, g_VoteMaps[best])
+		if (mode == cur)
+			return client_print_color(0, print_team_default, "^4[Server]^1 Next map: ^4%s^1.", g_VoteMaps[best])
+		return client_print_color(0, print_team_default, "^4[Server]^1 Next: ^4%s^1 on ^4%s^1, when this map ends.", name, g_VoteMaps[best])
+	}
+	if (best < 0)
+	{
+		vote_settled(false)
+		return client_print_color(0, print_team_default, "^4[Server]^1 There's no map to play %s on, so nothing changes.", name)
+	}
+	vote_settled(true)
+	g_Changing = true
+	client_print_color(0, print_team_default, "^4[Server]^1 Switching to ^4%s^1 on ^4%s^1 in 5 seconds.", name, g_VoteMaps[best])
+	new data[33]
+	data[0] = mode
+	copy(data[1], charsmax(data) - 1, g_VoteMaps[best])
+	set_task(5.0, "task_mode_go", TASK_CHANGE, data, sizeof data)
+	return PLUGIN_HANDLED
+}
+
+public task_mode_go(const data[])
+{
+	// through the Game Mode Menu: the mode's saved settings, plugins and bot personalities
+	if (!gm_modes_go(data[0], data[1]))
+		g_Changing = false
+}
+
+// ---- the end of the map ----------------------------------------------------------------
+
+public ev_teamscore()
+{
+	new team[2]
+	read_data(1, team, charsmax(team))
+	g_Score[team[0] == 'C' ? 0 : 1] = read_data(2)
+}
+
+// Close to the end, the way mapchooser judges it (rounds or wins to go, or time left)
+bool:near_end()
+{
+	new winlimit = get_cvar_num("mp_winlimit"), maxrounds = get_cvar_num("mp_maxrounds")
+	if (winlimit)
+		return max(g_Score[0], g_Score[1]) >= winlimit - 2
+	if (maxrounds)
+		return g_Score[0] + g_Score[1] >= maxrounds - 2
+	new left = get_timeleft()
+	return get_cvar_float("mp_timelimit") > 0.0 && left > 0 && left <= END_LEAD
+}
+
+// One vote at the end, not two: mapchooser sits this map out
+set_mapchooser(bool:paused)
+{
+	g_McPaused = paused
+	if (is_plugin_loaded("mapchooser.amxx", true) == -1)
+		return
+	if (paused)
+		pause("ac", "mapchooser.amxx")
+	else
+		unpause("ac", "mapchooser.amxx")
+}
+
+public task_end_check()
+{
+	new bool:due = g_EndDue && mode_voting() && get_pcvar_num(g_pModeEvery) > 0
+	if (!g_EndStarted && due != g_McPaused)
+		set_mapchooser(due)
+	if (!due || g_EndStarted || g_Voting || g_Changing || !humans() || !near_end())
+		return
+	g_EndStarted = true
+	begin_mode_vote(true)
+}
+
+// ---- an admin (or the app) starts one ------------------------------------------------------
+
+vote_reply(id, const msg[])
+{
+	if (id)
+	{
+		console_print(id, "%s", msg)
+		client_print_color(id, print_team_default, "^4[Server]^1 %s", msg)
+	}
+	else
+		server_print("[Game Mode] %s", msg)
+}
+
+public cmd_votemode(id, level, cid)
+{
+	if (!cmd_access(id, level, cid, 1))
+		return PLUGIN_HANDLED
+	if (!LibraryExists("gm_modes", LibType_Library) || g_Career || gm_modes_current() < 0)
+		vote_reply(id, "Mode votes need the Game Mode Menu, and don't run in a Tour of Duty match.")
+	else if (get_cvar_num("gm_scrim_phase"))
+		vote_reply(id, "Not during a match.")
+	else if (g_Voting)
+		vote_reply(id, "A vote is already running.")
+	else if (g_Changing)
+		vote_reply(id, "The map is about to change.")
+	else
+	{
+		g_Voting = true
+		set_task(1.0, "start_mode_vote", TASK_VOTE)
+		client_print_color(0, print_team_default, "^4[Server]^1 An admin started a mode vote.")
+		if (!id)
+			server_print("[Game Mode] Mode vote started.")
+		else
+			console_print(id, "Mode vote started.")
+	}
+	return PLUGIN_HANDLED
 }
 
 // ---------------------------------------------------------------------------
@@ -1225,6 +2044,8 @@ show_welcome(id)
 	if (get_pcvar_num(g_pRtv))
 		len += formatex(html[len], charsmax(html) - len,
 			"<tr><td><b>rtv</b></td><td>vote for a new map</td></tr><tr><td><b>nominate</b> map</td><td>suggest a map for the vote</td></tr>")
+	if (get_pcvar_num(g_pModeVote))
+		len += formatex(html[len], charsmax(html) - len, "<tr><td><b>rtm</b></td><td>vote for a different mode</td></tr>")
 	len += formatex(html[len], charsmax(html) - len, admin ?
 		"<tr><td><b>/gm</b></td><td>game modes, maps, bots and settings</td></tr><tr><td><b>/q</b></td><td>quick menu</td></tr>" :
 		"<tr><td><b>/guns</b></td><td>pick your guns (deathmatch modes)</td></tr>")
