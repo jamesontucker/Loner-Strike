@@ -354,7 +354,7 @@ function Shell() {
           {/* the app stopped answering: said once, at the top, with a way to try again */}
           {lost && state && !state.online && <LoadError title={state.reason === SIGNED_OUT ? "Not signed in" : "Can't reach Loner-Strike"} text={state.reason} onRetry={() => queryClient.invalidateQueries()} />}
           <HomeScreenHint />
-          {!setupOpen && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} />}
+          {!setupOpen && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} server={current?.name} />}
           {state === null ? (
             <Skeleton rows={4} />
           ) : needsGame && !lost ? (

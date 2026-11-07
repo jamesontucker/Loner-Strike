@@ -9,7 +9,7 @@ import { JobProgress } from "./JobProgress";
 /** After an app update: the parts of Loner-Strike in this game whose files changed, and
  *  mods the player had before Loner-Strike (without its bot fixes). One button puts the
  *  current versions in; settings, admins and maps stay. */
-export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo | null; scan: Scan | null; gameOpen: boolean; reloadApp: () => void }) {
+export function FilesUpdate({ app, scan, gameOpen, reloadApp, server }: { app: AppInfo | null; scan: Scan | null; gameOpen: boolean; reloadApp: () => void; server?: string }) {
   const toast = useToast();
   const [running, setRunning] = useState(false);
   const [skip, setSkip] = useState(false);
@@ -31,7 +31,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/install", { hl: g.hl, games: [g.id], components, repair: true }).catch(() => ({ error: "Couldn't reach the app." }));
     if (r.error) return toast(r.error, true);
     setRunning(true);
-  }, ids.length === 1 ? `Updating ${name(ids[0])}…` : "Updating Loner-Strike's files…");
+  }, ids.length === 1 ? `Updating ${name(ids[0])}…` : `Updating ${them}…`);
   const row = (id: string, label: string) => (
     <li key={id} className="files-update-row">
       <span>{name(id)}</span>
@@ -39,20 +39,25 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
     </li>
   );
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  // whose files these are: your game and each server are updated separately
+  const whose = server ? server : `Your game (${gameTitle(g.id)})`;
+  const them = server ? server : "your game";
   // what the bar says: Loner-Strike's own parts, mods you had before it, or both
   const summary =
     outdated.length && theirs.length
-      ? `${plural(outdated.length, "part", "parts")} of Loner-Strike and ${theirs.length} of your own mods have updates waiting.`
+      ? `${whose}: ${plural(outdated.length, "part", "parts")} of Loner-Strike and ${theirs.length} of your own mods have updates waiting.`
       : outdated.length
-        ? `${plural(outdated.length, "part", "parts")} of Loner-Strike ${outdated.length === 1 ? "has" : "have"} updates waiting.`
-        : `${plural(theirs.length, "mod is", "mods are")} in your game without the bot fixes.`;
+        ? `${whose}: ${plural(outdated.length, "part", "parts")} of Loner-Strike ${outdated.length === 1 ? "has" : "have"} updates waiting.`
+        : `${whose}: ${plural(theirs.length, "mod is", "mods are")} here without the bot fixes.`;
+  // a server is updated on this computer, then uploaded; your game and other servers aren't touched
+  const scope = server ? " Your game and other servers are updated separately." : " Each server is updated from its own page.";
   if (running)
     return (
       <div className="panel files-update">
         <JobProgress
-          title="Updating Loner-Strike's files…"
+          title={`Updating ${them}…`}
           // a failed update stays on screen with its reason until closed
-          onEnd={(ok) => { if (ok) setRunning(false); toast(ok ? "Updated" : "The update stopped. The bar shows why.", !ok); reloadApp(); }}
+          onEnd={(ok) => { if (ok) setRunning(false); toast(ok ? `Updated ${them}` : "The update stopped. The bar shows why.", !ok); reloadApp(); }}
           onClose={() => setRunning(false)}
         />
       </div>
@@ -63,6 +68,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
         <span>
           {summary}
           {blocked ? ` Close ${gameTitle(g.id)} to update.` : ""}
+          <span className="muted">{scope}</span>
         </span>
         <span className="files-bar-actions">
           {/* the files are on the computer: a phone only says so */}
@@ -78,9 +84,10 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
         </span>
       </div>
       {open && (
-        <Sheet label="Fixes for your game files" onClose={() => setOpen(false)} className="sheet files-sheet">
+        <Sheet label={`Updates for ${them}`} onClose={() => setOpen(false)} className="sheet files-sheet">
             <div className="sheet-body">
-            <h2>Fixes for your game files</h2>
+            <h2>Updates for {them}</h2>
+            {server && <p className="muted small-note">Made here on your computer, then uploaded to the server if it's on another machine. Your game is updated separately.</p>}
             {outdated.length > 0 && (
               <>
                 <p className="muted">This version of Loner-Strike has newer files for these. Your settings, admins and maps stay.</p>
