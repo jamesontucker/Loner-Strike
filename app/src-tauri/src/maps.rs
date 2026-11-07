@@ -380,7 +380,12 @@ impl Pictures {
             }
             out
         };
-        let dirs = g.game_dirs();
+        let mut dirs = g.game_dirs().to_vec();
+        // a dedicated server's files have no pictures: this computer's game has them (the
+        // same fallback thumb_source uses, so the card and the picture agree)
+        if g.dedicated {
+            dirs.extend(local_games().into_iter().flat_map(|hl| [hl.join("czero"), hl.join("cstrike")]));
+        }
         Pictures {
             shots: collect(
                 dirs.iter().flat_map(|d| [d.join("gfx/thumbnails/maps_wide"), d.join("gfx/thumbnails/maps")]).collect(),
