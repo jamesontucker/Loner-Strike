@@ -313,7 +313,12 @@ mod tests {
         let mut back = String::new();
         std::io::Read::read_to_string(&mut flate2::read::GzDecoder::new(&gz[..]), &mut back).unwrap();
         assert_eq!(back, text);
-        assert_eq!(gzipped("test/x.js", b"different").unwrap(), gz, "made once");
+        assert_eq!(gzipped("test/x.js", text.as_bytes()).unwrap(), gz, "made once for the same file");
+        let changed = "const y = 2;\n".repeat(500);
+        let gz2 = gzipped("test/x.js", changed.as_bytes()).unwrap();
+        let mut back2 = String::new();
+        std::io::Read::read_to_string(&mut flate2::read::GzDecoder::new(&gz2[..]), &mut back2).unwrap();
+        assert_eq!(back2, changed, "a rebuilt file isn't answered with the old copy");
         assert!(gzipped("test/tiny.js", b"x").is_none(), "not worth it");
         assert!(compressible("application/javascript") && compressible("text/css") && !compressible("image/png"));
     }
