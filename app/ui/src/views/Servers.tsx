@@ -1128,9 +1128,9 @@ const HOSTS = [
     you: "Sign up (a card is needed), make an AMD Ubuntu server with a public IP, open UDP ports 27015-27020 in its firewall, then add it here: New server, A Linux server (VPS).",
   },
   {
-    name: "A cheap server (VPS)",
-    cost: "About $4 to $7 a month",
-    body: "Hetzner gives the most for the money; DigitalOcean and Vultr are simple; OVH includes DDoS protection. Pick a plan with an IPv4 address and an x86 (AMD or Intel) CPU, not Arm.",
+    name: "A rented server (VPS)",
+    cost: "Monthly",
+    body: "Hetzner, DigitalOcean, Vultr and OVH all work; OVH includes DDoS protection. Pick a plan with an IPv4 address and an x86 (AMD or Intel) CPU, not Arm.",
     you: "Buy an Ubuntu plan, open UDP ports 27015-27020 in its firewall, then add it here: New server, A Linux server (VPS).",
   },
 ];
@@ -1139,7 +1139,7 @@ const HOSTS = [
 function WhereToHost() {
   return (
     <details className="where-to-host">
-      <summary><h2>Where to host</h2><span className="muted">Free and cheap places, and how big a server you need</span></summary>
+      <summary><h2>Where to host</h2><span className="muted">Free and paid places, and how big a server you need</span></summary>
       <section className="stack-tight">
       <div className="host-grid">
         {HOSTS.map((h) => (

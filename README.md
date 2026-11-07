@@ -81,7 +81,7 @@ Still stuck? Ask in the [Discord](https://discord.gg/K9eBHVVwZE), or open Settin
 
 ## Run a server on a VPS
 
-The app can set up an always-on server on a Linux machine you rent (Ubuntu or Debian, x86). In Servers, choose New server, pick "A Linux server (VPS)" and give it the machine's address, user and SSH key. It checks the machine's identity, installs Valve's server and Loner-Strike over SSH and runs it as a service on UDP 27015, so it keeps going with the app closed. Oracle's free tier works, as does any VPS at around $4 to $7 a month (Hetzner, DigitalOcean, Vultr).
+The app can set up an always-on server on a Linux machine you rent (Ubuntu or Debian, x86). In Servers, choose New server, pick "A Linux server (VPS)" and give it the machine's address, user and SSH key. It checks the machine's identity, installs Valve's server and Loner-Strike over SSH and runs it as a service on UDP 27015, so it keeps going with the app closed. Oracle's free tier works, as does a small VPS from a host like Hetzner, DigitalOcean or Vultr.
 
 After that it's managed like any other server:
 - Changes you make in the app (settings, admins, mods, maps, sounds) go up by themselves, and only the files that changed. New plugins and maps load on the next map, or with Restart now.

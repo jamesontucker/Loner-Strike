@@ -75,8 +75,8 @@ export function HostingGuide() {
         <h4>1. Choose a host and size</h4>
         <SizingTable />
         <p className="muted measure">
-          Free: Oracle Cloud's Always Free AMD machines (VM.Standard.E2.1.Micro), when Oracle has capacity, or Oracle's trial credits. Cheap: Hetzner, Vultr,
-          DigitalOcean, OVH and Linode have x86 plans at around $4 to $7 a month. Pick a location near your players.
+          Free: Oracle Cloud's Always Free AMD machines (VM.Standard.E2.1.Micro), when Oracle has capacity, or Oracle's trial credits. Paid: Hetzner, Vultr,
+          DigitalOcean, OVH and Linode have small x86 plans. Pick a location near your players.
         </p>
       </div>
 

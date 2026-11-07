@@ -27,7 +27,7 @@ Disk: about 2 GB plus your maps. Any plan's disk is enough.
 Where to rent one:
 
 - **Free:** Oracle Cloud's Always Free tier includes small AMD machines (VM.Standard.E2.1.Micro), when Oracle has capacity. They suit a few friends and bots. Oracle's trial credits cover bigger machines for a while.
-- **Cheap:** Hetzner, Vultr, DigitalOcean, OVH and Linode (Akamai) all have x86 plans at around $4 to $7 a month. Pick one close to where you and your friends live, since distance adds ping.
+- **Paid:** Hetzner, Vultr, DigitalOcean, OVH and Linode (Akamai) all have small x86 plans. Pick one close to where you and your friends live, since distance adds ping.
 
 Shared web hosting can't run game servers. You need a VPS (also called a cloud server, droplet or instance).
 
