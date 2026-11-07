@@ -1,4 +1,4 @@
-import { Component, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Component, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cmd, options, sameValue } from "./api";
 
@@ -185,25 +185,43 @@ export class PageBoundary extends Component<{ children: ReactNode }, { failed: b
 }
 
 // ---- asking before something can't be undone --------------------------------------
-type Ask = { text: string; ok: string; danger: boolean; done: (yes: boolean) => void };
-const AskCtx = createContext<(text: string, opts?: { ok?: string; danger?: boolean }) => Promise<boolean>>(async () => false);
+type AskOpts = { ok?: string; danger?: boolean };
+/** A text box under the question (optional unless `required`). */
+type AskInput = { label: string; placeholder?: string; max?: number };
+type Ask = { text: string; ok: string; danger: boolean; input?: AskInput; done: (answer: string | null) => void };
+type AskFns = {
+  ask: (text: string, opts?: AskOpts) => Promise<boolean>;
+  askText: (text: string, input: AskInput, opts?: AskOpts) => Promise<string | null>;
+};
+const AskCtx = createContext<AskFns>({ ask: async () => false, askText: async () => null });
 /** In-app replacement for window.confirm: `if (!(await ask("Delete it?", { ok: "Delete", danger: true }))) return;` */
-export const useConfirm = () => useContext(AskCtx);
+export const useConfirm = () => useContext(AskCtx).ask;
+/** The same question with a text box: resolves with what was typed (maybe ""), or null when cancelled. */
+export const useAskText = () => useContext(AskCtx).askText;
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [q, setQ] = useState<Ask | null>(null);
-  const ask = useCallback(
-    (text: string, opts?: { ok?: string; danger?: boolean }) =>
-      new Promise<boolean>((resolve) =>
+  const [typed, setTyped] = useState("");
+  const open = useCallback(
+    (text: string, opts: AskOpts | undefined, input?: AskInput) =>
+      new Promise<string | null>((resolve) => {
+        setTyped("");
         setQ((old) => {
-          old?.done(false);
-          return { text, ok: opts?.ok ?? "OK", danger: !!opts?.danger, done: resolve };
-        }),
-      ),
+          old?.done(null);
+          return { text, ok: opts?.ok ?? "OK", danger: !!opts?.danger, input, done: resolve };
+        });
+      }),
     [],
   );
+  const fns = useMemo<AskFns>(
+    () => ({
+      ask: (text, opts) => open(text, opts).then((a) => a !== null),
+      askText: (text, input, opts) => open(text, opts, input),
+    }),
+    [open],
+  );
   const close = (yes: boolean) => {
-    q?.done(yes);
+    q?.done(yes ? typed.trim() : null);
     setQ(null);
   };
   useEffect(() => {
@@ -218,15 +236,28 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     };
   }, [q]);
   return (
-    <AskCtx.Provider value={ask}>
+    <AskCtx.Provider value={fns}>
       {children}
       {q && (
         <Sheet className="sheet ask" role="alertdialog" label={q.ok} describedBy="ask-text" onClose={() => close(false)}>
-          <p id="ask-text">{q.text}</p>
-          <div className="row ask-buttons">
-            <button className="btn" autoFocus={q.danger} onClick={() => close(false)}>Cancel</button>
-            <button className={`btn ${q.danger ? "danger strong" : "primary"}`} autoFocus={!q.danger} onClick={() => close(true)}>{q.ok}</button>
-          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              close(true);
+            }}
+          >
+            <p id="ask-text">{q.text}</p>
+            {q.input && (
+              <label className="field ask-field">
+                <span>{q.input.label}</span>
+                <input className="search" autoFocus placeholder={q.input.placeholder} maxLength={q.input.max ?? 64} value={typed} onChange={(e) => setTyped(e.target.value)} />
+              </label>
+            )}
+            <div className="row ask-buttons">
+              <button type="button" className="btn" autoFocus={q.danger && !q.input} onClick={() => close(false)}>Cancel</button>
+              <button type="submit" className={`btn ${q.danger ? "danger strong" : "primary"}`} autoFocus={!q.danger && !q.input}>{q.ok}</button>
+            </div>
+          </form>
         </Sheet>
       )}
     </AskCtx.Provider>

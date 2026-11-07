@@ -6,7 +6,7 @@ import { QueryClient, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { getJsonAt, isSignedOut, ON_THIS_COMPUTER, SIGNED_OUT } from "./api";
 import { useNav } from "./store";
-import type { AppInfo, GameState, MapInfo, Online, ServerList } from "./types";
+import type { AdminList, AdminReply, AppInfo, GameState, MapInfo, Online, ServerList } from "./types";
 import type { Job } from "./views/Setup";
 import type { Scan } from "./views/Setup";
 
@@ -133,6 +133,24 @@ export function useServers() {
   });
 }
 export const reloadServers = () => queryClient.invalidateQueries({ queryKey: ["servers"] });
+
+/** The open target's admins, VIPs and who has joined (the Admins page's list), for the
+ *  Players page's roles and player info. */
+export function useAdminList() {
+  const target = useTarget();
+  return useQuery({
+    queryKey: ["admins", target],
+    queryFn: async ({ signal }) => {
+      const r = await getJsonAt<AdminReply>("/api/admins", target, signal);
+      if (!("people" in r)) throw new Error(r.error);
+      return r;
+    },
+    staleTime: 15_000,
+    retry: 0,
+  });
+}
+/** A reply from an Admins change (the new list), for the open target. */
+export const setAdminList = (r: AdminList) => queryClient.setQueryData(["admins", useNav.getState().server], r);
 
 // ---- the setup job (one for the whole app) --------------------------------------------
 

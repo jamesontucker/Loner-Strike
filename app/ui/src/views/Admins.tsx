@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getJson, isAbort, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import type { Online } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { setAdminList } from "../queries";
 import { NeedsSetup } from "./MatchMode";
 import { ShareList } from "./ShareList";
 
@@ -151,6 +152,8 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
     if (!r) return toast("Couldn't reach the app.", true), false;
     if (!("people" in r)) return toast(r.error || "Couldn't save that. Try again.", true), false;
     setD(r);
+    // the Players page's menus read the same list
+    setAdminList(r);
     if (done) toast(done);
     return true;
   };

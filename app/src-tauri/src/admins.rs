@@ -811,6 +811,51 @@ async fn api_unban(State(st): State<Shared>, headers: HeaderMap, Json(req): Json
     )
 }
 
+// ---- kicking with a reason ----------------------------------------------------------
+
+/// A kick reason the player sees: letters, digits and plain punctuation only, so it can't
+/// end or extend the console command.
+pub fn kick_reason(s: &str) -> String {
+    let kept: String = s.chars().filter(|c| c.is_ascii_alphanumeric() || " _.,!?'()+-:#@&%/".contains(*c)).take(64).collect();
+    kept.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The engine's own kick by userid, with the reason shown to them when there is one.
+pub fn kick_line(uid: u32, reason: &str) -> String {
+    let reason = kick_reason(reason);
+    if reason.is_empty() {
+        format!("kick #{uid}")
+    } else {
+        format!("kick #{uid} \"{reason}\"")
+    }
+}
+
+#[derive(Deserialize)]
+struct KickReq {
+    uid: u32,
+    #[serde(default)]
+    reason: String,
+}
+
+async fn api_kick(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<KickReq>) -> Reply {
+    if !from_panel(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    if req.uid == 0 {
+        return bad("That player isn't in the game any more.");
+    }
+    let line = kick_line(req.uid, &req.reason);
+    answer(
+        with_game(&st, move |g| {
+            if !tell_game(g, &line)? {
+                return Err("No game is running.".into());
+            }
+            Ok(json!({"ok": true}))
+        })
+        .await,
+    )
+}
+
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/admins", get(api_list))
@@ -819,6 +864,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/admins/settings", post(api_settings))
         .route("/api/admins/ban", post(api_ban))
         .route("/api/admins/unban", post(api_unban))
+        .route("/api/admins/kick", post(api_kick))
 }
 
 // ---- shared between servers (lists.rs) ----------------------------------------------
@@ -1017,6 +1063,15 @@ mod tests {
         assert!(Role::Admin.flags().contains('t') && Role::Admin.flags().contains('d'));
         assert_eq!(Role::Moderator.flags(), "ceiju");
         assert_eq!(Role::Vip.flags(), "bt");
+    }
+
+    #[test]
+    fn admins_kick_reason() {
+        assert_eq!(kick_line(7, ""), "kick #7");
+        assert_eq!(kick_line(7, "  spam  in chat "), "kick #7 \"spam in chat\"");
+        assert_eq!(kick_line(7, "x\"; quit; \"y"), "kick #7 \"x quit y\"");
+        assert_eq!(kick_line(7, ";\n"), "kick #7");
+        assert_eq!(kick_reason(&"a".repeat(100)).len(), 64);
     }
 
     #[test]

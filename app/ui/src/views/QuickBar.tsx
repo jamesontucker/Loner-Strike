@@ -1,85 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { postJson, targetKey, useActions } from "../api";
 import { useNav } from "../store";
 import type { MapInfo, Online } from "../types";
-import { useCommand, useToast, zoom } from "../ui";
+import { Menu, type MenuItem } from "../menu";
+import { useCommand, useToast } from "../ui";
 
-type Item = { label: string; on: () => void; pressed?: boolean; disabled?: boolean; show?: boolean; title?: string };
-
-/** A button that opens a short list of actions under it. */
-function Menu({ label, items, active, ariaLabel }: { label: string; items: Item[]; active?: boolean; ariaLabel?: string }) {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  const list = useRef<HTMLDivElement>(null);
-  const button = useRef<HTMLButtonElement>(null);
-  // keep the list on screen: under the button, moved left if it would run off the edge.
-  // On phones the bar scrolls sideways, so the list is fixed to the window instead.
-  useLayoutEffect(() => {
-    const l = list.current;
-    const b = button.current;
-    if (!open || !l || !b) return;
-    const z = zoom();
-    const r = b.getBoundingClientRect();
-    const left = r.left / z;
-    const width = window.innerWidth / z;
-    if (getComputedStyle(l).position === "fixed") {
-      l.style.left = `${Math.max(8, Math.min(left, width - 8 - l.offsetWidth))}px`;
-      l.style.top = `${r.bottom / z + 4}px`;
-    } else {
-      const room = width - 8 - left - l.offsetWidth;
-      l.style.left = room < 0 ? `${room}px` : "0";
-    }
-    l.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
-  }, [open]);
-  const close = () => {
-    setOpen(false);
-    button.current?.focus();
-  };
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: Event) => !box.current?.contains(e.target as Node) && setOpen(false);
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && close();
-    // a list fixed to the window would be left behind by scrolling
-    const scrolled = (e: Event) => list.current && !list.current.contains(e.target as Node) && getComputedStyle(list.current).position === "fixed" && setOpen(false);
-    document.addEventListener("pointerdown", away);
-    document.addEventListener("keydown", esc);
-    document.addEventListener("scroll", scrolled, true);
-    return () => {
-      document.removeEventListener("pointerdown", away);
-      document.removeEventListener("keydown", esc);
-      document.removeEventListener("scroll", scrolled, true);
-    };
-  }, [open]);
-  const shown = items.filter((i) => i.show !== false);
-  if (!shown.length) return null;
-  return (
-    <div className="qmenu" ref={box}>
-      <button ref={button} className="qb" aria-label={ariaLabel} aria-haspopup="menu" aria-expanded={open} aria-pressed={active || undefined} onClick={() => setOpen((o) => !o)}>
-        {label} <span className="caret" aria-hidden="true">▾</span>
-      </button>
-      {open && (
-        <div className="qmenu-list" role="menu" ref={list}>
-          {shown.map((i) => (
-            <button
-              key={i.label}
-              role={i.pressed === undefined ? "menuitem" : "menuitemcheckbox"}
-              aria-checked={i.pressed}
-              disabled={i.disabled}
-              title={i.title}
-              onClick={() => {
-                i.on();
-                close();
-              }}
-            >
-              <span className="tick" aria-hidden="true">{i.pressed ? "✓" : ""}</span>
-              {i.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+type Item = MenuItem;
 
 /** One-click actions while a game is live, under the top bar, grouped so they fit. */
 export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; maps: MapInfo[]; refresh: () => void; reloadMaps: () => void }) {
