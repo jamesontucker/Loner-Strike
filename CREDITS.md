@@ -46,6 +46,7 @@ The MultiModServer collection as a whole is published under GPL-3.0. Warcraft 3'
 | Ultimate Gore Enhancement 1.6 | mike_cao, fizzarum, jtp10181 | [jtpage.net](http://www.jtpage.net), as published on [Pastebin](https://pastebin.com/raw/vUSkR2e6) | GPL-2.0-or-later |
 | CSB Grappling Hook 1.0.0 | counter-strike-boost.com | [counter-strike-boost.com](https://counter-strike-boost.com/plugins/csb-grappling-hook) | GPL-3.0-or-later |
 | Quake sounds (miscstats) | AMX Mod X Development Team | Comes with AMX Mod X | GPL-3.0-or-later |
+| Quake sounds' announcer | Hattrick (ClaudiuHKS) | The announcer sounds from [Advanced Quake Sounds](https://github.com/ClaudiuHKS/AdvancedQuakeSounds), downloaded at install from a fixed commit and checked | MIT |
 
 Round-end music ships with freely licensed tracks from OpenGameArt by Tri-Tachyon, marcelofg55 and OwlishMedia (CC BY 4.0) and Emma_MA, Umplix and Zane Little Music (CC0); each track's author, license and link is listed in `sound/roundsound/CREDITS.txt`.
 

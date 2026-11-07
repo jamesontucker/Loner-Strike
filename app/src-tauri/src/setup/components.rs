@@ -97,7 +97,7 @@ fn place_resource_as(rec: &mut Record, src: &Path, rel: &str, sha: Option<&str>,
     Ok(true)
 }
 
-fn fetch_all(rec: &mut Record, ctx: &Ctx, comp: &Value, tmp: &TempDir) -> Result<(), String> {
+pub(crate) fn fetch_all(rec: &mut Record, ctx: &Ctx, comp: &Value, tmp: &TempDir) -> Result<(), String> {
     let name = comp["name"].as_str().unwrap_or("this mode");
     // the files our patches change
     let patched: std::collections::HashSet<String> = strs(&comp["patches"])

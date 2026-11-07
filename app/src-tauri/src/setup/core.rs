@@ -171,6 +171,44 @@ fn is_comment_or_blank(l: &str) -> bool {
 
 /// The Game Mode Menu's settings, limited to the modes and add-ons installed.
 /// Settings of modes that are no longer installed are taken out again.
+/// The Quake sounds announcements miscstats plays, switched on in stats.ini: the sounds
+/// and the HUD lines that go with them. (Bomb and grenade ones stay off: their sounds
+/// aren't in the game.)
+pub const QUAKE_ON: &[&str] = &[
+    "MultiKill", "MultiKillSound", "KillingStreak", "KillingStreakSound", "DoubleKill", "DoubleKillSound", "FirstBloodSound",
+    "HeadShotKill", "HeadShotKillSound", "KnifeKill", "KnifeKillSound", "LastMan", "LastManSound", "RoundCounter", "RoundCounterSound",
+];
+
+/// stats.ini with the Quake sounds announcements switched on, the rest kept as it is
+/// (statscfg.amxx writes this file too: one setting per line, ; for comments).
+pub fn stats_ini_with_quake(text: &str) -> String {
+    let on: BTreeSet<String> = splitlines(text, false).iter().filter(|l| !is_comment_or_blank(l)).filter_map(|l| l.split_whitespace().next()).map(String::from).collect();
+    let mut lines: Vec<String> = splitlines(text, false).iter().map(|l| l.to_string()).collect();
+    while lines.last().is_some_and(|l| l.trim().is_empty()) {
+        lines.pop();
+    }
+    for name in QUAKE_ON.iter().filter(|n| !on.contains(**n)) {
+        lines.push(name.to_string());
+    }
+    lines.join("\r\n") + "\r\n"
+}
+
+/// Quake sounds (AMX Mod X's miscstats): the announcer's sounds, its miscstats.ini naming
+/// them, and the announcements switched on. AMX Mod X ships all of them off and CS 1.6
+/// without the sounds, so without this it says nothing. Servers get the sounds like any
+/// mode's (players download them).
+pub fn quake_sounds(rec: &mut Record, ctx: &Ctx) -> Result<(), String> {
+    let dir = ctx.res.join("plugins").join("configs").join("quake");
+    let list: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(dir.join("sounds.json")).map_err(|e| format!("Loner-Strike's files are incomplete (quake sounds: {e})."))?)
+        .map_err(|e| format!("Loner-Strike's files are damaged (quake sounds: {e})."))?;
+    let tmp = super::TempDir::new()?;
+    super::components::fetch_all(rec, ctx, &serde_json::json!({"name": "Quake sounds", "fetch": list["fetch"]}), &tmp)?;
+    let ini = crate::sys::read_latin1(&dir.join("miscstats.ini")).map_err(|e| format!("Loner-Strike's files are incomplete (miscstats.ini: {e})."))?;
+    rec.write("addons/amxmodx/configs/miscstats.ini", &ini.replace("\r\n", "\n").replace('\n', "\r\n"))?;
+    let stats = rec.read("addons/amxmodx/configs/stats.ini").unwrap_or_default();
+    rec.write("addons/amxmodx/configs/stats.ini", &stats_ini_with_quake(&stats))
+}
+
 pub fn configs(rec: &mut Record, ctx: &Ctx, modes: &BTreeSet<String>, addons: &BTreeSet<String>) -> Result<(), String> {
     let cfg_src = ctx.res.join("plugins").join("configs").join("gamemodes");
     let quoted = Regex::new(r#""([^"]*)""#).unwrap();

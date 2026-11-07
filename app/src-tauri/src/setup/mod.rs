@@ -487,6 +487,7 @@ pub fn plan_install(install: Install, games: &[String], component_ids: &[String]
         }
         steps.push(step(g, "core-plugins", "Building Loner-Strike's plugins", 2.0));
         steps.push(step(g, "core-configs", "Setting up the game modes", 0.3));
+        steps.push(step(g, "core-quake", "Adding the Quake sounds", 0.5));
         steps.push(step(g, "core-bots", "Making the bot styles", 0.3));
         steps.push(step(g, "core-keys", "Adding the F3 and F4 menu keys", 0.1));
     }
@@ -561,6 +562,7 @@ fn install_game_with(job: &Job, plan: &InstallPlan, ctx: &Ctx, g: &str, rec: &mu
         job.failed_compile("Loner-Strike plugins");
     }
     run_step(job, &format!("{g}/core-configs"), || core::configs(rec, ctx, &modes, &addons))?;
+    run_step(job, &format!("{g}/core-quake"), || core::quake_sounds(rec, ctx))?;
     // a first setup starts with Quake sounds on (the old pub-server announcer); once the
     // player has switched any add-on, addons.txt is theirs and stays as it is
     if !rec.exists("addons/amxmodx/data/gamemodes/addons.txt") {

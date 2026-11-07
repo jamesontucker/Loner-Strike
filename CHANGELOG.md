@@ -20,6 +20,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 - Find servers: a server browser like Steam's old one, with Internet (servers Loner-Strike hosts share), Favorites, History and LAN, server info with who's on, filters and passwords. A server can be put on the list from its settings.
 - The radio has eleven stations, with old-school hardcore and jungle, hands up, hardstyle, demoscene, video game music, 2000s hits and nu metal added, plus shuffle and a station list.
 - Copy diagnostics includes the end of AMX Mod X's error log.
+- Quake sounds are heard: setup brings the announcer (first blood, multi kill, godlike and the rest, from Advanced Quake Sounds) and switches the announcements on. Servers send the sounds to players like any mode's.
 
 ## 0.1.0
 
