@@ -496,6 +496,15 @@ public plugin_init()
 
 public plugin_cfg()
 {
+	// The app starts a game from loner_start.cfg (+exec), not +map: empty it now the server is
+	// up, so a resolution change (the engine reloads and runs the command line again) lands
+	// on the main menu instead of starting a second server in the same process, which crashes
+	if (file_size("loner_start.cfg") > 0)
+	{
+		new f = fopen("loner_start.cfg", "wt")
+		if (f)
+			fclose(f)
+	}
 	// server.cfg (run after plugin_init) can bring back an old password
 	apply_panel_rcon()
 	if (g_Career)

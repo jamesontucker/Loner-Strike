@@ -511,6 +511,9 @@ fn current_mode(g: &crate::game::Game) -> String {
 /// A server on another machine keeps its mode files there (not reachable from here yet).
 const REMOTE_MODE_SETTINGS: &str = "Changing another mode's settings isn't possible for a server on another machine yet. Switch the server to that mode to change them.";
 
+/// The one-shot start file in the game folder (see api_launch); gamemodes.sma empties it.
+const START_CFG: &str = "loner_start.cfg";
+
 /// A mode id that modes.ini lists.
 fn known_mode(g: &crate::game::Game, mode: &str) -> bool {
     let ini = g.dir.join("addons/amxmodx/configs/gamemodes/modes.ini");
@@ -689,6 +692,12 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, on: Option<axu
     let appid = if g.name == "cstrike" { "10" } else { "80" };
     // the game's console goes to qconsole.log, so a crash can be looked into afterwards
     let mut game_args: Vec<String> = vec!["-condebug".into()];
+    // The server starts from a one-shot file the Game Mode Menu empties once it's up, not
+    // from +map: changing the resolution reloads the engine in the same process and runs the
+    // command line again, and a second server start there crashes (Metamod keeps the game
+    // DLL loaded with its old cvars). Emptied, the reload lands on the main menu instead.
+    let start_cfg = g.dir.join(START_CFG);
+    let mut start: Vec<String> = Vec::new();
     if let (false, Some(m)) = (req.menu, map) {
         // a bot style's personalities are read when the map loads, so they go in first
         // (the plugin only switches them from the next map)
@@ -697,9 +706,20 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, on: Option<axu
             // how they play together in this mode on this map (botplay.ini), when that file is there
             let mode = req.mode.clone().filter(|m| !m.is_empty()).unwrap_or_else(|| current_mode(&g));
             let f = flavoured_style_file(&g.dir, f, &mode, &m);
-            game_args.extend(["+bot_profile_db".into(), f]);
+            start.push(format!("bot_profile_db \"{f}\""));
         }
-        game_args.extend(["+maxplayers".into(), "32".into(), "+map".into(), m]);
+        start.push("maxplayers 32".into());
+        start.push(format!("map {m}"));
+    }
+    let text = if start.is_empty() { String::new() } else { format!("// Written by Loner-Strike to start this game; emptied once the server is up
+{}
+", start.join("
+")) };
+    if let Err(e) = crate::sys::write_atomic(&start_cfg, text.as_bytes()) {
+        return (StatusCode::OK, Json(json!({"error": format!("Couldn't prepare the game ({e}).")})));
+    }
+    if !start.is_empty() {
+        game_args.extend(["+exec".into(), START_CFG.into()]);
     }
     match crate::steam::launch(&g.hl, appid, &game_args) {
         Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))),
