@@ -78,6 +78,11 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
     };
     // CrossOver's own chatter (graphics setup, "fixme" notes) isn't the compiler's
     let all: String = format!("{out}{err}").lines().filter(|l| !is_wine_noise(l)).collect::<Vec<_>>().join("\n");
+    if !all.contains("Done.") {
+        // the compiler's whole say, for Copy diagnostics (the note below is short)
+        let tail: String = all.chars().rev().take(3000).collect::<Vec<_>>().into_iter().rev().collect();
+        crate::diagnostics::log_error(&format!("compile {src_rel}"), &tail);
+    }
     if crashed(&Some((false, all.clone(), String::new()))) {
         ctx.progress.note(&format!(
             "Couldn't compile {src_rel}: the compiler crashed{}. Run full setup again to try it once more.",
