@@ -185,7 +185,7 @@ new g_HumanMsg[128]                 // what the person typed, as they typed it
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR)
-	g_pLevel  = register_cvar("gm_botchat", "2")
+	g_pLevel  = register_cvar("gm_botchat", "3")
 	g_pHumans = register_cvar("gm_botchat_humans", "1")
 	g_pDeadChat = register_cvar("gm_botchat_deadchat", "1")
 	register_srvcmd("gm_botchat_reload", "cmd_reload")
