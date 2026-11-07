@@ -14,6 +14,8 @@ type Station = {
   soma?: boolean;
   /** Rainwave: its own API */
   rainwave?: boolean;
+  /** an Airtime station: its live-info API */
+  airtime?: boolean;
   /** what's on now: SomaFM's or Rainwave's JSON, or an Icecast status-json.xsl */
   now?: string;
   /** the stream's mount in an Icecast status with several (the one ending in /stream if not given) */
@@ -22,7 +24,10 @@ type Station = {
 
 const STATIONS: Station[] = [
   { name: "Bassdrive", desc: "Worldwide drum and bass", stream: "https://ice.bassdrive.net/stream", site: "https://www.bassdrive.com/", credit: "Bassdrive", now: "https://ice.bassdrive.net/status-json.xsl" },
+  { name: "Kniteforce Radio", desc: "Old-school hardcore, jungle and breakbeat", stream: "https://kniteforce.out.airtime.pro/kniteforce_a", site: "https://kniteforce-radio.com/", credit: "Kniteforce Radio", airtime: true, now: "https://kniteforce.airtime.pro/api/live-info" },
   { name: "SomaFM The Trip", desc: "Progressive house and trance", stream: "https://ice1.somafm.com/thetrip-128-mp3", site: "https://somafm.com/thetrip/", credit: "SomaFM: The Trip", soma: true, now: "https://somafm.com/songs/thetrip.json" },
+  { name: "TechnoBase.FM", desc: "Hands up, dance and techno, a German webradio classic", stream: "https://listener3.mp3.tb-group.fm/tb.mp3", site: "https://www.technobase.fm/", credit: "TechnoBase.FM" },
+  { name: "HardBase.FM", desc: "Hardstyle and jumpstyle", stream: "https://listener3.mp3.tb-group.fm/hb.mp3", site: "https://www.hardbase.fm/", credit: "HardBase.FM" },
   { name: "SomaFM DEF CON Radio", desc: "Music for hacking, from the DEF CON hacker conference", stream: "https://ice1.somafm.com/defcon-128-mp3", site: "https://somafm.com/defcon/", credit: "SomaFM: DEF CON Radio", soma: true, now: "https://somafm.com/songs/defcon.json" },
   { name: "SceneSat", desc: "Demoscene and computer music", stream: "https://streams.scenesat.com/main/hq.mp3", site: "https://scenesat.com/", credit: "SceneSat Radio", now: "https://streams.scenesat.com/status-json.xsl", mount: "/main/hq.mp3" },
   { name: "Rainwave", desc: "Video game music, on air since 2003", stream: "https://relay.rainwave.cc/game.mp3", site: "https://rainwave.cc/", credit: "Rainwave", rainwave: true, now: "https://rainwave.cc/api4/info?sid=1" },
@@ -45,6 +50,7 @@ async function nowPlaying(s: Station, signal: AbortSignal): Promise<string> {
     const game = song?.albums?.[0]?.name;
     return song ? [song.title, game && `(${game})`].filter(Boolean).join(" ") : "";
   }
+  if (s.airtime) return String(j?.current?.name ?? "").trim();
   const sources = [j?.icestats?.source].flat().filter(Boolean);
   const main = sources.find((x: { listenurl?: string }) => x.listenurl?.endsWith(s.mount ?? "/stream")) ?? sources[0];
   return String(main?.title ?? "").trim();

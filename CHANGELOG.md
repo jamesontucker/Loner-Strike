@@ -14,7 +14,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 - Bots start at Hard, and bot chat at Chatty. Changing bot chat takes effect straight away.
 - Map pictures are looked up for every map in the background, and fill in on their own. Radar pictures lose their green background.
 - Website status can keep a Discord message up to date with who's playing, and post when people come on.
-- The radio has eight stations, with demoscene, video game music, 2000s hits and nu metal added, plus shuffle and a station list.
+- The radio has eleven stations, with old-school hardcore and jungle, hands up, hardstyle, demoscene, video game music, 2000s hits and nu metal added, plus shuffle and a station list.
 - Copy diagnostics includes the end of AMX Mod X's error log.
 
 ## 0.1.0

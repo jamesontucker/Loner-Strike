@@ -65,7 +65,7 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 - An in-game menu on F3, and quick actions in the app while you play (pause, bots, god mode, noclip and more).
 - Control it from your phone by scanning a QR code on the same Wi-Fi. Actions that delete or reinstall stay on the computer.
 - Export your setup to another computer or server. Signed automatic updates.
-- A built-in radio with eight stations, from drum and bass, trance and demoscene music to video game music, 2000s hits and nu metal (Bassdrive, SomaFM, SceneSat, Rainwave, 0nlineradio, Radio Bob), with shuffle and a station list.
+- A built-in radio with eleven stations, from drum and bass, jungle, hardstyle, trance and demoscene music to video game music, 2000s hits and nu metal (Bassdrive, Kniteforce, TechnoBase.FM, HardBase.FM, SomaFM, SceneSat, Rainwave, 0nlineradio, Radio Bob), with shuffle and a station list.
 - Built with Rust (Tauri) and React. It talks to the game over RCON on your own computer; nothing goes through a server run by the makers.
 
 ## FAQ

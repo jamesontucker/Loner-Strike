@@ -89,6 +89,8 @@ The radio, in the app and on the website, plays the stations' own streams; nothi
 | Station | Notes |
 |---|---|
 | [Bassdrive](https://www.bassdrive.com/) | Streamed from Bassdrive |
+| [Kniteforce Radio](https://kniteforce-radio.com/) | Streamed from Kniteforce Radio |
+| [TechnoBase.FM](https://www.technobase.fm/) and [HardBase.FM](https://www.hardbase.fm/) | Streamed from the We aRe One webradios |
 | [SomaFM: The Trip](https://somafm.com/thetrip/), [DEF CON Radio](https://somafm.com/defcon/) and [Groove Salad](https://somafm.com/groovesalad/) | Streamed from SomaFM, listener supported |
 | [SceneSat Radio](https://scenesat.com/) | Streamed from SceneSat |
 | [Rainwave](https://rainwave.cc/) | Streamed from Rainwave's game music channel |
