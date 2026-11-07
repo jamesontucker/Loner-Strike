@@ -1584,7 +1584,8 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .browser-tabs button { padding: 7px 18px 6px; border: 0; border-radius: 2px 2px 0 0; background: var(--bg); color: var(--bone-dim); box-shadow: var(--raised); font: 600 14px/1 var(--text); cursor: pointer; }
 .browser-tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--signal); }
 .browser-table { display: grid; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; min-width: 0; }
-.browser-body { max-height: min(56vh, 520px); overflow-y: auto; }
+.browser-body { min-height: 220px; max-height: min(56vh, 520px); overflow-y: auto; }
+.browser-body.short { min-height: 0; }
 .browser-body.short { max-height: 240px; }
 .browser-row { display: grid; grid-template-columns: 22px 22px minmax(140px, 3fr) minmax(110px, 1fr) 84px minmax(100px, 1fr) 76px; align-items: center; min-height: 34px; padding: 0 12px; gap: 14px; color: var(--bone); font-size: 15px; cursor: default; }
 .browser-row.with-last { grid-template-columns: 22px 22px minmax(140px, 3fr) minmax(110px, 1fr) 84px minmax(100px, 1fr) 76px 100px; }
