@@ -170,6 +170,12 @@ impl Game {
                 }
             }
         }
+        // a server on another machine: the maps that came with Valve's server download are
+        // only there (this computer's copy has just what Loner-Strike adds)
+        for name in self.remote_maps() {
+            let low = name.to_lowercase();
+            found.entry(low).or_insert_with(|| (name.clone(), false));
+        }
         let mut by = self.map_sources();
         by.extend(self.store.authors());
         // where each downloaded map came from, and what else that download brought
@@ -303,6 +309,36 @@ impl Game {
             let _ = convert(&src, &out, Shrink::Fit(512));
         }
         (out.exists().then_some((out, kind)), looking)
+    }
+}
+
+impl Game {
+    /// The maps in a remote server's own maps folder, asked over SSH at most every 5 minutes
+    /// per server (kept from the last answer if the machine doesn't reply).
+    fn remote_maps(&self) -> Vec<String> {
+        static CACHE: std::sync::Mutex<Option<HashMap<String, (std::time::Instant, Vec<String>)>>> = std::sync::Mutex::new(None);
+        let Some((r, dir)) = &self.remote else { return Vec::new() };
+        if let Some((at, list)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new).get(dir) {
+            if at.elapsed() < std::time::Duration::from_secs(300) {
+                return list.clone();
+            }
+        }
+        let cmd = format!("cd \"$HOME/{dir}/maps\" 2>/dev/null && ls -1 | grep -i '\\.bsp$'");
+        let fresh: Option<Vec<String>> = crate::remote::exec_quick(r, &cmd).ok().map(|(_, out)| {
+            out.lines()
+                .filter_map(|l| l.trim().strip_suffix(".bsp").or_else(|| l.trim().strip_suffix(".BSP")).map(String::from))
+                .filter(|n| safe_arg(n))
+                .collect()
+        });
+        let mut c = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        let c = c.get_or_insert_with(HashMap::new);
+        match fresh {
+            Some(list) => {
+                c.insert(dir.clone(), (std::time::Instant::now(), list.clone()));
+                list
+            }
+            None => c.get(dir).map(|(_, l)| l.clone()).unwrap_or_default(),
+        }
     }
 }
 
