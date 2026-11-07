@@ -114,8 +114,13 @@ pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
     // on the Mac happens to survive it, but it's the same Windows game there, so CrossOver
     // installs get the fixed module too. (A server on Linux has its own .so.)
     if cfg!(windows) || ctx.install.kind == "crossover" {
-        let patched = ctx.res.join("windows").join("hamsandwich").join("hamsandwich_amxx.dll");
-        if patched.is_file() {
+        // the app's resources, or the repo's own copy in a dev build
+        let rel = Path::new("windows").join("hamsandwich").join("hamsandwich_amxx.dll");
+        let mut places = vec![ctx.res.join(&rel)];
+        if cfg!(debug_assertions) {
+            places.push(super::repo_root().join("app/src-tauri/resources").join(&rel));
+        }
+        if let Some(patched) = places.into_iter().find(|p| p.is_file()) {
             rec.copy(&patched, "addons/amxmodx/modules/hamsandwich_amxx.dll")?;
         } else {
             ctx.progress.note("Loner-Strike's fixed Ham Sandwich module is missing from the app, so the game may crash on map changes. Reinstalling the app should fix it.");
