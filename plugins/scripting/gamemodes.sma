@@ -163,8 +163,6 @@ new const SETTINGS[][SettingData] =
 	{ "gm_nobomb",          "Bomb planting",    "0 1",                      "Allowed|Off",                         CAT_MATCH,  SC_MODE,   "" },
 	{ "gg_block_objectives", "Bomb & hostages", "0 1",                      "On|Off",                              CAT_MATCH,  SC_MODE,   "" },
 	{ "mp_c4timer",         "C4 timer",         "25 35 45",                 "25s 35s 45s",                         CAT_MATCH,  SC_MODE,   "" },
-	{ "mp_autoteambalance", "Team balance",     "0 1",                      "Off On",                              CAT_MATCH,  SC_MODE,   "" },
-	{ "mp_limitteams",      "Team size limit",  "0 2",                      "Off 2",                               CAT_MATCH,  SC_MODE,   "" },
 	{ "gmdm_random_spawns", "Spawn points",     "1 0",                      "Random|Team spawns",                  CAT_MATCH,  SC_MODE,   "" },
 	{ "gmdm_respawn_delay", "Respawn delay",    "0.5 1.5 3 5",               "0.5s 1.5s 3s 5s",                     CAT_MATCH,  SC_MODE,   "" },
 	{ "gmdm_protect",       "Spawn protection", "0 2 4",                     "Off 2s 4s",                           CAT_MATCH,  SC_MODE,   "" },
@@ -325,6 +323,8 @@ new bool:g_Noclip[33]
 new bool:g_Career
 new bool:g_LearnGuard, Float:g_LearnTimelimit
 new bool:g_Reloading
+new bool:g_FirstMap               // the first map since the server started
+new g_ProfileLoaded[48]           // bot_profile_db as this map loaded (CZ reads it before plugins)
 new g_GoMode = -1                 // the mode picked for the next map (-1: the current one)
 new g_NextMode = -1, g_NextMap[32] // a vote's mode for when this map ends (gm_pubserver), and its map
 new Float:g_MapsAt = -100.0       // when g_Maps was last read from the maps folders
@@ -469,11 +469,16 @@ public plugin_init()
 	if (!dir_exists(g_DataDir))
 		mkdir(g_DataDir)
 
-	// The control panel stores its RCON password here (written by the panel helper).
-	new pw[64]
-	read_data_line("panel_rcon.txt", pw, charsmax(pw))
-	if (pw[0])
-		set_cvar_string("rcon_password", pw)
+	// what CZ loaded the bots from on this map (read before plugins start)
+	get_cvar_string("bot_profile_db", g_ProfileLoaded, charsmax(g_ProfileLoaded))
+	// localinfo outlives map changes but not the server: empty means a fresh start
+	new up[4]
+	get_localinfo("gm_up", up, charsmax(up))
+	g_FirstMap = !up[0]
+	if (g_FirstMap)
+		set_localinfo("gm_up", "1")
+
+	apply_panel_rcon()
 
 	g_Career = detect_career()
 	check_last_session()
@@ -482,6 +487,7 @@ public plugin_init()
 	load_modes()
 	load_current()
 	load_saved()
+	check_roster_file()
 	load_addons()
 	load_presets()
 	check_map_presets()
@@ -489,20 +495,26 @@ public plugin_init()
 
 public plugin_cfg()
 {
+	// server.cfg (run after plugin_init) can bring back an old password
+	apply_panel_rcon()
 	if (g_Career)
 	{
 		career_cleanup()
 		return
 	}
+	new map[32]
+	get_mapname(map, charsmax(map))
+	check_first_profile(map)
 	if (g_Reloading)
 	{
-		new map[32]
-		get_mapname(map, charsmax(map))
 		set_task(0.5, "task_changelevel", 0, map, sizeof map)
 		return
 	}
-	new map[32]
-	get_mapname(map, charsmax(map))
+	// server name, password and when bots join, from the start of the map (again at 4s)
+	new path[192]
+	formatex(path, charsmax(path), "%s/friends.cfg", g_DataDir)
+	exec_if_exists(path)
+	server_exec()
 	set_pcvar_num(g_pBotPlay, botplay_for(g_Cur, map))
 	set_task(1.0, "task_apply")
 	set_task(4.0, "task_reapply_saved")
@@ -511,6 +523,53 @@ public plugin_cfg()
 	remember_recent()
 	if (navbatch_active())
 		set_task(3.0, "task_navbatch")
+}
+
+// CZ reads bot_profile_db when the game rules are made, before any plugin runs, so on
+// the first map after the server starts the bot style or roster set last session (or
+// on the panel since) isn't in yet: set it and load the map again, once.
+check_first_profile(const map[])
+{
+	if (!g_FirstMap || navbatch_active())
+		return
+	new want[48]
+	wanted_profile(g_Cur, map, want, charsmax(want))
+	if (equali(want, g_ProfileLoaded))
+		return
+	set_cvar_string("bot_profile_db", want)
+	// the reload's changelevel picks the style's file again: give it the saved style
+	new s = find_setting("gm_botstyle")
+	if (g_SavedHas[s] && get_cvar_pointer("gm_botstyle"))
+		set_cvar_string("gm_botstyle", g_SavedVal[s])
+	if (!g_Reloading)
+	{
+		g_Reloading = true
+		log_amx("Bot personalities %s (loaded %s) - reloading %s", want, g_ProfileLoaded, map)
+	}
+}
+
+// The control panel stores its RCON password here (written by the panel helper).
+apply_panel_rcon()
+{
+	new pw[64]
+	read_data_line("panel_rcon.txt", pw, charsmax(pw))
+	if (pw[0])
+		set_cvar_string("rcon_password", pw)
+}
+
+// A saved roster whose file isn't installed (Enhanced never was): back to Classic
+check_roster_file()
+{
+	new r = find_setting("bot_profile_db")
+	if (g_SavedHas[r] && !file_exists(g_SavedVal[r], true))
+	{
+		log_amx("Bot roster %s is missing - using BotProfile.db", g_SavedVal[r])
+		set_setting(r, "BotProfile.db")
+	}
+	new cur[48]
+	get_cvar_string("bot_profile_db", cur, charsmax(cur))
+	if (!cur[0] || !file_exists(cur, true))
+		set_cvar_string("bot_profile_db", "BotProfile.db")
 }
 
 public task_apply()
@@ -535,6 +594,8 @@ public task_reapply_saved()
 	formatex(path, charsmax(path), "%s/friends.cfg", g_DataDir)
 	exec_if_exists(path)
 	server_exec()
+	keep_learn_guard()
+	apply_panel_rcon()
 	apply_gg_order(false)
 	apply_zp_specials()
 	apply_nobomb()
@@ -792,6 +853,7 @@ apply_all(bool:restart)
 		exec_if_exists(path)
 	}
 	server_exec()
+	keep_learn_guard()
 
 	apply_weapons()
 	apply_gg_order(false)
@@ -1051,6 +1113,19 @@ public task_learn_guard_start()
 	get_mapname(map, charsmax(map))
 	if (!g_Career && get_cvar_num("bot_quota") > 0 && !has_nav(map))
 		learn_guard_start()
+}
+
+// Saved settings put back while the guard holds the timer: their limit waits for the bots
+keep_learn_guard()
+{
+	if (!g_LearnGuard)
+		return
+	new Float:t = get_cvar_float("mp_timelimit")
+	if (t > 0.0)
+	{
+		g_LearnTimelimit = t
+		set_cvar_float("mp_timelimit", 0.0)
+	}
 }
 
 learn_guard_start()
@@ -1639,9 +1714,6 @@ apply_botstyle_for(mode, const map[], bool:presets)
 {
 	if (!get_cvar_pointer("gm_botstyle") || g_Career)
 		return
-	new st = get_cvar_num("gm_botstyle")
-	if (!(0 < st < sizeof BOTSTYLE_FILES) || !file_exists(BOTSTYLE_FILES[st], true))
-		return
 	// a map with a preset switches to its mode as it loads
 	if (presets && presets_enabled())
 	{
@@ -1649,17 +1721,48 @@ apply_botstyle_for(mode, const map[], bool:presets)
 		if (p >= 0)
 			mode = p
 	}
-	new play = botplay_for(mode, map), file[48]
-	copy(file, charsmax(file), BOTSTYLE_FILES[st])
+	new file[48]
+	if (botstyle_file(get_cvar_num("gm_botstyle"), mode, map, file, charsmax(file)))
+		set_cvar_string("bot_profile_db", file)
+}
+
+// The personalities file of bot style st for how bots play in that mode on that map.
+// false: no style, or its file isn't installed (the roster setting applies then).
+bool:botstyle_file(st, mode, const map[], file[], len)
+{
+	if (!(0 < st < sizeof BOTSTYLE_FILES) || !file_exists(BOTSTYLE_FILES[st], true))
+		return false
+	new play = botplay_for(mode, map)
+	copy(file, len, BOTSTYLE_FILES[st])
 	if (play != PLAY_TEAM)
 	{
 		new stem[40]
 		copy(stem, min(charsmax(stem), strlen(file) - 3), file)     // without ".db"
-		formatex(file, charsmax(file), "%s%s.db", stem, play == PLAY_SOLO ? "_Solo" : "_Hold")
+		formatex(file, len, "%s%s.db", stem, play == PLAY_SOLO ? "_Solo" : "_Hold")
 		if (!file_exists(file, true))
-			copy(file, charsmax(file), BOTSTYLE_FILES[st])
+			copy(file, len, BOTSTYLE_FILES[st])
 	}
-	set_cvar_string("bot_profile_db", file)
+	return true
+}
+
+// The file bots should have loaded on this map: the saved bot style's, else the saved
+// roster (Classic when that file is missing)
+wanted_profile(mode, const map[], out[], len)
+{
+	if (get_cvar_pointer("gm_botstyle"))
+	{
+		new s = find_setting("gm_botstyle")
+		new st = g_SavedHas[s] ? str_to_num(g_SavedVal[s]) : get_cvar_num("gm_botstyle")
+		if (botstyle_file(st, mode, map, out, len))
+			return
+	}
+	new r = find_setting("bot_profile_db")
+	if (g_SavedHas[r])
+		copy(out, len, g_SavedVal[r])
+	else
+		copy(out, len, g_ProfileLoaded)
+	if (!out[0] || !file_exists(out, true))
+		copy(out, len, "BotProfile.db")
 }
 
 // ReGameDLL can stop the bomb being handed out at all; strip_c4 covers the rest
@@ -2618,6 +2721,19 @@ public missingnav_handler(id, menu, item)
 // Settings menus (bots / match / fun)
 // ---------------------------------------------------------------------------
 
+// The values (and labels) a setting offers. The Enhanced bot roster only shows when
+// its file is installed: CZ loads no bots at all from a missing file.
+setting_choices(s, values[], vlen, labels[], llen)
+{
+	copy(values, vlen, SETTINGS[s][SD_Values])
+	copy(labels, llen, SETTINGS[s][SD_Labels])
+	if (equal(SETTINGS[s][SD_Cvar], "bot_profile_db") && !file_exists("BotProfileEnhanced.db", true))
+	{
+		copy(values, vlen, "BotProfile.db")
+		copy(labels, llen, "Classic")
+	}
+}
+
 setting_visible(s, cat)
 {
 	if (SETTINGS[s][SD_Cat] != cat)
@@ -2653,7 +2769,7 @@ show_settings(id, cat, page)
 	new title[96]
 	formatex(title, charsmax(title), "%s^n\dSaved for %s", titles[cat], g_Career ? "all modes" : g_ModeName[g_Cur])
 	new menu = menu_create(title, "settings_handler")
-	new text[96], info[16], label[40], cur[40]
+	new text[96], info[16], label[40], cur[40], svals[64], slabels[96]
 
 	if (cat == CAT_BOT)
 	{
@@ -2674,7 +2790,8 @@ show_settings(id, cat, page)
 		if (!setting_visible(s, cat))
 			continue
 		get_cvar_string(SETTINGS[s][SD_Cvar], cur, charsmax(cur))
-		value_label(SETTINGS[s][SD_Values], SETTINGS[s][SD_Labels], cur, label, charsmax(label))
+		setting_choices(s, svals, charsmax(svals), slabels, charsmax(slabels))
+		value_label(svals, slabels, cur, label, charsmax(label))
 		formatex(text, charsmax(text), "%s: \y%s", SETTINGS[s][SD_Name], label)
 		formatex(info, charsmax(info), "%d %d", cat, s)
 		menu_additem(menu, text, info)
@@ -2722,9 +2839,10 @@ public settings_handler(id, menu, item)
 	parse(info, scat, charsmax(scat), sidx, charsmax(sidx))
 	new cat = str_to_num(scat), s = str_to_num(sidx)
 
-	new cur[40], val[40]
+	new cur[40], val[40], svals[64], slabels[96]
 	get_cvar_string(SETTINGS[s][SD_Cvar], cur, charsmax(cur))
-	next_value(SETTINGS[s][SD_Values], cur, val, charsmax(val))
+	setting_choices(s, svals, charsmax(svals), slabels, charsmax(slabels))
+	next_value(svals, cur, val, charsmax(val))
 	do_set(id, s, val)
 
 	show_settings(id, cat, page)
@@ -2762,17 +2880,29 @@ do_bots(const action[], n)
 }
 
 // Sets a setting, saves it, and applies whatever goes with it.
-do_set(id, s, const val[])
+do_set(id, s, const rawval[])
 {
 	if (!g_ApplyingPreset && g_LastPreset[0] && SETTINGS[s][SD_Scope] != SC_NONE)
 	{
 		g_LastPreset[0] = 0
 		write_data_line("lastpreset.txt", "")
 	}
+	new cvar[32], val[40]
+	copy(cvar, charsmax(cvar), SETTINGS[s][SD_Cvar])
+	copy(val, charsmax(val), rawval)
+	// a roster file that isn't installed: bots wouldn't load at all
+	if (equal(cvar, "bot_profile_db") && !file_exists(val, true))
+		copy(val, charsmax(val), "BotProfile.db")
 	set_setting(s, val)
 
-	new cvar[32]
-	copy(cvar, charsmax(cvar), SETTINGS[s][SD_Cvar])
+	// while the bots learn the map the timer stays at 0: the new limit starts when they're done
+	if (g_LearnGuard && equal(cvar, "mp_timelimit"))
+	{
+		g_LearnTimelimit = str_to_float(val)
+		set_cvar_float("mp_timelimit", 0.0)
+		gm_print(id, "Map time limit saved. It starts once the bots finish learning this map.")
+		return
+	}
 	if (equal(cvar, "gm_weapons"))
 	{
 		apply_weapons()
@@ -3357,9 +3487,9 @@ public srv_status()
 	if (!f)
 		return PLUGIN_HANDLED
 
-	fprintf(f, "{^"t^":^"state^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d}^n",
+	fprintf(f, "{^"t^":^"state^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"quota^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d}^n",
 		g_ModeId[g_Cur], map, has_nav(map), g_Career, navbatch_active(), navbatch_active() ? navqueue_count() : 0,
-		get_playersnum_ex(GetPlayers_ExcludeHuman), get_playersnum_ex(GetPlayers_ExcludeBots), MaxClients,
+		get_playersnum_ex(GetPlayers_ExcludeHuman), bot_quota_target(), get_playersnum_ex(GetPlayers_ExcludeBots), MaxClients,
 		get_timeleft(), presets_enabled(), addons_pending(), VERSION, g_CrashMap, pesc, get_cvar_num("bot_zombie"), g_Paused, g_Recording, get_cvar_num("mp_timelimit"))
 
 	for (new i = 0; i < g_ModeCount; i++)
@@ -3370,16 +3500,18 @@ public srv_status()
 			g_ModeId[i], esc, esc2, g_ModeFlags[i], g_ModeCmd[i][0] != 0)
 	}
 
+	new svals[64], slabels[96]
 	for (new s = 0; s < sizeof SETTINGS; s++)
 	{
 		if (SETTINGS[s][SD_Cat] == CAT_HIDDEN)
 			continue
 		get_cvar_string(SETTINGS[s][SD_Cvar], cur, charsmax(cur))
 		json_escape(cur, esc, charsmax(esc))
-		json_escape(SETTINGS[s][SD_Labels], esc3, charsmax(esc3))
+		setting_choices(s, svals, charsmax(svals), slabels, charsmax(slabels))
+		json_escape(slabels, esc3, charsmax(esc3))
 		fprintf(f, "{^"t^":^"setting^",^"cvar^":^"%s^",^"name^":^"%s^",^"cat^":%d,^"scope^":%d,^"value^":^"%s^",^"values^":^"%s^",^"labels^":^"%s^",^"visible^":%d}^n",
 			SETTINGS[s][SD_Cvar], SETTINGS[s][SD_Name], SETTINGS[s][SD_Cat], SETTINGS[s][SD_Scope], esc,
-			SETTINGS[s][SD_Values], esc3, setting_visible(s, SETTINGS[s][SD_Cat]))
+			svals, esc3, setting_visible(s, SETTINGS[s][SD_Cat]))
 	}
 
 	new cvar[32], name[32], values[96], labels[128]
@@ -3713,8 +3845,11 @@ public srv_team()
 			else if (t == CS_TEAM_CT)
 				cs_set_user_team(p, CS_TEAM_T)
 		}
-		// bots would otherwise rejoin their old side
-		set_cvar_string("bot_join_team", "any")
+		// bots would otherwise rejoin their old side (saved, so the menu and the app show it)
+		new bj[8]
+		get_cvar_string("bot_join_team", bj, charsmax(bj))
+		if (!equali(bj, "any"))
+			set_setting(find_setting("bot_join_team"), "any")
 		server_cmd("sv_restart 1")
 		gm_print(0, "Teams swapped. The round restarts.")
 		return PLUGIN_HANDLED
@@ -3921,14 +4056,24 @@ apply_preset(p)
 		fclose(f)
 	g_ApplyingPreset = false
 
+	new bool:going = mode != g_Cur || !equali(map, cur)
 	if (g_PresetBots[p] >= 0)
-		set_task(1.0, "task_preset_bots", g_PresetBots[p])
+	{
+		if (going)
+		{
+			// the map change below would cancel a task: save the count now, the next map adds them
+			end_bot_ramp()
+			set_setting(find_setting("bot_quota"), fmt("%d", clamp(g_PresetBots[p], 0, MaxClients - 1)))
+		}
+		else
+			set_task(1.0, "task_preset_bots", g_PresetBots[p])
+	}
 
 	gm_print(0, "Preset: %s", g_PresetName[p])
 	formatex(g_LastPreset, charsmax(g_LastPreset), "%s|%s", g_ModeId[mode], g_PresetName[p])
 	write_data_line("lastpreset.txt", g_LastPreset)
 	g_SummaryShown = false
-	if (mode != g_Cur || !equali(map, cur))
+	if (going)
 		do_go(mode, map)
 	else
 		server_cmd("sv_restart 1")

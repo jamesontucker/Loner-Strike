@@ -523,7 +523,9 @@ async fn api_start_options(State(st): State<Shared>) -> Json<Value> {
 
 /// Switches the mode before the game starts, the way the plugin does it between maps:
 /// the mode's plugin list becomes plugins-gamemode.ini, and current.txt names it.
-fn start_in(g: &crate::game::Game, mode: &str, settings: &std::collections::HashMap<String, String>) -> Result<(), String> {
+/// An explicit choice wins over map presets (like the plugin's do_go): lastmap.txt names
+/// the map it starts on and premode.txt goes, so the preset check leaves it alone.
+fn start_in(g: &crate::game::Game, mode: &str, map: Option<&str>, settings: &std::collections::HashMap<String, String>) -> Result<(), String> {
     let cfg = g.dir.join("addons/amxmodx/configs");
     let known = crate::extras::parse_modes(&crate::sys::read_latin1(&cfg.join("gamemodes/modes.ini")).unwrap_or_default());
     if !known.iter().any(|(id, _)| id == mode) {
@@ -547,7 +549,14 @@ fn start_in(g: &crate::game::Game, mode: &str, settings: &std::collections::Hash
     }
     let save = |p: std::path::PathBuf, v: &[(String, String)]| if v.is_empty() { Ok(()) } else { set_cfg_values(&p, v).map_err(|e| format!("Couldn't save the settings ({e}).")) };
     save(g.data.join("global.cfg"), &global)?;
-    save(g.data.join(format!("mode_{mode}.cfg")), &own)
+    save(g.data.join(format!("mode_{mode}.cfg")), &own)?;
+    if let Some(m) = map {
+        std::fs::create_dir_all(&g.data).and_then(|_| crate::sys::write_atomic(&g.data.join("lastmap.txt"), format!("{m}\n").as_bytes())).map_err(|e| format!("Couldn't switch the mode ({e})."))?;
+    }
+    match std::fs::remove_file(g.data.join("premode.txt")) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("Couldn't switch the mode ({e}).")),
+        _ => Ok(()),
+    }
 }
 
 /// Saves the bot count where the Game Mode Menu keeps it (global.cfg: bot_quota "9").
@@ -576,16 +585,16 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
             return (StatusCode::OK, Json(json!({"error": format!("Couldn't save the bot count ({e}).")})));
         }
     }
-    if let Some(m) = req.mode.as_deref().filter(|m| !m.is_empty()) {
-        if let Err(e) = start_in(&g, m, &req.settings) {
-            return (StatusCode::OK, Json(json!({"error": e})));
-        }
-    }
-    let appid = if g.name == "cstrike" { "10" } else { "80" };
     let map = req
         .map
         .filter(|m| m.len() <= 31 && m.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c)))
         .or_else(|| last_map(&st));
+    if let Some(m) = req.mode.as_deref().filter(|m| !m.is_empty()) {
+        if let Err(e) = start_in(&g, m, map.as_deref().filter(|_| !req.menu), &req.settings) {
+            return (StatusCode::OK, Json(json!({"error": e})));
+        }
+    }
+    let appid = if g.name == "cstrike" { "10" } else { "80" };
     // the game's console goes to qconsole.log, so a crash can be looked into afterwards
     let mut game_args: Vec<String> = vec!["-condebug".into()];
     if let (false, Some(m)) = (req.menu, map) {

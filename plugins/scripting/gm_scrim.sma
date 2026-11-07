@@ -66,6 +66,8 @@ new const PHASE_NAME[][] = { "none", "warmup", "knife", "vote", "live", "over" }
 // Cvars changed for warmup and the knife round, put back when the match goes live
 new const OVERRIDE[][] = { "mp_round_infinite", "mp_buy_anywhere", "mp_freezetime", "mp_friendlyfire", "mp_weapons_allow_map_placed", "mp_give_player_c4" }
 new g_Live[sizeof OVERRIDE][16], bool:g_HaveLive
+// what this plugin last set each one to: a different value means the menu or the app changed it
+new g_Set[sizeof OVERRIDE][16], bool:g_HaveSet[sizeof OVERRIDE]
 
 new g_pMaxRounds, g_pOvertime, g_pKnife, g_pBots, g_pPlayers, g_pPauses, g_pPauseTime
 new g_DataDir[128], g_Hud, g_MsgTeamScore
@@ -299,27 +301,72 @@ score_line(out[], len)
 save_live()
 {
 	if (g_HaveLive)
+	{
+		sync_live()
 		return
+	}
 	for (new i = 0; i < sizeof OVERRIDE; i++)
+	{
+		g_HaveSet[i] = false
 		if (get_cvar_pointer(OVERRIDE[i]))
 			get_cvar_string(OVERRIDE[i], g_Live[i], charsmax(g_Live[]))
+	}
 	g_HaveLive = true
+}
+
+// A setting changed (Game Mode Menu, the app) while warmup or the knife round had it
+// overridden is the new value for the match: keep it instead of putting the old one back
+sync_live()
+{
+	new cur[16]
+	for (new i = 0; i < sizeof OVERRIDE; i++)
+	{
+		if (!g_HaveSet[i] || !get_cvar_pointer(OVERRIDE[i]))
+			continue
+		get_cvar_string(OVERRIDE[i], cur, charsmax(cur))
+		if (!equal(cur, g_Set[i]))
+		{
+			copy(g_Live[i], charsmax(g_Live[]), cur)
+			g_HaveSet[i] = false
+		}
+	}
 }
 
 restore_live()
 {
 	if (!g_HaveLive)
 		return
+	sync_live()
 	for (new i = 0; i < sizeof OVERRIDE; i++)
+	{
+		g_HaveSet[i] = false
 		if (get_cvar_pointer(OVERRIDE[i]))
 			set_cvar_string(OVERRIDE[i], g_Live[i])
+	}
 	g_HaveLive = false
 }
 
 set_if(const cvar[], const value[])
 {
-	if (get_cvar_pointer(cvar))
-		set_cvar_string(cvar, value)
+	if (!get_cvar_pointer(cvar))
+		return
+	if (g_HaveLive)
+	{
+		for (new i = 0; i < sizeof OVERRIDE; i++)
+		{
+			if (!equal(OVERRIDE[i], cvar))
+				continue
+			// a change made meanwhile is kept before this one overwrites it
+			sync_live()
+			copy(g_Set[i], charsmax(g_Set[]), value)
+			g_HaveSet[i] = true
+		}
+	}
+	set_cvar_string(cvar, value)
+	// remember it as the engine stores it, so the comparison is like for like
+	for (new i = 0; i < sizeof OVERRIDE; i++)
+		if (g_HaveSet[i] && equal(OVERRIDE[i], cvar))
+			get_cvar_string(cvar, g_Set[i], charsmax(g_Set[]))
 }
 
 // Overtime money, put back afterwards
