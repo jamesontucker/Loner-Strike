@@ -2,6 +2,10 @@
 
 What changed in each version. The downloads are on the [Releases](https://github.com/jamesontucker/Loner-Strike/releases) page.
 
+## 0.1.2 (not released yet)
+
+- Gun Game (every player for themselves) has no teams underneath any more, so bots stop moving in groups with teammates they couldn't shoot. Team Gun Game is unchanged.
+
 ## 0.1.1
 
 ### Fixes

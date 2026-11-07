@@ -1699,7 +1699,8 @@ public ham_player_killed_pre(victim,killer,gib)
 	}
 	
 	// some sort of death that we don't want to count
-	if(killer == victim || !is_user_connected(killer) || cs_get_user_team(killer) == cs_get_user_team(victim))
+	// (with mp_freeforall on there are no teammates: Loner-Strike)
+	if(killer == victim || !is_user_connected(killer) || (cs_get_user_team(killer) == cs_get_user_team(victim) && !get_cvar_num("mp_freeforall")))
 		return HAM_IGNORED;
 
 	// award for killing hostage carrier
@@ -1891,8 +1892,8 @@ public ham_player_killed_post(victim,killer,gib)
 	
 	new teamplay = get_pcvar_num(gg_teamplay), penalty = get_pcvar_num(gg_tk_penalty);
 
-	// team kill
-	if(is_user_connected(victim) && cs_get_user_team(killer) == cs_get_user_team(victim) && penalty >= 0)
+	// team kill (none with mp_freeforall on, where everyone is everyone's enemy: Loner-Strike)
+	if(is_user_connected(victim) && cs_get_user_team(killer) == cs_get_user_team(victim) && penalty >= 0 && !get_cvar_num("mp_freeforall"))
 	{
 		if(penalty > 0)
 		{
@@ -9700,7 +9701,7 @@ stock can_score(id)
 	for(new player=1;player<=maxPlayers;player++)
 	{
 		// this player is on a real team, and he's on the opposite team, or we are playing FFA
-		if( player != id && is_user_connected(player) && on_valid_team(player) && (penalty < 0 || cs_get_user_team(id) != cs_get_user_team(player)) )
+		if( player != id && is_user_connected(player) && on_valid_team(player) && (penalty < 0 || get_cvar_num("mp_freeforall") || cs_get_user_team(id) != cs_get_user_team(player)) )
 				return 1;
 	}
 
