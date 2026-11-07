@@ -898,14 +898,14 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   // The public server: its address (ip:port) shows the "Play on our server" block. STATUS
   // is an https URL that answers {name, map, players, max_players} (optional: without it
   // the block just has the Join button).
-  const OUR_SERVER = { address: "play.lonerstrike.com", status: "" };
+  const OUR_SERVER = { address: "play.lonerstrike.com", status: "https://status.lonerstrike.com/status" };
   // Your Polar checkout link (in Polar: Products, your product, Checkout Links).
   const POLAR_CHECKOUT = "https://buy.polar.sh/polar_cl_Z1Ps6X1fYyIsMLnpunW5IkbF5rQTA2klPjfiZ1Dq8yn";
   // Visitor counter in the footer. An https URL that adds one to the count on each request
   // and answers {"count": n} with the new total. It must allow this site in CORS
   // (Access-Control-Allow-Origin) and shouldn't set cookies or keep IP addresses. The page asks
   // once per browser session and remembers the number. Empty, or if the request fails: no counter.
-  const COUNTER_URL = "";
+  const COUNTER_URL = "https://status.lonerstrike.com/visit";
 
   // "Play on our server": shown once an address is set above
   if (OUR_SERVER.address) {
@@ -920,6 +920,8 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       try {
         const r = await fetch(OUR_SERVER.status, { cache: "no-store" });
         const s = await r.json();
+        // between maps, or while it restarts, the server doesn't answer: show nothing
+        if (s.online === false || typeof s.players !== "number") { live.hidden = true; return; }
         live.replaceChildren();
         const dot = document.createElement("span");
         dot.className = "dot";
