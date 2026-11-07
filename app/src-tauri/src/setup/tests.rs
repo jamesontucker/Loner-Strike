@@ -308,3 +308,12 @@ fn mode_with_maps() {
     run_uninstall(&job, &plan, &res, Some(store));
     assert_eq!(snapshot(&hl), before);
 }
+
+#[test]
+fn bots_enabled_in_game_init() {
+    use crate::setup::core::enable_bots;
+    assert_eq!(enable_bots("// x\r\nbot_enable \"0\"\r\nhostage_ai_enable \"0\"\r\n").unwrap(), "// x\r\nbot_enable \"1\"\r\nhostage_ai_enable \"0\"\r\n");
+    assert_eq!(enable_bots("bot_enable 1\n"), None);
+    assert_eq!(enable_bots("sv_x 1").unwrap(), "sv_x 1\r\nbot_enable \"1\"\r\n");
+}
+

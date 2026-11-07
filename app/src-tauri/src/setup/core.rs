@@ -179,11 +179,34 @@ pub fn configs(rec: &mut Record, ctx: &Ctx, modes: &BTreeSet<String>, addons: &B
     Ok(())
 }
 
+/// game_init.cfg with bot_enable set to 1, or None if it already is.
+pub fn enable_bots(cfg: &str) -> Option<String> {
+    let re = Regex::new(r#"(?m)^[ \t]*bot_enable[ \t]+"?(\d+)"?[ \t]*\r?$"#).unwrap();
+    match re.captures(cfg) {
+        Some(c) if &c[1] == "1" => None,
+        Some(c) => {
+            let m = c.get(0).unwrap();
+            let eol = if m.as_str().ends_with('\r') { "\r" } else { "" };
+            Some(format!("{}bot_enable \"1\"{eol}{}", &cfg[..m.start()], &cfg[m.end()..]))
+        }
+        None => Some(format!("{}\r\nbot_enable \"1\"\r\n", cfg.trim_end_matches(['\r', '\n']))),
+    }
+}
+
 /// Bot styles: personality files made from the game's bot profile. CS 1.6 gets
 /// Loner-Strike's own BotProfile.db first if it has none.
 pub fn bot_styles(rec: &mut Record, ctx: &Ctx, game: &str) -> Result<(), String> {
     if game == "cstrike" && !rec.exists("BotProfile.db") {
         rec.write("BotProfile.db", &botprofile::generate())?;
+    }
+    // ReGameDLL only lets bots into a CS 1.6 dedicated server with bot_enable 1 in
+    // game_init.cfg, read once as the server starts (a listen server always has them)
+    if game == "cstrike" {
+        if let Some(cfg) = rec.read("game_init.cfg") {
+            if let Some(on) = enable_bots(&cfg) {
+                rec.write("game_init.cfg", &on)?;
+            }
+        }
     }
     let Some(base) = rec.read("BotProfileEnhanced.db").or_else(|| rec.read("BotProfile.db")) else {
         ctx.progress.note("No bot profile found, so the bot styles keep the game's own personalities.");
