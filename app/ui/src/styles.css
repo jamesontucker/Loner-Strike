@@ -1567,3 +1567,7 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .copy-row > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .copy-row code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .copy-row .btn { flex: none; }
+
+/* Remove everything: what happens, and the "I understand" tick */
+.plain-list { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--bone-dim); }
+.check-row { display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }

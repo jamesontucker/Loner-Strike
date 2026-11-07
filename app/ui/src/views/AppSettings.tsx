@@ -4,7 +4,7 @@ import { copyText, getJson, getJsonAt, ON_COMPUTER_ONLY, postJson, useActions } 
 import type { AppInfo, PhoneInfo } from "../types";
 import { ON_THIS_COMPUTER } from "../api";
 import { gameTitle } from "../games";
-import { queryClient, waitForSetupJob } from "../queries";
+import { queryClient, useServers, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { applyScale, savedScale, BusyButton, Info, LoadError, SCALES, SectionHead, Sheet, Switch, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
@@ -34,6 +34,7 @@ export const noteUpdateChecked = () => {
 };
 
 export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { app: AppInfo | null; reloadApp: () => void; scan: Scan | null; openSetup: () => void; switchGame: (hl: string | null, game: string) => Promise<void> }) {
+  const [nuke, setNuke] = useState(false);
   const ask = useConfirm();
   const toast = useToast();
   const { run, busy } = useActions();
@@ -318,6 +319,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
               {app?.game && scan && (
                 <BusyButton className="btn danger" busy={busy("app:uninstall")} label={`Remove from ${gameTitle(app.game.id)}`} busyLabel="Removing…" onClick={removeAll} />
               )}
+              {scan && <button className="btn danger" onClick={() => setNuke(true)}>Remove everything</button>}
             </div>
           ) : (
             <p className="muted">{ON_COMPUTER_ONLY}</p>
@@ -459,6 +461,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
 
       {!app?.update && updates}
 
+      {nuke && scan && <RemoveEverything scan={scan} onClose={() => setNuke(false)} />}
+
       {diag !== null && (
         <Sheet label="Diagnostics" onClose={() => setDiag(null)}>
           <div className="sheet-body">
@@ -491,4 +495,64 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
 /** A size, or a grey bar while it loads. */
 function Size({ n }: { n?: number }) {
   return n === undefined ? <span className="size-skeleton" aria-label="Loading" /> : <span className="muted">{mb(n)}</span>;
+}
+
+/** Remove everything: Loner-Strike out of every game, the servers on this computer deleted,
+ *  and the app's own data gone, then the app quits. Servers on other machines keep running. */
+function RemoveEverything({ scan, onClose }: { scan: Scan; onClose: () => void }) {
+  const toast = useToast();
+  const { run, busy } = useActions();
+  const serversQ = useServers();
+  const [sure, setSure] = useState(false);
+  const [step, setStep] = useState("");
+  const games = scan.installs.flatMap((i) => i.games.filter((g) => g.installed).map((g) => ({ hl: i.hl, id: g.id })));
+  const servers = serversQ.data?.servers ?? [];
+  const here = servers.filter((s) => !s.host);
+  const away = servers.filter((s) => s.host);
+  const list = (names: string[]) => names.join(", ");
+  const working = busy("app:remove-everything");
+
+  const go = () => run("app:remove-everything", async () => {
+    // each game the normal way first: original files back, Loner-Strike's out
+    for (const g of games) {
+      setStep(`Removing from ${gameTitle(g.id)}…`);
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/uninstall", { hl: g.hl, games: [g.id] }).catch(() => ({ error: "Couldn't reach the app." }));
+      if (r.error) return toast(r.error, true);
+      const j = await waitForSetupJob();
+      if (!j || j.state === "error") return toast(j?.error || `Couldn't remove Loner-Strike from ${gameTitle(g.id)}. Nothing else was deleted.`, true);
+    }
+    setStep("Deleting the servers and the app's data…");
+    try { localStorage.clear(); sessionStorage.clear(); } catch { /* private window */ }
+    type Done = { ok?: boolean; error?: string; failed?: string[] };
+    const r: Done = await postJson<Done>("/api/app/remove-everything").catch((): Done => ({ error: "Couldn't reach the app." }));
+    if (r.error) return toast(r.error, true);
+    const left = r.failed ?? [];
+    setStep(left.length ? `Done, except: ${left.join("; ")}. Delete those by hand. Loner-Strike is quitting.` : "Everything is removed. Loner-Strike is quitting.");
+  }, "Removing everything…");
+
+  return (
+    <Sheet label="Remove everything" onClose={() => !working && onClose()}>
+      <div className="sheet-body">
+        <h2>Remove everything</h2>
+        <p>This takes Loner-Strike off this computer completely:</p>
+        <ul className="plain-list">
+          {games.length > 0 && <li>It's removed from {list(games.map((g) => gameTitle(g.id)))}, and their original files are put back. Your own maps and files from before Loner-Strike stay.</li>}
+          {here.length > 0 && <li>The servers on this computer are stopped and deleted, with their folders: {list(here.map((s) => s.name))}.</li>}
+          <li>Its settings, servers list, map records, caches and downloads are deleted, and so are the stats, admins and XP a normal remove keeps. Then the app quits.</li>
+        </ul>
+        {away.length > 0 && (
+          <p className="muted">Servers on other machines aren't touched and keep running: {list(away.map((s) => s.name))}. To take one down too, delete it in Servers first.</p>
+        )}
+        <label className="check-row">
+          <input type="checkbox" checked={sure} disabled={working} onChange={(e) => setSure(e.target.checked)} />
+          <span>I understand this can't be undone</span>
+        </label>
+        {step && <p className="muted" role="status">{step}</p>}
+        <div className="row">
+          <BusyButton className="btn danger" busy={working} disabled={!sure} label="Remove everything" busyLabel="Removing…" onClick={go} />
+          <button className="btn" disabled={working} onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </Sheet>
+  );
 }

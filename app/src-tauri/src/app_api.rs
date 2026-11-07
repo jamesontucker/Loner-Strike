@@ -9,7 +9,7 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::net::UdpSocket;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri_plugin_updater::UpdaterExt;
 
@@ -628,9 +628,89 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, on: Option<axu
     }
 }
 
+/// Remove everything, after the page has removed Loner-Strike from every game: deletes
+/// the servers on this computer, what's left of Loner-Strike's data in the game folders,
+/// and the app's own data, then quits. Servers on other machines are left running.
+async fn api_remove_everything(State(st): State<Shared>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    if crate::sys::game_running() {
+        return (StatusCode::OK, Json(json!({"error": "Close Counter-Strike first, then try again."})));
+    }
+    let r = tokio::task::spawn_blocking(move || {
+        let mut failed = Vec::new();
+        crate::smartchat::shutdown(&st);
+        if let Some(g) = st.game() {
+            g.sharing.stop();
+        }
+        if crate::connect::DIRECT.lock().map(|d| d.on).unwrap_or(false) {
+            crate::connect::close_direct();
+        }
+        let (servers, server_errors) = crate::servers::remove_local_all();
+        failed.extend(server_errors);
+        for install in crate::steam::find_installs() {
+            for game in &install.games {
+                failed.extend(clear_game_leftovers(&install.hl.join(game)));
+            }
+        }
+        // the app's own data, and the window's saved size (a Tauri plugin's folder)
+        let mut dirs_to_go = vec![crate::sys::app_dir()];
+        if let Some(d) = dirs::data_dir() {
+            dirs_to_go.push(d.join("gg.lonerstrike.app"));
+        }
+        if let Some(d) = dirs::config_dir() {
+            dirs_to_go.push(d.join("gg.lonerstrike.app"));
+        }
+        if let Some(d) = dirs::cache_dir() {
+            dirs_to_go.push(d.join("loner-strike"));
+            dirs_to_go.push(d.join("gg.lonerstrike.app"));
+        }
+        for d in dirs_to_go {
+            if d.is_dir() {
+                if let Err(err) = std::fs::remove_dir_all(&d) {
+                    failed.push(format!("{} ({err})", d.display()));
+                }
+            }
+        }
+        json!({"ok": true, "servers": servers, "failed": failed})
+    })
+    .await
+    .unwrap_or_else(|_| json!({"error": "Loner-Strike hit an internal error part way. Some things may be left."}));
+    if r.get("ok").is_some() {
+        // a moment for the reply to reach the page, then quit without saving anything again
+        std::thread::spawn(|| {
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+            std::process::exit(0);
+        });
+    }
+    (StatusCode::OK, Json(r))
+}
+
+/// What a removal leaves in a game folder on purpose (so setting up again keeps it):
+/// Loner-Strike's own data, and AMX Mod X's leftovers when AMX Mod X itself was ours and
+/// is gone. Never anything the player had before: their own AMX Mod X keeps its plugins
+/// and modules, so then only Loner-Strike's data folder goes.
+fn clear_game_leftovers(game_dir: &Path) -> Vec<String> {
+    let mut failed = Vec::new();
+    let amxx = game_dir.join("addons/amxmodx");
+    let ours = amxx.join("data/gamemodes");
+    let theirs = ["plugins", "modules", "dlls", "scripting"].iter().any(|d| amxx.join(d).is_dir());
+    let target = if theirs { ours } else { amxx.clone() };
+    if target.is_dir() {
+        if let Err(err) = std::fs::remove_dir_all(&target) {
+            failed.push(format!("{} ({err})", target.display()));
+        }
+    }
+    // an addons folder left empty goes too
+    let _ = std::fs::remove_dir(game_dir.join("addons"));
+    failed
+}
+
 /// The app window only: updating or restarting the app and switching its game.
 pub fn local_routes() -> Router<Shared> {
     Router::new()
+        .route("/api/app/remove-everything", post(api_remove_everything))
         .route("/api/app/update/install", post(api_update_install))
         .route("/api/app/game", post(api_use_game))
         .route("/api/app/restart", post(api_restart))
@@ -678,5 +758,23 @@ mod start_tests {
         // an older install without the flavoured files keeps the plain one
         assert_eq!(flavoured_style_file(&dir, "BotProfile_Gods.db", "csdm", "de_dust2"), "BotProfile_Gods.db");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn leftovers_only_go_when_amxx_was_ours() {
+        let t = std::env::temp_dir().join(format!("ls-left-{}", std::process::id()));
+        // ours: AMX Mod X's binaries were removed, only runtime data is left
+        let a = t.join("a");
+        std::fs::create_dir_all(a.join("addons/amxmodx/data/gamemodes")).unwrap();
+        std::fs::create_dir_all(a.join("addons/amxmodx/logs")).unwrap();
+        assert!(clear_game_leftovers(&a).is_empty());
+        assert!(!a.join("addons").exists());
+        // theirs: their own AMX Mod X stays, only our data goes
+        let b = t.join("b");
+        std::fs::create_dir_all(b.join("addons/amxmodx/data/gamemodes")).unwrap();
+        std::fs::create_dir_all(b.join("addons/amxmodx/plugins")).unwrap();
+        assert!(clear_game_leftovers(&b).is_empty());
+        assert!(b.join("addons/amxmodx/plugins").is_dir() && !b.join("addons/amxmodx/data/gamemodes").exists());
+        let _ = std::fs::remove_dir_all(&t);
     }
 }

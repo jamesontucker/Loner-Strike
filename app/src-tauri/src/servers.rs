@@ -2073,6 +2073,47 @@ pub fn stop(id: &str) {
 }
 
 /// Stops every server this session started, all at once (each can take seconds).
+/// Remove everything: stops and deletes every server on this computer (only folders it
+/// made), and the servers folders' own working copies when they're left empty. Servers on
+/// other machines aren't touched. What couldn't be deleted, for the summary.
+pub fn remove_local_all() -> (Vec<String>, Vec<String>) {
+    let (mut done, mut failed) = (Vec::new(), Vec::new());
+    let guard = sync_guard();
+    let mut roots = std::collections::BTreeSet::new();
+    for e in load().into_iter().filter(|e| e.remote.is_none()) {
+        stop(&e.id);
+        if let Some(root) = e.dir.parent() {
+            roots.insert(root.to_path_buf());
+        }
+        if made_here(&e) && e.dir.is_dir() {
+            match std::fs::remove_dir_all(&e.dir) {
+                Ok(()) => done.push(e.name.clone()),
+                Err(err) => failed.push(format!("{} ({err})", e.dir.display())),
+            }
+        } else {
+            done.push(e.name.clone());
+        }
+    }
+    drop(guard);
+    // the servers folders: their shared download and the bots' map learner, then the
+    // folders themselves if nothing else is in them
+    for root in roots {
+        for sub in [".base", ".nav-learner"] {
+            let d = root.join(sub);
+            if d.is_dir() {
+                if let Err(err) = std::fs::remove_dir_all(&d) {
+                    failed.push(format!("{} ({err})", d.display()));
+                }
+            }
+        }
+        let _ = std::fs::remove_dir(&root);
+        if let Some(parent) = root.parent().filter(|p| p.file_name().is_some_and(|n| n == "Loner-Strike")) {
+            let _ = std::fs::remove_dir(parent);
+        }
+    }
+    (done, failed)
+}
+
 pub fn stop_all() {
     let ids: Vec<String> = with_runs(|r| r.procs.keys().cloned().collect());
     let threads: Vec<_> = ids.into_iter().map(|id| std::thread::spawn(move || stop(&id))).collect();
