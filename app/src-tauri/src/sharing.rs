@@ -456,8 +456,17 @@ impl Sharing {
             lines.push(format!("hostname \"{name}\""));
         }
         lines.push(format!("sv_password \"{password}\""));
+        // a dedicated server's "bots play on an empty server" line stays (servers.rs write_join)
+        let kept: Vec<String> = std::fs::read_to_string(data.join("friends.cfg"))
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| l.trim_start().starts_with("bot_join_after_player"))
+            .map(String::from)
+            .collect();
         // The plugin runs this after every map change (see task_reapply_saved)
-        std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike's Friends tab\n{}\n", lines.join("\n"))).map_err(|e| e.to_string())?;
+        let mut file = lines.clone();
+        file.extend(kept);
+        std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike's Friends tab\n{}\n", file.join("\n"))).map_err(|e| e.to_string())?;
         for line in &lines {
             if rcon.send(line).is_err() {
                 break; // applied when the game next loads a map

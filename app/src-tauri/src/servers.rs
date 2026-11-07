@@ -258,15 +258,17 @@ pub(crate) fn join_password(e: &Entry) -> String {
 }
 
 /// The name and join password in friends.json and friends.cfg (which the plugin runs
-/// after every map change), the same files the Friends tab writes.
-fn write_join(data: &Path, name: &str, password: &str) -> Result<(), String> {
+/// after every map change), the same files the Friends tab writes. friends.cfg also says
+/// whether bots play with nobody on: ReGameDLL's game.cfg sets bot_join_after_player back
+/// to 1 on every map, and this runs after it.
+fn write_join(data: &Path, name: &str, password: &str, bots_empty: bool) -> Result<(), String> {
     if !crate::sharing::password_ok(password) {
         return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
     }
     let name = crate::sharing::clean_name(name);
     std::fs::create_dir_all(data).map_err(|e| e.to_string())?;
     std::fs::write(data.join("friends.json"), json!({"name": name, "password": password}).to_string()).map_err(|e| e.to_string())?;
-    std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike\nhostname \"{name}\"\nsv_password \"{password}\"\n")).map_err(|e| e.to_string())
+    std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike\nhostname \"{name}\"\nsv_password \"{password}\"\nbot_join_after_player {}\n", if bots_empty { 0 } else { 1 })).map_err(|e| e.to_string())
 }
 
 fn list_file() -> PathBuf {
@@ -732,7 +734,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
                 copy_tree(&src.join("addons/amxmodx/data/gamemodes"), &data, true, &settings_filter)?;
             }
             let _ = std::fs::create_dir_all(&data);
-            write_join(&data, &entry.name, &join_pw)?;
+            write_join(&data, &entry.name, &join_pw, bots_when_empty(&entry))?;
             // empty ban lists, so the server doesn't complain it has none
             for f in ["banned.cfg", "listip.cfg"] {
                 let p = entry.dir.join(&g).join(f);
@@ -1199,7 +1201,7 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
             let _ = std::fs::create_dir_all(&data);
             // the password from the form, or the one it has now when this runs again
             let pw = Some(join_password(&entry)).filter(|p| !p.is_empty()).or(entry.setup_with.as_ref().map(|w| w.password.clone())).unwrap_or_default();
-            write_join(&data, &entry.name, &pw)?;
+            write_join(&data, &entry.name, &pw, bots_when_empty(&entry))?;
             // the panel's RCON password, which the plugin reads on the machine
             if !data.join("panel_rcon.txt").is_file() {
                 use rand::Rng;
@@ -2111,9 +2113,9 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
             true
         };
         // the name players see and the join password, applied now if it's running
-        if name.is_some() || password.is_some() {
+        if name.is_some() || password.is_some() || bots_when_empty(&e) != bots_when_empty(&now) {
             let pw = password.clone().unwrap_or_else(|| join_password(&now));
-            write_join(&now.dir.join(&now.game).join("addons/amxmodx/data/gamemodes"), &now.name, &pw)?;
+            write_join(&now.dir.join(&now.game).join("addons/amxmodx/data/gamemodes"), &now.name, &pw, bots_when_empty(&now))?;
             if running(&id) {
                 if let Some(rc) = now.rcon() {
                     let _ = rc.send(&format!("hostname \"{}\";sv_password \"{pw}\"", crate::sharing::clean_name(&now.name)));
