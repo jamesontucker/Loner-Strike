@@ -45,6 +45,12 @@ pub struct Settings {
     /// where new dedicated servers go (None: Loner-Strike/Servers in the usual place)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub servers_dir: Option<String>,
+    /// Smarter chat (experimental): a local model writes bots' replies (smartchat/)
+    #[serde(default)]
+    pub smart_chat: bool,
+    /// the Smarter chat model to use (catalog id)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub smart_chat_model: Option<String>,
 }
 
 /// A new phone access key.

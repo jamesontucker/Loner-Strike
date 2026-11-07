@@ -1432,3 +1432,28 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
   .quick-inner { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; }
   .qmenu-list { position: fixed; }
 }
+
+/* ---- Smarter chat (Bots page) ------------------------------------------------- */
+.sc-status { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--bone-dim); }
+.sc-status.ok { color: var(--ok); }
+.sc-status.err { color: var(--weak); }
+.sc-models { list-style: none; margin: 4px 0 0; padding: 0; }
+.sc-model { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid var(--bevel-lo); }
+.sc-pick { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; min-width: 0; }
+.sc-pick input { margin-top: 5px; accent-color: var(--signal); }
+.sc-pick input:disabled { cursor: default; }
+.sc-pick > span { display: grid; gap: 2px; min-width: 0; }
+.sc-using { justify-self: start; }
+.sc-good { color: var(--bone-dim); font-size: 15px; }
+.sc-credit { color: var(--bone-faint); font-size: 13px; }
+.sc-credit a { color: var(--bone-dim); }
+.sc-actions { flex: none; }
+.sc-replies { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.sc-reply { background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; padding: 10px 12px; display: grid; gap: 6px; align-content: start; }
+.sc-who { display: grid; }
+.sc-line { margin: 0; font-family: "Courier New", monospace; color: var(--signal); overflow-wrap: anywhere; }
+.sc-rejected { display: block; margin-top: 4px; color: var(--bone-faint); overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .sc-replies { grid-template-columns: 1fr; }
+  .sc-model { flex-direction: column; }
+}

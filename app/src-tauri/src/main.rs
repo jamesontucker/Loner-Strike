@@ -27,6 +27,7 @@ mod welcome;
 mod setup;
 mod setup_api;
 mod sharing;
+mod smartchat;
 mod sounds;
 mod steam;
 mod sys;
@@ -56,6 +57,7 @@ fn main() {
         phone: Mutex::new(app_api::Phone::default()),
     });
     state.set_game(game);
+    let state_at_exit = state.clone();
 
     tauri::Builder::default()
         // one copy at a time (on Windows a second double-click would start another, with
@@ -89,6 +91,8 @@ fn main() {
             servers::schedule_restarts();
             servers::sync_loop();
             notify::watch(app.handle().clone(), state.clone());
+            // Smarter chat's llama-server: only while it's on and a game is hosted here
+            smartchat::watch(state.clone());
             #[cfg(target_os = "macos")]
             app.set_menu(mac_menu(app.handle())?)?;
             // LONER_UI_URL points the window at the React dev server while working on the UI
@@ -114,9 +118,10 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("Loner-Strike couldn't start")
-        .run(|_, event| {
+        .run(move |_, event| {
             // stop dedicated servers and close the router port when the app quits
             if let tauri::RunEvent::Exit = event {
+                smartchat::shutdown(&state_at_exit);
                 // unless the player wants them left running
                 if !app_api::load_settings().keep_servers {
                     servers::stop_all();

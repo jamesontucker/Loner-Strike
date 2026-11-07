@@ -12,6 +12,7 @@ import { FilesUpdate } from "./views/FilesUpdate";
 import { Addons } from "./views/Addons";
 import { AppSettings, noteUpdateChecked } from "./views/AppSettings";
 import { Bots } from "./views/Bots";
+import { SmarterChat } from "./views/SmarterChat";
 import { Friends } from "./views/Friends";
 import { Maps } from "./views/Maps";
 import { Mods } from "./views/Mods";
@@ -356,7 +357,13 @@ function Shell() {
           {state === null ? (
             <Skeleton rows={4} />
           ) : needsGame && !lost ? (
-            <Waiting label={NAV.find((n) => n.id === section)!.label} game={gameName} gameOpen={gameOpen} reason={state.online ? "" : state.reason} onPlay={() => go("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={openSetup} />
+            <>
+              <Waiting label={NAV.find((n) => n.id === section)!.label} game={gameName} gameOpen={gameOpen} reason={state.online ? "" : state.reason} onPlay={() => go("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={openSetup} />
+              {/* set up and try Smarter chat before a game is running */}
+              {section === "bots" && !openServer && (
+                <SmarterChat />
+              )}
+            </>
           ) : (
             <PageBoundary key={`${section}:${openServer ?? ""}:${app?.game?.id ?? ""}`}>
             <Suspense fallback={<Skeleton rows={4} />}>

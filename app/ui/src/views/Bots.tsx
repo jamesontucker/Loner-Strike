@@ -6,6 +6,7 @@ import type { Online, Setting } from "../types";
 const SLIDER_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
 import { Banner, BusyButton, Info, useCommand, useConfirm } from "../ui";
 import { SettingsPage, usePending } from "./Settings";
+import { SmarterChat } from "./SmarterChat";
 
 export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
   const ask = useConfirm();
@@ -36,6 +37,7 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
   };
 
   return (
+    <div className="stack">
     <SettingsPage title="Bots" note="Difficulty changes re-add the bots so they pick it up straight away." data={data} cat={1} refresh={refresh}>
       {!st.nav && !learning && (
         <Banner action={<BusyButton className="btn primary" busy={busy(key("learn"))} label="Learn this map" busyLabel="Starting…" onClick={() => act(key("learn"), () => run("gm_nav", ["learn"]), `Starting to learn ${st.map}…`)} />}>
@@ -86,6 +88,8 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
       </div>
       {personality?.visible ? <PersonalitySlider setting={personality} refresh={refresh} /> : null}
     </SettingsPage>
+    <SmarterChat />
+    </div>
   );
 }
 

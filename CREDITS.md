@@ -35,6 +35,14 @@ Loner-Strike only exists because of these projects and their authors. The mods a
 
 Round-end music ships with freely licensed tracks from OpenGameArt; each track's author and license is listed in `sound/roundsound/CREDITS.txt`.
 
+## Smarter chat (experimental, downloaded only when you pick a model)
+| Project | Authors | License |
+|---|---|---|
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) (llama-server) | Georgi Gerganov and contributors | MIT |
+| [Llama 3.2 1B](https://huggingface.co/meta-llama/Llama-3.2-1B), GGUF by [QuantFactory](https://huggingface.co/QuantFactory/Llama-3.2-1B-GGUF) | Meta | Llama 3.2 Community License |
+| [Discord-Micae-Hermes-3-3B](https://huggingface.co/mookiezi/Discord-Micae-Hermes-3-3B), GGUF by [mradermacher](https://huggingface.co/mradermacher/Discord-Micae-Hermes-3-3B-GGUF) | mookiezi, on Hermes 3 (Nous Research) and Llama 3.2 (Meta) | Llama 3 Community License |
+| [Gemma4NPC-E2B](https://huggingface.co/chimbiwide/Gemma4NPC-E2B-GGUF) | chimbiwide (npcLM), on Gemma 4 (Google) | Apache-2.0 |
+
 ## Maps
 Maps are downloaded from [GameBanana](https://gamebanana.com) and belong to their creators. The panel shows each map's author.
 
