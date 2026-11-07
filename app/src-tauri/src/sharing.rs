@@ -141,15 +141,7 @@ pub struct Sharing {
 
 /// playitd next to the app (bundled resources), or the old panel's copy.
 fn find_playitd() -> Option<PathBuf> {
-    let mut places = Vec::new();
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(d) = exe.parent() {
-            places.push(d.join(PLAYITD));
-            places.push(d.join("resources").join(PLAYITD));
-            places.push(d.join("../Resources").join(PLAYITD)); // inside a Mac .app
-            places.push(d.join("../Resources/resources").join(PLAYITD));
-        }
-    }
+    let mut places = sys::bundled_places(PLAYITD);
     if let Some(old) = sys::old_panel_dir() {
         places.push(old.join("tools/playit").join(PLAYITD));
     }

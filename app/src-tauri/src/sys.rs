@@ -122,6 +122,13 @@ pub fn write_latin1(path: &Path, text: &str) -> std::io::Result<()> {
 }
 
 /// A program on PATH, or in one of the usual extra places (Homebrew on a Mac).
+/// Where a program shipped with the app may be: next to the app's own program, or in its
+/// resources (inside a Mac .app too).
+pub fn bundled_places(file: &str) -> Vec<PathBuf> {
+    let Some(d) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) else { return Vec::new() };
+    vec![d.join(file), d.join("resources").join(file), d.join("../Resources").join(file), d.join("../Resources/resources").join(file)]
+}
+
 pub fn find_tool(name: &str) -> Option<PathBuf> {
     let exe = if cfg!(windows) { format!("{name}.exe") } else { name.to_string() };
     if let Some(path) = std::env::var_os("PATH") {

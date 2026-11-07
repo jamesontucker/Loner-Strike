@@ -173,6 +173,23 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
         }
         tar_err = Some(err);
     }
+    // Windows 10's tar can't open RAR files packed with RAR's filters, and many maps are:
+    // RARLAB's UnRAR comes with the app on Windows (it refuses ../ paths too)
+    if cfg!(windows) && is_rar(archive) {
+        if let Some(unrar) = sys::bundled_places("unrar.exe").into_iter().find(|p| p.is_file()) {
+            clear_dir(dest);
+            let mut c = sys::command(&unrar);
+            // x: keep folders, -y: yes to everything, -idq: quiet, -o+: overwrite; the
+            // trailing separator marks the destination as a folder
+            c.args(["x", "-y", "-idq", "-o+"]).arg(archive).arg(format!("{}{}", dest.display(), std::path::MAIN_SEPARATOR));
+            let (ok, err) = run_limited(c, dest, budget)?;
+            strip_links(dest);
+            if ok {
+                return Ok(());
+            }
+            tar_err = Some(err);
+        }
+    }
     let unar = sys::find_tool("unar");
     if let (Some(unar), Some(lsar)) = (unar.as_ref(), sys::find_tool("lsar")) {
         if let Some(entries) = lsar_entries(&lsar, archive) {
@@ -206,6 +223,13 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
         ""
     };
     Err(format!("Couldn't fully unpack the download ({why}).{hint}"))
+}
+
+/// A RAR archive by its first bytes, whatever its name says.
+fn is_rar(archive: &Path) -> bool {
+    use std::io::Read;
+    let mut head = [0u8; 6];
+    std::fs::File::open(archive).and_then(|mut f| f.read_exact(&mut head)).is_ok() && head == *b"Rar!\x1a\x07"
 }
 
 /// (total size, has links, readable) from `tar -tvf` output. Anything we can't

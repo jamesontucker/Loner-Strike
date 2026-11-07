@@ -76,6 +76,7 @@ For a server on this computer or on a Linux machine, the app installs Valve's [S
 | Service | Notes |
 |---|---|
 | [playit.gg](https://playit.gg) | Tunnels run through playit.gg's service with playit's own agent, [playit-agent](https://github.com/playit-cloud/playit-agent) v1.2.0 by Developed Methods (BSD-2-Clause), shipped inside the app: built from its source for Mac, and playit's own signed build for Windows. Copyright 2022 Developed Methods LLC |
+| [UnRAR](https://www.rarlab.com) | RARLAB's UnRAR 7.13 (freeware, by Alexander Roshal), shipped inside the Windows app to unpack map downloads Windows' own tar can't open. Taken unchanged from the WinRAR installer, whose licence lets the UnRAR parts be passed on alone |
 | [Tailscale](https://tailscale.com) | The app only reads Tailscale's status for this computer's address |
 
 ## Website
