@@ -64,6 +64,9 @@ export default function App() {
       <ToastProvider>
         <ConfirmProvider>
           <Shell />
+          {/* one radio for the whole app, setup included: what's playing carries on from
+              setup into the panel (on this computer; phones control the game, not music) */}
+          {ON_THIS_COMPUTER && <Radio />}
         </ConfirmProvider>
       </ToastProvider>
     </QueryClientProvider>
@@ -420,8 +423,6 @@ function Shell() {
             </PageBoundary>
           )}
         </main>
-        {/* the radio plays on this computer; phones control the game, not music */}
-        {ON_THIS_COMPUTER && <Radio />}
       </div>
 
       {/* phones: the most used sections, the rest under More */}

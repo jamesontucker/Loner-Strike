@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJsonAt, postJson, useActions } from "../api";
 import { BOT_NOTE, BOT_RATING, BOT_RATING_INFO, gameShort, gameTitle } from "../games";
@@ -7,6 +7,7 @@ import { useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { BusyButton, Info, SteamProgress, useToast } from "../ui";
 import logo from "../assets/logo.svg";
+import { pinRadio, RadioButton } from "./Radio";
 
 // ---- what the setup API returns -------------------------------------------------
 export type SetupGame = { id: "cstrike" | "czero"; name: string; installed: boolean; components: string[]; foreign: boolean; unbuilt?: string[] };
@@ -55,6 +56,12 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
     if (jobQ.data?.state === "running" && stage !== "install") setStage("install");
     // only the first answer counts: later ones are this setup's own job
   }, [jobQ.isFetched]);
+  // the radio stays open while setup's buttons are clicked; the first run opens it (not
+  // playing) for something to try while it installs
+  useEffect(() => {
+    pinRadio(true, !fromSettings);
+    return () => pinRadio(false);
+  }, [fromSettings]);
   const [installIdx, setInstallIdx] = useState(0);
   const install = scan.installs[installIdx];
   // every game this Steam has, CS 1.6 first
@@ -114,7 +121,8 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
   return (
     <div className="setup">
       <div className="setup-card">
-        {!fromSettings && <ThemeMusic />}
+        {/* the radio, open but not playing on the first run: setup takes a while */}
+        <div className="setup-radio"><RadioButton /></div>
         <ol className="setup-steps" aria-label="Setup steps">
           {(["games", "content", "review", "install"] as Stage[]).map((s, i) => (
             <li key={s} className={stage === s ? "now" : order(stage) > order(s) ? "done" : ""}>
@@ -370,241 +378,3 @@ function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan
   );
 }
 
-/** The game's own menu music, quietly, while setting up: Counter-Strike's theme, then
- *  Half-Life's, round and round; and the menu's own hover and click sounds on buttons.
- *  Only if the player has the game (their copy, never shipped with the app); it starts
- *  on the first click, since the window can't play sound before that. */
-function ThemeMusic() {
-  const [on, setOn] = useState(() => {
-    try {
-      return localStorage.getItem("ls.music") !== "off";
-    } catch {
-      return true;
-    }
-  });
-  const [ready, setReady] = useState(false);
-  const [volume, setVolumeRaw] = useState(() => {
-    try {
-      const v = Number(localStorage.getItem("ls.musicVol"));
-      return v > 0 && v <= 1 ? v : 0.3;
-    } catch {
-      return 0.3;
-    }
-  });
-  const level = useRef(volume);
-  level.current = volume;
-  const audio = useRef<HTMLAudioElement | null>(null);
-  // the playlist's "next random track" (null with only one track)
-  const skipTrack = useRef<(() => void) | null>(null);
-  // stops the music for good (setup closing): no track can start again after that
-  const stopAudio = useRef<(() => void) | null>(null);
-  const wanted = useRef(on);
-  wanted.current = on;
-
-  // each fade takes over from the one before, so a quick off-on doesn't end up paused
-  const fade = useRef(0);
-  const fadeTo = (a: HTMLAudioElement, target: number) => {
-    const mine = ++fade.current;
-    const step = () => {
-      if (mine !== fade.current) return;
-      const d = target - a.volume;
-      if (Math.abs(d) < 0.02) {
-        a.volume = target;
-        if (target === 0) a.pause();
-        return;
-      }
-      a.volume = Math.min(1, Math.max(0, a.volume + Math.sign(d) * 0.02));
-      setTimeout(step, 40);
-    };
-    step();
-  };
-  const start = (a: HTMLAudioElement) => {
-    const mine = ++fade.current;
-    if (a.paused) a.volume = 0;
-    a.play().then(() => mine === fade.current && fadeTo(a, level.current)).catch(() => {});
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    // the playlist: both menu themes and the Half-Life tracks picked for it, shuffled (a
-    // random one first), reshuffled each time round, never the same one twice in a row.
-    // Played straight from the app (not loaded whole), and only the ones this game has.
-    const ALL = ["", "hl", "hl01", "hl02", "hl12", "hl13", "hl17"].map((t) => (t ? `/api/app/theme.mp3?track=${t}` : "/api/app/theme.mp3"));
-    Promise.all(ALL.map((u) => fetch(u, { method: "HEAD" }).then((r) => (r.ok ? u : null)).catch(() => null))).then((found) => {
-      if (cancelled) return;
-      const tracks = found.filter((u): u is string => !!u);
-      if (!tracks.length) return;
-      const shuffle = (last?: string) => {
-        const o = [...tracks];
-        for (let k = o.length - 1; k > 0; k--) {
-          const j = Math.floor(Math.random() * (k + 1));
-          [o[k], o[j]] = [o[j], o[k]];
-        }
-        if (o.length > 1 && o[0] === last) o.push(o.shift()!);
-        return o;
-      };
-      let order = shuffle();
-      let i = 0;
-      const a = new Audio(order[0]);
-      a.loop = tracks.length === 1;
-      // tracks that wouldn't play in a row: when all of them fail, stop trying
-      let failures = 0;
-      const next = () => {
-        if (cancelled) return;
-        const last = order[i];
-        i++;
-        if (i >= order.length) {
-          order = shuffle(last);
-          i = 0;
-        }
-        a.src = order[i];
-        a.volume = level.current;
-        if (wanted.current) a.play().catch(() => {});
-      };
-      const failed = () => {
-        if (++failures < tracks.length) next();
-      };
-      const playing = () => (failures = 0);
-      a.addEventListener("ended", next);
-      // a track that won't play is skipped
-      a.addEventListener("error", failed);
-      a.addEventListener("playing", playing);
-      stopAudio.current = () => {
-        a.removeEventListener("ended", next);
-        a.removeEventListener("error", failed);
-        a.removeEventListener("playing", playing);
-        a.pause();
-        a.removeAttribute("src");
-        a.load();
-      };
-      skipTrack.current = tracks.length > 1 ? next : null;
-      audio.current = a;
-      setReady(true);
-      if (wanted.current) start(a);
-    });
-    // the menu's hover and click sounds, on every button while setup is open. Web Audio,
-    // not <audio>: the window only lets an <audio> play from a click, and a hover never
-    // is one; an audio context, once the first click has woken it, plays both at once.
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    // ("interactive": the shortest delay the machine can do, for UI sounds)
-    const ctx = Ctx ? new Ctx({ latencyHint: "interactive" }) : null;
-    const sounds: Record<string, AudioBuffer> = {};
-    const loadSound = (name: string, key: string) =>
-      fetch(`/api/app/menu-sound/${name}`)
-        .then((r) => (r.ok ? r.arrayBuffer() : null))
-        .then((buf) => (buf && ctx ? ctx.decodeAudioData(buf) : null))
-        .then((b) => b && (sounds[key] = b))
-        .catch(() => {});
-    loadSound("rollover", "over");
-    loadSound("press", "press");
-    loadSound("click", "click");
-    const play = (which: string, loud: number) => {
-      const b = sounds[which];
-      if (!ctx || !b || !wanted.current || ctx.state !== "running") return;
-      const src = ctx.createBufferSource();
-      const gain = ctx.createGain();
-      gain.gain.value = Math.min(1, level.current * loud * 1.6);
-      src.buffer = b;
-      src.connect(gain).connect(ctx.destination);
-      src.start();
-    };
-    const wake = () => {
-      if (ctx && ctx.state !== "running") ctx.resume().catch(() => {});
-    };
-    window.addEventListener("pointerdown", wake);
-    window.addEventListener("keydown", wake);
-    const BUTTONS = "button:not(:disabled), a.btn, [role=radio]";
-    // only when a mouse comes onto a button from outside it (not moving between its
-    // parts, not a button redrawn under a still cursor, never a finger)
-    const over = (e: PointerEvent) => {
-      if (e.pointerType !== "mouse") return;
-      const b = (e.target as Element | null)?.closest(BUTTONS);
-      const from = e.relatedTarget as Node | null;
-      if (b && !(from && b.contains(from))) play("over", 0.8);
-    };
-    // like the game's menus: one sound as the button goes down, another as it comes up
-    const press = (e: PointerEvent) => {
-      wake();
-      if ((e.target as Element | null)?.closest(BUTTONS)) play("press", 0.9);
-    };
-    const click = (e: PointerEvent) => {
-      if ((e.target as Element | null)?.closest(BUTTONS)) play("click", 1);
-    };
-    document.addEventListener("pointerover", over);
-    document.addEventListener("pointerdown", press);
-    document.addEventListener("pointerup", click);
-    // the window may refuse to play before the first click: try again then
-    const firstClick = () => {
-      const a = audio.current;
-      if (a && wanted.current && a.paused) start(a);
-    };
-    window.addEventListener("pointerdown", firstClick, { once: true });
-    return () => {
-      cancelled = true;
-      fade.current++;
-      window.removeEventListener("pointerdown", firstClick);
-      document.removeEventListener("pointerover", over);
-      document.removeEventListener("pointerdown", press);
-      document.removeEventListener("pointerup", click);
-      window.removeEventListener("pointerdown", wake);
-      window.removeEventListener("keydown", wake);
-      ctx?.close().catch(() => {});
-      audio.current?.pause();
-      stopAudio.current?.();
-    };
-  }, []);
-
-  if (!ready) return null;
-  const toggle = () => {
-    const next = !on;
-    setOn(next);
-    try {
-      localStorage.setItem("ls.music", next ? "on" : "off");
-    } catch {
-      /* private window */
-    }
-    const a = audio.current;
-    if (!a) return;
-    if (next) start(a);
-    else fadeTo(a, 0);
-  };
-  const setVolume = (v: number) => {
-    setVolumeRaw(v);
-    try {
-      localStorage.setItem("ls.musicVol", String(v));
-    } catch {
-      /* private window */
-    }
-    if (audio.current && on) {
-      fade.current++;
-      audio.current.volume = v;
-    }
-  };
-  return (
-    <div className="music">
-      <button className="music-toggle" aria-pressed={on} onClick={toggle} title={on ? "Turn the music and menu sounds off" : "Play the menu music and sounds"}>
-        <span aria-hidden="true">♪</span> {on ? "Audio on" : "Audio off"}
-      </button>
-      {on && skipTrack.current && (
-        <button className="music-toggle icon" onClick={() => skipTrack.current?.()} title="Shuffle: play another track" aria-label="Shuffle: play another track">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
-          </svg>
-        </button>
-      )}
-      {on && (
-        <input
-          className="music-volume"
-          type="range"
-          min={0.05}
-          max={1}
-          step={0.05}
-          value={volume}
-          onChange={(e) => setVolume(Number(e.target.value))}
-          aria-label="Volume"
-          style={{ "--fill": `${Math.round(((volume - 0.05) / 0.95) * 100)}%` } as CSSProperties}
-        />
-      )}
-    </div>
-  );
-}

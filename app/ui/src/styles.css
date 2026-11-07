@@ -956,17 +956,8 @@ a.btn.primary { color: var(--signal-ink); }
   .sound-pack .pack-actions .btn { flex: 1 1 auto; }
 }
 
-/* ---- setup: the game's menu music ----------------------------------------------- */
+/* ---- setup: the Radio button sits top right (see .setup-radio) -------------------- */
 .setup-card { position: relative; }
-/* the audio controls: one sunken strip with the switch, shuffle and volume */
-.music { position: absolute; top: 14px; right: 16px; z-index: 2; display: flex; align-items: center; gap: 2px; padding: 2px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
-.music-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 24px; border: 0; border-radius: 1px; padding: 0 9px; background: transparent; color: var(--bone-faint); font: 600 13px/1 var(--text); cursor: pointer; }
-.music-toggle[aria-pressed="true"] { color: var(--signal); }
-.music-toggle:hover { color: var(--bone); background: rgba(233, 227, 207, .06); }
-.music-toggle.icon { width: 26px; padding: 0; }
-.music .music-volume { margin: 0 8px 0 4px; }
-@media (max-width: 760px), (pointer: coarse) and (max-height: 500px) { .music { top: 10px; right: 10px; } }
-.setup-steps { padding-right: 120px; }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) { .setup-steps { padding-right: 0; padding-top: 30px; } }
 
 /* ---- server extras: map rotation, chat messages, kickers, fast downloads -------------- */
@@ -1011,12 +1002,7 @@ a.btn.primary { color: var(--signal-ink); }
 .first-play { align-self: end; min-height: 38px; padding: 7px 20px; font-size: 16px; display: inline-flex; gap: 6px; align-items: center; }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) { .first-play { flex: 1 1 100%; justify-content: center; } }
 
-/* music volume: a sunken Steam-style track with a raised thumb */
-.music-volume { -webkit-appearance: none; appearance: none; width: 90px; height: 8px; border-radius: 2px; cursor: pointer;
-  background: linear-gradient(to right, var(--signal) var(--fill, 30%), var(--bg) var(--fill, 30%)); box-shadow: var(--sunken); }
-.music-volume::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 16px; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); }
-.music-volume::-moz-range-thumb { width: 12px; height: 16px; border: 0; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); }
-.setup-steps { padding-right: 230px; }
+.setup-steps { padding-right: 120px; }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) { .setup-steps { padding-right: 0; } }
 
 /* ---- quick actions: grouped menus ------------------------------------------------- */
@@ -1504,6 +1490,9 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .modevote h3 .spinner { width: 12px; height: 12px; margin-right: 4px; }
 
 /* Internet radio: the site's little Winamp, dropping down from the top bar's Radio button (computer only) */
+/* setup: the Radio button top right, its player under it */
+.setup-radio { position: absolute; top: 14px; right: 16px; z-index: 2; }
+@media (max-width: 760px) { .setup-radio { top: 10px; right: 10px; } }
 .radio { position: fixed; right: var(--gutter); top: calc(var(--strip-h) - 4px); z-index: 30; width: min(275px, 100vw - 32px);
   background: var(--panel); box-shadow: var(--raised), 0 10px 30px rgba(0,0,0,.4); border-radius: 3px; padding: 3px; font-size: 13px; line-height: 1.2; }
 .radio[hidden] { display: none; }

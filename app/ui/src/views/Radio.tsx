@@ -67,13 +67,21 @@ type State = "stopped" | "connecting" | "playing" | "error";
 
 /** Whether the radio is open, and what's on, for the button in the top bar. The player itself
  *  stays mounted in App so music keeps going whatever page or game is showing. */
-const useRadioStore = create<{ open: boolean; on: boolean; label: string; toggle: () => void; close: () => void }>((set) => ({
+const useRadioStore = create<{ open: boolean; on: boolean; label: string; pinned: boolean; toggle: () => void; close: () => void }>((set) => ({
   open: false,
   on: false,
   label: "",
+  // setup keeps it open while its buttons are clicked (see pinRadio)
+  pinned: false,
   toggle: () => set((s) => ({ open: !s.open })),
   close: () => set({ open: false }),
 }));
+
+/** Setup: the radio stays open while setup's own buttons are clicked; `open` opens it too
+ *  (the first run, not playing yet). Let go again when setup closes. */
+export function pinRadio(pinned: boolean, open = false) {
+  useRadioStore.setState((s) => ({ pinned, open: open || s.open }));
+}
 
 /** The top bar's Radio button: opens the player under it; the light is on while it plays. */
 export function RadioButton() {
@@ -94,6 +102,19 @@ export function Radio() {
     return v >= 0 && v <= 100 ? v : 70;
   });
   const open = useRadioStore((s) => s.open);
+  const pinned = useRadioStore((s) => s.pinned);
+  // in setup the button sits on the centred card: the player opens right under it
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+  useEffect(() => {
+    if (!open || !pinned) return setAnchor(null);
+    const place = () => {
+      const b = document.getElementById("radio-button")?.getBoundingClientRect();
+      setAnchor(b ? { top: Math.round(b.bottom + 6), right: Math.max(8, Math.round(window.innerWidth - b.right)) } : null);
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [open, pinned]);
   const [announce, setAnnounce] = useState("");
   const [track, setTrack] = useState("");
   const [list, setList] = useState(false);
@@ -270,7 +291,7 @@ export function Radio() {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
-      if (!panel.current?.contains(t) && !document.getElementById("radio-button")?.contains(t)) useRadioStore.getState().close();
+      if (!useRadioStore.getState().pinned && !panel.current?.contains(t) && !document.getElementById("radio-button")?.contains(t)) useRadioStore.getState().close();
     };
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onDown);
@@ -281,7 +302,7 @@ export function Radio() {
 
   if (!open) return <p className="sr-only" aria-live="polite">{announce}</p>;
   return (
-    <section ref={panel} id="radio" className="radio" aria-label="Radio">
+    <section ref={panel} id="radio" className="radio" aria-label="Radio" style={anchor ? { top: anchor.top, right: anchor.right } : undefined}>
       <div className="radio-bar">
         <span>Loner-Strike radio</span>
         <button type="button" onClick={close} aria-label="Close radio">
