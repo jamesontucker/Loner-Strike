@@ -189,9 +189,17 @@ pub fn bot_styles(rec: &mut Record, ctx: &Ctx, game: &str) -> Result<(), String>
         ctx.progress.note("No bot profile found, so the bot styles keep the game's own personalities.");
         return Ok(());
     };
+    // one file per style and way of playing together (configs/gamemodes/botplay.ini picks)
     for style in botprofile::styles(ctx.res) {
-        let text = format!("// Made by Loner-Strike for the {} bot style\r\n{}", style.name, botprofile::reshape(&base, &style, 27015));
-        rec.write(&format!("BotProfile_{}.db", style.name), &text)?;
+        for flavour in botprofile::Flavour::ALL {
+            let text = format!(
+                "// Made by Loner-Strike for the {} bot style ({:?} play)\r\n{}",
+                style.name,
+                flavour,
+                botprofile::reshape(&base, &style, flavour, 27015)
+            );
+            rec.write(&botprofile::style_file(&style.name, flavour), &text)?;
+        }
     }
     Ok(())
 }

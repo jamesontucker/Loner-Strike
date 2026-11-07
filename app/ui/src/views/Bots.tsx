@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { targetKey, useActions } from "../api";
-import type { Online } from "../types";
+import type { Online, Setting } from "../types";
 
 /** Keys that move a range input: only these send the new bot count. */
 const SLIDER_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
 import { Banner, BusyButton, Info, useCommand, useConfirm } from "../ui";
-import { SettingsPage } from "./Settings";
+import { SettingsPage, usePending } from "./Settings";
 
 export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
   const ask = useConfirm();
@@ -14,6 +14,7 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
   const key = (what: string) => `bots:${targetKey()}:${what}`;
   const bots = (what: string, label: string) => act(key(what), () => run("gm_bots", [what]), label);
   const st = data.state;
+  const personality = data.settings.find((s) => s.cvar === "gm_personality");
   const [count, setCount] = useState(st.bots);
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
@@ -83,6 +84,81 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
           <Info text="Kill all only kills the bots, and they're back next round. Kick all takes every bot out until you add more." />
         </div>
       </div>
+      {personality?.visible ? <PersonalitySlider setting={personality} refresh={refresh} /> : null}
     </SettingsPage>
+  );
+}
+
+/** A few words for a personality strength (gm_personality, percent). */
+function strength(v: number) {
+  if (v <= 0) return "Plain";
+  if (v < 100) return "Toned down";
+  if (v === 100) return "Normal";
+  if (v < 200) return "Stronger";
+  return "Exaggerated";
+}
+
+/** How strongly the bots' personalities show (gm_personality, 0 to 200 percent). */
+function PersonalitySlider({ setting, refresh }: { setting: Setting; refresh: () => void }) {
+  const run = useCommand(refresh);
+  const { run: act, busy } = useActions();
+  const pending = usePending();
+  const key = `settings:${targetKey()}:gm_personality`;
+  const saved = Math.min(200, Math.max(0, Math.round(Number(pending.value(setting.cvar, setting.value)) || 0)));
+  const [draft, setDraft] = useState<number | null>(null);
+  const value = draft ?? saved;
+  const settle = useRef(0);
+  const save = (n: number) => {
+    clearTimeout(settle.current);
+    if (n === saved) {
+      setDraft(null);
+      return;
+    }
+    act(key, async () => {
+      pending.set(setting.cvar, String(n));
+      setDraft(null);
+      if (!(await run("gm_set", [setting.cvar, String(n)], true))) pending.clear(setting.cvar);
+    }, "Saving personality…");
+  };
+  const saving = busy(key);
+  return (
+    <div className="slider-row wide-out">
+      <label htmlFor="botPersonality">
+        Personality
+        <Info text="How strongly each bot's personality shows. At 0 they play their style plainly: no tilt, quirks, show-off moments or habits, and they hardly chat. 100 is normal, 200 exaggerates it." />
+      </label>
+      <div className="slider-step">
+        <input
+          id="botPersonality"
+          type="range"
+          min={0}
+          max={200}
+          step={10}
+          value={value}
+          disabled={saving}
+          aria-valuetext={`${value} percent, ${strength(value).toLowerCase()}`}
+          onChange={(e) => {
+            const n = +e.target.value;
+            setDraft(n);
+            // screen readers and switch controls change it without pointer or key events
+            clearTimeout(settle.current);
+            settle.current = window.setTimeout(() => save(n), 700);
+          }}
+          onPointerUp={() => save(value)}
+          onKeyUp={(e) => SLIDER_KEYS.includes(e.key) && save(value)}
+        />
+      </div>
+      <output htmlFor="botPersonality">{value}</output>
+      <span className="muted" aria-live="polite">
+        {saving ? (
+          <>
+            <span className="spinner" aria-hidden="true" />
+            Saving…
+          </>
+        ) : (
+          `${strength(value)} (${value}%)`
+        )}
+      </span>
+    </div>
   );
 }

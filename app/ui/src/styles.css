@@ -329,6 +329,7 @@ code, pre, .mono, .address, .err-text, .copyable, .load-error p, .console, input
 .slider-row { display: grid; grid-template-columns: auto minmax(160px, 320px) 40px 1fr; gap: 14px; align-items: center; margin: 4px 0 6px; }
 .slider-row label { font-weight: 700; }
 .slider-row output { font: 400 24px/1 var(--stencil); color: var(--signal); }
+.slider-row.wide-out { grid-template-columns: auto minmax(160px, 320px) 56px 1fr; }
 input[type="range"] { accent-color: var(--signal); }
 /* checkboxes: the old Steam look, a sunken box with a gold tick */
 input[type="checkbox"] {
@@ -515,6 +516,8 @@ input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
   .setting { grid-template-columns: 1fr; gap: 8px; }
   .slider-row { grid-template-columns: auto 1fr 40px; }
   .slider-row .row { grid-column: 1 / -1; }
+  .slider-row.wide-out { grid-template-columns: auto 1fr 56px; }
+  .slider-row.wide-out > .muted { grid-column: 1 / -1; }
   .teams { grid-template-columns: 1fr; }
   .prow { grid-template-columns: 1fr 56px 52px; min-height: 44px; }
   .prow .num:not(.kd) { display: none; }

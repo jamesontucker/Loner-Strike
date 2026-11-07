@@ -65,6 +65,8 @@ fn core_parts_install_and_undo() {
         assert!(!dir.join("addons/amxmodx/configs/gamemodes/zombie.cfg").exists());
         assert!(!dir.join("addons/amxmodx/configs/gamemodes/addons/dice.ini").exists());
         assert!(dir.join("BotProfile_Gods.db").is_file());
+        assert!(dir.join("BotProfile_Pub_Solo.db").is_file() && dir.join("BotProfile_Pub_Hold.db").is_file());
+        assert!(dir.join("addons/amxmodx/configs/gamemodes/botplay.ini").is_file());
         // CS 1.6 gets Loner-Strike's own bot profile; CZ keeps its own
         let bp = std::fs::read_to_string(dir.join("BotProfile.db")).unwrap();
         assert_eq!(g == "cstrike", bp.starts_with("// BotProfile.db written by Loner-Strike"));

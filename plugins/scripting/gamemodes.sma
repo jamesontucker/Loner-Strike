@@ -77,6 +77,8 @@ new const SETTINGS[][SettingData] =
 	{ "gm_hb_aim",          "Human aim & bursts", "1 0",                    "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_mistakes",     "Bot mistakes",     "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_bhop",         "Pro bots bunnyhop", "1 0",                     "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_personality",     "Personality",      "0 50 100 150 200",         "Plain|Mild|Normal|Strong|Exaggerated", CAT_BOT,   SC_GLOBAL, "" },
+	{ "gm_hb_hold",         "Bots hold angles", "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "bot_profile_db",     "Bot roster",       "BotProfile.db BotProfileEnhanced.db", "Classic|Enhanced (next map)", CAT_BOT, SC_GLOBAL, "" },
 	{ "bot_stop",           "Freeze bots",      "0 1",                      "No Yes",                              CAT_BOT,    SC_NONE,   "" },
 	{ "gm_autodiff",        "Auto difficulty",  "0 1",                      "Off|On (bots adapt to how you're doing)", CAT_BOT, SC_GLOBAL, "" },
@@ -320,6 +322,8 @@ new bool:g_Noclip[33]
 new bool:g_Career
 new bool:g_LearnGuard, Float:g_LearnTimelimit
 new bool:g_Reloading
+new g_GoMode = -1                 // the mode picked for the next map (-1: the current one)
+new g_pBotPlay                    // gm_botplay: how bots play together on this map (botplay.ini)
 new g_ReloadNote[96]
 new g_NavPolls
 
@@ -402,6 +406,8 @@ public plugin_init()
 	register_clcmd("say", "hook_say")
 	register_clcmd("say_team", "hook_say")
 	register_cvar("gm_mappresets", "1")
+	// for gm_humanbots: 0 team, 1 solo, 2 hold (set once the mode for this map is known)
+	g_pBotPlay = register_cvar("gm_botplay", "1")
 
 	register_clcmd("gamemenu", "cmd_menu")
 	register_clcmd("say /gm", "cmd_menu")
@@ -482,6 +488,9 @@ public plugin_cfg()
 		set_task(0.5, "task_changelevel", 0, map, sizeof map)
 		return
 	}
+	new map[32]
+	get_mapname(map, charsmax(map))
+	set_pcvar_num(g_pBotPlay, botplay_for(g_Cur, map))
 	set_task(1.0, "task_apply")
 	set_task(4.0, "task_reapply_saved")
 	set_task(5.0, "task_learn_guard_start")
@@ -1555,13 +1564,82 @@ new const BOTSTYLE_FILES[][] = { "", "BotProfile_Pub.db", "BotProfile_Matchmakin
 	// Mixed lobby: the Pub server file has the widest spread of personalities
 	"BotProfile_Pub.db" }
 
+// How bots play together (configs/gamemodes/botplay.ini): each style has a file per way
+enum { PLAY_TEAM, PLAY_SOLO, PLAY_HOLD }
+
+// The way for a mode on a map: a map rule wins over the mode's; not listed: solo.
+// No botplay.ini (an older install, without the files either): team, the plain file.
+botplay_for(mode, const map[])
+{
+	new path[192], line[96], key[48], how[16]
+	formatex(path, charsmax(path), "%s/gamemodes/botplay.ini", g_CfgDir)
+	new f = fopen(path, "rt")
+	if (!f)
+		return PLAY_TEAM
+	new byMap = -1, byMode = -1
+	while (!feof(f))
+	{
+		fgets(f, line, charsmax(line))
+		trim(line)
+		if (!line[0] || line[0] == ';' || line[0] == '/')
+			continue
+		parse(line, key, charsmax(key), how, charsmax(how))
+		new v = equali(how, "team") ? PLAY_TEAM : equali(how, "solo") ? PLAY_SOLO : equali(how, "hold") ? PLAY_HOLD : -1
+		if (v == -1)
+			continue
+		new len = strlen(key)
+		if (len && key[len - 1] == '*')
+		{
+			if (byMap == -1 && equali(map, key, len - 1))
+				byMap = v
+		}
+		else if (byMap == -1 && equali(map, key))
+			byMap = v
+		else if (byMode == -1 && mode >= 0 && equali(g_ModeId[mode], key))
+			byMode = v
+	}
+	fclose(f)
+	return byMap != -1 ? byMap : byMode != -1 ? byMode : PLAY_SOLO
+}
+
+// Sets bot_profile_db for the next map: the style's file for how bots play there.
+// CZ reads it when the next map loads.
 apply_botstyle()
+{
+	// the map that comes when this one ends (nextmap.amxx), or this one again
+	new map[32]
+	if (get_cvar_pointer("amx_nextmap"))
+		get_cvar_string("amx_nextmap", map, charsmax(map))
+	if (!map[0] || !is_map_valid(map))
+		get_mapname(map, charsmax(map))
+	apply_botstyle_for(g_Cur, map, true)
+}
+
+apply_botstyle_for(mode, const map[], bool:presets)
 {
 	if (!get_cvar_pointer("gm_botstyle") || g_Career)
 		return
 	new st = get_cvar_num("gm_botstyle")
-	if (0 < st < sizeof BOTSTYLE_FILES && file_exists(BOTSTYLE_FILES[st], true))
-		set_cvar_string("bot_profile_db", BOTSTYLE_FILES[st])
+	if (!(0 < st < sizeof BOTSTYLE_FILES) || !file_exists(BOTSTYLE_FILES[st], true))
+		return
+	// a map with a preset switches to its mode as it loads
+	if (presets && presets_enabled())
+	{
+		new p = preset_mode_for(map)
+		if (p >= 0)
+			mode = p
+	}
+	new play = botplay_for(mode, map), file[48]
+	copy(file, charsmax(file), BOTSTYLE_FILES[st])
+	if (play != PLAY_TEAM)
+	{
+		new stem[40]
+		copy(stem, min(charsmax(stem), strlen(file) - 3), file)     // without ".db"
+		formatex(file, charsmax(file), "%s%s.db", stem, play == PLAY_SOLO ? "_Solo" : "_Hold")
+		if (!file_exists(file, true))
+			copy(file, charsmax(file), BOTSTYLE_FILES[st])
+	}
+	set_cvar_string("bot_profile_db", file)
 }
 
 // ReGameDLL can stop the bomb being handed out at all; strip_c4 covers the rest
@@ -2359,6 +2437,7 @@ go_map(id, const map[])
 // mode -1 keeps the current mode (map presets may still apply on load)
 do_go(mode, const map[])
 {
+	g_GoMode = mode
 	if (mode >= 0)
 	{
 		// an explicit choice wins over map presets
@@ -2379,6 +2458,8 @@ do_go(mode, const map[])
 // next map is still starting)
 public task_changelevel(const map[])
 {
+	// the bot personalities for how they play in that mode on that map
+	apply_botstyle_for(g_GoMode >= 0 ? g_GoMode : g_Cur, map, g_GoMode < 0)
 	engine_changelevel(map)
 }
 
@@ -2529,7 +2610,7 @@ setting_visible(s, cat)
 		new bool:styled = get_cvar_num("gm_botstyle") != 0
 		if (equal(SETTINGS[s][SD_Cvar], "bot_profile_db") && styled)
 			return false
-		if (equal(SETTINGS[s][SD_Cvar], "gm_hb_", 6) && !styled)
+		if ((equal(SETTINGS[s][SD_Cvar], "gm_hb_", 6) || equal(SETTINGS[s][SD_Cvar], "gm_personality")) && !styled)
 			return false
 		// only Locked In (5), Hackers (6) and Gods (7) hop
 		if (equal(SETTINGS[s][SD_Cvar], "gm_hb_bhop") && get_cvar_num("gm_botstyle") < 5)

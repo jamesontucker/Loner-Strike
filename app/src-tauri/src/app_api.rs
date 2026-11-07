@@ -444,6 +444,18 @@ const START_SETTINGS: &[(&str, bool, &[&str])] = &[
 /// gm_botstyle's personality files, by its value (as gamemodes.sma lists them).
 const BOT_STYLE_FILES: &[&str] = &["", "BotProfile_Pub.db", "BotProfile_Matchmaking.db", "BotProfile_Veterans.db", "BotProfile_Newbie.db", "BotProfile_LockedIn.db", "BotProfile_Hackers.db", "BotProfile_Gods.db", "BotProfile_Pub.db"];
 
+/// A style's personality file for a mode on a map: BotProfile_Pub.db becomes
+/// BotProfile_Pub_Solo.db when botplay.ini says bots play solo there (as gamemodes.sma
+/// picks it between maps). The plain file when the flavoured one isn't there.
+fn flavoured_style_file(game_dir: &std::path::Path, file: &str, mode: &str, map: &str) -> String {
+    use crate::setup::botprofile::{flavour_for, Flavour};
+    let botplay = crate::sys::read_latin1(&game_dir.join("addons/amxmodx/configs/gamemodes/botplay.ini")).unwrap_or_default();
+    let flavour = flavour_for(&botplay, mode, map);
+    let Some(stem) = file.strip_suffix(".db") else { return file.to_string() };
+    let want = format!("{stem}{}.db", flavour.suffix());
+    if flavour != Flavour::Team && game_dir.join(&want).is_file() { want } else { file.to_string() }
+}
+
 /// `cvar "value"` lines from a config file.
 fn cfg_values(path: &std::path::Path) -> Vec<(String, String)> {
     crate::sys::read_latin1(path)
@@ -575,7 +587,10 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
         // (the plugin only switches them from the next map)
         let style = req.settings.get("gm_botstyle").cloned().or_else(|| effective(&g, &current_mode(&g), "gm_botstyle")).and_then(|s| s.parse::<usize>().ok()).and_then(|i| BOT_STYLE_FILES.get(i)).filter(|f| !f.is_empty() && g.dir.join(f).is_file());
         if let Some(f) = style {
-            game_args.extend(["+bot_profile_db".into(), f.to_string()]);
+            // how they play together in this mode on this map (botplay.ini), when that file is there
+            let mode = req.mode.clone().filter(|m| !m.is_empty()).unwrap_or_else(|| current_mode(&g));
+            let f = flavoured_style_file(&g.dir, f, &mode, &m);
+            game_args.extend(["+bot_profile_db".into(), f]);
         }
         game_args.extend(["+maxplayers".into(), "32".into(), "+map".into(), m]);
     }
@@ -618,6 +633,22 @@ mod start_tests {
         let v = cfg_values(&p);
         assert!(v.contains(&("bot_quota".into(), "9".into())));
         assert_eq!(v.iter().filter(|(k, _)| k == "bot_difficulty").collect::<Vec<_>>(), vec![&("bot_difficulty".to_string(), "3".to_string())]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn style_file_follows_botplay() {
+        let dir = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "botplay-").unwrap();
+        std::fs::create_dir_all(dir.join("addons/amxmodx/configs/gamemodes")).unwrap();
+        std::fs::write(dir.join("addons/amxmodx/configs/gamemodes/botplay.ini"), "classic team\r\naim_* hold\r\n").unwrap();
+        for f in ["BotProfile_Pub.db", "BotProfile_Pub_Solo.db", "BotProfile_Pub_Hold.db"] {
+            std::fs::write(dir.join(f), "").unwrap();
+        }
+        assert_eq!(flavoured_style_file(&dir, "BotProfile_Pub.db", "classic", "de_dust2"), "BotProfile_Pub.db");
+        assert_eq!(flavoured_style_file(&dir, "BotProfile_Pub.db", "classic", "aim_map"), "BotProfile_Pub_Hold.db");
+        assert_eq!(flavoured_style_file(&dir, "BotProfile_Pub.db", "csdm", "de_dust2"), "BotProfile_Pub_Solo.db");
+        // an older install without the flavoured files keeps the plain one
+        assert_eq!(flavoured_style_file(&dir, "BotProfile_Gods.db", "csdm", "de_dust2"), "BotProfile_Gods.db");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -21,7 +21,8 @@ const NOTES: Record<string, string> = {
   gm_hb_showoff: "Now and then after a kill: crouch spam, a jump or the knife out (never in a match)",
   gm_hb_afk: "Now and then a bot stands still for a few seconds at round start",
   gm_hb_sprays: "Bots spray a logo now and then",
-  gm_hb_radio: "Radio calls that fit the moment: enemy spotted, enemy down, the team's caller says go",
+  gm_hb_radio: "The odd radio call that fits the moment: enemy spotted, enemy down, the team's caller says go",
+  gm_hb_hold: "Careful players and lurkers stop now and then and hold an angle for a few seconds",
   gm_botchat: "How often bots talk: kills, deaths, rage, encouraging teammates, answering you",
   gm_botchat_humans: "Bots answer what people type, and the one you name answers you",
   gm_botchat_deadchat: "In CS the living can't see what the dead say; like old pub servers, this shows dead bots' chat to everyone",
@@ -54,6 +55,10 @@ const INFO: Record<string, string> = {
   bb_build_time: "How long the builders have to put up barricades before the zombies are let out.",
   sh_maxbinds: "How many heroes with a power you trigger with a key each player can pick. The rest of their heroes work on their own.",
 };
+
+/** Settings the page shows as its own slider instead of in the list (Bots: Personality). */
+export const SLIDER_SETTINGS = ["gm_personality"];
+const listed = (s: Setting) => s.visible && !SLIDER_SETTINGS.includes(s.cvar);
 
 /** How long a picked value shows before the game's own answer wins regardless. */
 const PENDING_MS = 3000;
@@ -94,7 +99,7 @@ export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat
     pending.set(s.cvar, v);
     if (!(await run("gm_set", [s.cvar, v], true))) pending.clear(s.cvar);
   }, `Changing ${s.name}…`);
-  const all = data.settings.filter((s) => s.cat === cat && s.visible);
+  const all = data.settings.filter((s) => s.cat === cat && listed(s));
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const list = all.filter((s) => {
     const text = `${s.name} ${NOTES[s.cvar] ?? ""} ${s.labels}`.toLowerCase();
@@ -141,7 +146,7 @@ export function SettingsPage({
   children?: ReactNode;
 }) {
   const [q, setQ] = useState("");
-  const count = data.settings.filter((s) => s.cat === cat && s.visible).length;
+  const count = data.settings.filter((s) => s.cat === cat && listed(s)).length;
   return (
     <div className="stack">
       <div>
