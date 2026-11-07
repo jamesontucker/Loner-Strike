@@ -440,6 +440,15 @@ pub fn write_addons_offline(ini: &str, on_now: &str, id: &str, on: bool) -> Resu
 }
 
 fn set_addon(g: &Game, id: &str, on: bool) -> Result<&'static str, String> {
+    // a server on another machine: the plugin saves the switch there, but this computer's
+    // copy is what the page reads and what syncs up, so it gets the same files first
+    if g.remote.is_some() {
+        let f = addon_files(g);
+        let (txt, plugins) = write_addons_offline(&read_text(&f.ini), &read_text(&f.on), id, on)?;
+        std::fs::create_dir_all(&g.data).map_err(|e| e.to_string())?;
+        crate::sys::write_latin1(&f.on, &txt).map_err(|e| e.to_string())?;
+        crate::sys::write_latin1(&f.plugins_ini, &plugins).map_err(|e| e.to_string())?;
+    }
     match g.command("gm_addon", &[id.to_string(), if on { "1" } else { "0" }.to_string()]) {
         Ok(_) => Ok("live"),
         Err(CmdError::Bad(e)) => Err(e),
