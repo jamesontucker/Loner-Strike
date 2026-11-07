@@ -119,6 +119,10 @@ export type ServerInfo = {
   pending_restart?: boolean;
   listen_ip?: string;
   extra_args?: string;
+  /** bots keep playing with nobody on (bot_join_after_player 0) */
+  bots_when_empty?: boolean;
+  /** the host picked that; otherwise it follows the visibility (on when listed) */
+  bots_when_empty_set?: boolean;
   /** the join password ("" for none) */
   password?: string;
   /** component ids installed on it */
@@ -137,3 +141,10 @@ export type ServerInfo = {
   dir: string;
 };
 export type ServerList = { selected: string; local: string | null; servers: ServerInfo[]; steamcmd: boolean };
+
+/** The Admins page's list (GET /api/admins), the parts the Players page uses. */
+export type AdminRole = "owner" | "admin" | "moderator" | "vip";
+export type AdminPerson = { id: string; name: string; role: AdminRole; expires: string | null; note: string; expired: boolean };
+export type SeenPlayer = { id: string; name: string; aka: string[]; first: number; last: number; visits: number };
+export type AdminList = { people: AdminPerson[]; seen: SeenPlayer[]; bans: { kind: "id" | "ip"; value: string }[]; today: string; users_ini: boolean };
+export type AdminReply = AdminList | { ok: false; error: string };

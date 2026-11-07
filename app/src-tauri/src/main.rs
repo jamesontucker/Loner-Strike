@@ -22,6 +22,7 @@ mod rcon;
 mod remote;
 mod scrim;
 mod server;
+mod navs;
 mod servers;
 mod welcome;
 mod setup;

@@ -1,10 +1,11 @@
 import { memo, useDeferredValue, useMemo, useState } from "react";
-import { addFromFile, currentTarget, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable, withTarget } from "../api";
-import { useAppInfo, useMaps } from "../queries";
+import { addFromFile, currentTarget, getJsonAt, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable, withTarget } from "../api";
+import { useAppInfo, useMaps, useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { usePlayDrafts } from "../stores/playDraft";
 import type { MapInfo } from "../types";
-import { BusyButton, Info, LoadError, SectionHead, Sheet, useCommand, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, LoadError, SectionHead, Sheet, Switch, useCommand, useConfirm, useToast } from "../ui";
+import { JobProgress } from "./JobProgress";
 
 const CATS: [string, string][] = [
   ["all", "All"], ["fav", "Favourites"], ["recent", "Recently played"], ["defuse", "Bomb defusal"],
@@ -16,6 +17,9 @@ const SHOW: [string, string][] = [
   ["all", "All maps"], ["stock", "Came with the game"], ["download", "Downloaded"], ["added", "Added by hand"],
   ["nonav", "Bots haven't learned it"], ["hidden", "Hidden"],
 ];
+const TEACH_INFO = "A hidden server on this computer loads each map and a bot walks all of it, a few minutes per map. It runs in the background at low priority; the game doesn't need to be open. What the bots learn goes to your servers too.";
+const RELEARN_INFO = "Bots learn the picked maps again even if they know them already, replacing what they learned before. Useful when bots get stuck on a map.";
+const SEND_INFO = "Sends what bots learned about this map (its .nav file) to all your servers now. Only that file goes: a server without the map itself still needs the map.";
 const SHOW_INFO = "Hidden maps stay installed but are left out of lists, the in-game map menu and map votes. Bots spend a few minutes learning a map the first time it's played.";
 const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favourites first"], ["type", "By type"], ["source", "Downloaded first"]];
 const SOURCE_ORDER = ["download", "added", "stock"];
@@ -126,6 +130,46 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   const changeMap = (name: string) => once(key("change"), () => run("gm_map", [name]), `Changing the map to ${name}…`);
   const current = currentMap?.toLowerCase();
 
+  // teaching bots maps: this computer's own game only
+  const canTeach = ON_THIS_COMPUTER && !currentTarget();
+  const [picking, setPicking] = useState(false);
+  const [chosen, setChosen] = useState<Set<string>>(() => new Set());
+  const [relearn, setRelearn] = useState(false);
+  const jobQ = useSetupJob();
+  const learning = jobQ.data?.state === "running" && jobQ.data.kind === "navlearn";
+  const togglePick = useStable((m: MapInfo) => setChosen((c) => {
+    const n = new Set(c);
+    if (n.has(m.name)) n.delete(m.name);
+    else n.add(m.name);
+    return n;
+  }));
+  const stopPicking = () => {
+    setPicking(false);
+    setChosen(new Set());
+  };
+  const teach = () => once(key("learn"), async () => {
+    const r = await postJson<{ ok?: boolean; error?: string }>("/api/navs/learn", { maps: [...chosen], relearn }).catch(() => ({ error: "Couldn't reach the app." }));
+    if (r.error) return toast(r.error, true);
+    stopPicking();
+    const j = await waitForSetupJob();
+    const res = await getJsonAt<{ result?: { message?: string } | null }>("/api/navs/learn", null).catch(() => null);
+    const msg = res?.result?.message;
+    if (!j) toast("Lost track of the bots learning maps. Check the maps list to see what they learned.", true);
+    else if (j.state === "done") toast(msg || "Bots learned the maps.");
+    else toast(msg || j.error || "Bots couldn't learn those maps.", true);
+    reload();
+  }, "Teaching bots maps…");
+  const stopTeaching = () => once(key("learn-stop"), async () => {
+    const r = await postJson<{ ok?: boolean; error?: string }>("/api/navs/learn/stop").catch(() => ({ error: "Couldn't reach the app." }));
+    if (r.error) toast(r.error, true);
+  }, "Stopping…");
+  const sendNav = (name: string) => once(key(`send:${name}`), async () => {
+    type Sent = { ok?: boolean; error?: string; message?: string; sent?: number };
+    const r = await postJson<Sent>("/api/navs/send", { map: name }).catch((): Sent => ({ error: "Couldn't reach the app." }));
+    if (r.error) return toast(r.error, true);
+    toast(r.message || "Sent.");
+  }, `Sending ${name} to your servers…`);
+
   const shown = useMemo(() => {
     const query = search.trim().toLowerCase();
     let list = maps.filter((m) => (show === "hidden" ? m.hidden : !m.hidden));
@@ -184,6 +228,12 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
     <div className="stack">
       <div>
         <SectionHead title="Maps" note={live ? "Pick a map to play it in the current mode." : "Start the game to change maps."}>
+          {canTeach && !picking && (
+            <span className="row">
+              <BusyButton busy={learning || busy(key("learn"))} label="Teach bots maps" busyLabel="Bots are learning…" onClick={() => setPicking(true)} />
+              <Info text={TEACH_INFO} />
+            </span>
+          )}
           {ON_THIS_COMPUTER && (
             <BusyButton busy={busy(key("add-file"))} label="Add a map file" busyLabel="Adding…" onClick={() => once(key("add-file"), async () => {
               const r = await addFromFile("maps");
@@ -222,6 +272,33 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           </div>
         </div>
       </div>
+      {canTeach && learning && (
+        <div className="panel stack-tight">
+          <JobProgress title="Teaching bots maps…" onEnd={() => reload()} />
+          <div className="row">
+            <BusyButton className="btn" busy={busy(key("learn-stop"))} label="Stop" busyLabel="Stopping…" onClick={stopTeaching} />
+            <span className="muted small-note">The map in progress is left unfinished. Maps already learned are kept.</span>
+          </div>
+        </div>
+      )}
+      {canTeach && picking && (
+        <div className="panel stack-tight">
+          <h3>Teach bots maps</h3>
+          <p className="muted measure">Pick the maps below, then start. {chosen.size ? `${chosen.size} map${chosen.size === 1 ? "" : "s"} picked.` : "No maps picked yet."}</p>
+          <div className="row">
+            <button className="btn" onClick={() => setChosen(new Set(shown.filter((m) => !m.nav).map((m) => m.name)))}>Pick the ones bots don't know</button>
+            <button className="btn" disabled={!chosen.size} onClick={() => setChosen(new Set())}>Clear</button>
+          </div>
+          <div className="setting">
+            <span className="name">Re-learn<Info text={RELEARN_INFO} /></span>
+            <Switch on={relearn} label="Re-learn maps bots already know" onChange={setRelearn} />
+          </div>
+          <div className="row">
+            <BusyButton className="btn primary" busy={busy(key("learn"))} disabled={!chosen.size || learning} label="Start teaching" busyLabel="Starting…" onClick={teach} />
+            <button className="btn" onClick={stopPicking}>Cancel</button>
+          </div>
+        </div>
+      )}
       {!maps.length && mapsQ.isError && !isLoading ? (
         <LoadError text="Couldn't load the maps." onRetry={() => void mapsQ.refetch()} />
       ) : !maps.length && !isLoading ? (
@@ -237,7 +314,9 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
       ) : (
         <div className="maps grid">
           {shown.slice(0, limit).map((m) => (
-            <MapCard key={m.name} map={m} current={m.name.toLowerCase() === current} onClick={setPicked} onFav={toggleFav} />
+            picking
+              ? <MapCard key={m.name} map={m} selected={chosen.has(m.name)} onClick={togglePick} />
+              : <MapCard key={m.name} map={m} current={m.name.toLowerCase() === current} onClick={setPicked} onFav={toggleFav} />
           ))}
           {!shown.length && (maps.length ? <p className="muted">No maps match.</p> : Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>))}
         </div>
@@ -275,6 +354,12 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               )}
               <BusyButton busy={busy(key(`flag:fav:${picked.name}`))} label={picked.fav ? "Unfavourite" : "Favourite"} busyLabel="Saving…" onClick={() => flag(picked, "fav", !picked.fav)} />
               <BusyButton busy={busy(key(`flag:hidden:${picked.name}`))} label={picked.hidden ? "Show again" : "Hide"} busyLabel={picked.hidden ? "Showing…" : "Hiding…"} onClick={() => flag(picked, "hidden", !picked.hidden)} />
+              {canTeach && picked.nav && (
+                <span className="row">
+                  <BusyButton busy={busy(key(`send:${picked.name}`))} label="Send to servers" busyLabel="Sending…" onClick={() => sendNav(picked.name)} />
+                  <Info text={SEND_INFO} />
+                </span>
+              )}
               {ON_THIS_COMPUTER && picked.source === "download" && picked.mod && (
                 <BusyButton className="btn danger" busy={busy(key(`remove:${picked.mod}`))} label="Remove" busyLabel="Removing…" onClick={() => remove(picked)} />
               )}

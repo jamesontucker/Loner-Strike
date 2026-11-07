@@ -1457,3 +1457,30 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
   .sc-replies { grid-template-columns: 1fr; }
   .sc-model { flex-direction: column; }
 }
+
+/* ---- each player's actions: Kick, Ban and the … menu at the end of the row ---------------- */
+.team { container-type: inline-size; }
+.prow-line { display: flex; align-items: center; gap: 8px; }
+.prow-line > .prow { flex: 1; min-width: 0; }
+.prow-act { flex: none; display: flex; justify-content: flex-end; align-items: center; gap: 4px; min-width: 150px; }
+.prow-act .btn.small { white-space: nowrap; }
+.prow-act .pmore { min-width: 34px; font-weight: 800; letter-spacing: 1px; }
+.pname .role-badge { margin-left: 6px; }
+/* a narrow team: the buttons go under the name */
+@container (max-width: 560px) {
+  .prow-line { flex-wrap: wrap; row-gap: 0; }
+  .prow-line > .prow { flex-basis: 100%; }
+  .prow-act { min-width: 0; margin-left: auto; padding: 0 2px 8px; }
+  .prow-act:empty { display: none; }
+}
+.qmenu-list { position: fixed; z-index: 45; overflow-y: auto; overscroll-behavior: contain; }
+.qmenu-list.wide { min-width: 230px; }
+.qmenu-group + .qmenu-group { border-top: 1px solid var(--bevel-lo); margin-top: 4px; padding-top: 4px; }
+.qmenu-head { padding: 6px 10px 2px; color: var(--bone-faint); font-size: 12px; font-weight: 700; }
+.qmenu-note { padding: 4px 10px 6px 32px; max-width: 280px; color: var(--bone-faint); font-size: 13px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
+.qmenu-list button.danger { color: #f0b9a6; }
+.qmenu-list .tick .spinner { width: 10px; height: 10px; margin: 0; }
+.ask-field { margin: -4px 0 16px; }
+@media (max-width: 760px), (pointer: coarse) {
+  .prow-act .btn.small { min-height: 40px; padding: 4px 12px; }
+}

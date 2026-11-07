@@ -6,7 +6,7 @@ import { useDirty, useDirtyStore } from "../store";
 import type { AppInfo, MapInfo, Online, ServerInfo, ServerList } from "../types";
 import { HostingGuide, SizingTable, troubleFor } from "./HostingGuide";
 import { JobProgress } from "./JobProgress";
-import { BusyButton, Info, lazyPage, LoadError, PageBoundary, SectionHead, Sheet, Skeleton, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, lazyPage, LoadError, PageBoundary, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
 import { Bots } from "./Bots";
 import { Friends } from "./Friends";
@@ -568,12 +568,15 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   const [password, setPassword] = useState(server.password ?? "");
   const [listenIp, setListenIp] = useState(server.listen_ip ?? "");
   const [extra, setExtra] = useState(server.extra_args ?? "");
+  // null: not picked, so it follows who can join (on for listed servers)
+  const [botsEmpty, setBotsEmpty] = useState<boolean | null>(server.bots_when_empty_set ? !!server.bots_when_empty : null);
+  const botsShown = botsEmpty ?? vis === "listed";
   const [problem, setProblem] = useState<{ slots?: string; port?: string }>({});
   const portMin = server.host ? 27015 : 1024;
   const portMax = server.host ? 27019 : 65000;
 
   // what was last saved, to tell whether anything changed since
-  const now = JSON.stringify([name, map, slots.text, port.text, vis, password, listenIp, extra]);
+  const now = JSON.stringify([name, map, slots.text, port.text, vis, password, listenIp, extra, botsEmpty]);
   const [base, setBase] = useState(now);
   const dirty = !ro && now !== base;
   useDirty("server-settings", dirty);
@@ -586,7 +589,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
     if (bad.slots || bad.port) return;
     const sent = now;
     run(`${server.id}:save`, async () => {
-      const r = await post(`/api/servers/${server.id}`, { name, map, maxplayers: slots.value, port: port.value, visibility: vis, password, listen_ip: listenIp, extra_args: extra });
+      const r = await post(`/api/servers/${server.id}`, { name, map, maxplayers: slots.value, port: port.value, visibility: vis, password, listen_ip: listenIp, extra_args: extra, ...(botsEmpty === null ? {} : { bots_when_empty: botsEmpty }) });
       if (r.error) return toast(r.error, true);
       setBase(sent);
       // (an uptime of 0 means it's unknown: a restart couldn't be told apart, so no bar)
@@ -643,6 +646,10 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
           </label>
         </div>
         {problem.slots && <p className="err-text small-note">{problem.slots}</p>}
+        <div className="setting">
+          <span className="name">Bots play on an empty server<Info text="Keeps bots playing when nobody's on, so the server shows players in Steam's list. Uses the server's CPU around the clock." /></span>
+          <Switch on={botsShown} disabled={ro} label="Bots play on an empty server" onChange={setBotsEmpty} />
+        </div>
         <details className="advanced">
           <summary>Advanced</summary>
           <div className="stack-tight">

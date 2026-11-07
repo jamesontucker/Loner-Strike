@@ -81,6 +81,10 @@ pub struct Entry {
     /// More start options the player added (checked by `extra_args`)
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub extra_args: String,
+    /// Bots keep playing with nobody on (bot_join_after_player 0). None: what the
+    /// visibility suggests (on for "listed"), until the host picks (see bots_when_empty)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bots_when_empty: Option<bool>,
 }
 
 fn default_visibility() -> String {
@@ -147,6 +151,7 @@ const REMOTE_PORTS: std::ops::RangeInclusive<u16> = 27015..=27019;
 /// Start options the app sets itself, so they can't be added again by hand
 const OWN_ARGS: &[&str] = &[
     "-game", "-port", "+port", "-ip", "+ip", "+hostport", "+clientport", "-console", "-condebug", "-nomaster", "+map", "+maxplayers", "-maxplayers", "+sv_lan", "+rcon_password", "+sv_password", "+exec",
+    "+bot_join_after_player",
 ];
 
 /// The player's extra start options, split up, or why they can't be used.
@@ -260,7 +265,7 @@ pub fn find_install(hl: &Path) -> Option<Install> {
 
 /// Where servers live: inside the game's CrossOver bottle on a Mac (so wine sees
 /// them as C:\Loner-Strike Servers), the app's local data folder on Windows.
-fn root_for(client: &Install) -> Result<PathBuf, String> {
+pub(crate) fn root_for(client: &Install) -> Result<PathBuf, String> {
     // the folder picked in Settings, if it suits this game (on a Mac: in its bottle)
     if let Some(dir) = crate::app_api::load_settings().servers_dir.map(PathBuf::from) {
         if servers_dir_ok(&dir, client).is_ok() {
@@ -369,11 +374,11 @@ fn make_server_dir(e: &Entry) -> Result<(), String> {
     std::fs::write(e.dir.join(MARKER), &e.id).map_err(|err| format!("Couldn't make the server's folder ({err})."))
 }
 
-fn free_port(taken: &[Entry]) -> u16 {
+pub(crate) fn free_port(taken: &[Entry]) -> u16 {
     (FIRST_PORT..FIRST_PORT + 100).find(|p| !taken.iter().any(|e| e.port == *p && e.port >= FIRST_PORT)).unwrap_or(FIRST_PORT)
 }
 
-fn safe_map(m: &str) -> bool {
+pub(crate) fn safe_map(m: &str) -> bool {
     !m.is_empty() && m.len() <= 31 && m.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
 }
 
@@ -394,7 +399,7 @@ fn steamcmd_exe() -> PathBuf {
 /// Valve's SteamCMD: the Mac build on a Mac (it downloads the Windows server
 /// fine), the Windows one on Windows. Valve doesn't publish checksums; it's
 /// fetched over HTTPS from Valve's CDN and updates itself on first run.
-fn ensure_steamcmd(job: &Job) -> Result<(), String> {
+pub(crate) fn ensure_steamcmd(job: &Job) -> Result<(), String> {
     if steamcmd_exe().is_file() {
         return Ok(());
     }
@@ -434,7 +439,7 @@ fn parse_progress(line: &str) -> Option<(f64, String)> {
 
 /// Downloads (or updates) HLDS for `game` into `dir`. SteamCMD often needs more
 /// than one go for app 90, so it retries until the game folder is there.
-fn download_hlds(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
+pub(crate) fn download_hlds(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let mut last = String::new();
     for attempt in 1..=4 {
@@ -493,7 +498,7 @@ fn job_progress(job: &Job, f: f64, text: &str) {
 
 /// Copies everything in `from` into `to` (files that are already there are kept
 /// unless `overwrite`). On a Mac's APFS disk, copies are clones and take no space.
-fn copy_tree(from: &Path, to: &Path, overwrite: bool, filter: &dyn Fn(&Path) -> bool) -> Result<u64, String> {
+pub(crate) fn copy_tree(from: &Path, to: &Path, overwrite: bool, filter: &dyn Fn(&Path) -> bool) -> Result<u64, String> {
     let mut n = 0;
     for f in crate::archive::walk(from) {
         let Ok(rel) = f.strip_prefix(from) else { continue };
@@ -614,6 +619,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         setup_with: None,
         listen_ip: String::new(),
         extra_args: String::new(),
+        bots_when_empty: None,
     };
     let base = root.join(".base");
     let g = req.game.clone();
@@ -926,8 +932,10 @@ pub fn sync_loop() {
         let mut walked: HashMap<String, Instant> = HashMap::new();
         std::thread::spawn(move || loop {
             std::thread::sleep(Duration::from_secs(6));
-            // not while a setup job runs (it may be writing the copy)
-            if setup::current().state == "running" {
+            // not while a setup job runs (it may be writing the copy); teaching bots maps
+            // only writes this computer's game, so syncs go on meanwhile
+            let job = setup::current();
+            if job.state == "running" && job.kind != crate::navs::JOB_KIND {
                 continue;
             }
             // a machine that failed is left alone for a minute
@@ -956,10 +964,12 @@ pub fn sync_loop() {
     });
 }
 
-/// The bots' navigation files this computer's game has learned (CS 1.6 ships none), so
-/// the server's bots know those maps without learning them again. Only ones missing there.
+/// The bots' navigation files this computer's games have learned (CS 1.6 ships none),
+/// so the server's bots know those maps without learning them again: a newer one here
+/// replaces the server's copy, nothing is ever deleted (navs.rs has the rules).
 fn copy_navs(e: &Entry) {
-    // looking for the game means scanning Steam's folders: once a minute is plenty
+    // reading the game's maps folders (and, for a new map on a machine, asking it): once
+    // a minute is plenty
     static LAST: Mutex<Option<HashMap<String, Instant>>> = Mutex::new(None);
     {
         let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
@@ -969,16 +979,7 @@ fn copy_navs(e: &Entry) {
         }
         last.insert(e.id.clone(), Instant::now());
     }
-    let Some(game) = crate::steam::find_installs().into_iter().find(|i| i.games.iter().any(|g| g == &e.game)) else { return };
-    let (from, to) = (game.hl.join(&e.game).join("maps"), e.dir.join(&e.game).join("maps"));
-    let Ok(list) = std::fs::read_dir(&from) else { return };
-    let _ = std::fs::create_dir_all(&to);
-    for f in list.flatten() {
-        let name = f.file_name();
-        if name.to_string_lossy().to_lowercase().ends_with(".nav") && !to.join(&name).exists() {
-            let _ = std::fs::copy(f.path(), to.join(&name));
-        }
-    }
+    crate::navs::copy_to_server(e, None, true);
 }
 
 /// Puts this computer's copy of a server's files on its machine, all of it (setup).
@@ -1045,6 +1046,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         setup_with: Some(SetupWith { template: req.template.clone(), components: req.components.clone(), password: join_pw.clone() }),
         listen_ip: String::new(),
         extra_args: String::new(),
+        bots_when_empty: None,
     };
     make_server_dir(&entry)?;
     edit(|l| l.push(entry.clone()))?;
@@ -1280,6 +1282,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         setup_with: None,
         listen_ip: String::new(),
         extra_args: String::new(),
+        bots_when_empty: None,
     };
     // name and password as the Friends tab keeps them (it writes friends.cfg only when
     // something changes there, so the server's own server.cfg keeps working meanwhile)
@@ -1403,7 +1406,49 @@ fn launch_args(e: &Entry) -> Vec<String> {
     if !e.listen_ip.is_empty() {
         a.extend(["+ip".into(), e.listen_ip.clone()]);
     }
-    a.extend(extra_args(&e.extra_args).unwrap_or_default());
+    if bots_when_empty(e) {
+        // ReGameDLL's default (1) keeps bots out until a human joins
+        a.extend(["+bot_join_after_player".into(), "0".into()]);
+    }
+    let extra = extra_args(&e.extra_args).unwrap_or_default();
+    let cfg = sys::read_latin1(&e.dir.join(&e.game).join("server.cfg")).unwrap_or_default();
+    a.extend(netcode_args(&extra, &cfg, e.remote.is_some()));
+    a.extend(extra);
+    a
+}
+
+/// Whether bots play while nobody's on: the host's choice, else on for a server listed
+/// in Steam's browser (so it shows players there), off for the others.
+pub fn bots_when_empty(e: &Entry) -> bool {
+    e.bots_when_empty.unwrap_or(e.visibility == "listed")
+}
+
+/// Netcode defaults for a dedicated server (never the player's own listen server, which
+/// doesn't come through here): a higher tick rate and update/rate limits that suit
+/// today's connections, so what players see is closer to their real ping. A higher
+/// sys_ticrate costs CPU, and bots think every tick too, so 500 rather than 1000.
+/// Anything the host set in the extra start options or the server's own server.cfg wins
+/// (left out here). On a Linux machine -pingboost 1 too (not under Windows or wine,
+/// where it does nothing useful).
+pub(crate) const NETCODE: &[(&str, &str)] = &[
+    ("sys_ticrate", "500"),
+    ("sv_maxupdaterate", "101"),
+    ("sv_minupdaterate", "30"),
+    ("sv_maxrate", "100000"),
+    ("sv_minrate", "25000"),
+];
+
+fn netcode_args(extra: &[String], server_cfg: &str, linux: bool) -> Vec<String> {
+    let given = |name: &str| extra.iter().any(|w| w.trim_start_matches(['+', '-']).eq_ignore_ascii_case(name));
+    let mut a = Vec::new();
+    for (cvar, value) in NETCODE {
+        if !given(cvar) && cfg_value(server_cfg, cvar).is_none() {
+            a.extend([format!("+{cvar}"), value.to_string()]);
+        }
+    }
+    if linux && !given("pingboost") {
+        a.extend(["-pingboost".into(), "1".into()]);
+    }
     a
 }
 
@@ -1504,6 +1549,8 @@ pub fn start(id: &str) -> Result<(), String> {
     }
     // one from before that doesn't answer (hung, or still shutting down) would hold the port
     end_leftover(&e);
+    // the bots' newer navigation files from this computer's games
+    crate::navs::copy_to_server(&e, None, true);
     if let Some(other) = load().iter().find(|o| o.id != e.id && o.port == e.port && with_runs(|r| r.procs.contains_key(&o.id))) {
         return Err(format!("\"{}\" is using port {} already. Stop it first, or change this server's port.", other.name, e.port));
     }
@@ -1685,6 +1732,7 @@ fn view(e: &Entry) -> Value {
            "imported": e.imported, "loner": loner, "dir": e.dir,
            "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(), "pending_restart": pending_restart(&e.id),
            "listen_ip": e.listen_ip, "extra_args": e.extra_args, "password": join_password(e),
+           "bots_when_empty": bots_when_empty(e), "bots_when_empty_set": e.bots_when_empty.is_some(),
            "unreachable": e.remote.as_ref().and_then(|_| unreachable(&e.id)),
            "installed": installed})
 }
@@ -1880,6 +1928,8 @@ struct Change {
     password: Option<String>,
     listen_ip: Option<String>,
     extra_args: Option<String>,
+    /// bots keep playing with nobody on
+    bots_when_empty: Option<bool>,
 }
 
 async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<Change>) -> (StatusCode, Json<Value>) {
@@ -1961,9 +2011,19 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 if let Some(t) = &extra {
                     e.extra_args = t.clone();
                 }
+                if let Some(b) = req.bots_when_empty {
+                    e.bots_when_empty = Some(b);
+                }
             }
         })?;
         let now = get(&id).ok_or("That server isn't there any more.")?;
+        // bots on an empty server: a cvar, so a running server takes it now (and the start
+        // options carry it from the next start); only if it can't be told, a restart
+        let bots_live = if bots_when_empty(&e) != bots_when_empty(&now) && running(&id) {
+            now.rcon().is_some_and(|rc| rc.send(&format!("bot_join_after_player {}", if bots_when_empty(&now) { 0 } else { 1 })).is_ok())
+        } else {
+            true
+        };
         // the name players see and the join password, applied now if it's running
         if name.is_some() || password.is_some() {
             let pw = password.clone().unwrap_or_else(|| join_password(&now));
@@ -1993,7 +2053,8 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 crate::hltv::remote_apply(&e, true)?;
             }
         }
-        Ok(json!({"ok": true, "restart": running(&id) && restart_needed(&e, &now)}))
+        // (a visibility change alone needs a restart anyway; the bots part was applied above)
+        Ok(json!({"ok": true, "restart": running(&id) && (restart_needed(&e, &now) || !bots_live)}))
     })
     .await
     .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
@@ -2504,7 +2565,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(),
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None,
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -2519,13 +2580,50 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(),
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None,
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));
         e.visibility = "listed".into();
         let a = launch_args(&e).join(" ");
         assert!(!a.contains("-nomaster") && a.contains("+sv_lan 0") && a.contains("-port 27016"));
+    }
+
+    #[test]
+    fn bots_on_an_empty_server() {
+        let mut e: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/nonexistent-ls","kind":"windows","bottle":null,"visibility":"unlisted"}"#).unwrap();
+        assert!(!bots_when_empty(&e), "existing unlisted servers keep waiting for a human");
+        assert!(!launch_args(&e).join(" ").contains("bot_join_after_player"));
+        e.visibility = "listed".into();
+        assert!(bots_when_empty(&e), "listed: on unless the host turned it off");
+        assert!(launch_args(&e).join(" ").contains("+bot_join_after_player 0"));
+        e.bots_when_empty = Some(false);
+        assert!(!bots_when_empty(&e));
+        e.visibility = "lan".into();
+        e.bots_when_empty = Some(true);
+        assert!(bots_when_empty(&e));
+        assert!(extra_args("+bot_join_after_player 1").is_err(), "set by the app");
+        // the setting is kept, and left out of servers.json while unset
+        assert!(serde_json::to_string(&e).unwrap().contains("\"bots_when_empty\":true"));
+        e.bots_when_empty = None;
+        assert!(!serde_json::to_string(&e).unwrap().contains("bots_when_empty"));
+    }
+
+    #[test]
+    fn netcode_defaults() {
+        let a = netcode_args(&[], "", false).join(" ");
+        assert_eq!(a, "+sys_ticrate 500 +sv_maxupdaterate 101 +sv_minupdaterate 30 +sv_maxrate 100000 +sv_minrate 25000");
+        assert!(netcode_args(&[], "", true).join(" ").ends_with("-pingboost 1"), "Linux only");
+        // the host's own values win: extra start options and server.cfg
+        let extra: Vec<String> = ["+sys_ticrate", "1000", "-pingboost", "3"].iter().map(|s| s.to_string()).collect();
+        let a = netcode_args(&extra, "sv_maxrate \"50000\"\n// sv_minrate 1\n", true).join(" ");
+        assert!(!a.contains("sys_ticrate") && !a.contains("pingboost") && !a.contains("sv_maxrate"));
+        assert!(a.contains("+sv_minrate 25000"), "a commented-out line isn't a setting");
+        // in the full command line, before the host's extra options
+        let mut e: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/nonexistent-ls","kind":"windows","bottle":null}"#).unwrap();
+        e.extra_args = "+sv_maxupdaterate 60".into();
+        let a = launch_args(&e).join(" ");
+        assert!(a.contains("+sys_ticrate 500") && !a.contains("+sv_maxupdaterate 101") && a.ends_with("+sv_maxupdaterate 60") && !a.contains("pingboost"));
     }
 
     #[test]
