@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getJsonAt, ON_THIS_COMPUTER, postJson, useActions } from "../api";
-import { BusyButton, Sheet, Skeleton, useToast } from "../ui";
+import { BusyButton, SectionHead, Sheet, Skeleton, useToast } from "../ui";
 
 /** Find servers, after Steam's old server browser: Internet (the Loner-Strike server list,
  *  the servers hosts chose to share), Favorites, History and LAN. Every server is asked from
@@ -138,7 +138,10 @@ export function ServerBrowser() {
 
   return (
     <div className="stack browser">
-      <h2>Find servers</h2>
+      <SectionHead
+        title="Find servers"
+        note="Servers other Loner-Strike players share, your favorites and the ones you've played on, and games on your own network. Double-click a server to join it."
+      />
       <div className="browser-window">
         <div className="browser-tabs" role="tablist" aria-label="Server lists">
           {TABS.map(([id, label]) => (
@@ -271,7 +274,7 @@ function ServerInfo({ address, row, onClose, onConnect, joining }: { address: st
         <h2>{info?.name ?? address}</h2>
         {d?.error && <p className="err-text">{d.error}</p>}
         <dl className="browser-facts">
-          <div><dt>Address</dt><dd>{address}</dd></div>
+          <div className="wide"><dt>Address</dt><dd className="scroll-x">{address}</dd></div>
           {info && <div><dt>Game</dt><dd>{GAMES[info.game] ?? info.game}</dd></div>}
           {info && <div><dt>Map</dt><dd>{info.map}</dd></div>}
           {info && <div><dt>Players</dt><dd>{info.players} / {info.max_players}{info.bots ? ` (${info.bots} bots)` : ""}</dd></div>}

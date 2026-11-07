@@ -1616,6 +1616,9 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .browser-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 16px; margin: 0; }
 .browser-facts dt { color: var(--bone-faint); font-size: 13px; }
 .browser-facts dd { margin: 0; color: var(--bone); overflow-wrap: anywhere; }
+/* the address: its own row, never broken up, scrolling sideways when it's very long */
+.browser-facts .wide { grid-column: 1 / -1; min-width: 0; }
+.browser-facts dd.scroll-x { overflow-x: auto; overflow-wrap: normal; white-space: nowrap; }
 @media (max-width: 700px) {
   .browser-row, .browser-row.with-last { grid-template-columns: 18px 18px minmax(120px, 1fr) 64px 60px; }
   .browser-row .c-game, .browser-row .c-map, .browser-row .c-last { display: none; }
