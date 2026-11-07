@@ -1,5 +1,5 @@
 {
- "_note": "Quake sounds' announcer: sounds from ClaudiuHKS/AdvancedQuakeSounds (MIT), pinned to a commit and checked by checksum. Installed by setup's core (core::quake_sounds) for miscstats.ini.",
+ "_note": "Quake sounds' announcer: sounds from ClaudiuHKS/AdvancedQuakeSounds (MIT), pinned to a commit and checked by checksum. Installed by setup's core (core::quake_sounds) for miscstats.ini. Two announcers: miscstats.ini (Classic) and miscstats-alt.ini (Alternate takes), picked per game or server on the Sounds page.",
  "fetch": [
   {
    "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/doublekill.wav",
@@ -7,9 +7,19 @@
    "sha256": "66e07ad6ba4ac978b401d717391d9be42d188123072c5883d4aa360ad79baed9"
   },
   {
+   "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/doublekill2.wav",
+   "to": "sound/AQS/doublekill2.wav",
+   "sha256": "6d6fe2a99708650adc5dceeb12d86b38f7bd3a80a75e55cd9f0643b66c4a8bfd"
+  },
+  {
    "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/firstblood.wav",
    "to": "sound/AQS/firstblood.wav",
    "sha256": "47688106b8edd1ba59da8eeb9d5379a8c670f86abbc8686eb3a2ba3b67a8522c"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/firstblood2.wav",
+   "to": "sound/AQS/firstblood2.wav",
+   "sha256": "6882d8ce2fe548cc1f4464b594163196ebf0f550b03f61d8864b35ab973d5183"
   },
   {
    "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/godlike.wav",
@@ -17,9 +27,24 @@
    "sha256": "bdbe120d91ed03419aa5e84785347cb9c81ef91657b254e65dde9257ca1f8358"
   },
   {
+   "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/godlike2.wav",
+   "to": "sound/AQS/godlike2.wav",
+   "sha256": "01a9b834eea181c844430714ade4a2d15dc6d5be19f4822ad571f532fc18e5dd"
+  },
+  {
    "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/headshot.wav",
    "to": "sound/AQS/headshot.wav",
    "sha256": "2e312324347ea32924e613ced9f070709a216b2e01433a24a9f721e27ab16754"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/headshot2.wav",
+   "to": "sound/AQS/headshot2.wav",
+   "sha256": "f8b2a32934f08b3c17e70a3ed0643a52749396447ba685be86fd188bf0c43afc"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/humiliating.wav",
+   "to": "sound/AQS/humiliating.wav",
+   "sha256": "9a80283a1df25f6e8bf32f5c2f85df81897f0fcbeb92cb38811b8c7836f1cf98"
   },
   {
    "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/humiliation.wav",
@@ -37,14 +62,29 @@
    "sha256": "650cec1836944970bb31881fe20fdf93f1d4cf0e9e96c29564583a163c300660"
   },
   {
+   "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/killingspree2.wav",
+   "to": "sound/AQS/killingspree2.wav",
+   "sha256": "ae0ea8a4fa99ad01bce9e1e9f31414f555aa15356047053606b3bffb36eede1d"
+  },
+  {
    "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/monsterkill.wav",
    "to": "sound/AQS/monsterkill.wav",
    "sha256": "4186e46c168162af533d6e9c2926640ca17d6f798dccc0eee3d7307341813824"
   },
   {
+   "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/monsterkill2.wav",
+   "to": "sound/AQS/monsterkill2.wav",
+   "sha256": "fd9c46621bdaa5400675f73c8df9de78e6dd1c3eed36ec046892cbc283ff98d1"
+  },
+  {
    "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/multikill.wav",
    "to": "sound/AQS/multikill.wav",
    "sha256": "9a0c0e8c9216c0290aab0943af2d222a354c7be8ec0f138b139154687b95e79e"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/multikill2.wav",
+   "to": "sound/AQS/multikill2.wav",
+   "sha256": "154c8e8c4023c9caa81844f4b541198eb73d8154c2556c529627bbf304989adf"
   },
   {
    "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/prepareforbattle.wav",
@@ -62,14 +102,29 @@
    "sha256": "6ae5908f317cb1c818b923166e7d2e99a8f930b170df8cdb0bdfe0dce2688539"
   },
   {
+   "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/rampage2.wav",
+   "to": "sound/AQS/rampage2.wav",
+   "sha256": "9a78a030b314cf6bf97868c67d1ff8d957f9fee325d5cddf33d3b921fe85c0dc"
+  },
+  {
    "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/ultrakill.wav",
    "to": "sound/AQS/ultrakill.wav",
    "sha256": "1804b5654005446c057caa95a1af2ff43291082d7e67fa2d97878f3fd8703d84"
   },
   {
+   "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/ultrakill2.wav",
+   "to": "sound/AQS/ultrakill2.wav",
+   "sha256": "6cf975b612e5b1756ab12a7b3798181533ee949d587f9183f7563f13fc04f60d"
+  },
+  {
    "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/unstoppable.wav",
    "to": "sound/AQS/unstoppable.wav",
    "sha256": "d6575e9480f67a79bfd5f42fa326122544f9435456d99314c347b1b13c977f5e"
+  },
+  {
+   "url": "https://raw.githubusercontent.com/ClaudiuHKS/AdvancedQuakeSounds/6e9d36a01469150c94bd68ccebe6d5ca6f0b9292/sound/AQS/unstoppable2.wav",
+   "to": "sound/AQS/unstoppable2.wav",
+   "sha256": "bdf970fb3bbe603e15dfb52edb0de1e98afb6b610180f2b2aac598e6c3f4a94e"
   }
  ]
 }

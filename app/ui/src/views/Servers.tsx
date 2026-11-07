@@ -255,7 +255,7 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "webstatus", label: "Website status", group: "Server", remote: true },
   { id: "modes", label: "Modes", group: "Game", live: true },
   { id: "maps", label: "Maps", group: "Game" },
-  { id: "getmaps", label: "Get maps", group: "Game" },
+  { id: "getmaps", label: "Get more", group: "Game" },
   { id: "bots", label: "Bots", group: "Game", live: true },
   { id: "match", label: "Rules", group: "Game", live: true },
   { id: "fun", label: "Fun", group: "Game", live: true },
@@ -501,7 +501,7 @@ export function ServerPage(props: {
           {tab === "friends" && <Friends data={data} refresh={refresh} server={{ name: s.name, visibility: s.visibility }} />}
           {tab === "modes" && data && <PlayLive data={data} maps={maps} refresh={refresh} openMaps={() => setTab("maps")} />}
           {tab === "maps" && <Maps current={data?.state.map} live={!!data} maps={maps} reload={reloadMaps} refresh={refresh} />}
-          {tab === "getmaps" && <GetMore only="maps" onInstalled={reloadMaps} />}
+          {tab === "getmaps" && <GetMore server onInstalled={reloadMaps} />}
           {tab === "bots" && data && <Bots data={data} refresh={refresh} />}
           {tab === "match" && data && (
             <SettingsPage title="Rules" note={RULES_NOTE(data)} data={data} cat={2} refresh={refresh} pickMode>

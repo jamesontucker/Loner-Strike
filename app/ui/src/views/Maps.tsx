@@ -313,7 +313,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           <h3>No maps yet</h3>
           <p className="muted measure">
             {currentTarget()
-              ? "This server has no maps. Get some from Get maps, or check the server's game files."
+              ? "This server has no maps. Get some from Get more, or check the server's game files."
               : "Loner-Strike can't find any maps in your game. Get some from Get more, or add a map file."}
           </p>
           {!currentTarget() && <div className="row"><button className="btn primary" onClick={() => go("more")}>Get more maps</button></div>}

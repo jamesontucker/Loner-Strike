@@ -788,7 +788,7 @@ fn summary(g: &Game) -> Value {
     json!({
         "game": g.name, "hl": g.hl, "dedicated": g.dedicated,
         "setup": components.iter().any(|c| c == "core"),
-        "music": music, "quake": quake,
+        "music": music, "quake": quake, "announcer": crate::setup::core::announcer_of(&g.dir),
     })
 }
 
@@ -916,6 +916,43 @@ async fn api_addon(State(st): State<Shared>, headers: HeaderMap, Json(req): Json
             }
             ok(json!({"ok": true, "how": how}))
         }
+        Err(e) => err(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct AnnouncerReq {
+    which: String,
+}
+
+/// The Quake sounds announcer for this game or server: its miscstats.ini (both sets of
+/// sounds come with setup), from the next map.
+async fn api_announcer(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<AnnouncerReq>) -> Reply {
+    if !from_panel(&headers) {
+        return forbidden();
+    }
+    let Some(g) = st.game() else { return err("No game found.") };
+    let res = match crate::setup_api::resources_for(&st) {
+        Ok(r) => r,
+        Err(e) => return err(e),
+    };
+    let r = tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let ini = crate::setup::core::announcer_ini(&res, &req.which)?;
+        let data = g.dir.join("addons/amxmodx/data/gamemodes");
+        std::fs::create_dir_all(&data).map_err(|e| e.to_string())?;
+        crate::sys::write_atomic(&data.join("announcer.txt"), req.which.as_bytes()).map_err(|e| format!("Couldn't save it ({e})."))?;
+        let cfg = g.dir.join("addons/amxmodx/configs/miscstats.ini");
+        if cfg.is_file() {
+            crate::sys::write_latin1(&cfg, &ini).map_err(|e| format!("Couldn't write miscstats.ini ({e})."))?;
+        }
+        crate::servers::mark_changed_dir(&g.dir);
+        sounds_changed(&g);
+        Ok(())
+    })
+    .await
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again.".into()));
+    match r {
+        Ok(()) => ok(json!({"ok": true})),
         Err(e) => err(e),
     }
 }
@@ -1083,6 +1120,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/sounds/track", post(api_track))
         .route("/api/sounds/file", get(api_file))
         .route("/api/sounds/addon", post(api_addon))
+        .route("/api/sounds/announcer", post(api_announcer))
         .route("/api/sounds/packs", get(api_packs))
         .route("/api/sounds/pack", post(api_pack))
 }

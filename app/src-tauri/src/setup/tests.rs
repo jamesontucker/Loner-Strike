@@ -115,7 +115,8 @@ fn quake_sounds_files_are_listed() {
         assert_eq!(i["sha256"].as_str().unwrap().len(), 64);
         i["to"].as_str().unwrap().to_string()
     }).collect();
-    let ini = std::fs::read_to_string(dir.join("miscstats.ini")).unwrap();
+    for (_, file) in core::ANNOUNCERS {
+    let ini = std::fs::read_to_string(dir.join(file)).unwrap();
     for line in ini.lines().filter(|l| !l.starts_with(';') && !l.trim().is_empty()) {
         let mut w = line.split_whitespace();
         let (key, sound) = (w.next().unwrap(), w.next().unwrap());
@@ -126,6 +127,8 @@ fn quake_sounds_files_are_listed() {
             assert!(!["GrenadeKill", "GrenadeSuicide", "BombPlanted", "BombDefused", "BombFailed"].iter().any(|k| key.starts_with(k) && core::QUAKE_ON.contains(&format!("{k}Sound").as_str())), "{key}");
         }
     }
+    }
+    assert_eq!(core::announcer_of(&dir), "classic", "without a choice saved");
 }
 
 #[test]

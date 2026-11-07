@@ -222,6 +222,9 @@ const LOOKUP_WORKERS: usize = 3;
 pub static RECORDS: Mutex<()> = Mutex::new(());
 
 pub struct MapStore {
+    /// A dedicated server's store: its weapon skins and player models go in under their own
+    /// names for gm_content.amxx (servercontent.rs) instead of replacing the game's files
+    pub server: bool,
     cstrike: PathBuf,
     game_dir: PathBuf,
     record_path: PathBuf,
@@ -243,6 +246,7 @@ impl MapStore {
         let shots = app_dir.join("cache").join("gbshots");
         let _ = std::fs::create_dir_all(&shots);
         let store = MapStore {
+            server: false,
             cstrike: hl.join("cstrike"),
             game_dir: game_dir.to_path_buf(),
             record_path: app_dir.join("installed_maps.json"),
@@ -265,6 +269,7 @@ impl MapStore {
         let mut store = MapStore::new(hl, game_dir, app_dir, maps_cache);
         store.cstrike = game_dir.to_path_buf();
         store.record_path = hl.join(".installed_maps.json");
+        store.server = true;
         store
     }
 
@@ -366,6 +371,13 @@ impl MapStore {
             let id = content::key_id(&key);
             out.push(json!({"mod": id, "section": r["section"], "name": r["name"], "author": if id < 0 { Value::Null } else { r["author"].clone() },
                             "url": r["url"], "date": r["date"], "local": id < 0, "files": r["files"].as_array().map(|f| f.len()).unwrap_or(0)}));
+        }
+        if self.server {
+            for it in crate::servercontent::load(&self.game_dir) {
+                out.push(json!({"mod": it["mod"], "section": it["section"], "name": it["name"], "author": it["author"], "url": it["url"],
+                                "date": it["date"], "local": false, "files": it["files"].as_array().map(|f| f.len()).unwrap_or(0),
+                                "who": it["who"], "on": it["on"], "server": true}));
+            }
         }
         out.sort_by_key(|v| std::cmp::Reverse(v["date"].as_i64().unwrap_or(0)));
         out
@@ -626,6 +638,8 @@ impl MapStore {
         let is_maps = sec.key == "maps";
         let rec = if is_maps {
             self.records().get(&mod_id.to_string()).cloned()
+        } else if self.server && (sec.key == "skins" || sec.key == "players") {
+            crate::servercontent::load(&self.game_dir).into_iter().find(|i| i["mod"].as_i64() == Some(mod_id) && i["section"] == sec.key)
         } else {
             self.content.for_game(&self.game_dir).get(&content::record_key(sec, mod_id, &self.game_dir)).cloned()
         };
@@ -845,6 +859,7 @@ impl MapStore {
         let tmp = sys::make_temp_dir(&self.work, "gb-");
         let res = match &tmp {
             Ok(tmp) if section == "maps" => self.install_into(id, mod_id, file_id, tmp).map(|(m, a, b, c)| (m, a, b, c, vec![])),
+            Ok(tmp) if self.server && (section == "skins" || section == "players") => self.install_for_server(id, &section, mod_id, file_id, tmp),
             Ok(tmp) => self.install_content(id, &section, mod_id, file_id, tmp),
             Err(e) => Err(StoreError::Bad(e.to_string())),
         };
@@ -1032,6 +1047,19 @@ impl MapStore {
         Ok((src, fname))
     }
 
+    /// A weapon skin or player model for a dedicated server: under its own names, for
+    /// gm_content.amxx to swap in (see servercontent.rs).
+    #[allow(clippy::type_complexity)]
+    fn install_for_server(&self, id: &str, section: &str, mod_id: i64, file_id: i64, tmp: &Path) -> Result<(String, Vec<String>, Vec<String>, Vec<String>, Vec<String>), StoreError> {
+        let (info, src, _) = self.source(id, section, mod_id, file_id, tmp, &[".mdl"])?;
+        self.update(id, |j| j.message = "Adding it to the server".into());
+        let files = archive::walk(&src);
+        let info = json!({"name": info["name"], "author": info["author"], "url": info["url"]});
+        let placed = crate::servercontent::add(&self.game_dir, section, mod_id, &info, &files).map_err(StoreError::Bad)?;
+        let what = if section == "skins" { "Skin" } else { "Player model" };
+        Ok((format!("{what} added to this server. Players download it when they join, from the next map."), vec![], placed, vec![], vec![]))
+    }
+
     #[allow(clippy::type_complexity)]
     fn install_content(&self, id: &str, section: &str, mod_id: i64, file_id: i64, tmp: &Path) -> Result<(String, Vec<String>, Vec<String>, Vec<String>, Vec<String>), StoreError> {
         let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
@@ -1108,6 +1136,10 @@ impl MapStore {
         let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
         if sec.key == "maps" {
             return self.uninstall_maps(mod_id).map(|m| json!({"maps": m}));
+        }
+        if self.server && (sec.key == "skins" || sec.key == "players") {
+            let files = crate::servercontent::remove(&self.game_dir, sec.key, mod_id).map_err(StoreError::Bad)?;
+            return Ok(json!({"maps": [], "files": files}));
         }
         let key = content::record_key(sec, mod_id, &self.game_dir);
         if !self.content.for_game(&self.game_dir).contains_key(&key) {

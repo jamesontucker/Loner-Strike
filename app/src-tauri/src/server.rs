@@ -265,6 +265,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
         .merge(crate::servers::routes())
         .merge(crate::hltv::routes())
         .merge(crate::webstatus::routes())
+        .merge(crate::servercontent::routes())
         .merge(crate::welcome::routes())
         .merge(crate::extras::routes())
         .merge(crate::modevote::routes())

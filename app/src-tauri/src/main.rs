@@ -27,6 +27,7 @@ mod remote;
 mod scrim;
 mod server;
 mod navs;
+mod servercontent;
 mod servers;
 mod webstatus;
 mod welcome;

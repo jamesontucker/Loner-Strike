@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { addFromFile, getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, usePoll, useStable } from "../api";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
-import { BusyButton, LoadError, SectionHead, Sheet, Skeleton, useConfirm, useToast } from "../ui";
+import { BusyButton, LoadError, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 const SORTS: [string, string][] = [["popular", "Most downloaded"], ["new", "Newest"], ["liked", "Most liked"]];
 // Shown until the server sends its own list
@@ -10,13 +10,19 @@ const NOTES: Record<string, string> = {
   maps: "Only map files are copied in, and nothing you have is replaced.",
   default: "These replace the game's own files. Everything they replace is backed up, and removing one puts the originals back.",
 };
+/** A dedicated server can only send players what has a name of its own: maps, and weapon
+ *  skins and player models, which go in under new names (servercontent.rs). */
+const SERVER_SECTIONS = ["maps", "skins", "players"];
+const SERVER_NOTE = "Players download what this server uses when they join. Skins and player models go in under their own names, so everyone sees them, not just you.";
+type Slots = { map?: string; models?: number; sounds?: number; generic?: number };
+type ServerContent = { items: { mod: number; section: string }[]; slots: Slots | null; limit: number; ours: number };
 /** Shared by the browser and the Installed list, so removing shows on both. */
 const removeKey = (section: string, mod: number) => `getmore:${targetKey()}:remove:${section}:${mod}`;
 const size = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 /** GameBanana's Counter-Strike 1.6 section: maps, skins, models, sounds and more. */
-/** only: show just one section (a server's "Get maps"). */
-export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: () => void; only?: string }) {
+/** server: a dedicated server's Get more (maps, skins and player models it sends players). */
+export function GetMore({ onInstalled: onInstalledProp, server }: { onInstalled: () => void; server?: boolean }) {
   const onInstalled = useStable(onInstalledProp);
   const ask = useConfirm();
   const toast = useToast();
@@ -56,7 +62,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
         if (mine !== latest.current) return;
         if (r.error) throw new Error(r.error);
         setItems((old) => (reset ? r.items : [...old, ...r.items]));
-        if (r.sections?.length) setSections(r.sections);
+        if (r.sections?.length) setSections(server ? r.sections.filter((s) => SERVER_SECTIONS.includes(s[0])) : r.sections);
         setPage(next);
         setDone(r.done || !r.items.length);
       } catch (e) {
@@ -159,7 +165,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
   return (
     <div className="stack">
       <div>
-        <SectionHead title={only ? "Get maps" : "Get more"} note={`From GameBanana's Counter-Strike 1.6 section. ${NOTES[section] ?? NOTES.default}`}>
+        <SectionHead title="Get more" note={`From GameBanana's Counter-Strike 1.6 section. ${server ? SERVER_NOTE : NOTES[section] ?? NOTES.default}`}>
           {ON_THIS_COMPUTER && !showInstalled && (
             <BusyButton busy={busy(key(`add-file:${section}`))} label="Add from a file" busyLabel="Adding…" onClick={() => run(key(`add-file:${section}`), async () => {
               const r = await addFromFile(section);
@@ -169,7 +175,8 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
             }, `Adding ${label.toLowerCase()} from a file…`)} />
           )}
         </SectionHead>
-        <div className="chips section-tabs" role="tablist" aria-label="What to get" hidden={!!only}>
+        {server && <SlotsBar />}
+        <div className="chips section-tabs" role="tablist" aria-label="What to get">
           {sections.map(([id, name]) => (
             <button key={id} className="chip" role="tab" aria-selected={section === id && !showInstalled} onClick={() => {
               setShowInstalled(false);
@@ -207,7 +214,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
         )}
       </div>
       {showInstalled ? (
-        <InstalledList onChanged={onInstalled} />
+        <InstalledList onChanged={onInstalled} server={server} />
       ) : (
         <>
           {error && !items.length && !loading && <LoadError text={error} onRetry={() => load(lastReset.current)} />}
@@ -287,7 +294,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
                       {f.listed === false && <p className="muted small-note">Its contents are checked after downloading.</p>}
                     </div>
                     {f.virus ? <span className="muted">Flagged by GameBanana's virus scan</span> : f.supported ? (
-                      <BusyButton className="btn primary" busy={busy(key(`install:${open.id}:${f.id}`))} disabled={!!jobFor(open.id)} label={jobFor(open.id) ? jobText(jobFor(open.id)!) : "Install"} busyLabel="Installing…" onClick={() => install(open.id, f.id, open.name)} />
+                      <BusyButton className="btn primary" busy={busy(key(`install:${open.id}:${f.id}`))} disabled={!!jobFor(open.id)} label={jobFor(open.id) ? jobText(jobFor(open.id)!) : server && section !== "maps" ? "Use on this server" : "Install"} busyLabel="Installing…" onClick={() => install(open.id, f.id, open.name)} />
                     ) : <span className="muted">Can't open this kind of file</span>}
                   </li>
                 ))}
@@ -304,11 +311,32 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
   );
 }
 
-type Installed = { mod: number; section: string; name: string; author?: string | null; url?: string | null; date?: number; maps?: string[]; files?: number; local?: boolean };
+type Installed = { mod: number; section: string; name: string; author?: string | null; url?: string | null; date?: number; maps?: string[]; files?: number; local?: boolean; server?: boolean; who?: string; on?: boolean };
+const WHO: [string, string][] = [["all", "Everyone"], ["ct", "Counter-Terrorists"], ["t", "Terrorists"], ["admin", "Admins only"]];
+
+/** What the last map loaded, against the engine's 512-a-kind limit (over it the server stops). */
+function SlotsBar() {
+  const [d, setD] = useState<ServerContent | null>(null);
+  useEffect(() => {
+    getJson<ServerContent>("/api/servercontent").then(setD).catch(() => setD(null));
+  }, []);
+  if (!d) return null;
+  const s = d.slots;
+  if (!s || s.models === undefined) {
+    return <p className="muted small-note">The server counts what each map loads (models and sounds, 512 of each at most) when it next starts a map.</p>;
+  }
+  const near = (n?: number) => (n ?? 0) >= d.limit - 32;
+  return (
+    <p className={`small-note slots-bar${near(s.models) || near(s.sounds) ? " err-text" : " muted"}`}>
+      {s.map ? `${s.map}: ` : ""}models {s.models} of {d.limit}, sounds {s.sounds} of {d.limit}.
+      {near(s.models) || near(s.sounds) ? " That's close to the limit: a map that loads more stops the server. Take something off before adding more." : " Each skin uses one to three model slots, a player model one."}
+    </p>
+  );
+}
 const SECTION_NAME: Record<string, string> = { maps: "Map", skins: "Weapon skin", players: "Player model", sounds: "Sound", sprays: "Spray", sprites: "Effect", gui: "HUD & menu" };
 
 /** Everything downloaded into this game, in one place, to remove what you don't want. */
-function InstalledList({ onChanged }: { onChanged: () => void }) {
+function InstalledList({ onChanged, server }: { onChanged: () => void; server?: boolean }) {
   const toast = useToast();
   const ask = useConfirm();
   const { run, busy } = useActions();
@@ -324,7 +352,7 @@ function InstalledList({ onChanged }: { onChanged: () => void }) {
     load();
   }, []);
   const remove = async (it: Installed) => {
-    const what = it.section === "maps" ? `Its map${(it.maps?.length ?? 0) === 1 ? " is" : "s are"} deleted.` : "The game's original files are put back.";
+    const what = it.section === "maps" ? `Its map${(it.maps?.length ?? 0) === 1 ? " is" : "s are"} deleted.` : it.server ? "It's taken off this server from the next map." : "The game's original files are put back.";
     if (!(await ask(`Remove ${it.name}? ${what}`, { ok: "Remove", danger: true }))) return;
     await run(removeKey(it.section, it.mod), async () => {
       const r = await postJson<{ ok?: boolean; error?: string }>("/api/gb/uninstall", { mod: it.mod, section: it.section }).catch(() => ({ error: "Couldn't remove it." }));
@@ -334,6 +362,14 @@ function InstalledList({ onChanged }: { onChanged: () => void }) {
       onChanged();
     }, `Removing ${it.name}…`);
   };
+  const setKey = (it: Installed) => `getmore:${targetKey()}:set:${it.section}:${it.mod}`;
+  const setItem = (it: Installed, change: { who?: string; on?: boolean }) =>
+    run(setKey(it), async () => {
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/servercontent/set", { mod: it.mod, section: it.section, ...change }).catch(() => ({ error: "Couldn't save it." }));
+      if (r.error) return toast(r.error, true);
+      toast(`${it.name} changed. It applies from the next map.`);
+      load();
+    }, `Saving ${it.name}…`);
   if (failed && !list) return <LoadError text="Couldn't load what's installed." onRetry={load} />;
   if (!list) return <Skeleton />;
   if (!list.length) return <p className="muted">Nothing downloaded yet. Anything you install from here shows up in this list.</p>;
@@ -353,6 +389,14 @@ function InstalledList({ onChanged }: { onChanged: () => void }) {
             </span>
           </div>
           <div className="row">
+            {server && it.server && ON_THIS_COMPUTER && (
+              <>
+                <select aria-label={`Who sees ${it.name}`} value={it.who ?? "all"} disabled={busy(setKey(it))} onChange={(e) => setItem(it, { who: e.target.value })}>
+                  {WHO.map(([w, l]) => <option key={w} value={w}>{l}</option>)}
+                </select>
+                <Switch on={it.on !== false} label={`${it.name} on`} disabled={busy(setKey(it))} onChange={(v) => setItem(it, { on: v })} />
+              </>
+            )}
             {it.url && <a className="btn" href={it.url} target="_blank" rel="noreferrer">Open on GameBanana</a>}
             {ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={busy(removeKey(it.section, it.mod))} label="Remove" busyLabel="Removing…" onClick={() => remove(it)} />}
           </div>

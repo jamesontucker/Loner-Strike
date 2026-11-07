@@ -3,12 +3,12 @@ import { getJson, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, useActions, use
 import { reloadServers, useGameState, useServers, useSetupJob, waitForSetupJob } from "../queries";
 import { restartPending } from "../types";
 import { useNav } from "../store";
-import { Banner, BusyButton, LoadError, SectionHead, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
+import { Banner, BusyButton, LoadError, SectionHead, Segmented, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
 
 type Track = { name: string; size: number; on: boolean; kind: "mp3" | "wav"; pack?: string | null; problem?: string | null };
 type Pool = { id: "t" | "ct" | "any"; label: string; tracks: Track[]; on: number; over: boolean };
 type Music = { installed: boolean; on: boolean; pools: Pool[]; total: number; limit: number; good: number; warn_total: number; max: number; fallback?: number };
-type Data = { game: string; hl: string; dedicated: boolean; setup: boolean; music: Music; quake: { installed: boolean; on: boolean }; error?: string };
+type Data = { game: string; hl: string; dedicated: boolean; setup: boolean; music: Music; quake: { installed: boolean; on: boolean }; announcer?: string; error?: string };
 type Pack = { id: number; name: string; author: string; kind: "music" | "replace"; about: string; installed: boolean; url: string; note?: string };
 type PackJob = { id: string; mod: number; state: string; message: string; got: number; size: number };
 type Packs = { packs: Pack[]; jobs: PackJob[]; error?: string };
@@ -191,6 +191,13 @@ export function Sounds({ target }: { target: string }) {
     if (r.how === "live") setChanged(true);
     load();
   }, `Turning ${name.toLowerCase()} ${on ? "on" : "off"}…`);
+
+  const setAnnouncer = (which: string) => once(key("announcer"), async () => {
+    const r = await postJson<Reply>("/api/sounds/announcer", { which }).catch(failed);
+    if (r.error) return toast(r.error, true);
+    toast("Announcer changed. It's heard from the next map.");
+    load();
+  }, "Changing the announcer…");
 
   const installMusic = () => once(key("install-music"), async () => {
     if (!d) return;
@@ -390,6 +397,12 @@ export function Sounds({ target }: { target: string }) {
             </label>
           )}
         </div>
+        {d.quake.installed && (
+          <div className="setting">
+            <span className="name">Announcer<span className="note">The classic takes, or another recording of each line (both from Advanced Quake Sounds)</span></span>
+            <Segmented values="classic alt" labels="Classic|Alternate takes" current={d.announcer ?? "classic"} label="Announcer" disabled={isBusy(key("announcer"))} onPick={setAnnouncer} />
+          </div>
+        )}
       </section>
       )}
 

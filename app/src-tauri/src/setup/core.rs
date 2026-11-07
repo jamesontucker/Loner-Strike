@@ -13,11 +13,11 @@ use std::time::Duration;
 pub const CORE_MODES: &[&str] = &["classic", "csdm", "csdm_ffa", "knife", "pistols", "deagle", "awp", "scoutz", "surf", "match"];
 /// miscstats.amxx comes with AMX Mod X
 pub const CORE_ADDONS: &[&str] = &["quakesounds"];
-pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat", "gm_botping"];
+pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat", "gm_botping", "gm_content"];
 /// listed in plugins.ini. restmenu is AMX Mod X's own (amx_restrict), which its plugins.ini
 /// ships switched off: the weapon modes (knife, pistols, deagle, awp, scoutz, gm_weapons)
 /// restrict buying with it, so without it they restrict nothing.
-pub const ALWAYS_ON: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_vip", "gm_extras", "gm_community", "gm_botchat", "gm_botping", "restmenu"];
+pub const ALWAYS_ON: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_vip", "gm_extras", "gm_community", "gm_botchat", "gm_botping", "restmenu", "gm_content"];
 pub const BINDS: &[&str] = &["bind \"F3\" \"gamemenu\"", "bind \"F4\" \"gamequick\""];
 
 const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
@@ -193,6 +193,23 @@ pub fn stats_ini_with_quake(text: &str) -> String {
     lines.join("\r\n") + "\r\n"
 }
 
+/// The announcers to choose from (per game or server, on the Sounds page): id, its
+/// miscstats.ini in plugins/configs/quake.
+pub const ANNOUNCERS: &[(&str, &str)] = &[("classic", "miscstats.ini"), ("alt", "miscstats-alt.ini")];
+
+/// The announcer a game or server uses: data/gamemodes/announcer.txt, classic without it.
+pub fn announcer_of(game_dir: &std::path::Path) -> &'static str {
+    let saved = std::fs::read_to_string(game_dir.join("addons/amxmodx/data/gamemodes/announcer.txt")).unwrap_or_default();
+    ANNOUNCERS.iter().map(|(id, _)| *id).find(|id| *id == saved.trim()).unwrap_or("classic")
+}
+
+/// An announcer's miscstats.ini, with Windows line ends (as AMX Mod X ships it).
+pub fn announcer_ini(res: &std::path::Path, which: &str) -> Result<String, String> {
+    let file = ANNOUNCERS.iter().find(|(id, _)| *id == which).map(|(_, f)| *f).ok_or("Unknown announcer.")?;
+    let text = crate::sys::read_latin1(&res.join("plugins").join("configs").join("quake").join(file)).map_err(|e| format!("Loner-Strike's files are incomplete ({file}: {e})."))?;
+    Ok(text.replace("\r\n", "\n").replace('\n', "\r\n"))
+}
+
 /// Quake sounds (AMX Mod X's miscstats): the announcer's sounds, its miscstats.ini naming
 /// them, and the announcements switched on. AMX Mod X ships all of them off and CS 1.6
 /// without the sounds, so without this it says nothing. Servers get the sounds like any
@@ -203,8 +220,8 @@ pub fn quake_sounds(rec: &mut Record, ctx: &Ctx) -> Result<(), String> {
         .map_err(|e| format!("Loner-Strike's files are damaged (quake sounds: {e})."))?;
     let tmp = super::TempDir::new()?;
     super::components::fetch_all(rec, ctx, &serde_json::json!({"name": "Quake sounds", "fetch": list["fetch"]}), &tmp)?;
-    let ini = crate::sys::read_latin1(&dir.join("miscstats.ini")).map_err(|e| format!("Loner-Strike's files are incomplete (miscstats.ini: {e})."))?;
-    rec.write("addons/amxmodx/configs/miscstats.ini", &ini.replace("\r\n", "\n").replace('\n', "\r\n"))?;
+    let ini = announcer_ini(ctx.res, announcer_of(&rec.game))?;
+    rec.write("addons/amxmodx/configs/miscstats.ini", &ini)?;
     let stats = rec.read("addons/amxmodx/configs/stats.ini").unwrap_or_default();
     rec.write("addons/amxmodx/configs/stats.ini", &stats_ini_with_quake(&stats))
 }

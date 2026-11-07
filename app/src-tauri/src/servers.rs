@@ -1003,7 +1003,7 @@ pub(crate) fn server_owned(key: &str) -> bool {
         || data_file.is_some_and(|f| {
             matches!(
                 f,
-                "status.json" | "recent.txt" | "stats.json" | "stats.json.part" | "playtime.txt" | "matches.json" | "scrim_status.json" | "bots.txt" | "seen.json" | "reports.json"
+                "status.json" | "recent.txt" | "stats.json" | "stats.json.part" | "playtime.txt" | "matches.json" | "scrim_status.json" | "bots.txt" | "seen.json" | "reports.json" | "content_status.json"
             )
         })
         || key.starts_with("addons/amxmodx/logs/")
