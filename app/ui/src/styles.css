@@ -921,10 +921,13 @@ a.btn.primary { color: var(--signal-ink); }
 
 /* ---- setup: the game's menu music ----------------------------------------------- */
 .setup-card { position: relative; }
-.music { position: absolute; top: 14px; right: 16px; z-index: 2; display: flex; align-items: center; gap: 8px; }
-.music-toggle { border: 0; border-radius: 2px; padding: 4px 10px; background: var(--bg); box-shadow: var(--sunken); color: var(--bone-faint); font: 600 13px/1.2 var(--text); cursor: pointer; }
+/* the audio controls: one sunken strip with the switch, shuffle and volume */
+.music { position: absolute; top: 14px; right: 16px; z-index: 2; display: flex; align-items: center; gap: 2px; padding: 2px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
+.music-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 24px; border: 0; border-radius: 1px; padding: 0 9px; background: transparent; color: var(--bone-faint); font: 600 13px/1 var(--text); cursor: pointer; }
 .music-toggle[aria-pressed="true"] { color: var(--signal); }
-.music-toggle:hover { color: var(--bone); }
+.music-toggle:hover { color: var(--bone); background: rgba(233, 227, 207, .06); }
+.music-toggle.icon { width: 26px; padding: 0; }
+.music .music-volume { margin: 0 8px 0 4px; }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) { .music { top: 10px; right: 10px; } }
 .setup-steps { padding-right: 120px; }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) { .setup-steps { padding-right: 0; padding-top: 30px; } }

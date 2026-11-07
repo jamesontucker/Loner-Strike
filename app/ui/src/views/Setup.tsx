@@ -538,11 +538,10 @@ function ThemeMusic() {
         <span aria-hidden="true">♪</span> {on ? "Audio on" : "Audio off"}
       </button>
       {on && skipTrack.current && (
-        <button className="music-toggle" onClick={() => skipTrack.current?.()} title="Play another track" aria-label="Shuffle: play another track">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <button className="music-toggle icon" onClick={() => skipTrack.current?.()} title="Shuffle: play another track" aria-label="Shuffle: play another track">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
           </svg>
-          Shuffle
         </button>
       )}
       {on && (
