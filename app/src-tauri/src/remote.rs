@@ -665,6 +665,9 @@ if [ -f "$PW" ]; then
   umask 077
   printf 'rcon_password "%s"\n' "$(tr -d '\r\n"' < "$PW")" > "$SRV/{game}/lsrcon.cfg"
 fi
+# the ban lists are the server's own (never uploaded): empty ones to start with, so the
+# game doesn't say it couldn't load them
+for f in banned.cfg listip.cfg; do [ -e "$SRV/{game}/$f" ] || : > "$SRV/{game}/$f"; done
 sudo tee /etc/systemd/system/{unit}.service >/dev/null <<EOF
 [Unit]
 Description=Loner-Strike server {id}
