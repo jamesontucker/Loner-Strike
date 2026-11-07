@@ -276,7 +276,7 @@ export function Radio() {
         <button type="button" onClick={() => tune(1)} aria-label="Next station">
           <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><path d="M10 0h2v10h-2zM0 0v10l9-5z" /></svg>
         </button>
-        <input type="range" min={0} max={100} value={vol} onChange={(e) => setVol(Number(e.target.value))} aria-label="Volume" />
+        <input type="range" min={0} max={100} value={vol} onChange={(e) => setVol(Number(e.target.value))} aria-label="Volume" style={{ "--fill": `${vol}%` } as React.CSSProperties} />
       </div>
       <p className="radio-credit">
         <a href={station.site} target="_blank" rel="noreferrer">{station.credit}</a>

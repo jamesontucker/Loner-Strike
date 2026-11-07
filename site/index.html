@@ -469,7 +469,11 @@ footer a { color: var(--dim); }
 .radio-info .off { opacity: .35; }
 .radio-controls { display: flex; align-items: center; gap: 3px; }
 .radio-controls button { width: 26px; height: 20px; }
-.radio-controls input { flex: 1; min-width: 0; height: 20px; margin: 0 0 0 6px; accent-color: var(--signal); cursor: pointer; }
+.radio-controls input { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; height: 8px; margin: 0 2px 0 8px; border-radius: 2px; cursor: pointer;
+  background: linear-gradient(to right, var(--signal) var(--fill, 70%), #171a12 var(--fill, 70%)); box-shadow: var(--sunken); }
+.radio-controls input::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 16px; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); }
+.radio-controls input::-moz-range-thumb { width: 11px; height: 16px; border: 0; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); }
+.radio-controls input:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
 .radio-credit { display: flex; justify-content: space-between; gap: 8px; margin: 0; padding: 4px 3px 2px; font-size: 13px; color: var(--faint); }
 .radio-credit a { color: var(--dim); }
 .radio-credit a:hover { color: var(--signal); }
@@ -1348,8 +1352,10 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     const saved = keep.get("ls-radio-volume");
     if (saved !== null && saved !== "" && Number(saved) >= 0 && Number(saved) <= 100) vol.value = saved;
     audio.volume = vol.value / 100;
+    vol.style.setProperty("--fill", `${vol.value}%`);
     vol.addEventListener("input", () => {
       audio.volume = vol.value / 100;
+      vol.style.setProperty("--fill", `${vol.value}%`);
       keep.set("ls-radio-volume", vol.value);
     });
 
