@@ -332,6 +332,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
                   <p className="muted">Or open this address on your phone and add it to your home screen:</p>
                   <p className="address small">{phone.address}</p>
                   <p className="muted">The first visit needs the code (it's in the QR). After that the phone stays signed in.</p>
+                  {/Win/.test(navigator.platform) && <p className="muted">If the phone can't open it, Windows may think this Wi-Fi is public: in Settings, Network & internet, open your Wi-Fi and pick Private network.</p>}
                 </div>
               </div>
             )}

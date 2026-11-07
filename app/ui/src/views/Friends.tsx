@@ -226,7 +226,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     steps = (
       <ol className="steps">
         <li className="done"><strong>Get everyone on the same network</strong><p>Same Wi-Fi, or plugged into the same router.</p>{lanErr && <p className="err-text">{NO_ADDRESS}</p>}</li>
-        <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong>{OS === "mac" ? <p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (CrossOver): click Allow.</p> : OS === "windows" ? <p>The first time, Windows may ask whether to let the game through its firewall: allow it on private networks.</p> : null}</li>
+        <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong>{OS === "mac" ? <p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (CrossOver): click Allow.</p> : OS === "windows" ? <p>The first time, Windows may ask whether to let the game through its firewall: allow it on private networks. If friends still can't see it, Windows may think this Wi-Fi is public: in Settings, Network & internet, open your Wi-Fi and pick Private network.</p> : null}</li>
         <li className="now"><strong>Friends join from the LAN tab</strong><p>In Counter-Strike, open <b>Find Servers</b> and the <b>LAN</b> tab, and your server is there{serverName ? ` as "${serverName}"` : ""}.</p></li>
       </ol>
     );

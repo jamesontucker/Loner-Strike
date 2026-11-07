@@ -29,6 +29,8 @@
   --text: "Barlow Semi Condensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;
   --side-w: 224px;
   --strip-h: 64px;
+  /* the page's side margin: the top bar, the quick bar and the page line up on it */
+  --gutter: 24px;
 }
 
 * { box-sizing: border-box; }
@@ -122,7 +124,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .strip {
   height: var(--strip-h); flex: none;
   display: flex; align-items: center; gap: 22px;
-  padding: 0 22px;
+  padding: 0 var(--gutter);
   border-bottom: 1px solid var(--bevel-lo);
   box-shadow: 0 1px 0 rgba(136,145,128,.25);
   background: var(--panel);
@@ -154,8 +156,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .live.on::before { background: var(--ok); box-shadow: 0 0 0 3px rgba(157,176,98,.22); }
 
 /* ---- content ---------------------------------------------------------- */
-.content { flex: 1; overflow-y: auto; padding: 26px 28px 60px; }
-.stack > * + * { margin-top: 34px; }
+.content { flex: 1; overflow-y: auto; padding: 24px var(--gutter) 60px; }
+.stack > * + * { margin-top: 32px; }
 .section-head { display: grid; gap: 6px; margin-bottom: 14px; }
 .section-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; min-height: 32px; }
 .section-head p { margin: 0; color: var(--bone-faint); font-size: 15px; max-width: 78ch; }
@@ -268,7 +270,8 @@ a { color: var(--signal); }
 .btn.primary { background: var(--signal); color: var(--signal-ink); box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
 .btn.primary:hover { color: var(--signal-ink); filter: brightness(1.06); }
 .btn.danger { color: #f0b9a6; }
-.btn.small { padding: 2px 8px; font-size: 13px; margin-left: 6px; }
+.btn.small { padding: 2px 8px; font-size: 13px; }
+p > .btn.small { margin-left: 6px; }
 .btn:disabled { opacity: .55; cursor: default; }
 a.btn { text-decoration: none; display: inline-block; }
 select, .search {
@@ -298,7 +301,7 @@ select, .search {
 .banner {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal);
-  padding: 12px 14px; margin-bottom: 14px; border-radius: 2px;
+  padding: 12px 14px; margin-bottom: 16px; border-radius: 2px;
 }
 .panel { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 16px 18px; }
 .panel h3 { margin: 0 0 10px; font-size: 17px; }
@@ -371,7 +374,8 @@ input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
 .sheet-pic { aspect-ratio: 16/8; background: #23271c; overflow: hidden; }
 .sheet-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sheet-pic.radar img { object-fit: contain; }
-.sheet-body { padding: 16px 18px 18px; }
+.sheet-body { padding: 20px; }
+.sheet-body > h2 { margin-bottom: 8px; }
 .map-title { font: 400 30px/1 var(--stencil); margin-bottom: 6px; }
 .gb-text { white-space: pre-line; color: var(--bone-dim); font-size: 15px; max-height: 180px; overflow: auto; }
 .files { list-style: none; padding: 0; margin: 10px 0 14px; }
@@ -438,7 +442,10 @@ input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
 .side-foot { color: var(--bone-faint); font-size: 13px; padding: 10px 8px 0; }
 .dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--signal); }
 .waiting { padding: 40px 0; }
-.waiting h2 { margin-bottom: 6px; }
+.waiting h2 { margin-bottom: 8px; }
+.waiting > p { max-width: 62ch; margin: 0 0 6px; }
+.waiting > .btn { margin-top: 14px; }
+.waiting > .row { margin-top: 20px; } /* collapses with the p's 6px: lines up with the lone button's 6 + 14 */
 .thumb { background-size: cover; background-position: center; }
 
 
@@ -448,16 +455,17 @@ input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
 
 /* ---- phones and narrow windows ----------------------------------------- */
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) {
+  :root { --gutter: 16px; }
   body { overflow: auto; }
   .shell { grid-template-columns: 1fr; height: auto; min-height: 100%; }
   .sidebar { display: none; }
   .main { min-height: 100vh; }
-  .content { overflow: visible; padding: 16px 14px calc(84px + env(safe-area-inset-bottom)); }
+  .content { overflow: visible; padding: 16px var(--gutter) calc(84px + env(safe-area-inset-bottom)); }
 
   .strip {
     position: sticky; top: 0; z-index: 20;
     height: auto; min-height: 56px; gap: 12px; flex-wrap: wrap;
-    padding: calc(8px + env(safe-area-inset-top)) 14px 8px;
+    padding: calc(8px + env(safe-area-inset-top)) var(--gutter) 8px;
   }
   .strip-map { flex: 1; }
   .thumb { width: 52px; height: 32px; }
@@ -518,11 +526,21 @@ input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
 
   .sheet-backdrop { align-items: end; padding: 0; }
   .sheet, .sheet.wide { width: 100%; max-height: 92vh; border-radius: 6px 6px 0 0; padding-bottom: env(safe-area-inset-bottom); }
-  .toasts { left: 12px; right: 12px; top: auto; transform: none; width: auto; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; }
+  .toasts { left: var(--gutter); right: var(--gutter); top: auto; transform: none; width: auto; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; }
 }
 
 .section-tabs { margin: 0 0 12px; }
-.small-note { font-size: 13px; margin: 3px 0 0; }
+.small-note { font-size: 13px; }
+/* a note paragraph: clear of what's above and below (just under a heading it stays close) */
+p:where(.small-note) { margin: 8px 0; }
+:where(h2, h3, h4) + p:where(.small-note) { margin-top: 4px; }
+p:where(.small-note:last-child) { margin-bottom: 0; }
+/* buttons under text: 12px, not the paragraph's 8px. Only in block boxes (margins collapse), and
+   :where() keeps it weaker than a layout's own spacing (.stack-tight, .match-actions, ...) */
+:where(.panel:not(.row, .needs-setup), .sheet-body, .addon, .steps > li) > :where(p, ul, ol, textarea, .address, .gb-text) + :where(.row) { margin-top: 12px; }
+:where(.panel:not(.row, .needs-setup), .sheet-body, .addon, .steps > li) > :where(p) + :where(.btn) { margin-top: 4px; } /* inline-block: adds to the p's 8px */
+/* a sheet's buttons at its foot */
+.sheet-body > :where(.row:last-child) { margin-top: 16px; }
 .preview { width: 100%; margin: 6px 0 10px; }
 
 /* ---- setup wizard ---------------------------------------------------------- */
@@ -737,8 +755,8 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 }
 
 /* ---- asking before something can't be undone ------------------------------------ */
-.sheet.ask { width: min(460px, 100%); padding: 20px 22px 18px; }
-.ask p { margin: 0 0 18px; font-size: 17px; line-height: 1.45; text-wrap-style: pretty; }
+.sheet.ask { width: min(460px, 100%); padding: 20px; }
+.ask p { margin: 0 0 16px; font-size: 17px; line-height: 1.45; text-wrap-style: pretty; }
 .ask-buttons { justify-content: flex-end; }
 .btn.danger.strong { background: #8a4636; color: #fbe9e2; }
 .btn.danger.strong:hover { background: #9c513f; color: #fff; }
@@ -758,7 +776,7 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .tab-group-name { font-size: 12px; font-weight: 700; color: var(--bone-faint); }
 .tab-group .chips { flex-wrap: nowrap; }
 .chip { white-space: nowrap; }
-.home-hint { margin-bottom: 18px; }
+.home-hint { margin-bottom: 16px; }
 
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) {
   .server-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
@@ -822,18 +840,17 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 
 /* ---- quick actions under the top bar ---------------------------------------------- */
 .quick { flex: none; background: var(--side); box-shadow: inset 0 -1px 0 var(--bevel-lo); }
-.quick-inner { display: flex; gap: 6px; align-items: center; padding: 8px 22px; overflow-x: auto; scrollbar-width: none; }
+.quick-inner { display: flex; gap: 6px; align-items: center; padding: 8px var(--gutter); overflow-x: auto; scrollbar-width: none; }
 .quick-inner::-webkit-scrollbar { display: none; }
 .qb { flex: none; border: 0; border-radius: 2px; padding: 5px 10px; background: var(--panel); color: var(--bone-dim); box-shadow: var(--raised); font: 600 13px/1.2 var(--text); white-space: nowrap; cursor: pointer; }
 .qb:hover { color: var(--bone); }
 .qb[aria-pressed="true"] { background: var(--panel-2); color: var(--signal); }
 .qb:disabled { opacity: .45; cursor: default; }
 .qb-count { flex: none; color: var(--bone-faint); font-size: 13px; font-weight: 600; padding: 0 4px; }
-.quick-announce { display: flex; gap: 8px; padding: 0 22px 10px; }
+.quick-announce { display: flex; gap: 8px; padding: 0 var(--gutter) 10px; }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) {
-  .quick-inner { padding: 8px 12px; }
   .qb { min-height: 40px; padding: 8px 12px; font-size: 14px; }
-  .quick-announce { padding: 0 12px 10px; flex-wrap: wrap; }
+  .quick-announce { flex-wrap: wrap; }
   .quick-announce .search { flex-basis: 100%; }
 }
 
@@ -871,7 +888,7 @@ a.btn.primary { color: var(--signal-ink); }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) { .start-box .seg, .first-row .seg { display: grid; grid-template-columns: repeat(4, 1fr); } }
 
 /* ---- admins: tabs ------------------------------------------------------------------- */
-.admin-tabs { margin-bottom: -10px; }
+.admin-tabs { margin-bottom: -8px; } /* 24px to the section below, inside a .stack */
 .tab-n { font-style: normal; margin-left: 6px; font-size: 12px; color: var(--bone-faint); background: var(--bg); border-radius: 8px; padding: 0 6px; }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) { .admin-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .admin-tabs::-webkit-scrollbar { display: none; } }
 
@@ -904,6 +921,7 @@ a.btn.primary { color: var(--signal-ink); }
 .sound-packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 .sound-pack { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .sound-pack h3 { margin-top: 6px; }
+.sound-pack .small-note { margin-bottom: 0; }
 .sound-pack .pack-about { margin: 6px 0 0; font-size: 15px; color: var(--bone-dim); }
 .sound-pack .pack-actions { margin-top: auto; padding-top: 12px; }
 .sound-pack .tag.ok { color: var(--ok); }
@@ -1012,6 +1030,7 @@ a.btn.primary { color: var(--signal-ink); }
 .map-card.selected .map-pic { outline: 3px solid var(--signal); }
 .map-card.selected .map-label { color: var(--signal); }
 .switch-mode .sheet-body { display: grid; gap: 12px; }
+.switch-mode .sheet-body > * { margin: 0; } /* the grid's gap spaces it */
 .switch-maps { max-height: 46vh; overflow-y: auto; padding: 4px 2px; }
 @media (prefers-reduced-motion: reduce) { .fav-toggle { transition: none; } }
 
@@ -1025,7 +1044,6 @@ a.btn.primary { color: var(--signal-ink); }
 .hltv-addresses { display: grid; gap: 8px; margin-bottom: 12px; }
 .hltv-addresses p { margin: 0; }
 .hltv-address { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
-.hltv-address .btn.small { margin-left: 0; }
 .hltv-cmd { font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--bg); box-shadow: var(--sunken); padding: 4px 8px; border-radius: 2px; overflow-wrap: anywhere; justify-self: start; }
 .hltv-numbers { gap: 16px; }
 .hltv-numbers .field { margin-bottom: 4px; }
@@ -1102,6 +1120,7 @@ button.cm-stat[aria-expanded="true"] { background: var(--panel); }
 .cm-status.muted, .cm-status.blocked { background: #8a4636; color: #f6dcd2; box-shadow: none; }
 .cm-status.report { background: var(--signal); color: var(--signal-ink); box-shadow: none; }
 .cm-line-actions { background: var(--panel); padding: 4px 10px 12px; display: grid; gap: 8px; }
+.cm-detail > p, .cm-line-actions > p { margin: 0; }
 .cm-reports > li.done .person { opacity: .65; }
 .cm-reason { color: var(--bone); overflow-wrap: anywhere; }
 .cm-report-actions { margin-top: 8px; }
@@ -1219,19 +1238,16 @@ select option, select optgroup { background: var(--panel); color: var(--bone); }
 .start-box select, .start-box .map-picker-button { height: 40px; box-sizing: border-box; font-size: 16px; }
 
 /* ---- game files out of date after an app update -------------------------------------- */
-.files-update { margin-bottom: 18px; border-left: 3px solid var(--signal); }
+.files-update { margin-bottom: 16px; border-left: 3px solid var(--signal); }
 .files-update h3 { margin: 0 0 6px; }
 .files-update-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 4px; }
 .files-update-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
-.files-update-row .btn.small { margin-left: 0; }
 .files-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 16px; padding: 8px 10px 8px 14px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; font-size: 14px; }
 .files-bar-actions { display: flex; align-items: center; gap: 6px; }
-.files-bar-actions .btn.small { margin-left: 0; }
 .files-bar-close { border: 0; background: none; color: var(--bone-dim); font-size: 18px; line-height: 1; padding: 2px 6px; cursor: pointer; }
 .files-bar-close:hover { color: var(--bone); }
 .files-sheet { max-width: 520px; }
 .files-sheet .files-update-list { max-height: 50vh; overflow-y: auto; padding-right: 6px; }
-.files-sheet h2 { margin-top: 0; }
 
 /* ---- "?" explanations next to fields ------------------------------------------------- */
 .info { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
@@ -1271,9 +1287,9 @@ code.secret { padding: 5px 8px; background: var(--line); box-shadow: var(--sunke
 .nav-item.needs-game svg { opacity: .55; }
 .working-phone { display: none; }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) {
-  .working-phone { display: flex; margin: 0; padding: 6px 16px; max-width: none; background: var(--side); box-shadow: inset 0 -1px 0 var(--line); }
+  .working-phone { display: flex; margin: 0; padding: 6px var(--gutter); max-width: none; background: var(--side); box-shadow: inset 0 -1px 0 var(--line); }
 }
-.more-sheet .nav-group { padding: 10px 14px 4px; }
+.more-sheet .nav-group { padding: 10px 0 4px; }
 
 /* ---- admins, community, extras, welcome, match mode ---- */
 .needs-setup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
@@ -1383,7 +1399,8 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
   /* the More sheet scrolls when it's taller than the screen */
   .sheet-backdrop.bottom .more-sheet { max-height: calc(100dvh - 76px - env(safe-area-inset-bottom) - env(safe-area-inset-top)); overflow-y: auto; overscroll-behavior: contain; }
   .sheet, .sheet.wide { max-height: calc(92dvh / var(--zoom, 1)); }
-  .sheet.ask { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+  .sheet-body { padding: 16px; }
+  .sheet.ask { padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
   /* Live / Offline stays in the top bar; the busy line runs along its bottom instead */
   .strip-actions { display: flex; margin-left: auto; }
   .strip-actions .working { display: none; }
@@ -1396,9 +1413,7 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
   /* the keyboard is up: the tab bar would sit on top of it */
   body:has(:is(input:not([type="checkbox"]):not([type="range"]):not([type="radio"]), textarea, select):focus) .tabbar { display: none; }
   /* a phone on its side: clear of the notch */
-  .content { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
-  .strip { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
-  .quick-inner { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+  .content, .strip, .quick-inner, .quick-announce { padding-left: max(var(--gutter), env(safe-area-inset-left)); padding-right: max(var(--gutter), env(safe-area-inset-right)); }
   .tabbar { padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
   /* 44px touch targets */
   .switch { width: 56px; height: 44px; }

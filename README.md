@@ -1,5 +1,10 @@
 # Loner-Strike
 
+[![Latest release](https://img.shields.io/github/v/release/jamesontucker/Loner-Strike?label=release)](https://github.com/jamesontucker/Loner-Strike/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/jamesontucker/Loner-Strike/total)](https://github.com/jamesontucker/Loner-Strike/releases)
+[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Mac%20(CrossOver)-informational)](#requirements)
+[![License: GPL-3.0](https://img.shields.io/github/license/jamesontucker/Loner-Strike)](LICENSE)
+
 **Play Counter-Strike like it's 2004, alone or with the friends you don't have.**
 
 Counter-Strike 1.6 and Condition Zero set up like an old community server, except it's only you, your bots and maybe a friend.
@@ -48,16 +53,30 @@ The mods are community classics. We added:
 - **The Game Mode Menu, the server plugins and the app**, so you never have to edit a config file.
 - **Fixes** for Gun Game and Deathmatch spawns on maps without spawn files, the map timer while bots learn a map, and a Deathmatch crash on long sessions.
 
+## Requirements
+
+- Counter-Strike 1.6, Condition Zero or both, bought on Steam (other copies aren't supported)
+- Windows 10 or 11, or a Mac with [CrossOver](https://www.codeweavers.com/crossover) (Apple Silicon or Intel)
+- About 1 GB free for the mods, plus room for any maps you add
+- For a server on a VPS: an Ubuntu or Debian machine on x86 (AMD or Intel) with SSH access
+
 ## Install
 
-You need Counter-Strike 1.6, Condition Zero or both, on Steam.
-
-- **Windows:** download Loner-Strike from [Releases](https://github.com/jamesontucker/Loner-Strike/releases) and open it. Setup finds the game and walks you through the rest.
+- **Windows:** download Loner-Strike from [Releases](https://github.com/jamesontucker/Loner-Strike/releases) and open it. Setup finds the game and walks you through the rest. Windows may show "Windows protected your PC" (SmartScreen) because the app is new and not yet widely downloaded: click More info, then Run anyway.
 - **Mac:** the Mac version of Counter-Strike can't run mods, so play it through [CrossOver](https://www.codeweavers.com/crossover) (paid, with a free trial): install Windows Steam in a CrossOver bottle and Counter-Strike in that. Then download Loner-Strike from Releases; it finds the game inside CrossOver. With Parallels, run the Windows version of Loner-Strike inside the Windows virtual machine instead.
 
 Everything it changes is backed up. Remove one mode, or all of Loner-Strike, from the app and your game goes back the way it was.
 
-Only the Steam versions of the games are supported.
+Updates come through the app (Settings, Updates). What changed in each version is on the [Releases](https://github.com/jamesontucker/Loner-Strike/releases) page and in [CHANGELOG.md](CHANGELOG.md).
+
+## Troubleshooting
+
+- **The game won't start or the panel says no game is loaded.** Start the game from Play in the app, not from Steam, so it loads with the mods.
+- **Friends can't see your game on the LAN tab.** Allow the game through the firewall when asked. On Windows, also make sure your Wi-Fi is set to Private network (Settings, Network & internet).
+- **A mod misbehaves after a game update.** Open Settings and click Run full setup; it reinstalls what's missing and keeps your settings.
+- **You want everything gone.** Settings has Remove Loner-Strike, which puts your game back the way it was.
+
+Still stuck? Open Settings, click Copy next to Copy diagnostics (version, game folders, what's installed and recent errors; no passwords) and paste it into a [new issue](https://github.com/jamesontucker/Loner-Strike/issues/new).
 
 ## Run a server on a VPS
 
@@ -86,7 +105,7 @@ site/            lonerstrike.com
 
 ## Building it
 
-You need [Rust](https://rustup.rs), Node.js 20 and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your system.
+You need [Rust](https://rustup.rs), Node.js 22 and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your system.
 
 ```
 cd app/ui
@@ -95,6 +114,10 @@ npm run tauri dev       # runs the app with the UI built in
 ```
 
 `cargo test` in `app/src-tauri` runs the tests. Releases are built by GitHub Actions when a `v*` tag is pushed (see `.github/workflows/release.yml`).
+
+## Contributing
+
+Contributions are welcome. It's a side project, so I work on it on and off and replies can take a while. For anything bigger than a fix, open an issue first so we can talk it through.
 
 ## Credits
 

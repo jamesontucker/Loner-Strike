@@ -540,7 +540,8 @@ function Waiting({ label, game, gameOpen, reason, onPlay, setUp, openSetup }: { 
               ? `This works in a game you host. ${game} is open, but no map is loaded: start a game from its New Game menu, or quit it and start one from Play.`
               : "This works in a game you host. Start one from Play and this page fills in."}
           </p>
-          {reason && !gameOpen && <p className="muted small-note">{reason}</p>}
+          {/* the plain "nothing loaded" reason only repeats the line above */}
+          {reason && !gameOpen && !reason.startsWith("No game is loaded") && <p className="muted small-note">{reason}</p>}
           {!gameOpen && <button className="btn primary" onClick={onPlay}>Start a game</button>}
         </>
       ) : (
