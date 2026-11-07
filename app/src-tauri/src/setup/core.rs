@@ -76,7 +76,15 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
         ctx.progress.note(&format!("Couldn't compile {src_rel}: the compiler didn't run or took too long."));
         return Ok(false);
     };
-    let all = format!("{out}{err}");
+    // CrossOver's own chatter (graphics setup, "fixme" notes) isn't the compiler's
+    let all: String = format!("{out}{err}").lines().filter(|l| !is_wine_noise(l)).collect::<Vec<_>>().join("\n");
+    if crashed(&Some((false, all.clone(), String::new()))) {
+        ctx.progress.note(&format!(
+            "Couldn't compile {src_rel}: the compiler crashed{}. Run full setup again to try it once more.",
+            if install_is_crossover(ctx) { " (this happens now and then under CrossOver)" } else { "" }
+        ));
+        return Ok(false);
+    }
     if !all.contains("Done.") {
         let errors: Vec<&str> = all.lines().filter(|l| l.to_lowercase().contains("error")).take(5).collect();
         let why = if errors.is_empty() {
@@ -91,6 +99,21 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
         return Ok(false);
     }
     Ok(true)
+}
+
+/// A line Wine or CrossOver printed while running the compiler, not the compiler itself.
+fn is_wine_noise(line: &str) -> bool {
+    let l = line.trim();
+    l.is_empty()
+        || l.contains("fixme:")
+        || l.contains("err:")
+        || l.contains("warn:")
+        || l.contains("[mvk-")
+        || l.contains("MoltenVK")
+        || l.contains("Vulkan")
+        || l.starts_with("VK_")
+        || l.contains("macOS GPU Family")
+        || l.starts_with("wine:")
 }
 
 fn install_is_crossover(ctx: &Ctx) -> bool {
@@ -268,5 +291,18 @@ mod tests {
     fn filters_like_python() {
         let t = "; comment\r\n\r\nclassic \"C\"\r\nzombie \"Z\"\r\n";
         assert_eq!(filter_lines(t, |m| m == "classic"), "; comment\r\n\r\nclassic \"C\"\r\n");
+    }
+}
+
+#[cfg(test)]
+mod noise_tests {
+    #[test]
+    fn wine_chatter_is_not_the_compilers() {
+        for l in ["103c:fixme:thread:get_thread_times not implemented", "[mvk-info] Created VkInstance for Vulkan version 1.0.0", "VK_KHR_external_memory_capabilities v1", "macOS GPU Family 1 v1"] {
+            assert!(super::is_wine_noise(l), "{l}");
+        }
+        for l in ["basebuilder.sma(120) : error 017: undefined symbol", "Done."] {
+            assert!(!super::is_wine_noise(l), "{l}");
+        }
     }
 }
