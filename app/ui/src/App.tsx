@@ -7,7 +7,7 @@ import { forgetLive, queryClient, reloadAppInfo, useOpenReports, reloadMaps, rel
 import { hasUnsavedEdits, isPageEntry, useNav, type Section } from "./store";
 import { usePlayDrafts } from "./stores/playDraft";
 import type { AppInfo, Online } from "./types";
-import { applyScale, closeTopSheet, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, skipOwnBack, ToastProvider, useConfirm, useToast } from "./ui";
+import { applyScale, closeSheetsAbove, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, ToastProvider, useConfirm, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
 import { Addons } from "./views/Addons";
 import { AppSettings, noteUpdateChecked } from "./views/AppSettings";
@@ -152,18 +152,29 @@ function Shell() {
   // server's page, then the page before. Each page and sheet has its own history entry
   // (store.ts, ui.tsx), so this only has to follow the entry Back landed on.
   useEffect(() => {
+    // while asking about unsaved edits, the question's own history steps are ignored
+    let asking = false;
     const onPop = async (e: PopStateEvent) => {
-      // a sheet closed by its own button took its entry off again: nothing to do
-      if (skipOwnBack()) return;
-      if (closeTopSheet()) return;
+      if (asking) return;
+      // sheets opened after the entry Back landed on close (that's all a Back over a
+      // sheet does, and a sheet taking its own entry off again closes nothing else)
+      if (closeSheetsAbove((e.state as { sheet?: number } | null)?.sheet ?? 0)) return;
       const to = e.state;
       if (!isPageEntry(to)) return;
       const now = useNav.getState();
       if (to.section === now.section && to.server === now.server) return;
       if (hasUnsavedEdits()) {
-        // stay until they say so (put the page back in the history meanwhile)
-        history.pushState({ ls: 1, section: now.section, server: now.server }, "");
-        if (!(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
+        asking = true;
+        const leave = await ask("Leave without saving your changes?", { ok: "Leave", danger: true });
+        // let the question's sheet finish taking its entry off before deciding
+        await new Promise((r) => setTimeout(r, 50));
+        asking = false;
+        if (!leave) {
+          // stay: this page goes back on top of the history
+          history.pushState({ ls: 1, section: now.section, server: now.server }, "");
+          return;
+        }
+        history.replaceState({ ls: 1, section: to.section, server: to.server }, "");
       }
       useNav.getState().restore(to.section, to.server);
     };

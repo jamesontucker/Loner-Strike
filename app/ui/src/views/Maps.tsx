@@ -271,7 +271,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               {live ? (
                 <BusyButton className="btn primary" busy={busy(key("change"))} label={`Play ${picked.name}`} busyLabel="Changing…" onClick={() => { setPicked(null); changeMap(picked.name); }} />
               ) : (
-                !currentTarget() && <button className="btn primary" onClick={() => startOn(picked.name)}>Start a game on {picked.name}</button>
+                !currentTarget() && !picked.hidden && <button className="btn primary" onClick={() => startOn(picked.name)}>Start a game on {picked.name}</button>
               )}
               <BusyButton busy={busy(key(`flag:fav:${picked.name}`))} label={picked.fav ? "Unfavourite" : "Favourite"} busyLabel="Saving…" onClick={() => flag(picked, "fav", !picked.fav)} />
               <BusyButton busy={busy(key(`flag:hidden:${picked.name}`))} label={picked.hidden ? "Show again" : "Hide"} busyLabel={picked.hidden ? "Showing…" : "Hiding…"} onClick={() => flag(picked, "hidden", !picked.hidden)} />

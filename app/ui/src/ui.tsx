@@ -14,22 +14,13 @@ let openSheets = 0;
 type OpenSheet = { id: number; close: () => void };
 const sheetStack: OpenSheet[] = [];
 let nextSheet = 1;
-/** Back presses we caused ourselves (a sheet closed by its own button takes its entry
- *  off again), which the popstate handler skips. */
-let ownBacks = 0;
-/** For App.tsx's popstate handler: true when this Back was ours and should be ignored. */
-export function skipOwnBack() {
-  if (ownBacks <= 0) return false;
-  ownBacks--;
-  return true;
-}
-/** Back was pressed: closes the top sheet (true), or says there's none (false). A sheet
- *  that can't be closed keeps its place in the history. */
-export function closeTopSheet() {
-  const top = sheetStack[sheetStack.length - 1];
-  if (!top) return false;
-  top.close();
-  return true;
+/** History moved to an entry over sheet `landed` (0: no sheet): every sheet opened after
+ *  it closes (true), or there was none (false). Works from the entry alone, so a Back we
+ *  caused ourselves (a sheet taking its entry off again) closes nothing extra. */
+export function closeSheetsAbove(landed: number) {
+  const above = sheetStack.filter((s) => s.id > landed);
+  above.reverse().forEach((s) => s.close());
+  return above.length > 0;
 }
 /** A sheet's history entry carries the page it's over, so going back to it later (once the
  *  sheet is gone) just lands on that page. */
@@ -122,10 +113,7 @@ export function Sheet({
       if (at >= 0) sheetStack.splice(at, 1);
       // closed by its own button (its entry is still the current one): take the entry off
       // again, so Back afterwards goes where it should
-      if ((history.state as { sheet?: number } | null)?.sheet === id) {
-        ownBacks++;
-        history.back();
-      }
+      if ((history.state as { sheet?: number } | null)?.sheet === id) history.back();
     };
   }, []);
   return createPortal(

@@ -71,8 +71,8 @@ export const useNav = create<Nav>((set, get) => ({
   openServer: (server) => {
     if (server === get().server) return;
     switchTarget(server);
-    // a server's page is a step Back can undo
-    if (server) pushPage(get().section, server);
+    // a server's page, and going back to the list, are steps Back can undo
+    pushPage(get().section, server);
   },
   restore: (section, server) => {
     if (server !== get().server) switchTarget(server);
@@ -104,6 +104,12 @@ export type PageEntry = { ls: 1; section: Section; server: string | null; sheet?
 export const isPageEntry = (v: unknown): v is PageEntry => !!v && typeof v === "object" && (v as PageEntry).ls === 1 && SECTIONS.includes((v as PageEntry).section);
 function pushPage(section: Section, server: string | null) {
   try {
+    // leaving from over a sheet (the More menu, a map's sheet): the sheet is going, so its
+    // entry becomes the new page instead of staying behind as a dead Back
+    if ((history.state as PageEntry | null)?.sheet) {
+      history.replaceState({ ls: 1, section, server } satisfies PageEntry, "");
+      return;
+    }
     history.pushState({ ls: 1, section, server } satisfies PageEntry, "");
   } catch {
     /* history unavailable */

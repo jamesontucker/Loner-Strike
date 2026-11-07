@@ -188,6 +188,9 @@ async fn ui(uri: Uri, headers: axum::http::HeaderMap) -> Response {
         // an old build's file (a page left open across an update): say so, so the page
         // can reload, instead of answering with the HTML page
         None if file.starts_with("assets/") => return (StatusCode::NOT_FOUND, "not found").into_response(),
+        // an API path this listener doesn't serve (computer-only, asked from a phone):
+        // say so, so the page can explain, instead of answering with the HTML page
+        None if file.starts_with("api/") => return (StatusCode::FORBIDDEN, axum::Json(serde_json::json!({"error": "forbidden"}))).into_response(),
         None => match Ui::get("index.html") {
             Some(f) => ("index.html", f),
             None => return (StatusCode::NOT_FOUND, "The app's pages are missing. Rebuild the UI (npm run build in app/ui).").into_response(),

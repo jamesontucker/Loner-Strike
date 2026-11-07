@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { PageBoundary } from "./ui";
 import "./styles.css";
 
 // "Loner-Strike" never splits at its hyphen at the end of a line: an invisible word
@@ -25,6 +26,10 @@ new MutationObserver((changes) => {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    {/* anything that crashes outside a page (the top bar, setup, a dialog) still
+        leaves a way out instead of a blank window */}
+    <PageBoundary>
+      <App />
+    </PageBoundary>
   </React.StrictMode>,
 );
