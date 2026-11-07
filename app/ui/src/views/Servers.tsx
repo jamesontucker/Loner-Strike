@@ -693,8 +693,8 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
           <Switch on={botsShown} disabled={ro} label="Bots play on an empty server" onChange={setBotsEmpty} />
         </div>
         <div className="setting">
-          <span className="name">Show on the Loner-Strike server list<Info text="Other Loner-Strike players see it under Find servers, and can join with a click. The list checks the server itself, so it has to be reachable from the internet." /></span>
-          <Switch on={listed} disabled={ro} label="Show on the Loner-Strike server list" onChange={setListed} />
+          <span className="name">On the server list<span className="note">Other Loner-Strike players find it under Find servers and join with a click. It has to be reachable from the internet</span></span>
+          <Switch on={listed} disabled={ro} label="On the Loner-Strike server list" onChange={setListed} />
         </div>
         <details className="advanced">
           <summary>Advanced</summary>
