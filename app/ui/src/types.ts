@@ -113,6 +113,10 @@ export type ServerInfo = {
   /** on another machine (a VPS): its address */
   host?: string | null;
   address?: string;
+  /** a domain name (or IP, optionally with :port) pointing at it, shown in place of the IP */
+  public_address?: string | null;
+  /** the address shown and shared: the public address when set, else `address` */
+  connect?: string;
   /** on another machine: why it didn't answer last time (it's shown stopped meanwhile) */
   unreachable?: string | null;
   /** new files went up to its machine: used after a restart or map change */
@@ -148,3 +152,9 @@ export type AdminPerson = { id: string; name: string; role: AdminRole; expires: 
 export type SeenPlayer = { id: string; name: string; aka: string[]; first: number; last: number; visits: number };
 export type AdminList = { people: AdminPerson[]; seen: SeenPlayer[]; bans: { kind: "id" | "ip"; value: string }[]; today: string; users_ini: boolean };
 export type AdminReply = AdminList | { ok: false; error: string };
+
+/** The host name shown for a server: its public address's name, else the VPS's IP (none for a server on this computer without one). */
+export const serverHost = (s: ServerInfo) => (s.public_address ? s.public_address.split(":")[0] : s.host) ?? null;
+
+/** The address players connect to, as shown and shared. */
+export const serverAddress = (s: ServerInfo) => s.connect ?? s.address ?? `${s.host ?? "127.0.0.1"}:${s.port}`;

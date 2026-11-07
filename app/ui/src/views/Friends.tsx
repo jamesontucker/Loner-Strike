@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { copyText, getJson, HttpError, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, usePoll } from "../api";
 import { useServers } from "../queries";
 import { useNav } from "../store";
-import type { Online } from "../types";
+import { serverAddress, serverHost, type Online } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 
 type Share = {
@@ -120,7 +120,8 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   // a server on a rented machine: friends connect straight to its address
   const open = useNav((n) => n.server);
   const servers = useServers().data;
-  const vps = server && open ? servers?.servers.find((x) => x.id === open && x.host) : undefined;
+  const mine = server && open ? servers?.servers.find((x) => x.id === open) : undefined;
+  const vps = mine?.host ? mine : undefined;
 
   useEffect(() => {
     getJson<{ ip: string | null; port: number }>("/api/app/lan")
@@ -231,7 +232,8 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
       </ol>
     );
   } else if (method === "direct") {
-    address = directHere && direct?.address ? direct.address : "";
+    // a server with a public address (a home server's dynamic DNS name, say) shares that
+    address = directHere && direct?.address ? (mine?.public_address ? serverAddress(mine) : direct.address) : "";
     live = !!address;
     steps = (
       <ol className="steps">
@@ -350,11 +352,11 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   );
 
   if (vps) {
-    const at = vps.address ?? `${vps.host}:${vps.port}`;
+    const at = serverAddress(vps);
     const invite = inviteText(serverName, password, at, [], false);
     return (
       <div className="stack">
-        <SectionHead title="Play with friends" note={`${vps.name} runs on ${vps.host}, so friends connect straight to it. They need Counter-Strike on Steam.`} />
+        <SectionHead title="Play with friends" note={`${vps.name} runs on ${serverHost(vps)}, so friends connect straight to it. They need Counter-Strike on Steam.`} />
         <div className="friends">
           <div className="panel">
             <span className={`live ${vps.state === "running" ? "on" : ""}`}>{vps.state === "running" ? "Friends can join now" : "Start the server and friends can join"}</span>

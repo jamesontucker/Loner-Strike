@@ -85,6 +85,54 @@ pub struct Entry {
     /// visibility suggests (on for "listed"), until the host picks (see bots_when_empty)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bots_when_empty: Option<bool>,
+    /// A domain name (or IP) pointing at the server, with an optional :port, shown and
+    /// shared in place of its IP (display only: the server itself doesn't use it)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_address: Option<String>,
+}
+
+const PUBLIC_ADDRESS_HELP: &str = "Enter an address like play.example.com or play.example.com:27016.";
+
+/// Checks a public address the host typed: a host name or IPv4 address, optionally with
+/// :port. Host names come back lowercase; empty clears it (None).
+pub(crate) fn clean_public_address(text: &str) -> Result<Option<String>, String> {
+    let t = text.trim();
+    if t.is_empty() {
+        return Ok(None);
+    }
+    let bad = || PUBLIC_ADDRESS_HELP.to_string();
+    if t.len() > 253 || !t.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':')) {
+        return Err(bad());
+    }
+    let (host, port) = match t.split_once(':') {
+        Some((h, p)) => {
+            // digits only (no sign), 1 to 65535
+            if p.is_empty() || !p.chars().all(|c| c.is_ascii_digit()) {
+                return Err(bad());
+            }
+            let n = p.parse::<u16>().ok().filter(|n| *n > 0).ok_or_else(bad)?;
+            (h, Some(n))
+        }
+        None => (t, None),
+    };
+    let host = host.strip_suffix('.').unwrap_or(host).to_ascii_lowercase();
+    let ip = host.parse::<std::net::Ipv4Addr>().is_ok();
+    let label_ok = |l: &str| !l.is_empty() && l.len() <= 63 && !l.starts_with('-') && !l.ends_with('-');
+    let labels: Vec<&str> = host.split('.').collect();
+    // the last label of a name is never all digits (that's a broken IP address like 1.2.3.999)
+    let name = labels.iter().all(|l| label_ok(l)) && !labels.last().unwrap().chars().all(|c| c.is_ascii_digit());
+    if host.is_empty() || !(ip || name) {
+        return Err(bad());
+    }
+    Ok(Some(match port {
+        Some(p) => format!("{host}:{p}"),
+        None => host,
+    }))
+}
+
+/// The host part of a public address (without any :port).
+fn public_host(a: &str) -> &str {
+    a.split_once(':').map_or(a, |(h, _)| h)
 }
 
 fn default_visibility() -> String {
@@ -141,6 +189,28 @@ impl Entry {
             Some(r) => format!("{}:{}", r.host, self.port),
             None => format!("{}:{}", self.local_host(), self.port),
         }
+    }
+
+    /// The address shown and shared: the public address when one is set (with the port
+    /// added unless it names one or the port is the game's usual 27015), else `address`.
+    pub fn connect(&self) -> String {
+        match &self.public_address {
+            Some(a) if a.contains(':') || self.port == 27015 => a.clone(),
+            Some(a) => format!("{a}:{}", self.port),
+            None => self.address(),
+        }
+    }
+
+    /// The public address's host name with another port (HLTV's), if one is set.
+    pub fn public_at(&self, port: u16) -> Option<String> {
+        self.public_address.as_deref().map(|a| format!("{}:{port}", public_host(a)))
+    }
+
+    /// What Join on this computer connects to: the shared address for a server on another
+    /// machine; a server on this computer is joined directly (a router may not loop its
+    /// own internet address back)
+    fn join_address(&self) -> String {
+        if self.remote.is_some() { self.connect() } else { self.address() }
     }
 }
 
@@ -620,6 +690,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
+        public_address: None,
     };
     let base = root.join(".base");
     let g = req.game.clone();
@@ -1047,6 +1118,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
+        public_address: None,
     };
     make_server_dir(&entry)?;
     edit(|l| l.push(entry.clone()))?;
@@ -1283,6 +1355,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
+        public_address: None,
     };
     // name and password as the Friends tab keeps them (it writes friends.cfg only when
     // something changes there, so the server's own server.cfg keeps working meanwhile)
@@ -1730,7 +1803,8 @@ fn view(e: &Entry) -> Value {
     json!({"id": e.id, "name": e.name, "game": e.game, "port": e.port, "visibility": e.visibility, "map": e.map,
            "maxplayers": e.maxplayers, "ready": e.ready, "state": state, "uptime": uptime, "error": error,
            "imported": e.imported, "loner": loner, "dir": e.dir,
-           "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(), "pending_restart": pending_restart(&e.id),
+           "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(),
+           "public_address": e.public_address, "connect": e.connect(), "pending_restart": pending_restart(&e.id),
            "listen_ip": e.listen_ip, "extra_args": e.extra_args, "password": join_password(e),
            "bots_when_empty": bots_when_empty(e), "bots_when_empty_set": e.bots_when_empty.is_some(),
            "unreachable": e.remote.as_ref().and_then(|_| unreachable(&e.id)),
@@ -1930,6 +2004,8 @@ struct Change {
     extra_args: Option<String>,
     /// bots keep playing with nobody on
     bots_when_empty: Option<bool>,
+    /// a domain name shown in place of the IP ("" clears it)
+    public_address: Option<String>,
 }
 
 async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<Change>) -> (StatusCode, Json<Value>) {
@@ -1978,6 +2054,7 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 return Err("The listen address is an IP address like 192.168.1.20, or empty for all of them.".into());
             }
         }
+        let public_address = req.public_address.as_deref().map(clean_public_address).transpose()?;
         let extra = req.extra_args.as_ref().map(|t| t.split_whitespace().collect::<Vec<_>>().join(" "));
         if let Some(t) = &extra {
             extra_args(t)?;
@@ -2013,6 +2090,9 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 }
                 if let Some(b) = req.bots_when_empty {
                     e.bots_when_empty = Some(b);
+                }
+                if let Some(a) = &public_address {
+                    e.public_address = a.clone();
                 }
             }
         })?;
@@ -2054,7 +2134,7 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
             }
         }
         // (a visibility change alone needs a restart anyway; the bots part was applied above)
-        Ok(json!({"ok": true, "restart": running(&id) && (restart_needed(&e, &now) || !bots_live)}))
+        Ok(json!({"ok": true, "restart": running(&id) && (restart_needed(&e, &now) || !bots_live), "public_address": now.public_address, "connect": now.connect()}))
     })
     .await
     .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
@@ -2103,8 +2183,8 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                     sys::close_game()?;
                 } else if sys::game_running() {
                     let url = match &pw {
-                        Some(p) => format!("steam://connect/{}/{p}", e.address()),
-                        None => format!("steam://connect/{}", e.address()),
+                        Some(p) => format!("steam://connect/{}/{p}", e.join_address()),
+                        None => format!("steam://connect/{}", e.join_address()),
                     };
                     return crate::steam::open_steam_url(&client.hl, &url).map(|_| json!({"ok": true}));
                 }
@@ -2112,7 +2192,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 if let Some(p) = pw {
                     args.extend(["+password".to_string(), p]);
                 }
-                args.extend(["+connect".to_string(), e.address()]);
+                args.extend(["+connect".to_string(), e.join_address()]);
                 let appid = if e.game == "cstrike" { "10" } else { "80" };
                 crate::steam::launch(&client.hl, appid, &args).map(|_| json!({"ok": true}))
             }
@@ -2565,7 +2645,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None,
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None,
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -2577,10 +2657,68 @@ mod tests {
     }
 
     #[test]
+    fn public_addresses() {
+        let ok = |t: &str| clean_public_address(t).unwrap();
+        assert_eq!(ok(""), None);
+        assert_eq!(ok("   "), None, "empty clears it");
+        assert_eq!(ok(" Play.LonerStrike.com "), Some("play.lonerstrike.com".into()));
+        assert_eq!(ok("play.example.com:27016"), Some("play.example.com:27016".into()));
+        assert_eq!(ok("play.example.com."), Some("play.example.com".into()));
+        assert_eq!(ok("178.156.241.180"), Some("178.156.241.180".into()));
+        assert_eq!(ok("178.156.241.180:27015"), Some("178.156.241.180:27015".into()));
+        assert_eq!(ok("my-home.duckdns.org:65535"), Some("my-home.duckdns.org:65535".into()));
+        assert_eq!(ok("localhost"), Some("localhost".into()));
+        let long = format!("{}.com", vec!["a".repeat(60); 5].join("."));
+        assert!(long.len() > 253);
+        for bad in [
+            "http://play.example.com", "https://play.example.com", "play.example.com/join", "play example.com", "play.example.com:0",
+            "play.example.com:65536", "play.example.com:", "play.example.com:+1", "play.example.com:27016:1", ":27016", "-play.example.com",
+            "play-.example.com", "play..example.com", ".example.com", "1.2.3.999", "1.2.3", "play_x.example.com", "user@play.example.com",
+            "play.example.com?x", "[::1]:27015", &"a".repeat(64), &long,
+        ] {
+            assert_eq!(clean_public_address(bad), Err(PUBLIC_ADDRESS_HELP.to_string()), "{bad}");
+        }
+    }
+
+    #[test]
+    fn connect_addresses() {
+        let mut e: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/x","kind":"windows","bottle":null}"#).unwrap();
+        assert!(e.public_address.is_none(), "servers.json from before public addresses still loads");
+        // unset: the same as before
+        assert_eq!(e.connect(), "127.0.0.1:27016");
+        assert_eq!(e.connect(), e.address());
+        assert_eq!(e.join_address(), "127.0.0.1:27016");
+        e.listen_ip = "192.168.1.20".into();
+        assert_eq!(e.connect(), "192.168.1.20:27016");
+        e.public_address = Some("home.example.com".into());
+        assert_eq!(e.connect(), "home.example.com:27016");
+        assert_eq!(e.join_address(), "192.168.1.20:27016", "a server on this computer is joined directly");
+        e.public_address = Some("home.example.com:28000".into());
+        assert_eq!(e.connect(), "home.example.com:28000", "a port it names is kept");
+        assert_eq!(e.public_at(27020).as_deref(), Some("home.example.com:27020"));
+
+        e.listen_ip.clear();
+        e.public_address = None;
+        e.port = 27015;
+        e.remote = serde_json::from_value(serde_json::json!({"host": "178.156.241.180", "key": "/k"})).unwrap();
+        assert_eq!(e.connect(), "178.156.241.180:27015");
+        assert_eq!(e.join_address(), "178.156.241.180:27015");
+        assert_eq!(e.public_at(27020), None);
+        e.public_address = Some("play.lonerstrike.com".into());
+        assert_eq!(e.connect(), "play.lonerstrike.com", "27015 is the game's usual port: left off");
+        assert_eq!(e.join_address(), "play.lonerstrike.com");
+        e.port = 27017;
+        assert_eq!(e.connect(), "play.lonerstrike.com:27017");
+        // saved and loaded again
+        let back: Entry = serde_json::from_str(&serde_json::to_string(&e).unwrap()).unwrap();
+        assert_eq!(back.public_address.as_deref(), Some("play.lonerstrike.com"));
+    }
+
+    #[test]
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None,
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None,
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));

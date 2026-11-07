@@ -21,7 +21,8 @@ type Status = {
   server_running: boolean;
   /** on a Linux server: the address to watch from is the machine's */
   remote?: boolean;
-  addresses: { computer: string | null; network: string | null; internet?: string };
+  /** internet: the server's public address with HLTV's port (on a VPS, its IP when none is set) */
+  addresses: { computer: string | null; network: string | null; internet?: string | null };
   visibility: "lan" | "unlisted" | "listed";
   demos: Demo[];
   console: string[];
@@ -327,7 +328,7 @@ function Addresses({ st }: { st: Status }) {
     else toast("Couldn't copy. Select the text instead.", true);
   };
   const port = st.settings.port;
-  if (st.addresses.internet) {
+  if (st.remote && st.addresses.internet) {
     const at = st.addresses.internet;
     return (
       <div className="hltv-addresses">
@@ -345,6 +346,13 @@ function Addresses({ st }: { st: Status }) {
     <div className="hltv-addresses">
       <p className="muted">To watch, open the game's console and type:</p>
       {st.settings.password && <code className="hltv-cmd">password {st.settings.password}</code>}
+      {st.addresses.internet && (
+        <div className="hltv-address">
+          <code className="hltv-cmd">connect {st.addresses.internet}</code>
+          <button className="btn small" onClick={() => copy(st.addresses.internet!)}>Copy</button>
+          <span className="muted">from the internet</span>
+        </div>
+      )}
       {st.addresses.network && (
         <div className="hltv-address">
           <code className="hltv-cmd">connect {st.addresses.network}</code>
@@ -361,7 +369,7 @@ function Addresses({ st }: { st: Status }) {
       )}
       {!st.addresses.network && !st.addresses.computer && <p className="muted small-note">The address isn't known yet. It shows here once HLTV is up.</p>}
       {st.visibility !== "lan" && (
-        <p className="muted small-note">People outside your network use your internet address with port {port}. Open UDP port {port} on your router for them, the same way as the server's own port.</p>
+        <p className="muted small-note">People outside your network use {st.addresses.internet ? "the internet address above" : `your internet address with port ${port}`}. Open UDP port {port} on your router for them, the same way as the server's own port.</p>
       )}
     </div>
   );

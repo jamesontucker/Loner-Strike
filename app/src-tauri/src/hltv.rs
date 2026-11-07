@@ -583,6 +583,16 @@ fn lan_ip() -> Option<String> {
     (!ip.is_loopback() && !ip.is_unspecified()).then(|| ip.to_string())
 }
 
+/// Where spectators connect: the server's public address (its host name with HLTV's port)
+/// when one is set, else the VPS's address, or this computer's and this network's.
+fn addresses(e: &Entry, port: u16, lan_ip: impl FnOnce() -> Option<String>) -> Value {
+    let public = e.public_at(port);
+    match &e.remote {
+        Some(r) => json!({"computer": null, "network": null, "internet": public.unwrap_or_else(|| format!("{}:{port}", r.host))}),
+        None => json!({"computer": format!("127.0.0.1:{port}"), "network": lan_ip().map(|ip| format!("{ip}:{port}")), "internet": public}),
+    }
+}
+
 fn status(e: &Entry) -> Value {
     let (running, pending, error, uptime) = match &e.remote {
         Some(r) => {
@@ -625,10 +635,7 @@ fn status(e: &Entry) -> Value {
         "slots": live.slots,
         "recording": live.recording,
         "server_running": servers::running(&e.id),
-        "addresses": match &e.remote {
-            Some(r) => json!({"computer": null, "network": null, "internet": format!("{}:{port}", r.host)}),
-            None => json!({"computer": format!("127.0.0.1:{port}"), "network": lan_ip().map(|ip| format!("{ip}:{port}"))}),
-        },
+        "addresses": addresses(e, port, lan_ip),
         "visibility": e.visibility,
         "demos": demos(e),
         "console": console(e),
@@ -858,6 +865,26 @@ mod tests {
     fn server(id: &str, port: u16) -> Entry {
         serde_json::from_value(json!({"id": id, "name": format!("Server {id}"), "game": "cstrike", "port": port, "dir": "/tmp/x", "kind": "crossover", "ready": true}))
             .unwrap()
+    }
+
+    #[test]
+    fn spectator_addresses() {
+        let mut e = server("a", 27016);
+        let lan = || Some("192.168.1.20".to_string());
+        let a = addresses(&e, 27020, lan);
+        assert_eq!(a["computer"], "127.0.0.1:27020");
+        assert_eq!(a["network"], "192.168.1.20:27020");
+        assert!(a["internet"].is_null(), "nothing set: no internet address");
+        e.public_address = Some("home.example.com".into());
+        assert_eq!(addresses(&e, 27020, lan)["internet"], "home.example.com:27020");
+        e.remote = serde_json::from_value(json!({"host": "178.156.241.180", "key": "/k"})).unwrap();
+        e.public_address = None;
+        let a = addresses(&e, 27020, lan);
+        assert_eq!(a["internet"], "178.156.241.180:27020");
+        assert!(a["network"].is_null());
+        // a port in the public address is the game's, not HLTV's
+        e.public_address = Some("play.lonerstrike.com:27016".into());
+        assert_eq!(addresses(&e, 27020, lan)["internet"], "play.lonerstrike.com:27020");
     }
 
     #[test]
