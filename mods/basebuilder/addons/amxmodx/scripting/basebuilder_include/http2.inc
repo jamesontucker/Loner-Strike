@@ -492,7 +492,7 @@ public _HTTP2_DownloadThread(ent) {
 		if ( ! ( _gHTTP2_Information[_HTTP2_Index][_Status] & _HTTP2_STATUS_ACTIVE ) )
 			continue;
 		
-		if ( ! socket_change(_gHTTP2_Information[_HTTP2_Index][_hSocket], 1000) )
+		if ( ! socket_is_readable(_gHTTP2_Information[_HTTP2_Index][_hSocket], 1000) )
 			continue;
 		
 		if ( _gHTTP2_Information[_HTTP2_Index][_Status] & _HTTP2_STATUS_CHUNKED_TRANSFER &&

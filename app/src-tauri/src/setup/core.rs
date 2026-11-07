@@ -46,10 +46,6 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
     }
     let compile = || {
         let mut cmd = windows_command(ctx.install, &exe);
-        // under CrossOver a crashing program starts Wine's debugger, which shows an error box
-        // and waits for it to be closed, and --wait-children waits on it: off for compiles,
-        // so a crash just ends the compiler
-        cmd.env("WINEDLLOVERRIDES", "winedbg.exe=d");
         cmd.arg(&src).arg(format!("-o{}", out_full.display()));
         if let Some(inc) = include_rel {
             cmd.arg(format!("-i{}", am.join("scripting").join(inc).display()));
