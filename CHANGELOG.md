@@ -5,7 +5,8 @@ What changed in each version. The downloads are on the [Releases](https://github
 ## 0.1.1 (not released yet)
 
 ### Fixes
-- Windows 10: map downloads packed as RAR files unpack again (Windows 10's own unpacker can't open many of them, so the Windows app now brings RARLAB's UnRAR).
+- Windows: the game no longer crashes on a map change. AMX Mod X's Ham Sandwich module freed something it still used, which Windows caught; the Windows app brings a fixed build of it.
+- Windows 10: map downloads packed as RAR files unpack again (Windows 10's own unpacker can't open many of them, so the Windows app now brings 7-Zip).
 - Windows: Base Builder and other modes with their own folder compile during setup.
 - Mac: Base Builder's compile no longer crashes in Condition Zero under CrossOver.
 - The window fits the screen it opens on, when it was last used on a bigger monitor.

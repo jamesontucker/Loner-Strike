@@ -109,6 +109,17 @@ pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
             rec.copy(&full, &rel)?;
         }
     }
+    // Windows: Ham Sandwich with the special-bot queue fix (resources/windows/hamsandwich/
+    // README.md). Without it hl.exe corrupts its heap on map changes; Wine on the Mac hides
+    // the bug, so CrossOver installs keep the official module.
+    if cfg!(windows) {
+        let patched = ctx.res.join("windows").join("hamsandwich").join("hamsandwich_amxx.dll");
+        if patched.is_file() {
+            rec.copy(&patched, "addons/amxmodx/modules/hamsandwich_amxx.dll")?;
+        } else {
+            ctx.progress.note("Loner-Strike's fixed Ham Sandwich module is missing from the app, so the game may crash on map changes. Reinstalling the app should fix it.");
+        }
+    }
     Ok(())
 }
 

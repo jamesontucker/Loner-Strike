@@ -25,10 +25,8 @@ jobs:
         include:
           - platform: macos-latest
             args: --target universal-apple-darwin
-            bins: '["binaries/playitd"]'
           - platform: windows-latest
             args: ""
-            bins: '["binaries/playitd","binaries/unrar"]'
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -85,19 +83,6 @@ jobs:
             https://github.com/playit-cloud/playit-agent/releases/download/v1.2.0/playitd-windows-x86_64-signed.exe
           echo "e8dff30a9269a10d2c6786c95a0618567772e441d07dd7ebe3c1a37d3f35534d  app/src-tauri/binaries/playitd-x86_64-pc-windows-msvc.exe" | sha256sum -c -
 
-      # RARLAB's UnRAR (freeware; the WinRAR licence lets its UnRAR parts be passed on alone),
-      # for map downloads Windows 10's tar can't open. A separate program the app runs, taken
-      # from the WinRAR 7.13 installer, both checked against their sha256.
-      - name: Get UnRAR (Windows)
-        if: matrix.platform == 'windows-latest'
-        shell: bash
-        run: |
-          curl -fsSL -o "$RUNNER_TEMP/winrar.exe" https://www.rarlab.com/rar/winrar-x64-713.exe
-          echo "0c9a2a3d70d907cb8ee14ab00f6c97b17ce0e88d937a0f85b310698c2f2541de  $RUNNER_TEMP/winrar.exe" | sha256sum -c -
-          7z e -y "$RUNNER_TEMP/winrar.exe" UnRAR.exe -o"$RUNNER_TEMP/winrar"
-          echo "0d6b63ab2cf10c9b55eabc046580fcbf36c85f9459d3c2316493315674aadc72  $RUNNER_TEMP/winrar/UnRAR.exe" | sha256sum -c -
-          cp "$RUNNER_TEMP/winrar/UnRAR.exe" app/src-tauri/binaries/unrar-x86_64-pc-windows-msvc.exe
-
       # Notarization reads the App Store Connect key from a file
       - name: Write the notarization key
         if: matrix.platform == 'macos-latest'
@@ -123,9 +108,9 @@ jobs:
         with:
           projectPath: app
           tauriScript: npx --yes @tauri-apps/cli@2.12.4
-          # playitd (and UnRAR on Windows) go next to the app's own program (signed with it on a Mac)
+          # playitd goes next to the app's own program (and is signed with it on a Mac)
           args: >-
-            ${{ matrix.args }} --config '{"bundle":{"externalBin":${{ matrix.bins }}}}'
+            ${{ matrix.args }} --config '{"bundle":{"externalBin":["binaries/playitd"]}}'
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: "Loner-Strike ${{ github.ref_name }}"
           releaseBody: |

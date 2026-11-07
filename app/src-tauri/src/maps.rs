@@ -456,7 +456,8 @@ pub fn convert(src: &Path, out: &Path, shrink: Shrink) -> Result<(), String> {
     .map_err(|e| e.to_string())?;
     if let Shrink::Fit(_) = shrink {
         let mut rgba = img.to_rgba8();
-        for p in rgba.pixels_mut().filter(|p| p.0[..3] == [0, 255, 0]) {
+        // the green, give or take what a saved picture does to it
+        for p in rgba.pixels_mut().filter(|p| p.0[1] >= 240 && p.0[0] <= 16 && p.0[2] <= 16) {
             p.0 = [0, 0, 0, 0];
         }
         img = image::DynamicImage::ImageRgba8(rgba);

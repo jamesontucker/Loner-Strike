@@ -259,9 +259,9 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
         </section>
       )}
       <section>
-        <SectionHead title="Game mode" note={<>Switching reloads the map. Each mode remembers its own settings. Each card says how well bots play it.<Info text={BOT_RATING_INFO} /></>} />
+        <SectionHead title="Game mode" note={<>Switching reloads the map. Each mode remembers its own settings. Each card says how well bots <span className="nowrap">play it.<Info text={BOT_RATING_INFO} /></span></>} />
         <div className="modes">
-          {data.modes.map((m) => {
+          {[...data.modes].sort((a, b) => a.name.localeCompare(b.name)).map((m) => {
             const rating = BOT_RATING[m.id] ?? "great";
             return (
               <button
@@ -426,8 +426,32 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
     ? listed.map((n) => byName.get(n.toLowerCase())).filter((m): m is MapInfo => !!m)
     : have.filter((m) => prefixes.some((p) => m.name.toLowerCase().startsWith(p)));
   const query = q.trim().toLowerCase();
-  const shown = (query ? have.filter((m) => m.name.toLowerCase().includes(query)) : suggested).slice(0, 60);
+  // which maps: the mode's own (when it has any), every map, favourites or recently played;
+  // the search narrows whichever is picked
+  const [show, setShow] = useState<"mode" | "all" | "fav" | "recent" | null>(null);
+  const filters: ["mode" | "all" | "fav" | "recent", string][] = [
+    ...(suggested.length ? [["mode", listed?.length ? `${mode.name}'s maps` : "Made for this mode"] as ["mode", string]] : []),
+    ["all", "All"],
+    ["fav", "Favourites"],
+    ["recent", "Recent"],
+  ];
+  const which = show && filters.some(([id]) => id === show) ? show : listed === null ? "mode" : filters[0][0];
+  const pool =
+    which === "mode" ? suggested
+    : which === "fav" ? have.filter((m) => m.fav)
+    : which === "recent" ? have.filter((m) => m.recent >= 0).sort((a, b) => a.recent - b.recent)
+    : have;
+  const shown = (query ? pool.filter((m) => m.name.toLowerCase().includes(query) || (m.title ?? "").toLowerCase().includes(query)) : pool).slice(0, 60);
+  const emptyNote =
+    which === "fav" ? "No favourite maps yet. Star maps on the Maps page."
+    : which === "recent" ? "No maps played yet."
+    : "No maps yet. Get some from Get more.";
   const fits = !listed?.length && (!prefixes.length || prefixes.some((p) => map.toLowerCase().startsWith(p)));
+  // a map built for one particular mode (a SoccerJam pitch, a zombie or climb map): its goals,
+  // traps or course are part of the map and stay whatever mode is loaded
+  const madeForOther = Object.entries(MODE_PREFIX).some(
+    ([id, ps]) => id !== mode.id && !["classic", "war3", "shero", "pistols", "deagle", "awp", "scoutz", "knife"].includes(id) && ps.some((p) => map.toLowerCase().startsWith(p)),
+  );
   const same = mode.id === current;
   const chosen = pick === "" ? null : pick ?? (same || fits ? null : suggested[0]?.name ?? null);
   return (
@@ -441,16 +465,21 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
           <div className="toolbar">
             {!same && (
               <button className="chip" aria-pressed={chosen === null} onClick={() => setPick("")}>
-                Keep {map}{fits ? "" : " (may not suit this mode)"}
+                Keep {map}{fits ? "" : madeForOther ? " (built for another mode)" : " (may not suit this mode)"}
               </button>
             )}
-            <input className="search grow" type="search" placeholder="Search all maps" aria-label="Search all maps" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className="search grow" type="search" placeholder={`Search ${filters.find(([id]) => id === which)?.[1].toLowerCase() ?? "maps"}`} aria-label="Search maps" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          {!query && (
-            <p className="muted small-note">
-              {listed === null ? "Finding maps for this mode…" : listed.length ? `${mode.name}'s own map list` : suggested.length ? "Maps that look made for this mode" : "No maps that look made for this mode yet. Search, or get some from Get more."}
-            </p>
-          )}
+          <div className="chips" role="tablist" aria-label="Which maps">
+            {filters.map(([id, label]) => (
+              <button key={id} role="tab" className="chip" aria-selected={which === id} onClick={() => setShow(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {listed === null && which === "mode" && <p className="muted small-note">Finding maps for this mode…</p>}
+          {listed !== null && !suggested.length && which === "all" && !query && <p className="muted small-note">No maps look made for this mode yet, so here's every map.</p>}
+          {shown.length === 0 && listed !== null && <p className="muted small-note">{query ? `No map matches "${q.trim()}" here.` : emptyNote}</p>}
           <div className="maps grid switch-maps">
             {shown.map((m) => (
               <MapCard key={m.name} map={m} selected={chosen === m.name} onClick={() => setPick(m.name)} />

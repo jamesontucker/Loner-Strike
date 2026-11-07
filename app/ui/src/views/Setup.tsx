@@ -72,7 +72,8 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
   const [games, setGames] = useState<string[]>(() => (["cstrike", "czero"] as const).filter((id) => install?.games.some((g) => g.id === id)));
   const [preset, setPreset] = useState<"all" | "basics" | "pick">("all");
   const usable = useMemo(() => scan.catalog.filter((c) => !c.games || c.games.some((g) => games.includes(g))), [scan.catalog, games]);
-  const [picked, setPicked] = useState<Set<string>>(() => new Set(scan.catalog.map((c) => c.id)));
+  // "Let me pick" starts empty: "Everything" is there for all of it
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const job = stage === "install" || stage === "done" ? jobQ.data ?? null : null;
   // the app stopped answering while setup ran: say so instead of a bar that never moves
   const [lost, setLost] = useState(false);
@@ -210,6 +211,15 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               <button aria-pressed={preset === "pick"} onClick={() => setPreset("pick")}>Let me pick</button>
             </div>
             <p className="muted">The basics are always included: {BASICS}. You can add or remove anything later under Mods.</p>
+            {preset === "pick" && (
+              <div className="row pick-count">
+                <span aria-live="polite">
+                  <b>{chosen.length}</b> of {usable.length} selected
+                </span>
+                <button className="link" onClick={() => setPicked(new Set(usable.map((c) => c.id)))} disabled={chosen.length === usable.length}>Select all</button>
+                <button className="link" onClick={() => setPicked(new Set())} disabled={!chosen.length}>Clear</button>
+              </div>
+            )}
             {preset !== "basics" && (
               <div className="pick-grid">
                 {usable.map((c) => {

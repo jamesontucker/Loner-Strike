@@ -65,6 +65,25 @@ new Float:g_fHbSpot[33][3];
 new Float:g_fHbSpawnTime[33];
 new Float:g_fHbFledAt[33];
 new Float:g_fHbBad[33][3];
+new Float:g_fHbHiddenAt[33];
+new bool:g_bHbLitChecked[33];
+new g_HbLitTries[33];
+new Float:g_fHbLastPos[33][3];
+new Float:g_fHbMovedAt[33];
+
+// spots bot hiders found too lit (or dark enough) to hide in, kept for the map
+#define HB_MEMO 96
+new Float:g_fHbBright[HB_MEMO][3], g_HbBrightN;
+new Float:g_fHbDark[HB_MEMO][3], g_HbDarkN;
+
+// bot seekers (hns_bot_seek): hiding spots each looks through, shared so they spread out
+#define HS_MAX_CAND 6144
+new hns_bot_seek;
+new bool:g_bHsOn[33];
+new g_HsTarget[33];
+new bool:g_bHsChecked[HS_MAX_CAND];
+new Float:g_fHsClue[33][3];
+new Float:g_fHsClueAt[33];
 
 /* save memory */
 new const g_sBlank[] = "";
@@ -549,6 +568,8 @@ public plugin_init()
 
 	// CZ bot patch: bot hiders run to a hiding spot and flee from seekers (gm_botnav)
 	hns_bot_hide = register_cvar("hns_bot_hide", "1", 0, 0.0);
+	// CZ bot patch: bot seekers search the hiding spots and follow footsteps (gm_botnav)
+	hns_bot_seek = register_cvar("hns_bot_seek", "1", 0, 0.0);
 	g_bHbBotNav = bool:LibraryExists("gm_botnav", LibType_Library);
 	set_task(0.25, "taskHnsBots", TASK_ID_HNSBOTS, g_sBlank, 0, g_sB, 0);
 
@@ -1849,6 +1870,7 @@ public eventNewRound()
 	}
 	
 	g_HideTimer = get_pcvar_num(hns_hidetime);
+	hnsseek_round_reset();
 	
 	return PLUGIN_CONTINUE;
 }
@@ -3667,9 +3689,20 @@ public taskHnsBots()
 	
 	new Float:fNow = get_gametime();
 	new seeker;
+	new bool:bSeek = g_bHnsOn && get_pcvar_num(hns_bot_seek) && botnav_has_mesh();
+	
+	if( bSeek && g_HideTimer < 0 )
+	{
+		hnsseek_clues(fNow);
+	}
 	
 	for( new plr = 1; plr <= g_MaxPlayers; plr++ )
 	{
+		if( hnsseek_think(plr, fNow, bSeek) )
+		{
+			continue;
+		}
+		
 		if( !bOn || !g_bConnected[plr] || !g_bAlive[plr] || !is_user_bot(plr) || cs_get_user_team(plr) != HNS_TEAM_HIDER )
 		{
 			hnsbot_release(plr);
@@ -3684,6 +3717,7 @@ public taskHnsBots()
 				if( fNow - g_fHbSpawnTime[plr] >= 0.6 )
 				{
 					g_HbTries[plr] = 0;
+					g_HbLitTries[plr] = 0;
 					hnsbot_go_hide(plr);
 				}
 			}
@@ -3691,11 +3725,19 @@ public taskHnsBots()
 			{
 				new status = botnav_status(plr);
 				
+				// moving nowhere for a few seconds: treat it as a route that failed
+				if( status != BN_ARRIVED && hnsbot_stuck(plr, fNow) )
+				{
+					status = BN_FAILED;
+				}
+				
 				if( status == BN_ARRIVED )
 				{
 					botnav_hold(plr, 1);
 					g_HbState[plr] = HB_HIDDEN;
 					g_HbTries[plr] = 0;
+					g_fHbHiddenAt[plr] = fNow;
+					g_bHbLitChecked[plr] = false;
 				}
 				else if( status == BN_FAILED || status == BN_IDLE )
 				{
@@ -3726,6 +3768,34 @@ public taskHnsBots()
 			}
 			case HB_HIDDEN:
 			{
+				// settled in during hide time: too lit for the darkness to hide it? find
+				// somewhere darker while there's time, and remember the spot either way
+				if( g_HideTimer > 2 && !g_bHbLitChecked[plr] && fNow - g_fHbHiddenAt[plr] > 0.6 )
+				{
+					g_bHbLitChecked[plr] = true;
+					new Float:fHere[3];
+					pev(plr, pev_origin, fHere);
+					new lit = hnsbot_spot_lit(plr);
+					
+					if( lit == 1 )
+					{
+						hnsbot_memo(g_fHbBright, g_HbBrightN, fHere);
+						
+						if( ++g_HbLitTries[plr] <= 3 )
+						{
+							g_fHbBad[plr][0] = fHere[0];
+							g_fHbBad[plr][1] = fHere[1];
+							g_fHbBad[plr][2] = fHere[2];
+							hnsbot_go_hide(plr);
+							continue;
+						}
+					}
+					else if( lit == 0 )
+					{
+						hnsbot_memo(g_fHbDark, g_HbDarkN, fHere);
+					}
+				}
+				
 				if( g_HideTimer < 0 && fNow - g_fHbFledAt[plr] > 1.0 && (seeker = hnsbot_threat(plr)) )
 				{
 					hnsbot_flee(plr, seeker);
@@ -3772,7 +3842,7 @@ Float:hnsbot_candidate(i, bool:bSpots, Float:fPos[3], &area)
 	{
 		area = botnav_spot_area(i);
 		
-		return (botnav_hiding_spot(i, fPos) & 1) ? 200.0 : 0.0; // in cover
+		return (botnav_hiding_spot(i, fPos) & 1) ? 500.0 : 0.0; // in cover
 	}
 	
 	area = i;
@@ -3842,7 +3912,7 @@ bool:hnsbot_pick_hide(plr, Float:fOut[3])
 					continue;
 				}
 				
-				if( get_distance_f(fPos, g_fHbBad[plr]) < 96.0 )
+				if( get_distance_f(fPos, g_fHbBad[plr]) < 96.0 || hnsbot_memo_near(g_fHbBright, g_HbBrightN, fPos) )
 				{
 					continue;
 				}
@@ -3860,7 +3930,12 @@ bool:hnsbot_pick_hide(plr, Float:fOut[3])
 				continue;
 			}
 			
-			fScore += ((fFromSeekers >= 0.0) ? fFromSeekers * 0.6 : 1500.0) + fNear * 0.8 + random_float(0.0, 500.0);
+			fScore += ((fFromSeekers >= 0.0) ? floatmin(fFromSeekers, 3000.0) * 0.4 : 1200.0) + fNear * 0.6 + random_float(0.0, 250.0);
+			
+			if( hnsbot_memo_near(g_fHbDark, g_HbDarkN, fPos) )
+			{
+				fScore += 900.0; // hid someone before
+			}
 			
 			if( fScore > fBest )
 			{
@@ -3893,6 +3968,7 @@ hnsbot_go_hide(plr)
 	
 	botnav_set_fight(plr, 0.0);
 	botnav_path_to(plr, fSpot, 0);
+	hnsbot_moving(plr);
 	g_HbState[plr] = HB_GOING;
 }
 
@@ -4016,7 +4092,324 @@ hnsbot_flee(plr, seeker)
 	g_fHbSpot[plr][2] = fTo[2];
 	
 	botnav_path_to(plr, fTo, 0);
+	hnsbot_moving(plr);
 	g_HbState[plr] = HB_FLEEING;
+}
+
+/*====================================================================================================
+ CZ bot patch: helpers for the hiders, and searching bot seekers
+
+ Hiders: a route that moves nowhere for 3 seconds counts as failed. Once settled during hide time a
+ bot checks the light where it crouches (hns_bot_stealth's darkness is what hides it from bot
+ seekers): too lit, it remembers the spot and goes somewhere else while there's time; dark enough,
+ it remembers that too, and later picks favour known dark spots and skip known lit ones.
+
+ Seekers (hns_bot_seek 1): once the hide time is over each bot seeker walks from hiding spot to
+ hiding spot, nearest first, skipping the ones another seeker is checking or has checked this round.
+ A hider running within 1000 units (footsteps) sends it there first. It fights anyone it really
+ sees (gm_botnav hands it to its brain), so hiders in the dark are still only found up close.
+====================================================================================================*/
+
+hnsbot_moving(plr)
+{
+	pev(plr, pev_origin, g_fHbLastPos[plr]);
+	g_fHbMovedAt[plr] = get_gametime();
+}
+
+// On a route but hasn't moved 48 units in 3 seconds
+bool:hnsbot_stuck(plr, Float:fNow)
+{
+	new Float:fPos[3];
+	pev(plr, pev_origin, fPos);
+
+	if( get_distance_f(fPos, g_fHbLastPos[plr]) > 48.0 )
+	{
+		g_fHbLastPos[plr][0] = fPos[0];
+		g_fHbLastPos[plr][1] = fPos[1];
+		g_fHbLastPos[plr][2] = fPos[2];
+		g_fHbMovedAt[plr] = fNow;
+		return false;
+	}
+
+	return fNow - g_fHbMovedAt[plr] > 3.0;
+}
+
+// 1: too lit for hns_bot_stealth to hide a crouching hider here, 0: dark enough, -1: no stealth
+hnsbot_spot_lit(plr)
+{
+	new p = get_cvar_pointer("hns_bot_stealth");
+
+	if( !p || !get_pcvar_num(p) )
+	{
+		return -1;
+	}
+
+	new dark = get_cvar_num("hns_bot_stealth_dark") + 20; // crouched (hns_bot_stealth's CROUCH_BONUS)
+
+	return (engfunc(EngFunc_GetEntityIllum, plr) >= dark) ? 1 : 0;
+}
+
+bool:hnsbot_memo_near(const Float:fList[][3], n, const Float:fPos[3])
+{
+	for( new i = 0; i < n; i++ )
+	{
+		if( get_distance_f(fList[i], fPos) < 80.0 )
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+hnsbot_memo(Float:fList[][3], &n, const Float:fPos[3])
+{
+	if( hnsbot_memo_near(fList, n, fPos) )
+	{
+		return;
+	}
+
+	// full: the newest replaces the last
+	new i = (n < HB_MEMO) ? n++ : HB_MEMO - 1;
+	fList[i][0] = fPos[0];
+	fList[i][1] = fPos[1];
+	fList[i][2] = fPos[2];
+}
+
+hnsseek_round_reset()
+{
+	for( new i = 0; i < HS_MAX_CAND; i++ )
+	{
+		g_bHsChecked[i] = false;
+	}
+
+	for( new plr = 1; plr <= g_MaxPlayers; plr++ )
+	{
+		hnsseek_release(plr);
+	}
+}
+
+hnsseek_release(plr)
+{
+	if( g_bHsOn[plr] && g_bHbBotNav )
+	{
+		botnav_stop(plr);
+	}
+
+	g_bHsOn[plr] = false;
+	g_HsTarget[plr] = -1;
+	g_fHsClueAt[plr] = 0.0;
+}
+
+// Footsteps: a hider running on the ground is heard by bot seekers within 1000 units
+hnsseek_clues(Float:fNow)
+{
+	new Float:fVel[3], Float:fPos[3], Float:fThem[3];
+
+	for( new h = 1; h <= g_MaxPlayers; h++ )
+	{
+		if( !g_bConnected[h] || !g_bAlive[h] || cs_get_user_team(h) != HNS_TEAM_HIDER )
+		{
+			continue;
+		}
+
+		new flags = pev(h, pev_flags);
+		pev(h, pev_velocity, fVel);
+
+		if( !(flags & FL_ONGROUND) || (flags & FL_DUCKING) || fVel[0] * fVel[0] + fVel[1] * fVel[1] < 140.0 * 140.0 )
+		{
+			continue;
+		}
+
+		pev(h, pev_origin, fPos);
+
+		for( new s = 1; s <= g_MaxPlayers; s++ )
+		{
+			if( !g_bHsOn[s] || !g_bAlive[s] )
+			{
+				continue;
+			}
+
+			pev(s, pev_origin, fThem);
+
+			if( get_distance_f(fPos, fThem) < 1000.0 )
+			{
+				g_fHsClue[s][0] = fPos[0];
+				g_fHsClue[s][1] = fPos[1];
+				g_fHsClue[s][2] = fPos[2];
+				g_fHsClueAt[s] = fNow;
+			}
+		}
+	}
+}
+
+// A living hider within 300 units: the bot is busy with it, not stuck
+bool:hnsseek_busy(plr)
+{
+	new Float:fMe[3], Float:fThem[3];
+	pev(plr, pev_origin, fMe);
+
+	for( new h = 1; h <= g_MaxPlayers; h++ )
+	{
+		if( g_bConnected[h] && g_bAlive[h] && cs_get_user_team(h) == HNS_TEAM_HIDER )
+		{
+			pev(h, pev_origin, fThem);
+
+			if( get_distance_f(fMe, fThem) < 300.0 )
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+// Bot seekers. Returns true when plr was a seeker (handled here), false to let the hider code look
+bool:hnsseek_think(plr, Float:fNow, bool:bSeek)
+{
+	if( !g_bConnected[plr] || !is_user_bot(plr) || cs_get_user_team(plr) != HNS_TEAM_SEEKER )
+	{
+		hnsseek_release(plr);
+		return false;
+	}
+
+	if( !bSeek || !g_bAlive[plr] || g_HideTimer >= 0 )
+	{
+		hnsseek_release(plr);
+		return true;
+	}
+
+	if( !g_bHsOn[plr] )
+	{
+		g_bHsOn[plr] = true;
+		botnav_set_fight(plr, 800.0);
+		hnsseek_next(plr);
+		return true;
+	}
+
+	// footsteps nearby: go and look there first
+	if( g_fHsClueAt[plr] > 0.0 && fNow - g_fHsClueAt[plr] < 3.0 && g_HsTarget[plr] != -2 )
+	{
+		g_HsTarget[plr] = -2;
+		botnav_path_to(plr, g_fHsClue[plr], 0);
+		hnsbot_moving(plr);
+		return true;
+	}
+
+	if( hnsseek_busy(plr) )
+	{
+		g_fHbMovedAt[plr] = fNow;
+	}
+
+	new status = botnav_status(plr);
+
+	if( status == BN_ARRIVED || status == BN_FAILED || status == BN_IDLE || hnsbot_stuck(plr, fNow) )
+	{
+		if( g_HsTarget[plr] >= 0 )
+		{
+			g_bHsChecked[g_HsTarget[plr]] = true;
+		}
+		else if( g_HsTarget[plr] == -2 )
+		{
+			g_fHsClueAt[plr] = 0.0;
+		}
+
+		hnsseek_next(plr);
+	}
+
+	return true;
+}
+
+// Off to the nearest hiding spot nobody has checked or is checking
+hnsseek_next(plr)
+{
+	new bool:bSpots;
+	new count = min(hnsbot_candidate_count(bSpots), HS_MAX_CAND);
+
+	g_HsTarget[plr] = -1;
+
+	if( !count )
+	{
+		botnav_stop(plr);
+		return;
+	}
+
+	new Float:fMe[3], Float:fPos[3], area;
+	pev(plr, pev_origin, fMe);
+
+	// where the other seekers are headed
+	new Float:fTheirs[32][3], n;
+
+	for( new i = 1; i <= g_MaxPlayers && n < 32; i++ )
+	{
+		if( i != plr && g_bHsOn[i] && g_HsTarget[i] >= 0 )
+		{
+			hnsbot_candidate(g_HsTarget[i], bSpots, fTheirs[n], area);
+			n++;
+		}
+	}
+
+	new best = -1, Float:fBest = 999999.0, Float:fTo[3];
+
+	for( new pass = 0; pass < 2 && best == -1; pass++ )
+	{
+		if( pass == 1 )
+		{
+			// everything's been looked at: start the sweep again
+			for( new i = 0; i < count; i++ )
+			{
+				g_bHsChecked[i] = false;
+			}
+		}
+
+		for( new i = 0; i < count; i++ )
+		{
+			if( g_bHsChecked[i] )
+			{
+				continue;
+			}
+
+			new Float:fBonus = hnsbot_candidate(i, bSpots, fPos, area);
+			new Float:fDist = get_distance_f(fMe, fPos);
+
+			// right here: as good as looked at
+			if( fDist < 250.0 )
+			{
+				g_bHsChecked[i] = true;
+				continue;
+			}
+
+			new Float:fScore = fDist - fBonus * 0.5 + random_float(0.0, 150.0);
+
+			for( new o = 0; o < n; o++ )
+			{
+				if( get_distance_f(fPos, fTheirs[o]) < 500.0 )
+				{
+					fScore += 1000.0;
+				}
+			}
+
+			if( fScore < fBest )
+			{
+				fBest = fScore;
+				best = i;
+				fTo[0] = fPos[0];
+				fTo[1] = fPos[1];
+				fTo[2] = fPos[2];
+			}
+		}
+	}
+
+	if( best == -1 )
+	{
+		botnav_stop(plr);
+		return;
+	}
+
+	g_HsTarget[plr] = best;
+	botnav_path_to(plr, fTo, 0);
+	hnsbot_moving(plr);
 }
 
 /* AMXX-Studio Notes - DO NOT MODIFY BELOW HERE

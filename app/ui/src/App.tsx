@@ -382,11 +382,11 @@ function Shell() {
               {section === "maps" && <Maps current={online?.state.map} live={!!online} maps={maps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} />}
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
               {section === "match" && online && (
-                <SettingsPage title="Rules" note={RULES_NOTE(online)} data={online} cat={2} refresh={refresh}>
+                <SettingsPage title="Rules" note={RULES_NOTE(online)} data={online} cat={2} refresh={refresh} pickMode>
                   <MatchButtons refresh={refresh} />
                 </SettingsPage>
               )}
-              {section === "fun" && online && <SettingsPage title="Fun & effects" note={FUN_NOTE(online)} data={online} cat={3} refresh={refresh} />}
+              {section === "fun" && online && <SettingsPage title="Fun & effects" note={FUN_NOTE(online)} data={online} cat={3} refresh={refresh} pickMode />}
               {section === "players" && online && <Players data={online} refresh={refresh} />}
               {section === "addons" && online && <Addons data={online} refresh={refresh} />}
               {section === "friends" && <Friends data={online} refresh={refresh} />}

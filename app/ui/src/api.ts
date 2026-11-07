@@ -119,7 +119,9 @@ export async function cmd(command: string, args: string[] = []): Promise<string>
     throw new Error("Couldn't reach the game.");
   }
   if (!res.ok) throw new Error(res.error || "The game didn't accept that.");
-  return (res.output || []).map((l) => l.replace(/^\[Game Mode\]\s*/, "")).filter(Boolean).join(" ");
+  // control characters (padding, CS chat colour codes) aren't text: a reply of only those is no reply
+  // eslint-disable-next-line no-control-regex
+  return (res.output || []).map((l) => l.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").replace(/^\[Game Mode\]\s*/, "").trim()).filter(Boolean).join(" ");
 }
 
 /** "values"/"labels" as the plugin sends them: labels split on | when present, else on spaces. */

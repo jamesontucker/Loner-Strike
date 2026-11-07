@@ -1,0 +1,47 @@
+diff --git a/modules/hamsandwich/amxx_api.cpp b/modules/hamsandwich/amxx_api.cpp
+index 0cd66d3a..8636a8ff 100644
+--- a/modules/hamsandwich/amxx_api.cpp
++++ b/modules/hamsandwich/amxx_api.cpp
+@@ -117,6 +117,8 @@ void OnPluginsUnloaded(void)
+ 		}
+ 		hooks[i].clear();
+ 	}
++
++	SpecialbotHandler.ClearPending();
+ }
+ 
+ void OnPluginsLoaded(void)
+diff --git a/modules/hamsandwich/hook_specialbot.cpp b/modules/hamsandwich/hook_specialbot.cpp
+index 9f9469e3..9f354085 100644
+--- a/modules/hamsandwich/hook_specialbot.cpp
++++ b/modules/hamsandwich/hook_specialbot.cpp
+@@ -123,3 +123,16 @@ void CHamSpecialBotHandler::RegisterChecked(AMX *amx, int &func, const char *fun
+ 		hook->pre.append(pfwd);
+ 	}
+ }
++
++// Loner-Strike fix: registrations queued before any bot joined hold the plugin's AMX and a
++// Forward they don't own a reference to. Both are freed when plugins unload at a map change,
++// so the queue must go too; otherwise the first bot on a later map makes RegisterChecked
++// AddRef freed memory (heap corruption on Windows).
++void CHamSpecialBotHandler::ClearPending()
++{
++	for (size_t i = 0; i < m_RHP_list.length(); ++i)
++	{
++		delete m_RHP_list.at(i);
++	}
++	m_RHP_list.clear();
++}
+diff --git a/modules/hamsandwich/hook_specialbot.h b/modules/hamsandwich/hook_specialbot.h
+index 6f47c4a4..911b7a59 100644
+--- a/modules/hamsandwich/hook_specialbot.h
++++ b/modules/hamsandwich/hook_specialbot.h
+@@ -39,6 +39,8 @@ public:
+ 	CHamSpecialBotHandler();
+ 	void CheckClientKeyValue(int &clientIndex, char *infobuffer, const char *key, const char *value);
+ 	void RegisterHamSpecialBot(AMX *amx, int &func, const char *function, int &post, Forward *pfwd);
++	// Loner-Strike: drops registrations still waiting for the first bot when plugins unload
++	void ClearPending();
+ 
+ private:
+ 	void RegisterChecked(AMX *amx, int &func, const char *function, int &post, Forward *pfwd);

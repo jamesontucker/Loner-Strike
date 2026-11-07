@@ -19,8 +19,8 @@
 	Results: data/gamemodes/matches.json, one JSON object per line: date, map, both
 	  teams' players and scores. data/gamemodes/scrim_status.json (gm_scrimstatus)
 	  is the live state for the app.
-	Bots: gm_scrim_bots 0 removes them (bot_quota 0); 1 fills the teams up to
-	  gm_scrim_players during warmup. Bots count as ready. Hooks use RegisterHamPlayer,
+	Bots: gm_scrim_bots 0 removes them (bot_quota 0); 1 (default) leaves them to the
+	  game's own bot settings, like every other mode. Bots count as ready. Hooks use RegisterHamPlayer,
 	  so Condition Zero bots (another class) are covered.
 
 	Bot economy (gm_scrim_boteco 1): each live round a team of bots decides like a
@@ -54,7 +54,6 @@
 #define TASK_START   7900
 #define TASK_VOTE    7950
 #define TASK_NEXT    7960
-#define TASK_BOTS    7970
 #define TASK_PAUSABLE 7980
 #define OT_MONEY     10000
 #define OT_HALF      3
@@ -108,7 +107,7 @@ public plugin_init()
 	g_pMaxRounds = register_cvar("gm_scrim_maxrounds", "30")
 	g_pOvertime  = register_cvar("gm_scrim_overtime", "1")
 	g_pKnife     = register_cvar("gm_scrim_knife", "1")
-	g_pBots      = register_cvar("gm_scrim_bots", "0")
+	g_pBots      = register_cvar("gm_scrim_bots", "1")
 	g_pBotEco    = register_cvar("gm_scrim_boteco", "1")
 	g_pPlayers   = register_cvar("gm_scrim_players", "10")
 	g_pPauses    = register_cvar("gm_scrim_pauses", "2")
@@ -189,7 +188,6 @@ public task_begin()
 	apply_bots()
 	enter_warmup(false)
 	set_task(1.0, "task_hud", TASK_HUD, _, _, "b")
-	set_task(5.0, "task_bots", TASK_BOTS, _, _, "b")
 }
 
 load_settings()
@@ -392,6 +390,9 @@ restore_money()
 // Bots
 // ---------------------------------------------------------------------------
 
+// gm_scrim_bots 0: people only. 1: the bots are the game's own bot settings (how many, and
+// Fixed / Fill server / Per human), the same as in every other mode; the match doesn't
+// change them. Coming back from people only puts the saved bot count back.
 apply_bots()
 {
 	if (!get_cvar_pointer("bot_quota"))
@@ -402,29 +403,10 @@ apply_bots()
 			server_cmd("bot_quota 0")
 		return
 	}
-	fill_bots()
-}
-
-// Fills the teams up to gm_scrim_players while there's no match on
-fill_bots()
-{
-	new humans = 0
-	for (new p = 1; p <= MaxClients; p++)
-		if (is_human(p) && cs_get_user_team(p) != CS_TEAM_SPECTATOR)
-			humans++
-	new want = clamp(get_pcvar_num(g_pPlayers), 2, MaxClients)
-	new mode[16]
-	get_cvar_string("bot_quota_mode", mode, charsmax(mode))
-	// "fill": the total; "match": bots per person; "normal": bots on top of the people
-	new quota = equali(mode, "fill") ? want : equali(mode, "match") ? max(0, want - humans) / max(humans, 1) : max(0, want - humans)
-	if (get_cvar_num("bot_quota") != quota)
-		server_cmd("bot_quota %d", quota)
-}
-
-public task_bots()
-{
-	if (get_pcvar_num(g_pBots) && g_Phase == PH_WARMUP && get_cvar_pointer("bot_quota"))
-		fill_bots()
+	new path[160]
+	formatex(path, charsmax(path), "%s/global.cfg", g_DataDir)
+	if (get_cvar_num("bot_quota") == 0 && file_exists(path))
+		server_cmd("exec ^"%s^"", path)
 }
 
 // ---------------------------------------------------------------------------
@@ -470,9 +452,19 @@ restore_one(const cvar[])
 			set_if(cvar, g_Live[i])
 }
 
+// Ready players needed to start. People only: gm_scrim_players. With bots, the game's bot
+// settings decide how many play, so it's everyone on a team (bots are always ready), at
+// most gm_scrim_players and at least two.
 needed()
 {
-	return clamp(get_pcvar_num(g_pPlayers), 1, MaxClients)
+	new want = clamp(get_pcvar_num(g_pPlayers), 1, MaxClients)
+	if (!get_pcvar_num(g_pBots))
+		return want
+	new playing = 0
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && !is_user_hltv(p) && on_team(p))
+			playing++
+	return clamp(playing, 2, max(want, 2))
 }
 
 // Ready players on a team; bots are always ready
@@ -714,8 +706,6 @@ go_live(bool:swap)
 	set_cvar_num("mp_maxrounds", 0)
 	set_cvar_num("mp_winlimit", 0)
 	set_cvar_num("mp_timelimit", 0)
-	if (get_pcvar_num(g_pBots) && get_cvar_pointer("bot_quota"))
-		fill_bots()
 
 	set_phase(PH_LIVE)
 	g_Side0 = CS_TEAM_CT

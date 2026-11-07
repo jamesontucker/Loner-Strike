@@ -161,8 +161,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .section-head { display: grid; gap: 6px; margin-bottom: 14px; }
 .section-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; min-height: 32px; }
 .section-head p { margin: 0; color: var(--bone-faint); font-size: 15px; max-width: 78ch; }
+/* notes that wrap split into even lines, not a line and a stray word or two */
+.section-head p { text-wrap: balance; }
+.nowrap { white-space: nowrap; }
 h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; white-space: nowrap; }
 .link { margin-left: auto; border: 0; background: none; color: var(--signal); font-weight: 600; }
+/* Setup's "Let me pick": the count on the left, Select all and Clear together on the right */
+.pick-count { margin-top: 4px; }
+.pick-count .link + .link { margin-left: 0; }
+.pick-count .link:disabled { opacity: .45; cursor: default; }
 
 .btn {
   border: 0; border-radius: 2px;
@@ -906,6 +913,8 @@ a.btn.primary { color: var(--signal-ink); }
 
 /* ---- admins: tabs ------------------------------------------------------------------- */
 .admin-tabs { margin-bottom: -8px; } /* 24px to the section below, inside a .stack */
+.rule-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.rule-tabs::-webkit-scrollbar { display: none; }
 .tab-n { font-style: normal; margin-left: 6px; font-size: 12px; color: var(--bone-faint); background: var(--bg); border-radius: 8px; padding: 0 6px; }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) { .admin-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .admin-tabs::-webkit-scrollbar { display: none; } }
 

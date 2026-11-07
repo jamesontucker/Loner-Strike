@@ -31,6 +31,10 @@
 	  botnav_flood(slot, Float:origin[3])        walking distance from origin to every area (slots 0, 1)
 	  Float:botnav_flood_dist(slot, area)        -1.0 when unreachable
 	  botnav_farthest(slot, Float:out[3])        area farthest from the flood origin
+	Deadly ground: a trigger_hurt that is always on and kills (dmg 50+, not switched by
+	anything, so not a trap) marks the areas it covers as deadly. Routes avoid them (a big
+	cost, not a wall: a route that can't go round still can), a bot jumps from the edge when
+	its route crosses one, and they're never a farthest area or a reachable one for a flood.
 
 	Server command: botnav_info - mesh size and what each bot is doing.
 */
@@ -69,6 +73,10 @@
 #define TICK       0.1
 #define TASK_TICK  48120
 #define STEP_HEIGHT 18.0
+#define DEADLY_COST 50000.0
+#define BROKEN_COST 20000.0
+#define BROKEN_FAILS 2
+#define SF_HURT_START_OFF 2
 
 // ---- mesh ----
 new bool:g_Loaded
@@ -79,6 +87,9 @@ new Float:g_AX1[MAX_AREAS], Float:g_AY1[MAX_AREAS], Float:g_AZ1[MAX_AREAS]
 new Float:g_ANeZ[MAX_AREAS], Float:g_ASwZ[MAX_AREAS]
 new Float:g_ACx[MAX_AREAS], Float:g_ACy[MAX_AREAS], Float:g_ACz[MAX_AREAS]
 new g_Conn[MAX_CONNS]
+// links bots got stuck on, this map: two failures and the planner goes round them
+new g_ConnFail[MAX_CONNS]
+new bool:g_Deadly[MAX_AREAS], g_DeadlyN
 new g_IdMap[MAX_IDMAP]
 new Float:g_SX[MAX_SPOTS], Float:g_SY[MAX_SPOTS], Float:g_SZ[MAX_SPOTS], g_SFlags[MAX_SPOTS], g_SArea[MAX_SPOTS]
 
@@ -99,6 +110,8 @@ new bool:g_Partial[33], bool:g_Truncated[33]
 new Float:g_Wp[33][3], bool:g_WpJump[33], Float:g_WpJumpV[33], bool:g_WpDuck[33]
 new Float:g_Best[33], Float:g_ProgressAt[33], g_Stuck[33]
 new bool:g_ForceJump[33], Float:g_StrafeUntil[33], Float:g_StrafeSign[33]
+// a run-up for a ledge it couldn't jump: back off until then, run at it, jump near the edge
+new Float:g_BackUntil[33], bool:g_RunJump[33], Float:g_TakeOff[33]
 new Float:g_JumpUntil[33], Float:g_NextJump[33], Float:g_WaitUntil[33]
 new Float:g_FightRadius[33], bool:g_Released[33], Float:g_ReleaseUntil[33]
 new bool:g_HoldDuck[33]
@@ -121,6 +134,7 @@ public plugin_init()
 public plugin_cfg()
 {
 	load_mesh()
+	mark_deadly()
 	set_task(TICK, "task_tick", TASK_TICK, _, _, "b")
 }
 
@@ -163,6 +177,8 @@ reset_bot(id)
 	g_Released[id] = false
 	g_FightRadius[id] = 0.0
 	g_HoldDuck[id] = false
+	g_BackUntil[id] = 0.0
+	g_RunJump[id] = false
 }
 
 // ===========================================================================
@@ -208,6 +224,7 @@ load_mesh()
 {
 	g_Loaded = false
 	g_Areas = g_Conns = g_Spots = 0
+	arrayset(g_ConnFail, 0, MAX_CONNS)
 	g_FloodDone[0] = g_FloodDone[1] = false
 
 	new map[64], path[96]
@@ -390,6 +407,63 @@ bool:in_area(a, const Float:org[3])
 }
 
 // The area under a point (player origin or floor point); nearest area if none
+// The area under pos (a floor below it, or just above), or -1 when it's off the mesh
+area_under(const Float:pos[3])
+{
+	new best = -1, Float:bestScore = 999999.0
+	for (new a = 0; a < g_Areas; a++)
+	{
+		if (pos[0] < g_AX0[a] - 4.0 || pos[0] > g_AX1[a] + 4.0 || pos[1] < g_AY0[a] - 4.0 || pos[1] > g_AY1[a] + 4.0)
+			continue
+		new Float:dz = pos[2] - area_z(a, pos[0], pos[1])
+		if (dz < -30.0 || dz > 120.0)
+			continue
+		new Float:score = dz >= 0.0 ? dz : 500.0 - dz
+		if (score < bestScore)
+		{
+			bestScore = score
+			best = a
+		}
+	}
+	return best
+}
+
+// Of the closest areas (up to 1500 units, the nearest 12 tried), the first one with a clear
+// line from pos to just above its floor; -1 if none
+nearest_visible_area(const Float:pos[3])
+{
+	new tried[12], ntried
+	for (new k = 0; k < sizeof tried; k++)
+	{
+		new best = -1, Float:bestD = 1500.0 * 1500.0
+		for (new a = 0; a < g_Areas; a++)
+		{
+			new bool:skip
+			for (new t = 0; t < ntried && !skip; t++)
+				skip = tried[t] == a
+			if (skip)
+				continue
+			new Float:dx = pos[0] - g_ACx[a], Float:dy = pos[1] - g_ACy[a], Float:dz = pos[2] - 36.0 - g_ACz[a]
+			new Float:d = dx * dx + dy * dy + dz * dz * 4.0
+			if (d < bestD)
+			{
+				bestD = d
+				best = a
+			}
+		}
+		if (best < 0)
+			return -1
+		tried[ntried++] = best
+		new Float:to[3], Float:frac
+		to[0] = g_ACx[best]; to[1] = g_ACy[best]; to[2] = area_z(best, to[0], to[1]) + 36.0
+		engfunc(EngFunc_TraceLine, pos, to, IGNORE_MONSTERS, 0, 0)
+		get_tr2(0, TR_flFraction, frac)
+		if (frac >= 1.0)
+			return best
+	}
+	return -1
+}
+
 area_at(const Float:pos[3])
 {
 	new best = -1, Float:bestScore = 999999.0
@@ -519,7 +593,45 @@ Float:edge_cost(a, b)
 		c += 50.0
 	if (g_ACz[b] - g_ACz[a] > STEP_HEIGHT)
 		c += 30.0
+	if (g_Deadly[b])
+		c += DEADLY_COST
 	return c
+}
+
+// Always-on killing trigger_hurt volumes (death grass, lava, spikes): the areas whose middle
+// is inside one. Traps are left out: they start off, or a button switches them (targetname).
+mark_deadly()
+{
+	g_DeadlyN = 0
+	arrayset(g_Deadly, false, MAX_AREAS)
+	if (!g_Loaded)
+		return
+	new ent = -1, Float:dmg, Float:mins[3], Float:maxs[3], name[32]
+	while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", "trigger_hurt")) > 0)
+	{
+		pev(ent, pev_dmg, dmg)
+		if (dmg < 50.0 || (pev(ent, pev_spawnflags) & SF_HURT_START_OFF))
+			continue
+		pev(ent, pev_targetname, name, charsmax(name))
+		if (name[0])
+			continue
+		pev(ent, pev_absmin, mins)
+		pev(ent, pev_absmax, maxs)
+		for (new a = 0; a < g_Areas; a++)
+		{
+			if (g_Deadly[a])
+				continue
+			// the middle of the area, and someone standing on it (feet to knees)
+			if (g_ACx[a] < mins[0] || g_ACx[a] > maxs[0] || g_ACy[a] < mins[1] || g_ACy[a] > maxs[1])
+				continue
+			if (g_ACz[a] + 36.0 < mins[2] || g_ACz[a] - 8.0 > maxs[2])
+				continue
+			g_Deadly[a] = true
+			g_DeadlyN++
+		}
+	}
+	if (g_DeadlyN)
+		log_amx("Bot navigation: %d areas on deadly ground (always-on trigger_hurt)", g_DeadlyN)
 }
 
 // Returns the goal, or (reached = false) the searched area closest to it
@@ -558,6 +670,8 @@ astar(s, g, &bool:reached)
 			if (b < 0 || g_DoneAt[b] == g_Search)
 				continue
 			new Float:cost = g_Cost[a] + edge_cost(a, b)
+			if (g_ConnFail[c] >= BROKEN_FAILS)
+				cost += BROKEN_COST              // bots couldn't get across here
 			if (g_SeenAt[b] == g_Search && cost >= g_Cost[b])
 				continue
 			g_SeenAt[b] = g_Search
@@ -611,7 +725,13 @@ compute_path(id)
 {
 	new Float:org[3]
 	pev(id, pev_origin, org)
-	new s = area_at(org)
+	// standing somewhere the mesh doesn't cover (a spawn room it never learned): start
+	// from the nearest area it can see, not one behind a wall it would run into forever
+	new s = area_under(org)
+	if (s < 0)
+		s = nearest_visible_area(org)
+	if (s < 0)
+		s = area_at(org)
 	new g = area_at(g_Goal[id])
 	if (s < 0 || g < 0)
 	{
@@ -680,12 +800,19 @@ set_waypoint(id, w, const Float:org[3])
 		new a = g_Path[id][w - 1], b = g_Path[id][w]
 		portal(a, b, org, g_Wp[id])
 		new Float:dz = g_Wp[id][2] - area_z(a, g_Wp[id][0], g_Wp[id][1])
-		if (dz > STEP_HEIGHT || ((g_AFlags[a] | g_AFlags[b]) & NAV_JUMP))
+		if (g_Deadly[b] && !g_Deadly[a])
+		{
+			// deadly ground ahead that the route can't go round: jump it from the edge
+			g_WpJump[id] = true
+			g_WpJumpV[id] = 300.0
+		}
+		else if (dz > STEP_HEIGHT || ((g_AFlags[a] | g_AFlags[b]) & NAV_JUMP))
 		{
 			g_WpJump[id] = true
 			new Float:grav = g_pGravity ? get_pcvar_float(g_pGravity) : 800.0
 			new Float:h = floatmax(dz, 20.0) + 14.0
-			g_WpJumpV[id] = floatclamp(floatsqroot(2.0 * grav * h), 250.0, 345.0)
+			// at least a little more than a person's jump (268): the bot's timing is rougher
+			g_WpJumpV[id] = floatclamp(floatsqroot(2.0 * grav * h), 285.0, 345.0)
 		}
 		g_WpDuck[id] = ((g_AFlags[a] | g_AFlags[b]) & NAV_CROUCH) != 0
 	}
@@ -867,14 +994,24 @@ public fw_postthink(id)
 		wy = (diry * 0.5 + dirx * g_StrafeSign[id] * 0.85) * want
 	}
 
+	if (now < g_BackUntil[id])
+	{
+		// backing off for a run-up
+		wx = -dirx * 180.0
+		wy = -diry * 180.0
+	}
+
 	if (pev(id, pev_flags) & FL_ONGROUND)
 	{
 		vel[0] = wx
 		vel[1] = wy
-		if (now >= g_NextJump[id] && (g_ForceJump[id] || (g_WpJump[id] && len < 64.0)))
+		new bool:runup = g_RunJump[id] && now >= g_BackUntil[id] && len < 56.0
+		if (now >= g_NextJump[id] && now >= g_BackUntil[id] && (runup || g_ForceJump[id] || (g_WpJump[id] && len < 64.0)))
 		{
-			vel[2] = g_ForceJump[id] ? 270.0 : g_WpJumpV[id]
+			vel[2] = runup ? 345.0 : (g_ForceJump[id] ? 270.0 : g_WpJumpV[id])
 			g_ForceJump[id] = false
+			g_RunJump[id] = false
+			g_TakeOff[id] = now
 			g_JumpUntil[id] = now + 1.0
 			g_NextJump[id] = now + 0.7
 		}
@@ -911,14 +1048,39 @@ public fw_cmdstart(id, uc, seed)
 		new buttons = get_uc(uc, UC_Buttons) & ~IN_JUMP     // keep still means no hopping either
 		set_uc(uc, UC_Buttons, g_HoldDuck[id] ? (buttons | IN_DUCK) : buttons)
 	}
-	else if (g_State[id] == BN_MOVING && !g_Released[id] && g_WpDuck[id])
-		set_uc(uc, UC_Buttons, get_uc(uc, UC_Buttons) | IN_DUCK)
+	else if (g_State[id] == BN_MOVING && !g_Released[id])
+	{
+		// crouch areas, and crouch-jumps: in the air after one of our jumps the bot ducks,
+		// like a player does, which pulls its legs up ~18 units onto ledges and through gaps
+		new Float:now = get_gametime()
+		new bool:airjump = now < g_JumpUntil[id] && (now > g_TakeOff[id] + 0.05 || !(pev(id, pev_flags) & FL_ONGROUND))
+		if (g_WpDuck[id] || airjump)
+			set_uc(uc, UC_Buttons, get_uc(uc, UC_Buttons) | IN_DUCK)
+	}
 	return FMRES_IGNORED
 }
 
 // ===========================================================================
 // Every 0.1 s: routing, fights, getting unstuck
 // ===========================================================================
+
+// The link from the bot's current area to the next one on its route failed once more
+note_failed_link(id)
+{
+	new w = g_W[id], n = g_PathLen[id]
+	if (w < 1 || w >= n)
+		return
+	new a = g_Path[id][w - 1], b = g_Path[id][w]
+	for (new c = g_AFirst[a], end = g_AFirst[a + 1]; c < end; c++)
+	{
+		if (g_Conn[c] == b)
+		{
+			if (++g_ConnFail[c] == BROKEN_FAILS)
+				log_amx("Bot navigation: bots can't get from area %d to %d - going round it", g_AId[a], g_AId[b])
+			return
+		}
+	}
+}
 
 public task_tick()
 {
@@ -1008,12 +1170,24 @@ public task_tick()
 		{
 			case 1, 3:
 			{
-				g_ForceJump[id] = true
-				g_StrafeUntil[id] = now + 0.5
-				g_StrafeSign[id] = random_num(0, 1) ? 1.0 : -1.0
+				if (g_WpJump[id])
+				{
+					// a ledge it didn't make: back off and take a run at it
+					g_BackUntil[id] = now + 0.45
+					g_RunJump[id] = true
+				}
+				else
+				{
+					g_ForceJump[id] = true
+					g_StrafeUntil[id] = now + 0.5
+					g_StrafeSign[id] = random_num(0, 1) ? 1.0 : -1.0
+				}
 			}
 			case 2, 4:
 			{
+				// the link it keeps failing to cross counts against it (for every bot): after
+				// a couple of failures the new route goes another way
+				note_failed_link(id)
 				if (budget > 0)
 					budget--
 				compute_path(id)
@@ -1043,6 +1217,10 @@ bool:enemy_in_sight(id, Float:radius)
 	for (new i = 1; i <= g_MaxPlayers; i++)
 	{
 		if (i == id || !is_user_alive(i) || get_user_team(i) == team)
+			continue
+		// someone the bots can't see (Hide and Seek's darkness sets FL_NOTARGET): handing the
+		// bot to its brain for them would only leave it standing there
+		if (pev(i, pev_flags) & FL_NOTARGET)
 			continue
 		pev(i, pev_origin, other)
 		if (get_distance_f(org, other) > radius)
@@ -1082,6 +1260,8 @@ public n_path_to(plugin, params)
 	g_WaitUntil[id] = 0.0
 	g_Released[id] = false
 	g_Stuck[id] = 0
+	g_BackUntil[id] = 0.0
+	g_RunJump[id] = false
 	return 1
 }
 
@@ -1185,7 +1365,7 @@ public n_flood(plugin, params)
 public Float:n_flood_dist(plugin, params)
 {
 	new slot = get_param(1), a = get_param(2)
-	if (slot < 0 || slot >= FLOOD_SLOTS || !g_FloodDone[slot] || a < 0 || a >= g_Areas)
+	if (slot < 0 || slot >= FLOOD_SLOTS || !g_FloodDone[slot] || a < 0 || a >= g_Areas || g_Deadly[a])
 		return -1.0
 	return g_Flood[slot][a]
 }
@@ -1195,15 +1375,28 @@ public n_farthest(plugin, params)
 	new slot = get_param(1)
 	if (slot < 0 || slot >= FLOOD_SLOTS || !g_FloodDone[slot])
 		return -1
-	new best = -1, Float:far = -1.0
+	// the farthest place overall, and the farthest reached without crossing deadly ground
+	new best = -1, Float:far = -1.0, safe = -1, Float:safeFar = -1.0
 	for (new a = 0; a < g_Areas; a++)
 	{
-		if (g_Flood[slot][a] > far)
+		new Float:d = g_Flood[slot][a]
+		if (g_Deadly[a] || d < 0.0)
+			continue
+		if (d > far)
 		{
-			far = g_Flood[slot][a]
+			far = d
 			best = a
 		}
+		if (d < DEADLY_COST && d > safeFar)
+		{
+			safeFar = d
+			safe = a
+		}
 	}
+	// a way on that crosses deadly ground only counts when it really goes much farther
+	// (a course past a strip of death grass), not for a dead end behind some lava
+	if (safe >= 0 && far - DEADLY_COST < safeFar * 1.15)
+		best = safe
 	if (best >= 0)
 	{
 		new Float:c[3]
