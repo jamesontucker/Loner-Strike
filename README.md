@@ -8,6 +8,8 @@
 
 **Play Counter-Strike like it's 2004, alone or with the friends you don't have.**
 
+> Early release (0.1): it works, but expect some rough edges. It's a side project I work on now and then; bugs and ideas are welcome on [Discord](https://discord.gg/K9eBHVVwZE) or in [Issues](https://github.com/jamesontucker/Loner-Strike/issues).
+
 Counter-Strike 1.6 and Condition Zero set up like an old community server, except it's only you, your bots and maybe a friend.
 
 Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, that installs the mods, runs the game for you and gives you a control panel for all of it.

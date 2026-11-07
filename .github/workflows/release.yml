@@ -98,7 +98,12 @@ jobs:
             ${{ matrix.args }} --config '{"bundle":{"externalBin":["binaries/playitd"]}}'
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: "Loner-Strike ${{ github.ref_name }}"
-          releaseBody: "Download the file for your computer below. Mac: the .dmg. Windows: the -setup.exe."
+          releaseBody: |
+            An early release: it works, but expect some rough edges. Loner-Strike is a side project, updated now and then.
+
+            Download the file for your computer below. Mac: the .dmg. Windows: the -setup.exe. Windows may say it protected your PC (SmartScreen): click More info, then Run anyway.
+
+            Found a bug? In the app, open Settings and click Copy next to Copy diagnostics, then post it on Discord (https://discord.gg/K9eBHVVwZE) or in Issues. What's new is in CHANGELOG.md.
           releaseDraft: true
           prerelease: false
           # (named includeUpdaterJson before tauri-action 1.0: the old name is ignored
