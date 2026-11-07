@@ -113,12 +113,13 @@ fn main() {
                 w = f64::min(w, size.width - 40.0);
                 h = f64::min(h, size.height - 60.0);
             }
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("Loner-Strike")
                 .inner_size(w, h)
                 .min_inner_size(820.0, 600.0) // the sidebar scrolls when it doesn't fit
                 .center()
                 .build()?;
+            fit_on_screen(&window);
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -136,6 +137,31 @@ fn main() {
                 }
             }
         });
+}
+
+/// The window comes back where and how big it was last time, which may be on a bigger
+/// monitor than this one (a laptop away from its desk): too big for the screen it's on,
+/// or mostly off it, it's made to fit and centred.
+fn fit_on_screen(window: &tauri::WebviewWindow) {
+    let Ok(Some(m)) = window.current_monitor().or_else(|_| window.primary_monitor()) else { return };
+    let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) else { return };
+    let (area, scale) = (m.work_area(), m.scale_factor());
+    let (ax, ay, aw, ah) = (area.position.x, area.position.y, area.size.width as i32, area.size.height as i32);
+    let (w, h) = (size.width as i32, size.height as i32);
+    let too_big = w > aw || h > ah;
+    // less than half of it on this screen
+    let seen_w = (pos.x + w).min(ax + aw) - pos.x.max(ax);
+    let seen_h = (pos.y + h).min(ay + ah) - pos.y.max(ay);
+    let off = seen_w < w / 2 || seen_h < h / 2 || pos.y < ay;
+    if !too_big && !off {
+        return;
+    }
+    if too_big {
+        // a little room around it, never under the minimum
+        let fit = tauri::PhysicalSize::new(w.min(aw - (40.0 * scale) as i32).max(1) as u32, h.min(ah - (40.0 * scale) as i32).max(1) as u32);
+        let _ = window.set_size(tauri::Size::Physical(fit));
+    }
+    let _ = window.center();
 }
 
 /// Looks for a newer release on GitHub and offers to install it.
