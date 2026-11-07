@@ -301,7 +301,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
             <div className="row">
               <button className="btn primary" onClick={openSetup}>Run full setup</button>
               <Info text="Set up another game, or add or remove many modes at once. Nothing already set up is lost." />
-              <button className="btn" onClick={() => useNav.getState().setSetupOpen(true, true)}>Watch the intro</button>
+              {/* for working on the intro (music, sounds): only in a development build */}
+              {import.meta.env.DEV && <button className="btn" onClick={() => useNav.getState().setSetupOpen(true, true)}>Watch the intro</button>}
               {app?.game && scan && (
                 <BusyButton className="btn danger" busy={busy("app:uninstall")} label="Remove Loner-Strike" busyLabel="Removing…" onClick={removeAll} />
               )}
