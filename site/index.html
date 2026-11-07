@@ -347,6 +347,38 @@ html { scroll-padding-top: 72px; }
 .server-live .dot { display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; background: #8fbf5a; vertical-align: 1px; }
 .server-addr { margin: 0; color: var(--faint); font-size: 15px; line-height: 1.4; }
 .server-addr code { color: var(--dim); user-select: all; white-space: nowrap; }
+.srv-actions { display: grid; gap: 8px; }
+.srv-actions .btn { min-height: 40px; font-size: 16px; }
+/* the server list: the app's Find servers on the site */
+.servers-dlg { width: min(880px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 4px; border: 0; color: var(--bone); }
+.servers-dlg::backdrop { background: rgba(20,22,16,.7); }
+.servers-dlg .window-bar b { flex: 1; margin-left: 4px; color: var(--dim); }
+.servers-x { width: 22px; height: 18px; border: 0; border-radius: 2px; background: var(--panel); color: var(--bone); box-shadow: var(--raised); font: 700 16px/1 var(--text); cursor: pointer; }
+.servers-x:hover { color: var(--signal); }
+.sl { display: grid; gap: 12px; padding: 14px; background: var(--panel); border-radius: 2px; }
+.sl-note { margin: 0; color: var(--faint); font-size: 15px; line-height: 1.4; max-width: 70ch; }
+.sl-table { background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
+.sl-rows { min-height: 200px; max-height: min(52vh, 460px); overflow-y: auto; }
+.sl-row { display: grid; grid-template-columns: 18px minmax(140px, 3fr) minmax(100px, 1fr) 70px 46px minmax(90px, 1fr); gap: 14px; align-items: center; min-height: 34px; padding: 0 12px; font-size: 15px; cursor: default; }
+.sl-row > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-row.head { min-height: 30px; background: var(--panel); box-shadow: var(--raised); color: var(--dim); font-size: 13px; font-weight: 600; }
+.sl-rows .sl-row:not(:last-child) { border-bottom: 1px solid rgba(0,0,0,.12); }
+.sl-rows .sl-row:hover { background: rgba(255,255,255,.04); }
+.sl-rows .sl-row[aria-selected="true"] { background: #958831; color: #fff; }
+.sl-rows .sl-row:focus-visible { outline: 1px solid var(--signal); outline-offset: -1px; }
+.sl-num { text-align: right; font-variant-numeric: tabular-nums; }
+.sl-rows .sl-bots { color: var(--dim); }
+.sl-rows .sl-row[aria-selected="true"] .sl-bots { color: #fff; }
+.sl-row .sl-map { padding-left: 10px; }
+.sl-msg { margin: 0; padding: 18px 14px; color: var(--dim); }
+.sl-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.sl-count { flex: 1; color: var(--faint); font-size: 15px; }
+.sl-bar .btn { min-height: 40px; font-size: 16px; }
+.sl-bar a[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+@media (max-width: 640px) {
+  .sl-row { grid-template-columns: 18px minmax(120px, 1fr) 62px; }
+  .sl-game, .sl-bots, .sl-map { display: none; }
+}
 
 /* gallery */
 .gallery { padding: 64px 0 70px; }
@@ -760,6 +792,27 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     </div>
   </section>
 
+  <!-- The Loner-Strike server list, after Steam's old server browser (the app's Find servers) -->
+  <dialog class="window servers-dlg" id="servers" aria-labelledby="servers-title">
+    <div class="window-bar"><span></span><span></span><span></span><b id="servers-title">Servers</b>
+      <button type="button" class="servers-x" id="servers-close" aria-label="Close">×</button></div>
+    <div class="sl">
+      <p class="sl-note">Servers Loner-Strike players share, asked live. The app's Find servers also shows your latency, your favorites and games on your own network.</p>
+      <div class="sl-table" role="table" aria-label="Servers">
+        <div class="sl-row head" role="row">
+          <span role="columnheader" aria-label="Password"><svg width="9" height="11" viewBox="0 0 9 11" aria-hidden="true"><path d="M2 5V3.2a2.5 2.5 0 0 1 5 0V5h1v6H1V5zm1.2 0h2.6V3.2a1.3 1.3 0 0 0-2.6 0z" fill="currentColor"/></svg></span>
+          <span role="columnheader">Servers</span><span role="columnheader" class="sl-game">Game</span><span role="columnheader" class="sl-num">Players</span><span role="columnheader" class="sl-num sl-bots">Bots</span><span role="columnheader" class="sl-map">Map</span>
+        </div>
+        <div class="sl-rows" id="servers-rows" role="rowgroup"></div>
+      </div>
+      <div class="sl-bar">
+        <span class="sl-count" id="servers-count" role="status"></span>
+        <button type="button" class="btn" id="servers-refresh">Refresh</button>
+        <a class="btn primary" id="servers-join" href="#" aria-disabled="true" data-event="Join from server list">Connect</a>
+      </div>
+    </div>
+  </dialog>
+
   <dialog class="viewer" id="viewer" aria-label="Screenshot">
     <figure>
       <img id="viewer-img" alt="">
@@ -809,7 +862,10 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
               <p class="server-live" id="ourserver-live" hidden></p>
               <p class="server-addr">Bots and the community modes, 24/7.<br>Console: <code id="ourserver-addr"></code></p>
             </div>
-            <a class="btn primary" id="ourserver-join" href="#" data-event="Join our server">Join the server</a>
+            <div class="srv-actions">
+              <a class="btn primary" id="ourserver-join" href="#" data-event="Join our server">Join the server</a>
+              <button type="button" class="btn" id="servers-open" data-event="Open server list">All servers</button>
+            </div>
           </div>
         </div>
       <!-- Our own card instead of Discord's widget: the invite comes from data-invite, or from the
@@ -942,7 +998,10 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         live.replaceChildren();
         const dot = document.createElement("span");
         dot.className = "dot";
-        live.append(dot, `${s.players}/${s.max_players} playing on ${s.map}`);
+        const people = s.players - (s.bots || 0);
+        live.append(dot, people > 0
+          ? `${people} ${people === 1 ? "person" : "people"} and ${s.bots || 0} bots on ${s.map}`
+          : `${s.bots || 0} bots on ${s.map}, waiting for you`);
         live.hidden = false;
         if (s.name) document.getElementById("ourserver-name").textContent = s.name;
       } catch {
@@ -951,6 +1010,75 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     };
     show();
     setInterval(show, 30000);
+  }
+
+  // The server list: every server Loner-Strike players share (services/serverlist), in a window
+  // like the app's Find servers. Asked when it opens and on Refresh, never in the background.
+  {
+    const LIST_URL = "https://list.lonerstrike.com/servers";
+    const GAMES = { cstrike: "Counter-Strike", czero: "Condition Zero" };
+    const dlg = document.getElementById("servers");
+    const rows = document.getElementById("servers-rows");
+    const count = document.getElementById("servers-count");
+    const join = document.getElementById("servers-join");
+    let picked = null;
+    const pick = (address, row) => {
+      picked = address;
+      for (const r of rows.querySelectorAll(".sl-row")) r.setAttribute("aria-selected", String(r === row));
+      join.href = `steam://connect/${address}`;
+      join.removeAttribute("aria-disabled");
+    };
+    const message = (text) => {
+      const p = document.createElement("p");
+      p.className = "sl-msg";
+      p.textContent = text;
+      rows.replaceChildren(p);
+    };
+    const cell = (text, cls) => {
+      const c = document.createElement("span");
+      c.setAttribute("role", "cell");
+      if (cls) c.className = cls;
+      c.textContent = text;
+      return c;
+    };
+    const load = async () => {
+      count.textContent = "Asking the servers…";
+      picked = null;
+      join.setAttribute("aria-disabled", "true");
+      join.href = "#";
+      try {
+        const r = await fetch(LIST_URL, { cache: "no-store" });
+        const list = (await r.json()).servers || [];
+        count.textContent = `${list.length} ${list.length === 1 ? "server" : "servers"}`;
+        if (!list.length) return message("No servers are on the list right now. Host one with the app and turn on On the server list.");
+        rows.replaceChildren(...list.map((s) => {
+          const row = document.createElement("div");
+          row.className = "sl-row";
+          row.setAttribute("role", "row");
+          row.tabIndex = 0;
+          const lock = cell("");
+          if (s.password) lock.innerHTML = '<svg width="9" height="11" viewBox="0 0 9 11" role="img" aria-label="Password"><path d="M2 5V3.2a2.5 2.5 0 0 1 5 0V5h1v6H1V5zm1.2 0h2.6V3.2a1.3 1.3 0 0 0-2.6 0z" fill="currentColor"/></svg>';
+          const people = s.players - s.bots;
+          row.append(lock, cell(s.name || s.address), cell(GAMES[s.game] || s.game, "sl-game"), cell(`${people} / ${s.max_players}`, "sl-num"), cell(String(s.bots), "sl-num sl-bots"), cell(s.map, "sl-map"));
+          row.title = s.address;
+          row.addEventListener("click", () => pick(s.address, row));
+          row.addEventListener("dblclick", () => { location.href = `steam://connect/${s.address}`; });
+          row.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") location.href = `steam://connect/${s.address}`;
+            else if (e.key === " ") { e.preventDefault(); pick(s.address, row); }
+          });
+          return row;
+        }));
+      } catch {
+        count.textContent = "";
+        message("Couldn't reach the server list. Try again in a minute.");
+      }
+    };
+    document.getElementById("servers-open").addEventListener("click", () => { dlg.showModal(); load(); });
+    document.getElementById("servers-close").addEventListener("click", () => dlg.close());
+    document.getElementById("servers-refresh").addEventListener("click", load);
+    // a click on the dimmed page around it closes it
+    dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
   }
 
   // Name your price: Polar's checkout opens over the page. Without a link yet, it goes to the download.
