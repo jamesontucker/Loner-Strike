@@ -225,18 +225,25 @@ fn compressible(mime: &str) -> bool {
     mime.starts_with("text/") || mime.contains("javascript") || mime.contains("json") || mime.contains("svg") || mime.contains("xml")
 }
 
-/// An embedded file gzipped, made once on first ask (the files never change while the
-/// app runs). None if it doesn't get smaller.
+/// An embedded file gzipped, made once on first ask and kept with a fingerprint of what it
+/// was made from: a release's files never change, but a dev build reads them from disk and
+/// a rebuilt page must not be answered with the old one. None if it doesn't get smaller.
 fn gzipped(file: &str, data: &[u8]) -> Option<axum::body::Bytes> {
     use std::collections::HashMap;
+    use std::hash::{Hash, Hasher};
     use std::io::Write;
-    static GZ: Mutex<Option<HashMap<String, Option<axum::body::Bytes>>>> = Mutex::new(None);
-    if let Some(v) = GZ.lock().unwrap().as_ref().and_then(|m| m.get(file)) {
-        return v.clone();
+    static GZ: Mutex<Option<HashMap<String, (u64, Option<axum::body::Bytes>)>>> = Mutex::new(None);
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    data.hash(&mut h);
+    let print = h.finish();
+    if let Some((p, v)) = GZ.lock().unwrap().as_ref().and_then(|m| m.get(file)) {
+        if *p == print {
+            return v.clone();
+        }
     }
     let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
     let gz = enc.write_all(data).and_then(|_| enc.finish()).ok().filter(|g| g.len() + 64 < data.len()).map(axum::body::Bytes::from);
-    GZ.lock().unwrap().get_or_insert_with(HashMap::new).insert(file.to_string(), gz.clone());
+    GZ.lock().unwrap().get_or_insert_with(HashMap::new).insert(file.to_string(), (print, gz.clone()));
     gz
 }
 
