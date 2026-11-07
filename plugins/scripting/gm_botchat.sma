@@ -70,6 +70,9 @@
 #include <amxmisc>
 #include <nvault>
 #include <cstrike>
+// sockets (optional, for gm_ai_url): without the module the plugin still loads, the
+// feature just stays off (module_filter / native_filter)
+#include <sockets>
 
 // gm_community: true for chat that never shows (muted player, filtered out)
 native gm_chat_blocked(id, const text[])
@@ -164,6 +167,19 @@ new g_ThreadBot[33], g_ThreadTopic[33][24], g_ThreadTurns[33], Float:g_ThreadAt[
 // lines waiting to be "typed"
 new g_PendBot[MAX_PENDING], g_PendUser[MAX_PENDING], g_PendOther[MAX_PENDING], g_PendChain[MAX_PENDING], bool:g_PendTeam[MAX_PENDING]
 new g_PendText[MAX_PENDING][128], g_PendSec[MAX_PENDING][24], bool:g_PendQuiet[MAX_PENDING]   // quiet: starts no thread
+new bool:g_PendRaw[MAX_PENDING]     // the model's text: said as it is
+
+// smarter chat (gm_ai_url): one request per bot
+#define TASK_AI    2000000
+#define AI_TIMEOUT 4.5
+#define HIST       12
+new g_pAiUrl, bool:g_Sockets
+new g_AiSock[33], g_AiState[33]     // state: 0 none, 1 connecting, 2 waiting for the answer
+new Float:g_AiStart[33], g_AiUser[33], g_AiHuman[33], g_AiHumanUser[33], bool:g_AiTeam[33], Float:g_AiExtra[33], g_AiRound[33]
+new g_AiFallback[33][128], g_AiSection[33][32], g_AiReq[33][2048], g_AiSent[33], g_AiResp[33][1024], g_AiGot[33]
+new g_Round                         // counts rounds, so an answer from last round is dropped
+new g_Hist[HIST][100], g_HistTeam[HIST], g_HistPos, g_HistCount   // recent chat
+new g_HumanMsg[128]                 // what the person typed, as they typed it
 
 public plugin_init()
 {
@@ -172,6 +188,10 @@ public plugin_init()
 	g_pHumans = register_cvar("gm_botchat_humans", "1")
 	g_pDeadChat = register_cvar("gm_botchat_deadchat", "1")
 	register_srvcmd("gm_botchat_reload", "cmd_reload")
+	// the app sets it to "127.0.0.1:port" while its model is ready, "" when not
+	g_pAiUrl = get_cvar_pointer("gm_ai_url")
+	if (!g_pAiUrl)
+		g_pAiUrl = register_cvar("gm_ai_url", "")
 
 	register_event("DeathMsg", "ev_death", "a")
 	register_event("SendAudio", "ev_twin", "a", "2&%!MRAD_terwin")
@@ -202,13 +222,19 @@ public plugin_natives()
 	register_library("gm_botchat")
 	register_native("botchat_persona", "n_persona")
 	register_native("botchat_say", "n_say")
-	// still loads without gm_community
+	// still loads without gm_community, and without the sockets module
 	set_native_filter("native_filter")
+	set_module_filter("module_filter")
+}
+
+public module_filter(const library[], LibType:type)
+{
+	return equal(library, "sockets") ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 public native_filter(const name[], index, trap)
 {
-	return (!trap && equal(name, "gm_chat_blocked")) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+	return (!trap && (equal(name, "gm_chat_blocked") || equal(name, "socket_", 7))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 // botchat_persona(id): the bot's personality letter (0 for people)
@@ -247,6 +273,7 @@ public n_say(plugin, params)
 public plugin_cfg()
 {
 	personality_cvar()
+	ai_init()
 	for (new i = 0; i < sizeof g_ThemeAt; i++)
 		g_ThemeAt[i] = -10000.0
 	g_Vault = nvault_open("gm_botmemory")
@@ -429,6 +456,8 @@ public client_disconnected(id)
 {
 	if (!is_user_bot(id))
 		remember_all(id)
+	if (g_AiState[id])
+		ai_close(id)
 	// threads with this bot end (the slot may go to someone else)
 	for (new h = 1; h <= MaxClients; h++)
 		if (g_ThreadBot[h] == id)
@@ -467,6 +496,9 @@ dead_chat(id, const text[], bool:team)
 
 public plugin_end()
 {
+	for (new i = 1; i <= MaxClients; i++)
+		if (g_AiState[i])
+			ai_close(i)
 	for (new i = 1; i <= MaxClients; i++)
 		if (is_user_connected(i) && !is_user_bot(i))
 			remember_all(i)
@@ -930,7 +962,7 @@ Float:typing_time(const text[], Float:read_min = 0.8, Float:read_max = 2.2)
 	return random_float(read_min, read_max) + float(strlen(text)) * random_float(0.1, 0.17)
 }
 
-queue(id, other, const text[], chain, bool:team, Float:delay, const section[] = "", bool:quiet = false)
+queue(id, other, const text[], chain, bool:team, Float:delay, const section[] = "", bool:quiet = false, bool:raw = false)
 {
 	new slot = -1
 	for (new i = 0; i < MAX_PENDING; i++)
@@ -949,6 +981,7 @@ queue(id, other, const text[], chain, bool:team, Float:delay, const section[] = 
 	copy(g_PendText[slot], charsmax(g_PendText[]), text)
 	copy(g_PendSec[slot], charsmax(g_PendSec[]), section)
 	g_PendQuiet[slot] = quiet
+	g_PendRaw[slot] = raw
 	if (delay < 0.0)
 		delay = typing_time(text)
 	new Float:now = get_gametime()
@@ -971,29 +1004,34 @@ public task_say(task)
 
 	new text[128], tag[24]
 	copy(text, charsmax(text), g_PendText[slot])
-	// a reply asked for: "...  >tag"
-	new at = contain(text, ">")
-	if (at > 0)
-	{
-		copy(tag, charsmax(tag), text[at + 1])
-		trim(tag)
-		text[at] = 0
-		trim(text)
-	}
-	// "@..." is said to the team
 	new bool:team = g_PendTeam[slot]
-	if (text[0] == '@')
+	// the model's text is said as it came (no tags, placeholders or added typos)
+	if (!g_PendRaw[slot])
 	{
-		team = true
-		copy(text, charsmax(text), text[1])
-		trim(text)
+		// a reply asked for: "...  >tag"
+		new at = contain(text, ">")
+		if (at > 0)
+		{
+			copy(tag, charsmax(tag), text[at + 1])
+			trim(tag)
+			text[at] = 0
+			trim(text)
+		}
+		// "@..." is said to the team
+		if (text[0] == '@')
+		{
+			team = true
+			copy(text, charsmax(text), text[1])
+			trim(text)
+		}
+		fill(id, other, text, charsmax(text))
+		style_text(id, text)
+		decorate(id, text, charsmax(text))
 	}
-	fill(id, other, text, charsmax(text))
-	style_text(id, text)
-	decorate(id, text, charsmax(text))
 	if (!text[0])
 		return
 	engclient_cmd(id, team ? "say_team" : "say", text)
+	hist_add(id, text, team ? get_user_team(id) : 0)
 	// the living don't see the dead talk; like pub servers' dead-chat plugins, show it to them
 	if (!is_user_alive(id) && get_pcvar_num(g_pDeadChat))
 		dead_chat(id, text, team)
@@ -1272,6 +1310,7 @@ last_alive_check(team)
 
 public ev_newround()
 {
+	g_Round++
 	arrayset(g_RoundKills, 0, sizeof g_RoundKills)
 	arrayset(g_Streaked, false, sizeof g_Streaked)
 	g_BombPlanted = g_BombDropped = false
@@ -1577,8 +1616,9 @@ public ev_ctwin()
 
 round_end(winner)
 {
-	// the round's over: threads with people end here
+	// the round's over: threads with people end here, and answers still being written
 	arrayset(g_ThreadBot, 0, sizeof g_ThreadBot)
+	g_Round++
 	new loser = 3 - winner
 	new bool:comeback = g_LoseRun[winner] >= 4
 	g_WinRun[winner]++
@@ -2054,9 +2094,10 @@ clear_state()
 }
 
 // One bot's answer to a person, typed after reading it, with the game state it needs
-bool:answer(bot, const what[], human, bool:team, Float:extra, bool:quiet = false)
+bool:answer(bot, const what[], human, bool:team, Float:extra, bool:quiet = false, bool:thread = false)
 {
-	if (!bot)
+	// still typing an answer from the model
+	if (!bot || g_AiState[bot])
 		return false
 	new section[32], text[128]
 	copy(section, charsmax(section), what)
@@ -2064,6 +2105,13 @@ bool:answer(bot, const what[], human, bool:team, Float:extra, bool:quiet = false
 	g_CtxOther = human
 	new bool:ok = pick_line(bot, section, text, charsmax(text), true)
 	g_CtxOther = 0
+	// with gm_ai_url set the model writes it (the written line is the fallback); a second
+	// bot chiming in ("gg") keeps to the written lines
+	if (ok && !quiet && ai_ask(bot, human, text, section, team, extra, thread))
+	{
+		clear_state()
+		return true
+	}
 	clear_state()
 	if (!ok)
 		return false
@@ -2151,7 +2199,7 @@ bool:continue_thread(id, const msg[], const said[], to, bool:team)
 	if (equal(section, "t_any"))
 		chance *= 0.6
 	chance *= 0.6 + 0.4 * personality()
-	if (random_float(0.0, 1.0) > chance || !answer(bot, section, id, team, 0.0))
+	if (random_float(0.0, 1.0) > chance || !answer(bot, section, id, team, 0.0, false, true))
 		g_ThreadBot[id] = 0
 	return true
 }
@@ -2169,6 +2217,8 @@ heard(id, bool:team)
 	// nobody else saw it (muted or filtered), so no bot answers it
 	if (LibraryExists("gm_community", LibType_Library) && gm_chat_blocked(id, msg))
 		return
+	copy(g_HumanMsg, charsmax(g_HumanMsg), msg)
+	hist_add(id, msg, team ? get_user_team(id) : 0)
 	normalize(msg)
 	// "timeleft", "nextmap": the server answers those itself
 	new first[16]
@@ -2240,6 +2290,394 @@ heard(id, bool:team)
 		if (other && other != bot)
 			answer(other, section, id, team, random_float(1.5, 4.0), true)
 	}
+}
+
+// ---- smarter chat: a small local model writes answers to people -------------------------
+// The app runs the model and sets gm_ai_url to "127.0.0.1:port" while it's ready ("" when
+// not). Answers to people and thread lines go to it (POST /api/botchat/reply); a 200 with
+// {"text": "..."} is what the bot types. Anything else, no answer within AI_TIMEOUT, or no
+// sockets module: the written line picked as usual. Whether a bot answers at all is still
+// decided here, so the model doesn't make bots chattier. Never blocks: a nonblocking socket
+// polled every 0.1 s, one request per bot.
+
+// What each personality is, for the model (same order as PERSONAS)
+new const PERSONA_DESC[][] = { "friendly", "tryhard", "salty", "joker", "quiet", "new player", "chill", "old-timer",
+	"kid", "english is not their first language", "hype", "zoomer", "streamer wannabe", "backseat gamer", "the team's caller",
+	"half asleep", "blames themselves", "wholesome", "military roleplay", "meme lord", "anime fan", "brit",
+	"conspiracy theorist", "dad gamer", "esports wannabe", "foodie", "grammar nerd", "sees hackers everywhere", "lurker",
+	"music guy", "stats nerd", "overconfident", "pacifist", "movement nerd", "map tourist", "yapper", "it guy", "gym bro",
+	"wants the admin", "trivia guy", "patient coach", "pirate", "villain roleplay", "philosopher", "extreme 2000s gamer",
+	"zen", "jokes about being a bot", "cowboy", "detective", "leetspeak" }
+
+ai_init()
+{
+	g_Sockets = bool:LibraryExists("sockets", LibType_Library)
+}
+
+// Something said in chat, for the history the model sees (team: 0 everyone, 1 or 2 that team)
+hist_add(id, const text[], team)
+{
+	new name[32]
+	get_user_name(id, name, charsmax(name))
+	formatex(g_Hist[g_HistPos], charsmax(g_Hist[]), "%s: %s", name, text)
+	g_HistTeam[g_HistPos] = team
+	g_HistPos = (g_HistPos + 1) % HIST
+	if (g_HistCount < HIST)
+		g_HistCount++
+}
+
+// gm_ai_url split into host and port; false when the model isn't there
+bool:ai_target(host[], len, &port)
+{
+	if (!g_Sockets || !g_pAiUrl)
+		return false
+	new url[64]
+	get_pcvar_string(g_pAiUrl, url, charsmax(url))
+	trim(url)
+	new colon = contain(url, ":")
+	if (colon <= 0)
+		return false
+	port = str_to_num(url[colon + 1])
+	url[colon] = 0
+	copy(host, len, url)
+	return port > 0 && port < 65536
+}
+
+// `src` as the inside of a JSON string: quotes, backslashes and control characters escaped;
+// bytes past ascii as \u00XX, so the request is always valid JSON
+json_add(out[], len, const src[])
+{
+	new k = strlen(out)
+	for (new i = 0; src[i] && k < len - 7; i++)
+	{
+		new c = src[i] & 0xFF
+		if (c == '"' || c == '\')
+		{
+			out[k++] = '\'
+			out[k++] = c
+		}
+		else if (c == 10)
+		{
+			out[k++] = '\'
+			out[k++] = 'n'
+		}
+		else if (c < 32 || c >= 127)
+		{
+			static const HEX[] = "0123456789abcdef"
+			out[k++] = '\'
+			out[k++] = 'u'
+			out[k++] = '0'
+			out[k++] = '0'
+			out[k++] = HEX[c >> 4]
+			out[k++] = HEX[c & 15]
+		}
+		else
+			out[k++] = c
+	}
+	out[k] = 0
+}
+
+// "key": "value",
+json_field(out[], len, const key[], const value[], bool:comma = true)
+{
+	// (no fmt here: callers may pass a fmt() result as the value)
+	add(out, len, "^"")
+	add(out, len, key)
+	add(out, len, "^": ^"")
+	json_add(out, len, value)
+	add(out, len, comma ? "^", " : "^"")
+}
+
+// Ask the model for `bot`'s answer to `human`. `written` is the line it says otherwise.
+// True when the request is on its way.
+bool:ai_ask(bot, human, const written[], const section[], bool:team, Float:extra, bool:thread)
+{
+	new host[48], port
+	if (!ai_target(host, charsmax(host), port) || g_AiState[bot] || !is_user_connected(human))
+		return false
+	new err
+	new sock = socket_open(host, port, SOCKET_TCP, err, SOCK_NON_BLOCKING)
+	if (sock <= 0)
+		return false
+
+	static body[1700]
+	new name[32]
+	body = "{"
+	get_user_name(bot, name, charsmax(name))
+	json_field(body, charsmax(body), "bot", name)
+	// the letter for the ones the app knows, else a few words
+	new p = g_Persona[bot]
+	if (contain("ftsjqnockxbiduBDHLOS", fmt("%c", PERSONAS[p])) != -1)
+		json_field(body, charsmax(body), "persona", fmt("%c", PERSONAS[p]))
+	else
+		json_field(body, charsmax(body), "persona", PERSONA_DESC[p])
+	new mood[8]
+	mood_of(bot, human, mood, charsmax(mood))
+	json_field(body, charsmax(body), "mood", contain(mood, "-") != -1 ? "tilted" : contain(mood, "+") != -1 ? "cocky"
+		: contain(mood, "^^") != -1 ? "polite" : "normal")
+	json_field(body, charsmax(body), "kind", thread ? "thread" : "reply")
+	json_field(body, charsmax(body), "message", g_HumanMsg)
+	get_user_name(human, name, charsmax(name))
+	json_field(body, charsmax(body), "human", name)
+	// the last chat lines the person could see, oldest first
+	add(body, charsmax(body), "^"history^": [")
+	new t = get_user_team(human), first = 1, shown
+	// count back up to 8 visible lines
+	new idx[8]
+	for (new back = 0; back < g_HistCount && shown < 8; back++)
+	{
+		new i = (g_HistPos - 1 - back + HIST * 2) % HIST
+		if (!g_HistTeam[i] || g_HistTeam[i] == t)
+			idx[shown++] = i
+	}
+	for (new k = shown - 1; k >= 0; k--)
+	{
+		add(body, charsmax(body), first ? "^"" : ", ^"")
+		json_add(body, charsmax(body), g_Hist[idx[k]])
+		add(body, charsmax(body), "^"")
+		first = 0
+	}
+	add(body, charsmax(body), "], ^"context^": {")
+	// map, score and alive, then only what this answer is about (the app shows a few
+	// extra keys, so nothing that doesn't matter here)
+	new map[32], cmap[32]
+	get_mapname(map, charsmax(map))
+	casual_map(map, cmap, charsmax(cmap))
+	json_field(body, charsmax(body), "map", cmap)
+	new bt = get_user_team(bot)
+	if (bt == 1 || bt == 2)
+	{
+		new us = g_Score[bt], them = g_Score[3 - bt]
+		json_field(body, charsmax(body), "score", us > them ? fmt("%d %d us", us, them) : us < them ? fmt("%d %d them", them, us) : fmt("%d %d tied", us, them))
+	}
+	if (g_CtxPlace[0])
+		json_field(body, charsmax(body), equal(section, "r_how") ? "killer_place" : equal(section, "r_bomb", 6) ? "bomb_place" : "enemy_place", g_CtxPlace)
+	if (g_CtxWeapon[0])
+		json_field(body, charsmax(body), "killer_weapon", g_CtxWeapon)
+	if (g_CtxHs)
+		add(body, charsmax(body), "^"headshot^": true, ")
+	if (g_CtxCarrier[0])
+		json_field(body, charsmax(body), "bomb_carrier", g_CtxCarrier)
+	if (equal(section, "r_bomb_you"))
+		add(body, charsmax(body), "^"human_has_bomb^": true, ")
+	else if (equal(section, "r_bomb_me"))
+		add(body, charsmax(body), "^"bot_has_bomb^": true, ")
+	if (equal(section, "r_timeleft", 10) && get_timeleft() > 0)
+		add(body, charsmax(body), fmt("^"timeleft_min^": %d, ", (get_timeleft() + 30) / 60))
+	if (equal(section, "r_nextmap", 9))
+	{
+		new next[32]
+		next_map(next, charsmax(next))
+		if (next[0])
+			json_field(body, charsmax(body), "nextmap", next)
+	}
+	if (contain(mood, "=") != -1)
+		add(body, charsmax(body), "^"knows_human^": true, ")
+	if (team)
+		add(body, charsmax(body), "^"team_chat^": true, ")
+	if (thread)
+		json_field(body, charsmax(body), "topic", g_ThreadTopic[human])
+	add(body, charsmax(body), fmt("^"alive^": %s", is_user_alive(bot) ? "true" : "false"))
+	add(body, charsmax(body), "}}")
+
+	formatex(g_AiReq[bot], charsmax(g_AiReq[]), "POST /api/botchat/reply HTTP/1.1^r^nHost: %s:%d^r^nContent-Type: application/json^r^nContent-Length: %d^r^nConnection: close^r^n^r^n%s",
+		host, port, strlen(body), body)
+	g_AiSock[bot] = sock
+	g_AiState[bot] = 1
+	g_AiSent[bot] = 0
+	g_AiGot[bot] = 0
+	g_AiResp[bot][0] = 0
+	g_AiStart[bot] = get_gametime()
+	g_AiUser[bot] = get_user_userid(bot)
+	g_AiHuman[bot] = human
+	g_AiHumanUser[bot] = get_user_userid(human)
+	g_AiTeam[bot] = team
+	g_AiExtra[bot] = extra
+	g_AiRound[bot] = g_Round
+	copy(g_AiFallback[bot], charsmax(g_AiFallback[]), written)
+	copy(g_AiSection[bot], charsmax(g_AiSection[]), section)
+	set_task(0.1, "task_ai_poll", TASK_AI + bot, _, _, "b")
+	return true
+}
+
+// The answer no longer fits: the bot or the person left, or the round moved on
+bool:ai_stale(bot)
+{
+	new human = g_AiHuman[bot]
+	return !is_user_connected(bot) || get_user_userid(bot) != g_AiUser[bot] || !is_user_connected(human)
+		|| get_user_userid(human) != g_AiHumanUser[bot] || g_Round != g_AiRound[bot]
+}
+
+ai_close(bot)
+{
+	remove_task(TASK_AI + bot)
+	if (g_AiState[bot] && g_AiSock[bot] > 0)
+		socket_close(g_AiSock[bot])
+	g_AiSock[bot] = 0
+	g_AiState[bot] = 0
+}
+
+// Done with a request: the model's text, or the written line, typed in the time that's left
+ai_finish(bot, const said[])
+{
+	new bool:stale = ai_stale(bot)
+	ai_close(bot)
+	if (stale)
+		return
+	new text[128], bool:raw = said[0] != 0
+	copy(text, charsmax(text), raw ? said : g_AiFallback[bot])
+	if (!text[0])
+		return
+	// the time already spent waiting counts as reading it
+	new Float:delay = g_AiExtra[bot] + typing_time(text, 1.2, 3.0) - (get_gametime() - g_AiStart[bot])
+	queue(bot, g_AiHuman[bot], text, 1, g_AiTeam[bot], floatmax(delay, 0.3), g_AiSection[bot], false, raw)
+}
+
+public task_ai_poll(task)
+{
+	new bot = task - TASK_AI
+	if (!g_AiState[bot])
+	{
+		remove_task(task)
+		return
+	}
+	if (ai_stale(bot))
+	{
+		ai_finish(bot, "")
+		return
+	}
+	new sock = g_AiSock[bot]
+	if (get_gametime() - g_AiStart[bot] > AI_TIMEOUT)
+	{
+		ai_finish(bot, "")
+		return
+	}
+	// connecting: send the request once the socket is ready
+	if (g_AiState[bot] == 1)
+	{
+		if (!socket_is_writable(sock, 0))
+			return
+		new total = strlen(g_AiReq[bot])
+		new n = socket_send(sock, g_AiReq[bot][g_AiSent[bot]], total - g_AiSent[bot])
+		if (n < 0)
+		{
+			ai_finish(bot, "")
+			return
+		}
+		g_AiSent[bot] += n
+		if (g_AiSent[bot] >= total)
+			g_AiState[bot] = 2
+		return
+	}
+	// waiting: read what's there; the server closes the connection when it's done
+	static chunk[512]
+	while (socket_is_readable(sock, 0))
+	{
+		new n = socket_recv(sock, chunk, charsmax(chunk))
+		if (n <= 0)
+		{
+			ai_parse(bot)
+			return
+		}
+		chunk[min(n, charsmax(chunk))] = 0
+		new room = charsmax(g_AiResp[]) - g_AiGot[bot]
+		if (room <= 0)
+		{
+			ai_parse(bot)
+			return
+		}
+		copy(g_AiResp[bot][g_AiGot[bot]], room, chunk)
+		g_AiGot[bot] = strlen(g_AiResp[bot])
+	}
+	// everything the headers said is here (some servers keep the connection a moment)
+	new body = contain(g_AiResp[bot], "^r^n^r^n")
+	new cl = containi(g_AiResp[bot], "content-length:")
+	if (body > 0 && cl > 0 && cl < body)
+	{
+		new want_len = str_to_num(g_AiResp[bot][cl + 15])
+		if (g_AiGot[bot] - (body + 4) >= want_len)
+			ai_parse(bot)
+	}
+}
+
+// 200 with {"text": "..."}: the bot says it; anything else: the written line
+ai_parse(bot)
+{
+	new resp[1024]
+	copy(resp, charsmax(resp), g_AiResp[bot])
+	new said[128]
+	if (equal(resp, "HTTP/1.", 7) && str_to_num(resp[9]) == 200)
+	{
+		new body = contain(resp, "^r^n^r^n")
+		new at = body > 0 ? contain(resp[body], "^"text^"") : -1
+		if (at >= 0)
+		{
+			new i = body + at + 6
+			while (resp[i] && resp[i] != '"')
+				i++
+			if (resp[i] == '"')
+				json_string(resp[i + 1], said, charsmax(said))
+		}
+	}
+	clean_ai(said)
+	ai_finish(bot, said)
+}
+
+// A JSON string's text (after the opening quote), escapes undone; non-ascii dropped
+json_string(const src[], out[], len)
+{
+	new k
+	for (new i = 0; src[i] && src[i] != '"' && k < len; i++)
+	{
+		new c = src[i]
+		if (c == '\' && src[i + 1])
+		{
+			new e = src[++i]
+			switch (e)
+			{
+				case 'n', 'r', 't': c = ' '
+				case 'u':
+				{
+					new v
+					for (new h = 1; h <= 4 && src[i + h]; h++)
+					{
+						new d = src[i + h]
+						v = v * 16 + (d >= '0' && d <= '9' ? d - '0' : d >= 'a' && d <= 'f' ? d - 'a' + 10 : d >= 'A' && d <= 'F' ? d - 'A' + 10 : 0)
+					}
+					i += 4
+					c = v < 128 ? v : 0
+				}
+				default: c = e
+			}
+		}
+		if (c >= 32 && c < 127)
+			out[k++] = c
+	}
+	out[k] = 0
+}
+
+// What the model wrote, made safe to say: one line, no quotes or commands, not too long
+clean_ai(text[])
+{
+	for (new i = 0; text[i]; i++)
+		if (text[i] == '"')
+			text[i] = 39
+	trim(text)
+	while (text[0] == '@' || text[0] == '/' || text[0] == '!' || text[0] == '.')
+	{
+		copy(text, 127, text[1])
+		trim(text)
+	}
+	if (strlen(text) > 100)
+	{
+		text[100] = 0
+		new sp = 100
+		while (sp > 60 && text[sp] != ' ')
+			sp--
+		if (sp > 60)
+			text[sp] = 0
+	}
+	trim(text)
 }
 
 // `word` as a whole word ("hi" in "hi all", not in "this"), or anywhere for "?"
