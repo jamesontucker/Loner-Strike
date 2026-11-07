@@ -84,6 +84,8 @@ export function pinRadio(pinned: boolean) {
 }
 /** Whether the player is open, and opening it (setup's "try the radio" pointer). */
 export const useRadioOpen = () => useRadioStore((s) => s.open);
+/** Whether a station is playing (or connecting). */
+export const useRadioOn = () => useRadioStore((s) => s.on);
 export const openRadio = () => useRadioStore.setState({ open: true });
 
 /** The top bar's Radio button: opens the player under it; the light is on while it plays. */

@@ -1499,7 +1499,10 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .radio-tip p { margin: 0 0 10px; }
 .radio-tip .row { gap: 6px; }
 @keyframes radio-tip-in { from { opacity: 0; transform: translateY(-4px); } }
-@media (prefers-reduced-motion: reduce) { .radio-tip { animation: none; } }
+/* the Radio button glows softly while the pointer is up */
+.setup-radio.tip-on .radio-toggle { color: var(--signal); animation: radio-glow 1.8s ease-in-out infinite; }
+@keyframes radio-glow { 50% { box-shadow: var(--raised), 0 0 0 3px rgba(196, 181, 80, .35), 0 0 14px rgba(196, 181, 80, .45); } }
+@media (prefers-reduced-motion: reduce) { .radio-tip, .setup-radio.tip-on .radio-toggle { animation: none; } }
 .radio { position: fixed; right: var(--gutter); top: calc(var(--strip-h) - 4px); z-index: 30; width: min(275px, 100vw - 32px);
   background: var(--panel); box-shadow: var(--raised), 0 10px 30px rgba(0,0,0,.4); border-radius: 3px; padding: 3px; font-size: 13px; line-height: 1.2; }
 .radio[hidden] { display: none; }

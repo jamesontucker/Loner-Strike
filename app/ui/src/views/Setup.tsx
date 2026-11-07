@@ -7,7 +7,7 @@ import { useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { BusyButton, Info, SteamProgress, useToast } from "../ui";
 import logo from "../assets/logo.svg";
-import { openRadio, pinRadio, RadioButton, useRadioOpen } from "./Radio";
+import { openRadio, pinRadio, RadioButton, useRadioOn, useRadioOpen } from "./Radio";
 
 // ---- what the setup API returns -------------------------------------------------
 export type SetupGame = { id: "cstrike" | "czero"; name: string; installed: boolean; components: string[]; foreign: boolean; unbuilt?: string[] };
@@ -61,12 +61,11 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
     pinRadio(true);
     return () => pinRadio(false);
   }, []);
-  // while it installs: a pointer to the radio, until it's opened or waved off
+  // while it installs: a pointer to the radio, unless it's open, already playing, or waved off
   const radioOpen = useRadioOpen();
+  const radioOn = useRadioOn();
   const [radioTip, setRadioTip] = useState(true);
-  useEffect(() => {
-    if (radioOpen) setRadioTip(false);
-  }, [radioOpen]);
+  const showTip = stage === "install" && radioTip && !radioOpen && !radioOn;
   const [installIdx, setInstallIdx] = useState(0);
   const install = scan.installs[installIdx];
   // every game this Steam has, CS 1.6 first
@@ -127,9 +126,9 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
     <div className="setup">
       <div className="setup-card">
         {/* the radio: setup takes a while, so the install points it out */}
-        <div className="setup-radio">
+        <div className={`setup-radio${showTip ? " tip-on" : ""}`}>
           <RadioButton />
-          {stage === "install" && radioTip && !radioOpen && (
+          {showTip && (
             <div className="radio-tip" role="note">
               <p>This takes a few minutes. Try the radio: classic stations from drum and bass and trance to game music and 2000s hits.</p>
               <div className="row">
