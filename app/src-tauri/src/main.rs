@@ -195,7 +195,8 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         name: Some("Loner-Strike".into()),
         version: Some(app.package_info().version.to_string()),
         comments: Some("Play Counter-Strike like it's 2004, alone or with the friends you don't have.".into()),
-        website: Some("https://github.com/jamesontucker/Loner-Strike".into()),
+        website: Some("https://lonerstrike.com".into()),
+        website_label: Some("lonerstrike.com".into()),
         ..Default::default()
     };
     let app_menu = SubmenuBuilder::new(app, "Loner-Strike")
@@ -231,16 +232,28 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .item(&MenuItemBuilder::with_id("section:servers", "Servers").build(app)?)
         .build()?;
     let window = SubmenuBuilder::new(app, "Window").minimize().maximize().separator().fullscreen().separator().close_window().build()?;
-    let help = SubmenuBuilder::new(app, "Help").item(&MenuItemBuilder::with_id("github", "Loner-Strike on GitHub").build(app)?).build()?;
+    let help = SubmenuBuilder::new(app, "Help")
+        .item(&MenuItemBuilder::with_id("link:site", "Loner-Strike website").build(app)?)
+        .item(&MenuItemBuilder::with_id("link:discord", "Loner-Strike Discord").build(app)?)
+        .item(&MenuItemBuilder::with_id("link:github", "Loner-Strike on GitHub").build(app)?)
+        .build()?;
     MenuBuilder::new(app).items(&[&app_menu, &edit, &view, &window, &help]).build()
 }
 
 /// A menu item for the page: it listens for "ls-menu" (section:<id>, updates).
 fn menu_clicked(app: &tauri::AppHandle, id: &str) {
     use tauri::Manager;
-    if id == "github" {
+    // the Help menu's links, opened in the browser
+    let link = match id {
+        "link:site" => Some("https://lonerstrike.com"),
+        "link:discord" => Some("https://discord.gg/K9eBHVVwZE"),
+        "link:github" => Some("https://github.com/jamesontucker/Loner-Strike"),
+        _ => None,
+    };
+    if let Some(url) = link {
         #[cfg(target_os = "macos")]
-        let _ = std::process::Command::new("open").arg("https://github.com/jamesontucker/Loner-Strike").spawn().map(crate::sys::reap);
+        let _ = std::process::Command::new("open").arg(url).spawn().map(crate::sys::reap);
+        let _ = url;
         return;
     }
     if !(id == "updates" || id.starts_with("section:")) || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == ':') {

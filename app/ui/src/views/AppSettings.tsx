@@ -484,7 +484,9 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
         <SectionHead title="About" />
         <p className="muted">
           Play Counter-Strike like it's 2004, alone or with the friends you don't have. Not affiliated with Valve.{" "}
-          <a href="https://github.com/jamesontucker/Loner-Strike" target="_blank" rel="noreferrer">Source and credits on GitHub</a>. Made by{" "}
+          <a href="https://lonerstrike.com" target="_blank" rel="noreferrer">lonerstrike.com</a>,{" "}
+          <a href="https://discord.gg/K9eBHVVwZE" target="_blank" rel="noreferrer">our Discord</a>, and{" "}
+          <a href="https://github.com/jamesontucker/Loner-Strike" target="_blank" rel="noreferrer">source and credits on GitHub</a>. Made by{" "}
           <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a>.
         </p>
       </section>

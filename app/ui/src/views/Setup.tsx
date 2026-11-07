@@ -298,6 +298,9 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             {!!job?.failed_compiles?.length && <p className="err-text">These didn't build, so they won't load: {job.failed_compiles.join(", ")}.</p>}
             {job?.notes?.map((n) => <p key={n} className="muted">{n}</p>)}
             <BusyButton className="btn primary big-btn" busy={busy("setup:finish")} label="Open the panel" busyLabel="Opening…" onClick={finish} />
+            <p className="muted done-links">
+              Find people to play with on <a href="https://discord.gg/K9eBHVVwZE" target="_blank" rel="noreferrer">our Discord</a>, and what's new at <a href="https://lonerstrike.com" target="_blank" rel="noreferrer">lonerstrike.com</a>.
+            </p>
           </section>
         )}
       </div>

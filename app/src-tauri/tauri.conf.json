@@ -22,6 +22,7 @@
     }
   },
   "bundle": {
+    "homepage": "https://lonerstrike.com",
     "active": true,
     "targets": [
       "app",
