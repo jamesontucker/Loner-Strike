@@ -520,16 +520,39 @@ fn demos(e: &Entry) -> Vec<Value> {
     out.into_iter().map(|x| x.1).collect()
 }
 
+/// HLTV's console without the panel's own status checks: the "Executing rcon" line and the
+/// status report that follows it, every few seconds. Lines with a password never show.
+fn drop_status_checks(text: &str) -> Vec<String> {
+    const REPORT: [&str; 8] = ["--- HLTV Status ---", "Online ", "Local IP ", "Local Slots ", "Total Slots ", "Connected to Game Server ", "Server Name ", "Game Time "];
+    let mut out = Vec::new();
+    let mut in_report = false;
+    for l in text.lines() {
+        if l.contains("Executing rcon") {
+            in_report = true;
+            continue;
+        }
+        if in_report && (REPORT.iter().any(|p| l.trim_start().starts_with(p)) || l.trim_start().starts_with("Recording to ")) {
+            continue;
+        }
+        in_report = false;
+        if !l.to_lowercase().contains("password") && !l.trim().is_empty() {
+            out.push(l.to_string());
+        }
+    }
+    out
+}
+
 /// The last lines of HLTV's console, without the panel's own status checks.
 fn console(e: &Entry) -> Vec<String> {
     if let Some(r) = &e.remote {
-        let cmd = format!("tail -c 24576 \"$HOME/{}/{CONSOLE_LOG}\" 2>/dev/null", crate::remote::server_dir(&e.id));
+        // Linux HLTV prints its console to the service's journal rather than the log file
+        let cmd = format!(
+            "f=\"$HOME/{}/{CONSOLE_LOG}\"; if [ -s \"$f\" ]; then tail -c 24576 \"$f\"; else sudo -n journalctl -u {} -n 400 --no-pager -o cat 2>/dev/null; fi",
+            crate::remote::server_dir(&e.id),
+            crate::remote::hltv_unit(&e.id)
+        );
         let out = crate::remote::exec_quick(r, &cmd).map(|(_, o)| o).unwrap_or_default();
-        let lines: Vec<String> = out
-            .lines()
-            .filter(|l| !l.contains("Executing rcon") && !l.to_lowercase().contains("password") && !l.trim().is_empty())
-            .map(String::from)
-            .collect();
+        let lines: Vec<String> = drop_status_checks(&out);
         let skip = lines.len().saturating_sub(80);
         return lines[skip..].to_vec();
     }
@@ -923,5 +946,10 @@ mod tests {
     fn demo_names() {
         assert!(safe_demo("hltv-2611061830-de_dust2.dem") && safe_demo("A.DEM"));
         assert!(!safe_demo("../server.cfg") && !safe_demo("x/../../a.dem") && !safe_demo("..\\a.dem") && !safe_demo(".dem") && !safe_demo("a.dem.txt") && !safe_demo("C:a.dem"));
+    }
+    #[test]
+    fn console_drops_status_checks() {
+        let t = "Connected to Game Server 127.0.0.1:27015\nExecuting rcon \"status\" from 127.0.0.1:1.\n--- HLTV Status ---\nOnline 00:46, FPS 94.1\nLocal IP 127.0.1.1:27020\nGame Time 22:18, Mod \"cstrike\"\nSpectator joined: bob\nserverpassword secret\n";
+        assert_eq!(drop_status_checks(t), ["Connected to Game Server 127.0.0.1:27015", "Spectator joined: bob"]);
     }
 }
