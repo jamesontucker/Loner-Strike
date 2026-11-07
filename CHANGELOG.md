@@ -9,6 +9,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 - Windows 10: map downloads packed as RAR files unpack again (Windows 10's own unpacker can't open many of them, so the Windows app now brings 7-Zip).
 - Windows: Base Builder and other modes with their own folder compile during setup.
 - Mac: Base Builder's compile no longer crashes in Condition Zero under CrossOver.
+- Changing the resolution in the game while hosting no longer crashes it: the game goes back to its main menu, and you start the game again from there or from the app.
 - The window fits the screen it opens on, when it was last used on a bigger monitor.
 
 ### Changes
