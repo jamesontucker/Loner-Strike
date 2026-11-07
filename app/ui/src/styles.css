@@ -1484,3 +1484,45 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 760px), (pointer: coarse) {
   .prow-act .btn.small { min-height: 40px; padding: 4px 12px; }
 }
+/* Rules page: the modes in the mode vote */
+.modevote { margin-top: 16px; }
+.modevote h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; }
+.modevote h3 .spinner { width: 12px; height: 12px; margin-right: 4px; }
+
+/* Internet radio: the site's little Winamp, dropping down from the top bar's Radio button (computer only) */
+.radio { position: fixed; right: var(--gutter); top: calc(var(--strip-h) - 4px); z-index: 30; width: min(275px, 100vw - 32px);
+  background: var(--panel); box-shadow: var(--raised), 0 10px 30px rgba(0,0,0,.4); border-radius: 3px; padding: 3px; font-size: 13px; line-height: 1.2; }
+.radio[hidden] { display: none; }
+.radio-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 20px; padding: 0 2px 0 7px; background: var(--side); border-radius: 2px;
+  font: 700 11px/1 var(--text); letter-spacing: .1em; text-transform: uppercase; color: var(--bone-faint); }
+.radio-bar::before { content: ""; flex: 1; order: 1; height: 5px; border-block: 1px solid var(--bevel-lo); opacity: .7; }
+.radio-bar button { order: 2; }
+.radio button { display: grid; place-items: center; padding: 0; border: 0; border-radius: 2px; background: var(--panel-2); color: var(--bone); box-shadow: var(--raised); cursor: pointer; }
+.radio button:hover { color: var(--signal); }
+.radio button:active { box-shadow: var(--sunken); }
+.radio button svg { display: block; fill: currentColor; }
+.radio-bar button { width: 18px; height: 15px; }
+.radio-lcd { display: grid; grid-template-columns: 74px 1fr; gap: 3px 8px; margin: 3px 0; padding: 6px 7px; background: #171a12; box-shadow: var(--sunken); border-radius: 2px; color: var(--signal); }
+.radio-time { font: 400 20px/1 var(--stencil); letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.radio-time.off { opacity: .3; }
+.radio-vis { grid-row: 2 / 4; display: block; width: 74px; height: 22px; image-rendering: pixelated; }
+.radio-title { overflow: hidden; white-space: nowrap; font-weight: 600; color: var(--bone); }
+.radio-title span { display: inline-block; }
+.radio-title.scroll span { padding-right: 3em; animation: radio-marquee var(--marquee-s, 12s) linear infinite; }
+.radio-title.scroll span::after { content: attr(data-t); padding-left: 3em; }
+@keyframes radio-marquee { to { transform: translateX(-50%); } }
+.radio-info { display: flex; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--bone-faint); text-transform: uppercase; }
+.radio-info b { color: var(--signal); font-weight: 700; }
+.radio-info .off { opacity: .35; }
+.radio-controls { display: flex; align-items: center; gap: 3px; }
+.radio-controls button { width: 26px; height: 20px; }
+.radio-controls input { flex: 1; min-width: 0; height: 20px; margin: 0 0 0 6px; accent-color: var(--signal); cursor: pointer; }
+.radio-credit { display: flex; justify-content: space-between; gap: 8px; margin: 0; padding: 4px 3px 2px; font-size: 13px; color: var(--bone-faint); }
+.radio-credit a { color: var(--bone-dim); }
+.radio-credit a:hover { color: var(--signal); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.radio-toggle { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border: 0; border-radius: 2px; background: var(--panel); color: var(--bone); box-shadow: var(--raised); font: 600 14px/1 var(--text); cursor: pointer; }
+.radio-toggle:hover, .radio-toggle[aria-expanded="true"] { color: var(--signal); }
+.radio-toggle[aria-expanded="true"] { box-shadow: var(--sunken); }
+.radio-toggle i { width: 7px; height: 7px; border-radius: 50%; background: var(--bevel-lo); box-shadow: var(--sunken); }
+.radio-toggle.on i { background: var(--signal); box-shadow: 0 0 6px var(--signal); }

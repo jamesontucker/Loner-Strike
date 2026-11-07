@@ -1155,9 +1155,9 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   // remembered in localStorage when it's there. Phones always start minimised, to save data.
   {
     const STATIONS = [
-      { name: "Bassdrive", desc: "Worldwide drum and bass", stream: "https://ice.bassdrive.net/stream", site: "https://www.bassdrive.com/", credit: "Bassdrive" },
-      { name: "SomaFM The Trip", desc: "Progressive house and trance", stream: "https://ice1.somafm.com/thetrip-128-mp3", site: "https://somafm.com/thetrip/", credit: "SomaFM: The Trip", soma: true },
-      { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true },
+      { name: "Bassdrive", desc: "Worldwide drum and bass", stream: "https://ice.bassdrive.net/stream", site: "https://www.bassdrive.com/", credit: "Bassdrive", now: "https://ice.bassdrive.net/status-json.xsl" },
+      { name: "SomaFM The Trip", desc: "Progressive house and trance", stream: "https://ice1.somafm.com/thetrip-128-mp3", site: "https://somafm.com/thetrip/", credit: "SomaFM: The Trip", soma: true, now: "https://somafm.com/songs/thetrip.json" },
+      { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true, now: "https://somafm.com/songs/groovesalad.json" },
     ];
     const keep = {
       get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -1190,7 +1190,36 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       title.classList.add("scroll");
       title.style.setProperty("--marquee-s", `${Math.round(span.offsetWidth / 2 / 28)}s`);
     };
-    const stationTitle = () => `${at + 1}. ${STATIONS[at].name} · ${STATIONS[at].desc}`;
+    // What's on now, asked for only while playing: SomaFM lists the track, Bassdrive (mostly live
+    // DJ sets) names the show
+    let track = "";
+    let nowTimer = null;
+    let nowAbort = null;
+    const stationTitle = () => `${at + 1}. ${STATIONS[at].name} · ${track || STATIONS[at].desc}`;
+    const askNow = async () => {
+      const s = STATIONS[at];
+      nowAbort?.abort();
+      nowAbort = new AbortController();
+      try {
+        const j = await (await fetch(s.now, { signal: nowAbort.signal, cache: "no-store" })).json();
+        let t = "";
+        if (s.soma) {
+          const song = j?.songs?.[0];
+          t = song ? [song.artist, song.title].filter(Boolean).join(" - ") : "";
+        } else {
+          const src = [j?.icestats?.source].flat().filter(Boolean);
+          t = String((src.find((x) => x.listenurl?.endsWith("/stream")) ?? src[0])?.title ?? "").trim();
+        }
+        t = t.slice(0, 120);
+        if (t !== track && state === "playing") { track = t; setTitle(stationTitle()); }
+      } catch {}
+    };
+    const watchNow = (on) => {
+      clearInterval(nowTimer);
+      nowAbort?.abort();
+      track = "";
+      if (on) { askNow(); nowTimer = setInterval(askNow, 20000); }
+    };
 
     // Fake spectrum: bars that bounce while playing, a still picture with reduced motion
     const BARS = 18;
@@ -1246,6 +1275,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 
     // Drop the stream completely, so nothing keeps downloading in the background
     const disconnect = () => {
+      watchNow(false);
       clearInterval(tick);
       tick = null;
       audio.pause();
@@ -1289,6 +1319,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       state = "playing";
       visualise(true);
       show();
+      watchNow(true);
     });
     audio.addEventListener("waiting", () => {
       if (state !== "playing") return;

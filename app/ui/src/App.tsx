@@ -13,6 +13,7 @@ import { Addons } from "./views/Addons";
 import { AppSettings, noteUpdateChecked } from "./views/AppSettings";
 import { Bots } from "./views/Bots";
 import { SmarterChat } from "./views/SmarterChat";
+import { Radio, RadioButton } from "./views/Radio";
 import { Friends } from "./views/Friends";
 import { Maps } from "./views/Maps";
 import { Mods } from "./views/Mods";
@@ -416,6 +417,8 @@ function Shell() {
             </PageBoundary>
           )}
         </main>
+        {/* the radio plays on this computer; phones control the game, not music */}
+        {ON_THIS_COMPUTER && <Radio />}
       </div>
 
       {/* phones: the most used sections, the rest under More */}
@@ -500,6 +503,7 @@ function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { da
                 : reason}
         </div>
         <div className="strip-actions">
+          {ON_THIS_COMPUTER && <RadioButton />}
           <Working />
           <span className={`live${lost ? " off-line" : ""}`}>{lost ? "Can't reach it" : "Offline"}</span>
         </div>
@@ -528,6 +532,7 @@ function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { da
         <span className="ct">{score("CT")}</span>
       </div>
       <div className="strip-actions">
+        {ON_THIS_COMPUTER && <RadioButton />}
         <Working />
         <span className={`live${reconnecting ? "" : " on"}`}>{reconnecting ? "Reconnecting…" : "Live"}</span>
       </div>
