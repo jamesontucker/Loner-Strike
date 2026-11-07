@@ -116,6 +116,7 @@ new bool:g_Career
 new g_Persona[33]                   // index into PERSONAS
 new Float:g_NextBot[33]             // when this bot may talk again
 new Float:g_NextAny                 // when any bot may start a new line
+new Float:g_LastRound               // when the last round started (none in Gun Game or Deathmatch)
 new g_RoundKills[33], bool:g_Streaked[33]
 new g_DeathRow[33]                  // deaths since this player's last kill
 new bool:g_Raged[33]
@@ -197,6 +198,7 @@ public plugin_init()
 	register_event("SendAudio", "ev_twin", "a", "2&%!MRAD_terwin")
 	register_event("SendAudio", "ev_ctwin", "a", "2&%!MRAD_ctwin")
 	register_event("HLTV", "ev_newround", "a", "1=0", "2=0")
+	set_task(40.0, "task_idle_chatter")
 	register_event("30", "ev_intermission", "a")
 	register_logevent("ev_planted", 3, "2=Planted_The_Bomb")
 	register_logevent("ev_defused", 3, "2=Defused_The_Bomb")
@@ -683,7 +685,7 @@ Float:level_mult()
 	switch (get_pcvar_num(g_pLevel))
 	{
 		case 1: return 0.2
-		case 3: return 1.0
+		case 3: return 1.8
 	}
 	return 0.6
 }
@@ -700,7 +702,7 @@ Float:global_gap()
 	switch (get_pcvar_num(g_pLevel))
 	{
 		case 1: g = 40.0
-		case 3: g = 6.0
+		case 3: g = 4.0
 		default: g = 12.0
 	}
 	return g * gap_mult()
@@ -712,7 +714,7 @@ Float:bot_gap()
 	switch (get_pcvar_num(g_pLevel))
 	{
 		case 1: g = 150.0
-		case 3: g = 30.0
+		case 3: g = 20.0
 		default: g = 60.0
 	}
 	return g * gap_mult()
@@ -1308,8 +1310,21 @@ last_alive_check(team)
 		want(last, "last_alive", 0, 0.45, -1.0, 0, random_num(0, 1) == 1)
 }
 
+// Modes without rounds (Gun Game, Deathmatch) have no freeze time, when most chat happens:
+// every so often someone says something anyway
+public task_idle_chatter()
+{
+	set_task(random_float(25.0, 50.0), "task_idle_chatter")
+	if (get_gametime() - g_LastRound < 150.0)
+		return
+	new h
+	time(h)
+	want(any_bot(0), (h >= 0 && h < 5 && random_num(0, 1)) ? "late_night" : "idle", 0, 0.35, random_float(1.0, 4.0))
+}
+
 public ev_newround()
 {
+	g_LastRound = get_gametime()
 	g_Round++
 	arrayset(g_RoundKills, 0, sizeof g_RoundKills)
 	arrayset(g_Streaked, false, sizeof g_Streaked)
