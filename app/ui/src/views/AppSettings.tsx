@@ -181,18 +181,23 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
   }, `Installing Loner-Strike ${app?.update?.version ?? "update"}…`);
   const removeAll = async () => {
     const inst = scan?.installs.find((i) => app?.game && app.game.dir.startsWith(i.hl));
-    if (!app?.game || !inst || !(await ask("Remove Loner-Strike from this game and restore the original files? Close the game first.", { ok: "Remove", danger: true }))) return;
+    if (!app?.game || !inst) return;
+    const title = gameTitle(app.game.id);
+    // each game is set up on its own, so removing is per game too
+    const other = inst.games.find((g) => g.id !== app.game!.id && g.installed);
+    const otherNote = other ? ` ${gameTitle(other.id)} isn't touched: switch to it and remove it there too if you want.` : "";
+    if (!(await ask(`Remove Loner-Strike from ${title} and restore its original files? Close the game first.${otherNote} Your settings, admins and stats are kept, in case you set it up again.`, { ok: `Remove from ${title}`, danger: true }))) return;
     const game = app.game.id;
     await run("app:uninstall", async () => {
       const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/uninstall", { hl: inst.hl, games: [game] }).catch(() => ({ error: "Couldn't reach the app." }));
       if (r.error) return toast(r.error, true);
-      toast("Removing Loner-Strike. The app restarts when it's done.");
+      toast(`Removing Loner-Strike from ${title}. The app restarts when it's done.`);
       // runs on even if you leave this page, so the spinner stays until it's done
       const j = await waitForSetupJob();
       if (!j) return toast("Lost track of the removal. Check Mods to see if it finished, then restart Loner-Strike.", true);
       if (j.state === "error") toast(j.error || "Couldn't remove everything. Nothing was restarted.", true);
       else await postJson("/api/app/restart").catch(() => null); // the app going away can drop the reply
-    }, "Removing Loner-Strike…");
+    }, `Removing Loner-Strike from ${title}…`);
   };
 
   const updates = (
@@ -305,7 +310,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
               {/* for working on the intro (music, sounds): only in a development build */}
               {import.meta.env.DEV && <button className="btn" onClick={() => useNav.getState().setSetupOpen(true, true)}>Watch the intro</button>}
               {app?.game && scan && (
-                <BusyButton className="btn danger" busy={busy("app:uninstall")} label="Remove Loner-Strike" busyLabel="Removing…" onClick={removeAll} />
+                <BusyButton className="btn danger" busy={busy("app:uninstall")} label={`Remove from ${gameTitle(app.game.id)}`} busyLabel="Removing…" onClick={removeAll} />
               )}
             </div>
           ) : (
