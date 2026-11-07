@@ -31,6 +31,7 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 - 22 game modes: Classic, Match (5v5), Deathmatch, Free for all, Gun Game (solo and teams), Zombie Plague (two versions), Warcraft 3, SuperHero, Hide and Seek, Paintball, Deathrun, Base Builder, SoccerJam, Surf, Kreedz, plus knife, pistol, deagle, AWP and scout modes.
 - The mods are community classics, patched so they notice CZ bots. Some got bot logic they never had: SuperHero bots pick heroes, Deathrun bots trigger traps, SoccerJam bots chase the ball, Roll the Dice bots roll.
 - Thousands of maps from GameBanana with screenshots, favourites and search; skins, player models, sounds and sprays; round-end music, Quake sounds and classic sound packs.
+- Mode voting: players type rtv, vote for the next mode, then for a map that suits it. The host picks which modes are in the vote.
 - Add your own maps, sounds and AMX Mod X plugins from a file.
 - Mods are downloaded from their original sources and checked against pinned checksums.
 
@@ -51,7 +52,8 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 - Dedicated servers on your own computer (Valve's free dedicated server, downloaded and set up for you), or bring in one you already run.
 - Always-on servers on a rented Linux machine (a VPS: Ubuntu or Debian, x86, public IPv4). The app connects over SSH with your key, confirms the machine's identity, installs Valve's server and the mods, opens the game ports and runs it as a service that keeps going without your computer.
 - After that: changes made in the app (settings, admins, mods, maps, sounds) are uploaded automatically, only the files that changed; Valve's server files update from the app; HLTV runs next to it on UDP 27020 and its demos can be copied to your game; the app says when a server stops answering, and why.
-- Admins, bans, the swear filter, the welcome page and chat messages can be shared across servers. Mods and other settings stay per server. One server's mods can be copied to another.
+- Admins, bans, the swear filter, the welcome page and chat messages can be shared across servers. Mods and other settings stay per server. One server's mods can be copied to another, and your own maps can be sent to a server with everything they need.
+- Website status: a small service on a Linux server that gives your website the live player count and a visitor counter, over its own HTTPS or a Cloudflare Tunnel.
 - Each server has a join password, a console (RCON) password and extra start options.
 - Ports: servers on your computer start at UDP 27016 (27015 is your own game's); on a VPS, 27015 to 27019 for servers and 27020 for HLTV. Open UDP 27015-27020 in the provider's firewall.
 - Cost: free on your own computer. A VPS runs from free (Oracle Cloud's Always Free AMD machines, when available) to a small monthly plan at providers like Hetzner, DigitalOcean or Vultr. ARM machines can't run the game server.
@@ -63,6 +65,7 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 - An in-game menu on F3, and quick actions in the app while you play (pause, bots, god mode, noclip and more).
 - Control it from your phone by scanning a QR code on the same Wi-Fi. Actions that delete or reinstall stay on the computer.
 - Export your setup to another computer or server. Signed automatic updates.
+- A built-in radio with drum and bass and trance stations (Bassdrive, SomaFM).
 - Built with Rust (Tauri) and React. It talks to the game over RCON on your own computer; nothing goes through a server run by the makers.
 
 ## FAQ
