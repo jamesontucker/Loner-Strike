@@ -126,7 +126,7 @@ pub fn parse_players(d: &[u8]) -> Option<Vec<Player>> {
 /// The whole reply has to arrive by `deadline`, in MAX_PARTS packets at most.
 fn receive(s: &UdpSocket, deadline: Instant) -> Option<Vec<u8>> {
     let mut buf = [0u8; 4096];
-    let mut recv = |buf: &mut [u8]| {
+    let recv = |buf: &mut [u8]| {
         let left = deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero())?;
         s.set_read_timeout(Some(left)).ok()?;
         s.recv(buf).ok()
