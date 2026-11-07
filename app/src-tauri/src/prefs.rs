@@ -137,6 +137,39 @@ async fn api_storage_clear(headers: HeaderMap, Json(req): Json<ClearReq>) -> Rep
     ok(json!({"ok": true}))
 }
 
+#[derive(Deserialize)]
+struct OpenUrlReq {
+    url: String,
+}
+
+/// A web address that may be handed to the system: http(s) only, one plain line.
+fn openable(url: &str) -> bool {
+    let rest = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"));
+    rest.is_some_and(|r| !r.is_empty() && !r.starts_with('/')) && url.len() <= 2048 && url.bytes().all(|c| c.is_ascii_graphic() && c != b'"' && c != b'\\')
+}
+
+/// Opens an outside link in the default browser: the app's window is a web view that
+/// can't open new tabs, so the page sends its links here (main.tsx). The computer only.
+async fn api_open_url(headers: HeaderMap, Json(req): Json<OpenUrlReq>) -> Reply {
+    if !from_panel(&headers) {
+        return forbidden();
+    }
+    if !openable(&req.url) {
+        return err("That address can't be opened.");
+    }
+    // the address goes straight to the program, never through a shell
+    #[cfg(target_os = "macos")]
+    let r = std::process::Command::new("open").arg(&req.url).spawn().map(crate::sys::reap);
+    #[cfg(windows)]
+    let r = crate::sys::command("rundll32").args(["url.dll,FileProtocolHandler", &req.url]).spawn().map(crate::sys::reap);
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let r: std::io::Result<()> = Err(std::io::Error::other("unsupported"));
+    match r {
+        Ok(_) => ok(json!({"ok": true})),
+        Err(e) => err(format!("Couldn't open the link ({e}).")),
+    }
+}
+
 /// Shows the app's own folder (settings, caches, records) in Finder or Explorer.
 async fn api_open_folder(headers: HeaderMap) -> Reply {
     if !from_panel(&headers) {
@@ -493,6 +526,7 @@ pub fn local_routes() -> Router<Shared> {
         .route("/api/app/phone/reset", post(api_phone_reset))
         .route("/api/app/storage/clear", post(api_storage_clear))
         .route("/api/app/open-folder", post(api_open_folder))
+        .route("/api/app/open-url", post(api_open_url))
         .route("/api/app/game-folder", post(api_folder_add))
         .route("/api/app/servers-folder", get(api_servers_dir).post(api_servers_dir_set))
         .route("/api/app/game-folder/remove", post(api_folder_remove))
@@ -504,6 +538,14 @@ pub fn local_routes() -> Router<Shared> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn openable_links() {
+        assert!(openable("https://lonerstrike.com") && openable("http://example.com/a?b=c&d=e#f") && openable("https://discord.gg/K9eBHVVwZE"));
+        for bad in ["", "https://", "file:///etc/passwd", "javascript:alert(1)", "steam://connect/1.2.3.4", "https://a b", "https://a\nb", "https://x\"y", "https:///x", "ftp://x"] {
+            assert!(!openable(bad), "{bad}");
+        }
+    }
 
     #[test]
     fn setup_files() {

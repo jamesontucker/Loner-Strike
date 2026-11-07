@@ -292,6 +292,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               title={job?.state === "error" ? "Setup stopped" : "Installing Loner-Strike…"}
               text={(() => { const now = job?.steps.find((x) => x.state === "running"); return now ? `${now.label}${now.detail ? ` · ${now.detail}` : ""}` : "Getting ready…"; })()}
               error={job?.state === "error"}
+              foot="This may take a few minutes. Just like it used to."
             />
             <ul className="job-steps">
               {(job?.steps ?? []).map((s) => (

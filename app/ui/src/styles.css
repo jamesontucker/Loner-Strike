@@ -1003,6 +1003,7 @@ a.btn.primary { color: var(--signal-ink); }
 .setup-pane.welcome:has(.done-tips) { gap: 2px; padding: 0; }
 .setup-pane.welcome:has(.done-tips) h1 { margin: 6px 0 4px; font-size: 38px; }
 .setup-pane.welcome:has(.done-tips) > p { margin: 0; }
+.setup-pane.welcome:has(.done-tips) > p.done-links { margin-top: 32px; }
 .done-mark { width: 60px; height: 60px; padding: 6px; margin-bottom: 0; }
 .done-tips { margin: 10px 0 12px; gap: 6px; }
 .done-tips li { padding: 7px 12px; font-size: 15px; }

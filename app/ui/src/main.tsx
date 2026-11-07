@@ -24,6 +24,41 @@ new MutationObserver((changes) => {
   }
 }).observe(document.body, { subtree: true, childList: true, characterData: true });
 
+// Outside links (target=_blank, window.open) do nothing in the app's window, which is a web
+// view, not a browser: on this computer they go to the app, which opens them in the
+// default browser. (On a phone the panel is a real browser, which opens them itself.)
+if (["127.0.0.1", "localhost"].includes(location.hostname)) {
+  const outside = (href: string) => {
+    try {
+      const u = new URL(href, location.href);
+      return (u.protocol === "https:" || u.protocol === "http:") && u.origin !== location.origin ? u.href : null;
+    } catch {
+      return null;
+    }
+  };
+  const openOutside = (url: string) =>
+    fetch("/api/app/open-url", { method: "POST", headers: { "Content-Type": "application/json", "X-Panel": "1" }, body: JSON.stringify({ url }) }).catch(() => {});
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      const url = a && outside(a.getAttribute("href") ?? "");
+      if (!url) return;
+      e.preventDefault();
+      openOutside(url);
+    },
+    true,
+  );
+  const open = window.open.bind(window);
+  window.open = (target?: string | URL, ...rest) => {
+    const url = target ? outside(String(target)) : null;
+    if (!url) return open(target, ...rest);
+    openOutside(url);
+    return null;
+  };
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     {/* anything that crashes outside a page (the top bar, setup, a dialog) still
