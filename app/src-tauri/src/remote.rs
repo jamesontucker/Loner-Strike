@@ -88,7 +88,14 @@ fn connect(r: &RemoteInfo) -> Result<Session, String> {
     if first.starts_with("PuTTY-User-Key-File") {
         return Err("That's a PuTTY key (.ppk). Export it as an OpenSSH key in PuTTYgen (Conversions, then Export OpenSSH key) and pick that.".into());
     }
-    s.userauth_pubkey_file(&r.user, None, &r.key, None).map_err(|e| {
+    // libssh2 opens files with the ANSI API on Windows, so a key under a non-ASCII
+    // user name (C:\\Users\\José) can't be opened by path: hand it the text instead
+    let auth = if r.key.to_string_lossy().is_ascii() || first.is_empty() {
+        s.userauth_pubkey_file(&r.user, None, &r.key, None)
+    } else {
+        s.userauth_pubkey_memory(&r.user, None, &first, None)
+    };
+    auth.map_err(|e| {
         if first.contains("ENCRYPTED") || e.message().contains("passphrase") {
             "That key has a passphrase, which isn't supported yet. Make a key without one for the server.".to_string()
         } else {
@@ -132,8 +139,19 @@ fn base64_nopad(bytes: &[u8]) -> String {
 /// Whether this computer's SSH has the machine on record (~/.ssh/known_hosts) with this key.
 fn in_known_hosts(s: &Session, r: &RemoteInfo) -> bool {
     let (Some((key, _)), Some(home)) = (s.host_key(), dirs::home_dir()) else { return false };
-    let Ok(mut kh) = s.known_hosts() else { return false };
-    kh.read_file(&home.join(".ssh/known_hosts"), ssh2::KnownHostFileKind::OpenSSH).is_ok() && matches!(kh.check_port(&r.host, r.ssh_port, key), ssh2::CheckResult::Match)
+    let Some(kh) = known_hosts(s, &home) else { return false };
+    matches!(kh.check_port(&r.host, r.ssh_port, key), ssh2::CheckResult::Match)
+}
+
+/// This computer's ~/.ssh/known_hosts, read by the app (libssh2 can't open paths
+/// with non-ASCII characters on Windows). Lines it doesn't understand are skipped.
+fn known_hosts(s: &Session, home: &std::path::Path) -> Option<ssh2::KnownHosts> {
+    let text = std::fs::read_to_string(home.join(".ssh/known_hosts")).ok()?;
+    let mut kh = s.known_hosts().ok()?;
+    for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+        let _ = kh.read_str(line, ssh2::KnownHostFileKind::OpenSSH);
+    }
+    Some(kh)
 }
 
 /// A first look at a machine, before setting anything up: its fingerprint (for the
@@ -160,11 +178,9 @@ pub fn probe(r: &RemoteInfo) -> Result<(String, bool, String), String> {
 fn check_identity(s: &Session, r: &RemoteInfo) -> Result<(), String> {
     const CHANGED: &str = "The server's identity has changed since this computer last connected, so the app won't connect. If you rebuilt the machine, remove its line from ~/.ssh/known_hosts and add the server again; otherwise someone may be intercepting the connection.";
     let (key, _) = s.host_key().ok_or("The server didn't identify itself.")?;
-    if let (Some(home), Ok(mut kh)) = (dirs::home_dir(), s.known_hosts()) {
-        if kh.read_file(&home.join(".ssh/known_hosts"), ssh2::KnownHostFileKind::OpenSSH).is_ok() {
-            if let ssh2::CheckResult::Mismatch = kh.check_port(&r.host, r.ssh_port, key) {
-                return Err(CHANGED.into());
-            }
+    if let Some(kh) = dirs::home_dir().and_then(|home| known_hosts(s, &home)) {
+        if let ssh2::CheckResult::Mismatch = kh.check_port(&r.host, r.ssh_port, key) {
+            return Err(CHANGED.into());
         }
     }
     if let Some(expected) = &r.host_key {

@@ -184,7 +184,7 @@ async fn api_folder_add(headers: HeaderMap, Json(req): Json<FolderReq>) -> Reply
     if !from_panel(&headers) {
         return forbidden();
     }
-    let dir = req.dir.trim().trim_end_matches(['/', '\\']).to_string();
+    let dir = crate::sys::clean_path(&req.dir);
     if custom_install(&dir).is_none() {
         let mac = if cfg!(target_os = "macos") { " On a Mac it also has to be inside a CrossOver bottle." } else { "" };
         return err(format!("That isn't a Half-Life folder with Counter-Strike 1.6 or Condition Zero in it (it should have a cstrike or czero folder).{mac}"));
@@ -201,7 +201,7 @@ async fn api_folder_remove(headers: HeaderMap, Json(req): Json<FolderReq>) -> Re
     if !from_panel(&headers) {
         return forbidden();
     }
-    let s = edit_settings(|s| s.game_folders.retain(|d| d != req.dir.trim()));
+    let s = edit_settings(|s| s.game_folders.retain(|d| *d != crate::sys::clean_path(&req.dir)));
     ok(json!({"ok": true, "game_folders": s.game_folders}))
 }
 
@@ -231,7 +231,7 @@ async fn api_servers_dir_set(State(st): State<Shared>, headers: HeaderMap, Json(
         return forbidden();
     }
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
-        let dir = req.dir.trim().trim_end_matches(['/', '\\']).to_string();
+        let dir = crate::sys::clean_path(&req.dir);
         if !dir.is_empty() {
             let client = crate::servers::client(&st).ok_or("Set up the game on this computer first.")?;
             crate::servers::servers_dir_ok(Path::new(&dir), &client)?;

@@ -276,7 +276,11 @@ pub fn default_root(client: &Install) -> Result<PathBuf, String> {
     if client.kind == "crossover" {
         Ok(drive_c(client)?.join("Loner-Strike").join("Servers"))
     } else {
-        Ok(dirs::data_local_dir().ok_or("Couldn't find the app data folder.")?.join("Loner-Strike").join("Servers"))
+        let local = dirs::data_local_dir().ok_or("Couldn't find the app data folder.")?;
+        // the game server can't open paths with letters outside ASCII (a user name like
+        // José), so those computers keep servers at the top of the system drive instead
+        let base = if local.to_string_lossy().is_ascii() { local } else { PathBuf::from(std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()) + "\\") };
+        Ok(base.join("Loner-Strike").join("Servers"))
     }
 }
 
@@ -298,6 +302,11 @@ pub fn servers_dir_ok(dir: &Path, client: &Install) -> Result<(), String> {
     }
     if dir.exists() && !dir.is_dir() {
         return Err("That's a file, not a folder.".into());
+    }
+    // what the server sees: on a Mac only the part inside the bottle's C: drive
+    let seen = if client.kind == "crossover" { dir.strip_prefix(drive_c(client)?).unwrap_or(dir) } else { dir };
+    if !seen.to_string_lossy().is_ascii() {
+        return Err("The game server can't use a folder whose path has accents or other special letters in it. Pick one with plain letters, like C:\\Loner-Strike.".into());
     }
     Ok(())
 }
@@ -701,7 +710,7 @@ fn remote_of(req: &NewRemote) -> Result<crate::remote::RemoteInfo, String> {
     if !user.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)) {
         return Err("That user name has characters it can't have.".into());
     }
-    Ok(crate::remote::RemoteInfo { host, user, key: PathBuf::from(req.key.trim()), ssh_port: req.ssh_port.unwrap_or(22), host_key: None })
+    Ok(crate::remote::RemoteInfo { host, user, key: PathBuf::from(crate::sys::clean_path(&req.key)), ssh_port: req.ssh_port.unwrap_or(22), host_key: None })
 }
 
 /// What of this computer's copy goes up to the machine: Loner-Strike's plugins, configs,
@@ -1229,7 +1238,7 @@ fn import_motd(game_dir: &Path, cfg: &str, data: &Path) -> &'static str {
 }
 
 pub fn import(dir: &Path) -> Result<Value, String> {
-    let dir = dir.canonicalize().map_err(|_| "That folder isn't there.".to_string())?;
+    let dir = sys::canonical(dir).map_err(|_| "That folder isn't there.".to_string())?;
     if !dir.join("hlds.exe").is_file() {
         return Err("That folder has no hlds.exe. Pick the folder the dedicated server is in.".into());
     }
@@ -2243,7 +2252,7 @@ async fn api_import(headers: HeaderMap, Json(req): Json<ImportReq>) -> (StatusCo
     if !from_panel(&headers) {
         return forbidden();
     }
-    let r = tokio::task::spawn_blocking(move || import(Path::new(req.dir.trim()))).await.unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
+    let r = tokio::task::spawn_blocking(move || import(Path::new(&crate::sys::clean_path(&req.dir)))).await.unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
 }
 

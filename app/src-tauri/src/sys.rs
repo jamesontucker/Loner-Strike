@@ -28,9 +28,22 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let tmp = path.with_file_name(format!(".{name}.{}-{}.tmp", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
     std::fs::write(&tmp, bytes)?;
-    std::fs::rename(&tmp, path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&tmp);
-    })
+    // on Windows an antivirus scan or the game reading the file can hold it for a
+    // moment, which fails the rename: try a few times before giving up
+    let mut tries = 0;
+    loop {
+        match std::fs::rename(&tmp, path) {
+            Ok(()) => return Ok(()),
+            Err(e) if cfg!(windows) && tries < 5 && e.kind() == std::io::ErrorKind::PermissionDenied => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(60 * tries));
+            }
+            Err(e) => {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(e);
+            }
+        }
+    }
 }
 
 /// A JSON file that's there but doesn't parse is kept aside (name.bad) rather than
@@ -120,6 +133,33 @@ pub fn find_tool(name: &str) -> Option<PathBuf> {
         }
     }
     ["/opt/homebrew/bin", "/usr/local/bin"].iter().map(|d| Path::new(d).join(&exe)).find(|p| p.is_file())
+}
+
+/// A folder or file path as typed or pasted: no surrounding spaces or quotes (Windows
+/// "Copy as path" adds them) and no trailing slash, except on a drive root like D:\.
+pub fn clean_path(s: &str) -> String {
+    let t = s.trim().trim_matches(['"', '\'']).trim();
+    let bare = t.trim_end_matches(['/', '\\']);
+    if bare.is_empty() {
+        return t.chars().take(1).collect();
+    }
+    if bare.len() == 2 && bare.ends_with(':') {
+        return format!("{bare}\\");
+    }
+    bare.to_string()
+}
+
+/// A canonical path without Windows' \\?\ prefix, which many programs (and people) can't read.
+pub fn canonical(p: &Path) -> std::io::Result<PathBuf> {
+    let c = p.canonicalize()?;
+    let s = c.to_string_lossy();
+    Ok(if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{rest}"))
+    } else if let Some(rest) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        c
+    })
 }
 
 /// A Command that doesn't flash a console window on Windows.
@@ -347,4 +387,18 @@ pub fn game_running() -> bool {
     }
     #[cfg(not(any(target_os = "macos", windows)))]
     false
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::clean_path;
+    #[test]
+    fn cleans() {
+        assert_eq!(clean_path(r#"  "C:\Games\Half-Life\"  "#), r"C:\Games\Half-Life");
+        assert_eq!(clean_path("D:\\"), "D:\\");
+        assert_eq!(clean_path("D:"), "D:\\");
+        assert_eq!(clean_path("/"), "/");
+        assert_eq!(clean_path("'/Users/me/key'"), "/Users/me/key");
+        assert_eq!(clean_path(""), "");
+    }
 }
