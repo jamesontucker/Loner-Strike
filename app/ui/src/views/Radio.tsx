@@ -4,22 +4,49 @@ import { create } from "zustand";
 /** Internet radio, the site's little Winamp in the corner. Never autoplays: the stream is only
  *  requested on play, and stop drops the connection. Station, volume and whether it's open are
  *  remembered in localStorage when it's there. */
-const STATIONS = [
+type Station = {
+  name: string;
+  desc: string;
+  stream: string;
+  site: string;
+  credit: string;
+  /** SomaFM: its track list, and a Support SomaFM link */
+  soma?: boolean;
+  /** Rainwave: its own API */
+  rainwave?: boolean;
+  /** what's on now: SomaFM's or Rainwave's JSON, or an Icecast status-json.xsl */
+  now?: string;
+  /** the stream's mount in an Icecast status with several (the one ending in /stream if not given) */
+  mount?: string;
+};
+
+const STATIONS: Station[] = [
   { name: "Bassdrive", desc: "Worldwide drum and bass", stream: "https://ice.bassdrive.net/stream", site: "https://www.bassdrive.com/", credit: "Bassdrive", now: "https://ice.bassdrive.net/status-json.xsl" },
   { name: "SomaFM The Trip", desc: "Progressive house and trance", stream: "https://ice1.somafm.com/thetrip-128-mp3", site: "https://somafm.com/thetrip/", credit: "SomaFM: The Trip", soma: true, now: "https://somafm.com/songs/thetrip.json" },
+  { name: "SomaFM DEF CON Radio", desc: "Music for hacking, from the DEF CON hacker conference", stream: "https://ice1.somafm.com/defcon-128-mp3", site: "https://somafm.com/defcon/", credit: "SomaFM: DEF CON Radio", soma: true, now: "https://somafm.com/songs/defcon.json" },
+  { name: "SceneSat", desc: "Demoscene and computer music", stream: "https://streams.scenesat.com/main/hq.mp3", site: "https://scenesat.com/", credit: "SceneSat Radio", now: "https://streams.scenesat.com/status-json.xsl", mount: "/main/hq.mp3" },
+  { name: "Rainwave", desc: "Video game music, on air since 2003", stream: "https://relay.rainwave.cc/game.mp3", site: "https://rainwave.cc/", credit: "Rainwave", rainwave: true, now: "https://rainwave.cc/api4/info?sid=1" },
+  { name: "0N 2000s", desc: "Hits from the 2000s", stream: "https://0n-2000s.radionetz.de/0n-2000s.mp3", site: "https://www.0nlineradio.com/", credit: "0nlineradio: 2000s", now: "https://0n-2000s.radionetz.de/status-json.xsl", mount: "/0n-2000s.mp3" },
+  { name: "Radio Bob Nu Metal", desc: "Nu metal, from Korn to Linkin Park", stream: "https://streams.radiobob.de/numetal/mp3-192/", site: "https://www.radiobob.de/", credit: "Radio Bob" },
   { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true, now: "https://somafm.com/songs/groovesalad.json" },
 ];
 
-/** What's on now: SomaFM lists the track; Bassdrive (mostly live DJ sets) names the show. */
-async function nowPlaying(s: (typeof STATIONS)[number], signal: AbortSignal): Promise<string> {
+/** What's on now: SomaFM and Rainwave list the track; Bassdrive (mostly live DJ sets) names the show. */
+async function nowPlaying(s: Station, signal: AbortSignal): Promise<string> {
+  if (!s.now) return "";
   const r = await fetch(s.now, { signal, cache: "no-store" });
   const j = await r.json();
   if (s.soma) {
     const song = j?.songs?.[0];
     return song ? [song.artist, song.title].filter(Boolean).join(" - ") : "";
   }
+  if (s.rainwave) {
+    const song = j?.sched_current?.songs?.[0];
+    const game = song?.albums?.[0]?.name;
+    return song ? [song.title, game && `(${game})`].filter(Boolean).join(" ") : "";
+  }
   const sources = [j?.icestats?.source].flat().filter(Boolean);
-  const main = sources.find((x: { listenurl?: string }) => x.listenurl?.endsWith("/stream")) ?? sources[0];
+  const main = sources.find((x: { listenurl?: string }) => x.listenurl?.endsWith(s.mount ?? "/stream")) ?? sources[0];
   return String(main?.title ?? "").trim();
 }
 const FAILED = "This station isn't answering. Try another.";
@@ -63,6 +90,7 @@ export function Radio() {
   const open = useRadioStore((s) => s.open);
   const [announce, setAnnounce] = useState("");
   const [track, setTrack] = useState("");
+  const [list, setList] = useState(false);
   const audio = useRef<HTMLAudioElement | null>(null);
   const tick = useRef<number | null>(null);
   const stateRef = useRef<State>("stopped");
@@ -119,10 +147,10 @@ export function Radio() {
     setSeconds(0);
   };
 
-  const tune = (step: number) => {
+  // to a station by its place in the list, playing on if it was playing
+  const tuneTo = (next: number) => {
     const wasOn = stateRef.current === "playing" || stateRef.current === "connecting";
     if (wasOn) disconnect();
-    const next = (at + step + STATIONS.length) % STATIONS.length;
     setAt(next);
     keep.set("ls-radio-station", String(next));
     set("stopped");
@@ -130,6 +158,9 @@ export function Radio() {
     setAnnounce(`${STATIONS[next].name}, ${STATIONS[next].desc.toLowerCase()}`);
     if (wasOn) play(next);
   };
+  const tune = (step: number) => tuneTo((at + step + STATIONS.length) % STATIONS.length);
+  // any station but this one
+  const shuffle = () => tuneTo((at + 1 + Math.floor(Math.random() * (STATIONS.length - 1))) % STATIONS.length);
 
   useEffect(() => {
     const a = audio.current;
@@ -276,8 +307,26 @@ export function Radio() {
         <button type="button" onClick={() => tune(1)} aria-label="Next station">
           <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><path d="M10 0h2v10h-2zM0 0v10l9-5z" /></svg>
         </button>
+        <button type="button" onClick={shuffle} aria-label="Random station" title="Random station">
+          <svg width="13" height="10" viewBox="0 0 13 10" aria-hidden="true"><path d="M0 7h2.2L6.4 2H10V0l3 2.5L10 5V3.2H7L2.8 8.2H0zM0 1.8h2.8l1.6 1.9-.8.9L2.2 3H0zM7 6.8h3V5l3 2.5L10 10V8H6.4L5 6.3l.8-.9z" /></svg>
+        </button>
         <input type="range" min={0} max={100} value={vol} onChange={(e) => setVol(Number(e.target.value))} aria-label="Volume" style={{ "--fill": `${vol}%` } as React.CSSProperties} />
+        <button type="button" onClick={() => setList((l) => !l)} aria-label="Stations" aria-expanded={list} aria-controls="radio-list" title="Stations">
+          <svg width="11" height="10" viewBox="0 0 11 10" aria-hidden="true"><path d="M0 0h2v2H0zM3 0h8v2H3zM0 4h2v2H0zM3 4h8v2H3zM0 8h2v2H0zM3 8h8v2H3z" /></svg>
+        </button>
       </div>
+      {list && (
+        <ol id="radio-list" className="radio-list">
+          {STATIONS.map((s, i) => (
+            <li key={s.name}>
+              <button type="button" aria-current={i === at ? "true" : undefined} onClick={() => tuneTo(i)}>
+                <span>{i + 1}. {s.name}</span>
+                <small>{s.desc}</small>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
       <p className="radio-credit">
         <a href={station.site} target="_blank" rel="noreferrer">{station.credit}</a>
         {station.soma && <a href="https://somafm.com/support/" target="_blank" rel="noreferrer">Support SomaFM</a>}

@@ -1534,6 +1534,12 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .radio-controls input::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 16px; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); }
 .radio-controls input::-moz-range-thumb { width: 11px; height: 16px; border: 0; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); }
 .radio-controls input:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+.radio-list { list-style: none; margin: 3px 0 0; padding: 3px; max-height: 210px; overflow-y: auto; background: #171a12; box-shadow: var(--sunken); border-radius: 2px; }
+.radio .radio-list button { display: grid; justify-items: start; gap: 1px; width: 100%; padding: 3px 6px; background: none; box-shadow: none; text-align: left; color: var(--bone-dim); font: 600 13px/1.2 var(--text); }
+.radio .radio-list button small { font-weight: 500; font-size: 11px; color: var(--bone-faint); }
+.radio .radio-list button[aria-current="true"] { color: var(--signal); background: rgba(196, 181, 80, .08); }
+.radio .radio-list button:hover { color: var(--signal); }
+.radio .radio-list button:focus-visible { outline: 1px solid var(--signal); outline-offset: -1px; }
 .radio-credit { display: flex; justify-content: space-between; gap: 8px; margin: 0; padding: 4px 3px 2px; font-size: 13px; color: var(--bone-faint); }
 .radio-credit a { color: var(--bone-dim); }
 .radio-credit a:hover { color: var(--signal); }

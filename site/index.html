@@ -474,6 +474,13 @@ footer a { color: var(--dim); }
 .radio-controls input::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 16px; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); }
 .radio-controls input::-moz-range-thumb { width: 11px; height: 16px; border: 0; border-radius: 2px; background: var(--panel-2); box-shadow: var(--raised); }
 .radio-controls input:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+.radio-list { list-style: none; margin: 3px 0 0; padding: 3px; max-height: 210px; overflow-y: auto; background: #171a12; box-shadow: var(--sunken); border-radius: 2px; }
+.radio-list[hidden] { display: none; }
+.radio .radio-list button { display: grid; justify-items: start; gap: 1px; width: 100%; height: auto; padding: 3px 6px; background: none; box-shadow: none; text-align: left; color: var(--dim); font: 600 13px/1.2 var(--text); }
+.radio .radio-list button small { font-weight: 500; font-size: 11px; color: var(--faint); }
+.radio .radio-list button[aria-current="true"] { color: var(--signal); background: rgba(196, 181, 80, .08); }
+.radio .radio-list button:hover { color: var(--signal); }
+.radio .radio-list button:focus-visible { outline: 1px solid var(--signal); outline-offset: -1px; }
 .radio-credit { display: flex; justify-content: space-between; gap: 8px; margin: 0; padding: 4px 3px 2px; font-size: 13px; color: var(--faint); }
 .radio-credit a { color: var(--dim); }
 .radio-credit a:hover { color: var(--signal); }
@@ -893,8 +900,11 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     <button type="button" id="radio-play" aria-label="Play"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0l9 5-9 5z"/></svg></button>
     <button type="button" id="radio-stop" aria-label="Stop"><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><path d="M0 0h9v9H0z"/></svg></button>
     <button type="button" id="radio-next" aria-label="Next station"><svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><path d="M10 0h2v10h-2zM0 0v10l9-5z"/></svg></button>
+    <button type="button" id="radio-shuffle" aria-label="Random station" title="Random station"><svg width="13" height="10" viewBox="0 0 13 10" aria-hidden="true"><path d="M0 7h2.2L6.4 2H10V0l3 2.5L10 5V3.2H7L2.8 8.2H0zM0 1.8h2.8l1.6 1.9-.8.9L2.2 3H0zM7 6.8h3V5l3 2.5L10 10V8H6.4L5 6.3l.8-.9z"/></svg></button>
     <input type="range" id="radio-vol" min="0" max="100" value="70" aria-label="Volume">
+    <button type="button" id="radio-stations" aria-label="Stations" aria-expanded="false" aria-controls="radio-list" title="Stations"><svg width="11" height="10" viewBox="0 0 11 10" aria-hidden="true"><path d="M0 0h2v2H0zM3 0h8v2H3zM0 4h2v2H0zM3 4h8v2H3zM0 8h2v2H0zM3 8h8v2H3z"/></svg></button>
   </div>
+  <ol class="radio-list" id="radio-list" hidden></ol>
   <p class="radio-credit"><a id="radio-site" href="https://www.bassdrive.com/" target="_blank" rel="noopener">Bassdrive</a><a id="radio-support" href="https://somafm.com/support/" target="_blank" rel="noopener" hidden>Support SomaFM</a></p>
   <p class="sr" id="radio-announce" aria-live="polite"></p>
 </section>
@@ -1175,6 +1185,11 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     const STATIONS = [
       { name: "Bassdrive", desc: "Worldwide drum and bass", stream: "https://ice.bassdrive.net/stream", site: "https://www.bassdrive.com/", credit: "Bassdrive", now: "https://ice.bassdrive.net/status-json.xsl" },
       { name: "SomaFM The Trip", desc: "Progressive house and trance", stream: "https://ice1.somafm.com/thetrip-128-mp3", site: "https://somafm.com/thetrip/", credit: "SomaFM: The Trip", soma: true, now: "https://somafm.com/songs/thetrip.json" },
+      { name: "SomaFM DEF CON Radio", desc: "Music for hacking, from the DEF CON hacker conference", stream: "https://ice1.somafm.com/defcon-128-mp3", site: "https://somafm.com/defcon/", credit: "SomaFM: DEF CON Radio", soma: true, now: "https://somafm.com/songs/defcon.json" },
+      { name: "SceneSat", desc: "Demoscene and computer music", stream: "https://streams.scenesat.com/main/hq.mp3", site: "https://scenesat.com/", credit: "SceneSat Radio", now: "https://streams.scenesat.com/status-json.xsl", mount: "/main/hq.mp3" },
+      { name: "Rainwave", desc: "Video game music, on air since 2003", stream: "https://relay.rainwave.cc/game.mp3", site: "https://rainwave.cc/", credit: "Rainwave", rainwave: true, now: "https://rainwave.cc/api4/info?sid=1" },
+      { name: "0N 2000s", desc: "Hits from the 2000s", stream: "https://0n-2000s.radionetz.de/0n-2000s.mp3", site: "https://www.0nlineradio.com/", credit: "0nlineradio: 2000s", now: "https://0n-2000s.radionetz.de/status-json.xsl", mount: "/0n-2000s.mp3" },
+      { name: "Radio Bob Nu Metal", desc: "Nu metal, from Korn to Linkin Park", stream: "https://streams.radiobob.de/numetal/mp3-192/", site: "https://www.radiobob.de/", credit: "Radio Bob" },
       { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true, now: "https://somafm.com/songs/groovesalad.json" },
     ];
     const keep = {
@@ -1208,8 +1223,8 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       title.classList.add("scroll");
       title.style.setProperty("--marquee-s", `${Math.round(span.offsetWidth / 2 / 28)}s`);
     };
-    // What's on now, asked for only while playing: SomaFM lists the track, Bassdrive (mostly live
-    // DJ sets) names the show
+    // What's on now, asked for only while playing: SomaFM and Rainwave list the track, Bassdrive
+    // (mostly live DJ sets) names the show
     let track = "";
     let nowTimer = null;
     let nowAbort = null;
@@ -1217,6 +1232,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     const askNow = async () => {
       const s = STATIONS[at];
       nowAbort?.abort();
+      if (!s.now) return;
       nowAbort = new AbortController();
       try {
         const j = await (await fetch(s.now, { signal: nowAbort.signal, cache: "no-store" })).json();
@@ -1224,9 +1240,13 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         if (s.soma) {
           const song = j?.songs?.[0];
           t = song ? [song.artist, song.title].filter(Boolean).join(" - ") : "";
+        } else if (s.rainwave) {
+          const song = j?.sched_current?.songs?.[0];
+          const game = song?.albums?.[0]?.name;
+          t = song ? [song.title, game && `(${game})`].filter(Boolean).join(" ") : "";
         } else {
           const src = [j?.icestats?.source].flat().filter(Boolean);
-          t = String((src.find((x) => x.listenurl?.endsWith("/stream")) ?? src[0])?.title ?? "").trim();
+          t = String((src.find((x) => x.listenurl?.endsWith(s.mount ?? "/stream")) ?? src[0])?.title ?? "").trim();
         }
         t = t.slice(0, 120);
         if (t !== track && state === "playing") { track = t; setTitle(stationTitle()); }
@@ -1347,11 +1367,31 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     });
     audio.addEventListener("error", () => { if (state === "playing" || state === "connecting") fail(); });
 
-    const tune = (step) => {
+    // the station list: numbered like a Winamp playlist, the current one marked
+    const list = $("list");
+    const fillList = () => {
+      list.replaceChildren(...STATIONS.map((s, i) => {
+        const li = document.createElement("li");
+        const b = document.createElement("button");
+        b.type = "button";
+        if (i === at) b.setAttribute("aria-current", "true");
+        const name = document.createElement("span");
+        name.textContent = `${i + 1}. ${s.name}`;
+        const desc = document.createElement("small");
+        desc.textContent = s.desc;
+        b.append(name, desc);
+        b.addEventListener("click", () => tuneTo(i));
+        li.append(b);
+        return li;
+      }));
+    };
+    // to a station by its place in the list, playing on if it was playing
+    const tuneTo = (next) => {
       const wasOn = state === "playing" || state === "connecting";
       if (wasOn) disconnect();
-      at = (at + step + STATIONS.length) % STATIONS.length;
+      at = next;
       keep.set("ls-radio-station", String(at));
+      if (!list.hidden) fillList();
       state = "stopped";
       $("announce").textContent = `${STATIONS[at].name}, ${STATIONS[at].desc.toLowerCase()}`;
       if (wasOn) play();
@@ -1359,8 +1399,16 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     };
     $("play").addEventListener("click", play);
     $("stop").addEventListener("click", stop);
+    const tune = (step) => tuneTo((at + step + STATIONS.length) % STATIONS.length);
     $("prev").addEventListener("click", () => tune(-1));
     $("next").addEventListener("click", () => tune(1));
+    // any station but this one
+    $("shuffle").addEventListener("click", () => tuneTo((at + 1 + Math.floor(Math.random() * (STATIONS.length - 1))) % STATIONS.length));
+    $("stations").addEventListener("click", () => {
+      list.hidden = !list.hidden;
+      $("stations").setAttribute("aria-expanded", String(!list.hidden));
+      if (!list.hidden) fillList();
+    });
 
     const vol = $("vol");
     const saved = keep.get("ls-radio-volume");

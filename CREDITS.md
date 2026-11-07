@@ -84,12 +84,16 @@ For a server on this computer or on a Linux machine, the app installs Valve's [S
 |---|---|---|
 | [DreamHack, winter 2004](https://commons.wikimedia.org/wiki/File:Winter_2004_DreamHack_LAN_Party.jpg) | Toffelginkgo | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
 
-The website's radio plays the stations' own streams; nothing is copied or stored.
+The radio, in the app and on the website, plays the stations' own streams; nothing is copied or stored.
 
 | Station | Notes |
 |---|---|
 | [Bassdrive](https://www.bassdrive.com/) | Streamed from Bassdrive |
-| [SomaFM: The Trip](https://somafm.com/thetrip/) and [Groove Salad](https://somafm.com/groovesalad/) | Streamed from SomaFM, listener supported |
+| [SomaFM: The Trip](https://somafm.com/thetrip/), [DEF CON Radio](https://somafm.com/defcon/) and [Groove Salad](https://somafm.com/groovesalad/) | Streamed from SomaFM, listener supported |
+| [SceneSat Radio](https://scenesat.com/) | Streamed from SceneSat |
+| [Rainwave](https://rainwave.cc/) | Streamed from Rainwave's game music channel |
+| [0nlineradio: 2000s](https://www.0nlineradio.com/) | Streamed from 0nlineradio |
+| [Radio Bob: Nu Metal](https://www.radiobob.de/) | Streamed from Radio Bob |
 
 ## Fonts
 | Font | Author | License |

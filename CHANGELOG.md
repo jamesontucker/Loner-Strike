@@ -2,7 +2,22 @@
 
 What changed in each version. The downloads are on the [Releases](https://github.com/jamesontucker/Loner-Strike/releases) page.
 
-## 0.1.0 (not released yet)
+## 0.1.1 (not released yet)
+
+### Fixes
+- Windows 10: map downloads packed as RAR files unpack again (Windows 10's own unpacker can't open many of them, so the Windows app now brings RARLAB's UnRAR).
+- Windows: Base Builder and other modes with their own folder compile during setup.
+- Mac: Base Builder's compile no longer crashes in Condition Zero under CrossOver.
+- The window fits the screen it opens on, when it was last used on a bigger monitor.
+
+### Changes
+- Bots start at Hard, and bot chat at Chatty. Changing bot chat takes effect straight away.
+- Map pictures are looked up for every map in the background, and fill in on their own. Radar pictures lose their green background.
+- Website status can keep a Discord message up to date with who's playing, and post when people come on.
+- The radio has eight stations, with demoscene, video game music, 2000s hits and nu metal added, plus shuffle and a station list.
+- Copy diagnostics includes the end of AMX Mod X's error log.
+
+## 0.1.0
 
 The first public version.
 
