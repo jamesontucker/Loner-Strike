@@ -253,13 +253,14 @@ pub(crate) fn remote_apply(e: &Entry, on: bool) -> Result<(), String> {
     let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
     let admin = new_admin();
     let cfg = config(e, &admin, server_password(e).as_deref());
-    std::fs::write(e.dir.join(CFG), &cfg).map_err(|err| format!("Couldn't write HLTV's settings ({err})."))?;
     if on {
         allow_proxies(e);
     }
     let code = crate::remote::exec_stream(r, "bash -s", crate::remote::hltv_sh(&e.id, cfg.trim_end(), &admin, port_of(e), on).as_bytes(), |_| {})?;
     match code {
-        0 => Ok(()),
+        // the copy here only once the machine has it: refresh_remote compares with it, so
+        // a write that didn't reach the machine is tried again
+        0 => std::fs::write(e.dir.join(CFG), &cfg).map_err(|err| format!("HLTV is set up on the server, but its settings couldn't be saved here ({err}).")),
         3 => Err("HLTV isn't in this server's files. Stop the server and press Update in Overview, Maintenance, then try again.".into()),
         _ => Err("Couldn't set up HLTV on the server.".into()),
     }
@@ -270,7 +271,8 @@ pub(crate) fn remote_apply(e: &Entry, on: bool) -> Result<(), String> {
 /// written again. Nothing happens when they still match.
 pub fn refresh_remote(id: &str) {
     let Some(e) = servers::get(id).filter(|e| e.remote.is_some() && e.hltv.enabled && e.ready) else { return };
-    let Ok(now) = std::fs::read_to_string(e.dir.join(CFG)) else { return };
+    // (no copy here: it never reached the machine, so it's written now)
+    let now = std::fs::read_to_string(e.dir.join(CFG)).unwrap_or_default();
     let admin = now.lines().find_map(|l| l.strip_prefix("adminpassword ")).map(|p| p.trim().trim_matches('"').to_string()).unwrap_or_default();
     if config(&e, &admin, server_password(&e).as_deref()) != now {
         let _ = remote_apply(&e, true);
@@ -681,8 +683,9 @@ struct SaveReq {
     record: bool,
 }
 
-async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
+    // settings and turning it on or off: from the computer only, not the phone
+    if !from_panel(&headers) || on.is_none() {
         return forbidden();
     }
     blocking(move || {
@@ -690,19 +693,25 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req): J
         let wanted = Settings { enabled: req.enabled, port: Some(req.port), delay: req.delay, max_spectators: req.max_spectators, name: req.name, password: req.password, record: req.record };
         let s = validate(wanted, &e, &servers::load())?;
         let changed = s != e.hltv;
-        servers::edit(|l| {
-            if let Some(x) = l.iter_mut().find(|x| x.id == id) {
-                x.hltv = s.clone();
-            }
-        })?;
-        let e = entry(&id)?;
-        // on a Linux server: the service written again, and on or off with these settings
+        let save = || {
+            servers::edit(|l| {
+                if let Some(x) = l.iter_mut().find(|x| x.id == id) {
+                    x.hltv = s.clone();
+                }
+            })
+        };
+        // on a Linux server: the service written again, and on or off with these settings,
+        // before they're saved here (if the machine can't be reached nothing changes, and
+        // saving again tries again)
         if e.remote.is_some() {
             if changed || s.enabled {
-                remote_apply(&e, s.enabled)?;
+                remote_apply(&Entry { hltv: s.clone(), ..e.clone() }, s.enabled)?;
             }
+            save()?;
             return Ok(json!({"ok": true, "restart": false}));
         }
+        save()?;
+        let e = entry(&id)?;
         let running = with_runs(|r| alive(r, &id) || r.pending.contains_key(&id));
         // turned off: stop it now; turned on with the server up: start it now
         if !s.enabled && running {
@@ -710,7 +719,12 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req): J
         } else if s.enabled && !running && servers::running(&id) {
             start(&e)?;
         }
-        Ok(json!({"ok": true, "restart": s.enabled && running && changed}))
+        let restart = s.enabled && running && changed;
+        if restart {
+            // kept with the server, so the page still says so after a reload
+            servers::set_pending_restart(&id, servers::Pending::Hltv);
+        }
+        Ok(json!({"ok": true, "restart": restart}))
     })
     .await
 }

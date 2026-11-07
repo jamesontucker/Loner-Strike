@@ -126,6 +126,14 @@ fn host_of(req: &Request) -> String {
     req.headers().get(header::HOST).and_then(|h| h.to_str().ok()).unwrap_or("").to_lowercase()
 }
 
+/// Whether a change request (POST) may write the server's files, so a server on another
+/// machine needs a sync after it. Requests that only talk to the game over RCON (a game
+/// command, a kick, a match button) or touch nothing of the server's (smarter chat runs on
+/// this computer) don't.
+pub(crate) fn writes_files(path: &str) -> bool {
+    !matches!(path, "/api/cmd" | "/api/admins/kick" | "/api/scrim/action") && !path.starts_with("/api/smartchat") && !path.starts_with("/api/botchat")
+}
+
 /// A request naming a dedicated server (X-Target: <id>, or ?target=<id> for images)
 /// runs with that server as its game.
 async fn with_target(req: Request, next: Next) -> Response {
@@ -150,7 +158,7 @@ async fn with_target(req: Request, next: Next) -> Response {
         return (StatusCode::BAD_REQUEST, axum::Json(serde_json::json!({"error": "Unknown server."}))).into_response();
     }
     let id2 = id.clone();
-    let writes_files = path != "/api/cmd";
+    let writes_files = writes_files(path);
     let game = tokio::task::spawn_blocking(move || crate::servers::game_for(&id, || None)).await.ok().flatten();
     match game {
         Some(g) => {
@@ -301,5 +309,15 @@ mod tests {
         assert_eq!(gzipped("test/x.js", b"different").unwrap(), gz, "made once");
         assert!(gzipped("test/tiny.js", b"x").is_none(), "not worth it");
         assert!(compressible("application/javascript") && compressible("text/css") && !compressible("image/png"));
+    }
+
+    #[test]
+    fn rcon_only_requests_dont_sync() {
+        for p in ["/api/cmd", "/api/admins/kick", "/api/scrim/action", "/api/smartchat/set", "/api/smartchat/try/start", "/api/botchat/reply"] {
+            assert!(!writes_files(p), "{p}");
+        }
+        for p in ["/api/admins/ban", "/api/scrim/settings", "/api/community/gag", "/api/mapflag"] {
+            assert!(writes_files(p), "{p}");
+        }
     }
 }

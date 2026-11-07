@@ -118,9 +118,10 @@ impl Game {
             }
             cache.clone().unwrap()
         };
-        let fav: HashSet<String> = self.read_list("fav").iter().map(|m| m.to_lowercase()).collect();
-        let hidden: HashSet<String> = self.read_list("hidden").iter().map(|m| m.to_lowercase()).collect();
-        let recent: Vec<String> = self.read_list("recent").iter().map(|m| m.to_lowercase()).collect();
+        let [fav, hidden, recent] = self.read_lists(["fav", "hidden", "recent"]);
+        let fav: HashSet<String> = fav.iter().map(|m| m.to_lowercase()).collect();
+        let hidden: HashSet<String> = hidden.iter().map(|m| m.to_lowercase()).collect();
+        let recent: Vec<String> = recent.iter().map(|m| m.to_lowercase()).collect();
         list.into_iter()
             .map(|mut m| {
                 let k = m["name"].as_str().unwrap_or("").to_lowercase();
@@ -132,23 +133,44 @@ impl Game {
             .collect()
     }
 
+    /// A map list (favourites, hidden, recently played) as the server has it: the plugin
+    /// changes them too (the in-game menu, every map change), so for a server on another
+    /// machine they're the machine's (this computer's copy if it can't be reached).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn read_list(&self, which: &str) -> Vec<String> {
-        let Some(file) = list_file(which) else { return vec![] };
-        sys::read_latin1(&self.data.join(file))
-            .map(|t| t.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
-            .unwrap_or_default()
+        let [l] = self.read_lists([which]);
+        l
+    }
+
+    /// Several lists at once (one SSH command for a server on another machine).
+    fn read_lists<const N: usize>(&self, which: [&str; N]) -> [Vec<String>; N] {
+        let parse = |t: &str| t.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect::<Vec<_>>();
+        let local = |w: &str| list_file(w).and_then(|f| sys::read_latin1(&self.data.join(f)).ok()).map(|t| parse(&t)).unwrap_or_default();
+        if let Some((r, dir)) = &self.remote {
+            let files: Vec<&str> = which.iter().map(|w| list_file(w).unwrap_or("-")).collect();
+            if let Ok(got) = crate::remote::cat_files(r, &format!("{dir}/addons/amxmodx/data/gamemodes"), &files) {
+                let mut got = got.into_iter();
+                return which.map(|_| got.next().flatten().map(|b| parse(&crate::rcon::latin1(&b))).unwrap_or_default());
+            }
+        }
+        which.map(local)
     }
 
     pub fn set_flag(&self, which: &str, name: &str, on: bool) -> Result<(), String> {
         if !(which == "fav" || which == "hidden") || !safe_arg(name) {
             return Err("invalid map".into());
         }
-        let mut items: Vec<String> = self.read_list(which).into_iter().filter(|m| m.to_lowercase() != name.to_lowercase()).collect();
+        let rel = format!("addons/amxmodx/data/gamemodes/{}", list_file(which).unwrap());
+        // read and written where the server keeps it (on a Linux server, the machine: a
+        // failed read is an error, never an empty list written back)
+        let now = crate::remote::game_file(self, &rel)?.map(|b| crate::rcon::latin1(&b)).unwrap_or_default();
+        let mut items: Vec<String> = now.lines().map(|l| l.trim().to_string()).filter(|m| !m.is_empty() && m.to_lowercase() != name.to_lowercase()).collect();
         if on {
             items.insert(0, name.to_string());
         }
         let text: String = items.iter().map(|m| format!("{m}\n")).collect();
-        sys::write_latin1(&self.data.join(list_file(which).unwrap()), &text).map_err(|e| e.to_string())
+        let bytes: Vec<u8> = text.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
+        crate::remote::put_game_file(self, &rel, &bytes)
     }
 
     /// The map list, from the disk only: no network (pictures GameBanana might have

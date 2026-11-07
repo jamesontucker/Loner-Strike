@@ -441,7 +441,8 @@ fn schedule(g: &Game) -> Value {
         return Value::Null;
     }
     match crate::servers::restart_of(&g.hl, &g.name) {
-        Some(r) => json!({"on": r.on, "time": r.time()}),
+        // needs_app: on another machine the app does the restart, so only while it's open
+        Some(r) => json!({"on": r.on, "time": r.time(), "needs_app": g.remote.is_some()}),
         None => Value::Null,
     }
 }
@@ -460,7 +461,7 @@ fn listing(g: &Game) -> Value {
             lists.insert(id.clone(), json!(read(p)));
         }
     }
-    let current = crate::sys::read_latin1(&g.data.join("current.txt")).unwrap_or_default().trim().to_string();
+    let current = current_mode(g);
     json!({
         "settings": load(&g.data),
         "rotation": {"file": cycle_name(&g.dir), "main": read(rotation_path(g, "")), "modes": lists},
@@ -471,6 +472,27 @@ fn listing(g: &Game) -> Value {
         "geoip": geoip_ready(g),
         "schedule": schedule(g),
     })
+}
+
+/// The mode being played now. On another machine the plugin switches modes there, so
+/// this computer's current.txt can be behind: the running server says, else the
+/// machine's own file (this computer's copy only if the machine can't be reached).
+pub fn current_mode(g: &Game) -> String {
+    let local = || crate::sys::read_latin1(&g.data.join("current.txt")).unwrap_or_default().trim().to_string();
+    if g.remote.is_none() {
+        return local();
+    }
+    let st = g.state();
+    if st["online"] == json!(true) {
+        if let Some(m) = st["state"]["mode"].as_str().filter(|m| !m.is_empty()) {
+            return m.to_string();
+        }
+    }
+    match crate::remote::game_file(g, "addons/amxmodx/data/gamemodes/current.txt") {
+        Ok(Some(b)) => crate::rcon::latin1(&b).trim().to_string(),
+        Ok(None) => String::new(),
+        Err(_) => local(),
+    }
 }
 
 /// Tells the running game to re-read everything (a fixed command; offline is fine).

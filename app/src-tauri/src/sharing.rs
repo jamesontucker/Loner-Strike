@@ -472,6 +472,11 @@ impl Sharing {
                 break; // applied when the game next loads a map
             }
         }
+        // a dedicated server's name is also its name in the server list (and what Server
+        // settings writes back to friends.cfg), so it's kept there too
+        if !name.is_empty() {
+            crate::servers::rename_by_data(data, &name);
+        }
         Ok(())
     }
 

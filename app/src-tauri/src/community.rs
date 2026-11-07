@@ -205,13 +205,19 @@ pub fn gags_txt(gags: &[Gag]) -> String {
     out
 }
 
-fn read_gags(data: &Path) -> Vec<Gag> {
-    parse_gags(&decode(&std::fs::read(data.join("gags.txt")).unwrap_or_default()), now())
+/// Where the plugin keeps its files, relative to the game folder.
+const DATA: &str = "addons/amxmodx/data/gamemodes";
+
+/// The mutes as the server has them: on a Linux server, the machine's gags.txt (amx_gag
+/// in the game adds to it there). A failed read is an error, never an empty list (it
+/// would be written back over the real one).
+fn read_gags(g: &Game) -> Result<Vec<Gag>, String> {
+    let bytes = crate::remote::game_file(g, &format!("{DATA}/gags.txt")).map_err(|e| format!("Couldn't read the mutes ({e})."))?;
+    Ok(parse_gags(&decode(&bytes.unwrap_or_default()), now()))
 }
 
-fn write_gags(data: &Path, gags: &[Gag]) -> Result<(), String> {
-    std::fs::create_dir_all(data).map_err(|e| e.to_string())?;
-    std::fs::write(data.join("gags.txt"), gags_txt(gags)).map_err(|e| format!("Couldn't save the mutes ({e})."))
+fn write_gags(g: &Game, gags: &[Gag]) -> Result<(), String> {
+    crate::remote::put_game_file(g, &format!("{DATA}/gags.txt"), gags_txt(gags).as_bytes()).map_err(|e| format!("Couldn't save the mutes ({e})."))
 }
 
 // ---- stats ------------------------------------------------------------------------------
@@ -280,15 +286,46 @@ pub fn stat_row(p: &StatLine, pos: usize) -> Value {
     })
 }
 
-fn bot_names(data: &Path) -> HashSet<String> {
-    read_lines(&data.join("bots.txt")).into_iter().map(|l| l.trim().to_string()).collect()
+/// Lines of a file's bytes (see read_lines).
+fn split_lines(bytes: &[u8]) -> Vec<String> {
+    bytes.split(|&b| b == b'\n').map(|l| decode(l.strip_suffix(b"\r").unwrap_or(l))).filter(|l| !l.trim().is_empty()).collect()
+}
+
+/// A file the plugin writes, as the server has it: on the machine for a server on another
+/// one (this computer's copy if the machine can't be reached), else here.
+fn plugin_lines(g: &Game, name: &str) -> Vec<String> {
+    match &g.remote {
+        Some(_) => match crate::remote::game_file(g, &format!("{DATA}/{name}")) {
+            Ok(b) => split_lines(&b.unwrap_or_default()),
+            Err(_) => read_lines(&g.data.join(name)),
+        },
+        None => read_lines(&g.data.join(name)),
+    }
+}
+
+fn bot_names(g: &Game) -> HashSet<String> {
+    plugin_lines(g, "bots.txt").into_iter().map(|l| l.trim().to_string()).collect()
 }
 
 fn stats(g: &Game, refresh: bool) -> Value {
-    let online = if refresh { g.rcon.send(DUMP).is_ok() } else { false };
-    let lines = read_lines(&g.data.join("stats.json"));
+    let (online, lines) = match &g.remote {
+        // on another machine: the dump and the file it writes in one SSH command (without
+        // a refresh, just the file)
+        Some((_, dir)) if refresh => {
+            let file = format!("{dir}/{DATA}/stats.json");
+            match g.rcon.send_then_cat(DUMP, &file, STATS_MARK) {
+                Ok((_, Some(bytes))) => (true, split_lines(&bytes)),
+                _ => (false, plugin_lines(g, "stats.json")),
+            }
+        }
+        Some(_) => (false, plugin_lines(g, "stats.json")),
+        None => {
+            let online = if refresh { g.rcon.send(DUMP).is_ok() } else { false };
+            (online, read_lines(&g.data.join("stats.json")))
+        }
+    };
     let (info, all) = parse_stats(&lines);
-    let bots = bot_names(&g.data);
+    let bots = bot_names(g);
     let total = all.len();
     let humans: Vec<Value> = all.iter().filter(|p| !is_bot(p, &bots)).enumerate().map(|(i, p)| stat_row(p, i + 1)).collect();
     json!({
@@ -319,10 +356,15 @@ pub fn csstats_path(core_ini: &str) -> String {
     "addons/amxmodx/data/csstats.dat".into()
 }
 
+/// Splits the dump's reply from the stats file sent after it (a server on another machine).
+const STATS_MARK: &str = "\n@@LS-STATS-FILE@@\n";
+
 fn reset_stats(g: &Game) -> Result<Value, String> {
     match g.rcon.send(RESET) {
         Ok(_) => Ok(json!({"ok": true, "message": "Stats clear when the map changes."})),
         Err(RconError::BadPassword) => Err("The game didn't accept Loner-Strike's console password. Restart the map once.".into()),
+        // the ranks are on the machine: the server clears them itself, so it has to be up
+        Err(RconError::Offline) if g.remote.is_some() => Err("Start the server to reset its stats: it clears them itself when the map changes.".into()),
         Err(RconError::Offline) => {
             // the game is off, so nothing holds the ranks in memory
             let core = crate::sys::read_latin1(&g.dir.join("addons/amxmodx/configs/core.ini")).unwrap_or_default();
@@ -383,9 +425,19 @@ pub fn search_chat(lines: &[String], q: &str, limit: usize) -> Vec<ChatLine> {
         .collect()
 }
 
-fn chat(data: &Path, q: &str, limit: usize) -> Value {
-    let mut lines = read_lines(&data.join("chat.old.log"));
-    lines.extend(read_lines(&data.join("chat.log")));
+fn chat(g: &Game, q: &str, limit: usize) -> Value {
+    let lines: Vec<String> = match &g.remote {
+        // on another machine: both logs in one SSH command
+        Some((r, dir)) => match crate::remote::cat_files(r, &format!("{dir}/{DATA}"), &["chat.old.log", "chat.log"]) {
+            Ok(files) => files.into_iter().flat_map(|f| split_lines(&f.unwrap_or_default())).collect(),
+            Err(e) => return json!({"lines": [], "total": 0, "more": false, "error": format!("Couldn't read the chat log from the server ({e}).")}),
+        },
+        None => {
+            let mut l = read_lines(&g.data.join("chat.old.log"));
+            l.extend(read_lines(&g.data.join("chat.log")));
+            l
+        }
+    };
     let found = search_chat(&lines, q, limit);
     json!({"lines": found, "total": lines.len(), "more": found.len() == limit})
 }
@@ -437,7 +489,14 @@ fn save_reports(data: &Path, list: &[Report]) -> Result<(), String> {
     crate::sys::write_atomic(&data.join("reports.json"), serde_json::to_string(list).unwrap_or_default().as_bytes()).map_err(|e| format!("Couldn't save the reports ({e})."))
 }
 
-/// The reports, after taking in what the plugin wrote since last time. Call with LOCK held.
+/// The reports, after taking in what the plugin wrote since last time (on another
+/// machine, its new lines are fetched first). Call with LOCK held.
+fn reports_of(g: &Game) -> Vec<Report> {
+    let _ = crate::remote::take_log(g, &format!("{DATA}/reports.log"));
+    reports(&g.data)
+}
+
+/// reports_of for a folder on this computer.
 fn reports(data: &Path) -> Vec<Report> {
     let file = data.join("reports.json");
     let list: Vec<Report> = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
@@ -455,7 +514,16 @@ fn reports(data: &Path) -> Vec<Report> {
 }
 
 /// For notify.rs: reports no notification has been shown for yet (marked shown now).
-pub fn new_reports(data: &Path) -> Vec<Report> {
+/// `fetch`: a server on another machine has its new reports fetched first.
+pub fn new_reports(g: &Game, fetch: bool) -> Vec<Report> {
+    if fetch {
+        let _l = LOCK.lock().unwrap();
+        let _ = crate::remote::take_log(g, &format!("{DATA}/reports.log"));
+    }
+    new_reports_in(&g.data)
+}
+
+fn new_reports_in(data: &Path) -> Vec<Report> {
     if !data.join("reports.log").exists() && !data.join("reports.log.reading").exists() && !data.join("reports.json").exists() {
         return vec![];
     }
@@ -515,10 +583,15 @@ fn tell(g: &Game, cmd: &str) -> Result<bool, String> {
 }
 
 fn listing(g: &Game) -> Value {
-    let open = reports(&g.data).iter().filter(|r| !r.done).count();
+    let open = reports_of(g).iter().filter(|r| !r.done).count();
+    let (gags, gags_error) = match read_gags(g) {
+        Ok(l) => (l, None),
+        Err(e) => (Vec::new(), Some(e)),
+    };
     json!({
         "settings": load(&g.data),
-        "gags": read_gags(&g.data),
+        "gags": gags,
+        "gags_error": gags_error,
         "now": now(),
         "open_reports": open,
         "plugin": g.dir.join("addons/amxmodx/plugins/gm_community.amxx").exists(),
@@ -566,14 +639,14 @@ struct ChatQuery {
 async fn api_chat(State(st): State<Shared>, Query(q): Query<ChatQuery>) -> Reply {
     let limit = q.limit.unwrap_or(200).clamp(1, 1000);
     let text = clean(&q.q, 80);
-    answer(with_game(&st, move |g| Ok(chat(&g.data, &text, limit))).await)
+    answer(with_game(&st, move |g| Ok(chat(g, &text, limit))).await)
 }
 
 async fn api_reports(State(st): State<Shared>) -> Reply {
     answer(
         with_game(&st, |g| {
             let _l = LOCK.lock().unwrap();
-            Ok(json!({"reports": reports(&g.data)}))
+            Ok(json!({"reports": reports_of(g)}))
         })
         .await,
     )
@@ -601,7 +674,7 @@ async fn api_report(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
     answer(
         with_game(&st, move |g| {
             let _l = LOCK.lock().unwrap();
-            let mut list = reports(&g.data);
+            let mut list = reports_of(g);
             let same = |r: &Report| r.t == req.t && r.from_id == req.from_id && r.about == req.about;
             match req.action.as_str() {
                 "clear_done" => list.retain(|r| !r.done),
@@ -664,7 +737,7 @@ async fn api_gag(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<G
     answer(
         with_game(&st, move |g| {
             let _l = LOCK.lock().unwrap();
-            let mut gags = read_gags(&g.data);
+            let mut gags = read_gags(g)?;
             match gags.iter_mut().find(|x| x.id == gag.id) {
                 Some(x) => {
                     let name = if gag.name.is_empty() { x.name.clone() } else { gag.name.clone() };
@@ -672,7 +745,7 @@ async fn api_gag(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<G
                 }
                 None => gags.push(gag),
             }
-            write_gags(&g.data, &gags)?;
+            write_gags(g, &gags)?;
             tell(g, RELOAD)?;
             Ok(listing(g))
         })
@@ -693,9 +766,9 @@ async fn api_ungag(State(st): State<Shared>, headers: HeaderMap, Json(req): Json
     answer(
         with_game(&st, move |g| {
             let _l = LOCK.lock().unwrap();
-            let mut gags = read_gags(&g.data);
+            let mut gags = read_gags(g)?;
             gags.retain(|x| x.id != id);
-            write_gags(&g.data, &gags)?;
+            write_gags(g, &gags)?;
             tell(g, RELOAD)?;
             Ok(listing(g))
         })
@@ -901,11 +974,11 @@ mod tests {
 
         let dir = tmp("reports");
         std::fs::write(dir.join("reports.log"), log.join("\n")).unwrap();
-        assert_eq!(new_reports(&dir).len(), 2);
-        assert!(new_reports(&dir).is_empty(), "shown once");
+        assert_eq!(new_reports_in(&dir).len(), 2);
+        assert!(new_reports_in(&dir).is_empty(), "shown once");
         assert!(!dir.join("reports.log").exists());
         std::fs::write(dir.join("reports.log"), "1700000300\tSTEAM_0:0:9\tAnn\tSTEAM_0:0:8\tCy\tde_nuke\tcamping\n").unwrap();
-        let fresh = new_reports(&dir);
+        let fresh = new_reports_in(&dir);
         assert_eq!(fresh.len(), 1);
         assert_eq!(fresh[0].about, "Cy");
         let _l = LOCK.lock().unwrap();

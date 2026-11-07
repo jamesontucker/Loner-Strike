@@ -499,10 +499,30 @@ pub fn write_file(r: &RemoteInfo, path: &str, data: &[u8]) -> Result<(), String>
     })
 }
 
+/// Counts the bytes read through it (how far an upload has got).
+struct Counting<'a, R> {
+    inner: R,
+    sent: &'a std::cell::Cell<u64>,
+    total: u64,
+    progress: &'a dyn Fn(u64, u64),
+}
+
+impl<R: Read> Read for Counting<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.sent.set(self.sent.get() + n as u64);
+        (self.progress)(self.sent.get(), self.total);
+        Ok(n)
+    }
+}
+
 /// Uploads a folder (the files `keep` lets through) into `to` on the machine, as one
-/// compressed archive unpacked there.
-pub fn upload_dir(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Path) -> bool) -> Result<u64, String> {
+/// compressed archive unpacked there, telling `progress` (bytes sent, bytes in all) as
+/// the files go up.
+pub fn upload_dir_with(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Path) -> bool, progress: &dyn Fn(u64, u64)) -> Result<u64, String> {
     let files: Vec<PathBuf> = crate::archive::walk(from).into_iter().filter(|f| f.strip_prefix(from).is_ok_and(|rel| keep(rel)) && f.is_file()).collect();
+    let total: u64 = files.iter().filter_map(|f| std::fs::metadata(f).ok()).map(|m| m.len()).sum();
+    let sent = std::cell::Cell::new(0u64);
     let mut count = 0u64;
     let mut last = String::new();
     // packed straight into the connection as it goes up (a map pack would otherwise
@@ -530,7 +550,8 @@ pub fn upload_dir(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Path) ->
                 h.set_mode(0o644);
                 h.set_mtime(std::fs::metadata(file).ok().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0));
                 h.set_cksum();
-                tar.append_data(&mut h, &name, &data[..]).map_err(|e| format!("Couldn't send {name} ({e})."))?;
+                let reader = Counting { inner: &data[..], sent: &sent, total, progress };
+                tar.append_data(&mut h, &name, reader).map_err(|e| format!("Couldn't send {name} ({e})."))?;
                 count += 1;
             }
             tar.into_inner().and_then(|gz| gz.finish()).map(|_| ()).map_err(|e| e.to_string())
@@ -878,6 +899,95 @@ pub fn find_demo(r: &RemoteInfo, id: &str, game: &str, name: &str) -> Option<Str
     (!d.is_empty()).then(|| format!("{}/{d}/{name}", server_dir(id)))
 }
 
+// ---- files the server keeps itself ----------------------------------------------------------
+// The plugin (or a command typed in the game) writes some files on the machine: mutes, map
+// favourites, admins added in game, stats, logs. For a server there they're read and
+// edited on the machine, and this computer's copy is only kept in step (servers.rs never
+// uploads them, see server_owned).
+
+/// Separates the files cat_files prints.
+const CAT_MARK: &str = "\n@@LS-FILE@@\n";
+
+/// Several files of a folder on the machine in one command: each one's bytes, or None if
+/// it isn't there. A failed command is an error, never missing files.
+pub fn cat_files(r: &RemoteInfo, dir: &str, rels: &[&str]) -> Result<Vec<Option<Vec<u8>>>, String> {
+    let names = rels.iter().map(|f| shell_quote(f)).collect::<Vec<_>>().join(" ");
+    let cmd = format!(
+        "cd {} 2>/dev/null || exit 0; for f in {names}; do printf {}; if [ -f \"$f\" ]; then printf Y; cat \"$f\"; else printf N; fi; done",
+        shell_quote(dir),
+        shell_quote(&CAT_MARK.replace('\n', "\\n"))
+    );
+    let (code, out) = exec_quick(r, &cmd)?;
+    if code != 0 {
+        return Err(format!("Couldn't read the server's files ({}).", out.trim()));
+    }
+    Ok(split_cat(&out, rels.len()))
+}
+
+/// cat_files' output, file by file (Latin-1 text back to bytes).
+fn split_cat(out: &str, n: usize) -> Vec<Option<Vec<u8>>> {
+    let mut parts = out.split(CAT_MARK).skip(1);
+    (0..n)
+        .map(|_| {
+            let p = parts.next()?;
+            p.strip_prefix('Y').map(|b| b.chars().map(|c| c as u8).collect())
+        })
+        .collect()
+}
+
+/// A file of a game folder (`rel`, "/" separated) as the server has it: on the machine
+/// for a server there, else this computer's. None: it isn't there. A failed read is an
+/// error, never an empty file.
+pub fn game_file(g: &crate::game::Game, rel: &str) -> Result<Option<Vec<u8>>, String> {
+    match &g.remote {
+        Some((r, dir)) => read_file_opt(r, &format!("{dir}/{rel}")),
+        None => match std::fs::read(g.dir.join(rel)) {
+            Ok(b) => Ok(Some(b)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(format!("Couldn't read {rel} ({e}).")),
+        },
+    }
+}
+
+/// Writes a file of a game folder where the server has it (on the machine first, for a
+/// server there), and keeps this computer's copy the same.
+pub fn put_game_file(g: &crate::game::Game, rel: &str, data: &[u8]) -> Result<(), String> {
+    if let Some((r, dir)) = &g.remote {
+        write_file(r, &format!("{dir}/{rel}"), data)?;
+    }
+    let p = g.dir.join(rel);
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    crate::sys::write_atomic(&p, data).map_err(|e| format!("Couldn't save {rel} ({e})."))
+}
+
+/// For a server on another machine: what the plugin has added to a log there since last
+/// time (`rel`), moved aside, printed and removed in one command, and added to the end of
+/// this computer's copy of the log, where the usual reading takes it in. Nothing to do for
+/// a server here.
+pub fn take_log(g: &crate::game::Game, rel: &str) -> Result<(), String> {
+    let Some((r, dir)) = &g.remote else { return Ok(()) };
+    let f = shell_quote(rel);
+    let t = shell_quote(&format!("{rel}.taking"));
+    // (a .taking left by a dropped connection is printed first, next time)
+    let cmd = format!("cd {} 2>/dev/null || exit 0; [ -e {t} ] || mv {f} {t} 2>/dev/null || exit 0; cat {t} && rm -f {t}", shell_quote(dir));
+    let (code, out) = exec_quick(r, &cmd)?;
+    if code != 0 {
+        return Err(format!("Couldn't read the server's {rel} ({}).", out.trim()));
+    }
+    if out.is_empty() {
+        return Ok(());
+    }
+    let bytes: Vec<u8> = out.chars().map(|c| c as u8).collect();
+    let p = g.dir.join(rel);
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    use std::io::Write as _;
+    std::fs::OpenOptions::new().create(true).append(true).open(&p).and_then(|mut file| file.write_all(&bytes)).map_err(|e| format!("Couldn't save {rel} ({e})."))
+}
+
 /// The env assignments for SETUP_SH.
 pub fn setup_env(id: &str, game: &str) -> String {
     let mut env = vec![format!("SRVDIR={}", shell_quote(&server_dir(id))), format!("GAME={}", shell_quote(game))];
@@ -899,5 +1009,13 @@ mod tests {
         assert!(setup_env("my-server", "czero").contains("GAME='czero'"));
         let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()]);
         assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike'") && svc.contains("lsctl") && svc.contains("b\"\\xff\\xff\\xff\\xff\""));
+    }
+
+    #[test]
+    fn cat_files_split() {
+        let out = format!("{CAT_MARK}Ya\nb{CAT_MARK}N{CAT_MARK}Y");
+        assert_eq!(split_cat(&out, 3), vec![Some(b"a\nb".to_vec()), None, Some(vec![])]);
+        // a folder that isn't there prints nothing: every file missing
+        assert_eq!(split_cat("", 2), vec![None, None]);
     }
 }

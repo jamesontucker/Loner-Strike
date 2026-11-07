@@ -113,27 +113,44 @@ pub fn decode(bytes: Vec<u8>) -> String {
     String::from_utf8(bytes).unwrap_or_else(|e| latin1(e.as_bytes()))
 }
 
-fn matches(data: &Path) -> Vec<Value> {
-    parse_matches(&decode(std::fs::read(data.join("matches.json")).unwrap_or_default()))
+/// Past matches, from the machine for a server on another one (the plugin adds them there).
+fn matches(g: &Game) -> Vec<Value> {
+    let bytes = match &g.remote {
+        Some(_) => crate::remote::game_file(g, &format!("{DATA}/matches.json")).ok().flatten(),
+        None => std::fs::read(g.data.join("matches.json")).ok(),
+    };
+    parse_matches(&decode(bytes.unwrap_or_default()))
 }
 
+/// Where the plugin keeps its files, relative to the game folder.
+const DATA: &str = "addons/amxmodx/data/gamemodes";
+
 fn current_mode(g: &Game) -> String {
-    crate::sys::read_latin1(&g.data.join("current.txt")).unwrap_or_default().trim().to_string()
+    crate::extras::current_mode(g)
 }
 
 /// The plugin's live state, when the game is running this mode and answers.
-fn live(g: &Game) -> Value {
-    if current_mode(g) != MODE {
+fn live(g: &Game, mode: &str) -> Value {
+    if mode != MODE {
         return Value::Null;
     }
-    match g.rcon.send(STATUS) {
-        Ok(reply) if reply.contains(STATUS_DONE) => {
-            let text = decode(std::fs::read(g.data.join("scrim_status.json")).unwrap_or_default());
-            serde_json::from_str(text.trim()).unwrap_or(Value::Null)
+    // on another machine the file it writes comes back in the same SSH command
+    let file = g.remote.as_ref().map(|(_, dir)| format!("{dir}/{DATA}/scrim_status.json"));
+    let sent = match &file {
+        Some(f) => g.rcon.send_then_cat(STATUS, f, STATUS_MARK),
+        None => g.rcon.send(STATUS).map(|r| (r, None)),
+    };
+    match sent {
+        Ok((reply, file)) if reply.contains(STATUS_DONE) => {
+            let bytes = file.unwrap_or_else(|| std::fs::read(g.data.join("scrim_status.json")).unwrap_or_default());
+            serde_json::from_str(decode(bytes).trim()).unwrap_or(Value::Null)
         }
         _ => Value::Null,
     }
 }
+
+/// Splits the reply from the status file sent after it (a server on another machine).
+const STATUS_MARK: &str = "\n@@LS-SCRIM-FILE@@\n";
 
 fn mode_installed(g: &Game) -> bool {
     crate::extras::parse_modes(&crate::sys::read_latin1(&g.dir.join("addons/amxmodx/configs/gamemodes/modes.ini")).unwrap_or_default())
@@ -142,11 +159,12 @@ fn mode_installed(g: &Game) -> bool {
 }
 
 fn listing(g: &Game) -> Value {
+    let mode = current_mode(g);
     json!({
         "settings": load(&g.data),
-        "status": live(g),
-        "matches": matches(&g.data),
-        "current_mode": current_mode(g),
+        "status": live(g, &mode),
+        "matches": matches(g),
+        "current_mode": mode,
         "installed": mode_installed(g),
         "plugin": g.dir.join("addons/amxmodx/plugins/gm_scrim.amxx").exists(),
     })

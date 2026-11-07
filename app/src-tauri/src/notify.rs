@@ -29,6 +29,8 @@ pub fn watch(app: tauri::AppHandle, st: Shared) {
     std::thread::spawn(move || {
         // what each game looked like last time; a game seen for the first time doesn't notify
         let mut seen: HashMap<String, HashSet<(i64, String)>> = HashMap::new();
+        // when servers on other machines were last asked for new reports
+        let mut last_fetch: Option<std::time::Instant> = None;
         loop {
             std::thread::sleep(Duration::from_secs(5));
             let mut games: Vec<(String, String, std::sync::Arc<crate::game::Game>)> = Vec::new();
@@ -41,8 +43,13 @@ pub fn watch(app: tauri::AppHandle, st: Shared) {
                 }
             }
             // reports from players (say /report) always notify, whatever the join setting
+            // (a server on another machine is asked for new ones every 30 seconds)
+            let fetch_remote = last_fetch.is_none_or(|t: std::time::Instant| t.elapsed() >= Duration::from_secs(30));
+            if fetch_remote {
+                last_fetch = Some(std::time::Instant::now());
+            }
             for (_, label, g) in &games {
-                if let Some(text) = crate::community::report_note(&crate::community::new_reports(&g.data), label) {
+                if let Some(text) = crate::community::report_note(&crate::community::new_reports(g, fetch_remote && g.remote.is_some()), label) {
                     let _ = app.notification().builder().title("Loner-Strike").body(text).show();
                 }
             }

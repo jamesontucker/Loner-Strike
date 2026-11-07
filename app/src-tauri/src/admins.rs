@@ -321,13 +321,25 @@ fn vip_cfg(a: &Admins) -> String {
 
 /// Writes users.ini's block and vip.cfg. Ok(true) when users.ini changed.
 fn write_files(g: &Game, a: &Admins) -> Result<bool, String> {
-    let users = g.dir.join("addons/amxmodx/configs/users.ini");
+    const USERS: &str = "addons/amxmodx/configs/users.ini";
+    let users = g.dir.join(USERS);
     let mut changed = false;
     if users.parent().map(|d| d.is_dir()).unwrap_or(false) {
-        let old = crate::sys::read_latin1(&users).unwrap_or_default();
+        // on a Linux server, the machine's users.ini: admins added in the game (amx_addadmin)
+        // are only there, and must not be written over by this computer's copy. A failed
+        // read is an error, never an empty file
+        let old = match &g.remote {
+            Some(_) => crate::remote::game_file(g, USERS).map_err(|e| format!("Couldn't read the server's users.ini ({e})."))?.map(|b| crate::rcon::latin1(&b)).unwrap_or_default(),
+            None => crate::sys::read_latin1(&users).unwrap_or_default(),
+        };
         let new = rewrite_users(&old, &a.people, &today());
         if new != old {
-            crate::sys::write_latin1(&users, &new).map_err(|e| format!("Couldn't write users.ini ({e})."))?;
+            if g.remote.is_some() {
+                let bytes: Vec<u8> = new.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
+                crate::remote::put_game_file(g, USERS, &bytes).map_err(|e| format!("Couldn't write users.ini ({e})."))?;
+            } else {
+                crate::sys::write_latin1(&users, &new).map_err(|e| format!("Couldn't write users.ini ({e})."))?;
+            }
             changed = true;
         }
     }
@@ -576,6 +588,13 @@ pub fn fold_seen(mut list: Vec<Seen>, log: &str) -> Vec<Seen> {
     list
 }
 
+/// seen() for a game or server: on another machine the plugin's new lines are fetched
+/// from it first (moved aside and printed there in one command).
+fn seen_of(g: &Game) -> Vec<Seen> {
+    let _ = crate::remote::take_log(g, "addons/amxmodx/data/gamemodes/seen.log");
+    seen(&g.data)
+}
+
 /// The list, after taking in whatever the plugin wrote since last time.
 fn seen(data: &Path) -> Vec<Seen> {
     let file = data.join("seen.json");
@@ -607,7 +626,7 @@ fn listing(g: &Game) -> Value {
         })
         .collect();
     json!({"people": people, "donate": a.donate, "perks": a.perks, "abilities": a.abilities, "bans": read_bans(g).unwrap_or_default(), "today": today,
-           "users_ini": g.dir.join("addons/amxmodx/configs").is_dir(), "seen": seen(&g.data)})
+           "users_ini": g.dir.join("addons/amxmodx/configs").is_dir(), "seen": seen_of(g)})
 }
 
 type Reply = (StatusCode, Json<Value>);

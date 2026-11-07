@@ -13,6 +13,8 @@
 //! Quake sounds are AMX Mod X's miscstats.amxx, the "quakesounds" add-on of the Game Mode
 //! Menu. Add-ons are switched with gm_addon while the game runs; when it doesn't, this
 //! writes the same two files the plugin would (data/addons.txt, configs/plugins-gmaddons.ini).
+//! For a server on another machine those two files are brought back from it after a
+//! switch, and whether an add-on is on comes from the running server itself.
 //!
 //! Sound packs: a short list of GameBanana items, checked by hand. The ones that replace
 //! the game's own .wav files go through the usual GameBanana install (your own game; it
@@ -439,21 +441,32 @@ pub fn write_addons_offline(ini: &str, on_now: &str, id: &str, on: bool) -> Resu
     Ok((txt, plugins))
 }
 
+/// The add-on files the plugin rewrites, relative to the game folder (pulled back from a
+/// server on another machine after a switch).
+const ADDON_FILES: &[&str] = &["addons/amxmodx/data/gamemodes/addons.txt", "addons/amxmodx/configs/plugins-gmaddons.ini"];
+
 fn set_addon(g: &Game, id: &str, on: bool) -> Result<&'static str, String> {
-    // a server on another machine: the plugin saves the switch there, but this computer's
-    // copy is what the page reads and what syncs up, so it gets the same files first
-    if g.remote.is_some() {
-        let f = addon_files(g);
-        let (txt, plugins) = write_addons_offline(&read_text(&f.ini), &read_text(&f.on), id, on)?;
-        std::fs::create_dir_all(&g.data).map_err(|e| e.to_string())?;
-        crate::sys::write_latin1(&f.on, &txt).map_err(|e| e.to_string())?;
-        crate::sys::write_latin1(&f.plugins_ini, &plugins).map_err(|e| e.to_string())?;
-    }
+    let remote = crate::servers::entry_for(g);
     match g.command("gm_addon", &[id.to_string(), if on { "1" } else { "0" }.to_string()]) {
-        Ok(_) => Ok("live"),
+        Ok(_) => {
+            // a server on another machine: the plugin saved the switch there; this
+            // computer's copy takes it too (recorded as sent, so the old one never goes
+            // back up over it)
+            // (the switch is made either way; if the files can't be fetched now, the next
+            // switch with the server off fetches them before writing)
+            if let Some(e) = &remote {
+                let _ = crate::servers::pull_files(e, ADDON_FILES);
+            }
+            Ok("live")
+        }
         Err(CmdError::Bad(e)) => Err(e),
         Err(CmdError::Game(_)) => {
-            // not running: write what the plugin would, it reads them when the game starts
+            // not running: write what the plugin would, it reads them when the game starts.
+            // On another machine, from what the machine has (add-ons switched from the Fun
+            // page are only there); the change then goes up with the next sync
+            if let Some(e) = &remote {
+                crate::servers::pull_files(e, ADDON_FILES).map_err(|err| format!("Couldn't reach the server's machine to switch it ({err})."))?;
+            }
             let f = addon_files(g);
             let (txt, plugins) = write_addons_offline(&read_text(&f.ini), &read_text(&f.on), id, on)?;
             std::fs::create_dir_all(&g.data).map_err(|e| e.to_string())?;
@@ -461,6 +474,25 @@ fn set_addon(g: &Game, id: &str, on: bool) -> Result<&'static str, String> {
             crate::sys::write_latin1(&f.plugins_ini, &plugins).map_err(|e| e.to_string())?;
             Ok("saved")
         }
+    }
+}
+
+/// For a server on another machine that's running: whether each add-on is on, as the
+/// plugin says (this computer's addons.txt can be behind the machine's).
+fn live_addons(g: &Game) -> Option<HashMap<String, bool>> {
+    g.remote.as_ref()?;
+    let st = g.state();
+    if st["online"] != json!(true) {
+        return None;
+    }
+    Some(st["addons"].as_array()?.iter().filter_map(|a| Some((a["id"].as_str()?.to_lowercase(), a["on"].as_i64().unwrap_or(0) != 0))).collect())
+}
+
+/// A dedicated server's sounds changed: the next map takes them in (the server list says
+/// so until then).
+fn sounds_changed(g: &Game) {
+    if let Some(id) = crate::servers::id_of(g) {
+        crate::servers::set_pending_restart(&id, crate::servers::Pending::Sounds);
     }
 }
 
@@ -734,8 +766,15 @@ fn forbidden() -> Reply {
 fn summary(g: &Game) -> Value {
     let components = crate::setup::record::Record::open(&g.dir).component_ids();
     let f = addon_files(g);
-    let music_addon = addon_state(&f, "roundmusic");
-    let quake = addon_state(&f, "quakesounds");
+    let mut music_addon = addon_state(&f, "roundmusic");
+    let mut quake = addon_state(&f, "quakesounds");
+    if let Some(live) = live_addons(g) {
+        for (v, id) in [(&mut music_addon, "roundmusic"), (&mut quake, "quakesounds")] {
+            if let Some(on) = live.get(id) {
+                v["on"] = json!(v["installed"] == json!(true) && *on);
+            }
+        }
+    }
     let owners = g.store.content.owners(&g.dir);
     let mut music = tracks(&g.dir, &owners);
     let installed = components.iter().any(|c| c == "addon-roundmusic") || music_addon["installed"] == json!(true);
@@ -777,7 +816,23 @@ async fn api_track(State(st): State<Shared>, headers: HeaderMap, Json(req): Json
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Unknown track."})));
     }
     let Some(g) = st.game() else { return err("No game found.") };
-    let r = tokio::task::spawn_blocking(move || match req.action.as_str() {
+    let r = tokio::task::spawn_blocking(move || {
+        let r = track_action(&g, &req);
+        if r.is_ok() {
+            sounds_changed(&g);
+        }
+        r
+    })
+    .await
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
+    match r {
+        Ok(()) => ok(json!({"ok": true})),
+        Err(e) => err(e),
+    }
+}
+
+fn track_action(g: &Game, req: &TrackReq) -> Result<(), String> {
+    match req.action.as_str() {
         "on" => move_track(&g.dir, &req.pool, &req.name, req.off, &req.pool, false),
         "off" => move_track(&g.dir, &req.pool, &req.name, req.off, &req.pool, true),
         "move" => match req.to.as_deref().filter(|t| pool_sub(t).is_some()) {
@@ -786,12 +841,6 @@ async fn api_track(State(st): State<Shared>, headers: HeaderMap, Json(req): Json
         },
         "remove" => remove_track(&g.dir, &req.pool, &req.name, req.off),
         _ => Err("Unknown action.".into()),
-    })
-    .await
-    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
-    match r {
-        Ok(()) => ok(json!({"ok": true})),
-        Err(e) => err(e),
     }
 }
 
@@ -861,7 +910,12 @@ async fn api_addon(State(st): State<Shared>, headers: HeaderMap, Json(req): Json
     }
     let Some(g) = st.game() else { return err("No game found.") };
     match tokio::task::spawn_blocking(move || set_addon(&g, &req.id, req.on)).await.unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into())) {
-        Ok(how) => ok(json!({"ok": true, "how": how})),
+        Ok(how) => {
+            if let Some(g) = st.game() {
+                let _ = tokio::task::spawn_blocking(move || sounds_changed(&g)).await;
+            }
+            ok(json!({"ok": true, "how": how}))
+        }
         Err(e) => err(e),
     }
 }
@@ -911,8 +965,9 @@ struct PackReq {
     action: String,
 }
 
-async fn api_pack(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<PackReq>) -> Reply {
-    if !from_panel(&headers) {
+async fn api_pack(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<PackReq>) -> Reply {
+    // installing and removing packs is for the computer only (not the phone)
+    if !from_panel(&headers) || on.is_none() {
         return forbidden();
     }
     let Some(p) = pack(req.id) else { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Unknown pack."}))) };
@@ -951,6 +1006,7 @@ async fn api_pack(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<
                     j.ended = Some(crate::sys::now());
                     match r {
                         Ok(m) => {
+                            sounds_changed(&g);
                             j.state = "done".into();
                             j.message = m;
                         }
@@ -963,7 +1019,7 @@ async fn api_pack(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<
             });
             ok(json!({"ok": true, "job": id}))
         }
-        "remove" => match tokio::task::spawn_blocking(move || remove_music(&g, p)).await.unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into())) {
+        "remove" => match tokio::task::spawn_blocking(move || remove_music(&g, p).inspect(|_| sounds_changed(&g))).await.unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into())) {
             Ok(()) => ok(json!({"ok": true})),
             Err(e) => err(e),
         },
@@ -1008,6 +1064,9 @@ async fn api_add(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<A
         };
         let files: Vec<PathBuf> = picked.into_iter().filter_map(|p| p.into_path().ok()).take(40).collect();
         let (added, notes) = add_tracks(&g.dir, &req.pool, &files)?;
+        if !added.is_empty() {
+            sounds_changed(&g);
+        }
         Ok::<Value, String>(json!({"ok": true, "added": added, "notes": notes}))
     })
     .await

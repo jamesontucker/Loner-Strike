@@ -222,6 +222,12 @@ fn check(member: &str, list: &str, edited: bool) {
         let add: Vec<String> = mine.iter().filter(|b| !group.base.contains(b)).cloned().collect();
         let lift: Vec<String> = group.base.iter().filter(|b| !mine.contains(b)).cloned().collect();
         let r = each_other(&member, &group.members, |o| crate::admins::apply_bans(o, &add, &lift));
+        // only once every member has them: a server that was off or out of reach gets the
+        // same additions and lifts again at the next check (the others already have them,
+        // and applying them twice changes nothing)
+        if r.is_err() {
+            return;
+        }
         group.base = group.base.iter().filter(|b| !lift.contains(b)).cloned().chain(add).collect();
         r
     } else {

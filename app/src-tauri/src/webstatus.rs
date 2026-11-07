@@ -750,8 +750,9 @@ struct SaveReq {
     token: String,
 }
 
-async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
+    // settings and turning it on or off: from the computer only, not the phone
+    if !from_panel(&headers) || on.is_none() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
     blocking(move || {

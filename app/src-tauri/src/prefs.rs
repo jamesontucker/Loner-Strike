@@ -313,8 +313,39 @@ async fn api_diagnostics(State(st): State<Shared>) -> Json<Value> {
 const SETUP_FORMAT: &str = "loner-strike-setup";
 /// Files the Game Mode Menu keeps that are worth moving to another computer or server.
 const SETUP_EXT: &[&str] = &["cfg", "ini", "json", "txt", "html"];
-/// Not these: the panel's password, live status, logs, and who joined.
-const SETUP_SKIP: &[&str] = &["panel_rcon.txt", "status.json", "seen.json", "seen.log", "seen.log.reading", "friends.cfg", "navqueue.txt"];
+/// Not these: the panel's password, live status, logs, and who joined; the server's
+/// history (stats, reports, matches, recent maps); and what the plugin writes for itself
+/// as it runs (the mode it's in, the last map, a pending reload).
+const SETUP_SKIP: &[&str] = &[
+    "panel_rcon.txt", "status.json", "seen.json", "seen.log", "seen.log.reading", "friends.cfg", "navqueue.txt",
+    "stats.json", "stats.json.part", "playtime.txt", "reports.json", "matches.json", "scrim_status.json", "recent.txt", "bots.txt",
+    "current.txt", "premode.txt", "lastmap.txt", "session.txt", "lastpreset.txt", "crashmap.txt", "reloadnote.txt",
+];
+
+/// Separates the files machine_setup_files prints.
+const FILE_MARK: &str = "\n@@LS-SETUP-FILE@@\n";
+
+/// For a server on another machine: the data files as the machine has them (the plugin
+/// saves settings there: presets, mode settings, map lists, mutes), name -> text, in one
+/// command. None if the machine can't be reached.
+fn machine_setup_files(g: &crate::game::Game) -> Option<Vec<(String, String)>> {
+    let (r, dir) = g.remote.as_ref()?;
+    let cmd = format!(
+        "cd {}/addons/amxmodx/data/gamemodes 2>/dev/null || exit 0; find . -maxdepth 3 -type f -size -1000k \\( -name '*.cfg' -o -name '*.ini' -o -name '*.json' -o -name '*.txt' -o -name '*.html' \\) | while IFS= read -r f; do printf {}; printf '%s\\n' \"${{f#./}}\"; cat \"$f\"; done",
+        crate::remote::shell_quote(dir),
+        crate::remote::shell_quote(&FILE_MARK.replace('\n', "\\n"))
+    );
+    let (code, out) = crate::remote::exec_quick_for(r, &cmd, 60).ok()?;
+    if code != 0 {
+        return None;
+    }
+    Some(parse_machine_files(&out))
+}
+
+/// machine_setup_files' output: (name, text) for each file.
+fn parse_machine_files(out: &str) -> Vec<(String, String)> {
+    out.split(FILE_MARK).skip(1).filter_map(|p| p.split_once('\n')).map(|(name, text)| (name.to_string(), text.to_string())).collect()
+}
 
 fn exportable(rel: &Path) -> bool {
     let name = rel.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
@@ -335,15 +366,30 @@ fn safe_rel(rel: &str) -> Option<PathBuf> {
     exportable(&p).then_some(p)
 }
 
-pub fn export_setup(g: &crate::game::Game) -> Value {
-    let mut files = Map::new();
+pub fn export_setup(g: &crate::game::Game) -> Result<Value, String> {
+    let mut found: Vec<(String, String)> = Vec::new();
     for path in crate::archive::walk(&g.data) {
         let Ok(rel) = path.strip_prefix(&g.data) else { continue };
         if !exportable(rel) || std::fs::metadata(&path).map(|m| m.len() > 1_000_000).unwrap_or(true) {
             continue;
         }
         let Ok(text) = crate::sys::read_latin1(&path) else { continue };
-        let key = rel.to_string_lossy().replace('\\', "/");
+        found.push((rel.to_string_lossy().replace('\\', "/"), text));
+    }
+    // a server on another machine: what the machine has wins (the plugin saves settings
+    // there that this computer's copy doesn't have)
+    if g.remote.is_some() {
+        let there = machine_setup_files(g).ok_or("Couldn't reach the server's machine to read its settings. Try again when it's back.")?;
+        for (key, text) in there {
+            if !exportable(Path::new(&key)) {
+                continue;
+            }
+            found.retain(|(k, _)| *k != key);
+            found.push((key, text));
+        }
+    }
+    let mut files = Map::new();
+    for (key, text) in found {
         let text = if key == "friends.json" {
             // the server name travels, its password doesn't
             let name = serde_json::from_str::<Value>(&text).ok().and_then(|v| v["name"].as_str().map(String::from)).unwrap_or_default();
@@ -354,7 +400,7 @@ pub fn export_setup(g: &crate::game::Game) -> Value {
         files.insert(key, json!(text));
     }
     let components: Vec<String> = crate::setup::record::Record::open(&g.dir).component_ids().into_iter().filter(|c| c != "foundation" && c != "core").collect();
-    json!({"format": SETUP_FORMAT, "version": 1, "game": g.name, "components": components, "files": files})
+    Ok(json!({"format": SETUP_FORMAT, "version": 1, "game": g.name, "components": components, "files": files}))
 }
 
 /// Writes an exported setup into a game's data folder. Returns what isn't installed here.
@@ -381,6 +427,15 @@ pub fn import_setup(g: &crate::game::Game, v: &Value) -> Result<Vec<String>, Str
         } else {
             text.to_string()
         };
+        // files the server on another machine keeps itself (mutes, map lists) go straight
+        // there: the background sync never sends them
+        let key = format!("addons/amxmodx/data/gamemodes/{}", rel.to_string_lossy().replace('\\', "/"));
+        if g.remote.is_some() && crate::servers::server_owned(&key) {
+            let bytes: Vec<u8> = text.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
+            crate::remote::put_game_file(g, &key, &bytes).map_err(|e| format!("Couldn't write {} on the server ({e}).", rel.display()))?;
+            written += 1;
+            continue;
+        }
         if let Some(d) = dest.parent() {
             std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
         }
@@ -403,7 +458,7 @@ async fn api_export(State(st): State<Shared>, headers: HeaderMap) -> Reply {
     }
     let (Some(g), Some(app)) = (st.game(), st.app.get().cloned()) else { return err("No game found.") };
     let r = tokio::task::spawn_blocking(move || {
-        let data = export_setup(&g);
+        let data = export_setup(&g)?;
         let name = format!("loner-strike-{}.json", if g.dedicated { "server" } else { g.name.as_str() });
         let Some(path) = app.dialog().file().set_title("Save your Loner-Strike setup").set_file_name(&name).add_filter("Loner-Strike setup", &["json"]).blocking_save_file() else {
             return Ok(json!({"cancelled": true}));
@@ -581,5 +636,12 @@ mod tests {
         assert!(safe_rel("../x.cfg").is_none() && safe_rel("a/../../x.cfg").is_none() && safe_rel("/etc/x.cfg").is_none());
         assert!(safe_rel("panel_rcon.txt").is_none() && safe_rel("evil.exe").is_none() && safe_rel("a b.cfg").is_none());
         assert!(safe_rel("a/b/c/d.cfg").is_none());
+        // the server's history and what the plugin writes as it runs stay where they are
+        for f in ["stats.json", "reports.json", "matches.json", "recent.txt", "current.txt", "seen.json"] {
+            assert!(safe_rel(f).is_none(), "{f}");
+        }
+        assert!(safe_rel("gags.txt").is_some() && safe_rel("favorites.txt").is_some());
+        let out = format!("{FILE_MARK}global.cfg\nbot_quota 5\n{FILE_MARK}presets/a.cfg\n");
+        assert_eq!(parse_machine_files(&out), vec![("global.cfg".to_string(), "bot_quota 5\n".to_string()), ("presets/a.cfg".to_string(), String::new())]);
     }
 }

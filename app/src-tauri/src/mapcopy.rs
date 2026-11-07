@@ -674,7 +674,24 @@ pub fn start(hl: PathBuf, local: Map<String, Value>, maps: Vec<String>, ids: Vec
                     if e.remote.is_some() {
                         job.relabel(&id, format!("Uploading maps to {}", e.name));
                         job.fraction(n as f64 / weight);
-                        if servers::sync(e, false).is_err() {
+                        let started = std::time::Instant::now();
+                        let last = std::cell::Cell::new(None::<std::time::Instant>);
+                        let report = |sent: u64, total: u64| {
+                            // a few times a second is plenty
+                            if last.get().is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(400)) && sent < total {
+                                return;
+                            }
+                            last.set(Some(std::time::Instant::now()));
+                            let (label, transfer) = upload_progress(sent, total, started.elapsed().as_secs_f64());
+                            job.relabel(&id, format!("{label} to {}", e.name));
+                            job.transfer(Some(transfer));
+                            if total > 0 {
+                                job.fraction((n as f64 + (weight - n as f64) * sent as f64 / total as f64) / weight);
+                            }
+                        };
+                        let sent = servers::sync_with_progress(e, &report);
+                        job.transfer(None);
+                        if sent.is_err() {
                             out.not_uploaded.push(e.name.clone());
                         }
                     }
@@ -694,6 +711,21 @@ pub fn start(hl: PathBuf, local: Map<String, Value>, maps: Vec<String>, ids: Vec
         }
         Ok(())
     })
+}
+
+/// The upload's label ("Uploading 280 MB of 970 MB (4 MB/s)") and the job step's
+/// transfer: {sent, total, rate, left} (bytes, bytes, bytes a second, seconds; rate and
+/// left are null until there's a measure).
+pub fn upload_progress(sent: u64, total: u64, secs: f64) -> (String, Value) {
+    let mb = |b: u64| (b as f64 / 1_000_000.0).round() as u64;
+    let rate = (secs >= 1.0 && sent > 0).then(|| sent as f64 / secs);
+    let left = rate.filter(|r| *r > 0.0).map(|r| ((total.saturating_sub(sent)) as f64 / r).ceil() as u64);
+    let speed = match rate {
+        Some(r) if r >= 1_000_000.0 => format!(" ({:.0} MB/s)", r / 1_000_000.0),
+        Some(r) => format!(" ({:.0} KB/s)", (r / 1000.0).max(1.0)),
+        None => String::new(),
+    };
+    (format!("Uploading {} MB of {} MB{speed}", mb(sent), mb(total)), json!({"sent": sent, "total": total, "rate": rate.map(|r| r.round() as u64), "left": left}))
 }
 
 // ---- what the pickers show ----------------------------------------------------------------
@@ -998,6 +1030,18 @@ mod tests {
         store.uninstall_section("maps", 77).unwrap();
         assert!(!srv.join("cstrike/maps/de_czonly.bsp").exists() && !srv.join("cstrike/cz_special.wad").exists());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn upload_progress_label() {
+        let (l, t) = upload_progress(280_000_000, 970_000_000, 70.0);
+        assert_eq!(l, "Uploading 280 MB of 970 MB (4 MB/s)");
+        assert_eq!(t["sent"], 280_000_000u64);
+        assert_eq!(t["rate"], 4_000_000u64);
+        assert_eq!(t["left"], 173u64);
+        let (l, t) = upload_progress(0, 10_000_000, 0.2);
+        assert_eq!(l, "Uploading 0 MB of 10 MB");
+        assert!(t["rate"].is_null() && t["left"].is_null());
     }
 
     #[test]

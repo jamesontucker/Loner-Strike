@@ -275,6 +275,10 @@ pub struct Step {
     pub state: String,
     pub detail: String,
     pub game: String,
+    /// While files go up to a server's machine: {sent, total, rate, left} (bytes, bytes,
+    /// bytes a second, seconds)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transfer: Option<serde_json::Value>,
     #[serde(skip)]
     weight: f64,
     #[serde(skip)]
@@ -338,9 +342,18 @@ impl Job {
         Self::recompute(&mut v);
     }
 
+    /// The running step's upload progress (None: not uploading).
+    pub fn transfer(&self, t: Option<serde_json::Value>) {
+        let cur = *self.current.lock().unwrap();
+        if let Some(i) = cur {
+            self.view.lock().unwrap().steps[i].transfer = t;
+        }
+    }
+
     fn finish(&self, id: &str, detail: Option<&str>) {
         let mut v = self.view.lock().unwrap();
         if let Some(s) = v.steps.iter_mut().find(|s| s.id == id) {
+            s.transfer = None;
             s.state = "done".into();
             s.detail = detail.unwrap_or("").into();
         }
@@ -405,7 +418,7 @@ impl Progress for Job {
 }
 
 fn step(game: &str, id: &str, label: impl Into<String>, weight: f64) -> Step {
-    Step { id: format!("{game}/{id}"), label: label.into(), state: "pending".into(), detail: String::new(), game: game.into(), weight, frac: 0.0 }
+    Step { id: format!("{game}/{id}"), label: label.into(), state: "pending".into(), detail: String::new(), game: game.into(), transfer: None, weight, frac: 0.0 }
 }
 
 // ---- installing ------------------------------------------------------------------------

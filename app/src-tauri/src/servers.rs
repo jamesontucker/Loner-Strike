@@ -92,6 +92,66 @@ pub struct Entry {
     /// The website status page on a Linux machine (webstatus.rs)
     #[serde(default, skip_serializing_if = "crate::webstatus::Settings::is_unset")]
     pub web_status: crate::webstatus::Settings,
+    /// Something only a restart (or a map change) brings in is waiting for one: new start
+    /// options, HLTV settings, plugins or maps sent to the machine. Kept here, so the page
+    /// still says so after a reload; cleared when it starts or stops.
+    #[serde(default, deserialize_with = "pending_from", skip_serializing_if = "PendingRestart::is_clear")]
+    pub pending_restart: PendingRestart,
+    /// On another machine: its service still has the old start options (writing it there
+    /// failed). Written again before the next start, and by the background sync.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub service_stale: bool,
+}
+
+/// What's waiting for the server to restart (or, for sounds, the map to change).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(default)]
+pub struct PendingRestart {
+    /// plugins, modules, models or maps sent to the machine
+    pub files: bool,
+    /// start options (Server settings)
+    pub options: bool,
+    /// HLTV's settings
+    pub hltv: bool,
+    /// round-end music and sounds: the next map takes them
+    pub sounds: bool,
+    /// the map being played when `sounds` was set (another one means it changed)
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub sounds_map: String,
+}
+
+impl PendingRestart {
+    pub fn is_clear(&self) -> bool {
+        !(self.files || self.options || self.hltv || self.sounds)
+    }
+
+    /// What the page gets: {files, options, hltv, sounds}.
+    fn view(&self) -> Value {
+        json!({"files": self.files, "options": self.options, "hltv": self.hltv, "sounds": self.sounds})
+    }
+}
+
+/// Which change waits for a restart.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Pending {
+    Files,
+    Options,
+    Hltv,
+    Sounds,
+}
+
+/// A pending restart as saved (an older `true` counts as files).
+fn pending_from<'de, D: serde::Deserializer<'de>>(d: D) -> Result<PendingRestart, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Saved {
+        Old(bool),
+        Now(PendingRestart),
+    }
+    Ok(match Saved::deserialize(d)? {
+        Saved::Old(b) => PendingRestart { files: b, ..Default::default() },
+        Saved::Now(p) => p,
+    })
 }
 
 const PUBLIC_ADDRESS_HELP: &str = "Enter an address like play.example.com or play.example.com:27016.";
@@ -242,7 +302,7 @@ pub fn extra_args(text: &str) -> Result<Vec<String>, String> {
         }
     }
     if words.first().is_some_and(|w| !w.starts_with(['-', '+'])) {
-        return Err("Start options begin with - or +, like +sv_gravity 600.".into());
+        return Err("Start options begin with - or +, like -pingboost 2. Game settings (gravity, round time) belong in the Game Mode Menu: the server sets them again on every map.".into());
     }
     Ok(words)
 }
@@ -269,6 +329,34 @@ fn write_join(data: &Path, name: &str, password: &str, bots_empty: bool) -> Resu
     std::fs::create_dir_all(data).map_err(|e| e.to_string())?;
     std::fs::write(data.join("friends.json"), json!({"name": name, "password": password}).to_string()).map_err(|e| e.to_string())?;
     std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike\nhostname \"{name}\"\nsv_password \"{password}\"\nbot_join_after_player {}\n", if bots_empty { 0 } else { 1 })).map_err(|e| e.to_string())
+}
+
+/// friends.cfg with its bot_join_after_player line set to match `bots_empty`, the rest
+/// kept as it is (an imported server's file may have nothing else: its own server.cfg
+/// keeps the name and password).
+pub(crate) fn with_bots_line(text: &str, bots_empty: bool) -> String {
+    let mut lines: Vec<&str> = text.lines().filter(|l| !l.trim_start().starts_with("bot_join_after_player")).collect();
+    if lines.is_empty() {
+        lines.push("// Written by Loner-Strike");
+    }
+    let line = format!("bot_join_after_player {}", if bots_empty { 0 } else { 1 });
+    format!("{}\n{line}\n", lines.join("\n"))
+}
+
+/// Brings friends.cfg's bots line in step with the server's setting (start options can't
+/// carry it: ReGameDLL's game.cfg sets it back to 1 on every map, and friends.cfg runs
+/// after it). Whether the file changed.
+fn write_bots_line(e: &Entry) -> Result<bool, String> {
+    let data = e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes");
+    let path = data.join("friends.cfg");
+    let old = std::fs::read_to_string(&path).unwrap_or_default();
+    let new = with_bots_line(&old, bots_when_empty(e));
+    if new == old {
+        return Ok(false);
+    }
+    std::fs::create_dir_all(&data).map_err(|err| err.to_string())?;
+    std::fs::write(&path, new).map_err(|err| format!("Couldn't write friends.cfg ({err})."))?;
+    Ok(true)
 }
 
 fn list_file() -> PathBuf {
@@ -638,10 +726,18 @@ fn template_source(template: &str, game: &str, client: &Install, catalog: &[Valu
 }
 
 /// Game Mode Menu settings worth carrying over: presets, saved settings, admins…
-/// not the panel's password, live status or logs.
+/// not the panel's password, live status or logs, nor the template's history (its
+/// stats, reports, matches and who played there belong to it, not to a new server).
 fn settings_filter(rel: &Path) -> bool {
     let name = rel.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
-    !matches!(name.as_str(), "panel_rcon.txt" | "status.json" | "friends.json" | "friends.cfg") && !name.ends_with(".log")
+    let history = matches!(
+        name.as_str(),
+        "stats.json" | "stats.json.part" | "playtime.txt" | "seen.json" | "reports.json" | "matches.json" | "scrim_status.json" | "recent.txt"
+    );
+    !matches!(name.as_str(), "panel_rcon.txt" | "status.json" | "friends.json" | "friends.cfg")
+        && !history
+        && !name.ends_with(".log")
+        && !name.ends_with(".reading")
 }
 
 /// Maps and what custom maps need (textures, models, sounds, sprites, overviews).
@@ -695,7 +791,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
-        public_address: None, web_status: Default::default(),
+        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
     };
     let base = root.join(".base");
     let g = req.game.clone();
@@ -862,12 +958,61 @@ fn same_file(old: &(u64, u64), now: &(u64, u64)) -> bool {
     old.0 == now.0 && (old.1 == now.1 || (old.1 < 100_000_000_000 && now.1 / 1_000_000_000 == old.1))
 }
 
-/// Files the server on the machine writes itself: never sent from this computer's copy
-/// (the ban lists are edited on the machine directly, see admins.rs).
-fn server_owned(key: &str) -> bool {
-    matches!(key, "banned.cfg" | "listip.cfg" | "addons/amxmodx/data/gamemodes/status.json")
+/// Files the server on the machine keeps itself: the plugin or a command typed in the game
+/// writes them there, and the app reads and edits them on the machine directly
+/// (remote::game_file / put_game_file). Sent once when the server is set up, so a
+/// template's admins, mutes and map lists come along; never again after that, and never
+/// removed from the machine.
+const MACHINE_KEPT: &[&str] = &[
+    "addons/amxmodx/configs/users.ini",
+    "addons/amxmodx/data/gamemodes/gags.txt",
+    "addons/amxmodx/data/gamemodes/favorites.txt",
+    "addons/amxmodx/data/gamemodes/hidden_maps.txt",
+];
+
+/// Files the server on the machine writes itself, or the app keeps only here: never sent
+/// from this computer's copy, and never removed from the machine (the ban lists are
+/// edited on the machine directly, see admins.rs; stats, matches and the map history are
+/// written by the plugin; seen.json and reports.json are this computer's record of what
+/// it read from the machine's logs).
+pub(crate) fn server_owned(key: &str) -> bool {
+    const DATA: &str = "addons/amxmodx/data/gamemodes/";
+    let data_file = key.strip_prefix(DATA).filter(|f| !f.contains('/'));
+    matches!(key, "banned.cfg" | "listip.cfg")
+        || MACHINE_KEPT.contains(&key)
+        || data_file.is_some_and(|f| {
+            matches!(
+                f,
+                "status.json" | "recent.txt" | "stats.json" | "stats.json.part" | "playtime.txt" | "matches.json" | "scrim_status.json" | "bots.txt" | "seen.json" | "reports.json"
+            )
+        })
         || key.starts_with("addons/amxmodx/logs/")
         || key.ends_with(".log")
+        || key.ends_with(".reading")
+        || key.ends_with(".taking")
+}
+
+/// Files the plugin writes that aren't the server's own record: sent when this computer
+/// changed them (an add-on switched with the server off), but not when everything goes
+/// up again after Valve's update, where the copy here may be older than the machine's.
+fn plugin_written(key: &str) -> bool {
+    matches!(key, "addons/amxmodx/configs/plugins-gamemode.ini" | "addons/amxmodx/configs/plugins-gmaddons.ini")
+}
+
+/// What a sync sends and removes, from the record of the last upload (`saved`) and what's
+/// here now. (changed, gone)
+fn plan_sync(mode: Send, saved: Option<&Manifest>, now: &Manifest) -> (std::collections::HashSet<String>, Vec<String>) {
+    match (saved, mode) {
+        // (first: after Valve's update put stock configs back, the record can't be trusted)
+        (_, Send::AllButData) => (now.keys().filter(|k| !k.starts_with("addons/amxmodx/data/") && !plugin_written(k)).cloned().collect(), vec![]),
+        (_, Send::Everything) => (now.keys().cloned().collect(), vec![]),
+        (Some(old), Send::Changes) => (
+            now.iter().filter(|(k, v)| !old.get(*k).is_some_and(|o| same_file(o, v))).map(|(k, _)| k.clone()).collect(),
+            // a record from before a file became the server's own: it stays on the machine
+            old.keys().filter(|k| !now.contains_key(*k) && !server_owned(k)).cloned().collect(),
+        ),
+        (None, Send::Changes) => (std::collections::HashSet::new(), vec![]),
+    }
 }
 
 /// Writes the record of what was uploaded, unless it's what's there already (most
@@ -901,21 +1046,94 @@ fn current_files(e: &Entry) -> Manifest {
     m
 }
 
-// servers with new files that need a map change or restart to be used
-static PENDING_RESTART: Mutex<Option<std::collections::HashSet<String>>> = Mutex::new(None);
-
-pub fn pending_restart(id: &str) -> bool {
-    PENDING_RESTART.lock().unwrap().as_ref().is_some_and(|s| s.contains(id))
+/// Notes that a change waits for the server's next restart (kept in the server list).
+pub fn set_pending_restart(id: &str, what: Pending) {
+    let Some(e) = get(id) else { return };
+    let p = &e.pending_restart;
+    let already = match what {
+        Pending::Files => p.files,
+        Pending::Options => p.options,
+        Pending::Hltv => p.hltv,
+        Pending::Sounds => p.sounds,
+    };
+    if already {
+        return;
+    }
+    // sounds come in with the next map: remember which map is on now
+    let map = if what == Pending::Sounds { current_map(&e).unwrap_or_default() } else { String::new() };
+    let _ = edit(|l| {
+        for x in l.iter_mut().filter(|x| x.id == id) {
+            let p = &mut x.pending_restart;
+            match what {
+                Pending::Files => p.files = true,
+                Pending::Options => p.options = true,
+                Pending::Hltv => p.hltv = true,
+                Pending::Sounds => {
+                    p.sounds = true;
+                    p.sounds_map = map.clone();
+                }
+            }
+        }
+    });
 }
 
+/// The map a running server is playing (None if it doesn't answer).
+fn current_map(e: &Entry) -> Option<String> {
+    let g = game_for(&e.id, || None)?;
+    let st = g.state();
+    (st["online"] == json!(true)).then(|| st["state"]["map"].as_str().unwrap_or("").to_string())
+}
+
+/// Sounds waiting for a map change: cleared once the server plays another map (asked
+/// only while something's waiting, and the server is up).
+pub fn check_sounds_pending(e: &Entry) {
+    if !e.pending_restart.sounds || !running(&e.id) {
+        return;
+    }
+    let Some(now) = current_map(e) else { return };
+    if !now.is_empty() && !now.eq_ignore_ascii_case(&e.pending_restart.sounds_map) {
+        clear_sounds_pending(&e.id);
+    }
+}
+
+/// The map changed (or restarted): sounds are in.
+pub fn clear_sounds_pending(id: &str) {
+    if get(id).is_some_and(|e| e.pending_restart.sounds) {
+        let _ = edit(|l| {
+            for x in l.iter_mut().filter(|x| x.id == id) {
+                x.pending_restart.sounds = false;
+                x.pending_restart.sounds_map.clear();
+            }
+        });
+    }
+}
+
+/// The server started or stopped: everything waiting is in (or will be at its start).
 fn clear_pending_restart(id: &str) {
     // and ask the machine again next time rather than show what it was a moment ago
     if let Some(m) = SEEN.lock().unwrap().as_mut() {
         m.remove(id);
     }
-    if let Some(s) = PENDING_RESTART.lock().unwrap().as_mut() {
-        s.remove(id);
+    if get(id).is_some_and(|e| e.pending_restart != PendingRestart::default()) {
+        let _ = edit(|l| l.iter_mut().filter(|e| e.id == id).for_each(|e| e.pending_restart = PendingRestart::default()));
     }
+}
+
+/// The server a game is (None for the player's own game).
+pub fn id_of(g: &Game) -> Option<String> {
+    if !g.dedicated {
+        return None;
+    }
+    load().into_iter().find(|e| e.dir == g.hl && e.game == g.name).map(|e| e.id)
+}
+
+/// Whether a file sent to the machine is only used once the map changes or the server
+/// restarts (plugins, modules, models, sounds, maps), not straight away like the
+/// settings the app reloads. The game folder's own .txt files (mapcycle.txt, motd.txt)
+/// are read again as they're needed.
+fn needs_restart(key: &str) -> bool {
+    let root_txt = !key.contains('/') && key.to_ascii_lowercase().ends_with(".txt");
+    !key.starts_with("addons/amxmodx/data/") && !key.starts_with("addons/amxmodx/configs/") && !key.ends_with(".nav") && !root_txt
 }
 
 /// Brings the machine in step with this computer's copy: uploads files that are new or
@@ -924,7 +1142,12 @@ fn clear_pending_restart(id: &str) {
 /// by the app after setup, so they're left alone. `everything`: send it all (setup).
 /// Returns (sent, removed).
 pub fn sync(e: &Entry, everything: bool) -> Result<(usize, usize), String> {
-    sync_as(e, if everything { Send::Everything } else { Send::Changes })
+    sync_as(e, if everything { Send::Everything } else { Send::Changes }, &|_, _| {})
+}
+
+/// sync, telling `progress` (bytes sent, bytes in all) while files go up.
+pub fn sync_with_progress(e: &Entry, progress: &dyn Fn(u64, u64)) -> Result<(usize, usize), String> {
+    sync_as(e, Send::Changes, progress)
 }
 
 /// What a sync sends.
@@ -938,7 +1161,7 @@ enum Send {
     AllButData,
 }
 
-fn sync_as(e: &Entry, mode: Send) -> Result<(usize, usize), String> {
+fn sync_as(e: &Entry, mode: Send, progress: &dyn Fn(u64, u64)) -> Result<(usize, usize), String> {
     let everything = mode == Send::Everything;
     let _g = sync_guard();
     let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
@@ -952,24 +1175,20 @@ fn sync_as(e: &Entry, mode: Send) -> Result<(usize, usize), String> {
     let to = format!("{}/{}", crate::remote::server_dir(&e.id), e.game);
     let saved: Option<Manifest> = std::fs::read_to_string(manifest_path(e)).ok().and_then(|t| serde_json::from_str(&t).ok());
     let now = current_files(e);
-    let (changed, gone): (std::collections::HashSet<String>, Vec<String>) = match (&saved, everything) {
-        // (first: after Valve's update put stock configs back, the record can't be trusted)
-        _ if mode == Send::AllButData => (now.keys().filter(|k| !k.starts_with("addons/amxmodx/data/")).cloned().collect(), vec![]),
-        (Some(old), false) => (
-            now.iter().filter(|(k, v)| !old.get(*k).is_some_and(|o| same_file(o, v))).map(|(k, _)| k.clone()).collect(),
-            old.keys().filter(|k| !now.contains_key(*k)).cloned().collect(),
-        ),
+    let (mut changed, gone) = plan_sync(mode, saved.as_ref(), &now);
+    if saved.is_none() && mode == Send::Changes {
         // a server from before the app kept a record: only what the machine doesn't have
         // goes up. What's there stays (it may have changed on the machine, and sending all
         // of it, maps included, would tie up the connection for minutes)
-        (None, false) => {
-            let there = crate::remote::list_files(r, &to)?;
-            (now.keys().filter(|k| !there.contains(*k)).cloned().collect(), vec![])
-        }
-        (_, true) => (now.keys().cloned().collect(), vec![]),
-    };
+        let there = crate::remote::list_files(r, &to)?;
+        changed = now.keys().filter(|k| !there.contains(*k)).cloned().collect();
+    }
+    if everything {
+        // a new server: the template's admins, mutes and map lists go up once
+        changed.extend(MACHINE_KEPT.iter().filter(|k| e.dir.join(&e.game).join(k).is_file()).map(|k| k.to_string()));
+    }
     if !changed.is_empty() {
-        crate::remote::upload_dir(r, &e.dir.join(&e.game), &to, &|rel: &Path| changed.contains(&rel.to_string_lossy().replace('\\', "/")))?;
+        crate::remote::upload_dir_with(r, &e.dir.join(&e.game), &to, &|rel: &Path| changed.contains(&rel.to_string_lossy().replace('\\', "/")), progress)?;
     }
     for chunk in gone.chunks(80) {
         let list = chunk.iter().map(|g| crate::remote::shell_quote(g)).collect::<Vec<_>>().join(" ");
@@ -983,10 +1202,77 @@ fn sync_as(e: &Entry, mode: Send) -> Result<(usize, usize), String> {
         }
     }
     // plugins, modules, models, sounds, maps: only loaded when a map starts
-    if !everything && touched().any(|p| !p.starts_with("addons/amxmodx/data/") && !p.starts_with("addons/amxmodx/configs/") && !p.ends_with(".nav")) {
-        PENDING_RESTART.lock().unwrap().get_or_insert_with(Default::default).insert(e.id.clone());
+    if !everything {
+        // sounds: the next map precaches them; the rest only at a restart
+        if touched().any(|p| needs_restart(p) && !p.starts_with("sound/")) {
+            set_pending_restart(&e.id, Pending::Files);
+        }
+        if touched().any(|p| p.starts_with("sound/")) {
+            set_pending_restart(&e.id, Pending::Sounds);
+        }
     }
     Ok((changed.len(), gone.len()))
+}
+
+/// Renames the server whose data folder is `data` (Play with friends sets the name players
+/// see; the server list keeps the same one). Nothing for the player's own game.
+pub fn rename_by_data(data: &Path, name: &str) {
+    let name: String = name.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect();
+    let of = |e: &Entry| e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes");
+    if name.is_empty() || !load().iter().any(|e| of(e) == data && e.name != name) {
+        return;
+    }
+    let _ = edit(|l| l.iter_mut().filter(|e| of(e) == data).for_each(|e| e.name = name.clone()));
+}
+
+/// The server on another machine a Game is about (None for any other game).
+pub fn entry_for(g: &Game) -> Option<Entry> {
+    g.remote.as_ref()?;
+    load().into_iter().find(|e| e.remote.is_some() && e.dir == g.hl && e.game == g.name)
+}
+
+/// Brings files the plugin rewrote on the machine (`keys`, relative to the game folder)
+/// back into this computer's copy, and records them as uploaded, so the next sync
+/// doesn't send the old copy back over them. A file that isn't on the machine is
+/// removed here too.
+pub fn pull_files(e: &Entry, keys: &[&str]) -> Result<(), String> {
+    let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
+    let _g = sync_guard();
+    let gdir = e.dir.join(&e.game);
+    let got = crate::remote::cat_files(r, &format!("{}/{}", crate::remote::server_dir(&e.id), e.game), keys)?;
+    let path = manifest_path(e);
+    let saved: Option<Manifest> = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok());
+    let mut m = saved.clone().unwrap_or_default();
+    for (k, data) in keys.iter().zip(got) {
+        let p = gdir.join(k);
+        match data {
+            Some(bytes) => {
+                if let Some(d) = p.parent() {
+                    let _ = std::fs::create_dir_all(d);
+                }
+                sys::write_atomic(&p, &bytes).map_err(|err| format!("Couldn't save {k} ({err})."))?;
+            }
+            None => {
+                let _ = std::fs::remove_file(&p);
+            }
+        }
+        // (only with a record: without one the next sync compares with the machine itself)
+        if saved.is_some() {
+            match std::fs::metadata(&p) {
+                Ok(meta) => {
+                    let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos() as u64).unwrap_or(0);
+                    m.insert(k.to_string(), (meta.len(), modified));
+                }
+                Err(_) => {
+                    m.remove(*k);
+                }
+            }
+        }
+    }
+    if saved.is_some() {
+        save_manifest(&path, saved.as_ref(), &m);
+    }
+    Ok(())
 }
 
 /// Every few seconds: servers on other machines get what changed here (a mod installed,
@@ -1030,6 +1316,10 @@ pub fn sync_loop() {
                 match sync(&e, false) {
                     Ok(_) => {
                         wait.remove(&e.id);
+                        // start options saved while the machine couldn't be reached
+                        if e.service_stale {
+                            let _ = write_service(&e);
+                        }
                     }
                     Err(_) => {
                         wait.insert(e.id.clone(), Instant::now() + Duration::from_secs(60));
@@ -1056,6 +1346,35 @@ fn copy_navs(e: &Entry) {
         last.insert(e.id.clone(), Instant::now());
     }
     crate::navs::copy_to_server(e, None, true);
+}
+
+/// Writes a server's service on its machine again (its start options), and notes
+/// whether that worked: if not, it's tried again before the next start and by the
+/// background sync, so a change made while the machine was away isn't lost.
+pub fn write_service(e: &Entry) -> Result<(), String> {
+    let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
+    let set = |stale: bool| {
+        if get(&e.id).is_some_and(|x| x.service_stale != stale) {
+            let _ = edit(|l| l.iter_mut().filter(|x| x.id == e.id).for_each(|x| x.service_stale = stale));
+        }
+    };
+    // (from the list as it is now: the start options may have changed since `e` was read)
+    let now = get(&e.id).unwrap_or_else(|| e.clone());
+    let ok = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&now.id, &now.game, &launch_args(&now)).as_bytes(), |_| {});
+    match ok {
+        Ok(0) => {
+            set(false);
+            Ok(())
+        }
+        Ok(_) => {
+            set(true);
+            Err("Saved here, but the server's service couldn't be updated. It's tried again before the server next starts.".into())
+        }
+        Err(err) => {
+            set(true);
+            Err(format!("Saved here, but the server's machine couldn't be reached to update its service ({err}). It's tried again before the server next starts."))
+        }
+    }
 }
 
 /// Puts this computer's copy of a server's files on its machine, all of it (setup).
@@ -1123,7 +1442,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
-        public_address: None, web_status: Default::default(),
+        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
     };
     make_server_dir(&entry)?;
     edit(|l| l.push(entry.clone()))?;
@@ -1256,7 +1575,7 @@ pub fn update_files(e: Entry) -> Result<String, String> {
             job.run(&format!("{g}/srv-machine"), || machine_setup(job, &r, &e.id, &g))?;
             // everything but the settings goes up again over what setup put back (the
             // machine's own stats and bans stay as they are)
-            job.run(&format!("{g}/srv-upload"), || sync_as(&e, Send::AllButData).map(|_| ()))
+            job.run(&format!("{g}/srv-upload"), || sync_as(&e, Send::AllButData, &|_, _| {}).map(|_| ()))
         });
     }
     let base = e.dir.parent().ok_or("That isn't a server folder Loner-Strike can use.")?.join(".base");
@@ -1363,7 +1682,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
-        public_address: None, web_status: Default::default(),
+        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
     };
     // name and password as the Friends tab keeps them (it writes friends.cfg only when
     // something changes there, so the server's own server.cfg keeps working meanwhile)
@@ -1376,6 +1695,9 @@ pub fn import(dir: &Path) -> Result<Value, String> {
     if let Some(pw) = cfg_value(&cfg, "rcon_password").filter(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_graphic() && c != '"')) {
         let _ = std::fs::write(data.join("panel_rcon.txt"), format!("{pw}\n"));
     }
+    // whether bots play with nobody on: only that line in friends.cfg (and again before
+    // each start), so the server's own name and password still come from server.cfg
+    let _ = write_bots_line(&entry);
     let welcome = import_motd(&dir.join(game), &cfg, &data);
     let admins = crate::admins::import_users(&dir.join(game), &data);
     // (a server you already had: never marked, so never deleted)
@@ -1487,10 +1809,8 @@ fn launch_args(e: &Entry) -> Vec<String> {
     if !e.listen_ip.is_empty() {
         a.extend(["+ip".into(), e.listen_ip.clone()]);
     }
-    if bots_when_empty(e) {
-        // ReGameDLL's default (1) keeps bots out until a human joins
-        a.extend(["+bot_join_after_player".into(), "0".into()]);
-    }
+    // (bots on an empty server aren't a start option: ReGameDLL's game.cfg sets
+    // bot_join_after_player back on every map, so friends.cfg carries it, see write_bots_line)
     let extra = extra_args(&e.extra_args).unwrap_or_default();
     let cfg = sys::read_latin1(&e.dir.join(&e.game).join("server.cfg")).unwrap_or_default();
     a.extend(netcode_args(&extra, &cfg, e.remote.is_some()));
@@ -1620,8 +1940,17 @@ pub fn start(id: &str) -> Result<(), String> {
     if !e.ready {
         return Err("This server isn't finished setting up.".into());
     }
+    // whether bots play on an empty server (friends.cfg runs after every map)
+    let bots_changed = write_bots_line(&e).unwrap_or(false);
     // (systemd starts one copy at most, and a slow machine mustn't hold up local starts)
     if let Some(r) = &e.remote {
+        if bots_changed {
+            let _ = sync(&e, false);
+        }
+        // start options saved while the machine couldn't be reached go there first
+        if e.service_stale {
+            write_service(&e)?;
+        }
         clear_pending_restart(&e.id);
         return crate::remote::systemctl(r, &e.id, "start");
     }
@@ -1641,6 +1970,7 @@ pub fn start(id: &str) -> Result<(), String> {
         r.errors.remove(id);
         r.procs.insert(id.into(), Proc { child, started: Instant::now(), stopping: false });
     });
+    clear_pending_restart(&e.id);
     crate::hltv::server_started(&e);
     watch();
     Ok(())
@@ -1661,6 +1991,7 @@ pub fn stop(id: &str) {
     // HLTV first, so its demo is finished properly
     if let Some(e) = &e {
         crate::hltv::stop(e);
+        clear_pending_restart(&e.id);
     }
     let child = with_runs(|r| {
         r.procs.get_mut(id).map(|p| p.stopping = true);
@@ -1793,6 +2124,13 @@ fn hide_passwords(line: &str) -> String {
 }
 
 fn view(e: &Entry) -> Value {
+    // sounds wait for a map change: looked at only while something's waiting
+    let pending = if e.pending_restart.sounds {
+        check_sounds_pending(e);
+        get(&e.id).map(|x| x.pending_restart).unwrap_or_else(|| e.pending_restart.clone())
+    } else {
+        e.pending_restart.clone()
+    };
     let installed = setup::record::component_ids_cached(&e.dir.join(&e.game));
     let loner = installed.iter().any(|c| c == "core");
     let (state, uptime, error) = if e.remote.is_some() && e.ready {
@@ -1826,10 +2164,13 @@ fn view(e: &Entry) -> Value {
            "maxplayers": e.maxplayers, "ready": e.ready, "state": state, "uptime": uptime, "error": error,
            "imported": e.imported, "loner": loner, "dir": e.dir,
            "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(),
-           "public_address": e.public_address, "connect": e.connect(), "pending_restart": pending_restart(&e.id),
+           "public_address": e.public_address, "connect": e.connect(), "pending_restart": pending.view(),
            "listen_ip": e.listen_ip, "extra_args": e.extra_args, "password": join_password(e),
            "bots_when_empty": bots_when_empty(e), "bots_when_empty_set": e.bots_when_empty.is_some(),
            "unreachable": e.remote.as_ref().and_then(|_| unreachable(&e.id)),
+           // on another machine the daily restart is done by the app: only while it's open
+           "restart_needs_app": e.remote.is_some() && e.restart.as_ref().is_some_and(|r| r.on),
+           "service_stale": e.service_stale,
            "installed": installed})
 }
 
@@ -2086,7 +2427,10 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
             return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
         }
         let restart_needed = |old: &Entry, new: &Entry| old.port != new.port || old.visibility != new.visibility || old.maxplayers != new.maxplayers || old.listen_ip != new.listen_ip || old.extra_args != new.extra_args;
-        let name = req.name.as_ref().map(|n| n.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect::<String>()).filter(|n| !n.is_empty());
+        let name = req.name.as_ref().map(|n| n.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect::<String>());
+        if name.as_ref().is_some_and(|n| n.is_empty()) {
+            return Err("Give the server a name.".into());
+        }
         edit(|l| {
             if let Some(e) = l.iter_mut().find(|e| e.id == id) {
                 if let Some(n) = &name {
@@ -2143,13 +2487,17 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
         // on another machine the start options live in its service: write it again (and
         // bring its files up to date with this computer's copy while at it)
         let old = e.clone();
+        let restart = running(&id) && (restart_needed(&e, &now) || !bots_live);
+        if restart {
+            set_pending_restart(&id, Pending::Options);
+        }
         if let Some(e) = get(&id).filter(|e| e.ready && e.remote.is_some()) {
-            let r = e.remote.as_ref().unwrap();
-            sync(&e, false)?;
-            let code = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&e.id, &e.game, &launch_args(&e)).as_bytes(), |_| {})?;
-            if code != 0 {
-                return Err("Saved here, but the server's service couldn't be updated.".into());
+            if restart_needed(&old, &e) {
+                // (noted first: if the machine can't be reached it's written before the next start)
+                let _ = edit(|l| l.iter_mut().filter(|x| x.id == id).for_each(|x| x.service_stale = true));
             }
+            sync(&e, false)?;
+            write_service(&e)?;
             // HLTV's settings name the server's port and password: written again to match
             if e.hltv.enabled && (old.port != e.port || old.visibility != e.visibility || password.is_some()) {
                 crate::hltv::remote_apply(&e, true)?;
@@ -2160,7 +2508,7 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
             }
         }
         // (a visibility change alone needs a restart anyway; the bots part was applied above)
-        Ok(json!({"ok": true, "restart": running(&id) && (restart_needed(&e, &now) || !bots_live), "public_address": now.public_address, "connect": now.connect()}))
+        Ok(json!({"ok": true, "restart": restart, "public_address": now.public_address, "connect": now.connect()}))
     })
     .await
     .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
@@ -2366,12 +2714,12 @@ async fn api_set_rcon_password(UrlPath(id): UrlPath<String>, headers: HeaderMap,
         sys::write_atomic(&data.join("panel_rcon.txt"), format!("{pw}\n").as_bytes()).map_err(|err| err.to_string())?;
         forget(&id);
         // on another machine: the file goes up, and the service's copy (read at start) too
-        if let Some(r) = e.remote.as_ref().filter(|_| e.ready) {
+        if e.remote.is_some() && e.ready {
+            // (noted first: if the machine can't be reached now, the background sync sends
+            // the file and writes the service again, and a start does before starting)
+            let _ = edit(|l| l.iter_mut().filter(|x| x.id == id).for_each(|x| x.service_stale = true));
             sync(&e, false)?;
-            let code = crate::remote::exec_stream(r, "bash -s", crate::remote::service_sh(&e.id, &e.game, &launch_args(&e)).as_bytes(), |_| {})?;
-            if code != 0 {
-                return Err("Changed here, but the server's service couldn't be updated.".into());
-            }
+            write_service(&e)?;
         }
         Ok(json!({"ok": true, "password": pw}))
     })
@@ -2672,7 +3020,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None, web_status: Default::default(),
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -2745,7 +3093,7 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None, web_status: Default::default(),
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));
@@ -2761,7 +3109,8 @@ mod tests {
         assert!(!launch_args(&e).join(" ").contains("bot_join_after_player"));
         e.visibility = "listed".into();
         assert!(bots_when_empty(&e), "listed: on unless the host turned it off");
-        assert!(launch_args(&e).join(" ").contains("+bot_join_after_player 0"));
+        // never a start option (game.cfg sets it back on every map): friends.cfg has it
+        assert!(!launch_args(&e).join(" ").contains("bot_join_after_player"));
         e.bots_when_empty = Some(false);
         assert!(!bots_when_empty(&e));
         e.visibility = "lan".into();
@@ -2815,6 +3164,60 @@ mod tests {
     }
 
     #[test]
+    fn machine_kept_files_are_never_sent_or_removed() {
+        for k in ["addons/amxmodx/configs/users.ini", "addons/amxmodx/data/gamemodes/gags.txt", "addons/amxmodx/data/gamemodes/favorites.txt",
+                  "addons/amxmodx/data/gamemodes/hidden_maps.txt", "addons/amxmodx/data/gamemodes/recent.txt", "addons/amxmodx/data/gamemodes/stats.json",
+                  "addons/amxmodx/data/gamemodes/seen.json", "addons/amxmodx/data/gamemodes/reports.log.reading", "addons/amxmodx/data/gamemodes/chat.log"] {
+            assert!(server_owned(k), "{k}");
+        }
+        assert!(!server_owned("addons/amxmodx/data/gamemodes/global.cfg") && !server_owned("addons/amxmodx/data/gamemodes/addons.txt"));
+        // an old record still lists files that are the machine's own now: they're not "gone"
+        let mut old = Manifest::new();
+        old.insert("addons/amxmodx/configs/users.ini".into(), (5, 1));
+        old.insert("addons/amxmodx/data/gamemodes/gags.txt".into(), (5, 1));
+        old.insert("maps/de_old.bsp".into(), (5, 1));
+        old.insert("maps/de_x.bsp".into(), (5, 1));
+        let mut now = Manifest::new();
+        now.insert("maps/de_x.bsp".into(), (6, 2));
+        now.insert("addons/amxmodx/configs/plugins-gmaddons.ini".into(), (1, 1));
+        let (changed, gone) = plan_sync(Send::Changes, Some(&old), &now);
+        assert_eq!(gone, vec!["maps/de_old.bsp".to_string()]);
+        assert!(changed.contains("maps/de_x.bsp") && changed.contains("addons/amxmodx/configs/plugins-gmaddons.ini"));
+        // everything again after Valve's update: not the settings, not what the plugin writes
+        let (changed, gone) = plan_sync(Send::AllButData, Some(&old), &now);
+        assert!(gone.is_empty() && changed.contains("maps/de_x.bsp") && !changed.contains("addons/amxmodx/configs/plugins-gmaddons.ini"));
+        // a map cycle at the game folder's root is read as it's needed
+        assert!(!needs_restart("mapcycle.txt") && !needs_restart("motd.txt"));
+        assert!(needs_restart("maps/de_x.bsp") && needs_restart("addons/amxmodx/plugins/x.amxx") && !needs_restart("maps/de_x.nav"));
+    }
+
+    #[test]
+    fn friends_cfg_bots_line() {
+        assert_eq!(with_bots_line("", true), "// Written by Loner-Strike\nbot_join_after_player 0\n");
+        let cfg = "// Written by Loner-Strike's Friends tab\nhostname \"A\"\nsv_password \"\"\nbot_join_after_player 0\n";
+        let off = with_bots_line(cfg, false);
+        assert_eq!(off, "// Written by Loner-Strike's Friends tab\nhostname \"A\"\nsv_password \"\"\nbot_join_after_player 1\n");
+        assert_eq!(with_bots_line(&off, false), off, "the same twice");
+        assert_eq!(off.matches("bot_join_after_player").count(), 1);
+    }
+
+    #[test]
+    fn pending_restart_kept() {
+        let mut e: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/x","kind":"windows","bottle":null}"#).unwrap();
+        assert!(e.pending_restart.is_clear());
+        assert!(!serde_json::to_string(&e).unwrap().contains("pending_restart"), "left out while nothing waits");
+        e.pending_restart.options = true;
+        e.pending_restart.sounds = true;
+        e.pending_restart.sounds_map = "de_dust2".into();
+        let back: Entry = serde_json::from_str(&serde_json::to_string(&e).unwrap()).unwrap();
+        assert_eq!(back.pending_restart, e.pending_restart);
+        assert_eq!(back.pending_restart.view(), json!({"files": false, "options": true, "hltv": false, "sounds": true}));
+        // a list saved with the plain flag still loads
+        let old: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/x","kind":"windows","bottle":null,"pending_restart":true}"#).unwrap();
+        assert!(old.pending_restart.files && !old.pending_restart.options);
+    }
+
+    #[test]
     fn paths_and_cfg() {
         let p = Path::new("/Users/x/Library/Application Support/CrossOver/Bottles/Steam/drive_c/HLDS/hlds.exe");
         assert_eq!(windows_path(p).unwrap(), "C:\\HLDS\\hlds.exe");
@@ -2836,6 +3239,11 @@ mod tests {
         assert!(content_filter(Path::new("maps/de_x.bsp")) && content_filter(Path::new("halflife.wad")) && content_filter(Path::new("sound/a/b.wav")));
         assert!(!content_filter(Path::new("addons/amxmodx/x.amxx")) && !content_filter(Path::new("dlls/mp.dll")) && !content_filter(Path::new("sub/x.wad")));
         assert!(settings_filter(Path::new("presets/a.cfg")) && !settings_filter(Path::new("panel_rcon.txt")) && !settings_filter(Path::new("friends.json")));
+        // a template's history stays with it
+        for f in ["stats.json", "seen.json", "reports.json", "chat.log", "matches.json"] {
+            assert!(!settings_filter(Path::new(f)), "{f}");
+        }
+        assert!(settings_filter(Path::new("gags.txt")) && settings_filter(Path::new("favorites.txt")));
     }
 
     #[test]

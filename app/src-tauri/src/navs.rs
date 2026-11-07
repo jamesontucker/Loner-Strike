@@ -231,11 +231,11 @@ pub fn copy_with(e: &Entry, hl: &Path, local: &LocalNavs, only: Option<&str>, qu
         };
         match there.get(stem) {
             Some((_, t)) if nav.modified <= *t => out.had.push(stem.clone()),
-            Some(_) => copy.push((stem, nav)),
-            // a server on another machine may have learned the map itself: that file isn't
-            // in this computer's copy, so ask the machine before sending ours over it
-            None if e.remote.is_some() => ask.push((stem, nav)),
-            None => copy.push((stem, nav)),
+            // a server on another machine may have learned the map itself (or learned it
+            // again since this computer's copy was sent): that file isn't in this
+            // computer's copy, so ask the machine before sending ours over it
+            _ if e.remote.is_some() => ask.push((stem, nav)),
+            _ => copy.push((stem, nav)),
         }
     }
     if let (false, Some(r)) = (ask.is_empty(), &e.remote) {
