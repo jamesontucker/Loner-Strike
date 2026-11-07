@@ -255,7 +255,6 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "webstatus", label: "Website status", group: "Server", remote: true },
   { id: "modes", label: "Modes", group: "Game", live: true },
   { id: "maps", label: "Maps", group: "Game" },
-  { id: "getmaps", label: "Get more", group: "Game" },
   { id: "bots", label: "Bots", group: "Game", live: true },
   { id: "match", label: "Rules", group: "Game", live: true },
   { id: "fun", label: "Fun", group: "Game", live: true },
@@ -265,6 +264,7 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "welcome", label: "Welcome page", group: "People" },
   { id: "mods", label: "Mods", group: "Content" },
   { id: "sounds", label: "Sounds", group: "Content" },
+  { id: "getmaps", label: "Get more", group: "Content" },
 ];
 const TAB_GROUPS = [...new Set(TABS.map((t) => t.group))];
 
