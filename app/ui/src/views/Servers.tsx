@@ -192,6 +192,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
               <StateTag s={s} />
             </div>
             {s.error && <p className="err-text">{s.error}</p>}
+            {s.restart_needs_app && <p className="muted small-note">The daily restart only happens while Loner-Strike is open on this computer.</p>}
             {s.unreachable && s.state !== "setting-up" && <Unreachable s={s} onGuide={ON_THIS_COMPUTER ? openGuide : undefined} />}
             {s.state === "setting-up" ? (
               <JobProgress remote={!!s.host} onEnd={(ok) => { toast(ok ? `${s.name} is ready` : `Setting up ${s.name} stopped. It says why below.`, !ok); onChanged(); }} />
@@ -456,6 +457,7 @@ export function ServerPage(props: {
       )}
       {off && <Unreachable s={s} />}
       {s.error && <p className="err-text">{s.error}</p>}
+      {s.service_stale && <p className="muted small-note">The server's settings will be applied on the machine before it next starts.</p>}
       {!s.loner && <AddLoner server={s} onDone={() => { onChanged(); reloadApp(); }} />}
       {job && (
         <JobProgress

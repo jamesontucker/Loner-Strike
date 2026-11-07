@@ -31,7 +31,7 @@ type Data = {
   plugin: boolean;
   dedicated: boolean;
   geoip: boolean;
-  schedule: { on: boolean; time: string } | null;
+  schedule: { on: boolean; time: string; needs_app?: boolean } | null;
 };
 type Reply = Data | { ok: false; error: string };
 const failed = (r: Reply | { error?: string }): r is { ok: false; error: string } => "error" in r && !!r.error;
@@ -734,6 +734,7 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
               Runs from this computer: Loner-Strike has to be open at that time. The time is this computer's, not the server's.
             </p>
           )}
+          {sched.needs_app && <p className="muted small-note">The daily restart only happens while Loner-Strike is open on this computer.</p>}
           <div className="settings">
             <Toggle label="Restart every day" note="Only while the server is running and Loner-Strike is open on this computer." on={sched.on} set={(v) => saveRestart(v)} />
             <div className="setting">

@@ -459,9 +459,15 @@ function ChatTab({ d, setD, initial }: { d: Data; setD: SetData; initial: string
   const latest = useRef(0);
   const load = useCallback(async () => {
     const mine = ++latest.current;
-    const r = await getJson<{ lines: ChatLine[]; more: boolean } | Err>(`/api/community/chat?q=${encodeURIComponent(q.trim())}&limit=${limit}`).catch((e) => (isAbort(e) ? null : OFFLINE));
+    const r = await getJson<{ lines: ChatLine[]; more: boolean; error?: string } | Err>(`/api/community/chat?q=${encodeURIComponent(q.trim())}&limit=${limit}`).catch((e) => (isAbort(e) ? null : OFFLINE));
     if (!r || mine !== latest.current) return;
     // before the first lines the error takes the list's place; after that it's a toast
+    // the remote server couldn't be reached: say so in place of the list
+    if (failed(r) && "lines" in r) {
+      got.current = true;
+      setLines(null);
+      return setError(r.error);
+    }
     if (failed(r)) return got.current ? pollError(r.error) : setError(r.error);
     got.current = true;
     pollError(null);
@@ -691,6 +697,7 @@ function ModTab({ d, setD, reload, onDirty }: { d: Data; setD: SetData; reload: 
     <>
       <section>
         <SectionHead title="Muted players" note="A muted player can't use chat, voice or both until it runs out, even if they leave and come back. Their commands like /rtv still work. Bots are never muted." />
+        {d.gags_error && <p className="err-text">{d.gags_error}</p>}
         <ul className="people">
           {gags.map((g) => (
             <li key={g.id}>

@@ -125,6 +125,10 @@ export type ServerInfo = {
   /** What waits for a restart, kept by the app so it survives reloads. Older apps send just
    *  true (new files went up to its machine: used after a restart or map change); newer ones
    *  say what: { files, options, hltv, sounds } (or a list of those words). See restartPending. */
+  /** on another machine with a daily restart on: the app does the restart, so only while it's open */
+  restart_needs_app?: boolean;
+  /** on another machine: its service still has the old start options, written before the next start */
+  service_stale?: boolean;
   pending_restart?: boolean | RestartReason[] | Partial<Record<RestartReason, unknown>>;
   listen_ip?: string;
   extra_args?: string;

@@ -8,7 +8,7 @@ import { BusyButton, useToast } from "../ui";
 export type FilterMode = "off" | "replace" | "block";
 export type Settings = { filter: FilterMode; words: string[]; chatlog: boolean; reports: boolean; stats_bots: boolean };
 export type Gag = { id: string; name: string; until: number; chat: boolean; voice: boolean };
-export type Data = { settings: Settings; gags: Gag[]; now: number; open_reports: number; plugin: boolean; dedicated: boolean };
+export type Data = { settings: Settings; gags: Gag[]; now: number; open_reports: number; plugin: boolean; dedicated: boolean; gags_error?: string };
 export type Err = { ok: false; error: string };
 export const failed = (r: unknown): r is Err => !!r && typeof r === "object" && "error" in r && !!(r as Err).error;
 export const OFFLINE: Err = { ok: false, error: "Couldn't reach the app." };
