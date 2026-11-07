@@ -1,17 +1,13 @@
 import { memo, useDeferredValue, useMemo, useState } from "react";
 import { addFromFile, currentTarget, getJsonAt, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable, withTarget } from "../api";
-import { useAppInfo, useMaps, useSetupJob, waitForSetupJob } from "../queries";
+import { useAppInfo, useMaps, useServers, useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { usePlayDrafts } from "../stores/playDraft";
 import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Sheet, Switch, useCommand, useConfirm, useToast } from "../ui";
 import { JobProgress } from "./JobProgress";
+import { CATS, CopyFromGame, CopyToServers } from "./MapCopy";
 
-const CATS: [string, string][] = [
-  ["all", "All"], ["fav", "Favourites"], ["recent", "Recently played"], ["defuse", "Bomb defusal"],
-  ["hostage", "Hostage rescue"], ["objective", "Objectives"], ["surf", "Surf"], ["arena", "Arena & fun"],
-  ["other", "Other"],
-];
 /** Where a map came from and whether it's hidden or new to the bots: one menu, so the chips stay about map types. */
 const SHOW: [string, string][] = [
   ["all", "All maps"], ["stock", "Came with the game"], ["download", "Downloaded"], ["added", "Added by hand"],
@@ -135,6 +131,14 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   const [picking, setPicking] = useState(false);
   const [chosen, setChosen] = useState<Set<string>>(() => new Set());
   const [relearn, setRelearn] = useState(false);
+  // copying maps between your game and servers: on the computer only
+  const server = currentTarget();
+  const serversQ = useServers(ON_THIS_COMPUTER);
+  const serverList = serversQ.data?.servers ?? [];
+  const hasServers = serverList.some((s) => s.ready);
+  const serverName = serverList.find((s) => s.id === server)?.name ?? "this server";
+  const [copyMap, setCopyMap] = useState<string | null>(null);
+  const [copyFrom, setCopyFrom] = useState(false);
   const jobQ = useSetupJob();
   const learning = jobQ.data?.state === "running" && jobQ.data.kind === "navlearn";
   const togglePick = useStable((m: MapInfo) => setChosen((c) => {
@@ -233,6 +237,9 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               <BusyButton busy={learning || busy(key("learn"))} label="Teach bots maps" busyLabel="Bots are learning…" onClick={() => setPicking(true)} />
               <Info text={TEACH_INFO} />
             </span>
+          )}
+          {ON_THIS_COMPUTER && server && (
+            <button className="btn" onClick={() => setCopyFrom(true)}>Copy maps from my game</button>
           )}
           {ON_THIS_COMPUTER && (
             <BusyButton busy={busy(key("add-file"))} label="Add a map file" busyLabel="Adding…" onClick={() => once(key("add-file"), async () => {
@@ -360,6 +367,9 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
                   <Info text={SEND_INFO} />
                 </span>
               )}
+              {canTeach && hasServers && (
+                <button className="btn" onClick={() => { setCopyMap(picked.name); setPicked(null); }}>Copy to a server</button>
+              )}
               {ON_THIS_COMPUTER && picked.source === "download" && picked.mod && (
                 <BusyButton className="btn danger" busy={busy(key(`remove:${picked.mod}`))} label="Remove" busyLabel="Removing…" onClick={() => remove(picked)} />
               )}
@@ -368,6 +378,8 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           </div>
         </Sheet>
       )}
+      {canTeach && copyMap && <CopyToServers map={copyMap} onClose={() => setCopyMap(null)} />}
+      {ON_THIS_COMPUTER && server && copyFrom && <CopyFromGame server={server} name={serverName} onClose={() => setCopyFrom(false)} onDone={reload} />}
     </div>
   );
 }

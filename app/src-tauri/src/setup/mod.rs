@@ -774,6 +774,14 @@ impl Job {
         run_step(self, id, f)
     }
 
+    /// Renames a step while it runs ("Copying de_cbble to Alone Together (2 of 5)").
+    pub fn relabel(&self, id: &str, label: impl Into<String>) {
+        let mut v = self.view.lock().unwrap();
+        if let Some(s) = v.steps.iter_mut().find(|s| s.id == id) {
+            s.label = label.into();
+        }
+    }
+
     /// Adds steps before the step `id` once it's known what they'll be.
     pub fn insert_before(&self, id: &str, steps: Vec<Step>) {
         let mut v = self.view.lock().unwrap();

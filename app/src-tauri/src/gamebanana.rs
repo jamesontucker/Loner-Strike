@@ -277,6 +277,35 @@ impl MapStore {
         sys::write_atomic(&self.record_path, serde_json::to_string_pretty(rec).unwrap_or_default().as_bytes())
     }
 
+    /// Records a map copied in from this computer's game (mapcopy.rs) under `key`, merged
+    /// with what that key already has, so it lists as downloaded and Remove takes away
+    /// `files` (the ones copied in) but never `shared` (ones the server already had).
+    pub fn record_copy(&self, key: &str, info: &Value, map: &str, files: &[String], shared: &[String]) -> std::io::Result<()> {
+        {
+            let _g = RECORDS.lock().unwrap_or_else(|e| e.into_inner());
+            let mut rec = self.records();
+            let old = rec.get(key).cloned().unwrap_or(json!({}));
+            let merge = |k: &str, new: &[String]| {
+                let mut set: Vec<String> = old[k].as_array().into_iter().flatten().map(s).chain(new.iter().cloned()).collect();
+                set.sort();
+                set.dedup();
+                set
+            };
+            let pick = |k: &str| if old[k].is_null() { info[k].clone() } else { old[k].clone() };
+            rec.insert(
+                key.to_string(),
+                json!({
+                    "name": pick("name"), "author": pick("author"), "url": pick("url"), "file": "copied from your game",
+                    "date": sys::now() as i64, "maps": merge("maps", &[map.to_string()]), "files": merge("files", files),
+                    "shared": merge("shared", shared),
+                }),
+            );
+            self.save_records(&rec)?;
+        }
+        *self.maps_cache.lock().unwrap() = None;
+        Ok(())
+    }
+
     /// map name -> author, for maps installed from here.
     pub fn authors(&self) -> HashMap<String, String> {
         let mut out = HashMap::new();

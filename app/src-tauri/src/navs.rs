@@ -293,7 +293,7 @@ fn parse_machine_navs(out: &str) -> HashMap<String, f64> {
 }
 
 /// "de_a", "de_a and de_b", "de_a, de_b and 3 more"
-fn names(list: &[String]) -> String {
+pub(crate) fn names(list: &[String]) -> String {
     match list.len() {
         0 => String::new(),
         1 => list[0].clone(),
@@ -568,7 +568,7 @@ pub fn referenced_files(entities: &str) -> Vec<String> {
 }
 
 /// The entity text of a .bsp (lump 0).
-fn entity_text(bsp: &Path) -> Option<String> {
+pub(crate) fn entity_text(bsp: &Path) -> Option<String> {
     let mut f = std::fs::File::open(bsp).ok()?;
     let mut head = [0u8; 12];
     f.read_exact(&mut head).ok()?;

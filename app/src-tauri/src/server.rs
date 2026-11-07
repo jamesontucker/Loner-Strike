@@ -267,6 +267,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
             .merge(crate::app_api::local_routes())
             .merge(crate::servers::local_routes())
             .merge(crate::navs::local_routes())
+            .merge(crate::mapcopy::local_routes())
             .merge(crate::hltv::local_routes())
             .merge(crate::prefs::local_routes())
             .merge(crate::plugins::local_routes())

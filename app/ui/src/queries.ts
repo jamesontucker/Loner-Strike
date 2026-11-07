@@ -125,11 +125,12 @@ export function useScan() {
 export const reloadScan = () => queryClient.invalidateQueries({ queryKey: ["scan"] });
 
 /** The dedicated servers, every 5 seconds. */
-export function useServers() {
+export function useServers(on = true) {
   return useQuery({
     queryKey: ["servers"],
     queryFn: ({ signal }) => getJsonAt<ServerList>("/api/servers", null, signal),
     refetchInterval: 5000,
+    enabled: on,
   });
 }
 export const reloadServers = () => queryClient.invalidateQueries({ queryKey: ["servers"] });
