@@ -970,8 +970,29 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<a
     .await
 }
 
+#[derive(Deserialize)]
+struct SecretReq {
+    /// "live" or "busy" (a Discord link), or "token" (the tunnel's)
+    kind: String,
+}
+
+/// A saved secret, for the eye next to its field: on the computer only, never the phone.
+async fn api_secret(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SecretReq>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || on.is_none() {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    let value = match req.kind.as_str() {
+        "token" => read_token(&id),
+        k if HOOKS.contains(&k) => read_hook(k, &id),
+        _ => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Unknown setting."}))),
+    };
+    (StatusCode::OK, Json(json!({"value": value})))
+}
+
 pub fn routes() -> Router<Shared> {
-    Router::new().route("/api/servers/:id/webstatus", route_get(api_status).post(api_save))
+    Router::new()
+        .route("/api/servers/:id/webstatus", route_get(api_status).post(api_save))
+        .route("/api/servers/:id/webstatus/secret", axum::routing::post(api_secret))
 }
 
 #[cfg(test)]

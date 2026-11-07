@@ -111,6 +111,11 @@ export function WebStatus({ server }: { server: ServerInfo }) {
     }
   };
 
+  // a saved secret, for the eye (the app only answers on the computer)
+  const secret = async (kind: string) => {
+    const r = await postJson<{ value?: string | null }>(`/api/servers/${server.id}/webstatus/secret`, { kind }).catch(() => ({ value: null }));
+    return r.value ?? null;
+  };
   const install = () => {
     if (!form || !st || working) return;
     const again = st.settings.enabled;
@@ -254,7 +259,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
               {st.port !== USUAL_PORT && <PortNote port={st.port} />}
               <label className="field">
                 <span>Tunnel token<Info text="Kept on this computer and on the server, readable only by their administrators. It isn't shown again after it's saved." /></span>
-                <SecretInput placeholder={st.token_saved ? "Saved" : "Paste the token"} value={form.token} onChange={(v) => set({ token: v })} label="Tunnel token" />
+                <SecretInput placeholder={st.token_saved ? "Saved" : "Paste the token"} value={form.token} onChange={(v) => set({ token: v })} label="Tunnel token" saved={st.token_saved ? () => secret("token") : undefined} />
               </label>
             </div>
           )}
@@ -282,8 +287,8 @@ export function WebStatus({ server }: { server: ServerInfo }) {
               {!st.discord.address && " Set a public address for the server first, so the messages can say how to join."}
             </small>
           </div>
-          <HookField label="Live status message" what="the channel for the live message" saved={st.discord.live} value={form.live} drop={form.drop.live} disabled={working} onChange={(v) => set({ live: v })} onDrop={(d) => set({ drop: { ...form.drop, live: d } })} />
-          <HookField label="When people come on" what="the channel people chat in" saved={st.discord.busy} value={form.busy} drop={form.drop.busy} disabled={working} onChange={(v) => set({ busy: v })} onDrop={(d) => set({ drop: { ...form.drop, busy: d } })} />
+          <HookField label="Live status message" what="the channel for the live message" reveal={() => secret("live")} saved={st.discord.live} value={form.live} drop={form.drop.live} disabled={working} onChange={(v) => set({ live: v })} onDrop={(d) => set({ drop: { ...form.drop, live: d } })} />
+          <HookField label="When people come on" what="the channel people chat in" reveal={() => secret("busy")} saved={st.discord.busy} value={form.busy} drop={form.drop.busy} disabled={working} onChange={(v) => set({ busy: v })} onDrop={(d) => set({ drop: { ...form.drop, busy: d } })} />
 
           </fieldset>
           {!ro && (
@@ -307,12 +312,12 @@ export function WebStatus({ server }: { server: ServerInfo }) {
 }
 
 /** One Discord webhook link: pasted once, then only "Saved" with a way to take it away. */
-function HookField({ label, what, saved, value, drop, disabled, onChange, onDrop }: { label: string; what: string; saved: boolean; value: string; drop: boolean; disabled: boolean; onChange: (v: string) => void; onDrop: (d: boolean) => void }) {
+function HookField({ label, what, saved, value, drop, disabled, onChange, onDrop, reveal }: { label: string; what: string; saved: boolean; value: string; drop: boolean; disabled: boolean; onChange: (v: string) => void; onDrop: (d: boolean) => void; reveal: () => Promise<string | null> }) {
   return (
     <label className="field">
       <span>{label}</span>
       <div className="row">
-        <SecretInput placeholder={drop ? "Removed when you save" : saved ? "Saved" : `Webhook URL for ${what}`} value={value} disabled={disabled || drop} onChange={onChange} label={label} />
+        <SecretInput placeholder={drop ? "Removed when you save" : saved ? "Saved" : `Webhook URL for ${what}`} value={value} disabled={disabled || drop} onChange={onChange} label={label} saved={saved ? reveal : undefined} />
         {saved && !value && (
           <button type="button" className="btn small" disabled={disabled} onClick={() => onDrop(!drop)}>
             {drop ? "Keep" : "Remove"}
@@ -325,12 +330,20 @@ function HookField({ label, what, saved, value, drop, disabled, onChange, onDrop
 
 /** A field for a secret, hidden as you paste it, with an eye to check what's there. A saved
  *  secret never comes back from the app, so there's only ever what was just typed to show. */
-function SecretInput({ value, onChange, placeholder, label, disabled }: { value: string; onChange: (v: string) => void; placeholder: string; label: string; disabled?: boolean }) {
+function SecretInput({ value, onChange, placeholder, label, disabled, saved }: { value: string; onChange: (v: string) => void; placeholder: string; label: string; disabled?: boolean; saved?: () => Promise<string | null> }) {
   const [shown, setShown] = useState(false);
+  // the saved one, asked for when the eye opens on an empty field (shown, not put in the form)
+  const [peek, setPeek] = useState<string | null>(null);
+  const toggle = async () => {
+    if (shown) return setShown(false);
+    if (!value && saved) setPeek(await saved());
+    setShown(true);
+  };
+  const showing = shown && !value && peek ? peek : value;
   return (
     <div className="reveal">
-      <input className="search" type={shown ? "text" : "password"} placeholder={placeholder} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} spellCheck={false} autoComplete="off" aria-label={label} />
-      <button type="button" className="btn small" disabled={disabled || !value} aria-pressed={shown} aria-label={shown ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} title={shown ? "Hide" : "Show"} onClick={() => setShown((v) => !v)}>
+      <input className="search" type={shown ? "text" : "password"} placeholder={placeholder} value={showing} readOnly={showing !== value} disabled={disabled} onChange={(e) => onChange(e.target.value)} spellCheck={false} autoComplete="off" aria-label={label} />
+      <button type="button" className="btn small" disabled={disabled || (!value && !saved)} aria-pressed={shown} aria-label={shown ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} title={shown ? "Hide" : "Show"} onClick={toggle}>
         <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true">
           <path d="M1 7c2-3.6 4.8-5.5 8-5.5S15 3.4 17 7c-2 3.6-4.8 5.5-8 5.5S3 10.6 1 7z" />
           <circle cx="9" cy="7" r="2.4" />

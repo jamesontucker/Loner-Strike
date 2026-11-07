@@ -765,6 +765,8 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
   const { run, busy } = useActions();
   const value = url ?? d.settings.fastdl;
   const ok = !value.trim() || URL_OK.test(value.trim());
+  // set by the server's Website status, which serves the files itself
+  const bySt = /\/fastdl\/?$/.test(d.settings.fastdl);
   const save = () => run(xk("fastdl"), async () => {
     if (await saveSettings({ fastdl: value.trim() }, value.trim() ? "Saved. It's used from the next map." : "Fast downloads are off")) setUrl(null);
   }, "Saving the fast download address…");
@@ -790,12 +792,16 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
         </label>
         <div className="row">
           <BusyButton className="btn primary" busy={busy(xk("fastdl"))} disabled={url === null || url.trim() === d.settings.fastdl || !ok} label="Save" busyLabel="Saving…" onClick={save} />
-          {ON_THIS_COMPUTER && (
+          {ON_THIS_COMPUTER && !bySt && (
             <BusyButton busy={busy(xk("export"))} label="Copy files for your web server" busyLabel="Copying…" onClick={exportFiles} />
           )}
         </div>
-        {ON_THIS_COMPUTER && <p className="muted small-note">Copies the custom maps and what they need, plus the sounds and models of your game modes, into a folder you pick, ready to upload.</p>}
-        <p className="muted small-note">For a server on a Linux machine there's no need for a web server of your own: turn on Fast downloads under its Website status, and it serves the files and fills in this address.</p>
+        {ON_THIS_COMPUTER && !bySt && <p className="muted small-note">Copies the custom maps and what they need, plus the sounds and models of your game modes, into a folder you pick, ready to upload.</p>}
+        {bySt ? (
+          <p className="muted small-note">This address was set by Fast downloads under the server's Website status, which serves the files from the server itself. There's nothing to upload.</p>
+        ) : (
+          <p className="muted small-note">For a server on a Linux machine there's no need for a web server of your own: turn on Fast downloads under its Website status, and it serves the files and fills in this address.</p>
+        )}
       </div>
     </section>
   );
