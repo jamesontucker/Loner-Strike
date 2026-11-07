@@ -77,7 +77,8 @@ export const MapCard = memo(function MapCard({ map, onClick, current, onFav, sel
 
 /** `current`: the map being played; `live`: a game is running to change maps on. Not the
  *  whole game state, which is new every 2 seconds. */
-export function Maps({ current: currentMap, live, maps, loading, reload: reloadProp, refresh: refreshProp }: { current?: string; live: boolean; maps: MapInfo[]; loading?: boolean; reload: () => void; refresh: () => void }) {
+/** getMore: a server's way to the map browser (the game's own is Get more in the sidebar). */
+export function Maps({ current: currentMap, live, maps, loading, reload: reloadProp, refresh: refreshProp, getMore }: { current?: string; live: boolean; maps: MapInfo[]; loading?: boolean; reload: () => void; refresh: () => void; getMore?: () => void }) {
   const reload = useStable(reloadProp);
   const refresh = useStable(refreshProp);
   const ask = useConfirm();
@@ -238,6 +239,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               <Info text={TEACH_INFO} />
             </span>
           )}
+          {ON_THIS_COMPUTER && getMore && <button className="btn" onClick={getMore}>Get maps</button>}
           {ON_THIS_COMPUTER && server && (
             <button className="btn" onClick={() => setCopyFrom(true)}>Copy maps from your game</button>
           )}
@@ -313,10 +315,10 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           <h3>No maps yet</h3>
           <p className="muted measure">
             {currentTarget()
-              ? "This server has no maps. Get some from Get more, or check the server's game files."
+              ? "This server has no maps. Get some with Get maps, or check the server's game files."
               : "Loner-Strike can't find any maps in your game. Get some from Get more, or add a map file."}
           </p>
-          {!currentTarget() && <div className="row"><button className="btn primary" onClick={() => go("more")}>Get more maps</button></div>}
+          {!currentTarget() ? <div className="row"><button className="btn primary" onClick={() => go("more")}>Get more maps</button></div> : getMore && ON_THIS_COMPUTER && <div className="row"><button className="btn primary" onClick={getMore}>Get maps</button></div>}
         </div>
       ) : (
         <div className="maps grid">

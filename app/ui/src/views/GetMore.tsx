@@ -13,20 +13,22 @@ const NOTES: Record<string, string> = {
 /** A dedicated server can only send players what has a name of its own: maps, and weapon
  *  skins and player models, which go in under new names (servercontent.rs). */
 const SERVER_SECTIONS = ["maps", "skins", "players"];
-const SERVER_NOTE = "Players download what this server uses when they join. Skins and player models go in under their own names, so everyone sees them, not just you. Modes with their own models (Paintball, the zombie modes) keep them.";
+const SERVER_NOTE = "Players download what this server uses when they join. Skins and player models go in under their own names, so everyone sees them, not just you.";
 type Slots = { map?: string; models?: number; sounds?: number; generic?: number };
 type ServerContent = { items: { mod: number; section: string }[]; slots: Slots | null; limit: number; ours: number };
 /** Shared by the browser and the Installed list, so removing shows on both. */
 const removeKey = (section: string, mod: number) => `getmore:${targetKey()}:remove:${section}:${mod}`;
 const size = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-/** GameBanana's Counter-Strike 1.6 section: maps, skins, models, sounds and more. */
-/** server: a dedicated server's Get more (maps, skins and player models it sends players). */
-export function GetMore({ onInstalled: onInstalledProp, server }: { onInstalled: () => void; server?: boolean }) {
+/** GameBanana's Counter-Strike 1.6 section: maps, skins, models, sounds and more.
+ *  server: for a dedicated server (maps, skins and player models it sends players).
+ *  only: just these sections, opened from the page that manages them (a server's Maps or
+ *  Skins & models), with a way back there instead of an Installed list. */
+export function GetMore({ onInstalled: onInstalledProp, server, only, title = "Get more", back }: { onInstalled: () => void; server?: boolean; only?: string[]; title?: string; back?: { label: string; go: () => void } }) {
   const onInstalled = useStable(onInstalledProp);
   const ask = useConfirm();
   const toast = useToast();
-  const [section, setSection] = useState("maps");
+  const [section, setSection] = useState(only?.[0] ?? "maps");
   const [sections, setSections] = useState<GbSection[]>(FALLBACK_SECTIONS);
   const [cat, setCat] = useState<number | null>(null);
   const [sort, setSort] = useState("popular");
@@ -62,7 +64,8 @@ export function GetMore({ onInstalled: onInstalledProp, server }: { onInstalled:
         if (mine !== latest.current) return;
         if (r.error) throw new Error(r.error);
         setItems((old) => (reset ? r.items : [...old, ...r.items]));
-        if (r.sections?.length) setSections(server ? r.sections.filter((s) => SERVER_SECTIONS.includes(s[0])) : r.sections);
+        const allowed = only ?? (server ? SERVER_SECTIONS : null);
+        if (r.sections?.length) setSections(allowed ? r.sections.filter((s) => allowed.includes(s[0])) : r.sections);
         setPage(next);
         setDone(r.done || !r.items.length);
       } catch (e) {
@@ -165,7 +168,8 @@ export function GetMore({ onInstalled: onInstalledProp, server }: { onInstalled:
   return (
     <div className="stack">
       <div>
-        <SectionHead title="Get more" note={`From GameBanana's Counter-Strike 1.6 section. ${server ? SERVER_NOTE : NOTES[section] ?? NOTES.default}`}>
+        <SectionHead title={title} note={`From GameBanana's Counter-Strike 1.6 section. ${server ? (section === "maps" ? NOTES.maps : SERVER_NOTE) : NOTES[section] ?? NOTES.default}`}>
+          {back && <button className="btn" onClick={back.go}>{back.label}</button>}
           {ON_THIS_COMPUTER && !showInstalled && (
             <BusyButton busy={busy(key(`add-file:${section}`))} label="Add from a file" busyLabel="Adding…" onClick={() => run(key(`add-file:${section}`), async () => {
               const r = await addFromFile(section);
@@ -175,8 +179,8 @@ export function GetMore({ onInstalled: onInstalledProp, server }: { onInstalled:
             }, `Adding ${label.toLowerCase()} from a file…`)} />
           )}
         </SectionHead>
-        {server && <SlotsBar />}
-        <div className="chips section-tabs" role="tablist" aria-label="What to get">
+        {server && !only && <SlotsBar />}
+        {(!only || sections.length > 1) && <div className="chips section-tabs" role="tablist" aria-label="What to get">
           {sections.map(([id, name]) => (
             <button key={id} className="chip" role="tab" aria-selected={section === id && !showInstalled} onClick={() => {
               setShowInstalled(false);
@@ -189,8 +193,8 @@ export function GetMore({ onInstalled: onInstalledProp, server }: { onInstalled:
               {name}
             </button>
           ))}
-          <button className="chip" role="tab" aria-selected={showInstalled} onClick={() => setShowInstalled(true)}>Installed</button>
-        </div>
+          {!only && <button className="chip" role="tab" aria-selected={showInstalled} onClick={() => setShowInstalled(true)}>Installed</button>}
+        </div>}
         {active.map((j) => (
           <div className="job" key={j.id}>
             <span>{j.message || j.state}</span>
@@ -336,7 +340,7 @@ function SlotsBar() {
 const SECTION_NAME: Record<string, string> = { maps: "Map", skins: "Weapon skin", players: "Player model", sounds: "Sound", sprays: "Spray", sprites: "Effect", gui: "HUD & menu" };
 
 /** Everything downloaded into this game, in one place, to remove what you don't want. */
-function InstalledList({ onChanged, server }: { onChanged: () => void; server?: boolean }) {
+function InstalledList({ onChanged, server, only, empty = "Nothing downloaded yet. Anything you install from here shows up in this list." }: { onChanged: () => void; server?: boolean; only?: string[]; empty?: string }) {
   const toast = useToast();
   const ask = useConfirm();
   const { run, busy } = useActions();
@@ -345,7 +349,7 @@ function InstalledList({ onChanged, server }: { onChanged: () => void; server?: 
   const load = () => {
     setFailed(false);
     return getJson<Installed[]>("/api/gb/installed")
-      .then((l) => setList(Array.isArray(l) ? l : []))
+      .then((l) => setList(Array.isArray(l) ? l.filter((it) => !only || only.includes(it.section)) : []))
       .catch((e) => !isAbort(e) && setFailed(true));
   };
   useEffect(() => {
@@ -372,7 +376,7 @@ function InstalledList({ onChanged, server }: { onChanged: () => void; server?: 
     }, `Saving ${it.name}…`);
   if (failed && !list) return <LoadError text="Couldn't load what's installed." onRetry={load} />;
   if (!list) return <Skeleton />;
-  if (!list.length) return <p className="muted">Nothing downloaded yet. Anything you install from here shows up in this list.</p>;
+  if (!list.length) return <p className="muted">{empty}</p>;
   return (
     <ul className="people installed-list">
       {list.map((it) => (
@@ -403,5 +407,47 @@ function InstalledList({ onChanged, server }: { onChanged: () => void; server?: 
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A server's weapon skins and player models: what it uses, who sees each, and the map's
+ *  model and sound count against the engine's limit. Getting more opens the browser. */
+export function ServerSkins() {
+  const [shop, setShop] = useState<string | null>(null);
+  // a new list after the browser, for what was added there
+  const [seen, setSeen] = useState(0);
+  if (shop) {
+    return (
+      <GetMore
+        server
+        only={[shop]}
+        title={shop === "skins" ? "Get weapon skins" : "Get player models"}
+        back={{ label: "Back to skins & models", go: () => { setShop(null); setSeen((n) => n + 1); } }}
+        onInstalled={() => {}}
+      />
+    );
+  }
+  return (
+    <div className="stack">
+      <div>
+        <SectionHead title="Skins & models" note="Weapon skins and player models this server uses. Players download them when they join. Changes apply from the next map.">
+          {ON_THIS_COMPUTER && (
+            <span className="row">
+              <button className="btn" onClick={() => setShop("skins")}>Get weapon skins</button>
+              <button className="btn" onClick={() => setShop("players")}>Get player models</button>
+            </span>
+          )}
+        </SectionHead>
+        <SlotsBar />
+        <p className="muted small-note">Modes with their own models keep them: nothing changes in Paintball, Hide and Seek, Base Builder or the zombie modes, and Superhero and Warcraft 3 keep their own player models.</p>
+      </div>
+      <InstalledList
+        key={seen}
+        server
+        only={["skins", "players"]}
+        onChanged={() => {}}
+        empty="This server uses the game's own skins and models. Get some above: they go in under their own names, so the game's files stay as they are."
+      />
+    </div>
   );
 }

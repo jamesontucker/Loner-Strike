@@ -10,7 +10,7 @@ import { BusyButton, Info, lazyPage, LoadError, PageBoundary, SectionHead, Sheet
 import { Admins } from "./Admins";
 import { Bots } from "./Bots";
 import { Friends } from "./Friends";
-import { GetMore } from "./GetMore";
+import { GetMore, ServerSkins } from "./GetMore";
 import { Maps } from "./Maps";
 import { Mods } from "./Mods";
 import { PlayLive } from "./Play";
@@ -245,7 +245,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   );
 }
 
-type Tab = "community" | "hltv" | "webstatus" | "extras" | "sounds" | "overview" | "friends" | "modes" | "maps" | "getmaps" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
+type Tab = "community" | "hltv" | "webstatus" | "extras" | "sounds" | "overview" | "friends" | "modes" | "maps" | "skins" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
 /** remote: only for servers on a Linux machine */
 const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: boolean }[] = [
   { id: "overview", label: "Overview", group: "Server" },
@@ -254,7 +254,6 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "hltv", label: "Spectators & demos", group: "Server" },
   { id: "webstatus", label: "Website status", group: "Server", remote: true },
   { id: "modes", label: "Modes", group: "Game", live: true },
-  { id: "maps", label: "Maps", group: "Game" },
   { id: "bots", label: "Bots", group: "Game", live: true },
   { id: "match", label: "Rules", group: "Game", live: true },
   { id: "fun", label: "Fun", group: "Game", live: true },
@@ -263,8 +262,9 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "community", label: "Stats & moderation", group: "People" },
   { id: "welcome", label: "Welcome page", group: "People" },
   { id: "mods", label: "Mods", group: "Content" },
+  { id: "maps", label: "Maps", group: "Content" },
+  { id: "skins", label: "Skins & models", group: "Content" },
   { id: "sounds", label: "Sounds", group: "Content" },
-  { id: "getmaps", label: "Get more", group: "Content" },
 ];
 const TAB_GROUPS = [...new Set(TABS.map((t) => t.group))];
 
@@ -322,6 +322,8 @@ export function ServerPage(props: {
   const { server: s, others, data, reason, app, scan, maps, refresh, reloadMaps, reloadApp, onChanged, onBack } = props;
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("overview");
+  // the map browser, opened from the Maps tab
+  const [getMaps, setGetMaps] = useState(false);
   const [job, setJob] = useState<RunningJob | null>(null);
   const running = s.state === "running";
   const off = !!s.unreachable;
@@ -330,7 +332,10 @@ export function ServerPage(props: {
   const dirty = useDirtyStore((st) => Object.values(st.dirty).some(Boolean));
   const leaveOk = async () => !dirty || (await ask("Your changes here aren't saved. Leave without saving them?", { ok: "Leave without saving", danger: true }));
   const pick = async (t: Tab) => {
-    if (t !== tab && (await leaveOk())) setTab(t);
+    if (t !== tab && (await leaveOk())) {
+      setTab(t);
+      setGetMaps(false);
+    }
   };
   const back = async () => {
     if (await leaveOk()) onBack();
@@ -500,8 +505,9 @@ export function ServerPage(props: {
           )}
           {tab === "friends" && <Friends data={data} refresh={refresh} server={{ name: s.name, visibility: s.visibility }} />}
           {tab === "modes" && data && <PlayLive data={data} maps={maps} refresh={refresh} openMaps={() => setTab("maps")} />}
-          {tab === "maps" && <Maps current={data?.state.map} live={!!data} maps={maps} reload={reloadMaps} refresh={refresh} />}
-          {tab === "getmaps" && <GetMore server onInstalled={reloadMaps} />}
+          {tab === "maps" && !getMaps && <Maps current={data?.state.map} live={!!data} maps={maps} reload={reloadMaps} refresh={refresh} getMore={() => setGetMaps(true)} />}
+          {tab === "maps" && getMaps && <GetMore server only={["maps"]} title="Get maps" back={{ label: "Back to maps", go: () => setGetMaps(false) }} onInstalled={reloadMaps} />}
+          {tab === "skins" && <ServerSkins />}
           {tab === "bots" && data && <Bots data={data} refresh={refresh} />}
           {tab === "match" && data && (
             <SettingsPage title="Rules" note={RULES_NOTE(data)} data={data} cat={2} refresh={refresh} pickMode>
