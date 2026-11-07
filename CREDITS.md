@@ -75,7 +75,7 @@ For a server on this computer or on a Linux machine, the app installs Valve's [S
 ## Play with friends
 | Service | Notes |
 |---|---|
-| [playit.gg](https://playit.gg) | Tunnels run through playit.gg's service with playit's own agent, [playit-agent](https://github.com/playit-cloud/playit-agent) by Developed Methods (BSD-2-Clause) |
+| [playit.gg](https://playit.gg) | Tunnels run through playit.gg's service with playit's own agent, [playit-agent](https://github.com/playit-cloud/playit-agent) v1.2.0 by Developed Methods (BSD-2-Clause), shipped inside the app: built from its source for Mac, and playit's own signed build for Windows. Copyright 2022 Developed Methods LLC |
 | [Tailscale](https://tailscale.com) | The app only reads Tailscale's status for this computer's address |
 
 ## Website

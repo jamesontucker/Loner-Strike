@@ -19,3 +19,6 @@ __pycache__/
 # app build output
 app/src-tauri/target/
 app/src-tauri/gen/
+
+# playit.gg agent, fetched or built by the release workflow
+app/src-tauri/binaries/

@@ -44,6 +44,30 @@ jobs:
         with:
           workspaces: app/src-tauri -> target
 
+      # playit.gg's agent (BSD-2-Clause), shipped inside the app for "Play with friends".
+      # playit publishes no Mac build, so it's built from their v1.2.0 source for both Macs;
+      # Windows gets their own signed build, checked against its sha256.
+      - name: Build playit's agent (Mac)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          git clone --depth 1 --branch v1.2.0 https://github.com/playit-cloud/playit-agent "$RUNNER_TEMP/playit"
+          cd "$RUNNER_TEMP/playit"
+          test "$(git rev-parse HEAD)" = 7acf13568a99707dda73028234fdb376e45b15da
+          cargo build --release --locked -p playitd --target aarch64-apple-darwin
+          cargo build --release --locked -p playitd --target x86_64-apple-darwin
+          mkdir -p "$GITHUB_WORKSPACE/app/src-tauri/binaries"
+          lipo -create target/aarch64-apple-darwin/release/playitd target/x86_64-apple-darwin/release/playitd \
+            -output "$GITHUB_WORKSPACE/app/src-tauri/binaries/playitd-universal-apple-darwin"
+
+      - name: Get playit's agent (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          mkdir -p app/src-tauri/binaries
+          curl -fsSL -o app/src-tauri/binaries/playitd-x86_64-pc-windows-msvc.exe \
+            https://github.com/playit-cloud/playit-agent/releases/download/v1.2.0/playitd-windows-x86_64-signed.exe
+          echo "e8dff30a9269a10d2c6786c95a0618567772e441d07dd7ebe3c1a37d3f35534d  app/src-tauri/binaries/playitd-x86_64-pc-windows-msvc.exe" | sha256sum -c -
+
       # Notarization reads the App Store Connect key from a file
       - name: Write the notarization key
         if: matrix.platform == 'macos-latest'
@@ -69,7 +93,9 @@ jobs:
         with:
           projectPath: app
           tauriScript: npx --yes @tauri-apps/cli@2.12.4
-          args: ${{ matrix.args }}
+          # playitd goes next to the app's own program (and is signed with it on a Mac)
+          args: >-
+            ${{ matrix.args }} --config '{"bundle":{"externalBin":["binaries/playitd"]}}'
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: "Loner-Strike ${{ github.ref_name }}"
           releaseBody: "Download the file for your computer below. Mac: the .dmg. Windows: the -setup.exe."
