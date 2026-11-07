@@ -1577,3 +1577,42 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 /* Remove everything: what happens, and the "I understand" tick */
 .plain-list { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--bone-dim); }
 .check-row { display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }
+
+/* Find servers: after Steam's old server browser */
+.browser-window { display: grid; gap: 6px; padding: 6px; background: var(--panel); box-shadow: var(--raised); border-radius: 2px; }
+.browser-tabs { display: flex; gap: 2px; }
+.browser-tabs button { padding: 5px 14px 4px; border: 0; border-radius: 2px 2px 0 0; background: var(--bg); color: var(--bone-dim); box-shadow: var(--raised); font: 600 14px/1 var(--text); cursor: pointer; }
+.browser-tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--signal); }
+.browser-table { display: grid; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; min-width: 0; }
+.browser-body { max-height: min(56vh, 520px); overflow-y: auto; }
+.browser-body.short { max-height: 240px; }
+.browser-row { display: grid; grid-template-columns: 22px 22px minmax(140px, 3fr) minmax(90px, 1fr) 72px minmax(80px, 1fr) 70px; align-items: center; min-height: 24px; padding: 0 6px; gap: 6px; color: var(--bone); font-size: 14px; cursor: default; }
+.browser-row.with-last { grid-template-columns: 22px 22px minmax(140px, 3fr) minmax(90px, 1fr) 72px minmax(80px, 1fr) 70px 90px; }
+.browser-row > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-row.head { position: sticky; top: 0; z-index: 1; min-height: 22px; padding: 0 6px; background: var(--panel); box-shadow: var(--raised); color: var(--bone-dim); }
+.browser-row.head button { all: unset; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--bone-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-row.head button:hover, .browser-row.head button:focus-visible { color: var(--signal); }
+.browser-row:not(.head):hover { background: rgba(255, 255, 255, .04); }
+.browser-row[aria-selected="true"] { background: #958831; color: #fff; }
+.browser-row:focus-visible { outline: 1px solid var(--signal); outline-offset: -1px; }
+.browser-row.quiet { color: var(--bone-faint); }
+.browser-row .c-lock, .browser-row .c-vac { display: grid; place-items: center; color: var(--bone-dim); }
+.browser-row[aria-selected="true"] .c-lock, .browser-row[aria-selected="true"] .c-vac { color: #fff; }
+.browser-row .c-players, .browser-row .c-ping { text-align: right; font-variant-numeric: tabular-nums; }
+.browser-row.players-row { grid-template-columns: minmax(140px, 1fr) 70px 80px; }
+.browser-row.players-row > :not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.browser-note { margin: 0; padding: 14px 10px; color: var(--bone-dim); }
+.browser-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 16px; padding: 8px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
+.browser-filters .field { margin: 0; min-width: 140px; }
+.browser-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-bottom: 6px; color: var(--bone-dim); }
+.browser-checks label { display: flex; align-items: center; gap: 6px; }
+.browser-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.browser-count { flex: 1; min-width: 120px; }
+.browser-actions { gap: 6px; flex-wrap: wrap; }
+.browser-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 16px; margin: 0; }
+.browser-facts dt { color: var(--bone-faint); font-size: 13px; }
+.browser-facts dd { margin: 0; color: var(--bone); overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .browser-row, .browser-row.with-last { grid-template-columns: 18px 18px minmax(120px, 1fr) 64px 60px; }
+  .browser-row .c-game, .browser-row .c-map, .browser-row .c-last { display: none; }
+}

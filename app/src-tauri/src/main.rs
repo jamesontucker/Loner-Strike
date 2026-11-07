@@ -6,6 +6,7 @@ mod admins;
 mod app_api;
 mod connect;
 mod archive;
+mod browser;
 mod community;
 mod content;
 mod diagnostics;
@@ -226,6 +227,7 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .item(&MenuItemBuilder::with_id("section:welcome", "Welcome page").build(app)?)
         .item(&MenuItemBuilder::with_id("section:more", "Get more").build(app)?)
         .item(&MenuItemBuilder::with_id("section:mods", "Mods").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:browser", "Find servers").build(app)?)
         .item(&MenuItemBuilder::with_id("section:servers", "Servers").build(app)?)
         .build()?;
     let window = SubmenuBuilder::new(app, "Window").minimize().maximize().separator().fullscreen().separator().close_window().build()?;

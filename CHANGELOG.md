@@ -14,6 +14,8 @@ What changed in each version. The downloads are on the [Releases](https://github
 - Bots start at Hard, and bot chat at Chatty. Changing bot chat takes effect straight away.
 - Map pictures are looked up for every map in the background, and fill in on their own. Radar pictures lose their green background.
 - Website status can keep a Discord message up to date with who's playing, and post when people come on.
+- Website status can serve fast downloads (maps, sounds and models) from the server itself, and sets the download address.
+- Find servers: a server browser like Steam's old one, with Internet (servers Loner-Strike hosts share), Favorites, History and LAN, server info with who's on, filters and passwords. A server can be put on the list from its settings.
 - The radio has eleven stations, with old-school hardcore and jungle, hands up, hardstyle, demoscene, video game music, 2000s hits and nu metal added, plus shuffle and a station list.
 - Copy diagnostics includes the end of AMX Mod X's error log.
 

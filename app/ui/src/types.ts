@@ -136,6 +136,8 @@ export type ServerInfo = {
   bots_when_empty?: boolean;
   /** the host picked that; otherwise it follows the visibility (on when listed) */
   bots_when_empty_set?: boolean;
+  /** on the Loner-Strike server list (Find servers) */
+  ls_listed?: boolean;
   /** the join password ("" for none) */
   password?: string;
   /** component ids installed on it */

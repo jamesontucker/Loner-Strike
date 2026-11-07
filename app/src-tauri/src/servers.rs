@@ -85,6 +85,9 @@ pub struct Entry {
     /// visibility suggests (on for "listed"), until the host picks (see bots_when_empty)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bots_when_empty: Option<bool>,
+    /// On the Loner-Strike server list (ls_list 1 in friends.cfg; see browser.rs)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ls_listed: bool,
     /// A domain name (or IP) pointing at the server, with an optional :port, shown and
     /// shared in place of its IP (display only: the server itself doesn't use it)
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -321,14 +324,30 @@ pub(crate) fn join_password(e: &Entry) -> String {
 /// after every map change), the same files the Friends tab writes. friends.cfg also says
 /// whether bots play with nobody on: ReGameDLL's game.cfg sets bot_join_after_player back
 /// to 1 on every map, and this runs after it.
-fn write_join(data: &Path, name: &str, password: &str, bots_empty: bool) -> Result<(), String> {
+fn write_join(data: &Path, name: &str, password: &str, bots_empty: bool, listed: bool) -> Result<(), String> {
     if !crate::sharing::password_ok(password) {
         return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
     }
     let name = crate::sharing::clean_name(name);
     std::fs::create_dir_all(data).map_err(|e| e.to_string())?;
     std::fs::write(data.join("friends.json"), json!({"name": name, "password": password}).to_string()).map_err(|e| e.to_string())?;
-    std::fs::write(data.join("friends.cfg"), format!("// Written by Loner-Strike\nhostname \"{name}\"\nsv_password \"{password}\"\nbot_join_after_player {}\n", if bots_empty { 0 } else { 1 })).map_err(|e| e.to_string())
+    let cfg = format!("// Written by Loner-Strike\nhostname \"{name}\"\nsv_password \"{password}\"\nbot_join_after_player {}\n", if bots_empty { 0 } else { 1 });
+    std::fs::write(data.join("friends.cfg"), with_list_line(&cfg, listed)).map_err(|e| e.to_string())
+}
+
+/// friends.cfg with its ls_list line set: 1 while the server is on the Loner-Strike server
+/// list, 0 once it was (a file that never had the line stays as it is). The list only shows
+/// servers whose ls_list is 1, so only someone who runs a server can list it.
+pub(crate) fn with_list_line(text: &str, listed: bool) -> String {
+    let had = text.lines().any(|l| l.trim_start().starts_with("ls_list"));
+    if !listed && !had {
+        return text.to_string();
+    }
+    let mut lines: Vec<&str> = text.lines().filter(|l| !l.trim_start().starts_with("ls_list")).collect();
+    if lines.is_empty() {
+        lines.push("// Written by Loner-Strike");
+    }
+    format!("{}\nls_list {}\n", lines.join("\n"), if listed { 1 } else { 0 })
 }
 
 /// friends.cfg with its bot_join_after_player line set to match `bots_empty`, the rest
@@ -350,7 +369,7 @@ fn write_bots_line(e: &Entry) -> Result<bool, String> {
     let data = e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes");
     let path = data.join("friends.cfg");
     let old = std::fs::read_to_string(&path).unwrap_or_default();
-    let new = with_bots_line(&old, bots_when_empty(e));
+    let new = with_list_line(&with_bots_line(&old, bots_when_empty(e)), e.ls_listed);
     if new == old {
         return Ok(false);
     }
@@ -791,6 +810,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
+        ls_listed: false,
         public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
     };
     let base = root.join(".base");
@@ -830,7 +850,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
                 copy_tree(&src.join("addons/amxmodx/data/gamemodes"), &data, true, &settings_filter)?;
             }
             let _ = std::fs::create_dir_all(&data);
-            write_join(&data, &entry.name, &join_pw, bots_when_empty(&entry))?;
+            write_join(&data, &entry.name, &join_pw, bots_when_empty(&entry), false)?;
             // empty ban lists, so the server doesn't complain it has none
             for f in ["banned.cfg", "listip.cfg"] {
                 let p = entry.dir.join(&g).join(f);
@@ -1461,6 +1481,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
+        ls_listed: false,
         public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
     };
     make_server_dir(&entry)?;
@@ -1539,7 +1560,7 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
             let _ = std::fs::create_dir_all(&data);
             // the password from the form, or the one it has now when this runs again
             let pw = Some(join_password(&entry)).filter(|p| !p.is_empty()).or(entry.setup_with.as_ref().map(|w| w.password.clone())).unwrap_or_default();
-            write_join(&data, &entry.name, &pw, bots_when_empty(&entry))?;
+            write_join(&data, &entry.name, &pw, bots_when_empty(&entry), false)?;
             // the panel's RCON password, which the plugin reads on the machine
             if !data.join("panel_rcon.txt").is_file() {
                 use rand::Rng;
@@ -1701,6 +1722,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
+        ls_listed: false,
         public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
     };
     // name and password as the Friends tab keeps them (it writes friends.cfg only when
@@ -1985,8 +2007,18 @@ pub fn start(id: &str) -> Result<(), String> {
     if !e.ready {
         return Err("This server isn't finished setting up.".into());
     }
-    // whether bots play on an empty server (friends.cfg runs after every map)
+    // whether bots play on an empty server and whether it's listed (friends.cfg runs after every map)
     let bots_changed = write_bots_line(&e).unwrap_or(false);
+    if e.ls_listed {
+        // the list checks the server itself, so once it's had time to load a map
+        let address = e.connect();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(45));
+            if let Err(why) = crate::browser::register(&address) {
+                crate::diagnostics::log_error("server list", &why);
+            }
+        });
+    }
     // (systemd starts one copy at most, and a slow machine mustn't hold up local starts)
     if let Some(r) = &e.remote {
         if bots_changed {
@@ -2252,7 +2284,7 @@ fn view(e: &Entry) -> Value {
            "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(),
            "public_address": e.public_address, "connect": e.connect(), "pending_restart": pending.view(),
            "listen_ip": e.listen_ip, "extra_args": e.extra_args, "password": join_password(e),
-           "bots_when_empty": bots_when_empty(e), "bots_when_empty_set": e.bots_when_empty.is_some(),
+           "bots_when_empty": bots_when_empty(e), "bots_when_empty_set": e.bots_when_empty.is_some(), "ls_listed": e.ls_listed,
            "unreachable": e.remote.as_ref().and_then(|_| unreachable(&e.id)),
            // on another machine the daily restart is done by the app: only while it's open
            "restart_needs_app": e.remote.is_some() && e.restart.as_ref().is_some_and(|r| r.on),
@@ -2455,6 +2487,8 @@ struct Change {
     bots_when_empty: Option<bool>,
     /// a domain name shown in place of the IP ("" clears it)
     public_address: Option<String>,
+    /// on the Loner-Strike server list
+    ls_listed: Option<bool>,
 }
 
 async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<Change>) -> (StatusCode, Json<Value>) {
@@ -2546,6 +2580,9 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 if let Some(a) = &public_address {
                     e.public_address = a.clone();
                 }
+                if let Some(l) = req.ls_listed {
+                    e.ls_listed = l;
+                }
             }
         })?;
         let now = get(&id).ok_or("That server isn't there any more.")?;
@@ -2557,9 +2594,15 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
             true
         };
         // the name players see and the join password, applied now if it's running
-        if name.is_some() || password.is_some() || bots_when_empty(&e) != bots_when_empty(&now) {
+        // the list setting, told to a running server now (friends.cfg keeps it for later maps)
+        if e.ls_listed != now.ls_listed && running(&id) {
+            if let Some(rc) = now.rcon() {
+                let _ = rc.send(&format!("ls_list {}", if now.ls_listed { 1 } else { 0 }));
+            }
+        }
+        if name.is_some() || password.is_some() || bots_when_empty(&e) != bots_when_empty(&now) || e.ls_listed != now.ls_listed {
             let pw = password.clone().unwrap_or_else(|| join_password(&now));
-            write_join(&now.dir.join(&now.game).join("addons/amxmodx/data/gamemodes"), &now.name, &pw, bots_when_empty(&now))?;
+            write_join(&now.dir.join(&now.game).join("addons/amxmodx/data/gamemodes"), &now.name, &pw, bots_when_empty(&now), now.ls_listed)?;
             if running(&id) {
                 if let Some(rc) = now.rcon() {
                     let _ = rc.send(&format!("hostname \"{}\";sv_password \"{pw}\"", crate::sharing::clean_name(&now.name)));
@@ -2593,8 +2636,18 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 crate::webstatus::apply(&e, true)?;
             }
         }
+        // just put on the list: the list checks the server itself now (if it's down, the
+        // next start asks again)
+        let listing = if now.ls_listed && !e.ls_listed && running(&id) {
+            match crate::browser::register(&now.connect()) {
+                Ok(()) => json!({"ok": true}),
+                Err(why) => json!({"ok": false, "error": why}),
+            }
+        } else {
+            Value::Null
+        };
         // (a visibility change alone needs a restart anyway; the bots part was applied above)
-        Ok(json!({"ok": true, "restart": restart, "public_address": now.public_address, "connect": now.connect()}))
+        Ok(json!({"ok": true, "restart": restart, "public_address": now.public_address, "connect": now.connect(), "listing": listing}))
     })
     .await
     .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
@@ -3106,7 +3159,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -3179,7 +3232,7 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));
@@ -3275,6 +3328,18 @@ mod tests {
         // a map cycle at the game folder's root is read as it's needed
         assert!(!needs_restart("mapcycle.txt") && !needs_restart("motd.txt"));
         assert!(needs_restart("maps/de_x.bsp") && needs_restart("addons/amxmodx/plugins/x.amxx") && !needs_restart("maps/de_x.nav"));
+    }
+
+    #[test]
+    fn friends_cfg_list_line() {
+        let cfg = "// Written by Loner-Strike\nhostname \"A\"\nbot_join_after_player 0\n";
+        assert_eq!(with_list_line(cfg, false), cfg, "never listed: left alone");
+        let on = with_list_line(cfg, true);
+        assert_eq!(on, format!("{cfg}ls_list 1\n"));
+        assert_eq!(with_list_line(&on, true), on, "the same twice");
+        let off = with_list_line(&on, false);
+        assert_eq!(off, format!("{cfg}ls_list 0\n"), "taken off: it says so");
+        assert_eq!(with_list_line(&with_bots_line(&on, false), true).matches("ls_list").count(), 1);
     }
 
     #[test]

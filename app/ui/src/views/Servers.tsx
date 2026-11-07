@@ -40,7 +40,7 @@ const PUBLIC_ADDRESS_INFO =
   "A domain name that points at this server. The app shows it in place of the IP: in invites, the HLTV address and the join links. Point the name at the server's IP with your DNS provider; with Cloudflare, set it to DNS only (grey cloud), since the game's traffic can't go through its proxy.";
 const WHO_CAN_JOIN = "This network: only people on your Wi-Fi. Anyone with the address: friends join with the address you send, strangers can't find it. Listed on Steam: anyone can find it in the Internet tab.";
 
-type Reply = { ok?: boolean; error?: string; job?: string; id?: string; path?: string; note?: string | null; admins?: number; loner?: boolean; dir?: string | null; lines?: string[]; reply?: string; need_restart_game?: boolean; restart?: boolean; password?: string; public_address?: string | null };
+type Reply = { ok?: boolean; error?: string; job?: string; id?: string; path?: string; note?: string | null; admins?: number; loner?: boolean; dir?: string | null; lines?: string[]; reply?: string; need_restart_game?: boolean; restart?: boolean; password?: string; public_address?: string | null; listing?: { ok: boolean; error?: string } | null };
 const post = (path: string, body: unknown = {}) =>
   postJson<Reply>(path, body)
     .then((r) => (r.error === "forbidden" ? { ...r, error: ON_COMPUTER_ONLY } : r))
@@ -585,6 +585,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   // null: not picked, so it follows who can join (on for listed servers)
   const [botsEmpty, setBotsEmpty] = useState<boolean | null>(server.bots_when_empty_set ? !!server.bots_when_empty : null);
   const botsShown = botsEmpty ?? vis === "listed";
+  const [listed, setListed] = useState(!!server.ls_listed);
   const [problem, setProblem] = useState<{ name?: string; slots?: string; port?: string }>({});
   // the port is part of how the running server was started: changed only while it's stopped
   const portLocked = server.state === "running";
@@ -596,7 +597,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   const portMax = server.host ? 27019 : 65000;
 
   // what was last saved, to tell whether anything changed since
-  const snapshot = (pa: string) => JSON.stringify([name, map, slots.text, port.text, vis, password, listenIp, pa, extra, botsEmpty]);
+  const snapshot = (pa: string) => JSON.stringify([name, map, slots.text, port.text, vis, password, listenIp, pa, extra, botsEmpty, listed]);
   const now = snapshot(publicAddr);
   const [base, setBase] = useState(now);
   const dirty = !ro && now !== base;
@@ -614,7 +615,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
     if (bad.name || bad.slots || bad.port) return;
     const sent = now;
     run(`${server.id}:save`, async () => {
-      const r = await post(`/api/servers/${server.id}`, { name: name.trim(), map, maxplayers: slots.value, port: portLocked ? server.port : port.value, visibility: vis, password, listen_ip: listenIp, public_address: publicAddr, extra_args: extra, ...(botsEmpty === null ? {} : { bots_when_empty: botsEmpty }) });
+      const r = await post(`/api/servers/${server.id}`, { name: name.trim(), map, maxplayers: slots.value, port: portLocked ? server.port : port.value, visibility: vis, password, listen_ip: listenIp, public_address: publicAddr, extra_args: extra, ls_listed: listed, ...(botsEmpty === null ? {} : { bots_when_empty: botsEmpty }) });
       if (r.error) return toast(r.error, true);
       // the address as saved (a trailing dot dropped, say)
       const saved = typeof r.public_address === "string" ? r.public_address : r.public_address === null ? "" : publicAddr;
@@ -622,7 +623,10 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
       setBase(saved === publicAddr ? sent : snapshot(saved));
       // (an uptime of 0 means it's unknown: a restart couldn't be told apart, so no bar)
       if (r.restart && server.uptime > 0) mark(server.id, server.uptime);
-      toast(r.restart ? `${name} saved. Restart it to use the new start options.` : `${name} saved`);
+      // just put on the server list: what the list said after checking the server
+      if (r.listing && !r.listing.ok) toast(`${name} saved, but it isn't on the server list yet: ${r.listing.error}`, true);
+      else if (r.listing?.ok) toast(`${name} saved and on the Loner-Strike server list`);
+      else toast(r.restart ? `${name} saved. Restart it to use the new start options.` : `${name} saved`);
       onChanged();
     }, server.host ? `Saving and uploading to ${server.name}…` : `Saving ${server.name}…`);
   };
@@ -687,6 +691,10 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
         <div className="setting">
           <span className="name">Bots play on an empty server<Info text="Keeps bots playing when nobody's on, so the server shows players in Steam's list. Uses the server's CPU around the clock." /></span>
           <Switch on={botsShown} disabled={ro} label="Bots play on an empty server" onChange={setBotsEmpty} />
+        </div>
+        <div className="setting">
+          <span className="name">Show on the Loner-Strike server list<Info text="Other Loner-Strike players see it under Find servers, and can join with a click. The list checks the server itself, so it has to be reachable from the internet." /></span>
+          <Switch on={listed} disabled={ro} label="Show on the Loner-Strike server list" onChange={setListed} />
         </div>
         <details className="advanced">
           <summary>Advanced</summary>

@@ -31,6 +31,7 @@ const ServerPage = lazyPage(() => import("./views/Servers").then((m) => ({ defau
 const Community = lazyPage(() => import("./views/Community").then((m) => ({ default: m.Community })));
 const ServerExtras = lazyPage(() => import("./views/ServerExtras").then((m) => ({ default: m.ServerExtras })));
 const Admins = lazyPage(() => import("./views/Admins").then((m) => ({ default: m.Admins })));
+const ServerBrowser = lazyPage(() => import("./views/ServerBrowser").then((m) => ({ default: m.ServerBrowser })));
 const GetMore = lazyPage(() => import("./views/GetMore").then((m) => ({ default: m.GetMore })));
 
 const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean }[] = [
@@ -42,6 +43,7 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "players", label: "Players", icon: "players", live: true },
   { id: "addons", label: "Add-ons", icon: "addons", live: true },
   { id: "friends", label: "Play with friends", icon: "friends", group: "Online" },
+  { id: "browser", label: "Find servers", icon: "browser" },
   { id: "admins", label: "Admins", icon: "admins" },
   { id: "community", label: "Stats & moderation", icon: "stats" },
   { id: "welcome", label: "Welcome page", icon: "welcome" },
@@ -385,6 +387,7 @@ function Shell() {
               {section === "players" && online && <Players data={online} refresh={refresh} />}
               {section === "addons" && online && <Addons data={online} refresh={refresh} />}
               {section === "friends" && <Friends data={online} refresh={refresh} />}
+              {section === "browser" && <ServerBrowser />}
               {section === "servers" &&
                 (current ? (
                   <ServerPage

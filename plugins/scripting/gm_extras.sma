@@ -123,6 +123,9 @@ public plugin_init()
 	g_pPingMax     = register_cvar("gm_ping_max", "250")
 	g_pPingChecks  = register_cvar("gm_ping_checks", "5")
 	g_pFastdl      = register_cvar("gm_fastdl", "")
+	// public (in the server's rules): the Loner-Strike server list only lists servers set to 1,
+	// which the app does through friends.cfg when the host asks for it
+	register_cvar("ls_list", "0", FCVAR_SERVER)
 	g_pJoins         = register_cvar("gm_joins", "0")
 	g_pJoinsCountry  = register_cvar("gm_joins_country", "1")
 	g_pJoinsSkipBots = register_cvar("gm_joins_skipbots", "1")

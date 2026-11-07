@@ -1,0 +1,23 @@
+[Unit]
+Description=Loner-Strike server list
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+DynamicUser=yes
+StateDirectory=lonerstrike-list
+ExecStart=/usr/bin/python3 /opt/lonerstrike-list/serverlist.py --listen 8100 --state %S/lonerstrike-list/list.json
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

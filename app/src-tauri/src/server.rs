@@ -288,6 +288,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
             .merge(crate::plugins::local_routes())
             .merge(crate::sounds::local_routes())
             .merge(crate::extras::local_routes())
+            .merge(crate::browser::routes())
             .merge(crate::smartchat::local_routes())
             .layer(middleware::from_fn(crate::diagnostics::log_errors))
             .layer(middleware::from_fn(with_target))

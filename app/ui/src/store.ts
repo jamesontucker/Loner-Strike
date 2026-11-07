@@ -4,10 +4,10 @@ import { create } from "zustand";
 // ---- where you are in the app ------------------------------------------------------
 
 export type Section =
-  | "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "servers"
+  | "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "browser" | "servers"
   | "admins" | "community" | "extras" | "welcome" | "more" | "mods" | "sounds" | "settings";
 
-const SECTIONS: Section[] = ["play", "maps", "bots", "match", "fun", "players", "addons", "friends", "servers", "admins", "community", "extras", "welcome", "more", "mods", "sounds", "settings"];
+const SECTIONS: Section[] = ["play", "maps", "bots", "match", "fun", "players", "addons", "friends", "browser", "servers", "admins", "community", "extras", "welcome", "more", "mods", "sounds", "settings"];
 
 function saved<T>(key: string, fallback: T, ok: (v: string) => boolean = () => true): T {
   try {
