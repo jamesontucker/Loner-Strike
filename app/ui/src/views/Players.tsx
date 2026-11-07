@@ -44,6 +44,10 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
   const all = (what: string, command: string, args: string[], label: string) => once(key(what), () => run(command, args), label);
   const [open, setOpen] = useState<number | null>(null);
   const [gun, setGun] = useState(WEAPONS[0][0]);
+  // who the lists show: everyone, only people, or only bots
+  const [who, setWho] = useState<"all" | "people" | "bots">("all");
+  const counted = data.players.filter((p) => p.team === "T" || p.team === "CT" || p.team === "SPEC");
+  const nBots = counted.filter((p) => p.bot).length;
   const teams: [string, string, string][] = [["T", "Terrorists", "t"], ["CT", "Counter-Terrorists", "ct"], ["SPEC", "Spectators", "spec"]];
 
   const admins = useAdminList();
@@ -267,9 +271,18 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
           )}
         </div>
       </div>
+      {nBots > 0 && nBots < counted.length && (
+        <div className="chips player-filter" role="group" aria-label="Show">
+          {([["all", "Everyone", counted.length], ["people", "People", counted.length - nBots], ["bots", "Bots", nBots]] as const).map(([id, label, n]) => (
+            <button key={id} className="chip" aria-pressed={who === id} onClick={() => setWho(id)}>
+              {label} <span className="chip-n">{n}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="teams">
         {teams.map(([team, title, cls]) => {
-          const list = data.players.filter((p) => p.team === team).sort((a, b) => b.frags - a.frags);
+          const list = data.players.filter((p) => p.team === team && (who === "all" || (who === "bots") === !!p.bot)).sort((a, b) => b.frags - a.frags);
           if (!list.length && team === "SPEC") return null;
           return (
             <div key={team} className={`team ${cls}`}>
@@ -295,6 +308,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
                         <span className="pname">
                           {p.name}
                           {p.host ? <small>you</small> : null}
+                          {p.bot ? <i className="flag bot" title="A bot">bot</i> : null}
                           {p.god ? <i className="flag">god</i> : null}
                           {p.noclip ? <i className="flag">noclip</i> : null}
                           {p.frozen ? <i className="flag">frozen</i> : null}
