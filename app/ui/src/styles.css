@@ -68,7 +68,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   letter-spacing: .01em;
   white-space: nowrap;
 }
-.nav { flex: 1; overflow-y: auto; min-height: 0; }
+.nav { flex: 1; overflow: hidden auto; min-height: 0; }
 /* a slim version of the Steam scrollbar, only when the sections don't fit */
 .nav::-webkit-scrollbar { width: 8px; }
 .nav::-webkit-scrollbar-track { background: transparent; box-shadow: none; }
@@ -1031,7 +1031,8 @@ a.btn.primary { color: var(--signal-ink); }
 .map-card.selected .map-label { color: var(--signal); }
 .switch-mode .sheet-body { display: grid; gap: 12px; }
 .switch-mode .sheet-body > * { margin: 0; } /* the grid's gap spaces it */
-.switch-maps { max-height: 46vh; overflow-y: auto; padding: 4px 2px; }
+.switch-maps { max-height: 46vh; overflow: hidden auto; padding: 4px 2px; }
+.switch-maps:empty { display: none; }
 @media (prefers-reduced-motion: reduce) { .fav-toggle { transition: none; } }
 
 /* ---- HLTV (views/Hltv.tsx) ------------------------------------------------------- */
@@ -1210,7 +1211,7 @@ button.cm-stat[aria-expanded="true"] { background: var(--panel); }
 .map-picker { position: relative; }
 .map-picker-button { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 240px; font: 16px var(--text); padding: 8px 10px; color: var(--bone); background: var(--bg); box-shadow: var(--sunken); border: 0; border-radius: 2px; cursor: pointer; text-align: left; }
 .map-picker-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; width: min(340px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 6px; padding: 6px; background: var(--panel); box-shadow: var(--raised), 0 10px 28px rgba(0,0,0,.45); border-radius: 2px; }
-.map-picker-list { max-height: 300px; overflow-y: auto; display: grid; }
+.map-picker-list { max-height: 300px; overflow: hidden auto; display: grid; }
 .map-picker-group { padding: 8px 8px 3px; font-size: 12px; font-weight: 700; color: var(--bone-dim); }
 .map-picker-list button { display: block; width: 100%; border: 0; background: none; color: var(--bone); text-align: left; padding: 6px 8px; font: 500 14px/1.2 var(--text); border-radius: 2px; cursor: pointer; }
 .map-picker-list button.active { background: var(--panel-2); color: var(--signal); }
@@ -1247,7 +1248,7 @@ select option, select optgroup { background: var(--panel); color: var(--bone); }
 .files-bar-close { border: 0; background: none; color: var(--bone-dim); font-size: 18px; line-height: 1; padding: 2px 6px; cursor: pointer; }
 .files-bar-close:hover { color: var(--bone); }
 .files-sheet { max-width: 520px; }
-.files-sheet .files-update-list { max-height: 50vh; overflow-y: auto; padding-right: 6px; }
+.files-sheet .files-update-list { max-height: 50vh; overflow: hidden auto; padding-right: 6px; }
 
 /* ---- "?" explanations next to fields ------------------------------------------------- */
 .info { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
