@@ -1536,5 +1536,4 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 
 /* Players: who's a bot, and showing only people or only bots */
 .pname .flag.bot { background: transparent; color: var(--bone-faint); box-shadow: inset 0 0 0 1px var(--bevel-hi); }
-.player-filter { margin: 0 0 12px; }
 .chip-n { margin-left: 4px; opacity: .7; font-variant-numeric: tabular-nums; }

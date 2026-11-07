@@ -269,17 +269,18 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
               <BusyButton busy={busy(key("team:spec"))} label="Spectate" busyLabel="Moving…" onClick={() => all("team:spec", "gm_team", ["spec"], "Moving you to spectators…")} />
             </div>
           )}
+          {nBots > 0 && nBots < counted.length && (
+            <div className="row" role="group" aria-labelledby="pa-show">
+              <span className="pa-label" id="pa-show">Show</span>
+              {([["all", "Everyone", counted.length], ["people", "People", counted.length - nBots], ["bots", "Bots", nBots]] as const).map(([id, label, n]) => (
+                <button key={id} className="chip" aria-pressed={who === id} onClick={() => setWho(id)}>
+                  {label} <span className="chip-n">{n}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-      {nBots > 0 && nBots < counted.length && (
-        <div className="chips player-filter" role="group" aria-label="Show">
-          {([["all", "Everyone", counted.length], ["people", "People", counted.length - nBots], ["bots", "Bots", nBots]] as const).map(([id, label, n]) => (
-            <button key={id} className="chip" aria-pressed={who === id} onClick={() => setWho(id)}>
-              {label} <span className="chip-n">{n}</span>
-            </button>
-          ))}
-        </div>
-      )}
       <div className="teams">
         {teams.map(([team, title, cls]) => {
           const list = data.players.filter((p) => p.team === team && (who === "all" || (who === "bots") === !!p.bot)).sort((a, b) => b.frags - a.frags);
