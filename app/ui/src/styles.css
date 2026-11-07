@@ -1593,11 +1593,13 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .browser-row.head button { all: unset; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--bone-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser-row.head button:hover, .browser-row.head button:focus-visible { color: var(--signal); }
 .browser-row:not(.head):hover { background: rgba(255, 255, 255, .04); }
-.browser-row[aria-selected="true"] { background: #958831; color: #fff; }
+/* picked: strong while you're in the list, a tint once you've moved on (like any list) */
+.browser-row[aria-selected="true"] { background: rgba(196, 181, 80, .16); }
+.browser-table:focus-within .browser-row[aria-selected="true"] { background: #958831; color: #fff; }
 .browser-row:focus-visible { outline: 1px solid var(--signal); outline-offset: -1px; }
 .browser-row.quiet { color: var(--bone-faint); }
 .browser-row .c-lock, .browser-row .c-vac { display: grid; place-items: center; color: var(--bone-dim); }
-.browser-row[aria-selected="true"] .c-lock, .browser-row[aria-selected="true"] .c-vac { color: #fff; }
+.browser-table:focus-within .browser-row[aria-selected="true"] .c-lock, .browser-table:focus-within .browser-row[aria-selected="true"] .c-vac { color: #fff; }
 .browser-row .c-players, .browser-row .c-ping { text-align: right; font-variant-numeric: tabular-nums; }
 .browser-row.players-row { grid-template-columns: minmax(140px, 1fr) 70px 80px; }
 .browser-body .browser-row:not(:last-child) { border-bottom: 1px solid rgba(0, 0, 0, .12); }

@@ -156,7 +156,8 @@ export function ServerBrowser() {
             {head("ping", "Latency", "c-ping")}
             {tab === "history" && head("last", "Last played", "c-last")}
           </div>
-          <div className="browser-body">
+          {/* a click on empty space, or Escape, lets go of the picked server */}
+          <div className="browser-body" onClick={(e) => { if (e.target === e.currentTarget) setPicked(null); }} onKeyDown={(e) => { if (e.key === "Escape") setPicked(null); }}>
             {loading && rows.length === 0 ? (
               <div className="browser-note"><Skeleton rows={3} /></div>
             ) : errors[tab] ? (
