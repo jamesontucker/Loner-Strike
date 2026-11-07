@@ -75,14 +75,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .nav::-webkit-scrollbar-thumb { background: var(--panel); box-shadow: var(--raised); min-height: 24px; }
 .nav::-webkit-scrollbar-button { display: none; }
 .nav-group {
-  margin: 10px 10px 3px;
+  margin: 18px 10px 4px;
   color: var(--bone-faint);
   font-size: 13px; font-weight: 600;
 }
 /* a short window (a 13" laptop): a little tighter, so every section still fits */
 @media (min-width: 761px) and (max-height: 1000px) {
   .nav-item { padding-top: 3px; padding-bottom: 3px; }
-  .nav-group { margin-top: 6px; margin-bottom: 2px; }
+  .nav-group { margin-top: 14px; margin-bottom: 3px; }
   .brand { padding-bottom: 8px; }
   .game-switch { margin-bottom: 6px; }
   .drag-strip { height: 32px; }
