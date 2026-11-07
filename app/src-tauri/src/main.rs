@@ -8,6 +8,7 @@ mod connect;
 mod archive;
 mod community;
 mod content;
+mod diagnostics;
 mod extras;
 mod game;
 mod gamebanana;

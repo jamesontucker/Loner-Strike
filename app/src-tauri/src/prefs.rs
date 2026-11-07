@@ -249,62 +249,10 @@ async fn api_servers_dir_set(State(st): State<Shared>, headers: HeaderMap, Json(
 
 // ---- diagnostics --------------------------------------------------------------------
 
-/// A plain-text summary for bug reports. No passwords or keys.
+/// A plain-text summary for bug reports (diagnostics.rs). No passwords, tokens or keys.
 async fn api_diagnostics(State(st): State<Shared>) -> Json<Value> {
     let version = st.app.get().map(|a| a.package_info().version.to_string()).unwrap_or_default();
-    let game = st.local_game();
-    let text = tokio::task::spawn_blocking(move || {
-        let s = load_settings();
-        let mut out = vec![format!("Loner-Strike {version} on {} {}", std::env::consts::OS, std::env::consts::ARCH)];
-        match &game {
-            Some(g) => {
-                let installed = crate::setup::record::Record::open(&g.dir).component_ids();
-                out.push(format!("Game: {} at {}", g.name, g.dir.display()));
-                out.push(format!("Installed: {}", if installed.is_empty() { "nothing".into() } else { installed.join(", ") }));
-            }
-            None => out.push("Game: none found".into()),
-        }
-        for i in crate::steam::find_installs() {
-            out.push(format!("Install: {} ({}{}) games: {}", i.hl.display(), i.kind, i.bottle.map(|b| format!(" bottle {b}")).unwrap_or_default(), i.games.join(", ")));
-        }
-        for e in crate::servers::load() {
-            out.push(format!("Server: {} ({}, port {}, {}{})", e.name, e.game, e.port, if crate::servers::running(&e.id) { "running" } else { "stopped" }, if e.imported { ", imported" } else { "" }));
-        }
-        out.push(format!(
-            "Settings: phone access {}, updates {}, keep servers running {}, extra game folders {}",
-            if s.phone { "on" } else { "off" },
-            if s.manual_updates { "manual" } else { "automatic" },
-            if s.keep_servers { "on" } else { "off" },
-            s.game_folders.len()
-        ));
-        out.push(format!("Game running: {}", crate::sys::game_running()));
-        // the end of the game's console (written with -condebug), for crashes
-        if let Some(g) = &game {
-            for p in [g.hl.join("qconsole.log"), g.dir.join("qconsole.log")] {
-                if let Ok(text) = crate::sys::read_latin1(&p) {
-                    let lines: Vec<&str> = text.lines().filter(|l| !l.to_lowercase().contains("password")).collect();
-                    out.push(format!("Last game console lines ({}):", p.display()));
-                    for l in &lines[lines.len().saturating_sub(40)..] {
-                        out.push(format!("  {l}"));
-                    }
-                    break;
-                }
-            }
-        }
-        let job = crate::setup::current();
-        if job.state != "idle" {
-            out.push(format!("Last setup: {} ({}){}", job.kind, job.state, job.error.map(|e| format!(": {e}")).unwrap_or_default()));
-            for n in job.notes.iter().take(10) {
-                out.push(format!("  note: {n}"));
-            }
-            if !job.failed_compiles.is_empty() {
-                out.push(format!("  didn't compile: {}", job.failed_compiles.join(", ")));
-            }
-        }
-        out.join("\n")
-    })
-    .await
-    .unwrap_or_default();
+    let text = tokio::task::spawn_blocking(move || crate::diagnostics::build(&crate::diagnostics::gather(&st, version))).await.unwrap_or_default();
     Json(json!({"text": text}))
 }
 

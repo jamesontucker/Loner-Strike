@@ -289,9 +289,10 @@ pub fn router(state: Shared, listener: Listener) -> Router {
             .merge(crate::sounds::local_routes())
             .merge(crate::extras::local_routes())
             .merge(crate::smartchat::local_routes())
+            .layer(middleware::from_fn(crate::diagnostics::log_errors))
             .layer(middleware::from_fn(with_target))
             .layer(middleware::from_fn_with_state(state.clone(), guard_local)),
-        Listener::Lan => routes.layer(middleware::from_fn(with_target)).layer(middleware::from_fn_with_state(state.clone(), guard_lan)),
+        Listener::Lan => routes.layer(middleware::from_fn(crate::diagnostics::log_errors)).layer(middleware::from_fn(with_target)).layer(middleware::from_fn_with_state(state.clone(), guard_lan)),
     };
     routes.with_state(state)
 }

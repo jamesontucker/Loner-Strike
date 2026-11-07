@@ -595,6 +595,33 @@ fn addresses(e: &Entry, port: u16, lan_ip: impl FnOnce() -> Option<String>) -> V
     }
 }
 
+/// HLTV's state as last seen on the HLTV page, by server: (when, "running" / "stopped" / "starting").
+static LAST_SEEN: Mutex<Option<HashMap<String, (Instant, String)>>> = Mutex::new(None);
+
+/// HLTV's state for diagnostics, without asking the server's machine: on this computer
+/// from its process, on another machine as the HLTV page last saw it.
+pub fn last_state(e: &Entry) -> String {
+    if e.remote.is_none() {
+        let (on, pending, err) = with_runs(|r| (alive(r, &e.id), r.pending.contains_key(&e.id), r.errors.get(&e.id).cloned()));
+        return match (on, pending, err) {
+            (true, _, _) => "running".into(),
+            (_, true, _) => "starting".into(),
+            (_, _, Some(why)) => format!("stopped: {why}"),
+            _ => "stopped".into(),
+        };
+    }
+    match LAST_SEEN.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|m| m.get(&e.id).cloned()) {
+        Some((at, state)) => format!("{state} ({})", crate::diagnostics::ago(at.elapsed().as_secs())),
+        None => "not checked yet".into(),
+    }
+}
+
+/// HLTV's admin password (in the cfg it was started with), so diagnostics can leave it out.
+pub fn admin_password(e: &Entry) -> Option<String> {
+    let text = std::fs::read_to_string(e.dir.join(CFG)).ok()?;
+    text.lines().find_map(|l| l.strip_prefix("adminpassword ")).map(|p| p.trim().trim_matches('"').to_string())
+}
+
 fn status(e: &Entry) -> Value {
     let (running, pending, error, uptime) = match &e.remote {
         Some(r) => {
@@ -619,6 +646,7 @@ fn status(e: &Entry) -> Value {
     } else {
         "stopped"
     };
+    LAST_SEEN.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new).insert(e.id.clone(), (Instant::now(), state.to_string()));
     let port = port_of(e);
     json!({
         "available": e.remote.is_some() || exe(e).is_file(),

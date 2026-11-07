@@ -1161,7 +1161,26 @@ enum Send {
     AllButData,
 }
 
+/// How each server's last upload went: (when, Ok((sent, removed)) or Err(why)), for diagnostics.
+static LAST_SYNC: Mutex<Option<HashMap<String, (Instant, Result<(usize, usize), String>)>>> = Mutex::new(None);
+
+/// How a server's last upload went this session: (seconds ago, result).
+pub fn last_sync(id: &str) -> Option<(u64, Result<(usize, usize), String>)> {
+    LAST_SYNC.lock().unwrap_or_else(|e| e.into_inner()).as_ref()?.get(id).map(|(at, r)| (at.elapsed().as_secs(), r.clone()))
+}
+
 fn sync_as(e: &Entry, mode: Send, progress: &dyn Fn(u64, u64)) -> Result<(usize, usize), String> {
+    let r = sync_files(e, mode, progress);
+    if e.remote.is_some() {
+        if let Err(why) = &r {
+            crate::diagnostics::log_error(&format!("sync {}", e.name), why);
+        }
+        LAST_SYNC.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new).insert(e.id.clone(), (Instant::now(), r.clone()));
+    }
+    r
+}
+
+fn sync_files(e: &Entry, mode: Send, progress: &dyn Fn(u64, u64)) -> Result<(usize, usize), String> {
     let everything = mode == Send::Everything;
     let _g = sync_guard();
     let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
@@ -1785,6 +1804,32 @@ fn remote_state(e: &Entry) -> (bool, u64) {
     }
 }
 
+
+/// A server's state for diagnostics, without asking its machine: (state, last error).
+/// A server on another machine says what it said last time it was asked.
+pub fn last_state(e: &Entry) -> (String, Option<String>) {
+    if !e.ready {
+        let job = setup::current();
+        let busy = job.kind == "server" && job.state == "running";
+        return (if busy { "setting up" } else { "setup failed" }.into(), None);
+    }
+    if e.remote.is_some() {
+        let seen = SEEN.lock().unwrap().as_ref().and_then(|m| m.get(&e.id).cloned());
+        let state = match seen {
+            Some((at, (on, _))) => format!("{} ({})", if on { "running" } else { "stopped" }, crate::diagnostics::ago(at.elapsed().as_secs())),
+            None => "not checked yet".into(),
+        };
+        return (state, unreachable(&e.id).map(|w| format!("machine didn't answer: {w}")));
+    }
+    let (on, err) = with_runs(|r| (r.procs.contains_key(&e.id), r.errors.get(&e.id).cloned()));
+    if on {
+        ("running".into(), None)
+    } else if left_running(e) {
+        ("running (from before the app started)".into(), None)
+    } else {
+        (if err.is_some() { "crashed" } else { "stopped" }.into(), err)
+    }
+}
 
 /// A server still up from before the app last closed ("keep servers running"):
 /// it answers on its port with its RCON password.

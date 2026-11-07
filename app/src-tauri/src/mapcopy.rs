@@ -434,6 +434,17 @@ static STOP: AtomicBool = AtomicBool::new(false);
 /// How the last run went (for the toast at its end)
 static RESULT: Mutex<Option<Value>> = Mutex::new(None);
 
+/// The last run's counts, for diagnostics ("copied 3, already there 1, ...").
+pub fn last_summary() -> Option<String> {
+    let r = RESULT.lock().unwrap_or_else(|e| e.into_inner()).clone()?;
+    let n = |k: &str| r[k].as_u64().or_else(|| r[k].as_array().map(|a| a.len() as u64)).unwrap_or(0);
+    Some(format!(
+        "copied {}, already there {}, skipped {}, failed {}, files kept {}, not uploaded {}{}",
+        n("copied"), n("already"), n("skipped"), n("failed"), n("kept"), n("not_uploaded"),
+        if r["stopped"].as_bool() == Some(true) { ", stopped" } else { "" }
+    ))
+}
+
 /// What a run did, by map and server.
 #[derive(Default, Debug)]
 pub struct Outcome {
@@ -545,7 +556,7 @@ impl Outcome {
             "copied": self.copied.len(), "already": self.already.len(),
             "skipped": self.skipped.iter().map(|(m, s, w)| json!({"map": m, "server": s, "why": w})).collect::<Vec<_>>(),
             "failed": self.failed.iter().map(|(m, s, w)| json!({"map": m, "server": s, "why": w})).collect::<Vec<_>>(),
-            "kept": self.kept.len(), "stopped": self.stopped,
+            "kept": self.kept.len(), "not_uploaded": self.not_uploaded.len(), "stopped": self.stopped,
         })
     }
 }

@@ -668,6 +668,19 @@ fn check(e: &Entry) -> Result<Value, String> {
     }
 }
 
+/// The status website's last check, by server: (when, state, why), for diagnostics.
+static LAST_CHECK: std::sync::Mutex<Option<std::collections::HashMap<String, (std::time::Instant, String, Option<String>)>>> = std::sync::Mutex::new(None);
+
+/// How the status website's last check went this session: (seconds ago, state, why).
+pub fn last_check(id: &str) -> Option<(u64, String, Option<String>)> {
+    LAST_CHECK.lock().unwrap_or_else(|e| e.into_inner()).as_ref()?.get(id).map(|(at, s, w)| (at.elapsed().as_secs(), s.clone(), w.clone()))
+}
+
+/// The saved tunnel token, so diagnostics can leave it out.
+pub fn saved_token(id: &str) -> Option<String> {
+    read_token(id)
+}
+
 fn status(e: &Entry) -> Value {
     let all = servers::load();
     let s = &e.web_status;
@@ -693,6 +706,7 @@ fn status(e: &Entry) -> Value {
             }
         }
     };
+    LAST_CHECK.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Default::default).insert(e.id.clone(), (std::time::Instant::now(), state.to_string(), reason.clone()));
     // only asked about while tunnel mode is picked or could be (a remote server)
     let existing = e.remote.as_ref().and_then(|r| existing_tunnel(r).ok().flatten());
     let urls = (!s.domain.is_empty()).then(|| (format!("https://{}/status", s.domain), format!("https://{}/visit", s.domain)));
