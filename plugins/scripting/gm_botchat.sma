@@ -682,10 +682,10 @@ Float:level_mult()
 {
 	switch (get_pcvar_num(g_pLevel))
 	{
-		case 1: return 0.12
-		case 3: return 0.7
+		case 1: return 0.2
+		case 3: return 1.0
 	}
-	return 0.35
+	return 0.6
 }
 
 // gaps get longer as personality goes down (x1.5 at 0) and shorter as it goes up (x0.5 at 200)
@@ -699,9 +699,9 @@ Float:global_gap()
 	new Float:g
 	switch (get_pcvar_num(g_pLevel))
 	{
-		case 1: g = 50.0
-		case 3: g = 9.0
-		default: g = 22.0
+		case 1: g = 40.0
+		case 3: g = 6.0
+		default: g = 12.0
 	}
 	return g * gap_mult()
 }
@@ -711,9 +711,9 @@ Float:bot_gap()
 	new Float:g
 	switch (get_pcvar_num(g_pLevel))
 	{
-		case 1: g = 180.0
-		case 3: g = 40.0
-		default: g = 100.0
+		case 1: g = 150.0
+		case 3: g = 30.0
+		default: g = 60.0
 	}
 	return g * gap_mult()
 }

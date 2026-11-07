@@ -1744,7 +1744,7 @@ fn watch() {
 /// The last lines of the server's console (qconsole.log, from -condebug).
 fn console(e: &Entry) -> Vec<String> {
     if let Some(r) = &e.remote {
-        return crate::remote::console(r, &e.id, &e.game).iter().map(|l| hide_passwords(l)).collect();
+        return without_polls(crate::remote::console(r, &e.id, &e.game)).iter().map(|l| hide_passwords(l)).collect();
     }
     let mut lines = Vec::new();
     for p in [e.dir.join("qconsole.log"), e.dir.join(&e.game).join("qconsole.log"), e.dir.join("loner-strike-server.log")] {
@@ -1758,8 +1758,21 @@ fn console(e: &Entry) -> Vec<String> {
             break;
         }
     }
+    let mut lines = without_polls(lines);
     let skip = lines.len().saturating_sub(300);
     lines.split_off(skip).into_iter().map(|l| hide_passwords(&l)).collect()
+}
+
+/// The console without the app's own checks every few seconds ("Rcon from 127.0.0.1"
+/// and the gm_status it sent), which would bury chat and everything else.
+fn without_polls(lines: Vec<String>) -> Vec<String> {
+    lines
+        .into_iter()
+        .filter(|l| {
+            let t = l.trim();
+            !(t.starts_with("Rcon from 127.0.0.1") || t.starts_with("rcon ") && (t.ends_with(" gm_status") || t.ends_with(" gm_status_full")))
+        })
+        .collect()
 }
 
 /// The server logs every RCON command with its password ("rcon 1234 "secret" status"),
@@ -2822,5 +2835,12 @@ mod tests {
         assert!(content_filter(Path::new("maps/de_x.bsp")) && content_filter(Path::new("halflife.wad")) && content_filter(Path::new("sound/a/b.wav")));
         assert!(!content_filter(Path::new("addons/amxmodx/x.amxx")) && !content_filter(Path::new("dlls/mp.dll")) && !content_filter(Path::new("sub/x.wad")));
         assert!(settings_filter(Path::new("presets/a.cfg")) && !settings_filter(Path::new("panel_rcon.txt")) && !settings_filter(Path::new("friends.json")));
+    }
+
+    #[test]
+    fn console_hides_the_apps_own_checks() {
+        let l = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let got = without_polls(l(&["Rcon from 127.0.0.1:34335:", "rcon 352348701 \"x\" gm_status", "[TFR] Tyler : ace haha", "rcon 1 \"x\" amxx plugins"]));
+        assert_eq!(got, l(&["[TFR] Tyler : ace haha", "rcon 1 \"x\" amxx plugins"]));
     }
 }
