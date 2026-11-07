@@ -7,12 +7,17 @@
 #                or {"online": false} when the game doesn't answer
 #   GET /visit   adds one and answers {"count": n} (only with --counter)
 # Nothing else is served. No IP addresses are kept or logged, no cookies are set.
+#
+# With Discord webhooks (systemd credentials "discord-live" and "discord-busy"): keeps one
+# message up to date with the server's status, and says when people come on to play.
 import argparse
 import json
 import os
 import socket
 import threading
 import time
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HEADER = b"\xff\xff\xff\xff"
@@ -21,6 +26,10 @@ QUERY = HEADER + b"TSource Engine Query\x00"
 CACHE_SECS = 10
 # visits counted per second at most (all visitors together); more are answered, not counted
 MAX_VISITS_PER_SEC = 20
+# how often the Discord status message is brought up to date
+DISCORD_SECS = 60
+# "people are on" at most this often
+BUSY_GAP_SECS = 3600
 
 
 def _text(raw):
@@ -159,6 +168,123 @@ class Counter:
             pass
 
 
+def _credential(name):
+    """A systemd credential's text (LoadCredential=), or "" without it."""
+    folder = os.environ.get("CREDENTIALS_DIRECTORY")
+    if not folder:
+        return ""
+    try:
+        with open(os.path.join(folder, name)) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _discord(method, url, body=None):
+    """A call to a Discord webhook: (status, answer as a dict)."""
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header("Content-Type", "application/json")
+    # Discord turns away requests without a User-Agent of this shape
+    req.add_header("User-Agent", "DiscordBot (https://lonerstrike.com, 1)")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status, json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        return e.code, {}
+    except (OSError, ValueError):
+        return 0, {}
+
+
+def _people(n):
+    return "1 person" if n == 1 else f"{n} people"
+
+
+def status_message(info, address):
+    """The live status message's embed for an A2S answer (or {"online": False})."""
+    join = f"`connect {address}`" if address else ""
+    if not info.get("online"):
+        embed = {"title": "Server offline", "description": "The server isn't answering right now.", "color": 0x6B6B6B}
+    else:
+        people, bots = info["players"] - info["bots"], info["bots"]
+        if people:
+            text = f"**{_people(people)}** and {bots} bots playing **{info['map']}**."
+        elif bots:
+            text = f"Only bots right now, {bots} of them on **{info['map']}**. Join and take one's place."
+        else:
+            text = f"Empty right now, on **{info['map']}**."
+        embed = {"title": info["name"][:256], "description": text, "color": 0x8FA24A if people else 0x4F6B3A}
+        embed["fields"] = [{"name": "Players", "value": f"{info['players']}/{info['max_players']}", "inline": True}]
+        if join:
+            embed["fields"].append({"name": "Join", "value": join, "inline": True})
+    embed["footer"] = {"text": "Updated every minute"}
+    embed["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return {"embeds": [embed], "allowed_mentions": {"parse": []}}
+
+
+def busy_message(info, address):
+    """What's said when people come on to play."""
+    people = info["players"] - info["bots"]
+    verb = "is" if people == 1 else "are"
+    text = f"{_people(people)} {verb} playing on **{info['map']}** right now."
+    if address:
+        text += f" Join with `connect {address}`."
+    return {"content": text, "allowed_mentions": {"parse": []}}
+
+
+class DiscordStatus:
+    """Keeps the live message up to date and says when people come on. Its message id and
+    when it last said so are kept in `state` (JSON), so a restart edits the same message."""
+
+    def __init__(self, status, live, busy, address, state, busy_at):
+        self.status, self.live, self.busy, self.address = status, live, busy, address
+        self.state, self.busy_at = state, busy_at
+        self.saved = {}
+        try:
+            with open(state) as f:
+                self.saved = json.load(f)
+        except (OSError, ValueError):
+            pass
+        self.was_busy = True  # nothing is said for people already on when it starts
+
+    def _save(self):
+        tmp = self.state + ".tmp"
+        try:
+            with open(tmp, "w") as f:
+                json.dump(self.saved, f)
+            os.replace(tmp, self.state)
+        except OSError:
+            pass
+
+    def tick(self, now):
+        info = self.status.get()
+        if self.live:
+            body = status_message(info, self.address)
+            mid = self.saved.get("message")
+            code = _discord("PATCH", f"{self.live}/messages/{mid}", body)[0] if mid else 404
+            # never posted, or deleted since: a new one
+            if code == 404:
+                code, answer = _discord("POST", self.live + "?wait=true", body)
+                if code == 200 and answer.get("id"):
+                    self.saved["message"] = answer["id"]
+                    self._save()
+        if self.busy:
+            busy = info.get("online") and info["players"] - info["bots"] >= self.busy_at
+            if busy and not self.was_busy and ("busy_said" not in self.saved or now - self.saved["busy_said"] >= BUSY_GAP_SECS):
+                if _discord("POST", self.busy, busy_message(info, self.address))[0] in (200, 204):
+                    self.saved["busy_said"] = now
+                    self._save()
+            self.was_busy = bool(busy)
+
+    def run(self):
+        while True:
+            try:
+                self.tick(time.time())
+            except Exception:
+                pass  # Discord or the network having a moment: next minute
+            time.sleep(DISCORD_SECS)
+
+
 def origin_allowed(origin, allowed):
     """Whether a site may read the answers: an exact entry, or an https://*.suffix entry
     matching any subdomain (one or more labels) of that suffix over https."""
@@ -238,10 +364,18 @@ def main():
     p.add_argument("--game", type=int, required=True, help="the game server's port on this machine")
     p.add_argument("--origins", default="", help="sites allowed to read the answers, comma separated")
     p.add_argument("--counter", default="", help="file that keeps the visit count (no counter without it)")
+    p.add_argument("--address", default="", help="the server's public address, for joining from Discord")
+    p.add_argument("--discord-state", default="", help="file that keeps the Discord message id")
+    p.add_argument("--busy-at", type=int, default=1, help="people (not bots) on before Discord is told")
     a = p.parse_args()
     origins = {o.strip().rstrip("/").lower() for o in a.origins.split(",") if o.strip()}
     counter = Counter(a.counter) if a.counter else None
-    server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(Status(a.game), counter, origins))
+    status = Status(a.game)
+    live, busy = _credential("discord-live"), _credential("discord-busy")
+    if (live or busy) and a.discord_state:
+        discord = DiscordStatus(status, live, busy, a.address, a.discord_state, max(1, a.busy_at))
+        threading.Thread(target=discord.run, daemon=True).start()
+    server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(status, counter, origins))
     server.daemon_threads = True
     server.serve_forever()
 

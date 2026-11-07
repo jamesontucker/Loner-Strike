@@ -24,9 +24,13 @@ type Status = {
   live: Live | null;
   status_url: string | null;
   visit_url: string | null;
+  /** which Discord links are saved (the links never come back), and the address people join */
+  discord: { live: boolean; busy: boolean; address: string | null };
 };
 type Reply = { ok?: boolean; error?: string; port?: number; port_moved?: boolean };
-type Form = { domain: string; origins: string; counter: boolean; mode: Mode; token: string };
+type Hook = "live" | "busy";
+/** a Discord link: newly pasted text, or "remove" to take the saved one away */
+type Form = { domain: string; origins: string; counter: boolean; mode: Mode; token: string; live: string; busy: string; drop: Record<Hook, boolean> };
 
 const post = (path: string, body: unknown = {}) => postJson<Reply>(path, body).catch((): Reply => ({ error: "Couldn't reach the app." }));
 const USUAL_PORT = 8090;
@@ -71,7 +75,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
       const s = r.settings;
       // nothing entered yet: the usual sites for the address, ready to change
       const origins = s.origins.length ? s.origins : s.domain ? sitesFor(s.domain) : [];
-      setForm({ domain: s.domain, origins: origins.join("\n"), counter: s.counter, mode: s.mode, token: "" });
+      setForm({ domain: s.domain, origins: origins.join("\n"), counter: s.counter, mode: s.mode, token: "", live: "", busy: "", drop: { live: false, busy: false } });
     }
   };
   useEffect(() => {
@@ -109,7 +113,9 @@ export function WebStatus({ server }: { server: ServerInfo }) {
     if (!form || !st || working) return;
     const again = st.settings.enabled;
     run(key("install"), async () => {
-      const r = await post(`/api/servers/${server.id}/webstatus`, { enabled: true, domain: form.domain, origins: originList(form.origins), counter: form.counter, mode: form.mode, token: form.token });
+      // a Discord link goes only when it's new or taken away; otherwise the saved one stays
+      const hook = (h: Hook) => (form[h].trim() ? form[h] : form.drop[h] ? "" : undefined);
+      const r = await post(`/api/servers/${server.id}/webstatus`, { enabled: true, domain: form.domain, origins: originList(form.origins), counter: form.counter, mode: form.mode, token: form.token, discord_live: hook("live"), discord_busy: hook("busy") });
       if (r.error) {
         toast(r.error, true);
         load();
@@ -261,6 +267,16 @@ export function WebStatus({ server }: { server: ServerInfo }) {
             <Switch on={form.counter} disabled={working} onChange={(v) => set({ counter: v })} label="Visit counter" />
           </div>
 
+          <div className="field">
+            <span>Discord<Info text="Uses Discord webhooks: in a channel's settings, open Integrations, then Webhooks, make one and copy its URL. Kept on this computer and on the server, readable only by their administrators. Not shown again after it's saved." /></span>
+            <small>
+              Keeps a message in a channel up to date with who's playing, and posts when people come on to play, at most once an hour.
+              {!st.discord.address && " Set a public address for the server first, so the messages can say how to join."}
+            </small>
+          </div>
+          <HookField label="Live status message" what="the channel for the live message" saved={st.discord.live} value={form.live} drop={form.drop.live} disabled={working} onChange={(v) => set({ live: v })} onDrop={(d) => set({ drop: { ...form.drop, live: d } })} />
+          <HookField label="When people come on" what="the channel people chat in" saved={st.discord.busy} value={form.busy} drop={form.drop.busy} disabled={working} onChange={(v) => set({ busy: v })} onDrop={(d) => set({ drop: { ...form.drop, busy: d } })} />
+
           </fieldset>
           {!ro && (
           <div className="row">
@@ -279,6 +295,23 @@ export function WebStatus({ server }: { server: ServerInfo }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** One Discord webhook link: pasted once, then only "Saved" with a way to take it away. */
+function HookField({ label, what, saved, value, drop, disabled, onChange, onDrop }: { label: string; what: string; saved: boolean; value: string; drop: boolean; disabled: boolean; onChange: (v: string) => void; onDrop: (d: boolean) => void }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <div className="row">
+        <input className="search" type="password" placeholder={drop ? "Removed when you save" : saved ? "Saved" : `Webhook URL for ${what}`} value={value} disabled={disabled || drop} onChange={(e) => onChange(e.target.value)} spellCheck={false} autoComplete="off" aria-label={label} />
+        {saved && !value && (
+          <button type="button" className="btn small" disabled={disabled} onClick={() => onDrop(!drop)}>
+            {drop ? "Keep" : "Remove"}
+          </button>
+        )}
+      </div>
+    </label>
   );
 }
 

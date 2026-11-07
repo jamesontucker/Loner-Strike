@@ -256,16 +256,89 @@ fn read_token(id: &str) -> Option<String> {
     std::fs::read_to_string(token_path(id)).ok().map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
 }
 
-/// Forgets a server's tunnel token (the server was deleted).
+/// Forgets a server's tunnel token and Discord links (the server was deleted).
 pub fn forget_token(id: &str) {
     let _ = std::fs::remove_file(token_path(id));
+    for kind in HOOKS {
+        let _ = std::fs::remove_file(hook_path(kind, id));
+    }
+}
+
+// ---- Discord (webhook links, kept on this computer like the tunnel token) ---------------
+
+/// "live": the message kept up to date with the server's status; "busy": where it says
+/// people have come on to play
+pub const HOOKS: [&str; 2] = ["live", "busy"];
+
+fn hook_path(kind: &str, id: &str) -> PathBuf {
+    crate::sys::app_dir().join("secrets").join(format!("discord-{kind}-{id}.url"))
+}
+
+fn read_hook(kind: &str, id: &str) -> Option<String> {
+    std::fs::read_to_string(hook_path(kind, id)).ok().map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
+}
+
+fn save_hook(kind: &str, id: &str, url: Option<&str>) -> Result<(), String> {
+    let p = hook_path(kind, id);
+    let Some(url) = url else {
+        let _ = std::fs::remove_file(&p);
+        return Ok(());
+    };
+    if let Some(d) = p.parent() {
+        std::fs::create_dir_all(d).map_err(|e| format!("Couldn't save the Discord link ({e})."))?;
+    }
+    std::fs::write(&p, url).map_err(|e| format!("Couldn't save the Discord link ({e})."))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+
+/// The saved Discord links, so diagnostics can leave them out.
+pub fn saved_hooks(id: &str) -> Vec<String> {
+    HOOKS.iter().filter_map(|k| read_hook(k, id)).collect()
+}
+
+/// A Discord webhook link as pasted (Channel settings, Integrations, Webhooks, Copy Webhook
+/// URL): https://discord.com/api/webhooks/<id>/<token>, without anything after it.
+pub fn clean_hook(text: &str) -> Result<String, String> {
+    const HELP: &str = "Paste the link from Discord: Edit Channel, Integrations, Webhooks, Copy Webhook URL.";
+    let t = text.trim();
+    let rest = ["https://discord.com/api/webhooks/", "https://discordapp.com/api/webhooks/", "https://ptb.discord.com/api/webhooks/", "https://canary.discord.com/api/webhooks/"]
+        .iter()
+        .find_map(|p| t.strip_prefix(p))
+        .ok_or(HELP)?;
+    let rest = rest.split(['?', '#']).next().unwrap_or("");
+    let mut parts = rest.split('/');
+    let (Some(hid), Some(token)) = (parts.next(), parts.next()) else { return Err(HELP.into()) };
+    let ok_id = !hid.is_empty() && hid.len() <= 25 && hid.chars().all(|c| c.is_ascii_digit());
+    let ok_token = (20..=100).contains(&token.len()) && token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if !ok_id || !ok_token || parts.next().is_some_and(|x| !x.is_empty()) {
+        return Err(HELP.into());
+    }
+    Ok(format!("https://discord.com/api/webhooks/{hid}/{token}"))
 }
 
 // ---- what runs on the machine ----------------------------------------------------------
 
-/// The status service's systemd unit.
-pub fn status_unit_text(id: &str, listen: u16, game_port: u16, origins: &[String], counter: bool) -> String {
-    let counter = if counter { format!(" --counter {DATA}/{id}/visits.txt") } else { String::new() };
+/// The status service's systemd unit. `discord`: which webhook links it has (HOOKS order),
+/// read through systemd's credentials from root-only files, and the address people join.
+pub fn status_unit_text(id: &str, listen: u16, game_port: u16, origins: &[String], counter: bool, discord: [bool; 2], address: &str) -> String {
+    let mut counter = if counter { format!(" --counter {DATA}/{id}/visits.txt") } else { String::new() };
+    let mut load = String::new();
+    for (kind, on) in HOOKS.iter().zip(discord) {
+        if on {
+            load.push_str(&format!("LoadCredential=discord-{kind}:{SECRETS}/discord-{kind}-{id}.url\n"));
+        }
+    }
+    if !load.is_empty() {
+        counter.push_str(&format!(" --discord-state {DATA}/{id}/discord.json"));
+        if !address.is_empty() {
+            counter.push_str(&format!(" --address {address}"));
+        }
+    }
     format!(
         "[Unit]
 Description=Loner-Strike website status {id}
@@ -275,7 +348,7 @@ Wants=network-online.target
 [Service]
 User={USER}
 Group={USER}
-ExecStart=/usr/bin/python3 {SCRIPT} --listen {listen} --game {game_port} --origins {origins}{counter}
+{load}ExecStart=/usr/bin/python3 {SCRIPT} --listen {listen} --game {game_port} --origins {origins}{counter}
 Restart=always
 RestartSec=5
 NoNewPrivileges=yes
@@ -284,7 +357,7 @@ ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
 ReadWritePaths={DATA}/{id}
-RestrictAddressFamilies=AF_INET AF_INET6
+RestrictAddressFamilies=AF_INET AF_INET6{unix}
 CapabilityBoundingSet=
 AmbientCapabilities=
 MemoryMax=64M
@@ -292,7 +365,9 @@ MemoryMax=64M
 [Install]
 WantedBy=multi-user.target
 ",
-        origins = origins.join(",")
+        origins = origins.join(","),
+        // looking up discord.com can go through systemd-resolved's socket
+        unix = if load.is_empty() { "" } else { " AF_UNIX" }
     )
 }
 
@@ -462,6 +537,13 @@ else
 fi
 "#;
 
+/// The Discord links: root-only, sent through this script's input (never on a command line).
+const DISCORD_HOOK: &str = r#"sudo install -d -o root -g root -m 700 @SECRETS@
+sudo sh -c 'umask 077; cat > @SECRETS@/discord-@KIND@-@ID@.url' <<'LSHOOK'
+@HOOK@
+LSHOOK
+"#;
+
 const START: &str = r#"echo "@@STEP start"
 sudo systemctl daemon-reload
 sudo systemctl enable @UNIT@ >/dev/null 2>&1
@@ -502,12 +584,18 @@ fn fill(t: &str, id: &str) -> String {
 /// Sets up (or updates) the status service and its HTTPS front on the machine, taking away
 /// the other front if it was used before. `token` is needed for a tunnel. Safe to run again.
 /// Progress lines start with @@STEP; a failure with @@FAIL.
-pub fn install_sh(id: &str, s: &Settings, listen: u16, game_port: u16, token: Option<&str>) -> String {
+pub fn install_sh(id: &str, s: &Settings, listen: u16, game_port: u16, token: Option<&str>, hooks: [Option<&str>; 2], address: &str) -> String {
     let mut sh = String::from(HEAD);
     // (the script and unit go in as they are: substitutions happen before, in the template)
     let service = fill(INSTALL_SERVICE, id);
-    let unit_text = status_unit_text(id, listen, game_port, &s.origins, s.counter);
+    let unit_text = status_unit_text(id, listen, game_port, &s.origins, s.counter, hooks.map(|h| h.is_some()), address);
     sh.push_str(&service.replacen("@PY@", STATUS_PY, 1).replacen("@UNIT_TEXT@", &unit_text, 1));
+    for (kind, hook) in HOOKS.iter().zip(hooks) {
+        match hook {
+            Some(url) => sh.push_str(&fill(DISCORD_HOOK, id).replace("@KIND@", kind).replacen("@HOOK@", url, 1)),
+            None => sh.push_str(&format!("sudo rm -f {SECRETS}/discord-{kind}-{id}.url\n")),
+        }
+    }
     if s.tunnel() && token.is_none() {
         // the Cloudflare Tunnel already on the machine (cloudflared.service): used, never changed
         sh.push_str(&fill(DROP_CADDY, id));
@@ -550,6 +638,7 @@ pub fn off_sh(id: &str) -> String {
     sh.push_str(&format!("sudo rm -f /etc/systemd/system/{}.service\n", unit(id)));
     sh.push_str(&fill(DROP_TUNNEL, id));
     sh.push_str(&fill(DROP_CADDY, id));
+    sh.push_str(&format!("sudo rm -f {SECRETS}/discord-live-{id}.url {SECRETS}/discord-busy-{id}.url\n"));
     sh.push_str("sudo systemctl daemon-reload\n");
     sh
 }
@@ -568,7 +657,10 @@ pub fn apply(e: &Entry, on: bool) -> Result<(), String> {
         let s = &e.web_status;
         let listen = s.port.unwrap_or(FIRST_PORT);
         let token = if s.own_tunnel() { Some(read_token(&e.id).ok_or("Paste the tunnel's token first.")?) } else { None };
-        install_sh(&e.id, s, listen, e.port, token.as_deref())
+        let hooks = HOOKS.map(|k| read_hook(k, &e.id));
+        // the address people join with, when it's one others can reach
+        let address = if e.public_address.is_some() { e.connect() } else { String::new() };
+        install_sh(&e.id, s, listen, e.port, token.as_deref(), [hooks[0].as_deref(), hooks[1].as_deref()], &address)
     } else {
         off_sh(&e.id)
     };
@@ -715,6 +807,7 @@ fn status(e: &Entry) -> Value {
         "host": e.remote.as_ref().map(|r| r.host.clone()),
         "settings": {"enabled": s.enabled, "domain": s.domain, "origins": s.origins, "counter": s.counter, "mode": s.mode},
         "token_saved": read_token(&e.id).is_some(),
+        "discord": {"live": read_hook("live", &e.id).is_some(), "busy": read_hook("busy", &e.id).is_some(), "address": e.public_address.is_some().then(|| e.connect())},
         "own_tunnel": s.own_tunnel(),
         "existing_tunnel": existing,
         "port": port,
@@ -762,6 +855,11 @@ struct SaveReq {
     /// a new tunnel token; empty keeps the saved one
     #[serde(default)]
     token: String,
+    /// Discord webhook links: absent keeps the saved one, "" takes it away
+    #[serde(default)]
+    discord_live: Option<String>,
+    #[serde(default)]
+    discord_busy: Option<String>,
 }
 
 async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
@@ -789,8 +887,18 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<a
         } else {
             s.own_tunnel = false;
         }
+        // checked before anything is saved
+        let hooks: Vec<(&str, Option<Option<String>>)> = vec![("live", req.discord_live), ("busy", req.discord_busy)]
+            .into_iter()
+            .map(|(k, v)| v.map(|t| if t.trim().is_empty() { Ok(None) } else { clean_hook(&t).map(Some) }).transpose().map(|v| (k, v)))
+            .collect::<Result<_, _>>()?;
         if let Some(t) = &token {
             save_token(&id, t)?;
+        }
+        for (kind, hook) in hooks {
+            if let Some(hook) = hook {
+                save_hook(kind, &id, hook.as_deref())?;
+            }
         }
         let store = |s: &Settings| {
             servers::edit(|l| {
@@ -904,15 +1012,45 @@ mod tests {
     }
 
     #[test]
+    fn discord_links() {
+        let good = "https://discord.com/api/webhooks/1568456826754961408/AbCdEf_gh-IJKLmnopQRSTuvwxyz0123456789";
+        assert_eq!(clean_hook(&format!("  {good}  ")).unwrap(), good);
+        assert_eq!(clean_hook(&format!("{good}?wait=true")).unwrap(), good);
+        assert_eq!(clean_hook(&good.replace("discord.com", "discordapp.com")).unwrap(), good);
+        for bad in ["", "http://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz", "https://evil.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz",
+                    "https://discord.com/api/webhooks/12a/abcdefghijklmnopqrstuvwxyz", "https://discord.com/api/webhooks/1/short",
+                    "https://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz/messages/2", "https://discord.com/api/webhooks/1/abc'def$ghijklmnopqrstuvwxyz"] {
+            assert!(clean_hook(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn discord_in_the_unit_and_script() {
+        let u = status_unit_text("pub", 8090, 27015, &[], false, [true, false], "play.example.com");
+        assert!(u.contains("LoadCredential=discord-live:/etc/lonerstrike-status/discord-live-pub.url\nExecStart="));
+        assert!(!u.contains("discord-busy"));
+        assert!(u.contains(" --discord-state /var/lib/lonerstrike-status/pub/discord.json --address play.example.com\n"));
+        assert!(u.contains("RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"));
+        let none = status_unit_text("pub", 8090, 27015, &[], false, [false, false], "play.example.com");
+        assert!(!none.contains("discord") && !none.contains("--address") && !none.contains("AF_UNIX"));
+        let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec![], counter: false, mode: "caddy".into(), port: None, own_tunnel: false };
+        let hook = "https://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz";
+        let sh = install_sh("pub", &s, 8090, 27015, None, [Some(hook), None], "play.example.com");
+        assert!(sh.contains(&format!("discord-live-pub.url' <<'LSHOOK'\n{hook}\nLSHOOK")));
+        assert!(sh.contains("sudo rm -f /etc/lonerstrike-status/discord-busy-pub.url"));
+        assert!(off_sh("pub").contains("discord-live-pub.url"));
+    }
+
+    #[test]
     fn status_unit() {
-        let u = status_unit_text("pub", 8091, 27016, &["https://a.com".into(), "https://b.com".into()], true);
+        let u = status_unit_text("pub", 8091, 27016, &["https://a.com".into(), "https://b.com".into()], true, [false, false], "");
         assert!(u.contains("User=lonerstrike-status\n") && u.contains("Group=lonerstrike-status\n"));
         assert!(u.contains("ExecStart=/usr/bin/python3 /opt/lonerstrike-status/status.py --listen 8091 --game 27016 --origins https://a.com,https://b.com --counter /var/lib/lonerstrike-status/pub/visits.txt\n"));
         for line in ["NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes", "PrivateTmp=yes", "ReadWritePaths=/var/lib/lonerstrike-status/pub", "RestrictAddressFamilies=AF_INET AF_INET6", "CapabilityBoundingSet=\n", "MemoryMax=64M"] {
             assert!(u.contains(line), "{line}");
         }
         assert!(!u.contains("$HOME") && !u.contains("sudo"));
-        let u = status_unit_text("pub", 8090, 27015, &["https://a.com".into()], false);
+        let u = status_unit_text("pub", 8090, 27015, &["https://a.com".into()], false, [false, false], "");
         assert!(!u.contains("--counter") && u.contains("--origins https://a.com\n"));
     }
 
@@ -939,7 +1077,7 @@ mod tests {
     #[test]
     fn scripts() {
         let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec!["https://example.com".into()], counter: true, mode: "caddy".into(), port: Some(8090), own_tunnel: false };
-        let sh = install_sh("pub", &s, 8090, 27016, None);
+        let sh = install_sh("pub", &s, 8090, 27016, None, [None, None], "");
         assert!(!sh.contains('@') || !sh.lines().any(|l| l.contains("@ID@") || l.contains("@UNIT") || l.contains("@PY@") || l.contains("@CADDY")), "every placeholder filled");
         assert!(sh.contains("useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin lonerstrike-status"));
         assert!(sh.contains("sudo tee /opt/lonerstrike-status/status.py >/dev/null <<'LSPY'\n#!/usr/bin/env python3"));
@@ -956,7 +1094,7 @@ mod tests {
 
         let t = Settings { mode: "tunnel".into(), ..s };
         let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ==";
-        let sh = install_sh("pub", &t, 8090, 27016, Some(token));
+        let sh = install_sh("pub", &t, 8090, 27016, Some(token), [None, None], "");
         assert!(sh.contains("https://pkg.cloudflare.com/cloudflare-main.gpg") && sh.contains("https://pkg.cloudflare.com/cloudflared any main"));
         assert!(sh.contains(&format!("<<'LSTOKEN'\n{token}\nLSTOKEN\n")));
         assert_eq!(sh.matches(token).count(), 1, "the token only goes in the root-only file");
@@ -981,14 +1119,14 @@ mod tests {
         let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec!["https://example.com".into()], counter: true, mode: "caddy".into(), port: Some(8090), own_tunnel: false };
         let t = Settings { mode: "tunnel".into(), own_tunnel: true, ..s.clone() };
         let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ==";
-        for sh in [install_sh("pub", &s, 8090, 27016, None), install_sh("pub", &t, 8090, 27016, Some(token)), install_sh("pub", &t, 8090, 27016, None), off_sh("pub"), remove_sh("pub")] {
+        for sh in [install_sh("pub", &s, 8090, 27016, None, [None, None], ""), install_sh("pub", &t, 8090, 27016, Some(token), [None, None], ""), install_sh("pub", &t, 8090, 27016, None, [None, None], ""), off_sh("pub"), remove_sh("pub")] {
             use std::io::Write;
             let mut c = std::process::Command::new("bash").arg("-n").stdin(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn().unwrap();
             c.stdin.take().unwrap().write_all(sh.as_bytes()).unwrap();
             let out = c.wait_with_output().unwrap();
             assert!(out.status.success(), "{}\n{sh}", String::from_utf8_lossy(&out.stderr));
         }
-        let existing = install_sh("pub", &t, 8090, 27016, None);
+        let existing = install_sh("pub", &t, 8090, 27016, None, [None, None], "");
         assert!(existing.contains("systemctl is-active --quiet cloudflared ||") && !existing.contains("pkg.cloudflare.com") && !existing.contains("caddy adapt"));
         assert!(!existing.contains("disable --now cloudflared") && !off_sh("pub").contains("cloudflared.service"), "the machine's own tunnel is never touched");
     }
@@ -1018,6 +1156,45 @@ al = {"https://lonerstrike.com", "https://*.loner-strike.pages.dev", "http://loc
 ok = [m.origin_allowed(o, al) for o in ["https://lonerstrike.com", "https://abc123.loner-strike.pages.dev", "https://a.b.loner-strike.pages.dev", "http://localhost:5173"]]
 no = [m.origin_allowed(o, al) for o in ["", "https://evil.com", "http://abc.loner-strike.pages.dev", "https://loner-strike.pages.dev", "https://xloner-strike.pages.dev", "https://abc.loner-strike.pages.dev:8443", "https://lonerstrike.com.evil.com"]]
 assert all(ok) and not any(no), (ok, no)
+# Discord: posted once then edited, posted again when deleted, people coming on said once an hour
+import os, tempfile
+calls = []
+answers = {}
+def fake(method, url, body=None):
+    calls.append((method, url, body))
+    return answers.get(method, (200, {"id": "42"}))
+m._discord = fake
+class St:
+    info = {"online": True, "name": "Pub", "map": "de_dust2", "players": 9, "bots": 9, "max_players": 32}
+    def get(self): return dict(self.info)
+st = St()
+state = os.path.join(tempfile.mkdtemp(), "discord.json")
+d = m.DiscordStatus(st, "https://live", "https://busy", "play.example.com", state, 1)
+d.tick(1000.0)
+assert [c[:2] for c in calls] == [("POST", "https://live?wait=true")], calls
+assert "Only bots right now" in calls[0][2]["embeds"][0]["description"]
+calls.clear(); d.tick(1060.0)
+assert [c[:2] for c in calls] == [("PATCH", "https://live/messages/42")], calls
+st.info = dict(st.info, players=11)
+calls.clear(); d.tick(1120.0)
+said = [c for c in calls if c[1] == "https://busy"]
+assert len(said) == 1 and said[0][2]["content"].startswith("2 people are playing on **de_dust2**"), calls
+assert "**2 people** and 9 bots" in calls[0][2]["embeds"][0]["description"]
+st.info = dict(st.info, players=9); d.tick(1180.0); st.info = dict(st.info, players=10)
+calls.clear(); d.tick(1240.0)
+assert not [c for c in calls if c[1] == "https://busy"], "at most once an hour"
+st.info = dict(st.info, players=9); d.tick(5000.0); st.info = dict(st.info, players=10)
+calls.clear(); d.tick(5060.0)
+assert len([c for c in calls if c[1] == "https://busy"]) == 1
+answers["PATCH"] = (404, {})
+calls.clear(); d.tick(5120.0)
+assert [c[:2] for c in calls] == [("PATCH", "https://live/messages/42"), ("POST", "https://live?wait=true")], calls
+d2 = m.DiscordStatus(st, "https://live", "https://busy", "", state, 1)
+calls.clear(); d2.tick(9000.0)
+assert not [c for c in calls if c[1] == "https://busy"], "people already on when it starts aren't announced"
+assert d2.saved.get("message") == "42"
+assert [f["name"] for f in m.status_message(st.info, "")["embeds"][0]["fields"]] == ["Players"], "no Join without an address"
+assert m.status_message({"online": False}, "x")["embeds"][0]["title"] == "Server offline"
 print(json.dumps([m.parse_info(new), m.parse_info(old), m.parse_info(oldmod), m.parse_info(b"I\x30cut"), m.parse_info(b"")]))
 "#;
         let out = std::process::Command::new(py).arg("-c").arg(test).arg(&file).output().unwrap();

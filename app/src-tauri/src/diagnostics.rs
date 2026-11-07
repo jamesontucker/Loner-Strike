@@ -352,6 +352,7 @@ pub fn gather(st: &crate::server::Shared, version: String) -> Facts {
             secrets.push(e.hltv.password.clone());
             secrets.extend(crate::hltv::admin_password(&e));
             secrets.extend(crate::webstatus::saved_token(&e.id));
+            secrets.extend(crate::webstatus::saved_hooks(&e.id));
             let (state, error) = crate::servers::last_state(&e);
             ServerFacts {
                 hltv: crate::hltv::last_state(&e),
