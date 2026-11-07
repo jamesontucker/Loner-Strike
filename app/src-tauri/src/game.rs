@@ -136,16 +136,16 @@ impl Game {
     pub fn with_app_dir(hl: &Path, name: &str, app: &Path) -> Game {
         let dir = hl.join(name);
         let data = dir.join("addons/amxmodx/data/gamemodes");
-        let _ = std::fs::create_dir_all(&data);
         let _ = std::fs::create_dir_all(app.join("cache"));
-        // The plugin reads the same file, so both sides share the RCON password
+        // The plugin reads the same file, so both sides share the RCON password. A game
+        // without Loner-Strike (never set up, or removed) gets nothing written into it: the
+        // file is written once it's set up (ensure_password_file)
         let pw_file = data.join("panel_rcon.txt");
         let mut pw = std::fs::read_to_string(&pw_file).unwrap_or_default().trim().to_string();
         if pw.is_empty() {
             const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
             let mut rng = rand::thread_rng();
             pw = (0..24).map(|_| CHARS[rng.gen_range(0..CHARS.len())] as char).collect();
-            let _ = std::fs::write(&pw_file, format!("{pw}\n"));
         }
         let rcon = Arc::new(Rcon::new(pw, 27015));
         let maps_cache = Arc::new(Mutex::new(None));
@@ -159,7 +159,22 @@ impl Game {
         self.status.get_or(|| self.state_now())
     }
 
+    /// Writes the RCON password file for the plugin once Loner-Strike is set up in this
+    /// game (its plugins are there), and never into a game without it.
+    fn ensure_password_file(&self) {
+        if self.remote.is_some() || self.dedicated {
+            return;
+        }
+        let pw_file = self.data.join("panel_rcon.txt");
+        if pw_file.is_file() || !self.dir.join("addons/amxmodx/plugins/gamemodes.amxx").is_file() {
+            return;
+        }
+        let _ = std::fs::create_dir_all(&self.data);
+        let _ = std::fs::write(&pw_file, format!("{}\n", self.rcon.password()));
+    }
+
     fn state_now(&self) -> Value {
+        self.ensure_password_file();
         // a dedicated server on the game's port isn't the game: don't knock with the wrong password
         if !self.dedicated {
             if let Some(name) = crate::servers::running_on(self.port) {

@@ -345,7 +345,8 @@ fn write_files(g: &Game, a: &Admins) -> Result<bool, String> {
     }
     let cfg = g.data.join("vip.cfg");
     let text = vip_cfg(a);
-    if std::fs::read_to_string(&cfg).ok().as_deref() != Some(text.as_str()) {
+    // only into a game (or server copy) that has Loner-Strike
+    if g.data.is_dir() && std::fs::read_to_string(&cfg).ok().as_deref() != Some(text.as_str()) {
         let _ = std::fs::write(&cfg, text);
     }
     Ok(changed)
