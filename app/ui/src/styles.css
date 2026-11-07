@@ -668,7 +668,9 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .steam-box.error .steam-bar i { background: #b0664c; box-shadow: none; }
 
 /* ---- setup: all done --------------------------------------------------------------- */
-.done-mark { width: 64px; height: 64px; display: grid; place-items: center; background: var(--ok); color: #1f2412; font-size: 34px; font-weight: 800; border-radius: 50%; margin-bottom: 4px; }
+/* the end of setup: the app's icon on a raised Steam-style tile, like a game in the library */
+.done-mark { width: 80px; height: 80px; display: grid; place-items: center; padding: 8px; background: var(--panel-2); box-shadow: var(--raised), 0 10px 26px rgba(0,0,0,.35); border-radius: 4px; margin-bottom: 6px; }
+.done-mark img { width: 100%; height: 100%; display: block; }
 .done-tips { list-style: none; margin: 14px 0 22px; padding: 0; display: grid; gap: 8px; text-align: left; width: min(560px, 100%); }
 .done-tips li { display: flex; gap: 12px; align-items: baseline; background: var(--bg); box-shadow: var(--sunken); padding: 10px 14px; border-radius: 2px; }
 .kbd { flex: none; min-width: 34px; text-align: center; font-weight: 800; color: var(--signal-ink); background: var(--signal); padding: 1px 6px; border-radius: 2px; box-shadow: inset 0 -2px 0 rgba(0,0,0,.25); }
@@ -966,7 +968,7 @@ a.btn.primary { color: var(--signal-ink); }
 .setup-pane.welcome:has(.done-tips) { gap: 2px; padding: 0; }
 .setup-pane.welcome:has(.done-tips) h1 { margin: 6px 0 4px; font-size: 38px; }
 .setup-pane.welcome:has(.done-tips) > p { margin: 0; }
-.done-mark { width: 46px; height: 46px; font-size: 24px; margin-bottom: 0; }
+.done-mark { width: 60px; height: 60px; padding: 6px; margin-bottom: 0; }
 .done-tips { margin: 10px 0 12px; gap: 6px; }
 .done-tips li { padding: 7px 12px; font-size: 15px; }
 .first-game { margin: 0 0 10px; padding: 10px 14px 10px; }

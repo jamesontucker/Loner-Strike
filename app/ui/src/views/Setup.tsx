@@ -284,7 +284,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
 
         {stage === "done" && (
           <section className="setup-pane welcome">
-            <div className="done-mark" aria-hidden="true">✓</div>
+            <div className="done-mark" aria-hidden="true"><img src={logo} alt="" /></div>
             <h1>You're set</h1>
             <p>Start the game and Loner-Strike connects by itself.</p>
             <ul className="done-tips">
