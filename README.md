@@ -30,6 +30,7 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 **Friends**
 - Seven ways to connect: the same network, Direct (your router), [playit.gg](https://playit.gg), [Tailscale](https://tailscale.com), ZeroTier, Radmin VPN and Hamachi
 - Server name, join password, an invite to send and a custom welcome page
+- Find servers: a server browser like Steam's old one, with games on your own network
 
 **Servers**
 - Dedicated servers on your computer, or on a rented Linux machine (a VPS) that the app sets up over SSH and that keeps running without it
@@ -39,6 +40,8 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 - Map rotation, timed chat messages, AFK and high-ping kickers, stats and ranks, votekick and voteban
 - Match mode for 5v5s, HLTV spectators and demos, fast downloads and scheduled restarts
 - Join password, console password and extra start options per server
+- A live status in your Discord, and the Loner-Strike server list for anyone to find your server
+- Weapon skins and player models everyone on the server sees
 - A step-by-step guide in the app to renting a server: where, what size and how to set it up
 
 **The app**
@@ -77,7 +80,7 @@ Updates come through the app (Settings, Updates). What changed in each version i
 - **The game won't start or the panel says no game is loaded.** Start the game from Play in the app, not from Steam, so it loads with the mods.
 - **Friends can't see your game on the LAN tab.** Allow the game through the firewall when asked. On Windows, also make sure your Wi-Fi is set to Private network (Settings, Network & internet).
 - **A mod misbehaves after a game update.** Open Settings and click Run full setup; it reinstalls what's missing and keeps your settings.
-- **You want everything gone.** Settings has Remove Loner-Strike, which puts your game back the way it was.
+- **You want everything gone.** In Settings, Remove from (your game) puts that game back the way it was, and Remove everything also deletes Loner-Strike's own files.
 
 Still stuck? Ask in the [Discord](https://discord.gg/K9eBHVVwZE), or open Settings, click Copy next to Copy diagnostics (version, game folders, what's installed and recent errors; no passwords) and paste it into a [new issue](https://github.com/jamesontucker/Loner-Strike/issues/new).
 
