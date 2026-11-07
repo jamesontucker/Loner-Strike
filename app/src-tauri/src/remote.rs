@@ -988,6 +988,31 @@ pub fn take_log(g: &crate::game::Game, rel: &str) -> Result<(), String> {
     std::fs::OpenOptions::new().create(true).append(true).open(&p).and_then(|mut file| file.write_all(&bytes)).map_err(|e| format!("Couldn't save {rel} ({e})."))
 }
 
+/// AMX Mod X's Ham Sandwich for Linux with the special-bot queue fix (resources/linux/
+/// hamsandwich/README.md): the official module uses freed memory on map changes.
+const HAM_LINUX: &[u8] = include_bytes!("../resources/linux/hamsandwich/hamsandwich_amxx_i386.so");
+const HAM_LINUX_SHA: &str = "dd398607f0dd15d22493dce920eb59f5bc62d5f6710205bff8bbd42c1202510e";
+
+/// Puts the fixed Ham Sandwich on a server on a Linux machine, unless it's there already
+/// (or AMX Mod X isn't). Sent beside the old one and renamed over it, so a server running
+/// now keeps the copy it loaded; the fixed one loads from the next start. Whether it was sent.
+pub fn ensure_ham(r: &RemoteInfo, id: &str, game: &str) -> Result<bool, String> {
+    let rel = format!("{}/{game}/addons/amxmodx/modules/hamsandwich_amxx_i386.so", server_dir(id));
+    let q = shell_quote(&rel);
+    let (_, out) = exec_quick(r, &format!("cd \"$HOME\" && if [ -f {q} ]; then sha256sum {q} | cut -c1-64; else echo none; fi"))?;
+    match out.trim() {
+        HAM_LINUX_SHA | "none" => return Ok(false),
+        _ => {}
+    }
+    let new = format!("{rel}.new");
+    write_file(r, &new, HAM_LINUX)?;
+    let (code, out) = exec_quick(r, &format!("cd \"$HOME\" && mv -f {} {q}", shell_quote(&new)))?;
+    if code != 0 {
+        return Err(format!("Couldn't put the fixed Ham Sandwich in place ({}).", out.trim()));
+    }
+    Ok(true)
+}
+
 /// The env assignments for SETUP_SH.
 pub fn setup_env(id: &str, game: &str) -> String {
     let mut env = vec![format!("SRVDIR={}", shell_quote(&server_dir(id))), format!("GAME={}", shell_quote(game))];
@@ -1009,6 +1034,14 @@ mod tests {
         assert!(setup_env("my-server", "czero").contains("GAME='czero'"));
         let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()]);
         assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike'") && svc.contains("lsctl") && svc.contains("b\"\\xff\\xff\\xff\\xff\""));
+    }
+
+    #[test]
+    fn ham_linux_is_the_documented_build() {
+        use sha2::Digest;
+        let sum: String = sha2::Sha256::digest(HAM_LINUX).iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(sum, HAM_LINUX_SHA);
+        assert_eq!(&HAM_LINUX[..4], b"\x7fELF");
     }
 
     #[test]

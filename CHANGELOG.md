@@ -5,7 +5,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 ## 0.1.1 (not released yet)
 
 ### Fixes
-- Windows: the game no longer crashes on a map change. AMX Mod X's Ham Sandwich module freed something it still used, which Windows caught; the Windows app brings a fixed build of it.
+- The game no longer crashes on a map change on Windows. AMX Mod X's Ham Sandwich module used memory it had already freed, which Windows caught. Loner-Strike brings a fixed build of it, on Windows, on the Mac through CrossOver (where Wine only hid the bug) and on dedicated servers on Linux.
 - Windows 10: map downloads packed as RAR files unpack again (Windows 10's own unpacker can't open many of them, so the Windows app now brings 7-Zip).
 - Windows: Base Builder and other modes with their own folder compile during setup.
 - Mac: Base Builder's compile no longer crashes in Condition Zero under CrossOver.

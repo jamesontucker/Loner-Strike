@@ -77,7 +77,7 @@ For a server on this computer or on a Linux machine, the app installs Valve's [S
 |---|---|
 | [playit.gg](https://playit.gg) | Tunnels run through playit.gg's service with playit's own agent, [playit-agent](https://github.com/playit-cloud/playit-agent) v1.2.0 by Developed Methods (BSD-2-Clause), shipped inside the app: built from its source for Mac, and playit's own signed build for Windows. Copyright 2022 Developed Methods LLC |
 | [7-Zip](https://www.7-zip.org) | 7-Zip by Igor Pavlov (GNU LGPL, with the unRAR licence restriction for its RAR code), shipped inside the Windows app to unpack map downloads Windows 10's own tar can't open. Unchanged, with its licence beside it |
-| [Ham Sandwich](https://github.com/alliedmodders/amxmodx) | AMX Mod X's Ham Sandwich module (GPL-3.0), rebuilt for Windows with a fix for a crash on map changes; the patch and how it was built are in app/src-tauri/resources/windows/hamsandwich |
+| [Ham Sandwich](https://github.com/alliedmodders/amxmodx) | AMX Mod X's Ham Sandwich module (GPL-3.0), rebuilt for Windows and for Linux servers with a fix for a crash on map changes; the patch and how each was built are in app/src-tauri/resources/windows/hamsandwich and resources/linux/hamsandwich |
 | [Tailscale](https://tailscale.com) | The app only reads Tailscale's status for this computer's address |
 
 ## Website

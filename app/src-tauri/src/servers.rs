@@ -2028,6 +2028,11 @@ pub fn start(id: &str) -> Result<(), String> {
         if e.service_stale {
             write_service(&e)?;
         }
+        // the fixed Ham Sandwich (the official one crashes on map changes): a server set
+        // up before it existed gets it here, at a start
+        if let Err(why) = crate::remote::ensure_ham(r, &e.id, &e.game) {
+            crate::diagnostics::log_error("ham sandwich", &why);
+        }
         clear_pending_restart(&e.id);
         return crate::remote::systemctl(r, &e.id, "start");
     }
