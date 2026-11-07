@@ -1557,3 +1557,7 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .pick-row:hover { background: var(--panel); }
 .pick-row .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .pick-row input { flex: none; }
+
+/* a banner's button keeps its size and stays on one line; the text gives way */
+.banner > .btn, .banner > button, .banner > .row { flex: none; white-space: nowrap; }
+.banner > div { min-width: 0; }
