@@ -367,6 +367,8 @@ function ThemeMusic() {
   const audio = useRef<HTMLAudioElement | null>(null);
   // the playlist's "next random track" (null with only one track)
   const skipTrack = useRef<(() => void) | null>(null);
+  // stops the music for good (setup closing): no track can start again after that
+  const stopAudio = useRef<(() => void) | null>(null);
   const wanted = useRef(on);
   wanted.current = on;
 
@@ -416,7 +418,10 @@ function ThemeMusic() {
       let i = 0;
       const a = new Audio(order[0]);
       a.loop = tracks.length === 1;
+      // tracks that wouldn't play in a row: when all of them fail, stop trying
+      let failures = 0;
       const next = () => {
+        if (cancelled) return;
         const last = order[i];
         i++;
         if (i >= order.length) {
@@ -427,9 +432,22 @@ function ThemeMusic() {
         a.volume = level.current;
         if (wanted.current) a.play().catch(() => {});
       };
+      const failed = () => {
+        if (++failures < tracks.length) next();
+      };
+      const playing = () => (failures = 0);
       a.addEventListener("ended", next);
       // a track that won't play is skipped
-      a.addEventListener("error", () => tracks.length > 1 && next());
+      a.addEventListener("error", failed);
+      a.addEventListener("playing", playing);
+      stopAudio.current = () => {
+        a.removeEventListener("ended", next);
+        a.removeEventListener("error", failed);
+        a.removeEventListener("playing", playing);
+        a.pause();
+        a.removeAttribute("src");
+        a.load();
+      };
       skipTrack.current = tracks.length > 1 ? next : null;
       audio.current = a;
       setReady(true);
@@ -503,6 +521,7 @@ function ThemeMusic() {
       window.removeEventListener("keydown", wake);
       ctx?.close().catch(() => {});
       audio.current?.pause();
+      stopAudio.current?.();
     };
   }, []);
 

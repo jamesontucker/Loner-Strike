@@ -352,7 +352,7 @@ footer a { color: var(--dim); }
 
 .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-/* 2004 bits: crosshair, kill feed, visitor counter, friend toast */
+/* 2004 bits: crosshair, kill feed, visitor counter, friend toast, radio */
 
 /* The CS 1.6 crosshair on the hero and the screenshots. Mouse only; anything clickable keeps its own cursor. */
 @media (pointer: fine) {
@@ -398,6 +398,48 @@ footer a { color: var(--dim); }
 .toast-body img { flex: none; width: 36px; height: 36px; box-shadow: var(--sunken); border-radius: 2px; }
 .toast-body b { color: var(--bone); }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+/* Internet radio, a Winamp 2.x main window in Steam colours. --radio-clear is its height, set by the
+   script, so the footer and (on narrow screens) the toast can stay clear of it. */
+.radio { position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 3; width: min(275px, 100vw - 32px);
+  background: var(--panel); box-shadow: var(--raised), 0 10px 30px rgba(0,0,0,.4); border-radius: 3px; padding: 3px; font-size: 13px; line-height: 1.2; }
+.radio[hidden] { display: none; }
+.radio-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 20px; padding: 0 2px 0 7px; background: var(--side); border-radius: 2px;
+  font: 700 11px/1 var(--text); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+.radio-bar::before { content: ""; flex: 1; order: 1; height: 5px; border-block: 1px solid var(--bevel-lo); opacity: .7; }
+.radio-bar button { order: 2; }
+.radio button { display: grid; place-items: center; padding: 0; border: 0; border-radius: 2px; background: var(--panel-2); color: var(--bone); box-shadow: var(--raised); cursor: pointer; }
+.radio button:hover { color: var(--signal); }
+.radio button:active { box-shadow: var(--sunken); }
+.radio button svg { display: block; fill: currentColor; }
+.radio-bar button { width: 18px; height: 15px; }
+.radio-lcd { display: grid; grid-template-columns: 74px 1fr; gap: 3px 8px; margin: 3px 0; padding: 6px 7px; background: #171a12; box-shadow: var(--sunken); border-radius: 2px; color: var(--signal); }
+.radio-time { font: 400 20px/1 var(--stencil); letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.radio-time.off { opacity: .3; }
+.radio-vis { grid-row: 2 / 4; display: block; width: 74px; height: 22px; image-rendering: pixelated; }
+.radio-title { overflow: hidden; white-space: nowrap; font-weight: 600; color: var(--bone); }
+.radio-title span { display: inline-block; }
+.radio-title.scroll span { padding-right: 3em; animation: radio-marquee var(--marquee-s, 12s) linear infinite; }
+.radio-title.scroll span::after { content: attr(data-t); padding-left: 3em; }
+@keyframes radio-marquee { to { transform: translateX(-50%); } }
+.radio-info { display: flex; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--faint); text-transform: uppercase; }
+.radio-info b { color: var(--signal); font-weight: 700; }
+.radio-info .off { opacity: .35; }
+.radio-controls { display: flex; align-items: center; gap: 3px; }
+.radio-controls button { width: 26px; height: 20px; }
+.radio-controls input { flex: 1; min-width: 0; height: 20px; margin: 0 0 0 6px; accent-color: var(--signal); cursor: pointer; }
+.radio-credit { display: flex; justify-content: space-between; gap: 8px; margin: 0; padding: 4px 3px 2px; font-size: 13px; color: var(--faint); }
+.radio-credit a { color: var(--dim); }
+.radio-credit a:hover { color: var(--signal); }
+.radio-tab { position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px;
+  border: 0; border-radius: 3px; background: var(--panel); color: var(--bone); box-shadow: var(--raised), 0 6px 18px rgba(0,0,0,.35); font: 600 14px/1 var(--text); cursor: pointer; }
+.radio-tab[hidden] { display: none; }
+.radio-tab:hover { color: var(--signal); }
+.radio-tab i { width: 7px; height: 7px; border-radius: 50%; background: var(--bevel-lo); box-shadow: var(--sunken); }
+.radio-tab.on i { background: var(--signal); box-shadow: 0 0 6px var(--signal); }
+footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
+@media (max-width: 640px) { .toast { bottom: calc(max(16px, env(safe-area-inset-bottom)) + var(--radio-clear, 0px)); } }
+@media (prefers-reduced-motion: reduce) { .radio-title.scroll span { animation: none; } .radio-title { text-overflow: ellipsis; } .radio-title span { display: inline; padding: 0; } }
 
 @media (max-width: 860px) {
   body { font-size: 17px; }
@@ -727,6 +769,29 @@ footer a { color: var(--dim); }
   </div>
 </footer>
 
+<!-- Internet radio, bottom right. Hidden without the script. Nothing streams until you press play. -->
+<section class="radio" id="radio" aria-label="Radio" hidden>
+  <div class="radio-bar"><span>Loner-Strike radio</span>
+    <button type="button" id="radio-min" aria-label="Minimise radio"><svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><path d="M0 6h8v2H0z"/></svg></button>
+  </div>
+  <div class="radio-lcd">
+    <span class="radio-time off" id="radio-time" aria-hidden="true">00:00</span>
+    <div class="radio-title" id="radio-title"><span></span></div>
+    <canvas class="radio-vis" id="radio-vis" width="74" height="22" aria-hidden="true"></canvas>
+    <div class="radio-info" id="radio-info"><span>MP3</span><span id="radio-state">Stopped</span><b class="off" id="radio-live">Live</b></div>
+  </div>
+  <div class="radio-controls">
+    <button type="button" id="radio-prev" aria-label="Previous station"><svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><path d="M0 0h2v10H0zM12 0v10L3 5z"/></svg></button>
+    <button type="button" id="radio-play" aria-label="Play"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0l9 5-9 5z"/></svg></button>
+    <button type="button" id="radio-stop" aria-label="Stop"><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><path d="M0 0h9v9H0z"/></svg></button>
+    <button type="button" id="radio-next" aria-label="Next station"><svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><path d="M10 0h2v10h-2zM0 0v10l9-5z"/></svg></button>
+    <input type="range" id="radio-vol" min="0" max="100" value="70" aria-label="Volume">
+  </div>
+  <p class="radio-credit"><a id="radio-site" href="https://www.bassdrive.com/" target="_blank" rel="noopener">Bassdrive</a><a id="radio-support" href="https://somafm.com/support/" target="_blank" rel="noopener" hidden>Support SomaFM</a></p>
+  <p class="sr" id="radio-announce" aria-live="polite"></p>
+</section>
+<button type="button" class="radio-tab" id="radio-tab" aria-label="Open radio" hidden><i></i>Radio</button>
+
 <script>
   // ---- settings -------------------------------------------------------------
   // The public server: its address (ip:port) shows the "Play on our server" block. STATUS
@@ -985,6 +1050,201 @@ footer a { color: var(--dim); }
       if (document.hidden) return;
       if (++seconds >= 15 && !footerInView) { clearInterval(tick); showToast(); }
     }, 1000);
+  }
+
+  // Internet radio, a little Winamp in the corner. Never autoplays: the stream is only requested
+  // when you press play, and stop drops the connection. Volume, station and minimised state are
+  // remembered in localStorage when it's there. Phones always start minimised, to save data.
+  {
+    const STATIONS = [
+      { name: "Bassdrive", desc: "Worldwide drum and bass", stream: "https://ice.bassdrive.net/stream", site: "https://www.bassdrive.com/", credit: "Bassdrive" },
+      { name: "SomaFM The Trip", desc: "Progressive house and trance", stream: "https://ice1.somafm.com/thetrip-128-mp3", site: "https://somafm.com/thetrip/", credit: "SomaFM: The Trip", soma: true },
+      { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true },
+    ];
+    const keep = {
+      get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+    };
+    const $ = (id) => document.getElementById(`radio-${id}`);
+    const box = document.getElementById("radio");
+    const tab = $("tab");
+    const title = $("title");
+    const vis = $("vis").getContext("2d");
+    const audio = new Audio();
+    audio.preload = "none";
+
+    let at = Math.min(STATIONS.length - 1, Math.max(0, Number(keep.get("ls-radio-station")) || 0));
+    let state = "stopped"; // stopped, connecting, playing, error
+    let seconds = 0;
+    let lastTime = 0;
+    let stuck = 0;
+    let tick = null;
+    let running = false;
+
+    // Title marquee: scrolls only when it doesn't fit, and never with reduced motion
+    const setTitle = (text) => {
+      const span = title.firstElementChild;
+      span.textContent = text;
+      span.removeAttribute("data-t");
+      title.classList.remove("scroll");
+      if (reduce || box.hidden || span.offsetWidth <= title.clientWidth) return;
+      span.dataset.t = text;
+      title.classList.add("scroll");
+      title.style.setProperty("--marquee-s", `${Math.round(span.offsetWidth / 2 / 28)}s`);
+    };
+    const stationTitle = () => `${at + 1}. ${STATIONS[at].name} · ${STATIONS[at].desc}`;
+
+    // Fake spectrum: bars that bounce while playing, a still picture with reduced motion
+    const BARS = 18;
+    const levels = Array(BARS).fill(0);
+    const peaks = Array(BARS).fill(0);
+    const signal = getComputedStyle(document.documentElement).getPropertyValue("--signal").trim();
+    const draw = () => {
+      vis.clearRect(0, 0, 74, 22);
+      for (let i = 0; i < BARS; i++) {
+        const h = Math.round(levels[i] * 20);
+        vis.fillStyle = signal;
+        vis.globalAlpha = 0.85;
+        vis.fillRect(i * 4 + 1, 22 - Math.max(1, h), 3, Math.max(1, h));
+        vis.globalAlpha = 1;
+        if (peaks[i] > 0.05) vis.fillRect(i * 4 + 1, 21 - Math.round(peaks[i] * 20), 3, 1);
+      }
+    };
+    const animate = () => {
+      if (!running) return;
+      for (let i = 0; i < BARS; i++) {
+        // lows a bit louder than highs, like most music
+        const target = Math.random() * (1 - i / (BARS * 1.6)) * (Math.random() < 0.2 ? 1 : 0.7);
+        levels[i] = target > levels[i] ? target : levels[i] * 0.82;
+        peaks[i] = Math.max(levels[i], peaks[i] - 0.03);
+      }
+      if (!box.hidden) draw();
+      setTimeout(() => requestAnimationFrame(animate), 60);
+    };
+    const visualise = (on) => {
+      const was = running;
+      running = on && !reduce;
+      if (running) return was || animate();
+      for (let i = 0; i < BARS; i++) {
+        levels[i] = on ? 0.25 + 0.55 * Math.abs(Math.sin(i * 0.9)) * (1 - i / (BARS * 1.6)) : 0;
+        peaks[i] = 0;
+      }
+      draw();
+    };
+
+    const show = () => {
+      const s = STATIONS[at];
+      $("site").href = s.site;
+      $("site").textContent = s.credit;
+      $("support").hidden = !s.soma;
+      $("state").textContent = { stopped: "Stopped", connecting: "Connecting…", playing: "Playing", error: "Stopped" }[state];
+      $("live").classList.toggle("off", state !== "playing");
+      const t = $("time");
+      t.classList.toggle("off", state === "stopped" || state === "error");
+      t.textContent = `${String(Math.floor(seconds / 60) % 100).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+      tab.classList.toggle("on", state === "playing" || state === "connecting");
+      tab.setAttribute("aria-label", state === "playing" ? `Open radio, playing ${s.name}` : "Open radio");
+    };
+
+    // Drop the stream completely, so nothing keeps downloading in the background
+    const disconnect = () => {
+      clearInterval(tick);
+      tick = null;
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      visualise(false);
+    };
+    const fail = () => {
+      disconnect();
+      state = "error";
+      show();
+      setTitle("This station isn't answering. Try another.");
+    };
+    const stop = () => {
+      disconnect();
+      state = "stopped";
+      seconds = 0;
+      show();
+      setTitle(stationTitle());
+    };
+    const play = () => {
+      if (state === "playing" || state === "connecting") return;
+      state = "connecting";
+      seconds = 0;
+      lastTime = 0;
+      stuck = 0;
+      setTitle(stationTitle());
+      show();
+      audio.src = STATIONS[at].stream;
+      audio.play().catch((e) => { if (e.name !== "AbortError" && state === "connecting") fail(); });
+      // Once a second: the clock, and give up if the stream hasn't moved for 15 s
+      tick = setInterval(() => {
+        if (audio.currentTime > lastTime) { lastTime = audio.currentTime; stuck = 0; } else stuck++;
+        if (state === "playing" && !stuck) seconds++;
+        if (stuck >= 15) return fail();
+        show();
+      }, 1000);
+    };
+    audio.addEventListener("playing", () => {
+      if (state !== "connecting") return;
+      state = "playing";
+      visualise(true);
+      show();
+    });
+    audio.addEventListener("waiting", () => {
+      if (state !== "playing") return;
+      state = "connecting";
+      visualise(false);
+      show();
+    });
+    audio.addEventListener("error", () => { if (state === "playing" || state === "connecting") fail(); });
+
+    const tune = (step) => {
+      const wasOn = state === "playing" || state === "connecting";
+      if (wasOn) disconnect();
+      at = (at + step + STATIONS.length) % STATIONS.length;
+      keep.set("ls-radio-station", String(at));
+      state = "stopped";
+      $("announce").textContent = `${STATIONS[at].name}, ${STATIONS[at].desc.toLowerCase()}`;
+      if (wasOn) play();
+      else { seconds = 0; show(); setTitle(stationTitle()); }
+    };
+    $("play").addEventListener("click", play);
+    $("stop").addEventListener("click", stop);
+    $("prev").addEventListener("click", () => tune(-1));
+    $("next").addEventListener("click", () => tune(1));
+
+    const vol = $("vol");
+    const saved = keep.get("ls-radio-volume");
+    if (saved !== null && saved !== "" && Number(saved) >= 0 && Number(saved) <= 100) vol.value = saved;
+    audio.volume = vol.value / 100;
+    vol.addEventListener("input", () => {
+      audio.volume = vol.value / 100;
+      keep.set("ls-radio-volume", vol.value);
+    });
+
+    // Minimised to a tab. Its height goes in --radio-clear so nothing ends up underneath.
+    const setMin = (min, focus) => {
+      box.hidden = min;
+      tab.hidden = !min;
+      if (!min) setTitle(state === "error" ? "This station isn't answering. Try another." : stationTitle());
+      if (focus) (min ? tab : $("play")).focus();
+    };
+    $("min").addEventListener("click", () => { keep.set("ls-radio-min", "1"); setMin(true, true); });
+    tab.addEventListener("click", () => { keep.set("ls-radio-min", "0"); setMin(false, true); });
+    const clear = () => {
+      const h = (box.hidden ? tab : box).offsetHeight;
+      document.documentElement.style.setProperty("--radio-clear", `${h + 16}px`);
+    };
+    const ro = new ResizeObserver(clear);
+    ro.observe(box);
+    ro.observe(tab);
+
+    const phone = matchMedia("(max-width: 760px), (pointer: coarse)").matches;
+    show();
+    visualise(false);
+    setMin(phone || keep.get("ls-radio-min") === "1", false);
   }
 </script>
 </body>

@@ -301,10 +301,11 @@ pub fn servers_dir_ok(dir: &Path, client: &Install) -> Result<(), String> {
 /// it, in one of the servers folders it uses.
 fn made_here(e: &Entry) -> bool {
     let named = e.dir.file_name().map(|n| n.to_string_lossy() == e.id).unwrap_or(false);
-    let parent = e.dir.parent();
-    let in_ours = parent.and_then(|p| p.file_name()).map(|n| n == FOLDER || n == "Servers").unwrap_or(false)
-        || crate::app_api::load_settings().servers_dir.is_some_and(|d| parent == Some(Path::new(&d)));
-    !e.imported && named && in_ours
+    // marked when it was made; servers from before the marker are only in the servers
+    // folders Loner-Strike used then
+    let marked = std::fs::read_to_string(e.dir.join(MARKER)).is_ok_and(|t| t.trim() == e.id);
+    let legacy = e.dir.parent().and_then(|p| p.file_name()).map(|n| n == FOLDER || n == "Servers").unwrap_or(false);
+    !e.imported && named && (marked || legacy)
 }
 
 /// "Friday Night Frags" -> "friday-night-frags" (unique among the servers).
@@ -329,6 +330,29 @@ fn slug(name: &str, taken: &[Entry]) -> String {
         n += 1;
     }
     id
+}
+
+/// A new server's id, also free on disk: its folder is always a new one, never a folder
+/// that's already there (a game, someone's files), which Delete would then remove.
+fn slug_in(name: &str, taken: &[Entry], root: &Path) -> String {
+    let base = slug(name, taken);
+    let mut id = base.clone();
+    let mut n = 2;
+    while root.join(&id).exists() || taken.iter().any(|e| e.id == id) {
+        id = format!("{base}-{n}");
+        n += 1;
+    }
+    id
+}
+
+/// Written into every server folder Loner-Strike makes; only folders with it (or in
+/// the servers folders of earlier versions) are ever deleted.
+const MARKER: &str = ".loner-strike-server";
+
+/// Makes a new server's folder and marks it as ours.
+fn make_server_dir(e: &Entry) -> Result<(), String> {
+    std::fs::create_dir_all(&e.dir).map_err(|err| format!("Couldn't make the server's folder ({err})."))?;
+    std::fs::write(e.dir.join(MARKER), &e.id).map_err(|err| format!("Couldn't make the server's folder ({err})."))
 }
 
 fn free_port(taken: &[Entry]) -> u16 {
@@ -556,7 +580,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
     };
     let root = root_for(&client)?;
     let list = load();
-    let id = slug(&name, &list);
+    let id = slug_in(&name, &list, &root);
     let entry = Entry {
         id: id.clone(),
         name: name.clone(),
@@ -587,6 +611,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         setup::server_step(&g, "srv-maps", "Copying maps", 2.0),
         setup::server_step(&g, "srv-done", "Finishing up", 0.1),
     ];
+    make_server_dir(&entry)?;
     edit(|l| l.push(entry.clone()))?;
     let entry_id = entry.id.clone();
     let job = setup::start_job("server", steps, move |job| {
@@ -985,7 +1010,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
     };
     let root = root_for(&client)?;
     let list = load();
-    let id = slug(&name, &list);
+    let id = slug_in(&name, &list, &root);
     let entry = Entry {
         id: id.clone(),
         name: name.clone(),
@@ -1007,6 +1032,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         listen_ip: String::new(),
         extra_args: String::new(),
     };
+    make_server_dir(&entry)?;
     edit(|l| l.push(entry.clone()))?;
     let job = remote_setup(entry, source, components, res).inspect_err(|_| {
         let _ = edit(|l| l.retain(|e| e.id != id));
@@ -1254,6 +1280,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
     }
     let welcome = import_motd(&dir.join(game), &cfg, &data);
     let admins = crate::admins::import_users(&dir.join(game), &data);
+    // (a server you already had: never marked, so never deleted)
     edit(|l| l.push(entry.clone()))?;
     let loner = setup::record::Record::open(&dir.join(game)).installed("core");
     Ok(json!({"ok": true, "id": id, "admins": admins, "loner": loner, "welcome": welcome}))
