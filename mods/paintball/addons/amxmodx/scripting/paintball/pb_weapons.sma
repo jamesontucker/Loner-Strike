@@ -651,7 +651,9 @@ public fw_PaintBall_Touch(Ent, id)
 			engfunc(EngFunc_SetModel, Ent, PaintExp);
 			
 			paint_splat(Ent)
-			set_pev(Ent, pev_nextthink, get_gametime() + random_float(3.0, 6.0))
+			// the splash sprite goes quickly (the paint stays on the wall as a decal): with 30 bots
+			// firing, hundreds of them at once made busy areas slow to draw
+			set_pev(Ent, pev_nextthink, get_gametime() + random_float(0.8, 1.5))
 		} else {
 			set_pev(Ent, pev_movetype, MOVETYPE_BOUNCE)
 		
