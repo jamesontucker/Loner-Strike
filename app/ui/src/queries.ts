@@ -105,6 +105,8 @@ export function useMaps() {
       const m = await getJsonAt<MapInfo[]>("/api/maps", target, signal);
       return Array.isArray(m) ? m : [];
     },
+    // the app looks for map pictures in the background: the cards fill in as they're found
+    refetchInterval: (q) => (q.state.data?.some((m) => m.thumb === "lookup") ? 5000 : false),
   });
 }
 /** Looks at the maps folder again (a map added or learned), for the open target. */

@@ -211,12 +211,14 @@ impl Game {
         }
         let pics = Pictures::index(self);
         let misses = self.store.misses();
-        found
+        let mut lookups = Vec::new();
+        let list = found
             .into_iter()
             .map(|(key, (name, in_cz))| {
                 let thumb = if pics.shots.contains_key(&key) || self.store.shot_for(&key).is_some() {
                     Some("shot")
                 } else if !crate::gamebanana::MapStore::missed_recently(&misses, &key) {
+                    lookups.push(key.clone());
                     Some("lookup")
                 } else if pics.radars.contains_key(&key) {
                     Some("radar")
@@ -237,7 +239,13 @@ impl Game {
                 }
                 m
             })
-            .collect()
+            .collect();
+        // a server's maps are mostly the player's own game's, which looks for them (and
+        // tests never go to GameBanana)
+        if !self.dedicated && !cfg!(test) {
+            self.store.find_shots_soon(lookups);
+        }
+        list
     }
 
     pub fn map_title(&self, name: &str) -> String {
@@ -309,6 +317,11 @@ impl Game {
     pub fn thumbnail(&self, name: &str) -> (Option<(PathBuf, &'static str)>, bool) {
         let (kind, src, looking) = self.thumb_source(name);
         let (Some(kind), Some(src)) = (kind, src) else { return (None, looking) };
+        // while a screenshot may still turn up the card shows the map's name: the card
+        // only lays a radar out as one once the map list says "radar"
+        if kind == "radar" && looking {
+            return (None, true);
+        }
         let cache = self.app.join("cache");
         let _ = std::fs::create_dir_all(&cache);
         let base = format!("{kind}-{}", name.to_lowercase());
@@ -326,7 +339,8 @@ impl Game {
             }
             return (jpg.exists().then_some((jpg, kind)), looking);
         }
-        let out = cache.join(format!("{base}.png"));
+        // (-clear: made since the green went, so older green ones are made again)
+        let out = cache.join(format!("{base}-clear.png"));
         if !fresh(&out) {
             let _ = convert(&src, &out, Shrink::Fit(512));
         }
@@ -422,7 +436,8 @@ impl Pictures {
 pub enum Shrink {
     /// at most this wide (screenshots)
     Width(u32),
-    /// at most this wide and high (radar overviews)
+    /// at most this wide and high (radar overviews), with the overview's pure green
+    /// background made see-through
     Fit(u32),
 }
 
@@ -439,6 +454,13 @@ pub fn convert(src: &Path, out: &Path, shrink: Shrink) -> Result<(), String> {
         None => image::load_from_memory(&data),
     }
     .map_err(|e| e.to_string())?;
+    if let Shrink::Fit(_) = shrink {
+        let mut rgba = img.to_rgba8();
+        for p in rgba.pixels_mut().filter(|p| p.0[..3] == [0, 255, 0]) {
+            p.0 = [0, 0, 0, 0];
+        }
+        img = image::DynamicImage::ImageRgba8(rgba);
+    }
     match shrink {
         Shrink::Width(w) if img.width() > w => img = img.resize(w, img.height(), image::imageops::FilterType::Triangle),
         Shrink::Fit(n) if img.width() > n || img.height() > n => img = img.resize(n, n, image::imageops::FilterType::Triangle),
@@ -481,6 +503,21 @@ mod tests {
         assert_eq!(image::guess_format(&data).unwrap(), image::ImageFormat::Jpeg);
         let img = image::load_from_memory(&data).unwrap();
         assert_eq!((img.width(), img.height()), (340, 192));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn radar_green_goes() {
+        let dir = sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "radar-").unwrap();
+        let src = dir.join("de_x.bmp");
+        let mut img = image::RgbImage::from_pixel(64, 64, image::Rgb([0, 255, 0]));
+        img.put_pixel(10, 10, image::Rgb([90, 90, 90]));
+        img.save(&src).unwrap();
+        let out = dir.join("radar-de_x.png");
+        convert(&src, &out, Shrink::Fit(512)).unwrap();
+        let png = image::open(&out).unwrap().to_rgba8();
+        assert_eq!(png.get_pixel(0, 0).0[3], 0, "the green background is see-through");
+        assert_eq!(png.get_pixel(10, 10).0, [90, 90, 90, 255], "the map itself stays");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

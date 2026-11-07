@@ -400,12 +400,29 @@ impl MapStore {
         }
         // newest first: the pictures on screen now are the ones asked for last
         later.queue.push_front(name);
-        if later.workers < LOOKUP_WORKERS {
+        self.start_workers(&mut later);
+        true
+    }
+
+    /// Queues the lookups for a whole map list behind the ones asked for on screen, so
+    /// the pictures fill in without scrolling to every map first. `names` are the maps
+    /// the list marked "lookup".
+    pub fn find_shots_soon(self: &Arc<Self>, names: Vec<String>) {
+        let mut later = self.later.lock().unwrap_or_else(|e| e.into_inner());
+        for name in names {
+            if later.wanted.insert(name.clone()) {
+                later.queue.push_back(name);
+            }
+        }
+        self.start_workers(&mut later);
+    }
+
+    fn start_workers(self: &Arc<Self>, later: &mut Later) {
+        while later.workers < LOOKUP_WORKERS.min(later.queue.len()) {
             later.workers += 1;
             let store = self.clone();
             std::thread::spawn(move || store.lookup_worker());
         }
-        true
     }
 
     fn lookup_worker(&self) {
@@ -420,12 +437,12 @@ impl MapStore {
                     }
                 }
             };
-            if self.find_shot(&name).is_some() {
-                // the cached map list said "lookup": it has a picture now
-                if let Some(list) = self.maps_cache.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
-                    for m in list.iter_mut().filter(|m| m["name"].as_str().is_some_and(|n| n.to_lowercase() == name)) {
-                        m["thumb"] = json!("shot");
-                    }
+            // the cached map list said "lookup": now it's the screenshot, or the radar
+            // overview (a card shows the map's name when there's no radar either)
+            let kind = if self.find_shot(&name).is_some() { "shot" } else { "radar" };
+            if let Some(list) = self.maps_cache.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+                for m in list.iter_mut().filter(|m| m["name"].as_str().is_some_and(|n| n.to_lowercase() == name)) {
+                    m["thumb"] = json!(kind);
                 }
             }
             self.later.lock().unwrap_or_else(|e| e.into_inner()).wanted.remove(&name);
