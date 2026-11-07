@@ -89,6 +89,7 @@ new g_DataDir[128], g_CfgDir[128]
 
 new bool:g_Rocked[33]
 new g_NomBy[MAX_NOMS], g_Noms[MAX_NOMS][32], g_NomCount
+new g_WelcomeFor
 new bool:g_Voting, bool:g_VoteDone
 new g_VoteMaps[VOTE_MAPS + 1][32], g_VoteCount[VOTE_MAPS + 1], g_VoteOptions
 new Float:g_MapStart
@@ -1963,7 +1964,10 @@ custom_welcome(const hostesc[], const pesc[], const map[], const mode[], players
 		fclose(f)
 		trim(out)
 		if (equali(out, "http://", 7) || equali(out, "https://", 8))
+		{
+			welcome_query(out, len, players)
 			return 1
+		}
 	}
 	f = fopen(fmt("%s/welcome.html", g_DataDir), "rt")
 	if (!f)
@@ -1984,6 +1988,43 @@ custom_welcome(const hostesc[], const pesc[], const map[], const mode[], players
 	replace_string(out, len, "{mode}", modesc)
 	replace_string(out, len, "{players}", num)
 	return 1
+}
+
+// The welcome page at a web address gets ?server=&player=&mode=&map=&players= added, so
+// it can greet the player and show what's on (the raw values, url-encoded; the player is
+// whoever the page is being shown to, read from g_WelcomeFor)
+welcome_query(url[], len, players)
+{
+	new host[64], pname[32], mode[32], map[32], v[160]
+	get_cvar_string("hostname", host, charsmax(host))
+	get_user_name(g_WelcomeFor, pname, charsmax(pname))
+	current_mode_id(mode, charsmax(mode))
+	get_mapname(map, charsmax(map))
+	add(url, len, contain(url, "?") == -1 ? "?" : "&")
+	url_encode(host, v, charsmax(v)); add(url, len, fmt("server=%s", v))
+	url_encode(pname, v, charsmax(v)); add(url, len, fmt("&player=%s", v))
+	url_encode(mode, v, charsmax(v)); add(url, len, fmt("&mode=%s", v))
+	url_encode(map, v, charsmax(v)); add(url, len, fmt("&map=%s", v))
+	add(url, len, fmt("&players=%d%%2F%d", players, MaxClients))
+}
+
+url_encode(const text[], out[], len)
+{
+	new n, c
+	static const HEX[] = "0123456789ABCDEF"
+	for (new i = 0; text[i] && n < len - 3; i++)
+	{
+		c = text[i] & 0xFF
+		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~')
+			out[n++] = c
+		else
+		{
+			out[n++] = '%'
+			out[n++] = HEX[c >> 4]
+			out[n++] = HEX[c & 15]
+		}
+	}
+	out[n] = 0
 }
 
 // welcome_note.txt: the host's own line(s) under the built-in page
@@ -2022,6 +2063,7 @@ show_welcome(id)
 		if (is_user_connected(i) && !is_user_hltv(i))
 			players++
 	new bool:admin = bool:(get_user_flags(id) & ADMIN_CFG)
+	g_WelcomeFor = id
 	if (custom_welcome(hostesc, pesc, map, mode, players, html, charsmax(html)))
 	{
 		show_motd(id, html, hostesc[0] ? host : "Welcome")
