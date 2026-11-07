@@ -28,9 +28,19 @@
 	teammate who keeps dying, in team chat. A line starting with @ goes to team chat.
 
 	They type like people: a delay that depends on how long the line is, lowercase and
-	the odd typo for the casual ones, and not every time. How often is gm_botchat:
+	the odd typo for the casual ones, and not every time. Most of the time nobody says
+	anything, like a real pub. How often is gm_botchat:
 	  0 off, 1 now and then, 2 normal, 3 chatty
-	Other cvars: gm_botchat_humans 1 (bots answer what people say)
+	gm_personality (0-200, percent, from gm_humanbots) scales it: at 0 bots only say gg
+	and answer when spoken to, at 200 they talk about twice as much and lines that fit
+	their personality come up more. Lines marked * are anyone's; lines marked with
+	personality letters are the "characterful" ones.
+	No repeats: a line said in the last while isn't picked again (short ones like "gg"
+	or "lol" are fine), and a theme (noscopes, lag, hackers, the map...) rests for a few
+	minutes once someone brings it up.
+	Other cvars: gm_botchat_humans 1 (bots answer what people say: greetings, gg/gl,
+	"ns", insults, "bots?", lag, "rush b"/"wait", their name. One bot answers, now and
+	then two, and not every time; the one addressed, nearby or involved answers first)
 
 	Clans: bots that share a clan tag ("[XyZ] Name", "XyZ|Name") are clanmates. They
 	talk to each other in team chat ([clan]: a clanmate's kill, a clanmate joining),
@@ -70,20 +80,22 @@ new const Float:CHATTY[] = { 1.0, 0.8, 1.2, 1.4, 0.3, 1.0, 0.7, 0.8, 1.5, 0.8, 1
 	1.1, 1.0, 1.1, 0.8, 1.0, 1.0, 1.0, 1.2, 0.15, 1.0, 1.0, 1.3, 0.9, 1.0, 1.0, 1.6,
 	1.0, 1.0, 1.2, 1.0, 0.9, 1.0, 1.0, 0.8, 1.2, 0.6, 1.0, 1.0, 1.0, 1.1 }
 // how common each personality is (per 1000; same order): most people on a pub are
-// ordinary players, a few are characters
-new const WEIGHT[] = { 80, 60, 70, 70, 90, 70, 75, 45, 15, 30, 10, 3, 3, 20, 35, 15, 40, 30, 8, 15,
-	8, 10, 8, 10, 10, 8, 6, 10, 70, 8, 10, 12, 6, 12, 8, 12,
-	8, 8, 8, 6, 8, 5, 6, 6, 8, 6, 6, 5, 6, 8 }
+// ordinary players who say little; the gimmicks (pirates, anime fans, streamers...) are
+// left out, they read like someone wrote them
+new const WEIGHT[] = { 90, 70, 70, 35, 120, 60, 100, 70, 12, 40, 5, 0, 0, 20, 30, 30, 35, 10, 0, 0,
+	0, 25, 0, 20, 3, 0, 3, 15, 110, 0, 5, 10, 0, 8, 0, 3,
+	0, 0, 4, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 2 }
 
 // habits, picked per bot from its name
 // the first ones are for anyone; the last six only for people whose English isn't first
-new const LAUGHS[][] = { "lol", "lol", "lol", "lmao", "haha", "hahaha", "xD", "xd", "hehe", "rofl", "lmfao", "ahah", "kkkk", "jajaja", "mdr", "www", "555", "kek" }
+new const LAUGHS[][] = { "lol", "lol", "lol", "lol", "haha", "hehe", "lol", "xD", "hah", "rofl", "lmao", "haha", "kkkk", "jajaja", "mdr", "www", "555", "hehe" }
 #define LAUGHS_ANYONE 12
-new const WORDS[][] = { "", "", "", "", "bro", "mate", "dude", "man", "lads", "fam", "my guy", "buddy", "bruh", "boys", "guys", "homie" }
-new const EMOTES[][] = { "", "", "", ":)", ":D", "^^", ":3", "<3", "o7", ":P", ";)", "xD", ":(" }
+new const WORDS[][] = { "", "", "", "", "", "", "", "", "man", "dude", "mate", "guys", "m8", "lads", "bro", "" }
+new const EMOTES[][] = { "", "", "", "", "", ":)", ":D", "^^", ":P", ";)", ":/", ":(", "=)" }
 new g_Laugh[33], g_Word[33], g_Emote[33], bool:g_TextSpeak[33], g_Typos[33], g_Shouty[33], Float:g_Chatty[33]
 
 new g_pLevel, g_pHumans, g_pDeadChat
+new g_pPersonality                  // gm_personality (gm_humanbots), 0 if it isn't there
 new g_CfgDir[128]
 new Trie:g_Sections                 // section name -> Array of "letters|text"
 new Array:g_Lists[MAX_SECTIONS], g_ListCount
@@ -99,7 +111,29 @@ new Float:g_NextHeard
 new g_KilledBy[33][33]
 new g_WinRun[3], g_LoseRun[3]        // rounds won / lost in a row, per side               // this map: how often [killer][victim]
 new g_Vault = INVALID_HANDLE
-new Trie:g_Left                      // bots that left mid-map: name -> when                // bots don't answer every line someone types
+new Trie:g_Left                      // bots that left mid-map: name -> when
+
+// lines said lately (hashes), so the same one doesn't come round again soon
+#define RECENT 64
+new g_Recent[RECENT], g_RecentPos
+
+// themes rest for a while once someone brings them up: a word in the line -> theme
+new const THEME_WORD[][] = { "noscope", "no scope", "scope", "lag", "laggy", "hitreg", "reg", "choke", "ping",
+	"hack", "hacks", "hacking", "aimbot", "sus", "demo", "sleep", "tired", "bed", "3am", "zzz",
+	"this map", "map again", "{map}", "mouse", "fps", "camp", "camper", "camping", "awp", "1.5", "beta", "old" }
+new const THEME_ID[] = { 0, 0, 0, 1, 1, 1, 1, 1, 1,
+	2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3,
+	4, 4, 4, 5, 5, 6, 6, 6, 7, 8, 8, 8 }
+// seconds each theme rests: noscope, lag, hackers, sleep, the map, gear, camping, awp, the old days
+new const Float:THEME_REST[] = { 900.0, 150.0, 240.0, 600.0, 300.0, 600.0, 180.0, 90.0, 900.0 }
+new Float:g_ThemeAt[sizeof THEME_REST]
+
+// who's involved, for answering people: the last bot to get a kill, who killed each
+// person last and whom they killed last
+new g_LastBotKiller, Float:g_LastBotKillAt
+new g_KillerOf[33], Float:g_KillerOfAt[33], g_VictimOf[33], Float:g_VictimOfAt[33]
+// answers lately: the more bots have answered, the less they answer the next thing
+new g_HeardRun, Float:g_HeardRunAt
 
 // lines waiting to be "typed"
 new g_PendBot[MAX_PENDING], g_PendUser[MAX_PENDING], g_PendOther[MAX_PENDING], g_PendChain[MAX_PENDING], bool:g_PendTeam[MAX_PENDING]
@@ -164,9 +198,10 @@ public n_say(plugin, params)
 		new name[32]
 		get_user_name(id, name, charsmax(name))
 		TrieSetCell(g_Left, name, floatround(get_gametime()))
-		// about half say bye; the rest just go
+		// about half say bye (fewer at a low gm_personality); the rest just go
 		new text[128]
-		if (get_pcvar_num(g_pLevel) && random_num(1, 100) <= 45 && pick_line(id, "leave", text, charsmax(text)))
+		if (get_pcvar_num(g_pLevel) && !g_Career && random_float(0.0, 100.0) <= 15.0 + 30.0 * floatmin(personality(), 1.5)
+			&& pick_line(id, "leave", text, charsmax(text), true))
 			queue(id, 0, text, MAX_CHAIN, false, random_float(0.3, 1.2))
 		return 1
 	}
@@ -176,6 +211,9 @@ public n_say(plugin, params)
 
 public plugin_cfg()
 {
+	personality_cvar()
+	for (new i = 0; i < sizeof g_ThemeAt; i++)
+		g_ThemeAt[i] = -10000.0
 	g_Vault = nvault_open("gm_botmemory")
 	g_Left = TrieCreate()
 	// Tour of Duty missions keep their designed bots
@@ -238,6 +276,7 @@ public client_putinserver(id)
 	g_NextBot[id] = get_gametime() + random_float(5.0, 20.0)
 	g_RoundKills[id] = 0
 	g_DeathRow[id] = 0
+	g_KillerOf[id] = g_VictimOf[id] = 0
 	g_Raged[id] = false
 	for (new k = 1; k <= MaxClients; k++)
 		g_KilledBy[id][k] = g_KilledBy[k][id] = 0
@@ -518,38 +557,64 @@ bool:has_persona(id, const letters[])
 
 // ---- deciding to say something ---------------------------------------------------------
 
+personality_cvar()
+{
+	g_pPersonality = get_cvar_pointer("gm_personality")
+}
+
+// gm_personality as a factor: 0.0 (bots keep to themselves) to 2.0 (chatty), 1.0 without it
+Float:personality()
+{
+	if (!g_pPersonality)
+		personality_cvar()
+	if (!g_pPersonality)
+		return 1.0
+	return float(clamp(get_pcvar_num(g_pPersonality), 0, 200)) / 100.0
+}
+
 Float:level_mult()
 {
 	switch (get_pcvar_num(g_pLevel))
 	{
-		case 1: return 0.2
-		case 3: return 1.2
+		case 1: return 0.12
+		case 3: return 0.7
 	}
-	return 0.6
+	return 0.35
+}
+
+// gaps get longer as personality goes down (x1.5 at 0) and shorter as it goes up (x0.5 at 200)
+Float:gap_mult()
+{
+	return 1.5 - 0.5 * personality()
 }
 
 Float:global_gap()
 {
+	new Float:g
 	switch (get_pcvar_num(g_pLevel))
 	{
-		case 1: return 30.0
-		case 3: return 4.0
+		case 1: g = 50.0
+		case 3: g = 9.0
+		default: g = 22.0
 	}
-	return 10.0
+	return g * gap_mult()
 }
 
 Float:bot_gap()
 {
+	new Float:g
 	switch (get_pcvar_num(g_pLevel))
 	{
-		case 1: return 90.0
-		case 3: return 15.0
+		case 1: g = 180.0
+		case 3: g = 40.0
+		default: g = 100.0
 	}
-	return 40.0
+	return g * gap_mult()
 }
 
 // A bot might say a line from `section` about `other`, with the chance `base`
-// (before the chattiness setting and its personality). chain > 0: a reply.
+// (before the chattiness setting, gm_personality and its own personality). chain > 0: a
+// reply. Answers to people go through answer() instead.
 want(id, const section[], other, Float:base, Float:delay = -1.0, chain = 0, bool:team = false)
 {
 	if (!id || !is_user_connected(id) || !is_user_bot(id) || g_Career || !get_pcvar_num(g_pLevel))
@@ -557,7 +622,8 @@ want(id, const section[], other, Float:base, Float:delay = -1.0, chain = 0, bool
 	new Float:now = get_gametime()
 	if (!chain && (now < g_NextAny || now < g_NextBot[id]))
 		return
-	if (random_float(0.0, 1.0) > base * level_mult() * CHATTY[g_Persona[id]] * g_Chatty[id])
+	// at gm_personality 0 this is 0: bots only answer people and say gg
+	if (random_float(0.0, 1.0) > base * level_mult() * personality() * CHATTY[g_Persona[id]] * g_Chatty[id])
 		return
 	new text[128]
 	if (!pick_line(id, section, text, charsmax(text)))
@@ -565,7 +631,43 @@ want(id, const section[], other, Float:base, Float:delay = -1.0, chain = 0, bool
 	queue(id, other, text, chain, team, delay)
 }
 
-bool:pick_line(id, const section[], text[], len)
+// A line's theme (THEME_REST), or -1
+theme_of(const text[])
+{
+	new low[128]
+	copy(low, charsmax(low), text)
+	strtolower(low)
+	for (new w = 0; w < sizeof THEME_WORD; w++)
+		if (word_in(low, THEME_WORD[w]))
+			return THEME_ID[w]
+	return -1
+}
+
+line_hash(const text[])
+{
+	new h = 5381
+	for (new i = 0; text[i]; i++)
+	{
+		new c = text[i]
+		if (c >= 'A' && c <= 'Z')
+			c += 32
+		h = ((h << 5) + h + c) & 0x7FFFFFFF
+	}
+	return h ? h : 1
+}
+
+bool:said_lately(h)
+{
+	for (new i = 0; i < RECENT; i++)
+		if (g_Recent[i] == h)
+			return true
+	return false
+}
+
+// A line from `section` for this bot: anyone's lines (*) and, weighted by gm_personality,
+// lines for its personality. Not one said lately, and not a theme that's resting.
+// answer: answering a person, so a fitting line beats a fresh one
+bool:pick_line(id, const section[], text[], len, bool:answer = false)
 {
 	new Array:list
 	if (!TrieGetCell(g_Sections, section, list))
@@ -573,22 +675,59 @@ bool:pick_line(id, const section[], text[], len)
 	new n = ArraySize(list)
 	if (!n)
 		return false
-	// one at random among the lines this personality would say
-	new raw[192], letters[64], seen, pick = -1
+	new Float:p = personality(), Float:now = get_gametime()
+	new raw[192], letters[64], pick = -1, Float:total, fallback = -1, fseen
 	for (new i = 0; i < n; i++)
 	{
 		ArrayGetString(list, i, raw, charsmax(raw))
 		new bar = contain(raw, "|")
 		copy(letters, min(bar, charsmax(letters)), raw)
-		if (has_persona(id, letters) && random(++seen) == 0)
+		if (!has_persona(id, letters))
+			continue
+		new Float:w = letters[0] == '*' ? 1.0 : p
+		if (w <= 0.0)
+			continue
+		new body = bar + 1
+		new bool:fresh = true
+		// short lines ("gg", "lol", "ns") come up all the time on a real server
+		if (strlen(raw[body]) > 6 && said_lately(line_hash(raw[body])))
+			fresh = false
+		new t = theme_of(raw[body])
+		if (t >= 0 && now - g_ThemeAt[t] < THEME_REST[t] && !answer)
+			fresh = false
+		if (!fresh)
+		{
+			if (random(++fseen) == 0)
+				fallback = i
+			continue
+		}
+		total += w
+		if (random_float(0.0, total) < w)
 			pick = i
 	}
 	if (pick < 0)
-		return false
+	{
+		// everything fitting was said lately: keep quiet, unless answering someone
+		if (!answer || fallback < 0)
+			return false
+		pick = fallback
+	}
 	ArrayGetString(list, pick, raw, charsmax(raw))
 	copy(text, len, raw[contain(raw, "|") + 1])
 	trim(text)
+	g_Recent[g_RecentPos] = line_hash(text)
+	g_RecentPos = (g_RecentPos + 1) % RECENT
+	new t = theme_of(text)
+	if (t >= 0)
+		g_ThemeAt[t] = now
 	return true
+}
+
+// Reading what happened, then typing it: people type about 6 to 10 characters a second
+// in game, and take a moment before they start
+Float:typing_time(const text[], Float:read_min = 0.8, Float:read_max = 2.2)
+{
+	return random_float(read_min, read_max) + float(strlen(text)) * random_float(0.1, 0.17)
 }
 
 queue(id, other, const text[], chain, bool:team, Float:delay)
@@ -608,9 +747,8 @@ queue(id, other, const text[], chain, bool:team, Float:delay)
 	g_PendChain[slot] = chain
 	g_PendTeam[slot] = team
 	copy(g_PendText[slot], charsmax(g_PendText[]), text)
-	// reading what happened, then typing it
 	if (delay < 0.0)
-		delay = random_float(0.6, 2.0) + strlen(text) * random_float(0.05, 0.11)
+		delay = typing_time(text)
 	new Float:now = get_gametime()
 	g_NextBot[id] = now + delay + bot_gap() * random_float(0.6, 1.4) / floatsqroot(floatmax(g_Chatty[id], 0.15))
 	if (!chain)
@@ -658,11 +796,16 @@ public task_say(task)
 	if (!is_user_alive(id) && get_pcvar_num(g_pDeadChat))
 		dead_chat(id, text, team)
 
-	// someone answers: the one it was about if that's a bot, else another bot
+	// someone answers: the one it was about if that's a bot (and can see it), else
+	// another bot (a teammate, for team chat)
 	if (tag[0] && chain < MAX_CHAIN)
 	{
-		new who = (other && is_user_bot(other) && other != id) ? other : any_bot(id)
-		want(who, fmt("r_%s", tag), id, 0.75, -1.0, chain + 1, team)
+		new who
+		if (other && is_user_bot(other) && other != id && (!team || get_user_team(other) == get_user_team(id)))
+			who = other
+		else
+			who = team ? any_bot_on(get_user_team(id), id) : any_bot(id)
+		want(who, fmt("r_%s", tag), id, 0.5, -1.0, chain + 1, team)
 	}
 }
 
@@ -698,6 +841,14 @@ fill(id, other, text[], len)
 // What people call each other: the name without its clan tag, often just the start
 short_name(id, out[], len)
 {
+	base_name(id, out, len)
+	if (strlen(out) > 8 && random_num(1, 100) <= 40)
+		out[random_num(4, 6)] = 0
+}
+
+// The name without its clan tag
+base_name(id, out[], len)
+{
 	new name[32]
 	get_user_name(id, name, charsmax(name))
 	trim(name)
@@ -722,8 +873,6 @@ short_name(id, out[], len)
 	}
 	if (!out[0])
 		copy(out, len, name)
-	if (strlen(out) > 8 && random_num(1, 100) <= 40)
-		out[random_num(4, 6)] = 0
 }
 
 // Casual typers: lowercase, no full stop, the odd swapped letters
@@ -760,15 +909,16 @@ style_text(id, text[])
 }
 
 // The same line never comes out quite the same: a stretched word, an ending each
-// personality likes, now and then shouting
+// personality likes, very rarely shouting. All of it scales with gm_personality.
 decorate(id, text[], len)
 {
 	new p = PERSONAS[g_Persona[id]]
+	new Float:pm = personality()
 	new l = strlen(text)
 	if (!l || text[0] == '/')
 		return
 	// stretch the last vowel of a short word: nice -> niiice, no -> nooo
-	if (l <= 8 && (p == 'j' || p == 'f' || p == 'n' || p == 's') && random_num(1, 100) <= 15)
+	if (l <= 8 && (p == 'j' || p == 'f' || p == 'n' || p == 's') && random_float(0.0, 100.0) <= 5.0 * pm)
 	{
 		for (new i = l - 1; i >= 0; i--)
 		{
@@ -811,35 +961,31 @@ decorate(id, text[], len)
 	if (!ended)
 	{
 		// the word it keeps using
-		if (WORDS[g_Word[id]][0] && strlen(text) < 40 && random_num(1, 100) <= 18)
+		if (WORDS[g_Word[id]][0] && strlen(text) < 30 && random_float(0.0, 100.0) <= 7.0 * pm)
 			add(text, len, fmt(" %s", WORDS[g_Word[id]]))
 		// its emoticon, or an ending its personality likes (with its own laugh)
-		else if (EMOTES[g_Emote[id]][0] && random_num(1, 100) <= 14)
+		else if (EMOTES[g_Emote[id]][0] && random_float(0.0, 100.0) <= 6.0 * pm)
 			add(text, len, fmt(" %s", EMOTES[g_Emote[id]]))
 		else
 		{
 			new laugh[12]
 			copy(laugh, charsmax(laugh), LAUGHS[g_Laugh[id]])
-			new r = random_num(1, 100)
+			new Float:r = random_float(0.0, 100.0) / floatmax(pm, 0.01)
 			switch (p)
 			{
-				case 'f': if (r <= 18) add(text, len, random_num(0, 1) ? " :)" : " :D")
-				case 'j': if (r <= 25) add(text, len, random_num(0, 2) == 0 ? " xd" : random_num(0, 1) ? fmt(" %s", laugh) : " :P")
-				case 'n': if (r <= 15) add(text, len, random_num(0, 1) ? "?" : fmt(" %s", laugh))
-				case 's': if (r <= 15) add(text, len, random_num(0, 1) ? "..." : " -_-")
-				case 'c': if (r <= 12) add(text, len, fmt(" %s", laugh))
-				case 't': if (r <= 10) add(text, len, "!")
-				case 'o': if (r <= 10) add(text, len, ".")
-				case 'k': if (r <= 25) add(text, len, random_num(0, 1) ? "!!!" : fmt(" %s", laugh))
-				case 'h': if (r <= 20) add(text, len, random_num(0, 1) ? "!!" : " LETS GO")
+				case 'f': if (r <= 8.0) add(text, len, random_num(0, 1) ? " :)" : " :D")
+				case 'j': if (r <= 10.0) add(text, len, random_num(0, 1) ? fmt(" %s", laugh) : " :P")
+				case 'n': if (r <= 8.0) add(text, len, "?")
+				case 's': if (r <= 8.0) add(text, len, random_num(0, 1) ? "..." : " -_-")
+				case 'c': if (r <= 6.0) add(text, len, fmt(" %s", laugh))
+				case 'o': if (r <= 8.0) add(text, len, ".")
+				case 'k': if (r <= 10.0) add(text, len, random_num(0, 1) ? "!" : fmt(" %s", laugh))
 			}
 		}
 	}
-	// excitement
-	if ((p == 'h' && random_num(1, 100) <= 20) || ((p == 'j' || p == 's' || p == 'k') && random_num(1, 100) <= 4 * g_Shouty[id]))
+	// shouting is rare: only the loud ones, now and then, and short lines
+	if (g_Shouty[id] > 1 && (p == 'j' || p == 's' || p == 'k' || p == 'h') && random_float(0.0, 100.0) <= 1.5 * pm && strlen(text) <= 20)
 		strtoupper(text)
-	else if ((p == 'j' || p == 'n') && random_num(1, 100) <= 10)
-		add(text, len, "!!")
 }
 
 // `from` as a whole word (any case) replaced by `to`
@@ -922,7 +1068,7 @@ public ev_newround()
 	arrayset(g_RoundKills, 0, sizeof g_RoundKills)
 	arrayset(g_Streaked, false, sizeof g_Streaked)
 	// freeze time is when people chat most
-	if (random_num(1, 100) <= 35)
+	if (random_num(1, 100) <= 22)
 	{
 		new h
 		time(h)
@@ -952,6 +1098,24 @@ public ev_death()
 		return
 	}
 
+	// who was involved, for when a person says something about it
+	new Float:now = get_gametime()
+	if (is_user_bot(killer))
+	{
+		g_LastBotKiller = killer
+		g_LastBotKillAt = now
+	}
+	else
+	{
+		g_VictimOf[killer] = victim
+		g_VictimOfAt[killer] = now
+	}
+	if (!is_user_bot(victim))
+	{
+		g_KillerOf[victim] = killer
+		g_KillerOfAt[victim] = now
+	}
+
 	g_RoundKills[killer]++
 	// rivals: someone who keeps killing a bot this map, and the bot finally getting them
 	new was = g_KilledBy[victim][killer]
@@ -973,9 +1137,9 @@ public ev_death()
 
 	if (g_RoundKills[killer] == 5)
 		want(killer, "ace", 0, 0.8, -1.0, 1)
-	// scoped rifles without the scope
+	// scoped rifles without the scope (the line's theme keeps it to one now and then)
 	if (is_user_bot(killer) && (equal(weapon, "awp") || equal(weapon, "scout")) && cs_get_user_zoom(killer) == CS_SET_NO_ZOOM)
-		want(killer, "noscope", victim, 0.5)
+		want(killer, "noscope", victim, 0.3)
 	// someone dead and watching says something about a teammate's kill
 	new watcher = any_dead_bot_on(get_user_team(killer))
 	if (watcher && random_num(1, 100) <= 4)
@@ -985,13 +1149,13 @@ public ev_death()
 	new bool:knife = bool:equal(weapon, "knife"), bool:nade = bool:equal(weapon, "grenade")
 	if (knife)
 	{
-		want(killer, "kill_knife", victim, 0.5)
-		want(victim, "death_knife", killer, 0.6)
+		want(killer, "kill_knife", victim, 0.35)
+		want(victim, "death_knife", killer, 0.45)
 	}
 	else if (nade)
 	{
-		want(killer, "kill_nade", victim, 0.3)
-		want(victim, "death_nade", killer, 0.4)
+		want(killer, "kill_nade", victim, 0.2)
+		want(victim, "death_nade", killer, 0.3)
 	}
 	else if (hs)
 	{
@@ -1000,8 +1164,8 @@ public ev_death()
 	}
 	else
 	{
-		want(killer, equal(weapon, "awp") ? "kill_awp" : "kill", victim, 0.08)
-		want(victim, "death", killer, 0.12)
+		want(killer, equal(weapon, "awp") ? "kill_awp" : "kill", victim, 0.06)
+		want(victim, "death", killer, 0.1)
 	}
 	// a clanmate on the killer's team cheers them on; one on the victim's side is out for revenge
 	new mate = clanmate_bot(killer, true)
@@ -1012,7 +1176,7 @@ public ev_death()
 		want(avenger, "clan_avenge", killer, 0.25, -1.0, 0, true)
 	// a teammate of the killer says something about it
 	if (hs || knife)
-		want(any_bot_on(get_user_team(killer), killer), "nice_shot", killer, 0.15, -1.0, 0, true)
+		want(any_bot_on(get_user_team(killer), killer), "nice_shot", killer, 0.1, -1.0, 0, true)
 }
 
 // Dying again and again: a bot tilts, then crashes out; teammates may cheer them up.
@@ -1046,22 +1210,20 @@ bool:mood(victim)
 // A few angry lines in quick succession; a salty one may leave for good
 crash_out(id)
 {
-	if (g_Career || !get_pcvar_num(g_pLevel) || random_float(0.0, 1.0) > 0.6 * level_mult())
+	if (g_Career || !get_pcvar_num(g_pLevel) || random_float(0.0, 1.0) > 0.8 * level_mult() * personality())
 		return
-	new text[128], Float:at = random_float(0.8, 1.6)
-	new n = random_num(2, 4)
+	new text[128], Float:at = random_float(1.0, 2.0)
+	new n = random_num(1, 3)
 	for (new i = 0; i < n; i++)
 	{
 		if (!pick_line(id, "rage", text, charsmax(text)))
 			break
-		if (random_num(1, 100) <= 35)
-			strtoupper(text)
 		queue(id, 0, text, MAX_CHAIN, false, at)
-		at += random_float(0.7, 2.2) + strlen(text) * 0.04
+		at += typing_time(text, 0.3, 1.0)
 	}
 	// the hot-headed quit a third of the time, anyone now and then
 	new p = PERSONAS[g_Persona[id]]
-	if (random_num(1, 100) <= (contain("stOH", fmt("%c", p)) != -1 ? 35 : 8) && pick_line(id, "ragequit", text, charsmax(text)))
+	if (random_num(1, 100) <= (contain("stOH", fmt("%c", p)) != -1 ? 25 : 5) && pick_line(id, "ragequit", text, charsmax(text)))
 	{
 		queue(id, 0, text, MAX_CHAIN, false, at + 0.8)
 		set_task(at + 2.5, "task_ragequit", get_user_userid(id))
@@ -1146,16 +1308,23 @@ public ev_intermission()
 {
 	if (g_Career || !get_pcvar_num(g_pLevel))
 		return
-	// the end of the map: a few gg's, not every bot
-	new said
-	for (new i = 1; i <= MaxClients && said < 4; i++)
+	// the end of the map: a few gg's, not every bot (some gg's even at personality 0)
+	new said, most = 2 + floatround(personality()), Float:pct = 25.0 + 10.0 * personality()
+	new order[32], n
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_connected(i) && is_user_bot(i))
+			order[n++] = i
+	for (new k = 0; k < n && said < most; k++)
 	{
-		if (!is_user_connected(i) || !is_user_bot(i) || random_num(1, 100) > 45)
+		// in random order, so it isn't always the lowest slots
+		new j = random_num(k, n - 1), i = order[j]
+		order[j] = order[k]
+		if (random_float(0.0, 100.0) > pct)
 			continue
 		new text[128]
-		if (pick_line(i, "map_end", text, charsmax(text)))
+		if (pick_line(i, "map_end", text, charsmax(text), true))
 		{
-			queue(i, 0, text, MAX_CHAIN, false, random_float(0.5, 4.0))
+			queue(i, 0, text, MAX_CHAIN, false, random_float(0.8, 3.0) + said * random_float(0.8, 2.0) + typing_time(text, 0.0, 0.0))
 			said++
 		}
 	}
@@ -1183,68 +1352,316 @@ public cmd_say_team(id)
 	return PLUGIN_CONTINUE
 }
 
-// Words people type, and the section the answer comes from (first match wins)
+// Words people type, and the section the answer comes from (first match wins, so
+// "gg ez" is an ez, "nice try" isn't a "nice" and "my bad" isn't a "bad")
 new const HEARD[][][] =
 {
-	{ "gg", "r_gg" }, { "good game", "r_gg" },
-	{ "hack", "r_hack" }, { "aimbot", "r_hack" }, { "cheat", "r_hack" }, { "wallhack", "r_hack" },
-	{ "bot", "r_bot" },
-	{ "noob", "r_noob" }, { "nub", "r_noob" }, { "trash", "r_noob" }, { "ez", "r_ez" },
-	{ "lag", "r_lag" }, { "ping", "r_lag" },
-	{ "nice", "r_nice_from_human" }, { "ns", "r_nice_from_human" }, { "wp", "r_nice_from_human" },
-	{ "hello", "r_hi" }, { "hi", "r_hi" }, { "hey", "r_hi" }, { "yo", "r_hi" }, { "sup", "r_hi" },
-	{ "lol", "r_lol" }, { "haha", "r_lol" }, { "lmao", "r_lol" },
-	{ "wtf", "r_wtf" },
-	{ "sorry", "r_sorry" }, { "my bad", "r_sorry" }, { "mb", "r_sorry" },
-	{ "rush", "r_plan" }, { "go b", "r_plan" }, { "go a", "r_plan" }, { "eco", "r_plan" },
+	{ "hack", "r_hack" }, { "hacks", "r_hack" }, { "hacker", "r_hack" }, { "hacking", "r_hack" }, { "haxor", "r_hack" },
+	{ "aimbot", "r_hack" }, { "wallhack", "r_hack" }, { "wh", "r_hack" }, { "cheat", "r_hack" }, { "cheater", "r_hack" },
+	{ "cheating", "r_hack" }, { "sus", "r_hack" },
+	{ "bot", "r_bot" }, { "bots", "r_bot" }, { "botz", "r_bot" }, { "a bot", "r_bot" },
+	{ "nt", "r_nt" }, { "nice try", "r_nt" },
+	{ "ns", "r_nice_from_human" }, { "nice shot", "r_nice_from_human" }, { "nice", "r_nice_from_human" },
+	{ "good shot", "r_nice_from_human" }, { "wp", "r_nice_from_human" }, { "gj", "r_nice_from_human" },
+	{ "well played", "r_nice_from_human" }, { "nice one", "r_nice_from_human" },
+	{ "ez", "r_ez" }, { "ezpz", "r_ez" }, { "easy", "r_ez" }, { "too easy", "r_ez" },
+	{ "sorry", "r_sorry" }, { "sry", "r_sorry" }, { "my bad", "r_sorry" }, { "mb", "r_sorry" }, { "oops", "r_sorry" },
+	{ "noob", "r_noob" }, { "nub", "r_noob" }, { "n00b", "r_noob" }, { "newb", "r_noob" }, { "noobs", "r_noob" },
+	{ "trash", "r_noob" }, { "suck", "r_noob" }, { "sucks", "r_noob" }, { "bad", "r_noob" }, { "idiot", "r_noob" },
+	{ "loser", "r_noob" }, { "l2p", "r_noob" }, { "owned", "r_noob" }, { "pwned", "r_noob" }, { "stfu", "r_noob" },
+	{ "shut up", "r_noob" }, { "dumb", "r_noob" }, { "garbage", "r_noob" }, { "lame", "r_noob" },
+	{ "camp", "r_camping" }, { "camper", "r_camping" }, { "camping", "r_camping" }, { "campers", "r_camping" },
+	{ "gg", "r_gg" }, { "ggs", "r_gg" }, { "ggwp", "r_gg" }, { "good game", "r_gg" },
+	{ "gl", "r_gl" }, { "hf", "r_gl" }, { "glhf", "r_gl" }, { "good luck", "r_gl" },
+	{ "hi", "r_hi" }, { "hey", "r_hi" }, { "yo", "r_hi" }, { "sup", "r_hi" }, { "hello", "r_hi" }, { "hiya", "r_hi" },
+	{ "heya", "r_hi" }, { "hola", "r_hi" }, { "howdy", "r_hi" }, { "evening", "r_hi" }, { "whats up", "r_hi" },
+	{ "wassup", "r_hi" }, { "hai", "r_hi" }, { "ello", "r_hi" },
+	{ "lag", "r_lag" }, { "laggy", "r_lag" }, { "lagging", "r_lag" }, { "ping", "r_lag" }, { "hitreg", "r_lag" },
+	{ "reg", "r_lag" }, { "choke", "r_lag" }, { "loss", "r_lag" },
+	{ "wait", "r_wait" }, { "hold", "r_wait" }, { "stay", "r_wait" }, { "dont push", "r_wait" }, { "slow", "r_wait" },
+	{ "rush", "r_plan" }, { "rush b", "r_plan" }, { "go a", "r_plan" }, { "go b", "r_plan" }, { "come a", "r_plan" },
+	{ "come b", "r_plan" }, { "follow me", "r_plan" }, { "follow", "r_plan" }, { "cover me", "r_plan" }, { "cover", "r_plan" },
+	{ "push", "r_plan" }, { "stack", "r_plan" }, { "help", "r_plan" }, { "eco", "r_plan" }, { "save", "r_plan" },
+	{ "lets go", "r_plan" }, { "go go", "r_plan" }, { "with me", "r_plan" },
+	{ "ty", "r_np" }, { "thx", "r_np" }, { "thanks", "r_np" }, { "thank", "r_np" }, { "tyvm", "r_np" },
+	{ "im back", "r_wb" },
+	{ "wtf", "r_wtf" }, { "omg", "r_wtf" },
+	{ "lol", "r_lol" }, { "haha", "r_lol" }, { "lmao", "r_lol" }, { "rofl", "r_lol" }, { "xd", "r_lol" }, { "hehe", "r_lol" },
 	{ "?", "r_question" }
+}
+
+// How bots take what people say, per answer section: the chance one answers, who it
+// should be and whether a second one may chime in
+enum
+{
+	WHO_ANY,        // anyone, nearby and alive first
+	WHO_INVOLVED,   // the bot that killed them or that they killed, just now
+	WHO_KILLER,     // the bot that got the kill they're talking about
+	WHO_TEAM        // a teammate, alive if possible
+}
+
+reply_style(const section[], &Float:chance, &who, &Float:second)
+{
+	who = WHO_ANY
+	second = 0.0
+	if (equal(section, "r_hack"))           { chance = 0.4;  who = WHO_INVOLVED; }
+	else if (equal(section, "r_bot"))       { chance = 0.45; second = 0.15; }
+	else if (equal(section, "r_nt"))        { chance = 0.2;  who = WHO_TEAM; }
+	else if (equal(section, "r_nice_from_human")) { chance = 0.55; who = WHO_KILLER; }
+	else if (equal(section, "r_ez"))        { chance = 0.3;  who = WHO_INVOLVED; }
+	else if (equal(section, "r_noob"))      { chance = 0.35; who = WHO_INVOLVED; }
+	else if (equal(section, "r_camping"))   { chance = 0.3;  who = WHO_INVOLVED; }
+	else if (equal(section, "r_gg"))        { chance = 0.5;  second = 0.3; }
+	else if (equal(section, "r_gl"))        { chance = 0.35; second = 0.15; }
+	else if (equal(section, "r_hi"))        { chance = 0.45; second = 0.2; }
+	else if (equal(section, "r_lag"))       { chance = 0.3; }
+	else if (equal(section, "r_wait"))      { chance = 0.35; who = WHO_TEAM; }
+	else if (equal(section, "r_plan"))      { chance = 0.45; who = WHO_TEAM; }
+	else if (equal(section, "r_sorry"))     { chance = 0.35; who = WHO_INVOLVED; }
+	else if (equal(section, "r_np"))        { chance = 0.25; }
+	else if (equal(section, "r_wb"))        { chance = 0.35; }
+	else if (equal(section, "r_wtf"))       { chance = 0.12; }
+	else if (equal(section, "r_lol"))       { chance = 0.06; }
+	else if (equal(section, "r_question"))  { chance = 0.15; }
+	else if (equal(section, "r_named"))     { chance = 0.85; }
+	else                                    { chance = 0.03; }
+}
+
+// The section for what was said, or "" (msg in lowercase)
+classify(const msg[], section[], len)
+{
+	section[0] = 0
+	if (equal(msg, "o/") || equal(msg, "\o"))
+	{
+		copy(section, len, "r_hi")
+		return
+	}
+	if (equal(msg, "re") || equal(msg, "back") || equal(msg, "back."))
+	{
+		copy(section, len, "r_wb")
+		return
+	}
+	for (new w = 0; w < sizeof HEARD; w++)
+		if (word_in(msg, HEARD[w][0]))
+		{
+			copy(section, len, HEARD[w][1])
+			return
+		}
+}
+
+// What people type, made easier to match: lowercase, "heyyy" -> "hey", "ggggg" -> "gg"
+normalize(msg[])
+{
+	strtolower(msg)
+	new out[128], k
+	for (new i = 0; msg[i] && k < charsmax(out); i++)
+	{
+		new c = msg[i]
+		new run = 1
+		while (msg[i + run] == c)
+			run++
+		if (run >= 3)
+		{
+			out[k++] = c
+			if (c == 'g' && k < charsmax(out))
+				out[k++] = c
+			i += run - 1
+			continue
+		}
+		out[k++] = c
+	}
+	out[k] = 0
+	copy(msg, 127, out)
+}
+
+// The first word of a bot's name without its clan tag, lowercase ("[XyZ] Tariq K." -> "tariq")
+first_word(id, out[], len)
+{
+	new name[32]
+	base_name(id, name, charsmax(name))
+	strtolower(name)
+	new i, k
+	while (name[i] && !isalnum(name[i]))
+		i++
+	while (name[i] && isalnum(name[i]) && k < len)
+		out[k++] = name[i++]
+	out[k] = 0
+}
+
+// `part` at the start of a word in msg ("tari" in "nice tariq")
+bool:word_start_in(const msg[], const part[])
+{
+	new from = 0, at
+	while ((at = contain(msg[from], part)) != -1)
+	{
+		new s = from + at
+		if (s == 0 || !isalnum(msg[s - 1]))
+			return true
+		from = s + 1
+	}
+	return false
+}
+
+// The bot someone is talking to by name, or 0
+addressed(const msg[])
+{
+	new word[32], sec[24], hit[5]
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (!is_user_connected(i) || !is_user_bot(i))
+			continue
+		first_word(i, word, charsmax(word))
+		if (strlen(word) < 3)
+			continue
+		// a bot called "Lag" or "Ghost": "lag" in chat is about lag, not about them
+		classify(word, sec, charsmax(sec))
+		if (sec[0])
+			continue
+		if (word_in(msg, word))
+			return i
+		// people shorten names: "tari" for "tariq", "dyla" for "dylan52"
+		if (strlen(word) >= 5)
+		{
+			copy(hit, 4, word)
+			if (word_start_in(msg, hit))
+				return i
+		}
+	}
+	return 0
+}
+
+// The bot that should answer: `prefer` if it can, else one of the rest, likelier when
+// it's alive, nearby, or on their team
+responder(human, prefer, who, bool:team)
+{
+	new t = get_user_team(human)
+	if (prefer && is_user_connected(prefer) && is_user_bot(prefer) && (!team || get_user_team(prefer) == t)
+		&& (who != WHO_TEAM || get_user_team(prefer) == t))
+		return prefer
+	new list[32], Float:weight[32], n, Float:total
+	new org[3], o2[3]
+	new bool:alive = bool:is_user_alive(human)
+	if (alive)
+		get_user_origin(human, org)
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (!is_user_connected(i) || !is_user_bot(i))
+			continue
+		new bool:mate = get_user_team(i) == t
+		if ((team || who == WHO_TEAM) && !mate)
+			continue
+		new Float:w = 1.0
+		if (is_user_alive(i))
+		{
+			w += who == WHO_TEAM ? 3.0 : 1.5
+			if (alive)
+			{
+				get_user_origin(i, o2)
+				if (get_distance(org, o2) < 1000)
+					w += 2.0
+			}
+		}
+		if (mate)
+			w += 1.0
+		list[n] = i
+		weight[n++] = w
+		total += w
+	}
+	if (!n)
+		return 0
+	new Float:r = random_float(0.0, total)
+	for (new k = 0; k < n; k++)
+	{
+		r -= weight[k]
+		if (r <= 0.0)
+			return list[k]
+	}
+	return list[n - 1]
+}
+
+// One bot's answer to a person, typed after reading it
+bool:answer(bot, const section[], human, bool:team, Float:extra)
+{
+	new text[128]
+	if (!bot || !pick_line(bot, section, text, charsmax(text), true))
+		return false
+	queue(bot, human, text, 1, team, extra + typing_time(text, 1.2, 3.0))
+	return true
 }
 
 heard(id, bool:team)
 {
-	if (!is_user_connected(id) || is_user_bot(id) || !get_pcvar_num(g_pHumans))
+	if (!is_user_connected(id) || is_user_bot(id) || !get_pcvar_num(g_pHumans) || g_Career || !get_pcvar_num(g_pLevel))
 		return
 	new msg[128]
 	read_args(msg, charsmax(msg))
 	remove_quotes(msg)
 	trim(msg)
-	if (!msg[0] || msg[0] == '/' || msg[0] == '!' || get_gametime() < g_NextHeard)
+	if (!msg[0] || msg[0] == '/' || msg[0] == '!')
 		return
 	// nobody else saw it (muted or filtered), so no bot answers it
 	if (LibraryExists("gm_community", LibType_Library) && gm_chat_blocked(id, msg))
 		return
-	strtolower(msg)
+	normalize(msg)
 
-	// talking to a bot by name: that one answers
-	new to = 0, name[32]
-	for (new i = 1; i <= MaxClients && !to; i++)
-	{
-		if (!is_user_connected(i) || !is_user_bot(i))
-			continue
-		short_name(i, name, charsmax(name))
-		name[min(strlen(name), 5)] = 0
-		strtolower(name)
-		if (strlen(name) >= 3 && contain(msg, name) != -1)
-			to = i
-	}
-
+	new to = addressed(msg)
+	// a bot on the other side doesn't see team chat
+	if (to && team && get_user_team(to) != get_user_team(id))
+		to = 0
+	new Float:now = get_gametime()
+	// someone typing a lot doesn't get an answer to every line
+	if (!to && now < g_NextHeard)
+		return
 	new section[24]
-	for (new w = 0; w < sizeof HEARD; w++)
-		if (word_in(msg, HEARD[w][0]))
-		{
-			copy(section, charsmax(section), HEARD[w][1])
-			break
-		}
+	classify(msg, section, charsmax(section))
 	if (!section[0])
+		copy(section, charsmax(section), to ? "r_named" : "r_ack")
+
+	new Float:chance, who, Float:second
+	reply_style(section, chance, who, second)
+	// who it's about: the bot that killed them or that they just killed, the one that got the kill
+	new prefer = to
+	if (!prefer && who == WHO_INVOLVED)
 	{
-		if (!to)
-			return
-		copy(section, charsmax(section), "r_named")
+		if (g_KillerOf[id] && now - g_KillerOfAt[id] < 15.0 && is_user_bot(g_KillerOf[id]))
+			prefer = g_KillerOf[id]
+		else if (g_VictimOf[id] && now - g_VictimOfAt[id] < 15.0 && is_user_bot(g_VictimOf[id]))
+			prefer = g_VictimOf[id]
 	}
-	new who = to ? to : (team ? any_bot_on(get_user_team(id), 0) : any_bot(0))
-	g_NextHeard = get_gametime() + random_float(3.0, 6.0)
-	// a reply jumps the queue like a conversation would, but not every time
-	want(who, section, id, to ? 0.85 : 0.4, -1.0, 1, team)
+	else if (!prefer && who == WHO_KILLER)
+	{
+		if (g_KillerOf[id] && now - g_KillerOfAt[id] < 10.0 && is_user_bot(g_KillerOf[id]))
+			prefer = g_KillerOf[id]
+		else if (g_LastBotKiller && now - g_LastBotKillAt < 6.0)
+			prefer = g_LastBotKiller
+		else
+			chance *= 0.3          // "nice" about nothing in particular
+	}
+	if (to)
+		chance = floatmax(chance, 0.85)
+
+	// the more they've answered lately, the less they answer now
+	if (now - g_HeardRunAt > 45.0)
+		g_HeardRun = 0
+	chance /= 1.0 + (to ? 0.2 : 0.6) * float(g_HeardRun)
+	// at personality 0 they still answer when spoken to, at 200 a bit more
+	chance *= 0.6 + 0.4 * personality()
+	if (random_float(0.0, 1.0) > floatmin(chance, 0.95))
+		return
+
+	new bot = responder(id, prefer, who, team)
+	if (!answer(bot, section, id, team, 0.0))
+		return
+	g_HeardRun++
+	g_HeardRunAt = now
+	g_NextHeard = now + random_float(2.0, 4.0)
+	// now and then a second one ("gg", "hi"), a little later
+	if (second > 0.0 && random_float(0.0, 1.0) <= second * (0.5 + 0.5 * personality()))
+	{
+		new other = responder(id, 0, who, team)
+		if (other && other != bot)
+			answer(other, section, id, team, random_float(1.5, 4.0))
+	}
 }
 
 // `word` as a whole word ("hi" in "hi all", not in "this"), or anywhere for "?"

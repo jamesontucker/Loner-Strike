@@ -4,6 +4,8 @@
 	Regulars:   bots get names (with clan tags) from configs/gamemodes/regular_names.ini.
 	            Each CZ bot profile keeps its own name for good (data/gamemodes/regulars.ini),
 	            so the same regulars keep turning up; some bots join as one-off newcomers.
+	            Tags stay rare: a clan is at most three on the server, and tagged names
+	            are a small part of it (tag_fits). Names with a year in them are skipped.
 	Come & go:  now and then a bot leaves and someone new takes the slot (gm_churn).
 	RTV:        "rtv" starts a map vote once enough players want one; "nominate <map>".
 	            With gm_rtv_cycle 1 (gm_extras) both offer only the map rotation's maps.
@@ -52,6 +54,7 @@ new bool:g_Career
 new bool:g_Creating
 
 new Array:g_Pool                 // every name in regular_names.ini
+new Trie:g_InPool                // the same names, to look up
 new Trie:g_Regular               // profile name -> regular name
 new Trie:g_Taken                 // regular names already given to a profile
 new g_DataDir[128], g_CfgDir[128]
@@ -145,6 +148,7 @@ public plugin_end()
 load_names()
 {
 	g_Pool = ArrayCreate(32)
+	g_InPool = TrieCreate()
 	g_Regular = TrieCreate()
 	g_Taken = TrieCreate()
 	new line[64], f = fopen(fmt("%s/gamemodes/regular_names.ini", g_CfgDir), "rt")
@@ -155,8 +159,12 @@ load_names()
 			trim(line)
 			// a name with a quote, or starting with #, can't be kicked by name ("bot_kick"),
 			// so such a bot would never leave
-			if (line[0] && line[0] != ';' && line[0] != '#' && contain(line, "^"") == -1 && strlen(line) < 32)
+			// and no birth years or "2004" in names: nobody's name dates the server
+			if (line[0] && line[0] != ';' && line[0] != '#' && contain(line, "^"") == -1 && strlen(line) < 32 && !has_year(line))
+			{
 				ArrayPushString(g_Pool, line)
+				TrieSetCell(g_InPool, line, 1)
+			}
 		}
 		fclose(f)
 	}
@@ -171,7 +179,8 @@ load_names()
 				continue
 			name[0] = 0
 			strtok2(line, profile, charsmax(profile), name, charsmax(name), '=', TRIM_FULL)
-			if (profile[0] && name[0])
+			// a name taken out of regular_names.ini since is handed out fresh
+			if (profile[0] && name[0] && (!ArraySize(g_Pool) || TrieKeyExists(g_InPool, name)))
 			{
 				TrieSetString(g_Regular, profile, name)
 				TrieSetCell(g_Taken, name, 1)
@@ -179,6 +188,60 @@ load_names()
 		}
 		fclose(f)
 	}
+}
+
+// A year in the name: four digits in a row from 1950 to 2039 ("nacho2004", "LAN party 2003")
+bool:has_year(const name[])
+{
+	for (new i = 0; name[i]; i++)
+	{
+		if (!isdigit(name[i]) || (i > 0 && isdigit(name[i - 1])))
+			continue
+		new n, v
+		while (isdigit(name[i + n]))
+		{
+			v = v * 10 + name[i + n] - '0'
+			n++
+		}
+		if (n == 4 && v >= 1950 && v <= 2039)
+			return true
+	}
+	return false
+}
+
+// How many on the server wear `tag`, and how many wear any tag at all
+clan_count(const tag[], &tagged)
+{
+	new n, other[16]
+	tagged = 0
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (!is_user_connected(i))
+			continue
+		clan_of(i, other, charsmax(other))
+		if (!other[0])
+			continue
+		tagged++
+		if (tag[0] && equali(other, tag))
+			n++
+	}
+	return n
+}
+
+// Most people on a pub have no tag, and a clan is two or three of them: a tagged name
+// is fine while its clan has fewer than three here and tags stay a small part of the server
+bool:tag_fits(const name[])
+{
+	new tag[16], tagged, players
+	clan_of_name(name, tag, charsmax(tag))
+	if (!tag[0])
+		return true
+	if (clan_count(tag, tagged) >= 3)
+		return false
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_connected(i))
+			players++
+	return tagged < max(2, players / 5)
 }
 
 bool:name_in_use(const name[])
@@ -201,10 +264,11 @@ bool:free_name(name[], len)
 	new n = ArraySize(g_Pool)
 	if (!n)
 		return false
-	for (new tries = 0; tries < 40; tries++)
+	for (new tries = 0; tries < 60; tries++)
 	{
 		ArrayGetString(g_Pool, random(n), name, len)
-		if (!TrieKeyExists(g_Taken, name) && !name_in_use(name))
+		// the last tries take any free name rather than none
+		if (!TrieKeyExists(g_Taken, name) && !name_in_use(name) && (tries >= 50 || tag_fits(name)))
 			return true
 	}
 	return false
@@ -247,17 +311,18 @@ public fw_create_fake_client(const netname[])
 	return FMRES_SUPERCEDE
 }
 
-// Now and then someone brings a clanmate: a free name from a clan already on the server
+// Now and then someone brings a clanmate: a free name from a clan already on the server,
+// while that clan has fewer than three here
 bool:clan_friend(out[], len)
 {
-	if (!get_pcvar_num(g_pClans) || random(100) >= 40)
+	if (!get_pcvar_num(g_pClans) || random(100) >= 12)
 		return false
-	new here[33][16], n
+	new here[33][16], n, tagged
 	for (new id = 1; id <= MaxClients; id++)
 		if (is_user_connected(id))
 		{
 			clan_of(id, here[n], charsmax(here[]))
-			if (here[n][0])
+			if (here[n][0] && clan_count(here[n], tagged) < 3)
 				n++
 		}
 	if (!n)

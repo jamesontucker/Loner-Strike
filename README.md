@@ -19,7 +19,7 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 **Playing**
 - 22 game modes: Classic, Match (5v5), Deathmatch, Free for all, Gun Game (solo and teams), Zombie Plague (two versions), Warcraft 3, SuperHero, Hide and Seek, Paintball, Deathrun, Base Builder, SoccerJam, Surf, Kreedz, plus knife, pistol, deagle, AWP and scout modes
 - Bot styles with human reaction times and aim, from a newbie lobby up to bunnyhopping pros
-- 1,600 bot names with clan tags, so the same "regulars" keep showing up
+- 1,600 bot names, a few of them in small clans with a tag, so the same "regulars" keep showing up
 - Thousands of maps from GameBanana with pictures, favourites and search, plus skins, models, sounds and sprays
 - Round-end music, Quake sounds and classic sound packs
 - Add your own maps, sounds and AMX Mod X plugins from a file
