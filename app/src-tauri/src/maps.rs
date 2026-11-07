@@ -259,6 +259,19 @@ impl Game {
                 return (Some("radar"), Some(p), looking);
             }
         }
+        // a dedicated server's files have no pictures (Valve's server download leaves them
+        // out): this computer's game has them for the maps it has too
+        if self.dedicated {
+            for hl in local_games() {
+                for g in [hl.join("czero"), hl.join("cstrike")] {
+                    for (sub, kind) in [("gfx/thumbnails/maps_wide", "shot"), ("gfx/thumbnails/maps", "shot"), ("overviews", "radar")] {
+                        if let Some(p) = find_in(&g.join(sub), name, &[".tga", ".bmp"]) {
+                            return (Some(kind), Some(p), looking);
+                        }
+                    }
+                }
+            }
+        }
         (None, None, looking)
     }
 
@@ -291,6 +304,21 @@ impl Game {
         }
         (out.exists().then_some((out, kind)), looking)
     }
+}
+
+/// This computer's Half-Life folders, looked up at most every 5 minutes (it scans Steam's
+/// folders).
+fn local_games() -> Vec<PathBuf> {
+    static CACHE: std::sync::Mutex<Option<(std::time::Instant, Vec<PathBuf>)>> = std::sync::Mutex::new(None);
+    let mut c = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((at, list)) = c.as_ref() {
+        if at.elapsed() < std::time::Duration::from_secs(300) {
+            return list.clone();
+        }
+    }
+    let list: Vec<PathBuf> = crate::steam::find_installs().into_iter().map(|i| i.hl).collect();
+    *c = Some((std::time::Instant::now(), list.clone()));
+    list
 }
 
 /// Screenshots are shown about 170 pixels wide: twice that stays sharp on a phone
