@@ -55,6 +55,9 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 - Admins, bans, the swear filter, the welcome page and chat messages can be shared across servers. Mods and other settings stay per server. One server's mods can be copied to another, and your own maps can be sent to a server with everything they need.
 - Website status: a small service on a Linux server that gives your website the live player count and a visitor counter, over its own HTTPS or a Cloudflare Tunnel.
 - Each server has a join password, a console (RCON) password and extra start options.
+- Discord: a live server status message in your Discord channel. Fast map downloads (FastDL) for players joining.
+- The Loner-Strike server list: hosts can put a server on it, and players find it in the app's Find servers (a server browser after Steam's old one, with games on your own network) or on lonerstrike.com.
+- Weapon skins and player models per server, under their own names so every player downloads and sees them; the app shows how close each map gets to the engine's limit of 512 models.
 - Ports: servers on your computer start at UDP 27016 (27015 is your own game's); on a VPS, 27015 to 27019 for servers and 27020 for HLTV. Open UDP 27015-27020 in the provider's firewall.
 - Cost: free on your own computer. A VPS runs from free (Oracle Cloud's Always Free AMD machines, when available) to a small monthly plan at providers like Hetzner, DigitalOcean or Vultr. ARM machines can't run the game server.
 - Guide: https://lonerstrike.com/servers.html
