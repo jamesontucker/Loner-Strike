@@ -54,8 +54,9 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
         if let Some(inc) = include_rel {
             cmd.arg(format!("-i{}", am.join("scripting").join(inc).display()));
         }
-        // the biggest plugins take about 10 seconds
-        crate::sys::run_output(cmd, Duration::from_secs(120))
+        // the biggest plugins take about 10 seconds; the limit is only for a real hang, with
+        // room for a slow machine (a crash ends at once, with the debugger off)
+        crate::sys::run_output(cmd, Duration::from_secs(300))
     };
     // a compiler that crashed or hung (no "Done." and no errors of the code's own) gets
     // one more go: under Wine that's usually a one-off
