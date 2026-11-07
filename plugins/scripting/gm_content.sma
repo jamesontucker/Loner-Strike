@@ -10,7 +10,9 @@
 	    player <who> <model name>
 	who: all, ct, t or admin. A weapon's view and player models change when it's drawn;
 	its world model (on the ground) only for "all". Player models are set at each spawn.
-	The zombie modes and Base Builder set their own models: nothing is swapped there.
+	Modes with their own models win: nothing is swapped in the zombie modes, Base Builder,
+	Paintball or Hide and Seek, and Superhero and Warcraft 3 keep their own player models
+	(heroes and races that change how you look) but still get the weapon skins.
 
 	The engine can load 512 models, 512 sounds and 512 other files a map (more stops the
 	server). Each map start this counts what was loaded, the map's own pieces included
@@ -39,7 +41,7 @@ new g_WeaponClass[MAX_ITEMS][32], g_WeaponWho[MAX_ITEMS], g_V[MAX_ITEMS][96], g_
 new g_Weapons
 new g_PlayerModel[MAX_ITEMS][32], g_PlayerWho[MAX_ITEMS]
 new g_Players
-new bool:g_Off
+new bool:g_Off, bool:g_NoPlayers
 new g_MaxModel, g_MaxSound, g_MaxGeneric
 
 public plugin_precache()
@@ -51,7 +53,8 @@ public plugin_precache()
 
 	new mode[32]
 	read_data_line("current.txt", mode, charsmax(mode))
-	g_Off = equal(mode, "zombie") || equal(mode, "zp5") || equal(mode, "basebuilder")
+	g_Off = equal(mode, "zombie") || equal(mode, "zp5") || equal(mode, "basebuilder") || equal(mode, "paintball") || equal(mode, "hns")
+	g_NoPlayers = equal(mode, "shero") || equal(mode, "war3")
 	if (g_Off)
 		return
 
@@ -91,7 +94,7 @@ public plugin_precache()
 			if (g_V[i][0] || g_P[i][0] || g_W[i][0])
 				g_Weapons++
 		}
-		else if (equal(kind, "player") && g_Players < MAX_ITEMS && a[0] && name_ok(b))
+		else if (equal(kind, "player") && !g_NoPlayers && g_Players < MAX_ITEMS && a[0] && name_ok(b))
 		{
 			new file[96]
 			formatex(file, charsmax(file), "models/player/%s/%s.mdl", b, b)

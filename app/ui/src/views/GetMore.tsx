@@ -13,7 +13,7 @@ const NOTES: Record<string, string> = {
 /** A dedicated server can only send players what has a name of its own: maps, and weapon
  *  skins and player models, which go in under new names (servercontent.rs). */
 const SERVER_SECTIONS = ["maps", "skins", "players"];
-const SERVER_NOTE = "Players download what this server uses when they join. Skins and player models go in under their own names, so everyone sees them, not just you.";
+const SERVER_NOTE = "Players download what this server uses when they join. Skins and player models go in under their own names, so everyone sees them, not just you. Modes with their own models (Paintball, the zombie modes) keep them.";
 type Slots = { map?: string; models?: number; sounds?: number; generic?: number };
 type ServerContent = { items: { mod: number; section: string }[]; slots: Slots | null; limit: number; ours: number };
 /** Shared by the browser and the Installed list, so removing shows on both. */
