@@ -109,10 +109,11 @@ pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
             rec.copy(&full, &rel)?;
         }
     }
-    // Windows: Ham Sandwich with the special-bot queue fix (resources/windows/hamsandwich/
-    // README.md). Without it hl.exe corrupts its heap on map changes; Wine on the Mac hides
-    // the bug, so CrossOver installs keep the official module.
-    if cfg!(windows) {
+    // Ham Sandwich with the special-bot queue fix (resources/windows/hamsandwich/README.md).
+    // Without it hl.exe uses freed memory on map changes: real Windows crashes on it, Wine
+    // on the Mac happens to survive it, but it's the same Windows game there, so CrossOver
+    // installs get the fixed module too. (A server on Linux has its own .so.)
+    if cfg!(windows) || ctx.install.kind == "crossover" {
         let patched = ctx.res.join("windows").join("hamsandwich").join("hamsandwich_amxx.dll");
         if patched.is_file() {
             rec.copy(&patched, "addons/amxmodx/modules/hamsandwich_amxx.dll")?;

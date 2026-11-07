@@ -260,7 +260,8 @@ pub fn bot_styles(rec: &mut Record, ctx: &Ctx, game: &str) -> Result<(), String>
     // happens to survive it). Condition Zero's when that's installed, else Loner-Strike's
     // own: the same place and phrase names with no voice lines. CS 1.6 has none of CZ's
     // radio\bot sounds, so both sound the same (the bots use the normal radio).
-    if cfg!(windows) && game == "cstrike" && !rec.exists("BotChatter.db") {
+    // (CrossOver runs the same Windows game: it gets one too)
+    if (cfg!(windows) || install_is_crossover(ctx)) && game == "cstrike" && !rec.exists("BotChatter.db") {
         let cz = rec.game.parent().map(|hl| hl.join("czero").join("BotChatter.db"));
         match cz.filter(|p| p.is_file()) {
             Some(p) => rec.copy(&p, "BotChatter.db")?,

@@ -2,8 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "bundle": {
     "resources": {
-      "resources/windows/7zip/": "7zip/",
-      "resources/windows/hamsandwich/": "windows/hamsandwich/"
+      "resources/windows/7zip/": "7zip/"
     }
   }
 }

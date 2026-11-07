@@ -43,7 +43,8 @@
     "resources": {
       "../../plugins/": "plugins/",
       "../../mods/": "mods/",
-      "../../catalog/": "catalog/"
+      "../../catalog/": "catalog/",
+      "resources/windows/hamsandwich/": "windows/hamsandwich/"
     },
     "windows": {
       "nsis": {
