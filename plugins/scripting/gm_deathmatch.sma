@@ -29,6 +29,7 @@
 #define TASK_RESPAWN   5100
 #define TASK_PROTECT   5200
 #define TASK_EQUIP     5300
+#define TASK_NAV_WAIT  5900
 
 new bool:g_BotHams
 
@@ -79,6 +80,7 @@ new const MAXBP[31] = { 0, 52, 0, 90, 0, 32, 0, 100, 90, 0, 120, 100, 100, 90, 9
 new Float:g_Spawns[MAX_SPAWNS][3]
 new Float:g_SpawnAngles[MAX_SPAWNS][3]
 new g_SpawnCount
+new g_NavWaitSize
 
 new g_Primary[33] = { -1, ... }
 new g_Secondary[33] = { -1, ... }
@@ -145,6 +147,12 @@ load_spawns()
 	if (!f)
 	{
 		load_nav_spawns(map)
+		// no nav yet: the bots are probably learning the map, so use theirs once it's saved
+		if (!g_SpawnCount)
+		{
+			g_NavWaitSize = -1
+			set_task(10.0, "task_wait_nav", TASK_NAV_WAIT, _, _, "b")
+		}
 		return
 	}
 	while (!feof(f) && g_SpawnCount < MAX_SPAWNS)
@@ -165,6 +173,26 @@ load_spawns()
 	}
 	fclose(f)
 	log_amx("Loaded %d random spawn points for %s", g_SpawnCount, map)
+}
+
+// A map that had no nav when it started: once the bots have saved one (the file is there
+// and hasn't grown since the last look), random spawns come from it; team spawns until then
+public task_wait_nav()
+{
+	new map[32], path[96]
+	get_mapname(map, charsmax(map))
+	formatex(path, charsmax(path), "maps/%s.nav", map)
+	if (!file_exists(path, true))
+		return
+	new size = file_size(path, FSOPT_BYTES_COUNT, true)
+	if (size <= 0 || size != g_NavWaitSize)
+	{
+		g_NavWaitSize = size
+		return
+	}
+	remove_task(TASK_NAV_WAIT)
+	g_SpawnCount = 0
+	load_nav_spawns(map)
 }
 
 // Nav area attributes that make a poor spawn spot

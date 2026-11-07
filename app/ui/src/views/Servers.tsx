@@ -504,11 +504,11 @@ export function ServerPage(props: {
           {tab === "getmaps" && <GetMore only="maps" onInstalled={reloadMaps} />}
           {tab === "bots" && data && <Bots data={data} refresh={refresh} />}
           {tab === "match" && data && (
-            <SettingsPage title="Rules" note={RULES_NOTE(data)} data={data} cat={2} refresh={refresh}>
+            <SettingsPage title="Rules" note={RULES_NOTE(data)} data={data} cat={2} refresh={refresh} pickMode>
               <MatchButtons refresh={refresh} />
             </SettingsPage>
           )}
-          {tab === "fun" && data && <SettingsPage title="Fun & effects" note={FUN_NOTE(data)} data={data} cat={3} refresh={refresh} />}
+          {tab === "fun" && data && <SettingsPage title="Fun & effects" note={FUN_NOTE(data)} data={data} cat={3} refresh={refresh} pickMode />}
           {tab === "players" && data && <Players data={data} refresh={refresh} />}
           {tab === "mods" && <Mods app={app} scan={scan} running={!!data} onChanged={() => { reloadApp(); onChanged(); }} openSetup={() => {}} />}
           {tab === "admins" && <Admins data={data} />}

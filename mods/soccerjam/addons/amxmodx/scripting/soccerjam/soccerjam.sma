@@ -342,6 +342,8 @@ new g_botPresser[TEAMS]
 new g_botSlot[MAX_PLAYER]
 // each bot plays a bit differently: skill (aim of its shots) and pace, set when it's first seen
 new Float:g_botSkill[MAX_PLAYER], Float:g_botPace[MAX_PLAYER]
+// the velocity BotSteer last gave each bot: it speeds up and turns from there, like a player
+new Float:g_botVel[MAX_PLAYER][2]
 new Float:g_botHoldStart[MAX_PLAYER]
 new Float:g_botNextKick[MAX_PLAYER]
 new g_botChaser[TEAMS]
@@ -2947,7 +2949,7 @@ public BotPickChasers() {
 		if(g_botSkill[id] == 0.0) {
 			new Float:diff = float(clamp(get_cvar_num("bot_difficulty"), 0, 3))
 			g_botSkill[id] = floatmin(1.0, random_float(0.35, 0.75) + diff * 0.08)
-			g_botPace[id] = random_float(0.86, 1.0)
+			g_botPace[id] = random_float(0.80, 0.95)
 		}
 	}
 }
@@ -2965,11 +2967,37 @@ BotSteer(id, Float:target[3]) {
 	spd = entity_get_float(id, EV_FL_maxspeed)
 	if(spd < 100.0 || spd > 600.0)
 		spd = 250.0
+	// no faster than a person can run (their move keys stop at cl_forwardspeed 400)
+	if(spd > 400.0)
+		spd = 400.0
 	if(g_botPace[id] > 0.0)
 		spd *= g_botPace[id]
 	entity_get_vector(id, EV_VEC_velocity, vel)
-	vel[0] = dx / len * spd
-	vel[1] = dy / len * spd
+
+	// Speed up and turn the way a player's movement does (sv_accelerate 5: about a quarter
+	// of a second to full speed), not straight to full speed in a new direction each frame.
+	// From the velocity we gave last frame, so the bot's own brain pulling elsewhere doesn't
+	// slow it; from the real one when that's much slower (it ran into something).
+	new Float:cur0 = g_botVel[id][0], Float:cur1 = g_botVel[id][1]
+	new Float:real = floatsqroot(vel[0]*vel[0] + vel[1]*vel[1])
+	if(real < 0.5 * floatsqroot(cur0*cur0 + cur1*cur1)) {
+		cur0 = vel[0]
+		cur1 = vel[1]
+	}
+	new Float:dt = get_global_float(GL_frametime)
+	if(dt <= 0.0 || dt > 0.1)
+		dt = 0.01
+	new Float:step = spd * 5.0 * dt
+	new Float:d0 = dx / len * spd - cur0, Float:d1 = dy / len * spd - cur1
+	new Float:dl = floatsqroot(d0*d0 + d1*d1)
+	if(dl > step) {
+		d0 *= step / dl
+		d1 *= step / dl
+	}
+	vel[0] = cur0 + d0
+	vel[1] = cur1 + d1
+	g_botVel[id][0] = vel[0]
+	g_botVel[id][1] = vel[1]
 	entity_set_vector(id, EV_VEC_velocity, vel)
 
 	// nudge the view toward where we run (small steps; big jumps get overridden by the bot AI)

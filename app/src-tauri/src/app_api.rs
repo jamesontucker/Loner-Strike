@@ -508,6 +508,83 @@ fn current_mode(g: &crate::game::Game) -> String {
     std::fs::read_to_string(g.data.join("current.txt")).ok().map(|t| t.trim().to_string()).filter(|m| !m.is_empty()).unwrap_or_else(|| "classic".into())
 }
 
+/// A server on another machine keeps its mode files there (not reachable from here yet).
+const REMOTE_MODE_SETTINGS: &str = "Changing another mode's settings isn't possible for a server on another machine yet. Switch the server to that mode to change them.";
+
+/// A mode id that modes.ini lists.
+fn known_mode(g: &crate::game::Game, mode: &str) -> bool {
+    let ini = g.dir.join("addons/amxmodx/configs/gamemodes/modes.ini");
+    crate::extras::parse_modes(&crate::sys::read_latin1(&ini).unwrap_or_default()).iter().any(|(id, _)| id == mode)
+}
+
+#[derive(Deserialize)]
+struct ModeSettingsQuery {
+    mode: String,
+    /// comma-separated cvars
+    #[serde(default)]
+    cvars: String,
+}
+
+/// What a mode's settings will be when it next starts (the Rules page editing a mode other
+/// than the one being played): cvar -> value, or null where nothing sets it (the plugin's
+/// own default).
+async fn api_mode_settings(State(st): State<Shared>, axum::extract::Query(q): axum::extract::Query<ModeSettingsQuery>) -> Json<Value> {
+    let Some(g) = st.game() else { return Json(json!({"error": "Couldn't find the game."})) };
+    if g.remote.is_some() {
+        return Json(json!({"error": REMOTE_MODE_SETTINGS}));
+    }
+    let v = tokio::task::spawn_blocking(move || {
+        if !crate::maps::safe_arg(&q.mode) || !known_mode(&g, &q.mode) {
+            return json!({"error": "That mode isn't installed."});
+        }
+        let values: serde_json::Map<String, Value> =
+            q.cvars.split(',').filter(|c| crate::maps::safe_arg(c)).map(|c| (c.to_string(), json!(effective(&g, &q.mode, c)))).collect();
+        json!({"mode": q.mode, "current": current_mode(&g) == q.mode, "values": values})
+    })
+    .await
+    .unwrap_or_else(|_| json!({"error": "Couldn't read the settings."}));
+    Json(v)
+}
+
+#[derive(Deserialize)]
+struct ModeSettingReq {
+    mode: String,
+    cvar: String,
+    value: String,
+}
+
+/// Saves one setting for a mode that isn't being played, in its mode_<id>.cfg, which the
+/// Game Mode Menu applies when that mode next starts. The mode being played is the game's
+/// to save (it rewrites that file from what it holds), so it's refused here.
+async fn api_mode_setting_set(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<ModeSettingReq>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    let Some(g) = st.game() else { return (StatusCode::OK, Json(json!({"error": "Couldn't find the game."}))) };
+    if g.remote.is_some() {
+        return (StatusCode::OK, Json(json!({"error": REMOTE_MODE_SETTINGS})));
+    }
+    let r = tokio::task::spawn_blocking(move || {
+        if !crate::maps::safe_arg(&req.mode) || !known_mode(&g, &req.mode) {
+            return Err("That mode isn't installed.".to_string());
+        }
+        if !crate::maps::safe_arg(&req.cvar) || !crate::maps::safe_arg(&req.value) {
+            return Err("That isn't a setting value.".into());
+        }
+        if current_mode(&g) == req.mode {
+            return Err("That's the mode being played: change it live instead.".into());
+        }
+        std::fs::create_dir_all(&g.data).map_err(|e| e.to_string())?;
+        set_cfg_values(&g.data.join(format!("mode_{}.cfg", req.mode)), &[(req.cvar.to_lowercase(), req.value)]).map_err(|e| format!("Couldn't save the setting ({e})."))
+    })
+    .await
+    .unwrap_or_else(|_| Err("Couldn't save the setting.".into()));
+    match r {
+        Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))),
+        Err(e) => (StatusCode::OK, Json(json!({"error": e}))),
+    }
+}
+
 /// Modes and their quick settings, for starting the game.
 async fn api_start_options(State(st): State<Shared>) -> Json<Value> {
     let Some(g) = st.game() else { return Json(json!({"modes": []})) };
@@ -725,6 +802,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/app/phone", get(api_phone).post(api_phone_set))
         .route("/api/app/launch", post(api_launch))
         .route("/api/app/start-options", get(api_start_options))
+        .route("/api/app/mode-settings", get(api_mode_settings).post(api_mode_setting_set))
         .route("/api/app/lan", get(api_lan))
         .route("/api/app/direct", get(api_direct).post(api_direct_set))
         .route("/api/app/vlans", get(api_vlans))

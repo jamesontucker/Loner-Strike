@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "tauri": "cd ../src-tauri && CARGO_TARGET_DIR=\"$HOME/Library/Caches/loner-strike-target\" cargo tauri"
+    "tauri": "node scripts/tauri.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.59.20",

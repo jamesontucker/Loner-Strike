@@ -76,6 +76,9 @@ new g_pOn, g_pChance, g_pRadius, g_pDelay, g_pRange, g_pChat;
 // this round's activator: reaction time, how far ahead it times a trap, greed (0-100)
 new Float:g_fReact, Float:g_fLeadLo, Float:g_fLeadHi, g_iGreed;
 new Float:g_fSeenAt[ MAX_BUTTONS ];
+// patience (0-100): how likely it lets a lone runner by to save a trap for the ones behind
+new g_iPatience;
+new bool:g_bSaving[ MAX_BUTTONS ];
 new Float:g_fPressedAt, g_iPressKills, bool:g_bPressOpen;
 new g_iActivator;
 new g_iMaxPlayers;
@@ -170,6 +173,7 @@ public NativeFilter( const szNative[ ], iIndex, iTrap ) {
 public EventNewRound( ) {
 	arrayset( _:g_fNextUse, 0, MAX_BUTTONS );
 	arrayset( _:g_fSeenAt, 0, MAX_BUTTONS );
+	arrayset( g_bSaving, false, MAX_BUTTONS );
 	g_fNextAny = get_gametime( ) + 3.0;
 	g_bPressOpen = false;
 
@@ -181,6 +185,7 @@ public EventNewRound( ) {
 	g_fLeadLo = floatmax( 0.05, fCentre - fSpread * 0.5 );
 	g_fLeadHi = fCentre + fSpread * 0.5;
 	g_iGreed = random_num( 0, 70 );
+	g_iPatience = random_num( 25, 80 );
 
 	// runners start over once the round's respawn has put them back at the start
 	for( new i = 1; i <= g_iMaxPlayers; i++ )
@@ -400,6 +405,7 @@ public TaskThink( ) {
 
 		if( bCTAtButton || !iComing ) {
 			g_fSeenAt[ b ] = 0.0;
+			g_bSaving[ b ] = false;
 			continue;
 		}
 
@@ -407,8 +413,13 @@ public TaskThink( ) {
 		if( g_fSeenAt[ b ] == 0.0 ) {
 			// not everyone watches every trap: a less keen activator misses some runners
 			g_fSeenAt[ b ] = ( random_num( 1, 100 ) <= 40 + get_pcvar_num( g_pChance ) ) ? fNow : fNow + random_float( 0.8, 2.0 );
+			// one runner out in front with plenty still alive behind: a patient activator lets
+			// this one by and keeps the trap for the group (decided once per approach)
+			g_bSaving[ b ] = iComing == 1 && iNumCT - iComing >= 2 && random_num( 1, 100 ) <= g_iPatience;
 			continue;
 		}
+		if( g_bSaving[ b ] )
+			continue;
 		if( fNow - g_fSeenAt[ b ] < g_fReact || !iIn )
 			continue;
 

@@ -148,6 +148,7 @@ new const SETTINGS[][SettingData] =
 	{ "mp_friendlyfire",    "Friendly fire",    "0 1",                      "Off On",                              CAT_MATCH,  SC_MODE,   "" },
 	{ "mp_autoteambalance", "Team balance",     "1 0",                      "Auto|Off",                            CAT_MATCH,  SC_MODE,   "" },
 	{ "mp_limitteams",      "Max team difference", "2 1 3 0",               "2 players|1 player|3 players|No limit", CAT_MATCH, SC_MODE,  "" },
+	{ "mp_forcerespawn",    "Respawn",          "0 1 3 5",                  "Off|After 1s|After 3s|After 5s",      CAT_MATCH,  SC_MODE,   "w" },
 	{ "mp_respawn_immunitytime", "Spawn protection", "0 2 3 5",             "Off|2s|3s|5s",                        CAT_MATCH,  SC_MODE,   "" },
 	{ "mp_timelimit",       "Map time limit",   "0 10 20 30 45 60",         "None|10 min|20 min|30 min|45 min|60 min", CAT_MATCH, SC_MODE, "" },
 	{ "mp_maxrounds",       "Round limit",      "0 10 16 30",               "None 10 16 30",                       CAT_MATCH,  SC_MODE,   "" },
@@ -197,8 +198,8 @@ new const SETTINGS[][SettingData] =
 	{ "sv_airaccelerate",   "Air control",      "10 100",                   "Normal|Surf / bhop",                  CAT_FUN,    SC_MODE,   "" },
 	{ "gm_infammo",         "Unlimited ammo",   "0 1",                      "Off On",                              CAT_FUN,    SC_MODE,   "" },
 	{ "gm_hsonly",          "Headshots only",   "0 1",                      "Off On",                              CAT_FUN,    SC_MODE,   "" },
-	{ "zp_lighting",        "Zombie darkness",  "a d g 0",                  "Pitch black|Very dark|Dark|Normal lighting", CAT_FUN, SC_MODE, "" },
-	{ "gm_autobhop",        "Auto bunnyhop",    "0 1",                      "Off On",                              CAT_FUN,    SC_GLOBAL, "" },
+	{ "zp_lighting",        "Zombie darkness",  "a b d g 0",                "Pitch black|Very dark|Dark|Dim|Normal lighting", CAT_MATCH, SC_MODE, "" },
+	{ "gm_autobhop",        "Auto bunnyhop",    "0 1",                      "Off On",                              CAT_FUN,    SC_MODE,   "" },
 	{ "gm_tracers",         "Bullet tracers",   "0 1 2",                    "Off Tracers Lasers",                  CAT_FUN,    SC_GLOBAL, "" },
 	{ "gm_dmgnumbers",      "Damage numbers",   "0 1",                      "Off On",                              CAT_FUN,    SC_GLOBAL, "" },
 	{ "mp_infinite_grenades", "Infinite grenades", "0 1",                       "Off On",                              CAT_FUN,  SC_MODE,   "" },
@@ -2019,9 +2020,14 @@ public task_hint(taskid)
 		write_data_line("reloadnote.txt", "")
 		gm_print(id, "%s.", note)
 	}
-	if (g_CrashMap[0])
+	// the menus are for admins (and the host): everyone else just hears what's on
+	new bool:admin = (get_user_flags(id) & ACCESS) != 0
+	if (g_CrashMap[0] && admin)
 		gm_print(id, "Last session ended unexpectedly on %s. F3 shows what you can do about it.", g_CrashMap)
-	gm_print(id, "Now playing %s. F3 opens the menu, F4 quick actions.", g_ModeName[g_Cur])
+	if (admin)
+		gm_print(id, "Now playing %s. F3 opens the menu, F4 quick actions.", g_ModeName[g_Cur])
+	else
+		gm_print(id, "Now playing %s.", g_ModeName[g_Cur])
 }
 
 // Green "[Game Mode]" prefix in chat. Also echoed to the server console so the
@@ -2757,6 +2763,9 @@ setting_visible(s, cat)
 	}
 	// GunGame has its own objectives switch, and deathmatch removes them
 	if (equal(SETTINGS[s][SD_Cvar], "gm_nobomb") && (get_cvar_pointer("gg_block_objectives") || get_cvar_pointer("gmdm_guns")))
+		return false
+	// GunGame and deathmatch have their own spawn protection: show just that one
+	if (equal(SETTINGS[s][SD_Cvar], "mp_respawn_immunitytime") && (get_cvar_pointer("gg_dm_sp_time") || get_cvar_pointer("gmdm_protect")))
 		return false
 	if (SETTINGS[s][SD_NeedFlag][0] && !mode_has_flag(g_Cur, SETTINGS[s][SD_NeedFlag][0]))
 		return false
@@ -4709,9 +4718,19 @@ public task_summary()
 	new const diff[][] = { "Easy", "Normal", "Hard", "Expert" }
 	new preset[48]
 	get_preset_label(preset, charsmax(preset))
-	set_hudmessage(233, 227, 207, -1.0, 0.18, 0, 0.0, 5.0, 0.4, 1.0, -1)
-	show_hudmessage(0, "%s%s%s^n%d bots, %s   |   F3 menu   F4 quick actions", g_ModeName[g_Cur], preset[0] ? "  -  " : "", preset,
-		get_playersnum_ex(GetPlayers_ExcludeHuman), diff[clamp(get_cvar_num("bot_difficulty"), 0, 3)])
+	new bots = get_playersnum_ex(GetPlayers_ExcludeHuman)
+	new d = clamp(get_cvar_num("bot_difficulty"), 0, 3)
+	// the F3/F4 keys only mean something to those who can open the menus (admins, the host)
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (!is_user_connected(id) || is_user_bot(id))
+			continue
+		set_hudmessage(233, 227, 207, -1.0, 0.18, 0, 0.0, 5.0, 0.4, 1.0, -1)
+		if (get_user_flags(id) & ACCESS)
+			show_hudmessage(id, "%s%s%s^n%d bots, %s   |   F3 menu   F4 quick actions", g_ModeName[g_Cur], preset[0] ? "  -  " : "", preset, bots, diff[d])
+		else
+			show_hudmessage(id, "%s%s%s^n%d bots, %s", g_ModeName[g_Cur], preset[0] ? "  -  " : "", preset, bots, diff[d])
+	}
 }
 
 new Float:g_LastWin

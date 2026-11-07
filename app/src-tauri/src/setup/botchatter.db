@@ -1,0 +1,712 @@
+
+Place BombsiteA
+End
+
+Place BombsiteB
+End
+
+Place BombsiteC
+End
+
+Place Hostages
+End
+
+Place HostageRescueZone
+End
+
+Place VipRescueZone
+End
+
+Place CTSpawn
+End
+
+Place TSpawn
+End
+
+Place Bridge
+End
+
+Place Middle
+End
+
+Place House
+End
+
+Place Apartment
+End
+
+Place Apartments
+End
+
+Place Market
+End
+
+Place Sewers
+End
+
+Place Tunnel
+End
+
+Place Ducts
+End
+
+Place Village
+End
+
+Place Roof
+End
+
+Place Upstairs
+End
+
+Place Downstairs
+End
+
+Place Basement
+End
+
+Place Crawlspace
+End
+
+Place Kitchen
+End
+
+Place Inside
+End
+
+Place Outside
+End
+
+Place Tower
+End
+
+Place WineCellar
+End
+
+Place Garage
+End
+
+Place Courtyard
+End
+
+Place Water
+End
+
+Place FrontDoor
+End
+
+Place BackDoor
+End
+
+Place SideDoor
+End
+
+Place BackWay
+End
+
+Place FrontYard
+End
+
+Place BackYard
+End
+
+Place SideYard
+End
+
+Place Lobby
+End
+
+Place Vault
+End
+
+Place Elevator
+End
+
+Place DoubleDoors
+End
+
+Place SecurityDoors
+End
+
+Place LongHall
+End
+
+Place SideHall
+End
+
+Place FrontHall
+End
+
+Place BackHall
+End
+
+Place MainHall
+End
+
+Place FarSide
+End
+
+Place Windows
+End
+
+Place Window
+End
+
+Place Attic
+End
+
+Place StorageRoom
+End
+
+Place ProjectorRoom
+End
+
+Place MeetingRoom
+End
+
+Place ConferenceRoom
+End
+
+Place ComputerRoom
+End
+
+Place BigOffice
+End
+
+Place LittleOffice
+End
+
+Place Dumpster
+End
+
+Place Airplane
+End
+
+Place Underground
+End
+
+Place Bunker
+End
+
+Place Mines
+End
+
+Place Front
+End
+
+Place Back
+End
+
+Place Rear
+End
+
+Place Side
+End
+
+Place Ramp
+End
+
+Place Underpass
+End
+
+Place Overpass
+End
+
+Place Stairs
+End
+
+Place Ladder
+End
+
+Place Gate
+End
+
+Place GateHouse
+End
+
+Place LoadingDock
+End
+
+Place GuardHouse
+End
+
+Place Entrance
+End
+
+Place VendingMachines
+End
+
+Place Loft
+End
+
+Place Balcony
+End
+
+Place Alley
+End
+
+Place BackAlley
+End
+
+Place SideAlley
+End
+
+Place FrontRoom
+End
+
+Place BackRoom
+End
+
+Place SideRoom
+End
+
+Place Crates
+End
+
+Place Truck
+End
+
+Place Bedroom
+End
+
+Place FamilyRoom
+End
+
+Place Bathroom
+End
+
+Place LivingRoom
+End
+
+Place Den
+End
+
+Place Office
+End
+
+Place Atrium
+End
+
+Place Entryway
+End
+
+Place Foyer
+End
+
+Place Stairwell
+End
+
+Place Fence
+End
+
+Place Deck
+End
+
+Place Porch
+End
+
+Place Patio
+End
+
+Place Wall
+End
+
+Chatter EnemySpotted
+	Radio EVENT_RADIO_ENEMY_SPOTTED
+
+End
+
+Chatter EnemyDown
+	Radio EVENT_RADIO_ENEMY_DOWN
+
+End
+
+Chatter InCombat
+	Radio EVENT_RADIO_ENEMY_SPOTTED
+
+End
+
+Chatter Clear
+	Radio EVENT_RADIO_SECTOR_CLEAR
+
+End
+
+Chatter RequestReport
+	Radio EVENT_RADIO_REPORT_IN_TEAM
+
+End
+
+Chatter KilledMyEnemy
+	Radio EVENT_RADIO_ENEMY_DOWN
+
+End
+
+Chatter LostEnemy
+End
+
+Chatter NoEnemiesLeft
+End
+
+Chatter OneEnemyLeft
+End
+
+Chatter TwoEnemiesLeft
+End
+
+Chatter ThreeEnemiesLeft
+End
+
+Chatter Help
+	Radio EVENT_RADIO_TAKING_FIRE
+
+End
+
+Chatter Affirmative
+	Radio EVENT_RADIO_AFFIRMATIVE
+
+	Important
+
+End
+
+Chatter Negative
+	Radio EVENT_RADIO_NEGATIVE
+
+	Important
+
+End
+
+Chatter BombsiteClear
+	Radio EVENT_RADIO_SECTOR_CLEAR
+
+	Important
+
+End
+
+Chatter DefusingBomb
+	Radio EVENT_RADIO_COVER_ME
+
+	Important
+
+End
+
+Chatter GoingToGuardLooseBomb
+End
+
+Chatter GuardingLooseBomb
+	Radio EVENT_RADIO_IN_POSITION
+
+	Important
+
+End
+
+Chatter PlantingBomb
+	Radio EVENT_RADIO_COVER_ME
+
+	Important
+
+	Place ANY
+
+	Place BombsiteA
+
+	Place BombsiteB
+
+	Place BombsiteC
+End
+
+Chatter GoingToPlantBomb
+	Radio EVENT_RADIO_FOLLOW_ME
+
+	Important
+
+	Place ANY
+
+	Place BombsiteA
+
+	Place BombsiteB
+
+	Place BombsiteC
+End
+
+Chatter SpottedBomber
+	Radio EVENT_RADIO_ENEMY_SPOTTED
+
+	Important
+
+End
+
+Chatter SpottedLooseBomb
+	Important
+
+End
+
+Chatter TheyPickedUpTheBomb
+	Important
+
+End
+
+Chatter PlantedBombPlace
+	Radio EVENT_RADIO_NEED_BACKUP
+
+	Important
+
+	Place UNDEFINED
+
+	Place BombsiteA
+
+	Place BombsiteB
+
+	Place BombsiteC
+
+End
+
+Chatter WhereIsTheBomb
+	Important
+
+End
+
+Chatter GoingToDefendBombsite
+	Important
+
+	Place ANY
+
+	Place BombsiteA
+
+	Place BombsiteB
+
+	Place BombsiteC
+End
+
+Chatter DefendingBombsite
+	Important
+
+	Place UNDEFINED
+
+	Place BombsiteA
+
+	Place BombsiteB
+
+	Place BombsiteC
+End
+
+Chatter BombsiteSecure
+	Radio EVENT_RADIO_SECTOR_CLEAR
+
+	Important
+
+End
+
+Chatter WaitingForHumanToDefuseBomb
+End
+
+Chatter WaitingForHumanToDefuseBombPanic
+End
+
+Chatter BarelyDefused
+End
+
+Chatter GoingToGuardHostages
+	Important
+
+End
+
+Chatter GuardingHostages
+	Important
+
+End
+
+Chatter GoingToGuardHostageEscapeZone
+	Important
+
+End
+
+Chatter GuardingHostageEscapeZone
+	Important
+
+End
+
+Chatter HostagesBeingTaken
+	Radio EVENT_RADIO_NEED_BACKUP
+
+	Important
+
+End
+
+Chatter HostagesTaken
+	Important
+
+End
+
+Chatter TalkingToHostages
+	Important
+
+End
+
+Chatter EscortingHostages
+	Important
+
+End
+
+Chatter WaitingForHumanToRescueHostages
+	Radio EVENT_RADIO_SECTOR_CLEAR
+
+	Important
+
+End
+
+Chatter SpottedVIP
+	Radio EVENT_RADIO_ENEMY_SPOTTED
+
+	Important
+
+End
+
+Chatter GoingToGuardVIPEscapeZone
+	Important
+
+End
+
+Chatter GuardingVIPEscapeZone
+	Important
+
+End
+
+Chatter Pain
+End
+
+Chatter WonRound
+End
+
+Chatter WonRoundQuickly
+End
+
+Chatter LastManStanding
+End
+
+Chatter ThrillEmote
+End
+
+Chatter ScaredEmote
+End
+
+Chatter AgreeWithPlan
+	Important
+
+End
+
+Chatter CoveringFriend
+	Radio EVENT_RADIO_AFFIRMATIVE
+
+	Important
+
+End
+
+Chatter OnMyWay
+	Radio EVENT_RADIO_AFFIRMATIVE
+
+	Important
+
+End
+
+Chatter WaitingHere
+End
+
+Chatter PinnedDown
+	Radio EVENT_RADIO_NEED_BACKUP
+
+End
+
+Chatter HeardNoise
+End
+
+Chatter Blinded
+End
+
+Chatter NiceShot
+End
+
+Chatter NiceShotSir
+End
+
+Chatter NiceShotCommander
+End
+
+Chatter CommanderDown
+	Radio EVENT_RADIO_REGROUP_TEAM
+
+	Important
+
+End
+
+Chatter FollowingSir
+	Radio EVENT_RADIO_AFFIRMATIVE
+
+	Important
+
+End
+
+Chatter FollowingCommander
+	Radio EVENT_RADIO_AFFIRMATIVE
+
+	Important
+
+End
+
+Chatter KilledFriend
+End
+
+Chatter FriendlyFire
+	Important
+
+End
+
+Chatter PepTalk
+End
+
+Chatter OnARollBrag
+End
+
+Chatter TauntCamper
+End
+
+Chatter PreventEscapeBrag
+End
+
+Chatter SniperWarning
+End
+
+Chatter SniperKilled
+End
+
+Chatter ClearedArea
+End
+
+Chatter Agree
+End
+
+Chatter Disagree
+End
+
+Chatter CoverMe
+End
+
+Chatter FrustrationEmote
+End
+
+Chatter FollowingFriend
+End
+
+Chatter ReportingIn
+End
+
+Chatter BombTickingDown
+End
+
+Chatter HostageDown
+End
+
+Chatter RequestHostageLocation
+End
+
+Chatter MeToo
+End
+

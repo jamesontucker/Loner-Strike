@@ -12,7 +12,7 @@ export type BotRating = "great" | "ok" | "weak" | "none";
 
 /** How well bots handle each mode (by mode id, without "mode-"); unlisted modes are "great". */
 export const BOT_RATING: Record<string, BotRating> = {
-  hns: "ok", deathrun: "ok", match: "ok", surf: "ok", soccerjam: "weak", basebuilder: "weak", kreedz: "none",
+  hns: "ok", deathrun: "ok", match: "great", surf: "ok", soccerjam: "great", basebuilder: "weak", kreedz: "none",
 };
 
 export const BOT_NOTE: Record<BotRating, string> = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" };

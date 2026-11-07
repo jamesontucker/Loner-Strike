@@ -338,7 +338,7 @@ function MatchSettings({ s, save: send, target }: { s: Settings; save: (s: Parti
         <Toggle label="Knife round" note="Knives only before the match. The winners vote to stay or switch sides." on={s.knife} busy={saving("knife")} set={(v) => save({ knife: v })} />
         <Choice
           label="Players to start"
-          note="Both teams together. The match starts once this many are ready."
+          note="Both teams together. With bots on, the match starts once everyone playing is ready (bots always are), up to this many."
           values={PLAYERS}
           current={s.players}
           busy={saving("players")}
@@ -346,8 +346,8 @@ function MatchSettings({ s, save: send, target }: { s: Settings; save: (s: Parti
           pick={(v) => save({ players: v })}
         />
         <Toggle
-          label="Fill with bots"
-          note="Off: no bots in this mode. On: bots fill the empty spots during warmup and always count as ready. Changes right away."
+          label="Bots"
+          note="On: bots play as your bot settings say (how many, and Fixed, Fill server or Per human), like in every other mode, and always count as ready. Off: people only. Changes right away."
           on={s.bots}
           busy={saving("bots")}
           set={(v) => save({ bots: v })}

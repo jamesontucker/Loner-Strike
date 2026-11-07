@@ -171,7 +171,10 @@ impl Packets {
             parts.sort_by_key(|p| p.0);
             all.push(parts.into_iter().flat_map(|p| p.1).collect());
         }
-        all.iter().map(|d| latin1(if d.starts_with(PREFIX) && d.len() > 5 { &d[5..] } else { d })).collect()
+        // the game pads its answers with NULs ("\0\0" when a command prints nothing), which
+        // aren't text: kept, they'd show as an empty message
+        let text: String = all.iter().map(|d| latin1(if d.starts_with(PREFIX) && d.len() > 5 { &d[5..] } else { d })).collect();
+        text.replace('\0', "")
     }
 }
 
@@ -202,5 +205,10 @@ mod tests {
         p.add(b"\xff\xff\xff\xfflGM status written\n");
         assert!(!p.missing_parts());
         assert_eq!(p.text(), "GM status written\n");
+
+        // a command that prints nothing answers with padding only
+        let mut p = Packets::default();
+        p.add(b"\xff\xff\xff\xffl\0\0");
+        assert_eq!(p.text(), "");
     }
 }

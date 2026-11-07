@@ -14,8 +14,10 @@ pub const CORE_MODES: &[&str] = &["classic", "csdm", "csdm_ffa", "knife", "pisto
 /// miscstats.amxx comes with AMX Mod X
 pub const CORE_ADDONS: &[&str] = &["quakesounds"];
 pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat", "gm_botping"];
-/// listed in plugins.ini
-pub const ALWAYS_ON: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_vip", "gm_extras", "gm_community", "gm_botchat", "gm_botping"];
+/// listed in plugins.ini. restmenu is AMX Mod X's own (amx_restrict), which its plugins.ini
+/// ships switched off: the weapon modes (knife, pistols, deagle, awp, scoutz, gm_weapons)
+/// restrict buying with it, so without it they restrict nothing.
+pub const ALWAYS_ON: &[&str] = &["gamemodes", "gm_humanbots", "gm_pubserver", "gm_vip", "gm_extras", "gm_community", "gm_botchat", "gm_botping", "restmenu"];
 pub const BINDS: &[&str] = &["bind \"F3\" \"gamemenu\"", "bind \"F4\" \"gamequick\""];
 
 const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
@@ -37,7 +39,11 @@ pub fn windows_command(install: &crate::steam::Install, exe: &std::path::Path) -
 pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str, include_rel: Option<&str>) -> Result<bool, String> {
     let am = rec.game.join("addons").join("amxmodx");
     let exe = am.join("scripting").join("amxxpc.exe");
-    let src = am.join("scripting").join(src_rel);
+    // On Windows, amxxpc finds `#include "dir/x.inl"` next to the source by cutting its
+    // path at the last backslash, so "scripting\basebuilder/basebuilder.sma" would look
+    // in scripting\ instead: give it backslashes only. (Wine on the Mac gets a Unix path.)
+    let src_rel_native = if cfg!(windows) { src_rel.replace('/', "\\") } else { src_rel.to_string() };
+    let src = am.join("scripting").join(src_rel_native);
     let out_rel = format!("addons/amxmodx/plugins/{out_name}.amxx");
     let out_full = rec.prepare(&out_rel)?;
     if install_is_crossover(ctx) && !std::path::Path::new(CROSSOVER_WINE).is_file() {
@@ -48,6 +54,7 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
         let mut cmd = windows_command(ctx.install, &exe);
         cmd.arg(&src).arg(format!("-o{}", out_full.display()));
         if let Some(inc) = include_rel {
+            let inc = if cfg!(windows) { inc.replace('/', "\\") } else { inc.to_string() };
             cmd.arg(format!("-i{}", am.join("scripting").join(inc).display()));
         }
         // the biggest plugins take about 10 seconds; the limit is only for a real hang, with
@@ -240,11 +247,26 @@ pub fn enable_bots(cfg: &str) -> Option<String> {
     }
 }
 
+/// BotChatter.db for CS 1.6 without Condition Zero (see bot_styles).
+const BOT_CHATTER: &str = include_str!("botchatter.db");
+
 /// Bot styles: personality files made from the game's bot profile. CS 1.6 gets
 /// Loner-Strike's own BotProfile.db first if it has none.
 pub fn bot_styles(rec: &mut Record, ctx: &Ctx, game: &str) -> Result<(), String> {
     if game == "cstrike" && !rec.exists("BotProfile.db") {
         rec.write("BotProfile.db", &botprofile::generate())?;
+    }
+    // CS 1.6 has no BotChatter.db (the bots' place names and chatter phrases). Without one,
+    // ReGameDLL's bots crash hl.exe on real Windows soon after they join (Wine on the Mac
+    // happens to survive it). Condition Zero's when that's installed, else Loner-Strike's
+    // own: the same place and phrase names with no voice lines. CS 1.6 has none of CZ's
+    // radio\bot sounds, so both sound the same (the bots use the normal radio).
+    if cfg!(windows) && game == "cstrike" && !rec.exists("BotChatter.db") {
+        let cz = rec.game.parent().map(|hl| hl.join("czero").join("BotChatter.db"));
+        match cz.filter(|p| p.is_file()) {
+            Some(p) => rec.copy(&p, "BotChatter.db")?,
+            None => rec.write("BotChatter.db", BOT_CHATTER)?,
+        }
     }
     // ReGameDLL only lets bots into a CS 1.6 dedicated server with bot_enable 1 in
     // game_init.cfg, read once as the server starts (a listen server always has them)

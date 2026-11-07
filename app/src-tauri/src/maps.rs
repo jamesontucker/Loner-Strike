@@ -326,9 +326,11 @@ impl Game {
             }
             return (jpg.exists().then_some((jpg, kind)), looking);
         }
-        let out = cache.join(format!("{base}.png"));
+        // Windows: radars with their green background made see-through (a new name, so the
+        // green ones cached before aren't used)
+        let out = cache.join(if cfg!(windows) { format!("{base}-clear.png") } else { format!("{base}.png") });
         if !fresh(&out) {
-            let _ = convert(&src, &out, Shrink::Fit(512));
+            let _ = if cfg!(windows) { convert_radar(&src, &out, 512) } else { convert(&src, &out, Shrink::Fit(512)) };
         }
         (out.exists().then_some((out, kind)), looking)
     }
@@ -453,6 +455,33 @@ pub fn convert(src: &Path, out: &Path, shrink: Shrink) -> Result<(), String> {
     } else {
         img.save_with_format(&tmp, image::ImageFormat::Png).map_err(|e| e.to_string())?;
     }
+    std::fs::rename(&tmp, out).map_err(|e| e.to_string())
+}
+
+/// A radar overview (TGA/BMP) -> PNG at most `fit` wide and high, its background made
+/// transparent: the game draws overviews over pure green (0, 255, 0) and treats that as
+/// see-through. Keyed before shrinking, so no green fringe is blended into the edges.
+pub fn convert_radar(src: &Path, out: &Path, fit: u32) -> Result<(), String> {
+    let data = std::fs::read(src).map_err(|e| e.to_string())?;
+    let img = match src.extension().map(|e| e.to_string_lossy().to_lowercase()).as_deref() {
+        Some("tga") => image::load_from_memory_with_format(&data, image::ImageFormat::Tga),
+        Some("bmp") => image::load_from_memory_with_format(&data, image::ImageFormat::Bmp),
+        _ => image::load_from_memory(&data),
+    }
+    .map_err(|e| e.to_string())?;
+    let mut rgba = img.to_rgba8();
+    for p in rgba.pixels_mut() {
+        let [r, g, b, _] = p.0;
+        if g >= 240 && r <= 16 && b <= 16 {
+            p.0 = [0, 0, 0, 0];
+        }
+    }
+    let mut img = image::DynamicImage::ImageRgba8(rgba);
+    if img.width() > fit || img.height() > fit {
+        img = img.resize(fit, fit, image::imageops::FilterType::Triangle);
+    }
+    let tmp = out.with_extension("tmp");
+    img.save_with_format(&tmp, image::ImageFormat::Png).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, out).map_err(|e| e.to_string())
 }
 

@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState, type ReactNode } from "react";
-import { options, sameValue, targetKey, useActions } from "../api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { getJson, options, postJson, sameValue, targetKey, useActions } from "../api";
 import { BOT_STYLE_NOTE, BOT_STYLES } from "../games";
-import type { Online, Setting } from "../types";
+import type { Mode, Online, Setting } from "../types";
 import { ModeVoteList } from "./ModeVote";
-import { BusyButton, Info, SectionHead, Segmented, useCommand, useConfirm } from "../ui";
+import { BusyButton, Info, SectionHead, Segmented, useCommand, useConfirm, useToast } from "../ui";
 
 // Short explanations under settings, as in the old panel
 const NOTES: Record<string, string> = {
@@ -36,6 +37,9 @@ const NOTES: Record<string, string> = {
   mp_autoteambalance: "Moves players at round end to keep the teams even",
   mp_limitteams: "How many more players one team can have before joining it is blocked",
   mp_respawn_immunitytime: "Players can't be hurt for a moment after they spawn; good with deathmatch",
+  mp_forcerespawn: "Everyone, bots too, comes back this long after dying instead of waiting for the next round. Pair it with Spawn protection",
+  gmdm_random_spawns: "Random spreads spawns over the whole map, from the bots' map knowledge. On a map the bots are still learning, team spawns are used until they finish, then random ones take over",
+  gg_dm_spawn_random: "Random spreads spawns over the whole map, from the bots' map knowledge. On a map the bots are still learning, team spawns are used until they finish, then random ones take over",
 };
 // A "?" for settings whose name and choices don't explain them and that have no note
 const INFO: Record<string, string> = {
@@ -65,6 +69,7 @@ const listed = (s: Setting) => s.visible && !SLIDER_SETTINGS.includes(s.cvar);
 
 /** The game's scope for a setting saved per mode (0: not saved, 1: every mode, 2: this mode). */
 const SCOPE_MODE = 2;
+const SCOPE_EVERY = 1;
 const modeName = (data: Online) => data.modes.find((m) => m.id === data.state.mode)?.name ?? "this mode";
 /** Whether every listed setting of a section is saved per mode, some are, or none. */
 function scopeOf(data: Online, cat: number): "all" | "some" | "none" {
@@ -112,30 +117,96 @@ export function usePending() {
   return { set, clear, value };
 }
 
-export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat: number; refresh: () => void; q?: string }) {
+/** The Rules page's tabs: the game's general settings by subject; anything else belongs to
+ *  the mode (GunGame's weapon order, Zombie Plague's zombies, ...) and gets its own tab. */
+const RULE_TABS: [string, string, string[]][] = [
+  ["rounds", "Rounds & time", ["mp_roundtime", "mp_freezetime", "mp_timelimit", "mp_maxrounds", "mp_round_infinite", "mp_c4timer", "gm_nobomb"]],
+  ["teams", "Teams", ["mp_friendlyfire", "mp_autoteambalance", "mp_limitteams"]],
+  ["money", "Money & weapons", ["mp_startmoney", "mp_buytime", "mp_buy_anywhere", "mp_free_armor", "mp_auto_reload_weapons", "mp_weapons_allow_map_placed"]],
+  ["players", "Players", ["mp_forcerespawn", "mp_respawn_immunitytime", "mp_falldamage", "mp_footsteps", "mp_scoreboard_showhealth", "mp_scoreboard_showmoney", "gm_welcome"]],
+  ["voting", "Voting", ["gm_rtv", "gm_modevote", "gm_modevote_every"]],
+];
+const ruleTab = (cvar: string) => RULE_TABS.find(([, , cvars]) => cvars.includes(cvar))?.[0] ?? "mode";
+
+// ---- editing a mode that isn't being played -----------------------------------------
+// Live, the game itself says which settings a mode has (its plugins' cvars exist). For
+// another mode the page uses what that mode showed the last time it was played, and for
+// one it hasn't seen yet these rules (the same ones the Game Mode Menu applies).
+const GG = ["gungame", "gungame_team"];
+const DM = ["csdm", "csdm_ffa"];
+const FAMILIES: [string, string[]][] = [
+  ["gm_gg_", GG], ["gg_", GG], ["gmdm_", DM], ["gm_zp_", ["zombie", "zp5"]], ["zp_", ["zombie", "zp5"]],
+  ["wc3_", ["war3"]], ["sh_", ["shero"]], ["hns_", ["hns"]], ["pbmoves_", ["paintball"]], ["kz_", ["kreedz"]],
+  ["deathrun_", ["deathrun"]], ["bb_", ["basebuilder"]], ["sj_", ["soccerjam"]],
+];
+/** Settings only for modes with a flag in modes.ini (the Game Mode Menu's SD_NeedFlag). */
+const NEEDS_FLAG: Record<string, string> = { gm_weapons: "w", gm_gg_order: "g", gm_zp_specials: "z", mp_forcerespawn: "w", gm_autorespawn: "w" };
+/** General settings a mode replaces with its own (gamemodes.sma's setting_visible). */
+const REPLACED_IN: Record<string, string[]> = { gm_nobomb: [...GG, ...DM], mp_respawn_immunitytime: [...GG, ...DM] };
+
+/** Per game or server: servers can have different mods. */
+const seenKey = (mode: string) => `ls.modeSettings.${targetKey()}.${mode}`;
+function seenSettings(mode: string): string[] | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(seenKey(mode)) ?? "null");
+    return Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+/** Remembers which settings the mode being played shows, for editing it later from another. */
+function rememberSettings(data: Online) {
+  try {
+    const list = data.settings.filter((s) => s.visible && s.scope === SCOPE_MODE).map((s) => s.cvar).sort();
+    if (list.length) localStorage.setItem(seenKey(data.state.mode), JSON.stringify(list));
+  } catch {
+    /* no storage: the rules below still work */
+  }
+}
+function belongsTo(s: Setting, mode: Mode): boolean {
+  const seen = seenSettings(mode.id);
+  if (seen) return seen.includes(s.cvar);
+  if (NEEDS_FLAG[s.cvar]) return mode.flags.includes(NEEDS_FLAG[s.cvar]);
+  const fam = FAMILIES.find(([prefix]) => s.cvar.startsWith(prefix));
+  if (fam) return fam[1].includes(mode.id);
+  return !REPLACED_IN[s.cvar]?.includes(mode.id);
+}
+
+/** Another mode's saved settings, for the Rules page's mode picker. */
+type Editing = { mode: Mode; values: Record<string, string | null>; save: (cvar: string, value: string) => Promise<boolean> };
+
+export function SettingsList({ data, cat, refresh, q = "", tab, editing }: { data: Online; cat: number; refresh: () => void; q?: string; tab?: string; editing?: Editing }) {
   const run = useCommand(refresh);
   const { run: act, busy } = useActions();
-  const key = (cvar: string) => `settings:${targetKey()}:${cvar}`;
+  const key = (cvar: string) => `settings:${targetKey()}:${editing ? editing.mode.id : "live"}:${cvar}`;
   const pending = usePending();
   const pick = (s: Setting, v: string) => act(key(s.cvar), async () => {
     pending.set(s.cvar, v);
-    if (!(await run("gm_set", [s.cvar, v], true))) pending.clear(s.cvar);
-  }, `Changing ${s.name}…`);
-  const all = data.settings.filter((s) => s.cat === cat && listed(s));
+    // another mode's own settings go to its saved file; settings shared by every mode change live
+    const ok = editing && s.scope === SCOPE_MODE ? await editing.save(s.cvar, v) : await run("gm_set", [s.cvar, v], true);
+    if (!ok) pending.clear(s.cvar);
+  }, `Changing ${s.name}${editing ? ` for ${editing.mode.name}` : ""}…`);
+  const all = editing
+    ? // another mode: its own saved settings, and the ones every mode shares (as they are now)
+      data.settings.filter((s) => s.cat === cat && !SLIDER_SETTINGS.includes(s.cvar) && (s.scope === SCOPE_MODE ? belongsTo(s, editing.mode) : s.scope === SCOPE_EVERY && listed(s)))
+    : data.settings.filter((s) => s.cat === cat && listed(s));
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const list = all.filter((s) => {
+  // a search looks through every tab
+  const list = all.filter((s) => words.length > 0 || !tab || ruleTab(s.cvar) === tab).filter((s) => {
     const text = `${s.name} ${NOTES[s.cvar] ?? ""} ${s.labels}`.toLowerCase();
     return words.every((w) => text.includes(w));
   });
   // with some settings per mode and some not, the per-mode ones carry the mode's name
-  const markMode = scopeOf(data, cat) === "some";
+  const markMode = !editing && scopeOf(data, cat) === "some";
   const mode = modeName(data);
   if (!all.length) return <p className="muted">Nothing to set here in this mode.</p>;
+  // a tab whose only content is below the list (Voting's mode list)
+  if (tab && !words.length && !list.length) return null;
   if (!list.length) return <p className="muted">No settings match "{q.trim()}".</p>;
   return (
     <div className="settings">
       {list.map((s: Setting) => {
-        const value = pending.value(s.cvar, s.value);
+        const value = pending.value(s.cvar, editing && s.scope === SCOPE_MODE ? (editing.values[s.cvar] ?? "") : s.value);
         const style = s.cvar === "gm_botstyle";
         const note = style ? BOT_STYLE_NOTE[value] : NOTES[s.cvar];
         // our own names for the bot styles (the game's menu has older ones)
@@ -146,6 +217,7 @@ export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat
               {s.name}
               {INFO[s.cvar] && !NOTES[s.cvar] && <Info text={INFO[s.cvar]} />}
               {markMode && s.scope === SCOPE_MODE && <span className="tag scope-tag" title={`Saved for ${mode} only`}>{mode}</span>}
+              {editing && s.scope === SCOPE_EVERY && <span className="tag scope-tag" title="The same in every mode: changing it here changes it everywhere, straight away">Every mode</span>}
               {note && <span className="note">{note}</span>}
             </div>
             <Segmented label={s.name} values={s.values} labels={labels} current={value} disabled={busy(key(s.cvar))} onPick={(v) => pick(s, v)} />
@@ -163,6 +235,7 @@ export function SettingsPage({
   cat,
   refresh,
   children,
+  pickMode = false,
 }: {
   title: string;
   note: string;
@@ -170,21 +243,84 @@ export function SettingsPage({
   cat: number;
   refresh: () => void;
   children?: ReactNode;
+  /** a picker for editing another mode's saved settings */
+  pickMode?: boolean;
 }) {
   const [q, setQ] = useState("");
-  const count = data.settings.filter((s) => s.cat === cat && listed(s)).length;
+  const [picked, setPicked] = useState<string | null>(null);
+  // the mode being edited: the one being played unless another is picked
+  const [editId, setEditId] = useState<string | null>(null);
+  const toast = useToast();
+  const qc = useQueryClient();
+  const playing = data.state.mode;
+  useEffect(() => rememberSettings(data), [data]);
+  const other = pickMode && editId && editId !== playing ? data.modes.find((m) => m.id === editId) : undefined;
+  const otherCvars = other ? data.settings.filter((s) => s.cat === cat && s.scope === SCOPE_MODE && belongsTo(s, other)).map((s) => s.cvar) : [];
+  const savedQ = useQuery({
+    queryKey: ["modeSettings", targetKey(), other?.id, cat],
+    queryFn: () => getJson<{ values?: Record<string, string | null>; error?: string }>(`/api/app/mode-settings?mode=${encodeURIComponent(other!.id)}&cvars=${otherCvars.join(",")}`),
+    enabled: !!other,
+  });
+  const editing: Editing | undefined = other && {
+    mode: other,
+    values: savedQ.data?.values ?? {},
+    save: async (cvar, value) => {
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/mode-settings", { mode: other.id, cvar, value }).catch(() => ({ error: "Couldn't reach the app." }) as { ok?: boolean; error?: string });
+      if (r.error) toast(r.error, true);
+      await qc.invalidateQueries({ queryKey: ["modeSettings", targetKey(), other.id] });
+      return !r.error;
+    },
+  };
+  const shown = editing
+    ? data.settings.filter((s) => s.cat === cat && (otherCvars.includes(s.cvar) || (s.scope === SCOPE_EVERY && listed(s))))
+    : data.settings.filter((s) => s.cat === cat && listed(s));
+  const count = shown.length;
+  // Rules: tabs by subject, the mode's own settings first; tabs with nothing to set are left out
+  const tabs: [string, string][] =
+    cat === 2
+      ? ([["mode", other ? other.name : modeName(data)], ...RULE_TABS.map(([id, label]) => [id, label])] as [string, string][]).filter(
+          ([id]) => (id === "voting" && !editing) || shown.some((s) => ruleTab(s.cvar) === id),
+        )
+      : [];
+  const tab = tabs.length ? (tabs.find(([id]) => id === picked) ?? tabs[0])[0] : undefined;
+  const searching = q.trim().length > 0;
   return (
     <div className="stack">
       <div>
-        <SectionHead title={title} note={note} />
+        <SectionHead title={title} note={editing ? `Saved for ${editing.mode.name}: used the next time it starts. Ones marked "Every mode" are shared by all modes and change straight away.` : note} />
         {children}
       </div>
       <div className="stack-tight">
+        {pickMode && data.modes.length > 1 && (
+          <label className="sort mode-pick">
+            <span>Settings for</span>
+            <select value={other ? other.id : playing} onChange={(e) => { setEditId(e.target.value === playing ? null : e.target.value); setPicked(null); }}>
+              {[...data.modes].sort((a, b) => a.name.localeCompare(b.name)).map((m) => (
+                <option key={m.id} value={m.id}>{m.name}{m.id === playing ? " (playing now)" : ""}</option>
+              ))}
+            </select>
+          </label>
+        )}
         {count > 6 && (
           <input className="search full" type="search" placeholder={`Filter ${count} settings, like "round" or "gravity"`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter settings" />
         )}
-        <SettingsList data={data} cat={cat} refresh={refresh} q={q} />
-        {cat === 2 && <ModeVoteList data={data} />}
+        {tabs.length > 1 && !searching && (
+          <div className="chips rule-tabs" role="tablist" aria-label={`${title} sections`}>
+            {tabs.map(([id, label]) => (
+              <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setPicked(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        {editing && savedQ.data?.error ? (
+          <p className="muted">{savedQ.data.error}</p>
+        ) : editing && savedQ.isLoading ? (
+          <p className="muted">Loading {editing.mode.name}'s settings…</p>
+        ) : (
+          <SettingsList data={data} cat={cat} refresh={refresh} q={q} tab={tab} editing={editing} />
+        )}
+        {cat === 2 && !editing && (tab === "voting" || searching) && <ModeVoteList data={data} />}
       </div>
     </div>
   );

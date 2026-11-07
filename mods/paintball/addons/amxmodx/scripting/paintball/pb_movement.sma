@@ -87,7 +87,8 @@ public fw_cmdstart(id, uc_handle, random_seed)
 		if(!(buttons & IN_DUCK))
 		{	
 			
-			if (currentweapon != CSW_KNIFE){
+			// 0: nothing in hand (just spawned, between weapons): nothing to put back later
+			if (currentweapon > 0 && currentweapon != CSW_KNIFE){
 				get_weaponname(currentweapon,userWeapon[id],30)
 				engclient_cmd(id, "weapon_knife")
 			}

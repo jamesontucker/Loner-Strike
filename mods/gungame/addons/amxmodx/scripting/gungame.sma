@@ -2504,6 +2504,9 @@ public check_joinclass(taskid)
 // RESPAWN FUNCTIONS
 //**********************************************************************
 
+#define TASK_NAV_WAIT	947100
+new navWaitSize;
+
 // get all of our spawns into their arrays
 init_spawns()
 {
@@ -2559,6 +2562,39 @@ init_spawns()
 	{
 		collect_spawns("info_player_deathmatch");
 		collect_spawns("info_player_start");
+		// the bots are probably learning the map: use their nav as soon as it's saved
+		navWaitSize = -1;
+		remove_task(TASK_NAV_WAIT);
+		set_task(10.0,"task_wait_nav",TASK_NAV_WAIT,_,_,"b");
+	}
+}
+
+// a map without a nav when it started: once the bots have saved one (the file is there and
+// hasn't grown since the last look), swap the team spawns for random ones from it
+public task_wait_nav()
+{
+	new mapName[32], path[96];
+	get_mapname(mapName,31);
+	formatex(path,95,"maps/%s.nav",mapName);
+	if(!file_exists(path,true)) return;
+	new size = file_size(path,FSOPT_BYTES_COUNT,true);
+	if(size <= 0 || size != navWaitSize)
+	{
+		navWaitSize = size;
+		return;
+	}
+	remove_task(TASK_NAV_WAIT);
+	new oldCount = spawnCount, oldCsdm = csdmSpawnCount;
+	spawnCount = 0;
+	csdmSpawnCount = 0;
+	if(!load_nav_spawns(mapName))
+	{
+		// not readable after all: keep the team spawns
+		spawnCount = 0;
+		csdmSpawnCount = 0;
+		collect_spawns("info_player_deathmatch");
+		collect_spawns("info_player_start");
+		if(!spawnCount) { spawnCount = oldCount; csdmSpawnCount = oldCsdm; }
 	}
 }
 

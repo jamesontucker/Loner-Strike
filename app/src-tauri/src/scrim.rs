@@ -41,7 +41,7 @@ pub struct Settings {
     pub overtime: bool,
     /// a knife round picks the sides
     pub knife: bool,
-    /// bots fill the teams up to `players` during warmup
+    /// bots play, as the game's own bot settings say (false: people only)
     pub bots: bool,
     /// players needed (ready) to start, both teams together
     pub players: u32,
@@ -53,7 +53,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { max_rounds: 30, overtime: true, knife: true, bots: false, players: 10, pauses: 2, pause_seconds: 60 }
+        Settings { max_rounds: 30, overtime: true, knife: true, bots: true, players: 10, pauses: 2, pause_seconds: 60 }
     }
 }
 

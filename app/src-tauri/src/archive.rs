@@ -173,6 +173,28 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
         }
         tar_err = Some(err);
     }
+    // Windows 10's tar.exe (libarchive 3.5) can list but not unpack RAR files that use
+    // filters ("Parsing filters is unsupported"), which many older maps do: 7-Zip can.
+    #[cfg(windows)]
+    if let Some(sz) = seven_zip() {
+        match seven_zip_listing(&sz, archive) {
+            Some((_, true)) => return Err(HAS_LINKS.into()),
+            Some((size, false)) if size > budget => return Err(TOO_BIG.into()),
+            Some(_) => {
+                clear_dir(dest);
+                let mut c = sys::command(&sz);
+                // without -snl/-spf 7-Zip creates no links and keeps every path inside dest
+                c.args(["x", "-y", "-bso0", "-bsp0"]).arg(format!("-o{}", dest.display())).arg(archive);
+                let (ok, err) = run_limited(c, dest, budget)?;
+                strip_links(dest);
+                if ok {
+                    return Ok(());
+                }
+                tar_err = Some(format!("7-Zip: {}", err.trim()));
+            }
+            None => {}
+        }
+    }
     let unar = sys::find_tool("unar");
     if let (Some(unar), Some(lsar)) = (unar.as_ref(), sys::find_tool("lsar")) {
         if let Some(entries) = lsar_entries(&lsar, archive) {
@@ -237,6 +259,41 @@ fn tar_path() -> Option<PathBuf> {
         return Some(p);
     }
     sys::find_tool("bsdtar").or_else(|| p.is_file().then_some(p))
+}
+
+/// 7-Zip for Windows: the user's own install first, then the copy the Windows build
+/// ships next to the app (bundle resource 7zip/, see tauri.windows.conf.json).
+#[cfg(windows)]
+fn seven_zip() -> Option<PathBuf> {
+    let installed = ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"]
+        .iter()
+        .filter_map(std::env::var_os)
+        .map(|d| PathBuf::from(d).join("7-Zip").join("7z.exe"));
+    let bundled = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("7zip").join("7z.exe")));
+    installed.chain(bundled).find(|p| p.is_file())
+}
+
+/// (total unpacked size, has links) from `7z l -slt`, or None if 7-Zip can't read it.
+#[cfg(windows)]
+fn seven_zip_listing(sz: &Path, archive: &Path) -> Option<(u64, bool)> {
+    let mut c = sys::command(sz);
+    c.args(["l", "-slt"]).arg(archive);
+    let (ok, out, _) = sys::run_output(c, Duration::from_secs(300))?;
+    if !ok {
+        return None;
+    }
+    // entries follow the "----------" line; the lines before it describe the archive
+    let entries = out.split_once("\n----------")?.1;
+    let (mut total, mut links) = (0u64, false);
+    for line in entries.lines() {
+        let line = line.trim_end_matches('\r');
+        if let Some(n) = line.strip_prefix("Size = ") {
+            total += n.trim().parse::<u64>().unwrap_or(0);
+        } else if let Some(v) = line.strip_prefix("Symbolic Link = ").or_else(|| line.strip_prefix("Hard Link = ")) {
+            links = links || !v.trim().is_empty();
+        }
+    }
+    Some((total, links))
 }
 
 fn lsar_entries(lsar: &Path, archive: &Path) -> Option<Vec<serde_json::Value>> {
