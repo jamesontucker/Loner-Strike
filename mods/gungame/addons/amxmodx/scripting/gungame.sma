@@ -2690,6 +2690,8 @@ load_nav_spawns(mapName[])
 		if(next == -1 || far < 64.0) break;
 		pick = next;
 	}
+	// a real random set, like a CSDM spawn file: gg_dm_spawn_random 2 only spawns at random with one
+	csdmSpawnCount = spawnCount;
 	log_amx("Picked %d random spawn points for %s from its bot nav file",spawnCount,mapName);
 	return spawnCount;
 }

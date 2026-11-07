@@ -21,6 +21,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 - The radio has eleven stations, with old-school hardcore and jungle, hands up, hardstyle, demoscene, video game music, 2000s hits and nu metal added, plus shuffle and a station list.
 - Copy diagnostics includes the end of AMX Mod X's error log.
 - Servers can use weapon skins and player models: a new Skins & models tab lists what a server uses, who sees each (everyone, one team or admins), and how close each map gets to the engine's limit of 512 models and 512 sounds. They go in under their own names, so players download them when they join. Modes with their own models, like Paintball, keep them.
+- Gun Game spawns players at random again on maps without a CSDM spawn file: the spots taken from the bots' map count as a proper random set.
 - A server's content is together under Content: Mods, Maps (with Get maps), Skins & models and Sounds.
 - Two announcers for Quake sounds, picked per game or server on the Sounds page.
 - Quake sounds are heard: setup brings the announcer (first blood, multi kill, godlike and the rest, from Advanced Quake Sounds) and switches the announcements on. Servers send the sounds to players like any mode's.
