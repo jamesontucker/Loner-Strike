@@ -159,7 +159,7 @@ bool:is_our_grenade(ent)
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR)
-	g_Cvar_MaxBalls = register_cvar("PBR_MaxBalls", "80") // Loner-Strike: paintballs and splashes at once
+	g_Cvar_MaxBalls = register_cvar("PBR_MaxBalls", "85") // Loner-Strike: paintballs and splashes at once
 	
 	register_event("CurWeapon", "Event_CurWeapon", "be", "1=1")
 	register_touch("paintball", "*", "fw_PaintBall_Touch")
@@ -668,7 +668,7 @@ public fw_PaintBall_Touch(Ent, id)
 			paint_splat(Ent)
 			// the paint mark on the wall (this sprite) stays a few seconds; under heavy fire the
 			// oldest ones make room sooner (ball_slot_free), so busy areas stay quick to draw
-			set_pev(Ent, pev_nextthink, get_gametime() + random_float(2.0, 4.0))
+			set_pev(Ent, pev_nextthink, get_gametime() + random_float(1.0, 3.0))
 		} else {
 			set_pev(Ent, pev_movetype, MOVETYPE_BOUNCE)
 		
