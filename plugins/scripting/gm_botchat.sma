@@ -41,6 +41,15 @@
 	Other cvars: gm_botchat_humans 1 (bots answer what people say: greetings, gg/gl,
 	"ns", insults, "bots?", lag, "rush b"/"wait", their name. One bot answers, now and
 	then two, and not every time; the one addressed, nearby or involved answers first)
+	Answers use the game: "where is he" gets where their killer was or where the team last
+	saw someone (the radar's place names, from the map's nav file), "wheres the bomb" who
+	has it or where it's planted, "score?" the score, "timeleft" / "next map" / "what map"
+	the real ones, "how" after dying what a teammate saw (the gun, a headshot, the place).
+	Moods: lines can be marked for a bot that's tilted (-), on a streak (+), new (^) or one
+	that has played the person before (=).
+	Threads: when a person answers the bot that just spoke to them (within 20 seconds, by
+	name, or quoting it), that bot carries on, two more lines at most; it stops when it's
+	fighting or the round ends, and no other bot joins in.
 
 	Clans: bots that share a clan tag ("[XyZ] Name", "XyZ|Name") are clanmates. They
 	talk to each other in team chat ([clan]: a clanmate's kill, a clanmate joining),
@@ -135,9 +144,26 @@ new g_KillerOf[33], Float:g_KillerOfAt[33], g_VictimOf[33], Float:g_VictimOfAt[3
 // answers lately: the more bots have answered, the less they answer the next thing
 new g_HeardRun, Float:g_HeardRunAt
 
+// Game state, for answers that use it (empty when the game doesn't say)
+new g_Place[33][32]                  // where each player last was: the map's place names (CZ navs)
+new g_KillerPlace[33][32]            // how each person last died: where the killer was,
+new g_KillWeapon[33][16], bool:g_KillHs[33], Float:g_DiedAt[33]   // with what, a headshot, when
+new g_SeenPlace[3][32], Float:g_SeenAt[3]  // where each team last saw an enemy (a teammate's killer)
+new g_BombPlace[32], bool:g_BombPlanted, bool:g_BombDropped
+new g_Score[3]                       // team scores: 1 T, 2 CT
+new Float:g_FightAt[33]              // last time a player hurt someone or got hurt
+new Float:g_JoinedAt[33]
+new Float:g_FillerAt                 // last "?", "idk", "ya": they read as robotic when they come often
+// What pick_line may put in a line ({place} {weapon} {carrier} {hs}); a line asking for one
+// that's empty isn't picked
+new g_CtxPlace[32], g_CtxWeapon[16], g_CtxCarrier[32], bool:g_CtxHs, g_CtxOther
+// A short thread with a person (per person): the bot talking to them, what about, how many
+// lines it has said in it, when it last spoke and what it said
+new g_ThreadBot[33], g_ThreadTopic[33][24], g_ThreadTurns[33], Float:g_ThreadAt[33], g_ThreadLine[33][128]
+
 // lines waiting to be "typed"
 new g_PendBot[MAX_PENDING], g_PendUser[MAX_PENDING], g_PendOther[MAX_PENDING], g_PendChain[MAX_PENDING], bool:g_PendTeam[MAX_PENDING]
-new g_PendText[MAX_PENDING][128]
+new g_PendText[MAX_PENDING][128], g_PendSec[MAX_PENDING][24], bool:g_PendQuiet[MAX_PENDING]   // quiet: starts no thread
 
 public plugin_init()
 {
@@ -154,6 +180,15 @@ public plugin_init()
 	register_event("30", "ev_intermission", "a")
 	register_logevent("ev_planted", 3, "2=Planted_The_Bomb")
 	register_logevent("ev_defused", 3, "2=Defused_The_Bomb")
+	register_logevent("ev_bomb_dropped", 3, "2=Dropped_The_Bomb")
+	register_logevent("ev_bomb_got", 3, "2=Got_The_Bomb")
+	register_logevent("ev_bomb_got", 3, "2=Spawned_With_The_Bomb")
+	// where people are (the place names on the radar, from the map's nav file), the score,
+	// who's fighting
+	if (get_user_msgid("Location"))
+		register_event("Location", "ev_location", "ab")
+	register_event("TeamScore", "ev_teamscore", "a")
+	register_event("Damage", "ev_damage", "b", "2!0")
 	register_clcmd("say", "cmd_say")
 	register_clcmd("say_team", "cmd_say_team")
 
@@ -278,6 +313,10 @@ public client_putinserver(id)
 	g_DeathRow[id] = 0
 	g_KillerOf[id] = g_VictimOf[id] = 0
 	g_Raged[id] = false
+	g_Place[id][0] = g_KillerPlace[id][0] = 0
+	g_DiedAt[id] = g_FightAt[id] = -100.0
+	g_JoinedAt[id] = get_gametime()
+	g_ThreadBot[id] = 0
 	for (new k = 1; k <= MaxClients; k++)
 		g_KilledBy[id][k] = g_KilledBy[k][id] = 0
 	if (is_user_bot(id))
@@ -390,6 +429,11 @@ public client_disconnected(id)
 {
 	if (!is_user_bot(id))
 		remember_all(id)
+	// threads with this bot end (the slot may go to someone else)
+	for (new h = 1; h <= MaxClients; h++)
+		if (g_ThreadBot[h] == id)
+			g_ThreadBot[h] = 0
+	g_ThreadBot[id] = 0
 	// nothing left waiting to be said by whoever had this slot
 	for (new i = 0; i < MAX_PENDING; i++)
 		if (g_PendBot[i] == id)
@@ -555,6 +599,36 @@ bool:has_persona(id, const letters[])
 	return contain(letters, fmt("%c", PERSONAS[g_Persona[id]])) != -1
 }
 
+// How a bot is doing, as the mood marks lines can carry: - tilted or losing (short, salty),
+// + on a streak or winning (cocky, relaxed), ^ just joined (polite), = knows the person it's
+// talking to (casual; `other`, a person)
+mood_of(id, other, out[], len)
+{
+	out[0] = 0
+	new team = get_user_team(id)
+	new diff = get_user_frags(id) - get_user_deaths(id)
+	new bool:losing = team >= 1 && team <= 2 && g_LoseRun[team] >= 3
+	new bool:winning = team >= 1 && team <= 2 && g_WinRun[team] >= 3
+	if (g_DeathRow[id] >= 3 || losing || diff <= -6)
+		add(out, len, "-")
+	else if (g_RoundKills[id] >= 2 || winning || diff >= 8)
+		add(out, len, "+")
+	if (get_gametime() - g_JoinedAt[id] < 150.0)
+		add(out, len, "^^")
+	if (other && is_user_connected(other) && !is_user_bot(other))
+	{
+		new k, d, day
+		if ((recall(id, other, k, d, day) && day < today()) || g_KilledBy[id][other] + g_KilledBy[other][id] >= 6)
+			add(out, len, "=")
+	}
+}
+
+// Fights in the last few seconds: no time to type
+bool:in_combat(id)
+{
+	return get_gametime() - g_FightAt[id] < 5.0
+}
+
 // ---- deciding to say something ---------------------------------------------------------
 
 personality_cvar()
@@ -626,9 +700,11 @@ want(id, const section[], other, Float:base, Float:delay = -1.0, chain = 0, bool
 	if (random_float(0.0, 1.0) > base * level_mult() * personality() * CHATTY[g_Persona[id]] * g_Chatty[id])
 		return
 	new text[128]
-	if (!pick_line(id, section, text, charsmax(text)))
-		return
-	queue(id, other, text, chain, team, delay)
+	g_CtxOther = other
+	new bool:ok = pick_line(id, section, text, charsmax(text))
+	g_CtxOther = 0
+	if (ok)
+		queue(id, other, text, chain, team, delay, section)
 }
 
 // A line's theme (THEME_REST), or -1
@@ -664,8 +740,115 @@ bool:said_lately(h)
 	return false
 }
 
-// A line from `section` for this bot: anyone's lines (*) and, weighted by gm_personality,
-// lines for its personality. Not one said lately, and not a theme that's resting.
+// "?", "idk", "ya" and the like: fine now and then, robotic when they keep coming
+bool:is_filler(const text[])
+{
+	static const FILLER[][] = { "?", "??", "idk", "ya", "k", "hm", "hm?", "huh", "dunno", "wat", "what", "yep", "nope", "idk lol" }
+	new t[16]
+	copy(t, charsmax(t), text)
+	trim(t)
+	for (new i = 0; i < sizeof FILLER; i++)
+		if (equali(t, FILLER[i]))
+			return true
+	return false
+}
+
+// A line asking for game state ({place}, {weapon}...) only when that's known now
+bool:ctx_ok(const text[])
+{
+	if (contain(text, "{") == -1)
+		return true
+	if (contain(text, "{place}") != -1 && !g_CtxPlace[0])
+		return false
+	if (contain(text, "{weapon}") != -1 && !g_CtxWeapon[0])
+		return false
+	if (contain(text, "{carrier}") != -1 && !g_CtxCarrier[0])
+		return false
+	if (contain(text, "{hs}") != -1 && !g_CtxHs)
+		return false
+	if (contain(text, "{timeleft}") != -1 && get_timeleft() <= 0)
+		return false
+	if (contain(text, "{nextmap}") != -1)
+	{
+		new next[32]
+		next_map(next, charsmax(next))
+		if (!next[0])
+			return false
+	}
+	return true
+}
+
+bool:uses_state(const text[])
+{
+	return contain(text, "{place}") != -1 || contain(text, "{weapon}") != -1 || contain(text, "{carrier}") != -1
+		|| contain(text, "{us}") != -1 || contain(text, "{diff}") != -1 || contain(text, "{timeleft}") != -1
+		|| contain(text, "{nextmap}") != -1 || contain(text, "{hs}") != -1
+}
+
+// The game state in a line, as people would put it ("b", "deag", "7 5", "3 min")
+fill_state(id, text[], len)
+{
+	if (contain(text, "{") == -1)
+		return
+	replace_string(text, len, "{place}", g_CtxPlace)
+	replace_string(text, len, "{weapon}", g_CtxWeapon)
+	replace_string(text, len, "{carrier}", g_CtxCarrier)
+	replace_string(text, len, "{hs}", "hs")
+	new team = get_user_team(id)
+	if (team == 1 || team == 2)
+	{
+		new us = g_Score[team], them = g_Score[3 - team]
+		replace_string(text, len, "{us}", fmt("%d", us))
+		replace_string(text, len, "{them}", fmt("%d", them))
+		replace_string(text, len, "{diff}", fmt("%d", abs(us - them)))
+	}
+	if (contain(text, "{timeleft}") != -1)
+	{
+		new left = get_timeleft(), when[16]
+		if (left >= 90)
+			formatex(when, charsmax(when), "%d min", (left + 30) / 60)
+		else if (left >= 45)
+			copy(when, charsmax(when), "1 min")
+		else
+			formatex(when, charsmax(when), "%d sec", max(left, 5))
+		replace_string(text, len, "{timeleft}", when)
+	}
+	if (contain(text, "{nextmap}") != -1)
+	{
+		new next[32]
+		next_map(next, charsmax(next))
+		replace_string(text, len, "{nextmap}", next)
+	}
+}
+
+// A map's name as people say it: "dust2" for de_dust2
+casual_map(const map[], out[], len)
+{
+	new at = 0
+	if (strlen(map) > 3 && map[2] == '_')
+		at = 3
+	copy(out, len, map[at])
+}
+
+// The next map (nextmap.amxx / gm_extras put it in amx_nextmap), as people say it; "" if
+// unknown or this one again
+next_map(out[], len)
+{
+	out[0] = 0
+	if (!get_cvar_pointer("amx_nextmap"))
+		return
+	new next[32], map[32]
+	get_cvar_string("amx_nextmap", next, charsmax(next))
+	get_mapname(map, charsmax(map))
+	if (!next[0] || equali(next, map) || containi(next, "[") != -1)
+		return
+	casual_map(next, out, len)
+}
+
+// A line from `section` for this bot: anyone's lines (*), lines for its personality
+// (weighted by gm_personality) and lines for its mood (MOOD_OF: tilted, on a streak, new,
+// knows the person). Not one said lately, not a theme that's resting, and only lines whose
+// game state is known; lines with game state in them come up more.
 // answer: answering a person, so a fitting line beats a fresh one
 bool:pick_line(id, const section[], text[], len, bool:answer = false)
 {
@@ -676,24 +859,38 @@ bool:pick_line(id, const section[], text[], len, bool:answer = false)
 	if (!n)
 		return false
 	new Float:p = personality(), Float:now = get_gametime()
+	new mood[8]
+	mood_of(id, g_CtxOther, mood, charsmax(mood))
 	new raw[192], letters[64], pick = -1, Float:total, fallback = -1, fseen
 	for (new i = 0; i < n; i++)
 	{
 		ArrayGetString(list, i, raw, charsmax(raw))
 		new bar = contain(raw, "|")
 		copy(letters, min(bar, charsmax(letters)), raw)
-		if (!has_persona(id, letters))
-			continue
-		new Float:w = letters[0] == '*' ? 1.0 : p
-		if (w <= 0.0)
-			continue
 		new body = bar + 1
+		new Float:w
+		new bool:moody = false
+		for (new m = 0; mood[m]; m++)
+			if (contain(letters, fmt("%c", mood[m])) != -1)
+				moody = true
+		if (moody)
+			w = 1.5 + 0.5 * p                // how it's doing shows whatever the setting
+		else if (letters[0] == '*')
+			w = 1.0
+		else if (has_persona(id, letters))
+			w = p
+		if (w <= 0.0 || !ctx_ok(raw[body]))
+			continue
+		if (uses_state(raw[body]))
+			w *= 2.0
 		new bool:fresh = true
 		// short lines ("gg", "lol", "ns") come up all the time on a real server
 		if (strlen(raw[body]) > 6 && said_lately(line_hash(raw[body])))
 			fresh = false
 		new t = theme_of(raw[body])
 		if (t >= 0 && now - g_ThemeAt[t] < THEME_REST[t] && !answer)
+			fresh = false
+		if (is_filler(raw[body]) && now - g_FillerAt < 120.0)
 			fresh = false
 		if (!fresh)
 		{
@@ -720,6 +917,9 @@ bool:pick_line(id, const section[], text[], len, bool:answer = false)
 	new t = theme_of(text)
 	if (t >= 0)
 		g_ThemeAt[t] = now
+	if (is_filler(text))
+		g_FillerAt = now
+	fill_state(id, text, len)
 	return true
 }
 
@@ -730,7 +930,7 @@ Float:typing_time(const text[], Float:read_min = 0.8, Float:read_max = 2.2)
 	return random_float(read_min, read_max) + float(strlen(text)) * random_float(0.1, 0.17)
 }
 
-queue(id, other, const text[], chain, bool:team, Float:delay)
+queue(id, other, const text[], chain, bool:team, Float:delay, const section[] = "", bool:quiet = false)
 {
 	new slot = -1
 	for (new i = 0; i < MAX_PENDING; i++)
@@ -747,6 +947,8 @@ queue(id, other, const text[], chain, bool:team, Float:delay)
 	g_PendChain[slot] = chain
 	g_PendTeam[slot] = team
 	copy(g_PendText[slot], charsmax(g_PendText[]), text)
+	copy(g_PendSec[slot], charsmax(g_PendSec[]), section)
+	g_PendQuiet[slot] = quiet
 	if (delay < 0.0)
 		delay = typing_time(text)
 	new Float:now = get_gametime()
@@ -795,6 +997,9 @@ public task_say(task)
 	// the living don't see the dead talk; like pub servers' dead-chat plugins, show it to them
 	if (!is_user_alive(id) && get_pcvar_num(g_pDeadChat))
 		dead_chat(id, text, team)
+	// said to a person who can see it: they may answer, and this bot carries on (a thread)
+	if (other && !is_user_bot(other) && !g_PendQuiet[slot] && (!team || get_user_team(other) == get_user_team(id)))
+		thread_said(other, id, g_PendSec[slot], text)
 
 	// someone answers: the one it was about if that's a bot (and can see it), else
 	// another bot (a teammate, for team chat)
@@ -833,7 +1038,9 @@ fill(id, other, text[], len)
 	}
 	if (contain(text, "{map}") != -1)
 	{
-		get_mapname(name, charsmax(name))
+		new map[32]
+		get_mapname(map, charsmax(map))
+		casual_map(map, name, charsmax(name))
 		replace_string(text, len, "{map}", name)
 	}
 }
@@ -1067,6 +1274,8 @@ public ev_newround()
 {
 	arrayset(g_RoundKills, 0, sizeof g_RoundKills)
 	arrayset(g_Streaked, false, sizeof g_Streaked)
+	g_BombPlanted = g_BombDropped = false
+	g_BombPlace[0] = g_SeenPlace[1][0] = g_SeenPlace[2][0] = 0
 	// freeze time is when people chat most
 	if (random_num(1, 100) <= 22)
 	{
@@ -1114,6 +1323,18 @@ public ev_death()
 	{
 		g_KillerOf[victim] = killer
 		g_KillerOfAt[victim] = now
+		// how they died, for "how?" and "where is he"
+		g_DiedAt[victim] = now
+		g_KillHs[victim] = hs != 0
+		copy(g_KillerPlace[victim], charsmax(g_KillerPlace[]), g_Place[killer])
+		casual_weapon(weapon, g_KillWeapon[victim], charsmax(g_KillWeapon[]))
+	}
+	// the victim's team now knows where one of them is
+	new vt = get_user_team(victim)
+	if ((vt == 1 || vt == 2) && g_Place[killer][0])
+	{
+		copy(g_SeenPlace[vt], charsmax(g_SeenPlace[]), g_Place[killer])
+		g_SeenAt[vt] = now
 	}
 
 	g_RoundKills[killer]++
@@ -1174,9 +1395,115 @@ public ev_death()
 	new avenger = clanmate_bot(victim, true)
 	if (avenger && random_num(1, 100) <= 50)
 		want(avenger, "clan_avenge", killer, 0.25, -1.0, 0, true)
-	// a teammate of the killer says something about it
-	if (hs || knife)
+	// a teammate of the killer says something about it; about a person's kill, now and
+	// then with the gun or the kind of kill in it ("deag ns", "clean hs")
+	if (!is_user_bot(killer))
+	{
+		new mate = any_bot_on(get_user_team(killer), killer)
+		casual_weapon(weapon, g_CtxWeapon, charsmax(g_CtxWeapon))
+		g_CtxHs = hs != 0
+		want(mate, knife ? "human_kill_knife" : nade ? "human_kill_nade" : hs ? "human_kill_hs" : "human_kill", killer,
+			(hs || knife || nade) ? 0.2 : 0.07, -1.0, 0, random_num(1, 100) <= 40)
+		g_CtxWeapon[0] = 0
+		g_CtxHs = false
+	}
+	else if (hs || knife)
 		want(any_bot_on(get_user_team(killer), killer), "nice_shot", killer, 0.1, -1.0, 0, true)
+}
+
+// A gun's name as people say it ("deag" for deagle); "" for ones nobody would name
+casual_weapon(const weapon[], out[], len)
+{
+	static const FROM[][] = { "deagle", "ak47", "m4a1", "awp", "scout", "usp", "glock18", "mp5navy", "famas", "galil",
+		"p90", "m3", "xm1014", "aug", "sg552", "m249", "elite", "fiveseven", "ump45", "mac10", "tmp", "p228", "knife", "grenade", "sg550", "g3sg1" }
+	static const TO[][] = { "deag", "ak", "m4", "awp", "scout", "usp", "glock", "mp5", "famas", "galil",
+		"p90", "pump", "auto shotty", "aug", "krieg", "para", "dualies", "five seven", "ump", "mac10", "tmp", "p228", "knife", "nade", "auto", "auto" }
+	out[0] = 0
+	for (new i = 0; i < sizeof FROM; i++)
+		if (equal(weapon, FROM[i]))
+		{
+			copy(out, len, TO[i])
+			return
+		}
+}
+
+// A place name from the game ("#BombsiteB", "LongHall", "CTSpawn") as people say it
+// ("b", "long", "ct spawn")
+casual_place(const raw[], out[], len)
+{
+	new name[32]
+	copy(name, charsmax(name), raw[raw[0] == '#' ? 1 : 0])
+	out[0] = 0
+	if (!name[0])
+		return
+	static const FROM[][] = { "BombsiteA", "BombsiteB", "BombsiteC", "Middle", "MiddleHall", "CTSpawn", "TSpawn", "LongHall", "ShortHall", "Hostages", "HostageRescueZone" }
+	static const TO[][] = { "a", "b", "c", "mid", "mid", "ct spawn", "t spawn", "long", "short", "hostages", "rescue" }
+	for (new i = 0; i < sizeof FROM; i++)
+		if (equali(name, FROM[i]))
+		{
+			copy(out, len, TO[i])
+			return
+		}
+	// "UpperTunnel" -> "upper tunnel"
+	new k
+	for (new i = 0; name[i] && k < len - 1; i++)
+	{
+		new c = name[i]
+		if (i > 0 && c >= 'A' && c <= 'Z' && !(name[i - 1] >= 'A' && name[i - 1] <= 'Z') && k < len - 2)
+			out[k++] = ' '
+		else if (c == '_')
+			c = ' '
+		out[k++] = tolower(c)
+	}
+	out[k] = 0
+}
+
+// ---- game state -------------------------------------------------------------------------
+
+// Where someone is: the place names on the radar (only maps whose nav file names its places)
+public ev_location()
+{
+	new id = read_data(1), raw[32]
+	read_data(2, raw, charsmax(raw))
+	if (id >= 1 && id <= MaxClients && raw[0] && raw[1])
+		casual_place(raw, g_Place[id], charsmax(g_Place[]))
+}
+
+public ev_teamscore()
+{
+	new team[16]
+	read_data(1, team, charsmax(team))
+	new score = read_data(2)
+	if (equal(team, "TERRORIST"))
+		g_Score[1] = score
+	else if (equal(team, "CT"))
+		g_Score[2] = score
+}
+
+public ev_damage(victim)
+{
+	new Float:now = get_gametime()
+	if (victim >= 1 && victim <= MaxClients)
+	{
+		g_FightAt[victim] = now
+		new attacker = get_user_attacker(victim)
+		if (attacker >= 1 && attacker <= MaxClients)
+			g_FightAt[attacker] = now
+	}
+}
+
+public ev_bomb_dropped()
+{
+	new id = get_loguser_index()
+	g_BombDropped = true
+	g_BombPlace[0] = 0
+	if (id)
+		copy(g_BombPlace, charsmax(g_BombPlace), g_Place[id])
+}
+
+public ev_bomb_got()
+{
+	g_BombDropped = false
 }
 
 // Dying again and again: a bot tilts, then crashes out; teammates may cheer them up.
@@ -1250,6 +1577,8 @@ public ev_ctwin()
 
 round_end(winner)
 {
+	// the round's over: threads with people end here
+	arrayset(g_ThreadBot, 0, sizeof g_ThreadBot)
 	new loser = 3 - winner
 	new bool:comeback = g_LoseRun[winner] >= 4
 	g_WinRun[winner]++
@@ -1289,7 +1618,13 @@ round_end(winner)
 
 public ev_planted()
 {
-	want(any_bot_on(2, 0), "bomb_planted", 0, 0.2, -1.0, 0, true)
+	new id = get_loguser_index()
+	g_BombPlanted = true
+	g_BombDropped = false
+	if (id)
+		copy(g_BombPlace, charsmax(g_BombPlace), g_Place[id])
+	// the terrorists say so in team chat
+	want(any_bot_on(1, 0), "bomb_planted", 0, 0.2, -1.0, 0, true)
 }
 
 public ev_defused()
@@ -1353,9 +1688,19 @@ public cmd_say_team(id)
 }
 
 // Words people type, and the section the answer comes from (first match wins, so
-// "gg ez" is an ez, "nice try" isn't a "nice" and "my bad" isn't a "bad")
+// "gg ez" is an ez, "nice try" isn't a "nice", "my bad" isn't a "bad" and "how are you"
+// isn't a "how")
 new const HEARD[][][] =
 {
+	{ "how are you", "r_howru" }, { "how r u", "r_howru" }, { "how are u", "r_howru" }, { "how r you", "r_howru" },
+	{ "hows it going", "r_howru" }, { "how is it going", "r_howru" }, { "how u doing", "r_howru" },
+	{ "how you doing", "r_howru" }, { "hru", "r_howru" }, { "whats up with u", "r_howru" },
+	{ "where", "r_where" }, { "wheres", "r_where" }, { "where r they", "r_where" }, { "where is he", "r_where" },
+	{ "score", "r_score" }, { "whats the score", "r_score" },
+	{ "timeleft", "r_timeleft" }, { "time left", "r_timeleft" }, { "how long left", "r_timeleft" },
+	{ "how much time", "r_timeleft" }, { "how long is this map", "r_timeleft" },
+	{ "nextmap", "r_nextmap" }, { "next map", "r_nextmap" }, { "whats next", "r_nextmap" }, { "what map is next", "r_nextmap" },
+	{ "what map", "r_whatmap" }, { "which map", "r_whatmap" }, { "map name", "r_whatmap" }, { "what is this map", "r_whatmap" },
 	{ "hack", "r_hack" }, { "hacks", "r_hack" }, { "hacker", "r_hack" }, { "hacking", "r_hack" }, { "haxor", "r_hack" },
 	{ "aimbot", "r_hack" }, { "wallhack", "r_hack" }, { "wh", "r_hack" }, { "cheat", "r_hack" }, { "cheater", "r_hack" },
 	{ "cheating", "r_hack" }, { "sus", "r_hack" },
@@ -1385,6 +1730,7 @@ new const HEARD[][][] =
 	{ "lets go", "r_plan" }, { "go go", "r_plan" }, { "with me", "r_plan" },
 	{ "ty", "r_np" }, { "thx", "r_np" }, { "thanks", "r_np" }, { "thank", "r_np" }, { "tyvm", "r_np" },
 	{ "im back", "r_wb" },
+	{ "how", "r_how" },
 	{ "wtf", "r_wtf" }, { "omg", "r_wtf" },
 	{ "lol", "r_lol" }, { "haha", "r_lol" }, { "lmao", "r_lol" }, { "rofl", "r_lol" }, { "xd", "r_lol" }, { "hehe", "r_lol" },
 	{ "?", "r_question" }
@@ -1397,14 +1743,23 @@ enum
 	WHO_ANY,        // anyone, nearby and alive first
 	WHO_INVOLVED,   // the bot that killed them or that they killed, just now
 	WHO_KILLER,     // the bot that got the kill they're talking about
-	WHO_TEAM        // a teammate, alive if possible
+	WHO_TEAM,       // a teammate, alive if possible
+	WHO_WATCHER     // a teammate, dead (watching) if possible
 }
 
 reply_style(const section[], &Float:chance, &who, &Float:second)
 {
 	who = WHO_ANY
 	second = 0.0
-	if (equal(section, "r_hack"))           { chance = 0.4;  who = WHO_INVOLVED; }
+	if (equal(section, "r_where"))          { chance = 0.5;  who = WHO_TEAM; }
+	else if (equal(section, "r_bomb"))      { chance = 0.5;  who = WHO_TEAM; }
+	else if (equal(section, "r_score"))     { chance = 0.45; who = WHO_TEAM; }
+	else if (equal(section, "r_timeleft"))  { chance = 0.45; }
+	else if (equal(section, "r_nextmap"))   { chance = 0.45; }
+	else if (equal(section, "r_whatmap"))   { chance = 0.35; }
+	else if (equal(section, "r_how"))       { chance = 0.4;  who = WHO_WATCHER; }
+	else if (equal(section, "r_howru"))     { chance = 0.5; }
+	else if (equal(section, "r_hack"))      { chance = 0.4;  who = WHO_INVOLVED; }
 	else if (equal(section, "r_bot"))       { chance = 0.45; second = 0.15; }
 	else if (equal(section, "r_nt"))        { chance = 0.2;  who = WHO_TEAM; }
 	else if (equal(section, "r_nice_from_human")) { chance = 0.55; who = WHO_KILLER; }
@@ -1422,9 +1777,9 @@ reply_style(const section[], &Float:chance, &who, &Float:second)
 	else if (equal(section, "r_wb"))        { chance = 0.35; }
 	else if (equal(section, "r_wtf"))       { chance = 0.12; }
 	else if (equal(section, "r_lol"))       { chance = 0.06; }
-	else if (equal(section, "r_question"))  { chance = 0.15; }
+	else if (equal(section, "r_question"))  { chance = 0.08; }
 	else if (equal(section, "r_named"))     { chance = 0.85; }
-	else                                    { chance = 0.03; }
+	else                                    { chance = 0.015; }
 }
 
 // The section for what was said, or "" (msg in lowercase)
@@ -1441,12 +1796,25 @@ classify(const msg[], section[], len)
 		copy(section, len, "r_wb")
 		return
 	}
+	// "wheres the bomb", "bomb?", "who has c4"
+	if ((word_in(msg, "bomb") || word_in(msg, "c4")) && (contain(msg, "?") != -1 || word_in(msg, "where") || word_in(msg, "wheres") || word_in(msg, "who")))
+	{
+		copy(section, len, "r_bomb")
+		return
+	}
 	for (new w = 0; w < sizeof HEARD; w++)
 		if (word_in(msg, HEARD[w][0]))
 		{
 			copy(section, len, HEARD[w][1])
 			return
 		}
+}
+
+// Lines that go nowhere on their own: in a thread they carry on what was being said
+bool:weak_section(const section[])
+{
+	return !section[0] || equal(section, "r_lol") || equal(section, "r_ack") || equal(section, "r_question")
+		|| equal(section, "r_named") || equal(section, "r_wtf")
 }
 
 // What people type, made easier to match: lowercase, "heyyy" -> "hey", "ggggg" -> "gg"
@@ -1530,13 +1898,32 @@ addressed(const msg[])
 	return 0
 }
 
+// Something the bot said, quoted back ("lol no" -> "lol no?", or a longer word from it)
+bool:quoted(const msg[], const line[])
+{
+	new low[128]
+	copy(low, charsmax(low), line)
+	strtolower(low)
+	if (strlen(low) >= 4 && contain(msg, low) != -1)
+		return true
+	new word[32], rest[128]
+	copy(rest, charsmax(rest), low)
+	while (rest[0])
+	{
+		strtok2(rest, word, charsmax(word), rest, charsmax(rest), ' ', TRIM_FULL)
+		if (strlen(word) >= 5 && word_in(msg, word))
+			return true
+	}
+	return false
+}
+
 // The bot that should answer: `prefer` if it can, else one of the rest, likelier when
-// it's alive, nearby, or on their team
+// it's alive, nearby, on their team, and not in the middle of a fight
 responder(human, prefer, who, bool:team)
 {
 	new t = get_user_team(human)
-	if (prefer && is_user_connected(prefer) && is_user_bot(prefer) && (!team || get_user_team(prefer) == t)
-		&& (who != WHO_TEAM || get_user_team(prefer) == t))
+	new bool:teamonly = team || who == WHO_TEAM || who == WHO_WATCHER
+	if (prefer && is_user_connected(prefer) && is_user_bot(prefer) && (!teamonly || get_user_team(prefer) == t))
 		return prefer
 	new list[32], Float:weight[32], n, Float:total
 	new org[3], o2[3]
@@ -1548,10 +1935,12 @@ responder(human, prefer, who, bool:team)
 		if (!is_user_connected(i) || !is_user_bot(i))
 			continue
 		new bool:mate = get_user_team(i) == t
-		if ((team || who == WHO_TEAM) && !mate)
+		if (teamonly && !mate)
 			continue
 		new Float:w = 1.0
-		if (is_user_alive(i))
+		if (who == WHO_WATCHER)
+			w += is_user_alive(i) ? 0.0 : 3.0
+		else if (is_user_alive(i))
 		{
 			w += who == WHO_TEAM ? 3.0 : 1.5
 			if (alive)
@@ -1563,6 +1952,8 @@ responder(human, prefer, who, bool:team)
 		}
 		if (mate)
 			w += 1.0
+		if (in_combat(i))
+			w *= 0.15
 		list[n] = i
 		weight[n++] = w
 		total += w
@@ -1579,13 +1970,189 @@ responder(human, prefer, who, bool:team)
 	return list[n - 1]
 }
 
-// One bot's answer to a person, typed after reading it
-bool:answer(bot, const section[], human, bool:team, Float:extra)
+// The game state an answer needs, put where pick_line finds it; the section may change
+// to the one for what's known ("r_where" -> "r_where_unknown" when nobody saw anything)
+resolve_state(section[], len, human, bot)
 {
-	new text[128]
-	if (!bot || !pick_line(bot, section, text, charsmax(text), true))
+	new Float:now = get_gametime()
+	new t = get_user_team(human)
+	if (equal(section, "r_where"))
+	{
+		if (now - g_DiedAt[human] < 30.0 && g_KillerPlace[human][0])
+			copy(g_CtxPlace, charsmax(g_CtxPlace), g_KillerPlace[human])
+		else if ((t == 1 || t == 2) && now - g_SeenAt[t] < 25.0 && g_SeenPlace[t][0])
+			copy(g_CtxPlace, charsmax(g_CtxPlace), g_SeenPlace[t])
+		if (!g_CtxPlace[0])
+			copy(section, len, "r_where_unknown")
+	}
+	else if (equal(section, "r_bomb"))
+	{
+		new carrier
+		if (!g_BombPlanted && t == 1)
+			for (new i = 1; i <= MaxClients && !carrier; i++)
+				if (is_user_alive(i) && get_user_team(i) == 1 && user_has_weapon(i, CSW_C4))
+					carrier = i
+		if (g_BombPlanted && g_BombPlace[0])
+		{
+			copy(g_CtxPlace, charsmax(g_CtxPlace), g_BombPlace)
+			copy(section, len, "r_bomb_planted")
+		}
+		else if (carrier == human)
+			copy(section, len, "r_bomb_you")
+		else if (carrier)
+		{
+			if (carrier == bot)
+				copy(section, len, "r_bomb_me")
+			else
+			{
+				short_name(carrier, g_CtxCarrier, charsmax(g_CtxCarrier))
+				copy(section, len, "r_bomb_carrier")
+			}
+			copy(g_CtxPlace, charsmax(g_CtxPlace), g_Place[carrier])
+		}
+		else if (t == 1 && g_BombDropped)
+		{
+			copy(g_CtxPlace, charsmax(g_CtxPlace), g_BombPlace)
+			copy(section, len, "r_bomb_dropped")
+		}
+		else
+			copy(section, len, "r_bomb_unknown")
+	}
+	else if (equal(section, "r_score"))
+	{
+		new bt = get_user_team(bot)
+		new us = (bt == 1 || bt == 2) ? g_Score[bt] : 0, them = (bt == 1 || bt == 2) ? g_Score[3 - bt] : 0
+		copy(section, len, us > them ? "r_score_ahead" : us < them ? "r_score_behind" : "r_score_tied")
+	}
+	else if (equal(section, "r_how"))
+	{
+		// "how" about their own death, just now; otherwise it's just a question
+		if (now - g_DiedAt[human] < 15.0)
+		{
+			copy(g_CtxPlace, charsmax(g_CtxPlace), g_KillerPlace[human])
+			copy(g_CtxWeapon, charsmax(g_CtxWeapon), g_KillWeapon[human])
+			g_CtxHs = g_KillHs[human]
+		}
+		else
+			copy(section, len, "r_question")
+	}
+	else if (equal(section, "r_timeleft") && get_timeleft() <= 0)
+		copy(section, len, "r_timeleft_none")
+	else if (equal(section, "r_nextmap"))
+	{
+		new next[32]
+		next_map(next, charsmax(next))
+		if (!next[0])
+			copy(section, len, "r_nextmap_none")
+	}
+}
+
+clear_state()
+{
+	g_CtxPlace[0] = g_CtxWeapon[0] = g_CtxCarrier[0] = 0
+	g_CtxHs = false
+}
+
+// One bot's answer to a person, typed after reading it, with the game state it needs
+bool:answer(bot, const what[], human, bool:team, Float:extra, bool:quiet = false)
+{
+	if (!bot)
 		return false
-	queue(bot, human, text, 1, team, extra + typing_time(text, 1.2, 3.0))
+	new section[32], text[128]
+	copy(section, charsmax(section), what)
+	resolve_state(section, charsmax(section), human, bot)
+	g_CtxOther = human
+	new bool:ok = pick_line(bot, section, text, charsmax(text), true)
+	g_CtxOther = 0
+	clear_state()
+	if (!ok)
+		return false
+	queue(bot, human, text, 1, team, extra + typing_time(text, 1.2, 3.0), section, quiet)
+	return true
+}
+
+// A bot said something to a person: that's a thread they may carry on
+thread_said(human, bot, const section[], const text[])
+{
+	if (g_ThreadBot[human] != bot)
+	{
+		g_ThreadBot[human] = bot
+		g_ThreadTurns[human] = 1
+		copy(g_ThreadTopic[human], charsmax(g_ThreadTopic[]), section)
+	}
+	else
+	{
+		g_ThreadTurns[human]++
+		if (section[0] && !equal(section, "t_", 2))
+			copy(g_ThreadTopic[human], charsmax(g_ThreadTopic[]), section)
+	}
+	g_ThreadAt[human] = get_gametime()
+	copy(g_ThreadLine[human], charsmax(g_ThreadLine[]), text)
+}
+
+// The carry-on section for a thread about `topic`: t_bot for r_bot, t_score for
+// r_score_ahead, t_human for human_kill_hs..., t_any when there's none
+thread_section(const topic[], out[], len)
+{
+	new name[32]
+	copy(name, charsmax(name), topic[equal(topic, "r_", 2) ? 2 : 0])
+	new Array:list
+	while (name[0])
+	{
+		formatex(out, len, "t_%s", name)
+		if (TrieGetCell(g_Sections, out, list))
+			return
+		new cut = -1
+		for (new i = 0; name[i]; i++)
+			if (name[i] == '_')
+				cut = i
+		if (cut < 0)
+			break
+		name[cut] = 0
+	}
+	copy(out, len, "t_any")
+}
+
+// The person answers the bot that was just talking to them: it carries on, a couple of
+// lines at most, and only it (true: this was a thread, nobody else answers)
+bool:continue_thread(id, const msg[], const said[], to, bool:team)
+{
+	new bot = g_ThreadBot[id]
+	if (!bot)
+		return false
+	new Float:now = get_gametime()
+	if (!is_user_connected(bot) || !is_user_bot(bot) || g_ThreadTurns[id] >= 3 || in_combat(bot)
+		|| (to && to != bot) || (team && get_user_team(bot) != get_user_team(id))
+		|| (now - g_ThreadAt[id] >= 20.0 && to != bot && !quoted(msg, g_ThreadLine[id])))
+	{
+		g_ThreadBot[id] = 0
+		return false
+	}
+	// something new ("where is he", "gg") gets its own answer, from this bot; anything
+	// else ("sure", "lol", the same thing again) carries on what it was saying
+	new section[32], topic[24]
+	copy(topic, charsmax(topic), g_ThreadTopic[id])
+	new bool:same = said[0] && equal(topic, said, strlen(said))
+	if (weak_section(said) || same)
+		thread_section(topic, section, charsmax(section))
+	else
+	{
+		// "where is he" is for teammates, not the enemy who was talking
+		new Float:c, who, Float:sec
+		reply_style(said, c, who, sec)
+		if ((who == WHO_TEAM || who == WHO_WATCHER) && get_user_team(bot) != get_user_team(id))
+		{
+			g_ThreadBot[id] = 0
+			return false
+		}
+		copy(section, charsmax(section), said)
+	}
+	new Float:chance = g_ThreadTurns[id] <= 1 ? 0.8 : 0.55
+	if (equal(section, "t_any"))
+		chance *= 0.6
+	chance *= 0.6 + 0.4 * personality()
+	if (random_float(0.0, 1.0) > chance || !answer(bot, section, id, team, 0.0))
+		g_ThreadBot[id] = 0
 	return true
 }
 
@@ -1603,17 +2170,25 @@ heard(id, bool:team)
 	if (LibraryExists("gm_community", LibType_Library) && gm_chat_blocked(id, msg))
 		return
 	normalize(msg)
+	// "timeleft", "nextmap": the server answers those itself
+	new first[16]
+	copyc(first, charsmax(first), msg, ' ')
+	if (equal(first, "timeleft") || equal(first, "nextmap") || equal(first, "currentmap") || equal(first, "thetime"))
+		return
 
 	new to = addressed(msg)
 	// a bot on the other side doesn't see team chat
 	if (to && team && get_user_team(to) != get_user_team(id))
 		to = 0
 	new Float:now = get_gametime()
+	new section[24]
+	classify(msg, section, charsmax(section))
+	// answering the bot that was just talking to them
+	if (continue_thread(id, msg, section, to, team))
+		return
 	// someone typing a lot doesn't get an answer to every line
 	if (!to && now < g_NextHeard)
 		return
-	new section[24]
-	classify(msg, section, charsmax(section))
 	if (!section[0])
 		copy(section, charsmax(section), to ? "r_named" : "r_ack")
 
@@ -1637,6 +2212,9 @@ heard(id, bool:team)
 		else
 			chance *= 0.3          // "nice" about nothing in particular
 	}
+	// busy fighting: someone else answers
+	if (prefer && prefer != to && in_combat(prefer))
+		prefer = 0
 	if (to)
 		chance = floatmax(chance, 0.85)
 
@@ -1655,12 +2233,12 @@ heard(id, bool:team)
 	g_HeardRun++
 	g_HeardRunAt = now
 	g_NextHeard = now + random_float(2.0, 4.0)
-	// now and then a second one ("gg", "hi"), a little later
+	// now and then a second one ("gg", "hi"), a little later; it doesn't start a thread
 	if (second > 0.0 && random_float(0.0, 1.0) <= second * (0.5 + 0.5 * personality()))
 	{
 		new other = responder(id, 0, who, team)
 		if (other && other != bot)
-			answer(other, section, id, team, random_float(1.5, 4.0))
+			answer(other, section, id, team, random_float(1.5, 4.0), true)
 	}
 }
 
