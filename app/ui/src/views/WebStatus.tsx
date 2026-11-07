@@ -5,7 +5,7 @@ import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useToast } 
 import { useDirty } from "../store";
 
 type Mode = "caddy" | "tunnel";
-type Settings = { enabled: boolean; domain: string; origins: string[]; counter: boolean; mode: Mode };
+type Settings = { enabled: boolean; domain: string; origins: string[]; counter: boolean; mode: Mode; fastdl: boolean };
 type Live = { online: boolean; name?: string; map?: string; players?: number; bots?: number; max_players?: number };
 type Status = {
   host: string | null;
@@ -24,13 +24,15 @@ type Status = {
   live: Live | null;
   status_url: string | null;
   visit_url: string | null;
+  /** the address players download from with fast downloads on */
+  fastdl_url: string | null;
   /** which Discord links are saved (the links never come back), and the address people join */
   discord: { live: boolean; busy: boolean; address: string | null };
 };
 type Reply = { ok?: boolean; error?: string; port?: number; port_moved?: boolean };
 type Hook = "live" | "busy";
 /** a Discord link: newly pasted text, or "remove" to take the saved one away */
-type Form = { domain: string; origins: string; counter: boolean; mode: Mode; token: string; live: string; busy: string; drop: Record<Hook, boolean> };
+type Form = { domain: string; origins: string; counter: boolean; mode: Mode; fastdl: boolean; token: string; live: string; busy: string; drop: Record<Hook, boolean> };
 
 const post = (path: string, body: unknown = {}) => postJson<Reply>(path, body).catch((): Reply => ({ error: "Couldn't reach the app." }));
 const USUAL_PORT = 8090;
@@ -75,7 +77,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
       const s = r.settings;
       // nothing entered yet: the usual sites for the address, ready to change
       const origins = s.origins.length ? s.origins : s.domain ? sitesFor(s.domain) : [];
-      setForm({ domain: s.domain, origins: origins.join("\n"), counter: s.counter, mode: s.mode, token: "", live: "", busy: "", drop: { live: false, busy: false } });
+      setForm({ domain: s.domain, origins: origins.join("\n"), counter: s.counter, mode: s.mode, fastdl: s.fastdl, token: "", live: "", busy: "", drop: { live: false, busy: false } });
     }
   };
   useEffect(() => {
@@ -115,7 +117,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
     run(key("install"), async () => {
       // a Discord link goes only when it's new or taken away; otherwise the saved one stays
       const hook = (h: Hook) => (form[h].trim() ? form[h] : form.drop[h] ? "" : undefined);
-      const r = await post(`/api/servers/${server.id}/webstatus`, { enabled: true, domain: form.domain, origins: originList(form.origins), counter: form.counter, mode: form.mode, token: form.token, discord_live: hook("live"), discord_busy: hook("busy") });
+      const r = await post(`/api/servers/${server.id}/webstatus`, { enabled: true, domain: form.domain, origins: originList(form.origins), counter: form.counter, mode: form.mode, fastdl: form.fastdl, token: form.token, discord_live: hook("live"), discord_busy: hook("busy") });
       if (r.error) {
         toast(r.error, true);
         load();
@@ -132,7 +134,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
     run(key("off"), async () => {
       // only turns it off: edits not saved yet stay in the form, unsaved
       const s = st.settings;
-      const r = await post(`/api/servers/${server.id}/webstatus`, { enabled: false, domain: s.domain, origins: s.origins, counter: s.counter, mode: s.mode });
+      const r = await post(`/api/servers/${server.id}/webstatus`, { enabled: false, domain: s.domain, origins: s.origins, counter: s.counter, mode: s.mode, fastdl: s.fastdl });
       if (r.error) return toast(r.error, true);
       toast(dirty.current ? "The status page is off. Your other changes aren't saved yet." : "The status page is off");
       load();
@@ -183,6 +185,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
               <div className="hltv-addresses">
                 {st.status_url && <CopyRow label="Status address" value={st.status_url} />}
                 {st.visit_url && <CopyRow label="Visit counter address" value={st.visit_url} />}
+                {saved.fastdl && st.fastdl_url && <CopyRow label="Fast downloads" value={st.fastdl_url} />}
                 <p className="muted small-note">
                   Paste the status address where your site asks for it.{st.visit_url ? " The counter address goes where it asks for a visit counter." : ""}
                 </p>
@@ -265,6 +268,11 @@ export function WebStatus({ server }: { server: ServerInfo }) {
           <div className="setting">
             <span className="name">Visit counter<span className="note">Counts each visit to your site. Keeps no addresses and sets no cookies</span></span>
             <Switch on={form.counter} disabled={working} onChange={(v) => set({ counter: v })} label="Visit counter" />
+          </div>
+
+          <div className="setting">
+            <span className="name">Fast downloads<span className="note">Players get missing maps, sounds and models from here in seconds, instead of slowly from the game. Sets the server's download address for you</span></span>
+            <Switch on={form.fastdl} disabled={working} onChange={(v) => set({ fastdl: v })} label="Fast downloads" />
           </div>
 
           <div className="field">

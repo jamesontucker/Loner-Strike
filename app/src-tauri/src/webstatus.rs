@@ -67,11 +67,14 @@ pub struct Settings {
     /// set up by hand), which the app uses but never changes or removes
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub own_tunnel: bool,
+    /// Players' downloads (sv_downloadurl) served from the game folder at /fastdl
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub fastdl: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { enabled: false, domain: String::new(), origins: Vec::new(), counter: false, mode: "caddy".into(), port: None, own_tunnel: false }
+        Settings { enabled: false, domain: String::new(), origins: Vec::new(), counter: false, mode: "caddy".into(), port: None, own_tunnel: false, fastdl: false }
     }
 }
 
@@ -90,6 +93,17 @@ impl Settings {
 
 pub fn unit(id: &str) -> String {
     format!("lonerstrike-{id}-status")
+}
+
+/// Where players download from with fast downloads on (sv_downloadurl; the game adds the
+/// file's path after a /).
+pub fn fastdl_url(domain: &str) -> String {
+    format!("https://{domain}/fastdl")
+}
+
+/// The game folder as the service sees it: bound in read-only, inside its own data folder.
+fn fastdl_mount(id: &str) -> String {
+    format!("{DATA}/{id}/files")
 }
 
 pub fn tunnel_unit(id: &str) -> String {
@@ -325,15 +339,22 @@ pub fn clean_hook(text: &str) -> Result<String, String> {
 
 /// The status service's systemd unit. `discord`: which webhook links it has (HOOKS order),
 /// read through systemd's credentials from root-only files, and the address people join.
-pub fn status_unit_text(id: &str, listen: u16, game_port: u16, origins: &[String], counter: bool, discord: [bool; 2], address: &str) -> String {
+/// `fastdl`: the game folder on the machine (a placeholder the install script fills in), bound
+/// in read-only so the service can serve players' downloads from it.
+pub fn status_unit_text(id: &str, listen: u16, game_port: u16, origins: &[String], counter: bool, discord: [bool; 2], address: &str, fastdl: Option<&str>) -> String {
     let mut counter = if counter { format!(" --counter {DATA}/{id}/visits.txt") } else { String::new() };
     let mut load = String::new();
+    if let Some(dir) = fastdl {
+        // "-": a game folder that isn't there yet doesn't stop the status page
+        load.push_str(&format!("BindReadOnlyPaths=-{dir}:{}\n", fastdl_mount(id)));
+        counter.push_str(&format!(" --fastdl {}", fastdl_mount(id)));
+    }
     for (kind, on) in HOOKS.iter().zip(discord) {
         if on {
             load.push_str(&format!("LoadCredential=discord-{kind}:{SECRETS}/discord-{kind}-{id}.url\n"));
         }
     }
-    if !load.is_empty() {
+    if discord.iter().any(|on| *on) {
         counter.push_str(&format!(" --discord-state {DATA}/{id}/discord.json"));
         if !address.is_empty() {
             counter.push_str(&format!(" --address {address}"));
@@ -367,7 +388,7 @@ WantedBy=multi-user.target
 ",
         origins = origins.join(","),
         // looking up discord.com can go through systemd-resolved's socket
-        unix = if load.is_empty() { "" } else { " AF_UNIX" }
+        unix = if discord.iter().any(|on| *on) { " AF_UNIX" } else { "" }
     )
 }
 
@@ -410,12 +431,13 @@ WantedBy=multi-user.target
 }
 
 /// Caddy's site block: only /status and /visit go to the service, everything else is a 404.
-pub fn caddy_site(domain: &str, port: u16) -> String {
+pub fn caddy_site(domain: &str, port: u16, fastdl: bool) -> String {
+    let files = if fastdl { " /fastdl/*" } else { "" };
     format!(
         "# Loner-Strike website status. Written by the app; changes here are replaced.
 {domain} {{
 \theader -Server
-\t@status path /status /visit
+\t@status path /status /visit{files}
 \thandle @status {{
 \t\treverse_proxy 127.0.0.1:{port} {{
 \t\t\theader_down -Server
@@ -455,12 +477,15 @@ const INSTALL_SERVICE: &str = r#"echo "@@STEP service"
 id -u @USER@ >/dev/null 2>&1 || sudo useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin @USER@
 sudo install -d -o root -g root -m 755 /opt/lonerstrike-status @DATA@
 sudo install -d -o @USER@ -g @USER@ -m 750 @DATA@/@ID@
+sudo install -d -o root -g root -m 755 @DATA@/@ID@/files
 sudo tee @SCRIPT@ >/dev/null <<'LSPY'
 @PY@LSPY
 sudo chown root:root @SCRIPT@
 sudo chmod 644 @SCRIPT@
 sudo tee /etc/systemd/system/@UNIT@.service >/dev/null <<'LSUNIT'
 @UNIT_TEXT@LSUNIT
+# the game folder is under this user's home: its full path goes in now
+sudo sed -i "s|@GAME_DIR@|$HOME/@SERVER_DIR@|" /etc/systemd/system/@UNIT@.service
 "#;
 
 const INSTALL_CADDY: &str = r##"echo "@@STEP caddy"
@@ -551,7 +576,7 @@ sudo systemctl restart @UNIT@
 @FRONT@
 sleep 3
 systemctl is-active --quiet @UNIT@ || fail "The status service didn't start ($(sudo journalctl -u @UNIT@ -n 1 --no-pager -o cat 2>/dev/null))."
-@CHECK_FRONT@
+@CHECK_FASTDL@@CHECK_FRONT@
 echo "@@STEP ready"
 "#;
 
@@ -584,11 +609,12 @@ fn fill(t: &str, id: &str) -> String {
 /// Sets up (or updates) the status service and its HTTPS front on the machine, taking away
 /// the other front if it was used before. `token` is needed for a tunnel. Safe to run again.
 /// Progress lines start with @@STEP; a failure with @@FAIL.
-pub fn install_sh(id: &str, s: &Settings, listen: u16, game_port: u16, token: Option<&str>, hooks: [Option<&str>; 2], address: &str) -> String {
+/// `game`: the server's game folder name (cstrike or czero), for fast downloads.
+pub fn install_sh(id: &str, s: &Settings, listen: u16, game_port: u16, token: Option<&str>, hooks: [Option<&str>; 2], address: &str, game: &str) -> String {
     let mut sh = String::from(HEAD);
     // (the script and unit go in as they are: substitutions happen before, in the template)
-    let service = fill(INSTALL_SERVICE, id);
-    let unit_text = status_unit_text(id, listen, game_port, &s.origins, s.counter, hooks.map(|h| h.is_some()), address);
+    let service = fill(INSTALL_SERVICE, id).replace("@SERVER_DIR@", &format!("{}/{game}", crate::remote::server_dir(id)));
+    let unit_text = status_unit_text(id, listen, game_port, &s.origins, s.counter, hooks.map(|h| h.is_some()), address, s.fastdl.then_some("@GAME_DIR@"));
     sh.push_str(&service.replacen("@PY@", STATUS_PY, 1).replacen("@UNIT_TEXT@", &unit_text, 1));
     for (kind, hook) in HOOKS.iter().zip(hooks) {
         match hook {
@@ -596,11 +622,18 @@ pub fn install_sh(id: &str, s: &Settings, listen: u16, game_port: u16, token: Op
             None => sh.push_str(&format!("sudo rm -f {SECRETS}/discord-{kind}-{id}.url\n")),
         }
     }
+    // fast downloads: the service has to see the game folder's maps
+    let check = if s.fastdl {
+        format!("python3 -c 'import json,urllib.request,sys; sys.exit(0 if json.load(urllib.request.urlopen(\"http://127.0.0.1:{listen}/status\", timeout=5)).get(\"fastdl\") else 1)' || fail \"Fast downloads can't read the server's game folder. Is the server set up on this machine?\"\n")
+    } else {
+        String::new()
+    };
+    let sh_start = |t: String| t.replace("@CHECK_FASTDL@", &check);
     if s.tunnel() && token.is_none() {
         // the Cloudflare Tunnel already on the machine (cloudflared.service): used, never changed
         sh.push_str(&fill(DROP_CADDY, id));
         sh.push_str(&fill(DROP_TUNNEL, id));
-        sh.push_str(&fill(START, id).replace("@FRONT@", "").replace("@CHECK_FRONT@", USE_EXISTING));
+        sh.push_str(&sh_start(fill(START, id)).replace("@FRONT@", "").replace("@CHECK_FRONT@", USE_EXISTING));
     } else if s.tunnel() {
         sh.push_str(&fill(DROP_CADDY, id));
         let t = fill(INSTALL_TUNNEL, id);
@@ -611,7 +644,7 @@ pub fn install_sh(id: &str, s: &Settings, listen: u16, game_port: u16, token: Op
         );
         let tu = tunnel_unit(id);
         sh.push_str(
-            &fill(START, id)
+            &sh_start(fill(START, id))
                 .replace("@FRONT@", &format!("sudo systemctl enable {tu} >/dev/null 2>&1\nsudo systemctl restart {tu}"))
                 .replace(
                     "@CHECK_FRONT@",
@@ -620,9 +653,9 @@ pub fn install_sh(id: &str, s: &Settings, listen: u16, game_port: u16, token: Op
         );
     } else {
         sh.push_str(&fill(DROP_TUNNEL, id));
-        sh.push_str(&fill(INSTALL_CADDY, id).replace("@DOMAIN@", &s.domain).replacen("@CADDY_SITE@", &caddy_site(&s.domain, listen), 1));
+        sh.push_str(&fill(INSTALL_CADDY, id).replace("@DOMAIN@", &s.domain).replacen("@CADDY_SITE@", &caddy_site(&s.domain, listen, s.fastdl), 1));
         sh.push_str(
-            &fill(START, id)
+            &sh_start(fill(START, id))
                 .replace("@FRONT@", "sudo systemctl enable caddy >/dev/null 2>&1 || true\nsudo systemctl reload-or-restart caddy || fail \"Caddy didn't start. Something else may be using port 80 or 443.\"")
                 .replace("@CHECK_FRONT@", "systemctl is-active --quiet caddy || fail \"Caddy didn't start. Something else may be using port 80 or 443.\""),
         );
@@ -660,7 +693,7 @@ pub fn apply(e: &Entry, on: bool) -> Result<(), String> {
         let hooks = HOOKS.map(|k| read_hook(k, &e.id));
         // the address people join with, when it's one others can reach
         let address = if e.public_address.is_some() { e.connect() } else { String::new() };
-        install_sh(&e.id, s, listen, e.port, token.as_deref(), [hooks[0].as_deref(), hooks[1].as_deref()], &address)
+        install_sh(&e.id, s, listen, e.port, token.as_deref(), [hooks[0].as_deref(), hooks[1].as_deref()], &address, &e.game)
     } else {
         off_sh(&e.id)
     };
@@ -805,7 +838,8 @@ fn status(e: &Entry) -> Value {
     json!({
         "remote": e.remote.is_some(),
         "host": e.remote.as_ref().map(|r| r.host.clone()),
-        "settings": {"enabled": s.enabled, "domain": s.domain, "origins": s.origins, "counter": s.counter, "mode": s.mode},
+        "settings": {"enabled": s.enabled, "domain": s.domain, "origins": s.origins, "counter": s.counter, "mode": s.mode, "fastdl": s.fastdl},
+        "fastdl_url": (!s.domain.is_empty()).then(|| fastdl_url(&s.domain)),
         "token_saved": read_token(&e.id).is_some(),
         "discord": {"live": read_hook("live", &e.id).is_some(), "busy": read_hook("busy", &e.id).is_some(), "address": e.public_address.is_some().then(|| e.connect())},
         "own_tunnel": s.own_tunnel(),
@@ -860,6 +894,8 @@ struct SaveReq {
     discord_live: Option<String>,
     #[serde(default)]
     discord_busy: Option<String>,
+    #[serde(default)]
+    fastdl: bool,
 }
 
 async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
@@ -872,7 +908,7 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<a
         if !e.ready {
             return Err("Wait for the server's setup to finish first.".into());
         }
-        let wanted = Settings { enabled: req.enabled, domain: req.domain, origins: req.origins, counter: req.counter, mode: req.mode, port: e.web_status.port, own_tunnel: e.web_status.own_tunnel };
+        let wanted = Settings { enabled: req.enabled, domain: req.domain, origins: req.origins, counter: req.counter, mode: req.mode, port: e.web_status.port, own_tunnel: e.web_status.own_tunnel, fastdl: req.fastdl };
         let mut s = validate(wanted, &e, &servers::load())?;
         let token = (!req.token.trim().is_empty()).then(|| clean_token(&req.token)).transpose()?;
         if s.tunnel() {
@@ -917,6 +953,15 @@ async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<a
                 apply(&e, false)?;
             }
             store(&s)?;
+        }
+        // the game downloads from it while it's on, and stops when it's off (an address the
+        // host typed in Server extras is left alone)
+        let ours = |s: &Settings| (s.enabled && s.fastdl && !s.domain.is_empty()).then(|| fastdl_url(&s.domain));
+        let (was, now) = (ours(&e.web_status), ours(&s));
+        if was != now {
+            if let Some(g) = servers::game_for(&id, || None) {
+                crate::extras::set_fastdl(&g, now.as_deref(), was.as_deref())?;
+            }
         }
         // a port that had to move: a tunnel's hostname in Cloudflare must follow it
         let moved = e.web_status.port.is_some_and(|p| Some(p) != s.port);
@@ -1026,31 +1071,48 @@ mod tests {
 
     #[test]
     fn discord_in_the_unit_and_script() {
-        let u = status_unit_text("pub", 8090, 27015, &[], false, [true, false], "play.example.com");
+        let u = status_unit_text("pub", 8090, 27015, &[], false, [true, false], "play.example.com", None);
         assert!(u.contains("LoadCredential=discord-live:/etc/lonerstrike-status/discord-live-pub.url\nExecStart="));
         assert!(!u.contains("discord-busy"));
         assert!(u.contains(" --discord-state /var/lib/lonerstrike-status/pub/discord.json --address play.example.com\n"));
         assert!(u.contains("RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"));
-        let none = status_unit_text("pub", 8090, 27015, &[], false, [false, false], "play.example.com");
+        let none = status_unit_text("pub", 8090, 27015, &[], false, [false, false], "play.example.com", None);
         assert!(!none.contains("discord") && !none.contains("--address") && !none.contains("AF_UNIX"));
-        let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec![], counter: false, mode: "caddy".into(), port: None, own_tunnel: false };
+        let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec![], counter: false, mode: "caddy".into(), port: None, own_tunnel: false, fastdl: false };
         let hook = "https://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz";
-        let sh = install_sh("pub", &s, 8090, 27015, None, [Some(hook), None], "play.example.com");
+        let sh = install_sh("pub", &s, 8090, 27015, None, [Some(hook), None], "play.example.com", "cstrike");
         assert!(sh.contains(&format!("discord-live-pub.url' <<'LSHOOK'\n{hook}\nLSHOOK")));
         assert!(sh.contains("sudo rm -f /etc/lonerstrike-status/discord-busy-pub.url"));
         assert!(off_sh("pub").contains("discord-live-pub.url"));
     }
 
     #[test]
+    fn fast_downloads() {
+        let u = status_unit_text("pub", 8090, 27015, &[], false, [false, false], "", Some("@GAME_DIR@"));
+        assert!(u.contains("BindReadOnlyPaths=-@GAME_DIR@:/var/lib/lonerstrike-status/pub/files\n"));
+        assert!(u.contains(" --fastdl /var/lib/lonerstrike-status/pub/files"));
+        assert!(!status_unit_text("pub", 8090, 27015, &[], false, [false, false], "", None).contains("fastdl"));
+        let s = Settings { enabled: true, domain: "status.example.com".into(), fastdl: true, ..Settings::default() };
+        let sh = install_sh("pub", &s, 8090, 27015, None, [None, None], "", "czero");
+        assert!(sh.contains("sudo sed -i \"s|@GAME_DIR@|$HOME/loner-strike/servers/pub/czero|\" /etc/systemd/system/lonerstrike-pub-status.service"));
+        assert!(sh.contains("urlopen(\"http://127.0.0.1:8090/status\", timeout=5)).get(\"fastdl\")"));
+        assert!(caddy_site("status.example.com", 8090, true).contains("@status path /status /visit /fastdl/*\n"));
+        assert!(caddy_site("status.example.com", 8090, false).contains("@status path /status /visit\n"));
+        let off = install_sh("pub", &Settings { fastdl: false, ..s }, 8090, 27015, None, [None, None], "", "czero");
+        assert!(!off.contains("get(\"fastdl\")"));
+        assert_eq!(fastdl_url("status.example.com"), "https://status.example.com/fastdl");
+    }
+
+    #[test]
     fn status_unit() {
-        let u = status_unit_text("pub", 8091, 27016, &["https://a.com".into(), "https://b.com".into()], true, [false, false], "");
+        let u = status_unit_text("pub", 8091, 27016, &["https://a.com".into(), "https://b.com".into()], true, [false, false], "", None);
         assert!(u.contains("User=lonerstrike-status\n") && u.contains("Group=lonerstrike-status\n"));
         assert!(u.contains("ExecStart=/usr/bin/python3 /opt/lonerstrike-status/status.py --listen 8091 --game 27016 --origins https://a.com,https://b.com --counter /var/lib/lonerstrike-status/pub/visits.txt\n"));
         for line in ["NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=yes", "PrivateTmp=yes", "ReadWritePaths=/var/lib/lonerstrike-status/pub", "RestrictAddressFamilies=AF_INET AF_INET6", "CapabilityBoundingSet=\n", "MemoryMax=64M"] {
             assert!(u.contains(line), "{line}");
         }
         assert!(!u.contains("$HOME") && !u.contains("sudo"));
-        let u = status_unit_text("pub", 8090, 27015, &["https://a.com".into()], false, [false, false], "");
+        let u = status_unit_text("pub", 8090, 27015, &["https://a.com".into()], false, [false, false], "", None);
         assert!(!u.contains("--counter") && u.contains("--origins https://a.com\n"));
     }
 
@@ -1068,7 +1130,7 @@ mod tests {
 
     #[test]
     fn caddy_block() {
-        let c = caddy_site("status.example.com", 8091);
+        let c = caddy_site("status.example.com", 8091, false);
         assert!(c.contains("status.example.com {\n"));
         assert!(c.contains("\theader -Server\n") && c.contains("@status path /status /visit") && c.contains("reverse_proxy 127.0.0.1:8091") && c.contains("respond 404"));
         assert_eq!(c.matches('{').count(), c.matches('}').count());
@@ -1076,8 +1138,8 @@ mod tests {
 
     #[test]
     fn scripts() {
-        let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec!["https://example.com".into()], counter: true, mode: "caddy".into(), port: Some(8090), own_tunnel: false };
-        let sh = install_sh("pub", &s, 8090, 27016, None, [None, None], "");
+        let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec!["https://example.com".into()], counter: true, mode: "caddy".into(), port: Some(8090), own_tunnel: false, fastdl: false };
+        let sh = install_sh("pub", &s, 8090, 27016, None, [None, None], "", "cstrike");
         assert!(!sh.contains('@') || !sh.lines().any(|l| l.contains("@ID@") || l.contains("@UNIT") || l.contains("@PY@") || l.contains("@CADDY")), "every placeholder filled");
         assert!(sh.contains("useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin lonerstrike-status"));
         assert!(sh.contains("sudo tee /opt/lonerstrike-status/status.py >/dev/null <<'LSPY'\n#!/usr/bin/env python3"));
@@ -1094,7 +1156,7 @@ mod tests {
 
         let t = Settings { mode: "tunnel".into(), ..s };
         let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ==";
-        let sh = install_sh("pub", &t, 8090, 27016, Some(token), [None, None], "");
+        let sh = install_sh("pub", &t, 8090, 27016, Some(token), [None, None], "", "cstrike");
         assert!(sh.contains("https://pkg.cloudflare.com/cloudflare-main.gpg") && sh.contains("https://pkg.cloudflare.com/cloudflared any main"));
         assert!(sh.contains(&format!("<<'LSTOKEN'\n{token}\nLSTOKEN\n")));
         assert_eq!(sh.matches(token).count(), 1, "the token only goes in the root-only file");
@@ -1116,17 +1178,18 @@ mod tests {
         if cfg!(windows) || std::process::Command::new("bash").arg("--version").output().is_err() {
             return;
         }
-        let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec!["https://example.com".into()], counter: true, mode: "caddy".into(), port: Some(8090), own_tunnel: false };
+        let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec!["https://example.com".into()], counter: true, mode: "caddy".into(), port: Some(8090), own_tunnel: false, fastdl: false };
         let t = Settings { mode: "tunnel".into(), own_tunnel: true, ..s.clone() };
         let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ==";
-        for sh in [install_sh("pub", &s, 8090, 27016, None, [None, None], ""), install_sh("pub", &t, 8090, 27016, Some(token), [None, None], ""), install_sh("pub", &t, 8090, 27016, None, [None, None], ""), off_sh("pub"), remove_sh("pub")] {
+        for sh in [install_sh("pub", &s, 8090, 27016, None, [None, None], "", "cstrike"), install_sh("pub", &t, 8090, 27016, Some(token), [None, None], "", "cstrike"), install_sh("pub", &t, 8090, 27016, None, [None, None], "", "cstrike"),
+                   install_sh("pub", &Settings { fastdl: true, ..s.clone() }, 8090, 27016, None, [Some("https://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz"), None], "play.example.com", "czero"), off_sh("pub"), remove_sh("pub")] {
             use std::io::Write;
             let mut c = std::process::Command::new("bash").arg("-n").stdin(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn().unwrap();
             c.stdin.take().unwrap().write_all(sh.as_bytes()).unwrap();
             let out = c.wait_with_output().unwrap();
             assert!(out.status.success(), "{}\n{sh}", String::from_utf8_lossy(&out.stderr));
         }
-        let existing = install_sh("pub", &t, 8090, 27016, None, [None, None], "");
+        let existing = install_sh("pub", &t, 8090, 27016, None, [None, None], "", "cstrike");
         assert!(existing.contains("systemctl is-active --quiet cloudflared ||") && !existing.contains("pkg.cloudflare.com") && !existing.contains("caddy adapt"));
         assert!(!existing.contains("disable --now cloudflared") && !off_sh("pub").contains("cloudflared.service"), "the machine's own tunnel is never touched");
     }
@@ -1195,6 +1258,9 @@ assert not [c for c in calls if c[1] == "https://busy"], "people already on when
 assert d2.saved.get("message") == "42"
 assert [f["name"] for f in m.status_message(st.info, "")["embeds"][0]["fields"]] == ["Players"], "no Join without an address"
 assert m.status_message({"online": False}, "x")["embeds"][0]["title"] == "Server offline"
+# fast downloads: only what players may download
+assert all(m.downloadable(p) for p in ["maps/de_x.bsp", "maps/de_x.res", "sound/zombie/a b.wav", "models/player/x/x.mdl", "gfx/env/skyup.tga", "custom.wad", "overviews/de_x.txt"])
+assert not any(m.downloadable(p) for p in ["server.cfg", "addons/amxmodx/configs/users.ini", "maps/../server.cfg", "maps/.x.bsp", "dlls/mp.dll", "maps/x.nav", "sub/custom.wad", "", "maps/", "maps//x.bsp", "logs/L1.log", "sound/x.wav;rm"])
 print(json.dumps([m.parse_info(new), m.parse_info(old), m.parse_info(oldmod), m.parse_info(b"I\x30cut"), m.parse_info(b"")]))
 "#;
         let out = std::process::Command::new(py).arg("-c").arg(test).arg(&file).output().unwrap();

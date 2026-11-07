@@ -299,6 +299,21 @@ fn save(data: &Path, s: &Settings) -> Result<(), String> {
     crate::sys::write_latin1(&data.join("ads.txt"), &ads_txt(s)).map_err(|e| format!("Couldn't write the chat messages ({e})."))
 }
 
+/// Website status's fast downloads: sets the download address to `url`, or with None
+/// clears it, but only when it's still `was` (one the host typed in stays).
+pub fn set_fastdl(g: &Game, url: Option<&str>, was: Option<&str>) -> Result<(), String> {
+    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = load(&g.data);
+    match url {
+        Some(u) => s.fastdl = u.to_string(),
+        None if was.is_some_and(|w| s.fastdl == w) => s.fastdl = String::new(),
+        None => return Ok(()),
+    }
+    save(&g.data, &s)?;
+    reload(g);
+    Ok(())
+}
+
 // ---- map rotation -------------------------------------------------------------------
 
 /// A map name the plugins and the game take: plain characters, fits the game's 32.

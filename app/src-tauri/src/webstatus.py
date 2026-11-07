@@ -6,6 +6,8 @@
 #   GET /status  {"name", "map", "players", "bots", "max_players", "online": true}
 #                or {"online": false} when the game doesn't answer
 #   GET /visit   adds one and answers {"count": n} (only with --counter)
+#   GET /fastdl/<path>  a map, sound, model or sprite players download instead of getting
+#                it from the game (sv_downloadurl), from the game folder (only with --fastdl)
 # Nothing else is served. No IP addresses are kept or logged, no cookies are set.
 #
 # With Discord webhooks (systemd credentials "discord-live" and "discord-busy"): keeps one
@@ -15,8 +17,10 @@ import json
 import os
 import socket
 import threading
+import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -26,6 +30,12 @@ QUERY = HEADER + b"TSource Engine Query\x00"
 CACHE_SECS = 10
 # visits counted per second at most (all visitors together); more are answered, not counted
 MAX_VISITS_PER_SEC = 20
+# what players may download (the app's own list in extras.rs): these kinds of file, in these
+# folders of the game folder, or a .wad at its top
+DL_EXT = {"bsp", "res", "wad", "wav", "mp3", "mdl", "spr", "tga", "bmp", "txt"}
+DL_DIRS = ("maps/", "sound/", "models/", "sprites/", "gfx/", "overviews/")
+DL_NAME = re.compile(r"^[A-Za-z0-9_\-./ ()!+,'&]+$")
+DL_CHUNK = 64 * 1024
 # how often the Discord status message is brought up to date
 DISCORD_SECS = 60
 # "people are on" at most this often
@@ -168,6 +178,39 @@ class Counter:
             pass
 
 
+def downloadable(rel):
+    """Whether a path (relative to the game folder) is something players may download."""
+    r = rel.lower()
+    ext = r.rsplit(".", 1)[-1] if "." in r else ""
+    if ext not in DL_EXT or not DL_NAME.match(rel):
+        return False
+    parts = rel.split("/")
+    if any(p in ("", ".", "..") or p.startswith(".") for p in parts):
+        return False
+    return r.startswith(DL_DIRS) or (ext == "wad" and len(parts) == 1)
+
+
+def find_file(root, rel):
+    """The file for `rel` under `root`, matching each part's case loosely (players ask for
+    the case the map uses, the disk may differ); None if it isn't there or leads out."""
+    path = root
+    for part in rel.split("/"):
+        exact = os.path.join(path, part)
+        if not os.path.lexists(exact):
+            try:
+                low = part.lower()
+                exact = next((os.path.join(path, n) for n in os.listdir(path) if n.lower() == low), None)
+            except OSError:
+                return None
+            if exact is None:
+                return None
+        path = exact
+    real, top = os.path.realpath(path), os.path.realpath(root)
+    if not real.startswith(top + os.sep) or not os.path.isfile(real):
+        return None
+    return real
+
+
 def _credential(name):
     """A systemd credential's text (LoadCredential=), or "" without it."""
     folder = os.environ.get("CREDENTIALS_DIRECTORY")
@@ -303,7 +346,7 @@ def origin_allowed(origin, allowed):
     return False
 
 
-def make_handler(status, counter, origins):
+def make_handler(status, counter, origins, fastdl=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "status"
         sys_version = ""
@@ -331,10 +374,43 @@ def make_handler(status, counter, origins):
             if self.command != "HEAD":
                 self.wfile.write(data)
 
+        def _file(self):
+            """/fastdl/<path>: the file, or a 404 for anything else."""
+            rel = urllib.parse.unquote(self.path.split("?", 1)[0][len("/fastdl/"):])
+            rel = re.sub(r"/+", "/", rel.replace("\\", "/")).lstrip("/")
+            found = find_file(fastdl, rel) if fastdl and downloadable(rel) else None
+            if not found:
+                return self._send(404, {"error": "not found"}, "no-store")
+            try:
+                f = open(found, "rb")
+            except OSError:
+                return self._send(404, {"error": "not found"}, "no-store")
+            with f:
+                size = os.fstat(f.fileno()).st_size
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(size))
+                # the same file for everyone: Cloudflare may keep a copy near the player
+                self.send_header("Cache-Control", "public, max-age=3600")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                if self.command == "HEAD":
+                    return
+                while True:
+                    chunk = f.read(DL_CHUNK)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+
         def do_GET(self):
             path = self.path.split("?", 1)[0]
-            if path == "/status":
-                self._send(200, status.get(), "max-age=10")
+            if path.startswith("/fastdl/"):
+                self._file()
+            elif path == "/status":
+                body = dict(status.get())
+                if fastdl:
+                    body["fastdl"] = os.path.isdir(os.path.join(fastdl, "maps")) and os.access(fastdl, os.R_OK | os.X_OK)
+                self._send(200, body, "max-age=10")
             elif path == "/visit" and counter is not None:
                 self._send(200, {"count": counter.hit()}, "no-store")
             else:
@@ -342,7 +418,9 @@ def make_handler(status, counter, origins):
 
         def do_HEAD(self):
             path = self.path.split("?", 1)[0]
-            if path == "/status":
+            if path.startswith("/fastdl/"):
+                self._file()
+            elif path == "/status":
                 self._send(200, status.get(), "max-age=10")
             else:
                 self._send(404, {"error": "not found"}, "no-store")
@@ -367,6 +445,7 @@ def main():
     p.add_argument("--address", default="", help="the server's public address, for joining from Discord")
     p.add_argument("--discord-state", default="", help="file that keeps the Discord message id")
     p.add_argument("--busy-at", type=int, default=1, help="people (not bots) on before Discord is told")
+    p.add_argument("--fastdl", default="", help="the game folder, to serve players' downloads from")
     a = p.parse_args()
     origins = {o.strip().rstrip("/").lower() for o in a.origins.split(",") if o.strip()}
     counter = Counter(a.counter) if a.counter else None
@@ -375,7 +454,7 @@ def main():
     if (live or busy) and a.discord_state:
         discord = DiscordStatus(status, live, busy, a.address, a.discord_state, max(1, a.busy_at))
         threading.Thread(target=discord.run, daemon=True).start()
-    server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(status, counter, origins))
+    server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(status, counter, origins, a.fastdl or None))
     server.daemon_threads = True
     server.serve_forever()
 

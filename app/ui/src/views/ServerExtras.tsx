@@ -795,6 +795,7 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
           )}
         </div>
         {ON_THIS_COMPUTER && <p className="muted small-note">Copies the custom maps and what they need, plus the sounds and models of your game modes, into a folder you pick, ready to upload.</p>}
+        <p className="muted small-note">For a server on a Linux machine there's no need for a web server of your own: turn on Fast downloads under its Website status, and it serves the files and fills in this address.</p>
       </div>
     </section>
   );
