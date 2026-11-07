@@ -56,8 +56,11 @@ jobs:
           cargo build --release --locked -p playitd --target aarch64-apple-darwin
           cargo build --release --locked -p playitd --target x86_64-apple-darwin
           mkdir -p "$GITHUB_WORKSPACE/app/src-tauri/binaries"
-          lipo -create target/aarch64-apple-darwin/release/playitd target/x86_64-apple-darwin/release/playitd \
-            -output "$GITHUB_WORKSPACE/app/src-tauri/binaries/playitd-universal-apple-darwin"
+          # each half of the universal build looks for its own copy, then the bundle takes the combined one
+          B="$GITHUB_WORKSPACE/app/src-tauri/binaries"
+          cp target/aarch64-apple-darwin/release/playitd "$B/playitd-aarch64-apple-darwin"
+          cp target/x86_64-apple-darwin/release/playitd "$B/playitd-x86_64-apple-darwin"
+          lipo -create "$B/playitd-aarch64-apple-darwin" "$B/playitd-x86_64-apple-darwin" -output "$B/playitd-universal-apple-darwin"
 
       - name: Get playit's agent (Windows)
         if: matrix.platform == 'windows-latest'
