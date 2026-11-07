@@ -1507,12 +1507,13 @@ pub fn bots_when_empty(e: &Entry) -> bool {
 /// Netcode defaults for a dedicated server (never the player's own listen server, which
 /// doesn't come through here): a higher tick rate and update/rate limits that suit
 /// today's connections, so what players see is closer to their real ping. A higher
-/// sys_ticrate costs CPU, and bots think every tick too, so 500 rather than 1000.
+/// sys_ticrate costs CPU, and bots think every tick too: 300 (players get at most 101 updates a
+/// second, and on shared-CPU hosts 300 holds steadier than 500; measured on a Hetzner CPX21).
 /// Anything the host set in the extra start options or the server's own server.cfg wins
 /// (left out here). On a Linux machine -pingboost 1 too (not under Windows or wine,
 /// where it does nothing useful).
 pub(crate) const NETCODE: &[(&str, &str)] = &[
-    ("sys_ticrate", "500"),
+    ("sys_ticrate", "300"),
     ("sv_maxupdaterate", "101"),
     ("sv_minupdaterate", "30"),
     ("sv_maxrate", "100000"),
@@ -2776,7 +2777,7 @@ mod tests {
     #[test]
     fn netcode_defaults() {
         let a = netcode_args(&[], "", false).join(" ");
-        assert_eq!(a, "+sys_ticrate 500 +sv_maxupdaterate 101 +sv_minupdaterate 30 +sv_maxrate 100000 +sv_minrate 25000");
+        assert_eq!(a, "+sys_ticrate 300 +sv_maxupdaterate 101 +sv_minupdaterate 30 +sv_maxrate 100000 +sv_minrate 25000");
         assert!(netcode_args(&[], "", true).join(" ").ends_with("-pingboost 1"), "Linux only");
         // the host's own values win: extra start options and server.cfg
         let extra: Vec<String> = ["+sys_ticrate", "1000", "-pingboost", "3"].iter().map(|s| s.to_string()).collect();
@@ -2787,7 +2788,7 @@ mod tests {
         let mut e: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/nonexistent-ls","kind":"windows","bottle":null}"#).unwrap();
         e.extra_args = "+sv_maxupdaterate 60".into();
         let a = launch_args(&e).join(" ");
-        assert!(a.contains("+sys_ticrate 500") && !a.contains("+sv_maxupdaterate 101") && a.ends_with("+sv_maxupdaterate 60") && !a.contains("pingboost"));
+        assert!(a.contains("+sys_ticrate 300") && !a.contains("+sv_maxupdaterate 101") && a.ends_with("+sv_maxupdaterate 60") && !a.contains("pingboost"));
     }
 
     #[test]
