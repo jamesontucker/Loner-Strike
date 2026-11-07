@@ -269,6 +269,43 @@ pub fn is_bot(p: &StatLine, bot_names: &HashSet<String>) -> bool {
     p.bot == 1 || a == "BOT" || (!a.starts_with("STEAM_") && !a.starts_with("VALVE_") && bot_names.contains(&p.name))
 }
 
+/// One player kept under two IDs: a game hosted for the local network only records
+/// STEAM_ID_LAN (or VALVE_ID_LAN) for the same person csx otherwise ranks by Steam ID.
+/// A row without a real Steam ID goes into the real one with the same name, numbers added.
+pub fn merge_lan_rows(players: Vec<StatLine>) -> Vec<StatLine> {
+    let real = |p: &StatLine| valid_steamid(&p.auth);
+    let mut out: Vec<StatLine> = players.iter().filter(|p| real(p)).cloned().collect();
+    for p in players.into_iter().filter(|p| !real(p)) {
+        let same: Vec<usize> = out.iter().enumerate().filter(|(_, o)| o.name == p.name && real(o)).map(|(i, _)| i).collect();
+        // only when it's clearly one person: exactly one real ID under that name
+        match same.as_slice() {
+            [i] => {
+                let o = &mut out[*i];
+                o.rank = o.rank.min(p.rank);
+                o.k += p.k;
+                o.d += p.d;
+                o.hs += p.hs;
+                o.tk += p.tk;
+                o.shots += p.shots;
+                o.hits += p.hits;
+                o.dmg += p.dmg;
+                o.defusing += p.defusing;
+                o.defused += p.defused;
+                o.planted += p.planted;
+                o.exploded += p.exploded;
+                o.time += p.time;
+                o.body.resize(o.body.len().max(p.body.len()), 0);
+                for (a, b) in o.body.iter_mut().zip(p.body.iter()) {
+                    *a += b;
+                }
+            }
+            _ => out.push(p),
+        }
+    }
+    out.sort_by_key(|p| p.rank);
+    out
+}
+
 fn pct(a: i64, b: i64) -> f64 {
     if b <= 0 { 0.0 } else { (a as f64 * 1000.0 / b as f64).round() / 10.0 }
 }
@@ -326,11 +363,12 @@ fn stats(g: &Game, refresh: bool) -> Value {
     };
     let (info, all) = parse_stats(&lines);
     let bots = bot_names(g);
-    let total = all.len();
-    let humans: Vec<Value> = all.iter().filter(|p| !is_bot(p, &bots)).enumerate().map(|(i, p)| stat_row(p, i + 1)).collect();
+    let bots_hidden = all.iter().filter(|p| is_bot(p, &bots)).count();
+    let people = merge_lan_rows(all.into_iter().filter(|p| !is_bot(p, &bots)).collect());
+    let humans: Vec<Value> = people.iter().enumerate().map(|(i, p)| stat_row(p, i + 1)).collect();
     json!({
         "players": humans,
-        "bots_hidden": total - humans.len(),
+        "bots_hidden": bots_hidden,
         "updated": info["time"].as_i64().unwrap_or(0),
         "reset_pending": info["reset_pending"].as_i64() == Some(1),
         "csx": info["csx"].as_i64() != Some(0),
@@ -826,6 +864,18 @@ pub(crate) fn copy_words(from: &Game, to: &Game) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lan_rows_go_into_the_real_one() {
+        let row = |rank, name: &str, auth: &str, k, time| StatLine { rank, name: name.into(), auth: auth.into(), k, time, body: vec![0, 1], ..Default::default() };
+        let out = merge_lan_rows(vec![row(1, "nano", "STEAM_ID_LAN", 3, 221), row(2, "nano", "STEAM_0:0:47946581", 2, 32), row(3, "Ann", "STEAM_ID_LAN", 1, 5)]);
+        assert_eq!(out.len(), 2, "nano once; Ann has no real ID to go into");
+        assert_eq!((out[0].name.as_str(), out[0].auth.as_str(), out[0].k, out[0].time, out[0].rank, out[0].body[1]), ("nano", "STEAM_0:0:47946581", 5, 253, 1, 2));
+        assert_eq!(out[1].name, "Ann");
+        // two real IDs under one name: can't tell who it was, so it stays apart
+        let two = merge_lan_rows(vec![row(1, "x", "STEAM_0:0:1", 0, 0), row(2, "x", "STEAM_0:0:2", 0, 0), row(3, "x", "STEAM_ID_LAN", 0, 0)]);
+        assert_eq!(two.len(), 3);
+    }
 
     fn tmp(name: &str) -> std::path::PathBuf {
         let d = std::env::temp_dir().join(format!("ls-community-{name}-{}", std::process::id()));
