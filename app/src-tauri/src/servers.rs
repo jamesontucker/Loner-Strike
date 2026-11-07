@@ -2216,13 +2216,19 @@ async fn api_import(headers: HeaderMap, Json(req): Json<ImportReq>) -> (StatusCo
 }
 
 /// The system's folder picker (the app window only).
-async fn api_pick_folder(State(st): State<Shared>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
+async fn api_pick_folder(State(st): State<Shared>, headers: HeaderMap, body: Option<Json<Value>>) -> (StatusCode, Json<Value>) {
     use tauri_plugin_dialog::DialogExt;
     if !from_panel(&headers) {
         return forbidden();
     }
     let Some(app) = st.app.get().cloned() else { return answer(Err("No window.".into())) };
-    let picked = tokio::task::spawn_blocking(move || app.dialog().file().set_title("Pick the dedicated server's folder (with hlds.exe)").blocking_pick_folder())
+    // the same picker for a server you already run, a game folder, or where servers go
+    let title = match body.as_ref().and_then(|Json(b)| b["purpose"].as_str()) {
+        Some("servers") => "Pick the folder new servers go in",
+        Some("game") => "Pick the Half-Life folder (with cstrike or czero inside)",
+        _ => "Pick the dedicated server's folder (with hlds.exe)",
+    };
+    let picked = tokio::task::spawn_blocking(move || app.dialog().file().set_title(title).blocking_pick_folder())
         .await
         .ok()
         .flatten();

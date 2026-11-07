@@ -21,6 +21,9 @@ const STORAGE = ["appStorage"];
 const usePrefs = () => useQuery({ queryKey: PREFS, queryFn: ({ signal }) => getJsonAt<Prefs>("/api/app/prefs", null, signal), staleTime: 300000 });
 // a phone is connected by definition, and can't change phone access
 const usePhone = () => useQuery({ queryKey: PHONE, queryFn: ({ signal }) => getJsonAt<PhoneInfo>("/api/app/phone", null, signal), staleTime: 300000, enabled: ON_THIS_COMPUTER });
+type ServersDir = { dir?: string | null; default?: string | null; mac?: boolean };
+const SERVERS_DIR = ["serversDir"];
+const useServersDir = () => useQuery({ queryKey: SERVERS_DIR, queryFn: ({ signal }) => getJsonAt<ServersDir>("/api/app/servers-folder", null, signal), enabled: ON_THIS_COMPUTER });
 const useStorage = () => useQuery({ queryKey: STORAGE, queryFn: ({ signal }) => getJsonAt<Storage>("/api/app/storage", null, signal), staleTime: 60000 });
 const setPrefsData = (f: (p: Prefs) => Prefs) => queryClient.setQueryData<Prefs>(PREFS, (p) => (p ? f(p) : p));
 
@@ -100,13 +103,27 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
     else setDiag(r.text);
   }, "Collecting diagnostics…");
   const addFolder = () => run("app:folder:add", async () => {
-    const picked = await post<{ dir?: string | null } & R>("/api/servers/pick-folder");
+    const picked = await post<{ dir?: string | null } & R>("/api/servers/pick-folder", { purpose: "game" });
     if (picked.error) return toast(picked.error, true);
     if (!picked.dir) return;
     const r = await post<Prefs & R>("/api/app/game-folder", { dir: picked.dir });
     if (r.error) return toast(r.error, true);
     setPrefsData((p) => ({ ...p, game_folders: r.game_folders }));
     toast("Added. Run full setup to set up the game in it.");
+  }, "Choosing a folder…");
+  const serversDir = useServersDir();
+  const pickServersDir = (reset = false) => run("app:servers-dir", async () => {
+    let dir = "";
+    if (!reset) {
+      const picked = await post<{ dir?: string | null } & R>("/api/servers/pick-folder", { purpose: "servers" });
+      if (picked.error) return toast(picked.error, true);
+      if (!picked.dir) return;
+      dir = picked.dir;
+    }
+    const r = await post<ServersDir & R>("/api/app/servers-folder", { dir });
+    if (r.error) return toast(r.error, true);
+    queryClient.setQueryData(SERVERS_DIR, r);
+    toast(reset ? "New servers go in the usual place again" : "New servers go in that folder");
   }, "Choosing a folder…");
   const removeFolder = (dir: string) => run(`app:folder:remove:${dir}`, async () => {
     const r = await post<Prefs & R>("/api/app/game-folder/remove", { dir });
@@ -261,6 +278,20 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           )}
         </div>
       </section>
+
+      {ON_THIS_COMPUTER && serversDir.data && (
+        <section>
+          <SectionHead title="Servers folder" note="Where new dedicated servers go. Servers you already made stay where they are." />
+          <div className="panel stack-tight">
+            <p className="mono small">{serversDir.data.dir || serversDir.data.default || "Not known until a game is set up"}</p>
+            <div className="row">
+              <BusyButton className="btn" busy={busy("app:servers-dir")} label="Change" busyLabel="Choosing…" onClick={() => pickServersDir()} />
+              {serversDir.data.dir && <button className="btn" onClick={() => pickServersDir(true)}>Use the usual place</button>}
+              <Info text={serversDir.data.mac ? "On a Mac it has to be inside the same CrossOver bottle as the game, since the servers run through it." : "Any folder on this computer with room for the server files (about 1 GB each)."} />
+            </div>
+          </div>
+        </section>
+      )}
 
       <section>
         <SectionHead title="Setup" note="Add or remove game modes and add-ons, or set up another game." />

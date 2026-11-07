@@ -365,6 +365,8 @@ function ThemeMusic() {
   const level = useRef(volume);
   level.current = volume;
   const audio = useRef<HTMLAudioElement | null>(null);
+  // the playlist's "next random track" (null with only one track)
+  const skipTrack = useRef<(() => void) | null>(null);
   const wanted = useRef(on);
   wanted.current = on;
 
@@ -392,32 +394,43 @@ function ThemeMusic() {
   };
 
   useEffect(() => {
-    const urls: string[] = [];
     let cancelled = false;
-    const load = (path: string) =>
-      fetch(path)
-        .then((r) => (r.ok ? r.blob() : null))
-        .then((blob) => {
-          if (!blob) return null;
-          const url = URL.createObjectURL(blob);
-          urls.push(url);
-          return url;
-        })
-        .catch(() => null);
-    // Counter-Strike's theme first, then Half-Life's (the same file twice is just the one)
-    Promise.all([load("/api/app/theme.mp3"), load("/api/app/theme.mp3?track=hl")]).then(([cs, hl]) => {
+    // the playlist: both menu themes and the Half-Life tracks picked for it, shuffled (a
+    // random one first), reshuffled each time round, never the same one twice in a row.
+    // Played straight from the app (not loaded whole), and only the ones this game has.
+    const ALL = ["", "hl", "hl01", "hl02", "hl12", "hl13", "hl17"].map((t) => (t ? `/api/app/theme.mp3?track=${t}` : "/api/app/theme.mp3"));
+    Promise.all(ALL.map((u) => fetch(u, { method: "HEAD" }).then((r) => (r.ok ? u : null)).catch(() => null))).then((found) => {
       if (cancelled) return;
-      const tracks = [cs, hl].filter((u): u is string => !!u);
+      const tracks = found.filter((u): u is string => !!u);
       if (!tracks.length) return;
+      const shuffle = (last?: string) => {
+        const o = [...tracks];
+        for (let k = o.length - 1; k > 0; k--) {
+          const j = Math.floor(Math.random() * (k + 1));
+          [o[k], o[j]] = [o[j], o[k]];
+        }
+        if (o.length > 1 && o[0] === last) o.push(o.shift()!);
+        return o;
+      };
+      let order = shuffle();
       let i = 0;
-      const a = new Audio(tracks[0]);
+      const a = new Audio(order[0]);
       a.loop = tracks.length === 1;
-      a.addEventListener("ended", () => {
-        i = (i + 1) % tracks.length;
-        a.src = tracks[i];
+      const next = () => {
+        const last = order[i];
+        i++;
+        if (i >= order.length) {
+          order = shuffle(last);
+          i = 0;
+        }
+        a.src = order[i];
         a.volume = level.current;
         if (wanted.current) a.play().catch(() => {});
-      });
+      };
+      a.addEventListener("ended", next);
+      // a track that won't play is skipped
+      a.addEventListener("error", () => tracks.length > 1 && next());
+      skipTrack.current = tracks.length > 1 ? next : null;
       audio.current = a;
       setReady(true);
       if (wanted.current) start(a);
@@ -454,11 +467,13 @@ function ThemeMusic() {
     window.addEventListener("pointerdown", wake);
     window.addEventListener("keydown", wake);
     const BUTTONS = "button:not(:disabled), a.btn, [role=radio]";
-    let lastOver: Element | null = null;
+    // only when a mouse comes onto a button from outside it (not moving between its
+    // parts, not a button redrawn under a still cursor, never a finger)
     const over = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
       const b = (e.target as Element | null)?.closest(BUTTONS);
-      if (b && b !== lastOver) play("over", 0.8);
-      lastOver = b ?? null;
+      const from = e.relatedTarget as Node | null;
+      if (b && !(from && b.contains(from))) play("over", 0.8);
     };
     // like the game's menus: one sound as the button goes down, another as it comes up
     const press = (e: PointerEvent) => {
@@ -488,7 +503,6 @@ function ThemeMusic() {
       window.removeEventListener("keydown", wake);
       ctx?.close().catch(() => {});
       audio.current?.pause();
-      urls.forEach((u) => URL.revokeObjectURL(u));
     };
   }, []);
 
@@ -523,6 +537,14 @@ function ThemeMusic() {
       <button className="music-toggle" aria-pressed={on} onClick={toggle} title={on ? "Turn the music and menu sounds off" : "Play the menu music and sounds"}>
         <span aria-hidden="true">♪</span> {on ? "Audio on" : "Audio off"}
       </button>
+      {on && skipTrack.current && (
+        <button className="music-toggle" onClick={() => skipTrack.current?.()} title="Play another track" aria-label="Shuffle: play another track">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+          </svg>
+          Shuffle
+        </button>
+      )}
       {on && (
         <input
           className="music-volume"
