@@ -254,7 +254,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
               {st.port !== USUAL_PORT && <PortNote port={st.port} />}
               <label className="field">
                 <span>Tunnel token<Info text="Kept on this computer and on the server, readable only by their administrators. It isn't shown again after it's saved." /></span>
-                <input className="search" type="password" placeholder={st.token_saved ? "Saved" : "Paste the token"} value={form.token} onChange={(e) => set({ token: e.target.value })} spellCheck={false} autoComplete="off" />
+                <SecretInput placeholder={st.token_saved ? "Saved" : "Paste the token"} value={form.token} onChange={(v) => set({ token: v })} label="Tunnel token" />
               </label>
             </div>
           )}
@@ -312,7 +312,7 @@ function HookField({ label, what, saved, value, drop, disabled, onChange, onDrop
     <label className="field">
       <span>{label}</span>
       <div className="row">
-        <input className="search" type="password" placeholder={drop ? "Removed when you save" : saved ? "Saved" : `Webhook URL for ${what}`} value={value} disabled={disabled || drop} onChange={(e) => onChange(e.target.value)} spellCheck={false} autoComplete="off" aria-label={label} />
+        <SecretInput placeholder={drop ? "Removed when you save" : saved ? "Saved" : `Webhook URL for ${what}`} value={value} disabled={disabled || drop} onChange={onChange} label={label} />
         {saved && !value && (
           <button type="button" className="btn small" disabled={disabled} onClick={() => onDrop(!drop)}>
             {drop ? "Keep" : "Remove"}
@@ -320,6 +320,24 @@ function HookField({ label, what, saved, value, drop, disabled, onChange, onDrop
         )}
       </div>
     </label>
+  );
+}
+
+/** A field for a secret, hidden as you paste it, with an eye to check what's there. A saved
+ *  secret never comes back from the app, so there's only ever what was just typed to show. */
+function SecretInput({ value, onChange, placeholder, label, disabled }: { value: string; onChange: (v: string) => void; placeholder: string; label: string; disabled?: boolean }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <div className="reveal">
+      <input className="search" type={shown ? "text" : "password"} placeholder={placeholder} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} spellCheck={false} autoComplete="off" aria-label={label} />
+      <button type="button" className="btn small" disabled={disabled || !value} aria-pressed={shown} aria-label={shown ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} title={shown ? "Hide" : "Show"} onClick={() => setShown((v) => !v)}>
+        <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true">
+          <path d="M1 7c2-3.6 4.8-5.5 8-5.5S15 3.4 17 7c-2 3.6-4.8 5.5-8 5.5S3 10.6 1 7z" />
+          <circle cx="9" cy="7" r="2.4" />
+          {shown && <path d="M2.5 1.5l13 11" />}
+        </svg>
+      </button>
+    </div>
   );
 }
 
