@@ -37,7 +37,11 @@ pub fn windows_command(install: &crate::steam::Install, exe: &std::path::Path) -
 pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str, include_rel: Option<&str>) -> Result<bool, String> {
     let am = rec.game.join("addons").join("amxmodx");
     let exe = am.join("scripting").join("amxxpc.exe");
-    let src = am.join("scripting").join(src_rel);
+    // one folder at a time, so Windows gets backslashes throughout: amxxpc takes the
+    // plugin's folder (where its own includes are) from the last backslash, and
+    // scripting\basebuilder/basebuilder.sma sent it looking one folder too high
+    let under = |rel: &str| rel.split('/').fold(am.join("scripting"), |p, part| p.join(part));
+    let src = under(src_rel);
     let out_rel = format!("addons/amxmodx/plugins/{out_name}.amxx");
     let out_full = rec.prepare(&out_rel)?;
     if install_is_crossover(ctx) && !std::path::Path::new(CROSSOVER_WINE).is_file() {
@@ -48,7 +52,7 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
         let mut cmd = windows_command(ctx.install, &exe);
         cmd.arg(&src).arg(format!("-o{}", out_full.display()));
         if let Some(inc) = include_rel {
-            cmd.arg(format!("-i{}", am.join("scripting").join(inc).display()));
+            cmd.arg(format!("-i{}", under(inc).display()));
         }
         // the biggest plugins take about 10 seconds; the limit is only for a real hang, with
         // room for a slow machine
