@@ -242,7 +242,81 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
 
   return (
     <div className="stack narrow app-settings">
-      {app?.update && updates}
+      {updates}
+
+      <section>
+        <SectionHead title="Use on your phone" note="Control the game from your phone on the same Wi-Fi." />
+        {ON_THIS_COMPUTER ? (
+          <div className="panel phone">
+            <div className="row between setting-line toggle">
+              <div>
+                <b>Phone access</b>
+                <p className="muted">Only phones that scan the code can connect. Turn it off when you don't need it.</p>
+              </div>
+              <Switch on={!!phone?.enabled} label="Phone access" disabled={!phone || busy("app:phone")} onChange={setPhoneOn} />
+            </div>
+            {phone?.enabled && phone.qr && (
+              <div className="qr-row">
+                <img className="qr" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(phone.qr)}`} alt="QR code to open Loner-Strike on your phone" />
+                <div>
+                  <p>Scan with your phone's camera.</p>
+                  <p className="muted">Or open this address on your phone and add it to your home screen:</p>
+                  <p className="address small">{phone.address}</p>
+                  <p className="muted">The first visit needs the code (it's in the QR). After that the phone stays signed in.</p>
+                  {/Win/.test(navigator.platform) && <p className="muted">If the phone can't open it, Windows may think this Wi-Fi is public: in Settings, Network & internet, open your Wi-Fi and pick Private network.</p>}
+                </div>
+              </div>
+            )}
+            {phone?.error && <p className="err-text">{phone.error}</p>}
+            {phoneQ.isError && !phone && <LoadError text="Couldn't load phone access." onRetry={() => phoneQ.refetch()} />}
+            <div className="row between setting-line">
+              <div>
+                <b>Sign out all phones</b>
+                <p className="muted">For a lost phone, or a code you shared by mistake. Every phone has to scan the new code.</p>
+              </div>
+              <BusyButton className="btn danger" busy={busy("app:phones:reset")} label="Sign out phones" busyLabel="Signing out…" onClick={resetPhones} />
+            </div>
+          </div>
+        ) : (
+          <div className="panel phone">
+            <p><b>This phone is connected</b></p>
+            <p className="muted">Phone access and the code for other phones are only on the computer running Loner-Strike.</p>
+          </div>
+        )}
+      </section>
+
+      <section>
+        <SectionHead title="App" />
+        <div className="panel settings-list">
+          {prefsQ.isError && !prefs && <LoadError text="Couldn't load these settings." onRetry={() => prefsQ.refetch()} />}
+          <div className="row between setting-line">
+            <div>
+              <b>Text size</b>
+              <p className="muted">For this {ON_THIS_COMPUTER ? "computer" : "phone"} only.</p>
+            </div>
+            <div className="seg" role="group" aria-label="Text size">
+              {SCALES.map(([label, v]) => (
+                <button key={label} aria-pressed={scale === v} onClick={() => { applyScale(v); setScale(v); }}>{label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="row between setting-line toggle">
+            <div>
+              <b>Tell me when someone joins</b>
+              <p className="muted">A notification on the computer running Loner-Strike when a person (not a bot) joins your game or one of your servers, while the app is in the background.</p>
+            </div>
+            <Switch on={!!prefs?.notify_joins} label="Tell me when someone joins" disabled={!prefs || busy("app:pref:notify_joins")} onChange={(v) => setPref({ notify_joins: v })} />
+          </div>
+          <div className="row between setting-line toggle">
+            <div>
+              <b>Keep servers running when I close Loner-Strike</b>
+              <p className="muted">Off: closing the app stops your dedicated servers. On: they keep going, and the app picks them up again next time.</p>
+            </div>
+            <Switch on={!!prefs?.keep_servers} label="Keep servers running" disabled={!prefs || busy("app:pref:keep_servers")} onChange={(v) => setPref({ keep_servers: v })} />
+          </div>
+        </div>
+      </section>
+
       <section>
         <SectionHead title="Game" />
         <div className="panel">
@@ -328,79 +402,6 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
       </section>
 
       <section>
-        <SectionHead title="Use on your phone" note="Control the game from your phone on the same Wi-Fi." />
-        {ON_THIS_COMPUTER ? (
-          <div className="panel phone">
-            <div className="row between setting-line toggle">
-              <div>
-                <b>Phone access</b>
-                <p className="muted">Only phones that scan the code can connect. Turn it off when you don't need it.</p>
-              </div>
-              <Switch on={!!phone?.enabled} label="Phone access" disabled={!phone || busy("app:phone")} onChange={setPhoneOn} />
-            </div>
-            {phone?.enabled && phone.qr && (
-              <div className="qr-row">
-                <img className="qr" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(phone.qr)}`} alt="QR code to open Loner-Strike on your phone" />
-                <div>
-                  <p>Scan with your phone's camera.</p>
-                  <p className="muted">Or open this address on your phone and add it to your home screen:</p>
-                  <p className="address small">{phone.address}</p>
-                  <p className="muted">The first visit needs the code (it's in the QR). After that the phone stays signed in.</p>
-                  {/Win/.test(navigator.platform) && <p className="muted">If the phone can't open it, Windows may think this Wi-Fi is public: in Settings, Network & internet, open your Wi-Fi and pick Private network.</p>}
-                </div>
-              </div>
-            )}
-            {phone?.error && <p className="err-text">{phone.error}</p>}
-            {phoneQ.isError && !phone && <LoadError text="Couldn't load phone access." onRetry={() => phoneQ.refetch()} />}
-            <div className="row between setting-line">
-              <div>
-                <b>Sign out all phones</b>
-                <p className="muted">For a lost phone, or a code you shared by mistake. Every phone has to scan the new code.</p>
-              </div>
-              <BusyButton className="btn danger" busy={busy("app:phones:reset")} label="Sign out phones" busyLabel="Signing out…" onClick={resetPhones} />
-            </div>
-          </div>
-        ) : (
-          <div className="panel phone">
-            <p><b>This phone is connected</b></p>
-            <p className="muted">Phone access and the code for other phones are only on the computer running Loner-Strike.</p>
-          </div>
-        )}
-      </section>
-
-      <section>
-        <SectionHead title="App" />
-        <div className="panel settings-list">
-          {prefsQ.isError && !prefs && <LoadError text="Couldn't load these settings." onRetry={() => prefsQ.refetch()} />}
-          <div className="row between setting-line">
-            <div>
-              <b>Text size</b>
-              <p className="muted">For this {ON_THIS_COMPUTER ? "computer" : "phone"} only.</p>
-            </div>
-            <div className="seg" role="group" aria-label="Text size">
-              {SCALES.map(([label, v]) => (
-                <button key={label} aria-pressed={scale === v} onClick={() => { applyScale(v); setScale(v); }}>{label}</button>
-              ))}
-            </div>
-          </div>
-          <div className="row between setting-line toggle">
-            <div>
-              <b>Tell me when someone joins</b>
-              <p className="muted">A notification on the computer running Loner-Strike when a person (not a bot) joins your game or one of your servers, while the app is in the background.</p>
-            </div>
-            <Switch on={!!prefs?.notify_joins} label="Tell me when someone joins" disabled={!prefs || busy("app:pref:notify_joins")} onChange={(v) => setPref({ notify_joins: v })} />
-          </div>
-          <div className="row between setting-line toggle">
-            <div>
-              <b>Keep servers running when I close Loner-Strike</b>
-              <p className="muted">Off: closing the app stops your dedicated servers. On: they keep going, and the app picks them up again next time.</p>
-            </div>
-            <Switch on={!!prefs?.keep_servers} label="Keep servers running" disabled={!prefs || busy("app:pref:keep_servers")} onChange={(v) => setPref({ keep_servers: v })} />
-          </div>
-        </div>
-      </section>
-
-      <section>
         <SectionHead title="Your setup" note="Save this game's mode settings, presets, admins and welcome page to a file, to move to another computer or set up a server the same way." />
         <div className="panel row between">
           <p className="muted">Passwords aren't included.</p>
@@ -459,7 +460,6 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
         </div>
       </section>
 
-      {!app?.update && updates}
 
       {nuke && scan && <RemoveEverything scan={scan} onClose={() => setNuke(false)} />}
 
