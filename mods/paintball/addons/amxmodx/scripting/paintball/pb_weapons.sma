@@ -110,10 +110,10 @@ new Float:g_Recoil[33][3]
 new g_WeaponEvent[MAX_GUN], Float:DelayTime[33], blood1, blood2
 new g_OldWeapon[33]
 
-// Loner-Strike fix: every pellet is an entity that lives up to 10 s; a full bot server ran out of edicts.
-// Count live balls and refuse new ones over the cap.
-#define MAX_LIVE_BALLS 120
-new g_LiveBalls, Float:g_LiveBallsSync
+// Loner-Strike fix: every pellet is an entity that lives up to 10 s; a full bot server ran out of edicts,
+// and hundreds on screen dropped players' frame rate. Count live balls (splashes included) and keep
+// them under PBR_MaxBalls: at the cap the oldest splash makes room, and only with none a shot is lost.
+new g_LiveBalls, Float:g_LiveBallsSync, g_Cvar_MaxBalls
 
 // Loner-Strike fix: all paintball removals go through here so the live count stays right
 remove_ball(Ent)
@@ -125,13 +125,27 @@ remove_ball(Ent)
 // Loner-Strike fix: room for another ball? At the cap, recount (pb_gameplay also removes balls on new round)
 bool:ball_slot_free()
 {
-	if(g_LiveBalls < MAX_LIVE_BALLS) return true
+	new cap = clamp(get_pcvar_num(g_Cvar_MaxBalls), 20, 400)
+	if(g_LiveBalls < cap) return true
+	// the oldest splash (a ball that landed: it doesn't move) goes, so the shot still fires
+	new ent = -1, oldest, Float:soonest = 999999.0, Float:next
+	while((ent = find_ent_by_class(ent, "paintball")) > 0)
+	{
+		if(pev(ent, pev_movetype) != MOVETYPE_NONE) continue
+		pev(ent, pev_nextthink, next)
+		if(next < soonest) { soonest = next; oldest = ent; }
+	}
+	if(oldest)
+	{
+		remove_ball(oldest)
+		return true
+	}
 	if(get_gametime() - g_LiveBallsSync < 0.5) return false
 	g_LiveBallsSync = get_gametime()
 	g_LiveBalls = 0
-	new ent = -1
+	ent = -1
 	while((ent = find_ent_by_class(ent, "paintball")) > 0) g_LiveBalls++
-	return g_LiveBalls < MAX_LIVE_BALLS
+	return g_LiveBalls < cap
 }
 
 // Loner-Strike fix: the Metatron tasks are keyed by the grenade's index; make sure it's still that grenade
@@ -145,6 +159,7 @@ bool:is_our_grenade(ent)
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR)
+	g_Cvar_MaxBalls = register_cvar("PBR_MaxBalls", "80") // Loner-Strike: paintballs and splashes at once
 	
 	register_event("CurWeapon", "Event_CurWeapon", "be", "1=1")
 	register_touch("paintball", "*", "fw_PaintBall_Touch")
@@ -651,9 +666,9 @@ public fw_PaintBall_Touch(Ent, id)
 			engfunc(EngFunc_SetModel, Ent, PaintExp);
 			
 			paint_splat(Ent)
-			// the splash sprite goes quickly (the paint stays on the wall as a decal): with 30 bots
-			// firing, hundreds of them at once made busy areas slow to draw
-			set_pev(Ent, pev_nextthink, get_gametime() + random_float(0.8, 1.5))
+			// the paint mark on the wall (this sprite) stays a few seconds; under heavy fire the
+			// oldest ones make room sooner (ball_slot_free), so busy areas stay quick to draw
+			set_pev(Ent, pev_nextthink, get_gametime() + random_float(2.0, 4.0))
 		} else {
 			set_pev(Ent, pev_movetype, MOVETYPE_BOUNCE)
 		
@@ -755,7 +770,7 @@ public Create_PaintBall(id, Float:Target[3])
 			set_pev(Ent, pev_iuser2, get_user_team(id))
 			
 			entity_set_string(Ent, EV_SZ_classname, "paintball")
-	set_pev(Ent, pev_nextthink, get_gametime() + 10.0) // never outlive 10 s (fw_PaintBall_Think removes it)
+			set_pev(Ent, pev_nextthink, get_gametime() + 10.0) // never outlive 10 s (fw_PaintBall_Think removes it)
 			engfunc(EngFunc_SetModel, Ent, S_Launcher)
 			
 			set_pev(Ent, pev_mins, Float:{-3.0, -3.0, -3.0})

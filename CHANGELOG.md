@@ -21,7 +21,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 - The radio has eleven stations, with old-school hardcore and jungle, hands up, hardstyle, demoscene, video game music, 2000s hits and nu metal added, plus shuffle and a station list.
 - Copy diagnostics includes the end of AMX Mod X's error log.
 - Servers can use weapon skins and player models: a new Skins & models tab lists what a server uses, who sees each (everyone, one team or admins), and how close each map gets to the engine's limit of 512 models and 512 sounds. They go in under their own names, so players download them when they join. Modes with their own models, like Paintball, keep them.
-- Paintball is lighter to draw: paint splashes vanish after about a second (the paint stays on the wall) and dropped guns after 10 seconds, so busy areas no longer drop the frame rate.
+- Paintball is lighter to draw: at most 80 paintballs and paint marks at once (PBR_MaxBalls), with the oldest marks making room instead of shots going missing, and dropped guns gone after 10 seconds. Busy areas had dropped players' games to single-digit frame rates.
 - Gun Game spawns players at random again on maps without a CSDM spawn file: the spots taken from the bots' map count as a proper random set.
 - A server's content is together under Content: Mods, Maps (with Get maps), Skins & models and Sounds.
 - Two announcers for Quake sounds, picked per game or server on the Sounds page.
