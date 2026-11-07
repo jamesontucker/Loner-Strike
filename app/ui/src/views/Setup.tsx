@@ -7,7 +7,7 @@ import { useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { BusyButton, Info, SteamProgress, useToast } from "../ui";
 import logo from "../assets/logo.svg";
-import { pinRadio, RadioButton } from "./Radio";
+import { openRadio, pinRadio, RadioButton, useRadioOpen } from "./Radio";
 
 // ---- what the setup API returns -------------------------------------------------
 export type SetupGame = { id: "cstrike" | "czero"; name: string; installed: boolean; components: string[]; foreign: boolean; unbuilt?: string[] };
@@ -56,12 +56,17 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
     if (jobQ.data?.state === "running" && stage !== "install") setStage("install");
     // only the first answer counts: later ones are this setup's own job
   }, [jobQ.isFetched]);
-  // the radio stays open while setup's buttons are clicked; the first run opens it (not
-  // playing) for something to try while it installs
+  // the radio stays open while setup's buttons are clicked
   useEffect(() => {
-    pinRadio(true, !fromSettings);
+    pinRadio(true);
     return () => pinRadio(false);
-  }, [fromSettings]);
+  }, []);
+  // while it installs: a pointer to the radio, until it's opened or waved off
+  const radioOpen = useRadioOpen();
+  const [radioTip, setRadioTip] = useState(true);
+  useEffect(() => {
+    if (radioOpen) setRadioTip(false);
+  }, [radioOpen]);
   const [installIdx, setInstallIdx] = useState(0);
   const install = scan.installs[installIdx];
   // every game this Steam has, CS 1.6 first
@@ -121,8 +126,19 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
   return (
     <div className="setup">
       <div className="setup-card">
-        {/* the radio, open but not playing on the first run: setup takes a while */}
-        <div className="setup-radio"><RadioButton /></div>
+        {/* the radio: setup takes a while, so the install points it out */}
+        <div className="setup-radio">
+          <RadioButton />
+          {stage === "install" && radioTip && !radioOpen && (
+            <div className="radio-tip" role="note">
+              <p>This takes a few minutes. Try the radio: classic stations from drum and bass and trance to game music and 2000s hits.</p>
+              <div className="row">
+                <button type="button" className="btn small primary" onClick={openRadio}>Listen</button>
+                <button type="button" className="btn small" onClick={() => setRadioTip(false)}>No thanks</button>
+              </div>
+            </div>
+          )}
+        </div>
         <ol className="setup-steps" aria-label="Setup steps">
           {(["games", "content", "review", "install"] as Stage[]).map((s, i) => (
             <li key={s} className={stage === s ? "now" : order(stage) > order(s) ? "done" : ""}>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { create } from "zustand";
 
 /** Internet radio, the site's little Winamp in the corner. Never autoplays: the stream is only
@@ -77,11 +77,14 @@ const useRadioStore = create<{ open: boolean; on: boolean; label: string; pinned
   close: () => set({ open: false }),
 }));
 
-/** Setup: the radio stays open while setup's own buttons are clicked; `open` opens it too
- *  (the first run, not playing yet). Let go again when setup closes. */
-export function pinRadio(pinned: boolean, open = false) {
-  useRadioStore.setState((s) => ({ pinned, open: open || s.open }));
+/** Setup: the radio stays open while setup's own buttons are clicked. Let go again when
+ *  setup closes. */
+export function pinRadio(pinned: boolean) {
+  useRadioStore.setState({ pinned });
 }
+/** Whether the player is open, and opening it (setup's "try the radio" pointer). */
+export const useRadioOpen = () => useRadioStore((s) => s.open);
+export const openRadio = () => useRadioStore.setState({ open: true });
 
 /** The top bar's Radio button: opens the player under it; the light is on while it plays. */
 export function RadioButton() {
@@ -105,7 +108,7 @@ export function Radio() {
   const pinned = useRadioStore((s) => s.pinned);
   // in setup the button sits on the centred card: the player opens right under it
   const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || !pinned) return setAnchor(null);
     const place = () => {
       const b = document.getElementById("radio-button")?.getBoundingClientRect();

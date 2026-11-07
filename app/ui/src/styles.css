@@ -1493,6 +1493,13 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 /* setup: the Radio button top right, its player under it */
 .setup-radio { position: absolute; top: 14px; right: 16px; z-index: 2; }
 @media (max-width: 760px) { .setup-radio { top: 10px; right: 10px; } }
+/* the install's pointer to the radio: a callout under the button, its arrow pointing up at it */
+.radio-tip { position: absolute; top: calc(100% + 12px); right: 0; width: 260px; padding: 12px 14px; background: var(--panel-2); color: var(--bone); box-shadow: var(--raised), 0 10px 28px rgba(0,0,0,.4); border-radius: 3px; font-size: 14px; line-height: 1.35; animation: radio-tip-in .25s ease-out; }
+.radio-tip::before { content: ""; position: absolute; top: -7px; right: 26px; width: 12px; height: 12px; background: var(--panel-2); transform: rotate(45deg); box-shadow: -1px -1px 0 var(--bevel-hi); }
+.radio-tip p { margin: 0 0 10px; }
+.radio-tip .row { gap: 6px; }
+@keyframes radio-tip-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .radio-tip { animation: none; } }
 .radio { position: fixed; right: var(--gutter); top: calc(var(--strip-h) - 4px); z-index: 30; width: min(275px, 100vw - 32px);
   background: var(--panel); box-shadow: var(--raised), 0 10px 30px rgba(0,0,0,.4); border-radius: 3px; padding: 3px; font-size: 13px; line-height: 1.2; }
 .radio[hidden] { display: none; }
