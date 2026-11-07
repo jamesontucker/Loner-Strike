@@ -243,7 +243,9 @@ async fn api_app(State(st): State<Shared>) -> Json<Value> {
                 (Some(r), true) => crate::setup::unmanaged(r, &g.dir, &rec),
                 _ => vec![],
             };
-            json!({"id": g.name, "dir": g.dir, "hl": g.hl, "dedicated": g.dedicated, "port": g.port, "installed": rec.component_ids(), "outdated": outdated, "unmanaged": theirs})
+            // installed, but a plugin of theirs didn't build (setup marks them)
+            let unbuilt: Vec<String> = rec.data.components.iter().filter(|(_, v)| v["unbuilt"] == Value::Bool(true)).map(|(k, _)| k.clone()).collect();
+            json!({"id": g.name, "dir": g.dir, "hl": g.hl, "dedicated": g.dedicated, "port": g.port, "installed": rec.component_ids(), "outdated": outdated, "unmanaged": theirs, "unbuilt": unbuilt})
         })
         .await
         .ok(),

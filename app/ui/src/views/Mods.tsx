@@ -85,11 +85,13 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
     });
   const where = game.dedicated ? "this server" : game.id === "cstrike" ? "Counter-Strike 1.6" : "Condition Zero";
 
-  const change = async (id: string | null, remove: boolean, name?: string) => {
+  const unbuilt = game.unbuilt ?? [];
+  const change = async (id: string | null, remove: boolean, name?: string, again = false) => {
     if (busy) return;
     if (remove && !(await ask(id ? `Remove ${name ?? id}? Its files go, and anything it replaced is put back.` : `Remove Loner-Strike from ${where}? Everything it changed is put back.`, { ok: "Remove", danger: true }))) return;
-    const body = { hl: game.hl, games: [game.id], ...(id ? { components: [id] } : remove ? {} : { components: [] }) };
-    const label = id ? `${remove ? "Removing" : "Installing"} ${name ?? id}…` : remove ? `Removing Loner-Strike from ${where}…` : "Installing the basics…";
+    // again: an installed mod put in once more (its files fresh, its plugins built again)
+    const body = { hl: game.hl, games: [game.id], ...(id ? { components: [id] } : remove ? {} : { components: [] }), ...(again ? { repair: true } : {}) };
+    const label = id ? `${remove ? "Removing" : again ? "Reinstalling" : "Installing"} ${name ?? id}…` : remove ? `Removing Loner-Strike from ${where}…` : "Installing the basics…";
     await run(`${prefix}${id ?? "core"}`, async () => {
       const r = await postJson<{ ok?: boolean; error?: string }>(remove ? "/api/setup/uninstall" : "/api/setup/install", body).catch(() => ({ error: "Couldn't reach the app." }));
       if (r.error) return toast(r.error, true);
@@ -176,7 +178,11 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
                   ) : !ON_THIS_COMPUTER ? (
                     on && <span className="muted small-note">Installed</span>
                   ) : on ? (
-                    <BusyButton className="btn danger" busy={busy === c.id} disabled={!!busy} label="Remove" busyLabel="Removing…" onClick={() => change(c.id, true, c.name)} />
+                    <>
+                      {unbuilt.includes(c.id) && <span className="err-text small-note">Didn't build, so it won't load</span>}
+                      <BusyButton className={`btn${unbuilt.includes(c.id) ? " primary" : ""}`} busy={busy === c.id} disabled={!!busy} label={unbuilt.includes(c.id) ? "Try again" : "Reinstall"} busyLabel="Reinstalling…" onClick={() => change(c.id, false, c.name, true)} />
+                      <BusyButton className="btn danger" busy={busy === c.id} disabled={!!busy} label="Remove" busyLabel="Removing…" onClick={() => change(c.id, true, c.name)} />
+                    </>
                   ) : (
                     <BusyButton className="btn primary" busy={busy === c.id} disabled={!!busy} label="Install" busyLabel="Installing…" onClick={() => change(c.id, false, c.name)} />
                   )}

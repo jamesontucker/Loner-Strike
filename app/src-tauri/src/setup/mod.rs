@@ -206,7 +206,9 @@ fn game_status(install: &Install, game: &str) -> Value {
     let comps: Vec<&String> = rec.data.components.keys().filter(|c| !matches!(c.as_str(), "foundation" | "core")).collect();
     let amxx = "addons/amxmodx/dlls/amxmodx_mm.dll";
     let foreign = dir.join(amxx).exists() && !rec.ours(amxx);
-    json!({"id": game, "name": game_name(game), "installed": installed, "components": comps, "foreign": foreign})
+    // installed, but a plugin of theirs didn't build (it won't load until it's tried again)
+    let unbuilt: Vec<&String> = rec.data.components.iter().filter(|(_, v)| v["unbuilt"] == Value::Bool(true)).map(|(k, _)| k).collect();
+    json!({"id": game, "name": game_name(game), "installed": installed, "components": comps, "foreign": foreign, "unbuilt": unbuilt})
 }
 
 /// How well bots play a component, from what the catalog says about it.
@@ -546,6 +548,10 @@ fn install_game_with(job: &Job, plan: &InstallPlan, ctx: &Ctx, g: &str, rec: &mu
         let ok = run_step(job, &format!("{g}/{id}"), || components::install_component(rec, ctx, c))?;
         if !ok {
             job.failed_compile(c["name"].as_str().unwrap_or(id));
+            // remembered, so the Mods page can say so and offer to try again
+            if let Some(Value::Object(m)) = rec.data.components.get_mut(id) {
+                m.insert("unbuilt".into(), Value::Bool(true));
+            }
         }
     }
     let (modes, addons) = menu_contents(rec, &plan.catalog);

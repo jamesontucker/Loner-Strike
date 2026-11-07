@@ -9,7 +9,7 @@ import { BusyButton, Info, SteamProgress, useToast } from "../ui";
 import logo from "../assets/logo.svg";
 
 // ---- what the setup API returns -------------------------------------------------
-export type SetupGame = { id: "cstrike" | "czero"; name: string; installed: boolean; components: string[]; foreign: boolean };
+export type SetupGame = { id: "cstrike" | "czero"; name: string; installed: boolean; components: string[]; foreign: boolean; unbuilt?: string[] };
 export type SetupInstall = { hl: string; kind: string; bottle: string | null; games: SetupGame[] };
 export type CatalogItem = {
   id: string;

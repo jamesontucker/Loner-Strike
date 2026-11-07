@@ -103,7 +103,7 @@ export type GbJob = { id: string; mod: number; file: number; state: string; mess
 export type AppInfo = {
   version: string;
   update: { version: string; notes?: string } | null;
-  game: { id: string; dir: string; hl: string; dedicated?: boolean; port?: number; installed?: string[]; outdated?: string[]; unmanaged?: string[] } | null;
+  game: { id: string; dir: string; hl: string; dedicated?: boolean; port?: number; installed?: string[]; outdated?: string[]; unmanaged?: string[]; unbuilt?: string[] } | null;
   bots?: number | null;
   lastmap?: string | null;
 };
