@@ -17,6 +17,7 @@ const LAUNCH_CEILING_MS = 90000;
 
 export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppInfo | null; reason: string; gameOpen: boolean; maps: MapInfo[]; openSetup: () => void }) {
   const toast = useToast();
+  const ask = useConfirm();
   const { run, busy } = useActions();
   const t = targetKey();
   const key = (what: string) => `play:${t}:${what}`;
@@ -48,13 +49,16 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
     if (r.error) toast(r.error, true);
     else toast(`Opening ${game}…`);
   }, `Opening ${game}…`);
-  const launch = (map?: string, bots?: number) => {
+  // an open game ignores a new launch, so starting means closing it first (asked)
+  const restart = gameOpen && ON_THIS_COMPUTER;
+  const launch = async (map?: string, bots?: number) => {
     if (starting) return;
+    if (restart && !(await ask(`${game} is open at its menu. Close it and start ${map ? `on ${map}` : "the game"}?`, { ok: "Restart and start" }))) return;
     // never chosen before: start with the defaults shown, so they're saved like a choice
     const fresh = Object.fromEntries(Object.entries(DEFAULTS).filter(([k]) => !changed[k] && mode?.settings[k] == null));
     const start = mode ? { mode: mode.id, settings: { ...fresh, ...changed } } : {};
     return run(key("launch"), async () => {
-      const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}), ...start }).catch(() => ({ error: "Couldn't reach the app." }));
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}), ...start, ...(restart ? { restart: true } : {}) }).catch(() => ({ error: "Couldn't reach the app." }));
       if (r.error) {
         endLaunch(t);
         toast(r.error, true);
@@ -62,7 +66,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
         toast(`Starting ${game}…`);
         startLaunch(t);
       }
-    }, `Starting ${game}${map ? ` on ${map}` : ""}…`);
+    }, `${restart ? "Restarting" : "Starting"} ${game}${map ? ` on ${map}` : ""}…`);
   };
   const bots = app?.bots ?? null;
   const modes = opts ? [...opts.modes].sort((a, b) => a.name.localeCompare(b.name)) : [];
@@ -122,7 +126,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
         <h1>Start a game</h1>
         <p>
           {gameOpen
-            ? `${game} is open, but no game is loaded. Start one from its New Game menu, or quit it and pick everything here.`
+            ? `${game} is open, but no game is loaded. Pick everything here and Loner-Strike restarts it into your game, or start one from its New Game menu.`
             : `${game} isn't running. Pick a mode, a map and the bots, and Loner-Strike starts it and connects by itself.`}
         </p>
         <div className="start-box">
@@ -189,8 +193,8 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
         <BusyButton
           className="btn launch"
           busy={starting}
-          label={<><Icon name="play" size={22} />{overdue ? "Still starting? Start again" : mode ? `Play ${mode.name} on ${map}` : `Play ${map}`}</>}
-          busyLabel="Starting…"
+          label={<><Icon name="play" size={22} />{overdue ? "Still starting? Start again" : restart ? `Restart ${game} and play ${mode ? `${mode.name} on ` : ""}${map}` : mode ? `Play ${mode.name} on ${map}` : `Play ${map}`}</>}
+          busyLabel={restart ? "Restarting…" : "Starting…"}
           onClick={() => launch(map, botCount)}
         />
         <div className="last">

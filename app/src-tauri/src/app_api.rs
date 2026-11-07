@@ -423,6 +423,9 @@ fn last_map(st: &Shared) -> Option<String> {
 
 #[derive(Deserialize, Default)]
 struct LaunchReq {
+    /// the game is already open: close it first (a running game ignores a new launch)
+    #[serde(default)]
+    restart: bool,
     /// start a server on this map (or the last one) instead of the main menu
     #[serde(default)]
     map: Option<String>,
@@ -570,9 +573,19 @@ fn save_bots(dir: &std::path::Path, bots: u32) -> std::io::Result<()> {
     std::fs::write(path, lines.join("\n") + "\n")
 }
 
-async fn api_launch(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<LaunchReq>) -> (StatusCode, Json<Value>) {
+async fn api_launch(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<LaunchReq>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    // a game that's already open ignores a new launch: closing it is for the person at
+    // the computer
+    if req.restart {
+        if on.is_none() {
+            return (StatusCode::OK, Json(json!({"error": "Close Counter-Strike on the computer, then start the game."})));
+        }
+        if let Err(e) = tokio::task::spawn_blocking(crate::sys::close_game).await.unwrap_or_else(|_| Err("Couldn't close the game.".into())) {
+            return (StatusCode::OK, Json(json!({"error": e})));
+        }
     }
     let Some(g) = st.game() else {
         return (StatusCode::OK, Json(json!({"error": "Couldn't find the game."})));

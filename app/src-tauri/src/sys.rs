@@ -368,7 +368,7 @@ pub fn close_game() -> Result<(), String> {
         }
         std::thread::sleep(Duration::from_millis(500));
     }
-    Err("Counter-Strike didn't close. Quit it and press Join again.".into())
+    Err("Counter-Strike didn't close. Quit it yourself and try again.".into())
 }
 
 pub fn game_running() -> bool {
