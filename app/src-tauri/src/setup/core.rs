@@ -44,12 +44,34 @@ pub fn compile_plugin(rec: &mut Record, ctx: &Ctx, src_rel: &str, out_name: &str
         ctx.progress.note(&format!("Couldn't compile {src_rel}: CrossOver isn't installed in Applications."));
         return Ok(false);
     }
-    let mut cmd = windows_command(ctx.install, &exe);
-    cmd.arg(&src).arg(format!("-o{}", out_full.display()));
-    if let Some(inc) = include_rel {
-        cmd.arg(format!("-i{}", am.join("scripting").join(inc).display()));
+    let compile = || {
+        let mut cmd = windows_command(ctx.install, &exe);
+        // under CrossOver a crashing program starts Wine's debugger, which shows an error box
+        // and waits for it to be closed, and --wait-children waits on it: off for compiles,
+        // so a crash just ends the compiler
+        cmd.env("WINEDLLOVERRIDES", "winedbg.exe=d");
+        cmd.arg(&src).arg(format!("-o{}", out_full.display()));
+        if let Some(inc) = include_rel {
+            cmd.arg(format!("-i{}", am.join("scripting").join(inc).display()));
+        }
+        // the biggest plugins take about 10 seconds
+        crate::sys::run_output(cmd, Duration::from_secs(120))
+    };
+    // a compiler that crashed or hung (no "Done." and no errors of the code's own) gets
+    // one more go: under Wine that's usually a one-off
+    let mut ran = compile();
+    let crashed = |r: &Option<(bool, String, String)>| match r {
+        None => true,
+        Some((_, out, err)) => {
+            let all = format!("{out}{err}");
+            !all.contains("Done.") && !all.to_lowercase().contains("error")
+        }
+    };
+    if crashed(&ran) {
+        ctx.progress.note(&format!("The compiler stopped part way through {src_rel}; trying it once more."));
+        ran = compile();
     }
-    let Some((_, out, err)) = crate::sys::run_output(cmd, Duration::from_secs(300)) else {
+    let Some((_, out, err)) = ran else {
         ctx.progress.note(&format!("Couldn't compile {src_rel}: the compiler didn't run or took too long."));
         return Ok(false);
     };
