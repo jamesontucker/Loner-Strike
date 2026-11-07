@@ -88,7 +88,7 @@ type ExtrasTab = "rotation" | "chat" | "kickers" | "people" | "schedule" | "down
 const EXTRAS_TABS: [ExtrasTab, string][] = [
   ["rotation", "Map rotation"],
   ["chat", "Chat messages"],
-  ["kickers", "Kickers"],
+  ["kickers", "Away & ping"],
   ["people", "Joins & votes"],
   ["schedule", "Schedule"],
   ["downloads", "Fast downloads"],
@@ -156,17 +156,25 @@ export function ServerExtras({ target }: { target: string }) {
   };
   const saveSettings = (s: Partial<Settings>, done?: string) => (d ? queue(d.settings, (cur) => ({ ...cur, ...s }), (full) => send("/api/extras/settings", full, done)) : Promise.resolve(false));
 
+  const head = <SectionHead title="Rotation & rules" note="Map rotation, chat messages, away and ping kicks, joins and player votes, a daily restart, and fast downloads." />;
   if (error)
     return (
       <div className="stack narrow extras">
-        <SectionHead title="Rotation & messages" />
+        {head}
         <LoadError text={error} onRetry={() => setVersion((v) => v + 1)} />
       </div>
     );
-  if (!d) return <Skeleton rows={6} />;
+  if (!d)
+    return (
+      <div className="stack narrow extras">
+        {head}
+        <Skeleton rows={6} />
+      </div>
+    );
 
   return (
     <div className="stack narrow extras">
+      {head}
       {!d.plugin && (
         <NeedsSetup text="This game is missing the Loner-Strike plugin for these settings." after="Until then your settings are saved here, but the game doesn't use them." />
       )}
@@ -503,7 +511,7 @@ function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSetting
               <button key={k} className="chip" title={`Fills in ${label}`} onClick={() => insert(k)}>{k}</button>
             ))}
           </div>
-          <small>Tap one to add it to the message you're editing. The game fills them in when the message shows.</small>
+          <small>{ON_THIS_COMPUTER ? "Click" : "Tap"} one to add it to the message you're editing. The game fills them in when the message shows.</small>
         </div>
         {shown.length > 0 && (
           <div className="field">
@@ -535,7 +543,7 @@ function Kickers({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) {
   const host = d.dedicated ? "" : " You, the host, never are.";
   return (
     <section>
-      <SectionHead title="Kickers" note={`Keep slots free for people who are actually playing. Bots are never moved or kicked, and neither is anyone with immunity (owners).${host}`} />
+      <SectionHead title="Away & ping" note={`Keep slots free for people who are actually playing. Bots are never moved or kicked, and neither is anyone with immunity (owners).${host}`} />
       <div className="settings">
         <Toggle label="Away players" note="Someone who doesn't press a key or move the mouse for a while goes to spectator, then can be kicked." on={afk.on} set={(v) => saveSettings({ afk: { ...afk, on: v } })} />
         {afk.on && (
@@ -770,7 +778,7 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
           HTTP instead, in seconds. The folder on the web server has to look like the game folder: <b>maps/</b>, <b>sound/</b>, <b>models/</b>, <b>sprites/</b> and so on.
         </p>
         <label className="field">
-          <span>Web address of that folder<Info text="Sets the game's sv_downloadurl. Any host that serves plain files works, like cheap web hosting or a public storage bucket." /></span>
+          <span>Web address of that folder<Info text="Players download missing maps and sounds from this web folder instead of the game server. Any host that serves plain files works." /></span>
           <input className="search" type="url" spellCheck={false} placeholder="https://dl.example.com/czero" value={value} onChange={(e) => setUrl(e.target.value)} />
           <small className={ok ? undefined : "err-text"}>{ok ? "Leave it empty to turn fast downloads off." : "Start with http:// or https://, with no spaces or quotes."}</small>
         </label>

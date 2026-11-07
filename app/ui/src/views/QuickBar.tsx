@@ -2,9 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { postJson, targetKey, useActions } from "../api";
 import { useNav } from "../store";
 import type { MapInfo, Online } from "../types";
-import { useCommand, useToast } from "../ui";
+import { useCommand, useToast, zoom } from "../ui";
 
-type Item = { label: string; on: () => void; pressed?: boolean; disabled?: boolean; show?: boolean };
+type Item = { label: string; on: () => void; pressed?: boolean; disabled?: boolean; show?: boolean; title?: string };
 
 /** A button that opens a short list of actions under it. */
 function Menu({ label, items, active, ariaLabel }: { label: string; items: Item[]; active?: boolean; ariaLabel?: string }) {
@@ -12,13 +12,23 @@ function Menu({ label, items, active, ariaLabel }: { label: string; items: Item[
   const box = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
-  // keep the list on screen: under the button, moved left if it would run off the edge
+  // keep the list on screen: under the button, moved left if it would run off the edge.
+  // On phones the bar scrolls sideways, so the list is fixed to the window instead.
   useLayoutEffect(() => {
     const l = list.current;
     const b = button.current;
     if (!open || !l || !b) return;
-    const room = window.innerWidth - 8 - b.getBoundingClientRect().left - l.offsetWidth;
-    l.style.left = room < 0 ? `${room}px` : "0";
+    const z = zoom();
+    const r = b.getBoundingClientRect();
+    const left = r.left / z;
+    const width = window.innerWidth / z;
+    if (getComputedStyle(l).position === "fixed") {
+      l.style.left = `${Math.max(8, Math.min(left, width - 8 - l.offsetWidth))}px`;
+      l.style.top = `${r.bottom / z + 4}px`;
+    } else {
+      const room = width - 8 - left - l.offsetWidth;
+      l.style.left = room < 0 ? `${room}px` : "0";
+    }
     l.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
   }, [open]);
   const close = () => {
@@ -29,11 +39,15 @@ function Menu({ label, items, active, ariaLabel }: { label: string; items: Item[
     if (!open) return;
     const away = (e: Event) => !box.current?.contains(e.target as Node) && setOpen(false);
     const esc = (e: KeyboardEvent) => e.key === "Escape" && close();
+    // a list fixed to the window would be left behind by scrolling
+    const scrolled = (e: Event) => list.current && !list.current.contains(e.target as Node) && getComputedStyle(list.current).position === "fixed" && setOpen(false);
     document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", esc);
+    document.addEventListener("scroll", scrolled, true);
     return () => {
       document.removeEventListener("pointerdown", away);
       document.removeEventListener("keydown", esc);
+      document.removeEventListener("scroll", scrolled, true);
     };
   }, [open]);
   const shown = items.filter((i) => i.show !== false);
@@ -51,6 +65,7 @@ function Menu({ label, items, active, ariaLabel }: { label: string; items: Item[
               role={i.pressed === undefined ? "menuitem" : "menuitemcheckbox"}
               aria-checked={i.pressed}
               disabled={i.disabled}
+              title={i.title}
               onClick={() => {
                 i.on();
                 close();
@@ -126,7 +141,7 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
     { label: "Add 10 minutes", on: () => run("gm_do", ["addtime"]), show: st.timelimit > 0 },
   ];
   const botMenu: Item[] = [
-    { label: "Peaceful bots", on: () => run("gm_set", ["bot_zombie", st.peaceful ? "0" : "1"]), pressed: !!st.peaceful },
+    { label: "Peaceful bots", on: () => run("gm_set", ["bot_zombie", st.peaceful ? "0" : "1"]), pressed: !!st.peaceful, title: "Bots stop attacking. Turn it off to fight again." },
     // (on a server's page its own Bots tab has them; this would leave the server)
     ...(onServer ? [] : [{ label: "All bot settings", on: () => go("bots") }]),
   ];
@@ -163,7 +178,7 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
         )}
         <Menu label="You" items={you} active={!!me?.god || !!me?.noclip} />
         <button ref={announceButton} className="qb" aria-pressed={announcing} onClick={() => setAnnouncing((a) => !a)}>Announce</button>
-        <button className="qb" aria-pressed={!!st.recording} disabled={busy(`quick:${targetKey()}:demo`)} onClick={() => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…")}>{st.recording ? "● Stop recording" : "Record demo"}</button>
+        <button className="qb" aria-pressed={!!st.recording} title="Records the game as you see it to a demo file in your game folder. Watch it later with viewdemo in the console." disabled={busy(`quick:${targetKey()}:demo`)} onClick={() => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…")}>{st.recording ? "● Stop recording" : "Record demo"}</button>
       </div>
       {announcing && (
         <form className="quick-announce" onSubmit={(e) => { e.preventDefault(); announce(); }} onKeyDown={(e) => e.key === "Escape" && closeAnnounce()}>

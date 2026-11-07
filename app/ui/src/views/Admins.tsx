@@ -156,13 +156,11 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
   };
 
   if (!d)
-    return failed ? (
+    return (
       <div className="stack narrow">
         <SectionHead title="Admins" />
-        <LoadError text={failed} onRetry={() => (setFailed(""), load())} />
+        {failed ? <LoadError text={failed} onRetry={() => (setFailed(""), load())} /> : <Skeleton />}
       </div>
-    ) : (
-      <Skeleton />
     );
 
   const save = () => act("save", async () => {
@@ -214,6 +212,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
 
   return (
     <div className="stack narrow">
+      <SectionHead title="Admins" note="Who has admin powers or VIP perks, who has joined, and who is banned." />
       <div className="chips admin-tabs" role="tablist" aria-label="Admins sections">
         {TABS.map(([id, label]) => (
           <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>
@@ -226,7 +225,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
       </div>
       {tab === "people" && (
       <div>
-        <SectionHead title="Admins" note="Give people admin powers or VIP perks on your server, like real servers do.">
+        <SectionHead title="Admins & VIPs" note="Give people admin powers or VIP perks on your server, like real servers do.">
           <button className="btn primary" onClick={() => setDraft({ ...EMPTY })}>Add someone</button>
         </SectionHead>
         <ShareList list="admins" onShared={load} />
@@ -328,6 +327,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
         <ShareList list="bans" onShared={load} />
         <div className="row ban-form">
           <input className="search" placeholder="SteamID, like STEAM_0:1:12345" value={banId} onChange={(e) => setBanId(e.target.value)} aria-label="SteamID to ban" />
+          <Info text="Find someone's SteamID by typing status in the game console." />
           <select value={banTime} onChange={(e) => setBanTime(Number(e.target.value))} aria-label="How long">
             {BAN_TIMES.map(([m, l]) => <option key={m} value={m}>{l}</option>)}
           </select>
@@ -387,13 +387,16 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
                   </th>
                   {COLUMNS.map((r) => (
                     <td key={r}>
-                      <input
-                        type="checkbox"
-                        checked={d.abilities[a.key].includes(r)}
-                        disabled={busy(`ability:${a.key}:${r}`)}
-                        onChange={(e) => toggle(a.key, r, e.target.checked)}
-                        aria-label={`${a.name} for ${roleName(r)}`}
-                      />
+                      {/* the whole cell is the tap target */}
+                      <label className="ability-cell">
+                        <input
+                          type="checkbox"
+                          checked={d.abilities[a.key].includes(r)}
+                          disabled={busy(`ability:${a.key}:${r}`)}
+                          onChange={(e) => toggle(a.key, r, e.target.checked)}
+                          aria-label={`${a.name} for ${roleName(r)}`}
+                        />
+                      </label>
                     </td>
                   ))}
                 </tr>
@@ -411,7 +414,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
         <div className="settings">
           <Perk
             label="Allow in every mode"
-            note="Double jump, respawn, noclip and god mode are normally off in Zombie, Hide and Seek, Deathrun, Kreedz, Knife Arena, Base Builder, Soccer Jam, Paintball and Tour of Duty, where they'd spoil the game."
+            note="Double jump, respawn, noclip and god mode are normally off in Zombie, Hide and Seek, Deathrun, Kreedz, Knife arena, Base Builder, Soccer Jam, Paintball and Tour of Duty, where they'd spoil the game."
             on={d.abilities.every_mode}
             busy={busy("ability:every_mode")}
             set={(v) => act("ability:every_mode", () => settings((s) => ({ ...s, abilities: { ...s.abilities, every_mode: v } })), "Saving what each role gets…")}
@@ -457,7 +460,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
           <Perk label="You get the perks too" note="As the host you're counted as an owner, for spawn gear and the abilities above." on={d.perks.host} busy={busy("perk:host")} set={(v) => setPerks({ host: v })} />
         </div>
         <p className="muted small-note">
-          To keep things fair, modes like Zombie, Hide and Seek, Deathrun, Kreedz and Knife Arena skip the spawn perks, and deathmatch and one-weapon modes only give
+          To keep things fair, modes like Zombie, Hide and Seek, Deathrun, Kreedz and Knife arena skip the spawn perks, and deathmatch and one-weapon modes only give
           armour and the kit. Changes reach a running game straight away; the mode check happens on the next map.
         </p>
       </div>

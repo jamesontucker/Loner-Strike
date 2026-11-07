@@ -4,7 +4,7 @@
 
 import { QueryClient, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { getJsonAt, ON_THIS_COMPUTER } from "./api";
+import { getJsonAt, isSignedOut, ON_THIS_COMPUTER, SIGNED_OUT } from "./api";
 import { useNav } from "./store";
 import type { AppInfo, GameState, MapInfo, Online, ServerList } from "./types";
 import type { Job } from "./views/Setup";
@@ -28,6 +28,9 @@ const LOST = ON_THIS_COMPUTER
   ? "Lost contact with Loner-Strike. If it keeps happening, restart the app."
   : "Can't reach your computer. Check it's on and on the same Wi-Fi as this phone.";
 
+/** Why the app can't be reached, for a failed request (a signed-out phone says so). */
+export const lostReason = (e: unknown) => (isSignedOut(e) ? SIGNED_OUT : LOST);
+
 /** Bumped when your game switches (CS 1.6 / Condition Zero share the "local" target), so
  *  one game's live state is never shown, even briefly, as the other's. */
 let liveGen = 0;
@@ -41,7 +44,8 @@ const GRACE_MS = 6000;
 
 /** The live game (or server), every 2 seconds while the window is visible. A short gap in
  *  answers (a map loading) keeps the last live state, flagged `reconnecting`, instead of
- *  every live page falling back to "start a game". */
+ *  every live page falling back to "start a game". `lost`: the app itself isn't answering
+ *  (past that grace period), with why in the state's reason. */
 export function useGameState() {
   const target = useTarget();
   const q = useQuery({
@@ -58,6 +62,8 @@ export function useGameState() {
   const failing = q.isError && q.errorUpdatedAt >= q.dataUpdatedAt;
   let state: GameState | null = null;
   let reconnecting = false;
+  let lost = false;
+  const why = lostReason(q.error);
   if (data?.online && !failing) {
     last.current = { target, gen: liveGen, data, at: q.dataUpdatedAt };
     state = data;
@@ -67,9 +73,11 @@ export function useGameState() {
       state = l.data;
       reconnecting = true;
     } else if (failing) {
-      state = { online: false, reason: LOST };
+      state = { online: false, reason: why };
+      lost = true;
     } else {
-      state = data ?? { online: false, reason: LOST };
+      state = data ?? { online: false, reason: why };
+      lost = !data;
     }
   }
   useEffect(() => {
@@ -78,7 +86,7 @@ export function useGameState() {
     return () => clearTimeout(t);
   }, [reconnecting]);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["state", target] });
-  return { state, reconnecting, refresh };
+  return { state, reconnecting, lost, refresh };
 }
 
 /** The game (or server) the app is about: version, what's installed, updates. */

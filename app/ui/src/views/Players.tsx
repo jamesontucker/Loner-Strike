@@ -118,8 +118,9 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
                         </div>
                         {!p.host && (
                           <div className="row">
-                            {pb(p, "bring", "Bring to me")}
-                            {pb(p, "goto", "Go to them")}
+                            {/* on a server there's no "you" to bring them to */}
+                            {!currentTarget() && pb(p, "bring", "Bring to me")}
+                            {!currentTarget() && pb(p, "goto", "Go to them")}
                             {pb(p, "freeze", p.frozen ? "Unfreeze" : "Freeze")}
                             {pb(p, "slap", "Slap")}
                             {pb(p, "slay", "Slay", "btn danger")}

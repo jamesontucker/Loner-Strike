@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { postJson, targetKey, useActions } from "../api";
+import { ON_THIS_COMPUTER, postJson, targetKey, useActions } from "../api";
 import type { AppInfo } from "../types";
 import { gameTitle } from "../games";
 import { BusyButton, Sheet, useToast } from "../ui";
@@ -42,9 +42,9 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
   // what the bar says: Loner-Strike's own parts, mods you had before it, or both
   const summary =
     outdated.length && theirs.length
-      ? `${plural(outdated.length, "part", "parts")} of Loner-Strike and ${theirs.length} of your own mods have fixes waiting.`
+      ? `${plural(outdated.length, "part", "parts")} of Loner-Strike and ${theirs.length} of your own mods have updates waiting.`
       : outdated.length
-        ? `${plural(outdated.length, "part", "parts")} of Loner-Strike ${outdated.length === 1 ? "has" : "have"} fixes waiting.`
+        ? `${plural(outdated.length, "part", "parts")} of Loner-Strike ${outdated.length === 1 ? "has" : "have"} updates waiting.`
         : `${plural(theirs.length, "mod is", "mods are")} in your game without the bot fixes.`;
   if (running)
     return (
@@ -65,8 +65,15 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp }: { app: AppInfo |
           {blocked ? ` Close ${gameTitle(g.id)} to update.` : ""}
         </span>
         <span className="files-bar-actions">
-          <button className="btn small" onClick={() => setOpen(true)}>Details</button>
-          <BusyButton className="btn small primary" busy={updating} disabled={blocked} label="Update all" busyLabel="Updating…" onClick={() => update([...outdated, ...theirs])} />
+          {/* the files are on the computer: a phone only says so */}
+          {ON_THIS_COMPUTER ? (
+            <>
+              <button className="btn small" onClick={() => setOpen(true)}>Details</button>
+              <BusyButton className="btn small primary" busy={updating} disabled={blocked} label="Update all" busyLabel="Updating…" onClick={() => update([...outdated, ...theirs])} />
+            </>
+          ) : (
+            <span className="muted">Update on the computer</span>
+          )}
           <button className="files-bar-close" aria-label="Hide until next time" onClick={() => setSkip(true)}>×</button>
         </span>
       </div>

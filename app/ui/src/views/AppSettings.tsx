@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getJson, getJsonAt, postJson, useActions } from "../api";
+import { copyText, getJson, getJsonAt, ON_COMPUTER_ONLY, postJson, useActions } from "../api";
 import type { AppInfo, PhoneInfo } from "../types";
 import { ON_THIS_COMPUTER } from "../api";
 import { gameTitle } from "../games";
 import { queryClient, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
-import { applyScale, savedScale, BusyButton, Info, LoadError, SCALES, SectionHead, Switch, useConfirm, useToast } from "../ui";
+import { applyScale, savedScale, BusyButton, Info, LoadError, SCALES, SectionHead, Sheet, Switch, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
 
 type Prefs = { auto_update: boolean; keep_servers: boolean; game_folders: string[]; notify_joins: boolean };
@@ -24,7 +24,11 @@ const usePhone = () => useQuery({ queryKey: PHONE, queryFn: ({ signal }) => getJ
 const useStorage = () => useQuery({ queryKey: STORAGE, queryFn: ({ signal }) => getJsonAt<Storage>("/api/app/storage", null, signal), staleTime: 60000 });
 const setPrefsData = (f: (p: Prefs) => Prefs) => queryClient.setQueryData<Prefs>(PREFS, (p) => (p ? f(p) : p));
 
-const COMPUTER_ONLY = "Only on the computer running Loner-Strike.";
+/** Whether updates were looked for since the app started (here, from the menu or at start). */
+let checkedOnce = false;
+export const noteUpdateChecked = () => {
+  checkedOnce = true;
+};
 
 export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { app: AppInfo | null; reloadApp: () => void; scan: Scan | null; openSetup: () => void; switchGame: (hl: string | null, game: string) => Promise<void> }) {
   const ask = useConfirm();
@@ -33,6 +37,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
   // the update installed and the app is restarting: the button stays busy until it does
   const [restarting, setRestarting] = useState(false);
   const [checked, setChecked] = useState<string>("");
+  // diagnostics on a phone: shown to copy by hand (a copy after waiting for them isn't allowed there)
+  const [diag, setDiag] = useState<string | null>(null);
 
   const prefsQ = usePrefs();
   const phoneQ = usePhone();
@@ -89,25 +95,29 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
   const copyDiagnostics = () => run("app:diagnostics", async () => {
     const r = await getJson<{ text: string }>("/api/app/diagnostics").catch(() => null);
     if (!r) return toast("Couldn't collect the diagnostics. Try again.", true);
-    try {
-      await navigator.clipboard.writeText(r.text);
-      toast("Copied. Paste it into a GitHub issue.");
-    } catch {
-      toast("Couldn't copy them to the clipboard. Try again.", true);
-    }
+    if (!ON_THIS_COMPUTER) return setDiag(r.text);
+    if (await copyText(r.text)) toast("Copied. Paste it into a GitHub issue.");
+    else setDiag(r.text);
   }, "Collecting diagnostics…");
-  const addFolder = async () => {
+  const addFolder = () => run("app:folder:add", async () => {
     const picked = await post<{ dir?: string | null } & R>("/api/servers/pick-folder");
+    if (picked.error) return toast(picked.error, true);
     if (!picked.dir) return;
     const r = await post<Prefs & R>("/api/app/game-folder", { dir: picked.dir });
     if (r.error) return toast(r.error, true);
     setPrefsData((p) => ({ ...p, game_folders: r.game_folders }));
-    toast("Added. Run setup to set up the game in it.");
-  };
-  const removeFolder = async (dir: string) => {
+    toast("Added. Run full setup to set up the game in it.");
+  }, "Choosing a folder…");
+  const removeFolder = (dir: string) => run(`app:folder:remove:${dir}`, async () => {
     const r = await post<Prefs & R>("/api/app/game-folder/remove", { dir });
-    if (!r.error) setPrefsData((p) => ({ ...p, game_folders: r.game_folders }));
-  };
+    if (r.error) return toast(r.error, true);
+    setPrefsData((p) => ({ ...p, game_folders: r.game_folders }));
+    toast("Forgotten. Nothing was deleted.");
+  }, "Forgetting the folder…");
+  const openFolder = () => run("app:open-folder", async () => {
+    const r = await post("/api/app/open-folder");
+    if (r.error) toast(r.error, true);
+  }, "Opening the folder…");
   const exportSetup = () => run("app:export", async () => {
     const r = await post<{ files?: number } & R>("/api/app/export");
     if (r.error) return toast(r.error, true);
@@ -137,6 +147,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
 
   const check = () => run("app:update:check", async () => {
     const r = await postJson<{ available?: boolean; version?: string; error?: string }>("/api/app/update/check").catch((): { available?: boolean; error?: string } => ({ error: "Couldn't check for updates." }));
+    noteUpdateChecked();
     if (r.error) return toast(r.error, true);
     setChecked(r.available ? "" : "You're on the latest version.");
     reloadApp();
@@ -173,7 +184,12 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
         <div className="row between setting-line">
           <div>
             <b>Loner-Strike {app?.version}</b>
-            {app?.update ? <p>Version {app.update.version} is available.</p> : <p className="muted">{checked || "You're up to date as of the last check."}</p>}
+            {app?.update ? (
+              <p>Version {app.update.version} is available.</p>
+            ) : (
+              // checked here, from the menu, or when the app started (with that switch on)
+              <p className="muted">{checked || (checkedOnce || prefs?.auto_update ? "You're up to date as of the last check." : "Not checked yet.")}</p>
+            )}
           </div>
           {app?.update && !ON_THIS_COMPUTER ? (
             <p className="muted">Install it on the computer running Loner-Strike.</p>
@@ -231,14 +247,15 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
               {prefs.game_folders.map((d) => (
                 <li key={d}>
                   <span className="mono small">{d}</span>
-                  {ON_THIS_COMPUTER && <button className="btn small" onClick={() => removeFolder(d)}>Forget</button>}
+                  {ON_THIS_COMPUTER && <BusyButton className="btn small" busy={busy(`app:folder:remove:${d}`)} label="Forget" busyLabel="Forgetting…" onClick={() => removeFolder(d)} />}
                 </li>
               ))}
             </ul>
           )}
           {ON_THIS_COMPUTER && (
             <p className="muted small-note">
-              Game not found? <button className="link inline" onClick={addFolder}>Choose its Half-Life folder</button> (the one with cstrike or czero inside).
+              Game not found?{" "}
+              <BusyButton className="link inline" busy={busy("app:folder:add")} label="Choose its Half-Life folder" busyLabel="Choosing…" onClick={addFolder} /> (the one with cstrike or czero inside).
               <Info text="For a game Loner-Strike didn't find by itself, like one on another drive. Folders you add are listed above; Forget only takes one off the list and deletes nothing." />
             </p>
           )}
@@ -251,14 +268,15 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           <p className="muted">Everything Loner-Strike changed is backed up, so removing it puts your game back the way it was.</p>
           {ON_THIS_COMPUTER ? (
             <div className="row">
-              <button className="btn primary" onClick={openSetup}>Run setup</button>
+              <button className="btn primary" onClick={openSetup}>Run full setup</button>
+              <Info text="Set up another game, or add or remove many modes at once. Nothing already set up is lost." />
               <button className="btn" onClick={() => useNav.getState().setSetupOpen(true, true)}>Watch the intro</button>
               {app?.game && scan && (
                 <BusyButton className="btn danger" busy={busy("app:uninstall")} label="Remove Loner-Strike" busyLabel="Removing…" onClick={removeAll} />
               )}
             </div>
           ) : (
-            <p className="muted">{COMPUTER_ONLY}</p>
+            <p className="muted">{ON_COMPUTER_ONLY}</p>
           )}
         </div>
       </section>
@@ -321,7 +339,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           <div className="row between setting-line toggle">
             <div>
               <b>Tell me when someone joins</b>
-              <p className="muted">A notification when a person (not a bot) joins your game or one of your servers, while Loner-Strike is in the background.</p>
+              <p className="muted">A notification on the computer running Loner-Strike when a person (not a bot) joins your game or one of your servers, while the app is in the background.</p>
             </div>
             <Switch on={!!prefs?.notify_joins} label="Tell me when someone joins" disabled={!prefs || busy("app:pref:notify_joins")} onChange={(v) => setPref({ notify_joins: v })} />
           </div>
@@ -345,7 +363,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
               <BusyButton busy={busy("app:import")} label="Import" busyLabel="Importing…" onClick={importSetup} />
             </div>
           ) : (
-            <p className="muted">{COMPUTER_ONLY}</p>
+            <p className="muted">{ON_COMPUTER_ONLY}</p>
           )}
         </div>
       </section>
@@ -374,7 +392,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
                 <b>Loner-Strike's folder</b>
                 {storage ? <p className="muted mono small">{storage.folder}</p> : <span className="size-skeleton wide" aria-hidden="true" />}
               </div>
-              <button className="btn" onClick={() => post("/api/app/open-folder")}>Show in {navigator.platform.startsWith("Mac") ? "Finder" : "Explorer"}</button>
+              <BusyButton busy={busy("app:open-folder")} label={`Show in ${navigator.platform.startsWith("Mac") ? "Finder" : "Explorer"}`} busyLabel="Opening…" onClick={openFolder} />
             </div>
           )}
         </div>
@@ -395,6 +413,23 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
       </section>
 
       {!app?.update && updates}
+
+      {diag !== null && (
+        <Sheet label="Diagnostics" onClose={() => setDiag(null)}>
+          <div className="sheet-body">
+            <h2>Diagnostics</h2>
+            <p className="muted">Copy this into a GitHub issue. No passwords are in it.</p>
+            <textarea className="invite code" readOnly value={diag} aria-label="Diagnostics" />
+            <div className="row">
+              <button className="btn primary" onClick={async () => {
+                const ok = await copyText(diag);
+                toast(ok ? "Copied. Paste it into a GitHub issue." : "Couldn't copy. Select the text and copy it by hand.", !ok);
+              }}>Copy</button>
+              <button className="btn" onClick={() => setDiag(null)}>Close</button>
+            </div>
+          </div>
+        </Sheet>
+      )}
 
       <section>
         <SectionHead title="About" />

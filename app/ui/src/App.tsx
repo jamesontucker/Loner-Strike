@@ -1,16 +1,16 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { clock, ON_THIS_COMPUTER, postJson, withTarget, useActions, useActivity } from "./api";
+import { clock, isSignedOut, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, SIGNED_OUT, withTarget, useActions, useActivity } from "./api";
 import { gameTitle } from "./games";
 import { Icon } from "./icons";
 import { forgetLive, queryClient, reloadAppInfo, useOpenReports, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
-import { hasUnsavedEdits, useNav, type Section } from "./store";
+import { hasUnsavedEdits, isPageEntry, useNav, type Section } from "./store";
 import { usePlayDrafts } from "./stores/playDraft";
 import type { AppInfo, Online } from "./types";
-import { applyScale, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, ToastProvider, useConfirm, useToast } from "./ui";
+import { applyScale, closeTopSheet, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, skipOwnBack, ToastProvider, useConfirm, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
 import { Addons } from "./views/Addons";
-import { AppSettings } from "./views/AppSettings";
+import { AppSettings, noteUpdateChecked } from "./views/AppSettings";
 import { Bots } from "./views/Bots";
 import { Friends } from "./views/Friends";
 import { Maps } from "./views/Maps";
@@ -35,7 +35,7 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "play", label: "Play", icon: "play" },
   { id: "maps", label: "Maps", icon: "maps" },
   { id: "bots", label: "Bots", icon: "bots", live: true },
-  { id: "match", label: "Match", icon: "match", live: true },
+  { id: "match", label: "Rules", icon: "match", live: true },
   { id: "fun", label: "Fun", icon: "fun", live: true },
   { id: "players", label: "Players", icon: "players", live: true },
   { id: "addons", label: "Add-ons", icon: "addons", live: true },
@@ -43,7 +43,7 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "admins", label: "Admins", icon: "admins" },
   { id: "community", label: "Stats & moderation", icon: "stats" },
   { id: "welcome", label: "Welcome page", icon: "welcome" },
-  { id: "extras", label: "Rotation & messages", icon: "extras" },
+  { id: "extras", label: "Rotation & rules", icon: "extras" },
   { id: "more", label: "Get more", icon: "more", group: "Library" },
   { id: "mods", label: "Mods", icon: "mods" },
   { id: "sounds", label: "Sounds", icon: "sound" },
@@ -67,7 +67,7 @@ export default function App() {
 }
 
 function Shell() {
-  const { state, reconnecting, refresh } = useGameState();
+  const { state, reconnecting, lost, refresh } = useGameState();
   const { section, server: openServer, moreOpen, setupOpen, setupIntro, setupLater, go, openServer: enterServer, setMoreOpen, setSetupOpen, laterSetup } = useNav();
   const appQ = useAppInfo();
   const mapsQ = useMaps();
@@ -81,7 +81,7 @@ function Shell() {
   const ask = useConfirm();
   const answered = useRef(false);
   // setup copies files on the computer; from a phone it can only be pointed at
-  const openSetup = () => (ON_THIS_COMPUTER ? setSetupOpen(true) : toast("Set it up on the computer running Loner-Strike."));
+  const openSetup = () => (ON_THIS_COMPUTER ? setSetupOpen(true) : toast(SETUP_ON_COMPUTER));
   const { run: once, busy } = useActions();
   /** Goes to a section, asking first when a page has edits that aren't saved. */
   const nav = async (s: Section, focus?: string) => {
@@ -137,6 +137,7 @@ function Shell() {
         // same key as Settings' Check now button, so it shows there too
         await once("app:update:check", async () => {
           const r = await postJson<{ available?: boolean; version?: string; error?: string }>("/api/app/update/check").catch((): { available?: boolean; version?: string; error?: string } => ({ error: "Couldn't check for updates." }));
+          noteUpdateChecked();
           if (r.error) toast(r.error, true);
           else toast(r.available ? `Loner-Strike ${r.version} is out. Install it from Settings.` : "You're on the latest version.");
           reloadAppInfo();
@@ -146,6 +147,43 @@ function Shell() {
     window.addEventListener("ls-menu", onMenu);
     return () => window.removeEventListener("ls-menu", onMenu);
   });
+
+  // Back (the phone's, the browser's, a swipe): the top sheet closes first, then the
+  // server's page, then the page before. Each page and sheet has its own history entry
+  // (store.ts, ui.tsx), so this only has to follow the entry Back landed on.
+  useEffect(() => {
+    const onPop = async (e: PopStateEvent) => {
+      // a sheet closed by its own button took its entry off again: nothing to do
+      if (skipOwnBack()) return;
+      if (closeTopSheet()) return;
+      const to = e.state;
+      if (!isPageEntry(to)) return;
+      const now = useNav.getState();
+      if (to.section === now.section && to.server === now.server) return;
+      if (hasUnsavedEdits()) {
+        // stay until they say so (put the page back in the history meanwhile)
+        history.pushState({ ls: 1, section: now.section, server: now.server }, "");
+        if (!(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
+      }
+      useNav.getState().restore(to.section, to.server);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [ask]);
+
+  // a phone opened from the QR code: the code isn't left in the address bar (the app keeps
+  // the phone signed in with a cookie)
+  useEffect(() => {
+    if (!/[?&]t=/.test(location.search)) return;
+    const params = new URLSearchParams(location.search);
+    params.delete("t");
+    const rest = params.toString();
+    try {
+      history.replaceState(history.state, "", `${location.pathname}${rest ? `?${rest}` : ""}${location.hash}`);
+    } catch {
+      /* leave it */
+    }
+  }, []);
 
   // ⌘1-⌘9 switch sections (in sidebar order), ⌘, opens Settings
   useEffect(() => {
@@ -181,7 +219,7 @@ function Shell() {
       n: (servers?.servers ?? []).filter((x) => x.unreachable || x.state === "crashed" || x.state === "failed" || (x.state === "running" && x.pending_restart)).length,
       why: "to look at: servers not answering, stopped by a crash, not finished setting up or waiting for a restart",
     },
-    mods: { n: app?.game?.outdated?.length ?? 0, why: "to update: parts of Loner-Strike with fixes waiting" },
+    mods: { n: app?.game?.outdated?.length ?? 0, why: "to update: parts of Loner-Strike with updates waiting" },
     community: { n: reports, why: "to read: player reports nobody has looked at yet" },
     settings: { n: app?.update ? 1 : 0, why: "update for Loner-Strike" },
   };
@@ -198,7 +236,11 @@ function Shell() {
     if (scanQ.isError) {
       return (
         <div className="splash">
-          <LoadError title="Loner-Strike isn't answering" text={ON_THIS_COMPUTER ? "The app's own server didn't start. Restart Loner-Strike." : "Can't reach your computer. Check it's on and on the same Wi-Fi as this phone."} onRetry={() => queryClient.invalidateQueries()} />
+          <LoadError
+            title={isSignedOut(scanQ.error) ? "Not signed in" : "Loner-Strike isn't answering"}
+            text={isSignedOut(scanQ.error) ? SIGNED_OUT : ON_THIS_COMPUTER ? "The app's own server didn't start. Restart Loner-Strike." : "Can't reach your computer. Check it's on and on the same Wi-Fi as this phone."}
+            onRetry={() => queryClient.invalidateQueries()}
+          />
         </div>
       );
     }
@@ -238,7 +280,7 @@ function Shell() {
   // the game is open here but isn't hosting a map (its main menu, or someone else's server)
   const gameOpen = !!state && !state.online && !!state.game_open;
   const gameName = gameTitle(app?.game?.id);
-  const navButton = (n: (typeof NAV)[number], cls = "nav-item") => (
+  const navButton = (n: (typeof NAV)[number], cls = "nav-item", sub = false) => (
     <button
       key={n.id}
       className={`${cls}${n.live && !online ? " needs-game" : ""}`}
@@ -248,6 +290,8 @@ function Shell() {
     >
       <Icon name={n.icon} />
       {n.label}
+      {/* the title above doesn't show on touch: the More sheet says it */}
+      {sub && n.live && !online && <small className="nav-sub">Needs a game</small>}
       {n.id === "players" && players > 0 && <span className="count">{players}</span>}
       {pill(n.id)}
     </button>
@@ -287,15 +331,16 @@ function Shell() {
       </aside>
 
       <div className="main">
-        <Strip data={online} reconnecting={reconnecting} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} gameOpen={gameOpen} />
-        <Working phone />
+        <Strip data={online} reconnecting={reconnecting} lost={lost} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} gameOpen={gameOpen} />
         {online && <QuickBar data={online} maps={maps} refresh={refresh} reloadMaps={refreshMaps} />}
         <main className="content">
+          {/* the app stopped answering: said once, at the top, with a way to try again */}
+          {lost && state && !state.online && <LoadError title={state.reason === SIGNED_OUT ? "Not signed in" : "Can't reach Loner-Strike"} text={state.reason} onRetry={() => queryClient.invalidateQueries()} />}
           <HomeScreenHint />
           {!setupOpen && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} />}
           {state === null ? (
             <Skeleton rows={4} />
-          ) : needsGame ? (
+          ) : needsGame && !lost ? (
             <Waiting label={NAV.find((n) => n.id === section)!.label} game={gameName} gameOpen={gameOpen} reason={state.online ? "" : state.reason} onPlay={() => go("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={openSetup} />
           ) : (
             <PageBoundary key={`${section}:${openServer ?? ""}:${app?.game?.id ?? ""}`}>
@@ -309,7 +354,7 @@ function Shell() {
               {section === "maps" && <Maps current={online?.state.map} live={!!online} maps={maps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} />}
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
               {section === "match" && online && (
-                <SettingsPage title="Match" note={`Saved for ${online.modes.find((m) => m.id === online.state.mode)?.name ?? "this mode"}. Round changes take effect next round.`} data={online} cat={2} refresh={refresh}>
+                <SettingsPage title="Rules" note={`Saved for ${online.modes.find((m) => m.id === online.state.mode)?.name ?? "this mode"}. Round changes take effect next round.`} data={online} cat={2} refresh={refresh}>
                   <MatchButtons refresh={refresh} />
                 </SettingsPage>
               )}
@@ -375,12 +420,12 @@ function Shell() {
         </button>
       </nav>
       {moreOpen && (
-        <Sheet label="More sections" className="more-sheet" bottom onClose={() => setMoreOpen(false)}>
+        <Sheet label="More sections" className="more-sheet" bottom keepApp onClose={() => setMoreOpen(false)}>
           {NAV.filter((n) => !tabbar.includes(n.id)).map((n, i, list) => (
             <div key={n.id}>
               {/* the sidebar's groups, so 13 items aren't one long list */}
               {(i === 0 || groupOf(n.id) !== groupOf(list[i - 1].id)) && groupOf(n.id) && <div className="nav-group">{groupOf(n.id)}</div>}
-              {navButton(n)}
+              {navButton(n, "nav-item", true)}
             </div>
           ))}
         </Sheet>
@@ -403,32 +448,40 @@ function groupOf(id: Section) {
 const tabbarFor = (hosting: boolean): Section[] => (hosting ? ["play", "maps", "players", "servers"] : ["play", "maps", "bots", "players"]);
 
 /** What's in progress anywhere in the app, so it's visible from any page. `phone`: the
- *  slim line under the top bar on phones (the bar itself has no room for it there). */
+ *  slim line along the bottom of the top bar on phones (the bar itself has no room for it
+ *  there); only one of the two shows, by screen size. */
 function Working({ phone }: { phone?: boolean }) {
   const acts = useActivity().filter(([, label]) => label);
   if (!acts.length) return null;
   return (
-    <span className={phone ? "working working-phone" : "working"} role="status">
+    <span className={phone ? "working working-phone" : "working"} role={phone ? undefined : "status"}>
       <span className="spinner" aria-hidden="true" />
-      {acts[0][1]}
-      {acts.length > 1 ? ` (+${acts.length - 1} more)` : ""}
+      <span className="working-label">
+        {acts[0][1]}
+        {acts.length > 1 ? ` (+${acts.length - 1} more)` : ""}
+      </span>
     </span>
   );
 }
 
-function Strip({ data, reconnecting, reason, app, server, gameOpen }: { data: Online | null; reconnecting: boolean; reason: string; app: AppInfo | null; server?: string; gameOpen: boolean }) {
+function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { data: Online | null; reconnecting: boolean; lost: boolean; reason: string; app: AppInfo | null; server?: string; gameOpen: boolean }) {
   if (!data) {
     return (
       <header className="strip" data-tauri-drag-region>
         <div className="strip-meta idle" data-tauri-drag-region>
-          {server
-            ? `${server} isn't running`
-            : app?.game
-              ? `${gameTitle(app.game.id)} ${gameOpen ? "is open, but no game is loaded" : "isn't running"}`
-              : reason}
+          {lost
+            ? reason
+            : server
+              ? `${server} isn't running`
+              : app?.game
+                ? `${gameTitle(app.game.id)} ${gameOpen ? "is open, but no game is loaded" : "isn't running"}`
+                : reason}
         </div>
-        <Working />
-        <span className="live">Offline</span>
+        <div className="strip-actions">
+          <Working />
+          <span className={`live${lost ? " off-line" : ""}`}>{lost ? "Can't reach it" : "Offline"}</span>
+        </div>
+        <Working phone />
       </header>
     );
   }
@@ -456,6 +509,7 @@ function Strip({ data, reconnecting, reason, app, server, gameOpen }: { data: On
         <Working />
         <span className={`live${reconnecting ? "" : " on"}`}>{reconnecting ? "Reconnecting…" : "Live"}</span>
       </div>
+      <Working phone />
     </header>
   );
 }
@@ -477,12 +531,15 @@ function Waiting({ label, game, gameOpen, reason, onPlay, setUp, openSetup }: { 
       ) : (
         <>
           <p className="muted">Loner-Strike isn't set up on this game yet, so there's nothing to control.</p>
-          <button className="btn primary" onClick={openSetup}>Set it up</button>
+          {ON_THIS_COMPUTER ? <button className="btn primary" onClick={openSetup}>Set it up</button> : <p className="muted">{SETUP_ON_COMPUTER}</p>}
         </>
       )}
     </div>
   );
 }
+
+/** The phone layout (styles.css uses the same): narrow, or a phone on its side. */
+const PHONE_QUERY = "(max-width: 760px), (pointer: coarse) and (max-height: 500px)";
 
 /** On a phone in the browser: how to put the panel on the home screen, so it opens like an app. */
 function HomeScreenHint() {
@@ -493,9 +550,9 @@ function HomeScreenHint() {
       return false;
     }
   });
-  const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 760px)").matches);
+  const [narrow, setNarrow] = useState(() => window.matchMedia(PHONE_QUERY).matches);
   useEffect(() => {
-    const m = window.matchMedia("(max-width: 760px)");
+    const m = window.matchMedia(PHONE_QUERY);
     const on = () => setNarrow(m.matches);
     m.addEventListener("change", on);
     return () => m.removeEventListener("change", on);
@@ -514,7 +571,7 @@ function HomeScreenHint() {
   return (
     <div className="banner home-hint">
       <div>
-        Put Loner-Strike on your home screen: {ios ? <>tap <b>Share</b>, then <b>Add to Home Screen</b></> : <>tap <b>⋮</b>, then <b>Add to Home screen</b></>}. It opens like an app.
+        Put Loner-Strike on your home screen: {ios ? <>tap <b>Share</b>, then <b>Add to Home Screen</b>. It opens like an app.</> : <>tap <b>⋮</b>, then <b>Add to Home screen</b>.</>}
       </div>
       <button className="btn" onClick={hide}>Got it</button>
     </div>

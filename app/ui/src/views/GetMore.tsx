@@ -61,6 +61,8 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
         setDone(r.done || !r.items.length);
       } catch (e) {
         if (mine !== latest.current) return;
+        // a new search that failed: the old results aren't its results
+        if (reset) setItems([]);
         setError((e as Error).message.includes("Start") || (e as Error).message.includes("game") ? (e as Error).message : "Couldn't reach GameBanana. Check your internet connection.");
       } finally {
         if (mine === latest.current) setLoading(false);
@@ -245,7 +247,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
                 </div>
               );
             })}
-            {!items.length && !loading && !error && <p className="muted">Nothing found. Try another search or type.</p>}
+            {!items.length && !loading && !error && <p className="muted">Nothing matches. Try another search or type.</p>}
             {!items.length && loading && Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>)}
           </div>
           {!done && items.length > 0 && (
@@ -268,7 +270,7 @@ export function GetMore({ onInstalled: onInstalledProp, only }: { onInstalled: (
             {open.installed ? (
               <div className="banner">
                 <div>Installed.</div>
-                <BusyButton className="btn danger" busy={busy(removeKey(section, open.id))} label="Remove" busyLabel="Removing…" onClick={() => remove(open.id, open.name)} />
+                {ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={busy(removeKey(section, open.id))} label="Remove" busyLabel="Removing…" onClick={() => remove(open.id, open.name)} />}
               </div>
             ) : (
               <ul className="files">
@@ -352,7 +354,7 @@ function InstalledList({ onChanged }: { onChanged: () => void }) {
           </div>
           <div className="row">
             {it.url && <a className="btn" href={it.url} target="_blank" rel="noreferrer">Open on GameBanana</a>}
-            <BusyButton className="btn danger" busy={busy(removeKey(it.section, it.mod))} label="Remove" busyLabel="Removing…" onClick={() => remove(it)} />
+            {ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={busy(removeKey(it.section, it.mod))} label="Remove" busyLabel="Removing…" onClick={() => remove(it)} />}
           </div>
         </li>
       ))}

@@ -6,7 +6,7 @@ import { useNav } from "../store";
 import type { AppInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
-import { BOT_NOTE, BOT_RATING } from "../games";
+import { BOT_NOTE, BOT_RATING, BOT_RATING_INFO } from "../games";
 
 
 // Part of Loner-Strike's own plugin: always there once the basics are installed
@@ -14,10 +14,10 @@ const BUILT_IN: { id: string; name: string; kind: "mode" | "addon"; description:
   { id: "classic", name: "Classic", kind: "mode", description: "Bomb defusal and hostage rescue, the way the game plays" },
   { id: "csdm", name: "Deathmatch", kind: "mode", description: "Teams, instant respawn, pick your guns" },
   { id: "csdm_ffa", name: "Free for all", kind: "mode", description: "Everyone for themselves, instant respawn" },
-  { id: "knife", name: "Knife Arena", kind: "mode", description: "Knives only" },
-  { id: "pistols", name: "Pistols Only", kind: "mode", description: "No primaries" },
-  { id: "deagle", name: "Deagle Only", kind: "mode", description: "Free Deagle every spawn" },
-  { id: "awp", name: "AWP Only", kind: "mode", description: "Free AWP every spawn" },
+  { id: "knife", name: "Knife arena", kind: "mode", description: "Knives only" },
+  { id: "pistols", name: "Pistols only", kind: "mode", description: "No primaries" },
+  { id: "deagle", name: "Deagle only", kind: "mode", description: "Free Deagle every spawn" },
+  { id: "awp", name: "AWP only", kind: "mode", description: "Free AWP every spawn" },
   { id: "scoutz", name: "Scoutz & Knivez", kind: "mode", description: "Scouts, low gravity, air control" },
   { id: "surf", name: "Surf", kind: "mode", description: "Air control, free guns, long rounds" },
   { id: "match", name: "Match (5v5)", kind: "mode", description: "Scrims and pick-up games: ready up, knife for sides, MR15 with half-time" },
@@ -94,8 +94,10 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
       const r = await postJson<{ ok?: boolean; error?: string }>(remove ? "/api/setup/uninstall" : "/api/setup/install", body).catch(() => ({ error: "Couldn't reach the app." }));
       if (r.error) return toast(r.error, true);
       const j = await waitForSetupJob();
+      const what = id ? name ?? id : remove ? `Loner-Strike from ${where}` : "the basics";
       if (!j) toast("Lost track of the install. Open Mods again to see if it finished.", true);
-      else toast(j.state === "done" ? (running ? "Done. It loads on the next map." : "Done") : j.error || "The install stopped.", j.state === "error");
+      else if (j.state === "done") toast(`${remove ? "Removed" : "Installed"} ${what}${running ? ". It changes on the next map." : ""}`);
+      else toast(j.error || (remove ? `Couldn't remove ${what}.` : `Couldn't install ${what}.`), true);
       onChanged();
     }, label);
   };
@@ -116,8 +118,15 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
   return (
     <div className="stack">
       <SectionHead title="Mods" note={`Game modes and add-ons on ${where}. Everything is backed up, so removing something puts the original files back.`}>
-        {!game.dedicated && <button className="btn" onClick={openSetup}>Run full setup</button>}
+        {ON_THIS_COMPUTER && !game.dedicated && (
+          <>
+            <button className="btn" onClick={openSetup}>Run full setup</button>
+            <Info text="Set up another game, or add or remove many modes at once. Nothing already set up is lost." />
+          </>
+        )}
       </SectionHead>
+      {/* installing copies files on the computer: a phone looks, it doesn't change */}
+      {!ON_THIS_COMPUTER && <p className="muted">Install and remove mods on the computer running Loner-Strike.</p>}
 
       {busy && (
         <SteamProgress
@@ -132,9 +141,11 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
         <div className="panel">
           <h3>Loner-Strike isn't on {where} yet</h3>
           <p className="muted measure">The basics come first: Metamod-P, AMX Mod X, ReGameDLL and the Game Mode Menu, with the built-in modes. Then add whatever you like below.</p>
-          <div className="row">
-            <BusyButton className="btn primary" busy={busy === "core"} disabled={!!busy} label="Install the basics" busyLabel="Installing…" onClick={() => change(null, false)} />
-          </div>
+          {ON_THIS_COMPUTER && (
+            <div className="row">
+              <BusyButton className="btn primary" busy={busy === "core"} disabled={!!busy} label="Install the basics" busyLabel="Installing…" onClick={() => change(null, false)} />
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -142,6 +153,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
           <div className="chips" role="group" aria-label="Show">
             {FILTERS.map(([id, label]) => <button key={id} className="chip" aria-pressed={filter === id} onClick={() => setFilter(id)}>{label}</button>)}
             <Info text="A game mode changes how the whole game plays, and you switch between modes. An add-on, like the grappling hook, works on top of whichever mode is on." />
+            {sort === "bots" && <Info text={BOT_RATING_INFO} />}
           </div>
           <label className="sort">
             <span>Sort</span>
@@ -161,13 +173,15 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
                 <div className="row">
                   {c.builtin ? (
                     <span className="muted small-note">Comes with Loner-Strike</span>
+                  ) : !ON_THIS_COMPUTER ? (
+                    on && <span className="muted small-note">Installed</span>
                   ) : on ? (
                     <BusyButton className="btn danger" busy={busy === c.id} disabled={!!busy} label="Remove" busyLabel="Removing…" onClick={() => change(c.id, true, c.name)} />
                   ) : (
                     <BusyButton className="btn primary" busy={busy === c.id} disabled={!!busy} label="Install" busyLabel="Installing…" onClick={() => change(c.id, false, c.name)} />
                   )}
                   {switchAt(c)}
-                  {rating && <span className={`bots-note ${rating}`}>{BOT_NOTE[rating]}</span>}
+                  {rating && <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>}
                 </div>
               </div>
             );
@@ -179,10 +193,15 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
 
       {setUp && <OwnPlugins />}
 
-      {setUp && (
+      {/* your own game: one place to remove it all, in Settings; a server keeps its own button here */}
+      {setUp && ON_THIS_COMPUTER && (
         <div className="panel row between">
           <p className="muted">Take Loner-Strike off {where} completely: every mod, the Game Mode Menu and the bot setup.</p>
-          <BusyButton className="btn danger" busy={busy === "core"} disabled={!!busy} label="Remove Loner-Strike" busyLabel="Removing…" onClick={() => change(null, true)} />
+          {game.dedicated ? (
+            <BusyButton className="btn danger" busy={busy === "core"} disabled={!!busy} label="Remove Loner-Strike" busyLabel="Removing…" onClick={() => change(null, true)} />
+          ) : (
+            <button className="link inline" onClick={() => go("settings")}>Remove Loner-Strike in Settings</button>
+          )}
         </div>
       )}
     </div>
@@ -216,6 +235,7 @@ function OwnPlugins() {
       const r = await postJson<R>("/api/mods/plugins/remove", { name }).catch((): R => ({ error: "Couldn't reach the app." }));
       if (r.error) return toast(r.error, true);
       setList(r.plugins ?? []);
+      toast(`Removed ${name}`);
     }, `Removing ${name}…`);
   };
   return (
@@ -235,7 +255,7 @@ function OwnPlugins() {
                 <span className="person-name">{n}</span>
                 <span className="person-sub mono">addons/amxmodx/plugins/{n}.amxx</span>
               </div>
-              <BusyButton className="btn danger" busy={busy(key(`remove:${n}`))} label="Remove" busyLabel="Removing…" onClick={() => remove(n)} />
+              {ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={busy(key(`remove:${n}`))} label="Remove" busyLabel="Removing…" onClick={() => remove(n)} />}
             </li>
           ))}
         </ul>

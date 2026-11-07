@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, useActions } from "../api";
+import { copyText, getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { useDirty } from "../store";
@@ -214,9 +214,18 @@ export function Hltv({ server }: { server: ServerInfo }) {
             <h3>Broadcast</h3>
             <span className={`live${running ? " on" : ""}`}>{running ? "Running" : st.state === "starting" ? "Starting" : saved.enabled ? "Stopped" : "Off"}</span>
           </div>
+          {/* saves by itself, unlike the settings beside it */}
+          <div className="setting">
+            <span className="name">
+              HLTV
+              <Info text="Lets people watch without joining a team, and can record demos. Starts and stops with the server." />
+              <span className="note">Turns on now. It starts and stops with the server</span>
+            </span>
+            <Switch on={form.enabled} disabled={saving} onChange={setEnabled} label="HLTV" />
+          </div>
           {st.error && <p className="err-text">{st.error}</p>}
           {!saved.enabled ? (
-            <p className="muted">HLTV is off. Turn it on in the settings and it starts and stops with the server.</p>
+            <p className="muted">HLTV is off. Turn it on above and it starts and stops with the server.</p>
           ) : running ? (
             <>
               <dl className="hltv-facts">
@@ -249,17 +258,13 @@ export function Hltv({ server }: { server: ServerInfo }) {
 
         <div className="panel">
           <h3>Settings</h3>
-          <div className="setting">
-            <span className="name">HLTV<span className="note">Starts and stops with the server</span></span>
-            <Switch on={form.enabled} disabled={saving} onChange={setEnabled} label="HLTV" />
-          </div>
           <label className="field">
             <span>Name</span>
             <input className="search" maxLength={32} placeholder={st.default_name} value={form.name} onChange={(e) => set({ name: e.target.value })} />
             <small>Shown on the scoreboard and in the server browser.</small>
           </label>
           <div className="field">
-            <span>Delay</span>
+            <span>Delay<Info text="How far behind the live game watchers see. A longer delay stops them telling a team where the enemy is." /></span>
             <div className="seg" role="group" aria-label="Delay">
               {(DELAYS.includes(form.delay) ? DELAYS : [...DELAYS, form.delay].sort((a, b) => a - b)).map((d) => (
                 <button key={d} type="button" aria-pressed={form.delay === d} onClick={() => set({ delay: d })}>{delayText(d)}</button>
@@ -280,7 +285,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
           {problem && <p className="err-text small-note">{problem}</p>}
           <p className="muted small-note">Each spectator uses about 3 KB/s of upload. The port is {st.default_port} unless you change it.</p>
           <label className="field">
-            <span>Spectator password</span>
+            <span>Spectator password<Info text="Watchers type this to connect. It's separate from the server's join password." /></span>
             <input className="search" maxLength={32} placeholder="None: anyone with the address can watch" value={form.password} onChange={(e) => set({ password: e.target.value })} spellCheck={false} autoComplete="off" />
           </label>
           <div className="setting">
@@ -318,12 +323,8 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 function Addresses({ st }: { st: Status }) {
   const toast = useToast();
   const copy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(`connect ${text}`);
-      toast("Copied");
-    } catch {
-      toast("Couldn't copy. Select the text instead.", true);
-    }
+    if (await copyText(`connect ${text}`)) toast("Copied");
+    else toast("Couldn't copy. Select the text instead.", true);
   };
   const port = st.settings.port;
   if (st.addresses.internet) {
@@ -387,7 +388,7 @@ function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; re
   }, `Copying ${d.name} to your game…`);
   const show = async (name = "") => {
     const r = await post(`/api/servers/${server.id}/hltv-folder`, { name });
-    if (r.error) toast(r.error.includes("forbidden") ? "That only works on the computer running Loner-Strike." : r.error, true);
+    if (r.error) toast(r.error.includes("forbidden") ? ON_COMPUTER_ONLY : r.error, true);
   };
   return (
     <div className="panel">
@@ -418,7 +419,7 @@ function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; re
                     ) : (
                       <a className="btn" href={`/api/servers/${encodeURIComponent(server.id)}/hltv/demos/${encodeURIComponent(d.name)}`} download={d.name}>Download</a>
                     )}
-                    <BusyButton className="btn danger" busy={busy(key(d))} disabled={live} label="Delete" busyLabel="Deleting…" onClick={() => remove(d)} />
+                    {ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={busy(key(d))} disabled={live} label="Delete" busyLabel="Deleting…" onClick={() => remove(d)} />}
                   </div>
                 </li>
               );

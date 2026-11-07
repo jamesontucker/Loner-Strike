@@ -23,6 +23,16 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
   const settle = useRef(0);
   const sendCount = (n: number) => run("gm_bots", ["count", String(n)], true).then(() => setTimeout(() => setDragging(false), 1500));
   const learning = st.navleft > 0;
+  const most = Math.max(1, st.maxplayers - 1);
+  /** One more or one fewer, for the buttons beside the slider (easier than dragging on a phone). */
+  const step = (d: number) => {
+    const n = Math.min(most, Math.max(0, count + d));
+    if (n === count) return;
+    clearTimeout(settle.current);
+    setDragging(true);
+    setCount(n);
+    settle.current = window.setTimeout(() => sendCount(n), 500);
+  };
 
   return (
     <SettingsPage title="Bots" note="Difficulty changes re-add the bots so they pick it up straight away." data={data} cat={1} refresh={refresh}>
@@ -33,12 +43,14 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
       )}
       {learning && <Banner>Bots are learning {st.map}… {st.navleft} step{st.navleft === 1 ? "" : "s"} left.</Banner>}
       <div className="slider-row">
-        <label htmlFor="botCount">Bots<Info text="How many bots are in the game." /></label>
+        <label htmlFor="botCount">Bots<Info text="How many bots play. Each one takes a player slot, so leave room for friends." /></label>
+        <div className="slider-step">
+        <button type="button" className="btn step" aria-label="One bot fewer" disabled={count <= 0} onClick={() => step(-1)}>−</button>
         <input
           id="botCount"
           type="range"
           min={0}
-          max={Math.max(1, st.maxplayers - 1)}
+          max={most}
           value={count}
           onChange={(e) => {
             setDragging(true);
@@ -60,6 +72,8 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
             sendCount(count);
           }}
         />
+        <button type="button" className="btn step" aria-label="One more bot" disabled={count >= most} onClick={() => step(1)}>+</button>
+        </div>
         <output htmlFor="botCount">{count}</output>
         <div className="row">
           <BusyButton busy={busy(key("addt"))} label="Add a Terrorist" busyLabel="Adding…" onClick={() => bots("addt", "Adding a Terrorist bot…")} />

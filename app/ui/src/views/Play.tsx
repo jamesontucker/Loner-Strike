@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getJson, getJsonAt, postJson, targetKey, useActions, useActivity } from "../api";
-import { BOT_NOTE, BOT_RATING, gameTitle } from "../games";
+import { getJson, getJsonAt, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, targetKey, useActions, useActivity } from "../api";
+import { BOT_NOTE, BOT_RATING, BOT_RATING_INFO, BOT_STYLE_NOTE, BOT_STYLES, gameTitle } from "../games";
 import { Icon } from "../icons";
-import { useTarget } from "../queries";
+import { reloadAppInfo, reloadScan, useTarget } from "../queries";
+import { useNav } from "../store";
 import { usePlayDraft, usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
-import { BusyButton, Info, LoadError, SectionHead, Sheet, useCommand, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 import { COLLATOR, MapCard } from "./Maps";
 import { MatchMode } from "./MatchMode";
 
@@ -77,10 +78,14 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
         <div className="idle-hero">
           <h1>Not set up yet</h1>
           <p>Loner-Strike adds the bots, the modes and the Game Mode Menu to {game}. Setup takes a couple of minutes, and everything it changes is backed up.</p>
-          <button className="btn launch" onClick={openSetup}>
-            <Icon name="play" size={22} />
-            Set it up
-          </button>
+          {ON_THIS_COMPUTER ? (
+            <button className="btn launch" onClick={openSetup}>
+              <Icon name="play" size={22} />
+              Set it up
+            </button>
+          ) : (
+            <p className="muted">{SETUP_ON_COMPUTER}</p>
+          )}
           <div className="last">
             Or <button className="link inline" disabled={starting} aria-busy={starting} onClick={() => launch()}>{starting ? "starting…" : overdue ? "still starting? Start again" : `start ${game} without it`}</button>.
           </div>
@@ -102,6 +107,10 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
         <div className="idle-hero">
           <h1>No game yet</h1>
           <p>{reason || "Loner-Strike couldn't find Counter-Strike 1.6 or Condition Zero on this computer."}</p>
+          <div className="row">
+            <BusyButton className="btn primary" busy={busy(key("rescan"))} label="Look again" busyLabel="Looking…" onClick={() => run(key("rescan"), async () => { await Promise.all([reloadScan(), reloadAppInfo()]); }, "Looking for the game…")} />
+            {ON_THIS_COMPUTER && <button className="btn" onClick={() => useNav.getState().go("settings")}>Choose the game folder</button>}
+          </div>
         </div>
       </div>
     );
@@ -120,6 +129,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           {optsQ.isError && !opts && (
             <LoadError text="Couldn't load the modes and bot settings. Starting now uses the game's last settings." onRetry={() => optsQ.refetch()} />
           )}
+          {optsQ.isLoading && <div className="start-skeleton"><Skeleton rows={2} /></div>}
           {modes.length > 0 && mode && (
             <label className="field">
               <span>Mode<Info text="The mode the game starts in. Each mode remembers its own settings, and you can switch once you're in." /></span>
@@ -129,13 +139,13 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
             </label>
           )}
           <div className="field">
-            <span id="start-map">Map<Info text="Type to search. Maps made for the mode you picked come first, then the ones you played recently and your favourites." /></span>
+            <span id="start-map">Map<Info text="Maps made for this mode come first, then recent ones and favourites. Open the list and type to search." /></span>
             <MapPicker value={map} maps={maps} mode={mode?.id} modeName={mode?.name} recent={recent} favs={favs} onPick={(m) => setDraft({ map: m })} labelledBy="start-map" />
           </div>
         </div>
         <div className="start-box start-settings">
           <div className="field">
-            <span>Bots<Info text="How many bots join. You can add or remove bots once you're in." /></span>
+            <span>Bots<Info text="How many bots play. Each one takes a player slot, so leave room for friends." /></span>
             <div className="seg" role="group" aria-label="Bots">
               {[0, 5, 9, 15].map((n) => <button key={n} aria-pressed={botCount === n} onClick={() => setDraft({ bots: n })}>{n === 0 ? "None" : n}</button>)}
             </div>
@@ -154,7 +164,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
               <select value={value("gm_botstyle") ?? DEFAULTS.gm_botstyle} onChange={(e) => change("gm_botstyle", e.target.value)}>
                 {BOT_STYLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
-              <span className="field-note">{STYLE_NOTE[value("gm_botstyle") ?? DEFAULTS.gm_botstyle]}</span>
+              <span className="field-note">{BOT_STYLE_NOTE[value("gm_botstyle") ?? DEFAULTS.gm_botstyle]}</span>
             </label>
           )}
           {mode && (
@@ -245,7 +255,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
         </section>
       )}
       <section>
-        <SectionHead title="Game mode" note="Switching reloads the map. Each mode remembers its own settings." />
+        <SectionHead title="Game mode" note={<>Switching reloads the map. Each mode remembers its own settings. Each card says how well bots play it.<Info text={BOT_RATING_INFO} /></>} />
         <div className="modes">
           {data.modes.map((m) => {
             const rating = BOT_RATING[m.id] ?? "great";
@@ -263,7 +273,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
                 </span>
                 <span className="mode-name">{modeBusy === m.id && <span className="spinner" aria-hidden="true" />}{m.name}</span>
                 <span className="mode-desc">{m.desc}</span>
-                <span className={`bots-note ${rating}`}>{BOT_NOTE[rating]}</span>
+                <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>
               </button>
             );
           })}
@@ -286,23 +296,12 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
 }
 
 type StartOptions = { modes: { id: string; name: string; settings: Record<string, string | null> }[]; mode: string };
-// What each bot style is like
-const STYLE_NOTE: Record<string, string> = {
-  "0": "The game's own bots: instant reactions, perfect aim.",
-  "4": "New players: slow to react, they spray and miss a lot.",
-  "1": "A typical public server: a few sharp players, most average, some bad.",
-  "8": "Everyone different, from new to very good. A regular keeps their level.",
-  "2": "Solid players who work as a team.",
-  "3": "Experienced: quick, accurate, short bursts.",
-  "5": "Very good and focused. They bunnyhop between fights.",
-  "6": "Suspiciously good: most bullets find you and they notice you from behind.",
-  "7": "Everything maxed. Every bullet near you is a headshot.",
-};
 // What the screen shows (and starts the game with) when nothing's been chosen yet
 const DEFAULTS: Record<string, string> = { bot_difficulty: "2", gm_botstyle: "8" };
-// gm_botstyle values, in the order the in-game menu shows them
-const BOT_STYLES: [string, string][] = [["0", "Classic"], ["4", "Newbie lobby"], ["1", "Pub server"], ["8", "Mixed lobby"], ["2", "Matchmaking"], ["3", "Veterans"], ["5", "Locked In"], ["6", "Hackers"], ["7", "Gods"]];
 const TIME_LIMITS: [string, string][] = [["0", "None"], ["10", "10 min"], ["20", "20 min"], ["30", "30 min"], ["45", "45 min"], ["60", "60 min"]];
+
+/** A touch screen: the search box doesn't take focus by itself (that opens the keyboard over the list). */
+const TOUCH = window.matchMedia("(pointer: coarse)").matches;
 
 /** A map list you can type into: the mode's maps, recent and favourites first. */
 function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelledBy }: { value: string; maps: MapInfo[]; mode?: string; modeName?: string; recent: MapInfo[]; favs: MapInfo[]; onPick: (m: string) => void; labelledBy: string }) {
@@ -367,7 +366,7 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
       </button>
       {open && (
         <div className="map-picker-pop">
-          <input className="search" type="search" autoFocus placeholder={`Search ${have.length} maps`} value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={key} aria-label="Search maps" role="combobox" aria-expanded="true" aria-controls={`${labelledBy}-list`} aria-autocomplete="list" aria-activedescendant={flat[active] ? optId(active) : undefined} />
+          <input className="search" type="search" autoFocus={!TOUCH} placeholder={`Search ${have.length} maps`} value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={key} aria-label="Search maps" role="combobox" aria-expanded="true" aria-controls={`${labelledBy}-list`} aria-autocomplete="list" aria-activedescendant={flat[active] ? optId(active) : undefined} />
           <div className="map-picker-list" id={`${labelledBy}-list`} role="listbox" aria-label="Maps">
             {flat.length === 0 && <p className="muted small-note">No map matches. Find more in Get more.</p>}
             {shown.map(([label, list]) => (

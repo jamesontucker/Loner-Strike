@@ -8,6 +8,46 @@ export const SAFE = /^[A-Za-z0-9_.\-]{1,64}$/;
 
 /** The app window on this computer (not a phone over Wi-Fi). Some things only work here. */
 export const ON_THIS_COMPUTER = ["127.0.0.1", "localhost"].includes(location.hostname);
+/** What a phone says about something only the computer can do. */
+export const ON_COMPUTER_ONLY = "Do that on the computer running Loner-Strike.";
+/** What a phone says where the computer would offer setup. */
+export const SETUP_ON_COMPUTER = "Set it up on the computer running Loner-Strike.";
+
+/** Copies text, also on phones over plain http (no navigator.clipboard there): call it
+ *  straight from the click handler. Resolves false when nothing could be copied. */
+export async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      /* try the old way below */
+    }
+  }
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.top = "0";
+  area.style.left = "0";
+  area.style.opacity = "0";
+  // 16px so iOS doesn't zoom in on it
+  area.style.fontSize = "16px";
+  document.body.appendChild(area);
+  const focused = document.activeElement as HTMLElement | null;
+  area.focus();
+  area.select();
+  area.setSelectionRange(0, text.length);
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  area.remove();
+  focused?.focus?.();
+  return ok;
+}
 
 /** The open target as part of an action key ("local" for the player's own game), so the
  *  same action on two servers doesn't share a spinner. */
@@ -22,13 +62,23 @@ const targetHeader = (): Record<string, string> => {
   return t ? { "X-Target": t } : {};
 };
 
+/** A request the app answered with an error status (403: this phone isn't signed in). */
+export class HttpError extends Error {
+  constructor(path: string, readonly status: number) {
+    super(`${path}: ${status}`);
+  }
+}
+/** What a phone says when the app no longer accepts it (a new code, or signed out). */
+export const SIGNED_OUT = "This phone isn't signed in any more. Scan the QR code in Settings on the computer.";
+export const isSignedOut = (e: unknown) => e instanceof HttpError && e.status === 403;
+
 /** GET as JSON for the open target. Opening another server cancels it (an AbortError),
  *  so a reply meant for the previous one can't land on the new one's page. */
 export async function getJson<T>(path: string): Promise<T> {
   const { signal, done } = targetSignal();
   try {
     const r = await fetch(path, { credentials: "same-origin", headers: targetHeader(), signal });
-    if (!r.ok && r.status !== 400) throw new Error(`${path}: ${r.status}`);
+    if (!r.ok && r.status !== 400) throw new HttpError(path, r.status);
     return (await r.json()) as T;
   } finally {
     done();
@@ -39,7 +89,7 @@ export async function getJson<T>(path: string): Promise<T> {
  *  following a job to its end, which must finish even if another server is opened. */
 export async function getJsonAt<T>(path: string, target: string | null, signal?: AbortSignal): Promise<T> {
   const r = await fetch(path, { credentials: "same-origin", headers: target ? { "X-Target": target } : {}, signal });
-  if (!r.ok && r.status !== 400) throw new Error(`${path}: ${r.status}`);
+  if (!r.ok && r.status !== 400) throw new HttpError(path, r.status);
   return (await r.json()) as T;
 }
 

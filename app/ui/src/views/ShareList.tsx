@@ -47,7 +47,7 @@ export function ShareList({ list, onShared }: { list: ListId; onShared?: () => v
       if (picking && !on) return setPicking(false);
       // the ones who stay keep sharing (they all have the same list, so any of them is the source)
       const rest = members.filter((m) => m !== me);
-      return set(rest, rest.find((m) => data.targets.some((t) => t.id === m)) ?? rest[0] ?? me, `This one's ${label} are its own again`);
+      return set(rest, rest.find((m) => data.targets.some((t) => t.id === m)) ?? rest[0] ?? me, `Stopped sharing the ${label}`);
     }
     // a group already shares it: join that one and take its list
     if (members.length >= 2) {

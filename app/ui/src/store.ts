@@ -40,6 +40,8 @@ type Nav = {
   focus: string | null;
   go: (s: Section, focus?: string) => void;
   openServer: (id: string | null) => void;
+  /** Back (or Forward) to a page from the history: like go/openServer, without a new entry. */
+  restore: (s: Section, server: string | null) => void;
   setMoreOpen: (v: boolean) => void;
   setSetupOpen: (v: boolean, intro?: boolean) => void;
   laterSetup: () => void;
@@ -55,20 +57,31 @@ export const useNav = create<Nav>((set, get) => ({
   setupLater: saved<string>("ls.setupLater", "0") === "1",
   focus: null,
   go: (section, focus) => {
+    const was = { section: get().section, server: get().server };
     // only the Servers area works on a server; every other page is your own game (and
     // Servers again, from a server's page, is the list)
-    if (get().server && (section !== "servers" || get().section === "servers")) get().openServer(null);
+    if (get().server && (section !== "servers" || get().section === "servers")) switchTarget(null);
     keep("ls.section", section);
     set({ section, moreOpen: false, focus: focus ?? null });
+    if (was.section !== section || was.server !== get().server) pushPage(section, get().server);
     // an open question about the old page closes (ConfirmProvider)
     window.dispatchEvent(new Event("ls-nav"));
     document.querySelector(".content")?.scrollTo({ top: 0 });
   },
   openServer: (server) => {
     if (server === get().server) return;
-    abortTargetRequests();
-    set({ server });
-    window.dispatchEvent(new Event("ls-target"));
+    switchTarget(server);
+    // a server's page is a step Back can undo
+    if (server) pushPage(get().section, server);
+  },
+  restore: (section, server) => {
+    if (server !== get().server) switchTarget(server);
+    if (section !== get().section) {
+      keep("ls.section", section);
+      set({ section, moreOpen: false, focus: null });
+      window.dispatchEvent(new Event("ls-nav"));
+      document.querySelector(".content")?.scrollTo({ top: 0 });
+    } else set({ moreOpen: false });
   },
   setMoreOpen: (moreOpen) => set({ moreOpen }),
   setSetupOpen: (setupOpen, intro = false) => set({ setupOpen, setupIntro: setupOpen && intro }),
@@ -78,6 +91,30 @@ export const useNav = create<Nav>((set, get) => ({
   },
   clearFocus: () => set({ focus: null }),
 }));
+
+/** Opens a server's pages (or your own game's, null): its requests start over. */
+function switchTarget(server: string | null) {
+  abortTargetRequests();
+  useNav.setState({ server });
+  window.dispatchEvent(new Event("ls-target"));
+}
+
+/** A page in the history, for Back: { ls, section, server }. */
+export type PageEntry = { ls: 1; section: Section; server: string | null; sheet?: number };
+export const isPageEntry = (v: unknown): v is PageEntry => !!v && typeof v === "object" && (v as PageEntry).ls === 1 && SECTIONS.includes((v as PageEntry).section);
+function pushPage(section: Section, server: string | null) {
+  try {
+    history.pushState({ ls: 1, section, server } satisfies PageEntry, "");
+  } catch {
+    /* history unavailable */
+  }
+}
+// where the app starts is the first entry
+try {
+  history.replaceState({ ls: 1, section: useNav.getState().section, server: null } satisfies PageEntry, "");
+} catch {
+  /* history unavailable */
+}
 
 /** The open target as the API names it (null: your own game). */
 export const currentTarget = () => useNav.getState().server;

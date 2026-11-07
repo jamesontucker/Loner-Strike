@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
-import { getJson, ON_THIS_COMPUTER, postJson, useActions, useOnce, usePoll } from "../api";
+import { getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions, useOnce, usePoll } from "../api";
 import { reloadServers } from "../queries";
 import { useDirty, useDirtyStore } from "../store";
 import type { AppInfo, MapInfo, Online, ServerInfo, ServerList } from "../types";
@@ -33,8 +33,9 @@ const VISIBILITY = [
 ] as const;
 const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up", failed: "Not finished", checking: "Checking…" };
 
-/** What a phone is told when it tries something only the computer can do. */
-export const ON_COMPUTER_ONLY = "Change this from the computer running Loner-Strike.";
+/** How long a server on this computer keeps running (the switch's name is in AppSettings). */
+const RUNS_WHILE = "A server on this computer runs while Loner-Strike is open, or after you quit if Keep servers running when I close Loner-Strike is on in Settings.";
+const WHO_CAN_JOIN = "This network: only people on your Wi-Fi. Anyone with the address: friends join with the address you send, strangers can't find it. Listed on Steam: anyone can find it in the Internet tab.";
 
 type Reply = { ok?: boolean; error?: string; job?: string; id?: string; path?: string; note?: string | null; admins?: number; loner?: boolean; dir?: string | null; lines?: string[]; reply?: string; need_restart_game?: boolean; restart?: boolean; password?: string };
 const post = (path: string, body: unknown = {}) =>
@@ -156,7 +157,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
 
   return (
     <div className="stack">
-      <SectionHead title="Servers" note="Optional: run dedicated servers that keep going without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game.">
+      <SectionHead title="Servers" note={`Optional: dedicated servers that run without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game. ${RUNS_WHILE}`}>
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setImporting(true)}>Add one you already run</button>}
         {ON_THIS_COMPUTER && <button className="btn primary" onClick={() => setCreating(true)}>New server</button>}
       </SectionHead>
@@ -196,7 +197,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
                 <div className="row">
                   {s.host && <BusyButton className="btn primary" busy={busy(`${s.id}:retry`)} label="Try again" busyLabel="Starting…" onClick={() => act(s, "retry")} />}
                   {s.host && <BusyButton busy={busy(`${s.id}:rebuild`)} label="Rebuild from scratch" busyLabel="Starting…" onClick={() => act(s, "rebuild")} />}
-                  <button className="btn danger" onClick={() => act(s, "delete")}>{s.imported ? "Remove" : "Delete"}</button>
+                  <BusyButton className="btn danger" busy={busy(`${s.id}:delete`)} label={s.imported ? "Remove" : "Delete"} busyLabel={s.imported ? "Removing…" : "Deleting…"} onClick={() => act(s, "delete")} />
                 </div>
               ) : (
                 <p className="muted small-note">{ON_COMPUTER_ONLY}</p>
@@ -206,13 +207,13 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
                 <button className="btn primary" onClick={() => onOpen(s.id)}>Open</button>
                 {s.state === "running" ? (
                   <>
-                    <BusyButton busy={busy(`${s.id}:join`)} label="Join" busyLabel="Joining…" onClick={() => act(s, "join")} />
+                    <BusyButton busy={busy(`${s.id}:join`)} label={ON_THIS_COMPUTER ? "Join" : "Join on the computer"} busyLabel="Joining…" onClick={() => act(s, "join")} />
                     <BusyButton className="btn danger" busy={busy(`${s.id}:stop`)} label="Stop" busyLabel="Stopping…" onClick={() => act(s, "stop")} />
                   </>
                 ) : (
                   <BusyButton busy={busy(`${s.id}:start`)} disabled={!!s.unreachable} label="Start" busyLabel="Starting…" onClick={() => act(s, "start")} />
                 )}
-                {ON_THIS_COMPUTER && <button className="btn danger push" onClick={() => act(s, "delete")}>{s.imported ? "Remove" : "Delete"}</button>}
+                {ON_THIS_COMPUTER && <BusyButton className="btn danger push" busy={busy(`${s.id}:delete`)} label={s.imported ? "Remove" : "Delete"} busyLabel={s.imported ? "Removing…" : "Deleting…"} onClick={() => act(s, "delete")} />}
               </div>
             )}
           </div>
@@ -244,13 +245,13 @@ type Tab = "community" | "hltv" | "extras" | "sounds" | "overview" | "friends" |
 const TABS: { id: Tab; label: string; group: string; live?: boolean }[] = [
   { id: "overview", label: "Overview", group: "Server" },
   { id: "friends", label: "Play with friends", group: "Server" },
-  { id: "extras", label: "Rotation & messages", group: "Server" },
+  { id: "extras", label: "Rotation & rules", group: "Server" },
   { id: "hltv", label: "Spectators & demos", group: "Server" },
   { id: "modes", label: "Modes", group: "Game", live: true },
   { id: "maps", label: "Maps", group: "Game" },
   { id: "getmaps", label: "Get maps", group: "Game" },
   { id: "bots", label: "Bots", group: "Game", live: true },
-  { id: "match", label: "Match", group: "Game", live: true },
+  { id: "match", label: "Rules", group: "Game", live: true },
   { id: "fun", label: "Fun", group: "Game", live: true },
   { id: "players", label: "Players", group: "People", live: true },
   { id: "admins", label: "Admins", group: "People" },
@@ -417,7 +418,7 @@ export function ServerPage(props: {
           <div className="row">
             {running ? (
               <>
-                <BusyButton className="btn primary" busy={busy("join")} label="Join" busyLabel="Joining…" onClick={() => act("join")} />
+                <BusyButton className="btn primary" busy={busy("join")} label={ON_THIS_COMPUTER ? "Join" : "Join on the computer"} busyLabel="Joining…" onClick={() => act("join")} />
                 <BusyButton busy={busy("restart")} label="Restart" busyLabel="Restarting…" onClick={() => act("restart")} />
                 <BusyButton className="btn danger" busy={busy("stop")} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
               </>
@@ -491,7 +492,7 @@ export function ServerPage(props: {
           {tab === "getmaps" && <GetMore only="maps" onInstalled={reloadMaps} />}
           {tab === "bots" && data && <Bots data={data} refresh={refresh} />}
           {tab === "match" && data && (
-            <SettingsPage title="Match" note="Saved for this mode on this server." data={data} cat={2} refresh={refresh}>
+            <SettingsPage title="Rules" note="Saved for this mode on this server." data={data} cat={2} refresh={refresh}>
               <MatchButtons refresh={refresh} />
             </SettingsPage>
           )}
@@ -514,12 +515,13 @@ export function ServerPage(props: {
 function AddLoner({ server, onDone }: { server: ServerInfo; onDone: () => void }) {
   const ask = useConfirm();
   const toast = useToast();
+  const { run, busy } = useActions();
   const [running, setRunning] = useState(false);
-  const install = async () => {
+  const install = () => run(`${server.id}:add-loner`, async () => {
     const r = await post("/api/setup/install", { hl: server.dir, games: [server.game], components: [] });
     if (r.error) return toast(r.error, true);
     setRunning(true);
-  };
+  }, `Adding Loner-Strike to ${server.name}…`);
   const start = async () => {
     if (!(await ask("Add Loner-Strike to this server? It installs Metamod-P, AMX Mod X, ReGameDLL and the Game Mode Menu. Every file it replaces is backed up, and removing it in Mods puts them back.", { ok: "Add Loner-Strike" }))) return;
     install();
@@ -535,7 +537,7 @@ function AddLoner({ server, onDone }: { server: ServerInfo; onDone: () => void }
   ) : (
     <div className="banner">
       <div>This server doesn't have Loner-Strike yet, so here you can only start it, stop it and manage admins. Add Loner-Strike to get modes, bots and the rest.</div>
-      <button className="btn primary" onClick={start}>Add Loner-Strike</button>
+      <BusyButton className="btn primary" busy={busy(`${server.id}:add-loner`)} label="Add Loner-Strike" busyLabel="Adding…" onClick={start} />
     </div>
   );
 }
@@ -606,7 +608,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
           <input className="search" disabled={ro} maxLength={48} value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <div className="field">
-          <span>Who can join<Info text="Anyone with the address suits friends: they join with the address you send them, but strangers can't find it. Listed on Steam puts it in everyone's Internet server list." /></span>
+          <span>Who can join<Info text={WHO_CAN_JOIN} /></span>
           <div className="seg" role="group" aria-label="Who can join">
             {VISIBILITY.map((v) => (
               <button key={v.id} type="button" disabled={ro} aria-pressed={vis === v.id} onClick={() => setVis(v.id)}>{v.name}</button>
@@ -646,7 +648,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
           <div className="stack-tight">
             <div className="row">
               <label className="field">
-                <span>Port<Info text={server.host ? "The port players connect to: 27015 to 27019 on a Linux server (27020 is for HLTV). Open it in your provider's firewall too." : "The port the server listens on, from 27016 up (your own game uses 27015). If friends connect to you directly, open the new port on your router too."} /></span>
+                <span>Port<Info text={server.host ? "The port players connect to: 27015 to 27019 on a Linux server (27020 is for HLTV). Open it in your provider's firewall too." : "Each server needs its own port, from 27016 up. Change it only if something else uses it, and open the new port on your router if friends connect directly."} /></span>
                 <input
                   className="search narrow" type="number" disabled={ro} min={portMin} max={portMax} value={port.text}
                   onChange={(e) => { port.setText(e.target.value); setProblem((p) => ({ ...p, port: "" })); }}
@@ -832,12 +834,29 @@ function Console({ server }: { server: ServerInfo }) {
           <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow new lines
         </label>
       </div>
-      <pre className="console" ref={box}>{shown.length ? shown.join("\n") : failed ? "Can't read the console right now." : "Nothing yet. Start the server to see its console."}</pre>
+      <pre className="console" ref={box}>
+        {shown.length
+          ? shown.join("\n")
+          : failed
+            ? "Can't read the console right now."
+            : server.state === "running"
+              ? "Waiting for the server's console…"
+              : "Nothing yet. Start the server to see its console."}
+      </pre>
       {failed && shown.length > 0 && <p className="muted small-note">Can't read the console right now. These are the last lines it showed.</p>}
       {ON_THIS_COMPUTER ? (
         <form className="row" onSubmit={(e) => { e.preventDefault(); send(); }}>
           <input className="search grow" placeholder="A server command, like status or changelevel de_inferno" value={cmd} onChange={(e) => setCmd(e.target.value)} spellCheck={false} />
-          <button className="btn" type="submit" disabled={server.state !== "running"}>Send</button>
+          <button
+            className="btn"
+            type="submit"
+            disabled={server.state !== "running"}
+            title={server.state !== "running" ? "Start the server first" : undefined}
+            aria-describedby={server.state !== "running" ? `console-why-${server.id}` : undefined}
+          >
+            Send
+          </button>
+          {server.state !== "running" && <span id={`console-why-${server.id}`} className="muted small-note">Start the server first</span>}
         </form>
       ) : (
         <p className="muted small-note">Server commands can only be sent from the computer running Loner-Strike.</p>
@@ -941,7 +960,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
         <h2>New server</h2>
         {ON_THIS_COMPUTER && (
           <div className="field">
-            <span>Where it runs<Info text="This computer runs it while it's on. A Linux server is a machine you rent (a VPS, like Oracle's free tier) that runs it all the time; the app sets it up over SSH with your key." /></span>
+            <span>Where it runs<Info text={`This computer: ${RUNS_WHILE.replace("A server on this computer runs", "it runs")} A Linux server is a machine you rent (a VPS, like Oracle's free tier) that runs it all the time; the app sets it up over SSH with your key.`} /></span>
             <div className="seg" role="group" aria-label="Where it runs">
               <button type="button" aria-pressed={where === "here"} onClick={() => setWhere("here")}>This computer</button>
               <button type="button" aria-pressed={where === "vps"} onClick={() => setWhere("vps")}>A Linux server (VPS)</button>
@@ -1005,7 +1024,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
           </div>
         </div>
         <div className="field">
-          <span>Set it up like</span>
+          <span>Set it up like<Info text="What the new server starts with. You can add or remove modes later in its Mods tab." /></span>
           <div className="methods">
             {templates.map((t) => (
               <button key={t.id} type="button" className="method" role="radio" aria-checked={template === t.id} onClick={() => setTemplate(t.id)}>
@@ -1016,7 +1035,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
           </div>
         </div>
         <div className="field">
-          <span>Who can join<Info text="Anyone with the address suits friends: they join with the address you send them, but strangers can't find it. Listed on Steam puts it in everyone's Internet server list." /></span>
+          <span>Who can join<Info text={WHO_CAN_JOIN} /></span>
           <div className="seg" role="group" aria-label="Who can join">
             {VISIBILITY.map((v) => (
               <button key={v.id} type="button" aria-pressed={vis === v.id} onClick={() => setVis(v.id)}>{v.name}</button>
@@ -1031,7 +1050,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
         <p className="muted">
           {where === "vps"
             ? "Connects to the machine, installs Valve's free server and Loner-Strike there, opens the game ports in its firewall and runs it as a service that keeps going on its own. Ubuntu or Debian on an x86 (AMD or Intel) machine. Open UDP ports 27015-27020 in your provider's firewall too."
-            : "Downloads Valve's free server with SteamCMD (about 1 GB the first time), then sets it up. Your game isn't touched."}
+            : `Downloads Valve's free server with SteamCMD (about 1 GB the first time), then sets it up. Your game isn't touched. ${RUNS_WHILE}`}
         </p>
         {makeErr && <ErrorWithFix error={makeErr} />}
         <div className="row">
@@ -1046,8 +1065,14 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
 
 function ImportServer({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const toast = useToast();
+  const ask = useConfirm();
   const [dir, setDir] = useState("");
   const { run, busy } = useActions();
+  // a typed-in folder isn't thrown away by a stray click or Escape
+  const close = async () => {
+    if (busy("server:import")) return;
+    if (!dir.trim() || (await ask("Close without adding the server?", { ok: "Close without adding it", danger: true }))) onClose();
+  };
   const pick = async () => {
     const r = await post("/api/servers/pick-folder");
     if (r.dir) setDir(r.dir);
@@ -1060,7 +1085,7 @@ function ImportServer({ onClose, onDone }: { onClose: () => void; onDone: () => 
     onDone();
   }, "Adding the server…");
   return (
-    <Sheet label="Add a server you already run" onClose={dir.trim() ? undefined : onClose}>
+    <Sheet label="Add a server you already run" onClose={close}>
       <div className="sheet-body">
         <h2>Add a server you already run</h2>
         <p className="muted measure">Pick the folder with hlds.exe in it. Nothing is moved or deleted. Loner-Strike brings over:</p>
@@ -1076,7 +1101,7 @@ function ImportServer({ onClose, onDone }: { onClose: () => void; onDone: () => 
         <p className="muted">On a Mac the folder has to be inside a CrossOver bottle, so it can run. For a server on a Linux VPS, use New server instead.</p>
         <div className="row">
           <BusyButton className="btn primary" busy={busy("server:import")} disabled={!dir.trim()} label="Add server" busyLabel="Adding…" onClick={go} />
-          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn" onClick={close}>Cancel</button>
         </div>
       </div>
     </Sheet>
@@ -1087,7 +1112,7 @@ const HOSTS = [
   {
     name: "This computer",
     cost: "Free",
-    body: "Make a server here. It runs while Loner-Strike is open. Friends outside your network get in with Direct, playit.gg or a virtual LAN (see Play with friends).",
+    body: `Make a server here. ${RUNS_WHILE.replace("A server on this computer runs", "It runs")} Friends outside your network get in with Direct, playit.gg or a virtual LAN (see Play with friends).`,
     you: "Nothing extra.",
   },
   {

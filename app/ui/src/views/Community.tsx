@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MatchMode, NeedsSetup } from "./MatchMode";
-import { getJson, isAbort, postJson, targetKey, useActions, useQueuedSave } from "../api";
+import { getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import { queryClient } from "../queries";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { useDirty } from "../store";
@@ -34,7 +34,7 @@ type Report = { t: number; from_id: string; from: string; about_id: string; abou
 const STARTER = ["fuck", "fucking", "shit", "bitch", "cunt", "asshole", "bastard", "motherfucker", "retard", "faggot", "nigger", "whore", "slut"];
 
 type Tab = "stats" | "matches" | "chat" | "reports" | "mod";
-const TABS: [Tab, string][] = [["stats", "Stats"], ["matches", "Matches"], ["chat", "Chat log"], ["reports", "Reports"], ["mod", "Mutes & filter"]];
+const TABS: [Tab, string][] = [["stats", "Stats"], ["matches", "5v5 matches"], ["chat", "Chat log"], ["reports", "Reports"], ["mod", "Mutes & filter"]];
 
 function clockTime(t: number) {
   const d = new Date(t * 1000);
@@ -134,14 +134,13 @@ export function Community({ target }: { target: string }) {
   }, [target, reload]);
 
   // a failed reload keeps the page; the error only replaces it before anything loaded
+  const head = <SectionHead title="Stats & moderation" note="Player stats and ranks, 5v5 matches, the chat log, player reports, mutes and the swear filter." />;
   if (!d)
-    return error ? (
+    return (
       <div className="stack narrow community">
-        <SectionHead title="Stats & moderation" />
-        <LoadError text={error} onRetry={() => (setError(""), reload())} />
+        {head}
+        {error ? <LoadError text={error} onRetry={() => (setError(""), reload())} /> : <Skeleton rows={6} />}
       </div>
-    ) : (
-      <Skeleton rows={6} />
     );
   const gagCount = activeGags(d, d.now).length;
 
@@ -152,6 +151,7 @@ export function Community({ target }: { target: string }) {
 
   return (
     <div className="stack narrow community">
+      {head}
       {!d.plugin && (
         <NeedsSetup text="This game is missing the Loner-Strike plugin for stats and moderation." after="Until then your settings are saved here, but the game doesn't use them." />
       )}
@@ -376,7 +376,7 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
             {s.updated ? `Updated ${clockTime(s.updated)}. ` : ""}
             {s.players.length} {s.players.length === 1 ? "player" : "players"}
             {s.bots_hidden ? `, ${s.bots_hidden} bot ${s.bots_hidden === 1 ? "entry" : "entries"} left out` : ""}.
-            {s.rank_by === 0 ? " Ranks go by name (csstats_rank 0), so a name change starts a new entry." : ""}
+            {s.rank_by === 0 ? " Ranks go by player name, so a name change starts a new entry." : ""}
           </p>
         </>
       )}
@@ -589,7 +589,7 @@ function ReportsTab({ d, setD, reload, showChat }: { d: Data; setD: SetData; rel
 
   return (
     <section>
-      <SectionHead title="Reports" note="Players report someone with /report <name> <what happened>. You get a desktop notification for each one." />
+      <SectionHead title="Reports" note="Players report someone with /report <name> <what happened>. Each one also shows as a notification on the computer running Loner-Strike." />
       <div className="settings cm-settings top">
         <Toggle label="Let players report" note="Say /report in the game. One report a minute per player. Admins playing see them too." on={d.settings.reports} busy={busy(settingKey({ reports: true }))} set={(v) => save({ reports: v })} />
       </div>
@@ -767,7 +767,7 @@ function ModTab({ d, setD, reload, onDirty }: { d: Data; setD: SetData; reload: 
             {dirty && <button className="btn" onClick={() => setDraft(null)}>Undo changes</button>}
             {words.length > 0 && <button className="btn danger push" onClick={() => setDraft([])}>Remove all</button>}
           </div>
-          <p className="muted small-note">Tap a word to take it off the list. Changes count as soon as you save, no map change needed.</p>
+          <p className="muted small-note">{ON_THIS_COMPUTER ? "Click" : "Tap"} a word to take it off the list. Changes count as soon as you save, no map change needed.</p>
         </div>
       </section>
     </>

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJsonAt, postJson, useActions } from "../api";
-import { BOT_NOTE, BOT_RATING, gameShort, gameTitle } from "../games";
+import { BOT_NOTE, BOT_RATING, BOT_RATING_INFO, gameShort, gameTitle } from "../games";
 import { Icon } from "../icons";
 import { useSetupJob, waitForSetupJob } from "../queries";
+import { useNav } from "../store";
 import { BusyButton, Info, SteamProgress, useToast } from "../ui";
 import logo from "../assets/logo.svg";
 
@@ -40,6 +41,10 @@ const IS_MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform
  *  the game choice and its way out is Cancel. */
 export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan: Scan; fromSettings?: boolean; onClose: () => void; onDone: () => void; onRescan: () => void }) {
   const toast = useToast();
+  // opened with Watch the intro: the way out closes it, it isn't "later"
+  const intro = useNav((n) => n.setupIntro);
+  // from Settings, each step before the install can be left
+  const cancel = fromSettings ? onClose : undefined;
   // a setup already running (started before a reload, or from Mods): straight to its progress
   const jobQ = useSetupJob();
   const [stage, setStage] = useState<Stage>(() => (jobQ.data?.state === "running" ? "install" : fromSettings ? "games" : "welcome"));
@@ -125,7 +130,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             <p className="muted">Close Counter-Strike before you start.</p>
             <div className="row">
               <button className="btn primary big-btn" onClick={() => setStage("games")}>Set it up</button>
-              <button className="btn" onClick={onClose}>Set up later</button>
+              <button className="btn" onClick={onClose}>{intro ? "Close" : "Set up later"}</button>
             </div>
             <p className="muted later">Later, you can add or remove any of it under Mods.</p>
             <p className="made-by setup-by">by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a></p>
@@ -194,13 +199,13 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
                       <Icon name={c.id.replace(/^(mode|addon)-/, "")} size={22} />
                       <span className="pick-name">{c.name}<small>{c.kind === "addon" ? "Add-on" : "Game mode"}</small></span>
                       {c.description && <span className="pick-desc">{c.description}</span>}
-                      {ratingOf(c) && <span className={`bots-note ${ratingOf(c)}`}>{BOT_NOTE[ratingOf(c)!]}</span>}
+                      {ratingOf(c) && <span className={`bots-note ${ratingOf(c)}`} title={BOT_RATING_INFO}>{BOT_NOTE[ratingOf(c)!]}</span>}
                     </button>
                   );
                 })}
               </div>
             )}
-            <Nav back={() => setStage("games")} next={() => setStage("review")} />
+            <Nav back={() => setStage("games")} next={() => setStage("review")} cancel={cancel} />
           </section>
         )}
 
@@ -226,7 +231,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
                 <div>Counter-Strike is open. Close it to continue: setup can't change the game's files while it's running.</div>
               </div>
             )}
-            <Nav back={() => setStage("content")} next={start} nextLabel="Install" canNext={!gameOpen} busy={busy("setup:install")} busyLabel="Starting…" />
+            <Nav back={() => setStage("content")} next={start} nextLabel="Install" canNext={!gameOpen} busy={busy("setup:install")} busyLabel="Starting…" cancel={cancel} />
           </section>
         )}
 
@@ -245,6 +250,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             )}
             {!(lost && job?.state !== "error") && <>
             <h2>{job?.state === "error" ? "Setup stopped" : "Installing"}</h2>
+            {job?.state !== "error" && <p className="muted">Keep Loner-Strike open until this finishes.</p>}
             <SteamProgress
               value={job?.progress ?? 0}
               title={job?.state === "error" ? "Setup stopped" : "Installing Loner-Strike…"}
@@ -267,7 +273,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
                 <p className="err-text">{job.error}</p>
                 <p className="muted">Nothing that finished is lost. Try again to carry on.</p>
                 <div className="row">
-                  <button className="btn primary" onClick={() => setStage("review")}>Try again</button>
+                  <button className="btn primary" onClick={() => setStage("review")}>Back to review</button>
                   <button className="btn" onClick={onClose}>Close</button>
                 </div>
               </>
@@ -300,10 +306,13 @@ function order(s: Stage) {
   return ["welcome", "games", "content", "review", "install", "done"].indexOf(s);
 }
 
-function Nav({ back, backLabel = "Back", next, canNext = true, nextLabel = "Continue", busy = false, busyLabel = "" }: { back: () => void; backLabel?: string; next: () => void; canNext?: boolean; nextLabel?: string; busy?: boolean; busyLabel?: string }) {
+function Nav({ back, backLabel = "Back", next, canNext = true, nextLabel = "Continue", busy = false, busyLabel = "", cancel }: { back: () => void; backLabel?: string; next: () => void; canNext?: boolean; nextLabel?: string; busy?: boolean; busyLabel?: string; cancel?: () => void }) {
   return (
     <div className="setup-nav">
-      <button className="btn" disabled={busy} onClick={back}>{backLabel}</button>
+      <div className="row">
+        <button className="btn" disabled={busy} onClick={back}>{backLabel}</button>
+        {cancel && <button className="btn" disabled={busy} onClick={cancel}>Cancel</button>}
+      </div>
       <BusyButton className="btn primary" busy={busy} disabled={!canNext} label={nextLabel} busyLabel={busyLabel} onClick={next} />
     </div>
   );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, useActions, useActivity, usePoll, isAbort } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, useActions, useActivity, usePoll, isAbort } from "../api";
 import { useGameState, useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { Banner, BusyButton, LoadError, SectionHead, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
@@ -209,16 +209,23 @@ export function Sounds({ target }: { target: string }) {
     load();
   };
 
-  if (!d) return <Skeleton />;
-  if (d.error) return <LoadError text={d.error} onRetry={() => { setD(null); load(); }} />;
+  if (!d || d.error)
+    return (
+      <div className="stack sounds">
+        <SectionHead title="Sounds" />
+        {d?.error ? <LoadError text={d.error} onRetry={() => { setD(null); load(); }} /> : <Skeleton />}
+      </div>
+    );
   const m = d.music;
   const where = d.dedicated ? "this server" : "your game";
   const now = setupJob?.steps.find((s) => s.state === "running");
   const count = m.pools.reduce((n, p) => n + p.on, 0);
   // setting up happens on Mods: a button for your own game, words for a server (its own Mods tab)
-  const toMods = target === "local"
-    ? <div className="row"><button className="btn" onClick={() => go("mods")}>Run full setup in Mods</button></div>
-    : null;
+  const toMods = !ON_THIS_COMPUTER
+    ? <p className="muted">{SETUP_ON_COMPUTER}</p>
+    : target === "local"
+      ? <div className="row"><button className="btn" onClick={() => go("mods")}>Run full setup in Mods</button></div>
+      : null;
 
   return (
     <div className="stack sounds">
@@ -262,7 +269,11 @@ export function Sounds({ target }: { target: string }) {
             {d.setup ? (
               <>
                 <p className="muted measure">It comes with eight free tracks to start with, and you can add your own.</p>
-                <div className="row"><BusyButton className="btn primary" busy={installing} label="Install round-end music" busyLabel="Installing…" onClick={installMusic} /></div>
+                {ON_THIS_COMPUTER ? (
+                  <div className="row"><BusyButton className="btn primary" busy={installing} label="Install round-end music" busyLabel="Installing…" onClick={installMusic} /></div>
+                ) : (
+                  <p className="muted">{SETUP_ON_COMPUTER}</p>
+                )}
               </>
             ) : (
               <>
@@ -328,7 +339,7 @@ export function Sounds({ target }: { target: string }) {
                                 {m.pools.filter((o) => o.id !== p.id).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                               </select>
                               <Switch on={t.on} label={`${t.name} ${t.on ? "on" : "off"}`} disabled={busy} onChange={(v) => track({ action: v ? "on" : "off", pool: p.id, name: t.name, off: !t.on }, `Turning ${t.name} ${v ? "on" : "off"}…`)} />
-                              <BusyButton className="btn danger" busy={isBusy(`sounds:${target}:track:${key}`)} disabled={busy} label="Remove" busyLabel="Removing…" onClick={() => remove(p.id, t)} />
+                              {ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={isBusy(`sounds:${target}:track:${key}`)} disabled={busy} label="Remove" busyLabel="Removing…" onClick={() => remove(p.id, t)} />}
                             </div>
                           </li>
                         );
@@ -396,7 +407,7 @@ export function Sounds({ target }: { target: string }) {
                     {job ? (
                       <span className="muted">{job.message}{job.size ? ` ${Math.round((job.got / job.size) * 100)}%` : ""}</span>
                     ) : p.installed ? (
-                      <BusyButton className="btn danger" busy={isBusy(key(`pack:${p.id}`))} label="Remove" busyLabel="Removing…" onClick={() => packAction(p, "remove")} />
+                      ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={isBusy(key(`pack:${p.id}`))} label="Remove" busyLabel="Removing…" onClick={() => packAction(p, "remove")} />
                     ) : (
                       <BusyButton className="btn primary" busy={isBusy(key(`pack:${p.id}`))} label="Install" busyLabel="Installing…" onClick={() => packAction(p, "install")} />
                     )}

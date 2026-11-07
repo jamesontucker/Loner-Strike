@@ -1,4 +1,4 @@
-import { Component, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { Component, createContext, lazy, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cmd, options, sameValue } from "./api";
 
@@ -6,6 +6,40 @@ import { cmd, options, sameValue } from "./api";
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let openSheets = 0;
+
+// ---- the back button (phones, and the browser) ----------------------------------------
+// Each open sheet has its own history entry, so Back closes the top one. App.tsx's
+// popstate handler asks closeTopSheet() first, then goes back a page.
+
+type OpenSheet = { id: number; close: () => void };
+const sheetStack: OpenSheet[] = [];
+let nextSheet = 1;
+/** Back presses we caused ourselves (a sheet closed by its own button takes its entry
+ *  off again), which the popstate handler skips. */
+let ownBacks = 0;
+/** For App.tsx's popstate handler: true when this Back was ours and should be ignored. */
+export function skipOwnBack() {
+  if (ownBacks <= 0) return false;
+  ownBacks--;
+  return true;
+}
+/** Back was pressed: closes the top sheet (true), or says there's none (false). A sheet
+ *  that can't be closed keeps its place in the history. */
+export function closeTopSheet() {
+  const top = sheetStack[sheetStack.length - 1];
+  if (!top) return false;
+  top.close();
+  return true;
+}
+/** A sheet's history entry carries the page it's over, so going back to it later (once the
+ *  sheet is gone) just lands on that page. */
+function pushSheetEntry(id: number) {
+  try {
+    history.pushState({ ...(history.state ?? {}), ls: 1, sheet: id }, "");
+  } catch {
+    /* history unavailable: Back just won't close sheets */
+  }
+}
 
 /** A dialog over the app: Escape and the backdrop close it (unless `onClose` is left
  *  out), focus moves into it and back when it closes, Tab stays inside, and the app
@@ -16,6 +50,7 @@ export function Sheet({
   children,
   className = "sheet",
   bottom,
+  keepApp,
   role = "dialog",
   describedBy,
 }: {
@@ -25,6 +60,8 @@ export function Sheet({
   className?: string;
   /** a sheet that slides up from the bottom (the phone's More menu) */
   bottom?: boolean;
+  /** the app behind stays usable (the phone's More menu: the tab bar still works) */
+  keepApp?: boolean;
   role?: "dialog" | "alertdialog";
   describedBy?: string;
 }) {
@@ -38,8 +75,22 @@ export function Sheet({
   const downOnBackdrop = useRef(false);
   useEffect(() => {
     const root = document.getElementById("root");
-    openSheets++;
-    root?.setAttribute("inert", "");
+    if (!keepApp) {
+      openSheets++;
+      root?.setAttribute("inert", "");
+    }
+    // Back closes it: its own history entry, and a place on the stack Back looks at
+    const id = nextSheet++;
+    const entry: OpenSheet = {
+      id,
+      close: () => {
+        if (close.current) close.current();
+        // can't be closed: it keeps its entry
+        else pushSheetEntry(id);
+      },
+    };
+    sheetStack.push(entry);
+    pushSheetEntry(id);
     // focus the first field (or button) unless something inside already asked for it
     const el = box.current;
     if (el && !el.contains(document.activeElement)) (el.querySelector<HTMLElement>(FOCUSABLE) ?? el).focus();
@@ -65,8 +116,16 @@ export function Sheet({
     el?.addEventListener("keydown", key);
     return () => {
       el?.removeEventListener("keydown", key);
-      if (--openSheets === 0) root?.removeAttribute("inert");
+      if (!keepApp && --openSheets === 0) root?.removeAttribute("inert");
       if (back?.isConnected) back.focus();
+      const at = sheetStack.indexOf(entry);
+      if (at >= 0) sheetStack.splice(at, 1);
+      // closed by its own button (its entry is still the current one): take the entry off
+      // again, so Back afterwards goes where it should
+      if ((history.state as { sheet?: number } | null)?.sheet === id) {
+        ownBacks++;
+        history.back();
+      }
     };
   }, []);
   return createPortal(
@@ -302,29 +361,41 @@ export function Info({ text }: { text: ReactNode }) {
   const pop = useRef<HTMLSpanElement>(null);
   // placed against the window, so it's never cut off and never makes the page scroll sideways
   useLayoutEffect(() => {
-    const b = box.current?.querySelector("button")?.getBoundingClientRect();
+    const r = box.current?.querySelector("button")?.getBoundingClientRect();
     const p = pop.current;
-    if (!open || !b || !p) return;
+    if (!open || !r || !p) return;
+    // measured on screen, placed in the page's own (text size) units
+    const z = zoom();
+    const b = { left: r.left / z, top: r.top / z, width: r.width / z, bottom: r.bottom / z };
     const w = p.offsetWidth, h = p.offsetHeight, m = 8;
-    const left = Math.min(Math.max(b.left + b.width / 2 - w / 2, m), window.innerWidth - w - m);
+    const left = Math.min(Math.max(b.left + b.width / 2 - w / 2, m), window.innerWidth / z - w - m);
     const above = b.top - h - m;
     p.style.left = `${left}px`;
     p.style.top = `${above >= m ? above : b.bottom + m}px`;
     p.style.visibility = "visible";
   }, [open]);
   useEffect(() => {
-    if (!pinned) return;
+    if (!open) return;
     const away = (e: Event) => !box.current?.contains(e.target as Node) && setOpen(false);
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    // it's placed against the window: scrolling would leave it behind
+    const scrolled = () => {
+      setOpen(false);
+      setHover(false);
+    };
     document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", esc);
+    document.addEventListener("scroll", scrolled, true);
     return () => {
       document.removeEventListener("pointerdown", away);
       document.removeEventListener("keydown", esc);
+      document.removeEventListener("scroll", scrolled, true);
     };
-  }, [pinned]);
+  }, [open]);
+  // hover is for a mouse: a tap fires enter (and no leave) on touch screens
+  const mouse = (e: ReactPointerEvent) => e.pointerType === "mouse";
   return (
-    <span className="info" ref={box} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+    <span className="info" ref={box} onPointerEnter={(e) => mouse(e) && setHover(true)} onPointerLeave={(e) => mouse(e) && setHover(false)}>
       <button
         type="button"
         className="info-btn"
@@ -345,9 +416,9 @@ export function Info({ text }: { text: ReactNode }) {
 }
 
 /** A button that shows a spinner and another label while its action runs. */
-export function BusyButton({ busy, label, busyLabel, className = "btn", disabled, onClick }: { busy: boolean; label: ReactNode; busyLabel: string; className?: string; disabled?: boolean; onClick: () => void }) {
+export function BusyButton({ busy, label, busyLabel, className = "btn", disabled, onClick, type = "button" }: { busy: boolean; label: ReactNode; busyLabel: string; className?: string; disabled?: boolean; onClick?: () => void; type?: "button" | "submit" }) {
   return (
-    <button className={className} disabled={busy || disabled} aria-busy={busy} onClick={onClick}>
+    <button type={type} className={className} disabled={busy || disabled} aria-busy={busy} onClick={onClick}>
       {busy ? (
         <>
           <span className="spinner" aria-hidden="true" />
@@ -428,8 +499,12 @@ export function savedScale() {
     return 1;
   }
 }
+/** The text size zoom on the page (1 = normal): sizes measured with getBoundingClientRect
+ *  are zoomed, while positions set in CSS get zoomed again, so divide by this first. */
+export const zoom = () => Number(getComputedStyle(document.documentElement).getPropertyValue("--zoom")) || 1;
 export function applyScale(v: number) {
   (document.documentElement.style as CSSStyleDeclaration & { zoom: string }).zoom = String(v);
+  document.documentElement.style.setProperty("--zoom", String(v));
   try {
     localStorage.setItem("ls.scale", String(v));
   } catch {

@@ -75,7 +75,13 @@ export function Welcome({ target }: { target: string }) {
         <LoadError text={error} onRetry={() => setVersion((v) => v + 1)} />
       </div>
     );
-  if (!d) return <Skeleton />;
+  if (!d)
+    return (
+      <div className="stack">
+        <SectionHead title="Welcome page" />
+        <Skeleton />
+      </div>
+    );
   const tooLong = html.length > d.max;
 
   /** Puts a fill-in where the cursor is (or over the selection), and keeps typing from there. */
@@ -103,7 +109,7 @@ export function Welcome({ target }: { target: string }) {
         title="Welcome page"
         note={
           <>
-            What players see when they join. To turn it off or show it every map, use the Welcome screen setting on the {server ? "server's Match tab" : "Match page"}, with the round
+            What players see when they join. To turn it off or show it every map, use the Welcome screen setting on the {server ? "server's Rules tab" : "Rules page"}, with the round
             settings. Players can say /welcome to see it again.
           </>
         }

@@ -1,7 +1,8 @@
 import { memo, useDeferredValue, useMemo, useState } from "react";
 import { addFromFile, currentTarget, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable, withTarget } from "../api";
-import { useMaps } from "../queries";
+import { useAppInfo, useMaps } from "../queries";
 import { useNav } from "../store";
+import { usePlayDrafts } from "../stores/playDraft";
 import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Sheet, useCommand, useConfirm, useToast } from "../ui";
 
@@ -15,7 +16,7 @@ const SHOW: [string, string][] = [
   ["all", "All maps"], ["stock", "Came with the game"], ["download", "Downloaded"], ["added", "Added by hand"],
   ["nonav", "Bots haven't learned it"], ["hidden", "Hidden"],
 ];
-const SHOW_INFO = "Bots haven't learned it: the first time you play one, the bots spend a few minutes learning it. Hidden: maps you hid, left out of the other lists, the in-game map menu and map votes.";
+const SHOW_INFO = "Hidden maps stay installed but are left out of lists, the in-game map menu and map votes. Bots spend a few minutes learning a map the first time it's played.";
 const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favourites first"], ["type", "By type"], ["source", "Downloaded first"]];
 const SOURCE_ORDER = ["download", "added", "stock"];
 const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by hand" };
@@ -83,6 +84,13 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   const run = useCommand(refresh);
   const toast = useToast();
   const go = useNav((s) => s.go);
+  const game = useAppInfo().data?.game?.id;
+  /** No game running: the map goes into Play's Start a game form, and Play opens. */
+  const startOn = (name: string) => {
+    if (game) usePlayDrafts.getState().set(game, { map: name });
+    setPicked(null);
+    go("play");
+  };
   // only for the error state and Try again: the list itself comes from the caller
   const mapsQ = useMaps();
   const isLoading = loading ?? mapsQ.isLoading;
@@ -258,13 +266,16 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               {picked.source === "download" && (picked.mod ?? 0) > 0 && picked.modName ? `: ${picked.modName}` : ""}
               {picked.pack && picked.pack.length > 1 ? ` (a pack of ${picked.pack.length} maps)` : ""}
             </p>
+            {!live && currentTarget() && <p className="muted">Start the server to play it.</p>}
             <div className="row">
-              {live && (
+              {live ? (
                 <BusyButton className="btn primary" busy={busy(key("change"))} label={`Play ${picked.name}`} busyLabel="Changing…" onClick={() => { setPicked(null); changeMap(picked.name); }} />
+              ) : (
+                !currentTarget() && <button className="btn primary" onClick={() => startOn(picked.name)}>Start a game on {picked.name}</button>
               )}
               <BusyButton busy={busy(key(`flag:fav:${picked.name}`))} label={picked.fav ? "Unfavourite" : "Favourite"} busyLabel="Saving…" onClick={() => flag(picked, "fav", !picked.fav)} />
               <BusyButton busy={busy(key(`flag:hidden:${picked.name}`))} label={picked.hidden ? "Show again" : "Hide"} busyLabel={picked.hidden ? "Showing…" : "Hiding…"} onClick={() => flag(picked, "hidden", !picked.hidden)} />
-              {picked.source === "download" && picked.mod && (
+              {ON_THIS_COMPUTER && picked.source === "download" && picked.mod && (
                 <BusyButton className="btn danger" busy={busy(key(`remove:${picked.mod}`))} label="Remove" busyLabel="Removing…" onClick={() => remove(picked)} />
               )}
               <button className="btn" onClick={() => setPicked(null)}>Close</button>

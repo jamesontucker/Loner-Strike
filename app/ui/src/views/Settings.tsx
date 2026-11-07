@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type ReactNode } from "react";
-import { sameValue, targetKey, useActions } from "../api";
+import { options, sameValue, targetKey, useActions } from "../api";
+import { BOT_STYLE_NOTE, BOT_STYLES } from "../games";
 import type { Online, Setting } from "../types";
 import { BusyButton, Info, SectionHead, Segmented, useCommand, useConfirm } from "../ui";
 
@@ -12,7 +13,7 @@ const NOTES: Record<string, string> = {
   gm_hb_reaction: "Bots wait a human reaction time before shooting",
   gm_hb_aim: "Flicks that overshoot, aim wobble, sprays in bursts",
   gm_hb_mistakes: "The odd whiffed shot, late reaction or panic spray",
-  gm_hb_bhop: "Locked In, Hackers and Gods hop between fights",
+  gm_hb_bhop: "Locked in, Hackers and Gods hop between fights",
   gm_regulars: "The same regulars keep coming back, plus the odd newcomer",
   gm_churn: "Now and then someone leaves and a new player takes the slot",
   gm_hb_habits: "Each bot plays like its personality: favourite guns, warming up, getting tired, nervous reloads, a rival",
@@ -52,17 +53,6 @@ const INFO: Record<string, string> = {
   zp_surv_enabled: "Rounds where one human, the Survivor, gets a powerful gun and lots of health against all the zombies.",
   bb_build_time: "How long the builders have to put up barricades before the zombies are let out.",
   sh_maxbinds: "How many heroes with a power you trigger with a key each player can pick. The rest of their heroes work on their own.",
-};
-const STYLE_NOTES: Record<string, string> = {
-  "0": "The game's own bots: instant reactions, perfect aim",
-  "4": "New players: slow to react, they spray and miss a lot",
-  "1": "A typical public server: a few sharp players, most average, some bad",
-  "8": "Everyone different, from new to very good. A regular keeps their level",
-  "2": "Solid players who work as a team",
-  "3": "Experienced: quick, accurate, short bursts",
-  "5": "Very good and focused. They bunnyhop between fights",
-  "6": "Suspiciously good: most bullets find you and they notice you from behind",
-  "7": "Everything maxed. Every bullet near you is a headshot",
 };
 
 /** How long a picked value shows before the game's own answer wins regardless. */
@@ -116,7 +106,10 @@ export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat
     <div className="settings">
       {list.map((s: Setting) => {
         const value = pending.value(s.cvar, s.value);
-        const note = s.cvar === "gm_botstyle" ? STYLE_NOTES[value] : NOTES[s.cvar];
+        const style = s.cvar === "gm_botstyle";
+        const note = style ? BOT_STYLE_NOTE[value] : NOTES[s.cvar];
+        // our own names for the bot styles (the game's menu has older ones)
+        const labels = style ? options(s.values, s.labels).map(([v, l]) => BOT_STYLES.find(([id]) => id === v)?.[1] ?? l).join("|") : s.labels;
         return (
           <div className="setting" key={s.cvar}>
             <div className="name">
@@ -124,7 +117,7 @@ export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat
               {INFO[s.cvar] && !NOTES[s.cvar] && <Info text={INFO[s.cvar]} />}
               {note && <span className="note">{note}</span>}
             </div>
-            <Segmented label={s.name} values={s.values} labels={s.labels} current={value} disabled={busy(key(s.cvar))} onPick={(v) => pick(s, v)} />
+            <Segmented label={s.name} values={s.values} labels={labels} current={value} disabled={busy(key(s.cvar))} onPick={(v) => pick(s, v)} />
           </div>
         );
       })}
@@ -165,7 +158,7 @@ export function SettingsPage({
   );
 }
 
-/** Restart / end the round / more time, for the Match page. */
+/** Restart / end the round / more time, for the Rules page. */
 export function MatchButtons({ refresh }: { refresh: () => void }) {
   const ask = useConfirm();
   const run = useCommand(refresh);

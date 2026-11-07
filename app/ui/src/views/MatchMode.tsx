@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { cmd, getJson, isAbort, postJson, useActions, useActivity, useQueuedSave } from "../api";
+import { cmd, getJson, isAbort, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, useActions, useActivity, useQueuedSave } from "../api";
 import { useGameState } from "../queries";
 import { useNav } from "../store";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
@@ -61,6 +61,7 @@ const COMMANDS: [string, string][] = [
 /** Where to add something setup installs: Mods ("Run full setup") for your own game; on a
  *  server, Rebuild under Maintenance on its Overview tab. */
 export function setupPlace(server: string | null) {
+  if (!ON_THIS_COMPUTER) return SETUP_ON_COMPUTER;
   return server ? "To add it, open this server's Overview tab and use Rebuild under Maintenance." : "To add it, use Run full setup in Mods.";
 }
 
@@ -74,7 +75,7 @@ export function NeedsSetup({ text, after, className = "panel extras-warn" }: { t
         {text} {setupPlace(server)}
         {after ? <> {after}</> : null}
       </p>
-      {!server && <button className="btn" onClick={() => go("mods")}>Open Mods</button>}
+      {!server && ON_THIS_COMPUTER && <button className="btn" onClick={() => go("mods")}>Open Mods</button>}
     </div>
   );
 }
@@ -149,13 +150,11 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
   }, "Switching to Match mode…");
 
   if (!d)
-    return error ? (
+    return (
       <div className="stack narrow match">
         <SectionHead title="Match mode" />
-        <LoadError text={error} onRetry={() => (setError(""), refresh())} />
+        {error ? <LoadError text={error} onRetry={() => (setError(""), refresh())} /> : <Skeleton rows={6} />}
       </div>
-    ) : (
-      <Skeleton rows={6} />
     );
 
   return (

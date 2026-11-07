@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions, usePoll } from "../api";
+import { copyText, getJson, HttpError, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, usePoll } from "../api";
 import { useServers } from "../queries";
 import { useNav } from "../store";
 import type { Online } from "../types";
-import { BusyButton, Info, SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, LoadError, SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 
 type Share = {
   installed: boolean;
@@ -28,7 +28,7 @@ type VLans = Partial<Record<"zerotier" | "radmin" | "hamachi", string>>;
 type Method = "lan" | "direct" | "playit" | "tailscale" | "zerotier" | "radmin" | "hamachi";
 
 const METHODS: { id: Method; name: string; blurb: string; tag?: string }[] = [
-  { id: "lan", name: "Same network", blurb: "Friends in the same room or on the same Wi-Fi", tag: "LAN party" },
+  { id: "lan", name: "This network", blurb: "Friends in the same room or on the same Wi-Fi", tag: "LAN party" },
   { id: "direct", name: "Direct", blurb: "Your router opens the port itself. Best ping, nothing to install", tag: "UPnP" },
   { id: "playit", name: "playit.gg", blurb: "A free relay. Friends install nothing" },
   { id: "tailscale", name: "Tailscale", blurb: "A private network everyone joins" },
@@ -80,13 +80,11 @@ function inviteText(name: string, pw: string, addr: string, intro: string[], lan
 }
 
 async function copy(text: string, toast: (t: string, e?: boolean) => void) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast("Copied");
-  } catch {
-    toast("Couldn't copy. Select the text and copy it yourself.", true);
-  }
+  if (await copyText(text)) toast("Copied");
+  else toast("Couldn't copy. Select the text and copy it yourself.", true);
 }
+
+const NO_ADDRESS = "Couldn't find this computer's network address.";
 
 function loadMethod(): Method {
   try {
@@ -109,7 +107,11 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   const [name, setName] = useState<string | null>(null);
   const [pw, setPw] = useState<string | null>(null);
   const [lanAddr, setLanAddr] = useState<string | null>(null);
+  const [lanErr, setLanErr] = useState(false);
   const [direct, setDirect] = useState<Direct | null>(null);
+  const [directErr, setDirectErr] = useState(false);
+  // the first load of sharing failed (a later miss keeps what's shown)
+  const [loadErr, setLoadErr] = useState(false);
   const { run: once, busy: busyKey } = useActions();
   const key = (what: string) => `friends:${targetKey()}:${what}`;
   const busy = (what: string) => busyKey(key(what));
@@ -121,17 +123,26 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   const vps = server && open ? servers?.servers.find((x) => x.id === open && x.host) : undefined;
 
   useEffect(() => {
-    getJson<{ ip: string | null; port: number }>("/api/app/lan").then((r) => setLanAddr(r.ip ? `${r.ip}:${r.port}` : null)).catch(() => null);
-    getJson<Direct>("/api/app/direct").then(setDirect).catch(() => null);
+    getJson<{ ip: string | null; port: number }>("/api/app/lan")
+      .then((r) => {
+        setLanAddr(r.ip ? `${r.ip}:${r.port}` : null);
+        setLanErr(!r.ip);
+      })
+      .catch((e) => !isAbort(e) && setLanErr(true));
+    getJson<Direct>("/api/app/direct").then((d) => (setDirect(d), setDirectErr(false))).catch((e) => !isAbort(e) && setDirectErr(true));
   }, []);
+  const [tries, setTries] = useState(0);
   usePoll(() =>
     Promise.all([
       getJson<Share>("/api/share")
-        .then((s) => ("phase" in s ? setSh(s) : setMissing(true)))
-        // only an app without sharing at all; a missed poll keeps what's shown
-        .catch((e: Error) => e.message.endsWith(": 404") && setMissing(true)),
+        .then((s) => ("phase" in s ? (setSh(s), setLoadErr(false)) : setMissing(true)))
+        // an app without sharing at all; otherwise a missed poll keeps what's shown
+        .catch((e: unknown) => {
+          if (e instanceof HttpError && e.status === 404) setMissing(true);
+          else if (!isAbort(e)) setLoadErr(true);
+        }),
       getJson<VLans>("/api/app/vlans").then(setVlans).catch(() => setVlans({})),
-    ]), 3000);
+    ]), 3000, [tries]);
 
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
     let out: Share | null = null;
@@ -156,7 +167,13 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   }, on ? "Asking your router to open the port…" : "Closing the port on your router…");
 
   if (missing) return <div className="stack"><SectionHead title="Play with friends" /><p className="muted">Sharing isn't in this version of the app yet.</p></div>;
-  if (!sh) return <Skeleton />;
+  if (!sh)
+    return (
+      <div className="stack">
+        <SectionHead title="Play with friends" />
+        {loadErr ? <LoadError text="Couldn't load how friends connect." onRetry={() => (setLoadErr(false), setTries((n) => n + 1))} /> : <Skeleton />}
+      </div>
+    );
 
   const serverName = name ?? sh.name;
   const password = pw ?? sh.password;
@@ -208,7 +225,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     lanTab = true;
     steps = (
       <ol className="steps">
-        <li className="done"><strong>Get everyone on the same network</strong><p>Same Wi-Fi, or plugged into the same router.</p></li>
+        <li className="done"><strong>Get everyone on the same network</strong><p>Same Wi-Fi, or plugged into the same router.</p>{lanErr && <p className="err-text">{NO_ADDRESS}</p>}</li>
         <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong>{OS === "mac" ? <p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (CrossOver): click Allow.</p> : OS === "windows" ? <p>The first time, Windows may ask whether to let the game through its firewall: allow it on private networks.</p> : null}</li>
         <li className="now"><strong>Friends join from the LAN tab</strong><p>In Counter-Strike, open <b>Find Servers</b> and the <b>LAN</b> tab, and your server is there{serverName ? ` as "${serverName}"` : ""}.</p></li>
       </ol>
@@ -228,13 +245,14 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
             <BusyButton className="btn primary" busy={directBusy} label="Start" busyLabel="Asking your router…" onClick={() => setDirectOn(true)} />
           )}
           {direct?.error && <p className="err-text">{direct.error}</p>}
+          {directErr && !direct && <p className="err-text">{NO_ADDRESS}</p>}
           {direct?.shared_address && (
             <p className="err-text">Your internet connection shares its address with other customers (common with mobile and some fibre providers), so friends can't reach you directly. Use playit.gg instead.</p>
           )}
         </li>
         <li className={live ? "now" : ""}>
           <strong>Send friends your address</strong>
-          <p>It's your home's internet address, so only share it with friends, and set a join password.</p>
+          <p>It's your home's internet address, so only share it with friends. Set a join password under Your server.</p>
         </li>
       </ol>
     );
@@ -304,6 +322,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
       className="panel"
       onSubmit={async (e) => {
         e.preventDefault();
+        if (busy("server")) return;
         const p = password.trim();
         if (!/^[A-Za-z0-9_-]{0,24}$/.test(p)) return toast("Passwords can use letters, numbers, - and _.", true);
         const r = await act("server", { name: serverName.trim(), password: p });
@@ -312,11 +331,11 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     >
       <h3>Your server</h3>
       <label className="field">
-        <span>Server name</span>
+        <span>Server name<Info text="Shown in the server browser and on the scoreboard." /></span>
         <input className="search" maxLength={48} placeholder="Like Friday night frags" value={serverName} onChange={(e) => setName(e.target.value)} />
       </label>
       <label className="field">
-        <span>Join password</span>
+        <span>Join password<Info text="Everyone who joins needs this, however they connect. The invite message includes it." /></span>
         <div className="row">
           <input className="search" maxLength={24} placeholder="No password" spellCheck={false} value={password} onChange={(e) => setPw(e.target.value)} />
           <button type="button" className="btn" onClick={() => {
@@ -326,9 +345,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
         </div>
         <small>Letters, numbers, - and _. Leave it empty to let in anyone who has the address.</small>
       </label>
-      <button className="btn primary" type="submit" disabled={busy("server")} aria-busy={busy("server")}>
-        {busy("server") ? <><span className="spinner" aria-hidden="true" />Saving…</> : "Save"}
-      </button>
+      <BusyButton className="btn primary" type="submit" busy={busy("server")} label="Save" busyLabel="Saving…" />
     </form>
   );
 
@@ -403,6 +420,12 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
                 <button className="btn primary" onClick={() => copy(text, toast)}>Copy message</button>
                 <button className="btn" onClick={() => copy(address, toast)}>Copy address</button>
               </div>
+            </div>
+          )}
+          {!(live && address) && (
+            <div className="panel">
+              <h3>Send this to your friends</h3>
+              <p className="muted">Your invite shows here once friends can connect.</p>
             </div>
           )}
         </div>
