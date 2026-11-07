@@ -555,6 +555,16 @@ fn install_game_with(job: &Job, plan: &InstallPlan, ctx: &Ctx, g: &str, rec: &mu
         job.failed_compile("Loner-Strike plugins");
     }
     run_step(job, &format!("{g}/core-configs"), || core::configs(rec, ctx, &modes, &addons))?;
+    // a first setup starts with Quake sounds on (the old pub-server announcer); once the
+    // player has switched any add-on, addons.txt is theirs and stays as it is
+    if !rec.exists("addons/amxmodx/data/gamemodes/addons.txt") {
+        if let Some(ini) = rec.read("addons/amxmodx/configs/gamemodes/addons.ini") {
+            if let Ok((on, plugins)) = crate::sounds::write_addons_offline(&ini, "", "quakesounds", true) {
+                rec.write("addons/amxmodx/data/gamemodes/addons.txt", &on)?;
+                rec.write("addons/amxmodx/configs/plugins-gmaddons.ini", &plugins)?;
+            }
+        }
+    }
     run_step(job, &format!("{g}/core-bots"), || core::bot_styles(rec, ctx, g))?;
     run_step(job, &format!("{g}/core-keys"), || core::binds(rec))?;
     rec.done("core", json!(shipped_version(ctx.res, "core")))
