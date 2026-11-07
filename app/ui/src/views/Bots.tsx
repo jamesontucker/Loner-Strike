@@ -6,7 +6,7 @@ import type { Online, Setting } from "../types";
 const SLIDER_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
 import { Banner, BusyButton, Info, useCommand, useConfirm } from "../ui";
 import { SettingsPage, usePending } from "./Settings";
-import { SmarterChat } from "./SmarterChat";
+import { SMARTER_CHAT, SmarterChat } from "./SmarterChat";
 
 export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
   const ask = useConfirm();
@@ -88,7 +88,7 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
       </div>
       {personality?.visible ? <PersonalitySlider setting={personality} refresh={refresh} /> : null}
     </SettingsPage>
-    <SmarterChat />
+    {SMARTER_CHAT && <SmarterChat />}
     </div>
   );
 }

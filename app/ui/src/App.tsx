@@ -12,7 +12,7 @@ import { FilesUpdate } from "./views/FilesUpdate";
 import { Addons } from "./views/Addons";
 import { AppSettings, noteUpdateChecked } from "./views/AppSettings";
 import { Bots } from "./views/Bots";
-import { SmarterChat } from "./views/SmarterChat";
+import { SMARTER_CHAT, SmarterChat } from "./views/SmarterChat";
 import { Radio, RadioButton } from "./views/Radio";
 import { Friends } from "./views/Friends";
 import { Maps } from "./views/Maps";
@@ -361,7 +361,7 @@ function Shell() {
             <>
               <Waiting label={NAV.find((n) => n.id === section)!.label} game={gameName} gameOpen={gameOpen} reason={state.online ? "" : state.reason} onPlay={() => go("play")} setUp={!app?.game || !!app.game.installed?.includes("core")} openSetup={openSetup} />
               {/* set up and try Smarter chat before a game is running */}
-              {section === "bots" && !openServer && (
+              {SMARTER_CHAT && section === "bots" && !openServer && (
                 <SmarterChat />
               )}
             </>

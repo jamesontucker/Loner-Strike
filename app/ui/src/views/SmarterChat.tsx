@@ -35,6 +35,10 @@ function statusLine(s: Status, enabled: boolean): { text: string; tone: "" | "ok
   return { text: "Off", tone: "" };
 }
 
+/** Smarter chat is hidden for the first release; true brings it back (Bots page, and the
+ *  bots waiting screen). The backend stays, and only runs when it's switched on. */
+export const SMARTER_CHAT = false;
+
 export function SmarterChat() {
   const toast = useToast();
   const ask = useConfirm();
