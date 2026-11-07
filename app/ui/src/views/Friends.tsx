@@ -328,7 +328,11 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
         const p = password.trim();
         if (!/^[A-Za-z0-9_-]{0,24}$/.test(p)) return toast("Passwords can use letters, numbers, - and _.", true);
         const r = await act("server", { name: serverName.trim(), password: p });
-        if (r) toast(data ? "Saved and applied to the game" : "Saved. It applies when you start a game.");
+        if (!r) return;
+        // what the app saved shows from now on (it may have tidied it)
+        setName(null);
+        setPw(null);
+        toast(server ? (data ? `Saved for ${server.name}` : "Saved. It applies when the server starts.") : data ? "Saved and applied to the game" : "Saved. It applies when you start a game.");
       }}
     >
       <h3>Your server</h3>

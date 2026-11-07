@@ -82,7 +82,9 @@ export function Welcome({ target }: { target: string }) {
         <Skeleton />
       </div>
     );
-  const tooLong = html.length > d.max;
+  // the app counts bytes (an accented letter or emoji is more than one), so count the same
+  const size = new TextEncoder().encode(html).length;
+  const tooLong = size > d.max;
 
   /** Puts a fill-in where the cursor is (or over the selection), and keeps typing from there. */
   const insert = (k: string) => {
@@ -143,7 +145,7 @@ export function Welcome({ target }: { target: string }) {
             </div>
             <textarea ref={code} className="invite code" spellCheck={false} aria-label="Page HTML" value={html} onChange={(e) => setHtml(e.target.value)} placeholder="<h1>{server}</h1>" />
             <p className={tooLong ? "err-text" : "muted"}>
-              {html.length} of {d.max} characters{tooLong ? ". The game cuts off longer pages, so trim it, or host it as a web page instead." : "."}
+              {size} of {d.max} bytes{tooLong ? ". The game cuts off longer pages, so trim it, or host it as a web page instead." : "."}
             </p>
             <div className="chips">
               {PLACEHOLDERS.map(([k, label]) => (

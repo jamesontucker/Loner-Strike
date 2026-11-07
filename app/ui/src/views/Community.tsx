@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { MatchMode, NeedsSetup } from "./MatchMode";
 import { getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import { queryClient } from "../queries";
+import type { AppInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { useDirty } from "../store";
 import { ck, failed, OFFLINE, STEAMID, MuteControl, type Data, type Err, type FilterMode, type Settings, type Gag } from "./MuteControl";
@@ -238,7 +239,8 @@ const PAGE = 100;
 const DUMP_EVERY_MS = 60_000;
 /** The last stats answer, per game or server, and when the game was last asked to write them. */
 type CachedStats = { stats: Stats; dumpedAt: number };
-const statsKey = () => ["communityStats", targetKey()];
+// your own game is one of two (CS 1.6 or Condition Zero), each with its own stats
+const statsKey = () => ["communityStats", targetKey(), targetKey() === "local" ? (queryClient.getQueryData<AppInfo>(["app", null])?.game?.id ?? "") : ""];
 
 function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
   const toast = useToast();

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { copyText, getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions } from "../api";
-import type { ServerInfo } from "../types";
+import { restartPending, type ServerInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { useDirty } from "../store";
 
@@ -187,6 +187,10 @@ export function Hltv({ server }: { server: ServerInfo }) {
 
   const running = st.state === "running";
   const saved = st.settings;
+  // settings change the server's machine: only from the computer running Loner-Strike
+  const ro = !ON_THIS_COMPUTER;
+  // waiting for a restart: what the app keeps (survives reloads), or a save seen here
+  const restartWaits = restartAt !== undefined || restartPending(server).hltv;
   return (
     <div className="stack hltv">
       <SectionHead
@@ -194,7 +198,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
         note="HLTV lets people watch this server's matches live, a little behind the action, without taking a player slot. It can also record every map to a demo file you can replay later."
       />
       {failed && <p className="muted small-note" role="status">Can't reach the server. Showing what it last reported.</p>}
-      {restartAt !== undefined && running && (
+      {restartWaits && running && (
         <div className="files-bar" role="status">
           <span>New HLTV settings are saved. They're used after HLTV restarts.</span>
           <span className="files-bar-actions">
@@ -222,7 +226,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
               <Info text="Lets people watch without joining a team, and can record demos. Starts and stops with the server." />
               <span className="note">Turns on now. It starts and stops with the server</span>
             </span>
-            <Switch on={form.enabled} disabled={saving} onChange={setEnabled} label="HLTV" />
+            <Switch on={form.enabled} disabled={saving || ro} onChange={setEnabled} label="HLTV" />
           </div>
           {st.error && <p className="err-text">{st.error}</p>}
           {!saved.enabled ? (
@@ -259,6 +263,8 @@ export function Hltv({ server }: { server: ServerInfo }) {
 
         <div className="panel">
           <h3>Settings</h3>
+          {ro && <p className="muted small-note">{ON_COMPUTER_ONLY}</p>}
+          <fieldset className="plain" disabled={ro}>
           <label className="field">
             <span>Name</span>
             <input className="search" maxLength={32} placeholder={st.default_name} value={form.name} onChange={(e) => set({ name: e.target.value })} />
@@ -293,10 +299,13 @@ export function Hltv({ server }: { server: ServerInfo }) {
             <span className="name">Record demos<span className="note">Saves every map to a demo file, with the same delay as the broadcast</span></span>
             <Switch on={form.record} onChange={(v) => set({ record: v })} label="Record demos" />
           </div>
-          <div className="row">
-            <BusyButton className="btn primary" busy={saving} label="Save changes" busyLabel="Saving…" onClick={save} />
-            {isDirty && !saving && <span className="muted small-note">Unsaved changes</span>}
-          </div>
+          </fieldset>
+          {!ro && (
+            <div className="row">
+              <BusyButton className="btn primary" busy={saving} disabled={!isDirty} label="Save changes" busyLabel="Saving…" onClick={save} />
+              {isDirty && !saving && <span className="muted small-note">Unsaved changes</span>}
+            </div>
+          )}
         </div>
       </div>
 

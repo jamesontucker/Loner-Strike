@@ -20,7 +20,10 @@ export type CatalogItem = {
   bots?: "great" | "ok" | "weak" | "none";
 };
 export type Scan = { installs: SetupInstall[]; catalog: CatalogItem[]; native_mac: boolean };
-export type Step = { id: string; label: string; state: "pending" | "running" | "done" | "error"; detail?: string; game?: string };
+/** Bytes moving in a step (an upload to a server's machine), when the app reports them.
+ *  `rate` is bytes a second, `left` seconds to go; both optional. */
+export type Transfer = { sent: number; total: number; rate?: number; left?: number };
+export type Step = { id: string; label: string; state: "pending" | "running" | "done" | "error"; detail?: string; game?: string; transfer?: Transfer; upload?: Transfer };
 export type Job = { id?: string; state: "idle" | "running" | "done" | "error"; kind?: string; steps: Step[]; progress: number; error?: string; failed_compiles?: string[]; notes?: string[] };
 
 const ratingOf = (c: CatalogItem) => {

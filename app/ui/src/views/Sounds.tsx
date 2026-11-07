@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getJson, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, useActions, useActivity, usePoll, isAbort } from "../api";
-import { useGameState, useSetupJob, waitForSetupJob } from "../queries";
+import { reloadServers, useGameState, useServers, useSetupJob, waitForSetupJob } from "../queries";
+import { restartPending } from "../types";
 import { useNav } from "../store";
 import { Banner, BusyButton, LoadError, SectionHead, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
 
@@ -52,7 +53,16 @@ export function Sounds({ target }: { target: string }) {
   const go = useNav((s) => s.go);
   // the restart button only works while the game (or server) is running
   const live = !!useGameState().state?.online;
-  const [changed, setChanged] = useState(false);
+  const [changedHere, setChanged] = useState(false);
+  // on a server, the app also keeps what waits for the next map (so it survives a reload)
+  const server = useServers(target !== "local").data?.servers.find((x) => x.id === target);
+  const serverWaits = restartPending(server).sounds;
+  // the map was just restarted here: the app's record catches up on its next answer
+  const [restarted, setRestarted] = useState(false);
+  useEffect(() => {
+    if (!serverWaits) setRestarted(false);
+  }, [serverWaits]);
+  const changed = changedHere || (serverWaits && !restarted);
   const [playing, setPlaying] = useState<string | null>(null);
   const jobQ = useSetupJob();
   const setupJob = jobQ.data?.state === "running" ? jobQ.data : null;
@@ -92,6 +102,7 @@ export function Sounds({ target }: { target: string }) {
     setPacks(null);
     setPacksFailed(false);
     setChanged(false);
+    setRestarted(false);
     stop();
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,7 +243,12 @@ export function Sounds({ target }: { target: string }) {
       <SectionHead title="Sounds" note={`Round-end music, Quake sounds and sound packs on ${where}. Players download custom sounds the first time they join.`} />
 
       {changed && (live ? (
-        <Banner action={<BusyButton className="btn primary" busy={isBusy(key("restartmap"))} label="Restart map" busyLabel="Restarting…" onClick={() => once(key("restartmap"), () => run("gm_restartmap").then((ok) => ok && setChanged(false)), "Restarting the map…")} />}>
+        <Banner action={<BusyButton className="btn primary" busy={isBusy(key("restartmap"))} label="Restart map" busyLabel="Restarting…" onClick={() => once(key("restartmap"), () => run("gm_restartmap").then((ok) => {
+          if (!ok) return;
+          setChanged(false);
+          setRestarted(true);
+          if (target !== "local") reloadServers();
+        }), "Restarting the map…")} />}>
           Sound changes start on the next map.
         </Banner>
       ) : (
@@ -294,7 +310,7 @@ export function Sounds({ target }: { target: string }) {
                 : `Friends download them when they join, so mp3s under ${size(m.good)} each keep that quick.`}
               {m.fallback ? ` Condition Zero also plays ${m.fallback} track${m.fallback === 1 ? "" : "s"} from Counter-Strike 1.6's folder.` : ""}
             </p>
-            {!ON_THIS_COMPUTER && <p className="muted">Adding your own tracks works from the app on your computer.</p>}
+            {!ON_THIS_COMPUTER && <p className="muted">Adding and removing tracks works on the computer running Loner-Strike. Here you can turn them on or off and move them.</p>}
             <div className="sound-pools">
               {m.pools.map((p) => (
                 <div className="panel sound-pool" key={p.id}>
@@ -384,6 +400,7 @@ export function Sounds({ target }: { target: string }) {
           title="Classic sound packs"
           note={`A few picks from GameBanana's Counter-Strike 1.6 sounds.${d.dedicated ? " Packs that replace game sounds change what you hear, so they go into your own game; music packs go onto this server." : ""} Anything replaced is backed up, and removing a pack puts it back.`}
         />
+        {!ON_THIS_COMPUTER && <p className="muted">Install and remove packs on the computer running Loner-Strike.</p>}
         {!packs && packsFailed ? (
           <LoadError text="Couldn't load the sound packs." onRetry={load} />
         ) : !packs ? (
@@ -409,7 +426,7 @@ export function Sounds({ target }: { target: string }) {
                     ) : p.installed ? (
                       ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={isBusy(key(`pack:${p.id}`))} label="Remove" busyLabel="Removing…" onClick={() => packAction(p, "remove")} />
                     ) : (
-                      <BusyButton className="btn primary" busy={isBusy(key(`pack:${p.id}`))} label="Install" busyLabel="Installing…" onClick={() => packAction(p, "install")} />
+                      ON_THIS_COMPUTER && <BusyButton className="btn primary" busy={isBusy(key(`pack:${p.id}`))} label="Install" busyLabel="Installing…" onClick={() => packAction(p, "install")} />
                     )}
                     <a className="btn" href={p.url} target="_blank" rel="noreferrer">Open on GameBanana</a>
                   </div>

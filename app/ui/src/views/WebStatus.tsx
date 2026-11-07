@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { copyText, getJson, postJson, useActions } from "../api";
+import { copyText, getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useToast } from "../ui";
 import { useDirty } from "../store";
@@ -124,10 +124,11 @@ export function WebStatus({ server }: { server: ServerInfo }) {
   const turnOff = () => {
     if (!form || !st || working) return;
     run(key("off"), async () => {
-      const r = await post(`/api/servers/${server.id}/webstatus`, { enabled: false, domain: form.domain, origins: originList(form.origins), counter: form.counter, mode: form.mode });
+      // only turns it off: edits not saved yet stay in the form, unsaved
+      const s = st.settings;
+      const r = await post(`/api/servers/${server.id}/webstatus`, { enabled: false, domain: s.domain, origins: s.origins, counter: s.counter, mode: s.mode });
       if (r.error) return toast(r.error, true);
-      markDirty(false);
-      toast("The status page is off");
+      toast(dirty.current ? "The status page is off. Your other changes aren't saved yet." : "The status page is off");
       load();
     }, `Turning off the status page on ${server.name}…`);
   };
@@ -146,6 +147,8 @@ export function WebStatus({ server }: { server: ServerInfo }) {
   const tunnel = form.mode === "tunnel";
   const usesExisting = tunnel && st.existing_tunnel === "running" && !st.own_tunnel;
   const service = `http://localhost:${st.port}`;
+  // it sets up a service on the server's machine and keeps a tunnel token: from the computer only
+  const ro = !ON_THIS_COMPUTER;
   const tag = installing ? "Setting up" : turningOff ? "Turning off" : st.state === "running" ? "Running" : st.state === "not_answering" ? "Not answering" : "Off";
 
   return (
@@ -163,7 +166,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
             <span className={`live${st.state === "running" && !working ? " on" : ""}`}>{tag}</span>
           </div>
           {!saved.enabled ? (
-            <p className="muted">It's off. Fill in the settings and press Install.</p>
+            <p className="muted">{ro ? "It's off." : "It's off. Fill in the settings and press Install."}</p>
           ) : st.state === "running" ? (
             <>
               <dl className="hltv-facts">
@@ -185,7 +188,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
               <p className="muted small-note">Checked from this computer every 15 seconds.</p>
             </>
           )}
-          {saved.enabled && (
+          {saved.enabled && !ro && (
             <div className="row">
               <BusyButton className="btn danger" busy={turningOff} disabled={working} label="Turn off" busyLabel="Turning off…" onClick={turnOff} />
             </div>
@@ -194,6 +197,8 @@ export function WebStatus({ server }: { server: ServerInfo }) {
 
         <div className="panel">
           <h3>Settings</h3>
+          {ro && <p className="muted small-note">{ON_COMPUTER_ONLY}</p>}
+          <fieldset className="plain" disabled={ro}>
           <label className="field">
             <span>Address<Info text="A name for the status page, on a domain you own. It needs its own name, separate from the one players connect to." /></span>
             <input className="search" placeholder={st.suggested_domain ?? "status.example.com"} value={form.domain} onChange={(e) => set({ domain: e.target.value })} onBlur={fillSites} spellCheck={false} autoComplete="off" />
@@ -256,6 +261,8 @@ export function WebStatus({ server }: { server: ServerInfo }) {
             <Switch on={form.counter} disabled={working} onChange={(v) => set({ counter: v })} label="Visit counter" />
           </div>
 
+          </fieldset>
+          {!ro && (
           <div className="row">
             <BusyButton
               className="btn primary"
@@ -267,6 +274,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
             />
             {isDirty && !working && <span className="muted small-note">Unsaved changes</span>}
           </div>
+          )}
           {installing && <p className="muted small-note">Setting up can take a minute or two the first time, while it installs {tunnel && !usesExisting ? "cloudflared" : tunnel ? "the service" : "Caddy"}.</p>}
         </div>
       </div>

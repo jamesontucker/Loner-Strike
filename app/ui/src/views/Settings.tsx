@@ -63,6 +63,25 @@ const INFO: Record<string, string> = {
 export const SLIDER_SETTINGS = ["gm_personality"];
 const listed = (s: Setting) => s.visible && !SLIDER_SETTINGS.includes(s.cvar);
 
+/** The game's scope for a setting saved per mode (0: not saved, 1: every mode, 2: this mode). */
+const SCOPE_MODE = 2;
+const modeName = (data: Online) => data.modes.find((m) => m.id === data.state.mode)?.name ?? "this mode";
+/** Whether every listed setting of a section is saved per mode, some are, or none. */
+function scopeOf(data: Online, cat: number): "all" | "some" | "none" {
+  const all = data.settings.filter((s) => s.cat === cat && listed(s));
+  const per = all.filter((s) => s.scope === SCOPE_MODE).length;
+  return !per ? "none" : per === all.length ? "all" : "some";
+}
+/** The page note's first part, the same on your game and on a server: where changes are saved. */
+export function savedNote(data: Online, cat: number) {
+  const scope = scopeOf(data, cat);
+  const mode = modeName(data);
+  return scope === "all" ? `Saved for ${mode}.` : scope === "some" ? `Settings marked ${mode} are saved for that mode only; the rest for every mode.` : "";
+}
+/** Rules and Fun & effects: the same words on your game and on servers. */
+export const RULES_NOTE = (data: Online) => `${savedNote(data, 2)} Round changes take effect next round.`.trim();
+export const FUN_NOTE = (data: Online) => `${savedNote(data, 3)} Most apply straight away. Round changes take effect next round.`.trim();
+
 /** How long a picked value shows before the game's own answer wins regardless. */
 const PENDING_MS = 3000;
 
@@ -108,6 +127,9 @@ export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat
     const text = `${s.name} ${NOTES[s.cvar] ?? ""} ${s.labels}`.toLowerCase();
     return words.every((w) => text.includes(w));
   });
+  // with some settings per mode and some not, the per-mode ones carry the mode's name
+  const markMode = scopeOf(data, cat) === "some";
+  const mode = modeName(data);
   if (!all.length) return <p className="muted">Nothing to set here in this mode.</p>;
   if (!list.length) return <p className="muted">No settings match "{q.trim()}".</p>;
   return (
@@ -123,6 +145,7 @@ export function SettingsList({ data, cat, refresh, q = "" }: { data: Online; cat
             <div className="name">
               {s.name}
               {INFO[s.cvar] && !NOTES[s.cvar] && <Info text={INFO[s.cvar]} />}
+              {markMode && s.scope === SCOPE_MODE && <span className="tag scope-tag" title={`Saved for ${mode} only`}>{mode}</span>}
               {note && <span className="note">{note}</span>}
             </div>
             <Segmented label={s.name} values={s.values} labels={labels} current={value} disabled={busy(key(s.cvar))} onPick={(v) => pick(s, v)} />

@@ -16,6 +16,8 @@ export function ShareList({ list, onShared }: { list: ListId; onShared?: () => v
   const { run, busy } = useActions();
   // switched on but nothing ticked yet: the list of servers to tick
   const [picking, setPicking] = useState(false);
+  // what the spinner says, for the change going on now
+  const [doing, setDoing] = useState("");
   const load = () => getJson<Data>("/api/lists").then(setData).catch(() => null);
   useEffect(() => {
     load();
@@ -34,20 +36,27 @@ export function ShareList({ list, onShared }: { list: ListId; onShared?: () => v
     return on ? <p className="muted small-note share-list">Shared with {members.filter((m) => m !== me).map(nameOf).join(", ")}.</p> : null;
   }
 
-  const set = (next: string[], from: string, done: string) => run(key, async () => {
-    const r = await postJson<{ ok?: boolean; error?: string }>("/api/lists", { list, members: next, from }).catch(() => ({ error: "Couldn't reach the app." }));
-    if (r.error) return toast(r.error, true);
-    toast(done);
-    await load();
-    if (from !== me) onShared?.();
-  }, `Sharing the ${label}…`);
+  /** Saves who shares the list. Resolves true when it was saved. */
+  const set = async (next: string[], from: string, done: string, saying: string) => {
+    let ok = false;
+    setDoing(saying);
+    await run(key, async () => {
+      const r = await postJson<{ ok?: boolean; error?: string }>("/api/lists", { list, members: next, from }).catch(() => ({ error: "Couldn't reach the app." }));
+      if (r.error) return toast(r.error, true);
+      ok = true;
+      toast(done);
+      await load();
+      if (from !== me) onShared?.();
+    }, saying);
+    return ok;
+  };
 
   const turn = async (v: boolean) => {
     if (!v) {
       if (picking && !on) return setPicking(false);
       // the ones who stay keep sharing (they all have the same list, so any of them is the source)
       const rest = members.filter((m) => m !== me);
-      return set(rest, rest.find((m) => data.targets.some((t) => t.id === m)) ?? rest[0] ?? me, `Stopped sharing the ${label}`);
+      return set(rest, rest.find((m) => data.targets.some((t) => t.id === m)) ?? rest[0] ?? me, `Stopped sharing the ${label}`, `Stopping sharing the ${label}…`);
     }
     // a group already shares it: join that one and take its list
     if (members.length >= 2) {
@@ -55,7 +64,7 @@ export function ShareList({ list, onShared }: { list: ListId; onShared?: () => v
       if (!(await ask(`Use the ${label} shared by ${names}? This one's are replaced with theirs.`, { ok: "Use the shared list" }))) return;
       // the source has to be one the app can open right now (your other game may not be)
       const from = members.find((m) => data.targets.some((t) => t.id === m)) ?? members[0];
-      return set([...members, me], from, `Now sharing the ${label} with ${names}`);
+      return set([...members, me], from, `Now sharing the ${label} with ${names}`, `Sharing the ${label}…`);
     }
     // nothing shared yet: pick which servers to share with
     setPicking(true);
@@ -65,9 +74,11 @@ export function ShareList({ list, onShared }: { list: ListId; onShared?: () => v
       if (!(await ask(`${nameOf(id)}'s ${label} are replaced with this one's. Go ahead?`, { ok: `Share the ${label}` }))) return;
       // the first tick starts the group, with this one in it
       const next = on ? [...members, id] : [me, id];
-      return set(next, me, `${nameOf(id)} now shares the ${label}`).then(() => setPicking(false));
+      // the list stays open when it didn't work, to try again
+      if (await set(next, me, `${nameOf(id)} now shares the ${label}`, `Sharing the ${label} with ${nameOf(id)}…`)) setPicking(false);
+      return;
     }
-    set(members.filter((m) => m !== id), me, `${nameOf(id)} keeps its own ${label} now`);
+    set(members.filter((m) => m !== id), me, `${nameOf(id)} keeps its own ${label} now`, `Stopping sharing with ${nameOf(id)}…`);
   };
 
   const working = busy(key);
@@ -76,7 +87,12 @@ export function ShareList({ list, onShared }: { list: ListId; onShared?: () => v
       <label className="row">
         <Switch on={on || picking} onChange={turn} label="Share across servers" disabled={working} />
         <span>Share across servers<Info text={`Changes to the ${label} here are copied to the servers you tick, and theirs come here. Mods, plugins and other settings stay separate.`} /></span>
-        {working && <span className="spinner" aria-hidden="true" />}
+        {working && (
+          <span className="muted small-note" role="status">
+            <span className="spinner" aria-hidden="true" />
+            {doing}
+          </span>
+        )}
       </label>
       {picking && !on && <p className="muted small-note">Tick the servers to share with.</p>}
       {(on || picking) && (

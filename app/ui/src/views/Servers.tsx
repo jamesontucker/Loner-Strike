@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions, useOnce, usePoll } from "../api";
 import { reloadServers } from "../queries";
 import { useDirty, useDirtyStore } from "../store";
-import { serverAddress, serverHost, type AppInfo, type MapInfo, type Online, type ServerInfo, type ServerList } from "../types";
+import { restartPending, serverAddress, serverHost, type AppInfo, type MapInfo, type Online, type ServerInfo, type ServerList } from "../types";
 import { HostingGuide, SizingTable, troubleFor } from "./HostingGuide";
 import { JobProgress } from "./JobProgress";
 import { BusyButton, Info, lazyPage, LoadError, PageBoundary, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
@@ -15,7 +15,7 @@ import { Maps } from "./Maps";
 import { Mods } from "./Mods";
 import { PlayLive } from "./Play";
 import { Players } from "./Players";
-import { MatchButtons, SettingsPage } from "./Settings";
+import { FUN_NOTE, MatchButtons, RULES_NOTE, SettingsPage } from "./Settings";
 import type { Scan } from "./Setup";
 import { Community } from "./Community";
 import { ServerExtras } from "./ServerExtras";
@@ -408,7 +408,12 @@ export function ServerPage(props: {
     return () => clearTimeout(t);
   }, [needsLive, running, tab, tries]);
 
-  const restartBar = running && !off && (s.pending_restart || restartAt !== undefined);
+  // what waits for a restart: the app's own record (kept across reloads) when it sends one,
+  // plus what this page saw saved since
+  const waiting = restartPending(s);
+  const filesWait = waiting.files;
+  const optionsWait = waiting.options || restartAt !== undefined;
+  const restartBar = running && !off && (filesWait || optionsWait);
   return (
     <div className="stack">
       <div className="server-top">
@@ -438,9 +443,9 @@ export function ServerPage(props: {
       {restartBar && (
         <div className="files-bar server-restart-bar" role="status">
           <span>
-            {s.pending_restart && restartAt !== undefined
+            {filesWait && optionsWait
               ? "New files and start options are saved. They're used after a restart."
-              : s.pending_restart
+              : filesWait
                 ? "New files are on the server. They're used after a restart (or the next map)."
                 : "New start options are saved. They're used after a restart."}
           </span>
@@ -497,11 +502,11 @@ export function ServerPage(props: {
           {tab === "getmaps" && <GetMore only="maps" onInstalled={reloadMaps} />}
           {tab === "bots" && data && <Bots data={data} refresh={refresh} />}
           {tab === "match" && data && (
-            <SettingsPage title="Rules" note="Saved for this mode on this server." data={data} cat={2} refresh={refresh}>
+            <SettingsPage title="Rules" note={RULES_NOTE(data)} data={data} cat={2} refresh={refresh}>
               <MatchButtons refresh={refresh} />
             </SettingsPage>
           )}
-          {tab === "fun" && data && <SettingsPage title="Fun & effects" note="These apply immediately." data={data} cat={3} refresh={refresh} />}
+          {tab === "fun" && data && <SettingsPage title="Fun & effects" note={FUN_NOTE(data)} data={data} cat={3} refresh={refresh} />}
           {tab === "players" && data && <Players data={data} refresh={refresh} />}
           {tab === "mods" && <Mods app={app} scan={scan} running={!!data} onChanged={() => { reloadApp(); onChanged(); }} openSetup={() => {}} />}
           {tab === "admins" && <Admins data={data} />}
@@ -578,7 +583,13 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   // null: not picked, so it follows who can join (on for listed servers)
   const [botsEmpty, setBotsEmpty] = useState<boolean | null>(server.bots_when_empty_set ? !!server.bots_when_empty : null);
   const botsShown = botsEmpty ?? vis === "listed";
-  const [problem, setProblem] = useState<{ slots?: string; port?: string }>({});
+  const [problem, setProblem] = useState<{ name?: string; slots?: string; port?: string }>({});
+  // the port is part of how the running server was started: changed only while it's stopped
+  const portLocked = server.state === "running";
+  const setPortText = port.setText;
+  useEffect(() => {
+    if (portLocked) setPortText(String(server.port));
+  }, [portLocked, server.port, setPortText]);
   const portMin = server.host ? 27015 : 1024;
   const portMax = server.host ? 27019 : 65000;
 
@@ -592,12 +603,16 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   const { run, busy } = useActions();
   const saving = busy(`${server.id}:save`);
   const save = () => {
-    const bad = { slots: numberProblem(slots.value, 2, 32, "Player slots"), port: numberProblem(port.value, portMin, portMax, "Port") };
+    const bad = {
+      name: name.trim() ? "" : "Give the server a name.",
+      slots: numberProblem(slots.value, 2, 32, "Player slots"),
+      port: portLocked ? "" : numberProblem(port.value, portMin, portMax, "Port"),
+    };
     setProblem(bad);
-    if (bad.slots || bad.port) return;
+    if (bad.name || bad.slots || bad.port) return;
     const sent = now;
     run(`${server.id}:save`, async () => {
-      const r = await post(`/api/servers/${server.id}`, { name, map, maxplayers: slots.value, port: port.value, visibility: vis, password, listen_ip: listenIp, public_address: publicAddr, extra_args: extra, ...(botsEmpty === null ? {} : { bots_when_empty: botsEmpty }) });
+      const r = await post(`/api/servers/${server.id}`, { name: name.trim(), map, maxplayers: slots.value, port: portLocked ? server.port : port.value, visibility: vis, password, listen_ip: listenIp, public_address: publicAddr, extra_args: extra, ...(botsEmpty === null ? {} : { bots_when_empty: botsEmpty }) });
       if (r.error) return toast(r.error, true);
       // the address as saved (a trailing dot dropped, say)
       const saved = typeof r.public_address === "string" ? r.public_address : r.public_address === null ? "" : publicAddr;
@@ -619,7 +634,12 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
         {ro && <p className="muted small-note">{ON_COMPUTER_ONLY}</p>}
         <label className="field">
           <span>Name</span>
-          <input className="search" disabled={ro} maxLength={48} value={name} onChange={(e) => setName(e.target.value)} />
+          <input
+            className="search" disabled={ro} maxLength={48} value={name}
+            onChange={(e) => { setName(e.target.value); setProblem((p) => ({ ...p, name: "" })); }}
+            aria-invalid={!!problem.name} aria-describedby={problem.name ? "serverNameProblem" : undefined}
+          />
+          {problem.name && <small className="err-text" id="serverNameProblem">{problem.name}</small>}
         </label>
         <div className="field">
           <span>Who can join<Info text={WHO_CAN_JOIN} /></span>
@@ -673,7 +693,8 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
               <label className="field">
                 <span>Port<Info text={server.host ? "The port players connect to: 27015 to 27019 on a Linux server (27020 is for HLTV). Open it in your provider's firewall too." : "Each server needs its own port, from 27016 up. Change it only if something else uses it, and open the new port on your router if friends connect directly."} /></span>
                 <input
-                  className="search narrow" type="number" disabled={ro} min={portMin} max={portMax} value={port.text}
+                  className="search narrow" type="number" disabled={ro || portLocked} min={portMin} max={portMax} value={portLocked ? String(server.port) : port.text}
+                  aria-describedby={portLocked && !ro ? "serverPortLocked" : undefined}
                   onChange={(e) => { port.setText(e.target.value); setProblem((p) => ({ ...p, port: "" })); }}
                   onBlur={() => port.setText(clampText(port.text, portMin, portMax))}
                   aria-invalid={!!problem.port}
@@ -686,6 +707,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
                 </label>
               )}
             </div>
+            {portLocked && !ro && <p className="muted small-note" id="serverPortLocked">Stop the server to change its port</p>}
             {problem.port && <p className="err-text small-note">{problem.port}</p>}
             <label className="field">
               <span>Extra start options<Info text="Added to the server's command line, like -pingboost 2, from the next start. Port, map, player slots and passwords are set above instead." /></span>

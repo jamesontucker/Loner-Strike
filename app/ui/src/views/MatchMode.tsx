@@ -121,10 +121,11 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
     const r = await postJson<Reply>(path, body).catch(() => ({ ok: false as const, error: "Couldn't reach the app." }));
     if (failed(r)) {
       toast(r.error, true);
-      return;
+      return false;
     }
     setD(r);
     if (done) toast(done);
+    return true;
   };
   const save = (s: Partial<Settings>) => d && queue(d.settings, (cur) => ({ ...cur, ...s }), (full) => post("/api/scrim/settings", full, "Saved"));
   const act = async (action: string, done: string, confirm?: string) => {

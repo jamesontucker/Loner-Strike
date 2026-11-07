@@ -7,7 +7,10 @@ export type LiveState = {
   career: number;
   navbatch: number;
   navleft: number;
+  /** bots playing now */
   bots: number;
+  /** the bot count asked for (the saved target); missing on older plugins, use `bots` then */
+  quota?: number;
   humans: number;
   maxplayers: number;
   timeleft: number;
@@ -119,8 +122,10 @@ export type ServerInfo = {
   connect?: string;
   /** on another machine: why it didn't answer last time (it's shown stopped meanwhile) */
   unreachable?: string | null;
-  /** new files went up to its machine: used after a restart or map change */
-  pending_restart?: boolean;
+  /** What waits for a restart, kept by the app so it survives reloads. Older apps send just
+   *  true (new files went up to its machine: used after a restart or map change); newer ones
+   *  say what: { files, options, hltv, sounds } (or a list of those words). See restartPending. */
+  pending_restart?: boolean | RestartReason[] | Partial<Record<RestartReason, unknown>>;
   listen_ip?: string;
   extra_args?: string;
   /** bots keep playing with nobody on (bot_join_after_player 0) */
@@ -144,6 +149,28 @@ export type ServerInfo = {
   loner: boolean;
   dir: string;
 };
+/** What can wait for a restart: new files on the machine, start options, HLTV's settings,
+ *  sound changes (used from the next map). */
+export type RestartReason = "files" | "options" | "hltv" | "sounds";
+export type RestartPending = Record<RestartReason, boolean> & {
+  /** the app says what waits (not just "new files"): what it says replaces the page's own guess */
+  known: boolean;
+};
+/** What waits for a restart on a server, from what the app reports (any of its shapes). */
+export function restartPending(s?: ServerInfo | null): RestartPending {
+  const p = s?.pending_restart;
+  const none = { files: false, options: false, hltv: false, sounds: false };
+  if (!p) return { ...none, known: false };
+  if (p === true) return { ...none, files: true, known: false };
+  if (Array.isArray(p)) return { files: p.includes("files"), options: p.includes("options"), hltv: p.includes("hltv"), sounds: p.includes("sounds"), known: true };
+  if (typeof p === "object") return { files: !!p.files, options: !!p.options, hltv: !!p.hltv, sounds: !!p.sounds, known: true };
+  return { ...none, known: false };
+}
+/** Anything on a server waits for a restart. */
+export const waitsForRestart = (s?: ServerInfo | null) => {
+  const r = restartPending(s);
+  return r.files || r.options || r.hltv || r.sounds;
+};
 export type ServerList = { selected: string; local: string | null; servers: ServerInfo[]; steamcmd: boolean };
 
 /** The Admins page's list (GET /api/admins), the parts the Players page uses. */
@@ -158,3 +185,15 @@ export const serverHost = (s: ServerInfo) => (s.public_address ? s.public_addres
 
 /** The address players connect to, as shown and shared. */
 export const serverAddress = (s: ServerInfo) => s.connect ?? s.address ?? `${s.host ?? "127.0.0.1"}:${s.port}`;
+
+/** The bot count asked for: the saved target, or (older plugins) the bots playing. */
+export const botTarget = (st: LiveState) => (typeof st.quota === "number" ? st.quota : st.bots);
+
+/** A few words when fewer bots are playing than asked for: "3 of 10 playing", or, with
+ *  nobody on and the bots waiting for someone, "Bots join when someone does". */
+export function botsNote(st: LiveState): string | null {
+  const target = botTarget(st);
+  if (st.bots >= target) return null;
+  if (st.humans === 0 && st.bots === 0) return "Bots join when someone does";
+  return `${st.bots} of ${target} playing`;
+}

@@ -157,21 +157,39 @@ export async function addFromFile(section: string): Promise<{ ok: boolean; messa
   return { ok: false, message: "Still adding. Check Get more for progress." };
 }
 
-/** Saves of one settings object, quickly one after another: each builds on the last one
- *  sent rather than on what's on screen, so two quick changes don't undo each other. */
+/** Whether a save's reply means it was accepted: not false, and no error in it. */
+const acceptedReply = (r: unknown) => r !== false && !(r && typeof r === "object" && "error" in r && (r as { error?: unknown }).error);
+
+/** Saves of one settings object, quickly one after another. Each change is a function of
+ *  the settings, applied when its turn comes to the last state the app accepted, so two
+ *  quick changes (even to the same nested group) don't undo each other, and a change that
+ *  failed doesn't come back with the next one. `ok` says whether a reply was accepted
+ *  (by default: not false and no `error`). */
 export function useQueuedSave<S>() {
-  const want = useRef<S | null>(null);
+  // what the app last accepted while saves are queued (null when nothing is going: the
+  // page's own copy is the truth then)
+  const confirmed = useRef<S | null>(null);
+  // the newest copy the page has passed in, for the first save of a batch
+  const latest = useRef<S | null>(null);
+  const waiting = useRef(0);
   // one save at a time, in order, so the last reply is the last change
   const chain = useRef<Promise<unknown>>(Promise.resolve());
-  return useCallback(async <T,>(current: S, change: (s: S) => S, send: (s: S) => Promise<T>): Promise<T> => {
-    const next = change(want.current ?? current);
-    want.current = next;
-    const mine = chain.current.catch(() => null).then(() => send(next));
+  return useCallback(async <T,>(current: S, change: (s: S) => S, send: (s: S) => Promise<T>, ok: (r: T) => boolean = acceptedReply): Promise<T> => {
+    latest.current = current;
+    waiting.current++;
+    const mine = chain.current.catch(() => null).then(async () => {
+      const next = change(confirmed.current ?? latest.current ?? current);
+      const r = await send(next);
+      // accepted: the next change builds on it; failed: on what was there before
+      if (ok(r)) confirmed.current = next;
+      return r;
+    });
     chain.current = mine;
     try {
       return await mine;
     } finally {
-      if (want.current === next) want.current = null;
+      // the last one in the queue: the page's copy (updated from the replies) takes over
+      if (--waiting.current === 0) confirmed.current = null;
     }
   }, []);
 }

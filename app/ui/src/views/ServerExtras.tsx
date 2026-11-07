@@ -154,7 +154,10 @@ export function ServerExtras({ target }: { target: string }) {
     if (done) toast(done);
     return true;
   };
-  const saveSettings = (s: Partial<Settings>, done?: string) => (d ? queue(d.settings, (cur) => ({ ...cur, ...s }), (full) => send("/api/extras/settings", full, done)) : Promise.resolve(false));
+  /** A change is applied to the settings as they'll be when its turn comes (not as they
+   *  were drawn), so two quick changes in the same group both stick. */
+  const saveSettings: SaveSettings = (s, done) =>
+    d ? queue(d.settings, (cur) => ({ ...cur, ...(typeof s === "function" ? s(cur) : s) }), (full) => send("/api/extras/settings", full, done)) : Promise.resolve(false);
 
   const head = <SectionHead title="Rotation & rules" note="Map rotation, chat messages, away and ping kicks, joins and player votes, a daily restart, and fast downloads." />;
   if (error)
@@ -193,7 +196,9 @@ export function ServerExtras({ target }: { target: string }) {
   );
 }
 
-type SaveSettings = (s: Partial<Settings>, done?: string) => Promise<boolean>;
+/** A change: the fields to set, or a function of the settings returning them (for nested
+ *  groups: `(cur) => ({ ping: { ...cur.ping, max: 200 } })`). */
+type SaveSettings = (s: Partial<Settings> | ((cur: Settings) => Partial<Settings>), done?: string) => Promise<boolean>;
 
 /** Tells the page whether this tab has unsaved changes, so switching tabs can ask first. */
 function useReportDirty(dirty: boolean, onDirty: (v: boolean) => void) {
@@ -401,7 +406,7 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
 function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSettings: SaveSettings; onShared: () => void; onDirty: (v: boolean) => void }) {
   const ads = d.settings.ads;
   const { run, busy } = useActions();
-  const pick = (what: string, p: Partial<typeof ads>, label: string) => run(xk(`ads:${what}`), () => saveSettings({ ads: { ...ads, ...p } }), label);
+  const pick = (what: string, p: Partial<typeof ads>, label: string) => run(xk(`ads:${what}`), () => saveSettings((cur) => ({ ads: { ...cur.ads, ...p } })), label);
   const [draft, setDraft] = useState<{ prefix: string; messages: Ad[] } | null>(null);
   const [focus, setFocus] = useState(0);
   const cur = draft ?? { prefix: ads.prefix, messages: ads.messages };
@@ -428,7 +433,7 @@ function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSetting
   };
   const save = () => run(xk("ads:messages"), async () => {
     const messages = cur.messages.map((m) => ({ ...m, text: m.text.trim() })).filter((m) => m.text);
-    if (await saveSettings({ ads: { ...ads, prefix: cur.prefix, messages } }, "Messages saved")) setDraft(null);
+    if (await saveSettings((now) => ({ ads: { ...now.ads, prefix: cur.prefix, messages } }), "Messages saved")) setDraft(null);
   }, "Saving chat messages…");
   const fill = (t: string) => Object.entries(SAMPLE).reduce((s, [k, v]) => s.split(k).join(v), t);
   const shown = cur.messages.filter((m) => m.text.trim());
@@ -438,12 +443,12 @@ function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSetting
       <SectionHead title="Chat messages" note="Messages that show up in chat every few minutes, like a real server's: your Discord, the rules, a donate reminder. Only while someone is playing." />
       <ShareList list="messages" onShared={onShared} />
       <div className="settings">
-        <Toggle label="Show messages" note={ads.messages.length ? `${ads.messages.length} ${ads.messages.length === 1 ? "message" : "messages"}.` : "Write some below first."} on={ads.on} set={(v) => saveSettings({ ads: { ...ads, on: v } })} />
+        <Toggle label="Show messages" note={ads.messages.length ? `${ads.messages.length} ${ads.messages.length === 1 ? "message" : "messages"}.` : "Write some below first."} on={ads.on} set={(v) => saveSettings((cur) => ({ ads: { ...cur.ads, on: v } }))} />
         <Toggle
           label="Mention Loner-Strike"
           note="Every 20 minutes while other people are playing: “This server runs on Loner-Strike, free for CS 1.6 and Condition Zero at lonerstrike.com”. Separate from your own messages."
           on={ads.credit ?? true}
-          set={(v) => saveSettings({ ads: { ...ads, credit: v } })}
+          set={(v) => saveSettings((cur) => ({ ads: { ...cur.ads, credit: v } }))}
         />
         <div className="setting">
           <span className="name">How often<span className="note">One message each time.</span></span>
@@ -545,31 +550,31 @@ function Kickers({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) {
     <section>
       <SectionHead title="Away & ping" note={`Keep slots free for people who are actually playing. Bots are never moved or kicked, and neither is anyone with immunity (owners).${host}`} />
       <div className="settings">
-        <Toggle label="Away players" note="Someone who doesn't press a key or move the mouse for a while goes to spectator, then can be kicked." on={afk.on} set={(v) => saveSettings({ afk: { ...afk, on: v } })} />
+        <Toggle label="Away players" note="Someone who doesn't press a key or move the mouse for a while goes to spectator, then can be kicked." on={afk.on} set={(v) => saveSettings((cur) => ({ afk: { ...cur.afk, on: v } }))} />
         {afk.on && (
           <>
-            <Choice label="Move to spectator after" note="Of doing nothing while alive. They get a warning first." values={AFK_SPEC} current={afk.spec} show={secs} pick={(v) => saveSettings({ afk: { ...afk, spec: v } })} />
+            <Choice label="Move to spectator after" note="Of doing nothing while alive. They get a warning first." values={AFK_SPEC} current={afk.spec} show={secs} pick={(v) => saveSettings((cur) => ({ afk: { ...cur.afk, spec: v } }))} />
             <Choice
               label="Then kick after"
               note="Unless they join a team again. Someone who never picks a team waits both times."
               values={AFK_KICK}
               current={afk.kick}
               show={(v) => (v ? secs(v) : "Never")}
-              pick={(v) => saveSettings({ afk: { ...afk, kick: v } })}
+              pick={(v) => saveSettings((cur) => ({ afk: { ...cur.afk, kick: v } }))}
             />
           </>
         )}
-        <Toggle label="High ping" note="Someone whose connection stays slow gets warnings, then a kick. Not while a map is loading, or right after they join." on={ping.on} set={(v) => saveSettings({ ping: { ...ping, on: v } })} />
+        <Toggle label="High ping" note="Someone whose connection stays slow gets warnings, then a kick. Not while a map is loading, or right after they join." on={ping.on} set={(v) => saveSettings((cur) => ({ ping: { ...cur.ping, on: v } }))} />
         {ping.on && (
           <>
-            <Choice label="Ping limit" note="Their average ping over the last 30 seconds." values={PING_MAX} current={ping.max} show={(v) => `${v} ms`} pick={(v) => saveSettings({ ping: { ...ping, max: v } })} />
+            <Choice label="Ping limit" note="Their average ping over the last 30 seconds." values={PING_MAX} current={ping.max} show={(v) => `${v} ms`} pick={(v) => saveSettings((cur) => ({ ping: { ...cur.ping, max: v } }))} />
             <Choice
               label="Kick after"
               note="Checks in a row over the limit, 10 seconds apart. Admins and moderators are never kicked for ping."
               values={PING_CHECKS}
               current={ping.checks}
               show={(v) => `${v} checks`}
-              pick={(v) => saveSettings({ ping: { ...ping, checks: v } })}
+              pick={(v) => saveSettings((cur) => ({ ping: { ...cur.ping, checks: v } }))}
             />
           </>
         )}
@@ -589,7 +594,7 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
       <section>
         <SectionHead title="Join messages" note="A line in chat when someone joins or leaves, like Alex (Germany) joined." />
         <div className="settings">
-          <Toggle label="Join and leave messages" note="Not on map changes, only when someone really comes or goes." on={joins.on} set={(v) => saveSettings({ joins: { ...joins, on: v } })} />
+          <Toggle label="Join and leave messages" note="Not on map changes, only when someone really comes or goes." on={joins.on} set={(v) => saveSettings((cur) => ({ joins: { ...cur.joins, on: v } }))} />
           {joins.on && (
             <>
               {d.geoip ? (
@@ -597,7 +602,7 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
                   label="Show the country"
                   note="Players on your own network show none, and people joining through playit.gg may not either."
                   on={joins.country}
-                  set={(v) => saveSettings({ joins: { ...joins, country: v } })}
+                  set={(v) => saveSettings((cur) => ({ joins: { ...cur.joins, country: v } }))}
                 />
               ) : (
                 <div className="setting">
@@ -606,7 +611,7 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
                   </span>
                 </div>
               )}
-              <Toggle label="Leave out bots" note="Bots come and go a lot. Leave this on to keep chat quiet." on={joins.skip_bots} set={(v) => saveSettings({ joins: { ...joins, skip_bots: v } })} />
+              <Toggle label="Leave out bots" note="Bots come and go a lot. Leave this on to keep chat quiet." on={joins.skip_bots} set={(v) => saveSettings((cur) => ({ joins: { ...cur.joins, skip_bots: v } }))} />
             </>
           )}
         </div>
@@ -617,8 +622,8 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
           note={`Players say /votekick or /voteban, pick someone from a menu, and everyone else votes for 20 seconds. Owners with immunity${host} and HLTV can't be voted on.`}
         />
         <div className="settings">
-          <Toggle label="Vote kick" note="Someone kicked this way can join again straight away." on={votes.kick} set={(v) => saveSettings({ votes: { ...votes, kick: v } })} />
-          <Toggle label="Vote ban" note="Keeps them out for a while. Never for good: that's for you to decide." on={votes.ban} set={(v) => saveSettings({ votes: { ...votes, ban: v } })} />
+          <Toggle label="Vote kick" note="Someone kicked this way can join again straight away." on={votes.kick} set={(v) => saveSettings((cur) => ({ votes: { ...cur.votes, kick: v } }))} />
+          <Toggle label="Vote ban" note="Keeps them out for a while. Never for good: that's for you to decide." on={votes.ban} set={(v) => saveSettings((cur) => ({ votes: { ...cur.votes, ban: v } }))} />
           {(votes.kick || votes.ban) && (
             <>
               <Choice
@@ -627,7 +632,7 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
                 values={VOTE_PERCENT}
                 current={votes.percent}
                 show={(v) => `${v}%`}
-                pick={(v) => saveSettings({ votes: { ...votes, percent: v } })}
+                pick={(v) => saveSettings((cur) => ({ votes: { ...cur.votes, percent: v } }))}
               />
               <Choice
                 label="Players needed"
@@ -635,7 +640,7 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
                 values={VOTE_MIN}
                 current={votes.min_players}
                 show={(v) => `${v}`}
-                pick={(v) => saveSettings({ votes: { ...votes, min_players: v } })}
+                pick={(v) => saveSettings((cur) => ({ votes: { ...cur.votes, min_players: v } }))}
               />
               <Choice
                 label="Time between votes"
@@ -643,19 +648,19 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
                 values={VOTE_COOLDOWN}
                 current={votes.cooldown}
                 show={(v) => (v ? `${v} min` : "None")}
-                pick={(v) => saveSettings({ votes: { ...votes, cooldown: v } })}
+                pick={(v) => saveSettings((cur) => ({ votes: { ...cur.votes, cooldown: v } }))}
               />
             </>
           )}
           {votes.ban && (
-            <Choice label="Ban length" note="By Steam account, or by address for players without one." values={BAN_MINUTES} current={votes.ban_minutes} show={mins} pick={(v) => saveSettings({ votes: { ...votes, ban_minutes: v } })} />
+            <Choice label="Ban length" note="By Steam account, or by address for players without one." values={BAN_MINUTES} current={votes.ban_minutes} show={mins} pick={(v) => saveSettings((cur) => ({ votes: { ...cur.votes, ban_minutes: v } }))} />
           )}
           {votes.kick && (
             <Toggle
               label="Bots can be vote-kicked"
               note="Handy when a bot is spoiling the game. The bot count goes down by one. Bots can never be banned."
               on={votes.kick_bots}
-              set={(v) => saveSettings({ votes: { ...votes, kick_bots: v } })}
+              set={(v) => saveSettings((cur) => ({ votes: { ...cur.votes, kick_bots: v } }))}
             />
           )}
         </div>
@@ -670,11 +675,11 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
   const empty = d.settings.empty;
   const [time, setTime] = useState<string | null>(null);
   const { run, busy } = useActions();
-  const pickEmpty = (what: "map" | "mode", v: string) => run(xk(`empty:${what}`), () => saveSettings({ empty: { ...empty, [what]: v } }), what === "map" ? `Saving the map to go back to…` : "Saving the mode to go back to…");
+  const pickEmpty = (what: "map" | "mode", v: string) => run(xk(`empty:${what}`), () => saveSettings((cur) => ({ empty: { ...cur.empty, [what]: v } })), what === "map" ? `Saving the map to go back to…` : "Saving the mode to go back to…");
   const names = useMemo(() => maps.map((m) => m.name).filter((n) => MAP_NAME.test(n)).sort((a, b) => a.localeCompare(b)), [maps]);
   const options = empty.map && !names.some((n) => n.toLowerCase() === empty.map.toLowerCase()) ? [empty.map, ...names] : names;
   const firstMap = d.rotation.main.find((m) => names.includes(m)) ?? names[0] ?? "de_dust2";
-  const turnOn = (on: boolean) => saveSettings({ empty: { ...empty, on, map: empty.map || firstMap } });
+  const turnOn = (on: boolean) => saveSettings((cur) => ({ empty: { ...cur.empty, on, map: cur.empty.map || firstMap } }));
   const sched = d.schedule;
   const at = time ?? sched?.time ?? "05:00";
   // a server on another machine is still restarted from here, on this computer's clock
@@ -697,7 +702,7 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
           />
           {empty.on && (
             <>
-              <Choice label="After" note="With nobody playing." values={EMPTY_MINUTES} current={empty.minutes} show={(v) => `${v} min`} pick={(v) => saveSettings({ empty: { ...empty, minutes: v } })} />
+              <Choice label="After" note="With nobody playing." values={EMPTY_MINUTES} current={empty.minutes} show={(v) => `${v} min`} pick={(v) => saveSettings((cur) => ({ empty: { ...cur.empty, minutes: v } }))} />
               <div className="setting">
                 <span className="name">Map</span>
                 <select className="sched-select" aria-label="Map to go back to" value={empty.map} disabled={busy(xk("empty:map"))} onChange={(e) => pickEmpty("map", e.target.value)}>

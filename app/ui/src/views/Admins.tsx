@@ -5,6 +5,7 @@ import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm,
 import { setAdminList } from "../queries";
 import { NeedsSetup } from "./MatchMode";
 import { ShareList } from "./ShareList";
+import { useDirty } from "../store";
 
 type Role = "owner" | "admin" | "moderator" | "vip";
 type Person = { id: string; name: string; role: Role; expires: string | null; note: string; expired: boolean };
@@ -100,6 +101,17 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
   const [d, setD] = useState<Data | null>(null);
   const [failed, setFailed] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
+  // the editor as it opened, to tell whether anything was typed since
+  const [draftBase, setDraftBase] = useState("");
+  const editing = draft !== null && JSON.stringify(draft) !== draftBase;
+  // leaving the page (or another server tab) asks first
+  useDirty("admins-editor", editing);
+  const leaveEditor = async () => !editing || (await ask("Leave without saving your changes to this person?", { ok: "Leave without saving", danger: true }));
+  const openDraft = async (next: Draft) => {
+    if (!(await leaveEditor())) return;
+    setDraft(next);
+    setDraftBase(JSON.stringify(next));
+  };
   const [banId, setBanId] = useState("");
   const [banTime, setBanTime] = useState(0);
   const [donate, setDonate] = useState<string | null>(null);
@@ -112,7 +124,8 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
       return "people";
     }
   });
-  const setTab = (t: Tab) => {
+  const setTab = async (t: Tab) => {
+    if (t !== tab && !(await leaveEditor())) return;
     setTabRaw(t);
     try {
       localStorage.setItem("ls.adminTab", t);
@@ -229,7 +242,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
       {tab === "people" && (
       <div>
         <SectionHead title="Admins & VIPs" note="Give people admin powers or VIP perks on your server, like real servers do.">
-          <button className="btn primary" onClick={() => setDraft({ ...EMPTY })}>Add someone</button>
+          <button className="btn primary" onClick={() => openDraft({ ...EMPTY })}>Add someone</button>
         </SectionHead>
         <ShareList list="admins" onShared={load} />
         {!d.users_ini && <NeedsSetup className="err-text" text="AMX Mod X isn't set up for this game yet, so these can't take effect." />}
@@ -257,7 +270,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
                     onClick={() => act(`extend:${p.id}`, () => send("/api/admins/person", { ...p, expires: addDays(p.expired || !p.expires ? d.today : p.expires, 30), was: p.id }, "30 more days"), `Adding 30 days for ${p.name || p.id}…`)}
                   />
                 )}
-                <button className="btn" onClick={() => setDraft({ id: p.id, name: p.name, role: p.role, expires: p.expires ?? "", note: p.note, was: p.id })}>Edit</button>
+                <button className="btn" onClick={() => openDraft({ id: p.id, name: p.name, role: p.role, expires: p.expires ?? "", note: p.note, was: p.id })}>Edit</button>
                 <BusyButton className="btn danger" busy={busy(`remove:${p.id}`)} label="Remove" busyLabel="Removing…" onClick={() => remove(p)} />
               </div>
             </li>

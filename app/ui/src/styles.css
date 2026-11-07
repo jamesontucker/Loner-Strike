@@ -544,6 +544,19 @@ p:where(.small-note:last-child) { margin-bottom: 0; }
 :where(.panel:not(.row, .needs-setup), .sheet-body, .addon, .steps > li) > :where(p) + :where(.btn) { margin-top: 4px; } /* inline-block: adds to the p's 8px */
 /* a sheet's buttons at its foot */
 .sheet-body > :where(.row:last-child) { margin-top: 16px; }
+/* rows of controls never touch: chips, toolbars, button rows, search fields, progress blocks,
+   lists and summary lines get 12px between them in sheets, panels, sections and pages (block
+   boxes, so margins collapse with a field's own). :where() keeps it weaker than a layout's own
+   spacing (.stack, .stack-tight, ...) */
+:where(.panel:not(.row, .needs-setup), .sheet-body, section, .stack, .addon, .share-list, .hltv-addresses, .ads-edit, .extras)
+  > :where(.chips, .toolbar, .row, .seg, .search, .job-progress, .steam-box, .pick-list, .share-list, .files-bar, .banner, .field, .setting, .settings, .maps, .rot-list, .ad-list, .people)
+  + :where(.chips, .toolbar, .row, .seg, .search, .job-progress, .steam-box, .pick-list, .share-list, .files-bar, .banner, .settings, .maps, .rot-list, .ad-list, .people, p) { margin-top: 12px; }
+/* a fieldset that only switches a group of fields off (a phone's read-only settings) */
+fieldset.plain { display: contents; border: 0; margin: 0; padding: 0; min-width: 0; }
+/* what's moving under a progress bar: the bytes of an upload, or that it's still going */
+.job-detail { margin: 0; font-size: 16px; font-weight: 600; color: var(--bone); display: flex; align-items: center; gap: 8px; }
+/* a setting saved for the current mode only */
+.scope-tag { margin-left: 8px; font-size: 11px; vertical-align: middle; }
 .preview { width: 100%; margin: 6px 0 10px; }
 
 /* ---- setup wizard ---------------------------------------------------------- */

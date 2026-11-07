@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { postJson, targetKey, useActions } from "../api";
 import { useNav } from "../store";
-import type { MapInfo, Online } from "../types";
+import { botsNote, botTarget, type MapInfo, type Online } from "../types";
 import { Menu, type MenuItem } from "../menu";
 import { useCommand, useToast } from "../ui";
 
@@ -35,15 +35,18 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
     toast(here?.fav ? "Removed from favourites" : "Added to favourites");
     reloadMaps();
   };
+  // the bot count asked for (the saved target, not the bots playing right now)
+  const target = botTarget(st);
+  const note = botsNote(st);
   // the bot count just asked for, shown until the game reports it (or a few seconds pass)
   const [want, setWant] = useState<{ n: number; at: number } | null>(null);
   useEffect(() => {
     if (!want) return;
-    if (want.n === st.bots) return setWant(null);
+    if (want.n === target) return setWant(null);
     const t = setTimeout(() => setWant(null), Math.max(0, 3000 - (Date.now() - want.at)));
     return () => clearTimeout(t);
-  }, [want, st.bots]);
-  const botCount = want?.n ?? st.bots;
+  }, [want, target]);
+  const botCount = want?.n ?? target;
   const botsKey = `quick:${targetKey()}:bots`;
   const botsBusy = busy(botsKey);
   const setBots = (n: number) => once(botsKey, async () => {
@@ -104,7 +107,12 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
         {!career && (
           <div className="qstep" role="group" aria-label="Bots">
             <button className="qb" aria-label="One bot fewer" disabled={botsBusy || botCount <= 0} aria-busy={botsBusy || undefined} onClick={() => setBots(Math.max(0, botCount - 1))}>−</button>
-            <Menu label={`${botCount} bot${botCount === 1 ? "" : "s"}`} ariaLabel={`${botCount} bot${botCount === 1 ? "" : "s"}: bot options`} items={botMenu} active={!!st.peaceful} />
+            <Menu
+              label={`${botCount} bot${botCount === 1 ? "" : "s"}`}
+              ariaLabel={`${botCount} bot${botCount === 1 ? "" : "s"}${note && !want ? `, ${note.toLowerCase()}` : ""}: bot options`}
+              groups={[{ items: botMenu, note: note && !want ? note : undefined }]}
+              active={!!st.peaceful}
+            />
             <button className="qb" aria-label="One more bot" disabled={botsBusy || botCount >= st.maxplayers - 1} aria-busy={botsBusy || undefined} onClick={() => setBots(Math.min(st.maxplayers - 1, botCount + 1))}>+</button>
           </div>
         )}

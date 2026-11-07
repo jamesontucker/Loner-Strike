@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { targetKey, useActions } from "../api";
-import type { Online, Setting } from "../types";
+import { botsNote, botTarget, type Online, type Setting } from "../types";
 
 /** Keys that move a range input: only these send the new bot count. */
 const SLIDER_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
@@ -16,14 +16,48 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
   const bots = (what: string, label: string) => act(key(what), () => run("gm_bots", [what]), label);
   const st = data.state;
   const personality = data.settings.find((s) => s.cvar === "gm_personality");
-  const [count, setCount] = useState(st.bots);
-  const [dragging, setDragging] = useState(false);
+  // the bot count asked for (not the bots playing, which can lag behind or wait for people)
+  const target = botTarget(st);
+  const note = botsNote(st);
+  // where the slider is while it's being moved, before anything is sent
+  const [draft, setDraft] = useState<number | null>(null);
+  // the count just sent, shown until the game reports it (or a few seconds pass)
+  const [want, setWant] = useState<{ n: number; at: number } | null>(null);
+  // the newest count to send, for the send that's going (it sends again if this changed)
+  const wantN = useRef<number | null>(null);
   useEffect(() => {
-    if (!dragging) setCount(st.bots);
-  }, [st.bots, dragging]);
-  // send the count, then let the game's own number show again once it's had time to answer
+    if (!want) return;
+    if (want.n === target) return setWant(null);
+    const t = setTimeout(() => setWant(null), Math.max(0, 4000 - (Date.now() - want.at)));
+    return () => clearTimeout(t);
+  }, [want, target]);
+  const count = draft ?? want?.n ?? target;
   const settle = useRef(0);
-  const sendCount = (n: number) => run("gm_bots", ["count", String(n)], true).then(() => setTimeout(() => setDragging(false), 1500));
+  useEffect(() => () => clearTimeout(settle.current), []);
+  const countBusy = busy(key("count"));
+  /** Sends a new count, unless it's what's already asked for. A count picked while one is
+   *  on its way goes right after it, so the last one picked is the one that sticks. */
+  const sendCount = (n: number) => {
+    clearTimeout(settle.current);
+    setDraft(null);
+    if (n === (wantN.current ?? want?.n ?? target)) return;
+    wantN.current = n;
+    setWant({ n, at: Date.now() });
+    act(key("count"), async () => {
+      let sent: number | null = null;
+      try {
+        while (wantN.current !== null && wantN.current !== sent) {
+          sent = wantN.current;
+          if (!(await run("gm_bots", ["count", String(sent)], true))) {
+            setWant(null);
+            return;
+          }
+        }
+      } finally {
+        wantN.current = null;
+      }
+    }, "Saving the bot count…");
+  };
   const learning = st.navleft > 0;
   const most = Math.max(1, st.maxplayers - 1);
   /** One more or one fewer, for the buttons beside the slider (easier than dragging on a phone). */
@@ -31,8 +65,7 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
     const n = Math.min(most, Math.max(0, count + d));
     if (n === count) return;
     clearTimeout(settle.current);
-    setDragging(true);
-    setCount(n);
+    setDraft(n);
     settle.current = window.setTimeout(() => sendCount(n), 500);
   };
 
@@ -48,36 +81,43 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
       <div className="slider-row">
         <label htmlFor="botCount">Bots<Info text="How many bots play. Each one takes a player slot, so leave room for friends." /></label>
         <div className="slider-step">
-        <button type="button" className="btn step" aria-label="One bot fewer" disabled={count <= 0} onClick={() => step(-1)}>−</button>
+        <button type="button" className="btn step" aria-label="One bot fewer" disabled={countBusy || count <= 0} aria-busy={countBusy || undefined} onClick={() => step(-1)}>−</button>
         <input
           id="botCount"
           type="range"
           min={0}
           max={most}
           value={count}
+          aria-describedby={note ? "botCountNote" : undefined}
           onChange={(e) => {
-            setDragging(true);
-            setCount(+e.target.value);
+            const n = +e.target.value;
+            setDraft(n);
             // screen readers and switch controls change it without pointer or key events:
             // a quiet moment sends it too
             clearTimeout(settle.current);
-            const n = +e.target.value;
             settle.current = window.setTimeout(() => sendCount(n), 700);
           }}
-          onPointerUp={() => {
+          // (a tap without moving sends nothing: it's the same count)
+          onPointerUp={() => sendCount(count)}
+          onPointerCancel={() => {
             clearTimeout(settle.current);
-            sendCount(count);
+            setDraft(null);
           }}
-          onPointerCancel={() => setDragging(false)}
-          onKeyUp={(e) => {
-            if (!SLIDER_KEYS.includes(e.key)) return;
-            clearTimeout(settle.current);
-            sendCount(count);
-          }}
+          onKeyUp={(e) => SLIDER_KEYS.includes(e.key) && sendCount(count)}
         />
-        <button type="button" className="btn step" aria-label="One more bot" disabled={count >= most} onClick={() => step(1)}>+</button>
+        <button type="button" className="btn step" aria-label="One more bot" disabled={countBusy || count >= most} aria-busy={countBusy || undefined} onClick={() => step(1)}>+</button>
         </div>
         <output htmlFor="botCount">{count}</output>
+        <span className="muted" aria-live="polite" id="botCountNote">
+          {countBusy ? (
+            <>
+              <span className="spinner" aria-hidden="true" />
+              Saving…
+            </>
+          ) : (
+            note
+          )}
+        </span>
         <div className="row">
           <BusyButton busy={busy(key("addt"))} label="Add a Terrorist" busyLabel="Adding…" onClick={() => bots("addt", "Adding a Terrorist bot…")} />
           <BusyButton busy={busy(key("addct"))} label="Add a Counter-Terrorist" busyLabel="Adding…" onClick={() => bots("addct", "Adding a Counter-Terrorist bot…")} />
@@ -112,16 +152,27 @@ function PersonalitySlider({ setting, refresh }: { setting: Setting; refresh: ()
   const [draft, setDraft] = useState<number | null>(null);
   const value = draft ?? saved;
   const settle = useRef(0);
+  // the newest value to send, for the save that's going (it sends again if this changed)
+  const next = useRef<number | null>(null);
   const save = (n: number) => {
     clearTimeout(settle.current);
-    if (n === saved) {
-      setDraft(null);
-      return;
-    }
+    setDraft(null);
+    if (n === (next.current ?? saved)) return;
+    next.current = n;
+    pending.set(setting.cvar, String(n));
     act(key, async () => {
-      pending.set(setting.cvar, String(n));
-      setDraft(null);
-      if (!(await run("gm_set", [setting.cvar, String(n)], true))) pending.clear(setting.cvar);
+      let sent: number | null = null;
+      try {
+        while (next.current !== null && next.current !== sent) {
+          sent = next.current;
+          if (!(await run("gm_set", [setting.cvar, String(sent)], true))) {
+            pending.clear(setting.cvar);
+            return;
+          }
+        }
+      } finally {
+        next.current = null;
+      }
     }, "Saving personality…");
   };
   const saving = busy(key);
@@ -139,7 +190,8 @@ function PersonalitySlider({ setting, refresh }: { setting: Setting; refresh: ()
           max={200}
           step={10}
           value={value}
-          disabled={saving}
+          // stays usable while saving, so it keeps focus: a newer value goes after the save
+          aria-busy={saving || undefined}
           aria-valuetext={`${value} percent, ${strength(value).toLowerCase()}`}
           onChange={(e) => {
             const n = +e.target.value;

@@ -6,7 +6,7 @@ import { Icon } from "./icons";
 import { forgetLive, queryClient, reloadAppInfo, useOpenReports, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
 import { hasUnsavedEdits, isPageEntry, useNav, type Section } from "./store";
 import { usePlayDrafts } from "./stores/playDraft";
-import type { AppInfo, Online } from "./types";
+import { waitsForRestart, type AppInfo, type Online } from "./types";
 import { applyScale, closeSheetsAbove, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, ToastProvider, useConfirm, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
 import { Addons } from "./views/Addons";
@@ -21,7 +21,7 @@ import { PlayIdle, PlayLive } from "./views/Play";
 import { Players } from "./views/Players";
 import { QuickBar } from "./views/QuickBar";
 import { Sounds } from "./views/Sounds";
-import { MatchButtons, SettingsPage } from "./views/Settings";
+import { FUN_NOTE, MatchButtons, RULES_NOTE, SettingsPage } from "./views/Settings";
 import { Welcome } from "./views/Welcome";
 import { anySetUp, Setup } from "./views/Setup";
 
@@ -229,7 +229,7 @@ function Shell() {
   const reports = useOpenReports().data ?? 0;
   const attention: Partial<Record<Section, { n: number; why: string }>> = {
     servers: {
-      n: (servers?.servers ?? []).filter((x) => x.unreachable || x.state === "crashed" || x.state === "failed" || (x.state === "running" && x.pending_restart)).length,
+      n: (servers?.servers ?? []).filter((x) => x.unreachable || x.state === "crashed" || x.state === "failed" || (x.state === "running" && waitsForRestart(x))).length,
       why: "to look at: servers not answering, stopped by a crash, not finished setting up or waiting for a restart",
     },
     mods: { n: app?.game?.outdated?.length ?? 0, why: "to update: parts of Loner-Strike with updates waiting" },
@@ -377,11 +377,11 @@ function Shell() {
               {section === "maps" && <Maps current={online?.state.map} live={!!online} maps={maps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} />}
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
               {section === "match" && online && (
-                <SettingsPage title="Rules" note={`Saved for ${online.modes.find((m) => m.id === online.state.mode)?.name ?? "this mode"}. Round changes take effect next round.`} data={online} cat={2} refresh={refresh}>
+                <SettingsPage title="Rules" note={RULES_NOTE(online)} data={online} cat={2} refresh={refresh}>
                   <MatchButtons refresh={refresh} />
                 </SettingsPage>
               )}
-              {section === "fun" && online && <SettingsPage title="Fun & effects" note="These apply immediately." data={online} cat={3} refresh={refresh} />}
+              {section === "fun" && online && <SettingsPage title="Fun & effects" note={FUN_NOTE(online)} data={online} cat={3} refresh={refresh} />}
               {section === "players" && online && <Players data={online} refresh={refresh} />}
               {section === "addons" && online && <Addons data={online} refresh={refresh} />}
               {section === "friends" && <Friends data={online} refresh={refresh} />}

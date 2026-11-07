@@ -112,7 +112,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
     toast("Added. Run full setup to set up the game in it.");
   }, "Choosing a folder…");
   const serversDir = useServersDir();
-  const pickServersDir = (reset = false) => run("app:servers-dir", async () => {
+  const pickServersDir = (reset = false) => run(reset ? "app:servers-dir:reset" : "app:servers-dir", async () => {
     let dir = "";
     if (!reset) {
       const picked = await post<{ dir?: string | null } & R>("/api/servers/pick-folder", { purpose: "servers" });
@@ -124,7 +124,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
     if (r.error) return toast(r.error, true);
     queryClient.setQueryData(SERVERS_DIR, r);
     toast(reset ? "New servers go in the usual place again" : "New servers go in that folder");
-  }, "Choosing a folder…");
+  }, reset ? "Going back to the usual servers folder…" : "Choosing a folder…");
+  const dirBusy = busy("app:servers-dir") || busy("app:servers-dir:reset");
   const removeFolder = (dir: string) => run(`app:folder:remove:${dir}`, async () => {
     const r = await post<Prefs & R>("/api/app/game-folder/remove", { dir });
     if (r.error) return toast(r.error, true);
@@ -285,8 +286,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           <div className="panel stack-tight">
             <p className="mono small">{serversDir.data.dir || serversDir.data.default || "Not known until a game is set up"}</p>
             <div className="row">
-              <BusyButton className="btn" busy={busy("app:servers-dir")} label="Change" busyLabel="Choosing…" onClick={() => pickServersDir()} />
-              {serversDir.data.dir && <button className="btn" onClick={() => pickServersDir(true)}>Use the usual place</button>}
+              <BusyButton className="btn" busy={busy("app:servers-dir")} disabled={dirBusy} label="Change" busyLabel="Choosing…" onClick={() => pickServersDir()} />
+              {serversDir.data.dir && <BusyButton className="btn" busy={busy("app:servers-dir:reset")} disabled={dirBusy} label="Use the usual place" busyLabel="Saving…" onClick={() => pickServersDir(true)} />}
               <Info text={serversDir.data.mac ? "On a Mac it has to be inside the same CrossOver bottle as the game, since the servers run through it." : "Any folder on this computer with room for the server files (about 1 GB each)."} />
             </div>
           </div>
