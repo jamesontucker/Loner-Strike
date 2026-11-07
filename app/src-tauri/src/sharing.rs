@@ -37,9 +37,11 @@ fn error_words(code: &str) -> Option<&'static str> {
     })
 }
 
-/// Server names: only characters that can't end or extend a console command.
+/// Server names: printable ASCII the game's config files and console take inside quotes: everything but
+/// `"` (ends the name), `;` (starts another command) and `\\`. `|`, `[ ]`, `=` and `~` stay
+/// for names like "Loner-Strike | Alone Together" or "[LS] Pub".
 pub fn clean_name(name: &str) -> String {
-    let kept: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || " _.,!?'()+-:#@&/".contains(*c)).take(48).collect();
+    let kept: String = name.chars().filter(|c| (' '..='~').contains(c) && !"\";\\".contains(*c)).take(48).collect();
     kept.trim().to_string()
 }
 
@@ -764,5 +766,15 @@ mod tests {
         assert_eq!(a.unwrap()["port"], 27015);
         assert_eq!(r, vec!["PublicAllocationPending".to_string()]);
         assert!(tunnel_address(&json!({})).0.is_none());
+    }
+}
+
+#[cfg(test)]
+mod name_tests {
+    #[test]
+    fn keeps_server_name_punctuation() {
+        assert_eq!(super::clean_name("Loner-Strike | Alone Together"), "Loner-Strike | Alone Together");
+        assert_eq!(super::clean_name("[LS] =Pub= ~24/7~"), "[LS] =Pub= ~24/7~");
+        assert_eq!(super::clean_name("bad\";quit\\é"), "badquit");
     }
 }
