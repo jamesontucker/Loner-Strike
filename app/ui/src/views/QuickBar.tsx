@@ -110,7 +110,10 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
         )}
         <Menu label="You" items={you} active={!!me?.god || !!me?.noclip} />
         <button ref={announceButton} className="qb" aria-pressed={announcing} onClick={() => setAnnouncing((a) => !a)}>Announce</button>
-        <button className="qb" aria-pressed={!!st.recording} title="Records the game as you see it to a demo file in your game folder. Watch it later with viewdemo in the console." disabled={busy(`quick:${targetKey()}:demo`)} onClick={() => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…")}>{st.recording ? "● Stop recording" : "Record demo"}</button>
+        {/* records your own game: a server has none (its HLTV records it) */}
+        {targetKey() === "local" && (
+          <button className="qb" aria-pressed={!!st.recording} title="Records the game as you see it to a demo file in your game folder. Watch it later with viewdemo in the console." disabled={busy(`quick:${targetKey()}:demo`)} onClick={() => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…")}>{st.recording ? "● Stop recording" : "Record demo"}</button>
+        )}
       </div>
       {announcing && (
         <form className="quick-announce" onSubmit={(e) => { e.preventDefault(); announce(); }} onKeyDown={(e) => e.key === "Escape" && closeAnnounce()}>

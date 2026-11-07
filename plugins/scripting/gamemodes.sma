@@ -3650,11 +3650,19 @@ public srv_do()
 	}
 	else if (equal(arg, "demo"))
 	{
-		// on a listen server the console's record/stop act on the host's game
+		// on a listen server the console's record/stop act on the host's game; a dedicated
+		// server has no game of its own to record (HLTV records those)
+		if (is_dedicated_server())
+		{
+			gm_print(0, "This is a dedicated server: turn on Record demos in its HLTV settings to record it.")
+			return PLUGIN_HANDLED
+		}
+		new mod[16]
+		get_modname(mod, charsmax(mod))
 		if (g_Recording)
 		{
 			server_cmd("stop")
-			gm_print(0, "Demo saved: czero/%s.dem", g_DemoName)
+			gm_print(0, "Demo saved: %s/%s.dem", mod, g_DemoName)
 		}
 		else
 		{
