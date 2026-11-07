@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Welcome · Loner-Strike</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#3e4637">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="stylesheet" href="/fonts/barlow.css">
+<!--
+  The welcome page the game shows when someone joins a Loner-Strike server (the server's
+  Welcome page set to this address). Optional query: ?server=&player=&mode=&map=&players=
+  (the mode can be a mode id like war3, or its name). Works without any of them.
+-->
+<style>
+@font-face { font-family: "Counter-Strike"; src: url("/fonts/counter-strike.ttf") format("truetype"); font-display: swap; }
+:root { --bg: #3e4637; --panel: #4c5844; --panel-2: #5a6a50; --bone: #d8ded3; --dim: #c2c9b7; --faint: #aeb7a2; --signal: #c4b550; --ink: #26240f; --well: #1f231b;
+  --raised: inset 1px 1px 0 rgba(136,145,128,.55), inset -1px -1px 0 #292c21; --sunken: inset 1px 1px 0 #292c21, inset -1px -1px 0 rgba(136,145,128,.55); }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--bone); font: 500 16px/1.45 "Barlow Semi Condensed", "Arial Narrow", Tahoma, sans-serif; padding: 16px; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 720px; margin: 0 auto; }
+header { display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: var(--panel); box-shadow: var(--raised); border-radius: 2px; }
+header img { width: 52px; height: 52px; flex: none; }
+h1 { margin: 0; font: 400 24px/1.1 "Counter-Strike", Impact, sans-serif; letter-spacing: .02em; overflow-wrap: anywhere; }
+.hello { margin: 4px 0 0; color: var(--dim); }
+.hello b { color: var(--signal); font-weight: 700; }
+.now { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.now span { background: var(--well); box-shadow: var(--sunken); padding: 4px 10px; font-size: 14px; color: var(--faint); }
+.now b { color: var(--bone); font-weight: 600; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.box { background: var(--panel); box-shadow: var(--raised); border-radius: 2px; padding: 12px 14px; }
+h2 { margin: 0 0 8px; font: 400 15px/1 "Counter-Strike", Impact, sans-serif; color: var(--signal); letter-spacing: .03em; }
+ul { list-style: none; margin: 0; padding: 0; }
+li { position: relative; padding-left: 18px; color: var(--dim); }
+li + li { margin-top: 4px; }
+li::before { content: ""; position: absolute; left: 1px; top: 8px; width: 7px; height: 7px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
+code { font: 600 14px ui-monospace, Menlo, Consolas, monospace; color: var(--bone); background: var(--well); padding: 1px 5px; }
+.tip { grid-column: 1 / -1; }
+.tip p { margin: 0; color: var(--dim); }
+.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 12px; padding: 10px 14px; background: var(--well); box-shadow: var(--sunken); font-size: 15px; color: var(--faint); }
+.foot b { color: var(--bone); }
+@media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/img/logo.svg" alt="">
+    <div>
+      <h1 id="server">Loner-Strike</h1>
+      <p class="hello" id="hello">Welcome in. Grab a gun, the bots don't wait.</p>
+    </div>
+  </header>
+
+  <div class="now" id="now" hidden></div>
+
+  <div class="grid">
+    <div class="box">
+      <h2>Rules</h2>
+      <ul>
+        <li>Be decent. Trash talk is fine, slurs aren't.</li>
+        <li>No cheats, scripts or exploits.</li>
+        <li>No spam, and no advertising other servers.</li>
+        <li>English in all chat, so everyone can follow.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h2>Say in chat</h2>
+      <ul>
+        <li><code>rtv</code> vote for a new mode or map</li>
+        <li><code>nominate</code> suggest a map</li>
+        <li><code>timeleft</code> and <code>nextmap</code></li>
+        <li><code>/welcome</code> this page again</li>
+      </ul>
+    </div>
+    <div class="box tip" id="tipbox" hidden>
+      <h2 id="tiptitle">This mode</h2>
+      <p id="tip"></p>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Discord: <b>discord.gg/K9eBHVVwZE</b></span>
+    <span>Run your own: <b>lonerstrike.com</b></span>
+  </div>
+</div>
+
+<script>
+(() => {
+  const q = new URLSearchParams(location.search);
+  const get = (k) => (q.get(k) || "").trim().slice(0, 64);
+  const MODES = {
+    classic: ["Classic", "Plant the bomb or rescue the hostages. Buy at the start of each round."],
+    csdm: ["Deathmatch", "Instant respawn. Say /guns to pick your loadout."],
+    csdm_ffa: ["Free for all", "Everyone for themselves. Say /guns to pick your loadout."],
+    gungame: ["Gun Game", "Every kill moves you up a gun. Knife kill on the last level wins."],
+    gungame_team: ["Gun Game (Teams)", "Your team levels up together. Knife kills steal a level."],
+    zombie: ["Zombie Plague", "Survive the infection. Say /zpmenu for extra items."],
+    zp5: ["Zombie Plague", "Survive the infection, or spread it. Say /zpmenu for extra items."],
+    scoutz: ["Scoutz & Knivez", "Low gravity, scouts and knives. Jump shots count."],
+    war3: ["Warcraft 3", "Say /changerace to pick a race, /shopmenu for items. Bind a key to ultimate. XP is saved."],
+    shero: ["SuperHero", "Say /showmenu to pick heroes as you level up. XP is saved."],
+    hns: ["Hide and Seek", "Ts hide, CTs seek with knives. Say /hnshelp."],
+    paintball: ["Paintball", "One hit and you're out until your killer is. Say /pbgun."],
+    deathrun: ["Deathrun", "Run the course. One player sets off the traps."],
+    basebuilder: ["Base Builder", "Build a base before the zombies are let out."],
+    soccerjam: ["SoccerJam", "Knife the ball into the enemy goal. Say help."],
+    knife: ["Knife Arena", "Knives only."],
+    awp: ["AWP Only", "Free AWP every spawn."],
+    match: ["Match (5v5)", "Say /ready when you're set. Knife round picks sides."],
+  };
+  const server = get("server"), player = get("player"), map = get("map"), players = get("players");
+  const modeKey = get("mode").toLowerCase();
+  const known = MODES[modeKey] || Object.values(MODES).find(([n]) => n.toLowerCase() === modeKey);
+  const mode = known ? known[0] : get("mode");
+
+  if (server) document.getElementById("server").textContent = server;
+  if (player) {
+    const hello = document.getElementById("hello");
+    hello.replaceChildren("Hey ", Object.assign(document.createElement("b"), { textContent: player }), ". Good to have you.");
+  }
+  const now = document.getElementById("now");
+  for (const [label, value] of [["Playing", mode], ["Map", map], ["On now", players]]) {
+    if (!value) continue;
+    const span = document.createElement("span");
+    span.append(label + " ", Object.assign(document.createElement("b"), { textContent: value }));
+    now.append(span);
+  }
+  now.hidden = !now.children.length;
+  if (known) {
+    document.getElementById("tiptitle").textContent = known[0];
+    document.getElementById("tip").textContent = known[1];
+    document.getElementById("tipbox").hidden = false;
+  }
+})();
+</script>
+</body>
+</html>
