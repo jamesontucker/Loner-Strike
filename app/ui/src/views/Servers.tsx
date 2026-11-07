@@ -24,6 +24,7 @@ import { Welcome } from "./Welcome";
 
 // only servers that use it open this tab
 const Hltv = lazyPage(() => import("./Hltv").then((m) => ({ default: m.Hltv })));
+const WebStatus = lazyPage(() => import("./WebStatus").then((m) => ({ default: m.WebStatus })));
 
 const GAME = { cstrike: "Counter-Strike 1.6", czero: "Condition Zero" } as const;
 const VISIBILITY = [
@@ -243,12 +244,14 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   );
 }
 
-type Tab = "community" | "hltv" | "extras" | "sounds" | "overview" | "friends" | "modes" | "maps" | "getmaps" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
-const TABS: { id: Tab; label: string; group: string; live?: boolean }[] = [
+type Tab = "community" | "hltv" | "webstatus" | "extras" | "sounds" | "overview" | "friends" | "modes" | "maps" | "getmaps" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
+/** remote: only for servers on a Linux machine */
+const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: boolean }[] = [
   { id: "overview", label: "Overview", group: "Server" },
   { id: "friends", label: "Play with friends", group: "Server" },
   { id: "extras", label: "Rotation & rules", group: "Server" },
   { id: "hltv", label: "Spectators & demos", group: "Server" },
+  { id: "webstatus", label: "Website status", group: "Server", remote: true },
   { id: "modes", label: "Modes", group: "Game", live: true },
   { id: "maps", label: "Maps", group: "Game" },
   { id: "getmaps", label: "Get maps", group: "Game" },
@@ -265,7 +268,7 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean }[] = [
 const TAB_GROUPS = [...new Set(TABS.map((t) => t.group))];
 
 /** The tab strip; on a phone it scrolls sideways, with faded edges where more tabs are. */
-function TabStrip({ label, tab, onPick }: { label: string; tab: Tab; onPick: (t: Tab) => void }) {
+function TabStrip({ label, tab, remote, onPick }: { label: string; tab: Tab; remote: boolean; onPick: (t: Tab) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ left: false, right: false });
   useEffect(() => {
@@ -287,7 +290,7 @@ function TabStrip({ label, tab, onPick }: { label: string; tab: Tab; onPick: (t:
         <div key={g} className="tab-group">
           <span className="tab-group-name">{g}</span>
           <div className="chips">
-            {TABS.filter((t) => t.group === g).map((t) => (
+            {TABS.filter((t) => t.group === g && (remote || !t.remote)).map((t) => (
               <button key={t.id} role="tab" className="chip" aria-selected={tab === t.id} onClick={() => onPick(t.id)}>{t.label}</button>
             ))}
           </div>
@@ -429,7 +432,7 @@ export function ServerPage(props: {
             )}
           </div>
         </div>
-        <TabStrip label={`${s.name} sections`} tab={tab} onPick={pick} />
+        <TabStrip label={`${s.name} sections`} tab={tab} remote={!!s.host} onPick={pick} />
       </div>
 
       {restartBar && (
@@ -505,6 +508,7 @@ export function ServerPage(props: {
           {tab === "welcome" && <Welcome target={s.id} />}
           {tab === "sounds" && <Sounds target={s.id} />}
           {tab === "extras" && <ServerExtras target={s.id} />}
+          {tab === "webstatus" && s.host && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><WebStatus server={s} /></Suspense></PageBoundary>}
           {tab === "hltv" && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><Hltv server={s} /></Suspense></PageBoundary>}
           {tab === "community" && <Community target={s.id} />}
         </>

@@ -25,6 +25,7 @@ mod scrim;
 mod server;
 mod navs;
 mod servers;
+mod webstatus;
 mod welcome;
 mod setup;
 mod setup_api;

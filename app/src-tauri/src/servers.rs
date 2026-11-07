@@ -89,6 +89,9 @@ pub struct Entry {
     /// shared in place of its IP (display only: the server itself doesn't use it)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub public_address: Option<String>,
+    /// The website status page on a Linux machine (webstatus.rs)
+    #[serde(default, skip_serializing_if = "crate::webstatus::Settings::is_unset")]
+    pub web_status: crate::webstatus::Settings,
 }
 
 const PUBLIC_ADDRESS_HELP: &str = "Enter an address like play.example.com or play.example.com:27016.";
@@ -690,7 +693,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
-        public_address: None,
+        public_address: None, web_status: Default::default(),
     };
     let base = root.join(".base");
     let g = req.game.clone();
@@ -1118,7 +1121,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
-        public_address: None,
+        public_address: None, web_status: Default::default(),
     };
     make_server_dir(&entry)?;
     edit(|l| l.push(entry.clone()))?;
@@ -1226,7 +1229,10 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
             }
             crate::remote::systemctl(&r, &entry.id, "start")
         })?;
-        job.run(&format!("{g}/srv-done"), || edit(|l| l.iter_mut().filter(|e| e.id == entry.id).for_each(|e| e.ready = true)))
+        job.run(&format!("{g}/srv-done"), || edit(|l| l.iter_mut().filter(|e| e.id == entry.id).for_each(|e| e.ready = true)))?;
+        // a rebuilt machine gets its website status page back (if it can't, its status says why)
+        crate::webstatus::refresh(&entry.id);
+        Ok(())
     })
 }
 
@@ -1355,7 +1361,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
-        public_address: None,
+        public_address: None, web_status: Default::default(),
     };
     // name and password as the Friends tab keeps them (it writes friends.cfg only when
     // something changes there, so the server's own server.cfg keeps working meanwhile)
@@ -2132,6 +2138,10 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
             if e.hltv.enabled && (old.port != e.port || old.visibility != e.visibility || password.is_some()) {
                 crate::hltv::remote_apply(&e, true)?;
             }
+            // the website status asks the game on its port
+            if e.web_status.enabled && old.port != e.port {
+                crate::webstatus::apply(&e, true)?;
+            }
         }
         // (a visibility change alone needs a restart anyway; the bots part was applied above)
         Ok(json!({"ok": true, "restart": running(&id) && (restart_needed(&e, &now) || !bots_live), "public_address": now.public_address, "connect": now.connect()}))
@@ -2218,7 +2228,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                     None => (None, with.components.clone()),
                 };
                 let guard = sync_guard();
-                crate::remote::remove(&r, &e.id)?;
+                crate::remote::remove(&r, &e.id, false)?;
                 edit(|l| {
                     l.iter_mut().filter(|x| x.id == id).for_each(|x| {
                         x.ready = false;
@@ -2264,7 +2274,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 // on another machine: its service and folder there go too (if it can be reached)
                 let mut note = None;
                 if let Some(r) = &e.remote {
-                    if let Err(err) = crate::remote::remove(r, &e.id) {
+                    if let Err(err) = crate::remote::remove(r, &e.id, true) {
                         note = Some(format!("{err} Its files are still on {}.", r.host));
                     }
                 }
@@ -2279,6 +2289,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 // (after the sync lock: shared lists take theirs first, then sync)
                 crate::lists::forget(&id);
                 forget(&id);
+                crate::webstatus::forget_token(&id);
                 Ok(json!({"ok": true, "note": note}))
             }
             _ => Err("Unknown action.".into()),
@@ -2645,7 +2656,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None,
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None, web_status: Default::default(),
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -2718,7 +2729,7 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None,
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, public_address: None, web_status: Default::default(),
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));

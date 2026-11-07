@@ -779,13 +779,16 @@ pub fn console(r: &RemoteInfo, id: &str, game: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Takes the server off the machine: the service, its folder.
-pub fn remove(r: &RemoteInfo, id: &str) -> Result<(), String> {
+/// Takes the server off the machine: the service, its folder, its website status page
+/// (Caddy and cloudflared themselves stay, as does a tunnel the host set up by hand).
+/// `for_good`: the server is being deleted, so its visit count goes too (a rebuild keeps it).
+pub fn remove(r: &RemoteInfo, id: &str, for_good: bool) -> Result<(), String> {
     let u = unit(id);
     let (code, out) = exec(
         r,
         &format!(
-            "sudo systemctl disable --now {u}-hltv {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service /etc/systemd/system/{u}-hltv.service; sudo systemctl daemon-reload; rm -rf \"$HOME/{}\"",
+            "{}sudo systemctl disable --now {u}-hltv {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service /etc/systemd/system/{u}-hltv.service; sudo systemctl daemon-reload; rm -rf \"$HOME/{}\"",
+            if for_good { crate::webstatus::remove_sh(id) } else { crate::webstatus::off_sh(id) },
             server_dir(id)
         ),
     )?;
