@@ -323,6 +323,25 @@ function Nav({ back, backLabel = "Back", next, canNext = true, nextLabel = "Cont
 
 function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan: () => void; onClose: () => void }) {
   const [looking, setLooking] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const toast = useToast();
+  // a game somewhere Loner-Strike doesn't look (another Steam library, another bottle):
+  // the player points at its Half-Life folder, and it's looked for again
+  const choose = async () => {
+    setChoosing(true);
+    try {
+      type Picked = { dir?: string | null; error?: string };
+      const picked: Picked = await postJson<Picked>("/api/servers/pick-folder", { purpose: "game" }).catch((): Picked => ({ error: "Couldn't open the folder picker." }));
+      if (picked.error) return toast(picked.error, true);
+      if (!picked.dir) return;
+      const r = await postJson<{ error?: string }>("/api/app/game-folder", { dir: picked.dir }).catch(() => ({ error: "Couldn't reach the app." }));
+      if (r.error) return toast(r.error, true);
+      toast("Found it. Looking again…");
+      onRescan();
+    } finally {
+      setChoosing(false);
+    }
+  };
   return (
     <div className="setup">
       <div className="setup-card">
@@ -336,8 +355,12 @@ function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan
           )}
           <div className="row">
             <BusyButton className="btn primary" busy={looking} label="Look again" busyLabel="Looking…" onClick={() => { setLooking(true); onRescan(); setTimeout(() => setLooking(false), 1500); }} />
+            {!nativeMac && <BusyButton className="btn" busy={choosing} label="Choose the game folder" busyLabel="Choosing…" onClick={choose} />}
             <button className="btn" onClick={onClose}>Continue anyway</button>
           </div>
+          <p className="muted small-note">
+            Installed somewhere unusual, like another Steam library or drive? Choose the Half-Life folder: the one with cstrike or czero in it.
+          </p>
         </section>
       </div>
     </div>
