@@ -239,7 +239,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
             </span>
           )}
           {ON_THIS_COMPUTER && server && (
-            <button className="btn" onClick={() => setCopyFrom(true)}>Copy maps from my game</button>
+            <button className="btn" onClick={() => setCopyFrom(true)}>Copy maps from your game</button>
           )}
           {ON_THIS_COMPUTER && (
             <BusyButton busy={busy(key("add-file"))} label="Add a map file" busyLabel="Adding…" onClick={() => once(key("add-file"), async () => {

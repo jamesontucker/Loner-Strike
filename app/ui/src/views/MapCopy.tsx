@@ -197,9 +197,9 @@ export function CopyFromGame({ server, name, onClose, onDone }: { server: string
   const locked = working || running;
 
   return (
-    <Sheet label="Copy maps from my game" className="sheet wide" onClose={onClose}>
+    <Sheet label="Copy maps from your game" className="sheet wide" onClose={onClose}>
       <div className="sheet-body">
-        <h2>Copy maps from my game</h2>
+        <h2>Copy maps from your game</h2>
         <p className="muted measure">Maps in your game that {name} doesn't have yet. Each goes with what it needs; files the server already has stay as they are.</p>
         {error ? (
           <p className="muted">{error}</p>
