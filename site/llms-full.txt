@@ -29,7 +29,7 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 ## Modes and content
 
 - 22 game modes: Classic, Match (5v5), Deathmatch, Free for all, Gun Game (solo and teams), Zombie Plague (two versions), Warcraft 3, SuperHero, Hide and Seek, Paintball, Deathrun, Base Builder, SoccerJam, Surf, Kreedz, plus knife, pistol, deagle, AWP and scout modes.
-- The mods are community classics, patched so they notice CZ bots. Some got bot logic they never had: SuperHero bots pick heroes, Deathrun bots trigger traps, SoccerJam bots chase the ball, Roll the Dice bots roll.
+- The mods are community classics, patched so they notice CZ bots. Some got bot logic they never had: SuperHero bots pick heroes, SoccerJam bots chase the ball, Roll the Dice bots roll.
 - Thousands of maps from GameBanana with screenshots, favourites and search; skins, player models, sounds and sprays; round-end music, Quake sounds and classic sound packs.
 - Mode voting: players type rtv, vote for the next mode, then for a map that suits it. The host picks which modes are in the vote.
 - Add your own maps, sounds and AMX Mod X plugins from a file.

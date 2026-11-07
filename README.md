@@ -52,7 +52,7 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 The mods are community classics. We added:
 
 - **Bot styles.** Stock CZ bots react instantly and aim like turrets. The styles give them reaction delays, overshooting flicks, shaky tracking, burst fire and the occasional whiff. The top styles bunnyhop.
-- **Bot fixes in every mod.** A lot of old plugins don't see CZ bots at all, so hits, kills and spawns get missed. Every mod here is patched for that. Some also got bot logic they never had: SuperHero bots pick heroes, Deathrun bots trigger traps, SoccerJam bots chase the ball and Roll the Dice bots roll.
+- **Bot fixes in every mod.** A lot of old plugins don't see CZ bots at all, so hits, kills and spawns get missed. Every mod here is patched for that. Some also got bot logic they never had: SuperHero bots pick heroes, SoccerJam bots chase the ball and Roll the Dice bots roll.
 - **The Game Mode Menu, the server plugins and the app**, so you never have to edit a config file.
 - **Fixes** for Gun Game and Deathmatch spawns on maps without spawn files, the map timer while bots learn a map, and a Deathmatch crash on long sessions.
 
