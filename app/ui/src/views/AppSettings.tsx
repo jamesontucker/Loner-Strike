@@ -196,7 +196,13 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
       const j = await waitForSetupJob();
       if (!j) return toast("Lost track of the removal. Check Mods to see if it finished, then restart Loner-Strike.", true);
       if (j.state === "error") toast(j.error || "Couldn't remove everything. Nothing was restarted.", true);
-      else await postJson("/api/app/restart").catch(() => null); // the app going away can drop the reply
+      else {
+        // that was the last game with Loner-Strike: the intro shows again next time, like a first run
+        if (!other) {
+          try { localStorage.removeItem("ls.setupLater"); } catch { /* private window */ }
+        }
+        await postJson("/api/app/restart").catch(() => null); // the app going away can drop the reply
+      }
     }, `Removing Loner-Strike from ${title}…`);
   };
 
