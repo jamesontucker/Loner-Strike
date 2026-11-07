@@ -207,6 +207,8 @@ pub struct Facts {
     pub map_copy: Option<String>,
     /// (which file, its last lines)
     pub console: Option<(String, Vec<String>)>,
+    /// AMX Mod X's newest error log: (which file, its last lines)
+    pub amxx_errors: Option<(String, Vec<String>)>,
     /// the last setup job: (kind, state, error, notes, didn't compile)
     pub job: Option<(String, String, Option<String>, Vec<String>, Vec<String>)>,
     pub errors: Vec<String>,
@@ -299,6 +301,10 @@ pub fn build(f: &Facts) -> String {
         out.push(format!("Last game console lines ({file}):"));
         out.extend(lines.iter().map(|l| format!("  {l}")));
     }
+    if let Some((file, lines)) = &f.amxx_errors {
+        out.push(format!("Last AMX Mod X errors ({file}):"));
+        out.extend(lines.iter().map(|l| format!("  {l}")));
+    }
     out.push(format!("Recent errors ({}):", f.errors.len()));
     out.extend(f.errors.iter().map(|l| format!("  {l}")));
     redact(&out.join("\n"), &f.secrets)
@@ -371,6 +377,18 @@ pub fn gather(st: &crate::server::Shared, version: String) -> Facts {
             Some((p.display().to_string(), lines[lines.len().saturating_sub(30)..].to_vec()))
         })
     });
+    // plugin errors, which often come just before a crash on a map change
+    let amxx_errors = game.as_ref().and_then(|g| {
+        let newest = std::fs::read_dir(g.dir.join("addons/amxmodx/logs"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().starts_with("error_"))
+            .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())?;
+        let text = crate::sys::read_latin1(&newest.path()).ok()?;
+        let lines: Vec<String> = text.lines().filter(|l| !l.to_lowercase().contains("password")).map(String::from).collect();
+        Some((newest.file_name().to_string_lossy().to_string(), lines[lines.len().saturating_sub(20)..].to_vec()))
+    });
     let job = crate::setup::current();
     let job = (job.state != "idle").then(|| (job.kind, job.state, job.error, job.notes, job.failed_compiles));
     Facts {
@@ -386,6 +404,7 @@ pub fn gather(st: &crate::server::Shared, version: String) -> Facts {
         game_running: crate::sys::game_running(),
         map_copy: crate::mapcopy::last_summary(),
         console,
+        amxx_errors,
         job,
         errors: recent_errors(&log_path(), 30),
         secrets,
@@ -446,6 +465,7 @@ mod tests {
             game_running: false,
             map_copy: Some("copied 2, already there 1, skipped 0, failed 0".into()),
             console: Some(("qconsole.log".into(), vec![format!("sv_password \"{JOIN}\""), format!("Connection from {HOME_IP}:27005")])),
+            amxx_errors: Some(("error_20261106.log".into(), vec![format!("L 11/06/2026 - 22:10:01: [AMXX] rcon {RCON} failed")])),
             job: Some(("server".into(), "failed".into(), Some(format!("Couldn't log in with {KEY}")), vec![], vec![])),
             errors: vec![format!("20261106-101010 POST /api/share: token={PHONE} expired"), format!("20261106-101011 sync: {JOIN} rejected")],
             secrets: vec![RCON.into(), JOIN.into(), HLTV_PW.into(), TUNNEL.into(), PHONE.into()],
