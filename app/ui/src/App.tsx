@@ -269,9 +269,13 @@ function Shell() {
       );
     }
     const done = () => {
+      // a first run lands on Play, ready to start a game; run again from Settings, it
+      // goes back there
+      const fromSettings = setupOpen;
       setSetupOpen(false);
       reloadScan();
       refreshAll();
+      if (!fromSettings) go("play");
     };
     return <Setup scan={scan!} fromSettings={setupOpen && anySetUp(scan) && !setupIntro} onClose={laterSetup} onDone={done} onRescan={() => reloadScan()} />;
   }
