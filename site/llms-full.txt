@@ -24,6 +24,7 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 - Each bot has a personality and plays and types to match: it chats, replies to other bots and to people, rages after a run of deaths, and cheers up a teammate.
 - A cast of regular bot names with clan tags, and believable pings on the scoreboard instead of "BOT".
 - Bots get tilted, panic, make radio calls, spray their logo, and learn new maps by themselves.
+- Bot styles, weakest to strongest: Newbie lobby, Pub server, Mixed lobby, Matchmaking, Veterans, Locked in, Hackers, Gods. Or the game's own bots (instant reactions, perfect aim).
 
 ## Modes and content
 
@@ -74,6 +75,9 @@ Yes, on Steam: Counter-Strike 1.6, Condition Zero, or both.
 
 Does it work on a Mac?
 Through CrossOver (Windows Steam inside it), or with Parallels by running the Windows version in the virtual machine. Not with the Mac version of Counter-Strike.
+
+Windows says it protected my PC.
+That's SmartScreen, which warns about apps that aren't widely downloaded yet. Click More info, then Run anyway.
 
 Will it mess up my game?
 No. Every file it changes is backed up first, and you can remove any mode or all of it from the app.

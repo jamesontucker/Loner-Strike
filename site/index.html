@@ -9,6 +9,7 @@
 <meta name="author" content="nanoshrine">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#3e4637">
+<link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="alternate" type="text/plain" href="https://lonerstrike.com/llms.txt" title="Loner-Strike for AI assistants">
@@ -113,6 +114,14 @@
    "acceptedAnswer": {
     "@type": "Answer",
     "text": "Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in CrossOver (paid, with a free trial), and Loner-Strike finds it there. With Parallels (a Windows virtual machine), install the Windows version of Loner-Strike inside Windows."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Windows says it protected my PC",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "That's SmartScreen, which warns about apps that aren't widely downloaded yet. Click More info, then Run anyway. The code is open on GitHub if you want to check what it does."
    }
   },
   {
@@ -238,6 +247,32 @@ p { text-wrap: pretty; }
 .window-bar { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; font-size: 13px; color: var(--faint); font-weight: 600; }
 .window-bar span { width: 9px; height: 9px; border-radius: 50%; background: var(--panel-2); box-shadow: var(--sunken); }
 .window img { border-radius: 2px; width: 100%; height: auto; }
+
+/* how the bots play */
+.botplay { padding: 48px 0 40px; }
+.botplay .lede { color: var(--dim); font-size: 18px; max-width: 62ch; margin: 10px 0 0; }
+.botplay-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 40px; align-items: start; margin-top: 8px; }
+.ladder { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 18px 18px 12px; margin-top: 18px; }
+.ladder h3 { font: 400 20px/1.1 var(--stencil); margin: 0 0 12px; }
+.ladder ul { list-style: none; margin: 0; padding: 0; }
+.ladder li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 8px 0; border-top: 1px solid rgba(0,0,0,.18); }
+.ladder li:first-child { border-top: 0; padding-top: 0; }
+.ladder li b { display: block; color: var(--bone); }
+.ladder li span { color: var(--dim); font-size: 15px; line-height: 1.35; }
+.ladder .fine { color: var(--faint); font-size: 14px; margin: 10px 0 0; }
+.meter { height: 16px; padding: 3px; background: var(--bg); box-shadow: var(--sunken); display: flex; gap: 2px; }
+.meter i { width: 6px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
+.meter i.off { background: transparent; box-shadow: none; }
+@media (max-width: 860px) { .botplay-grid { grid-template-columns: 1fr; gap: 8px; } }
+
+html { scroll-padding-top: 72px; }
+
+/* community */
+.community { padding: 56px 0 24px; }
+.community .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 40px; align-items: start; }
+.community-text p { color: var(--dim); font-size: 18px; max-width: 48ch; margin: 10px 0 0; }
+.discord { width: 100%; max-width: 350px; height: 500px; border: 0; border-radius: 3px; box-shadow: var(--raised); background: var(--panel); }
+@media (max-width: 860px) { .community .wrap { grid-template-columns: 1fr; gap: 24px; } .discord { height: 420px; } }
 
 /* modes */
 .modes { padding: 36px 0 20px; }
@@ -461,6 +496,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   <div class="wrap">
     <a class="wordmark" href="#">Loner-Strike</a>
     <nav aria-label="Page">
+      <a href="#bots">Bots</a>
       <a href="#modes">Modes</a>
       <a href="#everything">Features</a>
       <a href="#gallery">Screenshots</a>
@@ -536,6 +572,35 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <div class="window">
         <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
         <img src="img/play.jpg" alt="The Play screen: 0 friends online, bots ready, and a big Play button" width="1280" height="800" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <section class="botplay" id="bots">
+    <div class="wrap">
+      <h2>How the bots play</h2>
+      <p class="lede">The game's own bots don't hesitate and don't miss. Loner-Strike leaves how they move and plan alone, and changes what happens once they see you.</p>
+      <div class="botplay-grid">
+        <ol class="steps">
+          <li><b>They notice you.</b> Each bot takes a human moment to react before it fires. A newbie takes longer than a veteran.</li>
+          <li><b>They aim.</b> The first flick overshoots or falls short, then settles. Tracking you while you move wobbles.</li>
+          <li><b>They shoot.</b> Good players tap and fire short bursts. Worse ones hold the trigger and the spray climbs away from them.</li>
+          <li><b>They feel it.</b> A bot that keeps dying gets tilted and plays worse, some panic when they're cornered, and the best ones bunnyhop and show off.</li>
+        </ol>
+        <div class="ladder">
+          <h3>Pick the lobby</h3>
+          <ul>
+          <li><div><b>Newbie lobby</b><span>Slow to react, they spray and miss a lot</span></div><div class="meter" role="img" aria-label="Skill 2 of 10"><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></div></li>
+          <li><div><b>Pub server</b><span>A few sharp players, most average, some bad</span></div><div class="meter" role="img" aria-label="Skill 4 of 10"><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></div></li>
+          <li><div><b>Mixed lobby</b><span>Everyone different. A regular keeps their level</span></div><div class="meter" role="img" aria-label="Varies"><i></i><i class="off"></i><i></i><i></i><i class="off"></i><i></i><i></i><i class="off"></i><i></i><i></i></div></li>
+          <li><div><b>Matchmaking</b><span>Solid players who work as a team</span></div><div class="meter" role="img" aria-label="Skill 5 of 10"><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></div></li>
+          <li><div><b>Veterans</b><span>Quick, accurate, short bursts</span></div><div class="meter" role="img" aria-label="Skill 7 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i></div></li>
+          <li><div><b>Locked in</b><span>Very good and focused. They bunnyhop between fights</span></div><div class="meter" role="img" aria-label="Skill 8 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i></div></li>
+          <li><div><b>Hackers</b><span>Suspiciously good. They notice you from behind</span></div><div class="meter" role="img" aria-label="Skill 9 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i></div></li>
+          <li><div><b>Gods</b><span>Everything maxed. Every bullet near you is a headshot</span></div><div class="meter" role="img" aria-label="Skill 10 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></li>
+          </ul>
+          <p class="fine">Or keep the game's own bots, with instant reactions and perfect aim.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -718,6 +783,16 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     </div>
   </section>
 
+  <section class="community" id="community">
+    <div class="wrap">
+      <div class="community-text">
+        <h2>Community</h2>
+        <p>Find people to play with, share maps and setups, report bugs and see what's coming next. Bring your own clan tag.</p>
+      </div>
+      <iframe class="discord" src="https://discord.com/widget?id=1568421500636233748&amp;theme=dark" title="Loner-Strike on Discord" width="350" height="500" loading="lazy" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>
+    </div>
+  </section>
+
   <section class="faq" id="faq">
     <div class="wrap">
       <h2>Questions</h2>
@@ -732,6 +807,10 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <details>
         <summary>Does it work on a Mac?</summary>
         <p>Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in <b>CrossOver</b> (paid, with a free trial), and Loner-Strike finds it there. With <b>Parallels</b> (a Windows virtual machine), install the Windows version of Loner-Strike inside Windows.</p>
+      </details>
+      <details>
+        <summary>Windows says it protected my PC</summary>
+        <p>That's SmartScreen, which warns about apps that aren't widely downloaded yet. Click More info, then Run anyway. The code is open on GitHub if you want to check what it does.</p>
       </details>
       <details>
         <summary>Will it mess up my game?</summary>
@@ -763,7 +842,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 
 <footer>
   <div class="wrap">
-    <span>Made by <a href="https://x.com/nanoshrine" data-event="X profile">nanoshrine</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a> · <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md">Credits</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></span>
+    <span>Made by <a href="https://x.com/nanoshrine" data-event="X profile">nanoshrine</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a> · <a href="#community">Discord</a> · <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CHANGELOG.md">Changelog</a> · <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md">Credits</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></span>
     <span>Not affiliated with Valve. Counter-Strike is a trademark of Valve Corporation.</span>
     <p class="counter" id="counter" hidden></p>
   </div>
