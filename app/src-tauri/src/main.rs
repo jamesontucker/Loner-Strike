@@ -58,6 +58,16 @@ fn main() {
     state.set_game(game);
 
     tauri::Builder::default()
+        // one copy at a time (on Windows a second double-click would start another, with
+        // its own background work and port): opening it again brings the window forward
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            use tauri::Manager;
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())

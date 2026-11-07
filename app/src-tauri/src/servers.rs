@@ -226,6 +226,11 @@ fn load_checked() -> Result<Vec<Entry>, String> {
 }
 
 /// A running server on `port`, by name (the game's own port is 27015).
+/// Whether the server in this folder (on this computer) is running.
+pub fn running_at(dir: &Path) -> bool {
+    load().into_iter().any(|e| e.remote.is_none() && crate::steam::same_dir(&e.dir, dir) && running(&e.id))
+}
+
 pub fn running_on(port: u16) -> Option<String> {
     // (servers on other machines use their machine's ports, not this computer's)
     load().into_iter().find(|e| e.remote.is_none() && e.port == port && running(&e.id)).map(|e| e.name)

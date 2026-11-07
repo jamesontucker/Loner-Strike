@@ -117,6 +117,11 @@ async fn install(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Re
         if !install.dedicated && crate::sys::game_running() {
             return Err(CLOSE_GAME.into());
         }
+        // a server on this computer that's running has its files open (Windows won't
+        // let them be replaced, and a server shouldn't change under its players anyway)
+        if install.dedicated && crate::servers::running_at(&install.hl) {
+            return Err("Stop the server first, then try again.".into());
+        }
         let plan = setup::plan_install(install, &list(&req["games"]), &list(&req["components"]), &res, req["repair"].as_bool() == Some(true))?;
         let store = store_for(target, &plan.install.hl, &plan.games[0]);
         setup::start_install(plan, res, Some(store))
@@ -140,6 +145,11 @@ async fn uninstall(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> 
         let install = find_install(req["hl"].as_str().unwrap_or(""))?;
         if !install.dedicated && crate::sys::game_running() {
             return Err(CLOSE_GAME.into());
+        }
+        // a server on this computer that's running has its files open (Windows won't
+        // let them be replaced, and a server shouldn't change under its players anyway)
+        if install.dedicated && crate::servers::running_at(&install.hl) {
+            return Err("Stop the server first, then try again.".into());
         }
         let comps = req.get("components").filter(|c| c.is_array()).map(list);
         let plan = setup::plan_uninstall(install, &list(&req["games"]), comps, &res)?;

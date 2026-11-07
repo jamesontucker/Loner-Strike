@@ -9,6 +9,8 @@ const P: Record<string, string> = {
   players: '<circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c.8-3.2 3-5 5.5-5s4.7 1.8 5.5 5"/><circle cx="17" cy="8" r="2.5"/><path d="M15.5 13.5c2.3.2 4 1.8 4.6 4.5"/>',
   addons: '<path d="M9 3v4M15 3v4M6 7h12v5a6 6 0 0 1-12 0zM12 18v3"/>',
   friends: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.2 3.6 3.2 14.4 0 18M12 3c-3.2 3.6-3.2 14.4 0 18"/>',
+  // a clipboard with ticked lines: the round rules (time, money, friendly fire)
+  rules: '<rect x="5" y="4.5" width="14" height="16.5" rx="1.5"/><path d="M9 3h6v3H9z"/><path d="M8.5 11l1.2 1.2L12 10M8.5 16l1.2 1.2L12 15M14 11.2h2.5M14 16.2h2.5"/>',
   // a box: mods you install (the plug is the live Add-ons page)
   mods: '<path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"/>',
   more: '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/>',

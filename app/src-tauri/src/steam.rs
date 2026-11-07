@@ -43,7 +43,7 @@ pub fn find_installs() -> Vec<Install> {
     let mut found = scan();
     for dir in crate::app_api::load_settings().game_folders {
         if let Some(i) = crate::prefs::custom_install(&dir) {
-            if !found.iter().any(|f| f.hl == i.hl) {
+            if !found.iter().any(|f| same_dir(&f.hl, &i.hl)) {
                 found.push(i);
             }
         }
@@ -51,8 +51,19 @@ pub fn find_installs() -> Vec<Install> {
     found
 }
 
+/// A folder for comparing: Windows paths match whatever their case and slashes (the
+/// registry gives c:/program files (x86)/steam, Steam's own list C:\Program Files (x86)\Steam).
+pub fn same_dir(a: &std::path::Path, b: &std::path::Path) -> bool {
+    if cfg!(windows) {
+        let key = |p: &std::path::Path| p.to_string_lossy().replace('/', "\\").trim_end_matches('\\').to_lowercase();
+        key(a) == key(b)
+    } else {
+        a == b
+    }
+}
+
 fn push(found: &mut Vec<Install>, hl: PathBuf, kind: &str, bottle: Option<String>) {
-    if hl.is_dir() && !found.iter().any(|i| i.hl == hl) {
+    if hl.is_dir() && !found.iter().any(|i| same_dir(&i.hl, &hl)) {
         let games = games_in(&hl);
         found.push(Install { hl, kind: kind.into(), bottle, games, dedicated: false });
     }
@@ -98,7 +109,8 @@ fn scan() -> Vec<Install> {
         if let Ok(k) = RegKey::predef(hive).open_subkey(key) {
             for name in ["SteamPath", "InstallPath"] {
                 if let Ok(v) = k.get_value::<String, _>(name) {
-                    roots.push(PathBuf::from(v));
+                    // (SteamPath is written with forward slashes)
+                    roots.push(PathBuf::from(v.replace('/', "\\")));
                 }
             }
         }
@@ -145,7 +157,8 @@ pub fn open_steam_url(hl: &Path, url: &str) -> Result<(), String> {
     #[cfg(windows)]
     {
         let _ = hl;
-        let mut cmd = std::process::Command::new("cmd");
+        // (no console window flashing up: sys::command hides it)
+        let mut cmd = crate::sys::command("cmd");
         cmd.args(["/C", "start", "", url]);
         cmd.spawn().map(crate::sys::reap).map_err(|e| format!("Couldn't start Steam ({e})."))
     }
@@ -180,8 +193,14 @@ pub fn launch(hl: &Path, appid: &str, args: &[String]) -> Result<(), String> {
     #[cfg(windows)]
     {
         let _ = hl;
-        // Steam's URL handler: steam://run/<appid>//<game arguments>
-        let mut cmd = std::process::Command::new("cmd");
+        // Steam itself with -applaunch, like on a Mac (no shell, no console window, no
+        // "launch with these options?" question); Steam's URL handler if it can't be found
+        if let Some(steam) = steam_exe() {
+            let mut cmd = crate::sys::command(&steam);
+            cmd.arg("-applaunch").arg(appid).args(args);
+            return cmd.spawn().map(crate::sys::reap).map_err(|e| format!("Couldn't start Steam ({e})."));
+        }
+        let mut cmd = crate::sys::command("cmd");
         let url = format!("steam://run/{}//{}", appid, args.join(" "));
         cmd.args(["/C", "start", "", &url]);
         cmd.spawn().map(crate::sys::reap).map_err(|e| format!("Couldn't start Steam ({e})."))
@@ -191,4 +210,16 @@ pub fn launch(hl: &Path, appid: &str, args: &[String]) -> Result<(), String> {
         let _ = (hl, appid, args);
         Err("Launching isn't supported on this system.".into())
     }
+}
+
+/// steam.exe, from the registry (SteamExe, or InstallPath\\steam.exe).
+#[cfg(windows)]
+fn steam_exe() -> Option<PathBuf> {
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+    use winreg::RegKey;
+    let exe = RegKey::predef(HKEY_CURRENT_USER).open_subkey("Software\\Valve\\Steam").ok().and_then(|k| k.get_value::<String, _>("SteamExe").ok()).map(|v| PathBuf::from(v.replace('/', "\\")));
+    let exe = exe.or_else(|| {
+        RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey("SOFTWARE\\WOW6432Node\\Valve\\Steam").ok().and_then(|k| k.get_value::<String, _>("InstallPath").ok()).map(|v| PathBuf::from(v).join("steam.exe"))
+    });
+    exe.filter(|p| p.is_file())
 }
