@@ -29,6 +29,8 @@ const DEFAULT_PORT: u16 = 27015;
 const LAN_PORTS: std::ops::RangeInclusive<u16> = 27015..=27020;
 const MAX_HISTORY: usize = 50;
 const MAX_FAVORITES: usize = 200;
+/// The most packets one split reply may come in
+const MAX_PARTS: usize = 16;
 
 // ---- asking a server ------------------------------------------------------------------
 
@@ -121,16 +123,22 @@ pub fn parse_players(d: &[u8]) -> Option<Vec<Player>> {
 
 /// One reply, put back together when GoldSrc split it (the high four bits of the fifth
 /// byte are the packet's number, the low four how many there are).
-fn receive(s: &UdpSocket) -> Option<Vec<u8>> {
+/// The whole reply has to arrive by `deadline`, in MAX_PARTS packets at most.
+fn receive(s: &UdpSocket, deadline: Instant) -> Option<Vec<u8>> {
     let mut buf = [0u8; 4096];
-    let n = s.recv(&mut buf).ok()?;
+    let mut recv = |buf: &mut [u8]| {
+        let left = deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero())?;
+        s.set_read_timeout(Some(left)).ok()?;
+        s.recv(buf).ok()
+    };
+    let n = recv(&mut buf)?;
     if buf[..4] != SPLIT {
         return Some(buf[..n].to_vec());
     }
     let id = buf[4..8].to_vec();
     let mut parts: Vec<Option<Vec<u8>>> = Vec::new();
     let mut data = buf[..n].to_vec();
-    loop {
+    for _ in 0..MAX_PARTS {
         if data.len() < 9 || data[..4] != SPLIT || data[4..8] != id[..] {
             return None;
         }
@@ -143,9 +151,10 @@ fn receive(s: &UdpSocket) -> Option<Vec<u8>> {
         if parts.iter().all(|p| p.is_some()) {
             return Some(parts.into_iter().flatten().flatten().collect());
         }
-        let n = s.recv(&mut buf).ok()?;
+        let n = recv(&mut buf)?;
         data = buf[..n].to_vec();
     }
+    None
 }
 
 /// Sends an A2S request, answering a challenge if the server asks for one: the reply's body
@@ -159,7 +168,7 @@ fn ask(addr: SocketAddr, request: &[u8], timeout: Duration) -> Option<(Vec<u8>, 
     for _ in 0..3 {
         let sent = Instant::now();
         s.send(&[request, &challenge].concat()).ok()?;
-        let reply = receive(&s)?;
+        let reply = receive(&s, sent + timeout)?;
         let ping = sent.elapsed().as_millis() as u32;
         if reply.len() < 5 || reply[..4] != HEADER {
             return None;

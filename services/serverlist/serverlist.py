@@ -37,6 +37,8 @@ MAX_SERVERS = 500
 # sign-ups per visitor per hour
 MAX_REGISTER = 20
 DEFAULT_PORT = 27015
+# the most packets one split reply may come in
+MAX_PARTS = 16
 
 
 # ---- asking a game server (A2S, over UDP) ------------------------------------------------
@@ -109,24 +111,31 @@ def parse_rules(data):
         return None
 
 
-def _receive(s):
-    """One reply, put back together when GoldSrc split it over several packets."""
-    data = s.recv(4096)
+def _receive(s, deadline):
+    """One reply, put back together when GoldSrc split it over several packets. The whole
+    reply has to arrive by `deadline` (time.monotonic()), in MAX_PARTS packets at most."""
+    def recv():
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise socket.timeout()
+        s.settimeout(left)
+        return s.recv(4096)
+    data = recv()
     if data[:4] != SPLIT:
         return data
-    parts, total, rid = {}, None, data[4:8]
-    while True:
+    parts, rid = {}, data[4:8]
+    for _ in range(MAX_PARTS):
         if data[:4] != SPLIT or data[4:8] != rid or len(data) < 9:
             return None
         # GoldSrc: the high four bits are this packet's number, the low four how many
         number, total = data[8] >> 4, data[8] & 0x0F
+        if total == 0 or number >= total:
+            return None
         parts[number] = data[9:]
-        if total and len(parts) >= total:
-            break
-        data = s.recv(4096)
-    if any(n not in parts for n in range(total)):
-        return None
-    return b"".join(parts[n] for n in range(total))
+        if all(n in parts for n in range(total)):
+            return b"".join(parts[n] for n in range(total))
+        data = recv()
+    return None
 
 
 def ask(address, request, parse, timeout=2.0):
@@ -138,7 +147,7 @@ def ask(address, request, parse, timeout=2.0):
         challenge = HEADER if request == RULES else b""
         for _ in range(3):
             s.send(request + challenge)
-            data = _receive(s)
+            data = _receive(s, time.monotonic() + timeout)
             if not data or data[:4] != HEADER:
                 return None
             body = data[4:]
@@ -295,10 +304,11 @@ def make_handler(registry, limit, asker=check):
                 self.wfile.write(data)
 
         def _visitor(self):
-            # behind Cloudflare or Caddy on this machine: the visitor is in a header
+            # behind a Cloudflare Tunnel on this machine: Cloudflare sets CF-Connecting-IP
+            # itself (a visitor can't), and nothing else is trusted
             peer = self.client_address[0]
             if peer == "127.0.0.1":
-                return self.headers.get("CF-Connecting-IP") or (self.headers.get("X-Forwarded-For") or peer).split(",")[0].strip()
+                return (self.headers.get("CF-Connecting-IP") or peer).strip()
             return peer
 
         def do_GET(self):
