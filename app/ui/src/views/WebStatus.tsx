@@ -318,10 +318,12 @@ function CopyRow({ label, value }: { label: string; value: string }) {
     else toast("Couldn't copy. Select the text instead.", true);
   };
   return (
-    <div className="hltv-address">
+    <div className="copy-row">
       <span className="muted">{label}</span>
-      <code className="hltv-cmd">{value}</code>
-      <button className="btn small" onClick={copy}>Copy</button>
+      <div>
+        <code className="hltv-cmd">{value}</code>
+        <button className="btn small" onClick={copy}>Copy</button>
+      </div>
     </div>
   );
 }

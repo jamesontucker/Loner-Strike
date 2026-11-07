@@ -423,7 +423,7 @@ export function ServerPage(props: {
           <div>
             <h2 className="server-title">{s.name}</h2>
             <p className="muted">
-              {s.host ? `Server on ${serverHost(s)}` : "Dedicated server"} · {GAME[s.game]} · {s.host || s.public_address ? serverAddress(s) : `port ${s.port}`} · <StateTag s={s} inline />
+              {s.host ? "Linux server" : "Dedicated server"} · {GAME[s.game]} · {s.host || s.public_address ? serverAddress(s) : `port ${s.port}`} · <StateTag s={s} inline />
             </p>
           </div>
           <div className="row">

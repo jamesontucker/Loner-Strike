@@ -1561,3 +1561,9 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 /* a banner's button keeps its size and stays on one line; the text gives way */
 .banner > .btn, .banner > button, .banner > .row { flex: none; white-space: nowrap; }
 .banner > div { min-width: 0; }
+
+/* a label over an address and its Copy button, which stay on one line */
+.copy-row { display: grid; gap: 4px; }
+.copy-row > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.copy-row code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy-row .btn { flex: none; }
