@@ -4,6 +4,7 @@
 [![Downloads](https://img.shields.io/github/downloads/jamesontucker/Loner-Strike/total)](https://github.com/jamesontucker/Loner-Strike/releases)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Mac%20(CrossOver)-informational)](#requirements)
 [![License: GPL-3.0](https://img.shields.io/github/license/jamesontucker/Loner-Strike)](LICENSE)
+[![Discord](https://img.shields.io/discord/1568421500636233748?label=discord&logo=discord&logoColor=white)](https://discord.gg/K9eBHVVwZE)
 
 **Play Counter-Strike like it's 2004, alone or with the friends you don't have.**
 
@@ -76,7 +77,7 @@ Updates come through the app (Settings, Updates). What changed in each version i
 - **A mod misbehaves after a game update.** Open Settings and click Run full setup; it reinstalls what's missing and keeps your settings.
 - **You want everything gone.** Settings has Remove Loner-Strike, which puts your game back the way it was.
 
-Still stuck? Open Settings, click Copy next to Copy diagnostics (version, game folders, what's installed and recent errors; no passwords) and paste it into a [new issue](https://github.com/jamesontucker/Loner-Strike/issues/new).
+Still stuck? Ask in the [Discord](https://discord.gg/K9eBHVVwZE), or open Settings, click Copy next to Copy diagnostics (version, game folders, what's installed and recent errors; no passwords) and paste it into a [new issue](https://github.com/jamesontucker/Loner-Strike/issues/new).
 
 ## Run a server on a VPS
 

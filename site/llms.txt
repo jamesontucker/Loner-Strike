@@ -23,6 +23,7 @@ Key facts:
 
 - [Latest release](https://github.com/jamesontucker/Loner-Strike/releases/latest): Windows and Mac builds (the Mac one signed and notarized), with updates in the app
 - [Changelog](https://github.com/jamesontucker/Loner-Strike/blob/main/CHANGELOG.md): what changed in each version
+- [Discord](https://discord.gg/K9eBHVVwZE): community, help and bug reports
 - [Source code](https://github.com/jamesontucker/Loner-Strike): Rust (Tauri) app, React control panel, AMX Mod X plugins
 
 ## Optional
