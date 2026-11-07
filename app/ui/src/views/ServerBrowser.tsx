@@ -10,7 +10,7 @@ type Tab = "internet" | "favorites" | "history" | "lan";
 type Info = { name: string; map: string; game: string; players: number; bots: number; max_players: number; password: boolean; secure: boolean };
 type Row = { address: string; info: Info | null; ping: number | null; answered: boolean; last_played?: number };
 type Player = { name: string; score: number; time: number };
-type Sort = { key: "name" | "game" | "players" | "map" | "ping" | "last"; down: boolean };
+type Sort = { key: "name" | "game" | "players" | "bots" | "map" | "ping" | "last"; down: boolean };
 type Filters = { game: "" | "cstrike" | "czero"; map: string; people: boolean; notFull: boolean; noPassword: boolean; ping: number };
 
 const TABS: [Tab, string][] = [["internet", "Internet"], ["favorites", "Favorites"], ["history", "History"], ["lan", "LAN"]];
@@ -82,6 +82,7 @@ export function ServerBrowser() {
         case "name": return (i?.name ?? r.address).toLowerCase();
         case "game": return i?.game ?? "";
         case "players": return i ? humans(i) * 100 + i.players : -1;
+        case "bots": return i ? i.bots : -1;
         case "map": return i?.map.toLowerCase() ?? "";
         case "ping": return r.ping ?? 99999;
         case "last": return r.last_played ?? 0;
@@ -129,7 +130,7 @@ export function ServerBrowser() {
   }
 
   const head = (key: Sort["key"], label: string, cls: string) => (
-    <button type="button" role="columnheader" className={cls} aria-sort={sort.key === key ? (sort.down ? "descending" : "ascending") : "none"} onClick={() => setSort((s) => ({ key, down: s.key === key ? !s.down : key === "players" || key === "last" }))}>
+    <button type="button" role="columnheader" className={cls} aria-sort={sort.key === key ? (sort.down ? "descending" : "ascending") : "none"} onClick={() => setSort((s) => ({ key, down: s.key === key ? !s.down : key === "players" || key === "bots" || key === "last" }))}>
       {label}
       {sort.key === key && <span aria-hidden="true">{sort.down ? " ▾" : " ▴"}</span>}
     </button>
@@ -155,6 +156,7 @@ export function ServerBrowser() {
             {head("name", "Servers", "c-name")}
             {head("game", "Game", "c-game")}
             {head("players", "Players", "c-players")}
+            {head("bots", "Bots", "c-bots")}
             {head("map", "Map", "c-map")}
             {head("ping", "Latency", "c-ping")}
             {tab === "history" && head("last", "Last played", "c-last")}
@@ -185,7 +187,8 @@ export function ServerBrowser() {
                     <span className="c-vac" role="gridcell">{i?.secure && <Shield label="Valve Anti-Cheat" />}</span>
                     <span className="c-name" role="gridcell" title={r.address}>{i?.name || r.address}</span>
                     <span className="c-game" role="gridcell">{i ? GAMES[i.game] ?? i.game : ""}</span>
-                    <span className="c-players" role="gridcell" title={i ? `${humans(i)} people, ${i.bots} bots` : undefined}>{i ? `${i.players} / ${i.max_players}` : ""}</span>
+                    <span className="c-players" role="gridcell" title={i ? `${humans(i)} ${humans(i) === 1 ? "person" : "people"} of ${i.max_players} slots` : undefined}>{i ? `${humans(i)} / ${i.max_players}` : ""}</span>
+                    <span className="c-bots" role="gridcell">{i ? i.bots : ""}</span>
                     <span className="c-map" role="gridcell">{i?.map ?? ""}</span>
                     <span className="c-ping" role="gridcell">{r.answered && r.ping !== null ? r.ping : r.answered ? "" : "Not answering"}</span>
                     {tab === "history" && <span className="c-last" role="gridcell">{r.last_played ? ago(r.last_played) : ""}</span>}
@@ -215,7 +218,17 @@ export function ServerBrowser() {
         </div>
       </div>
 
-      {details && <ServerInfo address={details} row={rows.find((r) => r.address === details)} onClose={() => setDetails(null)} onConnect={connect} joining={busy("browser:connect")} />}
+      {details && (
+        <ServerInfo
+          address={details}
+          row={rows.find((r) => r.address === details)}
+          onClose={() => setDetails(null)}
+          onConnect={connect}
+          joining={busy("browser:connect")}
+          // what it just said goes in the list too, so the two agree
+          onFresh={(info, ping) => setLists((l) => ({ ...l, [tab]: (l[tab] ?? []).map((r) => (r.address === details ? { ...r, info, ping, answered: true } : r)) }))}
+        />
+      )}
       {adding && <AddServer onClose={() => setAdding(false)} onAdd={(a) => { setAdding(false); favorite(a, true); }} />}
     </div>
   );
@@ -253,14 +266,16 @@ function FilterBar({ filters, setFilters }: { filters: Filters; setFilters: (f: 
 }
 
 /** Server info, like Steam's: the details and who's on, asked again on Refresh. */
-function ServerInfo({ address, row, onClose, onConnect, joining }: { address: string; row?: Row; onClose: () => void; onConnect: (r: Row, password?: string) => void; joining: boolean }) {
+function ServerInfo({ address, row, onClose, onConnect, joining, onFresh }: { address: string; row?: Row; onClose: () => void; onConnect: (r: Row, password?: string) => void; joining: boolean; onFresh: (info: Info, ping: number) => void }) {
   type Reply = { info?: Info; ping?: number; players?: Player[] | null; error?: string };
   const [d, setD] = useState<Reply | null>(null);
   const [password, setPassword] = useState("");
   const { run, busy } = useActions();
   const load = () =>
     run(`browser:info:${address}`, async () => {
-      setD(await getJsonAt<Reply>(`/api/browser/server?address=${encodeURIComponent(address)}`, null).catch((): Reply => ({ error: "Couldn't reach the app." })));
+      const r = await getJsonAt<Reply>(`/api/browser/server?address=${encodeURIComponent(address)}`, null).catch((): Reply => ({ error: "Couldn't reach the app." }));
+      setD(r);
+      if (r.info && r.ping !== undefined) onFresh(r.info, r.ping);
     }, "Asking the server…");
   useEffect(() => {
     load();
@@ -277,7 +292,8 @@ function ServerInfo({ address, row, onClose, onConnect, joining }: { address: st
           <div className="wide"><dt>Address</dt><dd className="scroll-x">{address}</dd></div>
           {info && <div><dt>Game</dt><dd>{GAMES[info.game] ?? info.game}</dd></div>}
           {info && <div><dt>Map</dt><dd>{info.map}</dd></div>}
-          {info && <div><dt>Players</dt><dd>{info.players} / {info.max_players}{info.bots ? ` (${info.bots} bots)` : ""}</dd></div>}
+          {info && <div><dt>Players</dt><dd>{humans(info)} / {info.max_players}</dd></div>}
+          {info && <div><dt>Bots</dt><dd>{info.bots}</dd></div>}
           {d?.ping !== undefined && <div><dt>Latency</dt><dd>{d.ping}</dd></div>}
           {info && <div><dt>Valve Anti-Cheat</dt><dd>{info.secure ? "Secure" : "Not secure"}</dd></div>}
         </dl>

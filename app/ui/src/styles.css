@@ -1587,8 +1587,8 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .browser-body { min-height: 220px; max-height: min(56vh, 520px); overflow-y: auto; }
 .browser-body.short { min-height: 0; }
 .browser-body.short { max-height: 240px; }
-.browser-row { display: grid; grid-template-columns: 22px 22px minmax(140px, 3fr) minmax(110px, 1fr) 84px minmax(100px, 1fr) 76px; align-items: center; min-height: 34px; padding: 0 12px; gap: 14px; color: var(--bone); font-size: 15px; cursor: default; }
-.browser-row.with-last { grid-template-columns: 22px 22px minmax(140px, 3fr) minmax(110px, 1fr) 84px minmax(100px, 1fr) 76px 100px; }
+.browser-row { display: grid; grid-template-columns: 22px 22px minmax(140px, 3fr) minmax(110px, 1fr) 84px 48px minmax(100px, 1fr) 76px; align-items: center; min-height: 34px; padding: 0 12px; gap: 14px; color: var(--bone); font-size: 15px; cursor: default; }
+.browser-row.with-last { grid-template-columns: 22px 22px minmax(140px, 3fr) minmax(110px, 1fr) 84px 48px minmax(100px, 1fr) 76px 100px; }
 .browser-row > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser-row.head { position: sticky; top: 0; z-index: 1; min-height: 30px; padding: 0 12px; background: var(--panel); box-shadow: var(--raised); color: var(--bone-dim); }
 .browser-row.head button { all: unset; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--bone-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1601,7 +1601,8 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .browser-row.quiet { color: var(--bone-faint); }
 .browser-row .c-lock, .browser-row .c-vac { display: grid; place-items: center; color: var(--bone-dim); }
 .browser-table:focus-within .browser-row[aria-selected="true"] .c-lock, .browser-table:focus-within .browser-row[aria-selected="true"] .c-vac { color: #fff; }
-.browser-row .c-players, .browser-row .c-ping { text-align: right; font-variant-numeric: tabular-nums; }
+.browser-row .c-players, .browser-row .c-bots, .browser-row .c-ping { text-align: right; font-variant-numeric: tabular-nums; }
+.browser-row:not(.head) .c-bots { color: var(--bone-dim); }
 .browser-row.players-row { grid-template-columns: minmax(140px, 1fr) 70px 80px; }
 .browser-body .browser-row:not(:last-child) { border-bottom: 1px solid rgba(0, 0, 0, .12); }
 .browser-row.players-row > :not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
@@ -1621,7 +1622,7 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .browser-facts dd.scroll-x { overflow-x: auto; overflow-wrap: normal; white-space: nowrap; }
 @media (max-width: 700px) {
   .browser-row, .browser-row.with-last { grid-template-columns: 18px 18px minmax(120px, 1fr) 64px 60px; }
-  .browser-row .c-game, .browser-row .c-map, .browser-row .c-last { display: none; }
+  .browser-row .c-game, .browser-row .c-map, .browser-row .c-last, .browser-row .c-bots { display: none; }
 }
 
 /* a secret field with a button to show what's in it */
