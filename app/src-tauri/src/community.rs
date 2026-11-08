@@ -764,10 +764,12 @@ pub fn make_gag(id: &str, name: &str, minutes: u32, chat: bool, voice: bool, now
     Ok(Gag { id, name: clean(name, 31), until, chat, voice })
 }
 
-async fn api_gag(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<GagReq>) -> Reply {
+async fn api_gag(State(st): State<Shared>, headers: HeaderMap, helper: Option<axum::Extension<crate::control::Helper>>, Json(req): Json<GagReq>) -> Reply {
     if !from_panel(&headers) {
         return forbidden();
     }
+    // a Moderator can't shorten a mute that's already there (that's lifting it, an Admin's call)
+    let moderator = helper.is_some_and(|h| h.0 .0.role == crate::control::Role::Moderator);
     let gag = match make_gag(&req.id, &req.name, req.minutes, req.chat, req.voice, now()) {
         Ok(g) => g,
         Err(e) => return bad(e),
@@ -777,6 +779,9 @@ async fn api_gag(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<G
             let _l = LOCK.lock().unwrap();
             let mut gags = read_gags(g)?;
             match gags.iter_mut().find(|x| x.id == gag.id) {
+                Some(x) if moderator && (x.until == 0 || (gag.until != 0 && gag.until < x.until)) => {
+                    return Err("They're already muted for longer. Ask an Admin or the owner to change it.".to_string());
+                }
                 Some(x) => {
                     let name = if gag.name.is_empty() { x.name.clone() } else { gag.name.clone() };
                     *x = Gag { name, ..gag };
