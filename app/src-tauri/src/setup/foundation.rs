@@ -33,15 +33,15 @@ pub const AMXX_CSTRIKE: Pinned = Pinned {
 };
 /// Loner-Strike's fork of ReGameDLL (github.com/jamesontucker/ReGameDLL_CS, branch loner-strike)
 pub const REGAMEDLL: Pinned = Pinned {
-    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls3/regamedll-bin-5.30.0.814-ls3.zip",
-    sha256: "23db69b4a8235cc394c52e716dcfbceed549304f6e9c2e2d69eda01fc8d304e8",
+    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls4/regamedll-bin-5.30.0.814-ls4.zip",
+    sha256: "d346df08155fa5beb632142ee6da82d29ab6b6f760faf69749e2fd9c7f059ded",
     what: "ReGameDLL",
 };
 /// Loner-Strike's fork of ReHLDS (github.com/jamesontucker/ReHLDS, branch loner-strike): the
 /// engine for dedicated servers
 pub const REHLDS: Pinned = Pinned {
-    url: "https://github.com/jamesontucker/ReHLDS/releases/download/3.15.0.896-ls2/rehlds-bin-3.15.0.896-ls2.zip",
-    sha256: "4d508085a0ed17a93dbac67441c6184e812d34575057bfd7633f0f5b83a679bb",
+    url: "https://github.com/jamesontucker/ReHLDS/releases/download/3.15.0.896-ls3/rehlds-bin-3.15.0.896-ls3.zip",
+    sha256: "f837e788f63b64a3261fdfb5aa806bf2c89f97eae1f55ba9fbe582f05f6e7101",
     what: "ReHLDS",
 };
 pub const REAPI: Pinned = Pinned {
