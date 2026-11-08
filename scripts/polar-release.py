@@ -20,6 +20,8 @@ import urllib.request
 
 API = os.environ.get("POLAR_API", "https://api.polar.sh")
 CHUNK = 10_000_000          # bytes per uploaded part
+# (Polar's firewall turns away Python's own User-Agent)
+UA = "Loner-Strike-release/1.0 (+https://github.com/jamesontucker/Loner-Strike)"
 INSTALLERS = [("*_universal.dmg", "application/x-apple-diskimage"), ("*_x64-setup.exe", "application/x-msdownload")]
 
 
@@ -31,7 +33,7 @@ def fail(msg):
 def call(method, path, body=None):
     req = urllib.request.Request(API + path, method=method, data=None if body is None else json.dumps(body).encode(),
                                  headers={"Authorization": "Bearer " + os.environ["POLAR_ACCESS_TOKEN"],
-                                          "Content-Type": "application/json", "Accept": "application/json"})
+                                          "Content-Type": "application/json", "Accept": "application/json", "User-Agent": UA})
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             text = r.read().decode()
@@ -101,7 +103,7 @@ def main():
     for fid in old:
         if fid in new:
             continue
-        req = urllib.request.Request(f"{API}/v1/files/{fid}", method="DELETE", headers={"Authorization": "Bearer " + os.environ["POLAR_ACCESS_TOKEN"]})
+        req = urllib.request.Request(f"{API}/v1/files/{fid}", method="DELETE", headers={"Authorization": "Bearer " + os.environ["POLAR_ACCESS_TOKEN"], "User-Agent": UA})
         try:
             urllib.request.urlopen(req, timeout=60).close()
             print(f"deleted old file {fid}")
