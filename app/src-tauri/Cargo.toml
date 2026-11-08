@@ -1,6 +1,6 @@
 [package]
 name = "loner-strike"
-version = "0.1.2"
+version = "0.1.3"
 homepage = "https://lonerstrike.com"
 description = "Re-live the golden days of Counter-Strike locally or with the friends you don't have."
 license = "GPL-3.0"
