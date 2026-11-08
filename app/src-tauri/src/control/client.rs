@@ -153,6 +153,15 @@ fn tunnel_client() -> Result<reqwest::blocking::Client, String> {
 
 /// The base URL and client for one of the owner's addresses.
 fn endpoint(address: &str, port: u16, fingerprint: &str) -> Result<(String, reqwest::blocking::Client), String> {
+    // only a host and maybe a port: an invite is pasted text, and anything more (a path, a
+    // query, a user@) would send the request somewhere other than the owner's app
+    let bare = address.strip_prefix("https://").unwrap_or(address).trim_end_matches('/');
+    let (host, at) = bare.split_once(':').unwrap_or((bare, ""));
+    let host_ok = !host.is_empty() && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
+    let port_ok = at.is_empty() || at.parse::<u16>().is_ok_and(|p| p > 0);
+    if !host_ok || !port_ok {
+        return Err("That invite has an address that isn't a computer's name or IP.".into());
+    }
     if let Some(host) = address.strip_prefix("https://") {
         // a tunnel's own name with a real certificate: checked the usual way (with a time
         // limit, so a tunnel that never answers can't hold anything up)

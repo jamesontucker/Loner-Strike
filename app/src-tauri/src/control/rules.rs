@@ -137,7 +137,9 @@ pub fn check(a: &Ask, known_setting: &dyn Fn(&str, &str) -> bool) -> Verdict {
                 deny("Moderators mute for up to 7 days. Ask an Admin or the owner for longer.")
             }
         }
-        ("POST", ["api", "community", "ungag"] | ["api", "community", "reports"]) => both,
+        ("POST", ["api", "community", "reports"]) => both,
+        // like lifting a ban: an Admin's call (a Moderator could otherwise undo an Admin's mute)
+        ("POST", ["api", "community", "ungag"]) => admins(),
         ("POST", ["api", "community", "settings"] | ["api", "community", "stats", "reset"]) => admins(),
 
         // ---- the server's setup ----------------------------------------------------
