@@ -2402,6 +2402,30 @@ pub fn stop_on_exit() {
 }
 
 
+/// Switches a server that's just been started to `mode` once it answers (a server starts in
+/// the mode it was last in; the plugin reloads the map for a new one). Gives up after a few
+/// minutes: a server that never came up has its own message.
+fn start_in_mode(id: &str, mode: &str) {
+    let (id, mode) = (id.to_string(), mode.to_string());
+    std::thread::spawn(move || {
+        let until = Instant::now() + Duration::from_secs(240);
+        while Instant::now() < until {
+            std::thread::sleep(Duration::from_secs(3));
+            let Some(g) = game_for(&id, || None) else { continue };
+            let st = g.state();
+            if st["online"] != json!(true) {
+                continue;
+            }
+            if st["state"]["mode"].as_str() != Some(mode.as_str()) {
+                if let Err(e) = g.command("gm_mode", &[mode.clone()]) {
+                    eprintln!("server {id}: couldn't switch to {mode} after starting: {e:?}");
+                }
+            }
+            return;
+        }
+    });
+}
+
 /// A server that froze (still running, no longer answering) for this long is ended, and
 /// the crash watcher starts it again. Any answer counts; a map change takes far less.
 const FROZEN_AFTER: Duration = Duration::from_secs(90);
@@ -3011,6 +3035,24 @@ pub(crate) fn launch_join(st: &Shared, game: &str, address: &str, password: Opti
     crate::steam::launch(&client.hl, appid, &args).map(|_| json!({"ok": true}))
 }
 
+/// The modes a server has (from its copy of modes.ini on this computer) and the one it was
+/// last in, for starting it in a mode
+async fn api_modes(UrlPath(id): UrlPath<String>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) {
+        return forbidden();
+    }
+    let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
+        let e = get(&id).ok_or("That server isn't there any more.")?;
+        let am = e.dir.join(&e.game).join("addons/amxmodx");
+        let modes = crate::extras::parse_modes(&sys::read_latin1(&am.join("configs/gamemodes/modes.ini")).unwrap_or_default());
+        let current = std::fs::read_to_string(am.join("data/gamemodes/current.txt")).ok().map(|t| t.trim().to_string()).filter(|m| !m.is_empty()).unwrap_or_else(|| "classic".into());
+        Ok(json!({"modes": modes.iter().map(|(id, name)| json!({"id": id, "name": name})).collect::<Vec<_>>(), "mode": current}))
+    })
+    .await
+    .unwrap_or_else(|_| Err("Couldn't read the server's modes.".into()));
+    answer(r)
+}
+
 async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, body: Option<Json<Value>>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) {
         return forbidden();
@@ -3028,7 +3070,14 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
     let on_computer = on.is_some();
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
         match action.as_str() {
-            "start" => start(&id).map(|_| json!({"ok": true})),
+            "start" => {
+                start(&id)?;
+                // started in a mode picked beforehand: switched to it once it's up
+                if let Some(mode) = body["mode"].as_str().filter(|m| !m.is_empty() && m.len() <= 31 && m.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')) {
+                    start_in_mode(&id, mode);
+                }
+                Ok(json!({"ok": true}))
+            }
             "stop" => {
                 stop(&id);
                 Ok(json!({"ok": true}))
@@ -3309,6 +3358,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/servers/select", post(api_select))
         .route("/api/servers/:id", post(api_change))
         .route("/api/servers/:id/console", route_get(api_console))
+        .route("/api/servers/:id/modes", route_get(api_modes))
         .route("/api/servers/:id/rcon-password", post(api_set_rcon_password))
         // a POST, so it carries X-Panel (a plain GET from the page doesn't)
         .route("/api/servers/:id/rcon-password/show", post(api_rcon_password))

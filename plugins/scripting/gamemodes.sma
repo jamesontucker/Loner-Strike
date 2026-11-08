@@ -1667,6 +1667,7 @@ strip_c4(id)
 
 // Each bot style (gm_humanbots.amxx) has its own personality file. CZ reads
 // bot_profile_db when a map loads, so the personalities follow on the next map.
+#define BOTSTYLE_MATCHMAKING 2
 new const BOTSTYLE_FILES[][] = { "", "BotProfile_Pub.db", "BotProfile_Matchmaking.db", "BotProfile_Veterans.db", "BotProfile_Newbie.db",
 	"BotProfile_LockedIn.db", "BotProfile_Hackers.db", "BotProfile_Gods.db",
 	// Mixed lobby: the Pub server file has the widest spread of personalities
@@ -1752,6 +1753,9 @@ bool:botstyle_file(st, mode, const map[], file[], len)
 	if (!(0 < st < sizeof BOTSTYLE_FILES) || !file_exists(BOTSTYLE_FILES[st], true))
 		return false
 	new play = botplay_for(mode, map)
+	// Matchmaking is the team style: an organised side on Classic's objectives
+	if (st == BOTSTYLE_MATCHMAKING && play == PLAY_SOLO && mode >= 0 && equal(g_ModeId[mode], "classic"))
+		play = PLAY_TEAM
 	copy(file, len, BOTSTYLE_FILES[st])
 	if (play != PLAY_TEAM)
 	{

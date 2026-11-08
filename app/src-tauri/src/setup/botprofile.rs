@@ -127,9 +127,10 @@ pub fn styles(_res: &Path) -> Vec<Style> {
 /// Each style has one file per flavour; CZ reads it when a map loads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flavour {
-    /// some teamwork (Classic, Match): a few team players, the rest still go their own way
+    /// a team (Match, and the Matchmaking style on Classic): calls followed, sites split
     Team,
-    /// individuals (the default): hardly any grouping, a wide mix of playstyles
+    /// individuals, like a real pub server (the default): hardly any grouping, a wide
+    /// mix of playstyles
     Solo,
     /// individuals who mostly play it safe and hold angles (aim and duel maps)
     Hold,
@@ -263,7 +264,10 @@ pub fn reshape(text: &str, style: &Style, flavour: Flavour, seed: u64) -> String
                     let pos = 0.75 * rnd.uniform(plo, phi) + 0.25 * base / 100.0;
                     let aggression = (alo + (ahi - alo) * pos).clamp(0.0, 100.0).trunc() as i64;
                     let mut teamwork = rnd.uniform(wlo, whi);
-                    if flavour != Flavour::Team {
+                    if flavour == Flavour::Team {
+                        // a team: everyone at least willing (CZ's own bots sit around 75)
+                        teamwork = 45.0 + teamwork * 0.6;
+                    } else {
                         // individuals: half as much, and team players only just over the line
                         teamwork = if wlo >= 50.0 { rnd.uniform(41.0, 55.0) } else { teamwork * 0.5 };
                     }
@@ -366,10 +370,15 @@ mod tests {
             let aggr: std::collections::BTreeSet<i64> = b.iter().map(|x| x.0).collect();
             assert!(aggr.len() > 25, "{flavour:?}: aggression is spread out ({aggr:?})");
             assert!(b.iter().any(|x| x.0 >= 85) && b.iter().any(|x| x.0 <= 45), "{flavour:?}: rushers and careful players");
-            // most can't tag along behind a human (teamwork 40 or less), a few can
             let followers = b.iter().filter(|x| x.1 > 40).count();
-            assert!(followers <= 80 / 4, "{flavour:?}: {followers} team players");
-            assert!(followers >= 1, "{flavour:?}: the odd team player");
+            if flavour == Flavour::Team {
+                // a team: nearly everyone willing to play together
+                assert!(followers >= 80 * 3 / 4, "{flavour:?}: {followers} team players");
+            } else {
+                // individuals: most can't tag along behind a human (teamwork 40 or less), a few can
+                assert!(followers <= 80 / 4, "{flavour:?}: {followers} team players");
+                assert!(followers >= 1, "{flavour:?}: the odd team player");
+            }
             assert!(b.iter().all(|x| (0..=75).contains(&x.1)));
         }
         let team = bots(&reshape(&profile(80), &pub_style, Flavour::Team, 27015));

@@ -479,6 +479,15 @@ export function ServerPage(props: {
 
   const { run: once, busy: busyKey } = useActions();
   const joinRestart = useJoinRestart();
+  // the mode it starts in (a server starts in the one it was last in)
+  const [startModes, setStartModes] = useState<{ modes: { id: string; name: string }[]; mode: string } | null>(null);
+  const [startMode, setStartMode] = useState<string | null>(null);
+  useEffect(() => {
+    if (running) return;
+    getJson<{ modes?: { id: string; name: string }[]; mode?: string }>(`/api/servers/${s.id}/modes`)
+      .then((r) => setStartModes(r.modes?.length ? { modes: [...r.modes].sort((a, b) => a.name.localeCompare(b.name)), mode: r.mode ?? "classic" } : null))
+      .catch(() => setStartModes(null));
+  }, [s.id, running]);
   // same keys as the server list, so a spinner follows the server, not the page
   const busy = (action: string) => busyKey(`${s.id}:${action}`);
   const humans = data?.state.humans ?? 0;
@@ -495,18 +504,28 @@ export function ServerPage(props: {
         : action === "stop" && !data ? `Stop ${s.name}? Anyone playing is disconnected.` : null;
       if (q && !(await ask(q, { ok: `${verb} the server`, danger: true }))) return;
     }
-    let r: Reply | null = await post(action === "join" ? joinPath(s) : `/api/servers/${s.id}/${action}`);
+    const startIn = action === "start" && startMode && startMode !== startModes?.mode ? { mode: startMode } : {};
+    let r: Reply | null = await post(action === "join" ? joinPath(s) : `/api/servers/${s.id}/${action}`, startIn);
     if (r.need_restart_game) r = await joinRestart(s);
     if (!r) return;
     if (r.error) return toast(r.error, true);
     if (action === "join") toast(`Joining ${s.name}…`);
-    if (action === "start") toast(`Starting ${s.name}…`);
+    if (action === "start") toast(`Starting ${s.name}${startIn.mode ? ` in ${startModes?.modes.find((m) => m.id === startIn.mode)?.name ?? startIn.mode}` : ""}…`);
     if (action === "restart") clearRestart(s.id);
     if (action === "update" && r.job) setJob({ title: "Updating Valve's server files…", done: "Valve's server files are up to date", retry: () => act("update") });
     if (action === "delete") return onBack(), onChanged();
     onChanged();
     setTimeout(refresh, 1500);
   }, `${ACTION_LABEL[action] ?? "Working on"} ${s.name}…`);
+
+  const modePick = startModes && (
+    <label className="start-mode">
+      <span className="muted">Start in</span>
+      <select value={startMode ?? startModes.mode} onChange={(e) => setStartMode(e.target.value)} aria-label="Mode the server starts in">
+        {startModes.modes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+      </select>
+    </label>
+  );
 
   // reinstall everything that's on the server, keeping its settings
   const rebuild = async () => {
@@ -582,7 +601,7 @@ export function ServerPage(props: {
                   <BusyButton className="btn danger" busy={busy("stop")} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
                 </>
               ) : (
-                <BusyButton className="btn primary" busy={busy("start")} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} />
+                <>{modePick}<BusyButton className="btn primary" busy={busy("start")} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} /></>
               )
             ) : running ? (
               <>
@@ -591,7 +610,7 @@ export function ServerPage(props: {
                 <BusyButton className="btn danger" busy={busy("stop")} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
               </>
             ) : (
-              <BusyButton className="btn primary" busy={busy("start")} disabled={off} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} />
+              <>{modePick}<BusyButton className="btn primary" busy={busy("start")} disabled={off} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} /></>
             )}
           </div>
         </div>

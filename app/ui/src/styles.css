@@ -309,6 +309,8 @@ h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; white-
 .mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; word-break: break-all; }
 .narrow { max-width: 820px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.start-mode { display: inline-flex; align-items: center; gap: 8px; }
+.start-mode select { min-width: 160px; }
 .row.between { justify-content: space-between; flex-wrap: nowrap; gap: 20px; }
 .row.center { justify-content: center; }
 .spacer { flex: 1; }
