@@ -805,6 +805,11 @@ fn clear_game_leftovers(game_dir: &Path) -> Vec<String> {
     }
     // an addons folder left empty goes too
     let _ = std::fs::remove_dir(game_dir.join("addons"));
+    // the one-shot file the app starts a game from (api_launch)
+    match std::fs::remove_file(game_dir.join(START_CFG)) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => failed.push(format!("{} ({e})", game_dir.join(START_CFG).display())),
+        _ => {}
+    }
     failed
 }
 
