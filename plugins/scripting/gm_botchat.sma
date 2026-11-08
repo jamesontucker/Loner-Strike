@@ -83,6 +83,7 @@ native people_match(id, other, const key[], const op[], const value[])
 native people_letter(id)
 native people_hobby(id, which, out[], len)
 native people_note(bot, other, const kind[])
+native people_get(id, const key[])
 
 #define PLUGIN  "Bot chat"
 #define VERSION "1.0"
@@ -178,6 +179,7 @@ new g_ThreadBot[33], g_ThreadTopic[33][24], g_ThreadTurns[33], Float:g_ThreadAt[
 new g_PendBot[MAX_PENDING], g_PendUser[MAX_PENDING], g_PendOther[MAX_PENDING], g_PendChain[MAX_PENDING], bool:g_PendTeam[MAX_PENDING]
 new g_PendText[MAX_PENDING][128], g_PendSec[MAX_PENDING][24], bool:g_PendQuiet[MAX_PENDING]   // quiet: starts no thread
 new bool:g_PendRaw[MAX_PENDING]     // the model's text: said as it is
+new bool:g_PendAlive[MAX_PENDING]   // alive when it started typing (dying cuts it off)
 
 // smarter chat (gm_ai_url): one request per bot
 #define TASK_AI    2000000
@@ -206,6 +208,46 @@ new g_PickCond[96], g_PickBase[128], g_PickScore     // the line pick_line chose
 new g_OfferBot[MAX_OFFERS], g_OfferOther[MAX_OFFERS], g_OfferText[MAX_OFFERS][128], g_OfferBase[MAX_OFFERS][128]
 new g_OfferCond[MAX_OFFERS][96], g_OfferSec[MAX_OFFERS][24], bool:g_OfferTeam[MAX_OFFERS], Float:g_OfferDelay[MAX_OFFERS]
 new Float:g_OfferBid[MAX_OFFERS], g_OfferCount
+
+// How much this person talks at all (gm_people's talk trait): the silent hardly ever, a
+// spammer all the time
+Float:talk_factor(id)
+{
+	if (!LibraryExists("gm_people", LibType_Library))
+		return 1.0
+	static const Float:TALK[] = { 0.12, 0.5, 1.0, 1.6, 2.4 }
+	new t = people_get(id, "talk")
+	return (t >= 0 && t < sizeof TALK) ? TALK[t] : 1.0
+}
+
+// When people talk: dead, in freeze time and at round end (the dead commentate). Alive in
+// the middle of a round only for something that matters
+Float:phase_factor(id, const section[])
+{
+	if (!is_user_alive(id) || g_Freeze || g_RoundOver)
+		return 1.4
+	static const BIG[][] = { "clutch", "ace", "teamkilled", "teamkill", "nemesis", "nemesis_won", "rage", "last_alive", "low_hp", "bomb_planted", "defuse_ninja" }
+	for (new i = 0; i < sizeof BIG; i++)
+		if (equal(section, BIG[i]))
+			return 1.0
+	return 0.35
+}
+
+// No more than 6 new bot lines in any 30 seconds, whatever happens
+#define CAP_LINES  6
+#define CAP_WINDOW 30.0
+new Float:g_CapAt[CAP_LINES], g_CapPos
+
+bool:rate_capped(Float:now)
+{
+	return now - g_CapAt[g_CapPos] < CAP_WINDOW && g_CapAt[g_CapPos] > 0.0
+}
+
+cap_count(Float:now)
+{
+	g_CapAt[g_CapPos] = now
+	g_CapPos = (g_CapPos + 1) % CAP_LINES
+}
 
 // What a person said, for how the bot it's about (or every bot) feels about them
 note_feeling(human, bot, const section[])
@@ -798,6 +840,27 @@ habits_of(id)
 	new p = PERSONAS[g_Persona[id]]
 	if (p == 'x' && g_Laugh[id] < 6)
 		g_Laugh[id] = LAUGHS_ANYONE + (h % 6)   // kkkk, jajaja, mdr, www, 555, kek
+	// gm_people: where they're from shows in the laugh; kids type like kids
+	if (LibraryExists("gm_people", LibType_Library))
+	{
+		switch (people_get(id, "region"))
+		{
+			case 6: g_Laugh[id] = LAUGHS_ANYONE      // br: kkkk
+			case 9: g_Laugh[id] = LAUGHS_ANYONE + 1  // es: jajaja
+			case 7: if (h % 2) g_Laugh[id] = LAUGHS_ANYONE + 2   // fr: mdr, half of them
+		}
+		new age = people_get(id, "age")
+		if (age == 0)
+		{
+			g_TextSpeak[id] = true
+			g_Typos[id] += 5
+		}
+		else if (age == 3)
+		{
+			g_TextSpeak[id] = false
+			g_Typos[id] = g_Typos[id] / 2
+		}
+	}
 	if (p == 'k')
 		g_TextSpeak[id] = true
 }
@@ -904,10 +967,10 @@ want(id, const section[], other, Float:base, Float:delay = -1.0, chain = 0, bool
 	if (!id || !is_user_connected(id) || !is_user_bot(id) || g_Career || !get_pcvar_num(g_pLevel))
 		return
 	new Float:now = get_gametime()
-	if (!chain && (now < g_NextAny || now < g_NextBot[id]))
+	if (!chain && (now < g_NextAny || now < g_NextBot[id] || rate_capped(now)))
 		return
 	// at gm_personality 0 this is 0: bots only answer people and say gg
-	if (random_float(0.0, 1.0) > base * level_mult() * personality() * CHATTY[g_Persona[id]] * g_Chatty[id])
+	if (random_float(0.0, 1.0) > base * level_mult() * personality() * CHATTY[g_Persona[id]] * g_Chatty[id] * talk_factor(id) * phase_factor(id, section))
 		return
 	new text[128]
 	g_CtxOther = other
@@ -976,6 +1039,7 @@ public task_director()
 		if (turn)
 			delay = (delay < 0.0 ? typing_time(g_OfferText[best]) : delay) + random_float(1.0, 3.0) * float(turn)
 		queue(g_OfferBot[best], g_OfferOther[best], g_OfferText[best], 0, g_OfferTeam[best], delay, g_OfferSec[best])
+		cap_count(get_gametime())
 		g_OfferBid[best] = 0.0
 		said[count++] = best
 	}
@@ -1486,6 +1550,7 @@ queue(id, other, const text[], chain, bool:team, Float:delay, const section[] = 
 	copy(g_PendText[slot], charsmax(g_PendText[]), text)
 	copy(g_PendSec[slot], charsmax(g_PendSec[]), section)
 	g_PendQuiet[slot] = quiet
+	g_PendAlive[slot] = bool:is_user_alive(id)
 	g_PendRaw[slot] = raw
 	if (delay < 0.0)
 		delay = typing_time(text)
@@ -1532,6 +1597,17 @@ public task_say(task)
 		fill(id, other, text, charsmax(text))
 		style_text(id, text)
 		decorate(id, text, charsmax(text))
+		// killed while typing: it hits enter on what it had ("nice sh")
+		new l = strlen(text)
+		if (g_PendAlive[slot] && !is_user_alive(id) && l > 8 && random_num(1, 3) == 1)
+			text[random_num(l * 2 / 5, l * 3 / 4)] = 0
+		// the chat key's letter in front, now and then ("ygo b", "uok"): typing as the key's pressed
+		else if (g_Typos[id] >= 8 && random_num(1, 150) == 1)
+		{
+			new out[128]
+			formatex(out, charsmax(out), "%c%s", team ? 'u' : 'y', text)
+			copy(text, charsmax(text), out)
+		}
 	}
 	if (!text[0])
 		return
@@ -1642,7 +1718,8 @@ style_text(id, text[])
 	for (new i = 0; text[i]; i++)
 		if (text[i] >= 'a' && text[i] <= 'z')
 			shout = false
-	if (!shout && contain("njcstkxhzpbdumAHLOS", fmt("%c", p)) != -1)
+	new bool:old = LibraryExists("gm_people", LibType_Library) && people_get(id, "age") == 3
+	if (!shout && !old && contain("njcstkxhzpbdumAHLOS", fmt("%c", p)) != -1)
 	{
 		if (random_num(1, 100) <= 80)
 			strtolower(text)
@@ -1704,6 +1781,9 @@ decorate(id, text[], len)
 		replace_word(text, len, "lol", LAUGHS[g_Laugh[id]])
 		replace_word(text, len, "haha", LAUGHS[g_Laugh[id]])
 	}
+	// "c1" for ok: an old habit from the radio menu days
+	if (LibraryExists("gm_people", LibType_Library) && people_get(id, "age") >= 2 && people_get(id, "skill") >= 2 && random_num(1, 4) == 1)
+		replace_word(text, len, "ok", "c1")
 	if (g_TextSpeak[id])
 	{
 		static const FROM[][] = { "you're", "your", "you", "thanks", "please", "though", "probably", "because", "okay", "really", "people", "tonight" }
