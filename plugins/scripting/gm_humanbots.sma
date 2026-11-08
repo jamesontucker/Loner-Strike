@@ -182,6 +182,7 @@ public plugin_init()
 	g_pHold      = register_cvar("gm_hb_hold", "1")
 	g_pPersonality = register_cvar("gm_personality", "100")
 	register_logevent("ev_round_start", 2, "1=Round_Start")
+	register_event("HLTV", "ev_new_round_sprays", "a", "1=0", "2=0")
 	g_Chat = bool:LibraryExists("gm_botchat", LibType_Library)
 	// logos to spray: whichever of these the game has
 	static const LOGOS[][] = { "{lambda01", "{lambda02", "{lambda03", "{lambda04", "{lambda05", "{lambda06", "{biohaz", "{smiley" }
@@ -203,7 +204,19 @@ public plugin_init()
 
 public plugin_natives()
 {
+	register_library("gm_humanbots")
+	register_native("hb_bot_idle", "n_bot_idle")
 	set_native_filter("native_filter")
+}
+
+// hb_bot_idle(id): true while the bot is afk or holding an angle (gm_botfun leaves it be)
+public n_bot_idle(plugin, params)
+{
+	new id = get_param(1)
+	if (id < 1 || id > MaxClients)
+		return false
+	new Float:now = get_gametime()
+	return g_AfkUntil[id] > now || g_HoldUntil[id] > now
 }
 
 public native_filter(const name[], index, trap)
@@ -1143,6 +1156,11 @@ Float:wrap(Float:yaw)
 // Round start: favourite guns, afk moments, sprays, the caller's call
 // ---------------------------------------------------------------------------
 
+public ev_new_round_sprays()
+{
+	clear_sprays()
+}
+
 public ev_round_start()
 {
 	clear_sprays()
@@ -1354,14 +1372,21 @@ public task_spray(userid)
 spray_logo(const Float:at[3], const Float:normal[3])
 {
 	new ent = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
-	if (!pev_valid(ent))
+	// (0 is the world: what it returns when the map is out of entities)
+	if (ent <= MaxClients || !pev_valid(ent))
 		return
 	set_pev(ent, pev_classname, "ls_spray")
 	engfunc(EngFunc_SetModel, ent, SPRAY_SPRITE)
 	new Float:origin[3], Float:angles[3]
 	for (new i = 0; i < 3; i++)
 		origin[i] = at[i] + normal[i] * 0.5
-	vector_to_angle(normal, angles)
+	// facing into the wall, the way someone looking at it faces: the logo reads the right way
+	// round (an entity's pitch is the other way up from a direction's)
+	new Float:into[3]
+	for (new i = 0; i < 3; i++)
+		into[i] = -normal[i]
+	vector_to_angle(into, angles)
+	angles[0] = -angles[0]
 	set_pev(ent, pev_angles, angles)
 	engfunc(EngFunc_SetOrigin, ent, origin)
 	set_pev(ent, pev_movetype, MOVETYPE_NONE)

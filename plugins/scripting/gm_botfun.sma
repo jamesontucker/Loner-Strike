@@ -31,6 +31,7 @@
 #include <cstrike>
 
 native botchat_persona(id)
+native hb_bot_idle(id)
 
 #define PLUGIN  "Bot fun"
 #define VERSION "1.0"
@@ -51,7 +52,7 @@ enum
 
 new g_pFun, g_pWeapons, g_pSpawn, g_pFlashlight, g_pSalute, g_pLook, g_pCelebrate
 new g_pPersonality, g_pStyle, g_pFlashAllowed
-new bool:g_Chat, bool:g_Fork
+new bool:g_Chat, bool:g_Fork, bool:g_HumanBots, bool:g_BombPlanted
 
 new g_Habit[33][2]                       // its two habits (FUN_*)
 new Float:g_Fidget[33]                   // how fidgety it is: most hardly, a few all the time
@@ -63,6 +64,7 @@ new g_Impulse[33]                        // impulse to send on its next command
 new g_JumpsLeft[33], Float:g_NextJump[33]
 new Float:g_FireUntil[33]
 new g_QLeft[33]
+new g_PendWeapon[33]                     // the gun a delayed silencer/scope/burst press is for
 new bool:g_Freeze
 
 public plugin_init()
@@ -78,8 +80,11 @@ public plugin_init()
 	g_pCelebrate  = register_cvar("gm_bf_celebrate", "1")
 
 	register_forward(FM_CmdStart, "fw_cmdstart")
-	RegisterHam(Ham_TakeDamage, "player", "fw_takedamage_post", 1)
+	// RegisterHamPlayer also covers Condition Zero bots (a different class)
+	RegisterHamPlayer(Ham_TakeDamage, "fw_takedamage_post", 1)
+	RegisterHamPlayer(Ham_Spawn, "fw_spawn_post", 1)
 	register_event("HLTV", "ev_new_round", "a", "1=0", "2=0")
+	register_logevent("ev_bomb_planted", 3, "2=Planted_The_Bomb")
 	register_logevent("ev_round_start", 2, "1=Round_Start")
 	register_event("SendAudio", "ev_t_win", "a", "2&%!MRAD_terwin")
 	register_event("SendAudio", "ev_ct_win", "a", "2&%!MRAD_ctwin")
@@ -93,6 +98,7 @@ public plugin_cfg()
 	g_pStyle = get_cvar_pointer("gm_botstyle")
 	g_pFlashAllowed = get_cvar_pointer("mp_flashlight")
 	g_Chat = bool:LibraryExists("gm_botchat", LibType_Library)
+	g_HumanBots = bool:LibraryExists("gm_humanbots", LibType_Library)
 	// Loner-Strike's own game DLL: it adds ls_bot (and these cvars with it)
 	g_Fork = get_cvar_pointer("bot_ls_routes") != 0
 }
@@ -104,7 +110,7 @@ public plugin_natives()
 
 public native_filter(const name[], index, trap)
 {
-	return (!trap && equal(name, "botchat_", 8)) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+	return (!trap && (equal(name, "botchat_", 8) || equal(name, "hb_", 3))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 // ---- who does what, and when ------------------------------------------------------------
@@ -229,7 +235,13 @@ bool:free_bot(id)
 	if (!is_user_alive(id) || !is_user_bot(id))
 		return false
 	new Float:now = get_gametime()
-	if (now < g_Busy[id])
+	if (now < g_Busy[id] || g_BombPlanted)
+		return false
+	// the bomb carrier has somewhere to be once the round is on
+	if (!g_Freeze && user_has_weapon(id, CSW_C4))
+		return false
+	// gm_humanbots has it afk or holding an angle: leave it be
+	if (g_HumanBots && hb_bot_idle(id))
 		return false
 	return !enemy_in_sight(id)
 }
@@ -269,6 +281,23 @@ public fw_takedamage_post(victim, inflictor, attacker, Float:damage, bits)
 		g_Busy[attacker] = get_gametime() + 4.0
 }
 
+public fw_spawn_post(id)
+{
+	if (!is_user_alive(id))
+		return
+	g_Press[id] = 0
+	g_Impulse[id] = 0
+	g_JumpsLeft[id] = 0
+	g_QLeft[id] = 0
+	g_FireUntil[id] = 0.0
+	g_PendWeapon[id] = 0
+}
+
+public ev_bomb_planted()
+{
+	g_BombPlanted = true
+}
+
 public ev_death()
 {
 	new killer = read_data(1)
@@ -283,10 +312,16 @@ public ev_death()
 		set_task(random_float(0.8, 2.0), "task_start_qspam", killer)
 }
 
-// Freeze time starts
+// Freeze time starts (before the dead respawn: the rolls wait a moment)
 public ev_new_round()
 {
 	g_Freeze = true
+	g_BombPlanted = false
+	set_task(0.3, "task_freeze_rolls")
+}
+
+public task_freeze_rolls()
+{
 	if (!fun_allowed() || !get_pcvar_num(g_pSpawn))
 		return
 	for (new id = 1; id <= MaxClients; id++)
@@ -337,6 +372,8 @@ public ev_ct_win()
 // The winners: a few shoot into the air
 celebrate(team)
 {
+	// the round is over: the bomb doesn't matter any more
+	g_BombPlanted = false
 	if (!g_Fork || !fun_allowed() || !get_pcvar_num(g_pCelebrate))
 		return
 	new n
@@ -400,6 +437,9 @@ public fw_cmdstart(id, uc, seed)
 	new buttons = get_uc(uc, UC_Buttons)
 	if (buttons & IN_ATTACK && get_gametime() >= g_FireUntil[id])
 		g_Busy[id] = floatmax(g_Busy[id], get_gametime() + 3.0)
+	// using something (defusing, a hostage): busy
+	if (buttons & IN_USE)
+		g_Busy[id] = floatmax(g_Busy[id], get_gametime() + 3.0)
 
 	new changed
 	if (g_Press[id])
@@ -423,12 +463,21 @@ public fw_cmdstart(id, uc, seed)
 	}
 	if (get_gametime() < g_FireUntil[id])
 	{
-		// a short burst every so often, not the whole magazine
-		if (floatround(get_gametime() * 8.0) % 3 != 0)
-			buttons |= IN_ATTACK
-		else
-			buttons &= ~IN_ATTACK
-		changed = 1
+		// only while it's really looking up into the air with a gun: anything else (the look
+		// was refused, a fight, a grenade in hand) and it doesn't fire
+		new Float:view[3]
+		pev(id, pev_v_angle, view)
+		if (get_gametime() < g_Busy[id] || !holding_gun(id))
+			g_FireUntil[id] = 0.0
+		else if (view[0] < -35.0)
+		{
+			// a short burst every so often, not the whole magazine
+			if (floatround(get_gametime() * 8.0) % 3 != 0)
+				buttons |= IN_ATTACK
+			else
+				buttons &= ~IN_ATTACK
+			changed = 1
+		}
 	}
 	if (changed)
 		set_uc(uc, UC_Buttons, buttons)
@@ -442,6 +491,7 @@ public fw_cmdstart(id, uc, seed)
 
 silencer(id)
 {
+	g_PendWeapon[id] = get_user_weapon(id)
 	g_Press[id] |= IN_ATTACK2
 	// and back again now and then, like someone who can't decide
 	if (random_num(0, 1))
@@ -450,6 +500,7 @@ silencer(id)
 
 scope(id)
 {
+	g_PendWeapon[id] = get_user_weapon(id)
 	// in, (further in,) and out again
 	new presses = get_user_weapon(id) == CSW_AWP || get_user_weapon(id) == CSW_SCOUT ? 3 : 2
 	g_Press[id] |= IN_ATTACK2
@@ -459,6 +510,7 @@ scope(id)
 
 burst(id)
 {
+	g_PendWeapon[id] = get_user_weapon(id)
 	g_Press[id] |= IN_ATTACK2
 	if (random_num(0, 2))
 		set_task(random_float(0.6, 1.5), "task_attack2", id)
@@ -466,7 +518,7 @@ burst(id)
 
 public task_attack2(id)
 {
-	if (free_bot(id))
+	if (free_bot(id) && get_user_weapon(id) == g_PendWeapon[id])
 		g_Press[id] |= IN_ATTACK2
 }
 
@@ -567,7 +619,7 @@ public task_flashlight(id)
 
 public task_flash_once(id)
 {
-	if (is_user_alive(id))
+	if (is_user_alive(id) && is_user_bot(id))
 		g_Impulse[id] = 100
 }
 
@@ -636,6 +688,16 @@ public task_celebrate(id)
 
 public task_fire(id)
 {
-	if (is_user_alive(id) && is_user_bot(id))
+	if (free_bot(id) && holding_gun(id))
 		g_FireUntil[id] = get_gametime() + random_float(0.6, 1.4)
+}
+
+// A gun in hand: a primary or a pistol (not the knife, a grenade or the bomb)
+bool:holding_gun(id)
+{
+	switch (get_user_weapon(id))
+	{
+		case CSW_KNIFE, CSW_HEGRENADE, CSW_FLASHBANG, CSW_SMOKEGRENADE, CSW_C4, 0: return false
+	}
+	return true
 }
