@@ -77,6 +77,13 @@
 // gm_community: true for chat that never shows (muted player, filtered out)
 native gm_chat_blocked(id, const text[])
 
+// gm_people (optional): who the bots are and what they remember. people_match: 1 the
+// condition holds, 0 it doesn't, -1 it doesn't know the key
+native people_match(id, other, const key[], const op[], const value[])
+native people_letter(id)
+native people_hobby(id, which, out[], len)
+native people_note(bot, other, const kind[])
+
 #define PLUGIN  "Bot chat"
 #define VERSION "1.0"
 #define AUTHOR  "gamemodes"
@@ -200,10 +207,94 @@ new g_OfferBot[MAX_OFFERS], g_OfferOther[MAX_OFFERS], g_OfferText[MAX_OFFERS][12
 new g_OfferCond[MAX_OFFERS][96], g_OfferSec[MAX_OFFERS][24], bool:g_OfferTeam[MAX_OFFERS], Float:g_OfferDelay[MAX_OFFERS]
 new Float:g_OfferBid[MAX_OFFERS], g_OfferCount
 
+// What a person said, for how the bot it's about (or every bot) feels about them
+note_feeling(human, bot, const section[])
+{
+	if (!LibraryExists("gm_people", LibType_Library))
+		return
+	new kind[12]
+	if (equal(section, "r_nice_from_human") || equal(section, "r_ns_thanks"))
+		copy(kind, charsmax(kind), "praise")
+	else if (equal(section, "r_sorry") || equal(section, "r_np"))
+		copy(kind, charsmax(kind), "thanks")
+	else if (equal(section, "r_hi") || equal(section, "r_wb") || equal(section, "r_gg") || equal(section, "r_gl"))
+		copy(kind, charsmax(kind), "greet")
+	else if (equal(section, "r_lol"))
+		copy(kind, charsmax(kind), "joke")
+	else if (equal(section, "r_noob") || equal(section, "r_ez") || equal(section, "r_trash"))
+		copy(kind, charsmax(kind), "insult")
+	else if (equal(section, "r_hack") || equal(section, "r_bot") || equal(section, "r_camping"))
+		copy(kind, charsmax(kind), "accuse")
+	else
+		return
+	if (bot)
+	{
+		people_note(bot, human, kind)
+		return
+	}
+	if (equal(kind, "greet"))
+		for (new b = 1; b <= MaxClients; b++)
+			if (b != human && is_user_connected(b) && is_user_bot(b))
+				people_note(b, human, kind)
+}
+
+// Inline choices: "{nice|ns|good one} man" says one of them
+choose(text[], len)
+{
+	for (new guard = 0; guard < 8; guard++)
+	{
+		new open = -1, bar = -1, close = -1
+		for (new i = 0; text[i]; i++)
+		{
+			if (text[i] == '{')
+			{
+				open = i
+				bar = -1
+			}
+			else if (text[i] == '|' && open >= 0 && bar < 0)
+				bar = i
+			else if (text[i] == '}' && open >= 0)
+			{
+				if (bar > 0)
+				{
+					close = i
+					break
+				}
+				open = -1
+			}
+		}
+		if (close < 0)
+			return
+		// count the options and pick one
+		new n = 1
+		for (new i = open + 1; i < close; i++)
+			if (text[i] == '|')
+				n++
+		new want = random(n), k, start = open + 1
+		for (new i = open + 1; i <= close; i++)
+		{
+			if (text[i] == '|' || i == close)
+			{
+				if (k == want)
+				{
+					new pick[64], rest[128]
+					copy(pick, min(i - start, charsmax(pick)), text[start])
+					copy(rest, charsmax(rest), text[close + 1])
+					text[open] = 0
+					add(text, len, pick)
+					add(text, len, rest)
+					break
+				}
+				k++
+				start = i + 1
+			}
+		}
+	}
+}
+
 // gm_people (optional): traits, archetypes and memory. 1 the condition holds, 0 it doesn't,
 // -1 it doesn't know the key
-native people_match(id, other, const key[], const op[], const value[])
-native people_letter(id)
+// (gm_people natives: declared at the top)
 
 public plugin_init()
 {
@@ -333,9 +424,27 @@ public cmd_reload()
 	return PLUGIN_HANDLED
 }
 
+// botchat.ini, then every botchat-*.ini beside it (sections in them add to the same ones)
 load_lines()
 {
-	new f = fopen(fmt("%s/gamemodes/botchat.ini", g_CfgDir), "rt")
+	load_lines_from("botchat.ini")
+	new dir[160], file[64]
+	formatex(dir, charsmax(dir), "%s/gamemodes", g_CfgDir)
+	new h = open_dir(dir, file, charsmax(file))
+	if (!h)
+		return
+	do
+	{
+		if (equali(file, "botchat-", 8) && strlen(file) > 12 && equali(file[strlen(file) - 4], ".ini"))
+			load_lines_from(file)
+	}
+	while (next_file(h, file, charsmax(file)))
+	close_dir(h)
+}
+
+load_lines_from(const name[])
+{
+	new f = fopen(fmt("%s/gamemodes/%s", g_CfgDir, name), "rt")
 	if (!f)
 		return
 	new line[192], Array:cur = Invalid_Array
@@ -1450,7 +1559,15 @@ public task_say(task)
 
 fill(id, other, text[], len)
 {
+	choose(text, len)
 	new name[32]
+	if (contain(text, "{hobby}") != -1)
+	{
+		new hobby[16]
+		if (LibraryExists("gm_people", LibType_Library))
+			people_hobby(id, random_num(0, 1), hobby, charsmax(hobby))
+		replace_string(text, len, "{hobby}", hobby[0] ? hobby : "wc3")
+	}
 	if (contain(text, "{name}") != -1)
 	{
 		short_name(id, name, charsmax(name))
@@ -2674,6 +2791,9 @@ heard(id, bool:team)
 		else
 			chance *= 0.3          // "nice" about nothing in particular
 	}
+	// how it lands (gm_people remembers): praise, thanks, a greeting, a laugh, an insult, an
+	// accusation; said to everyone, a greeting or a gg warms everyone a little
+	note_feeling(id, prefer, section)
 	// busy fighting: someone else answers
 	if (prefer && prefer != to && in_combat(prefer))
 		prefer = 0
