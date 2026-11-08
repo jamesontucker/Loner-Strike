@@ -59,10 +59,31 @@ pub fn cache_name(url: &str) -> String {
     format!("{}-{}", &digest[..16], base)
 }
 
+/// Loner-Strike's own copy of the pinned downloads (Cloudflare R2), tried before the
+/// original: GitHub's downloads now and then fail for minutes at a time. Same file names;
+/// the checksum still decides, so a copy that isn't the pinned file is never used.
+pub const MIRROR: &str = "https://dl.lonerstrike.com";
+
+/// Where the mirror keeps a download (its file name)
+pub fn mirror_url(url: &str) -> String {
+    format!("{MIRROR}/{}", url.split('?').next().unwrap_or(url).rsplit('/').next().unwrap_or(""))
+}
+
 /// Path to a cached copy of url, downloading it if needed. With sha, the file must
-/// match it exactly (a changed upstream file stops the install). `what` names the
-/// download for the progress line ("AMX Mod X").
+/// match it exactly (a changed upstream file stops the install), and Loner-Strike's
+/// mirror is tried first. `what` names the download for the progress line ("AMX Mod X").
 pub fn download(url: &str, sha: Option<&str>, what: &str, p: &dyn Progress) -> Result<PathBuf, String> {
+    if sha.is_some() {
+        // once, quickly: if it isn't there or doesn't answer, the original it is
+        if let Ok(path) = download_from(&mirror_url(url), url, sha, what, p, false) {
+            return Ok(path);
+        }
+    }
+    download_from(url, url, sha, what, p, true)
+}
+
+/// Downloads `from` into the cache as `url`'s file (a few tries apart if `retry`).
+fn download_from(from: &str, url: &str, sha: Option<&str>, what: &str, p: &dyn Progress, retry: bool) -> Result<PathBuf, String> {
     let cache = cache_dir();
     std::fs::create_dir_all(&cache).map_err(|e| format!("Couldn't make the download folder {} ({e}).", cache.display()))?;
     let name = cache_name(url);
@@ -82,18 +103,19 @@ pub fn download(url: &str, sha: Option<&str>, what: &str, p: &dyn Progress) -> R
     // connection for a moment, before or during the download: a few tries, a little apart,
     // before giving up
     const WAITS: [u64; 4] = [2, 5, 10, 20];
+    let most = if retry { WAITS.len() } else { 0 };
     let mut tries = 0;
     let out = loop {
         let again = |tries: usize| {
             p.detail(&format!("Downloading {what} (trying again)"));
             std::thread::sleep(Duration::from_secs(WAITS[tries]));
         };
-        let sent = crate::sys::http().get(url).header("User-Agent", USER_AGENT).timeout(Duration::from_secs(900)).send();
+        let sent = crate::sys::http().get(from).header("User-Agent", USER_AGENT).timeout(Duration::from_secs(900)).send();
         let retry = match &sent {
             Ok(r) => r.status().is_server_error() || r.status().as_u16() == 429,
             Err(e) => e.is_connect() || e.is_timeout() || e.is_request(),
         };
-        if retry && tries < WAITS.len() {
+        if retry && tries < most {
             again(tries);
             tries += 1;
             continue;
@@ -135,7 +157,7 @@ pub fn download(url: &str, sha: Option<&str>, what: &str, p: &dyn Progress) -> R
             Some(e) => {
                 drop(out);
                 let _ = std::fs::remove_file(&tmp);
-                if tries < WAITS.len() {
+                if tries < most {
                     again(tries);
                     tries += 1;
                     continue;

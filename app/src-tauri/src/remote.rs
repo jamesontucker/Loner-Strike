@@ -638,7 +638,11 @@ ln -sf "$BASE/steamcmd/linux32/steamclient.so" "$HOME/.steam/sdk32/steamclient.s
 
 step foundation
 cd "$SRV/$G"; TMP=$(mktemp -d)
-fetch() { curl -fsSL --proto '=https' --retry 5 --retry-delay 3 "$1" -o "$TMP/$2" || fail "Couldn't download $2."; echo "$3  $TMP/$2" | sha256sum -c --quiet - || fail "$2 didn't match its checksum."; }
+# Loner-Strike's own copy first (once, quickly), then the original with a few tries
+fetch() {
+  if curl -fsSL --proto '=https' --max-time 300 "$MIRROR/${1##*/}" -o "$TMP/$2" 2>/dev/null && echo "$3  $TMP/$2" | sha256sum -c --quiet - 2>/dev/null; then return 0; fi
+  curl -fsSL --proto '=https' --retry 5 --retry-delay 3 "$1" -o "$TMP/$2" || fail "Couldn't download $2."; echo "$3  $TMP/$2" | sha256sum -c --quiet - || fail "$2 didn't match its checksum."
+}
 fetch "$MM_URL" mm.tar.xz "$MM_SHA"; tar xJf "$TMP/mm.tar.xz" -C .
 fetch "$AMXX_URL" amxx.tar.gz "$AMXX_SHA"; tar xzf "$TMP/amxx.tar.gz" -C .
 fetch "$AMXXCS_URL" amxxcs.tar.gz "$AMXXCS_SHA"; tar xzf "$TMP/amxxcs.tar.gz" -C .
@@ -682,12 +686,15 @@ pub const FOUNDATION_ENV: &[(&str, &str)] = &[
     ("REAPI_SHA", crate::setup::foundation::REAPI.sha256),
     ("RLB_URL", crate::setup::foundation::RELOCALIZEBUGFIX.url),
     ("RLB_SHA", crate::setup::foundation::RELOCALIZEBUGFIX.sha256),
+    ("MIRROR", crate::setup::fetch::MIRROR),
 ];
 
 /// The systemd service for one server, and the `lsctl` helper for managing servers by hand.
 pub fn service_sh(id: &str, game: &str, args: &[String]) -> String {
     let unit = unit(id);
     let dir = server_dir(id);
+    // the game's port, for the watchdog to knock on
+    let port = args.iter().position(|a| a == "-port").and_then(|i| args.get(i + 1)).and_then(|p| p.parse::<u16>().ok()).unwrap_or(27015);
     // (the game's command line splits words at "-", so file names here have none)
     // all addresses: left to itself the server picks the name entry's 127.0.1.1 and
     // doesn't answer from outside; and the panel's RCON password from a file only this
@@ -776,8 +783,60 @@ for parts in splits.values():
 sys.stdout.buffer.write(b"".join(d[5:] if d[:4] == P and len(d) > 5 else d for d in singles))
 LSRCON
 sudo chmod 755 /usr/local/bin/lsrcon
+# a server that froze (still running, no longer answering) is ended, and systemd starts it
+# again like after a crash
+sudo tee /usr/local/bin/lswatchdog >/dev/null <<'LSWATCH'
+#!/usr/bin/env python3
+# lswatchdog <port> <unit>: ends the game if it stops answering for 90 s, so systemd
+# starts it again (Restart=always). Any answer counts; a map change takes far less.
+import os, signal, socket, subprocess, sys, time
+port, unit = int(sys.argv[1]), sys.argv[2]
+GRACE, LIMIT, EVERY = 120, 90, 15
+def answers():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(2)
+    try:
+        s.sendto(b"\xff\xff\xff\xffTSource Engine Query\x00", ("127.0.0.1", port))
+        return len(s.recv(1400)) > 4
+    except OSError:
+        return False
+    finally:
+        s.close()
+time.sleep(GRACE)
+last = time.time()
+while True:
+    if answers():
+        last = time.time()
+    elif time.time() - last > LIMIT:
+        pid = subprocess.run(["systemctl", "show", "-p", "MainPID", "--value", unit], capture_output=True, text=True).stdout.strip()
+        if pid.isdigit() and int(pid) > 0:
+            print(f"{{unit}} hasn't answered for {{LIMIT}} s: ending it so it starts again", flush=True)
+            try:
+                os.kill(int(pid), signal.SIGKILL)
+            except OSError:
+                pass
+        time.sleep(GRACE)
+        last = time.time()
+    time.sleep(EVERY)
+LSWATCH
+sudo chmod 755 /usr/local/bin/lswatchdog
+sudo tee /etc/systemd/system/{unit}-watchdog.service >/dev/null <<EOF
+[Unit]
+Description=Loner-Strike server {id} watchdog (starts it again if it freezes)
+After={unit}.service
+BindsTo={unit}.service
+
+[Service]
+User=$(whoami)
+ExecStart=/usr/local/bin/lswatchdog {port} {unit}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy={unit}.service
+EOF
 sudo systemctl daemon-reload
-sudo systemctl enable {unit} >/dev/null 2>&1
+sudo systemctl enable {unit} {unit}-watchdog >/dev/null 2>&1
 echo "@@STEP ready"
 "#
     )
@@ -832,7 +891,7 @@ pub fn remove(r: &RemoteInfo, id: &str, for_good: bool) -> Result<(), String> {
     let (code, out) = exec(
         r,
         &format!(
-            "{}sudo systemctl disable --now {u}-hltv {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service /etc/systemd/system/{u}-hltv.service; sudo systemctl daemon-reload; rm -rf \"$HOME/{}\"",
+            "{}sudo systemctl disable --now {u}-watchdog {u}-hltv {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service /etc/systemd/system/{u}-hltv.service /etc/systemd/system/{u}-watchdog.service; sudo systemctl daemon-reload; rm -rf \"$HOME/{}\"",
             if for_good { crate::webstatus::remove_sh(id) } else { crate::webstatus::off_sh(id) },
             server_dir(id)
         ),
@@ -1053,8 +1112,9 @@ mod tests {
         assert_eq!(base64_nopad(b"hi!"), "aGkh");
         assert_eq!(shell_quote("it's"), "'it'\\''s'");
         assert!(setup_env("my-server", "czero").contains("GAME='czero'"));
-        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()]);
-        assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike'") && svc.contains("lsctl") && svc.contains("b\"\\xff\\xff\\xff\\xff\""));
+        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into(), "-port".into(), "27016".into()]);
+        assert!(svc.contains("ExecStart=/usr/local/bin/lswatchdog 27016 lonerstrike-x") && svc.contains("print(f\"{unit} hasn't"));
+        assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike' '-port' '27016'") && svc.contains("lsctl") && svc.contains("b\"\\xff\\xff\\xff\\xff\""));
     }
 
     #[test]

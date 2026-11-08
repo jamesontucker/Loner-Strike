@@ -49,3 +49,5 @@ fi
 
 echo "url: https://github.com/$repo/releases/download/$version/$(basename "$zip")"
 echo "sha256: $(shasum -a 256 "$zip" | cut -d' ' -f1)"
+echo "next: pin it in app/src-tauri/src/setup/foundation.rs, then scripts/r2-sync.sh (puts it on"
+echo "the download mirror and removes the release it replaces)"

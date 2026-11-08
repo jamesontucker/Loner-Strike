@@ -1904,6 +1904,8 @@ pub fn import(dir: &Path) -> Result<Value, String> {
 struct Proc {
     child: Child,
     started: Instant,
+    /// when it last answered a query (the frozen-server check)
+    answered: Instant,
     /// stopped on purpose (don't restart it)
     stopping: bool,
 }
@@ -2260,7 +2262,7 @@ pub fn start(id: &str) -> Result<(), String> {
     let child = spawn(&e)?;
     with_runs(|r| {
         r.errors.remove(id);
-        r.procs.insert(id.into(), Proc { child, started: Instant::now(), stopping: false });
+        r.procs.insert(id.into(), Proc { child, started: Instant::now(), answered: Instant::now(), stopping: false });
     });
     clear_pending_restart(&e.id);
     crate::hltv::server_started(&e);
@@ -2400,10 +2402,40 @@ pub fn stop_on_exit() {
 }
 
 
+/// A server that froze (still running, no longer answering) for this long is ended, and
+/// the crash watcher starts it again. Any answer counts; a map change takes far less.
+const FROZEN_AFTER: Duration = Duration::from_secs(90);
+/// Not checked this soon after it starts (loading the first map)
+const FROZEN_GRACE: Duration = Duration::from_secs(120);
+
+/// Ends servers that stopped answering (on their own thread: a query can take a moment).
+fn watch_frozen() {
+    std::thread::spawn(|| loop {
+        std::thread::sleep(Duration::from_secs(15));
+        let due: Vec<String> = with_runs(|r| r.procs.iter().filter(|(_, p)| !p.stopping && p.started.elapsed() > FROZEN_GRACE).map(|(id, _)| id.clone()).collect());
+        for id in due {
+            let Some(e) = get(&id) else { continue };
+            let answers = crate::browser::info(&format!("{}:{}", e.local_host(), e.port)).is_some();
+            with_runs(|r| {
+                let Some(p) = r.procs.get_mut(&id) else { return };
+                if answers {
+                    p.answered = Instant::now();
+                } else if p.answered.elapsed() > FROZEN_AFTER && p.started.elapsed() > FROZEN_GRACE {
+                    eprintln!("server {id} hasn't answered for {} s: ending it so it starts again", FROZEN_AFTER.as_secs());
+                    let _ = p.child.kill();
+                    // (the crash watcher sees it end and starts it again)
+                    p.answered = Instant::now();
+                }
+            });
+        }
+    });
+}
+
 /// Restarts servers that crash (up to MAX_RESTARTS times in CRASH_WINDOW).
 fn watch() {
     static STARTED: std::sync::Once = std::sync::Once::new();
     STARTED.call_once(|| {
+        watch_frozen();
         std::thread::spawn(|| loop {
             std::thread::sleep(Duration::from_secs(3));
             let died: Vec<String> = with_runs(|r| {
