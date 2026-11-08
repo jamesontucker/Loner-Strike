@@ -3,19 +3,29 @@
 //! `#[path]`. Plain std only: nothing from the app's crate.
 
 /// A SteamID as the game writes it: STEAM_X:Y:Z (X 0 to 5, Y 0 or 1, Z a number).
-/// Whether the newest mute on this SteamID in a server's activity log (one JSON line per
-/// change) was this helper's own: a Moderator may lift a mute they gave, not an Admin's or
-/// the owner's (one given in the game isn't in the log, so it stays an Admin's call).
+/// Whether the mute on this SteamID is this helper's own, from a server's activity log (one
+/// JSON line per change that went through): every mute given since it was last lifted was
+/// theirs. A Moderator may lift a mute they gave, not one an Admin or the owner gave or added
+/// to (one given in the game isn't in the log, so it stays an Admin's call).
 pub fn gave_last_gag(log: &str, member: &str, steamid: &str) -> bool {
     let id = steamid.trim().to_uppercase();
     if id.is_empty() {
         return false;
     }
-    log.lines()
-        .rev()
-        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-        .find(|e| e["path"] == "/api/community/gag" && e["body"]["id"].as_str().is_some_and(|g| g.trim().eq_ignore_ascii_case(&id)))
-        .is_some_and(|e| e["member"] == member)
+    let about = |e: &serde_json::Value| e["body"]["id"].as_str().is_some_and(|g| g.trim().eq_ignore_ascii_case(&id));
+    let mut theirs = false;
+    for e in log.lines().rev().filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok()) {
+        if !about(&e) {
+            continue;
+        }
+        match e["path"].as_str() {
+            Some("/api/community/ungag") => break,
+            Some("/api/community/gag") if e["member"] == member => theirs = true,
+            Some("/api/community/gag") => return false,
+            _ => {}
+        }
+    }
+    theirs
 }
 
 pub fn valid_steamid(s: &str) -> bool {
@@ -162,10 +172,25 @@ mod gag_tests {
         ]
         .join("\n");
         assert!(gave_last_gag(&log, "m1", "STEAM_0:1:7"));
-        assert!(gave_last_gag(&log, "m1", "steam_0:1:8"), "the newest one counts");
+        assert!(!gave_last_gag(&log, "m1", "steam_0:1:8"), "another helper's mute they added to");
         assert!(!gave_last_gag(&log, "m2", "STEAM_0:1:8"));
         assert!(!gave_last_gag(&log, "m1", "STEAM_0:1:9"), "someone else's");
         assert!(!gave_last_gag(&log, "m1", "STEAM_0:1:1"), "not in the log (given in the game)");
         assert!(!gave_last_gag(&log, "m1", " "));
+        // an Admin's mute a Moderator added to stays the Admin's
+        let added = [
+            r#"{"member":"a1","path":"/api/community/gag","body":{"id":"STEAM_0:1:5"}}"#,
+            r#"{"member":"m1","path":"/api/community/gag","body":{"id":"STEAM_0:1:5"}}"#,
+        ]
+        .join("\n");
+        assert!(!gave_last_gag(&added, "m1", "STEAM_0:1:5"));
+        // after it was lifted, a new mute of theirs is theirs
+        let lifted = [
+            r#"{"member":"a1","path":"/api/community/gag","body":{"id":"STEAM_0:1:5"}}"#,
+            r#"{"member":"a1","path":"/api/community/ungag","body":{"id":"STEAM_0:1:5"}}"#,
+            r#"{"member":"m1","path":"/api/community/gag","body":{"id":"STEAM_0:1:5"}}"#,
+        ]
+        .join("\n");
+        assert!(gave_last_gag(&lifted, "m1", "STEAM_0:1:5"));
     }
 }
