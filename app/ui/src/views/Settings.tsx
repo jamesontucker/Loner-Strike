@@ -41,6 +41,8 @@ const NOTES: Record<string, string> = {
   gm_botping: "Bots show a believable ping on the scoreboard instead of BOT",
   gm_rtv: "Say rtv in chat to vote for a new map, nominate <map> to suggest one",
   gm_welcome: "Shown when you or a friend joins. Say /welcome to see it again",
+  gm_atmo_adverts: "Every few minutes a line in chat with the server's rules and tips, like pub servers ran. The lines are in adverts.ini",
+  gm_atmo_spec: "Now and then a bot sits a few rounds out in spectator, then joins again",
   mp_autoteambalance: "Moves players at round end to keep the teams even",
   mp_limitteams: "How many more players one team can have before joining it is blocked",
   mp_respawn_immunitytime: "Players can't be hurt for a moment after they spawn; good with deathmatch",

@@ -13,11 +13,11 @@ use std::time::Duration;
 pub const CORE_MODES: &[&str] = &["classic", "csdm", "csdm_ffa", "knife", "pistols", "deagle", "awp", "scoutz", "surf", "match"];
 /// miscstats.amxx comes with AMX Mod X
 pub const CORE_ADDONS: &[&str] = &["quakesounds"];
-pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_people", "gm_humanbots", "gm_botfun", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat", "gm_botping", "gm_content"];
+pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_people", "gm_atmosphere", "gm_humanbots", "gm_botfun", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat", "gm_botping", "gm_content"];
 /// listed in plugins.ini. restmenu is AMX Mod X's own (amx_restrict), which its plugins.ini
 /// ships switched off: the weapon modes (knife, pistols, deagle, awp, scoutz, gm_weapons)
 /// restrict buying with it, so without it they restrict nothing.
-pub const ALWAYS_ON: &[&str] = &["gamemodes", "gm_people", "gm_humanbots", "gm_botfun", "gm_pubserver", "gm_vip", "gm_extras", "gm_community", "gm_botchat", "gm_botping", "restmenu", "gm_content"];
+pub const ALWAYS_ON: &[&str] = &["gamemodes", "gm_people", "gm_atmosphere", "gm_humanbots", "gm_botfun", "gm_pubserver", "gm_vip", "gm_extras", "gm_community", "gm_botchat", "gm_botping", "restmenu", "gm_content"];
 pub const BINDS: &[&str] = &["bind \"F3\" \"gamemenu\"", "bind \"F4\" \"gamequick\""];
 
 const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";

@@ -108,6 +108,8 @@ new const SETTINGS[][SettingData] =
 	{ "gm_modevote",        "Mode voting",      "1 0",                      "On Off",                              CAT_MATCH,  SC_GLOBAL, "" },
 	{ "gm_modevote_every",  "Mode vote at map end", "0 2 3 5",              "Off|Every 2 maps|Every 3 maps|Every 5 maps", CAT_MATCH, SC_GLOBAL, "" },
 	{ "gm_welcome",         "Welcome screen",   "1 2 0",                    "Once per session|Every map|Off",      CAT_MATCH,  SC_GLOBAL, "" },
+	{ "gm_atmo_adverts",    "Server adverts",   "1 0",                      "On Off",                              CAT_MATCH,  SC_GLOBAL, "" },
+	{ "gm_atmo_spec",       "Bots sit out in spec", "1 0",                  "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "wc3_xp_multiplier",     "Leveling speed",      "0.1 0.25 0.5 1.0",          "Very fast|Fast|Normal|Slow (original)", CAT_MATCH, SC_MODE, "" },
 	{ "wc3_start_level",       "Starting level",      "0 2 4 6",                   "0|2|4|6",                               CAT_MATCH, SC_MODE, "" },
 	{ "wc3_races",             "Races",               "8 9",                       "Standard 8|Plus Chameleon",             CAT_MATCH, SC_MODE, "" },

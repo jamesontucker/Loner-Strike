@@ -82,6 +82,7 @@ new Float:g_JoinedAt[33]
 
 // each player's person, worked out for the name it has (again when that changes)
 new g_For[33][32]
+new g_Alias[33][32]                  // who they really are while called something else ("Player")
 new g_Arch[33], g_Trait[33][T_COUNT], g_Hobby[33][2]
 
 public plugin_init()
@@ -111,6 +112,7 @@ public client_putinserver(id)
 
 public client_disconnected(id)
 {
+	g_Alias[id][0] = 0
 	save_all(id)
 	for (new j = 1; j <= MaxClients; j++)
 		g_MemLoaded[id][j] = g_MemLoaded[j][id] = false
@@ -126,6 +128,7 @@ public plugin_natives()
 	register_native("people_arch", "n_arch")
 	register_native("people_hobby", "n_hobby")
 	register_native("people_note", "n_note")
+	register_native("people_alias", "n_alias")
 }
 
 public cmd_reload()
@@ -341,7 +344,10 @@ bool:person(id)
 	if (id < 1 || id > MaxClients || !is_user_connected(id) || !is_user_bot(id) || !g_ArchCount)
 		return false
 	new name[32]
-	get_user_name(id, name, charsmax(name))
+	if (g_Alias[id][0])
+		copy(name, charsmax(name), g_Alias[id])
+	else
+		get_user_name(id, name, charsmax(name))
 	if (equal(g_For[id], name))
 		return true
 	// a new name is a new person: what the old one remembered is saved under the old name
@@ -678,6 +684,17 @@ public ev_death()
 		g_KillsOn[killer][victim]++
 		g_MemDirty[killer][victim] = true
 	}
+}
+
+// people_alias(id, name[]): who this bot really is while it goes by another name (a newcomer
+// still called "Player"); "" to stop
+public n_alias(plugin, params)
+{
+	new id = get_param(1)
+	if (id < 1 || id > MaxClients)
+		return 0
+	get_string(2, g_Alias[id], charsmax(g_Alias[]))
+	return 1
 }
 
 // people_note(bot, other, kind[]): what was said or done changes how the bot feels
