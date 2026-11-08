@@ -78,12 +78,24 @@ pub fn download(url: &str, sha: Option<&str>, what: &str, p: &dyn Progress) -> R
     p.detail(&format!("Downloading {what}"));
     let tmp = cache.join(format!("{name}.part"));
     let fail = |e: String| format!("Couldn't download {what} ({e}). Check your internet connection and try again.");
-    let mut resp = crate::sys::http()
-        .get(url)
-        .header("User-Agent", USER_AGENT)
-        .timeout(Duration::from_secs(900))
-        .send()
-        .map_err(|e| fail(short_err(&e)))?;
+    // the download servers (GitHub's above all) now and then answer 502/503/504 or drop the
+    // connection for a moment: a few tries, a little apart, before giving up
+    const WAITS: [u64; 4] = [2, 5, 10, 20];
+    let mut tries = 0;
+    let mut resp = loop {
+        let sent = crate::sys::http().get(url).header("User-Agent", USER_AGENT).timeout(Duration::from_secs(900)).send();
+        let retry = match &sent {
+            Ok(r) => r.status().is_server_error() || r.status().as_u16() == 429,
+            Err(e) => e.is_connect() || e.is_timeout(),
+        };
+        if retry && tries < WAITS.len() {
+            p.detail(&format!("Downloading {what} (trying again)"));
+            std::thread::sleep(Duration::from_secs(WAITS[tries]));
+            tries += 1;
+            continue;
+        }
+        break sent.map_err(|e| fail(short_err(&e)))?;
+    };
     if !resp.status().is_success() {
         return Err(fail(format!("the server answered {}", resp.status())));
     }

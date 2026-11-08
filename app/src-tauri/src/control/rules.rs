@@ -104,7 +104,11 @@ pub fn check(a: &Ask, known_setting: &dyn Fn(&str, &str) -> bool) -> Verdict {
         // ---- the game, live --------------------------------------------------------
         ("POST", ["api", "cmd"]) => {
             let cmd = a.body.and_then(|b| b["cmd"].as_str()).unwrap_or("");
-            if NEVER_CMDS.contains(&cmd) {
+            // (game.rs only passes Loner-Strike's own commands, with plain arguments, and
+            // gm_set only its settings table; a setting that's a key or password is refused
+            // here too, as in the console, in case one is ever added there)
+            let secret_arg = a.body.and_then(|b| b["args"].as_array()).into_iter().flatten().filter_map(|v| v.as_str()).any(secret_setting);
+            if NEVER_CMDS.contains(&cmd) || secret_arg {
                 deny(NOT_ROLE)
             } else if admin || MOD_CMDS.contains(&cmd) {
                 both
@@ -410,5 +414,13 @@ quit", "SV_PASSWORD x", "sv_rcon_banpenalty 0", "amx_pluginsdisable x"] {
         assert!(!ok(&ask(a, "POST", "/api/app/mode-settings", Some(&json!({"mode": "zp5", "cvar": "rcon_password", "value": "a"})))));
         assert!(!ok(&ask(a, "POST", "/api/app/mode-settings", Some(&json!({"mode": "zp5", "cvar": "servercfgfile", "value": "x.cfg"})))));
         assert!(!ok(&ask(a, "POST", "/api/app/mode-settings", Some(&json!({"mode": "zp5", "cvar": "mapchangecfgfile", "value": "x.cfg"})))));
+    }
+
+    #[test]
+    fn cmd_never_sets_a_secret() {
+        let body = json!({"cmd": "gm_set", "args": ["rcon_password", "x"]});
+        assert!(!ok(&ask(Role::Admin, "POST", "/api/cmd", Some(&body))));
+        let body = json!({"cmd": "gm_set", "args": ["gm_hb_aim", "1"]});
+        assert!(ok(&ask(Role::Admin, "POST", "/api/cmd", Some(&body))));
     }
 }

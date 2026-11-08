@@ -638,7 +638,7 @@ ln -sf "$BASE/steamcmd/linux32/steamclient.so" "$HOME/.steam/sdk32/steamclient.s
 
 step foundation
 cd "$SRV/$G"; TMP=$(mktemp -d)
-fetch() { curl -fsSL --proto '=https' "$1" -o "$TMP/$2" || fail "Couldn't download $2."; echo "$3  $TMP/$2" | sha256sum -c --quiet - || fail "$2 didn't match its checksum."; }
+fetch() { curl -fsSL --proto '=https' --retry 5 --retry-delay 3 "$1" -o "$TMP/$2" || fail "Couldn't download $2."; echo "$3  $TMP/$2" | sha256sum -c --quiet - || fail "$2 didn't match its checksum."; }
 fetch "$MM_URL" mm.tar.xz "$MM_SHA"; tar xJf "$TMP/mm.tar.xz" -C .
 fetch "$AMXX_URL" amxx.tar.gz "$AMXX_SHA"; tar xzf "$TMP/amxx.tar.gz" -C .
 fetch "$AMXXCS_URL" amxxcs.tar.gz "$AMXXCS_SHA"; tar xzf "$TMP/amxxcs.tar.gz" -C .
