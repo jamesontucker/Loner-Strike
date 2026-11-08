@@ -3037,7 +3037,10 @@ pub(crate) fn launch_join(st: &Shared, game: &str, address: &str, password: Opti
 
 /// The modes a server has (from its copy of modes.ini on this computer) and the one it was
 /// last in, for starting it in a mode
-async fn api_modes(UrlPath(id): UrlPath<String>) -> (StatusCode, Json<Value>) {
+async fn api_modes(UrlPath(id): UrlPath<String>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) {
+        return forbidden();
+    }
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
         let e = get(&id).ok_or("That server isn't there any more.")?;
         let am = e.dir.join(&e.game).join("addons/amxmodx");

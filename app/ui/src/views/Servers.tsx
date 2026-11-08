@@ -484,7 +484,9 @@ export function ServerPage(props: {
   const [startMode, setStartMode] = useState<string | null>(null);
   useEffect(() => {
     if (running) return;
-    getJson<{ modes?: { id: string; name: string }[]; mode?: string }>(`/api/servers/${s.id}/modes`)
+    // (with the panel header: only the app's own pages can send it)
+    fetch(`/api/servers/${s.id}/modes`, { credentials: "same-origin", headers: { "X-Panel": "1" } })
+      .then((r) => r.json() as Promise<{ modes?: { id: string; name: string }[]; mode?: string }>)
       .then((r) => setStartModes(r.modes?.length ? { modes: [...r.modes].sort((a, b) => a.name.localeCompare(b.name)), mode: r.mode ?? "classic" } : null))
       .catch(() => setStartModes(null));
   }, [s.id, running]);
