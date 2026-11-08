@@ -34,9 +34,9 @@
 	(from the name, leaning on personality and how good a player it is). Nothing happens
 	in a match (or with the Matchmaking style on Classic) but quiet freeze time looks, in modes a plugin steers bots
 	through (Hide and Seek, Deathrun, zombies...), with the Classic bot style, or at
-	gm_personality 0; gm_personality scales how often. Deathmatch keeps the quick ones
-	(flicks, scopes, jumps after spawning, a reload after a kill), and none of the
-	standing about.
+	gm_personality 0; gm_personality scales how often. Deathmatch (and Gun Game) keeps the
+	quick ones (flicks, scopes, a reload after a kill; coming back in, nearly half do
+	something like leaving spawn in a round), and none of the standing about.
 	A bot fidgets only once it has been quiet 8-10 seconds: no enemy in sight, not hurt,
 	no shots of its own, no gunfire or someone hurt near it. Whatever it was doing stops
 	the moment that changes (the gun comes back out, a scope, burst or flashlight is put
@@ -684,21 +684,53 @@ public fw_spawn_post(id)
 	g_NextFun[id] = now + random_float(20.0, 45.0)
 	if (!is_user_bot(id) || !g_FunOn || mode_ctx() != CTX_DM || !get_pcvar_num(g_pSpawn))
 		return
-	// deathmatch has no freeze time: a couple of seconds after spawning count as quiet, for
-	// a jump out of spawn or a flick through the weapons (more than in a round)
+	// deathmatch has no freeze time: a couple of seconds after spawning count as quiet, and
+	// coming back in, nearly half do something like leaving spawn in a round (a jump or a
+	// few, flicking weapons, the knife out a moment, crouch spam, a look about)
 	g_Grace[id] = now + random_float(2.0, 4.0)
-	if (roll(id, FUN_SPAWNJUMP, 0.15))
+	new Float:act = activity(persona(id))
+	if (random_float(0.0, 1.0) >= floatmin(floatclamp(0.25 + 0.2 * act, 0.15, 0.7) * pers(), 0.9))
+		return
+	new Float:w[5]
+	w[0] = 3.0 * taste(id, FUN_SPAWNJUMP)
+	w[1] = get_pcvar_num(g_pWeapons) ? 2.5 * taste(id, FUN_QSPAM) : 0.0
+	w[2] = 1.0 * taste(id, FUN_KNIFE)
+	w[3] = 0.6 * taste(id, FUN_DUCK)
+	w[4] = g_Fork && get_pcvar_num(g_pLook) ? 1.2 * taste(id, FUN_LOOK) : 0.0
+	new Float:total = w[0] + w[1] + w[2] + w[3] + w[4]
+	new Float:r = random_float(0.0, total), a
+	for (a = 0; a < 4; a++)
+	{
+		r -= w[a]
+		if (r <= 0.0 && w[a] > 0.0)
+			break
+	}
+	if (a == 4 && w[4] <= 0.0)
+		return
+	if (a == 0)
 	{
 		g_JumpsLeft[id] = random_num(1, 3)
 		g_NextJump[id] = now + random_float(0.3, 1.0)
 	}
-	else if (get_pcvar_num(g_pWeapons) && roll(id, FUN_QSPAM, 0.12))
-		set_task(random_float(0.4, 1.5), "task_spawn_qspam", id + TASK_SPAWN)
+	else
+	{
+		new what[2]
+		what[0] = a == 1 ? 'q' : a == 2 ? 'k' : a == 3 ? 'c' : 'g'
+		set_task(random_float(0.3, 1.2), "task_spawn_do", id + TASK_SPAWN, what, 2)
+	}
 }
 
-public task_spawn_qspam(tid)
+public task_spawn_do(const what[], tid)
 {
-	start_qspam(tid - TASK_SPAWN)
+	new id = tid - TASK_SPAWN
+	switch (what[0])
+	{
+		case 'q': start_qspam(id)
+		case 'k': if (free_bot(id) && holding_gun(id)) knife_out(id, random_float(0.6, 1.5))
+		case 'c': start_ducks(id, random_num(2, 4))
+		// a glance or two on the way (it's moving already)
+		case 'g': if (g_Fork && free_bot(id)) { g_GlanceLeft[id] = random_num(1, 2); glance_step(id); }
+	}
 }
 
 public ev_bomb_planted()
@@ -1808,7 +1840,8 @@ public task_glance(tid)
 
 glance_step(id)
 {
-	if (g_GlanceLeft[id] <= 0 || !g_Freeze || !free_bot(id))
+	// (freeze time, or just after a deathmatch spawn)
+	if (g_GlanceLeft[id] <= 0 || (!g_Freeze && get_gametime() >= g_Grace[id]) || !free_bot(id))
 	{
 		g_GlanceLeft[id] = 0
 		return
