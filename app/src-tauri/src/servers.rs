@@ -880,6 +880,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         setup::server_step(&g, "srv-steamcmd", "Getting SteamCMD (Valve's server downloader)", 1.0),
         setup::server_step(&g, "srv-download", "Downloading the server from Valve", 8.0),
         setup::server_step(&g, "srv-copy", "Making the server's folder", 1.0),
+        setup::server_step(&g, "srv-engine", "Installing Loner-Strike's server engine", 0.5),
         setup::server_step(&g, "srv-settings", "Copying settings and admins", 0.3),
         setup::server_step(&g, "srv-maps", "Copying maps", 2.0),
         setup::server_step(&g, "srv-done", "Finishing up", 0.1),
@@ -902,9 +903,10 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         })?;
         // Loner-Strike itself, with the same modes as the template
         let plan = setup::plan_install(entry.install(), &[g.clone()], &components, &res, false)?;
-        job.insert_before(&format!("{g}/srv-settings"), plan.step_list());
+        job.insert_before(&format!("{g}/srv-engine"), plan.step_list());
         let store = Arc::new(crate::gamebanana::MapStore::new_server(&entry.dir, &entry.dir.join(&g), &sys::app_dir(), Arc::new(Mutex::new(None))));
         setup::install_into(job, &plan, &res, Some(store))?;
+        job.run(&format!("{g}/srv-engine"), || install_engine(job, &entry.dir, &g))?;
         let data = entry.dir.join(&g).join("addons/amxmodx/data/gamemodes");
         job.run(&format!("{g}/srv-settings"), || {
             if let Some(src) = &source {
@@ -1684,6 +1686,7 @@ pub fn update_files(e: Entry) -> Result<String, String> {
         setup::server_step(&g, "srv-steamcmd", "Getting SteamCMD", 0.5),
         setup::server_step(&g, "srv-download", "Checking Valve's server files", 8.0),
         setup::server_step(&g, "srv-copy", "Updating the server", 1.0),
+        setup::server_step(&g, "srv-engine", "Installing Loner-Strike's server engine", 0.5),
     ];
     setup::start_job("server", steps, move |job| {
         job.run(&format!("{g}/srv-steamcmd"), || ensure_steamcmd(job))?;
@@ -1691,8 +1694,66 @@ pub fn update_files(e: Entry) -> Result<String, String> {
         // engine files only: never the game folders, which hold Loner-Strike's changes
         job.run(&format!("{g}/srv-copy"), || {
             copy_tree(&base, &e.dir, true, &|rel: &Path| rel.components().count() == 1 && rel.extension().map(|x| x != "gam").unwrap_or(true)).map(|_| ())
-        })
+        })?;
+        // Valve's engine files just came back: Loner-Strike's go over them again
+        job.run(&format!("{g}/srv-engine"), || install_engine(job, &e.dir, &g))
     })
+}
+
+/// Loner-Strike's server engine on a dedicated server on this computer: our ReHLDS (Valve's
+/// engine with ReHLDS's fixes, and it tells the bots who is talking on voice), ReAPI for
+/// plugins, and relocalizebugfix (blocks names and chat that crash other players' games).
+/// The Valve files it replaces are kept in .valve-engine the first time, to go back to.
+fn install_engine(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
+    use setup::foundation::{REAPI, REHLDS, RELOCALIZEBUGFIX};
+    let tmp = setup::TempDir::new()?;
+    let get = |p: &setup::foundation::Pinned, sub: &str| -> Result<PathBuf, String> {
+        let file = setup::fetch::download(p.url, Some(p.sha256), p.what, job)?;
+        let to = tmp.0.join(sub);
+        setup::fetch::unpack(&file, &to)?;
+        Ok(to)
+    };
+    let copy = |from: &Path, to: &Path| -> Result<(), String> {
+        if let Some(parent) = to.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        std::fs::copy(from, to).map(|_| ()).map_err(|e| format!("Couldn't copy {} ({e}). If the server is running, stop it and try again.", to.display()))
+    };
+
+    let rh = get(&REHLDS, "rh")?;
+    let bin = rh.join("bin").join("win32");
+    if !bin.join("swds.dll").is_file() {
+        return Err("The ReHLDS download is missing its engine. Try again.".into());
+    }
+    let keep = dir.join(".valve-engine");
+    for (full, rel) in setup::foundation::tree(&bin) {
+        let dest = dir.join(&rel);
+        let kept = keep.join(&rel);
+        if dest.is_file() && !kept.exists() {
+            copy(&dest, &kept)?;
+        }
+        copy(&full, &dest)?;
+    }
+
+    let gdir = dir.join(game);
+    let ra = get(&REAPI, "reapi")?;
+    copy(&ra.join("addons/amxmodx/modules/reapi_amxx.dll"), &gdir.join("addons/amxmodx/modules/reapi_amxx.dll"))?;
+
+    let rl = get(&RELOCALIZEBUGFIX, "rlb")?;
+    copy(&rl.join("addons/relocalizebugfix/relocalizebugfix_mm.dll"), &gdir.join("addons/relocalizebugfix/relocalizebugfix_mm.dll"))?;
+    let ini = gdir.join("addons/metamod/plugins.ini");
+    let text = std::fs::read_to_string(&ini).unwrap_or_default();
+    if !text.contains("relocalizebugfix") {
+        let line = r"win32 addons\relocalizebugfix\relocalizebugfix_mm.dll";
+        let mut out = text.trim_end_matches(['\r', '\n']).to_string();
+        if !out.is_empty() {
+            out.push_str("\r\n");
+        }
+        out.push_str(line);
+        out.push_str("\r\n");
+        sys::write_atomic(&ini, out.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 // ---- bringing in a server the player already runs ------------------------------------

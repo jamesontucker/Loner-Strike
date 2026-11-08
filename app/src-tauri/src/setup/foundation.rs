@@ -1,4 +1,6 @@
-//! The foundation: Metamod-P, AMX Mod X (base + Counter-Strike addon) and ReGameDLL.
+//! The foundation: Metamod-P, AMX Mod X (base + Counter-Strike addon) and ReGameDLL
+//! (Loner-Strike's fork: the bots' changes). Dedicated servers also get REHLDS (Loner-Strike's
+//! fork of the engine: voice awareness for the bots), ReAPI and relocalizebugfix.
 //! Every version is the one Loner-Strike
 //! is tested with, pinned by checksum.
 
@@ -29,10 +31,28 @@ pub const AMXX_CSTRIKE: Pinned = Pinned {
     sha256: "47f358b4dd40c0259576bbde9790442dee4b642fe31bfed0421180b81429d4aa",
     what: "AMX Mod X's Counter-Strike module",
 };
+/// Loner-Strike's fork of ReGameDLL (github.com/jamesontucker/ReGameDLL_CS, branch loner-strike)
 pub const REGAMEDLL: Pinned = Pinned {
-    url: "https://github.com/rehlds/ReGameDLL_CS/releases/download/5.30.0.814/regamedll-bin-5.30.0.814.zip",
-    sha256: "457f5c96a4d10280fcad47f106cbd5be86363a47df1ccab91c514e9d1bc6fd18",
+    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls3/regamedll-bin-5.30.0.814-ls3.zip",
+    sha256: "23db69b4a8235cc394c52e716dcfbceed549304f6e9c2e2d69eda01fc8d304e8",
     what: "ReGameDLL",
+};
+/// Loner-Strike's fork of ReHLDS (github.com/jamesontucker/ReHLDS, branch loner-strike): the
+/// engine for dedicated servers
+pub const REHLDS: Pinned = Pinned {
+    url: "https://github.com/jamesontucker/ReHLDS/releases/download/3.15.0.896-ls2/rehlds-bin-3.15.0.896-ls2.zip",
+    sha256: "4d508085a0ed17a93dbac67441c6184e812d34575057bfd7633f0f5b83a679bb",
+    what: "ReHLDS",
+};
+pub const REAPI: Pinned = Pinned {
+    url: "https://github.com/rehlds/ReAPI/releases/download/5.29.0.358/reapi-bin-5.29.0.358.zip",
+    sha256: "f33a7435540bea8706db3fa948e51a85b511f5b18c383b97402a204dc5419195",
+    what: "ReAPI",
+};
+pub const RELOCALIZEBUGFIX: Pinned = Pinned {
+    url: "https://github.com/rehlds/relocalizebugfix/releases/download/v2.8/relocalizebugfix-v2.8.zip",
+    sha256: "262c4f021e4863fd772fcdbe48689f171426d33321ff0f2c9787eb083cacb1b0",
+    what: "relocalizebugfix",
 };
 pub const METAMOD_DLL: &str = r"addons\metamod\dlls\metamod.dll";
 

@@ -643,8 +643,19 @@ fetch "$MM_URL" mm.tar.xz "$MM_SHA"; tar xJf "$TMP/mm.tar.xz" -C .
 fetch "$AMXX_URL" amxx.tar.gz "$AMXX_SHA"; tar xzf "$TMP/amxx.tar.gz" -C .
 fetch "$AMXXCS_URL" amxxcs.tar.gz "$AMXXCS_SHA"; tar xzf "$TMP/amxxcs.tar.gz" -C .
 fetch "$RG_URL" rg.zip "$RG_SHA"; unzip -o -q "$TMP/rg.zip" "bin/linux32/cstrike/*" -d "$TMP/rg"; cp -rf "$TMP/rg/bin/linux32/cstrike/." .
+# Loner-Strike's engine (ReHLDS, which also tells the bots who is talking on voice). Valve's
+# engine files, which steamcmd just checked, are kept in .valve-engine to go back to
+fetch "$RH_URL" rh.zip "$RH_SHA"; unzip -o -q "$TMP/rh.zip" "bin/linux32/*" -d "$TMP/rh"
+( cd "$TMP/rh/bin/linux32" && find . -type f ) | while read -r f; do
+  if [ -f "$SRV/$f" ]; then mkdir -p "$SRV/.valve-engine/$(dirname "$f")"; cp -p "$SRV/$f" "$SRV/.valve-engine/$f"; fi
+done
+cp -rf "$TMP/rh/bin/linux32/." "$SRV/"
+chmod +x "$SRV/hlds_linux" "$SRV/hltv" 2>/dev/null || true
+# ReAPI for plugins, relocalizebugfix (names and chat that crash other players' games)
+fetch "$REAPI_URL" reapi.zip "$REAPI_SHA"; unzip -o -q "$TMP/reapi.zip" "addons/amxmodx/modules/reapi_amxx_i386.so" -d .
+fetch "$RLB_URL" rlb.zip "$RLB_SHA"; unzip -o -q "$TMP/rlb.zip" "addons/relocalizebugfix/relocalizebugfix_mm_i386.so" -d .
 mkdir -p addons/metamod
-echo "linux addons/amxmodx/dlls/amxmodx_mm_i386.so" > addons/metamod/plugins.ini
+printf '%s\n' "linux addons/amxmodx/dlls/amxmodx_mm_i386.so" "linux addons/relocalizebugfix/relocalizebugfix_mm_i386.so" > addons/metamod/plugins.ini
 if grep -q '^gamedll_linux' liblist.gam; then sed -i 's|^gamedll_linux.*|gamedll_linux "addons/metamod/dlls/metamod.so"|' liblist.gam
 else echo 'gamedll_linux "addons/metamod/dlls/metamod.so"' >> liblist.gam; fi
 rm -rf "$TMP"
@@ -659,8 +670,14 @@ pub const FOUNDATION_ENV: &[(&str, &str)] = &[
     ("AMXX_SHA", "d82d1d65c907f358c48bdebc07e20084e7e8c4f4d0e95af275e8b43f32815c7e"),
     ("AMXXCS_URL", "https://www.amxmodx.org/amxxdrop/1.10/amxmodx-1.10.0-git5487-cstrike-linux.tar.gz"),
     ("AMXXCS_SHA", "6a7541a213ef71c47c1348b3457722e95669c0135c60102d5cb5a876341aa808"),
-    ("RG_URL", "https://github.com/rehlds/ReGameDLL_CS/releases/download/5.30.0.814/regamedll-bin-5.30.0.814.zip"),
-    ("RG_SHA", "457f5c96a4d10280fcad47f106cbd5be86363a47df1ccab91c514e9d1bc6fd18"),
+    ("RG_URL", crate::setup::foundation::REGAMEDLL.url),
+    ("RG_SHA", crate::setup::foundation::REGAMEDLL.sha256),
+    ("RH_URL", crate::setup::foundation::REHLDS.url),
+    ("RH_SHA", crate::setup::foundation::REHLDS.sha256),
+    ("REAPI_URL", crate::setup::foundation::REAPI.url),
+    ("REAPI_SHA", crate::setup::foundation::REAPI.sha256),
+    ("RLB_URL", crate::setup::foundation::RELOCALIZEBUGFIX.url),
+    ("RLB_SHA", crate::setup::foundation::RELOCALIZEBUGFIX.sha256),
 ];
 
 /// The systemd service for one server, and the `lsctl` helper for managing servers by hand.
