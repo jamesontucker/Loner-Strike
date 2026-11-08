@@ -4,7 +4,10 @@
 	Adverts:    every few minutes one of configs/gamemodes/adverts.ini in chat, the way
 	            servers ran their rules and "type /rank" lines (gm_atmo_adverts 0/1)
 	Spectator:  now and then (not every map) a bot sits a few rounds out in spectator, the
-	            way someone did who'd gone to get food, then joins again (gm_atmo_spec 0/1)
+	            way someone did who'd gone to get food, then joins again (gm_atmo_spec 0/1).
+	            Only in modes where one player fewer doesn't matter (not Hide and Seek,
+	            Deathrun, zombies, Base Builder and the like), and never from a team of
+	            fewer than four
 
 	Nothing happens in a match or a career game.
 */
@@ -26,6 +29,7 @@ new g_pAdverts, g_pSpec
 new Array:g_Adverts, g_AdvertNext
 new bool:g_Career
 new g_Spec, CsTeams:g_SpecTeam, g_SpecUser
+new bool:g_SpecMode                  // a mode where a player sitting out fits
 
 public plugin_init()
 {
@@ -44,6 +48,32 @@ public plugin_cfg()
 {
 	// career (Tour of Duty) keeps its designed bots and texts
 	g_Career = get_cvar_num("mp_career") != 0
+	// modes built around the teams as they are (hiders and seekers, a deathrun's terrorist,
+	// zombies, builders) or where nobody's really playing a round: no spectator
+	new mode[32], path[128]
+	get_datadir(path, charsmax(path))
+	new f = fopen(fmt("%s/gamemodes/current.txt", path), "rt")
+	if (f)
+	{
+		fgets(f, mode, charsmax(mode))
+		trim(mode)
+		fclose(f)
+	}
+	static const NO_SPEC[][] = { "hns", "deathrun", "zombie", "zp5", "basebuilder", "kreedz", "surf", "soccerjam", "match" }
+	g_SpecMode = true
+	for (new i = 0; i < sizeof NO_SPEC; i++)
+		if (equal(mode, NO_SPEC[i]))
+			g_SpecMode = false
+}
+
+// Players on a team (bots and people)
+team_count(CsTeams:team)
+{
+	new n
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_connected(i) && cs_get_user_team(i) == team)
+			n++
+	return n
 }
 
 bool:quiet()
@@ -105,14 +135,15 @@ public task_advert()
 // A bot that's dead (so nothing is cut short) goes to spectator for a few minutes
 public task_spec_out()
 {
-	if (!get_pcvar_num(g_pSpec) || quiet() || g_Spec)
+	if (!get_pcvar_num(g_pSpec) || !g_SpecMode || quiet() || g_Spec)
 		return
+	// (a team left with fewer than three would feel it)
 	new list[32], n
 	for (new i = 1; i <= MaxClients; i++)
 		if (is_user_connected(i) && is_user_bot(i) && !is_user_alive(i))
 		{
 			new CsTeams:t = cs_get_user_team(i)
-			if (t == CS_TEAM_T || t == CS_TEAM_CT)
+			if ((t == CS_TEAM_T || t == CS_TEAM_CT) && team_count(t) > 3)
 				list[n++] = i
 		}
 	if (!n)

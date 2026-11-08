@@ -85,6 +85,10 @@ native people_hobby(id, which, out[], len)
 native people_note(bot, other, const kind[])
 native people_get(id, const key[])
 
+// gm_humanbots (optional): the bot is afk; the enemy it has in view (0 none)
+native hb_bot_afk(id)
+native hb_bot_target(id)
+
 #define PLUGIN  "Bot chat"
 #define VERSION "1.0"
 #define AUTHOR  "gamemodes"
@@ -180,6 +184,8 @@ new g_PendBot[MAX_PENDING], g_PendUser[MAX_PENDING], g_PendOther[MAX_PENDING], g
 new g_PendText[MAX_PENDING][128], g_PendSec[MAX_PENDING][24], bool:g_PendQuiet[MAX_PENDING]   // quiet: starts no thread
 new bool:g_PendRaw[MAX_PENDING]     // the model's text: said as it is
 new bool:g_PendAlive[MAX_PENDING]   // alive when it started typing (dying cuts it off)
+new bool:g_PendWaited[MAX_PENDING]  // put off once already (it was in a fight)
+new bool:g_HumanBots                // gm_humanbots is running
 
 // smarter chat (gm_ai_url): one request per bot
 #define TASK_AI    2000000
@@ -519,7 +525,7 @@ public module_filter(const library[], LibType:type)
 
 public native_filter(const name[], index, trap)
 {
-	if (!trap && equal(name, "people_", 7))
+	if (!trap && (equal(name, "people_", 7) || equal(name, "hb_", 3)))
 		return PLUGIN_HANDLED
 	return (!trap && (equal(name, "gm_chat_blocked") || equal(name, "socket_", 7))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
@@ -565,6 +571,7 @@ public plugin_cfg()
 		g_ThemeAt[i] = -10000.0
 	g_Vault = nvault_open("gm_botmemory")
 	g_Left = TrieCreate()
+	g_HumanBots = bool:LibraryExists("gm_humanbots", LibType_Library)
 	// Tour of Duty missions keep their designed bots
 	new pass[64], team[8]
 	get_cvar_string("sv_password", pass, charsmax(pass))
@@ -1025,6 +1032,18 @@ bool:in_combat(id)
 	return get_gametime() - g_FightAt[id] < 5.0
 }
 
+// ... or an enemy in view right now (gm_humanbots knows)
+bool:fighting(id)
+{
+	return in_combat(id) || (g_HumanBots && hb_bot_target(id) != 0)
+}
+
+// Standing there afk (gm_humanbots): nobody at the keyboard to type
+bool:bot_afk(id)
+{
+	return g_HumanBots && is_user_alive(id) && hb_bot_afk(id)
+}
+
 // ---- deciding to say something ---------------------------------------------------------
 
 personality_cvar()
@@ -1087,7 +1106,7 @@ Float:bot_gap()
 // reply. Answers to people go through answer() instead.
 want(id, const section[], other, Float:base, Float:delay = -1.0, chain = 0, bool:team = false)
 {
-	if (!id || !is_user_connected(id) || !is_user_bot(id) || g_Career || !get_pcvar_num(g_pLevel))
+	if (!id || !is_user_connected(id) || !is_user_bot(id) || g_Career || !get_pcvar_num(g_pLevel) || bot_afk(id))
 		return
 	new Float:now = get_gametime()
 	if (!chain && (now < g_NextAny || now < g_NextBot[id] || rate_capped(now)))
@@ -1705,6 +1724,7 @@ queue(id, other, const text[], chain, bool:team, Float:delay, const section[] = 
 	g_PendQuiet[slot] = quiet
 	g_PendAlive[slot] = bool:is_user_alive(id)
 	g_PendRaw[slot] = raw
+	g_PendWaited[slot] = false
 	if (delay < 0.0)
 		delay = typing_time(text)
 	new Float:now = get_gametime()
@@ -1718,10 +1738,37 @@ public task_say(task)
 {
 	new slot = task - TASK_SAY
 	new id = g_PendBot[slot], other = g_PendOther[slot], chain = g_PendChain[slot]
-	g_PendBot[slot] = 0
 	// still the same bot (the slot may have gone to someone else meanwhile)
 	if (!is_user_connected(id) || !is_user_bot(id) || get_user_userid(id) != g_PendUser[slot])
+	{
+		g_PendBot[slot] = 0
 		return
+	}
+	// alive and busy: nobody types while afk; in a fight it waits a moment, and if it's still
+	// fighting only says a reply (lines with chain MAX_CHAIN, like leaving, always go)
+	if (is_user_alive(id) && chain < MAX_CHAIN)
+	{
+		if (bot_afk(id))
+		{
+			g_PendBot[slot] = 0
+			return
+		}
+		if (fighting(id))
+		{
+			if (!g_PendWaited[slot])
+			{
+				g_PendWaited[slot] = true
+				set_task(random_float(2.0, 4.0), "task_say", task)
+				return
+			}
+			if (!chain)
+			{
+				g_PendBot[slot] = 0
+				return
+			}
+		}
+	}
+	g_PendBot[slot] = 0
 	if (other && !is_user_connected(other))
 		other = 0
 
@@ -2081,6 +2128,18 @@ public ev_newround()
 	arrayset(g_Streaked, false, sizeof g_Streaked)
 	g_BombPlanted = g_BombDropped = false
 	g_BombPlace[0] = g_SeenPlace[1][0] = g_SeenPlace[2][0] = 0
+	// last round's lines still being typed are dropped, apart from answers to people (and
+	// lines like leaving)
+	for (new i = 0; i < MAX_PENDING; i++)
+	{
+		if (!g_PendBot[i] || g_PendChain[i] >= MAX_CHAIN)
+			continue
+		new o = g_PendOther[i]
+		if (g_PendChain[i] > 0 && o && is_user_connected(o) && !is_user_bot(o))
+			continue
+		g_PendBot[i] = 0
+		remove_task(TASK_SAY + i)
+	}
 	// freeze time is when people chat most
 	if (random_num(1, 100) <= 22)
 	{

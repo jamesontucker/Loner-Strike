@@ -29,9 +29,12 @@
 	                   and react late, tryhards pre-aim, old-timers tap; favourite guns
 	                   (a Deagle lover, an AWP guy), warming up after joining, getting
 	                   tired late at night, over-swinging at someone behind them,
-	                   nervous reloads, running with the knife out, and a rival (the
-	                   player who keeps killing it) it reacts to faster
-	gm_hb_afk        1 now and then a bot stands still for a few seconds at round start
+	                   nervous reloads, running with the knife out early in the round
+	                   (not in a match), and a rival (the player who keeps killing it)
+	                   it reacts to faster
+	gm_hb_afk        1 now and then a bot stands still for a few seconds early in the round
+	                   (not in modes a plugin steers bots through); shots, an enemy or
+	                   getting hurt bring it back at once
 	gm_hb_sprays     1 bots spray a logo now and then: Loner-Strike's (sprites/lonerstrike/
 	                   spray.spr, flat on the wall like a player's spray), else one of the
 	                   game's own logos. Cleared each round
@@ -40,15 +43,17 @@
 	                   enemy down; in team modes the team's caller says go). Each bot and
 	                   each team waits a while between calls: CZ bots walk over to whoever
 	                   calls, so a busy radio turns a team into one big group
-	gm_hb_showoff    1 now and then after a kill, when nobody's shooting at it: a jump, the
-	                   knife out for a moment, or (with gm_hb_disrespect) crouch spam over
-	                   the body
+	gm_hb_showoff    1 now and then after a kill, when no other enemy is in view and it
+	                   hasn't been hurt lately: a jump, the knife out for a moment, or
+	                   (with gm_hb_disrespect) crouch spam over the body. Any sign of a
+	                   fight ends it and the gun comes back
 	gm_hb_reaction   1 human reaction times
 	gm_hb_aim        1 flicks, wobble and bursts
 	gm_hb_mistakes   1 occasional mistakes
 	gm_hb_bhop       1 Locked In and Hackers bunnyhop between fights
 	gm_hb_hold       1 careful players and lurkers stop now and then and hold an angle for a
-	                   few seconds (crouched sometimes); more on aim and duel maps
+	                   few seconds (crouched sometimes); more on aim and duel maps. Not in
+	                   a match
 	gm_personality 100 how strongly all of the above shows, in percent (0-200): at 0 bots
 	                   play their style plainly (no tilt, panic, habits, show-off, afk,
 	                   sprays or radio, less spread in skill and mistakes); 200 exaggerates it.
@@ -80,6 +85,8 @@ native botchat_say(id, const section[], other, Float:chance)
 #define SCAN_INTERVAL 0.1
 #define STYLE_MIXED   8
 #define OFFSET_ACTIVE_ITEM 373
+#define TASK_KNIFE    1900000             // the show-off knife going back (+ id; sprays use userids)
+#define KNIFE_WINDOW  14.0                // knife runs only this early in a round
 
 enum { STYLE_CLASSIC, STYLE_PUB, STYLE_MM, STYLE_VET, STYLE_NEWBIE, STYLE_LOCKED, STYLE_HACKER, STYLE_GOD, STYLE_COUNT }
 
@@ -117,6 +124,10 @@ new g_pStyle, g_pReaction, g_pAim, g_pMistakes, g_pBhop, g_pFreeForAll, g_pTilt,
 new g_Mix[33]                                   // Mixed lobby: this bot's own style
 new Float:g_Tilt[33], Float:g_TiltWay[33]       // >0 sloppier; some get careful instead
 new Float:g_ShowUntil[33], g_Show[33]           // a show-off moment: 1 crouch spam, 2 jump
+new g_ShowHp[33], Float:g_ShowNext[33], bool:g_ShowDuck[33]   // health then; the next crouch toggle
+new bool:g_KnifeOut[33]                         // the show-off knife is out (the gun comes back)
+new Float:g_HurtAt[33]                          // when it last took damage
+new Float:g_AfkAt[33], g_AfkHp[33]              // when this round's afk starts; health then
 new g_pHabits, g_pAfk, g_pSprays, g_pRadio, g_pDisrespect
 new const SPRAY_SPRITE[] = "sprites/lonerstrike/spray.spr"
 #define MAX_SPRAYS 16
@@ -135,7 +146,7 @@ new g_pPersonality, g_pHold, g_pBotPlay
 new Float:g_NextRadio[33], Float:g_TeamRadioAt[3]       // radio cooldowns: each bot, each team
 new Float:g_HoldUntil[33], Float:g_NextHoldTry[33], bool:g_HoldDuck[33], g_HoldHp[33]
 new Float:g_FollowOpenUntil[33], Float:g_NextFollowRoll[33]
-new Float:g_RoundStartAt, bool:g_BombPlanted, bool:g_HoldMode
+new Float:g_RoundStartAt, bool:g_BombPlanted, bool:g_IdleMode
 enum { PLAY_TEAM, PLAY_SOLO, PLAY_HOLD }                // gm_botplay (gamemodes, botplay.ini)
 enum { KIND_RUSHER, KIND_ROAMER, KIND_LURKER, KIND_CAREFUL }
 
@@ -193,6 +204,9 @@ public plugin_init()
 			g_SprayDecals[g_SprayCount++] = d
 	}
 	register_event("DeathMsg", "ev_death", "a")
+	register_event("Damage", "ev_damage", "b", "2!0")
+	// RegisterHamPlayer also covers Condition Zero bots (a different class)
+	RegisterHamPlayer(Ham_Spawn, "fw_spawn_post", 1)
 	register_logevent("ev_bomb_planted", 3, "2=Planted_The_Bomb")
 	set_task(1.0, "task_follow", _, _, _, "b")
 
@@ -206,6 +220,8 @@ public plugin_natives()
 {
 	register_library("gm_humanbots")
 	register_native("hb_bot_idle", "n_bot_idle")
+	register_native("hb_bot_afk", "n_bot_afk")
+	register_native("hb_bot_target", "n_bot_target")
 	set_native_filter("native_filter")
 }
 
@@ -216,7 +232,41 @@ public n_bot_idle(plugin, params)
 	if (id < 1 || id > MaxClients)
 		return false
 	new Float:now = get_gametime()
-	return g_AfkUntil[id] > now || g_HoldUntil[id] > now
+	return afk_now(id, now) || g_HoldUntil[id] > now
+}
+
+// hb_bot_afk(id): true while the bot is afk (gm_botchat doesn't type then)
+public n_bot_afk(plugin, params)
+{
+	new id = get_param(1)
+	return id >= 1 && id <= MaxClients && afk_now(id, get_gametime())
+}
+
+// hb_bot_target(id): the enemy the bot has in view (0: none, or the Classic style)
+public n_bot_target(plugin, params)
+{
+	new id = get_param(1)
+	return (id >= 1 && id <= MaxClients) ? g_Target[id] : 0
+}
+
+bool:afk_now(id, Float:now)
+{
+	return g_AfkUntil[id] > now && now >= g_AfkAt[id]
+}
+
+// A match (gm_scrim): only the guns, nothing silly
+bool:is_match()
+{
+	new phase = get_cvar_num("gm_scrim_phase")
+	return phase > 0 && phase < 5
+}
+
+// The gun back out, only if it's the knife in hand (lastinv on anything else could
+// undo what the bot's own weapon logic picked)
+ensure_gun(id)
+{
+	if (get_user_weapon(id) == CSW_KNIFE)
+		engclient_cmd(id, "lastinv")
 }
 
 public native_filter(const name[], index, trap)
@@ -353,14 +403,15 @@ public plugin_cfg()
 	get_cvar_string("humans_join_team", team, charsmax(team))
 	g_Career = pass[0] && (equali(team, "CT") || equali(team, "T"))
 	g_pBotPlay = get_cvar_pointer("gm_botplay")
-	// holding an angle fits modes where bots fight; not ones a plugin steers them through
+	// holding an angle and afk fit modes where bots fight; not ones a plugin steers them
+	// through (gm_botnav in hns and deathrun sets their velocity every frame)
 	new mode[32]
 	read_mode(mode, charsmax(mode))
-	static const NO_HOLD[][] = { "hns", "deathrun", "kreedz", "surf", "soccerjam", "zombie", "zp5", "basebuilder" }
-	g_HoldMode = true
-	for (new i = 0; i < sizeof NO_HOLD; i++)
-		if (equal(mode, NO_HOLD[i]))
-			g_HoldMode = false
+	static const NO_IDLE[][] = { "hns", "deathrun", "kreedz", "surf", "soccerjam", "zombie", "zp5", "basebuilder" }
+	g_IdleMode = true
+	for (new i = 0; i < sizeof NO_IDLE; i++)
+		if (equal(mode, NO_IDLE[i]))
+			g_IdleMode = false
 	update_forwards(style(), get_pcvar_num(g_pAim))
 }
 
@@ -462,8 +513,9 @@ Float:skill_of(id)
 public ev_death()
 {
 	new killer = read_data(1), victim = read_data(2)
+	// nothing of this life carries over to the next
 	if (victim >= 1 && victim <= MaxClients)
-		g_AfkUntil[victim] = g_HoldUntil[victim] = 0.0
+		reset_bot(victim)
 	if (victim >= 1 && victim <= MaxClients && killer != victim)
 	{
 		g_Tilt[victim] = floatmin(g_Tilt[victim] + 0.08, 0.3)
@@ -479,33 +531,68 @@ public ev_death()
 	if (killer < 1 || killer > MaxClients || killer == victim || !is_user_bot(killer))
 		return
 	g_Tilt[killer] = floatmax(g_Tilt[killer] - 0.08, -0.1)
-	// a show-off moment, now and then (not in a match)
+	// a show-off moment, now and then (not in a match), and only when it's over: no other
+	// enemy in view and not hurt lately
 	if (!get_pcvar_num(g_pShowoff) || get_cvar_num("gm_scrim_phase") || style() == STYLE_CLASSIC)
+		return
+	new Float:now = get_gametime()
+	if ((g_Target[killer] && g_Target[killer] != victim) || now - g_HurtAt[killer] < 4.0 || g_Show[killer] || g_KnifeOut[killer])
 		return
 	// mostly the jokers and show-offs
 	new p = persona(killer)
 	new Float:chance = (has(p, "jkhOmX") ? 0.04 : p ? 0.01 : 0.02) * pers()
 	if (random_float(0.0, 1.0) >= chance)
 		return
-	new Float:now = get_gametime()
+	g_ShowHp[killer] = get_user_health(killer)
 	// crouch spam over the body is disrespect: only when the server allows it
 	new pick = get_pcvar_num(g_pDisrespect) ? random(4) : 2 + random(2)
 	switch (pick)
 	{
-		case 0, 1: { g_Show[killer] = 1; g_ShowUntil[killer] = now + random_float(1.2, 2.2); }
+		case 0, 1:
+		{
+			g_Show[killer] = 1
+			g_ShowUntil[killer] = now + random_float(1.2, 2.2)
+			// no set rhythm: each press its own length, starting anywhere
+			g_ShowDuck[killer] = bool:random(2)
+			g_ShowNext[killer] = now + random_float(0.0, 0.15)
+		}
 		case 2: { g_Show[killer] = 2; g_ShowUntil[killer] = now + 0.3; }
 		default:
 		{
+			if (!holding_gun(killer))
+				return
+			g_KnifeOut[killer] = true
 			engclient_cmd(killer, "weapon_knife")
-			set_task(random_float(1.5, 3.0), "task_lastinv", killer)
+			set_task(random_float(1.5, 3.0), "task_lastinv", TASK_KNIFE + killer)
 		}
 	}
 }
 
-public task_lastinv(id)
+// The show-off knife goes back, whatever happened meanwhile (engage may have done it already)
+public task_lastinv(tid)
 {
-	if (is_user_alive(id) && is_user_bot(id) && !g_Target[id])
-		engclient_cmd(id, "lastinv")
+	new id = tid - TASK_KNIFE
+	if (!g_KnifeOut[id])
+		return
+	g_KnifeOut[id] = false
+	if (is_user_alive(id) && is_user_bot(id))
+		ensure_gun(id)
+}
+
+public ev_damage(victim)
+{
+	if (victim >= 1 && victim <= MaxClients)
+		g_HurtAt[victim] = get_gametime()
+}
+
+// (the living respawn at a new round with what they held: a knife of ours goes back)
+public fw_spawn_post(id)
+{
+	if (!is_user_alive(id))
+		return
+	if (is_user_bot(id) && (g_KnifeOut[id] || g_KnifeRun[id]))
+		ensure_gun(id)
+	reset_bot(id)
 }
 
 public client_putinserver(id)
@@ -558,8 +645,11 @@ reset_bot(id)
 	g_PauseUntil[id] = g_PanicUntil[id] = 0.0
 	g_Show[id] = 0
 	g_ReloadAt[id] = g_AfkUntil[id] = 0.0
-	g_KnifeRun[id] = false
-	g_HoldUntil[id] = 0.0
+	g_KnifeRun[id] = g_KnifeOut[id] = false
+	g_HoldUntil[id] = g_AfkAt[id] = 0.0
+	g_HopsLeft[id] = 0
+	g_HurtAt[id] = 0.0
+	remove_task(TASK_KNIFE + id)
 }
 
 // ---------------------------------------------------------------------------
@@ -669,6 +759,12 @@ public task_scan()
 			}
 			else if (get_pcvar_num(g_pHabits) && now >= g_NextKnifeTry[id])
 				knife_run(id, now)
+			// the early part of the round is over: the gun comes back out
+			if (g_KnifeRun[id] && now - g_RoundStartAt > KNIFE_WINDOW + 2.0)
+			{
+				g_KnifeRun[id] = false
+				ensure_gun(id)
+			}
 			if (!g_Target[id] && now >= g_NextHoldTry[id] && g_HoldUntil[id] == 0.0)
 				try_hold(id, now)
 			continue
@@ -725,13 +821,15 @@ engage(id, target, Float:angle, Float:dist, s, Float:now)
 	{
 		if (target == g_Rival[id])
 			rt *= pers_factor(0.85)         // been waiting for this one
-		if (g_KnifeRun[id])
-		{
-			// running with the knife out: the gun comes back first
-			g_KnifeRun[id] = false
-			engclient_cmd(id, "lastinv")
+	}
+	if (g_KnifeRun[id] || g_KnifeOut[id])
+	{
+		// a knife of ours out (running, showing off): the gun comes back first
+		g_KnifeRun[id] = g_KnifeOut[id] = false
+		remove_task(TASK_KNIFE + id)
+		if (get_user_weapon(id) == CSW_KNIFE)
 			rt += 0.35
-		}
+		ensure_gun(id)
 	}
 	if (!recent)
 		radio(id, "enemyspot", has(persona(id), "itr") ? 0.06 : 0.02, 45.0, 20.0)
@@ -818,42 +916,65 @@ public fw_cmdstart(id, uc, seed)
 	new Float:dt = floatclamp(float(get_uc(uc, UC_Msec)) / 1000.0, 0.001, 0.1)
 	update_wobble(id, s, dt, now)
 
-	// standing still for a moment (afk): no shooting either
-	if (g_AfkUntil[id] > 0.0)
+	// a fight: an enemy in view, or the bot's own brain shooting at one (maybe outside the
+	// plugin's view cone). Read before anything here changes the buttons
+	new bool:fight = g_Target[id] || (get_uc(uc, UC_Buttons) & IN_ATTACK)
+
+	// standing still for a moment (afk): no shooting either. Over at once in a fight or
+	// when it's hurt
+	if (g_AfkUntil[id] > 0.0 && now >= g_AfkAt[id])
 	{
-		if (now < g_AfkUntil[id] && !g_Target[id] && !user_has_weapon(id, CSW_C4))
+		if (now < g_AfkUntil[id] && !fight && get_user_health(id) >= g_AfkHp[id] && !user_has_weapon(id, CSW_C4))
 		{
 			set_uc(uc, UC_Buttons, 0)
 			set_uc(uc, UC_ForwardMove, 0.0)
 			set_uc(uc, UC_SideMove, 0.0)
 			return FMRES_IGNORED
 		}
-		g_AfkUntil[id] = 0.0
+		g_AfkUntil[id] = g_AfkAt[id] = 0.0
 		say_line(id, "afk_back", 0, 0.5)
 	}
-	// holding an angle: no walking, sometimes crouched; it still looks around and shoots
-	if (g_HoldUntil[id] > now && !g_Target[id])
+	// holding an angle: no walking, sometimes crouched; it still looks around. A fight ends it
+	if (g_HoldUntil[id] > now)
 	{
-		new b = get_uc(uc, UC_Buttons) & ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP | IN_RUN)
-		set_uc(uc, UC_Buttons, g_HoldDuck[id] ? (b | IN_DUCK) : b)
-		set_uc(uc, UC_ForwardMove, 0.0)
-		set_uc(uc, UC_SideMove, 0.0)
+		if (fight)
+		{
+			g_HoldUntil[id] = 0.0
+			g_NextHoldTry[id] = now + random_float(8.0, 20.0)
+		}
+		else
+		{
+			new b = get_uc(uc, UC_Buttons) & ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP | IN_RUN)
+			set_uc(uc, UC_Buttons, g_HoldDuck[id] ? (b | IN_DUCK) : b)
+			set_uc(uc, UC_ForwardMove, 0.0)
+			set_uc(uc, UC_SideMove, 0.0)
+		}
 	}
+	// a nervous reload, unless someone showed up meanwhile
 	if (g_ReloadAt[id] > 0.0 && now >= g_ReloadAt[id])
 	{
 		g_ReloadAt[id] = 0.0
-		set_uc(uc, UC_Buttons, get_uc(uc, UC_Buttons) | IN_RELOAD)
+		if (!fight)
+			set_uc(uc, UC_Buttons, get_uc(uc, UC_Buttons) | IN_RELOAD)
 	}
-	// a show-off moment, only while nobody's in its sights
+	// a show-off moment, only while nothing's going on: a fight or getting hurt ends it
 	if (g_Show[id])
 	{
-		if (now >= g_ShowUntil[id] || g_Target[id])
+		if (now >= g_ShowUntil[id] || fight || get_user_health(id) < g_ShowHp[id])
 			g_Show[id] = 0
 		else
 		{
-			new b = get_uc(uc, UC_Buttons) & ~IN_ATTACK
+			new b = get_uc(uc, UC_Buttons)
 			if (g_Show[id] == 1)
-				b = (floatround(now * 7.0) % 2) ? (b | IN_DUCK) : (b & ~IN_DUCK)
+			{
+				// crouch spam: each press and release its own length, no set rhythm
+				if (now >= g_ShowNext[id])
+				{
+					g_ShowDuck[id] = !g_ShowDuck[id]
+					g_ShowNext[id] = now + random_float(0.09, 0.16)
+				}
+				b = g_ShowDuck[id] ? (b | IN_DUCK) : (b & ~IN_DUCK)
+			}
 			else
 				b |= IN_JUMP
 			set_uc(uc, UC_Buttons, b)
@@ -905,7 +1026,7 @@ public fw_prethink(id)
 {
 	if (!is_user_alive(id) || !is_user_bot(id))
 		return
-	if ((g_AfkUntil[id] > get_gametime() || g_HoldUntil[id] > get_gametime()) && !g_Target[id])
+	if ((afk_now(id, get_gametime()) || g_HoldUntil[id] > get_gametime()) && !g_Target[id])
 	{
 		new Float:v[3]
 		pev(id, pev_velocity, v)
@@ -1166,9 +1287,13 @@ public ev_round_start()
 	clear_sprays()
 	g_RoundStartAt = get_gametime()
 	g_BombPlanted = false
-	if (style() == STYLE_CLASSIC || get_cvar_num("gm_scrim_phase") > 0 && get_cvar_num("gm_scrim_phase") < 5)
+	// last round's afk and held angles are over (in a match too)
+	for (new id = 1; id <= MaxClients; id++)
+		g_AfkUntil[id] = g_AfkAt[id] = g_HoldUntil[id] = 0.0
+	if (style() == STYLE_CLASSIC || is_match())
 	{
-		// a match: only the guns, the rest would look silly
+		// a match: favourite guns only, nothing silly (no afk, sprays or radio calls here;
+		// knife runs and held angles check for a match themselves)
 		if (style() != STYLE_CLASSIC)
 			set_task(0.4, "task_favourites")
 		return
@@ -1182,12 +1307,16 @@ public ev_round_start()
 		if (!is_user_alive(id) || !is_user_bot(id))
 			continue
 		new p = persona(id)
-		// a mood settles between rounds; last round's afk is over
+		// a mood settles between rounds
 		g_Tilt[id] *= 0.85
-		g_AfkUntil[id] = g_HoldUntil[id] = 0.0
-		// a few seconds, and never with the bomb: the round would wait on it
-		if (get_pcvar_num(g_pAfk) && !user_has_weapon(id, CSW_C4) && random_float(0.0, 1.0) < (has(p, "dYLF") ? 0.015 : 0.007) * k)
-			g_AfkUntil[id] = now + random_float(3.0, 10.0)
+		// a few seconds, starting a moment into the round (not on the dot), never with the
+		// bomb (the round would wait on it), and not where a plugin steers the bots
+		if (get_pcvar_num(g_pAfk) && g_IdleMode && !user_has_weapon(id, CSW_C4) && random_float(0.0, 1.0) < (has(p, "dYLF") ? 0.015 : 0.007) * k)
+		{
+			g_AfkAt[id] = now + random_float(0.0, 6.0)
+			g_AfkUntil[id] = g_AfkAt[id] + random_float(3.0, 10.0)
+			g_AfkHp[id] = get_user_health(id)
+		}
 		if (get_pcvar_num(g_pSprays) && (g_SprayCount || g_LogoSpray) && random_float(0.0, 1.0) < (has(p, "9") ? 0.70 : has(p, "jkhXS3") ? 0.25 : 0.10) * k)
 			set_task(random_float(1.0, 8.0), "task_spray", get_user_userid(id))
 		// the team's caller, now and then, in team modes only. Never "follow me", "stick
@@ -1322,14 +1451,15 @@ drop_slot(id, slot)
 	}
 }
 
-// Every few seconds without a fight: some put the knife out to run faster
+// Every few seconds without a fight, early in the round: some put the knife out to run faster
 knife_run(id, Float:now)
 {
 	g_NextKnifeTry[id] = now + 3.0
-	if (g_KnifeRun[id] || now - g_NoTargetSince[id] < 5.0 || !holding_gun(id))
+	// only early in the round, when nobody can be close yet (and never in a match)
+	if (g_KnifeRun[id] || now - g_NoTargetSince[id] < 5.0 || now - g_RoundStartAt > KNIFE_WINDOW || is_match() || !holding_gun(id))
 		return
 	new p = persona(id)
-	if (random_float(0.0, 1.0) < (has(p, "P5") ? 0.70 : has(p, "SJne") ? 0.25 : has(p, "46") ? 0.02 : 0.07) * pers())
+	if (random_float(0.0, 1.0) < (has(p, "P5") ? 0.30 : has(p, "SJne") ? 0.25 : has(p, "46") ? 0.02 : 0.07) * pers())
 	{
 		g_KnifeRun[id] = true
 		engclient_cmd(id, "weapon_knife")
@@ -1502,7 +1632,7 @@ bot_kind(id)
 try_hold(id, Float:now)
 {
 	g_NextHoldTry[id] = now + 2.5
-	if (!get_pcvar_num(g_pHold) || !g_HoldMode || now - g_RoundStartAt < 4.0 || g_AfkUntil[id] > now)
+	if (!get_pcvar_num(g_pHold) || !g_IdleMode || is_match() || now - g_RoundStartAt < 4.0 || g_AfkUntil[id] > now)
 		return
 	if (user_has_weapon(id, CSW_C4) || !holding_gun(id) || g_BombPlanted && get_user_team(id) == 2)
 		return
