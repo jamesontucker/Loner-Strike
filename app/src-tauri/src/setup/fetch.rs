@@ -19,7 +19,7 @@ pub fn cache_dir() -> PathBuf {
     if let Some(p) = std::env::var_os("LONER_STRIKE_DOWNLOADS") {
         return PathBuf::from(p);
     }
-    dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("Loner-Strike").join("downloads")
+    crate::sys::cache_root().join("downloads")
 }
 
 /// The Python installer's cache (not used when LONER_STRIKE_DOWNLOADS picks a folder).

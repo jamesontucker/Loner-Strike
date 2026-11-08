@@ -761,8 +761,10 @@ async fn api_remove_everything(State(st): State<Shared>, headers: HeaderMap) -> 
         if let Some(d) = dirs::config_dir() {
             dirs_to_go.push(d.join("gg.lonerstrike.app"));
         }
+        // the cache (never the system cache folder's Loner-Strike on Windows: the app is
+        // installed there), and the window's own data
+        dirs_to_go.push(crate::sys::cache_root());
         if let Some(d) = dirs::cache_dir() {
-            dirs_to_go.push(d.join("loner-strike"));
             dirs_to_go.push(d.join("gg.lonerstrike.app"));
         }
         for d in dirs_to_go {

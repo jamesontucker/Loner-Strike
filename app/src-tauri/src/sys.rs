@@ -11,6 +11,19 @@ pub fn app_dir() -> PathBuf {
     dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Loner-Strike")
 }
 
+/// The app's cache (setup's downloads and work folders). On Windows not the system cache
+/// folder's Loner-Strike: that's %LOCALAPPDATA%\Loner-Strike, where the installer puts the
+/// app itself (installMode currentUser), so clearing the cache there deleted the app. It
+/// goes in the app's own %LOCALAPPDATA%\gg.lonerstrike.app (the window's data is there too).
+pub fn cache_root() -> PathBuf {
+    let base = dirs::cache_dir().unwrap_or_else(std::env::temp_dir);
+    if cfg!(windows) {
+        base.join("gg.lonerstrike.app").join("cache")
+    } else {
+        base.join("Loner-Strike")
+    }
+}
+
 /// The old Python panel's folder, to bring its records over the first time.
 pub fn old_panel_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join("CZ Control Panel"))

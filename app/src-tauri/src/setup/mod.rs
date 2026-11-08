@@ -167,7 +167,7 @@ pub struct Ctx<'a> {
 pub struct TempDir(pub PathBuf);
 impl TempDir {
     pub fn new() -> Result<TempDir, String> {
-        let parent = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("Loner-Strike").join("work");
+        let parent = crate::sys::cache_root().join("work");
         crate::sys::make_temp_dir(&parent, "setup-").map(TempDir).map_err(|e| format!("Couldn't make a work folder ({e})."))
     }
 }
