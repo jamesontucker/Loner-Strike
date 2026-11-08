@@ -430,9 +430,12 @@ WantedBy=multi-user.target
     )
 }
 
-/// Caddy's site block: only /status and /visit go to the service, everything else is a 404.
+/// Caddy's site block: only /status and /visit go to the service, /control/… to the
+/// server's shared control service (control/agent.rs: helpers' apps, with /control taken
+/// off, small bodies only), everything else is a 404.
 pub fn caddy_site(domain: &str, port: u16, fastdl: bool) -> String {
     let files = if fastdl { " /fastdl/*" } else { "" };
+    let control = port.saturating_add(crate::control::agent::PORT_OFFSET);
     format!(
         "# Loner-Strike website status. Written by the app; changes here are replaced.
 {domain} {{
@@ -440,6 +443,14 @@ pub fn caddy_site(domain: &str, port: u16, fastdl: bool) -> String {
 \t@status path /status /visit{files}
 \thandle @status {{
 \t\treverse_proxy 127.0.0.1:{port} {{
+\t\t\theader_down -Server
+\t\t}}
+\t}}
+\thandle_path /control/* {{
+\t\trequest_body {{
+\t\t\tmax_size 64KB
+\t\t}}
+\t\treverse_proxy 127.0.0.1:{control} {{
 \t\t\theader_down -Server
 \t\t}}
 \t}}
@@ -1154,6 +1165,8 @@ mod tests {
         let c = caddy_site("status.example.com", 8091, false);
         assert!(c.contains("status.example.com {\n"));
         assert!(c.contains("\theader -Server\n") && c.contains("@status path /status /visit") && c.contains("reverse_proxy 127.0.0.1:8091") && c.contains("respond 404"));
+        // helpers' apps reach the server's shared control service at /control/…
+        assert!(c.contains("\thandle_path /control/* {\n") && c.contains("reverse_proxy 127.0.0.1:9091") && c.contains("max_size 64KB"));
         assert_eq!(c.matches('{').count(), c.matches('}').count());
     }
 

@@ -44,7 +44,8 @@
       "../../plugins/": "plugins/",
       "../../mods/": "mods/",
       "../../catalog/": "catalog/",
-      "resources/windows/hamsandwich/": "windows/hamsandwich/"
+      "resources/windows/hamsandwich/": "windows/hamsandwich/",
+      "resources/linux/ls-control/": "linux/ls-control/"
     },
     "windows": {
       "nsis": {

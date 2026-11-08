@@ -182,13 +182,7 @@ pub struct Admins {
 // ---- checks ------------------------------------------------------------------
 
 /// STEAM_X:Y:Z only (no STEAM_ID_LAN, BOT, VALVE_ID_...).
-pub fn valid_steamid(s: &str) -> bool {
-    let Some(rest) = s.strip_prefix("STEAM_") else { return false };
-    let mut parts = rest.split(':');
-    let (Some(x), Some(y), Some(z), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else { return false };
-    let digits = |p: &str, max: usize| !p.is_empty() && p.len() <= max && p.bytes().all(|c| c.is_ascii_digit());
-    digits(x, 1) && x.as_bytes()[0] <= b'5' && (y == "0" || y == "1") && digits(z, 10) && z.parse::<u32>().is_ok() && !(z.len() > 1 && z.starts_with('0'))
-}
+pub use crate::control::common::valid_steamid;
 
 /// YYYY-MM-DD with a real month and day.
 pub fn valid_date(s: &str) -> bool {
@@ -876,22 +870,10 @@ async fn api_unban(State(st): State<Shared>, headers: HeaderMap, helper: Option<
 
 // ---- kicking with a reason ----------------------------------------------------------
 
-/// A kick reason the player sees: letters, digits and plain punctuation only, so it can't
-/// end or extend the console command.
-pub fn kick_reason(s: &str) -> String {
-    let kept: String = s.chars().filter(|c| c.is_ascii_alphanumeric() || " _.,!?'()+-:#@&%/".contains(*c)).take(64).collect();
-    kept.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// The engine's own kick by userid, with the reason shown to them when there is one.
-pub fn kick_line(uid: u32, reason: &str) -> String {
-    let reason = kick_reason(reason);
-    if reason.is_empty() {
-        format!("kick #{uid}")
-    } else {
-        format!("kick #{uid} \"{reason}\"")
-    }
-}
+// (shared with ls-control, the shared control service on a Linux server)
+pub use crate::control::common::kick_line;
+#[cfg(test)]
+use crate::control::common::kick_reason;
 
 #[derive(Deserialize)]
 struct KickReq {

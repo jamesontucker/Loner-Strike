@@ -156,16 +156,23 @@ fn endpoint(address: &str, port: u16, fingerprint: &str) -> Result<(String, reqw
     // only a host and maybe a port: an invite is pasted text, and anything more (a path, a
     // query, a user@) would send the request somewhere other than the owner's app
     let bare = address.strip_prefix("https://").unwrap_or(address).trim_end_matches('/');
+    // a server's own shared control (agent.rs) is at /control on its https:// address: that
+    // one path only
+    let (bare, path) = match bare.strip_suffix("/control") {
+        Some(h) if address.starts_with("https://") => (h, "/control"),
+        _ => (bare, ""),
+    };
     let (host, at) = bare.split_once(':').unwrap_or((bare, ""));
     let host_ok = !host.is_empty() && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
     let port_ok = at.is_empty() || at.parse::<u16>().is_ok_and(|p| p > 0);
     if !host_ok || !port_ok {
         return Err("That invite has an address that isn't a computer's name or IP.".into());
     }
-    if let Some(host) = address.strip_prefix("https://") {
-        // a tunnel's own name with a real certificate: checked the usual way (with a time
-        // limit, so a tunnel that never answers can't hold anything up)
-        return Ok((format!("https://{}", host.trim_end_matches('/')), tunnel_client()?));
+    if address.starts_with("https://") {
+        // a tunnel's own name, or a server's website status address, with a real
+        // certificate: checked the usual way (with a time limit, so one that never answers
+        // can't hold anything up)
+        return Ok((format!("https://{bare}{path}"), tunnel_client()?));
     }
     if address.matches(':').count() > 1 || address.starts_with('[') {
         return Err("IPv6 addresses aren't used for sharing yet.".into());
@@ -382,6 +389,16 @@ pub fn list() -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn addresses() {
+        // a server's own shared control: its https:// address and /control only
+        assert_eq!(endpoint("https://status.example.com/control", 27030, "").map(|(b, _)| b), Ok("https://status.example.com/control".to_string()));
+        assert_eq!(endpoint("https://share.example.com/", 27030, "").map(|(b, _)| b), Ok("https://share.example.com".to_string()));
+        for bad in ["https://status.example.com/other", "https://user@evil.com/control", "https://a.com/control/x", "203.0.113.4/control", "https://a.com?x=/control"] {
+            assert!(endpoint(bad, 27030, &"a".repeat(64)).is_err(), "{bad}");
+        }
+    }
 
     #[test]
     fn shared_ids() {

@@ -56,9 +56,7 @@ pub fn map_category(name: &str) -> &'static str {
 }
 
 /// A command argument the panel may send: plain words only (the UI checks the same rule).
-pub fn safe_arg(a: &str) -> bool {
-    !a.is_empty() && a.len() <= 64 && a.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
-}
+pub use crate::control::common::safe_arg;
 
 fn list_file(which: &str) -> Option<&'static str> {
     match which {

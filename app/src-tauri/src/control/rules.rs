@@ -211,10 +211,11 @@ const CONSOLE_NEVER: &[&str] = &[
     "meta", "amxx", "amx_rcon", "amx_cvar", "amx_cfg", "amx_addadmin", "amx_reloadadmins", "amx_execall", "amx_exec", "amx_execteam", "amx_pausecfg", "amx_on", "amx_off",
     "amx_plugincmd", "gm_crash", "gm_fastdl", "gm_ai_url", "mapchangecfgfile", "motd_write", "ls_list", "setinfo", "localinfo", "motdfile", "mapcyclefile", "servercfgfile", "lservercfgfile", "bannedcfgfile", "listipcfgfile",
 ];
-/// What a Moderator types: talk, look, kick, ban for up to 7 days, change the map.
+/// What a Moderator types: talk, look, kick, ban and mute for up to 7 days, change the map.
+/// (Lifting a mute is an Admin's call, as on the Community page: no amx_ungag.)
 const CONSOLE_MOD: &[&str] = &[
     "say", "status", "users", "kick", "banid", "changelevel", "amx_kick", "amx_ban", "amx_banip", "amx_map", "amx_say", "amx_csay",
-    "amx_tsay", "amx_chat", "amx_who", "amx_gag", "amx_ungag", "amx_slap", "amx_slay", "amx_last",
+    "amx_tsay", "amx_chat", "amx_who", "amx_gag", "amx_slap", "amx_slay", "amx_last",
 ];
 
 /// Whether a helper may send this console line. One command per line (no `;` or line
@@ -385,6 +386,7 @@ quit", "SV_PASSWORD x", "sv_rcon_banpenalty 0", "amx_pluginsdisable x"] {
         assert!(console_line(m, "banid 0 STEAM_0:1:1").is_err(), "for good: admins only");
         assert!(console_line(m, "amx_ban bob 99999").is_err() && console_line(m, "amx_ban bob").is_err());
         assert!(console_line(m, "amx_gag STEAM_0:1:3 60 chat").is_ok() && console_line(m, "amx_gag STEAM_0:1:3 0").is_err(), "mutes until removed: admins only");
+        assert!(console_line(m, "amx_ungag STEAM_0:1:3").is_err() && console_line(a, "amx_ungag STEAM_0:1:3").is_ok(), "lifting a mute: admins only");
         assert!(console_line(a, "sv_cheats 1").is_ok() && console_line(m, "sv_cheats 1").is_err());
         assert!(console_line(m, "amx_ban \"#5 60 x\" 0 spam").is_err(), "quotes could hide a ban for good");
         assert!(console_line(a, "say \"hello there\"").is_ok(), "admins may quote what they say");

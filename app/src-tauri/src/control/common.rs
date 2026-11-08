@@ -1,0 +1,108 @@
+//! Small checks and filters shared word for word by the app and `ls-control` (the shared
+//! control service on a Linux server, app/server-agent), which compiles this file in with
+//! `#[path]`. Plain std only: nothing from the app's crate.
+
+/// A SteamID as the game writes it: STEAM_X:Y:Z (X 0 to 5, Y 0 or 1, Z a number).
+pub fn valid_steamid(s: &str) -> bool {
+    let Some(rest) = s.strip_prefix("STEAM_") else { return false };
+    let mut parts = rest.split(':');
+    let (Some(x), Some(y), Some(z), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else { return false };
+    let digits = |p: &str, max: usize| !p.is_empty() && p.len() <= max && p.bytes().all(|c| c.is_ascii_digit());
+    digits(x, 1) && x.as_bytes()[0] <= b'5' && (y == "0" || y == "1") && digits(z, 10) && z.parse::<u32>().is_ok() && !(z.len() > 1 && z.starts_with('0'))
+}
+
+/// A command argument the panel may send: plain words only (the UI checks the same rule).
+pub fn safe_arg(a: &str) -> bool {
+    !a.is_empty() && a.len() <= 64 && a.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
+}
+
+/// gm_announce's free text: only characters that can't end or extend the console command.
+pub fn announce_text(args: &[String]) -> String {
+    let text: String = args.join(" ").chars().filter(|c| c.is_ascii_alphanumeric() || " _.,!?'()+-:#@&%/".contains(*c)).take(120).collect();
+    text.trim().to_string()
+}
+
+/// A kick reason the player sees: letters, digits and plain punctuation only, so it can't
+/// end or extend the console command.
+pub fn kick_reason(s: &str) -> String {
+    let kept: String = s.chars().filter(|c| c.is_ascii_alphanumeric() || " _.,!?'()+-:#@&%/".contains(*c)).take(64).collect();
+    kept.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The engine's own kick by userid, with the reason shown to them when there is one.
+pub fn kick_line(uid: u32, reason: &str) -> String {
+    let reason = kick_reason(reason);
+    if reason.is_empty() {
+        format!("kick #{uid}")
+    } else {
+        format!("kick #{uid} \"{reason}\"")
+    }
+}
+
+/// The console without the app's own checks every few seconds ("Rcon from <from>", the
+/// address the app knocks on, and the gm_status it sent), which would bury chat and
+/// everything else; nor what the console's suggestions ask for (the command lists, and a
+/// setting's value: one word on its own).
+pub fn without_polls(lines: Vec<String>, from: &str, is_setting: &dyn Fn(&str) -> bool) -> Vec<String> {
+    let ours = format!("Rcon from {from}:");
+    let mut after_ours = false;
+    lines
+        .into_iter()
+        .filter(|l| {
+            let t = l.trim();
+            let was_ours = std::mem::replace(&mut after_ours, t.starts_with(&ours) || t.starts_with("Rcon from 127.0.0.1:"));
+            if after_ours {
+                return false;
+            }
+            if !t.starts_with("rcon ") {
+                return true;
+            }
+            if t.ends_with(" gm_status") || t.ends_with(" gm_status_full") {
+                return false;
+            }
+            // rcon <challenge> "<password>" <command>
+            let cmd = t.splitn(2, "\" ").nth(1).unwrap_or("").trim();
+            let lists = matches!(cmd, "cmdlist" | "cvarlist" | "amxx cmds" | "amxx cvars") || cmd.strip_prefix("amx_help ").is_some_and(|n| n.parse::<u32>().is_ok());
+            // a setting's value looked up for the suggestions (a known setting on its own);
+            // a one-word command typed in the console (status) stays
+            !(was_ours && (lists || (!cmd.is_empty() && !cmd.contains(' ') && is_setting(cmd))))
+        })
+        .collect()
+}
+
+/// The server logs every RCON command with its password ("rcon 1234 "secret" status"),
+/// and rcon_password / sv_password changes too: blank them out before showing the console.
+pub fn hide_passwords(line: &str) -> String {
+    let lower = line.to_lowercase();
+    for key in ["rcon ", "rcon_password", "sv_password", "password "] {
+        if let Some(i) = lower.find(key) {
+            if let Some(q) = line[i..].find('"').map(|q| i + q) {
+                if let Some(end) = line[q + 1..].find('"').map(|e| q + 1 + e) {
+                    return format!("{}\"••••\"{}", &line[..q], hide_passwords(&line[end + 1..]));
+                }
+            }
+        }
+    }
+    line.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn steamids() {
+        assert!(valid_steamid("STEAM_0:1:12345") && valid_steamid("STEAM_5:0:0"));
+        for bad in ["", "bob", "STEAM_0:1:1; rcon_password x", "STEAM_6:0:1", "STEAM_0:2:1", "STEAM_0:1:01", "STEAM_0:1:", "steam_0:1:1", "STEAM_0:1:99999999999"] {
+            assert!(!valid_steamid(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn words_and_reasons() {
+        assert!(safe_arg("de_dust2") && !safe_arg("a;b") && !safe_arg("") && !safe_arg(&"a".repeat(65)));
+        assert_eq!(kick_line(5, "spam; quit"), "kick #5 \"spam quit\"");
+        assert_eq!(kick_line(5, ""), "kick #5");
+        assert_eq!(announce_text(&["hi\";".into(), "all".into()]), "hi all");
+    }
+}

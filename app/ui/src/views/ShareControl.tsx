@@ -11,10 +11,14 @@ import { BusyButton, Info, Sheet, Switch, useConfirm, useToast } from "../ui";
  */
 
 type Role = "admin" | "moderator";
-type Member = { id: string; name: string; role: Role; steam: string; added: string; seen: number | null; invited_by: string };
+type Member = { id: string; name: string; role: Role; steam: string; added: string; seen: number | null; invited_by: string; via_app?: boolean };
 type Activity = { id?: string; at: number; who: string; member: string; role: Role; path: string; body: Record<string, unknown> | null; can_undo?: boolean; undone?: boolean };
-type OpenInvite = { id: string; role: Role; steam: string; expires: number; by: string };
-type Control = { members?: Member[]; invites?: OpenInvite[]; addresses?: string[]; port?: number; listening?: number | null; activity?: Activity[]; error?: string };
+type OpenInvite = { id: string; role: Role; steam: string; expires: number; by: string; via_app?: boolean };
+/** mode "server": a Linux server whose shared control runs on the server itself (helpers reach it at url) */
+type Control = {
+  members?: Member[]; invites?: OpenInvite[]; addresses?: string[]; port?: number; listening?: number | null; activity?: Activity[]; error?: string;
+  mode?: "server"; url?: string | null; domain?: string; tunnel?: boolean; reachable?: boolean; reach_error?: string | null;
+};
 type Reply = { ok?: boolean; error?: string; invite?: string; id?: string; name?: string | null; role?: Role; address?: string; port?: number; need_restart_game?: boolean; left_bans?: boolean };
 
 const post = (path: string, body: unknown = {}) => postJson<Reply>(path, body).catch((): Reply => ({ error: "Couldn't reach the app." }));
@@ -119,6 +123,28 @@ function describe(a: Activity) {
   return p;
 }
 
+/** A Linux server's shared control: where helpers' apps reach it, and whether they can. */
+function ServerReach({ c }: { c: Control }) {
+  if (!c.url) {
+    return <p className="muted small-note">Helpers connect to the server itself at its website status address, so this computer can be off. Set up Website status for this server in Overview first.</p>;
+  }
+  return (
+    <div className="stack">
+      <p className="muted small-note">
+        Helpers connect to the server itself at <code className="mono">{c.url}</code>, so this computer can be off. Only invite people you trust.
+      </p>
+      {c.tunnel && (
+        <p className="muted small-note">
+          With a Cloudflare tunnel, add this in Cloudflare too: on the tunnel's public hostname {c.domain}, path <code className="mono">control/*</code>, service <code className="mono">http://localhost:{c.port}</code>.
+        </p>
+      )}
+      {!c.reachable && (
+        <p className="err-text small-note">Helpers' apps can't reach it there yet{c.reach_error ? ` (${c.reach_error})` : ""}. Check Website status, then open this tab again.</p>
+      )}
+    </div>
+  );
+}
+
 /** The owner's tab: who helps run this server, inviting someone, and what they changed. */
 export function ShareControl({ server }: { server: ServerInfo }) {
   const toast = useToast();
@@ -164,8 +190,10 @@ export function ShareControl({ server }: { server: ServerInfo }) {
   }, [server.id]);
 
   const list = addresses.split(/[\s,]+/).map((a) => a.trim()).filter(Boolean);
+  // a Linux server: helpers reach the server itself, at its website status address
+  const onServer = c?.mode === "server";
   const make = () => run(`${server.id}:invite`, async () => {
-    if (!list.length) return toast("Add at least one address friends reach this computer at.", true);
+    if (!onServer && !list.length) return toast("Add at least one address friends reach this computer at.", true);
     const r = await post(`/api/control/server/${server.id}/invite`, { role, steam: steam.trim(), addresses: list });
     if (r.error) return toast(r.error, true);
     setInvite(r.invite ?? "");
@@ -174,14 +202,14 @@ export function ShareControl({ server }: { server: ServerInfo }) {
     load();
   }, "Making an invite…");
   const setMemberRole = (m: Member, r: Role) => run(`member:${m.id}`, async () => {
-    const x = await post(`/api/control/member/${m.id}`, { role: r });
+    const x = await post(`/api/control/member/${m.id}`, { role: r, server: server.id });
     if (x.error) return toast(x.error, true);
     toast(`${m.name} is now ${r === "admin" ? "an Admin" : "a Moderator"}`);
     load();
   });
   const remove = (m: Member) => run(`member:${m.id}`, async () => {
     if (!(await ask(`Take away ${m.name}'s access to ${server.name}? Their app stops working on it straight away.`, { ok: "Take away access", danger: true }))) return;
-    const x = await post(`/api/control/member/${m.id}/remove`);
+    const x = await post(`/api/control/member/${m.id}/remove`, { server: server.id });
     if (x.error) return toast(x.error, true);
     toast(x.left_bans ? `${m.name} no longer has access. ${server.name} stopped sharing bans with your other servers, so changes made while helpers ran it stay there; turn sharing back on in its Admins tab.` : `${m.name} no longer has access`);
     load();
@@ -196,7 +224,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
   });
   const cancel = (i: OpenInvite) => run(`invite:${i.id}`, async () => {
     if (!(await ask("Cancel this invite? Whoever has it can't use it any more.", { ok: "Cancel the invite", danger: true }))) return;
-    const r = await post(`/api/control/invite/${i.id}/cancel`);
+    const r = await post(`/api/control/invite/${i.id}/cancel`, { server: server.id });
     if (r.error) return toast(r.error, true);
     toast("Invite cancelled");
     if (i.id === inviteId) setInvite("");
@@ -255,6 +283,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
                 <b>{m.name}</b> <span className={`tag role-${m.role}`}>{ROLE_NAME[m.role]}</span>
                 <p className="muted small-note">
                   {m.steam ? `${m.steam} · ` : ""}added {made(m.added)} · last here {ago(m.seen)}{m.invited_by && m.invited_by !== "owner" ? " · invited by an Admin" : ""}
+                  {onServer && m.via_app ? " · connects through this computer" : ""}
                 </p>
               </div>
               <div className="row">
@@ -284,7 +313,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
             <span>Their SteamID (optional)<Info text="Makes them an in-game admin on this server too, with the same powers. It looks like STEAM_0:1:12345: they find it by typing status in the game's console." /></span>
             <input className="search" placeholder="STEAM_0:1:12345" value={steam} onChange={(e) => setSteam(e.target.value.trim())} spellCheck={false} />
           </label>
-          <div className="field" style={{ flex: "2 1 320px" }}>
+          {!onServer && <div className="field" style={{ flex: "2 1 320px" }}>
             <label htmlFor="share-addresses">Where friends reach this computer<Info text={`Their Loner-Strike connects to this computer on TCP port ${c?.port ?? 27030}. Use your internet address (with that port forwarded on your router), a virtual LAN address you're both on (ZeroTier, Radmin VPN, Hamachi), or a tunnel's https:// address. Several, separated by commas, are tried in order.`} /></label>
             <input id="share-addresses" className="search" placeholder="Your internet address, or a virtual LAN address" value={addresses} onChange={(e) => setAddresses(e.target.value)} spellCheck={false} />
             <span className="row">
@@ -304,16 +333,17 @@ export function ShareControl({ server }: { server: ServerInfo }) {
                 ))}
               </small>
             )}
-          </div>
+          </div>}
         </div>
-        <p className="muted small-note">
-          {server.host
-            ? "For now, friends reach this server through this computer, so Loner-Strike has to be open here. "
-            : "Friends reach this computer while Loner-Strike is open. "}
-          Windows may ask to let Loner-Strike through its firewall the first time: allow it, or their app can't connect. Only invite people you trust.
-        </p>
+        {onServer ? (
+          <ServerReach c={c!} />
+        ) : (
+          <p className="muted small-note">
+            Friends reach this computer while Loner-Strike is open. Windows may ask to let Loner-Strike through its firewall the first time: allow it, or their app can't connect. Only invite people you trust.
+          </p>
+        )}
         <div className="row">
-          <BusyButton className="btn primary" busy={busy(`${server.id}:invite`)} label="Make an invite" busyLabel="Making…" onClick={make} />
+          <BusyButton className="btn primary" busy={busy(`${server.id}:invite`)} disabled={onServer && !c?.url} label="Make an invite" busyLabel="Making…" onClick={make} />
         </div>
         {invite && <InviteBox invite={invite} note="Send it to them however you like. It works once, for one person, for 24 hours. They paste it in Servers, Add a shared server. It's only shown now: if it gets out, cancel it below." />}
         {!!c?.invites?.length && (
@@ -388,7 +418,7 @@ export function AddShared({ initial = "", onClose, onAdded }: { initial?: string
     <Sheet label="Add a shared server" onClose={busy("shared:add") ? undefined : onClose}>
       <div className="sheet-body">
         <h2>Add a shared server</h2>
-        <p className="muted">Someone who runs a server with Loner-Strike sent you an invite. Paste it here. Their Loner-Strike has to be open for this to work.</p>
+        <p className="muted">Someone who runs a server with Loner-Strike sent you an invite. Paste it here. For a server on their own computer, their Loner-Strike has to be open.</p>
         <label className="field">
           <span>Invite</span>
           <textarea className="search invite-input" rows={3} placeholder="LS1.…" value={invite} onChange={(e) => { setInvite(e.target.value); setProblem(""); }} spellCheck={false} aria-invalid={!!problem || (!!invite.trim() && !looks)} />

@@ -235,13 +235,7 @@ impl Game {
         }
         let line = if cmd == "gm_announce" {
             // free text: keep only characters that can't end or extend the console command
-            let text: String = args
-                .join(" ")
-                .chars()
-                .filter(|c| c.is_ascii_alphanumeric() || " _.,!?'()+-:#@&%/".contains(*c))
-                .take(120)
-                .collect();
-            let text = text.trim().to_string();
+            let text = crate::control::common::announce_text(args);
             if text.is_empty() {
                 return Err(CmdError::Bad("empty message".into()));
             }

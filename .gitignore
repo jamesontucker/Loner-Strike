@@ -22,3 +22,8 @@ app/src-tauri/gen/
 
 # playit.gg agent, fetched or built by the release workflow
 app/src-tauri/binaries/
+
+# ls-control, built by scripts/build-server-agent.sh and the release workflow
+app/src-tauri/resources/linux/ls-control/ls-control
+app/src-tauri/resources/linux/ls-control/ls-control.sha256
+app/server-agent/target/

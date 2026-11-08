@@ -15,8 +15,15 @@
 //!
 //! Invites work once, for one person, for a day. Removing someone ends their key at once.
 //! Kept in control.json in the app's folder; the activity in control-log/<server>.jsonl.
+//!
+//! A server on a Linux machine works differently (agent.rs): its people, invites and
+//! activity are kept on the server by ls-control (app/server-agent), which compiles in the
+//! same `rules`, and helpers' apps reach the server itself at its https:// address. This app
+//! manages it over SSH; the endpoints below pass a Linux server's requests on to it.
 
+pub mod agent;
 pub mod client;
+pub mod common;
 pub mod rules;
 
 use crate::panel_api::from_panel;
@@ -201,7 +208,8 @@ pub struct InviteText {
     pub a: Vec<String>,
     /// the listener's port
     pub p: u16,
-    /// sha256 of this computer's certificate
+    /// sha256 of this computer's certificate (empty for a server's own shared control,
+    /// agent.rs: its https:// address has a real certificate)
     pub f: String,
     /// the invite's secret
     pub c: String,
@@ -219,7 +227,9 @@ pub fn decode_invite(s: &str) -> Option<InviteText> {
     let body = s.trim().strip_prefix(INVITE_PREFIX)?;
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(body).ok()?;
     let t: InviteText = serde_json::from_slice(&bytes).ok()?;
-    let ok = !t.a.is_empty() && t.a.len() <= 8 && t.f.len() == 64 && t.c.len() == 32 && t.s.chars().count() <= 64;
+    // no fingerprint only when every address is https:// (checked the usual way)
+    let pinned = t.f.len() == 64 || (t.f.is_empty() && t.a.iter().all(|a| a.starts_with("https://")));
+    let ok = !t.a.is_empty() && t.a.len() <= 8 && pinned && t.c.len() == 32 && t.s.chars().count() <= 64;
     ok.then_some(t)
 }
 
@@ -697,6 +707,103 @@ fn notify_owner(st: &Shared, m: &Member, path: &str, body: Option<&Value>) {
     }
 }
 
+// ---- a Linux server's own shared control (agent.rs) -----------------------------------------
+
+/// The server, when its shared control runs on its own machine (a Linux server, set up).
+fn on_server(id: &str) -> Option<crate::servers::Entry> {
+    crate::servers::get(id).filter(|e| e.ready && agent::used_for(e))
+}
+
+/// Whether someone is in this app's own list (they came in the direct way, before their
+/// server's own shared control: they keep working through this app until removed).
+fn is_local_member(mid: &str) -> bool {
+    load().members.iter().any(|m| m.id == mid)
+}
+
+/// The owner's tab for a Linux server: people, invites and activity from the server (over
+/// SSH), anyone still in this app's own list for it, and whether helpers can reach it.
+fn server_view(st: &Shared, e: &crate::servers::Entry) -> Result<Value, String> {
+    // set up (or brought up to this version) first; if that can't be done, what's there is shown
+    let setup_error = crate::setup_api::resources_for(st).and_then(|res| agent::ensure(e, &res)).err();
+    let (mut members, mut invites, mut activity, list_error) = match agent::cli(e, &["list", "--log", "200"]) {
+        Ok(v) => (v["members"].as_array().cloned().unwrap_or_default(), v["invites"].as_array().cloned().unwrap_or_default(), v["activity"].as_array().cloned().unwrap_or_default(), None),
+        Err(why) => (vec![], vec![], vec![], Some(why)),
+    };
+    if list_error.is_none() {
+        server_game_admins(e, &members, false);
+    }
+    let s = load();
+    for m in s.members.iter().filter(|m| m.server == e.id) {
+        let mut v = member_view(m);
+        v["via_app"] = json!(true);
+        members.push(v);
+    }
+    invites.extend(s.invites.iter().filter(|i| i.server == e.id && i.expires > now()).map(|i| json!({"id": i.id, "role": i.role, "steam": i.steam, "expires": i.expires, "by": "you", "via_app": true})));
+    activity.extend(self::activity(&e.id, 200));
+    activity.sort_by_key(|a| std::cmp::Reverse(a["at"].as_u64().unwrap_or(0)));
+    activity.truncate(200);
+    let url = agent::url(e);
+    let reach = url.as_deref().map(agent::reachable);
+    let reachable = matches!(&reach, Some(Ok(v)) if v == VERSION);
+    let reach_error = match &reach {
+        Some(Ok(v)) if v != VERSION => Some(format!("it runs version {v}")),
+        Some(Err(why)) => Some(why.clone()),
+        _ => None,
+    };
+    Ok(json!({
+        "mode": "server", "members": members, "invites": invites, "activity": activity,
+        "url": url, "port": agent::port(e), "domain": e.web_status.domain, "tunnel": e.web_status.mode == "tunnel",
+        "reachable": reachable, "reach_error": reach_error,
+        "error": list_error.or(setup_error),
+    }))
+}
+
+/// An invite made by the server's own shared control (it carries the server's https://
+/// address). Brought up to date first.
+fn server_invite(st: &Shared, e: &crate::servers::Entry, role: Role, steam: &str) -> Result<Value, String> {
+    let steam = steam.trim().to_uppercase();
+    if !steam.is_empty() && !crate::admins::valid_steamid(&steam) {
+        return Err("That isn't a SteamID. It looks like STEAM_0:1:12345.".into());
+    }
+    if agent::url(e).is_none() {
+        return Err("Helpers reach a Linux server at its website status address. Set up Website status for it first (Overview).".into());
+    }
+    agent::ensure(e, &crate::setup_api::resources_for(st)?)?;
+    let mut args = vec!["invite", "--role", if role == Role::Admin { "admin" } else { "moderator" }];
+    if !steam.is_empty() {
+        args.extend(["--steam", steam.as_str()]);
+    }
+    let v = agent::cli(e, &args)?;
+    let text = v["invite"].as_str().filter(|t| decode_invite(t).is_some()).ok_or("Shared control on the server made an invite that doesn't work. Try again.")?;
+    Ok(json!({"ok": true, "invite": text, "id": v["id"]}))
+}
+
+/// People on a Linux server's own list with a SteamID are in-game admins there with their
+/// role (`gone`: no longer). Kept in this app's copy of the server's admins and sent up.
+fn server_game_admins(e: &crate::servers::Entry, people: &[Value], gone: bool) {
+    let Some(g) = crate::servers::game_for(&e.id, || None) else { return };
+    let mut changed = false;
+    for p in people {
+        let steam = p["steam"].as_str().unwrap_or("").trim().to_uppercase();
+        if !crate::admins::valid_steamid(&steam) {
+            continue;
+        }
+        let role = match p["role"].as_str() {
+            Some("admin") => crate::admins::Role::Admin,
+            _ => crate::admins::Role::Moderator,
+        };
+        if gone {
+            changed |= crate::admins::set_helper(&g, &steam, "", None).is_ok();
+        } else if !crate::admins::has_role(&g, &steam, &[role]) {
+            let _ = crate::admins::set_helper(&g, &steam, p["name"].as_str().unwrap_or(""), Some(role));
+            changed |= crate::admins::has_role(&g, &steam, &[role]);
+        }
+    }
+    if changed {
+        crate::servers::sync_settings(&e.id);
+    }
+}
+
 // ---- endpoints -------------------------------------------------------------------------
 
 type Reply = (StatusCode, Json<Value>);
@@ -723,11 +830,14 @@ fn member_view(m: &Member) -> Value {
 /// The owner: who helps run a server, open invites, and where friends reach this computer.
 /// A read (the page's getJson sends no X-Panel, like the app's other reads): only names,
 /// roles and what changed, never a key; the app window only, like everything here.
-async fn api_server(UrlPath(id): UrlPath<String>, on: Option<Extension<OnComputer>>) -> Reply {
+async fn api_server(State(st): State<Shared>, UrlPath(id): UrlPath<String>, on: Option<Extension<OnComputer>>) -> Reply {
     if on.is_none() {
         return forbidden();
     }
     blocking(move || {
+        if let Some(e) = on_server(&id) {
+            return server_view(&st, &e);
+        }
         let s = load();
         let members: Vec<Value> = s.members.iter().filter(|m| m.server == id).map(member_view).collect();
         let by = |b: &str| if b == "owner" { "you".to_string() } else { s.members.iter().find(|m| m.id == b).map(|m| m.name.clone()).unwrap_or_else(|| "an Admin".into()) };
@@ -753,6 +863,10 @@ async fn api_invite(State(st): State<Shared>, UrlPath(id): UrlPath<String>, head
         return forbidden();
     }
     let Some(role) = Role::parse(&req.role) else { return answer(Err("Pick Admin or Moderator.".into())) };
+    // a Linux server: the invite is the server's own (its shared control service makes it)
+    if let Some(e) = on_server(&id) {
+        return blocking(move || server_invite(&st, &e, role, &req.steam)).await;
+    }
     let r = blocking(move || invite(&id, role, &req.steam, "owner", req.addresses).map(|(iid, text)| json!({"ok": true, "invite": text, "id": iid}))).await;
     listen(&st);
     r
@@ -761,6 +875,16 @@ async fn api_invite(State(st): State<Shared>, UrlPath(id): UrlPath<String>, head
 #[derive(Deserialize)]
 struct MemberReq {
     role: String,
+    /// the server they help run: a Linux server's people are kept on it (agent.rs)
+    #[serde(default)]
+    server: Option<String>,
+}
+
+/// Which server a request about someone or an invite is for (the page says; older pages don't).
+#[derive(Deserialize, Default)]
+struct ServerReq {
+    #[serde(default)]
+    server: Option<String>,
 }
 
 async fn api_member(UrlPath(mid): UrlPath<String>, headers: HeaderMap, on: Option<Extension<OnComputer>>, Json(req): Json<MemberReq>) -> Reply {
@@ -769,6 +893,12 @@ async fn api_member(UrlPath(mid): UrlPath<String>, headers: HeaderMap, on: Optio
     }
     let Some(role) = Role::parse(&req.role) else { return answer(Err("Pick Admin or Moderator.".into())) };
     blocking(move || {
+        // someone kept on the server itself (not in this app's list)
+        if let Some(e) = req.server.as_deref().filter(|_| !is_local_member(&mid)).and_then(on_server) {
+            let v = agent::cli(&e, &["role", "--member", &mid, "--role", if role == Role::Admin { "admin" } else { "moderator" }])?;
+            server_game_admins(&e, std::slice::from_ref(&v["member"]), false);
+            return Ok(json!({"ok": true}));
+        }
         edit(|s| {
             let m = s.members.iter_mut().find(|m| m.id == mid).ok_or("They don't have access any more.")?;
             m.role = role;
@@ -782,11 +912,18 @@ async fn api_member(UrlPath(mid): UrlPath<String>, headers: HeaderMap, on: Optio
     .await
 }
 
-async fn api_remove(UrlPath(mid): UrlPath<String>, headers: HeaderMap, on: Option<Extension<OnComputer>>) -> Reply {
+async fn api_remove(UrlPath(mid): UrlPath<String>, headers: HeaderMap, on: Option<Extension<OnComputer>>, req: Option<Json<ServerReq>>) -> Reply {
     if !from_panel(&headers) || on.is_none() {
         return forbidden();
     }
+    let server = req.and_then(|Json(r)| r.server);
     blocking(move || {
+        if let Some(e) = server.as_deref().filter(|_| !is_local_member(&mid)).and_then(on_server) {
+            let v = agent::cli(&e, &["remove", "--member", &mid])?;
+            let gone: Vec<Value> = v["removed"].as_array().cloned().unwrap_or_default();
+            server_game_admins(&e, &gone, true);
+            return Ok(json!({"ok": true, "removed": gone.len(), "left_bans": false}));
+        }
         edit(|s| {
             let i = s.members.iter().position(|m| m.id == mid).ok_or("They don't have access any more.")?;
             // invites they made, and the people who came in through them (an Admin's
@@ -1052,11 +1189,16 @@ async fn api_shared_join(State(st): State<Shared>, UrlPath(id): UrlPath<String>,
 }
 
 /// The owner cancels an invite nobody has used yet (sent to the wrong person, or leaked).
-async fn api_cancel_invite(UrlPath(iid): UrlPath<String>, headers: HeaderMap, on: Option<Extension<OnComputer>>) -> Reply {
+async fn api_cancel_invite(UrlPath(iid): UrlPath<String>, headers: HeaderMap, on: Option<Extension<OnComputer>>, req: Option<Json<ServerReq>>) -> Reply {
     if !from_panel(&headers) || on.is_none() {
         return forbidden();
     }
+    let server = req.and_then(|Json(r)| r.server);
     blocking(move || {
+        let here = load().invites.iter().any(|i| !i.id.is_empty() && i.id == iid);
+        if let Some(e) = server.as_deref().filter(|_| !here).and_then(on_server) {
+            return agent::cli(&e, &["cancel", "--invite", &iid]).map(|_| json!({"ok": true}));
+        }
         let r = edit(|s| {
             let n = s.invites.len();
             s.invites.retain(|i| i.id.is_empty() || i.id != iid);
@@ -1396,6 +1538,14 @@ mod tests {
         assert_eq!(decode_invite(&s), Some(t));
         assert_eq!(decode_invite(&format!("  {s}\n")).map(|t| t.p), Some(27030), "pasted with spaces");
         assert!(decode_invite("LS1.nonsense").is_none());
+        // a server's own shared control: no fingerprint, https:// only
+        let t = InviteText { a: vec!["https://status.example.com/control".into()], p: 443, f: String::new(), c: "b".repeat(32), s: "Friday Frags".into(), r: Role::Moderator };
+        assert_eq!(decode_invite(&encode_invite(&t)), Some(t));
+        let t = InviteText { a: vec!["203.0.113.40".into()], p: 27030, f: String::new(), c: "b".repeat(32), s: "x".into(), r: Role::Admin };
+        assert!(decode_invite(&encode_invite(&t)).is_none(), "a direct address needs the fingerprint");
+        // one ls-control (app/server-agent) made, used once in a test container
+        let made = decode_invite("LS1.eyJhIjpbImh0dHBzOi8vc3RhdHVzLmV4YW1wbGUuY29tL2NvbnRyb2wiXSwicCI6NDQzLCJmIjoiIiwiYyI6Ijc3MjU5YzYwNjRlYWI3NmEwYWZlYTc0YzkxMjdiZjJjIiwicyI6IkZyaWRheSBGcmFncyIsInIiOiJtb2RlcmF0b3IifQ").unwrap();
+        assert_eq!((made.a[0].as_str(), made.r, made.s.as_str()), ("https://status.example.com/control", Role::Moderator, "Friday Frags"));
         assert!(decode_invite("hello").is_none());
     }
 

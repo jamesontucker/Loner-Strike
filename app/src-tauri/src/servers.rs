@@ -1677,7 +1677,13 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
             if code != 0 {
                 return Err(format!("Couldn't set up the service ({failed})."));
             }
-            crate::remote::systemctl(&r, &entry.id, "start")
+            crate::remote::systemctl(&r, &entry.id, "start")?;
+            // shared control on the server itself (helpers don't need this computer on);
+            // the server works without it, so a problem here is only noted
+            if let Err(why) = crate::control::agent::install(&entry, &res) {
+                setup::Progress::note(job, &format!("Shared control isn't set up on the server yet: {why} It's tried again when you invite someone."));
+            }
+            Ok(())
         })?;
         job.run(&format!("{g}/srv-done"), || edit(|l| l.iter_mut().filter(|e| e.id == entry.id).for_each(|e| e.ready = true)))?;
         // a rebuilt machine gets its website status page back (if it can't, its status says why)
@@ -1687,7 +1693,7 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
 }
 
 /// Re-downloads Valve's files into the base copy and refreshes the server's engine files.
-pub fn update_files(e: Entry) -> Result<String, String> {
+pub fn update_files(e: Entry, res: Option<PathBuf>) -> Result<String, String> {
     if running(&e.id) {
         return Err("Stop the server first.".into());
     }
@@ -1699,12 +1705,21 @@ pub fn update_files(e: Entry) -> Result<String, String> {
         let steps = vec![
             setup::server_step(&g, "srv-machine", &format!("Updating {host}: Valve's server files"), 10.0),
             setup::server_step(&g, "srv-upload", "Sending Loner-Strike's files again", 1.5),
+            setup::server_step(&g, "srv-control", "Updating shared control", 0.2),
         ];
+        let res = res.ok_or("Loner-Strike's mod files are missing from the app. Reinstalling the app should fix it.")?;
         return setup::start_job("server", steps, move |job| {
             job.run(&format!("{g}/srv-machine"), || machine_setup(job, &r, &e.id, &g))?;
             // everything but the settings goes up again over what setup put back (the
             // machine's own stats and bans stay as they are)
-            job.run(&format!("{g}/srv-upload"), || sync_as(&e, Send::AllButData, &|_, _| {}).map(|_| ()))
+            job.run(&format!("{g}/srv-upload"), || sync_as(&e, Send::AllButData, &|_, _| {}).map(|_| ()))?;
+            // (the server works without it: only noted)
+            job.run(&format!("{g}/srv-control"), || {
+                if let Err(why) = crate::control::agent::install(&e, &res) {
+                    setup::Progress::note(job, &format!("Shared control on the server wasn't updated: {why}"));
+                }
+                Ok(())
+            })
         });
     }
     let base = e.dir.parent().ok_or("That isn't a server folder Loner-Strike can use.")?.join(".base");
@@ -2518,52 +2533,8 @@ fn console(e: &Entry) -> Vec<String> {
     lines.split_off(skip).into_iter().map(|l| hide_passwords(&l)).collect()
 }
 
-/// The console without the app's own checks every few seconds ("Rcon from <from>", the
-/// address the app knocks on, and the gm_status it sent), which would bury chat and
-/// everything else; nor what the console's suggestions ask for (the command lists, and a
-/// setting's value: one word on its own).
-fn without_polls(lines: Vec<String>, from: &str, is_setting: &dyn Fn(&str) -> bool) -> Vec<String> {
-    let ours = format!("Rcon from {from}:");
-    let mut after_ours = false;
-    lines
-        .into_iter()
-        .filter(|l| {
-            let t = l.trim();
-            let was_ours = std::mem::replace(&mut after_ours, t.starts_with(&ours) || t.starts_with("Rcon from 127.0.0.1:"));
-            if after_ours {
-                return false;
-            }
-            if !t.starts_with("rcon ") {
-                return true;
-            }
-            if t.ends_with(" gm_status") || t.ends_with(" gm_status_full") {
-                return false;
-            }
-            // rcon <challenge> "<password>" <command>
-            let cmd = t.splitn(2, "\" ").nth(1).unwrap_or("").trim();
-            let lists = matches!(cmd, "cmdlist" | "cvarlist" | "amxx cmds" | "amxx cvars") || cmd.strip_prefix("amx_help ").is_some_and(|n| n.parse::<u32>().is_ok());
-            // a setting's value looked up for the suggestions (a known setting on its own);
-            // a one-word command typed in the console (status) stays
-            !(was_ours && (lists || (!cmd.is_empty() && !cmd.contains(' ') && is_setting(cmd))))
-        })
-        .collect()
-}
-
-/// The server logs every RCON command with its password ("rcon 1234 "secret" status"),
-/// and rcon_password / sv_password changes too: blank them out before showing the console.
-fn hide_passwords(line: &str) -> String {
-    let lower = line.to_lowercase();
-    for key in ["rcon ", "rcon_password", "sv_password", "password "] {
-        if let Some(i) = lower.find(key) {
-            if let Some(q) = line[i..].find('"').map(|q| i + q) {
-                if let Some(end) = line[q + 1..].find('"').map(|e| q + 1 + e) {
-                    return format!("{}\"••••\"{}", &line[..q], hide_passwords(&line[end + 1..]));
-                }
-            }
-        }
-    }
-    line.to_string()
-}
+// (shared with ls-control, the shared control service on a Linux server)
+use crate::control::common::{hide_passwords, without_polls};
 
 pub(crate) fn view(e: &Entry) -> Value {
     // sounds wait for a map change: looked at only while something's waiting
@@ -3086,7 +3057,12 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 stop(&id);
                 start(&id).map(|_| json!({"ok": true}))
             }
-            "update" => update_files(get(&id).ok_or("That server isn't there any more.")?).map(|job| json!({"ok": true, "job": job})),
+            "update" => {
+                let e = get(&id).ok_or("That server isn't there any more.")?;
+                // (a Linux server's shared control program comes from the app's resources)
+                let res = e.remote.as_ref().map(|_| crate::setup_api::resources_for(&st2)).transpose()?;
+                update_files(e, res).map(|job| json!({"ok": true, "job": job}))
+            }
             "join" => {
                 let e = get(&id).ok_or("That server isn't there any more.")?;
                 let pw = Some(join_password(&e)).filter(|p| !p.is_empty());

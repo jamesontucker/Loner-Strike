@@ -20,7 +20,32 @@ permissions:
   contents: write
 
 jobs:
+  # ls-control, the shared control service the app puts on a Linux server over SSH: one
+  # static Linux x86_64 program, built in Docker from app/server-agent (its own job, with
+  # read-only access and no secrets; the app builds below take it as an artifact)
+  server-agent:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build ls-control (static Linux x86_64, in Docker)
+        run: ./scripts/build-server-agent.sh
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ls-control
+          path: |
+            app/src-tauri/resources/linux/ls-control/ls-control
+            app/src-tauri/resources/linux/ls-control/ls-control.sha256
+          if-no-files-found: error
+          retention-days: 7
+
   build:
+    needs: server-agent
     strategy:
       fail-fast: false
       matrix:
@@ -45,6 +70,19 @@ jobs:
             echo "::error::The tag is v$want but the app is version $have. Run ./scripts/bump-version.sh $want and tag again."
             exit 1
           fi
+
+      # ls-control goes in the app's resources (linux/ls-control), checked against the
+      # sha256 written when it was built; the app checks it again before sending it to a server
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ls-control
+          path: app/src-tauri/resources/linux/ls-control
+
+      - name: Check ls-control
+        shell: bash
+        run: |
+          cd app/src-tauri/resources/linux/ls-control
+          if command -v sha256sum >/dev/null; then sha256sum -c ls-control.sha256; else shasum -a 256 -c ls-control.sha256; fi
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
