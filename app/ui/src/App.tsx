@@ -6,7 +6,7 @@ import { Icon } from "./icons";
 import { forgetLive, queryClient, reloadAppInfo, useOpenReports, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
 import { hasUnsavedEdits, isPageEntry, useNav, type Section } from "./store";
 import { usePlayDrafts } from "./stores/playDraft";
-import { waitsForRestart, type AppInfo, type Online } from "./types";
+import { waitsForRestart, type AppInfo, type Online, type ServerInfo } from "./types";
 import { applyScale, closeSheetsAbove, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, ToastProvider, useConfirm, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
 import { Addons } from "./views/Addons";
@@ -337,7 +337,25 @@ function Shell() {
           {NAV.filter((n) => n.id !== "settings").map((n) => (
             <div key={n.id}>
               {n.group && <div className="nav-group">{n.group}</div>}
-              {navButton(n)}
+              {n.id === "servers" ? (
+                <ServersNav
+                  servers={servers?.servers ?? []}
+                  section={section}
+                  openId={openServer}
+                  pill={pill("servers")}
+                  onOverview={() => nav("servers")}
+                  onNew={() => nav("servers", "new")}
+                  onOpen={async (id) => {
+                    // the same checks as the other sections, then straight to that server's page
+                    if (document.getElementById("root")?.hasAttribute("inert")) return;
+                    if (hasUnsavedEdits() && !(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
+                    if (section !== "servers") go("servers");
+                    enterServer(id);
+                  }}
+                />
+              ) : (
+                navButton(n)
+              )}
             </div>
           ))}
         </nav>
@@ -460,6 +478,87 @@ function Shell() {
         </Sheet>
       )}
     </div>
+  );
+}
+
+/** How many servers the sidebar lists before "All servers" */
+const SIDE_SERVERS = 8;
+const SERVERS_FOLD = "ls.serversOpen";
+
+/**
+ * Servers in the sidebar: a header that only folds the list (open unless folded; opening a
+ * server unfolds it), then Overview (the list page), each server (straight to its page)
+ * and New server.
+ */
+function ServersNav({ servers, section, openId, pill, onOverview, onNew, onOpen }: { servers: ServerInfo[]; section: Section; openId: string | null; pill: React.ReactNode; onOverview: () => void; onNew: () => void; onOpen: (id: string) => void }) {
+  const [folded, setFolded] = useState(() => {
+    try {
+      return localStorage.getItem(SERVERS_FOLD) === "0";
+    } catch {
+      return false;
+    }
+  });
+  // opening a server (from its page or the list) unfolds it, so the open one shows
+  useEffect(() => {
+    if (openId) setFolded(false);
+  }, [openId]);
+  const open = !folded;
+  const toggle = () => {
+    setFolded(open);
+    try {
+      localStorage.setItem(SERVERS_FOLD, open ? "0" : "1");
+    } catch {
+      // storage off: it just isn't remembered
+    }
+  };
+  const here = section === "servers";
+  const shown = servers.slice(0, SIDE_SERVERS);
+  const dot = (s: ServerInfo) => (s.unreachable ? "warn" : s.state === "running" ? "on" : s.state === "failed" || s.state === "crashed" ? "warn" : "");
+  const say = (s: ServerInfo) => (s.unreachable ? "can't reach it" : s.state === "running" ? "running" : s.state === "setting-up" ? "setting up" : s.state === "failed" ? "not finished" : s.state === "crashed" ? "crashed" : "stopped");
+  return (
+    <>
+      <button className="nav-item nav-fold" aria-expanded={open} aria-controls="side-servers" onClick={toggle}>
+        <Icon name="server" />
+        Servers
+        {pill}
+        <svg className="fold-caret" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d={open ? "M6 9l6 6 6-6" : "M9 6l6 6-6 6"} />
+        </svg>
+      </button>
+      {open && (
+        <div className="side-servers" id="side-servers">
+          <button className="side-server overview" aria-current={here && !openId ? "page" : undefined} onClick={onOverview}>
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="4" width="7" height="7" />
+              <rect x="13" y="4" width="7" height="7" />
+              <rect x="4" y="13" width="7" height="7" />
+              <rect x="13" y="13" width="7" height="7" />
+            </svg>
+            <span className="side-server-name">Overview</span>
+          </button>
+          {shown.map((s) => (
+            <button key={s.id} className="side-server" aria-current={here && openId === s.id ? "page" : undefined} title={`${s.name} · ${say(s)}`} onClick={() => onOpen(s.id)}>
+              <span className={`side-dot ${dot(s)}`} aria-hidden="true" />
+              <span className="side-server-name">{s.name}</span>
+              <span className="sr-only">, {say(s)}</span>
+            </button>
+          ))}
+          {servers.length > SIDE_SERVERS && (
+            <button className="side-server more" onClick={onOverview}>
+              <span className="side-server-name">All servers ({servers.length})</span>
+            </button>
+          )}
+          {ON_THIS_COMPUTER && (
+            <button className="side-server add" onClick={onNew}>
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              <span className="side-server-name">New server</span>
+            </button>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 

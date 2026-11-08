@@ -2,7 +2,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions, useOnce, usePoll } from "../api";
 import { reloadServers } from "../queries";
-import { useDirty, useDirtyStore } from "../store";
+import { useDirty, useDirtyStore, useNav } from "../store";
 import { restartPending, serverAddress, serverHost, type AppInfo, type MapInfo, type Online, type ServerInfo, type ServerList } from "../types";
 import { HostingGuide, SizingTable, troubleFor } from "./HostingGuide";
 import { JobProgress } from "./JobProgress";
@@ -131,6 +131,13 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   const ask = useConfirm();
   const toast = useToast();
   const [creating, setCreating] = useState(false);
+  // New server in the sidebar: this page, with its window open
+  const focus = useNav((s) => s.focus);
+  useEffect(() => {
+    if (focus !== "new") return;
+    useNav.getState().clearFocus();
+    if (ON_THIS_COMPUTER) setCreating(true);
+  }, [focus]);
   const [importing, setImporting] = useState(false);
   // backups of servers (the whole app: Settings, Backup & restore)
   const [exporting, setExporting] = useState(false);
