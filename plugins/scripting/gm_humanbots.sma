@@ -32,13 +32,17 @@
 	                   nervous reloads, running with the knife out, and a rival (the
 	                   player who keeps killing it) it reacts to faster
 	gm_hb_afk        1 now and then a bot stands still for a few seconds at round start
-	gm_hb_sprays     1 bots spray a logo now and then
+	gm_hb_sprays     1 bots spray a logo now and then: Loner-Strike's (sprites/lonerstrike/
+	                   spray.spr, flat on the wall like a player's spray), else one of the
+	                   game's own logos. Cleared each round
+	gm_hb_disrespect 0 lets bots be disrespectful: crouch spam over someone they killed
 	gm_hb_radio      1 the odd radio call that fits the moment and the bot (enemy spotted,
 	                   enemy down; in team modes the team's caller says go). Each bot and
 	                   each team waits a while between calls: CZ bots walk over to whoever
 	                   calls, so a busy radio turns a team into one big group
-	gm_hb_showoff    1 now and then after a kill, when nobody's shooting at it: crouch
-	                   spam over the body, a jump, or the knife out for a moment
+	gm_hb_showoff    1 now and then after a kill, when nobody's shooting at it: a jump, the
+	                   knife out for a moment, or (with gm_hb_disrespect) crouch spam over
+	                   the body
 	gm_hb_reaction   1 human reaction times
 	gm_hb_aim        1 flicks, wobble and bursts
 	gm_hb_mistakes   1 occasional mistakes
@@ -113,7 +117,10 @@ new g_pStyle, g_pReaction, g_pAim, g_pMistakes, g_pBhop, g_pFreeForAll, g_pTilt,
 new g_Mix[33]                                   // Mixed lobby: this bot's own style
 new Float:g_Tilt[33], Float:g_TiltWay[33]       // >0 sloppier; some get careful instead
 new Float:g_ShowUntil[33], g_Show[33]           // a show-off moment: 1 crouch spam, 2 jump
-new g_pHabits, g_pAfk, g_pSprays, g_pRadio
+new g_pHabits, g_pAfk, g_pSprays, g_pRadio, g_pDisrespect
+new const SPRAY_SPRITE[] = "sprites/lonerstrike/spray.spr"
+#define MAX_SPRAYS 16
+new bool:g_LogoSpray, g_Sprays[MAX_SPRAYS], g_SprayNext   // the logo sprays on walls this round
 new bool:g_Chat                                 // gm_botchat is running
 new Float:g_JoinedAt[33], Float:g_ReloadAt[33], Float:g_AfkUntil[33], Float:g_NoTargetSince[33], Float:g_NextKnifeTry[33]
 new bool:g_KnifeRun[33], g_Fav[33], g_Rival[33], g_DeathsBy[33][33]
@@ -147,6 +154,16 @@ new bool:g_Bending
 // the bots' own AI, so none of these are hooked while there's nothing for them to do
 new g_FwCmdStart, g_FwPreThink, g_FwPostThink, g_FwPostThinkPost, g_FwTraceLine
 
+public plugin_precache()
+{
+	// Loner-Strike's logo, when setup put it there (one model slot, a 5 KB download)
+	if (file_exists(SPRAY_SPRITE))
+	{
+		precache_model(SPRAY_SPRITE)
+		g_LogoSpray = true
+	}
+}
+
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR)
@@ -160,6 +177,7 @@ public plugin_init()
 	g_pHabits    = register_cvar("gm_hb_habits", "1")
 	g_pAfk       = register_cvar("gm_hb_afk", "1")
 	g_pSprays    = register_cvar("gm_hb_sprays", "1")
+	g_pDisrespect = register_cvar("gm_hb_disrespect", "0")
 	g_pRadio     = register_cvar("gm_hb_radio", "1")
 	g_pHold      = register_cvar("gm_hb_hold", "1")
 	g_pPersonality = register_cvar("gm_personality", "100")
@@ -449,7 +467,9 @@ public ev_death()
 	if (random_float(0.0, 1.0) >= chance)
 		return
 	new Float:now = get_gametime()
-	switch (random(4))
+	// crouch spam over the body is disrespect: only when the server allows it
+	new pick = get_pcvar_num(g_pDisrespect) ? random(4) : 2 + random(2)
+	switch (pick)
 	{
 		case 0, 1: { g_Show[killer] = 1; g_ShowUntil[killer] = now + random_float(1.2, 2.2); }
 		case 2: { g_Show[killer] = 2; g_ShowUntil[killer] = now + 0.3; }
@@ -1117,6 +1137,7 @@ Float:wrap(Float:yaw)
 
 public ev_round_start()
 {
+	clear_sprays()
 	g_RoundStartAt = get_gametime()
 	g_BombPlanted = false
 	if (style() == STYLE_CLASSIC || get_cvar_num("gm_scrim_phase") > 0 && get_cvar_num("gm_scrim_phase") < 5)
@@ -1141,7 +1162,7 @@ public ev_round_start()
 		// a few seconds, and never with the bomb: the round would wait on it
 		if (get_pcvar_num(g_pAfk) && !user_has_weapon(id, CSW_C4) && random_float(0.0, 1.0) < (has(p, "dYLF") ? 0.015 : 0.007) * k)
 			g_AfkUntil[id] = now + random_float(3.0, 10.0)
-		if (get_pcvar_num(g_pSprays) && g_SprayCount && random_float(0.0, 1.0) < (has(p, "jkhXS3") ? 0.25 : 0.10) * k)
+		if (get_pcvar_num(g_pSprays) && (g_SprayCount || g_LogoSpray) && random_float(0.0, 1.0) < (has(p, "jkhXS3") ? 0.25 : 0.10) * k)
 			set_task(random_float(1.0, 8.0), "task_spray", get_user_userid(id))
 		// the team's caller, now and then, in team modes only. Never "follow me", "stick
 		// together" or "regroup": CZ bots answer those by walking over to the caller
@@ -1265,7 +1286,7 @@ knife_run(id, Float:now)
 public task_spray(userid)
 {
 	new id = find_player("k", userid)
-	if (!id || !is_user_alive(id) || !is_user_bot(id) || g_Target[id] || !g_SprayCount)
+	if (!id || !is_user_alive(id) || !is_user_bot(id) || g_Target[id] || (!g_SprayCount && !g_LogoSpray))
 		return
 	new Float:eye[3], Float:view[3], Float:fwd[3], Float:end[3]
 	eye_pos(id, eye)
@@ -1275,13 +1296,72 @@ public task_spray(userid)
 		end[i] = eye[i] + fwd[i] * 128.0
 	new tr = create_tr2()
 	engfunc(EngFunc_TraceLine, eye, end, IGNORE_MONSTERS, id, tr)
-	new Float:frac
+	new Float:frac, Float:normal[3]
 	get_tr2(tr, TR_flFraction, frac)
 	new hit = get_tr2(tr, TR_pHit)
 	get_tr2(tr, TR_vecEndPos, end)
+	get_tr2(tr, TR_vecPlaneNormal, normal)
 	free_tr2(tr)
 	// only on a wall close by (not on another entity)
 	if (frac >= 1.0 || (hit > 0 && pev_valid(hit)))
+		return
+	if (g_LogoSpray)
+		spray_logo(end, normal)
+	else
+		spray_decal(end)
+	emit_sound(id, CHAN_VOICE, "player/sprayer.wav", 1.0, ATTN_NORM, 0, PITCH_NORM)
+	say_line(id, "spray", 0, 0.08)
+}
+
+// The logo, flat on the wall a hair in front of it, like a player's spray. Sixteen at most
+// on the map: a new one takes the place of the oldest
+spray_logo(const Float:at[3], const Float:normal[3])
+{
+	new ent = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
+	if (!pev_valid(ent))
+		return
+	set_pev(ent, pev_classname, "ls_spray")
+	engfunc(EngFunc_SetModel, ent, SPRAY_SPRITE)
+	new Float:origin[3], Float:angles[3]
+	for (new i = 0; i < 3; i++)
+		origin[i] = at[i] + normal[i] * 0.5
+	vector_to_angle(normal, angles)
+	set_pev(ent, pev_angles, angles)
+	engfunc(EngFunc_SetOrigin, ent, origin)
+	set_pev(ent, pev_movetype, MOVETYPE_NONE)
+	set_pev(ent, pev_solid, SOLID_NOT)
+	set_pev(ent, pev_rendermode, kRenderTransAlpha)
+	set_pev(ent, pev_renderamt, 255.0)
+	set_pev(ent, pev_scale, random_float(0.8, 1.0))
+	remove_spray(g_SprayNext)
+	g_Sprays[g_SprayNext] = ent
+	g_SprayNext = (g_SprayNext + 1) % MAX_SPRAYS
+}
+
+clear_sprays()
+{
+	for (new i = 0; i < MAX_SPRAYS; i++)
+		remove_spray(i)
+	g_SprayNext = 0
+}
+
+// (only if that entity is still one of ours: an edict number gets used again)
+remove_spray(slot)
+{
+	new ent = g_Sprays[slot]
+	g_Sprays[slot] = 0
+	if (!ent || !pev_valid(ent))
+		return
+	new cls[16]
+	pev(ent, pev_classname, cls, charsmax(cls))
+	if (equal(cls, "ls_spray"))
+		engfunc(EngFunc_RemoveEntity, ent)
+}
+
+// One of the game's own logos
+spray_decal(const Float:end[3])
+{
+	if (!g_SprayCount)
 		return
 	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
 	// the index is one byte: decals past 255 go in the "high" message
@@ -1292,8 +1372,6 @@ public task_spray(userid)
 	engfunc(EngFunc_WriteCoord, end[2])
 	write_byte(d > 255 ? d - 256 : d)
 	message_end()
-	emit_sound(id, CHAN_VOICE, "player/sprayer.wav", 1.0, ATTN_NORM, 0, PITCH_NORM)
-	say_line(id, "spray", 0, 0.08)
 }
 
 // The current mode's id (gamemodes keeps it in data/gamemodes/current.txt)
