@@ -296,6 +296,68 @@ public task_follow_up(const data[], who)
 	want(who, sec, id, 1.0, -1.0, 1, str_to_num(b) == 1)
 }
 
+// ---- voice: people talking on the mic (Loner-Strike's engine tells us; dedicated servers) ----
+
+new g_VoiceCount[33], Float:g_VoiceTotal[33], bool:g_VoiceLongSaid[33], bool:g_VoiceSpamSaid[33]
+
+// gm_voice <index> start|still|stop <seconds> <bytes>
+public cmd_voice()
+{
+	new arg[16]
+	read_argv(1, arg, charsmax(arg))
+	new id = str_to_num(arg)
+	if (id < 1 || id > MaxClients || !is_user_connected(id) || is_user_bot(id) || g_Career || !get_pcvar_num(g_pLevel))
+		return PLUGIN_HANDLED
+	new what[8]
+	read_argv(2, what, charsmax(what))
+	read_argv(3, arg, charsmax(arg))
+	new Float:secs = str_to_float(arg)
+	if (equal(what, "start"))
+	{
+		g_VoiceLongSaid[id] = false
+		return PLUGIN_HANDLED
+	}
+	if (equal(what, "still"))
+	{
+		// a long one: mic spam, once per go
+		if (secs >= 20.0 && !g_VoiceLongSaid[id])
+		{
+			g_VoiceLongSaid[id] = true
+			want(voice_listener(id), "voice_long", id, 0.45)
+		}
+		return PLUGIN_HANDLED
+	}
+	// stopped
+	g_VoiceCount[id]++
+	g_VoiceTotal[id] += secs
+	new listener = voice_listener(id)
+	if (!listener)
+		return PLUGIN_HANDLED
+	new Float:died = get_gametime() - g_DiedAt[id]
+	if (g_VoiceTotal[id] >= 90.0 && g_VoiceCount[id] >= 6 && !g_VoiceSpamSaid[id])
+	{
+		g_VoiceSpamSaid[id] = true
+		want(listener, "voice_spam", id, 0.5)
+	}
+	else if (!is_user_alive(id) && died < secs + 4.0 && secs >= 3.0)
+		want(listener, "voice_rage", id, 0.3)
+	else if (g_VoiceCount[id] == 1 && secs >= 1.5)
+		want(listener, "voice_first", id, 0.3)
+	else if (secs < 1.5)
+		want(listener, "voice_short", id, 0.06)
+	else if (!g_VoiceLongSaid[id])
+		want(listener, "voice", id, 0.12)
+	return PLUGIN_HANDLED
+}
+
+// A bot who could hear them: a teammate, unless everyone hears everyone (sv_alltalk)
+voice_listener(id)
+{
+	if (get_cvar_num("sv_alltalk"))
+		return any_bot(id)
+	return any_bot_on(get_user_team(id), id)
+}
+
 // What a person said, for how the bot it's about (or every bot) feels about them
 note_feeling(human, bot, const section[])
 {
@@ -392,6 +454,8 @@ public plugin_init()
 	g_pHumans = register_cvar("gm_botchat_humans", "1")
 	g_pDeadChat = register_cvar("gm_botchat_deadchat", "1")
 	register_srvcmd("gm_botchat_reload", "cmd_reload")
+	// Loner-Strike's engine (ReHLDS fork) runs this when a person starts and stops talking
+	register_srvcmd("gm_voice", "cmd_voice")
 	// the app sets it to "127.0.0.1:port" while its model is ready, "" when not
 	g_pAiUrl = get_cvar_pointer("gm_ai_url")
 	if (!g_pAiUrl)
@@ -570,6 +634,9 @@ load_lines_from(const name[])
 
 public client_putinserver(id)
 {
+	g_VoiceCount[id] = 0
+	g_VoiceTotal[id] = 0.0
+	g_VoiceLongSaid[id] = g_VoiceSpamSaid[id] = false
 	g_NextBot[id] = get_gametime() + random_float(5.0, 20.0)
 	g_RoundKills[id] = 0
 	g_DeathRow[id] = 0
