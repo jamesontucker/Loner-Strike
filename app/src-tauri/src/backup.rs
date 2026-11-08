@@ -532,9 +532,15 @@ pub fn strip_passwords(rel: &str, text: &str) -> Option<(String, Vec<(usize, Str
             let mark = if users {
                 format!("; (admin \"{key}\" {LEFT_OUT}")
             } else {
-                // `sv_password x; mp_timelimit 20` keeps mp_timelimit
+                // `sv_password x; mp_timelimit 20` keeps mp_timelimit, unless anything kept still
+                // names a password (`alias pw "rcon_password x"`) or isn't plain: then the whole
+                // line goes, as it always did
                 let others: Vec<&str> = commands(line.trim_end_matches('\r')).into_iter().map(str::trim).filter(|c| !c.is_empty() && secret_key(false, c).is_none()).collect();
-                let before = if others.is_empty() { String::new() } else { format!("{}; ", others.join("; ")) };
+                let plain = |c: &str| {
+                    let low = c.to_ascii_lowercase();
+                    !PASSWORD_CVARS.iter().any(|v| low.contains(&v.to_ascii_lowercase())) && plain_prefix(c)
+                };
+                let before = if others.is_empty() || !others.iter().all(|c| plain(c)) { String::new() } else { format!("{}; ", others.join("; ")) };
                 format!("{before}// ({key} {LEFT_OUT}")
             };
             taken.push((i, std::mem::replace(line, format!("{mark}{end}"))));
@@ -587,6 +593,12 @@ fn commands(line: &str) -> Vec<&str> {
     out
 }
 
+/// Commands that a password line can safely follow: quotes closed and no comment, so a
+/// password put after them is its own command (not inside a string or a comment).
+fn plain_prefix(t: &str) -> bool {
+    t.matches('"').count() % 2 == 0 && !t.contains("//")
+}
+
 /// The key of a comment `strip_passwords` left, if the line has one, and the commands kept
 /// in front of it ("" when there were none).
 fn placeholder(line: &str) -> Option<(String, String)> {
@@ -598,7 +610,8 @@ fn placeholder(line: &str) -> Option<(String, String)> {
     // (the last one: a command kept in front can have a comment of its own)
     let at = t.rfind("// (")?;
     let before = &t[..at];
-    if !before.is_empty() && !before.ends_with("; ") {
+    // (a backup's line can't make this computer's password part of a string or a comment)
+    if !before.is_empty() && (!before.ends_with("; ") || !plain_prefix(before)) {
         return None;
     }
     let inner = t[at + 4..].strip_suffix(LEFT_OUT)?.trim_end();
@@ -2950,10 +2963,17 @@ mod tests {
         // a ; inside quotes is part of the command: nothing of the password is kept
         let (text3, _) = strip_passwords("server.cfg", "hostname \"a;b\"; sv_password \"p;q\"\n").unwrap();
         assert!(text3.starts_with("hostname \"a;b\"; // (sv_password") && !text3.contains("q\""), "{text3}");
-        // a kept command with a comment of its own
-        let (text2, taken2) = strip_passwords("server.cfg", "echo // (hi); sv_password x\n").unwrap();
-        assert_eq!(placeholder(text2.lines().next().unwrap()).map(|(k, _)| k).as_deref(), Some("sv_password"));
-        assert_eq!(put_back_passwords(&text2, &taken2), "echo // (hi); sv_password x\n");
+        // a command with a comment of its own, or another password inside it: the whole line goes
+        for line in ["echo // (hi); sv_password x\n", "sv_password a; alias pw \"rcon_password b\"\n"] {
+            let (text2, taken2) = strip_passwords("server.cfg", line).unwrap();
+            assert!(text2.starts_with("// (sv_password"), "{text2}");
+            assert_eq!(put_back_passwords(&text2, &taken2), line);
+        }
+        // a crafted backup line with an open quote in front: this computer's password goes on
+        // a line of its own at the end, never inside the string
+        let crafted = format!("echo \"; // (sv_password {LEFT_OUT}\n");
+        let out = keep_own_passwords("server.cfg", &crafted, &mine);
+        assert!(out.ends_with("\nsv_password \"mine\"\n") && out.starts_with(&crafted), "{out}");
         // with nothing of this computer's to put there, the other commands are still there
         assert!(keep_own_passwords("server.cfg", &text, &[]).contains("mp_timelimit 20; sv_gravity 800; // (sv_password"));
     }
