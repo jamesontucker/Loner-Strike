@@ -40,8 +40,8 @@ pub const REGAMEDLL: Pinned = Pinned {
 /// Loner-Strike's fork of ReHLDS (github.com/jamesontucker/ReHLDS, branch loner-strike): the
 /// engine for dedicated servers
 pub const REHLDS: Pinned = Pinned {
-    url: "https://github.com/jamesontucker/ReHLDS/releases/download/3.15.0.896-ls3/rehlds-bin-3.15.0.896-ls3.zip",
-    sha256: "f837e788f63b64a3261fdfb5aa806bf2c89f97eae1f55ba9fbe582f05f6e7101",
+    url: "https://github.com/jamesontucker/ReHLDS/releases/download/3.15.0.896-ls4/rehlds-bin-3.15.0.896-ls4.zip",
+    sha256: "7c21af8fb059ac8d24ef94d59793814e136558182e2ee20c3b373c2aa1e90561",
     what: "ReHLDS",
 };
 pub const REAPI: Pinned = Pinned {

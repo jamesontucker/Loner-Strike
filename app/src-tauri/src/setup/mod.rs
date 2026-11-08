@@ -122,9 +122,10 @@ pub fn shipped_version(res: &Path, id: &str) -> String {
     v
 }
 
-/// The foundation's version: the ReGameDLL it puts in (a new release of our fork is an update)
+/// The foundation's version: our ReGameDLL and (for servers) ReHLDS, so a new release of
+/// either fork is an update
 pub fn foundation_version() -> String {
-    foundation::REGAMEDLL.sha256[..16].to_string()
+    format!("{}{}", &foundation::REGAMEDLL.sha256[..8], &foundation::REHLDS.sha256[..8])
 }
 
 /// Installed parts whose shipped files have changed since they were put in.
