@@ -1888,7 +1888,7 @@ impl Restore {
             let older = setup::outdated(&self.res, &setup::record::Record::open(gdir));
             let mut base = base;
             if !older.is_empty() {
-                let names: Vec<String> = older.iter().map(|c| if c == "core" { "Loner-Strike's own plugins".to_string() } else { c.clone() }).collect();
+                let names: Vec<String> = older.iter().map(|c| if c == "core" { "Loner-Strike's own plugins".to_string() } else if c == "foundation" { "the bot brain (ReGameDLL)".to_string() } else { c.clone() }).collect();
                 if self.update_mods {
                     job.note(&format!("Updated to this version, as the backup had older ones: {}.", and_list(&names)));
                     // setup's own parts come with any install it runs

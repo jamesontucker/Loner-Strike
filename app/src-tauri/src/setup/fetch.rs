@@ -79,57 +79,71 @@ pub fn download(url: &str, sha: Option<&str>, what: &str, p: &dyn Progress) -> R
     let tmp = cache.join(format!("{name}.part"));
     let fail = |e: String| format!("Couldn't download {what} ({e}). Check your internet connection and try again.");
     // the download servers (GitHub's above all) now and then answer 502/503/504 or drop the
-    // connection for a moment: a few tries, a little apart, before giving up
+    // connection for a moment, before or during the download: a few tries, a little apart,
+    // before giving up
     const WAITS: [u64; 4] = [2, 5, 10, 20];
     let mut tries = 0;
-    let mut resp = loop {
+    let out = loop {
+        let again = |tries: usize| {
+            p.detail(&format!("Downloading {what} (trying again)"));
+            std::thread::sleep(Duration::from_secs(WAITS[tries]));
+        };
         let sent = crate::sys::http().get(url).header("User-Agent", USER_AGENT).timeout(Duration::from_secs(900)).send();
         let retry = match &sent {
             Ok(r) => r.status().is_server_error() || r.status().as_u16() == 429,
-            Err(e) => e.is_connect() || e.is_timeout(),
+            Err(e) => e.is_connect() || e.is_timeout() || e.is_request(),
         };
         if retry && tries < WAITS.len() {
-            p.detail(&format!("Downloading {what} (trying again)"));
-            std::thread::sleep(Duration::from_secs(WAITS[tries]));
+            again(tries);
             tries += 1;
             continue;
         }
-        break sent.map_err(|e| fail(short_err(&e)))?;
-    };
-    if !resp.status().is_success() {
-        return Err(fail(format!("the server answered {}", resp.status())));
-    }
-    let size = resp.content_length().unwrap_or(0);
-    let mut out = std::fs::File::create(&tmp).map_err(|e| fail(e.to_string()))?;
-    let mut got: u64 = 0;
-    let mut last_shown = 0u64;
-    let mut buf = vec![0u8; 256 * 1024];
-    loop {
-        let n = match resp.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => n,
-            Err(e) => {
+        let mut resp = sent.map_err(|e| fail(short_err(&e)))?;
+        if !resp.status().is_success() {
+            return Err(fail(format!("the server answered {}", resp.status())));
+        }
+        let size = resp.content_length().unwrap_or(0);
+        let mut out = std::fs::File::create(&tmp).map_err(|e| fail(e.to_string()))?;
+        let mut got: u64 = 0;
+        let mut last_shown = 0u64;
+        let mut buf = vec![0u8; 256 * 1024];
+        let dropped = loop {
+            let n = match resp.read(&mut buf) {
+                Ok(0) => break None,
+                Ok(n) => n,
+                Err(e) => break Some(e),
+            };
+            got += n as u64;
+            if got > MAX_BYTES {
                 let _ = std::fs::remove_file(&tmp);
-                return Err(fail(e.to_string()));
+                return Err(fail("it's far bigger than expected".into()));
+            }
+            out.write_all(&buf[..n]).map_err(|e| fail(e.to_string()))?;
+            if got - last_shown >= 512 * 1024 {
+                last_shown = got;
+                let mb = |b: u64| b as f64 / 1_048_576.0;
+                if size > 0 {
+                    p.detail(&format!("Downloading {what} ({:.1} of {:.1} MB)", mb(got), mb(size)));
+                    p.fraction(got as f64 / size as f64);
+                } else {
+                    p.detail(&format!("Downloading {what} ({:.1} MB)", mb(got)));
+                }
             }
         };
-        got += n as u64;
-        if got > MAX_BYTES {
-            let _ = std::fs::remove_file(&tmp);
-            return Err(fail("it's far bigger than expected".into()));
-        }
-        out.write_all(&buf[..n]).map_err(|e| fail(e.to_string()))?;
-        if got - last_shown >= 512 * 1024 {
-            last_shown = got;
-            let mb = |b: u64| b as f64 / 1_048_576.0;
-            if size > 0 {
-                p.detail(&format!("Downloading {what} ({:.1} of {:.1} MB)", mb(got), mb(size)));
-                p.fraction(got as f64 / size as f64);
-            } else {
-                p.detail(&format!("Downloading {what} ({:.1} MB)", mb(got)));
+        match dropped {
+            None => break out,
+            Some(e) => {
+                drop(out);
+                let _ = std::fs::remove_file(&tmp);
+                if tries < WAITS.len() {
+                    again(tries);
+                    tries += 1;
+                    continue;
+                }
+                return Err(fail(e.to_string()));
             }
         }
-    }
+    };
     drop(out);
     if let Some(s) = sha {
         if !sha256(&tmp).map(|h| h.eq_ignore_ascii_case(s)).unwrap_or(false) {

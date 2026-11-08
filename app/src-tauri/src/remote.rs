@@ -647,7 +647,7 @@ fetch "$RG_URL" rg.zip "$RG_SHA"; unzip -o -q "$TMP/rg.zip" "bin/linux32/cstrike
 # engine files, which steamcmd just checked, are kept in .valve-engine to go back to
 fetch "$RH_URL" rh.zip "$RH_SHA"; unzip -o -q "$TMP/rh.zip" "bin/linux32/*" -d "$TMP/rh"
 ( cd "$TMP/rh/bin/linux32" && find . -type f ) | while read -r f; do
-  if [ -f "$SRV/$f" ]; then mkdir -p "$SRV/.valve-engine/$(dirname "$f")"; cp -p "$SRV/$f" "$SRV/.valve-engine/$f"; fi
+  if [ -f "$SRV/$f" ] && [ ! -e "$SRV/.valve-engine/$f" ]; then mkdir -p "$SRV/.valve-engine/$(dirname "$f")"; cp -p "$SRV/$f" "$SRV/.valve-engine/$f"; fi
 done
 cp -rf "$TMP/rh/bin/linux32/." "$SRV/"
 chmod +x "$SRV/hlds_linux" "$SRV/hltv" 2>/dev/null || true
@@ -655,7 +655,11 @@ chmod +x "$SRV/hlds_linux" "$SRV/hltv" 2>/dev/null || true
 fetch "$REAPI_URL" reapi.zip "$REAPI_SHA"; unzip -o -q "$TMP/reapi.zip" "addons/amxmodx/modules/reapi_amxx_i386.so" -d .
 fetch "$RLB_URL" rlb.zip "$RLB_SHA"; unzip -o -q "$TMP/rlb.zip" "addons/relocalizebugfix/relocalizebugfix_mm_i386.so" -d .
 mkdir -p addons/metamod
-printf '%s\n' "linux addons/amxmodx/dlls/amxmodx_mm_i386.so" "linux addons/relocalizebugfix/relocalizebugfix_mm_i386.so" > addons/metamod/plugins.ini
+# (lines added if missing: other Metamod plugins the owner put in stay)
+touch addons/metamod/plugins.ini
+for p in addons/amxmodx/dlls/amxmodx_mm_i386.so addons/relocalizebugfix/relocalizebugfix_mm_i386.so; do
+  grep -qF "$p" addons/metamod/plugins.ini || printf 'linux %s\n' "$p" >> addons/metamod/plugins.ini
+done
 if grep -q '^gamedll_linux' liblist.gam; then sed -i 's|^gamedll_linux.*|gamedll_linux "addons/metamod/dlls/metamod.so"|' liblist.gam
 else echo 'gamedll_linux "addons/metamod/dlls/metamod.so"' >> liblist.gam; fi
 rm -rf "$TMP"

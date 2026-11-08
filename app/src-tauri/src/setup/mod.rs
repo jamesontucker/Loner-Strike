@@ -122,14 +122,20 @@ pub fn shipped_version(res: &Path, id: &str) -> String {
     v
 }
 
-/// Installed parts (core and components, not the foundation) whose shipped files have
-/// changed since they were put in.
+/// The foundation's version: the ReGameDLL it puts in (a new release of our fork is an update)
+pub fn foundation_version() -> String {
+    foundation::REGAMEDLL.sha256[..16].to_string()
+}
+
+/// Installed parts whose shipped files have changed since they were put in.
 pub fn outdated(res: &Path, rec: &Record) -> Vec<String> {
     rec.data
         .components
         .iter()
-        .filter(|(id, _)| id.as_str() != "foundation")
-        .filter(|(id, info)| info.get("version").and_then(|v| v.as_str()) != Some(shipped_version(res, id).as_str()))
+        .filter(|(id, info)| {
+            let want = if id.as_str() == "foundation" { foundation_version() } else { shipped_version(res, id) };
+            info.get("version").and_then(|v| v.as_str()) != Some(want.as_str())
+        })
         .map(|(id, _)| id.clone())
         .collect()
 }
@@ -539,7 +545,7 @@ fn install_game_with(job: &Job, plan: &InstallPlan, ctx: &Ctx, g: &str, rec: &mu
         run_step(job, &format!("{g}/regamedll"), || foundation::regamedll(rec, ctx, &tmp))?;
         drop(tmp);
         run_step(job, &format!("{g}/liblist"), || foundation::liblist(rec))?;
-        rec.done("foundation", json!(1))?;
+        rec.done("foundation", json!(foundation_version()))?;
     }
     for c in &plan.components {
         let id = c["id"].as_str().unwrap_or_default();

@@ -23,7 +23,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp, server }: { app: A
   const theirs = g?.unmanaged ?? [];
   if (!g || skip || (!outdated.length && !theirs.length && !running)) return null;
 
-  const name = (id: string) => (id === "core" ? "Loner-Strike's own plugins" : scan?.catalog.find((c) => c.id === id)?.name ?? id);
+  const name = (id: string) => (id === "core" ? "Loner-Strike's own plugins" : id === "foundation" ? "The bot brain (ReGameDLL)" : scan?.catalog.find((c) => c.id === id)?.name ?? id);
   const blocked = gameOpen && !g.dedicated;
   // one part, or all of them ("core" alone: setup's own parts are always refreshed)
   const update = (ids: string[]) => run(key, async () => {

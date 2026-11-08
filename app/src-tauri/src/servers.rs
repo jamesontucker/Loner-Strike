@@ -1768,16 +1768,20 @@ fn install_engine(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
     let rl = get(&RELOCALIZEBUGFIX, "rlb")?;
     copy(&rl.join("addons/relocalizebugfix/relocalizebugfix_mm.dll"), &gdir.join("addons/relocalizebugfix/relocalizebugfix_mm.dll"))?;
     let ini = gdir.join("addons/metamod/plugins.ini");
-    let text = std::fs::read_to_string(&ini).unwrap_or_default();
-    if !text.contains("relocalizebugfix") {
-        let line = r"win32 addons\relocalizebugfix\relocalizebugfix_mm.dll";
-        let mut out = text.trim_end_matches(['\r', '\n']).to_string();
-        if !out.is_empty() {
-            out.push_str("\r\n");
+    // as bytes: the file may not be UTF-8, and its other lines must stay as they are
+    let text = std::fs::read(&ini).unwrap_or_default();
+    if !text.windows(16).any(|w| w.eq_ignore_ascii_case(b"relocalizebugfix")) {
+        let line = br"win32 addons\relocalizebugfix\relocalizebugfix_mm.dll";
+        let mut out = text.clone();
+        while matches!(out.last(), Some(b'\r' | b'\n')) {
+            out.pop();
         }
-        out.push_str(line);
-        out.push_str("\r\n");
-        sys::write_atomic(&ini, out.as_bytes()).map_err(|e| e.to_string())?;
+        if !out.is_empty() {
+            out.extend_from_slice(b"\r\n");
+        }
+        out.extend_from_slice(line);
+        out.extend_from_slice(b"\r\n");
+        sys::write_atomic(&ini, &out).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
