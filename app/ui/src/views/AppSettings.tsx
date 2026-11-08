@@ -8,6 +8,9 @@ import { queryClient, useServers, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { applyScale, savedScale, BusyButton, Info, LoadError, SCALES, SectionHead, Sheet, Switch, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
+import { BackupSheet, RestoreSheet } from "./Backup";
+
+const NO_GAME_TO_BACK_UP = "No game to back up: set up Counter-Strike on this computer first (a dedicated server is backed up from its own page).";
 
 type Prefs = { auto_update: boolean; keep_servers: boolean; game_folders: string[]; notify_joins: boolean };
 type Storage = { downloads: number; pictures: number; folder: string };
@@ -35,6 +38,9 @@ export const noteUpdateChecked = () => {
 
 export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { app: AppInfo | null; reloadApp: () => void; scan: Scan | null; openSetup: () => void; switchGame: (hl: string | null, game: string) => Promise<void> }) {
   const [nuke, setNuke] = useState(false);
+  // backing up this game, and restoring a backup onto it (Backup.tsx)
+  const [backup, setBackup] = useState<"backup" | "restore" | null>(null);
+  const ownGame = app?.game && !app.game.dedicated ? app.game.id : null;
   const ask = useConfirm();
   const toast = useToast();
   const { run, busy } = useActions();
@@ -137,26 +143,6 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
     const r = await post("/api/app/open-folder");
     if (r.error) toast(r.error, true);
   }, "Opening the folder…");
-  const exportSetup = () => run("app:export", async () => {
-    const r = await post<{ files?: number } & R>("/api/app/export");
-    if (r.error) return toast(r.error, true);
-    if (r.ok) toast("Exported your setup");
-  }, "Exporting your setup…");
-  const importSetup = async () => {
-    if (!(await ask("Import a setup file? It replaces this game's mode settings, presets, admins and welcome page with the ones in the file.", { ok: "Choose a file" }))) return;
-    await run("app:import", async () => {
-      const r = await post<{ missing?: string[]; hl?: string; game?: string } & R>("/api/app/import");
-      if (r.error) return toast(r.error, true);
-      if (r.cancelled) return;
-      if (r.missing?.length && (await ask(`Done. The setup also uses ${r.missing.length} mode${r.missing.length === 1 ? "" : "s"} or add-on${r.missing.length === 1 ? "" : "s"} that aren't installed here. Install them now?`, { ok: "Install them" }))) {
-        const i = await post<{ job?: string } & R>("/api/setup/install", { hl: r.hl, games: [r.game], components: r.missing });
-        if (i.error) return toast(i.error, true);
-        toast("Installing them. Mods shows the progress.");
-      } else toast("Imported. It applies on the next map.");
-      reloadApp();
-    }, "Importing a setup…");
-  };
-
   const setPhoneOn = (enabled: boolean) => run("app:phone", async () => {
     const r = await postJson<PhoneInfo>("/api/app/phone", { enabled }).catch(() => null);
     if (!r) return toast("Couldn't change phone access.", true);
@@ -402,18 +388,21 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
       </section>
 
       <section>
-        <SectionHead title="Your setup" note="Save this game's mode settings, presets, admins and welcome page to a file, to move to another computer or set up a server the same way." />
+        <SectionHead title="Backup" note="Save this game's mode settings, presets, admins, bans, map rotation, your own plugins and maps, and which mods it has to one file, to move to another computer or set up a server the same way." />
         <div className="panel row between">
-          <p className="muted">Passwords aren't included.</p>
+          <p className="muted">Passwords are only included if you lock them with a password of your own.</p>
           {ON_THIS_COMPUTER ? (
             <div className="row">
-              <BusyButton busy={busy("app:export")} label="Export" busyLabel="Exporting…" onClick={exportSetup} />
-              <BusyButton busy={busy("app:import")} label="Import" busyLabel="Importing…" onClick={importSetup} />
+              <button className="btn" disabled={!ownGame} title={ownGame ? undefined : NO_GAME_TO_BACK_UP} onClick={() => setBackup("backup")}>Back up</button>
+              <button className="btn" onClick={() => setBackup("restore")}>Restore</button>
+              {!ownGame && <span className="muted small-note">{NO_GAME_TO_BACK_UP}</span>}
             </div>
           ) : (
             <p className="muted">{ON_COMPUTER_ONLY}</p>
           )}
         </div>
+        {backup === "backup" && ownGame && <BackupSheet only={[`local:${ownGame}`]} onClose={() => setBackup(null)} />}
+        {backup === "restore" && <RestoreToGame game={ownGame} onClose={() => setBackup(null)} onChanged={reloadApp} />}
       </section>
 
       <section>
@@ -557,4 +546,10 @@ function RemoveEverything({ scan, onClose }: { scan: Scan; onClose: () => void }
       </div>
     </Sheet>
   );
+}
+
+/** Restore, opened from Settings: onto this game unless another target is picked. */
+function RestoreToGame({ game, onClose, onChanged }: { game: string | null; onClose: () => void; onChanged: () => void }) {
+  const servers = useServers().data?.servers ?? [];
+  return <RestoreSheet to={game ? { where: "game", game } : undefined} servers={servers} onClose={onClose} onChanged={onChanged} />;
 }

@@ -252,7 +252,7 @@ fn token_path(id: &str) -> PathBuf {
     crate::sys::app_dir().join("secrets").join(format!("tunnel-{id}.token"))
 }
 
-fn save_token(id: &str, token: &str) -> Result<(), String> {
+pub(crate) fn save_token(id: &str, token: &str) -> Result<(), String> {
     let p = token_path(id);
     if let Some(d) = p.parent() {
         std::fs::create_dir_all(d).map_err(|e| format!("Couldn't save the token ({e})."))?;
@@ -266,7 +266,7 @@ fn save_token(id: &str, token: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn read_token(id: &str) -> Option<String> {
+pub(crate) fn read_token(id: &str) -> Option<String> {
     std::fs::read_to_string(token_path(id)).ok().map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
 }
 
@@ -288,11 +288,11 @@ fn hook_path(kind: &str, id: &str) -> PathBuf {
     crate::sys::app_dir().join("secrets").join(format!("discord-{kind}-{id}.url"))
 }
 
-fn read_hook(kind: &str, id: &str) -> Option<String> {
+pub(crate) fn read_hook(kind: &str, id: &str) -> Option<String> {
     std::fs::read_to_string(hook_path(kind, id)).ok().map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
 }
 
-fn save_hook(kind: &str, id: &str, url: Option<&str>) -> Result<(), String> {
+pub(crate) fn save_hook(kind: &str, id: &str, url: Option<&str>) -> Result<(), String> {
     let p = hook_path(kind, id);
     let Some(url) = url else {
         let _ = std::fs::remove_file(&p);

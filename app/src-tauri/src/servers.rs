@@ -201,13 +201,13 @@ fn public_host(a: &str) -> &str {
     a.split_once(':').map_or(a, |(h, _)| h)
 }
 
-fn default_visibility() -> String {
+pub(crate) fn default_visibility() -> String {
     "unlisted".into()
 }
-fn default_map() -> String {
+pub(crate) fn default_map() -> String {
     "de_dust2".into()
 }
-fn default_slots() -> u32 {
+pub(crate) fn default_slots() -> u32 {
     20
 }
 
@@ -246,7 +246,46 @@ impl Entry {
 
     /// Where on this computer the server answers: its listen address, or 127.0.0.1.
     pub(crate) fn local_host(&self) -> String {
-        if self.listen_ip.is_empty() || self.listen_ip == "0.0.0.0" { "127.0.0.1".into() } else { self.listen_ip.clone() }
+        match self.bind_ip() {
+            Some(ip) if ip != "0.0.0.0" => ip,
+            _ => "127.0.0.1".into(),
+        }
+    }
+
+    /// The address the server is started on (+ip): the one set in its settings, else, for a
+    /// Windows server on this computer that needs Steam (not "This network"), the network
+    /// adapter the internet goes through. Left to itself hlds can take a virtual adapter
+    /// (WSL, Hyper-V, VirtualBox), can't reach Steam from there, and then answers no one.
+    pub(crate) fn bind_ip(&self) -> Option<String> {
+        if !self.listen_ip.is_empty() {
+            return Some(self.listen_ip.clone());
+        }
+        if !cfg!(windows) || self.remote.is_some() || self.visibility == "lan" {
+            return None;
+        }
+        // the one it was started on, so RCON and Join still find it if the network changes
+        let pinned = PINNED.lock().unwrap().as_ref().and_then(|m| m.get(&self.id).cloned());
+        pinned.or_else(route_ip)
+    }
+
+    /// Fixes the automatic address for a start of this server (see bind_ip).
+    fn pin_address(&self) {
+        if !cfg!(windows) || self.remote.is_some() {
+            return;
+        }
+        let now = route_ip();
+        let before = {
+            let mut m = PINNED.lock().unwrap();
+            let m = m.get_or_insert_with(HashMap::new);
+            match &now {
+                Some(ip) => m.insert(self.id.clone(), ip.clone()),
+                None => m.remove(&self.id),
+            }
+        };
+        // a new address (the router handed out another): the kept Game's RCON points at the old one
+        if before != now {
+            forget(&self.id);
+        }
     }
 
     /// The address players connect to.
@@ -280,9 +319,21 @@ impl Entry {
     }
 }
 
+/// The automatic address each server on this computer was last started on (bind_ip)
+static PINNED: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+
+/// This computer's address on the network its internet traffic leaves through (nothing is
+/// sent: a UDP socket only picks its route on connect).
+fn route_ip() -> Option<String> {
+    let s = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    s.connect("1.1.1.1:53").ok()?;
+    let ip = s.local_addr().ok()?.ip();
+    (ip.is_ipv4() && !ip.is_loopback() && !ip.is_unspecified()).then(|| ip.to_string())
+}
+
 /// Ports a server on another machine can use: setup opens 27015-27020 there, and 27020
 /// is HLTV's
-const REMOTE_PORTS: std::ops::RangeInclusive<u16> = 27015..=27019;
+pub(crate) const REMOTE_PORTS: std::ops::RangeInclusive<u16> = 27015..=27019;
 
 /// Start options the app sets itself, so they can't be added again by hand
 const OWN_ARGS: &[&str] = &[
@@ -324,7 +375,7 @@ pub(crate) fn join_password(e: &Entry) -> String {
 /// after every map change), the same files the Friends tab writes. friends.cfg also says
 /// whether bots play with nobody on: ReGameDLL's game.cfg sets bot_join_after_player back
 /// to 1 on every map, and this runs after it.
-fn write_join(data: &Path, name: &str, password: &str, bots_empty: bool, listed: bool) -> Result<(), String> {
+pub(crate) fn write_join(data: &Path, name: &str, password: &str, bots_empty: bool, listed: bool) -> Result<(), String> {
     if !crate::sharing::password_ok(password) {
         return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
     }
@@ -535,7 +586,7 @@ fn slug(name: &str, taken: &[Entry]) -> String {
 
 /// A new server's id, also free on disk: its folder is always a new one, never a folder
 /// that's already there (a game, someone's files), which Delete would then remove.
-fn slug_in(name: &str, taken: &[Entry], root: &Path) -> String {
+pub(crate) fn slug_in(name: &str, taken: &[Entry], root: &Path) -> String {
     let base = slug(name, taken);
     let mut id = base.clone();
     let mut n = 2;
@@ -551,7 +602,7 @@ fn slug_in(name: &str, taken: &[Entry], root: &Path) -> String {
 const MARKER: &str = ".loner-strike-server";
 
 /// Makes a new server's folder and marks it as ours.
-fn make_server_dir(e: &Entry) -> Result<(), String> {
+pub(crate) fn make_server_dir(e: &Entry) -> Result<(), String> {
     std::fs::create_dir_all(&e.dir).map_err(|err| format!("Couldn't make the server's folder ({err})."))?;
     std::fs::write(e.dir.join(MARKER), &e.id).map_err(|err| format!("Couldn't make the server's folder ({err})."))
 }
@@ -757,10 +808,20 @@ fn settings_filter(rel: &Path) -> bool {
         && !history
         && !name.ends_with(".log")
         && !name.ends_with(".reading")
+        && !half_written(&name)
 }
 
 /// Maps and what custom maps need (textures, models, sounds, sprites, overviews).
-fn content_filter(rel: &Path) -> bool {
+/// Files a restore or a backup is still writing (backup.rs): never synced.
+fn half_written(name: &str) -> bool {
+    name.ends_with(".lsrestore") || name.ends_with(".lsbackup.part") || name.ends_with(".tmp")
+}
+
+pub(crate) fn content_filter(rel: &Path) -> bool {
+    let name = rel.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if half_written(&name) {
+        return false;
+    }
     let first = rel.components().next().map(|c| c.as_os_str().to_string_lossy().to_lowercase()).unwrap_or_default();
     let root_wad = rel.components().count() == 1 && rel.extension().map(|e| e.eq_ignore_ascii_case("wad")).unwrap_or(false);
     root_wad || matches!(first.as_str(), "maps" | "models" | "sound" | "sprites" | "gfx" | "overviews" | "resource")
@@ -1495,7 +1556,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
 /// Runs remote::SETUP_SH on the machine (the machine, Valve's server and the engine
 /// add-ons; safe to run again, which is also how Valve's updates come in), showing its
 /// stages and Valve's download on the job.
-fn machine_setup(job: &setup::Job, r: &crate::remote::RemoteInfo, id: &str, g: &str) -> Result<(), String> {
+pub(crate) fn machine_setup(job: &setup::Job, r: &crate::remote::RemoteInfo, id: &str, g: &str) -> Result<(), String> {
     // the script reports its stages; Valve's download reports its own progress
     const STAGES: &[(&str, f64, &str)] = &[
         ("packages", 0.03, "Installing the 32-bit libraries the server needs"),
@@ -1859,7 +1920,7 @@ fn left_running(e: &Entry) -> bool {
     e.ready && e.rcon().map(|r| r.send("status").is_ok()).unwrap_or(false)
 }
 
-fn launch_args(e: &Entry) -> Vec<String> {
+pub(crate) fn launch_args(e: &Entry) -> Vec<String> {
     let mut a: Vec<String> = vec!["-console".into(), "-game".into(), e.game.clone(), "-port".into(), e.port.to_string(), "-condebug".into()];
     if e.visibility != "listed" {
         a.push("-nomaster".into()); // no heartbeats to Steam's server list
@@ -1873,8 +1934,8 @@ fn launch_args(e: &Entry) -> Vec<String> {
         "+map".into(),
         map,
     ]);
-    if !e.listen_ip.is_empty() {
-        a.extend(["+ip".into(), e.listen_ip.clone()]);
+    if let Some(ip) = e.bind_ip() {
+        a.extend(["+ip".into(), ip]);
     }
     // (bots on an empty server aren't a start option: ReGameDLL's game.cfg sets
     // bot_join_after_player back on every map, so friends.cfg carries it, see write_bots_line)
@@ -1940,6 +2001,7 @@ fn spawn(e: &Entry) -> Result<Child, String> {
     if !e.hlds().is_file() {
         return Err("The server's files are missing. Delete it and make it again.".into());
     }
+    e.pin_address();
     let log = std::fs::File::create(e.dir.join("loner-strike-server.log")).map_err(|err| err.to_string())?;
     let mut cmd = if e.kind == "crossover" {
         let mut c = sys::command(CROSSOVER_WINE);
@@ -1999,11 +2061,15 @@ fn end_leftover(e: &Entry) {
     }
 }
 
+/// One start at a time, so a double click (or the crash watcher racing a restart) can't
+/// launch two copies; a restore (backup.rs) takes it too while it marks a server as busy.
+pub(crate) static STARTING: Mutex<()> = Mutex::new(());
+
 pub fn start(id: &str) -> Result<(), String> {
-    // one start at a time, so a double click (or the crash watcher racing a restart)
-    // can't launch two copies
-    static STARTING: Mutex<()> = Mutex::new(());
     let e = get(id).ok_or("That server isn't there any more.")?;
+    if crate::backup::restoring_server(id) {
+        return Err(crate::backup::RESTORING_SERVER.into());
+    }
     if !e.ready {
         return Err("This server isn't finished setting up.".into());
     }
@@ -2021,6 +2087,13 @@ pub fn start(id: &str) -> Result<(), String> {
     }
     // (systemd starts one copy at most, and a slow machine mustn't hold up local starts)
     if let Some(r) = &e.remote {
+        // checked again with starts held, so a restore can't begin in between
+        if crate::backup::restoring_server(id) || {
+            let _g = STARTING.lock().unwrap_or_else(|e| e.into_inner());
+            crate::backup::restoring_server(id)
+        } {
+            return Err(crate::backup::RESTORING_SERVER.into());
+        }
         if bots_changed {
             let _ = sync(&e, false);
         }
@@ -2037,6 +2110,10 @@ pub fn start(id: &str) -> Result<(), String> {
         return crate::remote::systemctl(r, &e.id, "start");
     }
     let _g = STARTING.lock().unwrap_or_else(|e| e.into_inner());
+    // checked again now that a restore can't begin in between
+    if crate::backup::restoring_server(id) {
+        return Err(crate::backup::RESTORING_SERVER.into());
+    }
     if with_runs(|r| r.procs.contains_key(id)) || left_running(&e) {
         return Ok(());
     }
@@ -2189,7 +2266,10 @@ fn watch() {
                 if recent > MAX_RESTARTS {
                     with_runs(|r| r.errors.insert(id.clone(), "The server keeps crashing, so it was left off. Check its console.".into()));
                 } else if let Err(e) = start(&id) {
-                    with_runs(|r| r.errors.insert(id.clone(), e));
+                    // a restore stopped it on purpose: nothing to report on its card
+                    if e != crate::backup::RESTORING_SERVER {
+                        with_runs(|r| r.errors.insert(id.clone(), e));
+                    }
                 }
             }
         });
@@ -2199,7 +2279,7 @@ fn watch() {
 /// The last lines of the server's console (qconsole.log, from -condebug).
 fn console(e: &Entry) -> Vec<String> {
     if let Some(r) = &e.remote {
-        return without_polls(crate::remote::console(r, &e.id, &e.game)).iter().map(|l| hide_passwords(l)).collect();
+        return without_polls(crate::remote::console(r, &e.id, &e.game), "127.0.0.1").iter().map(|l| hide_passwords(l)).collect();
     }
     let mut lines = Vec::new();
     for p in [e.dir.join("qconsole.log"), e.dir.join(&e.game).join("qconsole.log"), e.dir.join("loner-strike-server.log")] {
@@ -2213,19 +2293,21 @@ fn console(e: &Entry) -> Vec<String> {
             break;
         }
     }
-    let mut lines = without_polls(lines);
+    let mut lines = without_polls(lines, &e.local_host());
     let skip = lines.len().saturating_sub(300);
     lines.split_off(skip).into_iter().map(|l| hide_passwords(&l)).collect()
 }
 
-/// The console without the app's own checks every few seconds ("Rcon from 127.0.0.1"
-/// and the gm_status it sent), which would bury chat and everything else.
-fn without_polls(lines: Vec<String>) -> Vec<String> {
+/// The console without the app's own checks every few seconds ("Rcon from <from>", the
+/// address the app knocks on, and the gm_status it sent), which would bury chat and
+/// everything else.
+fn without_polls(lines: Vec<String>, from: &str) -> Vec<String> {
+    let ours = format!("Rcon from {from}:");
     lines
         .into_iter()
         .filter(|l| {
             let t = l.trim();
-            !(t.starts_with("Rcon from 127.0.0.1") || t.starts_with("rcon ") && (t.ends_with(" gm_status") || t.ends_with(" gm_status_full")))
+            !(t.starts_with(&ours) || t.starts_with("rcon ") && (t.ends_with(" gm_status") || t.ends_with(" gm_status_full")))
         })
         .collect()
 }
@@ -2320,7 +2402,7 @@ pub fn game_for(target: &str, local: impl FnOnce() -> Option<Game>) -> Option<Ar
             }
             // remote paths are relative to the user's home (sftp starts there)
             g.remote = Some((r.clone(), format!("{}/{}", crate::remote::server_dir(&e.id), e.game)));
-        } else if !e.listen_ip.is_empty() {
+        } else if e.bind_ip().is_some() {
             // a server bound to one address doesn't answer on 127.0.0.1
             if let Some(rc) = e.rcon() {
                 g.rcon = Arc::new(rc);
@@ -2341,7 +2423,7 @@ pub fn use_local(st: &Shared, hl: &str, game: &str) {
     st.set_game(game_for("local", || crate::app_api::pick_game(&s)));
 }
 
-fn forget(target: &str) {
+pub(crate) fn forget(target: &str) {
     if let Some(g) = GAMES.lock().unwrap().as_mut() {
         g.remove(target);
     }
@@ -2614,8 +2696,9 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 }
             }
         }
-        // the cached connection to it knows the old port and listen address
-        if now.port != e.port || now.listen_ip != e.listen_ip {
+        // the cached connection to it knows the old port and address (bind_ip: the listen
+        // address, or the automatic one, which visibility turns on and off)
+        if now.port != e.port || now.bind_ip() != e.bind_ip() {
             forget(&id);
         }
         // on another machine the start options live in its service: write it again (and
@@ -2668,6 +2751,9 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
     // one (which also reaches a VPS through the SSH key) is for the computer
     if on.is_none() && !matches!(action.as_str(), "start" | "stop" | "restart" | "join") {
         return answer(Err("Do that from the computer running Loner-Strike.".into()));
+    }
+    if matches!(action.as_str(), "delete" | "rebuild" | "retry") && crate::backup::restoring_server(&id) {
+        return answer(Err(crate::backup::RESTORING_SERVER_BUSY.into()));
     }
     let st2 = st.clone();
     let on_computer = on.is_some();
@@ -2761,6 +2847,10 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
             "retry" => {
                 // a setup that stopped part way, again with the same details
                 let e = get(&id).ok_or("That server isn't there any more.")?;
+                // a fresh setup wouldn't bring the backup's settings, admins or passwords
+                if crate::backup::restore_unfinished(&id) {
+                    return Err("This server was made by a restore that didn't finish. Delete it in the list, then restore the backup again.".into());
+                }
                 if e.ready || e.remote.is_none() {
                     return Err("Only a server on another machine whose setup didn't finish can be tried again.".into());
                 }
@@ -2798,6 +2888,7 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 crate::lists::forget(&id);
                 forget(&id);
                 crate::webstatus::forget_token(&id);
+                crate::backup::forget_server(&id);
                 Ok(json!({"ok": true, "note": note}))
             }
             _ => Err("Unknown action.".into()),
@@ -2942,7 +3033,9 @@ pub fn routes() -> Router<Shared> {
         .route("/api/servers/select", post(api_select))
         .route("/api/servers/:id", post(api_change))
         .route("/api/servers/:id/console", route_get(api_console))
-        .route("/api/servers/:id/rcon-password", route_get(api_rcon_password).post(api_set_rcon_password))
+        .route("/api/servers/:id/rcon-password", post(api_set_rcon_password))
+        // a POST, so it carries X-Panel (a plain GET from the page doesn't)
+        .route("/api/servers/:id/rcon-password/show", post(api_rcon_password))
         .route("/api/servers/:id/:action", post(api_action))
 }
 
@@ -3089,7 +3182,9 @@ fn restart_now(id: &str) {
     std::thread::sleep(Duration::from_secs(3));
     stop(id);
     if let Err(err) = start(id) {
-        with_runs(|r| r.errors.insert(id.to_string(), format!("The daily restart couldn't start it again: {err}")));
+        if err != crate::backup::RESTORING_SERVER {
+            with_runs(|r| r.errors.insert(id.to_string(), format!("The daily restart couldn't start it again: {err}")));
+        }
     }
 }
 
@@ -3203,6 +3298,13 @@ mod tests {
     fn connect_addresses() {
         let mut e: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/x","kind":"windows","bottle":null}"#).unwrap();
         assert!(e.public_address.is_none(), "servers.json from before public addresses still loads");
+        // on Windows a server that needs Steam is started on the internet adapter (bind_ip)
+        if cfg!(windows) {
+            assert_eq!(e.bind_ip(), route_ip());
+            assert_eq!(launch_args(&e).iter().any(|w| w == "+ip"), route_ip().is_some());
+        }
+        e.visibility = "lan".into();
+        assert_eq!(e.bind_ip(), None, "This network: left to hlds");
         // unset: the same as before
         assert_eq!(e.connect(), "127.0.0.1:27016");
         assert_eq!(e.connect(), e.address());
@@ -3405,7 +3507,9 @@ mod tests {
     #[test]
     fn console_hides_the_apps_own_checks() {
         let l = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        let got = without_polls(l(&["Rcon from 127.0.0.1:34335:", "rcon 352348701 \"x\" gm_status", "[TFR] Tyler : ace haha", "rcon 1 \"x\" amxx plugins"]));
+        let got = without_polls(l(&["Rcon from 127.0.0.1:34335:", "rcon 352348701 \"x\" gm_status", "[TFR] Tyler : ace haha", "rcon 1 \"x\" amxx plugins"]), "127.0.0.1");
+        // a server started on the network adapter: the app knocks from there
+        assert_eq!(without_polls(l(&["Rcon from 192.168.1.20:5000:", "Rcon from 127.0.0.1:1:"]), "192.168.1.20"), l(&["Rcon from 127.0.0.1:1:"]));
         assert_eq!(got, l(&["[TFR] Tyler : ace haha", "rcon 1 \"x\" amxx plugins"]));
     }
 }

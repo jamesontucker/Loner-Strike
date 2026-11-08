@@ -940,6 +940,7 @@ mod tests {
     #[test]
     fn command_line_and_config() {
         let mut e = server("a", 27017);
+        e.visibility = "lan".into(); // answers on 127.0.0.1 (see servers::Entry::bind_ip)
         e.hltv = Settings { enabled: true, port: Some(27500), delay: 45, max_spectators: 10, name: "Cup \"Final\"; quit".into(), password: "watch-me".into(), record: true };
         assert_eq!(launch_args(&e), vec!["-port", "27500", "+exec", CFG]);
         let c = config(&e, "adminpw", Some("joinpw"));

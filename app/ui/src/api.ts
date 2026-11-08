@@ -107,6 +107,17 @@ export async function postJson<T>(path: string, body: unknown = {}): Promise<T> 
   return r.json() as Promise<T>;
 }
 
+/** postJson for a request that names its server itself (or none): no X-Target. */
+export async function postJsonAt<T>(path: string, body: unknown, target: string | null): Promise<T> {
+  const r = await fetch(path, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", "X-Panel": "1", ...(target ? { "X-Target": target } : {}) },
+    body: JSON.stringify(body),
+  });
+  return r.json() as Promise<T>;
+}
+
 type CmdResult = { ok: boolean; output?: string[]; error?: string };
 
 /** Sends a Game Mode Menu command; returns the game's reply as one line, or throws its error. */

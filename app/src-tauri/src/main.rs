@@ -6,6 +6,7 @@ mod admins;
 mod app_api;
 mod connect;
 mod archive;
+mod backup;
 mod browser;
 mod community;
 mod content;

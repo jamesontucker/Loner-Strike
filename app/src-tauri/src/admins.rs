@@ -25,8 +25,8 @@ use std::net::Ipv4Addr;
 use std::path::Path;
 use std::sync::Mutex;
 
-const BEGIN: &str = "; ---- Loner-Strike: people from the app's Admins page. This block is rewritten automatically; edit it there. ----";
-const END: &str = "; ---- end of Loner-Strike ----";
+pub(crate) const BEGIN: &str = "; ---- Loner-Strike: people from the app's Admins page. This block is rewritten automatically; edit it there. ----";
+pub(crate) const END: &str = "; ---- end of Loner-Strike ----";
 /// One change at a time to admins.json, users.ini and the ban files
 static LOCK: Mutex<()> = Mutex::new(());
 

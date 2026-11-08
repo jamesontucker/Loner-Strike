@@ -160,9 +160,12 @@ impl Game {
     }
 
     /// Writes the RCON password file for the plugin once Loner-Strike is set up in this
-    /// game (its plugins are there), and never into a game without it.
+    /// game (its plugins are there), and never into a game without it. Dedicated servers on
+    /// this computer need it too: nothing else writes it for one made in the app, and without
+    /// it the plugin sets no password while the panel knocks with a made-up one (Bad Rcon).
+    /// A server on another machine gets it from its setup there instead.
     fn ensure_password_file(&self) {
-        if self.remote.is_some() || self.dedicated {
+        if self.remote.is_some() {
             return;
         }
         let pw_file = self.data.join("panel_rcon.txt");

@@ -283,6 +283,10 @@ async fn api_update_install(State(st): State<Shared>, headers: HeaderMap) -> (St
     if !from_panel(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
+    // restarting would cut a setup or restore off half way
+    if crate::setup::current().state == "running" || crate::backup::restoring_any() {
+        return (StatusCode::OK, Json(json!({"error": "Something is being set up or restored. Wait for it to finish, then update."})));
+    }
     let update = PENDING.lock().unwrap().take();
     let (Some(update), Some(app)) = (update, st.app.get().cloned()) else {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Check for updates first."})));
@@ -659,6 +663,10 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, on: Option<axu
     if !from_panel(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
+    // nothing is written into a game that's being restored
+    if st.game().is_some_and(|g| crate::backup::restoring_game(&g.hl)) {
+        return (StatusCode::OK, Json(json!({"error": crate::backup::RESTORING_GAME})));
+    }
     // a game that's already open ignores a new launch: closing it is for the person at
     // the computer
     if req.restart {
@@ -736,6 +744,9 @@ async fn api_remove_everything(State(st): State<Shared>, headers: HeaderMap) -> 
     }
     if crate::sys::game_running() {
         return (StatusCode::OK, Json(json!({"error": "Close Counter-Strike first, then try again."})));
+    }
+    if crate::setup::current().state == "running" || crate::backup::restoring_any() {
+        return (StatusCode::OK, Json(json!({"error": "Something is being set up or restored. Wait for it to finish, then try again."})));
     }
     let r = tokio::task::spawn_blocking(move || {
         let mut failed = Vec::new();

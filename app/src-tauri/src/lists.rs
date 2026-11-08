@@ -254,6 +254,61 @@ pub fn forget(target: &str) {
     }
 }
 
+/// The shared lists a server (or "local:<game>") is a member of, for a backup.
+pub fn memberships(member: &str) -> Vec<String> {
+    load().into_iter().filter(|(_, g)| g.members.len() >= 2 && g.members.iter().any(|m| m == member)).map(|(list, _)| list).collect()
+}
+
+/// What a restore's rejoin did.
+#[derive(Debug, Default, PartialEq)]
+pub struct Rejoined {
+    /// lists it took its old place in
+    pub joined: Vec<String>,
+    /// lists the backed-up server was in that aren't shared with it on this computer
+    pub skipped: Vec<String>,
+    /// "local:<game>" for a game the panel isn't using now: nothing was looked at
+    pub not_current: bool,
+}
+
+/// A restored server takes its old place in the shared lists it was in (backup.rs): in
+/// place of `old` when that server is gone (a reinstall), beside it when it's still here
+/// (a copy). Only groups `old` is a member of on this computer are joined: a backup from
+/// another computer never joins groups that just have the same name here. Its list as it
+/// is now is remembered first, so joining passes nothing on by itself: the next edit does.
+pub fn rejoin(old: &str, new: &str, lists: &[String]) -> Rejoined {
+    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(g) = game(new) else {
+        return Rejoined { skipped: lists.to_vec(), not_current: new.starts_with("local:"), ..Default::default() };
+    };
+    let mut c = load();
+    let old_gone = !old.starts_with("local:") && crate::servers::get(old).is_none();
+    let r = rejoin_in(&mut c, old, new, lists, old_gone, &|list| print(list, &g));
+    if !r.joined.is_empty() {
+        let _ = save(&c);
+    }
+    r
+}
+
+fn rejoin_in(c: &mut Config, old: &str, new: &str, lists: &[String], old_gone: bool, hash: &dyn Fn(&str) -> String) -> Rejoined {
+    let mut r = Rejoined::default();
+    for list in lists {
+        let Some(group) = c.get_mut(list.as_str()).filter(|g| g.members.iter().any(|m| m == old)) else {
+            r.skipped.push(list.clone());
+            continue;
+        };
+        if old_gone && old != new {
+            group.members.retain(|m| m != old);
+            group.hashes.remove(old);
+        }
+        if !group.members.iter().any(|m| m == new) {
+            group.members.push(new.to_string());
+        }
+        group.hashes.insert(new.to_string(), hash(list));
+        r.joined.push(list.clone());
+    }
+    r
+}
+
 // ---- API -----------------------------------------------------------------------------
 
 async fn api_get() -> Json<Value> {
@@ -335,5 +390,27 @@ mod tests {
         assert_eq!(list_for("/api/welcome"), Some("welcome"));
         assert_eq!(list_for("/api/maps/change"), None);
         assert_eq!(list_for("/api/extras/rotation"), None);
+    }
+
+    #[test]
+    fn rejoin_only_where_it_was() {
+        let group = |members: &[&str]| Group { members: members.iter().map(|m| m.to_string()).collect(), ..Default::default() };
+        let mut c: Config = [("admins".to_string(), group(&["a", "b"])), ("bans".to_string(), group(&["x", "y"]))].into_iter().collect();
+        let lists = vec!["admins".to_string(), "bans".to_string(), "filter".to_string()];
+        // a copy beside "a": joins admins only (bans and filter never had "a" here)
+        let r = rejoin_in(&mut c, "a", "a-2", &lists, false, &|_| "h".into());
+        assert_eq!(r.joined, vec!["admins".to_string()]);
+        assert_eq!(r.skipped, vec!["bans".to_string(), "filter".to_string()]);
+        assert_eq!(c["admins"].members, vec!["a", "b", "a-2"]);
+        assert_eq!(c["bans"].members, vec!["x", "y"]);
+        assert_eq!(c["admins"].hashes.get("a-2").map(String::as_str), Some("h"));
+        // a reinstall: takes the gone server's place
+        let r = rejoin_in(&mut c, "b", "b-new", &lists[..1], true, &|_| "h".into());
+        assert_eq!(r.joined.len(), 1);
+        assert_eq!(c["admins"].members, vec!["a", "a-2", "b-new"]);
+        // a backup from another computer whose id means nothing here
+        let r = rejoin_in(&mut c, "elsewhere", "z", &lists, true, &|_| "h".into());
+        assert!(r.joined.is_empty() && r.skipped.len() == 3);
+        assert!(!c["admins"].members.contains(&"z".to_string()));
     }
 }

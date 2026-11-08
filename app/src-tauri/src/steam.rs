@@ -174,6 +174,9 @@ pub fn launch(hl: &Path, appid: &str, args: &[String]) -> Result<(), String> {
     if !appid.chars().all(|c| c.is_ascii_digit()) || !args.iter().all(|a| a.chars().all(|c| c.is_ascii_alphanumeric() || "+-_.:/".contains(c))) {
         return Err("Those launch options can't be used.".into());
     }
+    if crate::backup::restoring_game(hl) {
+        return Err(crate::backup::RESTORING_GAME.into());
+    }
     #[cfg(target_os = "macos")]
     {
         // .../Bottles/<bottle>/drive_c/<steam>/steamapps/common/Half-Life

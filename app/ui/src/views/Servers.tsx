@@ -8,6 +8,7 @@ import { HostingGuide, SizingTable, troubleFor } from "./HostingGuide";
 import { JobProgress } from "./JobProgress";
 import { BusyButton, Info, lazyPage, LoadError, PageBoundary, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
+import { BackupSheet, RestoreSheet } from "./Backup";
 import { Bots } from "./Bots";
 import { Friends } from "./Friends";
 import { GetMore, ServerSkins } from "./GetMore";
@@ -130,6 +131,9 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  // backups: Export all (every server and this computer's game) and Import a backup
+  const [exporting, setExporting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const guide = useRef<HTMLDetailsElement>(null);
   const openGuide = () => {
     if (guide.current) guide.current.open = true;
@@ -161,6 +165,8 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   return (
     <div className="stack">
       <SectionHead title="Servers" note={`Optional: dedicated servers that run without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game. ${RUNS_WHILE}`}>
+        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setRestoring(true)}>Import a backup</button>}
+        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setExporting(true)}>Export all</button>}
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setImporting(true)}>Add one you already run</button>}
         {ON_THIS_COMPUTER && <button className="btn primary" onClick={() => setCreating(true)}>New server</button>}
       </SectionHead>
@@ -241,6 +247,8 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
         />
       )}
       {importing && <ImportServer onClose={() => setImporting(false)} onDone={() => { setImporting(false); onChanged(); }} />}
+      {exporting && <BackupSheet onClose={() => setExporting(false)} />}
+      {restoring && <RestoreSheet servers={list?.servers ?? []} onClose={() => setRestoring(false)} onChanged={onChanged} />}
     </div>
   );
 }
@@ -500,6 +508,7 @@ export function ServerPage(props: {
             <>
               <ServerDetails server={s} maps={maps} onChanged={onChanged} />
               {ON_THIS_COMPUTER && <CopyMods server={s} others={others} onStarted={(title) => setJob({ title, done: `Mods copied to ${s.name}` })} />}
+              {ON_THIS_COMPUTER && <BackupPanel server={s} others={others} onChanged={onChanged} />}
               {ON_THIS_COMPUTER && <Maintenance server={s} installed={app?.game?.installed ?? []} act={act} rebuild={rebuild} wipeRebuild={wipeRebuild} busy={busy} />}
             </>
           )}
@@ -752,7 +761,7 @@ function ConsolePassword({ server }: { server: ServerInfo }) {
   const { run, busy } = useActions();
   const show = async () => {
     if (shown !== null) return setShown(null);
-    const r = await getJson<Reply>(`/api/servers/${server.id}/rcon-password`).catch((): Reply => ({ error: "Couldn't reach the app." }));
+    const r = await postJson<Reply>(`/api/servers/${server.id}/rcon-password/show`).catch((): Reply => ({ error: "Couldn't reach the app." }));
     if (r.error) return toast(r.error, true);
     setShown(r.password ?? "");
   };
@@ -808,6 +817,26 @@ function CopyMods({ server, others, onStarted }: { server: ServerInfo; others: S
         <span className="muted small-note">{missing.length ? `${missing.length} to add` : "Nothing to add"}</span>
         <BusyButton className="btn" busy={busy(`${server.id}:copy-mods`)} label="Copy mods" busyLabel="Starting…" disabled={!missing.length} onClick={copy} />
       </div>
+    </div>
+  );
+}
+
+/** Backing this server up to a file, and restoring one over it (Backup.tsx). */
+function BackupPanel({ server, others, onChanged }: { server: ServerInfo; others: ServerInfo[]; onChanged: () => void }) {
+  const [open, setOpen] = useState<"backup" | "restore" | null>(null);
+  return (
+    <div className="panel">
+      <h3>Backup</h3>
+      <p className="muted measure">
+        Saves this server's settings, admins, bans, map rotation, your own plugins and maps, and which mods it has to one file. Restore it after a reinstall, on another
+        computer, or onto a Linux server.
+      </p>
+      <div className="row">
+        <button className="btn" onClick={() => setOpen("backup")}>Back up this server</button>
+        <button className="btn" onClick={() => setOpen("restore")}>Restore from a backup</button>
+      </div>
+      {open === "backup" && <BackupSheet only={[server.id]} onClose={() => setOpen(null)} />}
+      {open === "restore" && <RestoreSheet to={{ where: "server", id: server.id }} servers={[server, ...others]} onClose={() => setOpen(null)} onChanged={onChanged} />}
     </div>
   );
 }

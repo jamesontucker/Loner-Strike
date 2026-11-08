@@ -42,13 +42,17 @@ bzip2 = "0.6"
 lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "xz"] }
 # Linux servers (remote.rs): SSH and SFTP with bundled crypto, so ed25519 keys work on Mac and Windows alike
 ssh2 = { version = "0.9", features = ["vendored-openssl", "openssl-on-win32"] }
+# Server backups (backup.rs): passwords and webhooks are sealed with a key stretched from the
+# user's password, so a backup file on its own never gives them away
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_SystemInformation", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_Storage_FileSystem", "Win32_System_SystemInformation", "Win32_System_Threading"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

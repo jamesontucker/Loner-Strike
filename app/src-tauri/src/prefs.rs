@@ -1,6 +1,6 @@
 //! The Settings page's app-wide settings: updates, keeping servers running, phone
-//! sign-out, storage, game folders added by hand, diagnostics, and exporting or
-//! importing a game's or server's setup.
+//! sign-out, storage, game folders added by hand, diagnostics, and which of a game's
+//! settings files a backup takes (backup.rs).
 
 use crate::app_api::{edit_settings, load_settings};
 use crate::panel_api::from_panel;
@@ -10,7 +10,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
 type Reply = (StatusCode, Json<Value>);
@@ -289,15 +289,14 @@ async fn api_diagnostics(State(st): State<Shared>) -> Json<Value> {
     Json(json!({"text": text}))
 }
 
-// ---- export and import a setup ------------------------------------------------------
+// ---- a game's setup files (backup.rs packs them; old setup files are read there too) --
 
-const SETUP_FORMAT: &str = "loner-strike-setup";
 /// Files the Game Mode Menu keeps that are worth moving to another computer or server.
 const SETUP_EXT: &[&str] = &["cfg", "ini", "json", "txt", "html"];
 /// Not these: the panel's password, live status, logs, and who joined; the server's
 /// history (stats, reports, matches, recent maps); and what the plugin writes for itself
 /// as it runs (the mode it's in, the last map, a pending reload).
-const SETUP_SKIP: &[&str] = &[
+pub(crate) const SETUP_SKIP: &[&str] = &[
     "panel_rcon.txt", "status.json", "seen.json", "seen.log", "seen.log.reading", "friends.cfg", "navqueue.txt",
     "stats.json", "stats.json.part", "playtime.txt", "reports.json", "matches.json", "scrim_status.json", "recent.txt", "bots.txt",
     "current.txt", "premode.txt", "lastmap.txt", "session.txt", "lastpreset.txt", "crashmap.txt", "reloadnote.txt",
@@ -309,7 +308,7 @@ const FILE_MARK: &str = "\n@@LS-SETUP-FILE@@\n";
 /// For a server on another machine: the data files as the machine has them (the plugin
 /// saves settings there: presets, mode settings, map lists, mutes), name -> text, in one
 /// command. None if the machine can't be reached.
-fn machine_setup_files(g: &crate::game::Game) -> Option<Vec<(String, String)>> {
+pub(crate) fn machine_setup_files(g: &crate::game::Game) -> Option<Vec<(String, String)>> {
     let (r, dir) = g.remote.as_ref()?;
     let cmd = format!(
         "cd {}/addons/amxmodx/data/gamemodes 2>/dev/null || exit 0; find . -maxdepth 3 -type f -size -1000k \\( -name '*.cfg' -o -name '*.ini' -o -name '*.json' -o -name '*.txt' -o -name '*.html' \\) | while IFS= read -r f; do printf {}; printf '%s\\n' \"${{f#./}}\"; cat \"$f\"; done",
@@ -328,14 +327,14 @@ fn parse_machine_files(out: &str) -> Vec<(String, String)> {
     out.split(FILE_MARK).skip(1).filter_map(|p| p.split_once('\n')).map(|(name, text)| (name.to_string(), text.to_string())).collect()
 }
 
-fn exportable(rel: &Path) -> bool {
+pub(crate) fn exportable(rel: &Path) -> bool {
     let name = rel.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
     let ext = rel.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     SETUP_EXT.contains(&ext.as_str()) && !SETUP_SKIP.contains(&name.as_str()) && rel.components().count() <= 3
 }
 
 /// A relative path from an imported file, if it's safe to write.
-fn safe_rel(rel: &str) -> Option<PathBuf> {
+pub(crate) fn safe_rel(rel: &str) -> Option<PathBuf> {
     let parts: Vec<&str> = rel.split('/').collect();
     if parts.is_empty() || parts.len() > 3 {
         return None;
@@ -345,141 +344,6 @@ fn safe_rel(rel: &str) -> Option<PathBuf> {
     }
     let p: PathBuf = parts.iter().collect();
     exportable(&p).then_some(p)
-}
-
-pub fn export_setup(g: &crate::game::Game) -> Result<Value, String> {
-    let mut found: Vec<(String, String)> = Vec::new();
-    for path in crate::archive::walk(&g.data) {
-        let Ok(rel) = path.strip_prefix(&g.data) else { continue };
-        if !exportable(rel) || std::fs::metadata(&path).map(|m| m.len() > 1_000_000).unwrap_or(true) {
-            continue;
-        }
-        let Ok(text) = crate::sys::read_latin1(&path) else { continue };
-        found.push((rel.to_string_lossy().replace('\\', "/"), text));
-    }
-    // a server on another machine: what the machine has wins (the plugin saves settings
-    // there that this computer's copy doesn't have)
-    if g.remote.is_some() {
-        let there = machine_setup_files(g).ok_or("Couldn't reach the server's machine to read its settings. Try again when it's back.")?;
-        for (key, text) in there {
-            if !exportable(Path::new(&key)) {
-                continue;
-            }
-            found.retain(|(k, _)| *k != key);
-            found.push((key, text));
-        }
-    }
-    let mut files = Map::new();
-    for (key, text) in found {
-        let text = if key == "friends.json" {
-            // the server name travels, its password doesn't
-            let name = serde_json::from_str::<Value>(&text).ok().and_then(|v| v["name"].as_str().map(String::from)).unwrap_or_default();
-            json!({"name": name}).to_string()
-        } else {
-            text
-        };
-        files.insert(key, json!(text));
-    }
-    let components: Vec<String> = crate::setup::record::Record::open(&g.dir).component_ids().into_iter().filter(|c| c != "foundation" && c != "core").collect();
-    Ok(json!({"format": SETUP_FORMAT, "version": 1, "game": g.name, "components": components, "files": files}))
-}
-
-/// Writes an exported setup into a game's data folder. Returns what isn't installed here.
-pub fn import_setup(g: &crate::game::Game, v: &Value) -> Result<Vec<String>, String> {
-    if v["format"] != SETUP_FORMAT {
-        return Err("That isn't a Loner-Strike setup file.".into());
-    }
-    let files = v["files"].as_object().ok_or("The setup file is empty.")?;
-    if files.len() > 500 {
-        return Err("The setup file is too big.".into());
-    }
-    let mut written = 0;
-    for (rel, text) in files {
-        let (Some(rel), Some(text)) = (safe_rel(rel), text.as_str()) else { continue };
-        if text.len() > 1_000_000 {
-            continue;
-        }
-        let dest = g.data.join(&rel);
-        let text = if rel == Path::new("friends.json") {
-            // keep this server's own password
-            let name = serde_json::from_str::<Value>(text).ok().and_then(|x| x["name"].as_str().map(String::from)).unwrap_or_default();
-            let pw = std::fs::read_to_string(&dest).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|x| x["password"].as_str().map(String::from)).unwrap_or_default();
-            json!({"name": name, "password": pw}).to_string()
-        } else {
-            text.to_string()
-        };
-        // files the server on another machine keeps itself (mutes, map lists) go straight
-        // there: the background sync never sends them
-        let key = format!("addons/amxmodx/data/gamemodes/{}", rel.to_string_lossy().replace('\\', "/"));
-        if g.remote.is_some() && crate::servers::server_owned(&key) {
-            let bytes: Vec<u8> = text.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
-            crate::remote::put_game_file(g, &key, &bytes).map_err(|e| format!("Couldn't write {} on the server ({e}).", rel.display()))?;
-            written += 1;
-            continue;
-        }
-        if let Some(d) = dest.parent() {
-            std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
-        }
-        crate::sys::write_latin1(&dest, &text).map_err(|e| format!("Couldn't write {} ({e}).", rel.display()))?;
-        written += 1;
-    }
-    if written == 0 {
-        return Err("Nothing in that file could be used.".into());
-    }
-    // admins and VIP perks take effect (users.ini and vip.cfg are written from admins.json)
-    crate::admins::sync(g);
-    let have = crate::setup::record::Record::open(&g.dir).component_ids();
-    Ok(v["components"].as_array().into_iter().flatten().filter_map(|c| c.as_str()).filter(|c| !have.iter().any(|h| h == c)).map(String::from).collect())
-}
-
-async fn api_export(State(st): State<Shared>, headers: HeaderMap) -> Reply {
-    use tauri_plugin_dialog::DialogExt;
-    if !from_panel(&headers) {
-        return forbidden();
-    }
-    let (Some(g), Some(app)) = (st.game(), st.app.get().cloned()) else { return err("No game found.") };
-    let r = tokio::task::spawn_blocking(move || {
-        let data = export_setup(&g)?;
-        let name = format!("loner-strike-{}.json", if g.dedicated { "server" } else { g.name.as_str() });
-        let Some(path) = app.dialog().file().set_title("Save your Loner-Strike setup").set_file_name(&name).add_filter("Loner-Strike setup", &["json"]).blocking_save_file() else {
-            return Ok(json!({"cancelled": true}));
-        };
-        let path = path.into_path().map_err(|e| e.to_string())?;
-        std::fs::write(&path, serde_json::to_string_pretty(&data).unwrap_or_default()).map_err(|e| format!("Couldn't save it ({e})."))?;
-        Ok::<Value, String>(json!({"ok": true, "files": data["files"].as_object().map(|f| f.len()).unwrap_or(0)}))
-    })
-    .await
-    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
-    match r {
-        Ok(v) => ok(v),
-        Err(e) => err(e),
-    }
-}
-
-async fn api_import(State(st): State<Shared>, headers: HeaderMap) -> Reply {
-    use tauri_plugin_dialog::DialogExt;
-    if !from_panel(&headers) {
-        return forbidden();
-    }
-    let (Some(g), Some(app)) = (st.game(), st.app.get().cloned()) else { return err("No game found.") };
-    let r = tokio::task::spawn_blocking(move || {
-        let Some(path) = app.dialog().file().set_title("Open a Loner-Strike setup").add_filter("Loner-Strike setup", &["json"]).blocking_pick_file() else {
-            return Ok(json!({"cancelled": true}));
-        };
-        let path = path.into_path().map_err(|e| e.to_string())?;
-        if std::fs::metadata(&path).map(|m| m.len() > 20_000_000).unwrap_or(true) {
-            return Err("That file is too big to be a setup.".into());
-        }
-        let v: Value = serde_json::from_str(&std::fs::read_to_string(&path).map_err(|e| e.to_string())?).map_err(|_| "That isn't a Loner-Strike setup file.".to_string())?;
-        let missing = import_setup(&g, &v)?;
-        Ok::<Value, String>(json!({"ok": true, "missing": missing, "hl": g.hl, "game": g.name}))
-    })
-    .await
-    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
-    match r {
-        Ok(v) => ok(v),
-        Err(e) => err(e),
-    }
 }
 
 #[derive(Deserialize)]
@@ -530,8 +394,6 @@ pub fn local_routes() -> Router<Shared> {
         .route("/api/app/game-folder", post(api_folder_add))
         .route("/api/app/servers-folder", get(api_servers_dir).post(api_servers_dir_set))
         .route("/api/app/game-folder/remove", post(api_folder_remove))
-        .route("/api/app/export", post(api_export))
-        .route("/api/app/import", post(api_import))
         .route("/api/gb/add-file", post(api_add_file))
 }
 

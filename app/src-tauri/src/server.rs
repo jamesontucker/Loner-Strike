@@ -131,7 +131,7 @@ fn host_of(req: &Request) -> String {
 /// command, a kick, a match button) or touch nothing of the server's (smarter chat runs on
 /// this computer) don't.
 pub(crate) fn writes_files(path: &str) -> bool {
-    !matches!(path, "/api/cmd" | "/api/admins/kick" | "/api/scrim/action") && !path.starts_with("/api/smartchat") && !path.starts_with("/api/botchat")
+    !matches!(path, "/api/cmd" | "/api/admins/kick" | "/api/scrim/action") && !path.starts_with("/api/smartchat") && !path.starts_with("/api/botchat") && !path.starts_with("/api/backup/")
 }
 
 /// A request naming a dedicated server (X-Target: <id>, or ?target=<id> for images)
@@ -142,7 +142,7 @@ async fn with_target(req: Request, next: Next) -> Response {
     // the server list and per-server routes name their server in the path: they never
     // depend on (or fail because of) the one that's open
     let path = req.uri().path();
-    let by_path = path == "/api/servers" || path.starts_with("/api/servers/");
+    let by_path = path == "/api/servers" || path.starts_with("/api/servers/") || path.starts_with("/api/backup/");
     let post = req.method() == axum::http::Method::POST;
     // a request that edits a list shared between servers passes the edit on
     let list = if post { crate::lists::list_for(path) } else { None };
@@ -156,6 +156,10 @@ async fn with_target(req: Request, next: Next) -> Response {
     };
     if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') || id.len() > 48 {
         return (StatusCode::BAD_REQUEST, axum::Json(serde_json::json!({"error": "Unknown server."}))).into_response();
+    }
+    // nothing changes on a server while a backup is put back on it
+    if post && writes_files(path) && crate::backup::restoring_server(&id) {
+        return (StatusCode::OK, axum::Json(serde_json::json!({"error": crate::backup::RESTORING_SERVER_BUSY}))).into_response();
     }
     let id2 = id.clone();
     let writes_files = writes_files(path);
@@ -286,6 +290,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
             .merge(crate::mapcopy::local_routes())
             .merge(crate::hltv::local_routes())
             .merge(crate::prefs::local_routes())
+            .merge(crate::backup::local_routes())
             .merge(crate::plugins::local_routes())
             .merge(crate::sounds::local_routes())
             .merge(crate::extras::local_routes())
