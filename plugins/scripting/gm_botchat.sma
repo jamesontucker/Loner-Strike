@@ -184,6 +184,26 @@ new g_Round                         // counts rounds, so an answer from last rou
 new g_Hist[HIST][100], g_HistTeam[HIST], g_HistPos, g_HistCount   // recent chat
 new g_HumanMsg[128]                 // what the person typed, as they typed it
 
+// The rules over lines (docs/bot-people.md): a line's conditions say who would say it and
+// when; the most specific one that fits wins. Per-line cooldowns, once-a-map lines, and
+// flags lines set for a while
+new Trie:g_LineAt, Trie:g_LineOnce, Trie:g_Flags
+new bool:g_Freeze, bool:g_RoundOver
+new g_PickCond[96], g_PickBase[128], g_PickScore     // the line pick_line chose last
+#define MAX_CANDIDATES 256
+
+// The director: bots that would say something about the same moment make an offer; one
+// of them speaks, now and then a second, almost never a third (silence is the default)
+#define MAX_OFFERS    16
+#define TASK_DIRECTOR 8290
+new g_OfferBot[MAX_OFFERS], g_OfferOther[MAX_OFFERS], g_OfferText[MAX_OFFERS][128], g_OfferBase[MAX_OFFERS][128]
+new g_OfferCond[MAX_OFFERS][96], g_OfferSec[MAX_OFFERS][24], bool:g_OfferTeam[MAX_OFFERS], Float:g_OfferDelay[MAX_OFFERS]
+new Float:g_OfferBid[MAX_OFFERS], g_OfferCount
+
+// gm_people (optional): traits, archetypes and memory. 1 the condition holds, 0 it doesn't,
+// -1 it doesn't know the key
+native people_match(id, other, const key[], const op[], const value[])
+
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR)
@@ -216,9 +236,19 @@ public plugin_init()
 	register_clcmd("say", "cmd_say")
 	register_clcmd("say_team", "cmd_say_team")
 
+	register_logevent("ev_round_live", 2, "1=Round_Start")
+
 	get_configsdir(g_CfgDir, charsmax(g_CfgDir))
 	g_Sections = TrieCreate()
+	g_LineAt = TrieCreate()
+	g_LineOnce = TrieCreate()
+	g_Flags = TrieCreate()
 	load_lines()
+}
+
+public ev_round_live()
+{
+	g_Freeze = false
 }
 
 public plugin_natives()
@@ -238,6 +268,8 @@ public module_filter(const library[], LibType:type)
 
 public native_filter(const name[], index, trap)
 {
+	if (!trap && equal(name, "people_", 7))
+		return PLUGIN_HANDLED
 	return (!trap && (equal(name, "gm_chat_blocked") || equal(name, "socket_", 7))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
@@ -761,10 +793,74 @@ want(id, const section[], other, Float:base, Float:delay = -1.0, chain = 0, bool
 		return
 	new text[128]
 	g_CtxOther = other
-	new bool:ok = pick_line(id, section, text, charsmax(text))
+	new bool:ok = pick_line(id, section, text, charsmax(text), false, chain > 0)
 	g_CtxOther = 0
-	if (ok)
+	if (!ok)
+		return
+	// a reply someone asked for: said, not bid for
+	if (chain)
+	{
 		queue(id, other, text, chain, team, delay, section)
+		return
+	}
+	offer(id, other, text, section, delay, team)
+}
+
+offer(id, other, const text[], const section[], Float:delay, bool:team)
+{
+	if (g_OfferCount >= MAX_OFFERS)
+		return
+	new o = g_OfferCount++
+	g_OfferBot[o] = id
+	g_OfferOther[o] = other
+	copy(g_OfferText[o], charsmax(g_OfferText[]), text)
+	copy(g_OfferBase[o], charsmax(g_OfferBase[]), g_PickBase)
+	copy(g_OfferCond[o], charsmax(g_OfferCond[]), g_PickCond)
+	copy(g_OfferSec[o], charsmax(g_OfferSec[]), section)
+	g_OfferTeam[o] = team
+	g_OfferDelay[o] = delay
+	// a more specific line, and a chattier bot, bid higher; luck decides the rest
+	g_OfferBid[o] = (1.0 + 0.5 * float(g_PickScore)) * CHATTY[g_Persona[id]] * floatsqroot(floatmax(g_Chatty[id], 0.15)) * random_float(0.5, 1.5)
+	if (!task_exists(TASK_DIRECTOR))
+		set_task(0.15, "task_director", TASK_DIRECTOR)
+}
+
+public task_director()
+{
+	new n = g_OfferCount
+	g_OfferCount = 0
+	if (!n)
+		return
+	new said[3], count
+	// one speaks; a second now and then, a third almost never
+	static const Float:MORE[] = { 1.0, 0.25, 0.05 }
+	for (new turn = 0; turn < 3; turn++)
+	{
+		if (turn && random_float(0.0, 1.0) >= MORE[turn])
+			break
+		new best = -1
+		for (new o = 0; o < n; o++)
+		{
+			if (g_OfferBid[o] <= 0.0 || !is_user_connected(g_OfferBot[o]))
+				continue
+			new bool:spoke
+			for (new k = 0; k < count; k++)
+				if (g_OfferBot[said[k]] == g_OfferBot[o])
+					spoke = true
+			if (!spoke && (best < 0 || g_OfferBid[o] > g_OfferBid[best]))
+				best = o
+		}
+		if (best < 0)
+			break
+		commit_line(g_OfferBase[best], g_OfferCond[best])
+		// the others type after the first, not over it
+		new Float:delay = g_OfferDelay[best]
+		if (turn)
+			delay = (delay < 0.0 ? typing_time(g_OfferText[best]) : delay) + random_float(1.0, 3.0) * float(turn)
+		queue(g_OfferBot[best], g_OfferOther[best], g_OfferText[best], 0, g_OfferTeam[best], delay, g_OfferSec[best])
+		g_OfferBid[best] = 0.0
+		said[count++] = best
+	}
 }
 
 // A line's theme (THEME_REST), or -1
@@ -905,12 +1001,14 @@ next_map(out[], len)
 	casual_map(next, out, len)
 }
 
-// A line from `section` for this bot: anyone's lines (*), lines for its personality
-// (weighted by gm_personality) and lines for its mood (MOOD_OF: tilted, on a streak, new,
-// knows the person). Not one said lately, not a theme that's resting, and only lines whose
-// game state is known; lines with game state in them come up more.
+// A line from `section` for this bot: the lines whose conditions it meets (anyone's (*),
+// its personality's, its mood's, and the rules' key=value conditions: docs/bot-people.md),
+// the most specific first, now and then one less specific so it isn't always the same line.
+// Not one said lately, not a theme that's resting, and only lines whose game state is
+// known; lines with game state in them come up more.
 // answer: answering a person, so a fitting line beats a fresh one
-bool:pick_line(id, const section[], text[], len, bool:answer = false)
+// commit false: the director decides later whether it's said (commit_line)
+bool:pick_line(id, const section[], text[], len, bool:answer = false, bool:commit = true)
 {
 	new Array:list
 	if (!TrieGetCell(g_Sections, section, list))
@@ -921,31 +1019,23 @@ bool:pick_line(id, const section[], text[], len, bool:answer = false)
 	new Float:p = personality(), Float:now = get_gametime()
 	new mood[8]
 	mood_of(id, g_CtxOther, mood, charsmax(mood))
-	new raw[192], letters[64], pick = -1, Float:total, fallback = -1, fseen
+	static raw[192], cond[96], Float:cw[MAX_CANDIDATES], cs[MAX_CANDIDATES], ci[MAX_CANDIDATES]
+	new cn, best = -1, fallback = -1, fseen
 	for (new i = 0; i < n; i++)
 	{
 		ArrayGetString(list, i, raw, charsmax(raw))
 		new bar = contain(raw, "|")
-		copy(letters, min(bar, charsmax(letters)), raw)
+		copy(cond, min(bar, charsmax(cond)), raw)
 		new body = bar + 1
-		new Float:w
-		new bool:moody = false
-		for (new m = 0; mood[m]; m++)
-			if (contain(letters, fmt("%c", mood[m])) != -1)
-				moody = true
-		if (moody)
-			w = 1.5 + 0.5 * p                // how it's doing shows whatever the setting
-		else if (letters[0] == '*')
-			w = 1.0
-		else if (has_persona(id, letters))
-			w = p
+		new h = line_hash(raw[body]), score
+		new Float:w = line_weight(id, g_CtxOther, cond, mood, p, h, score)
 		if (w <= 0.0 || !ctx_ok(raw[body]))
 			continue
 		if (uses_state(raw[body]))
 			w *= 2.0
 		new bool:fresh = true
 		// short lines ("gg", "lol", "ns") come up all the time on a real server
-		if (strlen(raw[body]) > 6 && said_lately(line_hash(raw[body])))
+		if (strlen(raw[body]) > 6 && said_lately(h))
 			fresh = false
 		new t = theme_of(raw[body])
 		if (t >= 0 && now - g_ThemeAt[t] < THEME_REST[t] && !answer)
@@ -958,9 +1048,34 @@ bool:pick_line(id, const section[], text[], len, bool:answer = false)
 				fallback = i
 			continue
 		}
-		total += w
-		if (random_float(0.0, total) < w)
-			pick = i
+		if (cn < MAX_CANDIDATES)
+		{
+			cw[cn] = w
+			cs[cn] = score
+			ci[cn] = i
+			cn++
+			if (score > best)
+				best = score
+		}
+	}
+	new pick = -1
+	g_PickScore = 0
+	if (cn)
+	{
+		// the most specific tier; one lower now and then
+		new tier = (best > 0 && random_num(1, 5) == 1) ? best - 1 : best
+		new Float:total
+		for (new k = 0; k < cn; k++)
+		{
+			if (cs[k] < tier)
+				continue
+			total += cw[k]
+			if (random_float(0.0, total) < cw[k])
+			{
+				pick = ci[k]
+				g_PickScore = cs[k]
+			}
+		}
 	}
 	if (pick < 0)
 	{
@@ -970,17 +1085,261 @@ bool:pick_line(id, const section[], text[], len, bool:answer = false)
 		pick = fallback
 	}
 	ArrayGetString(list, pick, raw, charsmax(raw))
-	copy(text, len, raw[contain(raw, "|") + 1])
+	new bar = contain(raw, "|")
+	copy(g_PickCond, min(bar, charsmax(g_PickCond)), raw)
+	copy(text, len, raw[bar + 1])
 	trim(text)
-	g_Recent[g_RecentPos] = line_hash(text)
+	copy(g_PickBase, charsmax(g_PickBase), text)
+	if (commit)
+		commit_line(text, g_PickCond)
+	fill_state(id, text, len)
+	return true
+}
+
+// A chosen line is said: it rests (the line, its theme), and its options take effect
+commit_line(const text[], const cond[])
+{
+	new Float:now = get_gametime()
+	new h = line_hash(text)
+	g_Recent[g_RecentPos] = h
 	g_RecentPos = (g_RecentPos + 1) % RECENT
 	new t = theme_of(text)
 	if (t >= 0)
 		g_ThemeAt[t] = now
 	if (is_filler(text))
 		g_FillerAt = now
-	fill_state(id, text, len)
+	if (contain(cond, "!") == -1)
+		return
+	new key[16]
+	num_to_str(h, key, charsmax(key))
+	new tok[48], pos
+	while (next_token(cond, pos, tok, charsmax(tok)))
+	{
+		if (equal(tok, "!cd=", 4))
+			TrieSetCell(g_LineAt, key, now)
+		else if (equal(tok, "!once=", 6))
+			TrieSetCell(g_LineOnce, key, 1)
+		else if (equal(tok, "!set=", 5))
+		{
+			// !set=name/seconds: a flag lines can check (flag=name) for that long
+			new name[32], slash = contain(tok[5], "/")
+			new Float:ttl = 120.0
+			if (slash >= 0)
+			{
+				copy(name, min(slash, charsmax(name)), tok[5])
+				ttl = str_to_float(tok[5 + slash + 1])
+			}
+			else
+				copy(name, charsmax(name), tok[5])
+			TrieSetCell(g_Flags, name, now + ttl)
+		}
+	}
+}
+
+// The next space-separated word of `src` from `pos`; false at the end
+bool:next_token(const src[], &pos, out[], len)
+{
+	while (src[pos] == ' ')
+		pos++
+	if (!src[pos])
+		return false
+	new n
+	while (src[pos] && src[pos] != ' ')
+	{
+		if (n < len)
+			out[n++] = src[pos]
+		pos++
+	}
+	out[n] = 0
 	return true
+}
+
+// How much a bot would say a line with these conditions (0: it wouldn't), and how many
+// specific conditions it meets (score). Old personality letters and mood marks work as
+// they always did; key=value conditions and !options are the rules (docs/bot-people.md)
+Float:line_weight(id, other, const cond[], const mood[], Float:p, h, &score)
+{
+	score = 0
+	new Float:w = 1.0, bool:trait, bool:moodset
+	new tok[48], pos, key[16]
+	num_to_str(h, key, charsmax(key))
+	new Float:now = get_gametime()
+	while (next_token(cond, pos, tok, charsmax(tok)))
+	{
+		if (tok[0] == '!')
+		{
+			if (equal(tok, "!odds=", 6))
+			{
+				if (random_num(1, 100) > str_to_num(tok[6]))
+					return 0.0
+			}
+			else if (equal(tok, "!cd=", 4))
+			{
+				new Float:at
+				if (TrieGetCell(g_LineAt, key, at) && now - at < str_to_float(tok[4]))
+					return 0.0
+			}
+			else if (equal(tok, "!once=", 6))
+			{
+				if (TrieKeyExists(g_LineOnce, key))
+					return 0.0
+			}
+			continue
+		}
+		new op = op_at(tok)
+		if (op > 0)
+		{
+			new k[24], o[3], v[24]
+			split_condition(tok, op, k, charsmax(k), o, charsmax(o), v, charsmax(v))
+			if (fact_match(id, other, k, o, v) != 1)
+				return 0.0
+			score++
+			if (is_trait_key(k))
+				trait = true
+			continue
+		}
+		// the old way: personality letters, mood marks, * for anyone
+		new bool:moody
+		for (new m = 0; mood[m]; m++)
+			if (contain(tok, fmt("%c", mood[m])) != -1)
+				moody = true
+		if (moody)
+		{
+			// how it's doing shows whatever the setting
+			w = 1.5 + 0.5 * p
+			moodset = true
+		}
+		else if (tok[0] == '*')
+			continue
+		else if (has_persona(id, tok))
+		{
+			if (!moodset)
+				w *= p
+			score++
+		}
+		else
+			return 0.0
+	}
+	return trait ? w * p : w
+}
+
+// Where a condition's operator is (>= <= != = < >), or 0
+op_at(const tok[])
+{
+	for (new i = 1; tok[i]; i++)
+		if (tok[i] == '=' || tok[i] == '<' || tok[i] == '>' || (tok[i] == '!' && tok[i + 1] == '='))
+			return i
+	return 0
+}
+
+split_condition(const tok[], op, k[], klen, o[], olen, v[], vlen)
+{
+	copy(k, min(op, klen), tok)
+	new width = (tok[op + 1] == '=') ? 2 : 1
+	copy(o, min(width, olen), tok[op])
+	copy(v, vlen, tok[op + width])
+}
+
+// Conditions on who the bot is (they show more or less with gm_personality), not on what's
+// going on
+bool:is_trait_key(const k[])
+{
+	static const TRAITS[][] = { "warmth", "ego", "temper", "talk", "humor", "age", "skill", "region", "role", "hobby", "arch", "style" }
+	for (new i = 0; i < sizeof TRAITS; i++)
+		if (equal(k, TRAITS[i]))
+			return true
+	return false
+}
+
+// 1 the condition holds, 0 it doesn't, -1 unknown. What's going on is known here; who the
+// bot is and what it remembers comes from gm_people
+fact_match(id, other, const k[], const o[], const v[])
+{
+	new Float:have, bool:num = true, str[24]
+	if (equal(k, "kills"))
+		have = float(g_RoundKills[id])
+	else if (equal(k, "deaths"))
+		have = float(g_DeathRow[id])
+	else if (equal(k, "frags"))
+		have = float(get_user_frags(id))
+	else if (equal(k, "kd"))
+		have = float(get_user_frags(id)) / float(max(get_user_deaths(id), 1))
+	else if (equal(k, "alive"))
+	{
+		new team = get_user_team(id)
+		for (new i = 1; i <= MaxClients; i++)
+			if (is_user_alive(i) && get_user_team(i) == team)
+				have += 1.0
+	}
+	else if (equal(k, "diff"))
+	{
+		new team = get_user_team(id)
+		if (team != 1 && team != 2)
+			return -1
+		have = float(g_Score[team] - g_Score[3 - team])
+	}
+	else if (equal(k, "vs"))
+		have = (other > 0 && other <= MaxClients) ? float(g_KilledBy[id][other]) : 0.0
+	else if (equal(k, "vsby"))
+		have = (other > 0 && other <= MaxClients) ? float(g_KilledBy[other][id]) : 0.0
+	else if (equal(k, "joined"))
+		have = get_gametime() - g_JoinedAt[id]
+	else if (equal(k, "phase"))
+	{
+		num = false
+		copy(str, charsmax(str), !is_user_alive(id) ? "dead" : g_RoundOver ? "end" : g_Freeze ? "freeze" : "live")
+	}
+	else if (equal(k, "other"))
+	{
+		num = false
+		copy(str, charsmax(str), (!other || !is_user_connected(other)) ? "none" : is_user_bot(other) ? "bot" : "human")
+	}
+	else if (equal(k, "team"))
+	{
+		num = false
+		new team = get_user_team(id)
+		copy(str, charsmax(str), team == 1 ? "t" : team == 2 ? "ct" : "spec")
+	}
+	else if (equal(k, "time"))
+	{
+		num = false
+		new hr
+		time(hr)
+		copy(str, charsmax(str), hr < 5 ? "night" : hr < 12 ? "morning" : hr < 18 ? "day" : "evening")
+	}
+	else if (equal(k, "map"))
+	{
+		new map[32]
+		get_mapname(map, charsmax(map))
+		new bool:in = containi(map, v) != -1
+		return (o[0] == '!') ? !in : in
+	}
+	else if (equal(k, "flag"))
+	{
+		new Float:until
+		new bool:set = TrieGetCell(g_Flags, v, until) && get_gametime() < until
+		return (o[0] == '!') ? !set : set
+	}
+	else
+	{
+		// traits, archetype, memory: gm_people
+		if (!LibraryExists("gm_people", LibType_Library))
+			return -1
+		return people_match(id, other, k, o, v)
+	}
+	if (!num)
+	{
+		new bool:eq = bool:equali(str, v)
+		return (o[0] == '!') ? !eq : eq
+	}
+	new Float:want = str_to_float(v)
+	switch (o[0])
+	{
+		case '>': return o[1] == '=' ? have >= want : have > want
+		case '<': return o[1] == '=' ? have <= want : have < want
+		case '!': return have != want
+	}
+	return have == want
 }
 
 // Reading what happened, then typing it: people type about 6 to 10 characters a second
@@ -1350,6 +1709,8 @@ public task_idle_chatter()
 
 public ev_newround()
 {
+	g_Freeze = true
+	g_RoundOver = false
 	g_LastRound = get_gametime()
 	g_Round++
 	arrayset(g_RoundKills, 0, sizeof g_RoundKills)
@@ -1657,6 +2018,7 @@ public ev_ctwin()
 
 round_end(winner)
 {
+	g_RoundOver = true
 	// the round's over: threads with people end here, and answers still being written
 	arrayset(g_ThreadBot, 0, sizeof g_ThreadBot)
 	g_Round++
