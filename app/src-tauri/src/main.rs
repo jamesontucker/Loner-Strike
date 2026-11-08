@@ -9,6 +9,7 @@ mod archive;
 mod backup;
 mod browser;
 mod community;
+mod consolehints;
 mod content;
 mod diagnostics;
 mod extras;

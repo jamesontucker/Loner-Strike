@@ -91,7 +91,7 @@ impl Rcon {
     }
 
     fn send_udp(&self, command: &str) -> Result<String, RconError> {
-        let sock = UdpSocket::bind("127.0.0.1:0").map_err(|_| RconError::Offline)?;
+        let sock = UdpSocket::bind(local_end(&self.addr)).map_err(|_| RconError::Offline)?;
         sock.set_read_timeout(Some(Duration::from_millis(1500))).ok();
         sock.connect(&self.addr).map_err(|_| RconError::Offline)?;
 
@@ -124,6 +124,17 @@ impl Rcon {
             return Err(RconError::BadPassword);
         }
         Ok(text)
+    }
+}
+
+/// Where the app's end of the connection is: 127.0.0.1 for a server there, and the server's
+/// own address for one started on this computer's network address (a server bound to
+/// 192.168.x.x never gets packets sent from 127.0.0.1). Anything else: left to the system.
+fn local_end(addr: &str) -> String {
+    match addr.parse::<std::net::SocketAddr>().map(|a| a.ip()) {
+        Ok(ip) if ip.is_loopback() => "127.0.0.1:0".into(),
+        Ok(ip) if UdpSocket::bind((ip, 0)).is_ok() => std::net::SocketAddr::new(ip, 0).to_string(),
+        _ => "0.0.0.0:0".into(),
     }
 }
 

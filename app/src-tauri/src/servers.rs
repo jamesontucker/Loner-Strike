@@ -2002,6 +2002,8 @@ fn spawn(e: &Entry) -> Result<Child, String> {
         return Err("The server's files are missing. Delete it and make it again.".into());
     }
     e.pin_address();
+    // it may come up with other plugins: its console suggestions are asked for again
+    crate::consolehints::forget(&e.id);
     let log = std::fs::File::create(e.dir.join("loner-strike-server.log")).map_err(|err| err.to_string())?;
     let mut cmd = if e.kind == "crossover" {
         let mut c = sys::command(CROSSOVER_WINE);
@@ -2300,14 +2302,29 @@ fn console(e: &Entry) -> Vec<String> {
 
 /// The console without the app's own checks every few seconds ("Rcon from <from>", the
 /// address the app knocks on, and the gm_status it sent), which would bury chat and
-/// everything else.
+/// everything else; nor what the console's suggestions ask for (the command lists, and a
+/// setting's value: one word on its own).
 fn without_polls(lines: Vec<String>, from: &str) -> Vec<String> {
     let ours = format!("Rcon from {from}:");
+    let mut after_ours = false;
     lines
         .into_iter()
         .filter(|l| {
             let t = l.trim();
-            !(t.starts_with(&ours) || t.starts_with("rcon ") && (t.ends_with(" gm_status") || t.ends_with(" gm_status_full")))
+            let was_ours = std::mem::replace(&mut after_ours, t.starts_with(&ours) || t.starts_with("Rcon from 127.0.0.1:"));
+            if after_ours {
+                return false;
+            }
+            if !t.starts_with("rcon ") {
+                return true;
+            }
+            if t.ends_with(" gm_status") || t.ends_with(" gm_status_full") {
+                return false;
+            }
+            // rcon <challenge> "<password>" <command>
+            let cmd = t.splitn(2, "\" ").nth(1).unwrap_or("").trim();
+            let lists = matches!(cmd, "cmdlist" | "cvarlist" | "amxx cmds" | "amxx cvars") || cmd.strip_prefix("amx_help ").is_some_and(|n| n.parse::<u32>().is_ok());
+            !(was_ours && (lists || (!cmd.is_empty() && !cmd.contains(' '))))
         })
         .collect()
 }
@@ -2975,6 +2992,37 @@ struct ConsoleCmd {
     command: String,
 }
 
+#[derive(Deserialize, Default)]
+struct HintsReq {
+    #[serde(default)]
+    refresh: bool,
+    /// just this setting's current value
+    #[serde(default)]
+    value: Option<String>,
+}
+
+/// The running server's commands and settings, for suggestions while typing in its console,
+/// or with `value`, one setting's current value (null for a password or an unknown name).
+/// A POST so the page's request carries X-Panel; this computer only (it shows settings' values).
+async fn api_console_hints(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, req: Option<Json<HintsReq>>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || on.is_none() {
+        return forbidden();
+    }
+    let req = req.map(|Json(r)| r).unwrap_or_default();
+    let r = tokio::task::spawn_blocking(move || {
+        let e = get(&id).ok_or("That server isn't there any more.")?;
+        let rcon = e.rcon().ok_or("The server isn't set up yet.")?;
+        if let Some(name) = req.value {
+            return Ok(json!({"ok": true, "value": crate::consolehints::value(&rcon, name.trim())}));
+        }
+        let refresh = req.refresh;
+        crate::consolehints::for_server(&id, &rcon, refresh).map(|items| json!({"ok": true, "items": items}))
+    })
+    .await
+    .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
+    answer(r)
+}
+
 /// Any console command, for the server's owner at this computer only (not phones).
 async fn api_console_cmd(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req): Json<ConsoleCmd>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) {
@@ -3045,6 +3093,7 @@ pub fn local_routes() -> Router<Shared> {
     Router::new()
         .route("/api/servers/import", post(api_import))
         .route("/api/servers/:id/console/send", post(api_console_cmd))
+        .route("/api/servers/:id/console/hints", post(api_console_hints))
         .route("/api/servers/pick-folder", post(api_pick_folder))
         .route("/api/servers/remote", post(api_create_remote))
         .route("/api/servers/remote/probe", post(api_probe_remote))
@@ -3508,8 +3557,12 @@ mod tests {
     fn console_hides_the_apps_own_checks() {
         let l = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         let got = without_polls(l(&["Rcon from 127.0.0.1:34335:", "rcon 352348701 \"x\" gm_status", "[TFR] Tyler : ace haha", "rcon 1 \"x\" amxx plugins"]), "127.0.0.1");
-        // a server started on the network adapter: the app knocks from there
-        assert_eq!(without_polls(l(&["Rcon from 192.168.1.20:5000:", "Rcon from 127.0.0.1:1:"]), "192.168.1.20"), l(&["Rcon from 127.0.0.1:1:"]));
+        // a server started on the network adapter: the app knocks from there (and from
+        // 127.0.0.1 in older lines of the same log); someone else's RCON stays
+        assert_eq!(without_polls(l(&["Rcon from 192.168.1.20:5000:", "Rcon from 127.0.0.1:1:", "Rcon from 10.0.0.9:7:"]), "192.168.1.20"), l(&["Rcon from 10.0.0.9:7:"]));
         assert_eq!(got, l(&["[TFR] Tyler : ace haha", "rcon 1 \"x\" amxx plugins"]));
+        // the console suggestions' lists and setting lookups; a real command stays
+        let got = without_polls(l(&["Rcon from 127.0.0.1:2:", "rcon 5 \"x\" cmdlist", "Rcon from 127.0.0.1:3:", "rcon 6 \"x\" amx_help 11", "Rcon from 127.0.0.1:4:", "rcon 7 \"x\" mp_roundtime", "Rcon from 127.0.0.1:5:", "rcon 8 \"x\" changelevel de_inferno"]), "127.0.0.1");
+        assert_eq!(got, l(&["rcon 8 \"x\" changelevel de_inferno"]));
     }
 }

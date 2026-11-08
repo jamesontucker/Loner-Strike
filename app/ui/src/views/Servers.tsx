@@ -19,6 +19,7 @@ import { Players } from "./Players";
 import { FUN_NOTE, MatchButtons, RULES_NOTE, SettingsPage } from "./Settings";
 import type { Scan } from "./Setup";
 import { Community } from "./Community";
+import { ConsoleInput } from "./ConsoleInput";
 import { ServerExtras } from "./ServerExtras";
 import { Sounds } from "./Sounds";
 import { Welcome } from "./Welcome";
@@ -131,7 +132,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
-  // backups: Export all (every server and this computer's game) and Import a backup
+  // backups of servers (the whole app: Settings, Backup & restore)
   const [exporting, setExporting] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const guide = useRef<HTMLDetailsElement>(null);
@@ -166,7 +167,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
     <div className="stack">
       <SectionHead title="Servers" note={`Optional: dedicated servers that run without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game. ${RUNS_WHILE}`}>
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setRestoring(true)}>Import a backup</button>}
-        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setExporting(true)}>Export all</button>}
+        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setExporting(true)}>Back up servers</button>}
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setImporting(true)}>Add one you already run</button>}
         {ON_THIS_COMPUTER && <button className="btn primary" onClick={() => setCreating(true)}>New server</button>}
       </SectionHead>
@@ -247,8 +248,8 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
         />
       )}
       {importing && <ImportServer onClose={() => setImporting(false)} onDone={() => { setImporting(false); onChanged(); }} />}
-      {exporting && <BackupSheet onClose={() => setExporting(false)} />}
-      {restoring && <RestoreSheet servers={list?.servers ?? []} onClose={() => setRestoring(false)} onChanged={onChanged} />}
+      {exporting && <BackupSheet scope="servers" onClose={() => setExporting(false)} />}
+      {restoring && <RestoreSheet scope="servers" servers={list?.servers ?? []} onClose={() => setRestoring(false)} onChanged={onChanged} />}
     </div>
   );
 }
@@ -935,8 +936,8 @@ function Console({ server }: { server: ServerInfo }) {
       </pre>
       {failed && shown.length > 0 && <p className="muted small-note">Can't read the console right now. These are the last lines it showed.</p>}
       {ON_THIS_COMPUTER ? (
-        <form className="row" onSubmit={(e) => { e.preventDefault(); send(); }}>
-          <input className="search grow" placeholder="A server command, like status or changelevel de_inferno" value={cmd} onChange={(e) => setCmd(e.target.value)} spellCheck={false} />
+        <form className="row console-form" onSubmit={(e) => { e.preventDefault(); send(); }}>
+          <ConsoleInput serverId={server.id} running={server.state === "running"} value={cmd} onChange={setCmd} />
           <button
             className="btn"
             type="submit"

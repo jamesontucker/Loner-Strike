@@ -672,6 +672,24 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .server-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; }
 .server-details .panel { background: var(--panel-2); }
 .console { margin: 0 0 10px; height: 260px; overflow: auto; background: #23271c; box-shadow: var(--sunken); padding: 10px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; color: var(--bone-dim); }
+/* the console's command box and its suggestions (ConsoleInput.tsx) */
+.console-input { position: relative; flex: 1 1 260px; display: flex; flex-direction: column; min-width: 0; }
+.console-form { align-items: flex-start; }
+.console-input > .search { width: 100%; max-width: none; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+.console-suggest { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40; max-height: 264px; overflow: hidden auto; display: grid; padding: 4px; background: var(--panel); box-shadow: var(--raised), 0 10px 28px rgba(0,0,0,.45); border-radius: 2px; }
+.console-suggest button { display: grid; grid-template-columns: minmax(10ch, max-content) minmax(0, 1fr) auto; gap: 12px; align-items: baseline; width: 100%; border: 0; background: none; color: var(--bone); text-align: left; padding: 5px 8px; border-radius: 2px; cursor: pointer; font: 500 13px/1.25 var(--text); }
+.console-suggest button.active { background: var(--panel-2); }
+.console-suggest button.active .cs-name { color: var(--signal); }
+.console-suggest .cs-name { font: 13px ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
+.console-suggest .cs-what { font: 12px ui-monospace, Menlo, Consolas, monospace; color: var(--bone-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.console-suggest .cs-what .muted { font-family: var(--text); font-size: 13px; }
+.console-suggest .cs-from { font-size: 12px; color: var(--bone-faint); white-space: nowrap; }
+.console-hint { margin: 6px 0 0; color: var(--bone-dim); overflow-wrap: anywhere; }
+.console-hint code { font-size: 12px; color: var(--bone); }
+@media (max-width: 760px), (pointer: coarse) and (max-height: 500px) {
+  .console-suggest button { grid-template-columns: minmax(0, 1fr) auto; min-height: 40px; }
+  .console-suggest .cs-what { display: none; }
+}
 .search.narrow { width: 110px; }
 .search.grow { flex: 1; max-width: none; }
 .stack-tight > * + * { margin-top: 12px; }
@@ -1569,6 +1587,8 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 
 /* picking maps or servers to copy to (MapCopy.tsx) */
 .pick-list { max-height: 44vh; overflow: auto; margin: 12px 0; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; padding: 4px; }
+.prefs-box { margin: 12px 0; padding: 10px 12px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
+.prefs-box p { margin: 6px 0 0; }
 .pick-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 2px; cursor: pointer; }
 .pick-row:hover { background: var(--panel); }
 .pick-row .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }

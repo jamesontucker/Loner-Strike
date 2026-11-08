@@ -67,20 +67,39 @@ impl StoreError {
     }
 }
 
+/// Waits before asking GameBanana again after a reply that was empty, cut off or "slow
+/// down": it sends those when it's asked for a lot at once (setup getting a mode's maps,
+/// a restore downloading everything again). No reply at all fails straight away.
+const RETRY_WAITS: &[Duration] = &[Duration::from_secs(2), Duration::from_secs(6), Duration::from_secs(15)];
+
+const BUSY: &str = "GameBanana is busy and didn't send it properly. Try again in a minute.";
+
 fn get_json(path: &str, params: &[(&str, String)]) -> Result<Value, StoreError> {
-    let r = sys::http()
-        .get(format!("{API}{path}"))
-        .query(params)
-        .header("User-Agent", USER_AGENT)
-        .header("Accept", "application/json")
-        .timeout(Duration::from_secs(20))
-        .send()
-        .map_err(|_| StoreError::Net)?;
-    if !r.status().is_success() {
-        return Err(StoreError::Net);
+    let mut waits = RETRY_WAITS.iter();
+    loop {
+        let r = sys::http()
+            .get(format!("{API}{path}"))
+            .query(params)
+            .header("User-Agent", USER_AGENT)
+            .header("Accept", "application/json")
+            .timeout(Duration::from_secs(20))
+            .send()
+            .map_err(|_| StoreError::Net)?;
+        let status = r.status();
+        // too many requests, or GameBanana's own trouble: worth another go
+        let busy = status.as_u16() == 429 || status.is_server_error();
+        if !status.is_success() && !busy {
+            return Err(StoreError::Net);
+        }
+        let parsed = if busy { None } else { r.text().ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) };
+        if let Some(v) = parsed {
+            return Ok(v);
+        }
+        match waits.next() {
+            Some(w) => std::thread::sleep(*w),
+            None => return Err(StoreError::Bad(BUSY.into())),
+        }
     }
-    let text = r.text().map_err(|_| StoreError::Net)?;
-    serde_json::from_str(&text).map_err(|e| StoreError::Bad(e.to_string()))
 }
 
 fn get_bytes(url: &str, limit: u64) -> Option<Vec<u8>> {
@@ -962,7 +981,8 @@ impl MapStore {
         Ok((msg, maps, kept, skipped))
     }
 
-    fn download(&self, id: &str, file_id: i64, out: &Path, size: u64) -> Result<(), StoreError> {
+    /// Downloads a file; returns how many bytes came.
+    fn download(&self, id: &str, file_id: i64, out: &Path, size: u64) -> Result<u64, StoreError> {
         use std::io::{Read, Write};
         self.update(id, |j| {
             j.state = "downloading".into();
@@ -997,7 +1017,7 @@ impl MapStore {
             f.write_all(&buf[..n]).map_err(|e| StoreError::Bad(e.to_string()))?;
             self.update(id, |j| j.got = got);
         }
-        Ok(())
+        Ok(got)
     }
 
     fn save_shot(&self, info: &Value, maps: &[String]) {
@@ -1029,7 +1049,24 @@ impl MapStore {
         }
         let ext = archive::ext_of(&fname).to_lowercase();
         let download = tmp.join(format!("download{ext}"));
-        self.download(id, file_id, &download, size)?;
+        // an empty or cut-off file (GameBanana busy) is downloaded again, not unpacked into
+        // nothing ("No map found")
+        let mut waits = RETRY_WAITS.iter();
+        loop {
+            let got = self.download(id, file_id, &download, size)?;
+            if got > 0 && got >= size {
+                break;
+            }
+            let Some(w) = waits.next() else {
+                // GameBanana's size can be a little off: something that came is unpacked and checked
+                if got > 0 {
+                    break;
+                }
+                return Err(StoreError::Bad(BUSY.into()));
+            };
+            self.update(id, |j| j.message = "GameBanana is busy: trying again".into());
+            std::thread::sleep(*w);
+        }
         self.update(id, |j| {
             j.state = "unpacking".into();
             j.message = "Unpacking".into();

@@ -123,7 +123,7 @@ fn start_download(m: &'static Model) -> Result<(), String> {
 // ---- running llama-server -----------------------------------------------------------
 
 /// The model the feature uses: the chosen one, if it's downloaded.
-fn chosen() -> Option<&'static Model> {
+pub(crate) fn chosen() -> Option<&'static Model> {
     load_settings().smart_chat_model.as_deref().and_then(catalog::model).filter(|m| runtime::has_model(m))
 }
 

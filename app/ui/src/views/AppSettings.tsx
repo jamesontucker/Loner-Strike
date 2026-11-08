@@ -39,7 +39,7 @@ export const noteUpdateChecked = () => {
 export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { app: AppInfo | null; reloadApp: () => void; scan: Scan | null; openSetup: () => void; switchGame: (hl: string | null, game: string) => Promise<void> }) {
   const [nuke, setNuke] = useState(false);
   // backing up this game, and restoring a backup onto it (Backup.tsx)
-  const [backup, setBackup] = useState<"backup" | "restore" | null>(null);
+  const [backup, setBackup] = useState<"backup" | "game" | "restore" | null>(null);
   const ownGame = app?.game && !app.game.dedicated ? app.game.id : null;
   const ask = useConfirm();
   const toast = useToast();
@@ -388,21 +388,22 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
       </section>
 
       <section>
-        <SectionHead title="Backup" note="Save this game's mode settings, presets, admins, bans, map rotation, your own plugins and maps, and which mods it has to one file, to move to another computer or set up a server the same way." />
+        <SectionHead title="Backup & restore" note="Everything in one file: your game's mode settings, presets, admins, bans, map rotation, your own plugins and maps, and which mods it has; every server; and the app's preferences. For after a reinstall, or moving to another computer. A single server is backed up from its own page." />
         <div className="panel row between">
           <p className="muted">Passwords are only included if you lock them with a password of your own.</p>
           {ON_THIS_COMPUTER ? (
             <div className="row">
-              <button className="btn" disabled={!ownGame} title={ownGame ? undefined : NO_GAME_TO_BACK_UP} onClick={() => setBackup("backup")}>Back up</button>
+              <button className="btn primary" onClick={() => setBackup("backup")}>Back up everything</button>
+              <button className="btn" disabled={!ownGame} title={ownGame ? undefined : NO_GAME_TO_BACK_UP} onClick={() => setBackup("game")}>Just your game</button>
               <button className="btn" onClick={() => setBackup("restore")}>Restore</button>
-              {!ownGame && <span className="muted small-note">{NO_GAME_TO_BACK_UP}</span>}
             </div>
           ) : (
             <p className="muted">{ON_COMPUTER_ONLY}</p>
           )}
         </div>
-        {backup === "backup" && ownGame && <BackupSheet only={[`local:${ownGame}`]} onClose={() => setBackup(null)} />}
-        {backup === "restore" && <RestoreToGame game={ownGame} onClose={() => setBackup(null)} onChanged={reloadApp} />}
+        {backup === "backup" && <BackupSheet onClose={() => setBackup(null)} />}
+        {backup === "game" && ownGame && <BackupSheet only={[`local:${ownGame}`]} onClose={() => setBackup(null)} />}
+        {backup === "restore" && <RestoreAll onClose={() => setBackup(null)} onChanged={reloadApp} />}
       </section>
 
       <section>
@@ -548,8 +549,9 @@ function RemoveEverything({ scan, onClose }: { scan: Scan; onClose: () => void }
   );
 }
 
-/** Restore, opened from Settings: onto this game unless another target is picked. */
-function RestoreToGame({ game, onClose, onChanged }: { game: string | null; onClose: () => void; onChanged: () => void }) {
+/** Restore, opened from Settings: anything in the file, to wherever fits (a game's backup
+ *  into the game, a server's as a new server), and the app preferences. */
+function RestoreAll({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
   const servers = useServers().data?.servers ?? [];
-  return <RestoreSheet to={game ? { where: "game", game } : undefined} servers={servers} onClose={onClose} onChanged={onChanged} />;
+  return <RestoreSheet servers={servers} onClose={onClose} onChanged={onChanged} />;
 }

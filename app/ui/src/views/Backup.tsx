@@ -12,7 +12,9 @@ import type { Job } from "./Setup";
 type Part = { id: string; name: string };
 type Source = { id: string; name: string; game: "cstrike" | "czero"; kind: "game" | "server"; host?: string | null };
 type Machine = { id: string; host: string; user: string };
-type Choices = { sources?: Source[]; machines?: Machine[]; parts?: Part[]; kept_dir?: string; error?: string };
+type Choices = { sources?: Source[]; machines?: Machine[]; parts?: Part[]; kept_dir?: string; app_version?: string; error?: string };
+/** "servers": opened from the Servers page, so only servers (Settings has the whole app). */
+export type Scope = "servers" | "all";
 type Reply = { ok?: boolean; error?: string; cancelled?: boolean; job?: string; id?: string | null; need_password?: boolean; wrong_password?: boolean };
 
 const GAME = { cstrike: "CS 1.6", czero: "Condition Zero" } as const;
@@ -25,6 +27,7 @@ const PART_NOTE: Record<string, string> = {
   content: "Maps, models and sounds you added, round music and skins, and the GameBanana downloads. For your game, maps you copied in yourself are only told apart from Valve's when a server here has Valve's files to compare with",
   mods: "The modes and add-ons installed",
 };
+const PREFS_NOTE = "Checking for updates when the app starts, keeping servers running when the app closes, join notifications, and Smarter chat. Not phone access, which game is picked, or folders: those belong to this computer.";
 const PASSWORDS_NOTE = "The console (RCON) password, the join password, the HLTV spectator password, Discord webhooks, the website status tunnel token, and passwords in settings files (rcon_password and sv_password in server.cfg, admins' passwords in users.ini). They're locked with the password you pick here, and asked for when restoring.";
 /** The player's own compiled plugins: code, so only restored when they say so. */
 const PLUGIN_CODE_NOTE = "Compiled plugins (.amxx) run inside the server, and anyone could have made or changed this file. Only tick this if you made the backup yourself or trust whoever did. Left unticked, their source (.sma) still comes back, and you can build them again on the Mods page.";
@@ -77,14 +80,14 @@ function PartChecks({ parts, chosen, onChange, disabled }: { parts: Part[]; chos
 
 // ---- backing up -------------------------------------------------------------------------
 
-type Saved = { bytes: number; path: string; skipped?: string[]; sources: { name: string; files: number; maps: number; components: number; secrets: boolean; odd_names: number; passwords_left_out?: number }[] };
+type Saved = { bytes: number; path: string; skipped?: string[]; app_prefs?: boolean; sources: { name: string; files: number; maps: number; components: number; secrets: boolean; odd_names: number; passwords_left_out?: number }[] };
 
 /** The Back up window. `only`: just these (a server's page, Settings); otherwise every
- *  server and this computer's game, all ticked (Export all). */
-export function BackupSheet({ only, onClose }: { only?: string[]; onClose: () => void }) {
+ *  server and this computer's game, all ticked (Back up everything in Settings; servers only from the Servers page). */
+export function BackupSheet({ only, scope = "all", onClose }: { only?: string[]; scope?: Scope; onClose: () => void }) {
   const toast = useToast();
   const info = useBackupInfo();
-  const sources = useMemo(() => (info?.sources ?? []).filter((s) => !only || only.includes(s.id)), [info, only]);
+  const sources = useMemo(() => (info?.sources ?? []).filter((s) => (!only || only.includes(s.id)) && (scope === "all" || s.kind === "server")), [info, only, scope]);
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const chosen = useMemo(() => picked ?? new Set(sources.map((s) => s.id)), [picked, sources]);
   const [full, setFull] = useState(false);
@@ -96,6 +99,10 @@ export function BackupSheet({ only, onClose }: { only?: string[]; onClose: () =>
   const [size, setSize] = useState<number | null>(null);
   const [sizeError, setSizeError] = useState("");
   const [saved, setSaved] = useState<Saved | null>(null);
+  // Export all (not one server or the game): the app's own preferences can go in too
+  const [prefs, setPrefs] = useState(true);
+  const showPrefs = !only && scope === "all";
+  const withPrefs = showPrefs && prefs;
   const { run, busy } = useActions();
   const saving = busy("backup:save");
 
@@ -126,14 +133,14 @@ export function BackupSheet({ only, onClose }: { only?: string[]; onClose: () =>
   };
   const why = !chosen.size ? "Pick what to back up." : !partSet.size ? "Pick at least one part." : lock && chars(pw) < 6 ? "Pick a password of at least 6 characters." : lock && pw !== pw2 ? "The two passwords aren't the same." : "";
   const save = () => run("backup:save", async () => {
-    const r = await post("/api/backup/export", { sources: [...chosen], content: full ? "full" : "light", parts: [...partSet], password: lock ? pw : "" });
+    const r = await post("/api/backup/export", { sources: [...chosen], content: full ? "full" : "light", parts: [...partSet], password: lock ? pw : "", app_prefs: withPrefs });
     if (r.error) return toast(r.error, true);
     if (r.cancelled) return;
     setSaved(r as unknown as Saved);
     toast("Backup saved");
   }, "Saving the backup…");
 
-  const title = only?.length === 1 ? `Back up ${sources[0]?.name ?? ""}` : "Back up";
+  const title = only?.length === 1 ? `Back up ${sources[0]?.name ?? ""}` : scope === "servers" ? "Back up servers" : "Back up everything";
   return (
     <Sheet label={title} onClose={saving ? undefined : onClose}>
       <div className="sheet-body">
@@ -162,8 +169,9 @@ export function BackupSheet({ only, onClose }: { only?: string[]; onClose: () =>
                 </li>
               ))}
             </ul>
+            {saved.app_prefs && <p className="muted small-note">App preferences included.</p>}
             {saved.skipped?.length ? <ul className="plain-list err-text">{saved.skipped.map((n) => <li key={n}>{n}</li>)}</ul> : null}
-            <p className="muted measure">Keep it somewhere safe, like a USB stick or cloud storage. To bring it back: Servers, Import a backup.</p>
+            <p className="muted measure">Keep it somewhere safe, like a USB stick or cloud storage. To bring it back: Settings, Backup & restore (or a server's own Restore).</p>
             <div className="row"><button className="btn primary" onClick={onClose}>Done</button></div>
           </>
         ) : (
@@ -198,6 +206,12 @@ export function BackupSheet({ only, onClose }: { only?: string[]; onClose: () =>
               <span>What's included</span>
               <PartChecks parts={info.parts ?? []} chosen={partSet} onChange={setParts} disabled={saving} />
             </div>
+            {showPrefs && (
+              <label className="check-row">
+                <input type="checkbox" checked={prefs} disabled={saving} onChange={(e) => setPrefs(e.target.checked)} />
+                <span>Include app preferences<Info text={PREFS_NOTE} /></span>
+              </label>
+            )}
             <label className="check-row">
               <input type="checkbox" checked={lock} disabled={saving} onChange={(e) => setLock(e.target.checked)} />
               <span>Include passwords & webhooks<Info text={PASSWORDS_NOTE} /></span>
@@ -232,11 +246,41 @@ export function BackupSheet({ only, onClose }: { only?: string[]; onClose: () =>
 // ---- restoring ---------------------------------------------------------------------------
 
 type InFile = { index: number; source: "game" | "server"; name: string; game: "cstrike" | "czero"; content: "light" | "full"; secrets: boolean; secrets_kept?: boolean; bytes: number; app_version: string; created: string; parts: string[]; components: number; maps: number; files: number; plugin_code?: number };
-type Opened = { file: string; name?: string; sources: InFile[]; machines: Machine[] };
+type AppPrefs = { manual_updates: boolean; keep_servers: boolean; mute_joins: boolean; smart_chat: boolean };
+type Opened = { file: string; name?: string; sources: InFile[]; machines: Machine[]; app_prefs?: AppPrefs | null };
 /** Where a restore goes: a new server here, a new server on a machine, over a server, or the game. */
 type Where = "new-local" | "new-remote" | "server" | "game";
 /** Preset by where the window was opened from. */
 export type RestoreTo = { where: "server"; id: string } | { where: "game"; game: string };
+
+/** The app preferences in an Export all file: shown, and put back on their own (they
+ *  aren't part of any one server or game). */
+function PrefsBack({ file, prefs }: { file: string; prefs: AppPrefs }) {
+  const toast = useToast();
+  const [done, setDone] = useState<string[] | null>(null);
+  const { run, busy } = useActions();
+  const working = busy("restore:prefs");
+  const onOff = (on: boolean) => (on ? "on" : "off");
+  const put = () => run("restore:prefs", async () => {
+    const r = await post("/api/backup/app-prefs", { file });
+    if (r.error) return toast(r.error, true);
+    const notes = (r.notes as string[] | undefined) ?? [];
+    setDone(notes);
+    toast("App preferences put back");
+  }, "Putting back the app preferences…");
+  return (
+    <div className="prefs-box">
+      <div className="row between">
+        <b>App preferences</b>
+        {done ? <span className="muted small-note">Put back</span> : <BusyButton className="btn small" busy={working} label="Put them back" busyLabel="Putting back…" onClick={put} />}
+      </div>
+      <p className="muted small-note">
+        Check for updates when the app starts: {onOff(!prefs.manual_updates)} · Keep servers running when the app closes: {onOff(prefs.keep_servers)} · Join notifications: {onOff(!prefs.mute_joins)} · Smarter chat: {onOff(prefs.smart_chat)}
+      </p>
+      {done?.map((n) => <p key={n} className="small-note">{n}</p>)}
+    </div>
+  );
+}
 
 /** "20260107-142233" -> "7 Jan 2026" */
 function made(stamp: string) {
@@ -246,7 +290,7 @@ function made(stamp: string) {
 }
 
 /** The Restore window: pick a backup, what's restored from it and where. */
-export function RestoreSheet({ to, servers, onClose, onChanged }: { to?: RestoreTo; servers: ServerInfo[]; onClose: () => void; onChanged: () => void }) {
+export function RestoreSheet({ to, scope = "all", servers, onClose, onChanged }: { to?: RestoreTo; scope?: Scope; servers: ServerInfo[]; onClose: () => void; onChanged: () => void }) {
   const toast = useToast();
   const ask = useConfirm();
   const info = useBackupInfo();
@@ -260,6 +304,7 @@ export function RestoreSheet({ to, servers, onClose, onChanged }: { to?: Restore
   const [pw, setPw] = useState("");
   const [skipSecrets, setSkipSecrets] = useState(false);
   const [pluginCode, setPluginCode] = useState(false);
+  const [updateMods, setUpdateMods] = useState(true);
   const [problem, setProblem] = useState("");
   const [running, setRunning] = useState(false);
   const [ended, setEnded] = useState<{ ok: boolean; notes: string[]; error?: string } | null>(null);
@@ -289,6 +334,7 @@ export function RestoreSheet({ to, servers, onClose, onChanged }: { to?: Restore
     const first = o.sources[0];
     setName(first?.source === "server" ? first.name : "");
     setMachine(o.machines[0]?.id ?? "");
+    fitWhere(first);
   }, "Opening the backup…");
   const pickSource = (i: number) => {
     setIndex(i);
@@ -299,6 +345,13 @@ export function RestoreSheet({ to, servers, onClose, onChanged }: { to?: Restore
     setEnded(null);
     const s = opened?.sources[i];
     setName(s?.source === "server" ? s.name : "");
+    fitWhere(s);
+  };
+  // opened without a preset target (Settings, the Servers page): a game's backup goes back
+  // into the game when it's here, a server's becomes a new server
+  const fitWhere = (s?: InFile) => {
+    if (to || !s) return;
+    setWhere(s.source === "game" && scope === "all" && games.includes(s.game) ? "game" : "new-local");
   };
 
   const targetName = where === "server" ? servers.find((s) => s.id === server)?.name : where === "game" ? `your game (${src ? GAME[src.game] : ""})` : null;
@@ -320,7 +373,7 @@ export function RestoreSheet({ to, servers, onClose, onChanged }: { to?: Restore
     if ((where === "server" || where === "game") && !(await ask(`Restore over ${targetName}? Its settings${partSet.has("mods") ? ", mods" : ""} and files are replaced with the ones in the backup. A copy of what's there now is saved first, so you can undo it.`, { ok: "Restore over it", danger: true }))) return;
     await run("restore:start", async () => {
       setProblem("");
-      const r = await post("/api/backup/restore", { file: opened!.file, index, target: where, machine, server, name, parts: [...partSet], password: pw, skip_secrets: skipSecrets, plugin_code: pluginCode && partSet.has("plugins") });
+      const r = await post("/api/backup/restore", { file: opened!.file, index, target: where, machine, server, name, parts: [...partSet], password: pw, skip_secrets: skipSecrets, plugin_code: pluginCode && partSet.has("plugins"), update_mods: updateMods });
       if (r.wrong_password || r.need_password) return setProblem(r.error ?? "");
       if (r.error) return setProblem(r.error);
       setRunning(true);
@@ -358,8 +411,9 @@ export function RestoreSheet({ to, servers, onClose, onChanged }: { to?: Restore
               <BusyButton className={opened ? "btn" : "btn primary"} busy={opening} label={opened ? "Open another backup" : "Choose a backup file"} busyLabel="Opening…" onClick={open} />
               {opened?.name && <span className="muted small-note mono">{opened.name}</span>}
             </div>
-            {!opened && <p className="muted measure">A .lsbackup file from Back up or Export all. Setup files exported from Settings by earlier versions open too.</p>}
+            {!opened && <p className="muted measure">A .lsbackup file from any Back up. Setup files exported from Settings by earlier versions open too.</p>}
             {!opened && info?.kept_dir && <p className="muted small-note">Before restoring over a server or your game, Loner-Strike saves a copy of it in <span className="mono">{info.kept_dir}</span>: open one from there to undo a restore.</p>}
+            {scope === "all" && opened?.app_prefs && <PrefsBack file={opened.file} prefs={opened.app_prefs} />}
             {opened && opened.sources.length > 1 && (
               <div className="pick-list" role="radiogroup" aria-label="What to restore">
                 {opened.sources.map((s, i) => (
@@ -395,10 +449,10 @@ export function RestoreSheet({ to, servers, onClose, onChanged }: { to?: Restore
                       <span className="method-name">Over a server you have</span>
                       <span className="method-blurb">{over.length ? "Replaces its settings, mods and files" : `No ${GAME[src.game]} servers yet`}</span>
                     </button>
-                    <button type="button" className="method" role="radio" aria-checked={where === "game"} disabled={!games.includes(src.game)} onClick={() => setWhere("game")}>
+                    {scope === "all" && <button type="button" className="method" role="radio" aria-checked={where === "game"} disabled={!games.includes(src.game)} onClick={() => setWhere("game")}>
                       <span className="method-name">This computer's game ({GAME[src.game]})</span>
                       <span className="method-blurb">The game you play with Play</span>
-                    </button>
+                    </button>}
                   </div>
                 </div>
                 {where.startsWith("new") && (
@@ -436,6 +490,15 @@ export function RestoreSheet({ to, servers, onClose, onChanged }: { to?: Restore
                       <span>Your own plugins (code from this backup): {src.plugin_code} compiled plugin{src.plugin_code === 1 ? "" : "s"}<Info text={PLUGIN_CODE_NOTE} /></span>
                     </label>
                   ) : null}
+                  {src.content === "full" && partSet.has("mods") && (
+                    <label className="check-row">
+                      <input type="checkbox" checked={updateMods} disabled={starting} onChange={(e) => setUpdateMods(e.target.checked)} />
+                      <span>
+                        Update mods to this version of Loner-Strike
+                        <Info text={`${src.app_version && info?.app_version && src.app_version !== info.app_version ? `This backup was made with ${src.app_version}. ` : ""}Mods from an older version get this version's fixes and patches after they're put back; their settings stay. Without it they're left as they were, and Update all on the page updates them later.`} />
+                      </span>
+                    </label>
+                  )}
                   {src.content === "full" && partSet.has("mods") && <small>Mods' program files aren't taken from a backup: setup installs them from its own checked downloads.</small>}
                   <small>Restored settings files (.cfg) can run game commands on the server, so only restore backups you made yourself or trust.</small>
                 </div>

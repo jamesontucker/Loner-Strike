@@ -78,6 +78,42 @@ pub const PARTS: &[(&str, &str)] = &[
     ("mods", "Mods"),
 ];
 
+/// The app's own preferences that make sense on another computer or after a reinstall
+/// (app-preferences.json at the top of the file). Never phone access or its token, which
+/// game is picked, or folders: those belong to this computer.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(default)]
+pub struct AppPrefs {
+    pub manual_updates: bool,
+    pub keep_servers: bool,
+    pub mute_joins: bool,
+    pub smart_chat: bool,
+}
+
+const PREFS_FILE: &str = "app-preferences.json";
+
+impl AppPrefs {
+    fn now() -> AppPrefs {
+        let s = crate::app_api::load_settings();
+        AppPrefs { manual_updates: s.manual_updates, keep_servers: s.keep_servers, mute_joins: s.mute_joins, smart_chat: s.smart_chat }
+    }
+
+    /// Puts them back; says what's left to do.
+    fn apply(&self) -> Vec<String> {
+        crate::app_api::edit_settings(|s| {
+            s.manual_updates = self.manual_updates;
+            s.keep_servers = self.keep_servers;
+            s.mute_joins = self.mute_joins;
+            s.smart_chat = self.smart_chat;
+        });
+        let mut notes = Vec::new();
+        if self.smart_chat && crate::smartchat::chosen().is_none() {
+            notes.push("Smarter chat is on, but its model isn't on this computer yet: download it in Settings.".into());
+        }
+        notes
+    }
+}
+
 // ---- the format ------------------------------------------------------------------------
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -1002,7 +1038,7 @@ fn zip_options(path: &str, size: u64) -> zip::write::SimpleFileOptions {
 /// Each file's size in the manifest is what was actually packed (files change between
 /// planning and saving); a file that's gone by then is left out and named in a note.
 /// Returns the file's size and the notes.
-fn write_backup(path: &Path, planned: &mut [Planned]) -> Result<(u64, Vec<String>), String> {
+fn write_backup(path: &Path, planned: &mut [Planned], prefs: Option<&AppPrefs>) -> Result<(u64, Vec<String>), String> {
     let mut notes = Vec::new();
     let zerr = |e: zip::result::ZipError| format!("Couldn't write the backup ({e}).");
     let ioerr = |e: std::io::Error| format!("Couldn't write the backup ({e}).");
@@ -1015,6 +1051,10 @@ fn write_backup(path: &Path, planned: &mut [Planned]) -> Result<(u64, Vec<String
             z.start_file("backups.json", zip_options("backups.json", 0)).map_err(zerr)?;
             let top = json!({"format": MANY, "version": VERSION, "count": planned.len(), "created": crate::sys::stamp()});
             z.write_all(serde_json::to_string_pretty(&top).unwrap_or_default().as_bytes()).map_err(ioerr)?;
+        }
+        if let Some(prefs) = prefs {
+            z.start_file(PREFS_FILE, zip_options(PREFS_FILE, 0)).map_err(zerr)?;
+            z.write_all(serde_json::to_string_pretty(prefs).unwrap_or_default().as_bytes()).map_err(ioerr)?;
         }
         for (i, p) in planned.iter_mut().enumerate() {
             let prefix = if many { format!("sources/{i}/") } else { String::new() };
@@ -1157,7 +1197,7 @@ fn write_kept(path: &Path, mut p: Planned, mut secrets: Secrets) -> Result<(), S
         p.manifest.secrets = Some(seal(&secrets, &key)?);
         Some(key)
     };
-    write_backup(path, std::slice::from_mut(&mut p))?;
+    write_backup(path, std::slice::from_mut(&mut p), None)?;
     if let Some(key) = key {
         let kp = key_path(path);
         // a copy whose key couldn't be saved can't bring its passwords back: none is kept
@@ -1188,6 +1228,8 @@ pub struct Opened {
     key: Option<String>,
     /// (where it is in the file, what it is)
     sources: Vec<(String, Manifest)>,
+    /// the app's own preferences, when Export all took them
+    prefs: Option<AppPrefs>,
 }
 
 /// Backups opened in the Import window, by token (the page never sends a file path).
@@ -1248,7 +1290,7 @@ fn open_legacy(v: &Value) -> Result<Opened, String> {
         files: items,
         ..Default::default()
     };
-    Ok(Opened { backing: Backing::Legacy(bytes), key: None, sources: vec![(String::new(), m)] })
+    Ok(Opened { backing: Backing::Legacy(bytes), key: None, sources: vec![(String::new(), m)], prefs: None })
 }
 
 pub fn open_backup(path: &Path) -> Result<Opened, String> {
@@ -1285,7 +1327,8 @@ pub fn open_backup(path: &Path) -> Result<Opened, String> {
     }
     // only a key that's no more than a key
     let key = std::fs::read_to_string(key_path(path)).ok().map(|k| k.trim().to_string()).filter(|k| k.len() == 64 && k.chars().all(|c| c.is_ascii_hexdigit()));
-    Ok(Opened { backing: Backing::Zip(path.to_path_buf()), key, sources })
+    let prefs = read_json(&mut z, PREFS_FILE).and_then(|v| serde_json::from_value(v).ok());
+    Ok(Opened { backing: Backing::Zip(path.to_path_buf()), key, sources, prefs })
 }
 
 /// Reads files out of an opened backup (the zip opened once for a whole restore).
@@ -1390,6 +1433,8 @@ struct Restore {
     st: Shared,
     /// restore the player's own compiled plugins (code) too
     plugin_code: bool,
+    /// bring mods from an older version in an Everything included backup up to this one
+    update_mods: bool,
     opened: Arc<Opened>,
     prefix: String,
     m: Manifest,
@@ -1641,7 +1686,7 @@ impl Restore {
             }
             _ => {
                 let (saved, local_only) = job.run(&step("rs-safety"), || self.save_first())?;
-                job.note(&format!("A copy of what was there before is in {}. To undo, restore that file with Import a backup (its passwords come back too).", saved.display()));
+                job.note(&format!("A copy of what was there before is in {}. To undo, restore that file (Settings, Backup & restore; its passwords come back too).", saved.display()));
                 if local_only {
                     job.note("The server's machine couldn't be reached, so that copy has this computer's copy of its settings, which may be a little behind the machine's.");
                 }
@@ -1758,9 +1803,27 @@ impl Restore {
             if refused > 0 {
                 job.note(&format!("{refused} mod file{} in the backup weren't used: program files, and anything setup's record doesn't list, only ever come from setup.", if refused == 1 { "" } else { "s" }));
             }
-            let (redo, cant): (Vec<String>, Vec<String>) = missing.into_iter().partition(|c| can(c));
+            let (mut redo, cant): (Vec<String>, Vec<String>) = missing.into_iter().partition(|c| can(c));
             if !cant.is_empty() {
                 job.note(&format!("Not put back, as this version of Loner-Strike can't install them: {}.", and_list(&cant)));
+            }
+            // mods from an older version of Loner-Strike: this one's fixes and patches
+            let older = setup::outdated(&self.res, &setup::record::Record::open(gdir));
+            let mut base = base;
+            if !older.is_empty() {
+                let names: Vec<String> = older.iter().map(|c| if c == "core" { "Loner-Strike's own plugins".to_string() } else { c.clone() }).collect();
+                if self.update_mods {
+                    job.note(&format!("Updated to this version, as the backup had older ones: {}.", and_list(&names)));
+                    // setup's own parts come with any install it runs
+                    base |= older.iter().any(|c| c == "core" || c == "foundation");
+                    for c in older.into_iter().filter(|c| c != "core" && c != "foundation" && can(c)) {
+                        if !redo.contains(&c) {
+                            redo.push(c);
+                        }
+                    }
+                } else {
+                    job.note(&format!("From an older version of Loner-Strike, left as they were: {}. Update all on its page brings them up to date.", and_list(&names)));
+                }
             }
             if redo.is_empty() && !base {
                 return Ok(None);
@@ -2261,7 +2324,7 @@ async fn api_info(State(st): State<Shared>) -> Reply {
         }
         let machines: Vec<Value> = machines().into_iter().map(|(id, r)| json!({"id": id, "host": r.host, "user": r.user})).collect();
         let parts: Vec<Value> = PARTS.iter().map(|(id, name)| json!({"id": id, "name": name})).collect();
-        json!({"sources": sources, "machines": machines, "parts": parts, "kept_dir": crate::sys::app_dir().join("backups").to_string_lossy()})
+        json!({"sources": sources, "machines": machines, "parts": parts, "kept_dir": crate::sys::app_dir().join("backups").to_string_lossy(), "app_version": env!("CARGO_PKG_VERSION")})
     })
     .await
     .unwrap_or_default();
@@ -2280,6 +2343,9 @@ struct ExportReq {
     /// locks the passwords and webhooks in (empty: none are included)
     #[serde(default)]
     password: String,
+    /// the app's own preferences too (AppPrefs)
+    #[serde(default)]
+    app_prefs: bool,
 }
 
 fn sources_of(st: &Shared, ids: &[String]) -> Result<Vec<Source>, String> {
@@ -2365,13 +2431,14 @@ async fn api_export(State(st): State<Shared>, headers: HeaderMap, Json(req): Jso
             return Ok(json!({"cancelled": true}));
         };
         let path = path.into_path().map_err(|e| e.to_string())?;
-        let (bytes, gone) = write_backup(&path, &mut planned)?;
+        let prefs = req.app_prefs.then(AppPrefs::now);
+        let (bytes, gone) = write_backup(&path, &mut planned, prefs.as_ref())?;
         skipped.extend(gone);
         let each: Vec<Value> = planned
             .iter()
             .map(|p| json!({"name": p.manifest.name, "files": p.manifest.files.len(), "maps": p.manifest.maps.len(), "components": p.manifest.components.len(), "secrets": p.manifest.secrets.is_some(), "odd_names": p.odd_names, "passwords_left_out": p.stripped.len()}))
             .collect();
-        Ok(json!({"ok": true, "bytes": bytes, "path": path.to_string_lossy(), "sources": each, "skipped": skipped}))
+        Ok(json!({"ok": true, "bytes": bytes, "path": path.to_string_lossy(), "sources": each, "skipped": skipped, "app_prefs": prefs.is_some()}))
     })
     .await
     .unwrap_or_else(|_| Err(INTERNAL.into()));
@@ -2402,6 +2469,7 @@ async fn api_open(State(st): State<Shared>, headers: HeaderMap) -> Reply {
                        "plugin_code": m.files.iter().filter(|i| i.part == "plugins" && code(&i.path) && checked(i).is_some()).count()})
             })
             .collect();
+        let prefs = opened.prefs.clone();
         let token = format!("{:x}", rand::random::<u64>());
         let mut all = OPENED.lock().unwrap_or_else(|e| e.into_inner());
         let all = all.get_or_insert_with(HashMap::new);
@@ -2413,7 +2481,7 @@ async fn api_open(State(st): State<Shared>, headers: HeaderMap) -> Reply {
         let n = all.values().map(|(n, _)| *n).max().unwrap_or(0) + 1;
         all.insert(token.clone(), (n, Arc::new(opened)));
         let machines: Vec<Value> = machines().into_iter().map(|(id, r)| json!({"id": id, "host": r.host, "user": r.user})).collect();
-        Ok(json!({"ok": true, "file": token, "name": path.file_name().map(|n| n.to_string_lossy().to_string()), "sources": sources, "machines": machines}))
+        Ok(json!({"ok": true, "file": token, "name": path.file_name().map(|n| n.to_string_lossy().to_string()), "sources": sources, "machines": machines, "app_prefs": prefs}))
     })
     .await
     .unwrap_or_else(|_| Err(INTERNAL.into()));
@@ -2446,6 +2514,13 @@ struct RestoreReq {
     /// restore the player's own compiled plugins (code from the backup) too
     #[serde(default)]
     plugin_code: bool,
+    /// update mods an Everything included backup has from an older version (on by default)
+    #[serde(default = "yes")]
+    update_mods: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// Servers ("<id>") and games ("game:<folder>") being restored: they can't be started.
@@ -2623,7 +2698,7 @@ fn start_restore(st: &Shared, req: RestoreReq) -> Result<Value, String> {
             }
         }
     }
-    let r = Restore { st: st.clone(), plugin_code: req.plugin_code, opened, prefix, m, parts, secrets, target, res, notes, local: st.local_game() };
+    let r = Restore { st: st.clone(), plugin_code: req.plugin_code, update_mods: req.update_mods, opened, prefix, m, parts, secrets, target, res, notes, local: st.local_game() };
     let (kind, steps) = r.steps();
     let id = r.entry().map(|e| e.id.clone());
     let new = r.is_new();
@@ -2667,6 +2742,26 @@ async fn api_restore(State(st): State<Shared>, headers: HeaderMap, Json(req): Js
     answer(r)
 }
 
+#[derive(Deserialize)]
+struct PrefsReq {
+    file: String,
+}
+
+/// Puts back the app preferences from an opened backup.
+async fn api_restore_prefs(headers: HeaderMap, Json(req): Json<PrefsReq>) -> Reply {
+    if !from_panel(&headers) {
+        return forbidden();
+    }
+    let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
+        let opened = OPENED.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|m| m.get(&req.file).map(|(_, o)| o.clone())).ok_or("Open the backup again: Loner-Strike lost track of it.")?;
+        let prefs = opened.prefs.clone().ok_or("That backup has no app preferences.")?;
+        Ok(json!({"ok": true, "notes": prefs.apply()}))
+    })
+    .await
+    .unwrap_or_else(|_| Err(INTERNAL.into()));
+    answer(r)
+}
+
 /// The app window only: these open file dialogs, read every server's secrets, and reach
 /// machines over SSH.
 pub fn local_routes() -> Router<Shared> {
@@ -2676,6 +2771,7 @@ pub fn local_routes() -> Router<Shared> {
         .route("/api/backup/export", post(api_export))
         .route("/api/backup/open", post(api_open))
         .route("/api/backup/restore", post(api_restore))
+        .route("/api/backup/app-prefs", post(api_restore_prefs))
 }
 
 #[cfg(test)]
@@ -2844,7 +2940,7 @@ mod tests {
         let m = Manifest { format: FORMAT.into(), version: VERSION, game: "cstrike".into(), name: "Friday".into(), content: "light".into(), parts: all_parts(), files: items, ..Default::default() };
         let mut p = [Planned { manifest: m, config: HashMap::new(), game_dir: g.clone(), odd_names: 0, stripped: BTreeMap::new() }];
         let file = root.join(format!("x.{EXT}"));
-        let (_, notes) = write_backup(&file, &mut p).unwrap();
+        let (_, notes) = write_backup(&file, &mut p, None).unwrap();
         assert!(notes.len() == 1 && notes[0].contains("maps/goes.bsp"), "{notes:?}");
         let opened = open_backup(&file).unwrap();
         let (prefix, m) = &opened.sources[0];
@@ -3145,9 +3241,11 @@ mod tests {
         let one = Planned { manifest: m.clone(), config: HashMap::new(), game_dir: g.clone(), odd_names: 0, stripped: BTreeMap::new() };
         let two = Planned { manifest: m, config: HashMap::new(), game_dir: g.clone(), odd_names: 0, stripped: BTreeMap::new() };
         let file = root.join(format!("x.{EXT}"));
-        write_backup(&file, &mut [one, two]).unwrap();
+        let prefs = AppPrefs { mute_joins: true, smart_chat: true, ..Default::default() };
+        write_backup(&file, &mut [one, two], Some(&prefs)).unwrap();
         let opened = open_backup(&file).unwrap();
         assert_eq!(opened.sources.len(), 2);
+        assert_eq!(opened.prefs, Some(prefs), "the app preferences come back as they went in");
         let (prefix, m) = &opened.sources[1];
         assert_eq!(prefix, "sources/1/");
         let it = m.files.iter().find(|i| i.path == "maps/custom.bsp").unwrap();
