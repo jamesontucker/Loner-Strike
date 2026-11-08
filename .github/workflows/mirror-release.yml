@@ -82,8 +82,19 @@ jobs:
           # an older one again mustn't offer it as an update)
           newest=$(gh release view -R "$REPO" --json tagName -q .tagName)
           if [ "$newest" = "$TAG" ]; then
-            jq --arg from "https://github.com/$REPO/releases/download/$TAG/" --arg to "$MIRROR/app/$TAG/" \
-              '.platforms |= map_values(.url |= (if startswith($from) then $to + .[($from | length):] else . end))' dist/latest.json > mirror-latest.json
+            # each link becomes the mirror's copy of the same file: a download link names it,
+            # an API one (a release that started as a draft) is looked up by its number
+            cp dist/latest.json mirror-latest.json
+            for platform in $(jq -r '.platforms | keys[]' dist/latest.json); do
+              url=$(jq -r --arg p "$platform" '.platforms[$p].url' dist/latest.json)
+              case "$url" in
+                "https://github.com/$REPO/releases/download/$TAG/"*) name=${url##*/} ;;
+                "https://api.github.com/repos/$REPO/releases/assets/"*) name=$(gh api "${url#https://api.github.com/}" -q .name) ;;
+                *) echo "::error::latest.json links to $url, which isn't this release's"; exit 1 ;;
+              esac
+              jq --arg p "$platform" --arg u "$MIRROR/app/$TAG/$name" '.platforms[$p].url = $u' mirror-latest.json > next.json
+              mv next.json mirror-latest.json
+            done
             # every link must now be the mirror's, and every file it names there
             jq -r '.platforms[].url' mirror-latest.json | while read -r url; do
               case "$url" in "$MIRROR/app/$TAG/"*) ;; *) echo "::error::latest.json still links to $url"; exit 1 ;; esac
