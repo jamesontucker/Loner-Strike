@@ -11,8 +11,9 @@
 	            with the gun (looking up and down at them), looking around at the map,
 	            shooting into the air after the round is won
 
-	Each bot has a couple of habits of its own (from its name, so a regular keeps
-	them), done more often than the rest. Nothing happens in a fight, in a match, with
+	Each personality has its own leanings (LIKES, DISLIKES, activity), each bot its own
+	fidgetiness (most hardly, a few all the time) and a couple of habits of its own, all
+	from its name, so a regular keeps them. Nothing happens in a fight, in a match, with
 	the Classic bot style, or at gm_personality 0; gm_personality scales how often.
 
 	gm_bf_fun        1 all of it on or off
@@ -53,6 +54,7 @@ new g_pPersonality, g_pStyle, g_pFlashAllowed
 new bool:g_Chat, bool:g_Fork
 
 new g_Habit[33][2]                       // its two habits (FUN_*)
+new Float:g_Fidget[33]                   // how fidgety it is: most hardly, a few all the time
 new Float:g_Busy[33]                     // in a fight until then (fired, hurt)
 new Float:g_NextFun[33]                  // when this bot may do something again
 new Float:g_NextAny                      // when any bot may (so it's never a crowd at once)
@@ -151,30 +153,65 @@ public client_putinserver(id)
 			h = ((h * 33) ^ name[i]) & 0x7FFFFFFF
 		g_Habit[id][0] = h % FUN_COUNT
 		g_Habit[id][1] = (h / FUN_COUNT) % FUN_COUNT
+		// like chattiness in gm_botchat: 45% hardly, 30% some, 18% a lot, 7% constantly
+		new tier = (h / 997) % 100
+		g_Fidget[id] = tier < 45 ? 0.3 : tier < 75 ? 0.8 : tier < 93 ? 1.6 : 3.0
 	}
 }
 
-// How likely a bot is to do this: its personality, its own habits and gm_personality
+// Per personality letter (gm_botchat's): what each thing appeals to (x3) and what it doesn't
+// (x0.2), in FUN_* order. Tuned with a simulation of a 20-bot lobby so the common
+// personalities (quiet, lurker, chill, friendly...) don't all end up doing the same things
+new const LIKES[FUN_COUNT][] = {
+	"stkhzmEY",      // Q-spam
+	"LorBNMG",       // silencer
+	"LtEO",          // scope
+	"no",            // burst
+	"nkd",           // slots
+	"qstnEOuN",      // reload
+	"jkhzS",         // spawn jump
+	"xjkzS",         // freeze time jump
+	"cxkS",          // knife flick
+	"njkzmD",        // flashlight
+	"cfjirwBbPY",    // salute
+	"qLcndDiTbHPM",  // look around
+	"fjkhwmO"        // celebrate
+}
+new const DISLIKES[FUN_COUNT][] = {
+	"qoDdPr", "", "cn", "", "tEL", "c", "qLotdDrP", "qLotdDrP", "", "qLt", "LstH", "tE", "qLosrdP"
+}
+
+// How much a personality fidgets at all: the quiet and the lurkers hardly, kids and
+// jokers all the time
+Float:activity(p)
+{
+	switch (p)
+	{
+		case 'q': return 0.4
+		case 'L', 'd', 'D', 'P': return 0.6
+		case 'o', 't', 'u', 'H', 'N', 'G': return 0.8
+		case 'c', 's', 'i', 'r', 'B', 'b': return 0.9
+		case 'O': return 1.1
+		case 'n', 'Y': return 1.2
+		case 'S': return 1.3
+		case 'm': return 1.4
+		case 'h', 'z': return 1.5
+		case 'j': return 1.6
+		case 'k': return 1.8
+	}
+	return 1.0
+}
+
+// How likely a bot is to do this: its personality, how fidgety it is, its own habits and
+// gm_personality
 Float:weight(id, what)
 {
 	new p = persona(id)
-	new Float:w = 1.0
-	switch (what)
-	{
-		case FUN_QSPAM:      w = has(p, "kzhjSmE") ? 3.0 : has(p, "qdDP") ? 0.3 : 1.0
-		case FUN_SILENCER:   w = has(p, "oMNG") ? 3.0 : has(p, "k") ? 1.5 : 1.0
-		case FUN_SCOPE:      w = has(p, "tEOL") ? 2.5 : 1.0
-		case FUN_BURST:      w = has(p, "nkj") ? 2.0 : 1.0
-		case FUN_SLOTS:      w = has(p, "nkzd") ? 2.5 : 0.7
-		case FUN_RELOAD:     w = has(p, "tEuO") ? 3.0 : has(p, "n") ? 2.0 : 1.0
-		case FUN_SPAWNJUMP:  w = has(p, "kSzhj") ? 3.0 : has(p, "qdoD") ? 0.3 : 1.0
-		case FUN_FREEZEJUMP: w = has(p, "kzhSj") ? 3.0 : has(p, "qo") ? 0.3 : 1.0
-		case FUN_KNIFE:      w = has(p, "kjSz") ? 2.0 : 1.0
-		case FUN_FLASHLIGHT: w = has(p, "kjmz") ? 3.0 : has(p, "nd") ? 1.5 : 0.4
-		case FUN_SALUTE:     w = has(p, "fwrjcB") ? 3.0 : has(p, "stHO") ? 0.2 : 1.0
-		case FUN_LOOK:       w = has(p, "TdcnM") ? 3.0 : has(p, "tE") ? 0.4 : 1.0
-		case FUN_CELEBRATE:  w = has(p, "hkzjpm") ? 3.0 : has(p, "qoP") ? 0.2 : 1.0
-	}
+	new Float:w = activity(p) * g_Fidget[id]
+	if (has(p, LIKES[what]))
+		w *= 3.0
+	else if (has(p, DISLIKES[what]))
+		w *= 0.2
 	if (g_Habit[id][0] == what || g_Habit[id][1] == what)
 		w *= 4.0
 	return w * pers()
@@ -256,11 +293,11 @@ public ev_new_round()
 		if (!is_user_alive(id) || !is_user_bot(id))
 			continue
 		new Float:delay = random_float(0.5, 3.5)
-		if (roll(id, FUN_FREEZEJUMP, 0.10))
+		if (roll(id, FUN_FREEZEJUMP, 0.07))
 			set_task(delay, "task_freeze_jump", id)
-		else if (roll(id, FUN_KNIFE, 0.10))
+		else if (roll(id, FUN_KNIFE, 0.07))
 			set_task(delay, "task_knife_flick", id)
-		else if (roll(id, FUN_QSPAM, 0.08))
+		else if (roll(id, FUN_QSPAM, 0.06))
 			set_task(delay, "task_start_qspam", id)
 		else if (get_pcvar_num(g_pFlashlight) && flashlight_allowed() && roll(id, FUN_FLASHLIGHT, 0.05))
 			set_task(delay, "task_flashlight", id)
@@ -278,7 +315,7 @@ public ev_round_start()
 	new Float:now = get_gametime()
 	for (new id = 1; id <= MaxClients; id++)
 	{
-		if (is_user_alive(id) && is_user_bot(id) && roll(id, FUN_SPAWNJUMP, 0.10))
+		if (is_user_alive(id) && is_user_bot(id) && roll(id, FUN_SPAWNJUMP, 0.08))
 		{
 			g_JumpsLeft[id] = random_num(2, 6)
 			g_NextJump[id] = now + random_float(0.2, 0.8)
