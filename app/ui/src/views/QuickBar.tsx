@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { postJson, targetKey, useActions } from "../api";
 import { useNav } from "../store";
+import { sharedRole } from "../queries";
 import { botsNote, botTarget, type MapInfo, type Online } from "../types";
 import { Menu, type MenuItem } from "../menu";
 import { useCommand, useToast } from "../ui";
@@ -15,6 +16,9 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
   const go = useNav((s) => s.go);
   const onServer = useNav((s) => s.server !== null);
   const [announcing, setAnnouncing] = useState(false);
+  // a Moderator's map picker (they have no Maps page)
+  const [picking, setPicking] = useState(false);
+  const [pick, setPick] = useState("");
   const announceButton = useRef<HTMLButtonElement>(null);
   const [text, setText] = useState("");
   const st = data.state;
@@ -77,11 +81,12 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
   const map: Item[] = [
     { label: "Restart map", on: () => once(`quick:${targetKey()}:restartmap`, () => run("gm_restartmap"), "Restarting the map…") },
     { label: "Random map", on: randomMap },
-    { label: here?.fav ? "Favourite map" : "Favourite this map", on: favourite, pressed: !!here?.fav, show: !!here },
+    { label: "Change map…", on: () => setPicking(true), show: sharedRole() === "moderator" },
+    { label: here?.fav ? "Favourite map" : "Favourite this map", on: favourite, pressed: !!here?.fav, show: !!here && sharedRole() !== "moderator" },
     {
       label: "Start a mode vote",
       on: () => once(`quick:${targetKey()}:modevote`, () => run("gm_votemode"), "Starting a mode vote…"),
-      show: data.settings.some((s) => s.cvar === "gm_modevote"),
+      show: data.settings.some((s) => s.cvar === "gm_modevote") && sharedRole() !== "moderator",
       title: "Everyone votes for the next mode, then a map for it",
     },
   ];
@@ -97,14 +102,16 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
       ]
     : [];
 
+  // a Moderator on a shared server: change or restart the map, and Announce
+  const mod = sharedRole() === "moderator";
   return (
     <div className="quick" aria-label="Quick actions">
       <div className="quick-inner">
         {/* toggles: a double click would undo itself, so one at a time */}
-        <button className="qb" aria-pressed={!!st.paused} disabled={busy(`quick:${targetKey()}:pause`)} onClick={() => once(`quick:${targetKey()}:pause`, () => run("gm_pause"), st.paused ? "Resuming…" : "Pausing…")}>{st.paused ? "Resume" : "Pause"}</button>
-        {!career && <Menu label="Round" items={round} />}
+        {!mod && <button className="qb" aria-pressed={!!st.paused} disabled={busy(`quick:${targetKey()}:pause`)} onClick={() => once(`quick:${targetKey()}:pause`, () => run("gm_pause"), st.paused ? "Resuming…" : "Pausing…")}>{st.paused ? "Resume" : "Pause"}</button>}
+        {!career && !mod && <Menu label="Round" items={round} />}
         {!career && <Menu label="Map" items={map} />}
-        {!career && (
+        {!career && !mod && (
           <div className="qstep" role="group" aria-label="Bots">
             <button className="qb" aria-label="One bot fewer" disabled={botsBusy || botCount <= 0} aria-busy={botsBusy || undefined} onClick={() => setBots(Math.max(0, botCount - 1))}>−</button>
             <Menu
@@ -116,13 +123,23 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
             <button className="qb" aria-label="One more bot" disabled={botsBusy || botCount >= st.maxplayers - 1} aria-busy={botsBusy || undefined} onClick={() => setBots(Math.min(st.maxplayers - 1, botCount + 1))}>+</button>
           </div>
         )}
-        <Menu label="You" items={you} active={!!me?.god || !!me?.noclip} />
+        {!mod && <Menu label="You" items={you} active={!!me?.god || !!me?.noclip} />}
         <button ref={announceButton} className="qb" aria-pressed={announcing} onClick={() => setAnnouncing((a) => !a)}>Announce</button>
         {/* records your own game: a server has none (its HLTV records it) */}
         {targetKey() === "local" && (
           <button className="qb" aria-pressed={!!st.recording} title="Records the game as you see it to a demo file in your game folder. Watch it later with viewdemo in the console." disabled={busy(`quick:${targetKey()}:demo`)} onClick={() => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…")}>{st.recording ? "● Stop recording" : "Record demo"}</button>
         )}
       </div>
+      {picking && (
+        <form className="quick-announce" onSubmit={(e) => { e.preventDefault(); if (pick) { once(`maps:${targetKey()}:change`, () => run("gm_map", [pick]), `Changing the map to ${pick}…`); setPicking(false); } }} onKeyDown={(e) => e.key === "Escape" && setPicking(false)}>
+          <select className="grow" autoFocus value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Map">
+            <option value="">Choose a map</option>
+            {maps.filter((m) => !m.hidden).map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+          </select>
+          <button className="btn primary" type="submit" disabled={!pick}>Change map</button>
+          <button className="btn" type="button" onClick={() => setPicking(false)}>Cancel</button>
+        </form>
+      )}
       {announcing && (
         <form className="quick-announce" onSubmit={(e) => { e.preventDefault(); announce(); }} onKeyDown={(e) => e.key === "Escape" && closeAnnounce()}>
           <input className="search grow" autoFocus maxLength={120} placeholder="A message everyone sees in the middle of the screen" value={text} onChange={(e) => setText(e.target.value)} />

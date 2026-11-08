@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, useActions, useActivity, usePoll, isAbort } from "../api";
+import { getJson, isSharedId, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, useActions, useActivity, usePoll, isAbort } from "../api";
 import { reloadServers, useGameState, useServers, useSetupJob, waitForSetupJob } from "../queries";
 import { restartPending } from "../types";
 import { useNav } from "../store";
@@ -35,7 +35,8 @@ export function Sounds({ target }: { target: string }) {
   const [tab, setTabRaw] = useState<SoundTab>(() => {
     try {
       const t = localStorage.getItem("ls.soundTab") as SoundTab;
-      return SOUND_TABS.some(([id]) => id === t) ? t : "music";
+      // sound packs stay with a shared server's owner
+      return SOUND_TABS.some(([id]) => id === t) && !(t === "packs" && isSharedId(target)) ? t : "music";
     } catch {
       return "music";
     }
@@ -263,7 +264,7 @@ export function Sounds({ target }: { target: string }) {
       ))}
 
       <div className="chips admin-tabs" role="tablist" aria-label="Sounds sections">
-        {SOUND_TABS.map(([id, label]) => (
+        {SOUND_TABS.filter(([t]) => t !== "packs" || !isSharedId(target)).map(([id, label]) => (
           <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
         ))}
       </div>
@@ -292,7 +293,9 @@ export function Sounds({ target }: { target: string }) {
             {d.setup ? (
               <>
                 <p className="muted measure">It comes with eight free tracks to start with, and you can add your own.</p>
-                {ON_THIS_COMPUTER ? (
+                {isSharedId(target) ? (
+                  <p className="muted">The server's owner installs it (Mods on their Loner-Strike).</p>
+                ) : ON_THIS_COMPUTER ? (
                   <div className="row"><BusyButton className="btn primary" busy={installing} label="Install round-end music" busyLabel="Installing…" onClick={installMusic} /></div>
                 ) : (
                   <p className="muted">{SETUP_ON_COMPUTER}</p>
@@ -326,7 +329,7 @@ export function Sounds({ target }: { target: string }) {
                       <h3 className={`pool-${p.id}`}>{p.label}</h3>
                       <p className="muted small-note">{POOL_NOTE[p.id]}</p>
                     </div>
-                    {ON_THIS_COMPUTER && <BusyButton busy={isBusy(key(`add:${p.id}`))} label="Add tracks" busyLabel="Adding…" onClick={() => add(p.id)} />}
+                    {ON_THIS_COMPUTER && !isSharedId(target) && <BusyButton busy={isBusy(key(`add:${p.id}`))} label="Add tracks" busyLabel="Adding…" onClick={() => add(p.id)} />}
                   </div>
                   {p.over && <p className="err-text small-note">{p.on} tracks are on; the game uses a random {m.limit} of them each map.</p>}
                   {p.tracks.length === 0 ? (

@@ -95,6 +95,36 @@ fn open_unless_closed(port: u16, since: Option<u64>) -> Value {
     direct_status()
 }
 
+/// Shared control (control/): asks the router to forward a TCP port to this computer, for
+/// friends' Loner-Strike. Returns the router's internet address, and whether that address
+/// can't be reached from the internet anyway (shared/CGNAT). Leases run out: call again
+/// within LEASE to keep it. Blocking.
+pub fn open_tcp(port: u16) -> Result<(Ipv4Addr, bool), String> {
+    let local = local_ipv4().ok_or("This computer isn't on a network right now.")?;
+    let mut opts = igd_next::SearchOptions::default();
+    opts.timeout = Some(Duration::from_secs(4));
+    let gw = igd_next::search_gateway(opts).map_err(|_| "Your router didn't answer. UPnP may be turned off in its settings: forward the port yourself, or use a virtual LAN.".to_string())?;
+    let external = match gw.get_external_ip() {
+        Ok(IpAddr::V4(ip)) => ip,
+        _ => return Err("Your router didn't say what its internet address is.".into()),
+    };
+    gw.add_port(igd_next::PortMappingProtocol::TCP, port, SocketAddr::V4(SocketAddrV4::new(local, port)), LEASE_SECS, "Loner-Strike (shared control)")
+        .map_err(|e| format!("Your router refused to open the port ({e}). Forward TCP {port} to this computer yourself, or use a virtual LAN."))?;
+    Ok((external, not_public(external)))
+}
+
+/// How long a router keeps a port open before it has to be asked again
+pub const LEASE: Duration = Duration::from_secs(LEASE_SECS as u64);
+
+/// Takes the shared control port off the router again.
+pub fn close_tcp(port: u16) {
+    let mut opts = igd_next::SearchOptions::default();
+    opts.timeout = Some(Duration::from_secs(3));
+    if let Ok(gw) = igd_next::search_gateway(opts) {
+        let _ = gw.remove_port(igd_next::PortMappingProtocol::TCP, port);
+    }
+}
+
 /// Closes the port again (sharing stopped, or the app quits).
 pub fn close_direct() -> Value {
     CLOSED.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -148,6 +178,8 @@ pub fn virtual_lans(port: u16) -> Value {
             Some("radmin")
         } else if ip.octets()[0] == 25 || name.contains("hamachi") || name.starts_with("ham") {
             Some("hamachi")
+        } else if name.contains("tailscale") {
+            Some("tailscale")
         } else {
             None
         };

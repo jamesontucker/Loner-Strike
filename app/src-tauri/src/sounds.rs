@@ -792,9 +792,16 @@ fn summary(g: &Game) -> Value {
     })
 }
 
-async fn api_get(State(st): State<Shared>) -> Reply {
+async fn api_get(State(st): State<Shared>, helper: Option<axum::Extension<crate::control::Helper>>) -> Reply {
     let Some(g) = st.game() else { return err("No game found.") };
-    ok(tokio::task::spawn_blocking(move || summary(&g)).await.unwrap_or_else(|_| json!({"error": "Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening."})))
+    let mut v = tokio::task::spawn_blocking(move || summary(&g)).await.unwrap_or_else(|_| json!({"error": "Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening."}));
+    // someone helping run it (control/) doesn't get this computer's folders
+    if helper.is_some() {
+        if let Some(o) = v.as_object_mut() {
+            o.remove("hl");
+        }
+    }
+    ok(v)
 }
 
 #[derive(Deserialize)]

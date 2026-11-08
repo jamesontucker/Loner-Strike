@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { postJson, targetKey, useActions } from "../api";
+import { sharedRole } from "../queries";
 import { BusyButton, useToast } from "../ui";
 
 export type FilterMode = "off" | "replace" | "block";
@@ -36,7 +37,8 @@ export function MuteControl({ steamid, name, onDone, compact }: { steamid: strin
   return (
     <div className={`row cm-mute${compact ? " compact" : ""}`}>
       <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} aria-label={`How long to mute ${name}`}>
-        {MUTE_TIMES.map(([m, l]) => <option key={m} value={m}>{l}</option>)}
+        {/* a Moderator mutes for up to a week */}
+        {MUTE_TIMES.filter(([m]) => m > 0 || sharedRole() !== "moderator").map(([m, l]) => <option key={m} value={m}>{l}</option>)}
       </select>
       <select value={what} onChange={(e) => setWhat(e.target.value)} aria-label="Mute what">
         {MUTE_WHAT.map(([v, l]) => <option key={v} value={v}>{l}</option>)}

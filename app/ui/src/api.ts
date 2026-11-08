@@ -52,6 +52,9 @@ export async function copyText(text: string): Promise<boolean> {
 /** The open target as part of an action key ("local" for the player's own game), so the
  *  same action on two servers doesn't share a spinner. */
 export const targetKey = () => currentTarget() ?? "local";
+/** Whether an id is a server a friend shared with you (shared control): "sh-" and 8 hex,
+ *  like the app makes them (your own servers never look like that). */
+export const isSharedId = (id?: string | null) => !!id && /^sh-[0-9a-f]{8}$/.test(id);
 /** For URLs the browser loads by itself (images). */
 export function withTarget(url: string) {
   const t = currentTarget();

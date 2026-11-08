@@ -139,13 +139,37 @@ pub(crate) fn writes_files(path: &str) -> bool {
 async fn with_target(req: Request, next: Next) -> Response {
     let header = req.headers().get("x-target").and_then(|v| v.to_str().ok()).map(String::from);
     let query = req.uri().query().and_then(|q| q.split('&').find_map(|p| p.strip_prefix("target=").map(String::from)));
+    // a server a friend shared with you (control::client): the app window's requests for it
+    // go to the owner's app, which decides what you may do there
+    if req.extensions().get::<OnComputer>().is_some() {
+        let p = req.uri().path();
+        // a path that names a server decides by itself (one of yours stays here even with a
+        // shared server open); only a path naming none goes by the open server
+        let path_id = p.strip_prefix("/api/servers/").and_then(|r| r.split('/').next()).filter(|id| !id.is_empty());
+        let named = match path_id {
+            Some(id) => crate::control::client::is_shared(id).then(|| id.to_string()),
+            None => header.clone().or(query.clone()).filter(|t| crate::control::client::is_shared(t)),
+        };
+        if let Some(id) = named {
+            // this app's own business (its info, setup, the list): answered here, for your game
+            if !crate::control::client::about_the_server(p) {
+                return next.run(req).await;
+            }
+            let (parts, body) = req.into_parts();
+            let pq = parts.uri.path_and_query().map(|x| x.as_str().to_string()).unwrap_or_default();
+            return crate::control::client::forward(id, parts.method, pq, parts.headers, body).await;
+        }
+    }
     // the server list and per-server routes name their server in the path: they never
     // depend on (or fail because of) the one that's open
     let path = req.uri().path();
     let by_path = path == "/api/servers" || path.starts_with("/api/servers/") || path.starts_with("/api/backup/");
     let post = req.method() == axum::http::Method::POST;
     // a request that edits a list shared between servers passes the edit on
-    let list = if post { crate::lists::list_for(path) } else { None };
+    // (a helper's change stays on the server they were given: it isn't passed to the owner's
+    // other servers or game)
+    let helper = req.extensions().get::<crate::control::Helper>().is_some();
+    let list = if post && !helper { crate::lists::list_for(path) } else { None };
     let Some(id) = header.or(query).filter(|t| !t.is_empty() && t != "local" && !by_path) else {
         let res = next.run(req).await;
         // the player's own game: a list it shares with servers goes to them
@@ -256,6 +280,8 @@ fn gzipped(file: &str, data: &[u8]) -> Option<axum::body::Bytes> {
 pub enum Listener {
     Local,
     Lan,
+    /// friends' Loner-Strike helping run a shared server (control/): TLS, their key, their role
+    Share,
 }
 
 pub fn router(state: Shared, listener: Listener) -> Router {
@@ -296,10 +322,17 @@ pub fn router(state: Shared, listener: Listener) -> Router {
             .merge(crate::extras::local_routes())
             .merge(crate::browser::routes())
             .merge(crate::smartchat::local_routes())
+            .merge(crate::control::local_routes())
             .layer(middleware::from_fn(crate::diagnostics::log_errors))
             .layer(middleware::from_fn(with_target))
             .layer(middleware::from_fn_with_state(state.clone(), guard_local)),
         Listener::Lan => routes.layer(middleware::from_fn(crate::diagnostics::log_errors)).layer(middleware::from_fn(with_target)).layer(middleware::from_fn_with_state(state.clone(), guard_lan)),
+        // only the shared routes (never the computer's), and the guard decides each request
+        Listener::Share => routes
+            .merge(crate::control::share_routes())
+            .layer(middleware::from_fn(crate::diagnostics::log_errors))
+            .layer(middleware::from_fn(with_target))
+            .layer(middleware::from_fn_with_state(state.clone(), crate::control::guard)),
     };
     routes.with_state(state)
 }

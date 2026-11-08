@@ -121,6 +121,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .side-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--bone-faint); }
 .side-dot.on { background: var(--ok); box-shadow: none; }
 .side-dot.warn { background: var(--warn); box-shadow: none; }
+.side-div { margin: 4px 4px 0; padding: 6px 4px 2px; border-top: 1px solid var(--line); font-size: 11px; font-weight: 700; color: var(--bone-faint); letter-spacing: .04em; text-transform: uppercase; }
+.side-role { flex: none; font-size: 11px; font-weight: 700; padding: 0 5px; border-radius: 2px; background: var(--panel); }
+
+/* ---- shared control (ShareControl.tsx): roles, people, invites, activity ---------------- */
+.role-admin { color: var(--signal); }
+.role-moderator { color: var(--ct); }
+.tag.role-admin, .tag.role-moderator { background: var(--bg); vertical-align: middle; }
+.server.shared-server { border-left: 3px solid var(--signal); }
+.server.shared-server.role-moderator { border-left-color: var(--ct); color: inherit; }
+.server.shared-server.role-admin { color: inherit; }
+.share-person { padding: 8px 0; border-top: 1px solid var(--line); }
+.share-person:first-of-type { border-top: 0; }
+.share-person p { margin: 2px 0 0; }
+.invite-box { display: grid; gap: 10px; margin-top: 14px; padding: 12px 14px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
+.invite-box code { color: var(--signal); font-size: 13px; word-break: break-all; user-select: all; }
+.invite-input { width: 100%; max-width: none; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+.share-log { display: grid; }
+.share-log-row { display: grid; grid-template-columns: 110px minmax(120px, auto) minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.share-log-row:first-child { border-top: 0; }
+@media (max-width: 760px) { .share-log-row { grid-template-columns: 1fr; gap: 2px; } }
 .count {
   margin-left: auto;
   font-size: 13px; color: var(--bone-faint);
@@ -1681,3 +1701,8 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .reveal input { flex: 1; min-width: 0; }
 .reveal .btn { display: grid; place-items: center; padding: 0 10px; }
 .reveal .btn svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.6; }
+
+.good-practice li { margin: 0 0 8px; color: var(--bone-dim); text-wrap-style: pretty; }
+
+.share-invites { display: grid; gap: 2px; margin-top: 14px; }
+.invite-code { flex: 1; min-width: 0; padding: 7px 10px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; word-break: break-all; user-select: all; }

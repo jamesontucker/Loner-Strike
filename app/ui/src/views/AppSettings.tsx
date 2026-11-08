@@ -12,7 +12,7 @@ import { BackupSheet, RestoreSheet } from "./Backup";
 
 const NO_GAME_TO_BACK_UP = "No game to back up: set up Counter-Strike on this computer first (a dedicated server is backed up from its own page).";
 
-type Prefs = { auto_update: boolean; keep_servers: boolean; game_folders: string[]; notify_joins: boolean };
+type Prefs = { auto_update: boolean; keep_servers: boolean; game_folders: string[]; notify_joins: boolean; notify_helpers: boolean };
 type Storage = { downloads: number; pictures: number; folder: string };
 const mb = (n: number) => (n < 1048576 ? `${Math.max(0, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(n < 104857600 ? 1 : 0)} MB`);
 
@@ -286,19 +286,18 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
               ))}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section>
+        <SectionHead title="Notifications" note="Shown on the computer running Loner-Strike while the app is in the background. Each dedicated server has its own: in its settings (joins) and its Shared control tab (helpers). Player reports (say /report) always notify." />
+        <div className="panel settings-list">
           <div className="row between setting-line toggle">
             <div>
-              <b>Tell me when someone joins</b>
-              <p className="muted">A notification on the computer running Loner-Strike when a person (not a bot) joins your game or one of your servers, while the app is in the background.</p>
+              <b>Tell me when someone joins your game</b>
+              <p className="muted">When a person (not a bot) joins the game you host from Play. Also the starting point for servers you haven't set their own.</p>
             </div>
             <Switch on={!!prefs?.notify_joins} label="Tell me when someone joins" disabled={!prefs || busy("app:pref:notify_joins")} onChange={(v) => setPref({ notify_joins: v })} />
-          </div>
-          <div className="row between setting-line toggle">
-            <div>
-              <b>Keep servers running when I close Loner-Strike</b>
-              <p className="muted">Off: closing the app stops your dedicated servers. On: they keep going, and the app picks them up again next time.</p>
-            </div>
-            <Switch on={!!prefs?.keep_servers} label="Keep servers running" disabled={!prefs || busy("app:pref:keep_servers")} onChange={(v) => setPref({ keep_servers: v })} />
           </div>
         </div>
       </section>
@@ -499,8 +498,9 @@ function RemoveEverything({ scan, onClose }: { scan: Scan; onClose: () => void }
   const [step, setStep] = useState("");
   const games = scan.installs.flatMap((i) => i.games.filter((g) => g.installed).map((g) => ({ hl: i.hl, id: g.id })));
   const servers = serversQ.data?.servers ?? [];
-  const here = servers.filter((s) => !s.host);
-  const away = servers.filter((s) => s.host);
+  // (servers friends share with you are theirs: nothing of them is here)
+  const here = servers.filter((s) => !s.host && !s.shared);
+  const away = servers.filter((s) => s.host && !s.shared);
   const list = (names: string[]) => names.join(", ");
   const working = busy("app:remove-everything");
 

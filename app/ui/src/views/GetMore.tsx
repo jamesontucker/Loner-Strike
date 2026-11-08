@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addFromFile, getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, usePoll, useStable } from "../api";
+import { addFromFile, getJson, isAbort, ON_THIS_COMPUTER, isSharedId, postJson, targetKey, useActions, usePoll, useStable } from "../api";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
 import { BusyButton, LoadError, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
@@ -170,7 +170,7 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
       <div>
         <SectionHead title={title} note={`From GameBanana's Counter-Strike 1.6 section. ${server ? (section === "maps" ? NOTES.maps : SERVER_NOTE) : NOTES[section] ?? NOTES.default}`}>
           {back && <button className="btn" onClick={back.go}>{back.label}</button>}
-          {ON_THIS_COMPUTER && !showInstalled && (
+          {ON_THIS_COMPUTER && !showInstalled && !isSharedId(targetKey()) && (
             <BusyButton busy={busy(key(`add-file:${section}`))} label="Add from a file" busyLabel="Adding…" onClick={() => run(key(`add-file:${section}`), async () => {
               const r = await addFromFile(section);
               if (!r) return;

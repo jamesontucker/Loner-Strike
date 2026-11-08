@@ -104,6 +104,17 @@ pub struct Entry {
     /// failed). Written again before the next start, and by the background sync.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub service_stale: bool,
+    /// on this computer: keeps running after the app closes (None: the app-wide setting
+    /// from before this was per server)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_running: Option<bool>,
+    /// a notification when someone joins (None: the app-wide setting from before this was
+    /// per server)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notify_joins: Option<bool>,
+    /// a notification when someone helping run it (shared control) makes a big change
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notify_helpers: Option<bool>,
 }
 
 /// What's waiting for the server to restart (or, for sounds, the map to change).
@@ -328,7 +339,17 @@ fn route_ip() -> Option<String> {
     let s = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
     s.connect("1.1.1.1:53").ok()?;
     let ip = s.local_addr().ok()?.ip();
-    (ip.is_ipv4() && !ip.is_loopback() && !ip.is_unspecified()).then(|| ip.to_string())
+    if !ip.is_ipv4() || ip.is_loopback() || ip.is_unspecified() {
+        return None;
+    }
+    // a VPN carrying all traffic: not an address players or the router reach, so left to
+    // the server as before (it answers on every address then)
+    let vpn = if_addrs::get_if_addrs().unwrap_or_default().into_iter().find(|i| i.ip() == ip).is_some_and(|i| {
+        let n = i.name.to_lowercase();
+        ["vpn", "tap", "tun", "wireguard", "wg", "tailscale", "zerotier", "nord", "proton", "mullvad", "express", "surfshark", "openvpn", "cisco", "fortinet"].iter().any(|w| n.contains(w))
+    });
+    let cgnat = matches!(ip, std::net::IpAddr::V4(v) if v.octets()[0] == 100 && (64..128).contains(&v.octets()[1]));
+    (!vpn && !cgnat).then(|| ip.to_string())
 }
 
 /// Ports a server on another machine can use: setup opens 27015-27020 there, and 27020
@@ -574,6 +595,11 @@ fn slug(name: &str, taken: &[Entry]) -> String {
     base.truncate(32);
     if base.is_empty() {
         base = "server".into();
+    }
+    // "sh-" starts the ids of servers friends share with you (shared control)
+    if base.starts_with("sh-") {
+        base.insert_str(0, "my-");
+        base.truncate(32);
     }
     let mut id = base.clone();
     let mut n = 2;
@@ -872,7 +898,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         extra_args: String::new(),
         bots_when_empty: None,
         ls_listed: false,
-        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
+        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None,
     };
     let base = root.join(".base");
     let g = req.game.clone();
@@ -1545,7 +1571,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         extra_args: String::new(),
         bots_when_empty: None,
         ls_listed: false,
-        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
+        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None,
     };
     make_server_dir(&entry)?;
     edit(|l| l.push(entry.clone()))?;
@@ -1845,7 +1871,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         extra_args: String::new(),
         bots_when_empty: None,
         ls_listed: false,
-        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
+        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None,
     };
     // name and password as the Friends tab keeps them (it writes friends.cfg only when
     // something changes there, so the server's own server.cfg keeps working meanwhile)
@@ -1978,7 +2004,9 @@ pub fn last_state(e: &Entry) -> (String, Option<String>) {
 /// A server still up from before the app last closed ("keep servers running"):
 /// it answers on its port with its RCON password.
 fn left_running(e: &Entry) -> bool {
-    e.ready && e.rcon().map(|r| r.send("status").is_ok()).unwrap_or(false)
+    // (gm_status: the app's own poll, which the console leaves out; any answer will do,
+    // "unknown command" too)
+    e.ready && e.rcon().map(|r| r.send("gm_status").is_ok()).unwrap_or(false)
 }
 
 pub(crate) fn launch_args(e: &Entry) -> Vec<String> {
@@ -2184,6 +2212,8 @@ pub fn start(id: &str) -> Result<(), String> {
     }
     // (systemd starts one copy at most, and a slow machine mustn't hold up local starts)
     if let Some(r) = &e.remote {
+        // it may come up with other plugins: its console suggestions are asked for again
+        crate::consolehints::forget(id);
         // checked with starts held, and marked as starting until systemctl has answered, so a
         // restore can't begin anywhere in between (it refuses a server that's starting)
         let _starting = {
@@ -2327,13 +2357,44 @@ pub fn remove_local_all() -> (Vec<String>, Vec<String>) {
     (done, failed)
 }
 
-pub fn stop_all() {
+/// Whether two versions of a server differ only in this app's own switches.
+fn same_but_app_switches(a: &Entry, b: &Entry) -> bool {
+    let strip = |e: &Entry| {
+        let mut v = serde_json::to_value(e).unwrap_or_default();
+        if let Some(o) = v.as_object_mut() {
+            for k in ["keep_running", "notify_joins", "notify_helpers"] {
+                o.remove(k);
+            }
+        }
+        v
+    };
+    strip(a) == strip(b)
+}
+
+/// Whether a server's joins show as notifications.
+pub(crate) fn notifies_joins(e: &Entry) -> bool {
+    e.notify_joins.unwrap_or_else(|| !crate::app_api::load_settings().mute_joins)
+}
+
+/// Whether what helpers do on a server shows as notifications.
+pub(crate) fn notifies_helpers(e: &Entry) -> bool {
+    e.notify_helpers.unwrap_or_else(|| !crate::app_api::load_settings().mute_helpers)
+}
+
+/// Whether a server on this computer keeps running after the app closes.
+pub(crate) fn keeps_running(e: &Entry) -> bool {
+    e.keep_running.unwrap_or_else(|| crate::app_api::load_settings().keep_servers)
+}
+
+/// The app is closing: servers on this computer stop, except the ones set to keep running.
+pub fn stop_on_exit() {
     let ids: Vec<String> = with_runs(|r| r.procs.keys().cloned().collect());
-    let threads: Vec<_> = ids.into_iter().map(|id| std::thread::spawn(move || stop(&id))).collect();
+    let threads: Vec<_> = ids.into_iter().filter(|id| !get(id).is_some_and(|e| keeps_running(&e))).map(|id| std::thread::spawn(move || stop(&id))).collect();
     for t in threads {
         let _ = t.join();
     }
 }
+
 
 /// Restarts servers that crash (up to MAX_RESTARTS times in CRASH_WINDOW).
 fn watch() {
@@ -2378,7 +2439,7 @@ fn watch() {
 /// The last lines of the server's console (qconsole.log, from -condebug).
 fn console(e: &Entry) -> Vec<String> {
     if let Some(r) = &e.remote {
-        return without_polls(crate::remote::console(r, &e.id, &e.game), "127.0.0.1").iter().map(|l| hide_passwords(l)).collect();
+        return without_polls(crate::remote::console(r, &e.id, &e.game), "127.0.0.1", &|n| crate::consolehints::is_setting(&e.id, n)).iter().map(|l| hide_passwords(l)).collect();
     }
     let mut lines = Vec::new();
     for p in [e.dir.join("qconsole.log"), e.dir.join(&e.game).join("qconsole.log"), e.dir.join("loner-strike-server.log")] {
@@ -2392,7 +2453,7 @@ fn console(e: &Entry) -> Vec<String> {
             break;
         }
     }
-    let mut lines = without_polls(lines, &e.local_host());
+    let mut lines = without_polls(lines, &e.local_host(), &|n| crate::consolehints::is_setting(&e.id, n));
     let skip = lines.len().saturating_sub(300);
     lines.split_off(skip).into_iter().map(|l| hide_passwords(&l)).collect()
 }
@@ -2401,7 +2462,7 @@ fn console(e: &Entry) -> Vec<String> {
 /// address the app knocks on, and the gm_status it sent), which would bury chat and
 /// everything else; nor what the console's suggestions ask for (the command lists, and a
 /// setting's value: one word on its own).
-fn without_polls(lines: Vec<String>, from: &str) -> Vec<String> {
+fn without_polls(lines: Vec<String>, from: &str, is_setting: &dyn Fn(&str) -> bool) -> Vec<String> {
     let ours = format!("Rcon from {from}:");
     let mut after_ours = false;
     lines
@@ -2421,7 +2482,9 @@ fn without_polls(lines: Vec<String>, from: &str) -> Vec<String> {
             // rcon <challenge> "<password>" <command>
             let cmd = t.splitn(2, "\" ").nth(1).unwrap_or("").trim();
             let lists = matches!(cmd, "cmdlist" | "cvarlist" | "amxx cmds" | "amxx cvars") || cmd.strip_prefix("amx_help ").is_some_and(|n| n.parse::<u32>().is_ok());
-            !(was_ours && (lists || (!cmd.is_empty() && !cmd.contains(' '))))
+            // a setting's value looked up for the suggestions (a known setting on its own);
+            // a one-word command typed in the console (status) stays
+            !(was_ours && (lists || (!cmd.is_empty() && !cmd.contains(' ') && is_setting(cmd))))
         })
         .collect()
 }
@@ -2442,7 +2505,7 @@ fn hide_passwords(line: &str) -> String {
     line.to_string()
 }
 
-fn view(e: &Entry) -> Value {
+pub(crate) fn view(e: &Entry) -> Value {
     // sounds wait for a map change: looked at only while something's waiting
     let pending = if e.pending_restart.sounds {
         check_sounds_pending(e);
@@ -2485,7 +2548,7 @@ fn view(e: &Entry) -> Value {
            "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(),
            "public_address": e.public_address, "connect": e.connect(), "pending_restart": pending.view(),
            "listen_ip": e.listen_ip, "extra_args": e.extra_args, "password": join_password(e),
-           "bots_when_empty": bots_when_empty(e), "bots_when_empty_set": e.bots_when_empty.is_some(), "ls_listed": e.ls_listed,
+           "bots_when_empty": bots_when_empty(e), "bots_when_empty_set": e.bots_when_empty.is_some(), "keep_running": e.remote.is_none() && keeps_running(e), "notify_joins": notifies_joins(e), "notify_helpers": notifies_helpers(e), "ls_listed": e.ls_listed,
            "unreachable": e.remote.as_ref().and_then(|_| unreachable(&e.id)),
            // on another machine the daily restart is done by the app: only while it's open
            "restart_needs_app": e.remote.is_some() && e.restart.as_ref().is_some_and(|r| r.on),
@@ -2562,10 +2625,16 @@ pub(crate) fn client(st: &Shared) -> Option<Install> {
     crate::steam::find_installs().into_iter().find(|i| i.hl == local.hl)
 }
 
-async fn api_list() -> Json<Value> {
+async fn api_list(on: Option<axum::Extension<crate::server::OnComputer>>) -> Json<Value> {
+    // servers friends shared with you are this computer's app's (a phone can't reach them)
+    let with_shared = on.is_some();
     // view() can ask a server left running over RCON: not on the async workers
-    let v = tokio::task::spawn_blocking(|| {
-        let list: Vec<Value> = load().iter().map(view).collect();
+    let v = tokio::task::spawn_blocking(move || {
+        let mut list: Vec<Value> = load().iter().map(view).collect();
+        // servers friends shared with you, after your own
+        if with_shared {
+            list.extend(crate::control::client::list());
+        }
         json!({"servers": list, "steamcmd": steamcmd_exe().is_file()})
     })
     .await
@@ -2686,14 +2755,20 @@ struct Change {
     extra_args: Option<String>,
     /// bots keep playing with nobody on
     bots_when_empty: Option<bool>,
+    /// on this computer: keep running after the app closes
+    keep_running: Option<bool>,
+    notify_joins: Option<bool>,
+    notify_helpers: Option<bool>,
     /// a domain name shown in place of the IP ("" clears it)
     public_address: Option<String>,
     /// on the Loner-Strike server list
     ls_listed: Option<bool>,
 }
 
-async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<Change>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) || on.is_none() {
+async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, helper: Option<axum::Extension<crate::control::Helper>>, Json(req): Json<Change>) -> (StatusCode, Json<Value>) {
+    // the app window, or an Admin helping run this server (their request only carries the
+    // settings their role changes: control::rules trimmed it)
+    if !from_panel(&headers) || (on.is_none() && helper.is_none()) {
         return forbidden();
     }
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
@@ -2775,6 +2850,15 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 if let Some(t) = &extra {
                     e.extra_args = t.clone();
                 }
+                if let Some(k) = req.keep_running {
+                    e.keep_running = Some(k);
+                }
+                if let Some(n) = req.notify_joins {
+                    e.notify_joins = Some(n);
+                }
+                if let Some(n) = req.notify_helpers {
+                    e.notify_helpers = Some(n);
+                }
                 if let Some(b) = req.bots_when_empty {
                     e.bots_when_empty = Some(b);
                 }
@@ -2822,7 +2906,9 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
         if restart {
             set_pending_restart(&id, Pending::Options);
         }
-        if let Some(e) = get(&id).filter(|e| e.ready && e.remote.is_some()) {
+        // (only this app's own switches changed, notifications or keeping it running: nothing
+        // on the machine changes, so it needn't be reachable)
+        if let Some(e) = get(&id).filter(|e| e.ready && e.remote.is_some() && !same_but_app_switches(&old, e)) {
             if restart_needed(&old, &e) {
                 // (noted first: if the machine can't be reached it's written before the next start)
                 let _ = edit(|l| l.iter_mut().filter(|x| x.id == id).for_each(|x| x.service_stale = true));
@@ -2856,6 +2942,39 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
     answer(r)
 }
 
+/// Starts this computer's game joining a server: told by Steam when the game is open
+/// (closed and started again for an unlisted server once `restart` says so), else started
+/// with the address. Your own servers' Join and a shared server's (control::client::join).
+pub(crate) fn launch_join(st: &Shared, game: &str, address: &str, password: Option<String>, unlisted: bool, restart: bool, on_computer: bool) -> Result<Value, String> {
+    let client = client(st).ok_or("Couldn't find the game to join with.")?;
+    // the game already open: Steam tells it to join; otherwise it starts joining
+    if sys::game_running() && unlisted {
+        // an unlisted server doesn't answer the game's lookups, so the open game
+        // can't be told to join it: it has to start again with the address
+        if !restart {
+            return Ok(json!({"ok": true, "need_restart_game": true}));
+        }
+        // closing the game is for the person at the computer, not a phone
+        if !on_computer {
+            return Err("Close the game on the computer first, then press Join.".into());
+        }
+        sys::close_game()?;
+    } else if sys::game_running() {
+        let url = match &password {
+            Some(p) => format!("steam://connect/{address}/{p}"),
+            None => format!("steam://connect/{address}"),
+        };
+        return crate::steam::open_steam_url(&client.hl, &url).map(|_| json!({"ok": true}));
+    }
+    let mut args = Vec::new();
+    if let Some(p) = password {
+        args.extend(["+password".to_string(), p]);
+    }
+    args.extend(["+connect".to_string(), address.to_string()]);
+    let appid = if game == "cstrike" { "10" } else { "80" };
+    crate::steam::launch(&client.hl, appid, &args).map(|_| json!({"ok": true}))
+}
+
 async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, body: Option<Json<Value>>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) {
         return forbidden();
@@ -2885,34 +3004,8 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
             "update" => update_files(get(&id).ok_or("That server isn't there any more.")?).map(|job| json!({"ok": true, "job": job})),
             "join" => {
                 let e = get(&id).ok_or("That server isn't there any more.")?;
-                let client = client(&st2).ok_or("Couldn't find the game to join with.")?;
                 let pw = Some(join_password(&e)).filter(|p| !p.is_empty());
-                // the game already open: Steam tells it to join; otherwise it starts joining
-                if sys::game_running() && e.visibility == "unlisted" {
-                    // an unlisted server doesn't answer the game's lookups, so the open game
-                    // can't be told to join it: it has to start again with the address
-                    if !body["restart"].as_bool().unwrap_or(false) {
-                        return Ok(json!({"ok": true, "need_restart_game": true}));
-                    }
-                    // closing the game is for the person at the computer, not a phone
-                    if !on_computer {
-                        return Err("Close the game on the computer first, then press Join.".into());
-                    }
-                    sys::close_game()?;
-                } else if sys::game_running() {
-                    let url = match &pw {
-                        Some(p) => format!("steam://connect/{}/{p}", e.join_address()),
-                        None => format!("steam://connect/{}", e.join_address()),
-                    };
-                    return crate::steam::open_steam_url(&client.hl, &url).map(|_| json!({"ok": true}));
-                }
-                let mut args = Vec::new();
-                if let Some(p) = pw {
-                    args.extend(["+password".to_string(), p]);
-                }
-                args.extend(["+connect".to_string(), e.join_address()]);
-                let appid = if e.game == "cstrike" { "10" } else { "80" };
-                crate::steam::launch(&client.hl, appid, &args).map(|_| json!({"ok": true}))
+                launch_join(&st2, &e.game, &e.join_address(), pw, e.visibility == "unlisted", body["restart"].as_bool().unwrap_or(false), on_computer)
             }
             "rebuild" => {
                 // a server on another machine, wiped and set up again with the same details
@@ -2998,6 +3091,8 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 }
                 edit(|l| l.retain(|x| x.id != id))?;
                 drop(guard);
+                // people helping run it lose access with it (shared control)
+                crate::control::forget_server(&id);
                 // (after the sync lock: shared lists take theirs first, then sync)
                 crate::lists::forget(&id);
                 forget(&id);
@@ -3405,7 +3500,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None,
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -3485,7 +3580,7 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false,
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None,
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));
@@ -3653,13 +3748,16 @@ mod tests {
     #[test]
     fn console_hides_the_apps_own_checks() {
         let l = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        let got = without_polls(l(&["Rcon from 127.0.0.1:34335:", "rcon 352348701 \"x\" gm_status", "[TFR] Tyler : ace haha", "rcon 1 \"x\" amxx plugins"]), "127.0.0.1");
+        let got = without_polls(l(&["Rcon from 127.0.0.1:34335:", "rcon 352348701 \"x\" gm_status", "[TFR] Tyler : ace haha", "rcon 1 \"x\" amxx plugins"]), "127.0.0.1", &|_| false);
         // a server started on the network adapter: the app knocks from there (and from
         // 127.0.0.1 in older lines of the same log); someone else's RCON stays
-        assert_eq!(without_polls(l(&["Rcon from 192.168.1.20:5000:", "Rcon from 127.0.0.1:1:", "Rcon from 10.0.0.9:7:"]), "192.168.1.20"), l(&["Rcon from 10.0.0.9:7:"]));
+        assert_eq!(without_polls(l(&["Rcon from 192.168.1.20:5000:", "Rcon from 127.0.0.1:1:", "Rcon from 10.0.0.9:7:"]), "192.168.1.20", &|_| false), l(&["Rcon from 10.0.0.9:7:"]));
         assert_eq!(got, l(&["[TFR] Tyler : ace haha", "rcon 1 \"x\" amxx plugins"]));
         // the console suggestions' lists and setting lookups; a real command stays
-        let got = without_polls(l(&["Rcon from 127.0.0.1:2:", "rcon 5 \"x\" cmdlist", "Rcon from 127.0.0.1:3:", "rcon 6 \"x\" amx_help 11", "Rcon from 127.0.0.1:4:", "rcon 7 \"x\" mp_roundtime", "Rcon from 127.0.0.1:5:", "rcon 8 \"x\" changelevel de_inferno"]), "127.0.0.1");
+        let got = without_polls(l(&["Rcon from 127.0.0.1:2:", "rcon 5 \"x\" cmdlist", "Rcon from 127.0.0.1:3:", "rcon 6 \"x\" amx_help 11", "Rcon from 127.0.0.1:4:", "rcon 7 \"x\" mp_roundtime", "Rcon from 127.0.0.1:5:", "rcon 8 \"x\" changelevel de_inferno"]), "127.0.0.1", &|n| n == "mp_roundtime");
+        // a one-word command someone typed stays
+        let typed = without_polls(l(&["Rcon from 127.0.0.1:9:", "rcon 9 \"x\" status"]), "127.0.0.1", &|n| n == "mp_roundtime");
+        assert_eq!(typed, l(&["rcon 9 \"x\" status"]));
         assert_eq!(got, l(&["rcon 8 \"x\" changelevel de_inferno"]));
     }
 }

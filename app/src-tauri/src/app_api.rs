@@ -42,6 +42,10 @@ pub struct Settings {
     /// no desktop notification when someone joins your game or a server
     #[serde(default)]
     pub mute_joins: bool,
+    /// no desktop notification when someone helping run a server (shared control) restarts
+    /// it or adds or removes a download
+    #[serde(default)]
+    pub mute_helpers: bool,
     /// where new dedicated servers go (None: Loner-Strike/Servers in the usual place)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub servers_dir: Option<String>,
@@ -535,7 +539,11 @@ struct ModeSettingsQuery {
 /// What a mode's settings will be when it next starts (the Rules page editing a mode other
 /// than the one being played): cvar -> value, or null where nothing sets it (the plugin's
 /// own default).
-async fn api_mode_settings(State(st): State<Shared>, axum::extract::Query(q): axum::extract::Query<ModeSettingsQuery>) -> Json<Value> {
+async fn api_mode_settings(State(st): State<Shared>, helper: Option<axum::Extension<crate::control::Helper>>, axum::extract::Query(mut q): axum::extract::Query<ModeSettingsQuery>) -> Json<Value> {
+    // someone helping run it (control/) never reads a key or password this way
+    if helper.is_some() {
+        q.cvars = q.cvars.split(',').filter(|c| !crate::control::rules::secret_setting(c)).collect::<Vec<_>>().join(",");
+    }
     let Some(g) = st.game() else { return Json(json!({"error": "Couldn't find the game."})) };
     if g.remote.is_some() {
         return Json(json!({"error": REMOTE_MODE_SETTINGS}));
