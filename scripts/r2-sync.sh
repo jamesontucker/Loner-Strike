@@ -65,8 +65,10 @@ while read -r url sha; do
   rm -f "$work/$name"
 done <<< "$pins"
 
-# everything pinned is there now: what isn't pinned any more goes
+# everything pinned is there now: what isn't pinned any more goes (only the downloads at the
+# top: folders like app/, the app's own releases, are kept by their own workflow)
 for key in $have; do
+  case "$key" in */*) continue ;; esac
   printf '%s\n' "${wanted[@]}" | grep -qxF "$key" && continue
   echo "delete   $key"
   [ "$dry" = 1 ] || s3 delete-object --bucket "$R2_BUCKET" --key "$key" >/dev/null

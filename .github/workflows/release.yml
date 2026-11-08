@@ -3,7 +3,9 @@
 #
 # Release: push a tag like v0.1.0 (it must match "version" in app/src-tauri/tauri.conf.json),
 # check the draft release on GitHub, then publish it. Published releases are what the
-# in-app updater offers (releases/latest/download/latest.json).
+# in-app updater offers: publishing also copies it to the download mirror
+# (mirror-release.yml, dl.lonerstrike.com/app/latest.json, which the app asks first) and
+# GitHub's releases/latest/download/latest.json is the fallback.
 # Actions are pinned to exact commits (this job holds the signing keys); Dependabot
 # proposes updates. Test build without releasing: run this workflow by hand (Actions > Release > Run workflow).
 

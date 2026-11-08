@@ -57,6 +57,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMxNDc0NkE1MEU0QUNBMTAKUldRUXlrb09wVVpITWFkeC8zTlArNnYxWnV4WlZ1N0JIQnh2M29xdGNwMWMyc3VRSVhhdjFEZEcK",
       "endpoints": [
+        "https://dl.lonerstrike.com/app/latest.json",
         "https://github.com/jamesontucker/Loner-Strike/releases/latest/download/latest.json"
       ],
       "windows": {
