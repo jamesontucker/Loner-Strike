@@ -76,6 +76,10 @@ new g_Weights[T_COUNT][MAX_VALUES], g_WeightCount[T_COUNT]
 // -50..50 is rel -5..5
 new g_Vault = INVALID_HANDLE
 new bool:g_MemLoaded[33][33], bool:g_MemDirty[33][33]
+// what was said this map has moved a bot's feelings about someone this much (capped: twenty
+// "ns" in a row count no more than a few)
+new g_NoteSum[33][33]
+#define NOTE_CAP 8
 new g_Aff[33][33], g_Fam[33][33], g_Last[33][33], g_PrevLast[33][33], g_KillsOn[33][33], g_DeathsBy[33][33]
 new Float:g_JoinedAt[33]
 #define FAM_AFTER 600.0                  // together this long on a day counts as a day together
@@ -107,7 +111,10 @@ public client_putinserver(id)
 {
 	g_JoinedAt[id] = get_gametime()
 	for (new j = 1; j <= MaxClients; j++)
+	{
 		g_MemLoaded[id][j] = g_MemLoaded[j][id] = g_MemDirty[id][j] = g_MemDirty[j][id] = false
+		g_NoteSum[id][j] = g_NoteSum[j][id] = 0
+	}
 }
 
 public client_disconnected(id)
@@ -393,8 +400,12 @@ bool:person(id)
 			t = other
 			if (t == T_COUNT || g_ArchFixed[a][t] >= 0)
 			{
-				// both fixed, or a hobby: change the second hobby instead
-				g_Hobby[id][1] = (g_Hobby[id][1] + 1) % HOBBY_COUNT
+				// both fixed, or a hobby: change a hobby instead (the first too, every other
+				// try, unless the archetype fixed it: it may be the one in the way)
+				new h = (tries & 1) && g_ArchHobby[a] < 0 ? 0 : 1
+				g_Hobby[id][h] = (g_Hobby[id][h] + 1) % HOBBY_COUNT
+				if (g_Hobby[id][h] == g_Hobby[id][1 - h])
+					g_Hobby[id][h] = (g_Hobby[id][h] + 1) % HOBBY_COUNT
 				continue
 			}
 		}
@@ -403,7 +414,7 @@ bool:person(id)
 	return true
 }
 
-// Clan tags off: "[TAG]Name", "-=TAG=-Name", "Name|TAG" are all Name
+// Clan tags off: "[TAG]Name" and "-=TAG=-Name" are both Name
 bare_name(const name[], out[], len)
 {
 	copy(out, len, name)
@@ -416,9 +427,8 @@ bare_name(const name[], out[], len)
 		}
 	if (close >= 0 && close < 12 && out[close + 1])
 		copy(out, len, out[close + 1])
-	new bar = contain(out, "|")
-	if (bar > 2)
-		out[bar] = 0
+	// (a bar is left alone: "GG | Glacier" and "Paprika | aXe" put the tag on either side,
+	// and cutting at it would make a whole clan one person)
 	trim(out)
 }
 
@@ -485,7 +495,7 @@ public n_match(plugin, params)
 			return -1
 		new have
 		if (equal(key, "rel"))
-			have = g_Aff[id][other] / 10
+			have = toward_zero(g_Aff[id][other], 10)
 		else if (equal(key, "fam"))
 			have = g_Fam[id][other]
 		else if (equal(key, "days"))
@@ -603,11 +613,19 @@ bool:memory(a, b)
 	g_Last[a][b] = g_PrevLast[a][b] = str_to_num(f[2])
 	g_KillsOn[a][b] = str_to_num(f[3])
 	g_DeathsBy[a][b] = str_to_num(f[4])
-	// feelings fade toward neutral: a tenth a week without seeing each other
-	new weeks = (today() - g_Last[a][b]) / 7
-	for (new w = 0; w < weeks && g_Aff[a][b]; w++)
-		g_Aff[a][b] = g_Aff[a][b] * 9 / 10
+	// feelings fade toward neutral: a tenth a week since this pair was last saved (the
+	// vault's own stamp, so a faded value saved again doesn't fade twice)
+	new weeks = (get_systime() - ts) / (7 * 86400)
+	for (new w = 0; w < weeks && w < 60 && g_Aff[a][b]; w++)
+		g_Aff[a][b] = toward_zero(g_Aff[a][b] * 9, 10)
 	return true
+}
+
+// Divides rounding toward zero (Pawn rounds down: -2 / 10 would be -1, and negative
+// feelings would never fade)
+toward_zero(n, d)
+{
+	return n < 0 ? -((-n) / d) : n / d
 }
 
 memory_key(a, b, key[], len)
@@ -701,6 +719,8 @@ public n_alias(plugin, params)
 public n_note(plugin, params)
 {
 	new bot = get_param(1), other = get_param(2)
+	if (bot < 1 || bot > MaxClients || other < 1 || other > MaxClients)
+		return 0
 	new kind[16]
 	get_string(3, kind, charsmax(kind))
 	static const KINDS[][] = { "praise", "thanks", "greet", "joke", "saved", "insult", "accuse" }
@@ -708,7 +728,12 @@ public n_note(plugin, params)
 	for (new i = 0; i < sizeof KINDS; i++)
 		if (equal(kind, KINDS[i]))
 		{
-			feel(bot, other, CHANGE[i])
+			new change = clamp(g_NoteSum[bot][other] + CHANGE[i], -NOTE_CAP, NOTE_CAP) - g_NoteSum[bot][other]
+			if (change)
+			{
+				g_NoteSum[bot][other] += change
+				feel(bot, other, change)
+			}
 			return 1
 		}
 	return 0

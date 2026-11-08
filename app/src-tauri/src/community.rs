@@ -779,8 +779,12 @@ async fn api_gag(State(st): State<Shared>, headers: HeaderMap, helper: Option<ax
             let _l = LOCK.lock().unwrap();
             let mut gags = read_gags(g)?;
             match gags.iter_mut().find(|x| x.id == gag.id) {
-                Some(x) if moderator && (x.until == 0 || (gag.until != 0 && gag.until < x.until)) => {
-                    return Err("They're already muted for longer. Ask an Admin or the owner to change it.".to_string());
+                // a Moderator only adds to a mute that's there: never shorter, never less of it
+                // (lifting any of it is an Admin's call)
+                Some(x) if moderator => {
+                    let until = if x.until == 0 || gag.until == 0 { 0 } else { x.until.max(gag.until) };
+                    let name = if gag.name.is_empty() { x.name.clone() } else { gag.name.clone() };
+                    *x = Gag { name, until, chat: x.chat || gag.chat, voice: x.voice || gag.voice, ..gag };
                 }
                 Some(x) => {
                     let name = if gag.name.is_empty() { x.name.clone() } else { gag.name.clone() };

@@ -235,7 +235,8 @@ Float:phase_factor(id, const section[])
 	return 0.35
 }
 
-// No more than 6 new bot lines in any 30 seconds, whatever happens
+// No more than 6 new bot lines and follow-ups in any 30 seconds (answers to a person who
+// spoke to a bot still go through)
 #define CAP_LINES  6
 #define CAP_WINDOW 30.0
 new Float:g_CapAt[CAP_LINES], g_CapPos
@@ -293,6 +294,11 @@ public task_follow_up(const data[], who)
 	new id = str_to_num(a)
 	if (!is_user_connected(who) || !is_user_connected(id))
 		return
+	// a reply counts toward the cap too (a chain of them could otherwise flood the chat)
+	new Float:now = get_gametime()
+	if (rate_capped(now))
+		return
+	cap_count(now)
 	want(who, sec, id, 1.0, -1.0, 1, str_to_num(b) == 1)
 }
 
