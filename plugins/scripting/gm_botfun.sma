@@ -142,6 +142,18 @@ bool:fun_allowed()
 	return !(phase > 0 && phase < 5)
 }
 
+// A bot leaving: nothing of its carries over to whoever gets the slot next
+public client_disconnected(id)
+{
+	remove_task(id)
+	remove_task(id + TASK_QSPAM)
+	remove_task(id + TASK_SLOTS)
+	g_QLeft[id] = 0
+	g_JumpsLeft[id] = 0
+	g_Press[id] = 0
+	g_FireUntil[id] = 0.0
+}
+
 public client_putinserver(id)
 {
 	g_Busy[id] = 0.0
@@ -450,8 +462,8 @@ public fw_cmdstart(id, uc, seed)
 	}
 	if (g_JumpsLeft[id] > 0 && get_gametime() >= g_NextJump[id])
 	{
-		// stop at once if a fight starts
-		if (get_gametime() < g_Busy[id])
+		// stop at once if a fight starts, or gm_humanbots has it afk or holding an angle
+		if (get_gametime() < g_Busy[id] || (g_HumanBots && hb_bot_idle(id)))
 			g_JumpsLeft[id] = 0
 		else if (pev(id, pev_flags) & FL_ONGROUND)
 		{
@@ -539,7 +551,8 @@ public task_start_qspam(id)
 
 start_qspam(id)
 {
-	if (!free_bot(id))
+	// a knife out is gm_humanbots' (a knife run, a show-off): flicks would undo it
+	if (!free_bot(id) || get_user_weapon(id) == CSW_KNIFE)
 		return
 	// mostly an even number of flicks (it ends on the gun it started with)
 	g_QLeft[id] = random_num(2, 6)
@@ -551,8 +564,16 @@ start_qspam(id)
 public task_qspam(tid)
 {
 	new id = tid - TASK_QSPAM
-	if (g_QLeft[id] <= 0 || !free_bot(id))
+	if (g_QLeft[id] <= 0)
 		return
+	if (!free_bot(id))
+	{
+		// stopped halfway (a fight): back to the gun it started with
+		if ((g_QLeft[id] & 1) && is_user_alive(id) && is_user_bot(id))
+			engclient_cmd(id, "lastinv")
+		g_QLeft[id] = 0
+		return
+	}
 	engclient_cmd(id, "lastinv")
 	if (--g_QLeft[id] > 0)
 		set_task(random_float(0.12, 0.28), "task_qspam", tid)
@@ -560,22 +581,54 @@ public task_qspam(tid)
 
 start_slots(id)
 {
-	if (!free_bot(id))
+	if (!free_bot(id) || get_user_weapon(id) == CSW_KNIFE)
 		return
-	// knife, pistol, grenade, back to the gun
-	static const SLOTS[][] = { "weapon_knife", "slot2", "slot4", "slot1" }
-	for (new i = 0; i < sizeof SLOTS; i++)
+	// knife, pistol, grenade, back to the gun it had (by name: slot1..slot4 are keys in the
+	// player's own game, the server never sees them)
+	new held = get_user_weapon(id)
+	new steps[4][24], n
+	copy(steps[n++], charsmax(steps[]), "weapon_knife")
+	new weapons[32], count, pistol, nade
+	get_user_weapons(id, weapons, count)
+	for (new i = 0; i < count; i++)
 	{
-		new data[24]
-		copy(data, charsmax(data), SLOTS[i])
-		set_task(0.35 * i + random_float(0.0, 0.2), "task_slot", id + TASK_SLOTS, data, sizeof data)
+		if (!pistol && is_pistol(weapons[i]))
+			pistol = weapons[i]
+		else if (!nade && is_nade(weapons[i]))
+			nade = weapons[i]
 	}
+	if (pistol && pistol != held)
+		get_weaponname(pistol, steps[n++], charsmax(steps[]))
+	if (nade && nade != held)
+		get_weaponname(nade, steps[n++], charsmax(steps[]))
+	if (held && held != CSW_KNIFE)
+		get_weaponname(held, steps[n++], charsmax(steps[]))
+	for (new i = 0; i < n; i++)
+		set_task(0.35 * i + random_float(0.0, 0.2), i == n - 1 ? "task_slot_back" : "task_slot", id + TASK_SLOTS, steps[i], sizeof steps[])
+}
+
+bool:is_pistol(w)
+{
+	return w == CSW_GLOCK18 || w == CSW_USP || w == CSW_P228 || w == CSW_DEAGLE || w == CSW_FIVESEVEN || w == CSW_ELITE
+}
+
+bool:is_nade(w)
+{
+	return w == CSW_HEGRENADE || w == CSW_FLASHBANG || w == CSW_SMOKEGRENADE
 }
 
 public task_slot(const data[], tid)
 {
 	new id = tid - TASK_SLOTS
 	if (free_bot(id))
+		engclient_cmd(id, data)
+}
+
+// The last step (its own gun again) happens even if something came up meanwhile
+public task_slot_back(const data[], tid)
+{
+	new id = tid - TASK_SLOTS
+	if (is_user_alive(id) && is_user_bot(id) && user_has_weapon(id, get_weaponid(data)))
 		engclient_cmd(id, data)
 }
 
@@ -589,7 +642,8 @@ public task_knife_flick(id)
 
 public task_lastinv(id)
 {
-	if (free_bot(id))
+	// even if something came up meanwhile: it shouldn't be left with the knife out
+	if (is_user_alive(id) && is_user_bot(id) && get_user_weapon(id) == CSW_KNIFE)
 		engclient_cmd(id, "lastinv")
 }
 
