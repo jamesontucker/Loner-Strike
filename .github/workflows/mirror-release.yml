@@ -16,6 +16,11 @@
 #
 # Secrets (Settings > Secrets and variables > Actions): R2_ACCESS_KEY_ID,
 # R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET (an R2 token limited to that bucket).
+#
+# The newest release also goes to Polar (job polar, scripts/polar-release.py): its Mac and
+# Windows installers replace the ones the downloads benefit offers. Secret POLAR_ACCESS_TOKEN
+# (an Organization Access Token with benefits:read/write and files:read/write); variable
+# POLAR_BENEFIT_ID if the benefit can't be found by its description mentioning Loner-Strike.
 
 name: Mirror release
 
@@ -119,3 +124,29 @@ jobs:
               | { grep -v '^None$' || true; } | while read -r key; do s3 delete-object --bucket "$R2_BUCKET" --key "$key" >/dev/null; done
           done
           echo "kept: $(printf '%s\n' "$versions" | tail -n "$KEEP" | tr '\n' ' ')"
+
+  polar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Put the installers on Polar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          POLAR_ACCESS_TOKEN: ${{ secrets.POLAR_ACCESS_TOKEN }}
+          POLAR_BENEFIT_ID: ${{ vars.POLAR_BENEFIT_ID }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$TAG isn't a release tag like v0.1.3"; exit 1; }
+          [ -n "$POLAR_ACCESS_TOKEN" ] || { echo "::warning::No POLAR_ACCESS_TOKEN: Polar left as it is."; exit 0; }
+          # only the newest release (copying an older one again mustn't put it back on Polar)
+          newest=$(gh release view -R "$REPO" --json tagName -q .tagName)
+          [ "$newest" = "$TAG" ] || { echo "$TAG isn't the newest release ($newest): Polar left as it is"; exit 0; }
+          mkdir dist
+          for i in 1 2 3 4 5; do
+            gh release download "$TAG" -R "$REPO" -D dist -p '*_universal.dmg' -p '*_x64-setup.exe' --clobber && break
+            [ "$i" = 5 ] && { echo "::error::Couldn't download the installers."; exit 1; }
+            sleep $((i * 10))
+          done
+          python3 scripts/polar-release.py dist "$TAG"
