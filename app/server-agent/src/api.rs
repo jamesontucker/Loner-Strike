@@ -190,15 +190,7 @@ pub fn handle(ctx: &Ctx, req: Req) -> Resp {
         return refuse(400, "That isn't something Loner-Strike sends.");
     }
     // 4. their role (the app's own rules; mode settings aren't known here, so never)
-    let mut verdict = rules::check(&rules::Ask { role: m.role, method: &method, path: &path, server: &config.id, body: body.as_ref() }, &|_, _| false);
-    // a Moderator lifting a mute they gave themselves
-    if m.role == Role::Moderator && method == "POST" && path == "/api/community/ungag" {
-        let who = body.as_ref().and_then(|b| b["id"].as_str()).unwrap_or("");
-        let log = std::fs::read_to_string(files.log_path()).unwrap_or_default();
-        if common::gave_last_gag(&log, &m.id, who) {
-            verdict = rules::Verdict::Allow(None);
-        }
-    }
+    let verdict = rules::check(&rules::Ask { role: m.role, method: &method, path: &path, server: &config.id, body: body.as_ref() }, &|_, _| false);
     let body = match verdict {
         rules::Verdict::Deny(why) => return refuse(403, &why),
         rules::Verdict::Allow(Some(v)) => Some(v),

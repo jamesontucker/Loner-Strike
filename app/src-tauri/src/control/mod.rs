@@ -607,21 +607,7 @@ pub async fn guard(State(st): State<Shared>, req: Request, next: Next) -> Respon
     } else {
         vec![]
     };
-    let mut verdict = rules::check(&rules::Ask { role: m.role, method: &method, path: &path, server: &m.server, body: json_body.as_ref() }, &|_, cvar| known.iter().any(|k| k == cvar));
-    // a Moderator lifting a mute they gave themselves
-    if m.role == Role::Moderator && method == "POST" && path == "/api/community/ungag" {
-        let who = json_body.as_ref().and_then(|b| b["id"].as_str()).unwrap_or("").to_string();
-        let (server, mid) = (m.server.clone(), m.id.clone());
-        let own = tokio::task::spawn_blocking(move || {
-            let log = std::fs::read_to_string(log_dir().join(format!("{server}.jsonl"))).unwrap_or_default();
-            common::gave_last_gag(&log, &mid, &who)
-        })
-        .await
-        .unwrap_or(false);
-        if own {
-            verdict = rules::Verdict::Allow(None);
-        }
-    }
+    let verdict = rules::check(&rules::Ask { role: m.role, method: &method, path: &path, server: &m.server, body: json_body.as_ref() }, &|_, cvar| known.iter().any(|k| k == cvar));
     let body = match verdict {
         rules::Verdict::Deny(why) => return refuse(StatusCode::FORBIDDEN, &why),
         rules::Verdict::Allow(Some(v)) => Bytes::from(serde_json::to_vec(&v).unwrap_or_default()),
