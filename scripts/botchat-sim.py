@@ -255,7 +255,7 @@ class Sim:
         self.now = 0.0
         self.next_any = 0.0
         self.cap = collections.deque(maxlen=6)
-        self.recent = collections.deque(maxlen=64)
+        self.recent = collections.deque(maxlen=160)
         self.line_at, self.once, self.flags = {}, set(), {}
         self.offers = []
         self.pending = []
@@ -376,12 +376,16 @@ class Sim:
         if not cands:
             return None
         best = max(c[1] for c in cands)
-        tier = best - 1 if best > 0 and random.randint(1, 5) == 1 else best
+        top = sum(1 for c in cands if c[1] == best)
+        tier = best - 1 if best > 0 and (top < 3 or random.randint(1, 5) == 1) else best
         pool = [c for c in cands if c[1] >= tier]
-        total = sum(c[0] for c in pool)
-        r = random.uniform(0, total)
-        for c in pool:
-            r -= c[0]
+        topw = sum(c[0] for c in pool if c[1] == best)
+        restw = sum(c[0] for c in pool if c[1] != best)
+        boost = max(1.0, restw / topw) if tier < best and top < 3 and topw > 0 else 1.0
+        ws = [c[0] * boost if c[1] == best else c[0] for c in pool]
+        r = random.uniform(0, sum(ws))
+        for c, w in zip(pool, ws):
+            r -= w
             if r <= 0:
                 return c
         return pool[-1]
@@ -454,7 +458,7 @@ class Sim:
                     target = random.choice([b for b in self.bots if b is not bot])
                 if target:
                     self.pending.append((self.now + delay + random.uniform(0.3, 1.2),
-                                         lambda t=target, s=to, b=bot: self.want(t, s, b, 0.7, 1)))
+                                         lambda t=target, s=to, b=bot: self.want(t, s, b, 1.0, 1)))
         # a reply asked for
         if ">" in text and chain < 3:
             tag = text.split(">", 1)[1].strip()
@@ -566,14 +570,14 @@ class Sim:
 
 FOLLOW = {}
 for _s in ("kill", "kill_headshot", "kill_nade", "kill_awp", "noscope"):
-    FOLLOW[_s] = ("r_kill", 1, 0.3)
-FOLLOW["kill_knife"] = ("r_kill", 1, 0.45)
+    FOLLOW[_s] = ("r_kill", 1, 0.45)
+FOLLOW["kill_knife"] = ("r_kill", 1, 0.6)
 for _s in ("death", "death_headshot", "death_nade"):
-    FOLLOW[_s] = ("r_death", 1, 0.3)
-FOLLOW["death_knife"] = ("r_death", 1, 0.4)
-FOLLOW.update({"nice_shot": ("r_ns_thanks", 1, 0.5), "round_win": ("r_round", 2, 0.35), "round_lose": ("r_round", 2, 0.35),
-               "greet": ("r_hi", 3, 0.4), "idle": ("r_idle", 3, 0.35), "late_night": ("r_idle", 3, 0.35),
-               "map_end": ("r_gg", 3, 0.5), "teamkilled": ("r_sorry_tk", 1, 0.6)})
+    FOLLOW[_s] = ("r_death", 1, 0.45)
+FOLLOW["death_knife"] = ("r_death", 1, 0.55)
+FOLLOW.update({"nice_shot": ("r_ns_thanks", 1, 0.65), "round_win": ("r_round", 2, 0.5), "round_lose": ("r_round", 2, 0.5),
+               "greet": ("r_hi", 3, 0.55), "idle": ("r_idle", 3, 0.5), "late_night": ("r_idle", 3, 0.5),
+               "map_end": ("r_gg", 3, 0.65), "teamkilled": ("r_sorry_tk", 1, 0.75)})
 
 
 def choose(text):
@@ -636,12 +640,12 @@ def main():
     rep_any = rep_bot = 0
     for i in range(0, len(texts) - session, session):
         chunk = texts[i:i + session]
-        c = collections.Counter(t for t, _ in chunk if len(t) > 6)
+        c = collections.Counter(t for t, _ in chunk if len(t) > 12)
         rep_any += sum(v - 1 for v in c.values() if v > 1)
         cb = collections.Counter(chunk)
-        rep_bot += sum(v - 1 for (t, _), v in cb.items() if v > 1 and len(t) > 6)
+        rep_bot += sum(v - 1 for (t, _), v in cb.items() if v > 1 and len(t) > 12)
     chunks = max(1, (len(texts) - session) // max(session, 1))
-    print(f"In a 2-hour session:             {session} bot lines; longer lines repeated by anyone {rep_any / chunks:.1f}, by the same bot {rep_bot / chunks:.1f}")
+    print(f"In a 2-hour session:             {session} bot lines; lines over 12 characters repeated by anyone {rep_any / chunks:.1f}, by the same bot {rep_bot / chunks:.1f}")
     distinct = len({t for t, _ in texts})
     print(f"Distinct texts said overall:     {distinct} of {len(texts)} lines ({distinct / max(len(texts), 1):.0%})")
     # who the bots were

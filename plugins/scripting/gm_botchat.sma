@@ -137,7 +137,7 @@ new g_Vault = INVALID_HANDLE
 new Trie:g_Left                      // bots that left mid-map: name -> when
 
 // lines said lately (hashes), so the same one doesn't come round again soon
-#define RECENT 64
+#define RECENT 160
 new g_Recent[RECENT], g_RecentPos
 
 // themes rest for a while once someone brings them up: a word in the line -> theme
@@ -263,7 +263,7 @@ follow_up(id, other, const section[], bool:team)
 		"r_hi", "r_idle", "r_idle", "r_gg", "r_sorry_tk" }
 	// 1 the one it's about, 2 a teammate, 3 anyone
 	static const WHO[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 1 }
-	static const Float:ODDS[] = { 0.3, 0.3, 0.45, 0.3, 0.3, 0.3, 0.3, 0.3, 0.4, 0.3, 0.5, 0.35, 0.35, 0.4, 0.35, 0.35, 0.5, 0.6 }
+	static const Float:ODDS[] = { 0.45, 0.45, 0.6, 0.45, 0.45, 0.45, 0.45, 0.45, 0.55, 0.45, 0.65, 0.5, 0.5, 0.55, 0.5, 0.5, 0.65, 0.75 }
 	for (new i = 0; i < sizeof FROM; i++)
 	{
 		if (!equal(section, FROM[i]))
@@ -293,7 +293,7 @@ public task_follow_up(const data[], who)
 	new id = str_to_num(a)
 	if (!is_user_connected(who) || !is_user_connected(id))
 		return
-	want(who, sec, id, 0.7, -1.0, 1, str_to_num(b) == 1)
+	want(who, sec, id, 1.0, -1.0, 1, str_to_num(b) == 1)
 }
 
 // What a person said, for how the bot it's about (or every bot) feels about them
@@ -1294,15 +1294,31 @@ bool:pick_line(id, const section[], text[], len, bool:answer = false, bool:commi
 	g_PickScore = 0
 	if (cn)
 	{
-		// the most specific tier; one lower now and then
-		new tier = (best > 0 && random_num(1, 5) == 1) ? best - 1 : best
+		// the most specific tier; one lower now and then, and always when the top one has
+		// fewer than three lines (one line for a bot's region would be all it ever says)
+		new top
+		for (new k = 0; k < cn; k++)
+			if (cs[k] == best)
+				top++
+		new tier = (best > 0 && (top < 3 || random_num(1, 5) == 1)) ? best - 1 : best
+		// when the top tier is only joined because it's small, it still gets half the chance
+		new Float:topw, Float:restw
+		for (new k = 0; k < cn; k++)
+		{
+			if (cs[k] == best)
+				topw += cw[k]
+			else if (cs[k] >= tier)
+				restw += cw[k]
+		}
+		new Float:boost = (tier < best && top < 3 && topw > 0.0) ? floatmax(1.0, restw / topw) : 1.0
 		new Float:total
 		for (new k = 0; k < cn; k++)
 		{
 			if (cs[k] < tier)
 				continue
-			total += cw[k]
-			if (random_float(0.0, total) < cw[k])
+			new Float:w = cs[k] == best ? cw[k] * boost : cw[k]
+			total += w
+			if (random_float(0.0, total) < w)
 			{
 				pick = ci[k]
 				g_PickScore = cs[k]
