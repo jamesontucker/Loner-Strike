@@ -60,6 +60,11 @@ fn watch_bans() {
         std::thread::sleep(std::time::Duration::from_secs(60));
         let Some(group) = load().remove("bans").filter(|g| g.members.len() >= 2) else { continue };
         for m in &group.members {
+            // a server friends help run (shared control): what changes there stays there;
+            // the owner's own edits through the app are still passed on
+            if crate::control::has_helpers(m) {
+                continue;
+            }
             check(m, "bans", false);
         }
     });
@@ -197,6 +202,11 @@ fn check(member: &str, list: &str, edited: bool) {
     let member = member.to_string();
     let mut c = load();
     let Some(group) = c.get_mut(list).filter(|g| g.members.len() >= 2 && g.members.contains(&member)) else { return };
+    // a server friends help run (shared control): bans made there stay there, even when the
+    // owner edits them in the app (they'd carry what helpers added)
+    if list == "bans" && crate::control::has_helpers(&member) {
+        return;
+    }
     let Some(g) = game(&member) else { return };
     let now = print(list, &g);
     if group.hashes.get(&member) == Some(&now) {
@@ -252,6 +262,19 @@ pub fn forget(target: &str) {
     if c.values().map(|g| g.members.len()).sum::<usize>() != before {
         let _ = save(&c);
     }
+}
+
+/// A server stops sharing one list (its own copy stays as it is).
+pub fn leave(target: &str, list: &str) {
+    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut c = load();
+    let Some(g) = c.get_mut(list) else { return };
+    if !g.members.iter().any(|m| m == target) {
+        return;
+    }
+    g.members.retain(|m| m != target);
+    g.hashes.remove(target);
+    let _ = save(&c);
 }
 
 /// The shared lists a server (or "local:<game>") is a member of, for a backup.

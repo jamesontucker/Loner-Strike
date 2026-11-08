@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { sharedRole } from "../queries";
 import { MatchMode, NeedsSetup } from "./MatchMode";
-import { getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
+import { getJson, isAbort, isSharedId, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import { queryClient } from "../queries";
 import type { AppInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
@@ -102,7 +103,8 @@ export function Community({ target }: { target: string }) {
   const [tab, setTabRaw] = useState<Tab>(() => {
     try {
       const t = localStorage.getItem("ls.communityTab") as Tab;
-      return TABS.some(([id]) => id === t) ? t : "stats";
+      // 5v5 matches isn't a Moderator's
+      return TABS.some(([id]) => id === t) && !(t === "matches" && sharedRole() === "moderator") ? t : "stats";
     } catch {
       return "stats";
     }
@@ -157,7 +159,7 @@ export function Community({ target }: { target: string }) {
         <NeedsSetup text="This game is missing the Loner-Strike plugin for stats and moderation." after="Until then your settings are saved here, but the game doesn't use them." />
       )}
       <div className="chips admin-tabs" role="tablist" aria-label="Stats & moderation sections">
-        {TABS.map(([id, label]) => (
+        {TABS.filter(([id]) => id !== "matches" || sharedRole() !== "moderator").map(([id, label]) => (
           <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>
             {label}
             {id === "reports" && d.open_reports > 0 && <i className="tab-n">{d.open_reports}</i>}
@@ -207,16 +209,18 @@ function useSettings(d: Data, setD: SetData) {
   };
 }
 
-/** Bans for good through the Admins page's ban (asks first). */
+/** Bans for good through the Admins page's ban (asks first); a Moderator's for a week. */
 function useBan() {
   const ask = useConfirm();
   const toast = useToast();
   const { run } = useActions();
   return async (id: string, name: string) => {
     if (!STEAMID.test(id)) return toast("Only players with a SteamID can be banned. LAN players and bots can't.", true);
-    if (!(await ask(`Ban ${name || id} for good? They're kicked if they're playing. You can unban them on the Admins page.`, { ok: "Ban", danger: true }))) return;
+    const mod = sharedRole() === "moderator";
+    const lift = isSharedId(targetKey()) ? "Only the server's owner can lift it." : "You can unban them on the Admins page.";
+    if (!(await ask(`Ban ${name || id} ${mod ? "for a week" : "for good"}? They're kicked if they're playing. ${mod ? "A timed ban also ends if the server restarts." : lift}`, { ok: "Ban", danger: true }))) return;
     await run(ck(`ban:${id}`), async () => {
-      const r = await postJson<{ error?: string }>("/api/admins/ban", { id, minutes: 0 }).catch(() => OFFLINE);
+      const r = await postJson<{ error?: string }>("/api/admins/ban", { id, minutes: mod ? 10080 : 0 }).catch(() => OFFLINE);
       if (failed(r)) toast(r.error, true);
       else toast(`${name || id} is banned`);
     }, `Banning ${name || id}…`);
@@ -382,7 +386,7 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
           </p>
         </>
       )}
-      <div className="settings cm-settings">
+      {sharedRole() !== "moderator" && <div className="settings cm-settings">
         <Toggle
           label="Count games against bots"
           note="Kills and deaths against bots count toward everyone's stats. Turn it off to rank only games between people. From the next map."
@@ -394,7 +398,7 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
           <span className="name">Start over<span className="note">Clears every player's stats and rank, here and in the game's /rank and /top15.</span></span>
           <div><BusyButton className="btn danger" busy={isBusy(ck("stats:reset"))} label="Reset stats" busyLabel="Resetting…" onClick={reset} /></div>
         </div>
-      </div>
+      </div>}
     </section>
   );
 }
@@ -738,13 +742,13 @@ function ModTab({ d, setD, reload, onDirty }: { d: Data; setD: SetData; reload: 
             <span className="name">When someone swears<Info text="Star it out still sends the message, with the word hidden behind stars. Don't send it drops the whole message and tells the sender why." /><span className="note">{words.length ? `${words.length} ${words.length === 1 ? "word" : "words"} on the list.` : "Add words below first."}</span></span>
             <div className="seg" role="group" aria-label="When someone swears">
               {([["off", "Nothing"], ["replace", "Star it out"], ["block", "Don't send it"]] as [FilterMode, string][]).map(([m, l]) => (
-                <button key={m} type="button" aria-pressed={d.settings.filter === m} disabled={busy(settingKey({ filter: m }))} onClick={() => save({ filter: m })}>{l}</button>
+                <button key={m} type="button" aria-pressed={d.settings.filter === m} disabled={busy(settingKey({ filter: m })) || sharedRole() === "moderator"} onClick={() => save({ filter: m })}>{l}</button>
               ))}
             </div>
           </div>
         </div>
         <div className="panel stack-tight">
-          <div className="row">
+          {sharedRole() !== "moderator" && <div className="row">
             <input
               className="search grow"
               placeholder="Add a word"
@@ -755,28 +759,31 @@ function ModTab({ d, setD, reload, onDirty }: { d: Data; setD: SetData; reload: 
               aria-label="Word to add"
             />
             <button className="btn" disabled={!word.trim()} onClick={addWord}>Add</button>
-          </div>
+          </div>}
           {words.length ? (
             <div className="chips cm-words" aria-label="Filtered words">
               {words.map((w) => (
+                sharedRole() === "moderator" ? <span key={w} className="chip">{w}</span> : (
                 <button key={w} className="chip" aria-label={`Remove ${w}`} onClick={() => setDraft(words.filter((x) => x !== w))}>
                   {w}
                   <Glyph d="M6 6l12 12M18 6L6 18" />
-                </button>
+                </button>)
               ))}
             </div>
           ) : (
             <div className="row">
               <span className="muted">The list is empty.</span>
-              <button className="btn" onClick={() => setDraft(STARTER)}>Use a starter list</button>
+              {sharedRole() !== "moderator" && <button className="btn" onClick={() => setDraft(STARTER)}>Use a starter list</button>}
             </div>
           )}
+          {sharedRole() !== "moderator" && <>
           <div className="row">
             <BusyButton className="btn primary" busy={busy(settingKey({ words }))} disabled={!dirty} label="Save word list" busyLabel="Saving…" onClick={saveWords} />
             {dirty && <button className="btn" onClick={() => setDraft(null)}>Undo changes</button>}
             {words.length > 0 && <button className="btn danger push" onClick={() => setDraft([])}>Remove all</button>}
           </div>
           <p className="muted small-note">{ON_THIS_COMPUTER ? "Click" : "Tap"} a word to take it off the list. Changes count as soon as you save, no map change needed.</p>
+          </>}
         </div>
       </section>
     </>
@@ -797,7 +804,8 @@ function Toggle({ label, note, on, set, busy }: { label: string; note: ReactNode
   return (
     <div className="setting">
       <span className="name">{label}<span className="note">{note}</span></span>
-      <Switch on={on} onChange={set} label={label} disabled={busy} />
+      {/* a Moderator sees the settings; the owner and Admins change them */}
+      <Switch on={on} onChange={set} label={label} disabled={busy || sharedRole() === "moderator"} />
     </div>
   );
 }

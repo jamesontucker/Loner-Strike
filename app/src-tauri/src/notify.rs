@@ -33,13 +33,14 @@ pub fn watch(app: tauri::AppHandle, st: Shared) {
         let mut last_fetch: Option<std::time::Instant> = None;
         loop {
             std::thread::sleep(Duration::from_secs(5));
-            let mut games: Vec<(String, String, std::sync::Arc<crate::game::Game>)> = Vec::new();
+            // (key, label, game, whether its joins are wanted)
+            let mut games: Vec<(String, String, std::sync::Arc<crate::game::Game>, bool)> = Vec::new();
             if let Some(g) = st.local_game() {
-                games.push((format!("local:{}", g.name), "your game".into(), g));
+                games.push((format!("local:{}", g.name), "your game".into(), g, !crate::app_api::load_settings().mute_joins));
             }
             for e in crate::servers::load().into_iter().filter(|e| e.ready && crate::servers::running(&e.id)) {
                 if let Some(g) = crate::servers::game_for(&e.id, || None) {
-                    games.push((e.id.clone(), e.name.clone(), g));
+                    games.push((e.id.clone(), e.name.clone(), g, crate::servers::notifies_joins(&e)));
                 }
             }
             // reports from players (say /report) always notify, whatever the join setting
@@ -48,17 +49,19 @@ pub fn watch(app: tauri::AppHandle, st: Shared) {
             if fetch_remote {
                 last_fetch = Some(std::time::Instant::now());
             }
-            for (_, label, g) in &games {
+            for (_, label, g, _) in &games {
                 if let Some(text) = crate::community::report_note(&crate::community::new_reports(g, fetch_remote && g.remote.is_some()), label) {
                     let _ = app.notification().builder().title("Loner-Strike").body(text).show();
                 }
             }
-            if crate::app_api::load_settings().mute_joins {
-                seen.clear();
-                continue;
-            }
             let focused = app.get_webview_window("main").and_then(|w| w.is_focused().ok()).unwrap_or(false);
-            for (key, label, g) in games {
+            for (key, label, g, wanted) in games {
+                // joins turned off for this one: nothing remembered, so turning it back on
+                // doesn't announce everyone already there
+                if !wanted {
+                    seen.remove(&key);
+                    continue;
+                }
                 let Some(now) = people(&g) else {
                     seen.remove(&key);
                     continue;

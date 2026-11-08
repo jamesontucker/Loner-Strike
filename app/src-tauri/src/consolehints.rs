@@ -116,11 +116,20 @@ fn next_help_page(page: &str) -> Option<u32> {
 
 /// A setting's current value, asked for on its own (`"hostname" is "My Server"`), or None
 /// for a password or token, a name that isn't one, or no answer. Blocking.
-pub fn value(rcon: &Rcon, name: &str) -> Option<String> {
+pub fn value(id: &str, rcon: &Rcon, name: &str) -> Option<String> {
     if name.is_empty() || name.len() > 64 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') || secret(name) || NEVER.contains(&name) {
         return None;
     }
+    // only a setting the server listed: sending a command's name on its own would run it
+    if !is_setting(id, name) {
+        return None;
+    }
     parse_value(&rcon.send(name).ok()?, name)
+}
+
+/// Whether the server's list (as last asked for) has this setting.
+pub fn is_setting(id: &str, name: &str) -> bool {
+    CACHE.lock().unwrap().as_ref().and_then(|m| m.get(id)).is_some_and(|(_, items)| items.iter().any(|i| i.k == "cvar" && i.n.eq_ignore_ascii_case(name)))
 }
 
 fn parse_value(reply: &str, name: &str) -> Option<String> {

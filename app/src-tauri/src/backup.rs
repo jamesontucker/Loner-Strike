@@ -87,6 +87,8 @@ pub struct AppPrefs {
     pub manual_updates: bool,
     pub keep_servers: bool,
     pub mute_joins: bool,
+    /// (None: a backup from before this setting, which leaves it as it is)
+    pub mute_helpers: Option<bool>,
     pub smart_chat: bool,
 }
 
@@ -95,7 +97,7 @@ const PREFS_FILE: &str = "app-preferences.json";
 impl AppPrefs {
     fn now() -> AppPrefs {
         let s = crate::app_api::load_settings();
-        AppPrefs { manual_updates: s.manual_updates, keep_servers: s.keep_servers, mute_joins: s.mute_joins, smart_chat: s.smart_chat }
+        AppPrefs { manual_updates: s.manual_updates, keep_servers: s.keep_servers, mute_joins: s.mute_joins, mute_helpers: Some(s.mute_helpers), smart_chat: s.smart_chat }
     }
 
     /// Puts them back; says what's left to do.
@@ -104,6 +106,9 @@ impl AppPrefs {
             s.manual_updates = self.manual_updates;
             s.keep_servers = self.keep_servers;
             s.mute_joins = self.mute_joins;
+            if let Some(m) = self.mute_helpers {
+                s.mute_helpers = m;
+            }
             s.smart_chat = self.smart_chat;
         });
         let mut notes = Vec::new();
@@ -194,6 +199,13 @@ pub struct Saved {
     pub restart: Option<servers::DailyRestart>,
     pub extra_args: String,
     pub bots_when_empty: Option<bool>,
+    /// this app's own switches for it (backups from before them: the app-wide settings)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_running: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notify_joins: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notify_helpers: Option<bool>,
     pub ls_listed: bool,
     pub public_address: Option<String>,
     pub web_status: crate::webstatus::Settings,
@@ -215,6 +227,9 @@ impl Saved {
             restart: e.restart.clone(),
             extra_args: e.extra_args.clone(),
             bots_when_empty: e.bots_when_empty,
+            keep_running: e.keep_running,
+            notify_joins: e.notify_joins,
+            notify_helpers: e.notify_helpers,
             ls_listed: e.ls_listed,
             public_address: e.public_address.clone(),
             web_status,
@@ -242,6 +257,9 @@ impl Saved {
             Err(why) => notes.push(format!("The extra start options weren't used: {why}")),
         }
         e.bots_when_empty = self.bots_when_empty;
+        e.keep_running = self.keep_running;
+        e.notify_joins = self.notify_joins;
+        e.notify_helpers = self.notify_helpers;
         e.ls_listed = self.ls_listed;
         e.public_address = self.public_address.as_deref().and_then(|a| servers::clean_public_address(a).ok().flatten());
         e.restart = self.restart.clone();
@@ -1526,6 +1544,9 @@ fn new_entry(st: &Shared, m: &Manifest, saved: Option<&Saved>, name: &str, remot
         web_status: Default::default(),
         pending_restart: Default::default(),
         service_stale: false,
+        keep_running: None,
+        notify_joins: None,
+        notify_helpers: None,
     };
     if let Some(s) = saved {
         s.apply(&mut e, notes);

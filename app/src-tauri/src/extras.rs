@@ -692,11 +692,20 @@ async fn with_game<T: Send + 'static>(st: &Shared, f: impl FnOnce(&Game) -> T + 
     tokio::task::spawn_blocking(move || f(&g)).await.ok()
 }
 
-async fn api_get(State(st): State<Shared>) -> Reply {
-    answer(with_game(&st, |g| Ok(listing(g))).await)
+async fn api_get(State(st): State<Shared>, helper: Option<axum::Extension<crate::control::Helper>>) -> Reply {
+    let helper = helper.is_some();
+    answer(with_game(&st, move |g| Ok(for_helper(listing(g), helper))).await)
 }
 
-async fn api_settings(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<Settings>) -> Reply {
+/// The listing as someone helping run the server sees it: no FastDL address.
+fn for_helper(mut v: Value, helper: bool) -> Value {
+    if helper {
+        v["settings"]["fastdl"] = json!("");
+    }
+    v
+}
+
+async fn api_settings(State(st): State<Shared>, headers: HeaderMap, helper: Option<axum::Extension<crate::control::Helper>>, Json(req): Json<Settings>) -> Reply {
     if !from_panel(&headers) {
         return forbidden();
     }
@@ -704,8 +713,14 @@ async fn api_settings(State(st): State<Shared>, headers: HeaderMap, Json(req): J
         Ok(s) => s,
         Err(e) => return bad(e),
     };
+    // where players download maps from (sv_downloadurl) stays the owner's: a helper's save
+    // keeps it as it is
+    let keep_fastdl = helper.is_some();
     answer(
         with_game(&st, move |g| {
+            if keep_fastdl {
+                s.fastdl = load(&g.data).fastdl;
+            }
             if !s.empty.map.is_empty() {
                 s.empty.map = installed_maps(g).get(&s.empty.map.to_lowercase()).cloned().ok_or(format!("{} isn't installed.", s.empty.map))?;
             }
@@ -715,7 +730,7 @@ async fn api_settings(State(st): State<Shared>, headers: HeaderMap, Json(req): J
             let _l = LOCK.lock().unwrap();
             save(&g.data, &s)?;
             reload(g);
-            Ok(listing(g))
+            Ok(for_helper(listing(g), keep_fastdl))
         })
         .await,
     )
@@ -729,7 +744,8 @@ struct RotationReq {
     maps: Vec<String>,
 }
 
-async fn api_rotation(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<RotationReq>) -> Reply {
+async fn api_rotation(State(st): State<Shared>, headers: HeaderMap, helper: Option<axum::Extension<crate::control::Helper>>, Json(req): Json<RotationReq>) -> Reply {
+    let helper = helper.is_some();
     if !from_panel(&headers) {
         return forbidden();
     }
@@ -746,7 +762,7 @@ async fn api_rotation(State(st): State<Shared>, headers: HeaderMap, Json(req): J
             let _l = LOCK.lock().unwrap();
             write_rotation(&rotation_path(g, &mode), &g.data, &maps, mode.is_empty())?;
             reload(g);
-            Ok(listing(g))
+            Ok(for_helper(listing(g), helper))
         })
         .await,
     )
@@ -760,7 +776,8 @@ struct ScheduleReq {
 }
 
 /// A dedicated server's daily restart.
-async fn api_schedule(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<ScheduleReq>) -> Reply {
+async fn api_schedule(State(st): State<Shared>, headers: HeaderMap, helper: Option<axum::Extension<crate::control::Helper>>, Json(req): Json<ScheduleReq>) -> Reply {
+    let helper = helper.is_some();
     if !from_panel(&headers) {
         return forbidden();
     }
@@ -771,7 +788,7 @@ async fn api_schedule(State(st): State<Shared>, headers: HeaderMap, Json(req): J
                 return Err("Only dedicated servers restart on a schedule.".to_string());
             }
             crate::servers::set_restart(&g.hl, &g.name, crate::servers::DailyRestart { on: req.on, hour, minute })?;
-            Ok(listing(g))
+            Ok(for_helper(listing(g), helper))
         })
         .await,
     )

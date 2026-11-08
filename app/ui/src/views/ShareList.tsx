@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, targetKey, useActions } from "../api";
+import { getJson, isSharedId, ON_THIS_COMPUTER, postJson, targetKey, useActions } from "../api";
 import { Info, Switch, useConfirm, useToast } from "../ui";
 
 export type ListId = "admins" | "bans" | "filter" | "welcome" | "messages";
@@ -7,7 +7,12 @@ type Data = { lists: Record<ListId, string[]>; names: Record<ListId, string>; ta
 
 /** "Share across servers" for one list: a change saved on any of the ticked servers
  *  (or your game) is copied to the others. */
-export function ShareList({ list, onShared }: { list: ListId; onShared?: () => void }) {
+export function ShareList(props: { list: ListId; onShared?: () => void }) {
+  // a server a friend shared with you: its lists are its owner's to share
+  return isSharedId(targetKey()) ? null : <ShareListFor {...props} />;
+}
+
+function ShareListFor({ list, onShared }: { list: ListId; onShared?: () => void }) {
   const toast = useToast();
   const ask = useConfirm();
   const [data, setData] = useState<Data | null>(null);

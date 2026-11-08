@@ -1,5 +1,5 @@
 import { memo, useDeferredValue, useMemo, useState } from "react";
-import { addFromFile, currentTarget, getJsonAt, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable, withTarget } from "../api";
+import { addFromFile, currentTarget, getJsonAt, isSharedId, ON_THIS_COMPUTER, postJson, targetKey, useActions, useStable, withTarget } from "../api";
 import { useAppInfo, useMaps, useServers, useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { usePlayDrafts } from "../stores/playDraft";
@@ -134,6 +134,8 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   const [relearn, setRelearn] = useState(false);
   // copying maps between your game and servers: on the computer only
   const server = currentTarget();
+  // a server a friend shared with you: maps come from GameBanana there, not from this computer
+  const shared = isSharedId(server);
   const serversQ = useServers(ON_THIS_COMPUTER);
   const serverList = serversQ.data?.servers ?? [];
   const hasServers = serverList.some((s) => s.ready);
@@ -240,10 +242,10 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
             </span>
           )}
           {ON_THIS_COMPUTER && getMore && <button className="btn" onClick={getMore}>Get maps</button>}
-          {ON_THIS_COMPUTER && server && (
+          {ON_THIS_COMPUTER && server && !shared && (
             <button className="btn" onClick={() => setCopyFrom(true)}>Copy maps from your game</button>
           )}
-          {ON_THIS_COMPUTER && (
+          {ON_THIS_COMPUTER && !shared && (
             <BusyButton busy={busy(key("add-file"))} label="Add a map file" busyLabel="Adding…" onClick={() => once(key("add-file"), async () => {
               const r = await addFromFile("maps");
               if (r) toast(r.message, !r.ok);

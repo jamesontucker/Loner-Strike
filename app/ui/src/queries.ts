@@ -4,8 +4,8 @@
 
 import { QueryClient, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { getJsonAt, isSignedOut, ON_THIS_COMPUTER, SIGNED_OUT } from "./api";
-import { useNav } from "./store";
+import { getJsonAt, isSharedId, isSignedOut, ON_THIS_COMPUTER, SIGNED_OUT } from "./api";
+import { currentTarget, useNav } from "./store";
 import type { AdminList, AdminReply, AppInfo, GameState, MapInfo, Online, ServerList } from "./types";
 import type { Job } from "./views/Setup";
 import type { Scan } from "./views/Setup";
@@ -137,12 +137,24 @@ export function useServers(on = true) {
 }
 export const reloadServers = () => queryClient.invalidateQueries({ queryKey: ["servers"] });
 
+/** Your role on the open server when a friend shared it with you (shared control), or null
+ *  for your own servers and game. Unsure: the more limited role, so nothing shown fails. */
+export function sharedRole(): "admin" | "moderator" | null {
+  const t = currentTarget();
+  if (!isSharedId(t)) return null;
+  const s = queryClient.getQueryData<ServerList>(["servers"])?.servers.find((x) => x.id === t);
+  // listed, and not shared: your own
+  if (s && !s.shared) return null;
+  return s?.shared?.role ?? "moderator";
+}
+
 /** The open target's admins, VIPs and who has joined (the Admins page's list), for the
  *  Players page's roles and player info. */
 export function useAdminList() {
   const target = useTarget();
   return useQuery({
     queryKey: ["admins", target],
+    enabled: !isSharedId(target),
     queryFn: async ({ signal }) => {
       const r = await getJsonAt<AdminReply>("/api/admins", target, signal);
       if (!("people" in r)) throw new Error(r.error);

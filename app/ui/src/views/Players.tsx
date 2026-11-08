@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { copyText, currentTarget, postJson, targetKey, useActions } from "../api";
+import { copyText, currentTarget, isSharedId, postJson, targetKey, useActions } from "../api";
 import { Menu, type MenuGroup, type MenuItem } from "../menu";
-import { setAdminList, useAdminList } from "../queries";
+import { setAdminList, sharedRole, useAdminList } from "../queries";
 import type { AdminList, AdminReply, AdminRole, Online, Player } from "../types";
 import { BusyButton, SectionHead, useAskText, useCommand, useConfirm, useToast } from "../ui";
 import { ck, failed, MuteControl, OFFLINE, STEAMID, type Data as CommunityData, type Err } from "./MuteControl";
@@ -92,14 +92,15 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
   const sendAdmin = async (path: string, body: unknown): Promise<AdminList | null> => {
     const r = await postJson<AdminReply>(path, body).catch(() => null);
     if (!r) return toast("Couldn't reach the app.", true), null;
-    if (!("people" in r)) return toast(r.error || "Couldn't save that. Try again.", true), null;
+    // a shared server's owner sends back only that it worked, not their Admins list
+    if (!("people" in r)) return (r as { ok?: boolean }).ok ? (r as unknown as AdminList) : (toast(r.error || "Couldn't save that. Try again.", true), null);
     setAdminList(r);
     return r;
   };
   const ban = async (p: Player, minutes: number) => {
     const id = p.steamid!;
     const how = BANS.find(([m]) => m === minutes)?.[1] ?? "forever";
-    const more = minutes ? "A timed ban also ends if the game or server restarts." : "Unban them on the Admins page.";
+    const more = minutes ? "A timed ban also ends if the game or server restarts." : isSharedId(targetKey()) ? "Only the server's owner can lift it." : "Unban them on the Admins page.";
     if (!(await ask(`Ban ${p.name} ${how}? They're kicked now. ${more}`, { ok: "Ban", danger: true }))) return;
     once(adminKey(`ban:${id}`), async () => {
       if (!(await sendAdmin("/api/admins/ban", { id, minutes }))) return;
@@ -143,6 +144,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
   /** The row's "…" menu: everything you can do to this player, grouped. */
   const menuFor = (p: Player): MenuGroup[] => {
     const id = p.steamid && STEAMID.test(p.steamid) ? p.steamid : "";
+    const mod = sharedRole() === "moderator";
     const local = !currentTarget();
     const item = (a: string, label: string, extra: Partial<MenuItem> = {}): MenuItem => ({
       label,
@@ -163,15 +165,17 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
         items: [
           // Kick and Ban are also on the row, which shows them running
           { label: "Kick", on: () => kick(p), disabled: busy(key(`${p.uid}:kick`)), danger: true },
-          ...BANS.map(([m, how]): MenuItem => ({ label: `Ban ${how}`, on: () => ban(p, m), disabled: busy(adminKey(`ban:${id}`)), danger: true, show: !!id })),
+          // a Moderator bans for up to a week
+          ...BANS.filter(([m]) => m > 0 || !mod).map(([m, how]): MenuItem => ({ label: `Ban ${how}`, on: () => ban(p, m), disabled: busy(adminKey(`ban:${id}`)), danger: true, show: !!id })),
           { label: mapMinutes ? "Mute chat for this map" : "Mute chat for 1 hour", on: () => muteChat(p), busy: busy(ck(`mute:${id}`)), busyLabel: "Muting…", show: !!id },
-          item("slay", "Slay", { danger: true, show: !!p.alive }),
-          item("slap", "Slap", { show: !!p.alive }),
+          item("slay", "Slay", { danger: true, show: !!p.alive && !mod }),
+          item("slap", "Slap", { show: !!p.alive && !mod }),
         ],
         note: id ? undefined : why,
       },
     ];
-    if (id) {
+    // in-game roles on a shared server are the owner's (Admins on their Loner-Strike)
+    if (id && !sharedRole()) {
       const now = role && !role.expired ? role : undefined;
       groups.push({
         title: "Roles",
@@ -190,7 +194,8 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
             : roster.users_ini ? undefined : "AMX Mod X isn't set up for this game yet, so roles can't take effect.",
       });
     }
-    groups.push({
+    // (gm_player: the owner's and Admins')
+    if (!mod) groups.push({
       title: "Help and fun",
       items: [
         item("respawn", "Respawn"),
@@ -236,7 +241,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
             className="btn small danger"
             label="Ban"
             ariaLabel={`Ban ${p.name}`}
-            items={BANS.map(([m, how]) => ({ label: `Ban ${how}`, on: () => ban(p, m), busy: busy(adminKey(`ban:${id}`)), busyLabel: "Banning…" }))}
+            items={BANS.filter(([m]) => m > 0 || sharedRole() !== "moderator").map(([m, how]) => ({ label: `Ban ${how}`, on: () => ban(p, m), busy: busy(adminKey(`ban:${id}`)), busyLabel: "Banning…" }))}
           />
         )}
         <Menu className="btn small pmore" label="…" caret={false} wide ariaLabel={`More actions for ${p.name}`} groups={menuFor(p)} />
@@ -249,7 +254,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
       <div>
         <SectionHead title="Players" note="Select someone for god mode, weapons and teleporting. Kick, ban, roles and the rest are under … on their row." />
         <div className="player-actions">
-          <div className="row" role="group" aria-labelledby="pa-everyone">
+          {sharedRole() !== "moderator" && <div className="row" role="group" aria-labelledby="pa-everyone">
             <span className="pa-label" id="pa-everyone">Everyone</span>
             <BusyButton busy={busy(key("all:respawn"))} label="Respawn the dead" busyLabel="Respawning…" onClick={() => all("all:respawn", "gm_player", ["all", "respawn"], "Respawning the dead…")} />
             <BusyButton busy={busy(key("all:heal"))} label="Heal everyone" busyLabel="Healing…" onClick={() => all("all:heal", "gm_player", ["all", "heal"], "Healing everyone…")} />
@@ -259,7 +264,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
               busyLabel="Swapping…"
               onClick={async () => (await ask("Swap everyone to the other team? The round restarts.", { ok: "Swap teams" })) && all("team:swap", "gm_team", ["swap"], "Swapping teams…")}
             />
-          </div>
+          </div>}
           {/* on a server there's no "you" in the game */}
           {!currentTarget() && (
             <div className="row" role="group" aria-labelledby="pa-you">
@@ -325,6 +330,8 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
                     </div>
                     {open === p.uid && (
                       <div className="pactions">
+                        {/* god mode, weapons and the rest are for the owner and Admins */}
+                        {sharedRole() !== "moderator" && <>
                         <div className="row">
                           {pb(p, "god", p.god ? "God mode off" : "God mode")}
                           {pb(p, "noclip", p.noclip ? "Noclip off" : "Noclip")}
@@ -349,6 +356,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
                             {pb(p, "slay", "Slay", "btn danger")}
                           </div>
                         )}
+                        </>}
                         {!p.host && !p.bot && p.steamid && <MuteControl steamid={p.steamid} name={p.name} />}
                       </div>
                     )}

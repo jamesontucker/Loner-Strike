@@ -136,6 +136,11 @@ export type ServerInfo = {
   bots_when_empty?: boolean;
   /** the host picked that; otherwise it follows the visibility (on when listed) */
   bots_when_empty_set?: boolean;
+  /** on this computer: keeps running after the app closes */
+  keep_running?: boolean;
+  /** notifications: someone joins; helpers (shared control) make a big change */
+  notify_joins?: boolean;
+  notify_helpers?: boolean;
   /** on the Loner-Strike server list (Find servers) */
   ls_listed?: boolean;
   /** the join password ("" for none) */
@@ -154,6 +159,8 @@ export type ServerInfo = {
   imported: boolean;
   loner: boolean;
   dir: string;
+  /** a server a friend shared with you (control/): your role there, and whether their app answers */
+  shared?: { role: "admin" | "moderator"; reachable: boolean; why?: string };
 };
 /** What can wait for a restart: new files on the machine, start options, HLTV's settings,
  *  sound changes (used from the next map). */

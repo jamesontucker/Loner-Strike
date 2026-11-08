@@ -215,6 +215,47 @@ pub fn launch(hl: &Path, appid: &str, args: &[String]) -> Result<(), String> {
     }
 }
 
+/// The Steam name of who's signed in to Steam here, to fill in for shared control (they can
+/// change it). Steam's own last-used name, else the most recent account's in loginusers.vdf.
+#[cfg(windows)]
+pub fn persona_name() -> Option<String> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    let key = RegKey::predef(HKEY_CURRENT_USER).open_subkey("Software\\Valve\\Steam").ok()?;
+    let clean = |s: String| Some(s.trim().chars().filter(|c| !c.is_control()).take(32).collect::<String>()).filter(|s| !s.is_empty());
+    if let Some(n) = key.get_value::<String, _>("LastGameNameUsed").ok().and_then(clean) {
+        return Some(n);
+    }
+    let root = PathBuf::from(key.get_value::<String, _>("SteamPath").ok()?.replace('/', "\\"));
+    let text = std::fs::read_to_string(root.join("config").join("loginusers.vdf")).ok()?;
+    persona_in(&text).and_then(clean)
+}
+
+#[cfg(not(windows))]
+pub fn persona_name() -> Option<String> {
+    None
+}
+
+/// The PersonaName of the account marked MostRecent "1" (else the first) in loginusers.vdf.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn persona_in(vdf: &str) -> Option<String> {
+    let value = |line: &str, key: &str| -> Option<String> {
+        let rest = line.trim().strip_prefix(&format!("\"{key}\""))?.trim();
+        Some(rest.trim_matches('"').to_string())
+    };
+    let (mut first, mut current, mut recent) = (None, None::<String>, None);
+    for line in vdf.lines() {
+        if let Some(n) = value(line, "PersonaName") {
+            first.get_or_insert(n.clone());
+            current = Some(n);
+        }
+        if value(line, "MostRecent").as_deref() == Some("1") {
+            recent = current.clone();
+        }
+    }
+    recent.or(first)
+}
+
 /// steam.exe, from the registry (SteamExe, or InstallPath\\steam.exe).
 #[cfg(windows)]
 fn steam_exe() -> Option<PathBuf> {

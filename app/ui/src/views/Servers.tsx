@@ -9,6 +9,7 @@ import { JobProgress } from "./JobProgress";
 import { BusyButton, Info, lazyPage, LoadError, PageBoundary, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
 import { BackupSheet, RestoreSheet } from "./Backup";
+import { AddShared, InviteModerator, ROLE_NAME, ShareControl } from "./ShareControl";
 import { Bots } from "./Bots";
 import { Friends } from "./Friends";
 import { GetMore, ServerSkins } from "./GetMore";
@@ -37,7 +38,7 @@ const VISIBILITY = [
 const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up", failed: "Not finished", checking: "Checking…" };
 
 /** How long a server on this computer keeps running (the switch's name is in AppSettings). */
-const RUNS_WHILE = "A server on this computer runs while Loner-Strike is open, or after you quit if Keep servers running when I close Loner-Strike is on in Settings.";
+const RUNS_WHILE = "A server on this computer runs while Loner-Strike is open, or after you quit if Keep running after I close Loner-Strike is on in its settings.";
 const PUBLIC_ADDRESS_INFO =
   "A domain name that points at this server. The app shows it in place of the IP: in invites, the HLTV address and the join links. Point the name at the server's IP with your DNS provider; with Cloudflare, set it to DNS only (grey cloud), since the game's traffic can't go through its proxy.";
 const WHO_CAN_JOIN = "This network: only people on your Wi-Fi. Anyone with the address: friends join with the address you send, strangers can't find it. Listed on Steam: anyone can find it in the Internet tab.";
@@ -91,13 +92,17 @@ function useJoinRestart() {
       return null;
     }
     if (!(await ask(`Counter-Strike is open. Restart it and join ${s.name}? Unlisted servers can only be joined as the game starts.`, { ok: "Restart and join" }))) return null;
-    return post(`/api/servers/${s.id}/join`, { restart: true });
+    return post(joinPath(s), { restart: true });
   };
 }
 
+/** Where Join goes: your server's, or for one shared with you, through its owner's app
+ *  (which gives yours the address and password; it's never shown) */
+const joinPath = (s: ServerInfo) => (s.shared ? `/api/control/shared/${s.id}/join` : `/api/servers/${s.id}/join`);
+
 /** Running, Stopped... or that the machine it's on didn't answer. */
 function StateTag({ s, inline }: { s: ServerInfo; inline?: boolean }) {
-  if (s.unreachable) return <span className={`live off-line${inline ? " inline" : ""}`}>Can't reach {s.host}</span>;
+  if (s.unreachable) return <span className={`live off-line${inline ? " inline" : ""}`}>Can't reach {s.shared ? "it" : s.host}</span>;
   return (
     <span className={`live${inline ? " inline" : ""}${s.state === "running" ? " on" : ""}`}>
       {STATE[s.state]}
@@ -139,6 +144,19 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
     if (ON_THIS_COMPUTER) setCreating(true);
   }, [focus]);
   const [importing, setImporting] = useState(false);
+  // Add a shared server: the invite to start with ("" for none), or null when closed
+  const [addingShared, setAddingShared] = useState<string | null>(null);
+  // an invite pasted anywhere on this page opens it, filled in
+  useEffect(() => {
+    if (!ON_THIS_COMPUTER) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const t = e.clipboardData?.getData("text")?.trim() ?? "";
+      const inField = (e.target as HTMLElement | null)?.closest("input, textarea, [contenteditable]");
+      if (t.startsWith("LS1.") && !inField) setAddingShared(t);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
   // backups of servers (the whole app: Settings, Backup & restore)
   const [exporting, setExporting] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -158,7 +176,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
     if (action === "rebuild" && !(await ask(wipeQuestion(s), { ok: "Wipe and rebuild", danger: true }))) return;
     // the list doesn't know who's on, so stopping always asks
     if (action === "stop" && !(await ask(`Stop ${s.name}? Anyone playing is disconnected.`, { ok: "Stop the server", danger: true }))) return;
-    let r: Reply | null = await post(`/api/servers/${s.id}/${action}`);
+    let r: Reply | null = await post(action === "join" ? joinPath(s) : `/api/servers/${s.id}/${action}`);
     if (r.need_restart_game) r = await joinRestart(s);
     if (!r) return;
     if (r.error) return toast(r.error, true);
@@ -169,6 +187,9 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
     onChanged();
   }, `${ACTION_LABEL[action] ?? "Working on"} ${s.name}…`);
   const installed = (scan?.installs ?? []).flatMap((i) => i.games.filter((g) => g.installed).map((g) => g.id));
+  // your own servers, and ones friends shared with you (control/)
+  const own = (list?.servers ?? []).filter((s) => !s.shared);
+  const shared = (list?.servers ?? []).filter((s) => s.shared);
 
   return (
     <div className="stack">
@@ -176,12 +197,13 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setRestoring(true)}>Import a backup</button>}
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setExporting(true)}>Back up servers</button>}
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setImporting(true)}>Add one you already run</button>}
+        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setAddingShared("")}>Add a shared server</button>}
         {ON_THIS_COMPUTER && <button className="btn primary" onClick={() => setCreating(true)}>New server</button>}
       </SectionHead>
 
       {!list && (loadError ? <LoadError text="Couldn't load your servers." onRetry={() => void reloadServers()} /> : <Skeleton rows={4} />)}
 
-      {list && list.servers.length === 0 && (
+      {list && own.length === 0 && (
         <div className="panel">
           <h3>No servers yet</h3>
           <p className="muted measure">
@@ -193,7 +215,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
       )}
 
       <div className="server-list">
-        {list?.servers.map((s) => (
+        {own.map((s) => (
           <div key={s.id} className="server">
             <div className="server-head">
               <div>
@@ -238,7 +260,18 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
         ))}
       </div>
 
+      {shared.length > 0 && (
+        <section className="stack-tight" aria-labelledby="shared-with-you">
+          <h2 id="shared-with-you">Shared with you</h2>
+          <div className="server-list">
+            {shared.map((s) => <SharedCard key={s.id} s={s} onOpen={onOpen} onChanged={onChanged} />)}
+          </div>
+          <p className="muted small-note measure">These run on their owners' computers or machines. You do what your role there allows; the owner sees what you change.</p>
+        </section>
+      )}
+
       <WhereToHost />
+      <GoodPractice />
       {ON_THIS_COMPUTER && (
         <details className="where-to-host" ref={guide}>
           <summary><h2>Setting up a Linux server</h2><span className="muted">Step by step, from renting a machine to the first game</span></summary>
@@ -254,6 +287,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
           onCreated={() => { setCreating(false); onChanged(); }}
         />
       )}
+      {addingShared !== null && <AddShared initial={addingShared} onClose={() => setAddingShared(null)} onAdded={async (id) => { setAddingShared(null); await reloadServers(); onOpen(id); }} />}
       {importing && <ImportServer onClose={() => setImporting(false)} onDone={() => { setImporting(false); onChanged(); }} />}
       {exporting && <BackupSheet scope="servers" onClose={() => setExporting(false)} />}
       {restoring && <RestoreSheet scope="servers" servers={list?.servers ?? []} onClose={() => setRestoring(false)} onChanged={onChanged} />}
@@ -261,7 +295,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   );
 }
 
-type Tab = "community" | "hltv" | "webstatus" | "extras" | "sounds" | "overview" | "friends" | "modes" | "maps" | "skins" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
+type Tab = "share" | "community" | "hltv" | "webstatus" | "extras" | "sounds" | "overview" | "friends" | "modes" | "maps" | "skins" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
 /** remote: only for servers on a Linux machine */
 const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: boolean }[] = [
   { id: "overview", label: "Overview", group: "Server" },
@@ -277,6 +311,7 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "admins", label: "Admins", group: "People" },
   { id: "community", label: "Stats & moderation", group: "People" },
   { id: "welcome", label: "Welcome page", group: "People" },
+  { id: "share", label: "Shared control", group: "People" },
   { id: "mods", label: "Mods", group: "Content" },
   { id: "maps", label: "Maps", group: "Content" },
   { id: "skins", label: "Skins & models", group: "Content" },
@@ -284,8 +319,21 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
 ];
 const TAB_GROUPS = [...new Set(TABS.map((t) => t.group))];
 
+/** The tabs a server shared with you shows, by your role there (the owner's app decides
+ *  what actually goes through; these are the pages that role uses). Mods need setup on
+ *  the owner's side, so they aren't here yet. */
+const SHARED_TABS: Record<"admin" | "moderator", Tab[]> = {
+  admin: ["overview", "extras", "modes", "bots", "match", "fun", "players", "community", "welcome", "share", "maps", "sounds"],
+  moderator: ["overview", "players", "community"],
+};
+/** The tabs a server shows: all of yours (Shared control only on this computer), or your role's */
+function tabsFor(s: ServerInfo): Tab[] {
+  if (s.shared) return SHARED_TABS[s.shared.role];
+  return TABS.map((t) => t.id).filter((t) => t !== "share" || ON_THIS_COMPUTER);
+}
+
 /** The tab strip; on a phone it scrolls sideways, with faded edges where more tabs are. */
-function TabStrip({ label, tab, remote, onPick }: { label: string; tab: Tab; remote: boolean; onPick: (t: Tab) => void }) {
+function TabStrip({ label, tab, remote, allowed, onPick }: { label: string; tab: Tab; remote: boolean; allowed: Tab[]; onPick: (t: Tab) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ left: false, right: false });
   useEffect(() => {
@@ -303,11 +351,11 @@ function TabStrip({ label, tab, remote, onPick }: { label: string; tab: Tab; rem
   }, []);
   return (
     <div ref={box} className={`server-tabs${edges.left ? " more-left" : ""}${edges.right ? " more-right" : ""}`} role="tablist" aria-label={label}>
-      {TAB_GROUPS.map((g) => (
+      {TAB_GROUPS.filter((g) => TABS.some((t) => t.group === g && allowed.includes(t.id))).map((g) => (
         <div key={g} className="tab-group">
           <span className="tab-group-name">{g}</span>
           <div className="chips">
-            {TABS.filter((t) => t.group === g && (remote || !t.remote)).map((t) => (
+            {TABS.filter((t) => t.group === g && (remote || !t.remote) && allowed.includes(t.id)).map((t) => (
               <button key={t.id} role="tab" className="chip" aria-selected={tab === t.id} onClick={() => onPick(t.id)}>{t.label}</button>
             ))}
           </div>
@@ -318,6 +366,64 @@ function TabStrip({ label, tab, remote, onPick }: { label: string; tab: Tab; rem
 }
 
 type RunningJob = { title: string; done: string; retry?: () => void };
+
+/** A server a friend shared with you, in the list: your role, and what it lets you do here. */
+function SharedCard({ s, onOpen, onChanged }: { s: ServerInfo; onOpen: (id: string) => void; onChanged: () => void }) {
+  const toast = useToast();
+  const ask = useConfirm();
+  const { run, busy } = useActions();
+  const role = s.shared!.role;
+  const reachable = s.shared!.reachable;
+  const act = (action: "start" | "stop" | "restart") => run(`${s.id}:${action}`, async () => {
+    if (action !== "start" && !(await ask(`${action === "stop" ? "Stop" : "Restart"} ${s.name}? Anyone playing is disconnected.`, { ok: action === "stop" ? "Stop the server" : "Restart the server", danger: true }))) return;
+    const r = await post(`/api/servers/${s.id}/${action}`);
+    if (r.error) return toast(r.error, true);
+    toast(action === "start" ? `Starting ${s.name}…` : action === "stop" ? `${s.name} stopped` : `Restarting ${s.name}…`);
+    onChanged();
+  }, `${ACTION_LABEL[action] ?? "Working on"} ${s.name}…`);
+  const joinRestart = useJoinRestart();
+  const join = () => run(`${s.id}:join`, async () => {
+    let r: Reply | null = await post(joinPath(s));
+    if (r.need_restart_game) r = await joinRestart(s);
+    if (!r) return;
+    if (r.error) return toast(r.error, true);
+    toast(`Joining ${s.name}…`);
+  }, `Joining ${s.name}…`);
+  const leave = () => run(`${s.id}:leave`, async () => {
+    if (!(await ask(`Take ${s.name} off your list? To get it back you'd need a new invite from its owner.`, { ok: "Take it off", danger: true }))) return;
+    const r = await post(`/api/control/shared/${s.id}/leave`);
+    if (r.error) return toast(r.error, true);
+    toast(`${s.name} is off your list`);
+    onChanged();
+  });
+  return (
+    <div className={`server shared-server role-${role}`}>
+      <div className="server-head">
+        <div>
+          <h3>{s.name} <span className={`tag role-${role}`}>{role === "admin" ? "Admin" : "Moderator"}</span></h3>
+          <p className="muted">
+            {GAME[s.game]} · shared with you{s.connect ? ` · ${s.connect}` : ""}{s.map ? ` · ${s.map}` : ""}
+          </p>
+        </div>
+        {reachable ? <StateTag s={s} /> : <span className="live off-line">Can't reach it</span>}
+      </div>
+      {!reachable && <p className="muted small-note">{s.shared!.why}</p>}
+      <div className="row">
+        <button className="btn primary" disabled={!reachable} onClick={() => onOpen(s.id)}>Open</button>
+        {reachable && s.state === "running" && <BusyButton busy={busy(`${s.id}:join`)} label="Join" busyLabel="Joining…" onClick={join} />}
+        {reachable && role === "admin" && s.state !== "checking" && (s.state === "running" ? (
+          <>
+            <BusyButton busy={busy(`${s.id}:restart`)} label="Restart" busyLabel="Restarting…" onClick={() => act("restart")} />
+            <BusyButton className="btn danger" busy={busy(`${s.id}:stop`)} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
+          </>
+        ) : (
+          <BusyButton busy={busy(`${s.id}:start`)} label="Start" busyLabel="Starting…" onClick={() => act("start")} />
+        ))}
+        <BusyButton className="btn push" busy={busy(`${s.id}:leave`)} label="Take off my list" busyLabel="Removing…" onClick={leave} />
+      </div>
+    </div>
+  );
+}
 
 /** One server's own control panel. Every request from here names the server. */
 export function ServerPage(props: {
@@ -343,6 +449,13 @@ export function ServerPage(props: {
   const [job, setJob] = useState<RunningJob | null>(null);
   const running = s.state === "running";
   const off = !!s.unreachable;
+  // a server a friend shared with you: your role there (null: yours)
+  const role = s.shared?.role ?? null;
+  const allowed = tabsFor(s);
+  const allowedKey = allowed.join(",");
+  useEffect(() => {
+    if (!allowedKey.split(",").includes(tab)) setTab("overview");
+  }, [allowedKey, tab]);
 
   // unsaved edits on a tab: asked about before they're thrown away
   const dirty = useDirtyStore((st) => Object.values(st.dirty).some(Boolean));
@@ -382,7 +495,7 @@ export function ServerPage(props: {
         : action === "stop" && !data ? `Stop ${s.name}? Anyone playing is disconnected.` : null;
       if (q && !(await ask(q, { ok: `${verb} the server`, danger: true }))) return;
     }
-    let r: Reply | null = await post(`/api/servers/${s.id}/${action}`);
+    let r: Reply | null = await post(action === "join" ? joinPath(s) : `/api/servers/${s.id}/${action}`);
     if (r.need_restart_game) r = await joinRestart(s);
     if (!r) return;
     if (r.error) return toast(r.error, true);
@@ -435,20 +548,43 @@ export function ServerPage(props: {
   const waiting = restartPending(s);
   const filesWait = waiting.files;
   const optionsWait = waiting.options || restartAt !== undefined;
-  const restartBar = running && !off && (filesWait || optionsWait);
+  const restartBar = running && !off && role !== "moderator" && (filesWait || optionsWait);
+  if (s.shared && !s.shared.reachable) {
+    return (
+      <div className="stack">
+        <div className="server-top">
+          <button className="link back" onClick={back}>All servers</button>
+          <h2 className="server-title">{s.name} <span className={`tag role-${s.shared.role}`}>{ROLE_NAME[s.shared.role]}</span></h2>
+        </div>
+        <div className="banner" role="status">
+          <span>Can't reach this shared server right now. {s.shared.why}</span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="stack">
       <div className="server-top">
         <button className="link back" onClick={back}>All servers</button>
         <div className="row between">
           <div>
-            <h2 className="server-title">{s.name}</h2>
+            <h2 className="server-title">{s.name}{role && <> <span className={`tag role-${role}`}>{ROLE_NAME[role]}</span></>}</h2>
             <p className="muted">
-              {s.host ? "Linux server" : "Dedicated server"} · {GAME[s.game]} · {s.host || s.public_address ? serverAddress(s) : `port ${s.port}`} · <StateTag s={s} inline />
+              {role ? `Shared with you · ${GAME[s.game]}${s.connect ? ` · ${s.connect}` : ""}` : `${s.host ? "Linux server" : "Dedicated server"} · ${GAME[s.game]} · ${s.host || s.public_address ? serverAddress(s) : `port ${s.port}`}`} · <StateTag s={s} inline />
             </p>
           </div>
           <div className="row">
-            {running ? (
+            {role && running && ON_THIS_COMPUTER && <BusyButton className="btn primary" busy={busy("join")} label="Join" busyLabel="Joining…" onClick={() => act("join")} />}
+            {role === "moderator" || (role && s.state === "checking") ? null : role === "admin" ? (
+              running ? (
+                <>
+                  <BusyButton busy={busy("restart")} label="Restart" busyLabel="Restarting…" onClick={() => act("restart")} />
+                  <BusyButton className="btn danger" busy={busy("stop")} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
+                </>
+              ) : (
+                <BusyButton className="btn primary" busy={busy("start")} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} />
+              )
+            ) : running ? (
               <>
                 <BusyButton className="btn primary" busy={busy("join")} label={ON_THIS_COMPUTER ? "Join" : "Join on the computer"} busyLabel="Joining…" onClick={() => act("join")} />
                 <BusyButton busy={busy("restart")} label="Restart" busyLabel="Restarting…" onClick={() => act("restart")} />
@@ -459,8 +595,13 @@ export function ServerPage(props: {
             )}
           </div>
         </div>
-        <TabStrip label={`${s.name} sections`} tab={tab} remote={!!s.host} onPick={pick} />
+        <TabStrip label={`${s.name} sections`} tab={tab} remote={!!s.host} allowed={allowed} onPick={pick} />
       </div>
+      {role && (
+        <div className="banner" role="status">
+          <span>You're {role === "admin" ? "an Admin" : "a Moderator"} on this shared server. What you change happens on its owner's server, and they see it in its activity.</span>
+        </div>
+      )}
 
       {restartBar && (
         <div className="files-bar server-restart-bar" role="status">
@@ -479,7 +620,7 @@ export function ServerPage(props: {
       {off && <Unreachable s={s} />}
       {s.error && <p className="err-text">{s.error}</p>}
       {s.service_stale && <p className="muted small-note">The server's settings will be applied on the machine before it next starts.</p>}
-      {!s.loner && <AddLoner server={s} onDone={() => { onChanged(); reloadApp(); }} />}
+      {!s.loner && !role && <AddLoner server={s} onDone={() => { onChanged(); reloadApp(); }} />}
       {job && (
         <JobProgress
           title={job.title}
@@ -495,8 +636,8 @@ export function ServerPage(props: {
           <h2>{TABS.find((t) => t.id === tab)!.label}</h2>
           {!running ? (
             <>
-              <p className="muted">{off ? `This needs the server running, and ${s.host} isn't answering.` : "This needs the server running."}</p>
-              <BusyButton className="btn primary" busy={busy("start")} disabled={off} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} />
+              <p className="muted">{s.state === "checking" ? "Checking whether the server is running…" : off ? `This needs the server running, and ${s.host ?? "its owner's Loner-Strike"} isn't answering.` : role === "moderator" ? "This needs the server running. The owner or an Admin starts it." : "This needs the server running."}</p>
+              {role !== "moderator" && s.state !== "checking" && <BusyButton className="btn primary" busy={busy("start")} disabled={off} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} />}
             </>
           ) : !slow ? (
             <p className="muted"><span className="spinner" aria-hidden="true" />Connecting to the server…</p>
@@ -514,10 +655,10 @@ export function ServerPage(props: {
         <>
           {tab === "overview" && (
             <>
-              <ServerDetails server={s} maps={maps} onChanged={onChanged} />
-              {ON_THIS_COMPUTER && <CopyMods server={s} others={others} onStarted={(title) => setJob({ title, done: `Mods copied to ${s.name}` })} />}
-              {ON_THIS_COMPUTER && <BackupPanel server={s} others={others} onChanged={onChanged} />}
-              {ON_THIS_COMPUTER && <Maintenance server={s} installed={app?.game?.installed ?? []} act={act} rebuild={rebuild} wipeRebuild={wipeRebuild} busy={busy} />}
+              {s.shared && s.maxplayers === undefined ? <Skeleton rows={3} /> : <ServerDetails key={s.shared ? "loaded" : s.id} server={s} maps={maps} onChanged={onChanged} />}
+              {!role && ON_THIS_COMPUTER && <CopyMods server={s} others={others} onStarted={(title) => setJob({ title, done: `Mods copied to ${s.name}` })} />}
+              {!role && ON_THIS_COMPUTER && <BackupPanel server={s} others={others} onChanged={onChanged} />}
+              {!role && ON_THIS_COMPUTER && <Maintenance server={s} installed={app?.game?.installed ?? []} act={act} rebuild={rebuild} wipeRebuild={wipeRebuild} busy={busy} />}
             </>
           )}
           {tab === "friends" && <Friends data={data} refresh={refresh} server={{ name: s.name, visibility: s.visibility }} />}
@@ -541,6 +682,8 @@ export function ServerPage(props: {
           {tab === "webstatus" && s.host && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><WebStatus server={s} /></Suspense></PageBoundary>}
           {tab === "hltv" && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><Hltv server={s} /></Suspense></PageBoundary>}
           {tab === "community" && <Community target={s.id} />}
+          {tab === "share" && !role && <ShareControl server={s} />}
+          {tab === "share" && role === "admin" && <InviteModerator server={s} />}
         </>
       )}
     </div>
@@ -594,8 +737,10 @@ const clampText = (text: string, min: number, max: number) => {
 function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: MapInfo[]; onChanged: () => void }) {
   const toast = useToast();
   const mark = useRestartNeeded((st) => st.mark);
+  // a server shared with you: an Admin changes the basics, a Moderator only sees them
+  const sharedRole = server.shared?.role ?? null;
   // a phone sees the settings but changes them from the computer
-  const ro = !ON_THIS_COMPUTER;
+  const ro = !ON_THIS_COMPUTER || sharedRole === "moderator";
   const [name, setName] = useState(server.name);
   const [map, setMap] = useState(server.map);
   const slots = useNumber(server.maxplayers);
@@ -609,6 +754,8 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   const [botsEmpty, setBotsEmpty] = useState<boolean | null>(server.bots_when_empty_set ? !!server.bots_when_empty : null);
   const botsShown = botsEmpty ?? vis === "listed";
   const [listed, setListed] = useState(!!server.ls_listed);
+  const [keep, setKeep] = useState(!!server.keep_running);
+  const [joins, setJoins] = useState(server.notify_joins !== false);
   const [problem, setProblem] = useState<{ name?: string; slots?: string; port?: string }>({});
   // the port is part of how the running server was started: changed only while it's stopped
   const portLocked = server.state === "running";
@@ -620,7 +767,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   const portMax = server.host ? 27019 : 65000;
 
   // what was last saved, to tell whether anything changed since
-  const snapshot = (pa: string) => JSON.stringify([name, map, slots.text, port.text, vis, password, listenIp, pa, extra, botsEmpty, listed]);
+  const snapshot = (pa: string) => JSON.stringify([name, map, slots.text, port.text, vis, password, listenIp, pa, extra, botsEmpty, listed, keep, joins]);
   const now = snapshot(publicAddr);
   const [base, setBase] = useState(now);
   const dirty = !ro && now !== base;
@@ -638,7 +785,13 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
     if (bad.name || bad.slots || bad.port) return;
     const sent = now;
     run(`${server.id}:save`, async () => {
-      const r = await post(`/api/servers/${server.id}`, { name: name.trim(), map, maxplayers: slots.value, port: portLocked ? server.port : port.value, visibility: vis, password, listen_ip: listenIp, public_address: publicAddr, extra_args: extra, ls_listed: listed, ...(botsEmpty === null ? {} : { bots_when_empty: botsEmpty }) });
+      const bots = botsEmpty === null ? {} : { bots_when_empty: botsEmpty };
+      // a shared server: only what a helper changes (the owner's app drops anything else too)
+      const body = sharedRole
+        ? { name: name.trim(), map, maxplayers: slots.value, ...bots }
+        : { name: name.trim(), map, maxplayers: slots.value, port: portLocked ? server.port : port.value, visibility: vis, password, listen_ip: listenIp, public_address: publicAddr, extra_args: extra, ls_listed: listed, // (the per-server switches only once changed here: until then they follow the app's setting)
+          ...(server.host || keep === !!server.keep_running ? {} : { keep_running: keep }), ...(joins === (server.notify_joins !== false) ? {} : { notify_joins: joins }), ...bots };
+      const r = await post(`/api/servers/${server.id}`, body);
       if (r.error) return toast(r.error, true);
       // the address as saved (a trailing dot dropped, say)
       const saved = typeof r.public_address === "string" ? r.public_address : r.public_address === null ? "" : publicAddr;
@@ -660,7 +813,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
     <div className="server-details">
       <div className="panel">
         <h3>Settings</h3>
-        {ro && <p className="muted small-note">{ON_COMPUTER_ONLY}</p>}
+        {ro && <p className="muted small-note">{sharedRole === "moderator" ? "Moderators see these; the owner or an Admin changes them." : ON_COMPUTER_ONLY}</p>}
         <label className="field">
           <span>Name</span>
           <input
@@ -674,21 +827,22 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
           <span>Who can join<Info text={WHO_CAN_JOIN} /></span>
           <div className="seg" role="group" aria-label="Who can join">
             {VISIBILITY.map((v) => (
-              <button key={v.id} type="button" disabled={ro} aria-pressed={vis === v.id} onClick={() => setVis(v.id)}>{v.name}</button>
+              <button key={v.id} type="button" disabled={ro || !!sharedRole} aria-pressed={vis === v.id} onClick={() => setVis(v.id)}>{v.name}</button>
             ))}
           </div>
-          <small>{VISIBILITY.find((v) => v.id === vis)?.note}. {server.host ? "Friends join with the address shown above: see Play with friends." : "Friends outside your network also need a way in: see Play with friends."}</small>
+          {sharedRole && <small>Only the owner changes who can join: it decides how their server is reached from the internet.</small>}
+          <small>{VISIBILITY.find((v) => v.id === vis)?.note}. {sharedRole ? "" : server.host ? "Friends join with the address shown above: see Play with friends." : "Friends outside your network also need a way in: see Play with friends."}</small>
         </div>
-        <label className="field">
+        {!sharedRole && <label className="field">
           <span>Join password<Info text="Players type this to get in. Leave it empty for no password. It takes effect straight away, and Join in this app uses it for you." /></span>
           <input className="search" disabled={ro} maxLength={24} placeholder="None" value={password} onChange={(e) => setPassword(e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} spellCheck={false} autoComplete="off" />
           <small>Letters, numbers, - and _.</small>
-        </label>
-        <label className="field">
+        </label>}
+        {!sharedRole && <label className="field">
           <span>Public address<Info text={PUBLIC_ADDRESS_INFO} /></span>
           <input className="search" disabled={ro} maxLength={253} placeholder="play.example.com" value={publicAddr} onChange={(e) => setPublicAddr(e.target.value.replace(/\s/g, "").toLowerCase())} spellCheck={false} autoComplete="off" />
           <small>Optional.</small>
-        </label>
+        </label>}
         <div className="row">
           <label className="field">
             <span>Starting map<Info text="The map the server loads when it starts. After that, the map rotation decides what comes next." /></span>
@@ -715,11 +869,19 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
           <span className="name">Bots play on an empty server<Info text="Keeps bots playing when nobody's on, so the server shows players in Steam's list. Uses the server's CPU around the clock." /></span>
           <Switch on={botsShown} disabled={ro} label="Bots play on an empty server" onChange={setBotsEmpty} />
         </div>
-        <div className="setting">
+        {!sharedRole && <div className="setting">
+          <span className="name">Tell me when someone joins<span className="note">A notification on this computer when a person joins this server, while Loner-Strike is in the background</span></span>
+          <Switch on={joins} disabled={ro} label="Tell me when someone joins this server" onChange={setJoins} />
+        </div>}
+        {!sharedRole && !server.host && <div className="setting">
+          <span className="name">Keep running after I close Loner-Strike<span className="note">Off: closing the app stops it. On: it keeps going, and the app picks it up again next time</span></span>
+          <Switch on={keep} disabled={ro} label="Keep running after I close Loner-Strike" onChange={setKeep} />
+        </div>}
+        {!sharedRole && <div className="setting">
           <span className="name">On the server list<span className="note">Other Loner-Strike players find it under Find servers and join with a click. It has to be reachable from the internet</span></span>
           <Switch on={listed} disabled={ro} label="On the Loner-Strike server list" onChange={setListed} />
-        </div>
-        <details className="advanced">
+        </div>}
+        {!sharedRole && <details className="advanced">
           <summary>Advanced</summary>
           <div className="stack-tight">
             <div className="row">
@@ -748,7 +910,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
             </label>
             {ON_THIS_COMPUTER && <ConsolePassword server={server} />}
           </div>
-        </details>
+        </details>}
         {!ro && (
           <div className="row">
             <BusyButton className="btn primary" busy={saving} label="Save changes" busyLabel={server.host ? "Saving and uploading…" : "Saving…"} onClick={save} />
@@ -800,7 +962,7 @@ function ConsolePassword({ server }: { server: ServerInfo }) {
 /** Another server's modes and add-ons, installed on this one too (its settings stay). */
 function CopyMods({ server, others, onStarted }: { server: ServerInfo; others: ServerInfo[]; onStarted: (title: string) => void }) {
   const toast = useToast();
-  const sources = others.filter((o) => o.game === server.game && o.ready && o.loner);
+  const sources = others.filter((o) => o.game === server.game && o.ready && o.loner && !o.shared);
   const [from, setFrom] = useState(sources[0]?.id ?? "");
   const { run, busy } = useActions();
   if (!server.loner || !sources.length) return null;
@@ -920,7 +1082,7 @@ function Console({ server }: { server: ServerInfo }) {
     const c = cmd.trim();
     if (!c || server.state !== "running") return;
     const r = await post(`/api/servers/${server.id}/console/send`, { command: c });
-    if (r.error) return toast(r.error === ON_COMPUTER_ONLY || r.error.includes("Couldn't reach") ? "The console only works on this computer." : r.error, true);
+    if (r.error) return toast(!server.shared && (r.error === ON_COMPUTER_ONLY || r.error.includes("Couldn't reach")) ? "The console only works on this computer." : r.error, true);
     setCmd("");
     setSent((l) => [...l, `] ${c}`, ...(r.reply?.trim() ? r.reply.trim().split("\n") : [])].slice(-200));
   });
@@ -942,6 +1104,7 @@ function Console({ server }: { server: ServerInfo }) {
               : "Nothing yet. Start the server to see its console."}
       </pre>
       {failed && shown.length > 0 && <p className="muted small-note">Can't read the console right now. These are the last lines it showed.</p>}
+      {server.shared && <p className="muted small-note">{server.shared.role === "admin" ? "Most commands work. Passwords, keys, running other files, admins and plugins stay with the owner, one command at a time." : "A Moderator's commands: say, kick, ban for up to 7 days, change the map, status. Suggestions show only those."}</p>}
       {ON_THIS_COMPUTER ? (
         <form className="row console-form" onSubmit={(e) => { e.preventDefault(); send(); }}>
           <ConsoleInput serverId={server.id} running={server.state === "running"} value={cmd} onChange={setCmd} />
@@ -1034,7 +1197,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
   };
   const templates = [
     ...(games.includes(game) ? [{ id: "local", name: "My game", note: "Same modes, settings, admins and maps as your own game" }] : []),
-    ...servers.filter((s) => s.game === game && s.ready).map((s) => ({ id: s.id, name: s.name, note: "Copy this server's setup" })),
+    ...servers.filter((s) => s.game === game && s.ready && !s.shared).map((s) => ({ id: s.id, name: s.name, note: "Copy this server's setup" })),
     { id: "fresh", name: "Start fresh", note: "The basics: classic, deathmatch, knife, surf and the other built-in modes" },
   ];
   const create = () => run("new-server:make", async () => {
@@ -1234,6 +1397,65 @@ const HOSTS = [
 ];
 
 /** Where to run a server, and how big; folded away until opened. */
+/** Running a server well: the practical things that keep it safe, reachable and smooth. */
+const GOOD_PRACTICE: { title: string; points: string[] }[] = [
+  {
+    title: "Keep it safe",
+    points: [
+      "Update Loner-Strike when it asks: fixes reach your servers too, and sharing needs the same version on both sides.",
+      "Never give out the console (RCON) password. Give people in-game admin with their SteamID in Admins, or Shared control, instead.",
+      "Use a join password for private games. Change it when someone shouldn't get in any more.",
+      "Only install mods, maps and plugins from places you trust: a plugin runs on your computer or machine.",
+    ],
+  },
+  {
+    title: "Let the right people in",
+    points: [
+      "This network: only your Wi-Fi or LAN. Anyone with the address: friends you send it to. Listed on Steam: anyone, and it shows the server's address publicly (for a server on your PC, that's your home address).",
+      "Friends outside your network need a way in: forward the server's UDP port on your router, or all play over a virtual LAN (ZeroTier, Radmin VPN, Tailscale). See Play with friends.",
+      "On Windows, allow Loner-Strike and the server through the firewall when it asks, or people can't connect.",
+    ],
+  },
+  {
+    title: "Share the work (Shared control)",
+    points: [
+      "Invite only people you trust, and start them as Moderators: kicking, muting, short bans and changing the map cover most nights.",
+      "Make someone an Admin when they need to change settings, modes, maps and restarts. Who can join, passwords, the machine and deleting stay with you.",
+      "Look at What people changed now and then; Undo puts settings back and lifts bans. Remove access as soon as someone stops helping, and change the join password if they should stay out.",
+      "Friends reach your app on one TCP port (27030 unless you change it): open it on your router with the button, or use a virtual LAN. Your app has to be open for them.",
+    ],
+  },
+  {
+    title: "Keep it running smoothly",
+    points: [
+      "Back up a server before big changes (Overview, Back up), and keep a copy somewhere else. Settings, Backup & restore saves everything at once.",
+      "Bots cost CPU: on a small machine, fewer bots or none while nobody plays (Bots play on an empty server).",
+      "A daily restart keeps a long-running server fresh (Rotation & rules, Schedule).",
+      "Don't give everyone admin: a few trusted people with the right role beats a crowd with every power.",
+    ],
+  },
+];
+
+function GoodPractice() {
+  return (
+    <details className="where-to-host">
+      <summary><h2>Running a server well</h2><span className="muted">Keeping it safe, letting the right people in, sharing the work</span></summary>
+      <section className="stack-tight">
+        <div className="host-grid">
+          {GOOD_PRACTICE.map((g) => (
+            <div key={g.title} className="panel host">
+              <h3>{g.title}</h3>
+              <ul className="plain-list good-practice">
+                {g.points.map((p) => <li key={p}>{p}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+    </details>
+  );
+}
+
 function WhereToHost() {
   return (
     <details className="where-to-host">

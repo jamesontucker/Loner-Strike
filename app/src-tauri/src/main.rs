@@ -10,6 +10,7 @@ mod backup;
 mod browser;
 mod community;
 mod consolehints;
+mod control;
 mod content;
 mod diagnostics;
 mod extras;
@@ -89,6 +90,8 @@ fn main() {
         .setup(move |app| {
             let _ = state.app.set(app.handle().clone());
             tauri::async_runtime::spawn(server::serve(state.clone(), listener));
+            // friends helping run a shared server reach this app here (control/)
+            control::listen(&state);
             if settings.phone {
                 app_api::start_phone(&state);
             }
@@ -132,13 +135,13 @@ fn main() {
             // stop dedicated servers and close the router port when the app quits
             if let tauri::RunEvent::Exit = event {
                 smartchat::shutdown(&state_at_exit);
-                // unless the player wants them left running
-                if !app_api::load_settings().keep_servers {
-                    servers::stop_all();
-                }
+                // except the ones set to keep running (each server's own setting)
+                servers::stop_on_exit();
                 if connect::DIRECT.lock().map(|d| d.on).unwrap_or(false) {
                     connect::close_direct();
                 }
+                // shared control's router forwarding too
+                control::shutdown();
             }
         });
 }

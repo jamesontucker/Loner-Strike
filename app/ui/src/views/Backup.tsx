@@ -27,7 +27,7 @@ const PART_NOTE: Record<string, string> = {
   content: "Maps, models and sounds you added, round music and skins, and the GameBanana downloads. For your game, maps you copied in yourself are only told apart from Valve's when a server here has Valve's files to compare with",
   mods: "The modes and add-ons installed",
 };
-const PREFS_NOTE = "Checking for updates when the app starts, keeping servers running when the app closes, join notifications, and Smarter chat. Not phone access, which game is picked, or folders: those belong to this computer.";
+const PREFS_NOTE = "Checking for updates when the app starts, keeping servers running when the app closes, join and helper notifications, and Smarter chat. Not phone access, which game is picked, or folders: those belong to this computer.";
 const PASSWORDS_NOTE = "The console (RCON) password, the join password, the HLTV spectator password, Discord webhooks, the website status tunnel token, and passwords in settings files (rcon_password and sv_password in server.cfg, admins' passwords in users.ini). They're locked with the password you pick here, and asked for when restoring.";
 /** The player's own compiled plugins: code, so only restored when they say so. */
 const PLUGIN_CODE_NOTE = "Compiled plugins (.amxx) run inside the server, and anyone could have made or changed this file. Only tick this if you made the backup yourself or trust whoever did. Left unticked, their source (.sma) still comes back, and you can build them again on the Mods page.";
@@ -246,7 +246,7 @@ export function BackupSheet({ only, scope = "all", onClose }: { only?: string[];
 // ---- restoring ---------------------------------------------------------------------------
 
 type InFile = { index: number; source: "game" | "server"; name: string; game: "cstrike" | "czero"; content: "light" | "full"; secrets: boolean; secrets_kept?: boolean; bytes: number; app_version: string; created: string; parts: string[]; components: number; maps: number; files: number; plugin_code?: number };
-type AppPrefs = { manual_updates: boolean; keep_servers: boolean; mute_joins: boolean; smart_chat: boolean };
+type AppPrefs = { manual_updates: boolean; keep_servers: boolean; mute_joins: boolean; mute_helpers?: boolean; smart_chat: boolean };
 type Opened = { file: string; name?: string; sources: InFile[]; machines: Machine[]; app_prefs?: AppPrefs | null };
 /** Where a restore goes: a new server here, a new server on a machine, over a server, or the game. */
 type Where = "new-local" | "new-remote" | "server" | "game";
@@ -275,7 +275,7 @@ function PrefsBack({ file, prefs }: { file: string; prefs: AppPrefs }) {
         {done ? <span className="muted small-note">Put back</span> : <BusyButton className="btn small" busy={working} label="Put them back" busyLabel="Putting back…" onClick={put} />}
       </div>
       <p className="muted small-note">
-        Check for updates when the app starts: {onOff(!prefs.manual_updates)} · Keep servers running when the app closes: {onOff(prefs.keep_servers)} · Join notifications: {onOff(!prefs.mute_joins)} · Smarter chat: {onOff(prefs.smart_chat)}
+        Check for updates when the app starts: {onOff(!prefs.manual_updates)} · Keep servers running when the app closes: {onOff(prefs.keep_servers)} · Join notifications: {onOff(!prefs.mute_joins)} · Helper notifications: {prefs.mute_helpers == null ? "unchanged" : onOff(!prefs.mute_helpers)} · Smarter chat: {onOff(prefs.smart_chat)}
       </p>
       {done?.map((n) => <p key={n} className="small-note">{n}</p>)}
     </div>
@@ -316,7 +316,7 @@ export function RestoreSheet({ to, scope = "all", servers, onClose, onChanged }:
   const partList = (info?.parts ?? []).filter((p) => src?.parts.includes(p.id));
   const partSet = parts ?? new Set(partList.map((p) => p.id));
   const games = (info?.sources ?? []).filter((s) => s.kind === "game").map((s) => s.game);
-  const over = servers.filter((s) => s.ready && s.game === src?.game);
+  const over = servers.filter((s) => s.ready && !s.shared && s.game === src?.game);
   const machines = opened?.machines ?? [];
 
   const open = () => run("restore:open", async () => {

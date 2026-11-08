@@ -224,6 +224,12 @@ fn civil(days: i64) -> String {
 }
 
 /// The last day counts; ISO dates compare as text.
+/// Whether someone has one of these roles on this game or server (and it hasn't run out).
+pub fn has_role(g: &Game, steamid: &str, roles: &[Role]) -> bool {
+    let today = today();
+    load(&g.data).people.iter().any(|p| p.id.eq_ignore_ascii_case(steamid) && roles.contains(&p.role) && !expired(p, &today))
+}
+
 pub fn expired(p: &Person, today: &str) -> bool {
     p.expires.as_deref().map(|e| e < today).unwrap_or(false)
 }
@@ -683,6 +689,40 @@ fn change(g: &Game, f: impl FnOnce(&mut Admins) -> Result<(), String>) -> Result
     Ok(listing(g))
 }
 
+/// The note on admins shared control adds, so it only ever changes or removes its own
+pub const SHARED_NOTE: &str = "Shared control";
+
+/// Shared control (control/): someone who helps run the server is an in-game admin with
+/// the matching role (None: no longer). An admin the owner added by hand with that SteamID
+/// is left as it is.
+pub fn set_helper(g: &Game, steam: &str, name: &str, role: Option<Role>) -> Result<(), String> {
+    let steam = steam.trim().to_uppercase();
+    if !valid_steamid(&steam) {
+        return Ok(());
+    }
+    change(g, |a| {
+        match a.people.iter().position(|p| p.id == steam) {
+            Some(i) if a.people[i].note != SHARED_NOTE => {}
+            Some(i) => match role {
+                Some(r) => {
+                    a.people[i].role = r;
+                    a.people[i].name = clean_text(name, 32);
+                }
+                None => {
+                    a.people.remove(i);
+                }
+            },
+            None => {
+                if let Some(r) = role {
+                    a.people.push(Person { id: steam.clone(), name: clean_text(name, 32), role: r, expires: None, note: SHARED_NOTE.into() });
+                }
+            }
+        }
+        Ok(())
+    })
+    .map(|_| ())
+}
+
 async fn api_person(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<PersonReq>) -> Reply {
     if !from_panel(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
@@ -770,7 +810,9 @@ struct BanReq {
     minutes: u32,
 }
 
-async fn api_ban(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<BanReq>) -> Reply {
+async fn api_ban(State(st): State<Shared>, headers: HeaderMap, helper: Option<axum::Extension<crate::control::Helper>>, Json(req): Json<BanReq>) -> Reply {
+    // someone helping run it (shared control) gets no copy of the owner's Admins list
+    let helper = helper.is_some();
     if !from_panel(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
@@ -798,7 +840,7 @@ async fn api_ban(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<B
                     format!("{base}{}banid 0.0 {id}{nl}", if base.is_empty() { "" } else { nl })
                 })?;
             }
-            Ok(listing(g))
+            Ok(if helper { json!({"ok": true}) } else { listing(g) })
         })
         .await,
     )
@@ -810,7 +852,8 @@ struct UnbanReq {
     value: String,
 }
 
-async fn api_unban(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<UnbanReq>) -> Reply {
+async fn api_unban(State(st): State<Shared>, headers: HeaderMap, helper: Option<axum::Extension<crate::control::Helper>>, Json(req): Json<UnbanReq>) -> Reply {
+    let helper = helper.is_some();
     if !from_panel(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
@@ -825,7 +868,7 @@ async fn api_unban(State(st): State<Shared>, headers: HeaderMap, Json(req): Json
             let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
             tell_game(g, &format!("{} {value}", if kind == "ip" { "removeip" } else { "removeid" }))?;
             edit_ban_file(g, kind, |t| remove_ban_line(t, &value))?;
-            Ok(listing(g))
+            Ok(if helper { json!({"ok": true}) } else { listing(g) })
         })
         .await,
     )
@@ -891,13 +934,19 @@ pub fn routes() -> Router<Shared> {
 
 /// The admin list as it's stored, to tell whether it changed.
 pub(crate) fn shared_admins(g: &Game) -> String {
-    std::fs::read_to_string(g.data.join("admins.json")).unwrap_or_default()
+    // (people from shared control belong to their one server: not part of what's shared)
+    let mut a = load(&g.data);
+    a.people.retain(|p| p.note != SHARED_NOTE);
+    serde_json::to_string(&a).unwrap_or_default()
 }
 
 /// Gives `to` the same admins, VIPs and VIP settings as `from`.
 pub(crate) fn copy_admins(from: &Game, to: &Game) -> Result<(), String> {
     let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let a = load(&from.data);
+    let mut a = load(&from.data);
+    // shared control's people stay on their own server: not copied, and kept where they are
+    a.people.retain(|p| p.note != SHARED_NOTE);
+    a.people.extend(load(&to.data).people.into_iter().filter(|p| p.note == SHARED_NOTE));
     save(&to.data, &a)?;
     write_files(to, &a)?;
     reload(to);

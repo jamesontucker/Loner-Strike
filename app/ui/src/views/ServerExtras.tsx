@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
+import { getJson, isAbort, isSharedId, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import { useServers } from "../queries";
 import { useDirty, useNav } from "../store";
 import type { MapInfo } from "../types";
@@ -791,8 +791,12 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
           <small className={ok ? undefined : "err-text"}>{ok ? "Leave it empty to turn fast downloads off." : "Start with http:// or https://, with no spaces or quotes."}</small>
         </label>
         <div className="row">
-          <BusyButton className="btn primary" busy={busy(xk("fastdl"))} disabled={url === null || url.trim() === d.settings.fastdl || !ok} label="Save" busyLabel="Saving…" onClick={save} />
-          {ON_THIS_COMPUTER && !bySt && (
+          {isSharedId(targetKey()) ? (
+            <span className="muted small-note">Only the server's owner changes where players download from.</span>
+          ) : (
+            <BusyButton className="btn primary" busy={busy(xk("fastdl"))} disabled={url === null || url.trim() === d.settings.fastdl || !ok} label="Save" busyLabel="Saving…" onClick={save} />
+          )}
+          {ON_THIS_COMPUTER && !bySt && !isSharedId(targetKey()) && (
             <BusyButton busy={busy(xk("export"))} label="Copy files for your web server" busyLabel="Copying…" onClick={exportFiles} />
           )}
         </div>

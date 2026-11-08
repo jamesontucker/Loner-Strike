@@ -377,7 +377,7 @@ function Shell() {
           {/* the app stopped answering: said once, at the top, with a way to try again */}
           {lost && state && !state.online && <LoadError title={state.reason === SIGNED_OUT ? "Not signed in" : "Can't reach Loner-Strike"} text={state.reason} onRetry={() => queryClient.invalidateQueries()} />}
           <HomeScreenHint />
-          {!setupOpen && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} server={current?.name} />}
+          {!setupOpen && !current?.shared && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} server={current?.name} />}
           {state === null ? (
             <Skeleton rows={4} />
           ) : needsGame && !lost ? (
@@ -512,8 +512,12 @@ function ServersNav({ servers, section, openId, pill, onOverview, onNew, onOpen 
     }
   };
   const here = section === "servers";
-  const shown = servers.slice(0, SIDE_SERVERS);
-  const dot = (s: ServerInfo) => (s.unreachable ? "warn" : s.state === "running" ? "on" : s.state === "failed" || s.state === "crashed" ? "warn" : "");
+  // yours first, then ones friends shared with you
+  const own = servers.filter((s) => !s.shared);
+  const shared = servers.filter((s) => s.shared);
+  const shown = own.slice(0, SIDE_SERVERS);
+  const sharedShown = shared.slice(0, Math.max(0, SIDE_SERVERS - shown.length));
+  const dot = (s: ServerInfo) => (s.shared && !s.shared.reachable ? "warn" : s.unreachable ? "warn" : s.state === "running" ? "on" : s.state === "failed" || s.state === "crashed" ? "warn" : "");
   const say = (s: ServerInfo) => (s.unreachable ? "can't reach it" : s.state === "running" ? "running" : s.state === "setting-up" ? "setting up" : s.state === "failed" ? "not finished" : s.state === "crashed" ? "crashed" : "stopped");
   return (
     <>
@@ -543,7 +547,16 @@ function ServersNav({ servers, section, openId, pill, onOverview, onNew, onOpen 
               <span className="sr-only">, {say(s)}</span>
             </button>
           ))}
-          {servers.length > SIDE_SERVERS && (
+          {sharedShown.length > 0 && <div className="side-div">Shared</div>}
+          {sharedShown.map((s) => (
+            <button key={s.id} className="side-server" aria-current={here && openId === s.id ? "page" : undefined} title={`${s.name} · shared with you · ${s.shared!.role === "admin" ? "Admin" : "Moderator"} · ${say(s)}`} onClick={() => onOpen(s.id)}>
+              <span className={`side-dot ${dot(s)}`} aria-hidden="true" />
+              <span className="side-server-name">{s.name}</span>
+              <span className={`side-role role-${s.shared!.role}`} aria-hidden="true">{s.shared!.role === "admin" ? "A" : "M"}</span>
+              <span className="sr-only">, shared with you, {s.shared!.role}, {say(s)}</span>
+            </button>
+          ))}
+          {servers.length > shown.length + sharedShown.length && (
             <button className="side-server more" onClick={onOverview}>
               <span className="side-server-name">All servers ({servers.length})</span>
             </button>
