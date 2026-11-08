@@ -33,8 +33,8 @@ pub const AMXX_CSTRIKE: Pinned = Pinned {
 };
 /// Loner-Strike's fork of ReGameDLL (github.com/jamesontucker/ReGameDLL_CS, branch loner-strike)
 pub const REGAMEDLL: Pinned = Pinned {
-    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls9/regamedll-bin-5.30.0.814-ls9.zip",
-    sha256: "33570f7e06e3ba1bc743ab7c88bf712c9cda567749effc3184128210c1a9bc8a",
+    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls10/regamedll-bin-5.30.0.814-ls10.zip",
+    sha256: "79e30b80b9933f4330d260d6f9c2dc6647830b42e769f80a17105f6c1d0d01cf",
     what: "ReGameDLL",
 };
 /// Loner-Strike's fork of ReHLDS (github.com/jamesontucker/ReHLDS, branch loner-strike): the
