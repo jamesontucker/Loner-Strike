@@ -6,10 +6,15 @@
 	            (the bot puts it back itself), the scope in and out, the Glock's or FAMAS's
 	            burst on and off, cycling through the slots, reloading a nearly full
 	            magazine after a kill
-	Spawn:      jumping out of spawn when the round starts (teammates close by sometimes
-	            join in); in freeze time: jumping on the spot, the knife out and back,
-	            flicking weapons (a few do it all freeze time), the flashlight on and off
-	            (in the round too on a dark map)
+	Spawn:      freeze time is when people never stand still: about four in five do a
+	            thing or a few (looking about at teammates, the sky, their gun; flicking
+	            weapons, a few all freeze time; heads; the knife out and back; jumping or
+	            crouch spam on the spot; the flashlight, in the round too on a dark map;
+	            a salute). Leaving spawn nearly half do something: jumping out
+	            (teammates close by sometimes join in), flicking weapons on the run, the
+	            knife out, crouch spam, a look back, or still sorting out their gear and
+	            leaving late. In a match, freeze time is only looking about and a weapon
+	            check
 	Looking:    (needs Loner-Strike's game DLL, which adds ls_bot) saluting a teammate
 	            with the gun (looking up and down at them), good aimers flicking from one
 	            teammate's head to the next in freeze time, looking around at the map or
@@ -27,7 +32,7 @@
 	fidgetiness (most hardly, a few all the time) and a couple of habits of its own, all
 	from its name, so a regular keeps them; the newer habits are each only some bots'
 	(from the name, leaning on personality and how good a player it is). Nothing happens
-	in a match (or with the Matchmaking style on Classic), in modes a plugin steers bots
+	in a match (or with the Matchmaking style on Classic) but quiet freeze time looks, in modes a plugin steers bots
 	through (Hide and Seek, Deathrun, zombies...), with the Classic bot style, or at
 	gm_personality 0; gm_personality scales how often. Deathmatch keeps the quick ones
 	(flicks, scopes, jumps after spawning, a reload after a kill), and none of the
@@ -40,7 +45,7 @@
 
 	gm_bf_fun        1 all of it on or off
 	gm_bf_weapons    1 weapon fidgeting
-	gm_bf_spawn      1 spawn and freeze time habits
+	gm_bf_spawn      1 freeze time and leaving spawn habits
 	gm_bf_flashlight 1 the flashlight (only where mp_flashlight allows it)
 	gm_bf_salute     1 saluting teammates
 	gm_bf_look       1 looking around at the map, at teammates' heads in freeze time
@@ -90,13 +95,15 @@ native people_get(id, const key[])
 #define TASK_BAD      9900
 #define TASK_SPAWN    10000
 #define TASK_REBUY    10100
+#define TASK_GLANCE   10200
+#define TASK_LEAVE    10300
 
 // what a bot can do, for its own habits (two per bot)
 enum
 {
 	FUN_QSPAM, FUN_SILENCER, FUN_SCOPE, FUN_BURST, FUN_SLOTS, FUN_RELOAD,
 	FUN_SPAWNJUMP, FUN_FREEZEJUMP, FUN_KNIFE, FUN_FLASHLIGHT,
-	FUN_SALUTE, FUN_LOOK, FUN_CELEBRATE,
+	FUN_SALUTE, FUN_LOOK, FUN_CELEBRATE, FUN_DUCK,
 	FUN_COUNT
 }
 
@@ -140,6 +147,8 @@ new g_Impulse[33]                        // impulse to send on its next command
 new bool:g_FlashOff[33]                  // the flashlight goes off on its next command, whatever
 new g_FlashLeft[33]                      // flashlight toggles still to do
 new g_JumpsLeft[33], Float:g_NextJump[33]
+new g_DucksLeft[33], Float:g_DuckUntil[33], Float:g_NextDuck[33]   // crouch spam
+new g_GlanceLeft[33]                     // freeze time glances still to do
 new Float:g_FireUntil[33], bool:g_FireOn[33], Float:g_FireFlip[33], g_FireKind[33], Float:g_FireAt[33][3]
 new g_QLeft[33], g_QDone[33], g_QFrom[33], g_QTo[33]
 new bool:g_QKill[33]                     // these flicks follow a kill (free_after_kill decides)
@@ -387,7 +396,8 @@ clear_bot(id)
 	remove_task(id + TASK_QSPAM)
 	remove_task(id + TASK_SLOTS)
 	remove_task(id + TASK_KILL)
-	remove_task(id + TASK_FREEZE)
+	for (new i = 0; i < 3; i++)
+		remove_task(id + TASK_FREEZE + 32 * i)
 	remove_task(id + TASK_KNIFE)
 	remove_task(id + TASK_ATTACK2)
 	remove_task(id + TASK_FLASH)
@@ -399,9 +409,14 @@ clear_bot(id)
 	remove_task(id + TASK_BAD)
 	remove_task(id + TASK_SPAWN)
 	remove_task(id + TASK_REBUY)
+	remove_task(id + TASK_GLANCE)
+	for (new i = 0; i < 5; i++)
+		remove_task(id + TASK_LEAVE + 32 * i)
 	burst_restore(id)
 	g_QLeft[id] = 0
 	g_JumpsLeft[id] = 0
+	g_DucksLeft[id] = 0
+	g_GlanceLeft[id] = 0
 	g_Press[id] = 0
 	g_Force[id] = 0
 	g_Impulse[id] = 0
@@ -464,10 +479,11 @@ new const LIKES[FUN_COUNT][] = {
 	"njkzmDl",       // flashlight
 	"cfjirwBbPY7",   // salute
 	"qLcndDiTbHPM64v", // look around
-	"fjkhwmOeZ7"     // celebrate
+	"fjkhwmOeZ7",    // celebrate
+	"kjzhSn5"        // crouch spam
 }
 new const DISLIKES[FUN_COUNT][] = {
-	"qoDdPr6", "", "cn", "", "tEL", "c", "qLotdDrP46", "qLotdDrP46", "", "qLt6", "LstH", "tE", "qLosrdP6"
+	"qoDdPr6", "", "cn", "", "tEL", "c", "qLotdDrP46", "qLotdDrP46", "", "qLt6", "LstH", "tE", "qLosrdP6", "qLotdDrP46E"
 }
 
 // How much a personality fidgets at all: the quiet and the lurkers hardly, kids and
@@ -671,12 +687,12 @@ public fw_spawn_post(id)
 	// deathmatch has no freeze time: a couple of seconds after spawning count as quiet, for
 	// a jump out of spawn or a flick through the weapons (more than in a round)
 	g_Grace[id] = now + random_float(2.0, 4.0)
-	if (roll(id, FUN_SPAWNJUMP, 0.12))
+	if (roll(id, FUN_SPAWNJUMP, 0.15))
 	{
 		g_JumpsLeft[id] = random_num(1, 3)
 		g_NextJump[id] = now + random_float(0.3, 1.0)
 	}
-	else if (get_pcvar_num(g_pWeapons) && roll(id, FUN_QSPAM, 0.09))
+	else if (get_pcvar_num(g_pWeapons) && roll(id, FUN_QSPAM, 0.12))
 		set_task(random_float(0.4, 1.5), "task_spawn_qspam", id + TASK_SPAWN)
 }
 
@@ -759,58 +775,163 @@ public ev_new_round()
 	set_task(0.3, "task_freeze_rolls")
 }
 
+// What a bot does in freeze time, in the order of the plan's letters (task_freeze_do)
+enum { ACT_GLANCE, ACT_QSPAM, ACT_FLICKS, ACT_KNIFE, ACT_JUMP, ACT_DUCK, ACT_FLASH, ACT_SALUTE, ACT_MATES, ACT_COUNT }
+new const ACT_LETTER[ACT_COUNT] = { 'g', 'q', 'h', 'k', 'j', 'c', 'f', 's', 'm' }
+
 public task_freeze_rolls()
 {
-	if (!fun_allowed() || mode_ctx() != CTX_PUB)
+	new ctx = mode_ctx()
+	// a match: the quiet things only (looking about, a weapon check); a pub: everything
+	new bool:match = ctx == CTX_MATCH && match_freeze_allowed()
+	if (!match && (!fun_allowed() || ctx != CTX_PUB))
 		return
 	new bool:spawn = get_pcvar_num(g_pSpawn) != 0
+	// the freeze time left (this task runs 0.3 s in)
+	new Float:left = get_cvar_float("mp_freezetime") - 0.3
 	for (new id = 1; id <= MaxClients; id++)
 	{
 		if (!is_user_alive(id) || !is_user_bot(id))
 			continue
-		new Float:delay = random_float(0.5, 3.5)
 		// broke and nothing but a pistol: asking the team for a drop (after the others buy)
-		if (get_pcvar_num(g_pDrop) && g_Chat && g_BuyMode && !primary_of(id) && cs_get_user_money(id) < 2000
+		if (!match && get_pcvar_num(g_pDrop) && g_Chat && g_BuyMode && !primary_of(id) && cs_get_user_money(id) < 2000
 			&& has_quirk(id, Q_ASKS) && chance(id, 0.3))
 			set_task(random_float(2.0, 4.5), "task_ask_drop", id + TASK_DROP)
-		if (!spawn)
-			continue
-		// the ones who flick their weapons all freeze time
-		if (has_quirk(id, Q_SWITCHY) && get_pcvar_num(g_pWeapons) && chance(id, 0.35))
-			set_task(delay, "task_freeze_do", id + TASK_FREEZE, "Q", 1)
-		// good aimers flicking between their teammates' heads
-		else if (g_Fork && get_pcvar_num(g_pLook) && has_quirk(id, Q_FLICKS) && chance(id, 0.2))
-			set_task(delay, "task_freeze_do", id + TASK_FREEZE, "h", 1)
-		else if (roll(id, FUN_FREEZEJUMP, 0.07))
-			set_task(delay, "task_freeze_do", id + TASK_FREEZE, "j", 1)
-		else if (roll(id, FUN_KNIFE, 0.07))
-			set_task(delay, "task_freeze_do", id + TASK_FREEZE, "k", 1)
-		else if (roll(id, FUN_QSPAM, 0.06))
-			set_task(delay, "task_freeze_do", id + TASK_FREEZE, "q", 1)
-		else if (get_pcvar_num(g_pFlashlight) && flashlight_allowed() && roll(id, FUN_FLASHLIGHT, 0.05))
-			set_task(delay, "task_freeze_do", id + TASK_FREEZE, "f", 1)
-		else if (g_Fork && get_pcvar_num(g_pSalute) && roll(id, FUN_SALUTE, 0.06))
-			set_task(delay, "task_freeze_do", id + TASK_FREEZE, "s", 1)
+		if (spawn && left > 1.0)
+			plan_freeze(id, left, match)
 	}
+}
+
+// A few things through freeze time, one after another: most people never stand still
+// (about four in five do something; the quiet ones less, kids and jokers more), each in
+// its own way (its personality's likes, its habits and quirks)
+plan_freeze(id, Float:left, bool:match)
+{
+	new Float:act = activity(persona(id))
+	new Float:any = floatclamp((match ? 0.45 : 0.55) + 0.25 * act, 0.4, 0.97) * floatmin(pers(), 1.3)
+	if (random_float(0.0, 1.0) >= floatmin(any, 0.97))
+		return
+	new Float:w[ACT_COUNT]
+	freeze_weights(id, w, match)
+	// one, two or three things (fidgety ones more), from 0.4 s in to the end of freeze time
+	new count = 1
+	if (random_float(0.0, 1.0) < 0.35 * act * g_Fidget[id] + (match ? 0.0 : 0.15))
+		count++
+	if (!match && random_float(0.0, 1.0) < 0.2 * act * g_Fidget[id])
+		count++
+	new plan[4], n
+	new Float:at = random_float(0.4, 1.6)
+	new Float:slot = (left - at) / float(count)
+	for (new i = 0; i < count && at < left - 0.6; i++)
+	{
+		new a = pick_act(w)
+		if (a < 0)
+			break
+		// the same thing twice in a freeze time is fine, not straight after itself
+		w[a] *= 0.3
+		plan[0] = ACT_LETTER[a]
+		plan[1] = 0
+		set_task(at, "task_freeze_do", id + TASK_FREEZE + 32 * i, plan, 2)
+		at += slot * random_float(0.7, 1.1)
+		n++
+	}
+}
+
+// How much each freeze time thing appeals to this bot (0: it can't or won't)
+freeze_weights(id, Float:w[ACT_COUNT], bool:match)
+{
+	new bool:look = g_Fork && get_pcvar_num(g_pLook) != 0
+	new bool:guns = get_pcvar_num(g_pWeapons) != 0
+	w[ACT_GLANCE] = look ? 3.0 * taste(id, FUN_LOOK) : 0.0
+	w[ACT_QSPAM] = guns ? (has_quirk(id, Q_SWITCHY) ? 6.0 : 2.0) * taste(id, FUN_QSPAM) : 0.0
+	w[ACT_FLICKS] = look && has_quirk(id, Q_FLICKS) ? 4.0 : 0.0
+	if (match)
+	{
+		// waiting for a match to start: looking about, flicking heads, a weapon check
+		w[ACT_QSPAM] *= 0.5
+		return
+	}
+	w[ACT_KNIFE] = 1.2 * taste(id, FUN_KNIFE)
+	w[ACT_JUMP] = 1.0 * taste(id, FUN_FREEZEJUMP)
+	w[ACT_DUCK] = 0.8 * taste(id, FUN_DUCK)
+	w[ACT_FLASH] = get_pcvar_num(g_pFlashlight) && flashlight_allowed() ? 0.35 * taste(id, FUN_FLASHLIGHT) : 0.0
+	w[ACT_SALUTE] = g_Fork && get_pcvar_num(g_pSalute) ? 0.4 * taste(id, FUN_SALUTE) : 0.0
+	w[ACT_MATES] = look && get_pcvar_num(g_pBad) && has_quirk(id, Q_LOOKMATES) ? 2.0 : 0.0
+}
+
+pick_act(const Float:w[ACT_COUNT])
+{
+	new Float:total
+	for (new a = 0; a < ACT_COUNT; a++)
+		total += w[a]
+	if (total <= 0.0)
+		return -1
+	new Float:r = random_float(0.0, total)
+	for (new a = 0; a < ACT_COUNT; a++)
+	{
+		r -= w[a]
+		if (r <= 0.0 && w[a] > 0.0)
+			return a
+	}
+	return -1
+}
+
+// A thing's appeal to this bot alone (its personality's likes and its own habits), apart
+// from how fidgety it is
+Float:taste(id, what)
+{
+	new p = persona(id)
+	new Float:t = 1.0
+	if (has(p, LIKES[what]))
+		t *= 3.0
+	else if (has(p, DISLIKES[what]))
+		t *= 0.2
+	if (is_habit(id, what))
+		t *= 3.0
+	return t
+}
+
+// Freeze time in a match (match mode, a scrim, Matchmaking on Classic): only with bot fun
+// on, at a personality above 0, and not with the plain CZ bots
+bool:match_freeze_allowed()
+{
+	return get_pcvar_num(g_pFun) && pers() > 0.0 && !(g_pStyle && get_pcvar_num(g_pStyle) == STYLE_CLASSIC)
 }
 
 public task_freeze_do(const what[], tid)
 {
-	new id = tid - TASK_FREEZE
+	new id = (tid - TASK_FREEZE) % 32
+	if (!id)
+		id = 32
+	if (!g_Freeze)
+		return
 	switch (what[0])
 	{
+		case 'g': start_glances(id)
 		case 'j': freeze_jump(id)
 		case 'k': knife_flick(id)
-		case 'q': start_qspam(id)
-		case 'Q': start_qspam(id, false, true)
+		// the switchy ones flick all freeze time
+		case 'q': start_qspam(id, false, has_quirk(id, Q_SWITCHY))
+		case 'c': start_ducks(id, random_num(2, 6))
 		case 'f': flashlight(id)
 		case 's': salute(id)
 		case 'h': start_flicks(id)
+		case 'm': stare_mate(id)
 	}
 }
 
-// Freeze time is over: some jump their way out of spawn, and a teammate next to one
-// sometimes joins in; a newer player pulls out a grenade and puts it away again
+start_ducks(id, count)
+{
+	if (!free_bot(id))
+		return
+	g_DucksLeft[id] = count
+	g_NextDuck[id] = get_gametime()
+}
+
+// Freeze time is over: nearly half do something on the way out of spawn (jumping out, a
+// teammate next to a jumper sometimes joining in, flicking weapons on the run, the knife
+// out for the run, crouch spam, a look back, or still finishing up and leaving late); a
+// newer player pulls out a grenade and puts it away again
 public ev_round_start()
 {
 	g_Freeze = false
@@ -829,12 +950,38 @@ public ev_round_start()
 	new bool:jumper[33]
 	for (new id = 1; id <= MaxClients; id++)
 	{
-		if (free_bot(id, false) && roll(id, FUN_SPAWNJUMP, 0.08))
+		if (!free_bot(id, false))
+			continue
+		new Float:act = activity(persona(id))
+		if (random_float(0.0, 1.0) >= floatmin(floatclamp(0.25 + 0.2 * act, 0.15, 0.7) * pers(), 0.9))
+			continue
+		new Float:w[6]
+		w[0] = 3.0 * taste(id, FUN_SPAWNJUMP)
+		w[1] = get_pcvar_num(g_pWeapons) ? 2.0 * taste(id, FUN_QSPAM) : 0.0
+		w[2] = 1.0 * taste(id, FUN_KNIFE)
+		w[3] = 0.6 * taste(id, FUN_DUCK)
+		w[4] = g_Fork && get_pcvar_num(g_pLook) ? 1.5 * taste(id, FUN_LOOK) : 0.0
+		w[5] = g_Fork ? 1.5 : 0.0
+		new Float:total = w[0] + w[1] + w[2] + w[3] + w[4] + w[5]
+		if (total <= 0.0)
+			continue
+		new Float:r = random_float(0.0, total), a
+		for (a = 0; a < 5; a++)
+		{
+			r -= w[a]
+			if (r <= 0.0 && w[a] > 0.0)
+				break
+		}
+		if (a == 5 && w[5] <= 0.0)
+			continue
+		if (a == 0)
 		{
 			g_JumpsLeft[id] = random_num(2, 6)
 			g_NextJump[id] = now + random_float(0.2, 0.8)
 			jumper[id] = true
 		}
+		else
+			set_task(a == 5 ? 0.05 : random_float(0.3, 1.8), "task_leave", id + TASK_LEAVE + 32 * (a - 1))
 	}
 	new Float:a[3], Float:b[3]
 	for (new id = 1; id <= MaxClients; id++)
@@ -852,6 +999,52 @@ public ev_round_start()
 				g_JumpsLeft[m] = random_num(2, 4)
 				g_NextJump[m] = g_NextJump[id] + random_float(0.15, 0.6)
 			}
+		}
+	}
+}
+
+// One of the ways out of spawn (task_leave's slot: 0 flicks, 1 knife, 2 crouch spam, 3 a
+// look back, 4 leaving late)
+public task_leave(tid)
+{
+	new slot = (tid - TASK_LEAVE - 1) / 32
+	new id = tid - TASK_LEAVE - 32 * slot
+	if (!free_bot(id, false) || get_gametime() - g_RoundStartAt > 6.0)
+		return
+	switch (slot)
+	{
+		case 0: start_qspam(id, false, false)
+		case 1: if (holding_gun(id)) knife_out(id, random_float(2.0, 5.0))
+		case 2: start_ducks(id, random_num(2, 4))
+		case 3:
+		{
+			// a look back at the team, or behind it
+			new Float:me[3], Float:at[3], Float:view[3]
+			eye_pos(id, me)
+			pev(id, pev_v_angle, view)
+			new mate = visible_mate(id, 1200.0, 0)
+			if (mate)
+				pev(mate, pev_origin, at)
+			else
+			{
+				new Float:yaw = view[1] + 180.0 + random_float(-50.0, 50.0)
+				at[0] = me[0] + floatcos(yaw, degrees) * 400.0
+				at[1] = me[1] + floatsin(yaw, degrees) * 400.0
+				at[2] = me[2]
+			}
+			ls_look(id, at, random_float(0.5, 1.0), 0.0)
+		}
+		case 4:
+		{
+			// still sorting out its gear: looking down at it a moment before it goes
+			new Float:me[3], Float:at[3], Float:view[3]
+			eye_pos(id, me)
+			pev(id, pev_v_angle, view)
+			at[0] = me[0] + floatcos(view[1], degrees) * 90.0
+			at[1] = me[1] + floatsin(view[1], degrees) * 90.0
+			at[2] = me[2] - 60.0
+			new Float:secs = random_float(0.8, 2.5)
+			ls_look(id, at, secs, secs)
 		}
 	}
 }
@@ -1019,7 +1212,7 @@ public fw_cmdstart(id, uc, seed)
 	// anything of ours under way stops the moment there's danger, or gm_humanbots has it
 	// afk or holding an angle
 	new bool:stop = danger
-	if (!stop && g_HumanBots && (g_Press[id] || g_Impulse[id] || g_JumpsLeft[id] > 0 || g_Scoping[id] || g_Out[id] || g_FlickLeft[id]) && hb_bot_idle(id))
+	if (!stop && g_HumanBots && (g_Press[id] || g_Impulse[id] || g_JumpsLeft[id] > 0 || g_DucksLeft[id] > 0 || g_Scoping[id] || g_Out[id] || g_FlickLeft[id] || g_GlanceLeft[id]) && hb_bot_idle(id))
 		stop = true
 	if (stop)
 		stop_all(id, now)
@@ -1050,6 +1243,25 @@ public fw_cmdstart(id, uc, seed)
 			buttons |= IN_JUMP
 			g_JumpsLeft[id]--
 			g_NextJump[id] = now + random_float(0.55, 0.95)
+			changed = 1
+		}
+	}
+	// crouch spam: short taps, each its own length
+	if (now < g_DuckUntil[id] && !stop)
+	{
+		buttons |= IN_DUCK
+		changed = 1
+	}
+	else if (g_DucksLeft[id] > 0 && now >= g_NextDuck[id])
+	{
+		if (stop)
+			g_DucksLeft[id] = 0
+		else
+		{
+			g_DucksLeft[id]--
+			g_DuckUntil[id] = now + random_float(0.12, 0.3)
+			g_NextDuck[id] = g_DuckUntil[id] + random_float(0.12, 0.4)
+			buttons |= IN_DUCK
 			changed = 1
 		}
 	}
@@ -1117,6 +1329,12 @@ stop_all(id, Float:now)
 		g_FlickLeft[id] = 0
 		remove_task(id + TASK_FLICK)
 	}
+	if (g_GlanceLeft[id])
+	{
+		g_GlanceLeft[id] = 0
+		remove_task(id + TASK_GLANCE)
+	}
+	g_DucksLeft[id] = 0
 }
 
 // Looking where its shots should go: up into the sky, or at the point it's shooting
@@ -1571,6 +1789,81 @@ flick_step(id)
 	ls_look(id, at, secs + 0.15, secs)
 	if (--g_FlickLeft[id] > 0)
 		set_task(secs + random_float(0.0, 0.15), "task_flick", id + TASK_FLICK)
+}
+
+// Freeze time: a few looks about, each its own: at a teammate, up at the sky or a roof, down
+// at the gun (the buy menu), off to the side; how people pass the wait
+start_glances(id)
+{
+	if (!g_Fork || !free_bot(id))
+		return
+	g_GlanceLeft[id] = random_num(2, 4)
+	glance_step(id)
+}
+
+public task_glance(tid)
+{
+	glance_step(tid - TASK_GLANCE)
+}
+
+glance_step(id)
+{
+	if (g_GlanceLeft[id] <= 0 || !g_Freeze || !free_bot(id))
+	{
+		g_GlanceLeft[id] = 0
+		return
+	}
+	g_GlanceLeft[id]--
+	new Float:me[3], Float:at[3], Float:view[3]
+	eye_pos(id, me)
+	pev(id, pev_v_angle, view)
+	new r = random_num(0, 99), mate
+	if (r < 35 && (mate = visible_mate(id, 1500.0, 0)))
+	{
+		pev(mate, pev_origin, at)
+		at[2] += random_float(0.0, 20.0)
+	}
+	else
+	{
+		new Float:yaw = view[1] + random_float(-150.0, 150.0)
+		new Float:dist, Float:dz
+		if (r < 60)
+		{
+			dist = random_float(300.0, 700.0)
+			dz = random_float(200.0, 500.0)
+		}
+		else if (r < 80)
+		{
+			yaw = view[1] + random_float(-25.0, 25.0)
+			dist = random_float(60.0, 120.0)
+			dz = -random_float(50.0, 64.0)
+		}
+		else
+		{
+			dist = random_float(300.0, 800.0)
+			dz = random_float(-20.0, 30.0)
+		}
+		at[0] = me[0] + floatcos(yaw, degrees) * dist
+		at[1] = me[1] + floatsin(yaw, degrees) * dist
+		at[2] = me[2] + dz
+	}
+	new Float:secs = random_float(0.5, 1.3)
+	ls_look(id, at, secs, 0.0)
+	if (g_GlanceLeft[id] > 0)
+		set_task(secs + random_float(0.0, 0.3), "task_glance", id + TASK_GLANCE)
+}
+
+// A newer player staring at one teammate for a while (freeze time)
+stare_mate(id)
+{
+	if (!g_Fork || !free_bot(id))
+		return
+	new mate = visible_mate(id, 1200.0, 0)
+	if (!mate)
+		return
+	new Float:at[3]
+	eye_pos(mate, at)
+	ls_look(id, at, random_float(1.5, 3.0), 0.0)
 }
 
 eye_pos(id, Float:out[3])
