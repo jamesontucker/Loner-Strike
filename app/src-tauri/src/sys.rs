@@ -44,6 +44,46 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     rename_over(&tmp, path)
 }
 
+/// write_atomic for a file holding keys: only this user can read it (on the Mac and Linux;
+/// Windows keeps the app's folder to its user already). The file is never readable by
+/// others, not even for a moment while it's written.
+pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    if let Some(d) = path.parent() {
+        std::fs::create_dir_all(d)?;
+    }
+    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let tmp = path.with_file_name(format!(".{name}.{}-{}.tmp", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        o.mode(0o600);
+    }
+    let written = o.open(&tmp).and_then(|mut f| f.write_all(bytes).and_then(|_| f.sync_all()));
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    rename_over(&tmp, path)
+}
+
+/// A key file saved before write_private existed: made readable by this user only.
+pub fn tighten(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if std::fs::metadata(path).is_ok_and(|m| m.permissions().mode() & 0o077 != 0) {
+            let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+}
+
 /// Moves a finished temporary file over `path`. On Windows an antivirus scan or the game
 /// reading the file can hold it for a moment, which fails the rename: tried a few times
 /// before giving up. The temporary file is removed when it fails.

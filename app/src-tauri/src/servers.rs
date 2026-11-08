@@ -3288,7 +3288,8 @@ async fn api_console_cmd(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(
     let r = tokio::task::spawn_blocking(move || {
         let e = get(&id).ok_or("That server isn't there any more.")?;
         let rcon = e.rcon().ok_or("The server isn't set up yet.")?;
-        rcon.send(&cmd).map(|out| json!({"reply": out})).map_err(|_| "The server didn't answer. Check that it's running.".to_string())
+        // (keys and passwords blanked, as in the console: cvarlist prints them all)
+        rcon.send(&cmd).map(|out| json!({"reply": out.lines().map(hide_passwords).collect::<Vec<_>>().join("\n")})).map_err(|_| "The server didn't answer. Check that it's running.".to_string())
     })
     .await
     .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));

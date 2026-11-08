@@ -51,7 +51,10 @@ fn path() -> std::path::PathBuf {
 /// so a change never saves over it with only the new entry.
 fn read_all() -> Result<Vec<Shared>, String> {
     match std::fs::read_to_string(path()) {
-        Ok(t) => serde_json::from_str(&t).map_err(|_| "Your list of shared servers is damaged.".to_string()),
+        Ok(t) => {
+            crate::sys::tighten(&path());
+            serde_json::from_str(&t).map_err(|_| "Your list of shared servers is damaged.".to_string())
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(vec![]),
         Err(e) => Err(format!("Couldn't read your list of shared servers ({e}).")),
     }
@@ -63,7 +66,7 @@ pub fn load() -> Vec<Shared> {
 
 fn save(all: &[Shared]) -> Result<(), String> {
     let _ = std::fs::create_dir_all(crate::sys::app_dir());
-    crate::sys::write_atomic(&path(), serde_json::to_string_pretty(all).unwrap_or_default().as_bytes()).map_err(|e| format!("Couldn't save the shared server ({e})."))
+    crate::sys::write_private(&path(), serde_json::to_string_pretty(all).unwrap_or_default().as_bytes()).map_err(|e| format!("Couldn't save the shared server ({e})."))
 }
 
 pub fn get(id: &str) -> Option<Shared> {
@@ -103,7 +106,7 @@ impl ServerCertVerifier for Pinned {
         if super::hex(&Sha256::digest(end_entity.as_ref())) == self.fingerprint {
             Ok(ServerCertVerified::assertion())
         } else {
-            Err(rustls::Error::General("not the owner's Loner-Strike".into()))
+            Err(rustls::Error::General(NOT_OWNER.into()))
         }
     }
     fn verify_tls12_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
@@ -115,6 +118,22 @@ impl ServerCertVerifier for Pinned {
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
         self.provider.signature_verification_algorithms.supported_schemes()
     }
+}
+
+/// What the certificate check says when it's not the certificate the invite carried
+const NOT_OWNER: &str = "not the owner's Loner-Strike";
+
+/// Whether a failed request reached an app whose certificate isn't the one the invite
+/// carried (the owner reinstalled, or the address is someone else's now): not "unreachable"
+fn not_owner(e: &reqwest::Error) -> bool {
+    let mut err: Option<&(dyn std::error::Error + 'static)> = Some(e);
+    while let Some(x) = err {
+        if x.to_string().contains(NOT_OWNER) {
+            return true;
+        }
+        err = x.source();
+    }
+    false
 }
 
 /// A client that only talks to the app with that certificate (one per fingerprint, kept).
@@ -196,6 +215,10 @@ pub fn accept(invite: &str, name: &str) -> Result<Shared, String> {
         let v: Value = match r {
             Ok(r) => r.json().map_err(|_| "The owner's Loner-Strike answered strangely. Try again.".to_string())?,
             // only when it never got there is the next address tried: an invite works once
+            Err(e) if not_owner(&e) => {
+                last = format!("Something answered at {a}, but it isn't the Loner-Strike that made this invite. Ask the owner for a new invite.");
+                continue;
+            }
             Err(e) if e.is_connect() => {
                 last = format!("Couldn't reach the owner's Loner-Strike at {a}. It has to be open, and reachable from here.");
                 continue;
@@ -246,7 +269,7 @@ pub fn leave(id: &str) -> Result<(), String> {
 /// One request to the owner's app for this shared server, trying its addresses in order.
 /// Returns (status, content type, body).
 pub fn call(s: &Shared, method: &str, path_and_query: &str, content_type: Option<&str>, body: Bytes) -> Result<(u16, String, Bytes), String> {
-    let last = format!("Couldn't reach the owner's Loner-Strike for {}. It has to be open, and reachable from here.", s.name);
+    let mut last = format!("Couldn't reach the owner's Loner-Strike for {}. It has to be open, and reachable from here.", s.name);
     for a in &s.addresses {
         let Ok((base, c)) = endpoint(a, super::DEFAULT_PORT, &s.fingerprint) else { continue };
         let url = format!("{base}{path_and_query}");
@@ -272,6 +295,10 @@ pub fn call(s: &Shared, method: &str, path_and_query: &str, content_type: Option
             }
             // the next address only when this one was never reached: a change that may have
             // got there isn't sent twice
+            Err(e) if not_owner(&e) => {
+                last = format!("The owner's Loner-Strike for {} has a new security certificate since you joined (it was set up again, or the address is someone else's now). Ask them for a new invite.", s.name);
+                continue;
+            }
             Err(e) if e.is_connect() => continue,
             Err(_) => return Err(format!("The owner's Loner-Strike for {} didn't answer in time.", s.name)),
         }

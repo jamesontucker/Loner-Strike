@@ -146,7 +146,10 @@ fn store_path() -> PathBuf {
 /// read (busy, scanned by an antivirus, damaged), so nothing is saved over it.
 fn read_store() -> Result<Store, String> {
     match std::fs::read_to_string(store_path()) {
-        Ok(t) => serde_json::from_str(&t).map_err(|_| "The sharing settings file is damaged.".to_string()),
+        Ok(t) => {
+            crate::sys::tighten(&store_path());
+            serde_json::from_str(&t).map_err(|_| "The sharing settings file is damaged.".to_string())
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Store::default()),
         Err(e) => Err(format!("Couldn't read the sharing settings ({e}).")),
     }
@@ -159,7 +162,7 @@ fn load() -> Store {
 
 fn save(s: &Store) -> Result<(), String> {
     let _ = std::fs::create_dir_all(crate::sys::app_dir());
-    crate::sys::write_atomic(&store_path(), serde_json::to_string_pretty(s).unwrap_or_default().as_bytes()).map_err(|e| format!("Couldn't save the sharing settings ({e})."))
+    crate::sys::write_private(&store_path(), serde_json::to_string_pretty(s).unwrap_or_default().as_bytes()).map_err(|e| format!("Couldn't save the sharing settings ({e})."))
 }
 
 /// Changes the store under its lock.
@@ -604,7 +607,21 @@ pub async fn guard(State(st): State<Shared>, req: Request, next: Next) -> Respon
     } else {
         vec![]
     };
-    let verdict = rules::check(&rules::Ask { role: m.role, method: &method, path: &path, server: &m.server, body: json_body.as_ref() }, &|_, cvar| known.iter().any(|k| k == cvar));
+    let mut verdict = rules::check(&rules::Ask { role: m.role, method: &method, path: &path, server: &m.server, body: json_body.as_ref() }, &|_, cvar| known.iter().any(|k| k == cvar));
+    // a Moderator lifting a mute they gave themselves
+    if m.role == Role::Moderator && method == "POST" && path == "/api/community/ungag" {
+        let who = json_body.as_ref().and_then(|b| b["id"].as_str()).unwrap_or("").to_string();
+        let (server, mid) = (m.server.clone(), m.id.clone());
+        let own = tokio::task::spawn_blocking(move || {
+            let log = std::fs::read_to_string(log_dir().join(format!("{server}.jsonl"))).unwrap_or_default();
+            common::gave_last_gag(&log, &mid, &who)
+        })
+        .await
+        .unwrap_or(false);
+        if own {
+            verdict = rules::Verdict::Allow(None);
+        }
+    }
     let body = match verdict {
         rules::Verdict::Deny(why) => return refuse(StatusCode::FORBIDDEN, &why),
         rules::Verdict::Allow(Some(v)) => Bytes::from(serde_json::to_vec(&v).unwrap_or_default()),
@@ -1231,6 +1248,25 @@ static UPNP: Mutex<Option<u16>> = Mutex::new(None);
 /// Bumped when the renewing stops (another port): an older renewing thread then ends
 static UPNP_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// Renews the router's forwarding before its lease runs out, while anything is shared: once
+/// the last invite has run out with nobody having joined (or everyone was removed), the
+/// listener stops and the port is closed, instead of staying open until the app quits.
+fn keep_open() {
+    let gen = UPNP_GEN.load(std::sync::atomic::Ordering::SeqCst);
+    std::thread::spawn(move || loop {
+        std::thread::sleep(crate::connect::LEASE / 2);
+        if UPNP_GEN.load(std::sync::atomic::Ordering::SeqCst) != gen {
+            return;
+        }
+        if read_store().is_ok_and(|s| !in_use(&s)) {
+            quiet_if_unused();
+            return;
+        }
+        let Some(p) = *UPNP.lock().unwrap_or_else(|e| e.into_inner()) else { return };
+        let _ = crate::connect::open_tcp(p);
+    });
+}
+
 /// The owner: opens the sharing port on the router (UPnP) and adds the internet address to
 /// the ones invites carry. Kept open while the app runs.
 async fn api_open_port(headers: HeaderMap, on: Option<Extension<OnComputer>>) -> Reply {
@@ -1245,15 +1281,7 @@ async fn api_open_port(headers: HeaderMap, on: Option<Extension<OnComputer>>) ->
         }
         let first = UPNP.lock().unwrap_or_else(|e| e.into_inner()).replace(port).is_none();
         if first {
-            let gen = UPNP_GEN.load(std::sync::atomic::Ordering::SeqCst);
-            std::thread::spawn(move || loop {
-                std::thread::sleep(crate::connect::LEASE / 2);
-                if UPNP_GEN.load(std::sync::atomic::Ordering::SeqCst) != gen {
-                    return;
-                }
-                let Some(p) = *UPNP.lock().unwrap_or_else(|e| e.into_inner()) else { return };
-                let _ = crate::connect::open_tcp(p);
-            });
+            keep_open();
         }
         Ok(json!({"ok": true, "address": ip.to_string(), "port": port}))
     })
@@ -1303,15 +1331,7 @@ async fn api_port(State(st): State<Shared>, headers: HeaderMap, on: Option<Exten
         }
         if was_open.is_some() && crate::connect::open_tcp(new).is_ok() {
             *UPNP.lock().unwrap_or_else(|e| e.into_inner()) = Some(new);
-            let gen = UPNP_GEN.load(std::sync::atomic::Ordering::SeqCst);
-            std::thread::spawn(move || loop {
-                std::thread::sleep(crate::connect::LEASE / 2);
-                if UPNP_GEN.load(std::sync::atomic::Ordering::SeqCst) != gen {
-                    return;
-                }
-                let Some(p) = *UPNP.lock().unwrap_or_else(|e| e.into_inner()) else { return };
-                let _ = crate::connect::open_tcp(p);
-            });
+            keep_open();
         }
     });
     r
@@ -1364,6 +1384,25 @@ fn listening() -> Option<u16> {
 
 /// Starts the sharing listener if something is shared and it isn't running (at start-up
 /// and after an invite). A port that's busy is left for the owner's page to show.
+/// The app has started: each Linux server's shared control service is brought to this app's
+/// version (after an update helpers' apps would otherwise be refused until the owner opened
+/// the Share control tab). In the background, a moment after start, one server at a time.
+pub fn refresh_agents(st: &Shared) {
+    let st = st.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(20));
+        let Ok(res) = crate::setup_api::resources_for(&st) else { return };
+        for e in crate::servers::load() {
+            if !e.ready || !agent::used_for(&e) || agent::url(&e).is_none() {
+                continue;
+            }
+            if let Err(why) = agent::ensure(&e, &res) {
+                eprintln!("shared control on {}: {why}", e.id);
+            }
+        }
+    });
+}
+
 pub fn listen(st: &Shared) {
     if listening().is_some() || !in_use(&load()) {
         return;
@@ -1490,6 +1529,7 @@ pub mod tls {
         // replaced (friends' apps know this computer by it, and invites carry it)
         match std::fs::read_to_string(path()) {
             Ok(t) => {
+                crate::sys::tighten(&path());
                 let k = serde_json::from_str::<Kept>(&t).map_err(|_| "The sharing certificate file is damaged.".to_string())?;
                 return match (b64.decode(&k.cert), b64.decode(&k.key)) {
                     (Ok(c), Ok(k)) => Ok((c, k)),
@@ -1503,7 +1543,7 @@ pub mod tls {
         let (cert, key) = (made.cert.der().to_vec(), made.key_pair.serialize_der());
         let kept = Kept { cert: b64.encode(&cert), key: b64.encode(&key) };
         let _ = std::fs::create_dir_all(crate::sys::app_dir());
-        crate::sys::write_atomic(&path(), serde_json::to_string(&kept).unwrap_or_default().as_bytes()).map_err(|e| format!("Couldn't save the sharing certificate ({e})."))?;
+        crate::sys::write_private(&path(), serde_json::to_string(&kept).unwrap_or_default().as_bytes()).map_err(|e| format!("Couldn't save the sharing certificate ({e})."))?;
         Ok((cert, key))
     }
 

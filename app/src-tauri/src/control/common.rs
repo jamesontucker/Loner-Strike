@@ -3,6 +3,21 @@
 //! `#[path]`. Plain std only: nothing from the app's crate.
 
 /// A SteamID as the game writes it: STEAM_X:Y:Z (X 0 to 5, Y 0 or 1, Z a number).
+/// Whether the newest mute on this SteamID in a server's activity log (one JSON line per
+/// change) was this helper's own: a Moderator may lift a mute they gave, not an Admin's or
+/// the owner's (one given in the game isn't in the log, so it stays an Admin's call).
+pub fn gave_last_gag(log: &str, member: &str, steamid: &str) -> bool {
+    let id = steamid.trim().to_uppercase();
+    if id.is_empty() {
+        return false;
+    }
+    log.lines()
+        .rev()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find(|e| e["path"] == "/api/community/gag" && e["body"]["id"].as_str().is_some_and(|g| g.trim().eq_ignore_ascii_case(&id)))
+        .is_some_and(|e| e["member"] == member)
+}
+
 pub fn valid_steamid(s: &str) -> bool {
     let Some(rest) = s.strip_prefix("STEAM_") else { return false };
     let mut parts = rest.split(':');
@@ -73,6 +88,21 @@ pub fn without_polls(lines: Vec<String>, from: &str, is_setting: &dyn Fn(&str) -
 /// The server logs every RCON command with its password ("rcon 1234 "secret" status"),
 /// and rcon_password / sv_password changes too: blank them out before showing the console.
 pub fn hide_passwords(line: &str) -> String {
+    // a setting as cvarlist lists it ("rcon_password                : secret, sv"), or
+    // as the game answers its name ("rcon_password" is "secret"): a key's value blanked
+    if let Some((name, _)) = line.split_once(" : ") {
+        let name = name.trim();
+        if !name.contains(' ') && super::rules::secret_setting(name) {
+            return format!("{} : ••••", line.split_once(" : ").map_or("", |p| p.0));
+        }
+    }
+    if let Some(rest) = line.trim_start().strip_prefix('"') {
+        if let Some((name, after)) = rest.split_once('"') {
+            if after.trim_start().starts_with("is ") && super::rules::secret_setting(name) {
+                return format!("\"{name}\" is \"••••\"");
+            }
+        }
+    }
     let lower = line.to_lowercase();
     for key in ["rcon ", "rcon_password", "sv_password", "password "] {
         if let Some(i) = lower.find(key) {
@@ -91,6 +121,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn setting_lists_hide_keys() {
+        for (line, secret) in [("rcon_password                :       Abc123secret, sv", "Abc123secret"), ("sv_password     : hunter2, sv", "hunter2"), ("gm_webhook_url  : https://x", "https://x")] {
+            let out = hide_passwords(line);
+            assert!(!out.contains(secret) && out.ends_with(": ••••") && out.starts_with(line.split(' ').next().unwrap()), "{out}");
+        }
+        assert_eq!(hide_passwords(r#""rcon_password" is "Abc123secret""#), r#""rcon_password" is "••••""#);
+        assert_eq!(hide_passwords("mp_roundtime    :      2.5, sv"), "mp_roundtime    :      2.5, sv");
+        assert_eq!(hide_passwords(r#""mp_timelimit" is "20""#), r#""mp_timelimit" is "20""#);
+    }
+
+    #[test]
     fn steamids() {
         assert!(valid_steamid("STEAM_0:1:12345") && valid_steamid("STEAM_5:0:0"));
         for bad in ["", "bob", "STEAM_0:1:1; rcon_password x", "STEAM_6:0:1", "STEAM_0:2:1", "STEAM_0:1:01", "STEAM_0:1:", "steam_0:1:1", "STEAM_0:1:99999999999"] {
@@ -104,5 +145,27 @@ mod tests {
         assert_eq!(kick_line(5, "spam; quit"), "kick #5 \"spam quit\"");
         assert_eq!(kick_line(5, ""), "kick #5");
         assert_eq!(announce_text(&["hi\";".into(), "all".into()]), "hi all");
+    }
+}
+
+#[cfg(test)]
+mod gag_tests {
+    use super::gave_last_gag;
+
+    #[test]
+    fn own_mutes_only() {
+        let log = [
+            r#"{"member":"m1","path":"/api/community/gag","body":{"id":"STEAM_0:1:7"}}"#,
+            r#"{"member":"m2","path":"/api/community/gag","body":{"id":"STEAM_0:1:8"}}"#,
+            r#"{"member":"m1","path":"/api/community/gag","body":{"id":"STEAM_0:1:8"}}"#,
+            r#"{"member":"a1","path":"/api/community/gag","body":{"id":"steam_0:1:9"}}"#,
+        ]
+        .join("\n");
+        assert!(gave_last_gag(&log, "m1", "STEAM_0:1:7"));
+        assert!(gave_last_gag(&log, "m1", "steam_0:1:8"), "the newest one counts");
+        assert!(!gave_last_gag(&log, "m2", "STEAM_0:1:8"));
+        assert!(!gave_last_gag(&log, "m1", "STEAM_0:1:9"), "someone else's");
+        assert!(!gave_last_gag(&log, "m1", "STEAM_0:1:1"), "not in the log (given in the game)");
+        assert!(!gave_last_gag(&log, "m1", " "));
     }
 }

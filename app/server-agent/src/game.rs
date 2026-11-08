@@ -48,14 +48,17 @@ pub fn rcon_password(game_dir: &Path) -> Option<String> {
     std::fs::read_to_string(data_dir(game_dir).join("panel_rcon.txt")).ok().map(|p| p.trim().to_string()).filter(|p| !p.is_empty())
 }
 
+/// The join password as the server has it now (friends.json in the plugin's data folder)
+pub fn join_password(game_dir: &Path) -> Option<String> {
+    let t = std::fs::read_to_string(data_dir(game_dir).join("friends.json")).ok()?;
+    serde_json::from_str::<Value>(&t).ok()?["password"].as_str().map(String::from).filter(|p| !p.is_empty())
+}
+
 /// Secrets that never go to a helper, as they are now: the panel's RCON password and the
 /// join password (both kept in the plugin's data folder).
 pub fn secrets(game_dir: &Path) -> Vec<String> {
-    let data = data_dir(game_dir);
     let mut out: Vec<String> = rcon_password(game_dir).into_iter().collect();
-    if let Some(pw) = std::fs::read_to_string(data.join("friends.json")).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|v| v["password"].as_str().map(String::from)) {
-        out.push(pw);
-    }
+    out.extend(join_password(game_dir));
     // (short ones would blank out ordinary words)
     out.retain(|s| s.len() >= 4);
     out

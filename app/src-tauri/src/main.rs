@@ -92,6 +92,8 @@ fn main() {
             tauri::async_runtime::spawn(server::serve(state.clone(), listener));
             // friends helping run a shared server reach this app here (control/)
             control::listen(&state);
+            // and the ones running on Linux servers kept at this app's version
+            control::refresh_agents(&state);
             if settings.phone {
                 app_api::start_phone(&state);
             }

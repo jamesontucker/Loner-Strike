@@ -138,8 +138,9 @@ pub fn check(a: &Ask, known_setting: &dyn Fn(&str, &str) -> bool) -> Verdict {
             }
         }
         ("POST", ["api", "community", "reports"]) => both,
-        // like lifting a ban: an Admin's call (a Moderator could otherwise undo an Admin's mute)
-        ("POST", ["api", "community", "ungag"]) => admins(),
+        // like lifting a ban: an Admin's call (a Moderator could otherwise undo an Admin's mute;
+        // one they gave themselves is let through before this, from the activity log)
+        ("POST", ["api", "community", "ungag"]) => if admin { both } else { deny("Moderators can lift only the mutes they gave. Ask an Admin.") },
         ("POST", ["api", "community", "settings"] | ["api", "community", "stats", "reset"]) => admins(),
 
         // ---- the server's setup ----------------------------------------------------

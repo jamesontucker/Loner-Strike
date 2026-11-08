@@ -190,7 +190,15 @@ pub fn handle(ctx: &Ctx, req: Req) -> Resp {
         return refuse(400, "That isn't something Loner-Strike sends.");
     }
     // 4. their role (the app's own rules; mode settings aren't known here, so never)
-    let verdict = rules::check(&rules::Ask { role: m.role, method: &method, path: &path, server: &config.id, body: body.as_ref() }, &|_, _| false);
+    let mut verdict = rules::check(&rules::Ask { role: m.role, method: &method, path: &path, server: &config.id, body: body.as_ref() }, &|_, _| false);
+    // a Moderator lifting a mute they gave themselves
+    if m.role == Role::Moderator && method == "POST" && path == "/api/community/ungag" {
+        let who = body.as_ref().and_then(|b| b["id"].as_str()).unwrap_or("");
+        let log = std::fs::read_to_string(files.log_path()).unwrap_or_default();
+        if common::gave_last_gag(&log, &m.id, who) {
+            verdict = rules::Verdict::Allow(None);
+        }
+    }
     let body = match verdict {
         rules::Verdict::Deny(why) => return refuse(403, &why),
         rules::Verdict::Allow(Some(v)) => Some(v),
@@ -292,10 +300,11 @@ fn act(ctx: &Ctx, config: &Config, files: &Files, io: &dyn GameIo, m: &Member, m
             Ok((iid, text)) => ok(json!({"ok": true, "invite": text, "id": iid})),
             Err(e) => err(e),
         },
-        // where to join (no password: that one stays with the owner for now)
+        // where to join, with the join password (helpers are people the owner trusts; their
+        // app joins with it and doesn't show it)
         ("POST", ["api", "control", "join"]) => {
             let address = config.view["connect"].as_str().filter(|a| !a.is_empty()).map(String::from);
-            ok(json!({"address": address, "port": config.port, "password": null, "game": config.game, "unlisted": config.view["visibility"] == "unlisted"}))
+            ok(json!({"address": address, "port": config.port, "password": game::join_password(&io.game_dir()), "game": config.game, "unlisted": config.view["visibility"] == "unlisted"}))
         }
         ("GET", ["api", "state"]) => {
             let mut cached = ctx.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -345,7 +354,8 @@ fn act(ctx: &Ctx, config: &Config, files: &Files, io: &dyn GameIo, m: &Member, m
                 }
             }
             match tell(io, &line) {
-                Ok(out) => ok(json!({"reply": out})),
+                // (keys and passwords blanked, as in the console: cvarlist prints them all)
+                Ok(out) => ok(json!({"reply": out.lines().map(common::hide_passwords).collect::<Vec<_>>().join("\n")})),
                 Err(_) => err("The server didn't answer. Check that it's running."),
             }
         }
@@ -778,6 +788,7 @@ mod tests {
         assert!(!r.body.to_string().contains("Rcon0123456789Secret"));
         let out = finish(&Resp { status: 200, body: json!({"x": "Rcon0123456789Secret"}) }, &s.fake.dir);
         assert!(!out.contains("Rcon0123456789Secret"));
+        // no join password set: none to give
         assert_eq!(s.ask(&a, "POST", "/api/control/join", json!({})).body["password"], Value::Null);
     }
 
