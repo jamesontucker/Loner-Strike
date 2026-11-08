@@ -200,6 +200,8 @@ new Trie:g_LineAt, Trie:g_LineOnce, Trie:g_Flags
 new bool:g_Freeze, bool:g_RoundOver
 new g_PickCond[96], g_PickBase[128], g_PickScore     // the line pick_line chose last
 #define MAX_CANDIDATES 256
+#define BOT_RECENT     24                     // a bot doesn't say the same longer line twice in a while
+new g_BotRecent[33][BOT_RECENT], g_BotRecentPos[33]
 
 // The director: bots that would say something about the same moment make an offer; one
 // of them speaks, now and then a second, almost never a third (silence is the default)
@@ -247,6 +249,51 @@ cap_count(Float:now)
 {
 	g_CapAt[g_CapPos] = now
 	g_CapPos = (g_CapPos + 1) % CAP_LINES
+}
+
+// After a line, who might answer it and from where: the one it's about (a bot), a teammate,
+// or anyone. Most lines get no answer; a reply comes quickly or not at all
+follow_up(id, other, const section[], bool:team)
+{
+	static const FROM[][] = { "kill", "kill_headshot", "kill_knife", "kill_nade", "kill_awp", "noscope",
+		"death", "death_headshot", "death_knife", "death_nade", "nice_shot", "round_win", "round_lose",
+		"greet", "idle", "late_night", "map_end", "teamkilled" }
+	static const TO[][] = { "r_kill", "r_kill", "r_kill", "r_kill", "r_kill", "r_kill",
+		"r_death", "r_death", "r_death", "r_death", "r_ns_thanks", "r_round", "r_round",
+		"r_hi", "r_idle", "r_idle", "r_gg", "r_sorry_tk" }
+	// 1 the one it's about, 2 a teammate, 3 anyone
+	static const WHO[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 1 }
+	static const Float:ODDS[] = { 0.3, 0.3, 0.45, 0.3, 0.3, 0.3, 0.3, 0.3, 0.4, 0.3, 0.5, 0.35, 0.35, 0.4, 0.35, 0.35, 0.5, 0.6 }
+	for (new i = 0; i < sizeof FROM; i++)
+	{
+		if (!equal(section, FROM[i]))
+			continue
+		if (random_float(0.0, 1.0) >= ODDS[i])
+			return
+		new who
+		switch (WHO[i])
+		{
+			case 1: who = (other && is_user_connected(other) && is_user_bot(other) && other != id) ? other : 0
+			case 2: who = any_bot_on(get_user_team(id), id)
+			default: who = team ? any_bot_on(get_user_team(id), id) : any_bot(id)
+		}
+		// team chat stays in the team
+		if (who && team && get_user_team(who) != get_user_team(id))
+			who = 0
+		if (who)
+			set_task(random_float(0.3, 1.2), "task_follow_up", who, fmt("%d %d %s", id, team, TO[i]), 40)
+		return
+	}
+}
+
+public task_follow_up(const data[], who)
+{
+	new a[8], b[4], sec[24]
+	parse(data, a, charsmax(a), b, charsmax(b), sec, charsmax(sec))
+	new id = str_to_num(a)
+	if (!is_user_connected(who) || !is_user_connected(id))
+		return
+	want(who, sec, id, 0.7, -1.0, 1, str_to_num(b) == 1)
 }
 
 // What a person said, for how the bot it's about (or every bot) feels about them
@@ -837,6 +884,9 @@ habits_of(id)
 	// a few people do most of the talking: most say little, some a lot
 	new tier = (h / 977) % 100
 	g_Chatty[id] = tier < 45 ? 0.15 : tier < 75 ? 0.6 : tier < 93 ? 1.5 : 3.0
+	// with gm_people the talk trait does most of the spreading: gentler steps here
+	if (LibraryExists("gm_people", LibType_Library))
+		g_Chatty[id] = tier < 45 ? 0.5 : tier < 75 ? 0.8 : tier < 93 ? 1.2 : 1.7
 	new p = PERSONAS[g_Persona[id]]
 	if (p == 'x' && g_Laugh[id] < 6)
 		g_Laugh[id] = LAUGHS_ANYONE + (h % 6)   // kkkk, jajaja, mdr, www, 555, kek
@@ -1033,7 +1083,7 @@ public task_director()
 		}
 		if (best < 0)
 			break
-		commit_line(g_OfferBase[best], g_OfferCond[best])
+		commit_line(g_OfferBot[best], g_OfferBase[best], g_OfferCond[best])
 		// the others type after the first, not over it
 		new Float:delay = g_OfferDelay[best]
 		if (turn)
@@ -1217,7 +1267,7 @@ bool:pick_line(id, const section[], text[], len, bool:answer = false, bool:commi
 			w *= 2.0
 		new bool:fresh = true
 		// short lines ("gg", "lol", "ns") come up all the time on a real server
-		if (strlen(raw[body]) > 6 && said_lately(h))
+		if (strlen(raw[body]) > 6 && (said_lately(h) || bot_said(id, h)))
 			fresh = false
 		new t = theme_of(raw[body])
 		if (t >= 0 && now - g_ThemeAt[t] < THEME_REST[t] && !answer)
@@ -1273,16 +1323,30 @@ bool:pick_line(id, const section[], text[], len, bool:answer = false, bool:commi
 	trim(text)
 	copy(g_PickBase, charsmax(g_PickBase), text)
 	if (commit)
-		commit_line(text, g_PickCond)
+		commit_line(id, text, g_PickCond)
 	fill_state(id, text, len)
 	return true
 }
 
-// A chosen line is said: it rests (the line, its theme), and its options take effect
-commit_line(const text[], const cond[])
+bool:bot_said(id, h)
+{
+	for (new i = 0; i < BOT_RECENT; i++)
+		if (g_BotRecent[id][i] == h)
+			return true
+	return false
+}
+
+// A chosen line is said: it rests (the line, its theme, for this bot), and its options
+// take effect
+commit_line(id, const text[], const cond[])
 {
 	new Float:now = get_gametime()
 	new h = line_hash(text)
+	if (id >= 1 && id <= MaxClients)
+	{
+		g_BotRecent[id][g_BotRecentPos[id]] = h
+		g_BotRecentPos[id] = (g_BotRecentPos[id] + 1) % BOT_RECENT
+	}
 	g_Recent[g_RecentPos] = h
 	g_RecentPos = (g_RecentPos + 1) % RECENT
 	new t = theme_of(text)
@@ -1619,6 +1683,11 @@ public task_say(task)
 	// said to a person who can see it: they may answer, and this bot carries on (a thread)
 	if (other && !is_user_bot(other) && !g_PendQuiet[slot] && (!team || get_user_team(other) == get_user_team(id)))
 		thread_said(other, id, g_PendSec[slot], text)
+
+	// no answer asked for: now and then someone answers anyway, like on a real server
+	// (the victim to the killer's gloat, the killer to "wtf", a thanks for "nice shot")
+	if (!tag[0] && !chain && !g_PendRaw[slot])
+		follow_up(id, other, g_PendSec[slot], team)
 
 	// someone answers: the one it was about if that's a bot (and can see it), else
 	// another bot (a teammate, for team chat)
