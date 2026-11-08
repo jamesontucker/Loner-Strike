@@ -86,17 +86,19 @@ native gm_chat_blocked(id, const text[])
 #define MAX_PENDING  16
 #define MAX_CHAIN    3
 
-new const PERSONAS[] = "ftsjqncokxhzpbiduwrmABCDEFGHLMNOPSTYIJKQRUVWXZ0123"
+new const PERSONAS[] = "ftsjqncokxhzpbiduwrmABCDEFGHLMNOPSTYIJKQRUVWXZ0123aeglvy456789"
 // how much each personality talks (same order as PERSONAS)
 new const Float:CHATTY[] = { 1.0, 0.8, 1.2, 1.4, 0.3, 1.0, 0.7, 0.8, 1.5, 0.8, 1.6, 1.2, 1.3, 1.3, 1.1, 0.6, 0.9, 1.0, 1.0, 1.3,
 	1.1, 1.0, 1.1, 0.8, 1.0, 1.0, 1.0, 1.2, 0.15, 1.0, 1.0, 1.3, 0.9, 1.0, 1.0, 1.6,
-	1.0, 1.0, 1.2, 1.0, 0.9, 1.0, 1.0, 0.8, 1.2, 0.6, 1.0, 1.0, 1.0, 1.1 }
+	1.0, 1.0, 1.2, 1.0, 0.9, 1.0, 1.0, 0.8, 1.2, 0.6, 1.0, 1.0, 1.0, 1.1,
+	1.0, 1.1, 1.0, 1.1, 1.3, 1.0, 0.6, 0.9, 0.4, 1.2, 1.2, 0.9 }
 // how common each personality is (per 1000; same order): most people on a pub are
 // ordinary players who say little; the gimmicks (pirates, anime fans, streamers...) are
 // left out, they read like someone wrote them
 new const WEIGHT[] = { 90, 70, 70, 35, 120, 60, 100, 70, 12, 40, 5, 0, 0, 20, 30, 30, 35, 10, 0, 0,
 	0, 25, 0, 20, 3, 0, 3, 15, 110, 0, 5, 10, 0, 8, 0, 3,
-	0, 0, 4, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 2 }
+	0, 0, 4, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 2,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 
 // habits, picked per bot from its name
 // the first ones are for anyone; the last six only for people whose English isn't first
@@ -578,6 +580,13 @@ clanmate_bot(id, bool:sameteam)
 	return n ? list[random(n)] : 0
 }
 
+// The playstyle personalities (an AWPer, a rusher, a camper...), picked on a roll of their
+// own (NEW_SHARE per 1000 bots) so adding them left every other regular's personality as it
+// was. Letters and weights; Z is the clutch hero, K wants the admin (the rule enforcer)
+new const NEW_KINDS[] = "aeg4567l89vyZK"
+new const NEW_WEIGHT[] = { 25, 30, 10, 25, 10, 8, 6, 15, 15, 6, 10, 8, 8, 10 }
+#define NEW_SHARE 170
+
 // From the name, so the same regular always has the same personality. New players
 // in the Newbie lobby style are more often new to the game too.
 persona_of(id)
@@ -586,6 +595,23 @@ persona_of(id)
 	get_user_name(id, name, charsmax(name))
 	for (new i = 0; name[i]; i++)
 		h = (h * 31 + name[i]) & 0xFFFFFF
+	// the playstyle roll, from another mix of the name
+	new h2 = 2166136261
+	for (new i = 0; name[i]; i++)
+		h2 = ((h2 ^ name[i]) * 16777619) & 0x7FFFFFFF
+	if ((h2 / 13) % 1000 < NEW_SHARE && get_cvar_num("gm_botstyle") != 4)
+	{
+		new total
+		for (new i = 0; i < sizeof NEW_WEIGHT; i++)
+			total += NEW_WEIGHT[i]
+		new r = (h2 / 13001) % total
+		for (new i = 0; i < sizeof NEW_WEIGHT; i++)
+		{
+			if (r < NEW_WEIGHT[i])
+				return contain(PERSONAS, fmt("%c", NEW_KINDS[i]))
+			r -= NEW_WEIGHT[i]
+		}
+	}
 	if (get_cvar_num("gm_botstyle") == 4 && h % 3 == 0)
 		return 5
 	// weighted: plain players are common, gimmicks rare
@@ -2322,7 +2348,11 @@ new const PERSONA_DESC[][] = { "friendly", "tryhard", "salty", "joker", "quiet",
 	"conspiracy theorist", "dad gamer", "esports wannabe", "foodie", "grammar nerd", "sees hackers everywhere", "lurker",
 	"music guy", "stats nerd", "overconfident", "pacifist", "movement nerd", "map tourist", "yapper", "it guy", "gym bro",
 	"wants the admin", "trivia guy", "patient coach", "pirate", "villain roleplay", "philosopher", "extreme 2000s gamer",
-	"zen", "jokes about being a bot", "cowboy", "detective", "leetspeak" }
+	"clutch hero, plays bold when last alive", "jokes about being a bot", "cowboy", "detective", "leetspeak",
+	"awper, always wants the awp", "rusher, first out of spawn", "nade spammer", "lagger, blames the ping",
+	"map voter, always wants rtv", "plays weird guns like shotguns and the tmp", "camper, holds one spot",
+	"knifer, loves knife kills", "ninja, sneaky and quiet", "clan recruiter", "objective guy, wants the bomb planted",
+	"spray artist" }
 
 ai_init()
 {

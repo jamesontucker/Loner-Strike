@@ -27,6 +27,9 @@
 #include <amxmodx>
 #include <fakemeta>
 
+// gm_botchat (optional): the lagger personality ('l') gets the bad connection
+native botchat_persona(id)
+
 #define PLUGIN  "Bot ping"
 #define VERSION "1.0"
 #define AUTHOR  "gamemodes"
@@ -106,7 +109,23 @@ fix_key(id, bool:on)
 
 // ---- what each bot's ping is --------------------------------------------------------
 
+public plugin_natives()
+{
+	set_native_filter("native_filter")
+}
+
+public native_filter(const name[], index, trap)
+{
+	return (!trap && equal(name, "botchat_", 8)) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+}
+
+bool:lagger(id)
+{
+	return LibraryExists("gm_botchat", LibType_Library) && botchat_persona(id) == 'l'
+}
+
 // A bot's base ping, from its name: 70% low, 20% up to gm_botping_max, a few far beyond it
+// (the lagger always far beyond it)
 base_of(id)
 {
 	new name[32], h = 5381
@@ -117,7 +136,7 @@ base_of(id)
 	new hi = clamp(get_pcvar_num(g_pMax), lo + 1, 4095)
 	new mid = lo + (hi - lo) / 2
 	// most close by, a tail of people far away: like a real server's scoreboard
-	new r = h % 100
+	new r = lagger(id) ? 90 + h % 10 : h % 100
 	if (r < 70)
 		return lo + 5 + (h / 100) % max(1, mid - lo - 5)
 	if (r < 90)
@@ -144,7 +163,7 @@ public task_tick()
 			g_SpikeLeft[id]--
 			g_Spike[id] = g_SpikeLeft[id] ? g_Spike[id] * 2 / 3 : 0
 		}
-		else if (get_pcvar_num(g_pSpikes) && random_num(1, SPIKE_ODDS) == 1)
+		else if (get_pcvar_num(g_pSpikes) && random_num(1, lagger(id) ? SPIKE_ODDS / 8 : SPIKE_ODDS) == 1)
 		{
 			g_Spike[id] = random_num(80, 200)
 			g_SpikeLeft[id] = random_num(2, 4)

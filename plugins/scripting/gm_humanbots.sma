@@ -312,6 +312,14 @@ fav_of(id)
 	r = floatround(float(r) / floatmin(k, 1.5))
 	if (has(p, "o1") && r < 50)
 		return CSW_DEAGLE
+	// the AWPer, and the one who plays the odd guns (shotguns, the TMP, Elites...)
+	if (has(p, "a") && r < 85)
+		return CSW_AWP
+	if (has(p, "y") && r < 85)
+	{
+		static const ODD[] = { CSW_M3, CSW_XM1014, CSW_TMP, CSW_MAC10, CSW_P90, CSW_ELITE }
+		return ODD[(h / 101) % sizeof ODD]
+	}
 	if (has(p, "S") && r < 60)
 		return CSW_SCOUT
 	if (r < 8)
@@ -1162,7 +1170,7 @@ public ev_round_start()
 		// a few seconds, and never with the bomb: the round would wait on it
 		if (get_pcvar_num(g_pAfk) && !user_has_weapon(id, CSW_C4) && random_float(0.0, 1.0) < (has(p, "dYLF") ? 0.015 : 0.007) * k)
 			g_AfkUntil[id] = now + random_float(3.0, 10.0)
-		if (get_pcvar_num(g_pSprays) && (g_SprayCount || g_LogoSpray) && random_float(0.0, 1.0) < (has(p, "jkhXS3") ? 0.25 : 0.10) * k)
+		if (get_pcvar_num(g_pSprays) && (g_SprayCount || g_LogoSpray) && random_float(0.0, 1.0) < (has(p, "9") ? 0.70 : has(p, "jkhXS3") ? 0.25 : 0.10) * k)
 			set_task(random_float(1.0, 8.0), "task_spray", get_user_userid(id))
 		// the team's caller, now and then, in team modes only. Never "follow me", "stick
 		// together" or "regroup": CZ bots answer those by walking over to the caller
@@ -1213,6 +1221,34 @@ public task_favourites()
 					give_item(id, "weapon_deagle")
 					cs_set_user_bpammo(id, CSW_DEAGLE, 35)
 					cs_set_user_money(id, money - 650)
+				}
+			}
+			case CSW_ELITE:
+			{
+				if (money >= 800 && !user_has_weapon(id, CSW_ELITE))
+				{
+					drop_slot(id, 2)
+					give_item(id, "weapon_elite")
+					cs_set_user_bpammo(id, CSW_ELITE, 120)
+					cs_set_user_money(id, money - 800)
+				}
+			}
+			case CSW_M3, CSW_XM1014, CSW_TMP, CSW_MAC10, CSW_P90:
+			{
+				new price, item[24], ammo
+				switch (fav)
+				{
+					case CSW_M3:     { price = 1700; item = "weapon_m3"; ammo = 32; }
+					case CSW_XM1014: { price = 3000; item = "weapon_xm1014"; ammo = 32; }
+					case CSW_TMP:    { price = 1250; item = "weapon_tmp"; ammo = 120; }
+					case CSW_MAC10:  { price = 1400; item = "weapon_mac10"; ammo = 100; }
+					default:         { price = 2350; item = "weapon_p90"; ammo = 100; }
+				}
+				if (money >= price && !has_primary(id))
+				{
+					give_item(id, item)
+					cs_set_user_bpammo(id, fav, ammo)
+					cs_set_user_money(id, money - price)
 				}
 			}
 			case CSW_AWP, CSW_SCOUT:
@@ -1275,7 +1311,7 @@ knife_run(id, Float:now)
 	if (g_KnifeRun[id] || now - g_NoTargetSince[id] < 5.0 || !holding_gun(id))
 		return
 	new p = persona(id)
-	if (random_float(0.0, 1.0) < (has(p, "P") ? 0.70 : has(p, "SJn") ? 0.25 : 0.07) * pers())
+	if (random_float(0.0, 1.0) < (has(p, "P5") ? 0.70 : has(p, "SJne") ? 0.25 : has(p, "46") ? 0.02 : 0.07) * pers())
 	{
 		g_KnifeRun[id] = true
 		engclient_cmd(id, "weapon_knife")

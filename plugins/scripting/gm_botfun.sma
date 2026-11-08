@@ -163,22 +163,22 @@ public client_putinserver(id)
 // (x0.2), in FUN_* order. Tuned with a simulation of a 20-bot lobby so the common
 // personalities (quiet, lurker, chill, friendly...) don't all end up doing the same things
 new const LIKES[FUN_COUNT][] = {
-	"stkhzmEY",      // Q-spam
+	"stkhzmEYe3",    // Q-spam
 	"LorBNMG",       // silencer
-	"LtEO",          // scope
+	"LtEOa",         // scope
 	"no",            // burst
 	"nkd",           // slots
-	"qstnEOuN",      // reload
-	"jkhzS",         // spawn jump
-	"xjkzS",         // freeze time jump
-	"cxkS",          // knife flick
-	"njkzmD",        // flashlight
-	"cfjirwBbPY",    // salute
-	"qLcndDiTbHPM",  // look around
-	"fjkhwmO"        // celebrate
+	"qstnEOuNZ4",    // reload
+	"jkhzSe",        // spawn jump
+	"xjkzSe",        // freeze time jump
+	"cxkS5",         // knife flick
+	"njkzmDl",       // flashlight
+	"cfjirwBbPY7",   // salute
+	"qLcndDiTbHPM64v", // look around
+	"fjkhwmOeZ7"     // celebrate
 }
 new const DISLIKES[FUN_COUNT][] = {
-	"qoDdPr", "", "cn", "", "tEL", "c", "qLotdDrP", "qLotdDrP", "", "qLt", "LstH", "tE", "qLosrdP"
+	"qoDdPr6", "", "cn", "", "tEL", "c", "qLotdDrP46", "qLotdDrP46", "", "qLt6", "LstH", "tE", "qLosrdP6"
 }
 
 // How much a personality fidgets at all: the quiet and the lurkers hardly, kids and
@@ -188,12 +188,13 @@ Float:activity(p)
 	switch (p)
 	{
 		case 'q': return 0.4
-		case 'L', 'd', 'D', 'P': return 0.6
+		case '6': return 0.5
+		case 'L', 'd', 'D', 'P', '4': return 0.6
 		case 'o', 't', 'u', 'H', 'N', 'G': return 0.8
 		case 'c', 's', 'i', 'r', 'B', 'b': return 0.9
 		case 'O': return 1.1
-		case 'n', 'Y': return 1.2
-		case 'S': return 1.3
+		case 'n', 'Y', '3': return 1.2
+		case 'S', 'e': return 1.3
 		case 'm': return 1.4
 		case 'h', 'z': return 1.5
 		case 'j': return 1.6
