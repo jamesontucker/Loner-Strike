@@ -203,6 +203,7 @@ new Float:g_OfferBid[MAX_OFFERS], g_OfferCount
 // gm_people (optional): traits, archetypes and memory. 1 the condition holds, 0 it doesn't,
 // -1 it doesn't know the key
 native people_match(id, other, const key[], const op[], const value[])
+native people_letter(id)
 
 public plugin_init()
 {
@@ -623,6 +624,14 @@ new const NEW_WEIGHT[] = { 25, 30, 10, 25, 10, 8, 6, 15, 15, 6, 10, 8, 8, 10 }
 // in the Newbie lobby style are more often new to the game too.
 persona_of(id)
 {
+	// gm_people: the archetype says which of the old personalities this person acts as
+	if (LibraryExists("gm_people", LibType_Library))
+	{
+		new l = people_letter(id)
+		new at = l ? contain(PERSONAS, fmt("%c", l)) : -1
+		if (at >= 0)
+			return at
+	}
 	new name[32], h = 7
 	get_user_name(id, name, charsmax(name))
 	for (new i = 0; name[i]; i++)
