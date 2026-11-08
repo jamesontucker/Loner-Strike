@@ -75,7 +75,13 @@ const RETRY_WAITS: &[Duration] = &[Duration::from_secs(2), Duration::from_secs(6
 const BUSY: &str = "GameBanana is busy and didn't send it properly. Try again in a minute.";
 
 fn get_json(path: &str, params: &[(&str, String)]) -> Result<Value, StoreError> {
-    let mut waits = RETRY_WAITS.iter();
+    get_json_waiting(path, params, RETRY_WAITS)
+}
+
+/// `get_json` asking again after each of `waits` (none: one try, for lookups that hold a
+/// slot others are queued for, like a map's picture).
+fn get_json_waiting(path: &str, params: &[(&str, String)], waits: &[Duration]) -> Result<Value, StoreError> {
+    let mut waits = waits.iter();
     loop {
         let r = sys::http()
             .get(format!("{API}{path}"))
@@ -511,7 +517,8 @@ impl MapStore {
             for want in wants {
                 let key = alnum(&want);
                 for page in 1..=SHOT_PAGES {
-                    let d = match get_json(
+                    // (one try: the grid's other pictures are waiting on this slot)
+                    let d = match get_json_waiting(
                         "/Mod/Index",
                         &[
                             ("_nPage", page.to_string()),
@@ -519,6 +526,7 @@ impl MapStore {
                             ("_aFilters[Generic_Category]", MAPS_CATEGORY.to_string()),
                             ("_aFilters[Generic_Name]", format!("contains,{want}")),
                         ],
+                        &[],
                     ) {
                         Ok(d) => d,
                         Err(_) => return None, // offline or GameBanana busy: try again next time
@@ -981,8 +989,9 @@ impl MapStore {
         Ok((msg, maps, kept, skipped))
     }
 
-    /// Downloads a file; returns how many bytes came.
-    fn download(&self, id: &str, file_id: i64, out: &Path, size: u64) -> Result<u64, StoreError> {
+    /// Downloads a file to `out`: the bytes that came, and whether it ended properly (false:
+    /// cut off part way).
+    fn download(&self, id: &str, file_id: i64, out: &Path, size: u64) -> Result<(u64, bool), StoreError> {
         use std::io::{Read, Write};
         self.update(id, |j| {
             j.state = "downloading".into();
@@ -1006,7 +1015,12 @@ impl MapStore {
         let mut buf = vec![0u8; 256 * 1024];
         let mut got: u64 = 0;
         loop {
-            let n = r.read(&mut buf).map_err(|_| StoreError::Net)?;
+            let n = match r.read(&mut buf) {
+                Ok(n) => n,
+                // cut off part way: fetch asks again
+                Err(_) if got > 0 => return Ok((got, false)),
+                Err(_) => return Err(StoreError::Net),
+            };
             if n == 0 {
                 break;
             }
@@ -1017,7 +1031,7 @@ impl MapStore {
             f.write_all(&buf[..n]).map_err(|e| StoreError::Bad(e.to_string()))?;
             self.update(id, |j| j.got = got);
         }
-        Ok(got)
+        Ok((got, true))
     }
 
     fn save_shot(&self, info: &Value, maps: &[String]) {
@@ -1050,18 +1064,16 @@ impl MapStore {
         let ext = archive::ext_of(&fname).to_lowercase();
         let download = tmp.join(format!("download{ext}"));
         // an empty or cut-off file (GameBanana busy) is downloaded again, not unpacked into
-        // nothing ("No map found")
+        // nothing ("No map found"). GameBanana's size can be a little off, so one that ended
+        // properly and is nearly all there counts, and a cut-off or clearly short one is asked
+        // for again.
         let mut waits = RETRY_WAITS.iter();
         loop {
-            let got = self.download(id, file_id, &download, size)?;
-            if got > 0 && got >= size {
+            let (got, ended) = self.download(id, file_id, &download, size)?;
+            if ended && got > 0 && got >= size - size / 10 {
                 break;
             }
             let Some(w) = waits.next() else {
-                // GameBanana's size can be a little off: something that came is unpacked and checked
-                if got > 0 {
-                    break;
-                }
                 return Err(StoreError::Bad(BUSY.into()));
             };
             self.update(id, |j| j.message = "GameBanana is busy: trying again".into());

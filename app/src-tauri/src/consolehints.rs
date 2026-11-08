@@ -115,9 +115,20 @@ fn next_help_page(page: &str) -> Option<u32> {
 }
 
 /// A setting's current value, asked for on its own (`"hostname" is "My Server"`), or None
-/// for a password or token, a name that isn't one, or no answer. Blocking.
-pub fn value(rcon: &Rcon, name: &str) -> Option<String> {
+/// for a password or token, a name that isn't one of the server's settings (sent on its
+/// own, a command would run: `quit`), or no answer. Blocking.
+pub fn value(id: &str, rcon: &Rcon, name: &str) -> Option<String> {
     if name.is_empty() || name.len() > 64 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') || secret(name) || NEVER.contains(&name) {
+        return None;
+    }
+    let is_setting = |items: &[Item]| items.iter().any(|i| i.k == "cvar" && i.n.eq_ignore_ascii_case(name));
+    // the kept list, however old (or asked for again when it was dropped by a restart)
+    let kept = CACHE.lock().unwrap().as_ref().and_then(|m| m.get(id)).map(|(_, items)| is_setting(items));
+    let known = match kept {
+        Some(k) => k,
+        None => is_setting(&for_server(id, rcon, false).ok()?),
+    };
+    if !known {
         return None;
     }
     parse_value(&rcon.send(name).ok()?, name)

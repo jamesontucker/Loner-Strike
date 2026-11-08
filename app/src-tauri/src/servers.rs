@@ -2067,6 +2067,40 @@ fn end_leftover(e: &Entry) {
 /// launch two copies; a restore (backup.rs) takes it too while it marks a server as busy.
 pub(crate) static STARTING: Mutex<()> = Mutex::new(());
 
+/// Servers on other machines being started, and how many starts of each are going (sync,
+/// service and systemctl take a while over SSH, and local starts mustn't wait on them, so
+/// STARTING isn't held for it). A restore checks this with STARTING held and refuses one
+/// that's starting.
+static REMOTE_STARTS: Mutex<Option<HashMap<String, u32>>> = Mutex::new(None);
+
+/// Marks a server on another machine as starting until it's dropped (the end of start()).
+struct RemoteStart(String);
+
+impl RemoteStart {
+    fn new(id: &str) -> RemoteStart {
+        *REMOTE_STARTS.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new).entry(id.to_string()).or_insert(0) += 1;
+        RemoteStart(id.to_string())
+    }
+}
+
+impl Drop for RemoteStart {
+    fn drop(&mut self) {
+        if let Some(all) = REMOTE_STARTS.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+            if let Some(n) = all.get_mut(&self.0) {
+                *n -= 1;
+                if *n == 0 {
+                    all.remove(&self.0);
+                }
+            }
+        }
+    }
+}
+
+/// Whether a server on another machine is being started right now (call with STARTING held).
+pub(crate) fn remote_starting(id: &str) -> bool {
+    REMOTE_STARTS.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|s| s.contains_key(id))
+}
+
 pub fn start(id: &str) -> Result<(), String> {
     let e = get(id).ok_or("That server isn't there any more.")?;
     if crate::backup::restoring_server(id) {
@@ -2089,13 +2123,15 @@ pub fn start(id: &str) -> Result<(), String> {
     }
     // (systemd starts one copy at most, and a slow machine mustn't hold up local starts)
     if let Some(r) = &e.remote {
-        // checked again with starts held, so a restore can't begin in between
-        if crate::backup::restoring_server(id) || {
+        // checked with starts held, and marked as starting until systemctl has answered, so a
+        // restore can't begin anywhere in between (it refuses a server that's starting)
+        let _starting = {
             let _g = STARTING.lock().unwrap_or_else(|e| e.into_inner());
-            crate::backup::restoring_server(id)
-        } {
-            return Err(crate::backup::RESTORING_SERVER.into());
-        }
+            if crate::backup::restoring_server(id) {
+                return Err(crate::backup::RESTORING_SERVER.into());
+            }
+            RemoteStart::new(id)
+        };
         if bots_changed {
             let _ = sync(&e, false);
         }
@@ -3013,7 +3049,7 @@ async fn api_console_hints(UrlPath(id): UrlPath<String>, headers: HeaderMap, on:
         let e = get(&id).ok_or("That server isn't there any more.")?;
         let rcon = e.rcon().ok_or("The server isn't set up yet.")?;
         if let Some(name) = req.value {
-            return Ok(json!({"ok": true, "value": crate::consolehints::value(&rcon, name.trim())}));
+            return Ok(json!({"ok": true, "value": crate::consolehints::value(&id, &rcon, name.trim())}));
         }
         let refresh = req.refresh;
         crate::consolehints::for_server(&id, &rcon, refresh).map(|items| json!({"ok": true, "items": items}))

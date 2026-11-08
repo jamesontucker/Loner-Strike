@@ -41,18 +41,23 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let tmp = path.with_file_name(format!(".{name}.{}-{}.tmp", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
     std::fs::write(&tmp, bytes)?;
-    // on Windows an antivirus scan or the game reading the file can hold it for a
-    // moment, which fails the rename: try a few times before giving up
+    rename_over(&tmp, path)
+}
+
+/// Moves a finished temporary file over `path`. On Windows an antivirus scan or the game
+/// reading the file can hold it for a moment, which fails the rename: tried a few times
+/// before giving up. The temporary file is removed when it fails.
+pub fn rename_over(tmp: &Path, path: &Path) -> std::io::Result<()> {
     let mut tries = 0;
     loop {
-        match std::fs::rename(&tmp, path) {
+        match std::fs::rename(tmp, path) {
             Ok(()) => return Ok(()),
             Err(e) if cfg!(windows) && tries < 5 && e.kind() == std::io::ErrorKind::PermissionDenied => {
                 tries += 1;
                 std::thread::sleep(std::time::Duration::from_millis(60 * tries));
             }
             Err(e) => {
-                let _ = std::fs::remove_file(&tmp);
+                let _ = std::fs::remove_file(tmp);
                 return Err(e);
             }
         }

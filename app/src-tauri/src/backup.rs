@@ -505,8 +505,8 @@ fn checked(it: &Item) -> Option<&'static str> {
 /// Takes plain passwords out of a settings file before it goes in a backup: a .cfg's lines
 /// setting rcon_password, sv_password or adminpassword, and users.ini's admins with a
 /// password (outside Loner-Strike's own block). Each such line is swapped for a comment, so
-/// the line numbers stay; returns the new text and the lines as they were, or None when
-/// there were none.
+/// the line numbers stay (a .cfg line's other commands stay in front of it); returns the new
+/// text and the lines as they were, or None when there were none.
 pub fn strip_passwords(rel: &str, text: &str) -> Option<(String, Vec<(usize, String)>)> {
     let users = is_users_ini(rel);
     if !users && !rel.to_ascii_lowercase().ends_with(".cfg") {
@@ -529,7 +529,14 @@ pub fn strip_passwords(rel: &str, text: &str) -> Option<(String, Vec<(usize, Str
         }
         if let Some(key) = secret_key(users, t) {
             let end = if line.ends_with('\r') { "\r" } else { "" };
-            let mark = if users { format!("; (admin \"{key}\" {LEFT_OUT}") } else { format!("// ({key} {LEFT_OUT}") };
+            let mark = if users {
+                format!("; (admin \"{key}\" {LEFT_OUT}")
+            } else {
+                // `sv_password x; mp_timelimit 20` keeps mp_timelimit
+                let others: Vec<&str> = commands(line.trim_end_matches('\r')).into_iter().map(str::trim).filter(|c| !c.is_empty() && secret_key(false, c).is_none()).collect();
+                let before = if others.is_empty() { String::new() } else { format!("{}; ", others.join("; ")) };
+                format!("{before}// ({key} {LEFT_OUT}")
+            };
             taken.push((i, std::mem::replace(line, format!("{mark}{end}"))));
         }
     }
@@ -561,11 +568,41 @@ fn secret_key(users: bool, line: &str) -> Option<String> {
         .map(|v| v.to_string())
 }
 
-/// The key of a comment `strip_passwords` left, if the line is one.
-fn placeholder(line: &str) -> Option<String> {
+/// A .cfg line's commands: split at each `;` outside quotes, as the game does (a quoted
+/// password or name can hold one).
+fn commands(line: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let (mut start, mut quoted) = (0, false);
+    for (i, c) in line.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            ';' if !quoted => {
+                out.push(&line[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(&line[start..]);
+    out
+}
+
+/// The key of a comment `strip_passwords` left, if the line has one, and the commands kept
+/// in front of it ("" when there were none).
+fn placeholder(line: &str) -> Option<(String, String)> {
     let t = line.trim();
-    let inner = t.strip_prefix("// (").or_else(|| t.strip_prefix("; (admin \""))?.strip_suffix(LEFT_OUT)?.trim_end();
-    Some(inner.strip_suffix('"').unwrap_or(inner).to_string())
+    if let Some(inner) = t.strip_prefix("; (admin \"") {
+        let inner = inner.strip_suffix(LEFT_OUT)?.trim_end();
+        return Some((inner.strip_suffix('"').unwrap_or(inner).to_string(), String::new()));
+    }
+    // (the last one: a command kept in front can have a comment of its own)
+    let at = t.rfind("// (")?;
+    let before = &t[..at];
+    if !before.is_empty() && !before.ends_with("; ") {
+        return None;
+    }
+    let inner = t[at + 4..].strip_suffix(LEFT_OUT)?.trim_end();
+    Some((inner.to_string(), before.to_string()))
 }
 
 /// Puts the lines `strip_passwords` took out back (where the comment it left still is).
@@ -590,10 +627,10 @@ fn keep_own_passwords(rel: &str, text: &str, mine: &[(usize, String)]) -> String
     let mut left: Vec<(String, String)> = mine.iter().filter_map(|(_, l)| Some((secret_key(users, l)?, l.trim_end_matches('\r').to_string()))).collect();
     let mut lines: Vec<String> = text.split('\n').map(String::from).collect();
     for l in lines.iter_mut() {
-        let Some(key) = placeholder(l) else { continue };
+        let Some((key, before)) = placeholder(l) else { continue };
         if let Some(pos) = left.iter().position(|(k, _)| k.eq_ignore_ascii_case(&key)) {
             let cr = if l.ends_with('\r') { "\r" } else { "" };
-            *l = format!("{}{cr}", left.remove(pos).1);
+            *l = format!("{before}{}{cr}", left.remove(pos).1.trim_start());
         }
     }
     if !left.is_empty() {
@@ -711,9 +748,9 @@ pub fn pick(p: &Pick) -> Picked {
                 if !p.full {
                     continue;
                 }
-            } else if p.stock.iter().any(|s| s.join(r).is_file()) || (p.own_game && p.stock.is_empty()) {
+            } else if p.stock.iter().any(|s| s.join(r).is_file()) || (p.own_game && p.stock.is_empty() && valve_own_guess(p.game_dir, &low)) {
                 // Valve's own (or, for the game without a server's copy of Valve's files to
-                // compare with, possibly Valve's own)
+                // compare with, what's known or possibly Valve's own)
                 continue;
             }
             ("custom", "content")
@@ -768,6 +805,15 @@ fn source(st: &Shared, id: &str) -> Result<Source, String> {
     }
     let e = servers::get(id).filter(|e| e.ready).ok_or("That server isn't there any more, or isn't set up yet.")?;
     Ok(Source { id: id.into(), name: e.name.clone(), game: e.game.clone(), game_dir: e.dir.join(&e.game), entry: Some(e) })
+}
+
+/// The player's own game with no copy of Valve's server files to compare with: CS 1.6's
+/// stock maps and wads are known by name, so its other maps are the player's and get packed.
+/// Condition Zero's aren't listed anywhere, so every map there no download brought is
+/// treated as Valve's own (left out).
+fn valve_own_guess(game_dir: &Path, low: &str) -> bool {
+    let cstrike = game_dir.file_name().is_some_and(|n| n.eq_ignore_ascii_case("cstrike"));
+    !cstrike || crate::maps::is_stock_file(low) || crate::extras::STOCK_WADS.contains(&low)
 }
 
 /// Valve's own files to leave out: the servers' base download, next to the server or
@@ -1381,10 +1427,7 @@ fn write_stream(src: &mut dyn Read, dest: &Path, size: u64) -> Result<u64, Strin
         let _ = std::fs::remove_file(&tmp);
         return Err(format!("{name} in the backup isn't the size the backup says it is. {DAMAGED}"));
     }
-    std::fs::rename(&tmp, dest).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp);
-        format!("Couldn't write {name} ({e}). If the server or game is running, stop it and try again.")
-    })?;
+    crate::sys::rename_over(&tmp, dest).map_err(|e| format!("Couldn't write {name} ({e}). If the server or game is running, stop it and try again."))?;
     Ok(n)
 }
 
@@ -1630,7 +1673,7 @@ impl Restore {
                 let host = e.remote.as_ref().map(|r| r.host.clone()).unwrap_or_default();
                 v.push(s("srv-machine", format!("Setting up {host}: libraries, firewall, Valve's server"), 10.0));
             }
-            _ => v.push(s("rs-safety", "Saving a copy of what's there now, so you can undo".into(), 0.5)),
+            _ => v.push(s("rs-safety", "Saving a copy of its settings and your files, so you can undo".into(), 0.5)),
         }
         if self.full() && self.wants("mods") {
             v.push(s("rs-mods", "Putting the mods back from the backup".into(), 2.0));
@@ -2674,19 +2717,25 @@ fn start_restore(st: &Shared, req: RestoreReq) -> Result<Value, String> {
         return Err(format!("There isn't enough free space for this restore: it needs about {} and the drive has {} free. Make some room, then try again.", gb(want), gb(free)));
     }
     let busy = {
-        // with starts held, so none slips in between the mark and the check
+        // marked with starts held: a local start either finished before (so it's running,
+        // checked below) or refuses after, and a remote one still going is refused here
         let _starts = servers::STARTING.lock().unwrap_or_else(|e| e.into_inner());
-        let busy = Restoring::new(match &target {
+        if let Target::Server(e) = &target {
+            if servers::remote_starting(&e.id) {
+                return Err(format!("{} is starting. Stop it first, then restore.", e.name));
+            }
+        }
+        Restoring::new(match &target {
             Target::Game(i) => game_key(&i.hl),
             Target::NewLocal(e) | Target::NewRemote(e) | Target::Server(e) => e.id.clone(),
-        })?;
-        match &target {
-            Target::Server(e) if e.remote.is_none() && servers::running(&e.id) => return Err(format!("Stop {} first, then restore.", e.name)),
-            Target::Game(_) if crate::sys::game_running() => return Err("Counter-Strike is open. Close it, then try again: the game's files can't change while it's running.".into()),
-            _ => {}
-        }
-        busy
+        })?
     };
+    // the slow checks (RCON, the process list) without holding up starts
+    match &target {
+        Target::Server(e) if e.remote.is_none() && servers::running(&e.id) => return Err(format!("Stop {} first, then restore.", e.name)),
+        Target::Game(_) if crate::sys::game_running() => return Err("Counter-Strike is open. Close it, then try again: the game's files can't change while it's running.".into()),
+        _ => {}
+    }
     // a server on another machine: asked there, now that it can't be started from here
     // (and without holding up local starts while the machine answers)
     if let Target::Server(e) = &target {
@@ -2887,6 +2936,28 @@ mod tests {
         }
     }
 
+    /// A password on a line with other commands: only it is taken out, and it comes back
+    /// beside them (the backup's own, or this computer's).
+    #[test]
+    fn other_commands_on_a_password_line_stay() {
+        let cfg = "mp_timelimit 20; sv_password \"x\"; sv_gravity 800\r\nhostname a\r\n";
+        let (text, taken) = strip_passwords("server.cfg", cfg).unwrap();
+        assert!(text.starts_with(&format!("mp_timelimit 20; sv_gravity 800; // (sv_password {LEFT_OUT}\r\n")), "{text}");
+        assert_eq!(put_back_passwords(&text, &taken), cfg);
+        let (_, mine) = strip_passwords("server.cfg", "sv_password \"mine\"\r\n").unwrap();
+        let out = keep_own_passwords("server.cfg", &text, &mine);
+        assert!(out.starts_with("mp_timelimit 20; sv_gravity 800; sv_password \"mine\"\r\nhostname a\r\n"), "{out}");
+        // a ; inside quotes is part of the command: nothing of the password is kept
+        let (text3, _) = strip_passwords("server.cfg", "hostname \"a;b\"; sv_password \"p;q\"\n").unwrap();
+        assert!(text3.starts_with("hostname \"a;b\"; // (sv_password") && !text3.contains("q\""), "{text3}");
+        // a kept command with a comment of its own
+        let (text2, taken2) = strip_passwords("server.cfg", "echo // (hi); sv_password x\n").unwrap();
+        assert_eq!(placeholder(text2.lines().next().unwrap()).map(|(k, _)| k).as_deref(), Some("sv_password"));
+        assert_eq!(put_back_passwords(&text2, &taken2), "echo // (hi); sv_password x\n");
+        // with nothing of this computer's to put there, the other commands are still there
+        assert!(keep_own_passwords("server.cfg", &text, &[]).contains("mp_timelimit 20; sv_gravity 800; // (sv_password"));
+    }
+
     #[test]
     fn passwords_stay_out_of_settings_files() {
         let cfg = "hostname \"Friday\"\r\nRCON_PASSWORD \"hunter2\"\r\n\"sv_password\" abc\r\nsv_password \"\"\r\nsv_passwordx 1\r\nexec x.cfg; adminpassword secret // hi\r\nsv_gravity 800\r\n";
@@ -2972,7 +3043,7 @@ mod tests {
         let (_, mine) = strip_passwords("users.ini", "\"Boss\" \"local\" \"abc\" \"a\"\n").unwrap();
         let out = keep_own_passwords("users.ini", &text, &mine);
         assert!(out.starts_with("\"Boss\" \"local\" \"abc\" \"a\"\n") && !out.contains("\"o\""), "{out}");
-        assert_eq!(placeholder(out.lines().nth(1).unwrap()).as_deref(), Some("Other"));
+        assert_eq!(placeholder(out.lines().nth(1).unwrap()).map(|(k, _)| k).as_deref(), Some("Other"));
 
         // the copy kept before a restore: sealed with a key saved next to it
         let root = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "backupkept-").unwrap();
@@ -3224,8 +3295,20 @@ mod tests {
         // parts left out stay out
         let only: Vec<String> = vec!["settings".into()];
         assert!(paths(true, &only).iter().all(|(_, part, _)| part == "settings"));
-        // the game itself, without Valve's files to compare with: only what came from downloads
+        // the game itself, without Valve's files to compare with: CS 1.6's stock maps and wads
+        // are known by name, so its own maps and wads are packed and Valve's aren't
+        put(&g, "maps/de_dust2.txt", "valve");
+        put(&g, "cstrike.wad", "valve");
+        put(&g, "mine.wad", "wad");
         let own = pick(&Pick { game_dir: &g, full: true, parts: &parts, stock: &[], known: &known, own_game: true }).items;
+        let has = |p: &str| own.iter().any(|i| i.path == p);
+        assert!(has("maps/fromgb.bsp") && has("maps/custom.bsp") && has("mine.wad"));
+        assert!(!has("maps/de_dust2.bsp") && !has("maps/de_dust2.txt") && !has("cstrike.wad"));
+        // Condition Zero's aren't listed: only what came from downloads
+        let cz = root.join("srv").join("czero");
+        put(&cz, "maps/custom.bsp", "bsp");
+        put(&cz, "maps/fromgb.bsp", "gb");
+        let own = pick(&Pick { game_dir: &cz, full: true, parts: &parts, stock: &[], known: &known, own_game: true }).items;
         assert!(own.iter().any(|i| i.path == "maps/fromgb.bsp") && !own.iter().any(|i| i.path == "maps/custom.bsp"));
         let _ = std::fs::remove_dir_all(&root);
     }

@@ -518,7 +518,7 @@ fn reload(g: &Game) {
 // ---- fast downloads: the files a web server needs -----------------------------------
 
 /// Wads every Counter-Strike / Condition Zero install has.
-const STOCK_WADS: &[&str] = &[
+pub(crate) const STOCK_WADS: &[&str] = &[
     "cached.wad", "cs_747.wad", "cs_assault.wad", "cs_bdog.wad", "cs_cbble.wad", "cs_dust.wad", "cs_havana.wad", "cs_office.wad",
     "cstraining.wad", "cstrike.wad", "czero.wad", "de_airstrip.wad", "de_aztec.wad", "de_piranesi.wad", "de_storm.wad",
     "de_vertigo.wad", "decals.wad", "fonts.wad", "gfx.wad", "halflife.wad", "itsitaly.wad", "liquids.wad", "n0th1ng.wad",

@@ -370,7 +370,7 @@ export function RestoreSheet({ to, scope = "all", servers, onClose, onChanged }:
               : "";
   const restore = async () => {
     if (!src) return;
-    if ((where === "server" || where === "game") && !(await ask(`Restore over ${targetName}? Its settings${partSet.has("mods") ? ", mods" : ""} and files are replaced with the ones in the backup. A copy of what's there now is saved first, so you can undo it.`, { ok: "Restore over it", danger: true }))) return;
+    if ((where === "server" || where === "game") && !(await ask(`Restore over ${targetName}? Its settings${partSet.has("mods") ? ", mods" : ""} and files are replaced with the ones in the backup. A copy of its settings and your own files is saved first, so you can undo it (maps and skins from GameBanana come back as downloads).`, { ok: "Restore over it", danger: true }))) return;
     await run("restore:start", async () => {
       setProblem("");
       const r = await post("/api/backup/restore", { file: opened!.file, index, target: where, machine, server, name, parts: [...partSet], password: pw, skip_secrets: skipSecrets, plugin_code: pluginCode && partSet.has("plugins"), update_mods: updateMods });
