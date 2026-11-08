@@ -7,7 +7,8 @@
 	            way someone did who'd gone to get food, then joins again (gm_atmo_spec 0/1).
 	            Only in modes where one player fewer doesn't matter (not Hide and Seek,
 	            Deathrun, zombies, Base Builder and the like), and never from a team of
-	            fewer than four
+	            fewer than four. It comes back early if a match starts or its team ends up
+	            short, and only to a side with room (mp_limitteams)
 
 	Nothing happens in a match or a career game.
 */
@@ -23,6 +24,7 @@
 
 #define TASK_ADVERT  8800
 #define TASK_SPEC    8810
+#define TASK_SPEC_CHECK 8820
 #define MAX_ADVERTS  32
 
 new g_pAdverts, g_pSpec
@@ -157,20 +159,72 @@ public task_spec_out()
 	g_SpecTeam = cs_get_user_team(g_Spec)
 	cs_set_user_team(g_Spec, CS_TEAM_SPECTATOR)
 	set_task(random_float(120.0, 360.0), "task_spec_back", TASK_SPEC)
+	// meanwhile: back early if a match starts or its team ends up short
+	set_task(15.0, "task_spec_check", TASK_SPEC_CHECK, _, _, "b")
+}
+
+public task_spec_check()
+{
+	if (!g_Spec)
+	{
+		remove_task(TASK_SPEC_CHECK)
+		return
+	}
+	// short: down to two, or behind even counting this one (someone else left, or joined
+	// the other side)
+	new CsTeams:other = g_SpecTeam == CS_TEAM_T ? CS_TEAM_CT : CS_TEAM_T
+	new n = team_count(g_SpecTeam)
+	if (quiet() || n < 3 || n + 1 < team_count(other))
+		spec_return()
 }
 
 public task_spec_back()
 {
+	spec_return()
+}
+
+// Back on the side it left (it spawns with the next round), if that side has room; else the
+// other side if that has, else it waits a little longer
+spec_return()
+{
 	new id = g_Spec
-	g_Spec = 0
 	if (!id || !is_user_connected(id) || get_user_userid(id) != g_SpecUser || cs_get_user_team(id) != CS_TEAM_SPECTATOR)
+	{
+		spec_done()
 		return
-	// back on the side it left (it spawns with the next round)
-	cs_set_user_team(id, g_SpecTeam)
+	}
+	new CsTeams:team = g_SpecTeam
+	new CsTeams:other = team == CS_TEAM_T ? CS_TEAM_CT : CS_TEAM_T
+	if (!has_room(team, other))
+	{
+		if (!has_room(other, team))
+		{
+			remove_task(TASK_SPEC)
+			set_task(20.0, "task_spec_back", TASK_SPEC)
+			return
+		}
+		team = other
+	}
+	spec_done()
+	cs_set_user_team(id, team)
+}
+
+spec_done()
+{
+	g_Spec = 0
+	remove_task(TASK_SPEC)
+	remove_task(TASK_SPEC_CHECK)
+}
+
+// One more on `team` keeps it within mp_limitteams of `other` (0: no limit)
+bool:has_room(CsTeams:team, CsTeams:other)
+{
+	new limit = get_cvar_num("mp_limitteams")
+	return limit <= 0 || team_count(team) + 1 - team_count(other) <= limit
 }
 
 public client_disconnected(id)
 {
 	if (id == g_Spec)
-		g_Spec = 0
+		spec_done()
 }

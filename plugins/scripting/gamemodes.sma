@@ -97,9 +97,13 @@ new const SETTINGS[][SettingData] =
 	{ "gm_bf_salute",       "Bots salute teammates", "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_bf_look",         "Bots look around", "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_bf_celebrate",    "Bots celebrate wins", "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_bf_breakables",   "Bots shoot breakables", "1 0",                    "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_bf_drop",         "Bots drop guns",   "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_bf_bad",          "Newbie bad habits", "1 0",                     "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botchat",         "Bot chat",         "0 1 2 3",                  "Off|Now and then|Normal|Chatty",      CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botchat_humans",  "Bots answer you",  "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botchat_deadchat", "Dead bots' chat", "1 0",                      "Everyone sees it|Only the dead",      CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_botchat_stop",    "Bots stop to type", "1 0",                     "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_clans",           "Clans stick together", "1 0",                  "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botjoin",         "Bots trickle in",  "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botvotes",        "Bots vote for maps", "1 0",                    "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
@@ -2777,14 +2781,17 @@ setting_visible(s, cat)
 		new bool:styled = get_cvar_num("gm_botstyle") != 0
 		if (equal(SETTINGS[s][SD_Cvar], "bot_profile_db") && styled)
 			return false
-		if ((equal(SETTINGS[s][SD_Cvar], "gm_hb_", 6) || equal(SETTINGS[s][SD_Cvar], "gm_bf_", 6) || equal(SETTINGS[s][SD_Cvar], "gm_personality")) && !styled)
+		if ((equal(SETTINGS[s][SD_Cvar], "gm_hb_", 6) || equal(SETTINGS[s][SD_Cvar], "gm_bf_", 6) || equal(SETTINGS[s][SD_Cvar], "gm_personality")
+			|| equal(SETTINGS[s][SD_Cvar], "gm_botchat_stop")) && !styled)
 			return false
 		// only Locked In (5), Hackers (6) and Gods (7) hop
 		if (equal(SETTINGS[s][SD_Cvar], "gm_hb_bhop") && get_cvar_num("gm_botstyle") < 5)
 			return false
 	}
-	// saluting, looking around and celebrating need Loner-Strike's game DLL (its ls_bot)
-	if ((equal(SETTINGS[s][SD_Cvar], "gm_bf_salute") || equal(SETTINGS[s][SD_Cvar], "gm_bf_look") || equal(SETTINGS[s][SD_Cvar], "gm_bf_celebrate")) && !get_cvar_pointer("bot_ls_routes"))
+	// saluting, looking around, celebrating and stopping to type need Loner-Strike's game DLL
+	// (its ls_bot)
+	if ((equal(SETTINGS[s][SD_Cvar], "gm_bf_salute") || equal(SETTINGS[s][SD_Cvar], "gm_bf_look") || equal(SETTINGS[s][SD_Cvar], "gm_bf_celebrate")
+		|| equal(SETTINGS[s][SD_Cvar], "gm_botchat_stop")) && !get_cvar_pointer("bot_ls_routes"))
 		return false
 	// GunGame has its own objectives switch, and deathmatch removes them
 	if (equal(SETTINGS[s][SD_Cvar], "gm_nobomb") && (get_cvar_pointer("gg_block_objectives") || get_cvar_pointer("gmdm_guns")))

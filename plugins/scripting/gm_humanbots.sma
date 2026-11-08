@@ -30,14 +30,16 @@
 	                   (a Deagle lover, an AWP guy), warming up after joining, getting
 	                   tired late at night, over-swinging at someone behind them,
 	                   nervous reloads, running with the knife out early in the round
-	                   (not in a match), and a rival (the player who keeps killing it)
-	                   it reacts to faster
+	                   (not in a match), a rival (the player who keeps killing it)
+	                   it reacts to faster, and the odd failed bunnyhop from a pub kid
 	gm_hb_afk        1 now and then a bot stands still for a few seconds early in the round
-	                   (not in modes a plugin steers bots through); shots, an enemy or
-	                   getting hurt bring it back at once
+	                   (not in modes a plugin steers bots through, deathmatch, or a match
+	                   or Matchmaking on Classic), once it's standing somewhere solid;
+	                   shots, an enemy, danger nearby (gm_botfun) or getting hurt bring
+	                   it back at once
 	gm_hb_sprays     1 bots spray a logo now and then: Loner-Strike's (sprites/lonerstrike/
 	                   spray.spr, flat on the wall like a player's spray), else one of the
-	                   game's own logos. Cleared each round
+	                   game's own logos. Cleared each round. A few tag a wall after a kill
 	gm_hb_disrespect 0 lets bots be disrespectful: crouch spam over someone they killed
 	gm_hb_radio      1 the odd radio call that fits the moment and the bot (enemy spotted,
 	                   enemy down; in team modes the team's caller says go). Each bot and
@@ -53,7 +55,7 @@
 	gm_hb_bhop       1 Locked In and Hackers bunnyhop between fights
 	gm_hb_hold       1 careful players and lurkers stop now and then and hold an angle for a
 	                   few seconds (crouched sometimes); more on aim and duel maps. Not in
-	                   a match
+	                   a match or deathmatch, and only while nothing is going on around it
 	gm_personality 100 how strongly all of the above shows, in percent (0-200): at 0 bots
 	                   play their style plainly (no tilt, panic, habits, show-off, afk,
 	                   sprays or radio, less spread in skill and mistakes); 200 exaggerates it.
@@ -77,6 +79,8 @@
 // gm_botchat (optional): the bot's chat personality and its lines
 native botchat_persona(id)
 native botchat_say(id, const section[], other, Float:chance)
+// gm_botfun (optional): danger around the bot (shots, someone hurt, an enemy seen lately)
+native bf_danger(id)
 
 #define PLUGIN  "Human bots"
 #define VERSION "1.0"
@@ -85,7 +89,9 @@ native botchat_say(id, const section[], other, Float:chance)
 #define SCAN_INTERVAL 0.1
 #define STYLE_MIXED   8
 #define OFFSET_ACTIVE_ITEM 373
-#define TASK_KNIFE    1900000             // the show-off knife going back (+ id; sprays use userids)
+#define TASK_KNIFE    1900000             // the show-off knife going back (+ id)
+#define TASK_SPRAY    2100000             // a spray (+ userid)
+#define TASK_RADIO    2200000             // the caller's call (+ userid)
 #define KNIFE_WINDOW  14.0                // knife runs only this early in a round
 
 enum { STYLE_CLASSIC, STYLE_PUB, STYLE_MM, STYLE_VET, STYLE_NEWBIE, STYLE_LOCKED, STYLE_HACKER, STYLE_GOD, STYLE_COUNT }
@@ -133,6 +139,10 @@ new const SPRAY_SPRITE[] = "sprites/lonerstrike/spray.spr"
 #define MAX_SPRAYS 16
 new bool:g_LogoSpray, g_Sprays[MAX_SPRAYS], g_SprayNext   // the logo sprays on walls this round
 new bool:g_Chat                                 // gm_botchat is running
+new bool:g_BotFun                               // gm_botfun is running (bf_danger)
+new bool:g_AfkOn[33]                            // the afk has started (it waits for solid ground)
+new g_RoundKills[33]                            // kills this round (a better kill, a bigger show-off)
+new bool:g_FailHops[33]                         // these hops are a pub player's failed bunnyhop
 new Float:g_JoinedAt[33], Float:g_ReloadAt[33], Float:g_AfkUntil[33], Float:g_NoTargetSince[33], Float:g_NextKnifeTry[33]
 new bool:g_KnifeRun[33], g_Fav[33], g_Rival[33], g_DeathsBy[33][33]
 new g_SprayDecals[8], g_SprayCount, g_RadioCall[33], Float:g_Habit[33] = { 1.0, ... }
@@ -147,6 +157,7 @@ new Float:g_NextRadio[33], Float:g_TeamRadioAt[3]       // radio cooldowns: each
 new Float:g_HoldUntil[33], Float:g_NextHoldTry[33], bool:g_HoldDuck[33], g_HoldHp[33]
 new Float:g_FollowOpenUntil[33], Float:g_NextFollowRoll[33]
 new Float:g_RoundStartAt, bool:g_BombPlanted, bool:g_IdleMode
+new bool:g_MatchMode, bool:g_ClassicMode, g_pBotDm      // match mode, Classic, bot_deathmatch
 enum { PLAY_TEAM, PLAY_SOLO, PLAY_HOLD }                // gm_botplay (gamemodes, botplay.ini)
 enum { KIND_RUSHER, KIND_ROAMER, KIND_LURKER, KIND_CAREFUL }
 
@@ -222,6 +233,7 @@ public plugin_natives()
 	register_native("hb_bot_idle", "n_bot_idle")
 	register_native("hb_bot_afk", "n_bot_afk")
 	register_native("hb_bot_target", "n_bot_target")
+	register_native("hb_bot_level", "n_bot_level")
 	set_native_filter("native_filter")
 }
 
@@ -249,9 +261,53 @@ public n_bot_target(plugin, params)
 	return (id >= 1 && id <= MaxClients) ? g_Target[id] : 0
 }
 
+// hb_bot_level(id): how good a player the bot is, from its style: 0 new, 1 average,
+// 2 good, 3 very good (-1: no style, or not a bot)
+public n_bot_level(plugin, params)
+{
+	new id = get_param(1)
+	if (id < 1 || id > MaxClients || !is_user_bot(id) || style() == STYLE_CLASSIC)
+		return -1
+	new s = bot_style(id)
+	switch (s)
+	{
+		case STYLE_NEWBIE: return 0
+		case STYLE_PUB:
+		{
+			// a pub's own mix: the sloppy ones, the crowd, a few sharp ones
+			if (g_SkillStyle[id] != s)
+				sample_skill(id, s)
+			return g_Skill[id] >= 1.3 ? 0 : g_Skill[id] < 0.8 ? 2 : 1
+		}
+		case STYLE_MM: return 2
+	}
+	return 3
+}
+
 bool:afk_now(id, Float:now)
 {
-	return g_AfkUntil[id] > now && now >= g_AfkAt[id]
+	return g_AfkOn[id] && g_AfkUntil[id] > now
+}
+
+// Danger around it that gm_botfun knows of (gunfire, someone hurt close by, an enemy seen
+// in the last few seconds)
+bool:danger(id)
+{
+	return g_BotFun && bf_danger(id)
+}
+
+// Standing on something solid, not on a ladder or in water, not using anything: somewhere
+// a person would stop for a moment
+bool:steady(id, buttons)
+{
+	return (pev(id, pev_flags) & FL_ONGROUND) && pev(id, pev_movetype) != MOVETYPE_FLY
+		&& pev(id, pev_waterlevel) < 2 && !(buttons & IN_USE)
+}
+
+// In the air or on a ladder: an afk or a held angle ends
+bool:unsteady(id)
+{
+	return !(pev(id, pev_flags) & FL_ONGROUND) || pev(id, pev_movetype) == MOVETYPE_FLY
 }
 
 // A match (gm_scrim): only the guns, nothing silly
@@ -259,6 +315,19 @@ bool:is_match()
 {
 	new phase = get_cvar_num("gm_scrim_phase")
 	return phase > 0 && phase < 5
+}
+
+// Played like a match: guns only, nothing silly (a match, match mode, and the Matchmaking
+// style on Classic)
+bool:match_like()
+{
+	return is_match() || g_MatchMode || (g_ClassicMode && style() == STYLE_MM)
+}
+
+// A deathmatch-type mode (its cfg sets bot_deathmatch 1): no afk or holding angles for fun
+bool:dm_mode()
+{
+	return g_pBotDm && get_pcvar_num(g_pBotDm) != 0
 }
 
 // The gun back out, only if it's the knife in hand (lastinv on anything else could
@@ -271,7 +340,7 @@ ensure_gun(id)
 
 public native_filter(const name[], index, trap)
 {
-	return (!trap && equal(name, "botchat_", 8)) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+	return (!trap && (equal(name, "botchat_", 8) || equal(name, "bf_", 3))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 // The bot's chat personality letter, or 0 (gm_botchat isn't running)
@@ -407,11 +476,16 @@ public plugin_cfg()
 	// through (gm_botnav in hns and deathrun sets their velocity every frame)
 	new mode[32]
 	read_mode(mode, charsmax(mode))
+	// (gm_botfun skips the same modes: keep the two lists alike)
 	static const NO_IDLE[][] = { "hns", "deathrun", "kreedz", "surf", "soccerjam", "zombie", "zp5", "basebuilder" }
 	g_IdleMode = true
 	for (new i = 0; i < sizeof NO_IDLE; i++)
 		if (equal(mode, NO_IDLE[i]))
 			g_IdleMode = false
+	g_MatchMode = bool:equal(mode, "match")
+	g_ClassicMode = bool:equal(mode, "classic")
+	g_pBotDm = get_cvar_pointer("bot_deathmatch")
+	g_BotFun = bool:LibraryExists("gm_botfun", LibType_Library)
 	update_forwards(style(), get_pcvar_num(g_pAim))
 }
 
@@ -531,16 +605,26 @@ public ev_death()
 	if (killer < 1 || killer > MaxClients || killer == victim || !is_user_bot(killer))
 		return
 	g_Tilt[killer] = floatmax(g_Tilt[killer] - 0.08, -0.1)
+	g_RoundKills[killer]++
 	// a show-off moment, now and then (not in a match), and only when it's over: no other
 	// enemy in view and not hurt lately
-	if (!get_pcvar_num(g_pShowoff) || get_cvar_num("gm_scrim_phase") || style() == STYLE_CLASSIC)
+	if (style() == STYLE_CLASSIC || match_like())
 		return
 	new Float:now = get_gametime()
 	if ((g_Target[killer] && g_Target[killer] != victim) || now - g_HurtAt[killer] < 4.0 || g_Show[killer] || g_KnifeOut[killer])
 		return
-	// mostly the jokers and show-offs
 	new p = persona(killer)
+	// a tag on the wall after a kill, for the ones who spray a lot (not in deathmatch: no
+	// time to stand at a wall)
+	if (get_pcvar_num(g_pSprays) && g_IdleMode && !dm_mode() && (g_SprayCount || g_LogoSpray)
+		&& random_float(0.0, 1.0) < (has(p, "9") ? 0.25 : has(p, "jkhXS3") ? 0.06 : 0.015) * pers())
+		set_task(random_float(1.2, 2.5), "task_spray", TASK_SPRAY + get_user_userid(killer))
+	if (!get_pcvar_num(g_pShowoff))
+		return
+	// mostly the jokers and show-offs; a better kill (a headshot, the third this round)
+	// makes it likelier
 	new Float:chance = (has(p, "jkhOmX") ? 0.04 : p ? 0.01 : 0.02) * pers()
+	chance *= floatmin(1.0 + 0.5 * float(g_RoundKills[killer] - 1), 2.5) * (read_data(3) ? 1.6 : 1.0)
 	if (random_float(0.0, 1.0) >= chance)
 		return
 	g_ShowHp[killer] = get_user_health(killer)
@@ -563,7 +647,7 @@ public ev_death()
 				return
 			g_KnifeOut[killer] = true
 			engclient_cmd(killer, "weapon_knife")
-			set_task(random_float(1.5, 3.0), "task_lastinv", TASK_KNIFE + killer)
+			set_task(random_float(1.5, 3.0) + 0.3 * float(min(g_RoundKills[killer], 4)), "task_lastinv", TASK_KNIFE + killer)
 		}
 	}
 }
@@ -647,7 +731,10 @@ reset_bot(id)
 	g_ReloadAt[id] = g_AfkUntil[id] = 0.0
 	g_KnifeRun[id] = g_KnifeOut[id] = false
 	g_HoldUntil[id] = g_AfkAt[id] = 0.0
+	g_AfkOn[id] = false
 	g_HopsLeft[id] = 0
+	g_FailHops[id] = false
+	g_RoundKills[id] = 0
 	g_HurtAt[id] = 0.0
 	remove_task(TASK_KNIFE + id)
 }
@@ -743,7 +830,7 @@ public task_scan()
 		if (g_HoldUntil[id] > 0.0 && (best || get_user_health(id) < g_HoldHp[id] || g_BombPlanted && get_user_team(id) == 2 || now >= g_HoldUntil[id]))
 		{
 			g_HoldUntil[id] = 0.0
-			g_NextHoldTry[id] = now + random_float(8.0, 20.0)
+			g_NextHoldTry[id] = now + random_float(15.0, 40.0)
 		}
 		if (!best)
 		{
@@ -917,30 +1004,49 @@ public fw_cmdstart(id, uc, seed)
 	update_wobble(id, s, dt, now)
 
 	// a fight: an enemy in view, or the bot's own brain shooting at one (maybe outside the
-	// plugin's view cone). Read before anything here changes the buttons
-	new bool:fight = g_Target[id] || (get_uc(uc, UC_Buttons) & IN_ATTACK)
+	// plugin's view cone), or danger close by (gunfire, someone hurt, an enemy seen just
+	// now). Read before anything here changes the buttons
+	new buttons0 = get_uc(uc, UC_Buttons)
+	new bool:fight = g_Target[id] || (buttons0 & IN_ATTACK) || danger(id)
+	// a knife of ours out (running, showing off): the gun comes back
+	if (fight && (g_KnifeRun[id] || g_KnifeOut[id]))
+	{
+		g_KnifeRun[id] = g_KnifeOut[id] = false
+		remove_task(TASK_KNIFE + id)
+		ensure_gun(id)
+	}
 
-	// standing still for a moment (afk): no shooting either. Over at once in a fight or
-	// when it's hurt
+	// standing still for a moment (afk): no shooting either. It starts once it's standing
+	// somewhere solid; over at once in a fight, when it's hurt, or off the ground
 	if (g_AfkUntil[id] > 0.0 && now >= g_AfkAt[id])
 	{
-		if (now < g_AfkUntil[id] && !fight && get_user_health(id) >= g_AfkHp[id] && !user_has_weapon(id, CSW_C4))
+		new bool:on = g_AfkOn[id]
+		new bool:ok = now < g_AfkUntil[id] && !fight && get_user_health(id) >= g_AfkHp[id] && !user_has_weapon(id, CSW_C4)
+		if (ok && (on ? !unsteady(id) : steady(id, buttons0)))
 		{
+			g_AfkOn[id] = true
 			set_uc(uc, UC_Buttons, 0)
 			set_uc(uc, UC_ForwardMove, 0.0)
 			set_uc(uc, UC_SideMove, 0.0)
 			return FMRES_IGNORED
 		}
-		g_AfkUntil[id] = g_AfkAt[id] = 0.0
-		say_line(id, "afk_back", 0, 0.5)
+		// (not started yet and not standing anywhere solid: it waits)
+		if (!ok || on)
+		{
+			g_AfkUntil[id] = g_AfkAt[id] = 0.0
+			g_AfkOn[id] = false
+			if (on)
+				say_line(id, "afk_back", 0, 0.5)
+		}
 	}
-	// holding an angle: no walking, sometimes crouched; it still looks around. A fight ends it
+	// holding an angle: no walking, sometimes crouched; it still looks around. A fight, or
+	// leaving the ground, ends it
 	if (g_HoldUntil[id] > now)
 	{
-		if (fight)
+		if (fight || unsteady(id) || (buttons0 & IN_USE))
 		{
 			g_HoldUntil[id] = 0.0
-			g_NextHoldTry[id] = now + random_float(8.0, 20.0)
+			g_NextHoldTry[id] = now + random_float(15.0, 40.0)
 		}
 		else
 		{
@@ -950,11 +1056,12 @@ public fw_cmdstart(id, uc, seed)
 			set_uc(uc, UC_SideMove, 0.0)
 		}
 	}
-	// a nervous reload, unless someone showed up meanwhile
+	// a nervous reload, unless someone showed up meanwhile (the danger it just fought
+	// through is why it reloads)
 	if (g_ReloadAt[id] > 0.0 && now >= g_ReloadAt[id])
 	{
 		g_ReloadAt[id] = 0.0
-		if (!fight)
+		if (!g_Target[id] && !(buttons0 & IN_ATTACK))
 			set_uc(uc, UC_Buttons, get_uc(uc, UC_Buttons) | IN_RELOAD)
 	}
 	// a show-off moment, only while nothing's going on: a fight or getting hurt ends it
@@ -1036,22 +1143,33 @@ public fw_prethink(id)
 	}
 	new s = bot_style(id)
 	// chance per check (every 0.5s of straight running), and hops per chain
-	new Float:chance, Float:gain, Float:cap, hopsLo, hopsHi
+	new Float:chance, Float:gain, Float:cap, hopsLo, hopsHi, bool:fail
 	switch (s)
 	{
 		case STYLE_LOCKED: { chance = 0.12; gain = 1.06; cap = 320.0; hopsLo = 2; hopsHi = 5; }
 		case STYLE_HACKER: { chance = 0.7;  gain = 1.10; cap = 400.0; hopsLo = 4; hopsHi = 10; }
 		case STYLE_GOD:    { chance = 0.95; gain = 1.15; cap = 500.0; hopsLo = 6; hopsHi = 15; }
+		case STYLE_PUB, STYLE_NEWBIE:
+		{
+			// a pub player who's seen bunnyhopping and can't do it: a hop or three that lose
+			// speed (gm_hb_habits; not in a match, nor where a plugin steers the bots)
+			if (!get_pcvar_num(g_pHabits) || !fail_hopper(id) || match_like() || !g_IdleMode)
+			{
+				g_HopsLeft[id] = 0
+				return
+			}
+			chance = 0.004 * pers(); gain = 0.9; cap = 300.0; hopsLo = 1; hopsHi = 3; fail = true
+		}
 		default:
 		{
 			g_HopsLeft[id] = 0
 			return
 		}
 	}
-	if (!get_pcvar_num(g_pBhop))
+	if (!fail && !get_pcvar_num(g_pBhop))
 		return
-	if (g_HopsLeft[id])
-		set_pev(id, pev_fuser2, 0.0)     // no slowdown after landing
+	if (g_HopsLeft[id] && !g_FailHops[id])
+		set_pev(id, pev_fuser2, 0.0)     // no slowdown after landing (a failed hop keeps it)
 	if (!(pev(id, pev_flags) & FL_ONGROUND))
 		return
 
@@ -1061,10 +1179,12 @@ public fw_prethink(id)
 		if (now < g_NextHopTry[id])
 			return
 		g_NextHopTry[id] = now + 0.5
-		if (random_float(0.0, 1.0) >= chance || !hop_clear(id))
+		if (random_float(0.0, 1.0) >= chance || !hop_clear(id) || (fail && danger(id)))
 			return
 		g_HopsLeft[id] = random_num(hopsLo, hopsHi)
-		say_line(id, "bunnyhop", 0, 0.04)
+		g_FailHops[id] = fail
+		if (!fail)
+			say_line(id, "bunnyhop", 0, 0.04)
 	}
 	else if (!hop_clear(id))
 	{
@@ -1082,6 +1202,14 @@ public fw_prethink(id)
 	set_pev(id, pev_velocity, vel)
 	set_pev(id, pev_gaitsequence, 6)
 	g_HopsLeft[id]--
+}
+
+// Some pub players try to bunnyhop now and then (and fail): kids, zoomers, jokers, the
+// movement nerds most, from the name so a regular keeps it
+bool:fail_hopper(id)
+{
+	new r = (name_hash(id) / 31) % 100, p = persona(id)
+	return r < (has(p, "kzjS") ? 45 : has(p, "hnm") ? 20 : 4)
 }
 
 // running straight, not fighting, nothing in the way and somewhere to land
@@ -1289,7 +1417,10 @@ public ev_round_start()
 	g_BombPlanted = false
 	// last round's afk and held angles are over (in a match too)
 	for (new id = 1; id <= MaxClients; id++)
+	{
 		g_AfkUntil[id] = g_AfkAt[id] = g_HoldUntil[id] = 0.0
+		g_AfkOn[id] = false
+	}
 	if (style() == STYLE_CLASSIC || is_match())
 	{
 		// a match: favourite guns only, nothing silly (no afk, sprays or radio calls here;
@@ -1302,6 +1433,8 @@ public ev_round_start()
 	new Float:now = get_gametime()
 	new bool:called[3]
 	new Float:k = pers()
+	// played like a match (Matchmaking on Classic): no afk or sprays either; deathmatch: no afk
+	new bool:silly = !match_like()
 	for (new id = 1; id <= MaxClients; id++)
 	{
 		if (!is_user_alive(id) || !is_user_bot(id))
@@ -1311,31 +1444,31 @@ public ev_round_start()
 		g_Tilt[id] *= 0.85
 		// a few seconds, starting a moment into the round (not on the dot), never with the
 		// bomb (the round would wait on it), and not where a plugin steers the bots
-		if (get_pcvar_num(g_pAfk) && g_IdleMode && !user_has_weapon(id, CSW_C4) && random_float(0.0, 1.0) < (has(p, "dYLF") ? 0.015 : 0.007) * k)
+		if (get_pcvar_num(g_pAfk) && silly && g_IdleMode && !dm_mode() && !user_has_weapon(id, CSW_C4) && random_float(0.0, 1.0) < (has(p, "dYLF") ? 0.015 : 0.007) * k)
 		{
 			g_AfkAt[id] = now + random_float(0.0, 6.0)
 			g_AfkUntil[id] = g_AfkAt[id] + random_float(3.0, 10.0)
 			g_AfkHp[id] = get_user_health(id)
 		}
-		if (get_pcvar_num(g_pSprays) && (g_SprayCount || g_LogoSpray) && random_float(0.0, 1.0) < (has(p, "9") ? 0.70 : has(p, "jkhXS3") ? 0.25 : 0.10) * k)
-			set_task(random_float(1.0, 8.0), "task_spray", get_user_userid(id))
+		if (get_pcvar_num(g_pSprays) && silly && (g_SprayCount || g_LogoSpray) && random_float(0.0, 1.0) < (has(p, "9") ? 0.70 : has(p, "jkhXS3") ? 0.25 : 0.10) * k)
+			set_task(random_float(1.0, 8.0), "task_spray", TASK_SPRAY + get_user_userid(id))
 		// the team's caller, now and then, in team modes only. Never "follow me", "stick
 		// together" or "regroup": CZ bots answer those by walking over to the caller
 		new team = get_user_team(id)
 		if (get_pcvar_num(g_pRadio) && botplay() == PLAY_TEAM && (team == 1 || team == 2) && !called[team] && has(p, "itr") && random_float(0.0, 1.0) < 0.15 * k)
 		{
 			called[team] = true
-			set_task(random_float(0.3, 2.0), "task_radio", get_user_userid(id))
+			set_task(random_float(0.3, 2.0), "task_radio", TASK_RADIO + get_user_userid(id))
 			g_RadioCall[id] = random(3)
 		}
 	}
 }
 
 
-public task_radio(userid)
+public task_radio(tid)
 {
 	static const CALLS[][] = { "go", "stormfront", "getinpos" }
-	new id = find_player("k", userid)
+	new id = find_player("k", tid - TASK_RADIO)
 	if (id && is_user_alive(id) && is_user_bot(id))
 		engclient_cmd(id, CALLS[g_RadioCall[id] % sizeof CALLS])
 }
@@ -1456,7 +1589,7 @@ knife_run(id, Float:now)
 {
 	g_NextKnifeTry[id] = now + 3.0
 	// only early in the round, when nobody can be close yet (and never in a match)
-	if (g_KnifeRun[id] || now - g_NoTargetSince[id] < 5.0 || now - g_RoundStartAt > KNIFE_WINDOW || is_match() || !holding_gun(id))
+	if (g_KnifeRun[id] || now - g_NoTargetSince[id] < 5.0 || now - g_RoundStartAt > KNIFE_WINDOW || is_match() || !holding_gun(id) || danger(id))
 		return
 	new p = persona(id)
 	if (random_float(0.0, 1.0) < (has(p, "P5") ? 0.30 : has(p, "SJne") ? 0.25 : has(p, "46") ? 0.02 : 0.07) * pers())
@@ -1467,10 +1600,11 @@ knife_run(id, Float:now)
 }
 
 // A logo on the wall in front of it
-public task_spray(userid)
+public task_spray(tid)
 {
-	new id = find_player("k", userid)
-	if (!id || !is_user_alive(id) || !is_user_bot(id) || g_Target[id] || (!g_SprayCount && !g_LogoSpray))
+	new id = find_player("k", tid - TASK_SPRAY)
+	// (not with danger around: gunfire, someone hurt close by, an enemy seen just now)
+	if (!id || !is_user_alive(id) || !is_user_bot(id) || g_Target[id] || danger(id) || (!g_SprayCount && !g_LogoSpray))
 		return
 	new Float:eye[3], Float:view[3], Float:fwd[3], Float:end[3]
 	eye_pos(id, eye)
@@ -1588,7 +1722,7 @@ read_mode(mode[], len)
 
 radio(id, const cmd[], Float:chance, Float:botWait, Float:teamWait)
 {
-	if (!get_pcvar_num(g_pRadio) || get_cvar_num("gm_scrim_phase") || style() == STYLE_CLASSIC)
+	if (!get_pcvar_num(g_pRadio) || is_match() || style() == STYLE_CLASSIC)
 		return
 	new team = get_user_team(id)
 	if (team != 1 && team != 2)
@@ -1632,17 +1766,21 @@ bot_kind(id)
 try_hold(id, Float:now)
 {
 	g_NextHoldTry[id] = now + 2.5
-	if (!get_pcvar_num(g_pHold) || !g_IdleMode || is_match() || now - g_RoundStartAt < 4.0 || g_AfkUntil[id] > now)
+	// (not in deathmatch: nobody holds an angle for fun there)
+	if (!get_pcvar_num(g_pHold) || !g_IdleMode || is_match() || dm_mode() || now - g_RoundStartAt < 4.0 || g_AfkUntil[id] > now)
 		return
 	if (user_has_weapon(id, CSW_C4) || !holding_gun(id) || g_BombPlanted && get_user_team(id) == 2)
+		return
+	// only standing somewhere solid, with nothing going on around it
+	if (!steady(id, pev(id, pev_button)) || danger(id))
 		return
 	new kind = bot_kind(id), play = botplay()
 	new Float:chance
 	switch (kind)
 	{
 		case KIND_ROAMER: chance = 0.05
-		case KIND_LURKER: chance = 0.12
-		case KIND_CAREFUL: chance = 0.22
+		case KIND_LURKER: chance = 0.06
+		case KIND_CAREFUL: chance = 0.12
 		default: return
 	}
 	chance *= play == PLAY_HOLD ? 1.6 : play == PLAY_SOLO ? 1.2 : 1.0

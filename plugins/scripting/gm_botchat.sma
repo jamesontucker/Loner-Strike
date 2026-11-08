@@ -38,6 +38,12 @@
 	No repeats: a line said in the last while isn't picked again (short ones like "gg"
 	or "lol" are fine), and a theme (noscopes, lag, hackers, the map...) rests for a few
 	minutes once someone brings it up.
+	In a match (and with the Matchmaking style on Classic) they talk less, callouts aside.
+	Callouts: a bot just killed may tell its team where the killer was, with what, or that
+	they're low ([callout], [callout_low]); the team-minded ones mostly.
+	gm_botchat_stop 1: with Loner-Strike's game DLL, a bot typing a long line in the round
+	now and then stands still for the last few seconds of it (not in deathmatch, a match, or
+	modes a plugin steers bots through).
 	Other cvars: gm_botchat_humans 1 (bots answer what people say: greetings, gg/gl,
 	"ns", insults, "bots?", lag, "rush b"/"wait", their name. One bot answers, now and
 	then two, and not every time; the one addressed, nearby or involved answers first)
@@ -60,7 +66,8 @@
 	Memory: bots remember the people they've played with on earlier days (data/vault
 	gm_botmemory) and greet them like old faces ([remember], [remember_rival]).
 	Leaving: a bot that leaves mid-map says so ([leave]); one that left may come back
-	later ([rejoin]). Other plugins use the botchat_say / botchat_persona natives.
+	later ([rejoin]). Other plugins use the botchat_say / botchat_say_now / botchat_persona
+	natives.
 
 	Placeholders in lines: {name} the bot, {other} who it's about or answering,
 	{map} the map, {tag} the bot's clan tag. Edit botchat.ini to add your own; gm_botchat_reload re-reads it.
@@ -89,12 +96,17 @@ native people_get(id, const key[])
 native hb_bot_afk(id)
 native hb_bot_target(id)
 
+// gm_botfun (optional): danger around the bot (shots, someone hurt, an enemy seen lately)
+native bf_danger(id)
+
 #define PLUGIN  "Bot chat"
 #define VERSION "1.0"
 #define AUTHOR  "gamemodes"
 
 #define MAX_SECTIONS 160
 #define TASK_SAY     8100
+#define TASK_STOP    8200                 // standing still to type (+ slot)
+#define TASK_RAGEQUIT 2100000             // a rage quit (+ userid)
 #define MAX_PENDING  16
 #define MAX_CHAIN    3
 
@@ -120,7 +132,10 @@ new const WORDS[][] = { "", "", "", "", "", "", "", "", "man", "dude", "mate", "
 new const EMOTES[][] = { "", "", "", "", "", ":)", ":D", "^^", ":P", ";)", ":/", ":(", "=)" }
 new g_Laugh[33], g_Word[33], g_Emote[33], bool:g_TextSpeak[33], g_Typos[33], g_Shouty[33], Float:g_Chatty[33]
 
-new g_pLevel, g_pHumans, g_pDeadChat
+new g_pLevel, g_pHumans, g_pDeadChat, g_pStop
+new bool:g_BotFun                   // gm_botfun is running (bf_danger)
+new bool:g_Fork                     // Loner-Strike's game DLL (ls_bot)
+new bool:g_MatchMode, bool:g_ClassicMode, bool:g_SteeredMode   // from the mode's id
 new g_pPersonality                  // gm_personality (gm_humanbots), 0 if it isn't there
 new g_CfgDir[128]
 new Trie:g_Sections                 // section name -> Array of "letters|text"
@@ -465,6 +480,7 @@ public plugin_init()
 	g_pLevel  = register_cvar("gm_botchat", "3")
 	g_pHumans = register_cvar("gm_botchat_humans", "1")
 	g_pDeadChat = register_cvar("gm_botchat_deadchat", "1")
+	g_pStop = register_cvar("gm_botchat_stop", "1")
 	register_srvcmd("gm_botchat_reload", "cmd_reload")
 	// Loner-Strike's engine (ReHLDS fork) runs this when a person starts and stops talking
 	register_srvcmd("gm_voice", "cmd_voice")
@@ -513,6 +529,7 @@ public plugin_natives()
 	register_library("gm_botchat")
 	register_native("botchat_persona", "n_persona")
 	register_native("botchat_say", "n_say")
+	register_native("botchat_say_now", "n_say_now")
 	// still loads without gm_community, and without the sockets module
 	set_native_filter("native_filter")
 	set_module_filter("module_filter")
@@ -525,7 +542,7 @@ public module_filter(const library[], LibType:type)
 
 public native_filter(const name[], index, trap)
 {
-	if (!trap && (equal(name, "people_", 7) || equal(name, "hb_", 3)))
+	if (!trap && (equal(name, "people_", 7) || equal(name, "hb_", 3) || equal(name, "bf_", 3)))
 		return PLUGIN_HANDLED
 	return (!trap && (equal(name, "gm_chat_blocked") || equal(name, "socket_", 7))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
@@ -563,6 +580,26 @@ public n_say(plugin, params)
 	return 1
 }
 
+// botchat_say_now(id, const section[], other, bool:team): a line from `section`, typed now
+// (no waiting its turn, no chattiness roll); true if it's on its way. For things that
+// happen because it was said (gm_botfun: "drop pls")
+public n_say_now(plugin, params)
+{
+	new id = get_param(1), section[32]
+	if (id < 1 || id > MaxClients || !is_user_connected(id) || !is_user_bot(id) || g_Career || !get_pcvar_num(g_pLevel) || bot_afk(id))
+		return 0
+	get_string(2, section, charsmax(section))
+	strtolower(section)
+	new other = get_param(3), text[128]
+	g_CtxOther = other
+	new bool:ok = pick_line(id, section, text, charsmax(text))
+	g_CtxOther = 0
+	if (!ok)
+		return 0
+	queue(id, other, text, MAX_CHAIN - 1, get_param(4) != 0, -1.0, section, true)
+	return 1
+}
+
 public plugin_cfg()
 {
 	personality_cvar()
@@ -572,6 +609,24 @@ public plugin_cfg()
 	g_Vault = nvault_open("gm_botmemory")
 	g_Left = TrieCreate()
 	g_HumanBots = bool:LibraryExists("gm_humanbots", LibType_Library)
+	g_BotFun = bool:LibraryExists("gm_botfun", LibType_Library)
+	g_Fork = get_cvar_pointer("bot_ls_routes") != 0
+	// the mode: matches talk less; nobody stops to type where a plugin steers the bots
+	new mode[32], path[128]
+	get_datadir(path, charsmax(path))
+	new f = fopen(fmt("%s/gamemodes/current.txt", path), "rt")
+	if (f)
+	{
+		fgets(f, mode, charsmax(mode))
+		trim(mode)
+		fclose(f)
+	}
+	g_MatchMode = bool:equal(mode, "match")
+	g_ClassicMode = bool:equal(mode, "classic")
+	static const STEERED[][] = { "hns", "deathrun", "kreedz", "surf", "soccerjam", "zombie", "zp5", "basebuilder" }
+	for (new i = 0; i < sizeof STEERED; i++)
+		if (equal(mode, STEERED[i]))
+			g_SteeredMode = true
 	// Tour of Duty missions keep their designed bots
 	new pass[64], team[8]
 	get_cvar_string("sv_password", pass, charsmax(pass))
@@ -1032,10 +1087,18 @@ bool:in_combat(id)
 	return get_gametime() - g_FightAt[id] < 5.0
 }
 
-// ... or an enemy in view right now (gm_humanbots knows)
+// ... or an enemy in view right now (gm_humanbots knows), or danger around it: gunfire,
+// someone hurt close by, an enemy seen a moment ago (gm_botfun knows)
 bool:fighting(id)
 {
-	return in_combat(id) || (g_HumanBots && hb_bot_target(id) != 0)
+	return in_combat(id) || (g_HumanBots && hb_bot_target(id) != 0) || (g_BotFun && bf_danger(id))
+}
+
+// Played like a match: a match, match mode, the Matchmaking style on Classic. Chat is sparse
+bool:match_like()
+{
+	new phase = get_cvar_num("gm_scrim_phase")
+	return (phase > 0 && phase < 5) || g_MatchMode || (g_ClassicMode && get_cvar_num("gm_botstyle") == 2)
 }
 
 // Standing there afk (gm_humanbots): nobody at the keyboard to type
@@ -1112,7 +1175,8 @@ want(id, const section[], other, Float:base, Float:delay = -1.0, chain = 0, bool
 	if (!chain && (now < g_NextAny || now < g_NextBot[id] || rate_capped(now)))
 		return
 	// at gm_personality 0 this is 0: bots only answer people and say gg
-	if (random_float(0.0, 1.0) > base * level_mult() * personality() * CHATTY[g_Persona[id]] * g_Chatty[id] * talk_factor(id) * phase_factor(id, section))
+	if (random_float(0.0, 1.0) > base * level_mult() * personality() * CHATTY[g_Persona[id]] * g_Chatty[id] * talk_factor(id) * phase_factor(id, section)
+		* ((match_like() && !equal(section, "callout", 7)) ? 0.4 : 1.0))
 		return
 	new text[128]
 	g_CtxOther = other
@@ -1732,6 +1796,31 @@ queue(id, other, const text[], chain, bool:team, Float:delay, const section[] = 
 	if (!chain)
 		g_NextAny = now + delay + global_gap() * random_float(0.6, 1.4)
 	set_task(delay, "task_say", TASK_SAY + slot)
+	remove_task(TASK_STOP + slot)
+	// now and then it stands still for the last of the typing (a long line, nothing going on)
+	if (g_Fork && get_pcvar_num(g_pStop) && strlen(text) >= 20 && random_num(1, 100) <= 20 && stop_ok(id))
+	{
+		new Float:hold = floatmin(delay, 3.0)
+		set_task(delay - hold, "task_stop_type", TASK_STOP + slot, fmt("%.1f", hold), 8)
+	}
+}
+
+// Standing still to type fits: alive in the round with nothing going on, in a mode where
+// people stand about (not deathmatch, a match, or a mode a plugin steers the bots through)
+bool:stop_ok(id)
+{
+	if (!is_user_alive(id) || g_Freeze || fighting(id) || g_SteeredMode || match_like())
+		return false
+	return !get_cvar_num("bot_deathmatch") && get_cvar_num("gm_botstyle") != 0
+}
+
+public task_stop_type(const secs[], tid)
+{
+	new slot = tid - TASK_STOP
+	new id = g_PendBot[slot]
+	if (!id || !is_user_connected(id) || get_user_userid(id) != g_PendUser[slot] || !stop_ok(id))
+		return
+	server_cmd("ls_bot %d hold %s", id, secs)
 }
 
 public task_say(task)
@@ -1744,8 +1833,9 @@ public task_say(task)
 		g_PendBot[slot] = 0
 		return
 	}
-	// alive and busy: nobody types while afk; in a fight it waits a moment, and if it's still
-	// fighting only says a reply (lines with chain MAX_CHAIN, like leaving, always go)
+	// alive and busy: nobody types while afk; in a fight (or with danger around) it waits a
+	// moment, and if it's still fighting it lets it go, a reply too (lines with chain
+	// MAX_CHAIN, like leaving, always go)
 	if (is_user_alive(id) && chain < MAX_CHAIN)
 	{
 		if (bot_afk(id))
@@ -1761,11 +1851,8 @@ public task_say(task)
 				set_task(random_float(2.0, 4.0), "task_say", task)
 				return
 			}
-			if (!chain)
-			{
-				g_PendBot[slot] = 0
-				return
-			}
+			g_PendBot[slot] = 0
+			return
 		}
 	}
 	g_PendBot[slot] = 0
@@ -2200,6 +2287,9 @@ public ev_death()
 		copy(g_SeenPlace[vt], charsmax(g_SeenPlace[]), g_Place[killer])
 		g_SeenAt[vt] = now
 	}
+	// the dead tell their team where the killer was, with what, how hurt
+	if (is_user_bot(victim) && (vt == 1 || vt == 2) && !get_cvar_num("mp_freeforall"))
+		callout(victim, killer, weapon)
 
 	g_RoundKills[killer]++
 	// rivals: someone who keeps killing a bot this map, and the bot finally getting them
@@ -2273,6 +2363,26 @@ public ev_death()
 	}
 	else if (hs || knife)
 		want(any_bot_on(get_user_team(killer), killer), "nice_shot", killer, 0.1, -1.0, 0, true)
+}
+
+// A callout in team chat from someone just killed ("1 long", "awp mid", "hes low"): mostly
+// the team-minded (callers, tryhards, would-be pros, backseaters, the military ones), the
+// odd one from anyone. The place is the killer's on the radar (maps whose nav file names
+// its places), else the gun, else something plain
+callout(victim, killer, const weapon[])
+{
+	new p = PERSONAS[g_Persona[victim]]
+	new Float:base = contain("itrEbN", fmt("%c", p)) != -1 ? 0.4 : contain("qLdu", fmt("%c", p)) != -1 ? 0.0 : 0.07
+	if (base <= 0.0)
+		return
+	copy(g_CtxPlace, charsmax(g_CtxPlace), g_Place[killer])
+	casual_weapon(weapon, g_CtxWeapon, charsmax(g_CtxWeapon))
+	// (the knife and a grenade aren't worth naming)
+	if (equal(g_CtxWeapon, "knife") || equal(g_CtxWeapon, "nade"))
+		g_CtxWeapon[0] = 0
+	new hp = is_user_alive(killer) ? get_user_health(killer) : 0
+	want(victim, (hp > 0 && hp < 40) ? "callout_low" : "callout", killer, base, random_float(0.8, 2.0), 0, true)
+	g_CtxPlace[0] = g_CtxWeapon[0] = 0
 }
 
 // A gun's name as people say it ("deag" for deagle); "" for ones nobody would name
@@ -2417,13 +2527,14 @@ crash_out(id)
 	if (random_num(1, 100) <= (contain("stOH", fmt("%c", p)) != -1 ? 25 : 5) && pick_line(id, "ragequit", text, charsmax(text)))
 	{
 		queue(id, 0, text, MAX_CHAIN, false, at + 0.8)
-		set_task(at + 2.5, "task_ragequit", get_user_userid(id))
+		set_task(at + 2.5, "task_ragequit", TASK_RAGEQUIT + get_user_userid(id))
 	}
 	g_NextAny = get_gametime() + at + global_gap()
 }
 
-public task_ragequit(userid)
+public task_ragequit(tid)
 {
+	new userid = tid - TASK_RAGEQUIT
 	new id = find_player("k", userid)
 	if (id && is_user_bot(id))
 		server_cmd("kick #%d", userid)
