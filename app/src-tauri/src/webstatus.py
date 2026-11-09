@@ -11,11 +11,13 @@
 # Nothing else is served. No IP addresses are kept or logged, no cookies are set.
 #
 # With Discord webhooks (systemd credentials "discord-live" and "discord-busy"): keeps one
-# message up to date with the server's status, and says when people come on to play.
+# message up to date with the server's status, says when people come on to play, and says when
+# the server stops answering while it's meant to be running (and when it's back).
 import argparse
 import json
 import os
 import socket
+import subprocess
 import threading
 import re
 import time
@@ -275,13 +277,39 @@ def busy_message(info, address):
     return {"content": text, "allowed_mentions": {"parse": []}}
 
 
-class DiscordStatus:
-    """Keeps the live message up to date and says when people come on. Its message id and
-    when it last said so are kept in `state` (JSON), so a restart edits the same message."""
+# how long the game doesn't answer, while its service is meant to be running, before Discord is told
+DOWN_SECS = 180
 
-    def __init__(self, status, live, busy, address, state, busy_at):
+
+def unit_state(unit):
+    """The game service's state ("active", "activating", "inactive", "failed"...), or "" if
+    systemd can't be asked."""
+    if not unit:
+        return ""
+    try:
+        return subprocess.run(["systemctl", "is-active", unit], capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def down_message(name, state):
+    why = "It keeps restarting." if state in ("activating", "deactivating") else "It stopped unexpectedly." if state == "failed" else "It's running but not answering."
+    return {"content": f"**{name}** isn't answering. {why}", "allowed_mentions": {"parse": []}}
+
+
+def up_message(name):
+    return {"content": f"**{name}** is back up.", "allowed_mentions": {"parse": []}}
+
+
+class DiscordStatus:
+    """Keeps the live message up to date, says when people come on, and when the server goes
+    down while it's meant to be running (stopped on purpose: nothing). Its message id and when
+    it last said so are kept in `state` (JSON), so a restart edits the same message."""
+
+    def __init__(self, status, live, busy, address, state, busy_at, unit=""):
         self.status, self.live, self.busy, self.address = status, live, busy, address
-        self.state, self.busy_at = state, busy_at
+        self.state, self.busy_at, self.unit = state, busy_at, unit
+        self.down_since, self.said_down = None, False
         self.saved = {}
         try:
             with open(state) as f:
@@ -318,6 +346,30 @@ class DiscordStatus:
                     self.saved["busy_said"] = now
                     self._save()
             self.was_busy = bool(busy)
+        self.watch_down(info, now)
+
+    def watch_down(self, info, now):
+        """Down for DOWN_SECS while its service is meant to run: said once; back up: said once."""
+        hook = self.busy or self.live
+        if not hook or not self.unit:
+            return
+        if info.get("online"):
+            self.saved["name"] = info.get("name") or self.saved.get("name")
+            if self.said_down and _discord("POST", hook, up_message(self.saved.get("name") or "The server"))[0] in (200, 204):
+                self.said_down = False
+            self.down_since = None
+            return
+        state = unit_state(self.unit)
+        # stopped on purpose (the app, a helper, lsctl), or systemd not answering: not news
+        if state in ("inactive", ""):
+            self.down_since = None
+            return
+        if self.down_since is None:
+            self.down_since = now
+        if not self.said_down and now - self.down_since >= DOWN_SECS:
+            if _discord("POST", hook, down_message(self.saved.get("name") or "The server", state))[0] in (200, 204):
+                self.said_down = True
+                self._save()
 
     def run(self):
         while True:
@@ -446,13 +498,14 @@ def main():
     p.add_argument("--discord-state", default="", help="file that keeps the Discord message id")
     p.add_argument("--busy-at", type=int, default=1, help="people (not bots) on before Discord is told")
     p.add_argument("--fastdl", default="", help="the game folder, to serve players' downloads from")
+    p.add_argument("--unit", default="", help="the game's systemd service, to tell a crash from a stop")
     a = p.parse_args()
     origins = {o.strip().rstrip("/").lower() for o in a.origins.split(",") if o.strip()}
     counter = Counter(a.counter) if a.counter else None
     status = Status(a.game)
     live, busy = _credential("discord-live"), _credential("discord-busy")
     if (live or busy) and a.discord_state:
-        discord = DiscordStatus(status, live, busy, a.address, a.discord_state, max(1, a.busy_at))
+        discord = DiscordStatus(status, live, busy, a.address, a.discord_state, max(1, a.busy_at), a.unit)
         threading.Thread(target=discord.run, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(status, counter, origins, a.fastdl or None))
     server.daemon_threads = True

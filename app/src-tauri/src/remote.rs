@@ -768,17 +768,22 @@ sudo systemctl enable --now unattended-upgrades fail2ban >/dev/null 2>&1 || true
 sudo tee /usr/local/sbin/lonerstrike-logs >/dev/null <<LSLOGS
 #!/bin/sh
 # Loner-Strike: keeps the servers' logs from filling the disk (written by the app)
+# (runs as the servers' own user, never root: the game can write in these folders, so a link
+# put there is never followed into anything that user can't already change)
 for d in $HOME/loner-strike/servers/*/; do
+  [ -L "\${d%/}" ] && continue
   for f in "\$d"qconsole.log "\$d"*/qconsole.log; do
-    [ -f "\$f" ] || continue
-    if [ "\$(stat -c %s "\$f")" -gt 20971520 ]; then tail -c 5242880 "\$f" > "\$f.trim" && cat "\$f.trim" > "\$f"; rm -f "\$f.trim"; fi
+    [ -f "\$f" ] && [ ! -L "\$f" ] || continue
+    if [ "\$(stat -c %s "\$f")" -gt 20971520 ]; then
+      t=\$(mktemp) && tail -c 5242880 "\$f" > "\$t" && cat "\$t" > "\$f"; rm -f "\$t"
+    fi
   done
-  find "\$d" -path '*/logs/*' -name '*.log' -type f -mtime +30 -delete 2>/dev/null
+  find -P "\$d" -xdev -path '*/logs/*' -name '*.log' -type f -mtime +30 -delete 2>/dev/null
 done
 exit 0
 LSLOGS
 sudo chmod 755 /usr/local/sbin/lonerstrike-logs
-printf '[Unit]\nDescription=Loner-Strike log upkeep\n\n[Service]\nType=oneshot\nExecStart=/usr/local/sbin/lonerstrike-logs\nNice=19\n' | sudo tee /etc/systemd/system/lonerstrike-logs.service >/dev/null
+printf '[Unit]\nDescription=Loner-Strike log upkeep\n\n[Service]\nType=oneshot\nUser=%s\nExecStart=/usr/local/sbin/lonerstrike-logs\nNice=19\nNoNewPrivileges=yes\nPrivateTmp=yes\n' "$(whoami)" | sudo tee /etc/systemd/system/lonerstrike-logs.service >/dev/null
 printf '[Unit]\nDescription=Loner-Strike log upkeep, daily\n\n[Timer]\nOnCalendar=daily\nPersistent=true\nRandomizedDelaySec=1h\n\n[Install]\nWantedBy=timers.target\n' | sudo tee /etc/systemd/system/lonerstrike-logs.timer >/dev/null
 sudo systemctl daemon-reload
 sudo systemctl enable --now lonerstrike-logs.timer >/dev/null 2>&1 || true
@@ -1371,7 +1376,8 @@ pub fn logs_now(r: &RemoteInfo, id: &str, game: &str) -> Result<(), String> {
         let sh = setup_stage("security").ok_or("The app's setup script is missing a part.")?;
         exec_stream(r, &format!("{} bash -s", setup_env(id, game)), sh.as_bytes(), |_| {})?;
     }
-    let (code, out) = exec(r, "sudo -n /usr/local/sbin/lonerstrike-logs")?;
+    // (as the servers' own user, the one the app logs in as: never root)
+    let (code, out) = exec(r, "/usr/local/sbin/lonerstrike-logs")?;
     if code != 0 {
         return Err(format!("The log upkeep didn't run ({}).", out.trim()));
     }

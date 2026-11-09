@@ -23,7 +23,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 - A Security and health panel on each Linux server's Overview checks the machine (password logins, RCON, automatic updates, fail2ban, a restart waiting, the game's sandbox, disk space, memory and CPU) in plain words, with a button for what the app can fix. The servers' logs are trimmed once a day so they can't fill the disk. New servers get RCON closed to the internet, automatic security updates and fail2ban from the start, and the hosting guide has a Keeping it safe section.
 - Linux servers are locked down further: the game can't use the login's admin rights or touch SSH keys and login scripts, and shared control runs with only what it needs. Both go in at the server's next start.
 - Shared control: Moderators can no longer kick, slap, slay, ban or mute the owner, Admins or other helpers, and invites ask for a SteamID. The Cloudflare steps are spelled out, with a clear message if the route is in the wrong order.
-- Website status checks shared control, fast downloads and the Discord messages from outside, so you can see they work.
+- Website status checks shared control, fast downloads and the Discord messages from outside, so you can see they work. With Discord set up, it also says when a server stops answering while it's meant to be running, and when it's back (a server stopped on purpose says nothing).
 - Uploads to a Linux server go up in pieces and retry on their own when the connection stalls, instead of hanging.
 
 ### Other

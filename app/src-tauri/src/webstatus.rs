@@ -355,7 +355,7 @@ pub fn status_unit_text(id: &str, listen: u16, game_port: u16, origins: &[String
         }
     }
     if discord.iter().any(|on| *on) {
-        counter.push_str(&format!(" --discord-state {DATA}/{id}/discord.json"));
+        counter.push_str(&format!(" --discord-state {DATA}/{id}/discord.json --unit lonerstrike-{id}"));
         if !address.is_empty() {
             counter.push_str(&format!(" --address {address}"));
         }
@@ -1157,7 +1157,7 @@ mod tests {
         let u = status_unit_text("pub", 8090, 27015, &[], false, [true, false], "play.example.com", None);
         assert!(u.contains("LoadCredential=discord-live:/etc/lonerstrike-status/discord-live-pub.url\nExecStart="));
         assert!(!u.contains("discord-busy"));
-        assert!(u.contains(" --discord-state /var/lib/lonerstrike-status/pub/discord.json --address play.example.com\n"));
+        assert!(u.contains(" --discord-state /var/lib/lonerstrike-status/pub/discord.json --unit lonerstrike-pub --address play.example.com\n"));
         assert!(u.contains("RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"));
         let none = status_unit_text("pub", 8090, 27015, &[], false, [false, false], "play.example.com", None);
         assert!(!none.contains("discord") && !none.contains("--address") && !none.contains("AF_UNIX"));
