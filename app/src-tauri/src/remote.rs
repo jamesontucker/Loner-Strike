@@ -820,8 +820,11 @@ ReadOnlyPaths=$HOME/loner-strike/bin $HOME/loner-strike/control $HOME/.bashrc $H
 /// it's made to read it; the rest start empty (an empty file or folder changes nothing).
 pub const SANDBOX_PATHS: &str = r#"umask 077
 mkdir -p "$HOME/.ssh" "$HOME/loner-strike/bin" "$HOME/loner-strike/control" "$HOME/.config" "$HOME/.local/bin" "$HOME/.local/share/systemd" "$HOME/bin"
-[ -e "$HOME/.bash_profile" ] || printf '%s
-' '[ -f "$HOME/.profile" ] && . "$HOME/.profile"' > "$HOME/.bash_profile"
+# (what bash would have read without it: .bash_login if there is one, else .profile)
+if [ ! -e "$HOME/.bash_profile" ]; then
+  if [ -e "$HOME/.bash_login" ]; then echo '. "$HOME/.bash_login"' > "$HOME/.bash_profile"
+  else echo '[ -f "$HOME/.profile" ] && . "$HOME/.profile"' > "$HOME/.bash_profile"; fi
+fi
 for f in .bashrc .profile .bash_login .bash_logout .bash_aliases .zshrc .zprofile .zshenv; do [ -e "$HOME/$f" ] || : > "$HOME/$f"; done
 umask 022"#;
 

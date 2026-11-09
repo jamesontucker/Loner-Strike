@@ -3092,6 +3092,9 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 Ok(json!({"ok": true}))
             }
             "restart" => {
+                if crate::setup_api::updating(&id).is_some() {
+                    return Err("Its updates are going in. It starts again by itself when they're in.".into());
+                }
                 stop(&id);
                 start(&id).map(|_| json!({"ok": true}))
             }

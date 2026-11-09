@@ -318,12 +318,17 @@ pub fn queued(id: &str) -> bool {
 /// A server's Loner-Strike parts older than this app's (none for one Loner-Strike didn't set
 /// up). The record is read again only when it changed (the list asks every few seconds).
 pub fn server_outdated(res: &Path, e: &crate::servers::Entry) -> Vec<String> {
-    static CACHE: Mutex<Option<std::collections::HashMap<PathBuf, (std::time::SystemTime, Vec<String>)>>> = Mutex::new(None);
+    static CACHE: Mutex<Option<std::collections::HashMap<PathBuf, ((std::time::SystemTime, u64), Vec<String>)>>> = Mutex::new(None);
     if !e.ready {
         return vec![];
     }
     let gdir = e.dir.join(&e.game);
-    let stamp = std::fs::metadata(setup::record::Record::path_in(&gdir)).and_then(|m| m.modified()).ok();
+    // (its time and size; one written in the last two seconds isn't kept, as a coarse clock
+    // could give the next save the same time)
+    let stamp = std::fs::metadata(setup::record::Record::path_in(&gdir))
+        .ok()
+        .and_then(|m| Some((m.modified().ok()?, m.len())))
+        .filter(|(t, _)| t.elapsed().is_ok_and(|e| e > std::time::Duration::from_secs(2)));
     if let Some(t) = stamp {
         if let Some((at, v)) = CACHE.lock().unwrap().as_ref().and_then(|c| c.get(&gdir).cloned()) {
             if at == t {
@@ -339,11 +344,22 @@ pub fn server_outdated(res: &Path, e: &crate::servers::Entry) -> Vec<String> {
     v
 }
 
-/// People (not bots, not HLTV) on a running server now; None when it doesn't answer.
+/// People (not bots, not HLTV) on a running server now; None when it doesn't answer. From
+/// the game's own list (status: a person has a Steam or Valve ID, bots BOT, HLTV HLTV); if
+/// RCON doesn't answer, the server browser's count (players less bots: HLTV counted as a person).
 fn people_on(e: &crate::servers::Entry) -> Option<u32> {
+    if let Some(status) = e.rcon().and_then(|rc| rc.send("status").ok()) {
+        let ids: Vec<&str> = status
+            .lines()
+            .filter(|l| l.trim_start().starts_with('#'))
+            .filter_map(|l| l.rsplit_once('"').and_then(|(_, rest)| rest.split_whitespace().nth(1)))
+            .collect();
+        if status.contains("players :") || !ids.is_empty() {
+            return Some(ids.iter().filter(|id| !matches!(**id, "BOT" | "HLTV")).count() as u32);
+        }
+    }
     let (info, _) = crate::browser::info(&e.join_address())?;
-    let hltv = u8::from(e.hltv.enabled);
-    Some(u32::from(info.players.saturating_sub(info.bots).saturating_sub(hltv)))
+    Some(u32::from(info.players.saturating_sub(info.bots)))
 }
 
 /// Waits for a setup job to end (up to 45 minutes): its error, if it had one.
@@ -386,7 +402,12 @@ fn update_server(res: &Path, e: &crate::servers::Entry, outdated: &[String]) -> 
 /// update is going (asked again later).
 fn run_update(res: PathBuf, id: String) -> bool {
     let Some(e) = crate::servers::get(&id) else { return true };
-    let was_running = crate::servers::view(&e)["state"] == "running";
+    let state = crate::servers::view(&e)["state"].as_str().unwrap_or("").to_string();
+    // (a machine not heard from yet: whether it's running isn't known, so not now)
+    if state != "running" && state != "stopped" && state != "crashed" {
+        return false;
+    }
+    let was_running = state == "running";
     // (claimed under the one lock: never two at once)
     if !updates(|u| {
         if u.now.is_some() {
@@ -433,12 +454,14 @@ fn run_update(res: PathBuf, id: String) -> bool {
                     }
                 }
                 if !stopped {
+                    // (it may still stop a moment later: started again, which does nothing if
+                    // it's still up)
+                    let _ = crate::servers::start(&id);
                     return Err("it didn't stop".into());
                 }
             }
             let put_in = update_server(&res, &e, &outdated);
-            // started again whatever happened, unless someone stopped it meanwhile on purpose
-            // (it was running; the person's Stop marks it so in the servers list)
+            // started again whatever happened, as it was running
             if was_running {
                 updates(|u| {
                     if let Some(n) = u.now.as_mut() {
@@ -469,16 +492,23 @@ fn drain_queue(res: &Path) {
     if setup::current().state == "running" {
         return;
     }
-    let next = updates(|u| if u.now.is_none() && !u.queued.is_empty() { Some(u.queued[0].clone()) } else { None });
-    let Some((id, force)) = next else { return };
-    let Some(e) = crate::servers::get(&id) else {
-        updates(|u| u.queued.retain(|(q, _)| *q != id));
-        return;
-    };
-    if !force && crate::servers::view(&e)["state"] == "running" && people_on(&e) != Some(0) {
+    if updates(|u| u.now.is_some()) {
         return;
     }
-    run_update(res.to_path_buf(), id);
+    // (the first that can go: one with people on that wasn't forced waits, the rest don't)
+    let queue = updates(|u| u.queued.clone());
+    for (id, force) in queue {
+        let Some(e) = crate::servers::get(&id) else {
+            updates(|u| u.queued.retain(|(q, _)| *q != id));
+            continue;
+        };
+        if !force && crate::servers::view(&e)["state"] == "running" && people_on(&e) != Some(0) {
+            continue;
+        }
+        if run_update(res.to_path_buf(), id) {
+            return;
+        }
+    }
 }
 
 /// The servers list's "Update now": at once if nobody's on (or the person said so), queued if
@@ -487,8 +517,19 @@ fn drain_queue(res: &Path) {
 pub fn apply_updates(st: &Shared, id: &str, force: bool) -> Result<Value, String> {
     let res = resources(st)?;
     let e = crate::servers::get(id).ok_or("That server isn't there any more.")?;
-    if updating(id).is_some() || queued(id) {
-        return Ok(json!({"ok": true, "queued": queued(id)}));
+    if updating(id).is_some() {
+        return Ok(json!({"ok": true}));
+    }
+    // (asked again with the go-ahead: the queued one gets it)
+    if queued(id) {
+        if force {
+            updates(|u| u.queued.iter_mut().filter(|(q, _)| q == id).for_each(|(_, f)| *f = true));
+        }
+        return Ok(json!({"ok": true, "queued": true}));
+    }
+    let state = crate::servers::view(&e)["state"].as_str().unwrap_or("").to_string();
+    if state != "running" && state != "stopped" && state != "crashed" {
+        return Err(format!("{} isn't ready for that yet. Try again in a moment.", e.name));
     }
     if server_outdated(&res, &e).is_empty() {
         return Err("It's up to date.".into());

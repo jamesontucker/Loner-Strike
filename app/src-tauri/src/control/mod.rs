@@ -1141,7 +1141,7 @@ fn game_admin(m: &Member, role: Option<Role>) {
         return;
     }
     // removing one of two people with the same SteamID on that server: the other keeps it
-    if role.is_none() && load().members.iter().any(|o| o.id != m.id && o.server == m.server && o.steam.eq_ignore_ascii_case(&m.steam)) {
+    if role.is_none() && load().members.iter().any(|o| o.id != m.id && o.server == m.server && common::same_steamid(&o.steam, &m.steam)) {
         return;
     }
     let Some(g) = crate::servers::game_for(&m.server, || None) else { return };
