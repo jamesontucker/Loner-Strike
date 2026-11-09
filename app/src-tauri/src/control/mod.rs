@@ -342,7 +342,7 @@ pub fn shutdown() {
 /// server, or its owner, Admins or Moderators in the game (can't tell: as if so).
 fn outranks_moderator(server: &str, steamid: &str) -> bool {
     let Ok(s) = read_store() else { return true };
-    if s.members.iter().any(|m| m.server == server && !m.steam.is_empty() && m.steam.eq_ignore_ascii_case(steamid)) {
+    if s.members.iter().any(|m| m.server == server && !m.steam.is_empty() && common::same_steamid(&m.steam, steamid)) {
         return true;
     }
     let Some(g) = crate::servers::game_for(server, || None) else { return true };
@@ -628,6 +628,10 @@ pub async fn guard(State(st): State<Shared>, req: Request, next: Next) -> Respon
         let verdict = tokio::task::spawn_blocking(move || -> Result<(), &'static str> {
             let status = crate::servers::get(&server).and_then(|e| e.rcon()).and_then(|rc| rc.send("status").ok()).ok_or("The server didn't answer. Check that it's running.")?;
             let who = common::steamid_for_uid(&status, uid).ok_or("That player isn't in the game any more.")?;
+            // (an ID still pending, or a LAN one, can't be told apart from staff: not kicked)
+            if !crate::admins::valid_steamid(&who.to_uppercase()) && who != "BOT" && who != "HLTV" {
+                return Err("Moderators can't kick a player whose SteamID isn't known yet. Try again in a moment, or ask an Admin.");
+            }
             if outranks_moderator(&server, &who.to_uppercase()) {
                 return Err(common::OUTRANKED);
             }

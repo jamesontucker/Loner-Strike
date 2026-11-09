@@ -143,8 +143,10 @@ export type ServerInfo = {
   notify_helpers?: boolean;
   /** Loner-Strike's parts older than this app's ("core" plugins, "foundation" bot brain, mods) */
   outdated?: string[];
-  /** those updates going in now */
+  /** those updates going in now; started again after (it was running); waiting its turn */
   updating?: boolean;
+  restarts_after?: boolean;
+  update_queued?: boolean;
   /** they go in by themselves once nobody is playing */
   auto_update?: boolean;
   /** on the Loner-Strike server list (Find servers) */

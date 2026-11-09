@@ -221,7 +221,7 @@ fn civil(days: i64) -> String {
 /// Whether someone has one of these roles on this game or server (and it hasn't run out).
 pub fn has_role(g: &Game, steamid: &str, roles: &[Role]) -> bool {
     let today = today();
-    load(&g.data).people.iter().any(|p| p.id.eq_ignore_ascii_case(steamid) && roles.contains(&p.role) && !expired(p, &today))
+    load(&g.data).people.iter().any(|p| crate::control::common::same_steamid(&p.id, steamid) && roles.contains(&p.role) && !expired(p, &today))
 }
 
 pub fn expired(p: &Person, today: &str) -> bool {

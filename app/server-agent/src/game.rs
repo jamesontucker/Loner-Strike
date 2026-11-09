@@ -264,7 +264,7 @@ pub fn mode_maps(game_dir: &Path, mode: &str) -> Vec<String> {
 /// or Moderators in the game (admins.json, as the owner's app keeps it), or `helpers` (the
 /// SteamIDs of people helping run it). Can't tell: as if so.
 pub fn outranks_moderator(game_dir: &Path, steamid: &str, helpers: &[String]) -> bool {
-    if helpers.iter().any(|h| !h.is_empty() && h.eq_ignore_ascii_case(steamid)) {
+    if helpers.iter().any(|h| !h.is_empty() && common::same_steamid(h, steamid)) {
         return true;
     }
     let file = data_dir(game_dir).join("admins.json");
@@ -279,7 +279,7 @@ pub fn outranks_moderator(game_dir: &Path, steamid: &str, helpers: &[String]) ->
     let today = today();
     a["people"].as_array().into_iter().flatten().any(|p| {
         let expired = p["expires"].as_str().is_some_and(|e| e < today.as_str());
-        p["id"].as_str().is_some_and(|id| id.eq_ignore_ascii_case(steamid)) && matches!(p["role"].as_str(), Some("owner" | "admin" | "moderator")) && !expired
+        p["id"].as_str().is_some_and(|id| common::same_steamid(id, steamid)) && matches!(p["role"].as_str(), Some("owner" | "admin" | "moderator")) && !expired
     })
 }
 

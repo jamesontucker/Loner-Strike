@@ -1968,7 +1968,7 @@ static ASKING: Mutex<Option<std::collections::HashSet<String>>> = Mutex::new(Non
 static UNREACHABLE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
 /// Why the machine a server is on didn't answer last time, if it didn't.
-fn unreachable(id: &str) -> Option<String> {
+pub(crate) fn unreachable(id: &str) -> Option<String> {
     UNREACHABLE.lock().unwrap().as_ref().and_then(|m| m.get(id).cloned())
 }
 
@@ -2679,7 +2679,11 @@ async fn api_list(State(st): State<Shared>, on: Option<axum::Extension<crate::se
                 // Loner-Strike's parts older than this app's, and whether they're being put in
                 let outdated = res.as_ref().map(|r| crate::setup_api::server_outdated(r, e)).unwrap_or_default();
                 v["outdated"] = json!(outdated);
-                v["updating"] = json!(crate::setup_api::updating(&e.id));
+                let updating = crate::setup_api::updating(&e.id);
+                v["updating"] = json!(updating.is_some());
+                // (started again when its updates are in: it was running)
+                v["restarts_after"] = json!(updating == Some(true));
+                v["update_queued"] = json!(crate::setup_api::queued(&e.id));
                 v
             })
             .collect();
@@ -3068,6 +3072,10 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
         match action.as_str() {
             "start" => {
+                // (its files are being changed: it's started again when they're in if it was running)
+                if crate::setup_api::updating(&id).is_some() {
+                    return Err("Its updates are going in. It starts again by itself if it was running; otherwise start it when they're in.".into());
+                }
                 start(&id)?;
                 // started in a mode picked beforehand: switched to it once it's up
                 if let Some(mode) = body["mode"].as_str().filter(|m| !m.is_empty() && m.len() <= 31 && m.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')) {

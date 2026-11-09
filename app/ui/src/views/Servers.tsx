@@ -114,8 +114,9 @@ function StateTag({ s, inline }: { s: ServerInfo; inline?: boolean }) {
 /** Loner-Strike's updates for a server: going in now, or waiting (what, and when they'll go in). */
 function UpdateNote({ s, busy, onUpdate }: { s: ServerInfo; busy: boolean; onUpdate: () => void }) {
   if (s.updating) {
-    return <p className="muted small-note" role="status"><span className="spinner" aria-hidden="true" />Putting in Loner-Strike's updates{s.state === "running" ? "" : ". It starts again when they're in"}…</p>;
+    return <p className="muted small-note" role="status"><span className="spinner" aria-hidden="true" />Putting in Loner-Strike's updates{s.restarts_after ? ". It starts again when they're in" : ""}…</p>;
   }
+  if (s.update_queued) return <p className="muted small-note" role="status">Updates waiting their turn: another server's are going in now.</p>;
   const parts = s.outdated ?? [];
   if (!parts.length || s.state === "setting-up" || s.state === "failed") return null;
   const names = parts.map((p) => (p === "core" ? "plugins" : p === "foundation" ? "bot brain" : "mods"));
@@ -207,17 +208,17 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   }, `${ACTION_LABEL[action] ?? "Working on"} ${s.name}…`);
   // Loner-Strike's updates for a server: now, or (people playing) after asking
   const updateNow = (s: ServerInfo) => once(`${s.id}:apply-updates`, async () => {
-    let r = await postJson<Reply & { people?: number; queued?: boolean }>(`/api/servers/${s.id}/apply-updates`, {}).catch(() => ({ error: "Couldn't reach the app." }) as Reply & { people?: number; queued?: boolean });
-    if (r.people) {
-      const who = r.people === 1 ? "1 person is" : `${r.people} people are`;
+    let r = await postJson<Reply & { people?: number | null; queued?: boolean }>(`/api/servers/${s.id}/apply-updates`, {}).catch(() => ({ error: "Couldn't reach the app." }) as Reply & { people?: number | null; queued?: boolean });
+    if (r.ok === false) {
+      const who = r.people == null ? "Loner-Strike can't tell who's" : r.people === 1 ? "1 person is" : `${r.people} people are`;
       if (!(await ask(`${who} playing on ${s.name}. Update it now anyway? It stops and starts again, so they're disconnected for a few minutes. Otherwise it updates by itself once they've left.`, { ok: "Update now", danger: true }))) return;
-      r = await postJson<Reply & { people?: number; queued?: boolean }>(`/api/servers/${s.id}/apply-updates`, { force: true }).catch(() => ({ error: "Couldn't reach the app." }) as Reply & { people?: number; queued?: boolean });
+      r = await postJson<Reply & { people?: number | null; queued?: boolean }>(`/api/servers/${s.id}/apply-updates`, { force: true }).catch(() => ({ error: "Couldn't reach the app." }) as Reply & { people?: number | null; queued?: boolean });
     }
     if (r.error) return toast(r.error, true);
     toast(r.queued ? `${s.name} updates after the one going now` : `Updating ${s.name}`);
     onChanged();
   }, `Updating ${s.name}…`);
-  const waiting = (list?.servers ?? []).filter((s) => !s.shared && s.outdated?.length && !s.updating);
+  const waiting = (list?.servers ?? []).filter((s) => !s.shared && s.outdated?.length && !s.updating && !s.update_queued);
   const updateAll = () => once("servers:apply-updates", async () => {
     for (const s of waiting) await updateNow(s);
   }, "Updating servers…");

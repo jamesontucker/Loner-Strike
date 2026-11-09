@@ -24,6 +24,16 @@ pub fn steamid_for_uid(status: &str, uid: u32) -> Option<String> {
     })
 }
 
+/// Whether two SteamIDs are the same account. The game ignores the first number (the
+/// "universe": STEAM_0 and STEAM_1 are one account), so only Y:Z counts.
+pub fn same_steamid(a: &str, b: &str) -> bool {
+    let tail = |s: &str| s.trim().to_ascii_uppercase().strip_prefix("STEAM_").and_then(|r| r.split_once(':')).map(|(_, yz)| yz.to_string());
+    match (tail(a), tail(b)) {
+        (Some(x), Some(y)) => x == y,
+        _ => a.trim().eq_ignore_ascii_case(b.trim()),
+    }
+}
+
 /// A command argument the panel may send: plain words only (the UI checks the same rule).
 pub fn safe_arg(a: &str) -> bool {
     !a.is_empty() && a.len() <= 64 && a.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
@@ -117,6 +127,12 @@ pub fn hide_passwords(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn one_account_any_universe() {
+        assert!(same_steamid("STEAM_0:1:200", "STEAM_1:1:200") && same_steamid("steam_0:0:5", "STEAM_0:0:5"));
+        assert!(!same_steamid("STEAM_0:1:200", "STEAM_0:0:200") && !same_steamid("STEAM_0:1:200", "STEAM_0:1:2000"));
+    }
 
     #[test]
     fn userids_to_steamids() {

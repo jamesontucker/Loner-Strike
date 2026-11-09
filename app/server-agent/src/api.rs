@@ -100,9 +100,20 @@ fn too_many(t: &Mutex<Tries>, ip: Option<IpAddr>, max: u32, all_max: Option<u32>
     t.all.0 += 1;
     let over_all = all_max.is_some_and(|m| t.all.0 > m);
     let Some(ip) = ip else { return over_all };
-    // (a flood from very many addresses: new ones wait, the table doesn't grow without end)
+    // (an IPv6 address counts as its /64: one machine has a whole block of them)
+    let ip = match ip {
+        IpAddr::V6(v6) => {
+            let s = v6.segments();
+            IpAddr::V6(std::net::Ipv6Addr::new(s[0], s[1], s[2], s[3], 0, 0, 0, 0))
+        }
+        v4 => v4,
+    };
+    // (a flood from very many addresses: the oldest are forgotten, the table doesn't grow
+    // without end, and a newcomer is never turned away for it)
     if t.by_ip.len() >= MAX_TRACKED && !t.by_ip.contains_key(&ip) {
-        return true;
+        if let Some(oldest) = t.by_ip.iter().min_by_key(|(_, (_, start))| *start).map(|(k, _)| *k) {
+            t.by_ip.remove(&oldest);
+        }
     }
     let e = t.by_ip.entry(ip).or_insert((0, now));
     e.0 += 1;
@@ -113,6 +124,13 @@ fn too_many(t: &Mutex<Tries>, ip: Option<IpAddr>, max: u32, all_max: Option<u32>
 fn locked_out(t: &Mutex<Tries>, ip: Option<IpAddr>) -> bool {
     let now = store::now();
     let t = t.lock().unwrap_or_else(|e| e.into_inner());
+    let ip = ip.map(|ip| match ip {
+        IpAddr::V6(v6) => {
+            let s = v6.segments();
+            IpAddr::V6(std::net::Ipv6Addr::new(s[0], s[1], s[2], s[3], 0, 0, 0, 0))
+        }
+        v4 => v4,
+    });
     ip.and_then(|ip| t.by_ip.get(&ip)).is_some_and(|(n, start)| *n >= BAD_KEYS_MAX && now <= start + TRIES_WINDOW)
 }
 
@@ -372,6 +390,10 @@ fn act(ctx: &Ctx, config: &Config, files: &Files, io: &dyn GameIo, m: &Member, m
             if m.role == Role::Moderator {
                 let Ok(status) = io.rcon("status") else { return err("The server didn't answer. Check that it's running.") };
                 let Some(who) = common::steamid_for_uid(&status, uid as u32) else { return err("That player isn't in the game any more.") };
+                // (an ID still pending, or a LAN one, can't be told apart from staff: not kicked)
+                if !common::valid_steamid(&who.to_uppercase()) && who != "BOT" && who != "HLTV" {
+                    return err("Moderators can't kick a player whose SteamID isn't known yet. Try again in a moment, or ask an Admin.");
+                }
                 if outranks(files, io, &who.to_uppercase()) {
                     return err(common::OUTRANKED);
                 }
@@ -627,6 +649,8 @@ fn read_head(s: &mut std::net::TcpStream, started: Instant) -> Result<Head, u16>
         if started.elapsed() > IO_TIMEOUT {
             return Err(408);
         }
+        let left = IO_TIMEOUT.saturating_sub(started.elapsed()).max(Duration::from_millis(50));
+        let _ = s.set_read_timeout(Some(left));
         let n = s.read(&mut chunk).map_err(|_| 408u16)?;
         if n == 0 {
             return Err(400);
@@ -662,7 +686,8 @@ fn read_body(s: &mut std::net::TcpStream, head: &mut Head, started: Instant) -> 
         None => 0,
         Some(v) => v.trim().parse::<usize>().map_err(|_| 400u16)?,
     };
-    if len > MAX_BODY {
+    let redeem = clean_path(&head.path).as_deref() == Some("/api/control/redeem");
+    if len > MAX_BODY || (redeem && len > 2048) {
         return Err(413);
     }
     let mut body = std::mem::take(&mut head.rest);
@@ -672,6 +697,9 @@ fn read_body(s: &mut std::net::TcpStream, head: &mut Head, started: Instant) -> 
         if started.elapsed() > IO_TIMEOUT {
             return Err(408);
         }
+        // (each read limited to what's left of the time, so a trickle can't stretch it)
+        let left = IO_TIMEOUT.saturating_sub(started.elapsed()).max(Duration::from_millis(50));
+        let _ = s.set_read_timeout(Some(left));
         let n = s.read(&mut chunk[..(len - body.len()).min(4096)]).map_err(|_| 408u16)?;
         if n == 0 {
             return Err(400);
@@ -685,7 +713,9 @@ fn read_body(s: &mut std::net::TcpStream, head: &mut Head, started: Instant) -> 
 /// that works (a body from anyone else is never waited for).
 fn body_wanted(ctx: &Ctx, head: &Head) -> bool {
     match clean_path(&head.path).as_deref() {
-        Some("/api/control/redeem") | Some("/api/control/ping") => true,
+        // (an invite is a small body; a ping has none)
+        Some("/api/control/redeem") => head.method.eq_ignore_ascii_case("POST"),
+        Some("/api/control/ping") => false,
         Some(_) => {
             let key = head.headers.get("authorization").and_then(|v| v.strip_prefix("Bearer ")).unwrap_or("").trim();
             matches!(Files::new(&ctx.paths).member_for(key), Ok(Some(_)))

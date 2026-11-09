@@ -101,6 +101,11 @@ pub fn component_ids_cached(game_dir: &Path) -> Vec<String> {
 }
 
 impl Record {
+    /// Where a game folder's record is kept
+    pub fn path_in(game_dir: &Path) -> PathBuf {
+        game_dir.join(RECORD_DIR).join("record.json")
+    }
+
     pub fn open(game_dir: &Path) -> Record {
         let dir = game_dir.join(RECORD_DIR);
         let path = dir.join("record.json");
