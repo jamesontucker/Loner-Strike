@@ -54,7 +54,7 @@ export function SmarterChat() {
       note={
         <>
           <span className="tag">Experimental</span> Bots answer you in their own words.
-          <Info text="When you talk to the bots, a small model on this computer writes their replies, and the short back-and-forths between them. Kills, round wins and other game events still use the written lines. Nothing leaves your computer. If the model is slow or writes something odd, the bot uses a written line instead." />
+          <Info text="When you talk to the bots, a small model on this computer writes their replies, and the short back-and-forths between them. Kills, round wins and other game events still use the written lines. When you ask a bot to do something, the model can also pick an action from a short list, checked the same way as a typed request. Nothing leaves your computer. If the model is slow or writes something odd, the bot uses a written line instead." />
         </>
       }
     />
