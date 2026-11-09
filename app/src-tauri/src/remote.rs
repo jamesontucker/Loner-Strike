@@ -721,10 +721,14 @@ if ! iptables -C INPUT -p udp --dport 27015:27020 -j ACCEPT 2>/dev/null; then
   if [ -n "$pos" ]; then iptables -I INPUT "$pos" -p udp --dport 27015:27020 -j ACCEPT
   else iptables -A INPUT -p udp --dport 27015:27020 -j ACCEPT; fi
 fi
+# RCON is an out-of-band packet (it starts ffffffff); the game skips spaces before the word, so
+# any such packet with "rcon" anywhere in it is dropped (queries, connects and the game itself
+# never have it). The first version matched one place only, and padding got past it
 for p in '|ffffffff|rcon' '|ffffffff|challenge rcon'; do
-  iptables -C INPUT ! -i lo -p udp --dport 27015:27020 -m string --algo bm --from 28 --to 48 --hex-string "$p" -j DROP 2>/dev/null \
-    || iptables -I INPUT ! -i lo -p udp --dport 27015:27020 -m string --algo bm --from 28 --to 48 --hex-string "$p" -j DROP
+  iptables -D INPUT ! -i lo -p udp --dport 27015:27020 -m string --algo bm --from 28 --to 48 --hex-string "$p" -j DROP 2>/dev/null || true
 done
+R='! -i lo -p udp --dport 27015:27020 -m u32 --u32 0>>22&0x3C@8=0xFFFFFFFF -m string --algo bm --string rcon -j DROP'
+iptables -C INPUT $R 2>/dev/null || iptables -I INPUT $R
 exit 0
 LSFW
 sudo chmod 755 /usr/local/sbin/lonerstrike-firewall
@@ -1319,7 +1323,7 @@ sudo -n sshd -T 2>/dev/null | awk '$1=="passwordauthentication"||$1=="kbdinterac
 grep -qs 'Unattended-Upgrade "1"' /etc/apt/apt.conf.d/20auto-upgrades && echo "updates=yes" || echo "updates=no"
 echo "fail2ban=$(systemctl is-active fail2ban 2>/dev/null)"
 [ -e /var/run/reboot-required ] && echo "reboot=yes" || echo "reboot=no"
-echo "rcon_rules=$(sudo -n iptables -S INPUT 2>/dev/null | grep -c -- '--hex-string')"
+echo "rcon_rules=$(sudo -n iptables -S INPUT 2>/dev/null | grep -c -- '--string "rcon"')"
 echo "firewall_boot=$(systemctl is-enabled lonerstrike-firewall 2>/dev/null)"
 echo "sandbox=$(grep -c -xF '# {rev}' /etc/systemd/system/{unit}.service 2>/dev/null)"
 "#,

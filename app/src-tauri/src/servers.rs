@@ -3234,7 +3234,7 @@ fn security_items(e: &Entry) -> Result<Value, String> {
             "Password logins are on, so anyone on the internet can keep guessing. Loner-Strike uses your key, so turning passwords off is safe.", Some("passwords")),
         item("user", "Not running as root", get("uid") != "0",
             "The server runs as root, the most powerful account. It still works, but a bug in the game could reach the whole machine. A separate user is safer (Loner-Strike will do this for you in a later version).", None),
-        item("rcon", "RCON closed to the internet", get("rcon_rules").parse::<u32>().unwrap_or(0) >= 2 && get("firewall_boot") == "enabled",
+        item("rcon", "RCON closed to the internet", get("rcon_rules").parse::<u32>().unwrap_or(0) >= 1 && get("firewall_boot") == "enabled",
             "Anyone can try the console password from the internet. Only this machine needs it (Loner-Strike reaches it over SSH).", Some("firewall")),
         item("updates", "Automatic security updates", get("updates") == "yes",
             "Security fixes for the machine aren't installed by themselves.", Some("security")),
