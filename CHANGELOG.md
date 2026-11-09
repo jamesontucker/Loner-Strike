@@ -10,6 +10,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 - Freeze time and leaving spawn feel alive: looking about, flicking guns, hops and crouches, and a few always late out of the shop.
 - Team play: trades and flanks, CTs holding the sites, Ts picking a site together and switching after early losses, the bomb carrier going in with a teammate, guards spreading out round a planted bomb, defuses heard and kit holders let through.
 - They react like people: flashed bots panic their own way, AWPers step aside after a shot, a flanker who shoots them gets noticed, and being outnumbered makes the careful ones back off.
+- Ts take a site together: they gather just out of sight on their ways in, then go in at once, instead of walking into the CTs one at a time.
 - Retakes go for the bomb: CTs who can still make it run there, and learn the site from a teammate on it or one who just went down there. Ones who can't make it save.
 - They hold an angle for a few seconds instead of glancing round every second, and aim around the chest like most players, so headshots come at a pub's rate rather than every kill or none.
 - Each bot is its own person: a personality, mood and skill that show in how it plays and talks, regulars who remember you between sessions, tilt from a bad run, and callouts like "rush b" before they go down.
