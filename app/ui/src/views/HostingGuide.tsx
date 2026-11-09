@@ -155,9 +155,41 @@ export function HostingGuide() {
         </p>
         <p className="muted measure">
           Over SSH, <code>lsctl list</code>, <code>lsctl status</code>, <code>lsctl start</code>, <code>lsctl stop</code>, <code>lsctl restart</code> and{" "}
-          <code>lsctl logs</code> manage it. Keep the machine updated with <code>sudo apt update &amp;&amp; sudo apt upgrade</code>; the server comes back by itself after
-          a reboot.
+          <code>lsctl logs</code> manage it. The machine installs its own security updates; for the rest, <code>sudo apt update &amp;&amp; sudo apt upgrade</code>. The
+          server comes back by itself after a reboot.
         </p>
+      </div>
+
+      <div className="panel">
+        <h4>Keeping it safe</h4>
+        <p className="muted measure">
+          Loner-Strike does the machine's side for you: the game runs in a sandbox, RCON (the console) only answers from the machine itself, security updates install
+          themselves, and fail2ban slows down the bots that guess SSH logins all day. The Security panel on the server's Overview checks all of it and fixes what it can.
+          A few things only you can do:
+        </p>
+        <ul className="muted measure">
+          <li>
+            <b>Your provider's firewall.</b> Allow only UDP 27015-27020 (the game) and TCP 22 (SSH). If your home internet address doesn't change, allow SSH from that
+            address only. Nothing else needs to be open: with a Cloudflare Tunnel, not even the website ports.
+          </li>
+          <li>
+            <b>Your SSH key.</b> The file without .pub is the key to the machine. Never share it or paste it anywhere. If it might have leaked, remove its line from{" "}
+            <code>~/.ssh/authorized_keys</code> on the machine and make a new one.
+          </li>
+          <li>
+            <b>Password logins.</b> Keep them off (the Security panel can do it). Loner-Strike always uses your key.
+          </li>
+          <li>
+            <b>Helpers.</b> Only invite people you trust, with their SteamID so Moderators can't ban or mute them. After removing someone, change the join password.
+          </li>
+          <li>
+            <b>Website status.</b> A Cloudflare Tunnel opens no ports on the machine, so it's the safer choice if you use Cloudflare. Caddy works without Cloudflare but
+            opens TCP 80 and 443.
+          </li>
+          <li>
+            <b>Backups.</b> Back up servers (on the servers list) before big changes, and now and then.
+          </li>
+        </ul>
       </div>
 
       <div className="panel" id="hosting-trouble">

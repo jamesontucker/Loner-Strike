@@ -723,6 +723,7 @@ export function ServerPage(props: {
               {s.shared && s.maxplayers === undefined ? <Skeleton rows={3} /> : <ServerDetails key={s.shared ? "loaded" : s.id} server={s} maps={maps} onChanged={onChanged} />}
               {!role && ON_THIS_COMPUTER && <CopyMods server={s} others={others} onStarted={(title) => setJob({ title, done: `Mods copied to ${s.name}` })} />}
               {!role && ON_THIS_COMPUTER && <BackupPanel server={s} others={others} onChanged={onChanged} />}
+              {!role && ON_THIS_COMPUTER && s.host && <SecurityPanel server={s} />}
               {!role && ON_THIS_COMPUTER && <Maintenance server={s} installed={app?.game?.installed ?? []} act={act} rebuild={rebuild} wipeRebuild={wipeRebuild} busy={busy} />}
             </>
           )}
@@ -1082,6 +1083,81 @@ function BackupPanel({ server, others, onChanged }: { server: ServerInfo; others
 }
 
 /** Updating, rebuilding and deleting a server (on the computer running Loner-Strike). */
+type SecurityItem = { id: string; label: string; ok: boolean; why: string; fix: string | null };
+
+/** A Linux server's security check: what's right on the machine, and a button for what the app
+ * can put right (asking first where it matters). Read when the Overview opens. */
+function SecurityPanel({ server }: { server: ServerInfo }) {
+  const toast = useToast();
+  const ask = useConfirm();
+  const { run, busy } = useActions();
+  const [items, setItems] = useState<SecurityItem[] | null>(null);
+  const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
+  const check = async () => {
+    setChecking(true);
+    try {
+      const r = await getJson<{ items?: SecurityItem[]; error?: string }>(`/api/servers/${server.id}/security`);
+      if (r.error) setError(r.error);
+      else {
+        setItems(r.items ?? []);
+        setError("");
+      }
+    } catch {
+      setError("Couldn't reach the app.");
+    } finally {
+      setChecking(false);
+    }
+  };
+  useEffect(() => {
+    void check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [server.id]);
+  const fix = (item: SecurityItem) => run(`${server.id}:security:${item.id}`, async () => {
+    if (item.fix === "reboot" && !(await ask(`Restart the machine ${server.host} now? The server goes down for a minute or two and starts again by itself. Do it when nobody's playing.`, { ok: "Restart the machine", danger: true }))) return;
+    if (item.fix === "passwords" && !(await ask("Turn off SSH password logins? Loner-Strike and anyone with your key still get in. If you ever log in to this machine with a password yourself, set up a key first.", { ok: "Keys only" }))) return;
+    type FixReply = { items?: SecurityItem[]; rebooting?: boolean; error?: string };
+    const r = await postJson<FixReply>(`/api/servers/${server.id}/security/fix`, { item: item.fix }).catch((): FixReply => ({ error: "Couldn't reach the app." }));
+    if (r.error) return toast(r.error, true);
+    if (r.rebooting) {
+      toast(`${server.host} is restarting. Check again in a couple of minutes.`);
+      setItems(null);
+      return;
+    }
+    if (r.items) setItems(r.items);
+    toast("Done");
+  }, item.fix === "reboot" ? "Restarting the machine…" : "Fixing it on the machine…");
+  const bad = (items ?? []).filter((i) => !i.ok);
+  return (
+    <div className="panel">
+      <div className="row between">
+        <h3>Security</h3>
+        <BusyButton className="btn small" busy={checking} label="Check again" busyLabel="Checking…" onClick={() => void check()} />
+      </div>
+      {error && <p className="err-text small-note">{error}</p>}
+      {!items && !error && <p className="muted small-note"><span className="spinner" aria-hidden="true" />Checking the machine…</p>}
+      {items && (
+        <>
+          <p className="muted small-note">{bad.length ? `${bad.length} ${bad.length === 1 ? "thing needs" : "things need"} a look.` : "Everything Loner-Strike checks looks right."}</p>
+          <ul className="upkeep security-list">
+            {items.map((i) => (
+              <li key={i.id}>
+                <div>
+                  <b>{i.label}</b> <span className={`live${i.ok ? " on" : ""} inline`}>{i.ok ? "Good" : "Needs a look"}</span>
+                  {!i.ok && <p className="muted">{i.why}</p>}
+                </div>
+                {!i.ok && i.fix && (
+                  <BusyButton className="btn small" busy={busy(`${server.id}:security:${i.id}`)} label={i.fix === "reboot" ? "Restart the machine" : "Fix it"} busyLabel="Working…" onClick={() => fix(i)} />
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Maintenance({ server, installed, act, rebuild, wipeRebuild, busy }: { server: ServerInfo; installed: string[]; act: (a: string) => void; rebuild: () => void; wipeRebuild: () => void; busy: (action: string) => boolean }) {
   const running = server.state === "running";
   return (

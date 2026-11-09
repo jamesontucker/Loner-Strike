@@ -1592,7 +1592,8 @@ pub(crate) fn machine_setup(job: &setup::Job, r: &crate::remote::RemoteInfo, id:
     // the script reports its stages; Valve's download reports its own progress
     const STAGES: &[(&str, f64, &str)] = &[
         ("packages", 0.03, "Installing the 32-bit libraries the server needs"),
-        ("firewall", 0.08, "Opening the game ports in the machine's firewall"),
+        ("firewall", 0.07, "Opening the game ports in the machine's firewall, closing RCON to the internet"),
+        ("security", 0.08, "Turning on automatic security updates and fail2ban"),
         ("steamcmd", 0.1, "Getting SteamCMD"),
         ("server", 0.15, "Downloading the server from Valve (a few minutes)"),
         ("foundation", 0.9, "Installing Metamod-P, AMX Mod X and ReGameDLL"),
@@ -3217,6 +3218,92 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
 }
 
 /// The console (RCON) password, for using the server from another tool. Computer only.
+// ---- the security check (a server on a Linux machine) ------------------------------------
+
+/// What's checked on the machine, each with whether it's right and, if not, what the app can
+/// do about it ("fix": the item to send back) or what the person can.
+fn security_items(e: &Entry) -> Result<Value, String> {
+    let r = e.remote.as_ref().ok_or("The security check is for servers on a Linux machine.")?;
+    let (_, out) = crate::remote::exec_quick(r, &crate::remote::security_check_sh(&e.id))?;
+    let kv: HashMap<&str, &str> = out.lines().filter_map(|l| l.split_once('=')).map(|(k, v)| (k.trim(), v.trim())).collect();
+    let get = |k: &str| kv.get(k).copied().unwrap_or("");
+    let item = |id: &str, label: &str, ok: bool, why: &str, fix: Option<&str>| json!({"id": id, "label": label, "ok": ok, "why": why, "fix": fix});
+    let known = !get("passwordauthentication").is_empty();
+    let items = vec![
+        item("passwords", "SSH logins with a key only", !known || (get("passwordauthentication") == "no" && get("kbdinteractiveauthentication") != "yes"),
+            "Password logins are on, so anyone on the internet can keep guessing. Loner-Strike uses your key, so turning passwords off is safe.", Some("passwords")),
+        item("user", "Not running as root", get("uid") != "0",
+            "The server runs as root, the most powerful account. It still works, but a bug in the game could reach the whole machine. A separate user is safer (Loner-Strike will do this for you in a later version).", None),
+        item("rcon", "RCON closed to the internet", get("rcon_rules").parse::<u32>().unwrap_or(0) >= 2 && get("firewall_boot") == "enabled",
+            "Anyone can try the console password from the internet. Only this machine needs it (Loner-Strike reaches it over SSH).", Some("firewall")),
+        item("updates", "Automatic security updates", get("updates") == "yes",
+            "Security fixes for the machine aren't installed by themselves.", Some("security")),
+        item("fail2ban", "fail2ban slowing down login guessing", get("fail2ban") == "active",
+            "Bots try SSH logins all day. fail2ban blocks an address after a few failures.", Some("security")),
+        item("reboot", "No restart waiting", get("reboot") != "yes",
+            "An update (usually a new kernel) is waiting for the machine to restart. Restart it when nobody's playing; the server starts again by itself.", Some("reboot")),
+        item("sandbox", "The game in its sandbox", get("sandbox") != "0",
+            "The game's service is from an older Loner-Strike. It's updated at the server's next start.", None),
+    ];
+    Ok(json!({"ok": true, "items": items, "user": get("user")}))
+}
+
+async fn api_security(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || on.is_none() {
+        return forbidden();
+    }
+    answer(tokio::task::spawn_blocking(move || get(&id).ok_or("That server isn't there any more.".to_string()).and_then(|e| security_items(&e))).await.unwrap_or_else(|_| Err("The check didn't finish.".into())))
+}
+
+#[derive(Deserialize)]
+struct SecurityFix {
+    item: String,
+}
+
+async fn api_security_fix(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SecurityFix>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || on.is_none() {
+        return forbidden();
+    }
+    answer(
+        tokio::task::spawn_blocking(move || -> Result<Value, String> {
+            let e = get(&id).ok_or("That server isn't there any more.")?;
+            let r = e.remote.clone().ok_or("The security check is for servers on a Linux machine.")?;
+            let mut last = String::new();
+            let run = |script: String, last: &mut String| -> Result<(), String> {
+                let code = crate::remote::exec_stream(&r, &format!("{} bash -s", crate::remote::setup_env(&e.id, &e.game)), script.as_bytes(), |l| {
+                    if !l.starts_with("@@") && !l.trim().is_empty() {
+                        *last = l.trim().chars().take(160).collect();
+                    }
+                })?;
+                if code != 0 {
+                    return Err(format!("It didn't work on the machine ({last})."));
+                }
+                Ok(())
+            };
+            match req.item.as_str() {
+                "passwords" => run(crate::remote::SSH_KEYS_ONLY_SH.to_string(), &mut last)?,
+                "firewall" | "security" => run(crate::remote::setup_stage(&req.item).ok_or("That isn't something the app can fix.")?, &mut last)?,
+                "reboot" => {
+                    // (never with people on; the game starts again by itself after)
+                    if view(&e)["state"] == "running" {
+                        if let Some((info, _)) = crate::browser::info(&e.join_address()) {
+                            if info.players.saturating_sub(info.bots) > 0 {
+                                return Err("People are playing on it. Restart the machine when they've left.".into());
+                            }
+                        }
+                    }
+                    let _ = crate::remote::exec_quick(&r, "sudo -n systemctl reboot");
+                    return Ok(json!({"ok": true, "rebooting": true}));
+                }
+                _ => return Err("That isn't something the app can fix.".into()),
+            }
+            security_items(&e)
+        })
+        .await
+        .unwrap_or_else(|_| Err("It didn't finish.".into())),
+    )
+}
+
 async fn api_rcon_password(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) || on.is_none() {
         return forbidden();
@@ -3384,6 +3471,8 @@ pub fn routes() -> Router<Shared> {
         .route("/api/servers/:id/console", route_get(api_console))
         .route("/api/servers/:id/modes", route_get(api_modes))
         .route("/api/servers/:id/rcon-password", post(api_set_rcon_password))
+        .route("/api/servers/:id/security", route_get(api_security))
+        .route("/api/servers/:id/security/fix", post(api_security_fix))
         // a POST, so it carries X-Panel (a plain GET from the page doesn't)
         .route("/api/servers/:id/rcon-password/show", post(api_rcon_password))
         .route("/api/servers/:id/:action", post(api_action))

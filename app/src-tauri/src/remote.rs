@@ -708,17 +708,51 @@ for i in 1 2 3 4 5; do apt_get update -qq >/dev/null 2>&1 && break; sleep 20; do
 apt_get install -y -qq lib32gcc-s1 lib32stdc++6 libc6-i386 curl ca-certificates unzip xz-utils tar python3 >/dev/null
 
 step firewall
-if command -v iptables >/dev/null; then
-  if ! sudo iptables -C INPUT -p udp --dport 27015:27020 -j ACCEPT 2>/dev/null; then
-    # above a final REJECT rule if there is one (Oracle's images have one)
-    pos=$(sudo iptables -L INPUT --line-numbers -n | awk '$2=="REJECT" {print $1; exit}')
-    if [ -n "$pos" ]; then sudo iptables -I INPUT "$pos" -p udp --dport 27015:27020 -j ACCEPT
-    else sudo iptables -A INPUT -p udp --dport 27015:27020 -j ACCEPT; fi
-  fi
-  if command -v netfilter-persistent >/dev/null; then sudo netfilter-persistent save >/dev/null 2>&1 || true
-  elif [ -d /etc/iptables ]; then sudo sh -c 'iptables-save > /etc/iptables/rules.v4'; fi
+# the game's ports open, and RCON from the internet dropped (only this machine uses RCON: the
+# app over SSH, and shared control), set again by a small service at every boot (rules made
+# by hand are gone after a restart; iptables-persistent would remove ufw on Ubuntu)
+sudo tee /usr/local/sbin/lonerstrike-firewall >/dev/null <<'LSFW'
+#!/bin/sh
+# Loner-Strike: the game's ports open, RCON from outside dropped (written by the app)
+command -v iptables >/dev/null || exit 0
+if ! iptables -C INPUT -p udp --dport 27015:27020 -j ACCEPT 2>/dev/null; then
+  # above a final REJECT rule if there is one (Oracle's images have one)
+  pos=$(iptables -L INPUT --line-numbers -n | awk '$2=="REJECT" {print $1; exit}')
+  if [ -n "$pos" ]; then iptables -I INPUT "$pos" -p udp --dport 27015:27020 -j ACCEPT
+  else iptables -A INPUT -p udp --dport 27015:27020 -j ACCEPT; fi
 fi
+for p in '|ffffffff|rcon' '|ffffffff|challenge rcon'; do
+  iptables -C INPUT ! -i lo -p udp --dport 27015:27020 -m string --algo bm --from 28 --to 48 --hex-string "$p" -j DROP 2>/dev/null \
+    || iptables -I INPUT ! -i lo -p udp --dport 27015:27020 -m string --algo bm --from 28 --to 48 --hex-string "$p" -j DROP
+done
+exit 0
+LSFW
+sudo chmod 755 /usr/local/sbin/lonerstrike-firewall
+sudo tee /etc/systemd/system/lonerstrike-firewall.service >/dev/null <<'LSFWU'
+[Unit]
+Description=Loner-Strike game ports and RCON block
+After=network-pre.target ufw.service netfilter-persistent.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lonerstrike-firewall
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+LSFWU
+sudo systemctl daemon-reload
+sudo systemctl enable lonerstrike-firewall >/dev/null 2>&1 || true
+sudo /usr/local/sbin/lonerstrike-firewall || true
 if command -v ufw >/dev/null && sudo ufw status | grep -q "Status: active"; then sudo ufw allow 27015:27020/udp >/dev/null; fi
+
+step security
+# automatic security updates, and fail2ban to slow down the bots that try SSH logins all day
+# (neither is needed for the game: a problem here is noted, not fatal)
+apt_get install -y -qq unattended-upgrades fail2ban >/dev/null 2>&1 || echo "Couldn't install unattended-upgrades or fail2ban."
+printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' | sudo tee /etc/apt/apt.conf.d/20auto-upgrades >/dev/null || true
+sudo systemctl enable --now unattended-upgrades fail2ban >/dev/null 2>&1 || true
 
 step steamcmd
 mkdir -p "$BASE/steamcmd"; cd "$BASE/steamcmd"
@@ -1266,6 +1300,43 @@ pub fn ensure_ham(r: &RemoteInfo, id: &str, game: &str) -> Result<bool, String> 
 }
 
 /// The env assignments for SETUP_SH.
+/// One stage of SETUP_SH on its own, with the script's start (sudo, failing with a reason,
+/// apt): how the security check puts right one thing without the whole setup.
+pub fn setup_stage(name: &str) -> Option<String> {
+    let head = SETUP_SH.split("\nstep packages\n").next()?;
+    let apt = SETUP_SH.lines().find(|l| l.starts_with("apt_get()"))?;
+    let body = SETUP_SH.split(&format!("\nstep {name}\n")).nth(1)?;
+    let body = body.split("\nstep ").next()?;
+    Some(format!("{head}\n{apt}\n{body}\n"))
+}
+
+/// What the security check reads on the machine (one line each, key=value); nothing changes.
+pub fn security_check_sh(id: &str) -> String {
+    format!(
+        r#"echo "user=$(id -un)"
+echo "uid=$(id -u)"
+sudo -n sshd -T 2>/dev/null | awk '$1=="passwordauthentication"||$1=="kbdinteractiveauthentication"||$1=="permitrootlogin"{{print $1"="$2}}'
+grep -qs 'Unattended-Upgrade "1"' /etc/apt/apt.conf.d/20auto-upgrades && echo "updates=yes" || echo "updates=no"
+echo "fail2ban=$(systemctl is-active fail2ban 2>/dev/null)"
+[ -e /var/run/reboot-required ] && echo "reboot=yes" || echo "reboot=no"
+echo "rcon_rules=$(sudo -n iptables -S INPUT 2>/dev/null | grep -c -- '--hex-string')"
+echo "firewall_boot=$(systemctl is-enabled lonerstrike-firewall 2>/dev/null)"
+echo "sandbox=$(grep -c -xF '# {rev}' /etc/systemd/system/{unit}.service 2>/dev/null)"
+"#,
+        rev = SERVICE_REV,
+        unit = unit(id)
+    )
+}
+
+/// Turns SSH password and keyboard logins off (keys only), in a file of its own read before
+/// the provider's (sshd takes the first value it finds); checked before SSH is told.
+pub const SSH_KEYS_ONLY_SH: &str = r#"set -eu
+[ "$(id -u)" = 0 ] && ! command -v sudo >/dev/null && sudo() { [ "$1" = -n ] && shift; "$@"; }
+printf '# Loner-Strike: keys only (no password logins)\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n' | sudo tee /etc/ssh/sshd_config.d/00-lonerstrike.conf >/dev/null
+sudo sshd -t
+sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd
+"#;
+
 pub fn setup_env(id: &str, game: &str) -> String {
     let mut env = vec![format!("SRVDIR={}", shell_quote(&server_dir(id))), format!("GAME={}", shell_quote(game))];
     env.extend(FOUNDATION_ENV.iter().map(|(k, v)| format!("{k}={}", shell_quote(v))));
@@ -1290,6 +1361,27 @@ mod tests {
         // the sandbox in the game's own unit (before the watchdog's), not the watchdog's
         let game = &svc[svc.find("Description=Loner-Strike server x\n").unwrap()..svc.find("lsctl:").unwrap()];
         assert!(game.contains("NoNewPrivileges=yes") && game.contains("InaccessiblePaths=$HOME/.ssh") && svc.contains("mkdir -p \"$HOME/.ssh\"") && !game.contains("ProtectSystem"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn security_scripts() {
+        use std::io::Write;
+        for name in ["firewall", "security"] {
+            let sh = setup_stage(name).unwrap();
+            assert!(sh.starts_with("set -eu") && sh.contains("apt_get()") && !sh.contains("step steamcmd"), "{name}");
+            let mut p = std::process::Command::new("bash").arg("-n").stdin(std::process::Stdio::piped()).spawn().unwrap();
+            p.stdin.take().unwrap().write_all(sh.as_bytes()).unwrap();
+            assert!(p.wait().unwrap().success(), "{name}");
+        }
+        assert!(setup_stage("firewall").unwrap().contains("lonerstrike-firewall") && !setup_stage("firewall").unwrap().contains("fail2ban"));
+        assert!(setup_stage("nonsense").is_none());
+        for sh in [security_check_sh("friday"), SSH_KEYS_ONLY_SH.to_string()] {
+            let mut p = std::process::Command::new("bash").arg("-n").stdin(std::process::Stdio::piped()).spawn().unwrap();
+            p.stdin.take().unwrap().write_all(sh.as_bytes()).unwrap();
+            assert!(p.wait().unwrap().success(), "{sh}");
+        }
+        assert!(security_check_sh("friday").contains("lonerstrike-friday.service") && security_check_sh("friday").contains(SERVICE_REV));
     }
 
     #[test]
