@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ReleaseNotes } from "./WhatsNew";
 import { useQuery } from "@tanstack/react-query";
 import { copyText, getJson, getJsonAt, ON_COMPUTER_ONLY, postJson, useActions } from "../api";
 import type { AppInfo, PhoneInfo } from "../types";
@@ -201,7 +202,15 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           <div>
             <b>Loner-Strike {app?.version}</b>
             {app?.update ? (
-              <p>Version {app.update.version} is available.</p>
+              <>
+                <p>Version {app.update.version} is available.</p>
+                {app.update.notes && (
+                  <details className="update-notes">
+                    <summary>What's new</summary>
+                    <ReleaseNotes text={app.update.notes} />
+                  </details>
+                )}
+              </>
             ) : (
               // checked here, from the menu, or when the app started (with that switch on)
               <p className="muted">{checked || (checkedOnce || prefs?.auto_update ? "You're up to date as of the last check." : "Not checked yet.")}</p>

@@ -1713,3 +1713,13 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 
 .share-invites { display: grid; gap: 2px; margin-top: 14px; }
 .invite-code { flex: 1; min-width: 0; padding: 7px 10px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; word-break: break-all; user-select: all; }
+
+/* what's new: release notes, in the updates section and once after an update */
+.whats-new { margin-bottom: 16px; }
+.whats-new h3 { margin: 0; }
+.release-notes { margin-top: 10px; max-height: 340px; overflow: auto; }
+.release-notes p { margin: 6px 0; }
+.notes-head { margin: 12px 0 4px; font-size: 14px; }
+.notes-list li { margin: 4px 0; }
+.update-notes { margin-top: 6px; }
+.update-notes summary { cursor: pointer; }

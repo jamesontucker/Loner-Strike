@@ -4,7 +4,20 @@ What changed in each version. The downloads are on the [Releases](https://github
 
 ## 0.1.3
 
+### Bots that play like people
+- Talk to them in chat. Ask "money?", "hp?", "where'd they go", "who killed me" or "anyone got a flash" and they answer from what's really going on. Ask "cover me", "go b", "wait here", "drop me an ak", "plant at a" or "give me the bomb" and they do it, or say no in character. A bot only says yes when it actually does it.
+- They look around and aim like a hand on a mouse: still most of the time, quick flicks that land a touch off and get corrected, a small tremor, and a lag behind fast strafes. Better players are quicker and steadier.
+- Freeze time and leaving spawn feel alive: looking about, flicking guns, hops and crouches, and a few always late out of the shop.
+- Team play: trades and flanks, CTs holding the sites, Ts picking a site together and switching after early losses, the bomb carrier going in with a teammate, guards spreading out round a planted bomb, defuses heard and kit holders let through.
+- They react like people: flashed bots panic their own way, AWPers step aside after a shot, a flanker who shoots them gets noticed, and being outnumbered makes the careful ones back off.
+- Each bot is its own person: a personality, mood and skill that show in how it plays and talks, regulars who remember you between sessions, tilt from a bad run, and callouts like "rush b" before they go down.
+- Chat volume fits the mode, deathmatch chat is short reactions, and with Bots can be rude off nobody gets insulted.
+- Every mode is played right: deathmatch spreads out and goes for the fighting, Gun Game's grenade and knife levels work, fy_ maps get a run for the floor guns, and rounds on awp_ and aim_ maps don't stall.
+- Deathmatch and Gun Game no longer end the round and respawn everyone at 9 minutes.
+
+### Other
 - Windows: "Remove everything" no longer deletes the installed app along with everything else, so Loner-Strike opens again afterwards (at its first-time setup). Its download cache moved out of the app's own folder, which also keeps it through updates.
+- Updates show what's new before you install, and once after.
 
 ## 0.1.2
 

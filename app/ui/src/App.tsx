@@ -23,6 +23,7 @@ import { QuickBar } from "./views/QuickBar";
 import { Sounds } from "./views/Sounds";
 import { FUN_NOTE, MatchButtons, RULES_NOTE, SettingsPage } from "./views/Settings";
 import { Welcome } from "./views/Welcome";
+import { WhatsNew } from "./views/WhatsNew";
 import { anySetUp, Setup } from "./views/Setup";
 
 // The bigger pages load the first time they're opened, so the app starts on a smaller bundle
@@ -377,6 +378,7 @@ function Shell() {
           {/* the app stopped answering: said once, at the top, with a way to try again */}
           {lost && state && !state.online && <LoadError title={state.reason === SIGNED_OUT ? "Not signed in" : "Can't reach Loner-Strike"} text={state.reason} onRetry={() => queryClient.invalidateQueries()} />}
           <HomeScreenHint />
+          <WhatsNew version={app?.version} />
           {!setupOpen && !current?.shared && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} server={current?.name} />}
           {state === null ? (
             <Skeleton rows={4} />

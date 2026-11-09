@@ -71,6 +71,33 @@ jobs:
             exit 1
           fi
 
+      # the version's own section of CHANGELOG.md becomes the release's notes, which the
+      # updater's latest.json carries (the app shows them before and after an update);
+      # a release without a section fails, so every update says what's in it
+      - name: Release notes from the changelog
+        id: notes
+        shell: bash
+        run: |
+          version=$(node -p "require('./app/src-tauri/tauri.conf.json').version")
+          section=$(awk -v v="## $version" '$0 == v {on=1; next} on && /^## / {exit} on {print}' CHANGELOG.md | sed -e '/./,$!d')
+          if [ -z "$section" ]; then
+            if [ "${{ github.ref_type }}" = tag ]; then
+              echo "::error::CHANGELOG.md has no '## $version' section: write what's new before tagging."
+              exit 1
+            fi
+            section="(no notes yet)"
+          fi
+          {
+            echo "body<<LS_NOTES_END"
+            echo "$section"
+            echo ""
+            echo "---"
+            echo "Download the file for your computer below. Mac: the .dmg. Windows: the -setup.exe. Windows may say it protected your PC (SmartScreen): click More info, then Run anyway."
+            echo ""
+            echo "Found a bug? In the app, open Settings and click Copy next to Copy diagnostics, then post it on Discord (https://discord.gg/K9eBHVVwZE) or in Issues."
+            echo "LS_NOTES_END"
+          } >> "$GITHUB_OUTPUT"
+
       # ls-control goes in the app's resources (linux/ls-control), checked against the
       # sha256 written when it was built; the app checks it again before sending it to a server
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -153,12 +180,7 @@ jobs:
             ${{ matrix.args }} --config '{"bundle":{"externalBin":["binaries/playitd"]}}'
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: "Loner-Strike ${{ github.ref_name }}"
-          releaseBody: |
-            An early release: it works, but expect some rough edges. Loner-Strike is a side project, updated now and then.
-
-            Download the file for your computer below. Mac: the .dmg. Windows: the -setup.exe. Windows may say it protected your PC (SmartScreen): click More info, then Run anyway.
-
-            Found a bug? In the app, open Settings and click Copy next to Copy diagnostics, then post it on Discord (https://discord.gg/K9eBHVVwZE) or in Issues. What's new is in CHANGELOG.md.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           prerelease: false
           # (named includeUpdaterJson before tauri-action 1.0: the old name is ignored
