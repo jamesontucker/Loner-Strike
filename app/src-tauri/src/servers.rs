@@ -3245,6 +3245,26 @@ fn security_items(e: &Entry) -> Result<Value, String> {
         item("sandbox", "The game in its sandbox", get("sandbox") != "0",
             "The game's service is from an older Loner-Strike. It's updated at the server's next start.", None),
     ];
+    // the machine's health: disk, memory, CPU, and the logs kept in check
+    let num = |k: &str| get(k).parse::<f64>().ok();
+    let mut health = vec![];
+    if let Some(used) = num("disk_used") {
+        let free = num("disk_free_mb").unwrap_or(0.0) / 1024.0;
+        let server = num("server_mb").map(|m| format!(" This server takes {:.1} GB.", m / 1024.0)).unwrap_or_default();
+        health.push(item("disk", &format!("Disk space ({used:.0}% used, {free:.1} GB free)"), used < 85.0,
+            &format!("The disk is getting full. When it's full the server can't write its logs or stats and may stop.{server} Cleaning up old logs helps; otherwise remove maps you don't use or move to a bigger plan."), Some("logs")));
+    }
+    if let (Some(total), Some(avail)) = (num("mem_total_mb"), num("mem_avail_mb")) {
+        health.push(item("memory", &format!("Memory ({:.0} MB free of {:.0} MB)", avail, total), avail >= total * 0.1 && avail >= 150.0,
+            "Memory is nearly used up, so the machine may slow down or stop the server. Fewer bots or servers on this machine help, or a plan with more memory.", None));
+    }
+    if let (Some(load), Some(cores)) = (num("load"), num("cores")) {
+        health.push(item("cpu", &format!("CPU (load {load:.1} on {cores:.0} core{})", if cores == 1.0 { "" } else { "s" }), load <= cores * 1.5,
+            "The machine is busier than its processors keep up with, which players feel as lag. Fewer bots or servers on it help, or a plan with more CPU.", None));
+    }
+    health.push(item("logs", "Logs kept in check", get("logs_timer") == "enabled",
+        "Nothing trims the server's logs, so they grow until the disk is full. Loner-Strike can trim them once a day.", Some("security")));
+    let items: Vec<Value> = items.into_iter().chain(health).collect();
     Ok(json!({"ok": true, "items": items, "user": get("user")}))
 }
 
@@ -3282,6 +3302,7 @@ async fn api_security_fix(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: 
             };
             match req.item.as_str() {
                 "passwords" => run(crate::remote::SSH_KEYS_ONLY_SH.to_string(), &mut last)?,
+                "logs" => crate::remote::logs_now(&r, &e.id, &e.game)?,
                 "firewall" | "security" => run(crate::remote::setup_stage(&req.item).ok_or("That isn't something the app can fix.")?, &mut last)?,
                 "reboot" => {
                     // (never with people on; the game starts again by itself after)

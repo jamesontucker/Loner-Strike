@@ -1126,12 +1126,12 @@ function SecurityPanel({ server }: { server: ServerInfo }) {
     }
     if (r.items) setItems(r.items);
     toast("Done");
-  }, item.fix === "reboot" ? "Restarting the machine…" : "Fixing it on the machine…");
+  }, item.fix === "reboot" ? "Restarting the machine…" : item.fix === "logs" ? "Cleaning up logs…" : "Fixing it on the machine…");
   const bad = (items ?? []).filter((i) => !i.ok);
   return (
     <div className="panel">
       <div className="row between">
-        <h3>Security</h3>
+        <h3>Security and health</h3>
         <BusyButton className="btn small" busy={checking} label="Check again" busyLabel="Checking…" onClick={() => void check()} />
       </div>
       {error && <p className="err-text small-note">{error}</p>}
@@ -1147,7 +1147,7 @@ function SecurityPanel({ server }: { server: ServerInfo }) {
                   {!i.ok && <p className="muted">{i.why}</p>}
                 </div>
                 {!i.ok && i.fix && (
-                  <BusyButton className="btn small" busy={busy(`${server.id}:security:${i.id}`)} label={i.fix === "reboot" ? "Restart the machine" : "Fix it"} busyLabel="Working…" onClick={() => fix(i)} />
+                  <BusyButton className="btn small" busy={busy(`${server.id}:security:${i.id}`)} label={i.fix === "reboot" ? "Restart the machine" : i.fix === "logs" ? "Clean up logs now" : "Fix it"} busyLabel="Working…" onClick={() => fix(i)} />
                 )}
               </li>
             ))}

@@ -724,11 +724,16 @@ fi
 # RCON is an out-of-band packet (it starts ffffffff); the game skips spaces before the word, so
 # any such packet with "rcon" anywhere in it is dropped (queries, connects and the game itself
 # never have it). The first version matched one place only, and padding got past it
+# (the new rule in first; the old ones only go once it's there, so a kernel without the u32
+# match keeps what it had and says so instead of being left open)
+R='! -i lo -p udp --dport 27015:27020 -m u32 --u32 0>>22&0x3C@8=0xFFFFFFFF -m string --algo bm --icase --string rcon -j DROP'
+if ! iptables -C INPUT $R 2>/dev/null && ! iptables -I INPUT $R; then
+  echo "Couldn't add the RCON block (no u32 match in this kernel?); the older one stays." >&2
+  exit 1
+fi
 for p in '|ffffffff|rcon' '|ffffffff|challenge rcon'; do
   iptables -D INPUT ! -i lo -p udp --dport 27015:27020 -m string --algo bm --from 28 --to 48 --hex-string "$p" -j DROP 2>/dev/null || true
 done
-R='! -i lo -p udp --dport 27015:27020 -m u32 --u32 0>>22&0x3C@8=0xFFFFFFFF -m string --algo bm --string rcon -j DROP'
-iptables -C INPUT $R 2>/dev/null || iptables -I INPUT $R
 exit 0
 LSFW
 sudo chmod 755 /usr/local/sbin/lonerstrike-firewall
@@ -757,6 +762,26 @@ step security
 apt_get install -y -qq unattended-upgrades fail2ban >/dev/null 2>&1 || echo "Couldn't install unattended-upgrades or fail2ban."
 printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' | sudo tee /etc/apt/apt.conf.d/20auto-upgrades >/dev/null || true
 sudo systemctl enable --now unattended-upgrades fail2ban >/dev/null 2>&1 || true
+# the servers' logs kept from filling the disk, once a day: the console log (-condebug, never
+# cut by the game) back to its last 5 MB past 20 MB, the game's and AMX Mod X's day logs gone
+# after 30 days
+sudo tee /usr/local/sbin/lonerstrike-logs >/dev/null <<LSLOGS
+#!/bin/sh
+# Loner-Strike: keeps the servers' logs from filling the disk (written by the app)
+for d in $HOME/loner-strike/servers/*/; do
+  for f in "\$d"qconsole.log "\$d"*/qconsole.log; do
+    [ -f "\$f" ] || continue
+    if [ "\$(stat -c %s "\$f")" -gt 20971520 ]; then tail -c 5242880 "\$f" > "\$f.trim" && cat "\$f.trim" > "\$f"; rm -f "\$f.trim"; fi
+  done
+  find "\$d" -path '*/logs/*' -name '*.log' -type f -mtime +30 -delete 2>/dev/null
+done
+exit 0
+LSLOGS
+sudo chmod 755 /usr/local/sbin/lonerstrike-logs
+printf '[Unit]\nDescription=Loner-Strike log upkeep\n\n[Service]\nType=oneshot\nExecStart=/usr/local/sbin/lonerstrike-logs\nNice=19\n' | sudo tee /etc/systemd/system/lonerstrike-logs.service >/dev/null
+printf '[Unit]\nDescription=Loner-Strike log upkeep, daily\n\n[Timer]\nOnCalendar=daily\nPersistent=true\nRandomizedDelaySec=1h\n\n[Install]\nWantedBy=timers.target\n' | sudo tee /etc/systemd/system/lonerstrike-logs.timer >/dev/null
+sudo systemctl daemon-reload
+sudo systemctl enable --now lonerstrike-logs.timer >/dev/null 2>&1 || true
 
 step steamcmd
 mkdir -p "$BASE/steamcmd"; cd "$BASE/steamcmd"
@@ -1323,13 +1348,34 @@ sudo -n sshd -T 2>/dev/null | awk '$1=="passwordauthentication"||$1=="kbdinterac
 grep -qs 'Unattended-Upgrade "1"' /etc/apt/apt.conf.d/20auto-upgrades && echo "updates=yes" || echo "updates=no"
 echo "fail2ban=$(systemctl is-active fail2ban 2>/dev/null)"
 [ -e /var/run/reboot-required ] && echo "reboot=yes" || echo "reboot=no"
-echo "rcon_rules=$(sudo -n iptables -S INPUT 2>/dev/null | grep -c -- '--string "rcon"')"
+echo "rcon_rules=$(sudo -n iptables -S INPUT 2>/dev/null | grep -- '--string "rcon"' | grep -c -- '--icase')"
 echo "firewall_boot=$(systemctl is-enabled lonerstrike-firewall 2>/dev/null)"
 echo "sandbox=$(grep -c -xF '# {rev}' /etc/systemd/system/{unit}.service 2>/dev/null)"
+echo "logs_timer=$(systemctl is-enabled lonerstrike-logs.timer 2>/dev/null)"
+df -P / | awk 'NR==2{{gsub("%","",$5); print "disk_used="$5; print "disk_free_mb="int($4/1024)}}'
+awk '/^MemTotal:/{{t=$2}} /^MemAvailable:/{{a=$2}} END{{print "mem_total_mb="int(t/1024); print "mem_avail_mb="int(a/1024)}}' /proc/meminfo
+echo "cores=$(nproc)"
+echo "load=$(cut -d' ' -f2 /proc/loadavg)"
+du -sm "$HOME/loner-strike/servers/{id}" 2>/dev/null | awk '{{print "server_mb="$1}}'
 "#,
         rev = SERVICE_REV,
-        unit = unit(id)
+        unit = unit(id),
+        id = id
     )
+}
+
+/// Runs the log upkeep now (installing it first if this machine hasn't got it yet).
+pub fn logs_now(r: &RemoteInfo, id: &str, game: &str) -> Result<(), String> {
+    let (have, _) = exec_quick(r, "[ -x /usr/local/sbin/lonerstrike-logs ]")?;
+    if have != 0 {
+        let sh = setup_stage("security").ok_or("The app's setup script is missing a part.")?;
+        exec_stream(r, &format!("{} bash -s", setup_env(id, game)), sh.as_bytes(), |_| {})?;
+    }
+    let (code, out) = exec(r, "sudo -n /usr/local/sbin/lonerstrike-logs")?;
+    if code != 0 {
+        return Err(format!("The log upkeep didn't run ({}).", out.trim()));
+    }
+    Ok(())
 }
 
 /// Turns SSH password and keyboard logins off (keys only), in a file of its own read before
