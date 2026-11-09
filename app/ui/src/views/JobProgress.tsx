@@ -126,7 +126,17 @@ export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, remote 
 /** One line for a server whose Loner-Strike updates are going in: the step it's on and how far
  * the whole update has got (the same job the setup bar follows). Before the job starts, the
  * server is being stopped. */
-export function UpdateProgress({ restarts }: { restarts?: boolean }) {
+const PHASE: Record<string, string> = {
+  stopping: "stopping it first",
+  preparing: "getting ready",
+  installing: "putting in the new files",
+  machine: "updating the machine",
+  engine: "updating the engine files",
+  uploading: "sending the files to the server",
+  starting: "starting it again",
+};
+
+export function UpdateProgress({ restarts, phase, job: jobId }: { restarts?: boolean; phase?: string | null; job?: string | null }) {
   const q = useSetupJob();
   // (the shared query only polls a running job: this one asks while it's on screen, so a job
   // that starts after the server stops is picked up)
@@ -135,7 +145,8 @@ export function UpdateProgress({ restarts }: { restarts?: boolean }) {
     const t = window.setInterval(() => void refetch(), 2000);
     return () => window.clearInterval(t);
   }, [refetch]);
-  const job = q.data?.state === "running" ? q.data : null;
+  // (its own job only: another setup job's steps aren't this server's)
+  const job = q.data?.state === "running" && jobId && q.data.id === jobId ? q.data : null;
   const steps = job?.steps ?? [];
   const now = steps.find((s) => s.state === "running");
   const transfer = transferOf(now);
@@ -146,7 +157,7 @@ export function UpdateProgress({ restarts }: { restarts?: boolean }) {
     value = Math.max(base, base + (Math.max(base, end) - base) * Math.min(1, transfer.sent / transfer.total));
   }
   const n = now ? steps.indexOf(now) + 1 : 0;
-  const what = now ? `${now.label}${steps.length > 1 ? ` (step ${n} of ${steps.length})` : ""}` : "Stopping it first";
+  const what = now ? `${now.label}${steps.length > 1 ? ` (step ${n} of ${steps.length})` : ""}` : (PHASE[phase ?? ""] ?? "working on it");
   return (
     <p className="muted small-note update-progress" role="status">
       <span className="spinner" aria-hidden="true" />

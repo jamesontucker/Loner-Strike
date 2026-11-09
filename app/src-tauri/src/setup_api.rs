@@ -296,6 +296,10 @@ mod tests {
 #[derive(Default)]
 struct Updates {
     now: Option<(String, bool)>,
+    /// what the one going now is doing ("stopping", "installing", "uploading", "starting"), and
+    /// the setup job it started (the progress shown is that job's, never another's)
+    phase: String,
+    job: String,
     queued: Vec<(String, bool)>,
     failed_at: std::collections::HashMap<String, std::time::Instant>,
 }
@@ -308,6 +312,20 @@ fn updates<T>(f: impl FnOnce(&mut Updates) -> T) -> T {
 /// Whether this server's updates are going in now, and whether it'll be started again after.
 pub fn updating(id: &str) -> Option<bool> {
     updates(|u| u.now.as_ref().filter(|(n, _)| n == id).map(|(_, w)| *w))
+}
+
+/// What the server updating now is doing, and the setup job it's in.
+pub fn update_phase(id: &str) -> Option<(String, String)> {
+    updates(|u| u.now.as_ref().filter(|(n, _)| n == id).map(|_| (u.phase.clone(), u.job.clone())))
+}
+
+fn set_phase(phase: &str, job: Option<&str>) {
+    updates(|u| {
+        u.phase = phase.to_string();
+        if let Some(j) = job {
+            u.job = j.to_string();
+        }
+    })
 }
 
 /// Whether this server is waiting its turn for its updates.
@@ -388,10 +406,15 @@ fn update_server(res: &Path, e: &crate::servers::Entry, outdated: &[String]) -> 
     let comps: Vec<String> = outdated.iter().filter(|c| *c != "core" && *c != "foundation").cloned().collect();
     let plan = setup::plan_install(install, &[e.game.clone()], &comps, res, true)?;
     let store = store_for(crate::servers::game_for(&e.id, || None), &plan.install.hl, &plan.games[0]);
-    wait_job(&setup::start_install(plan, res.to_path_buf(), Some(store))?)?;
+    let job = setup::start_install(plan, res.to_path_buf(), Some(store))?;
+    set_phase("installing", Some(&job));
+    wait_job(&job)?;
     if outdated.iter().any(|c| c == "foundation") {
-        wait_job(&crate::servers::update_files(e.clone(), Some(res.to_path_buf()))?)?;
+        let job = crate::servers::update_files(e.clone(), Some(res.to_path_buf()))?;
+        set_phase(if e.remote.is_some() { "machine" } else { "engine" }, Some(&job));
+        wait_job(&job)?;
     } else if e.remote.is_some() {
+        set_phase("uploading", None);
         crate::servers::sync(e, false)?;
     }
     Ok(())
@@ -414,6 +437,8 @@ fn run_update(res: PathBuf, id: String) -> bool {
             return false;
         }
         u.now = Some((id.clone(), was_running));
+        u.phase = if was_running { "stopping".into() } else { "preparing".into() };
+        u.job.clear();
         u.queued.retain(|(q, _)| *q != id);
         true
     }) {
@@ -467,6 +492,8 @@ fn run_update(res: PathBuf, id: String) -> bool {
                     if let Some(n) = u.now.as_mut() {
                         n.1 = false;
                     }
+                    u.phase = "starting".into();
+                    u.job.clear();
                 });
                 crate::servers::start(&id)?;
             }

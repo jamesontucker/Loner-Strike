@@ -2688,6 +2688,9 @@ async fn api_list(State(st): State<Shared>, on: Option<axum::Extension<crate::se
                 // (started again when its updates are in: it was running)
                 v["restarts_after"] = json!(updating == Some(true));
                 v["update_queued"] = json!(crate::setup_api::queued(&e.id));
+                let (phase, job) = crate::setup_api::update_phase(&e.id).unzip();
+                v["update_phase"] = json!(phase);
+                v["update_job"] = json!(job.filter(|j| !j.is_empty()));
                 v
             })
             .collect();

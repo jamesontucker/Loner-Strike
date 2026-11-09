@@ -147,6 +147,9 @@ export type ServerInfo = {
   updating?: boolean;
   restarts_after?: boolean;
   update_queued?: boolean;
+  /** what that update is doing ("stopping", "installing", "machine", "uploading", "starting"...) and its setup job */
+  update_phase?: string | null;
+  update_job?: string | null;
   /** they go in by themselves once nobody is playing */
   auto_update?: boolean;
   /** on the Loner-Strike server list (Find servers) */

@@ -113,7 +113,7 @@ function StateTag({ s, inline }: { s: ServerInfo; inline?: boolean }) {
 
 /** Loner-Strike's updates for a server: going in now, or waiting (what, and when they'll go in). */
 function UpdateNote({ s, busy, onUpdate }: { s: ServerInfo; busy: boolean; onUpdate: () => void }) {
-  if (s.updating) return <UpdateProgress restarts={s.restarts_after} />;
+  if (s.updating) return <UpdateProgress restarts={s.restarts_after} phase={s.update_phase} job={s.update_job} />;
   if (s.update_queued) return <p className="muted small-note" role="status">Updates waiting their turn: another server's are going in now.</p>;
   const parts = s.outdated ?? [];
   if (!parts.length || s.state === "setting-up" || s.state === "failed") return null;
@@ -290,12 +290,12 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
                 {s.state === "running" ? (
                   <>
                     <BusyButton busy={busy(`${s.id}:join`)} label={ON_THIS_COMPUTER ? "Join" : "Join on the computer"} busyLabel="Joining…" onClick={() => act(s, "join")} />
-                    <BusyButton className="btn danger" busy={busy(`${s.id}:stop`)} label="Stop" busyLabel="Stopping…" onClick={() => act(s, "stop")} />
+                    <BusyButton className="btn danger" busy={busy(`${s.id}:stop`)} disabled={!!s.updating} label="Stop" busyLabel="Stopping…" onClick={() => act(s, "stop")} />
                   </>
                 ) : (
-                  <BusyButton busy={busy(`${s.id}:start`)} disabled={!!s.unreachable} label="Start" busyLabel="Starting…" onClick={() => act(s, "start")} />
+                  <BusyButton busy={busy(`${s.id}:start`)} disabled={!!s.unreachable || !!s.updating} label="Start" busyLabel="Starting…" onClick={() => act(s, "start")} />
                 )}
-                {ON_THIS_COMPUTER && <BusyButton className="btn danger push" busy={busy(`${s.id}:delete`)} label={s.imported ? "Remove" : "Delete"} busyLabel={s.imported ? "Removing…" : "Deleting…"} onClick={() => act(s, "delete")} />}
+                {ON_THIS_COMPUTER && <BusyButton className="btn danger push" busy={busy(`${s.id}:delete`)} disabled={!!s.updating} label={s.imported ? "Remove" : "Delete"} busyLabel={s.imported ? "Removing…" : "Deleting…"} onClick={() => act(s, "delete")} />}
               </div>
             )}
           </div>
@@ -660,7 +660,7 @@ export function ServerPage(props: {
         </div>
         <TabStrip label={`${s.name} sections`} tab={tab} remote={!!s.host} allowed={allowed} onPick={pick} />
       </div>
-      {!role && s.updating && <div className="banner" role="status"><UpdateProgress restarts={s.restarts_after} /></div>}
+      {!role && s.updating && <div className="banner" role="status"><UpdateProgress restarts={s.restarts_after} phase={s.update_phase} job={s.update_job} /></div>}
       {!role && !s.updating && s.update_queued && <div className="banner" role="status"><p className="muted small-note">Its Loner-Strike updates are waiting their turn: another server's are going in now.</p></div>}
       {role && (
         <div className="banner" role="status">
@@ -678,7 +678,7 @@ export function ServerPage(props: {
                 : "New start options are saved. They're used after a restart."}
           </span>
           <span className="files-bar-actions">
-            <BusyButton className="btn small primary" busy={busy("restart")} label="Restart now" busyLabel="Restarting…" onClick={() => act("restart")} />
+            <BusyButton className="btn small primary" busy={busy("restart")} disabled={!!s.updating} label="Restart now" busyLabel="Restarting…" onClick={() => act("restart")} />
           </span>
         </div>
       )}
@@ -1098,13 +1098,13 @@ function Maintenance({ server, installed, act, rebuild, wipeRebuild, busy }: { s
         {server.loner && !server.host && (
           <li>
             <div><b>Rebuild Loner-Strike</b><p className="muted">Reinstalls Metamod-P, AMX Mod X, ReGameDLL{installed.length > 2 ? ` and the ${installed.length - 2} extra mode${installed.length === 3 ? "" : "s"} and add-ons on it` : " and the built-in modes"}. Fixes a server that won't start or lost its mods. Settings, admins and maps stay.</p></div>
-            <BusyButton className="btn" busy={busy("reinstall")} disabled={running} label="Rebuild" busyLabel="Starting…" onClick={rebuild} />
+            <BusyButton className="btn" busy={busy("reinstall")} disabled={running || !!server.updating} label="Rebuild" busyLabel="Starting…" onClick={rebuild} />
           </li>
         )}
         {server.host && (
           <li>
             <div><b>Wipe and rebuild</b><p className="muted">Deletes everything in its folder on {server.host} (settings, admins, bans, stats and added maps) and sets it up again like when you made it. For a server that won't start or is badly broken. Takes 5 to 15 minutes.</p></div>
-            <BusyButton className="btn danger" busy={busy("rebuild")} disabled={running} label="Wipe and rebuild" busyLabel="Wiping…" onClick={wipeRebuild} />
+            <BusyButton className="btn danger" busy={busy("rebuild")} disabled={running || !!server.updating} label="Wipe and rebuild" busyLabel="Wiping…" onClick={wipeRebuild} />
           </li>
         )}
         <li>
