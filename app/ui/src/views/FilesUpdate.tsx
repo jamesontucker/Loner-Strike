@@ -50,7 +50,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp, server }: { app: A
         ? `${whose}: ${plural(outdated.length, "part", "parts")} of Loner-Strike ${outdated.length === 1 ? "has" : "have"} updates waiting.`
         : `${whose}: ${plural(theirs.length, "mod is", "mods are")} here without the bot fixes.`;
   // a server is updated on this computer, then uploaded; your game and other servers aren't touched
-  const scope = server ? " Your game and other servers are updated separately." : " Each server is updated from its own page.";
+  const scope = server ? " Your game and other servers are updated separately." : " This is the game you play in; your servers update on their own (see Servers).";
   if (running)
     return (
       <div className="panel files-update">
