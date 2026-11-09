@@ -419,6 +419,22 @@ fn exec_feed(r: &RemoteInfo, cmd: &str, feed: impl FnOnce(&mut dyn Write) -> Res
             // keep what it prints until its input has ended, as upload_dir_with's does: what
             // fills the channel meanwhile would stop it reading, and this writing, for good)
             if let Err(e) = feed(&mut ch) {
+                // (the command may have ended early, a full disk say, closing its input: then
+                // what it printed and its exit say why, not a stalled route)
+                if ch.eof() {
+                    s.set_timeout(5_000);
+                    let mut out = String::new();
+                    let _ = ch.read_to_string(&mut out);
+                    let _ = ch.wait_close();
+                    if let Ok(code) = ch.exit_status() {
+                        if code != 0 {
+                            for l in out.lines() {
+                                line(l);
+                            }
+                            return Ok(code);
+                        }
+                    }
+                }
                 fed = Err(e);
                 let _ = ch.close();
                 return Ok(-1);
@@ -560,6 +576,12 @@ pub fn upload_dir_with(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Pat
                 Err(Piece::Stalled(e)) => {
                     tries += 1;
                     drop_session(r, false);
+                    if tries < 3 {
+                        // (a moment for the route, and past the 20 s a failed connection is
+                        // remembered for, so the next try really connects again)
+                        std::thread::sleep(Duration::from_secs(if tries == 1 { 5 } else { 25 }));
+                        forget_down(r);
+                    }
                     if tries >= 3 {
                         return Err(format!("The connection to {} kept stalling while sending files ({e}). The route between your internet and the server may be having trouble: try again later.", r.host));
                     }
@@ -789,8 +811,19 @@ RestrictSUIDSGID=yes
 RestrictRealtime=yes
 LockPersonality=yes
 RestrictNamespaces=yes
-InaccessiblePaths=-$HOME/.ssh
-ReadOnlyPaths=-$HOME/loner-strike/bin -$HOME/loner-strike/control -$HOME/.bashrc -$HOME/.profile -$HOME/.bash_profile -$HOME/.bash_login -$HOME/.bash_logout -$HOME/.zshrc -$HOME/.zprofile -$HOME/.zshenv -$HOME/.config -$HOME/.local/share/systemd";
+InaccessiblePaths=$HOME/.ssh
+ReadOnlyPaths=$HOME/loner-strike/bin $HOME/loner-strike/control $HOME/.bashrc $HOME/.profile $HOME/.bash_profile $HOME/.bash_login $HOME/.bash_logout $HOME/.bash_aliases $HOME/.zshrc $HOME/.zprofile $HOME/.zshenv $HOME/.config $HOME/.local/bin $HOME/.local/share/systemd $HOME/bin";
+
+/// Makes every path the sandbox protects before its unit is written: a path that isn't there
+/// when the unit starts can't be protected, and is just what a hacked game would create (a
+/// login script, a user service). An empty .bash_profile would stop bash reading .profile, so
+/// it's made to read it; the rest start empty (an empty file or folder changes nothing).
+pub const SANDBOX_PATHS: &str = r#"umask 077
+mkdir -p "$HOME/.ssh" "$HOME/loner-strike/bin" "$HOME/loner-strike/control" "$HOME/.config" "$HOME/.local/bin" "$HOME/.local/share/systemd" "$HOME/bin"
+[ -e "$HOME/.bash_profile" ] || printf '%s
+' '[ -f "$HOME/.profile" ] && . "$HOME/.profile"' > "$HOME/.bash_profile"
+for f in .bashrc .profile .bash_login .bash_logout .bash_aliases .zshrc .zprofile .zshenv; do [ -e "$HOME/$f" ] || : > "$HOME/$f"; done
+umask 022"#;
 
 /// The systemd service for one server, and the `lsctl` helper for managing servers by hand.
 pub fn service_sh(id: &str, game: &str, args: &[String]) -> String {
@@ -820,6 +853,7 @@ fi
 # the ban lists are the server's own (never uploaded): empty ones to start with, so the
 # game doesn't say it couldn't load them
 for f in banned.cfg listip.cfg; do [ -e "$SRV/{game}/$f" ] || : > "$SRV/{game}/$f"; done
+{sandbox_paths}
 sudo tee /etc/systemd/system/{unit}.service >/dev/null <<EOF
 [Unit]
 # {rev}
@@ -945,13 +979,22 @@ sudo systemctl enable {unit} {unit}-watchdog >/dev/null 2>&1
 echo "@@STEP ready"
 "#,
         sandbox = SANDBOX,
+        sandbox_paths = SANDBOX_PATHS,
         rev = SERVICE_REV
     )
 }
 
 /// A line in the game's unit naming how it's written: a unit without it is written again
 /// before the server's next start (raise it whenever service_sh's unit changes)
-pub const SERVICE_REV: &str = "loner-strike unit 3";
+pub const SERVICE_REV: &str = "loner-strike unit 4";
+
+/// Whether the server's HLTV unit on the machine is the one this version writes (true when it
+/// has none).
+pub fn hltv_current(r: &RemoteInfo, id: &str) -> Result<bool, String> {
+    let f = format!("/etc/systemd/system/{}.service", hltv_unit(id));
+    let (code, _) = exec_quick(r, &format!("[ ! -e {f} ] || grep -qxF '# {SERVICE_REV}' {f}"))?;
+    Ok(code == 0)
+}
 
 /// Whether the server's unit on the machine is the one this version writes. (Not reachable,
 /// or no unit: says so, and the start that asked finds out the rest.)
@@ -1047,8 +1090,10 @@ cat > "$SRV/loner-strike-hltv.cfg" <<'LSCFG'
 LSCFG
 printf '%s\n' {admin} > "$SRV/hltv_admin.txt"
 umask 022
+{sandbox_paths}
 sudo tee /etc/systemd/system/{u}.service >/dev/null <<EOF
 [Unit]
+# {rev}
 Description=Loner-Strike HLTV {id}
 After={main}.service
 BindsTo={main}.service
@@ -1070,7 +1115,9 @@ sudo systemctl daemon-reload
 {switch}
 "#,
         admin = shell_quote(admin),
-        sandbox = SANDBOX
+        sandbox = SANDBOX,
+        sandbox_paths = SANDBOX_PATHS,
+        rev = SERVICE_REV
     )
 }
 
@@ -1239,7 +1286,7 @@ mod tests {
         assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike' '-port' '27016'") && svc.contains("lsctl") && svc.contains("b\"\\xff\\xff\\xff\\xff\""));
         // the sandbox in the game's own unit (before the watchdog's), not the watchdog's
         let game = &svc[svc.find("Description=Loner-Strike server x\n").unwrap()..svc.find("lsctl:").unwrap()];
-        assert!(game.contains("NoNewPrivileges=yes") && game.contains("InaccessiblePaths=-$HOME/.ssh") && !game.contains("ProtectSystem"));
+        assert!(game.contains("NoNewPrivileges=yes") && game.contains("InaccessiblePaths=$HOME/.ssh") && svc.contains("mkdir -p \"$HOME/.ssh\"") && !game.contains("ProtectSystem"));
     }
 
     #[test]

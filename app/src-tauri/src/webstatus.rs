@@ -897,7 +897,7 @@ fn health(e: &Entry) -> Value {
         Err(why) => json!({"ok": false, "why": why}),
     };
     let control = crate::control::agent::used_for(e).then(|| crate::control::agent::url(e)).flatten().map(|url| {
-        said(crate::control::agent::reachable(&url).and_then(|v| if v == crate::control::VERSION { Ok(()) } else { Err(format!("it runs version {v}, this app {}", crate::control::VERSION)) }))
+        said(crate::control::agent::reachable(&url, s.tunnel()).and_then(|v| if v == crate::control::VERSION { Ok(()) } else { Err(format!("it runs version {v}, this app {}", crate::control::VERSION)) }))
     });
     let fastdl = s.fastdl.then(|| {
         let map = http.get(format!("https://{}/status", s.domain)).timeout(Duration::from_secs(6)).send().ok().and_then(|r| r.json::<Value>().ok()).and_then(|v| v["map"].as_str().map(String::from)).filter(|m| crate::control::common::safe_arg(m));

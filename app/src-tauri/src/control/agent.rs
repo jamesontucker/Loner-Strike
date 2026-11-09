@@ -272,13 +272,14 @@ pub fn cli(e: &Entry, args: &[&str]) -> Result<Value, String> {
 }
 
 /// Whether helpers' apps can reach it at its https:// address right now (and its version).
-pub fn reachable(url: &str) -> Result<String, String> {
+pub fn reachable(url: &str, tunnel: bool) -> Result<String, String> {
     let r = crate::sys::http().get(format!("{url}/api/control/ping")).timeout(std::time::Duration::from_secs(6)).send().map_err(|e| e.to_string())?;
     let status = r.status().as_u16();
     // the ping is always there: a 404 is the status page answering (a tunnel without the
     // /control/ route, or with it below the status route), a 5xx the front not reaching it
     match status {
-        404 => return Err("the status page answered instead. In Cloudflare, add the ^/control/ route and move it above the status route".into()),
+        404 if tunnel => return Err("the status page answered instead. In Cloudflare, add the ^/control/ route and move it above the status route".into()),
+        404 => return Err("the website status front didn't pass it on. Press Install again in Website status, so Caddy gets the /control route".into()),
         502..=504 | 530 => return Err(format!("the front couldn't reach shared control on the server (HTTP {status})")),
         _ => {}
     }

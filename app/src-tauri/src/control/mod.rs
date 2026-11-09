@@ -768,7 +768,7 @@ fn server_view(st: &Shared, e: &crate::servers::Entry) -> Result<Value, String> 
     activity.sort_by_key(|a| std::cmp::Reverse(a["at"].as_u64().unwrap_or(0)));
     activity.truncate(200);
     let url = agent::url(e);
-    let reach = url.as_deref().map(agent::reachable);
+    let reach = url.as_deref().map(|u| agent::reachable(u, e.web_status.mode == "tunnel"));
     let reachable = matches!(&reach, Some(Ok(v)) if v == VERSION);
     let reach_error = match &reach {
         Some(Ok(v)) if v != VERSION => Some(format!("it runs version {v}")),

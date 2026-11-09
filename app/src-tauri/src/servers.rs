@@ -2260,6 +2260,10 @@ pub fn start(id: &str) -> Result<(), String> {
         if e.service_stale || !crate::remote::service_current(r, &e.id).unwrap_or(true) {
             write_service(&e)?;
         }
+        // (and its HLTV unit, the same way)
+        if e.hltv.enabled && !crate::remote::hltv_current(r, &e.id).unwrap_or(true) {
+            let _ = crate::hltv::remote_apply(&e, true);
+        }
         // the fixed Ham Sandwich (the official one crashes on map changes): a server set
         // up before it existed gets it here, at a start
         if let Err(why) = crate::remote::ensure_ham(r, &e.id, &e.game) {
