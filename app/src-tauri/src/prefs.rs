@@ -29,7 +29,7 @@ fn forbidden() -> Reply {
 
 async fn api_prefs() -> Json<Value> {
     let s = load_settings();
-    Json(json!({"auto_update": !s.manual_updates, "keep_servers": s.keep_servers, "game_folders": s.game_folders, "notify_joins": !s.mute_joins, "notify_helpers": !s.mute_helpers}))
+    Json(json!({"auto_update": !s.manual_updates, "keep_servers": s.keep_servers, "game_folders": s.game_folders, "notify_joins": !s.mute_joins, "notify_helpers": !s.mute_helpers, "auto_backups": !s.no_auto_backups}))
 }
 
 #[derive(Deserialize)]
@@ -38,6 +38,7 @@ struct PrefsReq {
     keep_servers: Option<bool>,
     notify_joins: Option<bool>,
     notify_helpers: Option<bool>,
+    auto_backups: Option<bool>,
 }
 
 async fn api_prefs_set(headers: HeaderMap, Json(req): Json<PrefsReq>) -> Reply {
@@ -57,8 +58,11 @@ async fn api_prefs_set(headers: HeaderMap, Json(req): Json<PrefsReq>) -> Reply {
         if let Some(v) = req.notify_helpers {
             s.mute_helpers = !v;
         }
+        if let Some(v) = req.auto_backups {
+            s.no_auto_backups = !v;
+        }
     });
-    ok(json!({"auto_update": !s.manual_updates, "keep_servers": s.keep_servers, "game_folders": s.game_folders, "notify_joins": !s.mute_joins, "notify_helpers": !s.mute_helpers}))
+    ok(json!({"auto_update": !s.manual_updates, "keep_servers": s.keep_servers, "game_folders": s.game_folders, "notify_joins": !s.mute_joins, "notify_helpers": !s.mute_helpers, "auto_backups": !s.no_auto_backups}))
 }
 
 // ---- phones -----------------------------------------------------------------------

@@ -24,6 +24,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 - Linux servers are locked down further: the game can't use the login's admin rights or touch SSH keys and login scripts, and shared control runs with only what it needs. Both go in at the server's next start.
 - Shared control: Moderators can no longer kick, slap, slay, ban or mute the owner, Admins or other helpers, and invites ask for a SteamID. The Cloudflare steps are spelled out, with a clear message if the route is in the wrong order.
 - Website status checks shared control, fast downloads and the Discord messages from outside, so you can see they work. With Discord set up, it also says when a server stops answering while it's meant to be running, and when it's back (a server stopped on purpose says nothing).
+- Servers on Linux machines are backed up every day while Loner-Strike is open (bans, admins and settings, the last 7 kept on this computer), so losing the machine doesn't lose them. Turn it off in Settings, Backup & restore.
 - Uploads to a Linux server go up in pieces and retry on their own when the connection stalls, instead of hanging.
 
 ### Other

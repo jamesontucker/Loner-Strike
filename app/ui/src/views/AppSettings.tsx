@@ -13,7 +13,7 @@ import { BackupSheet, RestoreSheet } from "./Backup";
 
 const NO_GAME_TO_BACK_UP = "No game to back up: set up Counter-Strike on this computer first (a dedicated server is backed up from its own page).";
 
-type Prefs = { auto_update: boolean; keep_servers: boolean; game_folders: string[]; notify_joins: boolean; notify_helpers: boolean };
+type Prefs = { auto_update: boolean; keep_servers: boolean; game_folders: string[]; notify_joins: boolean; notify_helpers: boolean; auto_backups?: boolean };
 type Storage = { downloads: number; pictures: number; folder: string };
 const mb = (n: number) => (n < 1048576 ? `${Math.max(0, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(n < 104857600 ? 1 : 0)} MB`);
 
@@ -409,6 +409,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
             <p className="muted">{ON_COMPUTER_ONLY}</p>
           )}
         </div>
+        {ON_THIS_COMPUTER && <DailyBackups on={prefs?.auto_backups !== false} busy={busy("app:pref:auto_backups")} disabled={!prefs} onChange={(v) => setPref({ auto_backups: v })} />}
         {backup === "backup" && <BackupSheet onClose={() => setBackup(null)} />}
         {backup === "game" && ownGame && <BackupSheet only={[`local:${ownGame}`]} onClose={() => setBackup(null)} />}
         {backup === "restore" && <RestoreAll onClose={() => setBackup(null)} onChanged={reloadApp} />}
@@ -563,4 +564,38 @@ function RemoveEverything({ scan, onClose }: { scan: Scan; onClose: () => void }
 function RestoreAll({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
   const servers = useServers().data?.servers ?? [];
   return <RestoreSheet servers={servers} onClose={onClose} onChanged={onChanged} />;
+}
+
+type AutoBackups = { on: boolean; dir: string; servers: { id: string; name: string; newest: { at: number; bytes: number } | null; count: number }[] };
+
+/** Daily backups of servers on Linux machines: on or off, where they go, and each one's newest. */
+function DailyBackups({ on, busy, disabled, onChange }: { on: boolean; busy: boolean; disabled: boolean; onChange: (v: boolean) => void }) {
+  const [info, setInfo] = useState<AutoBackups | null>(null);
+  useEffect(() => {
+    getJson<AutoBackups>("/api/backup/auto").then(setInfo).catch(() => setInfo(null));
+  }, [on]);
+  const ago = (secs: number) => {
+    const h = Math.max(0, Math.round((Date.now() / 1000 - secs) / 3600));
+    return h < 1 ? "less than an hour ago" : h < 48 ? `${h} hour${h === 1 ? "" : "s"} ago` : `${Math.round(h / 24)} days ago`;
+  };
+  return (
+    <div className="panel">
+      <div className="setting">
+        <span className="name">
+          Back up servers on Linux machines every day
+          <span className="note">Their bans, admins and settings live on the machine. A copy is kept here, the last 7 days of each, while Loner-Strike is open. No passwords or webhooks are included</span>
+        </span>
+        <Switch on={on} label="Back up servers on Linux machines every day" disabled={disabled || busy} onChange={onChange} />
+      </div>
+      {info && info.servers.length > 0 && (
+        <ul className="plain-list muted small-note">
+          {info.servers.map((s) => (
+            <li key={s.id}>{s.name}: {s.newest ? `last backed up ${ago(s.newest.at)} (${s.count} kept)` : on ? "first backup within the hour" : "no daily backups"}</li>
+          ))}
+        </ul>
+      )}
+      {info && info.servers.length === 0 && <p className="muted small-note">No servers on Linux machines yet.</p>}
+      {info && <p className="muted small-note">They're in <code className="mono">{info.dir}</code>, and restore like any backup (Restore, then pick the file).</p>}
+    </div>
+  );
 }

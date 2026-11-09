@@ -46,6 +46,9 @@ pub struct Settings {
     /// it or adds or removes a download
     #[serde(default)]
     pub mute_helpers: bool,
+    /// no daily backups of servers on Linux machines (kept on this computer)
+    #[serde(default)]
+    pub no_auto_backups: bool,
     /// where new dedicated servers go (None: Loner-Strike/Servers in the usual place)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub servers_dir: Option<String>,

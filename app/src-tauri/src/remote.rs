@@ -726,10 +726,14 @@ fi
 # never have it). The first version matched one place only, and padding got past it
 # (left out while /etc/lonerstrike/rcon-open is there: other game servers on this machine whose
 # owner manages them with remote RCON; the Security panel asks before closing it for all)
-[ -e /etc/lonerstrike/rcon-open ] && exit 0
+R='! -i lo -p udp --dport 27015:27020 -m u32 --u32 0>>22&0x3C@8=0xFFFFFFFF -m string --algo bm --icase --string rcon -j DROP'
+if [ -e /etc/lonerstrike/rcon-open ]; then
+  # (left open on purpose: the live rules match what's kept for boot)
+  while iptables -D INPUT $R 2>/dev/null; do :; done
+  exit 0
+fi
 # (the new rule in first; the old ones only go once it's there, so a kernel without the u32
 # match keeps what it had and says so instead of being left open)
-R='! -i lo -p udp --dport 27015:27020 -m u32 --u32 0>>22&0x3C@8=0xFFFFFFFF -m string --algo bm --icase --string rcon -j DROP'
 if ! iptables -C INPUT $R 2>/dev/null && ! iptables -I INPUT $R; then
   echo "Couldn't add the RCON block (no u32 match in this kernel?); the older one stays." >&2
   exit 1
@@ -743,9 +747,11 @@ sudo chmod 755 /usr/local/sbin/lonerstrike-firewall
 # another game server already on this machine (not one of Loner-Strike's): RCON is left as it
 # was, since its owner may run it remotely; the Security panel explains and asks. Asked once:
 # a choice made there (rcon-open there or not) is kept
-if [ ! -e /etc/lonerstrike/rcon-asked ]; then
+# (only on a machine with no RCON block yet: one that has it keeps it; and by the programs'
+# own names, not anything that mentions them)
+if [ ! -e /etc/lonerstrike/rcon-asked ] && ! sudo iptables -S INPUT 2>/dev/null | grep -q -i -- 'rcon\|72636f6e'; then
   other=""
-  for p in $(pgrep -f 'hlds|srcds' 2>/dev/null); do
+  for p in $(pgrep -x 'hlds_linux|hlds_i686|hlds_amd|srcds_linux|srcds_i686|srcds_amd|hlds_run|srcds_run' 2>/dev/null); do
     cwd=$(sudo readlink "/proc/$p/cwd" 2>/dev/null || true)
     case "$cwd" in "$HOME/loner-strike/servers/"*|"") ;; *) other=1 ;; esac
   done
@@ -756,6 +762,7 @@ if [ ! -e /etc/lonerstrike/rcon-asked ]; then
   fi
   sudo touch /etc/lonerstrike/rcon-asked
 fi
+sudo mkdir -p /etc/lonerstrike && sudo touch /etc/lonerstrike/rcon-asked
 sudo tee /etc/systemd/system/lonerstrike-firewall.service >/dev/null <<'LSFWU'
 [Unit]
 Description=Loner-Strike game ports and RCON block

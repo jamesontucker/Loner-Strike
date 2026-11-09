@@ -2850,6 +2850,7 @@ async fn api_restore_prefs(headers: HeaderMap, Json(req): Json<PrefsReq>) -> Rep
 pub fn local_routes() -> Router<Shared> {
     Router::new()
         .route("/api/backup/info", get(api_info))
+        .route("/api/backup/auto", get(api_auto))
         .route("/api/backup/estimate", post(api_estimate))
         .route("/api/backup/export", post(api_export))
         .route("/api/backup/open", post(api_open))
@@ -3386,4 +3387,91 @@ mod tests {
         assert!(open_backup(&root.join("out").join("custom.bsp")).is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
+}
+
+use std::time::Duration;
+
+// ---- daily backups of servers on Linux machines ------------------------------------------
+//
+// A server on a VPS keeps its bans, admins and settings on the VPS: if the machine is lost,
+// so are they. Once a day, while the app is open, each one gets a light backup (no passwords
+// or webhooks: those need a password to be packed) in the app's folder, backups/auto/<id>/,
+// the newest seven kept. A day missed while the app was closed is caught up when it opens.
+
+/// How many daily backups are kept for each server
+const AUTO_KEEP: usize = 7;
+
+pub fn auto_dir() -> PathBuf {
+    crate::sys::app_dir().join("backups").join("auto")
+}
+
+/// A server's daily backups, newest first: (path, when, bytes).
+fn auto_backups_of(id: &str) -> Vec<(PathBuf, std::time::SystemTime, u64)> {
+    let mut v: Vec<(PathBuf, std::time::SystemTime, u64)> = std::fs::read_dir(auto_dir().join(id))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == EXT))
+        .filter_map(|e| {
+            let m = e.metadata().ok()?;
+            Some((e.path(), m.modified().ok()?, m.len()))
+        })
+        .collect();
+    v.sort_by(|a, b| b.1.cmp(&a.1));
+    v
+}
+
+/// One server's daily backup now; older ones past AUTO_KEEP removed.
+fn auto_backup(st: &Shared, id: &str) -> Result<PathBuf, String> {
+    let src = source(st, id)?;
+    let mut planned = vec![plan(st, &src, false, &clean_parts(&[]), true)?];
+    let dir = auto_dir().join(id);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn't make the backups folder ({e})."))?;
+    let path = dir.join(format!("{}-{}.{EXT}", id, crate::sys::stamp()));
+    write_backup(&path, &mut planned, None)?;
+    for (old, _, _) in auto_backups_of(id).into_iter().skip(AUTO_KEEP) {
+        let _ = std::fs::remove_file(old);
+    }
+    Ok(path)
+}
+
+/// Every hour: each Linux server whose newest daily backup is a day old (or missing), and
+/// whose machine answers, backed up. Off in Settings: nothing.
+pub fn auto_backup_loop(st: Shared) {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        std::thread::spawn(move || loop {
+            // (a while after opening first: setup checks and syncs come first)
+            std::thread::sleep(Duration::from_secs(10 * 60));
+            if !crate::app_api::load_settings().no_auto_backups {
+                for e in servers::load().into_iter().filter(|e| e.ready && e.remote.is_some()) {
+                    let due = auto_backups_of(&e.id).first().map_or(true, |(_, at, _)| at.elapsed().map_or(true, |d| d > Duration::from_secs(23 * 3600)));
+                    if !due || restoring_server(&e.id) || crate::setup::current().state == "running" {
+                        continue;
+                    }
+                    if let Err(why) = auto_backup(&st, &e.id) {
+                        crate::diagnostics::log_error("daily backup", &format!("{}: {why}", e.name));
+                    }
+                }
+            }
+            std::thread::sleep(Duration::from_secs(50 * 60));
+        });
+    });
+}
+
+/// What the daily backups have: the folder, and each Linux server's newest one.
+async fn api_auto(headers: HeaderMap) -> Reply {
+    if !from_panel(&headers) {
+        return forbidden();
+    }
+    let each: Vec<Value> = servers::load()
+        .into_iter()
+        .filter(|e| e.ready && e.remote.is_some())
+        .map(|e| {
+            let all = auto_backups_of(&e.id);
+            let newest = all.first().and_then(|(_, at, bytes)| Some(json!({"at": at.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs(), "bytes": bytes})));
+            json!({"id": e.id, "name": e.name, "newest": newest, "count": all.len()})
+        })
+        .collect();
+    answer(Ok(json!({"ok": true, "on": !crate::app_api::load_settings().no_auto_backups, "dir": auto_dir().to_string_lossy(), "servers": each})))
 }
