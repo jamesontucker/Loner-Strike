@@ -3235,7 +3235,12 @@ fn security_items(e: &Entry) -> Result<Value, String> {
         item("user", "Not running as root", get("uid") != "0",
             "The server runs as root, the most powerful account. It still works, but a bug in the game could reach the whole machine. A separate user is safer (Loner-Strike will do this for you in a later version).", None),
         item("rcon", "RCON closed to the internet", get("rcon_rules").parse::<u32>().unwrap_or(0) >= 1 && get("firewall_boot") == "enabled",
-            "Anyone can try the console password from the internet. Only this machine needs it (Loner-Strike reaches it over SSH).", Some("firewall")),
+            if get("rcon_open_choice") == "yes" {
+                "Left open because another game server runs on this machine, and its owner may manage it with remote RCON (HLSW or a web panel). Closing it covers every game server here (UDP 27015-27020): Loner-Strike's own servers don't need it open."
+            } else {
+                "Anyone can try the console password from the internet. Only this machine needs it (Loner-Strike reaches it over SSH)."
+            },
+            Some("firewall")),
         item("updates", "Automatic security updates", get("updates") == "yes",
             "Security fixes for the machine aren't installed by themselves.", Some("security")),
         item("fail2ban", "fail2ban slowing down login guessing", get("fail2ban") == "active",
@@ -3303,7 +3308,13 @@ async fn api_security_fix(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: 
             match req.item.as_str() {
                 "passwords" => run(crate::remote::SSH_KEYS_ONLY_SH.to_string(), &mut last)?,
                 "logs" => crate::remote::logs_now(&r, &e.id, &e.game)?,
-                "firewall" | "security" => run(crate::remote::setup_stage(&req.item).ok_or("That isn't something the app can fix.")?, &mut last)?,
+                "firewall" => {
+                    // (chosen here: closed for every game server on the machine, and remembered)
+                    let pre = "sudo -n rm -f /etc/lonerstrike/rcon-open; sudo -n mkdir -p /etc/lonerstrike; sudo -n touch /etc/lonerstrike/rcon-asked\n";
+                    let stage = crate::remote::setup_stage("firewall").ok_or("That isn't something the app can fix.")?;
+                    run(stage.replacen("sudo tee /usr/local/sbin/lonerstrike-firewall", &format!("{pre}sudo tee /usr/local/sbin/lonerstrike-firewall"), 1), &mut last)?
+                }
+                "security" => run(crate::remote::setup_stage("security").ok_or("That isn't something the app can fix.")?, &mut last)?,
                 "reboot" => {
                     // (never with people on; the game starts again by itself after)
                     if view(&e)["state"] == "running" {

@@ -187,6 +187,11 @@ export function HostingGuide() {
             opens TCP 80 and 443.
           </li>
           <li>
+            <b>A machine that already runs another game server.</b> Loner-Strike sets up its server beside it and doesn't touch it, but some settings are for the whole
+            machine: automatic updates and fail2ban are turned on, and closing RCON to the internet would cover every game server on UDP 27015-27020. So RCON is left
+            open there until you choose otherwise in the Security panel (if you manage the other server with remote RCON, such as HLSW or a web panel, leave it open).
+          </li>
+          <li>
             <b>Backups.</b> Back up servers (on the servers list) before big changes, and now and then.
           </li>
         </ul>

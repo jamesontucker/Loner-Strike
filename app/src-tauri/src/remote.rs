@@ -724,6 +724,9 @@ fi
 # RCON is an out-of-band packet (it starts ffffffff); the game skips spaces before the word, so
 # any such packet with "rcon" anywhere in it is dropped (queries, connects and the game itself
 # never have it). The first version matched one place only, and padding got past it
+# (left out while /etc/lonerstrike/rcon-open is there: other game servers on this machine whose
+# owner manages them with remote RCON; the Security panel asks before closing it for all)
+[ -e /etc/lonerstrike/rcon-open ] && exit 0
 # (the new rule in first; the old ones only go once it's there, so a kernel without the u32
 # match keeps what it had and says so instead of being left open)
 R='! -i lo -p udp --dport 27015:27020 -m u32 --u32 0>>22&0x3C@8=0xFFFFFFFF -m string --algo bm --icase --string rcon -j DROP'
@@ -737,6 +740,22 @@ done
 exit 0
 LSFW
 sudo chmod 755 /usr/local/sbin/lonerstrike-firewall
+# another game server already on this machine (not one of Loner-Strike's): RCON is left as it
+# was, since its owner may run it remotely; the Security panel explains and asks. Asked once:
+# a choice made there (rcon-open there or not) is kept
+if [ ! -e /etc/lonerstrike/rcon-asked ]; then
+  other=""
+  for p in $(pgrep -f 'hlds|srcds' 2>/dev/null); do
+    cwd=$(sudo readlink "/proc/$p/cwd" 2>/dev/null || true)
+    case "$cwd" in "$HOME/loner-strike/servers/"*|"") ;; *) other=1 ;; esac
+  done
+  sudo mkdir -p /etc/lonerstrike
+  if [ -n "$other" ]; then
+    sudo touch /etc/lonerstrike/rcon-open
+    echo "Another game server runs on this machine, so RCON was left open to the internet. The server's Security panel can close it for all of them."
+  fi
+  sudo touch /etc/lonerstrike/rcon-asked
+fi
 sudo tee /etc/systemd/system/lonerstrike-firewall.service >/dev/null <<'LSFWU'
 [Unit]
 Description=Loner-Strike game ports and RCON block
@@ -1355,6 +1374,7 @@ echo "fail2ban=$(systemctl is-active fail2ban 2>/dev/null)"
 [ -e /var/run/reboot-required ] && echo "reboot=yes" || echo "reboot=no"
 echo "rcon_rules=$(sudo -n iptables -S INPUT 2>/dev/null | grep -- '--string "rcon"' | grep -c -- '--icase')"
 echo "firewall_boot=$(systemctl is-enabled lonerstrike-firewall 2>/dev/null)"
+[ -e /etc/lonerstrike/rcon-open ] && echo "rcon_open_choice=yes" || echo "rcon_open_choice=no"
 echo "sandbox=$(grep -c -xF '# {rev}' /etc/systemd/system/{unit}.service 2>/dev/null)"
 echo "logs_timer=$(systemctl is-enabled lonerstrike-logs.timer 2>/dev/null)"
 df -P / | awk 'NR==2{{gsub("%","",$5); print "disk_used="$5; print "disk_free_mb="int($4/1024)}}'
