@@ -101,20 +101,29 @@ pub struct Style {
     /// how many team players the style has, against the flavour's usual share
     pub team_players: f64,
     pub skill_scale: Option<f64>,
+    /// how many careful players (who hold angles and camp), against the flavour's usual share
+    pub careful: f64,
+    /// the lowest skill anyone in the style plays at (after the scale): a Veterans lobby
+    /// has no bot that plays like it's new, whatever the roster gave it
+    pub skill_floor: f64,
 }
 
 /// The styles: aggression range, the bounds teamwork is kept in, how many team
 /// players, and how skill is scaled.
 pub fn builtin_styles() -> Vec<Style> {
-    let s = |name: &str, a: (f64, f64), t: (f64, f64), tp: f64, k: Option<f64>| Style { name: name.into(), aggression: a, teamwork: t, team_players: tp, skill_scale: k };
+    let s = |name: &str, a: (f64, f64), t: (f64, f64), tp: f64, k: Option<f64>| Style { name: name.into(), aggression: a, teamwork: t, team_players: tp, skill_scale: k, careful: 1.0, skill_floor: 0.0 };
     vec![
         s("Pub", (25.0, 100.0), (0.0, 75.0), 1.0, Some(1.0)),
-        s("Matchmaking", (30.0, 90.0), (0.0, 85.0), 1.4, Some(1.0)),
-        s("Veterans", (35.0, 95.0), (0.0, 85.0), 1.2, Some(1.0)),
+        Style { skill_floor: 45.0, ..s("Matchmaking", (30.0, 90.0), (0.0, 85.0), 1.4, Some(1.0)) },
+        Style { skill_floor: 60.0, ..s("Veterans", (35.0, 95.0), (0.0, 85.0), 1.2, Some(1.0)) },
         s("Newbie", (30.0, 95.0), (0.0, 70.0), 0.6, Some(0.6)),
-        s("LockedIn", (40.0, 100.0), (0.0, 90.0), 1.4, Some(1.0)),
-        s("Hackers", (60.0, 100.0), (0.0, 70.0), 0.6, Some(1.0)),
+        Style { skill_floor: 70.0, ..s("LockedIn", (40.0, 100.0), (0.0, 90.0), 1.4, Some(1.0)) },
+        Style { skill_floor: 75.0, ..s("Hackers", (60.0, 100.0), (0.0, 70.0), 0.6, Some(1.0)) },
         s("Gods", (100.0, 100.0), (0.0, 100.0), 1.0, None),
+        // friends at a LAN: every level, plenty who play together
+        s("LanParty", (30.0, 85.0), (0.0, 90.0), 3.0, Some(0.85)),
+        // old-timers: good, slow and methodical, a lot of them holding angles
+        Style { careful: 2.5, skill_floor: 60.0, ..s("OldTimers", (10.0, 60.0), (0.0, 80.0), 1.0, Some(1.0)) },
     ]
 }
 
@@ -158,13 +167,13 @@ impl Flavour {
     }
 
     /// Chance weights of each playstyle (the order of PLAYSTYLES).
-    fn weights(self, team_players: f64) -> [f64; 5] {
+    fn weights(self, team_players: f64, careful: f64) -> [f64; 5] {
         let [r, ro, l, a, t] = match self {
             Flavour::Team => [22.0, 22.0, 18.0, 22.0, 16.0],
             Flavour::Solo => [25.0, 30.0, 20.0, 20.0, 5.0],
             Flavour::Hold => [8.0, 15.0, 22.0, 50.0, 5.0],
         };
-        [r, ro, l, a, t * team_players]
+        [r, ro, l, a * careful, t * team_players]
     }
 }
 
@@ -227,7 +236,7 @@ pub fn reshape(text: &str, style: &Style, flavour: Flavour, seed: u64) -> String
         alo *= 0.6; // more room for the careful ones
     }
     let (tlo, thi) = style.teamwork;
-    let weights = flavour.weights(style.team_players);
+    let weights = flavour.weights(style.team_players, style.careful);
     let mut rnd = PyRandom::new(seed + style.name.chars().count() as u64 + flavour as u64 * 100);
 
     // aggression each template (and Default) gives, for bots without their own line
@@ -311,7 +320,7 @@ pub fn reshape(text: &str, style: &Style, flavour: Flavour, seed: u64) -> String
             "AttackDelay" => "0".into(),
             _ => match style.skill_scale {
                 None => "100".into(),
-                Some(k) => format!("{}", (v * k).trunc() as i64),
+                Some(k) => format!("{}", (v * k).max(style.skill_floor).min(100.0).trunc() as i64),
             },
         };
         out.push(format!("{indent}{key}{eq}{new}{rest}"));
@@ -362,6 +371,19 @@ mod tests {
     }
 
     #[test]
+    fn old_timers_are_careful_and_a_lan_party_plays_together() {
+        let find = |n: &str| builtin_styles().into_iter().find(|s| s.name == n).unwrap();
+        let (pubs, old, lan) = (find("Pub"), find("OldTimers"), find("LanParty"));
+        let calm = |b: &[(i64, i64)]| b.iter().filter(|x| x.0 <= 30).count();
+        let pb = bots(&reshape(&profile(80), &pubs, Flavour::Solo, 27015));
+        let ob = bots(&reshape(&profile(80), &old, Flavour::Solo, 27015));
+        assert!(calm(&ob) > calm(&pb) * 2, "old-timers: more careful players ({} vs {})", calm(&ob), calm(&pb));
+        let lb = bots(&reshape(&profile(80), &lan, Flavour::Solo, 27015));
+        let together = |b: &[(i64, i64)]| b.iter().filter(|x| x.1 > 40).count();
+        assert!(together(&lb) > together(&pb), "a LAN party: more who play together ({} vs {})", together(&lb), together(&pb));
+    }
+
+    #[test]
     fn every_bot_gets_its_own_playstyle() {
         let pub_style = builtin_styles().into_iter().find(|s| s.name == "Pub").unwrap();
         for flavour in Flavour::ALL {
@@ -397,6 +419,24 @@ mod tests {
         assert!(out.contains("Template Elite\r\n\tSkill = 60\r\n\tAggression = 95\r\nEnd"), "{out}");
         assert!(out.contains("Default\r\n\tSkill = 30\r\n"));
         assert_eq!(out, reshape(&profile(2), &newbie, Flavour::Solo, 1), "same input, same file");
+    }
+
+    #[test]
+    fn strong_styles_have_a_skill_floor() {
+        let skills = |name: &str| -> Vec<i64> {
+            let st = builtin_styles().into_iter().find(|s| s.name == name).unwrap();
+            reshape(&profile(40), &st, Flavour::Solo, 7)
+                .lines()
+                .filter_map(|l| l.trim().strip_prefix("Skill = ").and_then(|v| v.trim().parse().ok()))
+                .collect()
+        };
+        for (name, floor) in [("Veterans", 60), ("LockedIn", 70), ("Hackers", 75), ("OldTimers", 60), ("Matchmaking", 45)] {
+            let v = skills(name);
+            assert!(!v.is_empty() && v.iter().all(|&x| (floor..=100).contains(&x)), "{name}: {v:?}");
+        }
+        assert!(skills("Gods").iter().all(|&x| x == 100));
+        // Newbie and Pub keep the roster's low end
+        assert!(skills("Newbie").iter().any(|&x| x < 45));
     }
 
     #[test]

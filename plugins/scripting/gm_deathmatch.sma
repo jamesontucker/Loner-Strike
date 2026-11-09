@@ -19,6 +19,9 @@
 #include <fakemeta>
 #include <hamsandwich>
 
+// gm_people (optional): the bot's playstyle (an AWPer keeps to the AWP)
+native people_get(id, const key[])
+
 #define PLUGIN  "GM Deathmatch"
 #define VERSION "1.0"
 #define AUTHOR  "local"
@@ -71,8 +74,10 @@ new const SECONDARY[][][] =
 enum { GUNS_ALL, GUNS_RIFLES, GUNS_SMGS, GUNS_SNIPERS, GUNS_PISTOLS }
 new const PRIMARY_KIND[] = { 1, 1, 3, 1, 1, 1, 1, 3, 2, 2, 2, 2, 2, 1 }
 
-// Bots get one of these (good weapons only)
+// Bots get one of these (good weapons only): each its own favourite from its name
 new const BOT_PRIMARY[] = { 0, 1, 1, 0, 3, 4, 2, 8 }
+// and now and then (an off life, trying something) one of these
+new const BOT_OTHER[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }
 
 // Max backpack ammo, indexed by CSW_*
 new const MAXBP[31] = { 0, 52, 0, 90, 0, 32, 0, 100, 90, 0, 120, 100, 100, 90, 90, 90, 100, 120, 30, 120, 200, 32, 90, 120, 90, 0, 35, 90, 90, 0, 100 }
@@ -88,6 +93,16 @@ new bool:g_Remember[33]
 
 new g_pDelay, g_pProtect, g_pRandom, g_pGrenade, g_pGuns, g_pFreeForAll
 new g_FwSpawn
+
+public plugin_natives()
+{
+	set_native_filter("native_filter")
+}
+
+public native_filter(const name[], index, trap)
+{
+	return (!trap && equal(name, "people_", 7)) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+}
 
 public plugin_precache()
 {
@@ -126,6 +141,8 @@ public plugin_init()
 
 	RegisterHam(Ham_Spawn, "player", "fw_player_spawn", 1)
 	RegisterHam(Ham_Killed, "player", "fw_player_killed", 1)
+	// spawn protection ends the moment the protected player shoots
+	register_forward(FM_CmdStart, "fw_cmdstart")
 	register_event("TeamInfo", "ev_teaminfo", "a")
 
 	register_clcmd("say /guns", "cmd_guns")
@@ -424,6 +441,19 @@ public fw_player_spawn(id)
 	set_task(0.1, "task_equip", id + TASK_EQUIP)
 }
 
+public fw_cmdstart(id, uc)
+{
+	if (id < 1 || id > MaxClients || !task_exists(id + TASK_PROTECT))
+		return FMRES_IGNORED
+	if (get_uc(uc, UC_Buttons) & IN_ATTACK && is_user_alive(id))
+	{
+		// (only with a gun out: the knife and grenades count too, all are an attack)
+		remove_task(id + TASK_PROTECT)
+		task_unprotect(id + TASK_PROTECT)
+	}
+	return FMRES_IGNORED
+}
+
 public task_unprotect(taskid)
 {
 	new id = taskid - TASK_PROTECT
@@ -439,7 +469,8 @@ bool:free_for_all()
 	return g_pFreeForAll && get_pcvar_num(g_pFreeForAll) != 0
 }
 
-// Pick a free spawn point away from enemies
+// Pick a free spawn point away from enemies (none in an enemy's sight, at least 1000 units off
+// if it can be) and from teammates
 random_spawn(id)
 {
 	new Float:mins[3], Float:origin[3]
@@ -448,7 +479,7 @@ random_spawn(id)
 	new myteam = free_for_all() ? -1 : get_user_team(id)
 
 	new start = random(g_SpawnCount)
-	new best = -1, Float:bestDist = -1.0
+	new best = -1, Float:bestDist = -99999.0
 	for (new n = 0; n < g_SpawnCount; n++)
 	{
 		new i = (start + n) % g_SpawnCount
@@ -458,24 +489,50 @@ random_spawn(id)
 		if (get_tr2(0, TR_StartSolid) || get_tr2(0, TR_AllSolid) || !get_tr2(0, TR_InOpen))
 			continue
 
-		// distance to the closest living enemy
-		new Float:closest = 99999.0
+		// distance to the closest living enemy (one that can see the spot counts as right
+		// there: spawning in plain view is spawning to die), and teammates close by (spawning
+		// next to teammates puts the team in one bunch: away from them too, if it can be)
+		new Float:closest = 99999.0, mates
+		new Float:eye[3]
+		eye = origin
+		eye[2] += 17.0
 		for (new p = 1; p <= MaxClients; p++)
 		{
-			if (p == id || !is_user_alive(p) || get_user_team(p) == myteam)
+			if (p == id || !is_user_alive(p))
 				continue
 			new Float:other[3]
 			pev(p, pev_origin, other)
-			closest = floatmin(closest, get_distance_f(origin, other))
+			new Float:d = get_distance_f(origin, other)
+			if (myteam != -1 && get_user_team(p) == myteam)
+			{
+				if (d < 400.0)
+					mates++
+				continue
+			}
+			// (looked at only within a sightline that matters, and only for a spot that's
+			// otherwise in the running)
+			if (d < 2500.0 && d < closest)
+			{
+				new Float:theirs[3], Float:ofs[3], Float:frac
+				pev(p, pev_view_ofs, ofs)
+				theirs[0] = other[0]; theirs[1] = other[1]; theirs[2] = other[2] + ofs[2]
+				engfunc(EngFunc_TraceLine, eye, theirs, IGNORE_MONSTERS, id, 0)
+				get_tr2(0, TR_flFraction, frac)
+				if (frac >= 1.0)
+					d = floatmin(d, 200.0)
+			}
+			closest = floatmin(closest, d)
 		}
-		if (closest > 600.0)
+		if (closest > 1000.0 && !mates)
 		{
 			best = i
 			break
 		}
-		if (closest > bestDist)
+		// mainly away from enemies; a teammate close by counts against a spot
+		new Float:score = closest - 300.0 * float(mates)
+		if (score > bestDist)
 		{
-			bestDist = closest
+			bestDist = score
 			best = i
 		}
 	}
@@ -497,7 +554,7 @@ public task_equip(taskid)
 
 	if (is_user_bot(id))
 	{
-		give_loadout(id, bot_primary(), random(2))
+		give_loadout(id, bot_primary(id), bot_secondary(id))
 		return
 	}
 	if (guns_kind() == GUNS_PISTOLS && g_Remember[id] && g_Secondary[id] >= 0)
@@ -526,18 +583,125 @@ bool:primary_allowed(i)
 	return kind == GUNS_ALL || PRIMARY_KIND[i] == kind
 }
 
-bot_primary()
+// A bot's gun this life: like a person, mostly the one it always picks (from its name, so a
+// regular has the same favourite every time), sometimes its second choice, now and then
+// something else. gm_people's AWPers and odd-gun players lean that way
+bot_primary(id)
 {
 	if (guns_kind() == GUNS_PISTOLS)
 		return -1
-	new pick = BOT_PRIMARY[random(sizeof BOT_PRIMARY)]
+	new h = name_hash(id)
+	new main = BOT_PRIMARY[h % sizeof BOT_PRIMARY], second = BOT_PRIMARY[(h / 7) % sizeof BOT_PRIMARY]
+	// rusher roamer lurker careful camper awper knifer nader ninja objective weirdgun
+	new style = LibraryExists("gm_people", LibType_Library) ? people_get(id, "style") : -1
+	if (style == 5)
+		main = 2
+	else if (style == 10)
+		main = 9 + (h / 3) % 5
+	else if (style == 0 && (h / 5) % 3 == 0)
+		second = 8
+	new r = random(100), pick = r < 75 ? main : r < 93 ? second : BOT_OTHER[random(sizeof BOT_OTHER)]
 	if (primary_allowed(pick))
 		return pick
+	if (primary_allowed(main))
+		return main
+	// (a restricted set, snipers or SMGs only: a lasting favourite and second choice among
+	// what's allowed, from the name too, then now and then something else)
 	new allowed[sizeof PRIMARY], n
 	for (new i = 0; i < sizeof PRIMARY; i++)
 		if (primary_allowed(i))
 			allowed[n++] = i
-	return n ? allowed[random(n)] : -1
+	if (!n)
+		return -1
+	if (r < 75)
+		return allowed[h % n]
+	if (r < 93)
+		return allowed[(h / 7) % n]
+	return allowed[random(n)]
+}
+
+// Its pistol: the same one every life (Deagle or USP, from its name)
+bot_secondary(id)
+{
+	return (name_hash(id) / 13) % 3 == 0 ? 1 : 0
+}
+
+name_hash(id)
+{
+	new full[32], name[32], h = 5381
+	get_user_name(id, full, charsmax(full))
+	ls_bare_name(full, name, charsmax(name))
+	for (new i = 0; name[i]; i++)
+		h = ((h << 5) + h + name[i]) & 0xFFFFFF
+	return h
+}
+
+// A name without its clan tag, by the bot brain's rules (LsBareName in cs_bot_ls.cpp; every
+// plugin uses this same copy, so a regular is the same person to all of them): a bracketed
+// tag at the start or the end ([TAG], (TAG), {TAG}, <TAG>, |TAG|, -=TAG=-) goes, twice over,
+// so "-=[CoC]=- Bob", "[FX]Dave", "(1)Dave" and "Dave |AX|" are Bob and Dave. A bar inside
+// a name ("GG | Glacier") is left alone. A name that's all tag stays as it is
+ls_bare_name(const name[], out[], len)
+{
+	new const opens[] = "[({<|", closes[] = "])}>|"
+	new n = strlen(name), a = 0, b = n
+	for (new pass = 0; pass < 2; pass++)
+	{
+		// leading
+		while (a < b && name[a] == ' ')
+			a++
+		new o = a < b ? ls_char_in(opens, name[a]) : -1
+		if (o >= 0)
+		{
+			for (new k = a + 1; k < b; k++)
+				if (name[k] == closes[o])
+				{
+					a = k + 1
+					break
+				}
+		}
+		else if (b - a > 4 && name[a] == '-' && name[a + 1] == '=')
+		{
+			for (new k = a + 2; k + 1 < b; k++)
+				if (name[k] == '=' && name[k + 1] == '-')
+				{
+					a = k + 2
+					break
+				}
+		}
+		// trailing
+		while (b > a && name[b - 1] == ' ')
+			b--
+		new c = b > a ? ls_char_in(closes, name[b - 1]) : -1
+		if (c >= 0)
+		{
+			for (new k = b - 2; k >= a; k--)
+				if (name[k] == opens[c])
+				{
+					b = k
+					break
+				}
+		}
+	}
+	if (b <= a)
+	{
+		a = 0
+		b = n
+	}
+	new m = min(b - a, len)
+	for (new i = 0; i < m; i++)
+		out[i] = name[a + i]
+	out[m] = 0
+	trim(out)
+	return m
+}
+
+ls_char_in(const set[], ch)
+{
+	for (new i = 0; set[i]; i++)
+		if (set[i] == ch)
+			return i
+	return -1
 }
 
 give_loadout(id, primary, secondary)

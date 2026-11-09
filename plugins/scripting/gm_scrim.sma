@@ -91,6 +91,8 @@ enum { BUY_FULL, BUY_ECO, BUY_FORCE }
 #define TASK_BOTMONEY 6301
 #define TASK_CALLBUY  6310
 new g_pBotEco, g_SideBuy[3], g_Held[33], g_Cap[33]
+// each side's buy this round for Loner-Strike's bot brain (gm_scrim_buy_t / _ct: 0 buy, 1 save, 2 force)
+new g_pBuySide[3]
 new g_PausesLeft[2], bool:g_PausePending, g_PauseTeam = -1, bool:g_Paused, g_PausedAt, g_PauseBy[32]
 
 set_phase(ph)
@@ -109,6 +111,8 @@ public plugin_init()
 	g_pKnife     = register_cvar("gm_scrim_knife", "1")
 	g_pBots      = register_cvar("gm_scrim_bots", "1")
 	g_pBotEco    = register_cvar("gm_scrim_boteco", "1")
+	g_pBuySide[1] = register_cvar("gm_scrim_buy_t", "0")
+	g_pBuySide[2] = register_cvar("gm_scrim_buy_ct", "0")
 	g_pPlayers   = register_cvar("gm_scrim_players", "10")
 	g_pPauses    = register_cvar("gm_scrim_pauses", "2")
 	g_pPauseTime = register_cvar("gm_scrim_pausetime", "60")
@@ -827,6 +831,9 @@ public ev_round_start()
 // ---- bot economy -------------------------------------------------------------------
 
 
+// the side (1 T, 2 CT) that won the last pistol round, for the round after it
+new g_PistolWon
+
 bool:pistol_round()
 {
 	return !g_InOt && (g_Rounds == 0 || g_Rounds == g_MaxRounds / 2)
@@ -835,7 +842,11 @@ bool:pistol_round()
 public task_bot_buy()
 {
 	if (g_Phase != PH_LIVE || !get_pcvar_num(g_pBotEco))
+	{
+		set_pcvar_num(g_pBuySide[1], BUY_FULL)
+		set_pcvar_num(g_pBuySide[2], BUY_FULL)
 		return
+	}
 	for (new t = 1; t <= 2; t++)
 		plan_side(t)
 }
@@ -853,12 +864,14 @@ plan_side(t)
 		}
 	}
 	g_SideBuy[t] = BUY_FULL
+	set_pcvar_num(g_pBuySide[t], BUY_FULL)
 	if (!n || pistol_round() || g_InOt)
 		return
 	new avg = total / n
-	// rifle, helmet and a grenade or two (the CT rifles cost more)
-	new full = t == 1 ? 3700 : 4200
-	if (avg >= full)
+	// rifle and armour (the CT rifles cost more); the round after a won pistol round is
+	// never a save: SMGs and armour on the pistol-round money, the way people play it
+	new full = t == 1 ? 3150 : 3750
+	if (avg >= full || g_PistolWon == t)
 		g_SideBuy[t] = BUY_FULL
 	else
 	{
@@ -868,6 +881,8 @@ plan_side(t)
 		new last = them >= g_MaxRounds / 2
 		g_SideBuy[t] = (last || (avg >= 2500 && random_num(1, 100) <= 30)) ? BUY_FORCE : BUY_ECO
 	}
+	// (the bot brain reads it when the bots buy: 0.5 s or more into the round, after this)
+	set_pcvar_num(g_pBuySide[t], g_SideBuy[t])
 	if (g_SideBuy[t] == BUY_ECO)
 	{
 		for (new i = 0; i < n; i++)
@@ -955,6 +970,7 @@ round_won(CsTeams:side)
 	}
 	if (g_Phase != PH_LIVE)
 		return
+	g_PistolWon = pistol_round() ? (_:side) : 0
 	g_Rounds++
 	if (side == CS_TEAM_T || side == CS_TEAM_CT)
 		g_Score[team_of(side)]++

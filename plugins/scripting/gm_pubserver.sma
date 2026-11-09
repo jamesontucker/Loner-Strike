@@ -28,6 +28,10 @@
 	            same mode-then-map vote instead of mapchooser's (paused for that map); the
 	            pick waits for the map to end. "gm_votemode" (admin, or the app) starts one.
 	            With gm_modevote 0 rock the vote and the end of the map work as before.
+	Room:       with the bot count on "fill", a person joining a team makes a bot leave. The
+	            game would kick the first bot in the list (the longest-standing regulars);
+	            here a bot that's dead, a newcomer, and new on the server goes instead, and
+	            it says it's off a moment after the person connects, before they pick a team.
 	Life:       bots join a few at a time when a map starts (gm_botjoin), say they're
 	            going before they leave (gm_churn), and some come back later; now and
 	            then one has tweaked its name. Bots join in on rock the vote and vote
@@ -44,6 +48,9 @@
 
 // gm_botchat (optional): bots' lines
 native botchat_say(id, const section[], other, Float:chance)
+native botchat_left(id)
+native people_get(id, const key[])
+native people_alias(id, const name[])
 
 // gamemodes.amxx (library gm_modes): the modes, the maps that suit one, switching
 native gm_modes_count()
@@ -63,6 +70,7 @@ native gm_modes_next(mode, const map[])
 #define TASK_WELCOME 5400
 #define TASK_CLANS   5500
 #define TASK_ENDVOTE 5600
+#define TASK_BYE     5700   // a bot saying it's off to make room (+ userid)
 
 #define VOTE_TIME    15
 #define VOTE_MAPS    5
@@ -76,6 +84,7 @@ native gm_modes_next(mode, const map[])
 new g_pRegulars, g_pChurn, g_pRtv, g_pWelcome, g_pClans, g_pBotJoin, g_pBotVotes, g_pRampTarget
 new bool:g_Chat
 new Array:g_LeftNames, Array:g_LeftAt   // bots that left this map, and when
+new g_RealName[33][32]           // a bot's own name when it shows up as a variant ("Dave_" is Dave)
 new g_RampTarget, g_RampSet             // joining a few at a time
 new g_BotVote[VOTE_MAPS + 1]            // bots' votes, kept apart from people's
 new bool:g_Career
@@ -107,6 +116,12 @@ new bool:g_McPaused          // mapchooser paused for this map
 new bool:g_Changing          // a vote's map change is on its way
 new bool:g_BothZombies       // "zombie" and "zp5" are both in the vote (zp5 keeps its full name)
 new g_StageMode = -1         // the map stage: maps for this mode
+new Float:g_BotSince[33]     // when each bot joined
+new g_LeaverFor[33]          // a person who just connected: the bot that leaves for them (userid)
+new bool:g_Leaving[33]       // this bot is the one going for someone
+new bool:g_IsRegular[33]     // this bot is a returning regular (a quota kick takes a newcomer first)
+new bool:g_NoLeft            // gm_botchat has no botchat_left (an older one)
+new bool:g_NoAlias           // gm_people has no people_alias (an older one)
 new g_Score[2]
 
 public plugin_init()
@@ -140,6 +155,9 @@ public plugin_init()
 	register_clcmd("gm_welcome_show", "cmd_welcome")
 	register_concmd("gm_votemode", "cmd_votemode", ADMIN_VOTE, "- starts a game mode vote, then a map vote")
 	register_event("TeamScore", "ev_teamscore", "a")
+	// a person picking a team (VGUI and the old menu): a bot makes room first, our choice
+	register_clcmd("jointeam", "cmd_jointeam")
+	register_menucmd(register_menuid("Team_Select", 1), 1023, "menu_team")
 
 	get_datadir(g_DataDir, charsmax(g_DataDir))
 	add(g_DataDir, charsmax(g_DataDir), "/gamemodes")
@@ -157,7 +175,11 @@ public plugin_natives()
 
 public native_filter(const name[], index, trap)
 {
-	return (!trap && (equal(name, "botchat_", 8) || equal(name, "gm_modes_", 9))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+	if (!trap && equal(name, "botchat_left"))
+		g_NoLeft = true
+	if (!trap && equal(name, "people_alias"))
+		g_NoAlias = true
+	return (!trap && (equal(name, "botchat_", 8) || equal(name, "gm_modes_", 9) || equal(name, "people_", 7))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 say_line(id, const section[], Float:chance)
@@ -329,7 +351,8 @@ bool:free_name(name[], len)
 	{
 		ArrayGetString(g_Pool, random(n), name, len)
 		// the last tries take any free name rather than none
-		if (!TrieKeyExists(g_Taken, name) && !name_in_use(name) && (tries >= 50 || tag_fits(name)))
+		// (regulars off: their names are free to anyone)
+		if ((!get_pcvar_num(g_pRegulars) || !TrieKeyExists(g_Taken, name)) && !name_in_use(name) && (tries >= 50 || tag_fits(name)))
 			return true
 	}
 	return false
@@ -337,22 +360,49 @@ bool:free_name(name[], len)
 
 public fw_create_fake_client(const netname[])
 {
-	if (g_Creating || g_Career || !get_pcvar_num(g_pRegulars) || !ArraySize(g_Pool))
+	if (g_Creating || g_Career || !ArraySize(g_Pool))
 		return FMRES_IGNORED
 
-	new name[32], bool:found
-	if (TrieGetString(g_Regular, netname, name, charsmax(name)))
+	new name[32], untweaked[32], bool:found, bool:regular
+	// regulars off: the game's own names, except a second bot with a name already here (the
+	// game would call it "(1)Dave", and which one is which would swap between maps): a free
+	// name from the pool instead
+	if (!get_pcvar_num(g_pRegulars))
+	{
+		if (!name_in_use(netname) || !free_name(name, charsmax(name)))
+			return FMRES_IGNORED
+		found = true
+	}
+	else if (TrieGetString(g_Regular, netname, name, charsmax(name)))
 	{
 		// the regular shows up most of the time; otherwise a newcomer takes the profile
 		found = random(100) >= NEWCOMER_PCT && !name_in_use(name)
+		regular = found
 		if (!found)
-			found = came_back(name, charsmax(name)) || clan_friend(name, charsmax(name)) || free_name(name, charsmax(name))
+		{
+			// (someone who left and came back counts as a regular too: it's been here before,
+			// and isn't the first to go again)
+			found = came_back(name, charsmax(name))
+			regular = found
+			if (!found)
+				found = clan_friend(name, charsmax(name)) || free_name(name, charsmax(name))
+		}
 		else
+		{
+			// (a small change to the name is the same person: gm_people is told who it is)
+			copy(untweaked, charsmax(untweaked), name)
 			tweak_name(name, charsmax(name))
+			if (equal(untweaked, name))
+				untweaked[0] = 0
+		}
 	}
-	else if (came_back(name, charsmax(name)) || clan_friend(name, charsmax(name)) || free_name(name, charsmax(name)))
+	else
 	{
-		found = true
+		regular = came_back(name, charsmax(name))
+		found = regular || clan_friend(name, charsmax(name)) || free_name(name, charsmax(name))
+	}
+	if (found && get_pcvar_num(g_pRegulars) && !TrieKeyExists(g_Regular, netname))
+	{
 		TrieSetString(g_Regular, netname, name)
 		TrieSetCell(g_Taken, name, 1)
 		new f = fopen(fmt("%s/regulars.ini", g_DataDir), "at")
@@ -368,6 +418,13 @@ public fw_create_fake_client(const netname[])
 	g_Creating = true
 	new ent = engfunc(EngFunc_CreateFakeClient, name)
 	g_Creating = false
+	if (1 <= ent <= MaxClients)
+	{
+		g_IsRegular[ent] = regular
+		copy(g_RealName[ent], charsmax(g_RealName[]), untweaked[0] ? untweaked : name)
+		if (untweaked[0] && !g_NoAlias && LibraryExists("gm_people", LibType_Library))
+			people_alias(ent, untweaked)
+	}
 	forward_return(FMV_CELL, ent)
 	return FMRES_SUPERCEDE
 }
@@ -443,6 +500,9 @@ public task_churn()
 	say_line(id, "leave", 1.0)
 	new name[32]
 	get_user_name(id, name, charsmax(name))
+	// (by its own name: a "Dave_" who comes back is Dave, untweaked)
+	if (g_RealName[id][0])
+		copy(name, charsmax(name), g_RealName[id])
 	ArrayPushString(g_LeftNames, name)
 	ArrayPushCell(g_LeftAt, floatround(get_gametime()))
 	set_task(random_float(2.5, 5.0), "task_kick", get_user_userid(id))
@@ -693,6 +753,11 @@ rock(id, bool:modeWord = false)
 public client_disconnected(id)
 {
 	g_Rocked[id] = false
+	// a person who never picked a team: the bot that was going for them stays after all
+	release_leaver(id)
+	g_Leaving[id] = false
+	g_IsRegular[id] = false
+	g_RealName[id][0] = 0
 	for (new i = 0; i < g_MNomCount; i++)
 	{
 		if (g_MNomBy[i] != id)
@@ -1860,10 +1925,210 @@ public cmd_votemode(id, level, cid)
 }
 
 // ---------------------------------------------------------------------------
+// Making room: which bot leaves when a person takes a slot (bot_quota_mode fill)
+// ---------------------------------------------------------------------------
+
+// A bot will have to go when this person joins a team: the bot count fills the server up
+// to bot_quota with people on teams counted, and one more is about to be
+bool:room_needed(id)
+{
+	if (g_Career || get_cvar_num("gm_scrim_phase"))
+		return false
+	new mode[8]
+	get_cvar_string("bot_quota_mode", mode, charsmax(mode))
+	if (!equali(mode, "fill"))
+		return false
+	new bots, people
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (!is_user_connected(i) || is_user_hltv(i))
+			continue
+		if (is_user_bot(i))
+			bots++
+		else if (i != id && (get_user_team(i) == 1 || get_user_team(i) == 2))
+			people++
+	}
+	return bots > 0 && bots > get_cvar_num("bot_quota") - (people + 1)
+}
+
+// The bot to go: one on the team the person is joining (so the teams stay even and the game
+// takes the join), a dead one before a living one (a kick mid-round wrecks it less), a
+// newcomer before a regular, and the newest on the server first; never one already going
+// One the round hangs on right now: the bomb carrier, a team's last one alive, or one still
+// doing what a person asked (pick_leaver's +2000, on its own)
+bool:key_bot(i)
+{
+	if (!is_user_alive(i))
+		return false
+	if (user_has_weapon(i, CSW_C4))
+		return true
+	new t = get_user_team(i), n
+	for (new j = 1; j <= MaxClients; j++)
+		if (j != i && is_user_alive(j) && get_user_team(j) == t)
+			n++
+	if ((t == 1 || t == 2) && n == 0)
+		return true
+	new Float:now = get_gametime(), Float:asked, Float:order[3]
+	pev(i, pev_fuser4, asked)
+	pev(i, pev_vuser1, order)
+	return (asked > 0.0 && asked <= now && now - asked < 30.0) || order[0] > now
+}
+
+pick_leaver(team = 0)
+{
+	new best, best_score = cellmax, Float:now = get_gametime()
+	new alive[3]
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_alive(i) && (get_user_team(i) == 1 || get_user_team(i) == 2))
+			alive[get_user_team(i)]++
+	new bool:planted = engfunc(EngFunc_FindEntityByString, -1, "model", "models/w_c4.mdl") > 0
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (!is_user_connected(i) || !is_user_bot(i) || is_user_hltv(i) || g_Leaving[i])
+			continue
+		new t = get_user_team(i)
+		// (never, if it can be helped, one the round hangs on: the bomb carrier, a planter or
+		// defuser, a team's last one alive, or one doing what a person just asked of it; the
+		// brain notes an order it took in fuser4)
+		// (and while that order runs: its end time is in vuser1's x)
+		new Float:asked, Float:order[3]
+		pev(i, pev_fuser4, asked)
+		pev(i, pev_vuser1, order)
+		new bool:key = is_user_alive(i) && (user_has_weapon(i, CSW_C4) || ((t == 1 || t == 2) && alive[t] == 1)
+			|| (t == 2 && planted && (pev(i, pev_button) & IN_USE)) || (asked > 0.0 && asked <= now && now - asked < 30.0)
+			|| order[0] > now)
+		new score = ((team == 1 || team == 2) && t != team ? 5000 : 0) + (key ? 2000 : 0)
+			+ (is_user_alive(i) ? 1000 : 0) + (g_IsRegular[i] ? 300 : 0) + min(floatround((now - g_BotSince[i]) / 60.0), 200)
+		if (score < best_score)
+		{
+			best_score = score
+			best = i
+		}
+	}
+	return best
+}
+
+// A person connected and a bot will have to make room: one is set aside for them now (so
+// several people coming in at once each get a different one); it says bye and goes only
+// once the person picks a team. Nothing is said before then: they may never pick one
+make_room_early(id)
+{
+	g_LeaverFor[id] = 0
+	if (!room_needed(id))
+		return
+	new bot = pick_leaver()
+	if (!bot)
+		return
+	g_Leaving[bot] = true
+	g_LeaverFor[id] = get_user_userid(bot)
+}
+
+// The bot set aside for a person who went to spectate (or left): it stays after all
+release_leaver(id)
+{
+	if (!g_LeaverFor[id])
+		return
+	new bot = find_player("k", g_LeaverFor[id])
+	if (bot)
+		g_Leaving[bot] = false
+	g_LeaverFor[id] = 0
+}
+
+// Just before the person's team choice is handled: the bot picked for them says bye and goes
+// now, so the bot count is right already and the game doesn't kick one of its own choosing.
+// One from the team they're joining, so the teams stay even and the game takes the join
+make_room(id, team)
+{
+	if (is_user_bot(id) || (get_user_team(id) == 1 || get_user_team(id) == 2) || !room_needed(id))
+		return
+	new bot = g_LeaverFor[id] ? find_player("k", g_LeaverFor[id]) : 0
+	if (bot && (team == 1 || team == 2) && get_user_team(bot) != team)
+	{
+		// (one on their team instead, if there is one)
+		g_Leaving[bot] = false
+		new other = pick_leaver(team)
+		if (other && get_user_team(other) == team)
+			bot = other
+		else
+			g_Leaving[bot] = true
+	}
+	if (!bot || !is_user_bot(bot))
+		bot = pick_leaver(team)
+	// (the one set aside when they connected may since have become one the round hangs on:
+	// handed the bomb at round start, Game Commencing, the last of its team; another, if any)
+	else if (key_bot(bot))
+	{
+		g_Leaving[bot] = false
+		new other = pick_leaver(team)
+		if (other && !key_bot(other) && ((team != 1 && team != 2) || get_user_team(other) == team))
+			bot = other
+		else
+			g_Leaving[bot] = true
+	}
+	g_LeaverFor[id] = 0
+	if (!bot)
+		return
+	// (said now, straight to the game: the kick comes right after it; not by one that never
+	// talks, nor with personality off; gm_botchat notes it left, for a "wb" if it comes back)
+	new bool:quiet = get_cvar_num("gm_personality") == 0
+		|| (LibraryExists("gm_people", LibType_Library) && people_get(bot, "talk") == 0)
+	if (g_Chat && !g_NoLeft)
+		botchat_left(bot)
+	if (g_Chat && !quiet)
+	{
+		static const BYE[][] = { "gtg", "gtg cya", "ok im off", "cya all", "gn all", "bbl", "brb food", "gotta go", "cya", "im out gg" }
+		new bn[32]
+		get_user_name(bot, bn, charsmax(bn))
+		new h
+		for (new c = 0; bn[c]; c++)
+			h = h * 31 + bn[c]
+		engclient_cmd(bot, "say", BYE[(h & 0x7FFFFFFF) % sizeof BYE])
+	}
+	new name[32]
+	get_user_name(bot, name, charsmax(name))
+	// (by its own name: a "Dave_" who comes back is Dave, untweaked)
+	if (g_RealName[bot][0])
+		copy(name, charsmax(name), g_RealName[bot])
+	ArrayPushString(g_LeftNames, name)
+	ArrayPushCell(g_LeftAt, floatround(get_gametime()))
+	server_cmd("kick #%d", get_user_userid(bot))
+	server_exec()
+}
+
+// jointeam <1 T, 2 CT, 5 auto, 6 spectator>
+public cmd_jointeam(id)
+{
+	new arg[4]
+	read_argv(1, arg, charsmax(arg))
+	new t = str_to_num(arg)
+	if (t == 1 || t == 2 || t == 5)
+		make_room(id, t)
+	else if (t == 6)
+		release_leaver(id)
+	return PLUGIN_CONTINUE
+}
+
+// the old team menu: 1 T, 2 CT, 5 auto, 6 spectator (keys from 0)
+public menu_team(id, key)
+{
+	if (key == 0 || key == 1 || key == 4)
+		make_room(id, key == 4 ? 5 : key + 1)
+	else if (key == 5)
+		release_leaver(id)
+	return PLUGIN_CONTINUE
+}
+
+// ---------------------------------------------------------------------------
 // Welcome screen
 // ---------------------------------------------------------------------------
 public client_putinserver(id)
 {
+	g_Leaving[id] = false
+	g_LeaverFor[id] = 0
+	if (is_user_bot(id))
+		g_BotSince[id] = get_gametime()
+	if (!is_user_bot(id) && !is_user_hltv(id))
+		make_room_early(id)
 	if (is_user_bot(id) || is_user_hltv(id) || g_Career)
 		return
 	new mode = get_pcvar_num(g_pWelcome)

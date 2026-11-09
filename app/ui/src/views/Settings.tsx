@@ -22,7 +22,8 @@ const NOTES: Record<string, string> = {
   gm_hb_tilt: "A bad run makes most bots sloppier (some careful); outnumbered or low on health, some panic",
   gm_hb_afk: "Now and then a bot stands still for a few seconds at round start (not in deathmatch or matches)",
   gm_hb_sprays: "Bots spray the Loner-Strike logo now and then",
-  gm_hb_disrespect: "Crouch spam over someone they killed. Off by default",
+  gm_hb_disrespect: "Insults and teabagging: crouch spam over someone they killed. Off by default, and off whatever the lobby mood. A friendly lobby is never rude",
+  gm_mood: "How the lobby gets along. Toxic brings rage, tilt and hack accusations, and with Bots can be rude on, trash talk and teabagging too. Friendly is warm and polite",
   gm_hb_showoff: "Now and then after a kill: a jump or the knife out, and crouch spam if bots can be rude (never in a match)",
   gm_bf_weapons: "Flicking between weapons, the silencer off and on, the scope in and out, reloading a nearly full gun",
   gm_bf_spawn: "Jumping out of spawn (teammates sometimes join in), and in freeze time jumping on the spot, the knife out and back, weapon flicking",
@@ -33,6 +34,7 @@ const NOTES: Record<string, string> = {
   gm_bf_breakables: "Shooting the glass in view after the round, and a few slash the same crate every time they walk past",
   gm_bf_drop: "A well-off bot sometimes drops its gun for a broke teammate who asks in chat, like drop pls, and broke bots sometimes ask",
   gm_bf_bad: "Newer players reload after every kill, flick weapons for no reason, walk about with the knife out and pull a grenade out of spawn",
+  gm_bf_cheeky: "On public games a few jokers teabag a kill, slash a teammate on the way out of spawn (only with friendly fire off) and jump about after the round",
   gm_hb_radio: "The odd radio call that fits the moment: enemy spotted, enemy down, the team's caller says go",
   gm_hb_hold: "Careful players and lurkers stop now and then and hold an angle for a few seconds (not in deathmatch)",
   gm_botchat: "How often bots talk: kills, deaths, rage, encouraging teammates, answering you",
@@ -221,7 +223,10 @@ export function SettingsList({ data, cat, refresh, q = "", tab, editing }: { dat
       {list.map((s: Setting) => {
         const value = pending.value(s.cvar, editing && s.scope === SCOPE_MODE ? (editing.values[s.cvar] ?? "") : s.value);
         const style = s.cvar === "gm_botstyle";
-        const note = style ? BOT_STYLE_NOTE[value] : NOTES[s.cvar];
+        // with Personality at Plain the bots hardly talk, so the lobby's mood has nothing to show in
+        const personality = data.settings.find((x) => x.cvar === "gm_personality");
+        const moodOff = s.cvar === "gm_mood" && !!personality && Number(pending.value("gm_personality", personality.value)) === 0;
+        const note = moodOff ? "Personality is set to Plain, so bots hardly talk and the mood doesn't show" : style ? BOT_STYLE_NOTE[value] : NOTES[s.cvar];
         // our own names for the bot styles (the game's menu has older ones)
         const labels = style ? options(s.values, s.labels).map(([v, l]) => BOT_STYLES.find(([id]) => id === v)?.[1] ?? l).join("|") : s.labels;
         return (
@@ -233,7 +238,7 @@ export function SettingsList({ data, cat, refresh, q = "", tab, editing }: { dat
               {editing && s.scope === SCOPE_EVERY && <span className="tag scope-tag" title="The same in every mode: changing it here changes it everywhere, straight away">Every mode</span>}
               {note && <span className="note">{note}</span>}
             </div>
-            <Segmented label={s.name} values={s.values} labels={labels} current={value} disabled={busy(key(s.cvar))} onPick={(v) => pick(s, v)} />
+            <Segmented label={s.name} values={s.values} labels={labels} current={value} disabled={busy(key(s.cvar)) || moodOff} onPick={(v) => pick(s, v)} />
           </div>
         );
       })}

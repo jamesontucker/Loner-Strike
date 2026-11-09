@@ -455,13 +455,13 @@ struct LaunchReq {
 /// or per mode (mode_<id>.cfg), and the values the in-game menu offers.
 const START_SETTINGS: &[(&str, bool, &[&str])] = &[
     ("bot_difficulty", true, &["0", "1", "2", "3"]),
-    ("gm_botstyle", true, &["0", "1", "2", "3", "4", "5", "6", "7", "8"]),
+    ("gm_botstyle", true, &["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]),
     ("mp_timelimit", false, &["0", "10", "20", "30", "45", "60"]),
     ("mp_friendlyfire", false, &["0", "1"]),
 ];
 
 /// gm_botstyle's personality files, by its value (as gamemodes.sma lists them).
-const BOT_STYLE_FILES: &[&str] = &["", "BotProfile_Pub.db", "BotProfile_Matchmaking.db", "BotProfile_Veterans.db", "BotProfile_Newbie.db", "BotProfile_LockedIn.db", "BotProfile_Hackers.db", "BotProfile_Gods.db", "BotProfile_Pub.db"];
+const BOT_STYLE_FILES: &[&str] = &["", "BotProfile_Pub.db", "BotProfile_Matchmaking.db", "BotProfile_Veterans.db", "BotProfile_Newbie.db", "BotProfile_LockedIn.db", "BotProfile_Hackers.db", "BotProfile_Gods.db", "BotProfile_Pub.db", "BotProfile_LanParty.db", "BotProfile_OldTimers.db"];
 
 /// A style's personality file for a mode on a map: BotProfile_Pub.db becomes
 /// BotProfile_Pub_Solo.db when botplay.ini says bots play solo there (as gamemodes.sma

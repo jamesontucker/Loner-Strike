@@ -53,6 +53,8 @@
 	gm_bf_breakables 1 shooting glass after the round, slashing a crate on the way past
 	gm_bf_drop       1 dropping a gun for a teammate who asks
 	gm_bf_bad        1 newer players' bad habits
+	gm_bf_cheeky     1 cheeky stuff on a pub: teabagging a kill, slashing a teammate on the way
+	                   out of spawn (only with friendly fire off), jumping about after the round
 */
 
 #include <amxmodx>
@@ -69,8 +71,11 @@ native botchat_say_now(id, const section[], other, bool:team)
 // gm_humanbots (optional): afk or holding an angle; how good a player it is (0-3, -1 none)
 native hb_bot_idle(id)
 native hb_bot_level(id)
+native hb_bot_showing_off(id)
+native Float:hb_urgent_until(id)
 // gm_people (optional): a trait's value (-1 unknown)
 native people_get(id, const key[])
+native people_mood()
 
 #define PLUGIN  "Bot fun"
 #define VERSION "1.0"
@@ -82,7 +87,8 @@ native people_get(id, const key[])
 #define TASK_QSPAM    8600
 #define TASK_SLOTS    8700
 #define TASK_KILL     8800
-#define TASK_FREEZE   8900
+#define TASK_FREEZE   11000             // (+ id + 32 * slot, FREEZE_SLOTS of them)
+#define FREEZE_SLOTS  6
 #define TASK_KNIFE    9000
 #define TASK_ATTACK2  9100
 #define TASK_FLASH    9200
@@ -97,6 +103,11 @@ native people_get(id, const key[])
 #define TASK_REBUY    10100
 #define TASK_GLANCE   10200
 #define TASK_LEAVE    10300
+#define TASK_SPAWNCHK 10500
+#define TASK_TBAG     10600
+#define TASK_SLASH    10700
+#define TASK_SWEEP    10800
+#define TASK_GIFT     10900
 
 // what a bot can do, for its own habits (two per bot)
 enum
@@ -111,7 +122,7 @@ enum
 enum
 {
 	Q_FLICKS, Q_BREAK, Q_SLASH, Q_GENEROUS, Q_ASKS, Q_TEAMJUMP, Q_SWITCHY,
-	Q_BADRELOAD, Q_BADSWITCH, Q_BADKNIFE, Q_BADNADE, Q_LOOKMATES
+	Q_BADRELOAD, Q_BADSWITCH, Q_BADKNIFE, Q_BADNADE, Q_LOOKMATES, Q_CHEEKY
 }
 
 // how the mode is played (PART of every habit's say)
@@ -121,7 +132,7 @@ enum { CTX_PUB, CTX_DM, CTX_MATCH, CTX_NOVELTY }
 enum { FIRE_SKY, FIRE_AT }
 
 new g_pFun, g_pWeapons, g_pSpawn, g_pFlashlight, g_pSalute, g_pLook, g_pCelebrate
-new g_pBreak, g_pDrop, g_pBad
+new g_pBreak, g_pDrop, g_pBad, g_pCheeky
 new g_pPersonality, g_pStyle, g_pFlashAllowed, g_pFreeForAll, g_pScrim, g_pBotDm
 new bool:g_Chat, bool:g_Fork, bool:g_HumanBots, bool:g_People, bool:g_BombPlanted, bool:g_DarkMap
 new bool:g_FunOn                         // fun_allowed(), checked now and then (not every frame)
@@ -149,6 +160,9 @@ new g_FlashLeft[33]                      // flashlight toggles still to do
 new g_JumpsLeft[33], Float:g_NextJump[33]
 new g_DucksLeft[33], Float:g_DuckUntil[33], Float:g_NextDuck[33]   // crouch spam
 new g_GlanceLeft[33]                     // freeze time glances still to do
+// mouse sweeps in freeze time (start_sweep): a spin, a wiggle or a slow pan
+enum { SWEEP_SPIN, SWEEP_WIGGLE, SWEEP_PAN }
+new g_SweepLeft[33], g_SweepKind[33], Float:g_SweepYaw[33], g_SweepStep[33]
 new Float:g_FireUntil[33], bool:g_FireOn[33], Float:g_FireFlip[33], g_FireKind[33], Float:g_FireAt[33][3]
 new g_QLeft[33], g_QDone[33], g_QFrom[33], g_QTo[33]
 new bool:g_QKill[33]                     // these flicks follow a kill (free_after_kill decides)
@@ -165,7 +179,10 @@ new g_DropFor[33], g_DropUser[33], g_DropGun[33], g_DropBox[33]   // a gun it's 
 new bool:g_DropDone, bool:g_Asked[3]     // one drop a round; one ask a team
 new g_Breaks                             // bots shooting breakables this round end
 new Float:g_RoundStartAt
+new Float:g_BodyAt[33][3]                // the body it's teabagging
 new bool:g_Freeze
+// gifts: a person drops a gun where a teammate bot with a worse one (or none) is
+new g_GiftBot[33], g_GiftBox[33], g_GiftGun[33], g_GiftTries[33], bool:g_GiftSent[33]
 
 public plugin_init()
 {
@@ -181,6 +198,7 @@ public plugin_init()
 	g_pBreak      = register_cvar("gm_bf_breakables", "1")
 	g_pDrop       = register_cvar("gm_bf_drop", "1")
 	g_pBad        = register_cvar("gm_bf_bad", "1")
+	g_pCheeky     = register_cvar("gm_bf_cheeky", "1")
 
 	register_forward(FM_CmdStart, "fw_cmdstart")
 	// RegisterHamPlayer also covers Condition Zero bots (a different class)
@@ -198,10 +216,14 @@ public plugin_init()
 	register_logevent("ev_round_start", 2, "1=Round_Start")
 	register_event("SendAudio", "ev_t_win", "a", "2&%!MRAD_terwin")
 	register_event("SendAudio", "ev_ct_win", "a", "2&%!MRAD_ctwin")
+	// a draw (an aim map's clock running out, game commencing) ends the round too
+	register_event("SendAudio", "ev_draw", "a", "2&%!MRAD_rounddraw")
 	register_event("DeathMsg", "ev_death", "a")
 	// "drop pls": someone asking a teammate for a gun
 	register_clcmd("say", "cmd_say")
 	register_clcmd("say_team", "cmd_say")
+	// a person dropping a gun near a teammate bot with a worse one: a gift
+	register_clcmd("drop", "cmd_drop")
 	set_task(1.0, "task_think", TASK_THINK)
 }
 
@@ -243,11 +265,17 @@ public plugin_natives()
 {
 	register_library("gm_botfun")
 	register_native("bf_danger", "n_danger")
+	register_native("bf_ask_drop", "n_ask_drop")
 	set_native_filter("native_filter")
 }
 
+// (gm_humanbots without hb_urgent_until, an older one: not asked)
+new bool:g_NoUrgent
+
 public native_filter(const name[], index, trap)
 {
+	if (!trap && equal(name, "hb_urgent_until"))
+		g_NoUrgent = true
 	return (!trap && (equal(name, "botchat_", 8) || equal(name, "hb_", 3) || equal(name, "people_", 7))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
@@ -263,6 +291,22 @@ public n_danger(plugin, params)
 	if (now < g_Busy[id])
 		return true
 	return now - g_SeenAt[id] < g_Quiet[id] && g_SeenAt[id] > g_KillAt[id] + 0.4
+}
+
+// bf_ask_drop(asker, want, prefer): someone asked for a gun (gm_botchat, from what they said):
+// the same as "drop pls" in chat. want: a CSW_ id or 0 for any gun; prefer: a bot they asked
+// by name, or 0. That bot gives if it can (rich, close, free) unless it's a cold one, without
+// needing the generous streak. 1 when a drop is on its way
+public n_ask_drop(plugin, params)
+{
+	new asker = get_param(1), want = get_param(2), prefer = get_param(3)
+	if (asker < 1 || asker > MaxClients || !is_user_alive(asker) || !drop_mode() || !buy_time())
+		return 0
+	if (want < 0 || want > CSW_P90)
+		want = 0
+	if (prefer < 1 || prefer > MaxClients)
+		prefer = 0
+	return ask_drop(asker, want, 0.6, prefer) ? 1 : 0
 }
 
 // The current mode's id (gamemodes keeps it in data/gamemodes/current.txt)
@@ -325,6 +369,20 @@ bool:fun_allowed()
 	return c == CTX_PUB || c == CTX_DM
 }
 
+// Personality at Plain (gm_personality 0) on a pub: no quirks, but not stock-stiff either;
+// about a third of the bots still look about, hop or crouch in freeze time and leaving spawn.
+// (Original style, gm_botstyle 0, is the game's own bots: nothing)
+bool:plain_floor()
+{
+	if (!get_pcvar_num(g_pFun) || pers() > 0.0)
+		return false
+	if (g_pStyle && get_pcvar_num(g_pStyle) == STYLE_CLASSIC)
+		return false
+	// (deathmatch too: only the respawn's quiet hop, crouch or look)
+	new ctx = mode_ctx()
+	return ctx == CTX_PUB || ctx == CTX_DM
+}
+
 // How good a player it is: 0 new, 1 average, 2 good, 3 very good (its style in
 // gm_humanbots, else gm_people's skill, else average)
 level(id)
@@ -370,6 +428,9 @@ bool:has_quirk(id, which)
 		case Q_BADKNIFE: return quirk(id, which, l == 0 ? 35 : l == 1 ? 5 : 0)
 		case Q_BADNADE: return quirk(id, which, l == 0 ? 30 : 0)
 		case Q_LOOKMATES: return quirk(id, which, l == 0 ? 40 : l == 1 ? 8 : 0)
+		// kids and jokers mostly; never the quiet or the serious ones
+		// (more of them in a toxic lobby, few in a friendly one)
+		case Q_CHEEKY: return quirk(id, which, floatround((has(p, "kjzh") ? 30.0 : has(p, "qLdtoE") ? 0.0 : 5.0) * mood_mult(), floatround_floor))
 	}
 	return false
 }
@@ -396,7 +457,7 @@ clear_bot(id)
 	remove_task(id + TASK_QSPAM)
 	remove_task(id + TASK_SLOTS)
 	remove_task(id + TASK_KILL)
-	for (new i = 0; i < 3; i++)
+	for (new i = 0; i < FREEZE_SLOTS; i++)
 		remove_task(id + TASK_FREEZE + 32 * i)
 	remove_task(id + TASK_KNIFE)
 	remove_task(id + TASK_ATTACK2)
@@ -410,6 +471,12 @@ clear_bot(id)
 	remove_task(id + TASK_SPAWN)
 	remove_task(id + TASK_REBUY)
 	remove_task(id + TASK_GLANCE)
+	remove_task(id + TASK_SPAWNCHK)
+	remove_task(id + TASK_SWEEP)
+	g_SweepLeft[id] = 0
+	remove_task(id + TASK_TBAG)
+	remove_task(id + TASK_SLASH)
+	remove_task(id + TASK_SLASH + 32)
 	for (new i = 0; i < 5; i++)
 		remove_task(id + TASK_LEAVE + 32 * i)
 	burst_restore(id)
@@ -542,6 +609,9 @@ bool:free_bot(id, bool:calm = true)
 		return false
 	new Float:now = get_gametime()
 	if (now < g_Busy[id] || g_BombPlanted)
+		return false
+	// flashed: nobody fidgets blind
+	if (get_ent_data_float(id, "CBasePlayer", "m_blindUntilTime") > now)
 		return false
 	if (calm && !g_Freeze && now >= g_Grace[id] && (now < g_FireBusy[id] || now - g_SeenAt[id] < g_Quiet[id]))
 		return false
@@ -682,19 +752,26 @@ public fw_spawn_post(id)
 	g_LifeKills[id] = 0
 	g_Quiet[id] = random_float(8.0, 10.0)
 	g_NextFun[id] = now + random_float(20.0, 45.0)
-	if (!is_user_bot(id) || !g_FunOn || mode_ctx() != CTX_DM || !get_pcvar_num(g_pSpawn))
+	// (personality Plain: a quiet few still hop, crouch or look about as they come in)
+	new bool:plain = !g_FunOn && plain_floor()
+	if (!is_user_bot(id) || (!g_FunOn && !plain) || mode_ctx() != CTX_DM || !get_pcvar_num(g_pSpawn))
 		return
 	// deathmatch has no freeze time: a couple of seconds after spawning count as quiet, and
 	// coming back in, nearly half do something like leaving spawn in a round (a jump or a
 	// few, flicking weapons, the knife out a moment, crouch spam, a look about)
 	g_Grace[id] = now + random_float(2.0, 4.0)
+	// a quick look over the shoulder first (spawn kills are common), about half of them
+	if (g_Fork && get_pcvar_num(g_pLook) && random_float(0.0, 1.0) < 0.5)
+		set_task(random_float(0.15, 0.5), "task_spawn_check", id + TASK_SPAWNCHK)
 	new Float:act = activity(persona(id))
-	if (random_float(0.0, 1.0) >= floatmin(floatclamp(0.25 + 0.2 * act, 0.15, 0.7) * pers(), 0.9))
+	// (at most about half, whatever the personality: with a respawn every few seconds, more is
+	// constant fidgeting)
+	if (random_float(0.0, 1.0) >= (plain ? 0.3 : floatmin(floatclamp(0.46 + 0.2 * act, 0.3, 0.8) * pers(), 0.55)))
 		return
 	new Float:w[5]
 	w[0] = 3.0 * taste(id, FUN_SPAWNJUMP)
-	w[1] = get_pcvar_num(g_pWeapons) ? 2.5 * taste(id, FUN_QSPAM) : 0.0
-	w[2] = 1.0 * taste(id, FUN_KNIFE)
+	w[1] = !plain && get_pcvar_num(g_pWeapons) ? 2.5 * taste(id, FUN_QSPAM) : 0.0
+	w[2] = plain ? 0.0 : 1.0 * taste(id, FUN_KNIFE)
 	w[3] = 0.6 * taste(id, FUN_DUCK)
 	w[4] = g_Fork && get_pcvar_num(g_pLook) ? 1.2 * taste(id, FUN_LOOK) : 0.0
 	new Float:total = w[0] + w[1] + w[2] + w[3] + w[4]
@@ -718,6 +795,21 @@ public fw_spawn_post(id)
 		what[0] = a == 1 ? 'q' : a == 2 ? 'k' : a == 3 ? 'c' : 'g'
 		set_task(random_float(0.3, 1.2), "task_spawn_do", id + TASK_SPAWN, what, 2)
 	}
+}
+
+public task_spawn_check(tid)
+{
+	new id = tid - TASK_SPAWNCHK
+	if (!free_bot(id))
+		return
+	new Float:me[3], Float:at[3], Float:view[3]
+	eye_pos(id, me)
+	pev(id, pev_v_angle, view)
+	new Float:yaw = view[1] + 180.0 + random_float(-70.0, 70.0)
+	at[0] = me[0] + floatcos(yaw, degrees) * 400.0
+	at[1] = me[1] + floatsin(yaw, degrees) * 400.0
+	at[2] = me[2]
+	ls_look(id, at, random_float(0.3, 0.6), 0.0)
 }
 
 public task_spawn_do(const what[], tid)
@@ -749,6 +841,20 @@ public ev_death()
 	g_KillAt[killer] = get_gametime()
 	g_FireBusy[killer] = 0.0
 	g_LifeKills[killer]++
+	// a cheeky one teabags the body, once it's quiet (a pub, close to it)
+	// (an enemy it killed, not a teammate)
+	if (cheeky_ok() && rude_ok() && mode_ctx() == CTX_PUB && 1 <= victim <= MaxClients && (free_for_all() || get_user_team(victim) != get_user_team(killer))
+		&& has_quirk(killer, Q_CHEEKY) && chance(killer, 0.25))
+	{
+		new Float:at[3]
+		pev(killer, pev_origin, at)
+		pev(victim, pev_origin, g_BodyAt[killer])
+		if (get_distance_f(at, g_BodyAt[killer]) < 220.0)
+		{
+			set_task(random_float(0.6, 1.2), "task_tbag", killer + TASK_TBAG)
+			return
+		}
+	}
 	if (!fun_allowed() || !get_pcvar_num(g_pWeapons) || task_exists(killer + TASK_KILL))
 		return
 	// a newer player's habit: a reload after every kill, whoever's still around
@@ -808,15 +914,16 @@ public ev_new_round()
 }
 
 // What a bot does in freeze time, in the order of the plan's letters (task_freeze_do)
-enum { ACT_GLANCE, ACT_QSPAM, ACT_FLICKS, ACT_KNIFE, ACT_JUMP, ACT_DUCK, ACT_FLASH, ACT_SALUTE, ACT_MATES, ACT_COUNT }
-new const ACT_LETTER[ACT_COUNT] = { 'g', 'q', 'h', 'k', 'j', 'c', 'f', 's', 'm' }
+enum { ACT_GLANCE, ACT_QSPAM, ACT_FLICKS, ACT_KNIFE, ACT_JUMP, ACT_DUCK, ACT_FLASH, ACT_SALUTE, ACT_MATES, ACT_NOD, ACT_SPIN, ACT_WIGGLE, ACT_PAN, ACT_COUNT }
+new const ACT_LETTER[ACT_COUNT] = { 'g', 'q', 'h', 'k', 'j', 'c', 'f', 's', 'm', 'n', 'p', 'w', 'a' }
 
 public task_freeze_rolls()
 {
 	new ctx = mode_ctx()
 	// a match: the quiet things only (looking about, a weapon check); a pub: everything
 	new bool:match = ctx == CTX_MATCH && match_freeze_allowed()
-	if (!match && (!fun_allowed() || ctx != CTX_PUB))
+	new bool:plain = !match && plain_floor()
+	if (!match && !plain && (!fun_allowed() || ctx != CTX_PUB))
 		return
 	new bool:spawn = get_pcvar_num(g_pSpawn) != 0
 	// the freeze time left (this task runs 0.3 s in)
@@ -826,31 +933,43 @@ public task_freeze_rolls()
 		if (!is_user_alive(id) || !is_user_bot(id))
 			continue
 		// broke and nothing but a pistol: asking the team for a drop (after the others buy)
-		if (!match && get_pcvar_num(g_pDrop) && g_Chat && g_BuyMode && !primary_of(id) && cs_get_user_money(id) < 2000
+		if (!match && !plain && get_pcvar_num(g_pDrop) && g_Chat && g_BuyMode && !primary_of(id) && cs_get_user_money(id) < 2000
 			&& has_quirk(id, Q_ASKS) && chance(id, 0.3))
 			set_task(random_float(2.0, 4.5), "task_ask_drop", id + TASK_DROP)
 		if (spawn && left > 1.0)
-			plan_freeze(id, left, match)
+			plan_freeze(id, left, match, plain)
 	}
 }
 
 // A few things through freeze time, one after another: most people never stand still
 // (about four in five do something; the quiet ones less, kids and jokers more), each in
 // its own way (its personality's likes, its habits and quirks)
-plan_freeze(id, Float:left, bool:match)
+plan_freeze(id, Float:left, bool:match, bool:plain = false)
 {
 	new Float:act = activity(persona(id))
-	new Float:any = floatclamp((match ? 0.45 : 0.55) + 0.25 * act, 0.4, 0.97) * floatmin(pers(), 1.3)
+	new Float:any = plain ? 0.3 : floatclamp((match ? 0.45 : 0.55) + 0.25 * act, 0.4, 0.97) * floatmin(pers(), 1.3)
 	if (random_float(0.0, 1.0) >= floatmin(any, 0.97))
 		return
 	new Float:w[ACT_COUNT]
-	freeze_weights(id, w, match)
+	// (Plain: the quiet things, and a hop or a crouch; nothing that's a quirk)
+	freeze_weights(id, w, match || plain)
+	if (plain)
+	{
+		w[ACT_FLICKS] = 0.0
+		w[ACT_JUMP] = 0.8
+		w[ACT_DUCK] = 0.8
+		act = 0.0
+	}
 	// one, two or three things (fidgety ones more), from 0.4 s in to the end of freeze time
 	new count = 1
 	if (random_float(0.0, 1.0) < 0.35 * act * g_Fidget[id] + (match ? 0.0 : 0.15))
 		count++
 	if (!match && random_float(0.0, 1.0) < 0.2 * act * g_Fidget[id])
 		count++
+	// a long freeze time (15, 30 seconds): more to fill it, about one more thing a 7 seconds
+	if (left > 9.0)
+		count += random_num(0, floatround((left - 6.0) / 7.0, floatround_floor))
+	count = min(count, FREEZE_SLOTS)
 	new plan[4], n
 	new Float:at = random_float(0.4, 1.6)
 	new Float:slot = (left - at) / float(count)
@@ -877,12 +996,20 @@ freeze_weights(id, Float:w[ACT_COUNT], bool:match)
 	w[ACT_GLANCE] = look ? 3.0 * taste(id, FUN_LOOK) : 0.0
 	w[ACT_QSPAM] = guns ? (has_quirk(id, Q_SWITCHY) ? 6.0 : 2.0) * taste(id, FUN_QSPAM) : 0.0
 	w[ACT_FLICKS] = look && has_quirk(id, Q_FLICKS) ? 4.0 : 0.0
+	// the ways people move the mouse while they wait, each its own sort: a quick left-right
+	// wiggle (warming up the aim: the tryhards and good players), a slow pan across the map
+	// (the quiet, patient ones), fast nodding up and down and spinning round (kids, jokers)
+	new p = persona(id), l = level(id)
+	w[ACT_WIGGLE] = look ? (l >= 2 ? 1.6 : 0.3) * (has(p, "tE7N") ? 2.0 : 1.0) : 0.0
+	w[ACT_PAN] = look ? (has(p, "qLd6c4") ? 2.5 : 0.6) : 0.0
 	if (match)
 	{
 		// waiting for a match to start: looking about, flicking heads, a weapon check
 		w[ACT_QSPAM] *= 0.5
 		return
 	}
+	w[ACT_NOD] = look ? (has(p, "kjzhS5") ? 2.0 : 0.3) : 0.0
+	w[ACT_SPIN] = look ? (has(p, "jzhk") ? 1.2 : 0.12) : 0.0
 	w[ACT_KNIFE] = 1.2 * taste(id, FUN_KNIFE)
 	w[ACT_JUMP] = 1.0 * taste(id, FUN_FREEZEJUMP)
 	w[ACT_DUCK] = 0.8 * taste(id, FUN_DUCK)
@@ -930,6 +1057,17 @@ bool:match_freeze_allowed()
 	return get_pcvar_num(g_pFun) && pers() > 0.0 && !(g_pStyle && get_pcvar_num(g_pStyle) == STYLE_CLASSIC)
 }
 
+// The freeze time look chains (glances, sweeps, head flicks) stop where they are
+stop_looks(id)
+{
+	g_GlanceLeft[id] = 0
+	g_SweepLeft[id] = 0
+	g_FlickLeft[id] = 0
+	remove_task(id + TASK_GLANCE)
+	remove_task(id + TASK_SWEEP)
+	remove_task(id + TASK_FLICK)
+}
+
 public task_freeze_do(const what[], tid)
 {
 	new id = (tid - TASK_FREEZE) % 32
@@ -937,6 +1075,8 @@ public task_freeze_do(const what[], tid)
 		id = 32
 	if (!g_Freeze)
 		return
+	// one thing at a time: whatever look it was in the middle of stops for the next
+	stop_looks(id)
 	switch (what[0])
 	{
 		case 'g': start_glances(id)
@@ -949,6 +1089,10 @@ public task_freeze_do(const what[], tid)
 		case 's': salute(id)
 		case 'h': start_flicks(id)
 		case 'm': stare_mate(id)
+		case 'n': nod_fast(id)
+		case 'p': start_sweep(id, SWEEP_SPIN)
+		case 'w': start_sweep(id, SWEEP_WIGGLE)
+		case 'a': start_sweep(id, SWEEP_PAN)
 	}
 }
 
@@ -960,7 +1104,7 @@ start_ducks(id, count)
 	g_NextDuck[id] = get_gametime()
 }
 
-// Freeze time is over: nearly half do something on the way out of spawn (jumping out, a
+// Freeze time is over: about half do something on the way out of spawn (jumping out, a
 // teammate next to a jumper sometimes joining in, flicking weapons on the run, the knife
 // out for the run, crouch spam, a look back, or still finishing up and leaving late); a
 // newer player pulls out a grenade and puts it away again
@@ -968,10 +1112,20 @@ public ev_round_start()
 {
 	g_Freeze = false
 	g_RoundStartAt = get_gametime()
-	if (!fun_allowed() || mode_ctx() != CTX_PUB)
-		return
 	new Float:now = get_gametime()
-	if (get_pcvar_num(g_pBad))
+	// freeze time's looks, nods and stares end with it (nobody runs out of spawn nodding)
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (is_user_alive(i) && is_user_bot(i))
+		{
+			stop_looks(i)
+			stop_all(i, now)
+		}
+	}
+	new bool:plain = plain_floor()
+	if (!plain && (!fun_allowed() || mode_ctx() != CTX_PUB))
+		return
+	if (!plain && get_pcvar_num(g_pBad))
 	{
 		for (new id = 1; id <= MaxClients; id++)
 			if (is_user_alive(id) && is_user_bot(id) && user_has_weapon(id, CSW_HEGRENADE) && has_quirk(id, Q_BADNADE) && chance(id, 0.3))
@@ -980,12 +1134,21 @@ public ev_round_start()
 	if (!get_pcvar_num(g_pSpawn))
 		return
 	new bool:jumper[33]
+	// (a slash at a teammate still next to it: nobody can attack in freeze time, so now)
+	// (never with friendly fire on, nor in free for all, where a "teammate" is really an opponent)
+	new bool:slashes = !plain && g_Fork && cheeky_ok() && !get_cvar_num("mp_friendlyfire") && !free_for_all()
 	for (new id = 1; id <= MaxClients; id++)
 	{
 		if (!free_bot(id, false))
 			continue
+		if (slashes && has_quirk(id, Q_CHEEKY) && chance(id, 0.3))
+		{
+			slash_mate(id)
+			if (task_exists(id + TASK_SLASH))
+				continue
+		}
 		new Float:act = activity(persona(id))
-		if (random_float(0.0, 1.0) >= floatmin(floatclamp(0.25 + 0.2 * act, 0.15, 0.7) * pers(), 0.9))
+		if (random_float(0.0, 1.0) >= (plain ? 0.3 : floatmin(floatclamp(0.46 + 0.2 * act, 0.3, 0.8) * pers(), 0.9)))
 			continue
 		new Float:w[6]
 		w[0] = 3.0 * taste(id, FUN_SPAWNJUMP)
@@ -993,7 +1156,16 @@ public ev_round_start()
 		w[2] = 1.0 * taste(id, FUN_KNIFE)
 		w[3] = 0.6 * taste(id, FUN_DUCK)
 		w[4] = g_Fork && get_pcvar_num(g_pLook) ? 1.5 * taste(id, FUN_LOOK) : 0.0
-		w[5] = g_Fork ? 1.5 : 0.0
+		// (leaving late: now and then, and only a moment; standing in spawn looks like a bot)
+		w[5] = g_Fork ? 0.4 : 0.0
+		// (Plain: a hop, a crouch or a look back, nothing that's a quirk)
+		if (plain)
+		{
+			w[0] = 1.0
+			w[1] = w[2] = w[5] = 0.0
+			w[3] = 1.0
+			w[4] = g_Fork && get_pcvar_num(g_pLook) ? 1.0 : 0.0
+		}
 		new Float:total = w[0] + w[1] + w[2] + w[3] + w[4] + w[5]
 		if (total <= 0.0)
 			continue
@@ -1075,7 +1247,7 @@ public task_leave(tid)
 			at[0] = me[0] + floatcos(view[1], degrees) * 90.0
 			at[1] = me[1] + floatsin(view[1], degrees) * 90.0
 			at[2] = me[2] - 60.0
-			new Float:secs = random_float(0.8, 2.5)
+			new Float:secs = random_float(0.5, 1.3)
 			ls_look(id, at, secs, secs)
 		}
 	}
@@ -1091,12 +1263,140 @@ public ev_ct_win()
 	round_end(2)
 }
 
+public ev_draw()
+{
+	round_end(0)
+}
+
 round_end(team)
 {
-	// the round is over: the bomb doesn't matter any more
+	// the round is over: the bomb doesn't matter any more, nor a gift on its way
 	g_BombPlanted = false
+	for (new id = 1; id <= MaxClients; id++)
+		if (g_GiftBox[id] && g_GiftBot[id])
+			gift_done(id)
+	// (a deathmatch-type mode has no rounds to win: a round end there is a time limit or a
+	// wipe, nothing to celebrate or show off over)
+	if (mode_ctx() == CTX_DM)
+		return
 	celebrate(team)
 	breakables()
+	show_off()
+}
+
+// The round's decided: a couple of the cheeky ones jump about (and some knife out) until the
+// next one. (Loner-Strike's modes have no warmup: this is the round-end version of it)
+show_off()
+{
+	if (!cheeky_ok() || mode_ctx() != CTX_PUB)
+		return
+	new n
+	for (new id = 1; id <= MaxClients && n < 2; id++)
+	{
+		if (!free_bot(id, false) || !has_quirk(id, Q_CHEEKY) || !chance(id, 0.4))
+			continue
+		n++
+		g_JumpsLeft[id] = random_num(3, 7)
+		g_NextJump[id] = get_gametime() + random_float(0.5, 1.5)
+		if (holding_gun(id) && random_num(0, 1))
+			knife_out(id, random_float(2.0, 4.0))
+	}
+}
+
+bool:cheeky_ok()
+{
+	return g_FunOn && get_pcvar_num(g_pCheeky) != 0
+}
+
+// The lobby mood (gm_mood, the app's Lobby mood): 0 friendly, 1 normal, 2 toxic; gm_people's
+// (one rule for every plugin: a LAN party counts as friendly), else gm_mood's own
+lobby_mood()
+{
+	if (g_People)
+		return people_mood()
+	new p = get_cvar_pointer("gm_mood")
+	new m = p ? clamp(get_pcvar_num(p), 0, 2) : 1
+	// (a LAN party is friends: friendly unless the lobby's set to something else)
+	return m == 1 && get_cvar_num("gm_botstyle") == 9 ? 0 : m
+}
+
+Float:mood_mult()
+{
+	switch (lobby_mood())
+	{
+		case 0: return 0.3
+		case 2: return 2.0
+	}
+	return 1.0
+}
+
+// Free for all (mp_freeforall): everyone's an opponent, whatever team they're listed in
+bool:free_for_all()
+{
+	return g_pFreeForAll && get_pcvar_num(g_pFreeForAll) != 0
+}
+
+// Disrespect (teabagging): only when "Bots can be rude" is on (gm_hb_disrespect, off unless
+// turned on: a hard cap, whatever the mood), and never in a friendly lobby. A toxic lobby
+// with it on does it more (mood_mult)
+bool:rude_ok()
+{
+	new p = get_cvar_pointer("gm_hb_disrespect")
+	if (!p || !get_pcvar_num(p))
+		return false
+	return lobby_mood() != 0
+}
+
+// Teabagging: once it's quiet after the kill, crouch spam standing over the body, looking down
+// at it (danger stops it at once, like everything else here)
+public task_tbag(tid)
+{
+	new id = tid - TASK_TBAG
+	if (!is_user_alive(id) || !is_user_bot(id))
+		return
+	// gm_humanbots is showing off for this kill already: one teabag, not two
+	if (g_HumanBots && hb_bot_showing_off(id))
+		return
+	if (!free_after_kill(id))
+	{
+		if (get_gametime() - g_KillAt[id] < 6.0)
+			set_task(random_float(0.3, 0.6), "task_tbag", tid)
+		return
+	}
+	new Float:at[3]
+	pev(id, pev_origin, at)
+	if (get_distance_f(at, g_BodyAt[id]) > 220.0)
+		return
+	new Float:secs = random_float(1.2, 2.2)
+	if (g_Fork)
+		ls_look(id, g_BodyAt[id], secs, secs)
+	g_DucksLeft[id] = random_num(4, 8)
+	g_NextDuck[id] = get_gametime()
+}
+
+// Leaving spawn: the knife out and a slash or two at the teammate right next to it (only with
+// friendly fire off: it does nothing but look silly)
+slash_mate(id)
+{
+	if (!g_Fork || !free_bot(id, false) || !holding_gun(id) || get_cvar_num("mp_friendlyfire") || free_for_all())
+		return
+	new mate = visible_mate(id, 90.0, 0)
+	if (!mate)
+		return
+	new Float:at[3]
+	pev(mate, pev_origin, at)
+	ls_look(id, at, 1.4, 0.0)
+	knife_out(id, random_float(1.6, 2.4))
+	set_task(0.45, "task_mate_slash", id + TASK_SLASH)
+	if (random_num(0, 1))
+		set_task(0.95, "task_mate_slash", id + TASK_SLASH + 32)
+}
+
+public task_mate_slash(tid)
+{
+	new id = (tid - TASK_SLASH - 1) % 32 + 1
+	if (is_user_alive(id) && held_weapon(id) == CSW_KNIFE && !get_cvar_num("mp_friendlyfire") && !free_for_all() && free_bot(id, false))
+		g_Press[id] |= IN_ATTACK
 }
 
 // The winners: a few shoot into the air
@@ -1152,15 +1452,16 @@ public task_think()
 	if (!n)
 		return
 	new id = list[random(n)]
-	g_NextAny = now + random_float(3.0, 8.0) / floatmax(pers(), 0.25)
-	g_NextFun[id] = now + random_float(25.0, 60.0)
+	// (a pub a little livelier than deathmatch: more of them, more often)
+	g_NextAny = now + (c == CTX_PUB ? random_float(2.0, 5.0) : random_float(3.0, 8.0)) / floatmax(pers(), 0.25)
+	g_NextFun[id] = now + (c == CTX_PUB ? random_float(18.0, 45.0) : random_float(25.0, 60.0))
 
 	// deathmatch: only the quick things with the gun in hand (more weapon flicks)
 	if (c == CTX_DM)
 	{
 		if (!get_pcvar_num(g_pWeapons))
 			return
-		switch (get_user_weapon(id))
+		switch (held_weapon(id))
 		{
 			case CSW_AWP, CSW_SCOUT, CSW_SG550, CSW_G3SG1: if (roll(id, FUN_SCOPE, 0.15)) { scope(id); return; }
 			case CSW_GLOCK18, CSW_FAMAS: if (roll(id, FUN_BURST, 0.12)) { burst(id); return; }
@@ -1173,7 +1474,7 @@ public task_think()
 		return
 	if (get_pcvar_num(g_pWeapons))
 	{
-		new weapon = get_user_weapon(id)
+		new weapon = held_weapon(id)
 		switch (weapon)
 		{
 			// a single press, now and then, from the ones it's a habit of: the bot's brain
@@ -1182,10 +1483,10 @@ public task_think()
 			case CSW_AWP, CSW_SCOUT, CSW_SG550, CSW_G3SG1: if (roll(id, FUN_SCOPE, 0.15)) { scope(id); return; }
 			case CSW_GLOCK18, CSW_FAMAS: if (roll(id, FUN_BURST, 0.12)) { burst(id); return; }
 		}
-		if (roll(id, FUN_QSPAM, 0.06)) { start_qspam(id); return; }
-		if (roll(id, FUN_SLOTS, 0.04)) { start_slots(id); return; }
+		if (roll(id, FUN_QSPAM, 0.10)) { start_qspam(id); return; }
+		if (roll(id, FUN_SLOTS, 0.06)) { start_slots(id); return; }
 	}
-	if (g_Fork && get_pcvar_num(g_pLook) && roll(id, FUN_LOOK, 0.05))
+	if (g_Fork && get_pcvar_num(g_pLook) && roll(id, FUN_LOOK, 0.08))
 	{
 		look_around(id)
 		return
@@ -1244,7 +1545,7 @@ public fw_cmdstart(id, uc, seed)
 	// anything of ours under way stops the moment there's danger, or gm_humanbots has it
 	// afk or holding an angle
 	new bool:stop = danger
-	if (!stop && g_HumanBots && (g_Press[id] || g_Impulse[id] || g_JumpsLeft[id] > 0 || g_DucksLeft[id] > 0 || g_Scoping[id] || g_Out[id] || g_FlickLeft[id] || g_GlanceLeft[id]) && hb_bot_idle(id))
+	if (!stop && g_HumanBots && (g_Press[id] || g_Impulse[id] || g_JumpsLeft[id] > 0 || g_DucksLeft[id] > 0 || g_Scoping[id] || g_Out[id] || g_FlickLeft[id] || g_GlanceLeft[id] || g_SweepLeft[id]) && hb_bot_idle(id))
 		stop = true
 	if (stop)
 		stop_all(id, now)
@@ -1351,7 +1652,7 @@ stop_all(id, Float:now)
 		burst_restore(id)
 	if (g_PuppetUntil[id] > now)
 	{
-		server_cmd("ls_bot %d release", id)
+		server_cmd("ls_bot %d release bf", id)
 		g_PuppetUntil[id] = 0.0
 	}
 	if (g_Out[id])
@@ -1365,6 +1666,11 @@ stop_all(id, Float:now)
 	{
 		g_GlanceLeft[id] = 0
 		remove_task(id + TASK_GLANCE)
+	}
+	if (g_SweepLeft[id])
+	{
+		g_SweepLeft[id] = 0
+		remove_task(id + TASK_SWEEP)
 	}
 	g_DucksLeft[id] = 0
 }
@@ -1392,7 +1698,7 @@ bool:aimed(id)
 // bot's brain may have picked something else meanwhile)
 out_back(id)
 {
-	if (is_user_alive(id) && g_Out[id] && get_user_weapon(id) == g_Out[id])
+	if (is_user_alive(id) && g_Out[id] && held_weapon(id) == g_Out[id])
 		engclient_cmd(id, "lastinv")
 	g_Out[id] = 0
 	remove_task(id + TASK_KNIFE)
@@ -1405,7 +1711,7 @@ out_back(id)
 // it reads as someone checking it, never as a fight over it
 silencer(id)
 {
-	g_PendWeapon[id] = get_user_weapon(id)
+	g_PendWeapon[id] = held_weapon(id)
 	g_Press[id] |= IN_ATTACK2
 }
 
@@ -1413,7 +1719,7 @@ silencer(id)
 // unzoomed: scope_end, or scope_abort when something comes up
 scope(id)
 {
-	g_PendWeapon[id] = get_user_weapon(id)
+	g_PendWeapon[id] = held_weapon(id)
 	g_Scoping[id] = true
 	g_Press[id] |= IN_ATTACK2
 	new Float:at
@@ -1439,14 +1745,14 @@ scope_abort(id)
 	remove_task(id + TASK_ATTACK2)
 	remove_task(id + TASK_SCOPE)
 	g_Press[id] &= ~IN_ATTACK2
-	if (is_user_alive(id) && get_user_weapon(id) == g_PendWeapon[id] && cs_get_user_zoom(id) > CS_SET_NO_ZOOM)
+	if (is_user_alive(id) && held_weapon(id) == g_PendWeapon[id] && cs_get_user_zoom(id) > CS_SET_NO_ZOOM)
 		cs_set_user_zoom(id, CS_SET_NO_ZOOM, 1)
 }
 
 public task_attack2(tid)
 {
 	new id = tid - TASK_ATTACK2
-	if (free_bot(id) && get_user_weapon(id) == g_PendWeapon[id])
+	if (free_bot(id) && held_weapon(id) == g_PendWeapon[id])
 		g_Press[id] |= IN_ATTACK2
 	else if (g_Scoping[id])
 		scope_abort(id)
@@ -1459,7 +1765,7 @@ burst(id)
 	new ent = active_item(id)
 	if (!ent)
 		return
-	g_PendWeapon[id] = get_user_weapon(id)
+	g_PendWeapon[id] = held_weapon(id)
 	g_BurstEnt[id] = ent
 	g_BurstWas[id] = cs_get_weapon_burst(ent)
 	g_Press[id] |= IN_ATTACK2
@@ -1494,13 +1800,30 @@ active_item(id)
 // A full magazine for each gun (CSW_* order)
 new const MAX_CLIP[] = { 0, 13, 0, 10, 0, 7, 0, 30, 30, 0, 30, 20, 25, 30, 35, 25, 12, 20, 10, 30, 100, 8, 30, 30, 20, 0, 7, 30, 30, 0, 50 }
 
+// What it has in hand: its active item. (get_user_weapon goes stale for bots: it comes from
+// the CurWeapon message, and the engine only sends players' client data to real clients)
+held_item(id)
+{
+	new item = get_ent_data_entity(id, "CBasePlayer", "m_pActiveItem")
+	return (item > 0 && pev_valid(item)) ? item : 0
+}
+
+held_weapon(id)
+{
+	new item = held_item(id)
+	return item ? cs_get_weapon_id(item) : 0
+}
+
 // A gun in hand whose magazine isn't full, with ammo to fill it
 bool:needs_reload(id)
 {
 	if (!holding_gun(id))
 		return false
-	new w = get_user_weapon(id), clip, ammo
-	get_user_ammo(id, w, clip, ammo)
+	new item = held_item(id)
+	if (item <= 0)
+		return false
+	new w = cs_get_weapon_id(item)
+	new clip = cs_get_weapon_ammo(item), ammo = cs_get_user_bpammo(id, w)
 	return w > 0 && w < sizeof MAX_CLIP && clip > 0 && clip < MAX_CLIP[w] && ammo > 0
 }
 
@@ -1514,7 +1837,8 @@ do_reload(id)
 // knife, never onto a grenade (the bot's brain pulls the pin on one in hand) or the bomb.
 // It always ends on the gun it started with (an even number of flicks).
 // after_kill: the quiet check after a kill (free_after_kill) was done already. many: a
-// long, quick run of them (freeze time, for the ones who can't stop)
+// long, quick run of them (freeze time, for the ones who can't stop). Freeze time: the
+// switchy ones start another run when one ends, until the round starts
 start_qspam(id, bool:after_kill = false, bool:many = false)
 {
 	if (!after_kill && !free_bot(id))
@@ -1529,12 +1853,13 @@ start_qspam(id, bool:after_kill = false, bool:many = false)
 	new to = cs_get_weapon_id(last)
 	if (!to || to == CSW_C4 || is_nade(to) || !user_has_weapon(id, to))
 		return
-	g_QFrom[id] = get_user_weapon(id)
+	g_QFrom[id] = held_weapon(id)
 	g_QTo[id] = to
 	g_QDone[id] = 0
 	g_QKill[id] = after_kill
-	g_QLeft[id] = 2 * (many ? random_num(3, 6) : random_num(1, 3))
-	g_QGap[id] = many ? 0.18 : 0.28
+	// (people spam it: several in a row, quickly; the ones who can't stop, a long run)
+	g_QLeft[id] = 2 * (many ? random_num(6, 12) : random_num(2, 5))
+	g_QGap[id] = many ? 0.16 : 0.24
 	qspam_step(id)
 }
 
@@ -1549,7 +1874,7 @@ qspam_step(id)
 		return
 	// the weapon it should have in hand now: if it's another, something else (gm_humanbots'
 	// knife, the bot's brain) took over, and that's left alone
-	if (get_user_weapon(id) != ((g_QDone[id] & 1) ? g_QTo[id] : g_QFrom[id]))
+	if (held_weapon(id) != ((g_QDone[id] & 1) ? g_QTo[id] : g_QFrom[id]))
 	{
 		g_QLeft[id] = 0
 		return
@@ -1566,6 +1891,16 @@ qspam_step(id)
 	g_QDone[id]++
 	if (--g_QLeft[id] > 0)
 		set_task(random_float(g_QGap[id] * 0.45, g_QGap[id]), "task_qspam", id + TASK_QSPAM)
+	// the switchy ones keep at it through freeze time, a short pause between runs
+	else if (g_Freeze && has_quirk(id, Q_SWITCHY) && random_num(0, 3))
+		set_task(random_float(0.4, 1.2), "task_qspam_again", id + TASK_QSPAM)
+}
+
+public task_qspam_again(tid)
+{
+	new id = tid - TASK_QSPAM
+	if (g_Freeze && is_user_alive(id))
+		start_qspam(id, false, true)
 }
 
 start_slots(id)
@@ -1575,7 +1910,7 @@ start_slots(id)
 	// knife, pistol, back to the gun it had (by name: slot1..slot4 are keys in the player's
 	// own game, the server never sees them). Not a grenade: the bot's brain pulls the pin
 	// on one in hand
-	new held = get_user_weapon(id)
+	new held = held_weapon(id)
 	new steps[3][24], n
 	copy(steps[n++], charsmax(steps[]), "weapon_knife")
 	new weapons[32], count, pistol
@@ -1619,7 +1954,7 @@ public task_slot_back(const data[], tid)
 	new id = tid - TASK_SLOTS
 	if (!is_user_alive(id) || !is_user_bot(id) || !user_has_weapon(id, get_weaponid(data)))
 		return
-	new w = get_user_weapon(id)
+	new w = held_weapon(id)
 	if (w == CSW_KNIFE || (g_SlotPistol[id] && w == g_SlotPistol[id]))
 		engclient_cmd(id, data)
 }
@@ -1643,7 +1978,7 @@ public task_lastinv(tid)
 {
 	new id = tid - TASK_KNIFE
 	// even if something came up meanwhile: it shouldn't be left with the knife out
-	if (is_user_alive(id) && is_user_bot(id) && get_user_weapon(id) == CSW_KNIFE)
+	if (is_user_alive(id) && is_user_bot(id) && held_weapon(id) == CSW_KNIFE)
 		engclient_cmd(id, "lastinv")
 	g_Out[id] = 0
 }
@@ -1663,6 +1998,14 @@ public task_bad_nade(tid)
 public task_nade_back(tid)
 {
 	new id = tid - TASK_BAD
+	// ours to put away only while it's still ours (g_Out) and still the grenade in hand: if
+	// the bot brain took it over (switched, threw it), it's left alone. (Not the attack
+	// button: a bot holds attack whenever it has a grenade out, ours too)
+	if (g_Out[id] == CSW_HEGRENADE && held_weapon(id) != CSW_HEGRENADE)
+	{
+		g_Out[id] = 0
+		return
+	}
 	if (g_Out[id] == CSW_HEGRENADE)
 		out_back(id)
 }
@@ -1711,11 +2054,16 @@ public task_flash_step(tid)
 
 // Looks at a point for `secs` (and stands still for `hold`, if any); remembered, so danger
 // lets it go at once
-ls_look(id, const Float:at[3], Float:secs, Float:hold)
+ls_look(id, const Float:at[3], Float:secs, Float:hold, bool:fast = false)
 {
-	server_cmd("ls_bot %d look %.0f %.0f %.0f %.2f", id, at[0], at[1], at[2], secs)
+	// (a calm look doesn't take the view from gm_humanbots' urgent turn to someone behind it)
+	if (!fast && !g_NoUrgent && LibraryExists("gm_humanbots", LibType_Library) && hb_urgent_until(id) > get_gametime())
+		return
+	// (fast: a flick of the mouse, not the brain's calm turn; holds are tagged "bf" so
+	// another plugin's release doesn't end them)
+	server_cmd("ls_bot %d look %.0f %.0f %.0f %.2f %d", id, at[0], at[1], at[2], secs, fast ? 1 : 0)
 	if (hold > 0.0)
-		server_cmd("ls_bot %d hold %.2f", id, hold)
+		server_cmd("ls_bot %d hold %.2f bf", id, hold)
 	g_PuppetUntil[id] = floatmax(g_PuppetUntil[id], get_gametime() + floatmax(secs, hold))
 }
 
@@ -1756,7 +2104,7 @@ salute(id)
 	other[2] -= 6.0
 	new Float:secs = random_float(1.2, 2.4)
 	server_cmd("ls_bot %d nod %.0f %.0f %.0f %.1f %.2f", id, other[0], other[1], other[2], secs, random_float(0.22, 0.38))
-	server_cmd("ls_bot %d hold %.1f", id, random_float(1.0, 2.0))
+	server_cmd("ls_bot %d hold %.1f bf", id, random_float(1.0, 2.0))
 	g_PuppetUntil[id] = get_gametime() + secs
 }
 
@@ -1818,7 +2166,7 @@ flick_step(id)
 	new Float:at[3]
 	eye_pos(mate, at)
 	new Float:secs = random_float(0.3, 0.6)
-	ls_look(id, at, secs + 0.15, secs)
+	ls_look(id, at, secs + 0.15, secs, true)
 	if (--g_FlickLeft[id] > 0)
 		set_task(secs + random_float(0.0, 0.15), "task_flick", id + TASK_FLICK)
 }
@@ -1886,6 +2234,85 @@ glance_step(id)
 		set_task(secs + random_float(0.0, 0.3), "task_glance", id + TASK_GLANCE)
 }
 
+// Fast nodding: the view bobbing up and down at nothing in particular, quickly (ls_bot nod)
+nod_fast(id)
+{
+	if (!g_Fork || !free_bot(id))
+		return
+	new Float:me[3], Float:view[3], Float:at[3]
+	eye_pos(id, me)
+	pev(id, pev_v_angle, view)
+	at[0] = me[0] + floatcos(view[1], degrees) * 300.0
+	at[1] = me[1] + floatsin(view[1], degrees) * 300.0
+	at[2] = me[2]
+	new Float:secs = random_float(0.8, 1.6)
+	server_cmd("ls_bot %d nod %.0f %.0f %.0f %.1f %.2f 1", id, at[0], at[1], at[2], secs, random_float(0.09, 0.15))
+	g_PuppetUntil[id] = floatmax(g_PuppetUntil[id], get_gametime() + secs)
+}
+
+// Mouse sweeps, a step at a time: a spin round (a quarter turn each step, once or twice
+// round), a quick wiggle left and right (a dozen degrees or so each way), or a slow pan
+// across the map (a few long looks well apart)
+
+start_sweep(id, kind)
+{
+	if (!g_Fork || !free_bot(id))
+		return
+	new Float:view[3]
+	pev(id, pev_v_angle, view)
+	g_SweepKind[id] = kind
+	g_SweepYaw[id] = view[1]
+	g_SweepStep[id] = 0
+	g_SweepLeft[id] = kind == SWEEP_SPIN ? 7 * random_num(1, 2) : kind == SWEEP_WIGGLE ? random_num(4, 7) : random_num(2, 3)
+	sweep_step(id)
+}
+
+public task_sweep(tid)
+{
+	sweep_step(tid - TASK_SWEEP)
+}
+
+sweep_step(id)
+{
+	if (g_SweepLeft[id] <= 0 || !g_Freeze || !free_bot(id))
+	{
+		g_SweepLeft[id] = 0
+		return
+	}
+	g_SweepLeft[id]--
+	g_SweepStep[id]++
+	new Float:me[3], Float:at[3], Float:yaw, Float:secs, Float:dz = 0.0
+	eye_pos(id, me)
+	switch (g_SweepKind[id])
+	{
+		case SWEEP_SPIN:
+		{
+			// (45-60 degrees a step: a quarter turn at a time would flip back the short way)
+			g_SweepYaw[id] += random_float(45.0, 60.0)
+			yaw = g_SweepYaw[id]
+			secs = random_float(0.1, 0.16)
+		}
+		case SWEEP_WIGGLE:
+		{
+			yaw = g_SweepYaw[id] + ((g_SweepStep[id] % 2) ? 1.0 : -1.0) * random_float(8.0, 18.0)
+			dz = random_float(-8.0, 8.0)
+			secs = random_float(0.08, 0.15)
+		}
+		default:
+		{
+			yaw = g_SweepYaw[id] + float(g_SweepStep[id]) * random_float(45.0, 80.0) * ((g_SweepYaw[id] > 0.0) ? 1.0 : -1.0)
+			dz = random_float(-15.0, 40.0)
+			secs = random_float(1.2, 2.2)
+		}
+	}
+	at[0] = me[0] + floatcos(yaw, degrees) * 500.0
+	at[1] = me[1] + floatsin(yaw, degrees) * 500.0
+	at[2] = me[2] + dz
+	ls_look(id, at, secs + 0.1, 0.0, g_SweepKind[id] != SWEEP_PAN)
+	if (g_SweepLeft[id] > 0)
+		set_task(secs, "task_sweep", id + TASK_SWEEP)
+}
+
 // A newer player staring at one teammate for a while (freeze time)
 stare_mate(id)
 {
@@ -1939,7 +2366,7 @@ public task_celebrate(tid)
 	if (!g_Fork || !free_bot(id, false))
 		return
 	// the knife can't shoot: the gun out first
-	if (get_user_weapon(id) == CSW_KNIFE)
+	if (held_weapon(id) == CSW_KNIFE)
 		engclient_cmd(id, "lastinv")
 	new Float:me[3]
 	pev(id, pev_origin, me)
@@ -1966,7 +2393,7 @@ public task_fire(tid)
 // A gun in hand: a primary or a pistol (not the knife, a grenade or the bomb)
 bool:holding_gun(id)
 {
-	switch (get_user_weapon(id))
+	switch (held_weapon(id))
 	{
 		case CSW_KNIFE, CSW_HEGRENADE, CSW_FLASHBANG, CSW_SMOKEGRENADE, CSW_C4, 0: return false
 	}
@@ -2091,7 +2518,7 @@ slash_check(Float:now)
 public task_slash(tid)
 {
 	new id = tid - TASK_BREAK
-	if (g_Out[id] == CSW_KNIFE && get_user_weapon(id) == CSW_KNIFE && free_bot(id, false))
+	if (g_Out[id] == CSW_KNIFE && held_weapon(id) == CSW_KNIFE && free_bot(id, false))
 		g_Press[id] |= IN_ATTACK
 }
 
@@ -2154,14 +2581,23 @@ bool:buy_time()
 {
 	if (g_Freeze)
 		return true
-	return get_gametime() - g_RoundStartAt < get_cvar_float("mp_buytime") * 60.0
+	new Float:secs = buy_secs()
+	return secs < 0.0 || get_gametime() - g_RoundStartAt < secs
+}
+
+// The buy time in seconds the way the game counts it: never under 15 (it puts a lower
+// mp_buytime, 0 too, up to that), and -1 for no limit
+Float:buy_secs()
+{
+	new Float:v = get_cvar_float("mp_buytime")
+	return v == -1.0 ? -1.0 : floatmax(v * 60.0, 15.0)
 }
 
 // Drops happen where buying is normal (Classic, Warcraft 3, SuperHero), in a pub round
 bool:drop_mode()
 {
 	return get_pcvar_num(g_pDrop) && g_FunOn && g_BuyMode && mode_ctx() == CTX_PUB
-		&& get_cvar_float("mp_buytime") > 0.0 && !get_cvar_num("gm_weapons")
+		&& !get_cvar_num("gm_weapons")
 }
 
 // `word` in msg on its own ("drop" in "drop pls", not in "dropped")
@@ -2195,6 +2631,153 @@ public cmd_say(id)
 	return PLUGIN_CONTINUE
 }
 
+// ---- gifts: a person drops a gun where a teammate bot with a worse one (or none) is ----
+// How much a bot would rather have it (the price, mostly; the machine gun and the
+// auto-snipers aren't what anyone wants instead of a rifle)
+gift_rank(w)
+{
+	switch (w)
+	{
+		case 0: return 0
+		case CSW_M249, CSW_G3SG1, CSW_SG550: return 2000
+	}
+	return gun_price(w)
+}
+
+public cmd_drop(id)
+{
+	if (!is_user_alive(id) || is_user_bot(id) || !drop_mode())
+		return PLUGIN_CONTINUE
+	new gun = held_weapon(id)
+	if (!((1 << gun) & PRIMARY_BITS))
+		return PLUGIN_CONTINUE
+	// the weapon box only exists once the drop is done: the gun's entity, looked at after
+	g_GiftBox[id] = active_item(id)
+	g_GiftGun[id] = gun
+	remove_task(id + TASK_GIFT)
+	set_task(0.1, "task_gift_box", id + TASK_GIFT)
+	return PLUGIN_CONTINUE
+}
+
+public task_gift_box(tid)
+{
+	new id = tid - TASK_GIFT
+	new ent = g_GiftBox[id], gun = g_GiftGun[id], team = get_user_team(id)
+	g_GiftBox[id] = 0
+	if (!ent || !pev_valid(ent) || !is_user_connected(id) || (team != 1 && team != 2))
+		return
+	new box = pev(ent, pev_owner), cls[16]
+	if (box <= MaxClients || !pev_valid(box))
+		return
+	pev(box, pev_classname, cls, charsmax(cls))
+	if (!equal(cls, "weaponbox"))
+		return
+	// the nearest teammate bot close by, quiet, with something worse
+	new Float:at[3], Float:o[3], best, Float:bestd = 600.0
+	pev(box, pev_origin, at)
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if (!is_user_alive(i) || !is_user_bot(i) || get_user_team(i) != team || g_GiftBot[i] || !free_bot(i))
+			continue
+		if (gift_rank(primary_of(i)) >= gift_rank(gun))
+			continue
+		pev(i, pev_origin, o)
+		new Float:d = get_distance_f(at, o)
+		if (d < bestd)
+		{
+			bestd = d
+			best = i
+		}
+	}
+	if (!best)
+		return
+	g_GiftBot[best] = id
+	g_GiftBox[best] = box
+	g_GiftGun[best] = gun
+	g_GiftTries[best] = 0
+	set_task(random_float(0.5, 1.0), "task_gift_take", best + TASK_GIFT)
+}
+
+// Over to the gift, its own gun dropped once there, and the gift picked up. In freeze time it
+// can't walk: it looks, and goes once the round starts (task_gift_check sends it then)
+public task_gift_take(tid)
+{
+	new id = tid - TASK_GIFT
+	new box = g_GiftBox[id], giver = g_GiftBot[id]
+	if (!gift_still(id))
+		return gift_done(id)
+	new Float:at[3]
+	pev(box, pev_origin, at)
+	if (g_Fork)
+	{
+		new Float:eye[3]
+		eye_pos(giver, eye)
+		ls_look(id, eye, 0.8, 0.6)
+		if (!g_Freeze)
+		{
+			server_cmd("ls_bot %d goto %.0f %.0f %.0f", id, at[0], at[1], at[2])
+			g_GiftSent[id] = true
+		}
+	}
+	set_task(0.5, "task_gift_check", tid, _, _, "b")
+	return 0
+}
+
+public task_gift_check(tid)
+{
+	new id = tid - TASK_GIFT
+	if (is_user_alive(id) && primary_of(id) == g_GiftGun[id])
+	{
+		if (g_Chat && is_user_connected(g_GiftBot[id]))
+			botchat_say_now(id, "gift_ty", g_GiftBot[id], true)
+		return gift_done(id)
+	}
+	// (the wait for freeze time to end isn't counted: 8 seconds to get there once it can walk)
+	if (!gift_still(id) || (!g_Freeze && ++g_GiftTries[id] > 16))
+		return gift_done(id)
+	new box = g_GiftBox[id], Float:at[3], Float:me[3]
+	pev(box, pev_origin, at)
+	pev(id, pev_origin, me)
+	// freeze time is over: now it walks over (once)
+	if (g_Fork && !g_Freeze && !g_GiftSent[id])
+	{
+		server_cmd("ls_bot %d goto %.0f %.0f %.0f", id, at[0], at[1], at[2])
+		g_GiftSent[id] = true
+	}
+	// only once it's there, at arm's length (never pulled in from across the room)
+	new Float:d = get_distance_f(at, me)
+	if (d < 90.0 && (pev(box, pev_flags) & FL_ONGROUND))
+	{
+		new own = primary_of(id)
+		if (own)
+		{
+			new name[24]
+			get_weaponname(own, name, charsmax(name))
+			engclient_cmd(id, "drop", name)
+		}
+		ExecuteHamB(Ham_Touch, box, id)
+	}
+	return 0
+}
+
+bool:gift_still(id)
+{
+	new box = g_GiftBox[id]
+	if (!is_user_alive(id) || !box || !pev_valid(box) || g_BombPlanted || sees_enemy(id))
+		return false
+	new cls[16]
+	pev(box, pev_classname, cls, charsmax(cls))
+	return bool:equal(cls, "weaponbox")
+}
+
+gift_done(id)
+{
+	remove_task(id + TASK_GIFT)
+	g_GiftBot[id] = g_GiftBox[id] = g_GiftGun[id] = 0
+	g_GiftSent[id] = false
+	return 0
+}
+
 // A broke bot asks its team (in freeze time, once the others have bought)
 public task_ask_drop(tid)
 {
@@ -2208,16 +2791,17 @@ public task_ask_drop(tid)
 }
 
 // Maybe a well-off teammate with a generous streak drops a gun for `asker` (rare: most of
-// the time nobody does). want: a gun they asked for by name
-ask_drop(asker, want, Float:odds)
+// the time nobody does). want: a gun they asked for by name; prefer: a bot asked by name,
+// which gives if it can and isn't cold. True when a drop is on its way
+bool:ask_drop(asker, want, Float:odds, prefer = 0)
 {
 	new team = get_user_team(asker)
 	if (g_DropDone || (team != 1 && team != 2))
-		return
+		return false
 	// someone who has a gun only asks for something in particular
 	if ((want && user_has_weapon(asker, want)) || (!want && primary_of(asker)))
-		return
-	new Float:me[3], Float:o[3], list[32], guns[32], n, cold
+		return false
+	new Float:me[3], Float:o[3], list[32], guns[32], n, cold, picked, pickedGun
 	pev(asker, pev_origin, me)
 	for (new i = 1; i <= MaxClients; i++)
 	{
@@ -2230,6 +2814,13 @@ ask_drop(asker, want, Float:odds)
 		pev(i, pev_origin, o)
 		if (get_distance_f(me, o) > 1200.0 || !free_bot(i, false))
 			continue
+		// asked by name: it gives (a cold one still says no)
+		if (i == prefer && warmth(i) != 0)
+		{
+			picked = i
+			pickedGun = gun
+			break
+		}
 		if (!has_quirk(i, Q_GENEROUS))
 		{
 			if (warmth(i) == 0)
@@ -2239,19 +2830,31 @@ ask_drop(asker, want, Float:odds)
 		guns[n] = gun
 		list[n++] = i
 	}
-	if (!n || random_float(0.0, 1.0) >= odds * floatmin(pers(), 1.5))
+	if (!picked && (!n || random_float(0.0, 1.0) >= odds * floatmin(pers(), 1.5)))
 	{
 		// now and then someone says no
 		if (g_Chat && cold && random_num(1, 100) <= 12)
 			botchat_say(cold, "drop_no", asker, 1.0)
-		return
+		return false
 	}
-	new k = random(n), giver = list[k]
+	new giver, gun
+	if (picked)
+	{
+		giver = picked
+		gun = pickedGun
+	}
+	else
+	{
+		new k = random(n)
+		giver = list[k]
+		gun = guns[k]
+	}
 	g_DropDone = true
 	g_DropFor[giver] = asker
 	g_DropUser[giver] = get_user_userid(asker)
-	g_DropGun[giver] = guns[k]
+	g_DropGun[giver] = gun
 	set_task(random_float(1.5, 4.0), "task_drop", giver + TASK_DROP)
+	return true
 }
 
 // Still worth doing: both there, the asker still without it, nothing going on
@@ -2283,7 +2886,7 @@ public task_drop(tid)
 		eye_pos(asker, at)
 		ls_look(id, at, 1.4, 1.0)
 	}
-	if (get_user_weapon(id) != gun)
+	if (held_weapon(id) != gun)
 	{
 		new name[24]
 		get_weaponname(gun, name, charsmax(name))
@@ -2297,7 +2900,7 @@ public task_drop_throw(tid)
 {
 	new id = tid - TASK_DROP
 	new asker = g_DropFor[id], gun = g_DropGun[id]
-	if (!drop_still(id) || get_user_weapon(id) != gun)
+	if (!drop_still(id) || held_weapon(id) != gun)
 	{
 		g_DropFor[id] = 0
 		return

@@ -286,6 +286,8 @@ static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
 
 pub struct Written {
     pub text: Option<String>,
+    /// something to do as well (one the plugin offered), only with a text
+    pub action: Option<String>,
     /// what the model said, when the filter dropped it
     pub raw: Option<String>,
     pub ms: u128,
@@ -313,13 +315,21 @@ fn generate(port: u16, model: &Model, req: &ReplyReq) -> Result<Written, String>
     let res = crate::sys::http().post(format!("http://127.0.0.1:{port}{path}")).timeout(GEN_TIMEOUT).json(&body).send();
     let v: Value = res.map_err(|e| e.to_string())?.json().map_err(|e| e.to_string())?;
     let raw = reply::answer_text(model.mode, &v).unwrap_or_default();
-    let mut text = reply::clean_reply(&raw, &req.bot, reply::is_loud(&req.persona));
-    // parroting the line it's answering isn't a reply
-    if text.as_deref().is_some_and(|t| t.eq_ignore_ascii_case(req.message.trim())) {
+    // asked for {"say", "do"} (chat models, with actions offered): the line and the action
+    let (said, action) = if model.mode == catalog::PromptMode::Chat && !req.actions.is_empty() {
+        reply::split_action(&raw, &req.actions)
+    } else {
+        (raw.clone(), None)
+    };
+    let mut text = reply::clean_reply(&said, &req.bot, reply::is_loud(&req.persona));
+    // parroting the line it's answering isn't a reply; with "Bots can be rude" off, an insult
+    // or swearing isn't either (the written line goes instead)
+    if text.as_deref().is_some_and(|t| t.eq_ignore_ascii_case(req.message.trim()) || (!req.rude && reply::has_insult(t))) {
         text = None;
     }
+    let action = action.filter(|_| text.is_some());
     let raw = text.is_none().then(|| reply::plain(&raw, 120));
-    Ok(Written { text, raw, ms: started.elapsed().as_millis() })
+    Ok(Written { text, action, raw, ms: started.elapsed().as_millis() })
 }
 
 /// POST /api/botchat/reply, for the plugin. 200 {"text"} or 204 when there's nothing good
@@ -342,7 +352,8 @@ async fn api_reply(headers: HeaderMap, body: axum::body::Bytes) -> Response {
     }
     let req = req.tidy();
     let job = tokio::task::spawn_blocking(move || write_reply(&req));
-    match tokio::time::timeout(Duration::from_millis(4600), job).await {
+    match tokio::time::timeout(Duration::from_millis(4200), job).await {
+        Ok(Ok(Ok(Written { text: Some(t), action: Some(a), .. }))) => (StatusCode::OK, Json(json!({"text": t, "action": a}))).into_response(),
         Ok(Ok(Ok(Written { text: Some(t), .. }))) => (StatusCode::OK, Json(json!({"text": t}))).into_response(),
         _ => StatusCode::NO_CONTENT.into_response(),
     }
@@ -541,6 +552,7 @@ async fn api_try(headers: HeaderMap, Json(req): Json<TryReq>) -> (StatusCode, Js
                 human: "Player".into(),
                 history: vec![],
                 context: serde_json::from_value(json!({"map": map, "score": "4-6", "alive": true})).unwrap_or_default(),
+                ..Default::default()
             }
             .tidy();
             tokio::task::spawn_blocking(move || (r.clone(), write_reply(&r)))
@@ -551,7 +563,7 @@ async fn api_try(headers: HeaderMap, Json(req): Json<TryReq>) -> (StatusCode, Js
         let Ok((r, res)) = j.await else { continue };
         let base = json!({"bot": r.bot, "persona": reply::persona_text(&r.persona), "mood": r.mood});
         let extra = match res {
-            Ok(w) => json!({"text": w.text, "rejected": w.raw, "ms": w.ms}),
+            Ok(w) => json!({"text": w.text, "action": w.action, "rejected": w.raw, "ms": w.ms}),
             Err(e) if e == "not ready" => json!({"error": "The model isn't ready yet."}),
             Err(e) if e.contains("timed out") || e.contains("timeout") => json!({"error": "Too slow, so a written line would be used."}),
             Err(_) => json!({"error": "No answer from the model."}),
@@ -665,6 +677,7 @@ mod tests {
                         human: "Player".into(),
                         history: hist.iter().map(|h| h.to_string()).collect(),
                         context: serde_json::from_value(json!({"map": "de_dust2", "score": "4-6", "alive": true})).unwrap(),
+                        ..Default::default()
                     }
                     .tidy();
                     match generate(s.port, m, &r) {

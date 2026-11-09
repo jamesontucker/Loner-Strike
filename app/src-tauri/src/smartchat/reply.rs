@@ -19,7 +19,24 @@ pub struct ReplyReq {
     pub history: Vec<String>,
     /// map, score, alive, and whatever else the plugin adds (unknown keys are fine)
     pub context: serde_json::Map<String, Value>,
+    /// who the bot is, in a few words ("warmth warm, temper tilty, humor goofy, into wc3")
+    pub traits: String,
+    /// how it knows the person: "friend", "regular", "rival", "clanmate", "stranger"...
+    pub relation: String,
+    /// the last few kills and deaths involving either of them ("bob killed Gordon with ak")
+    pub events: Vec<String>,
+    /// what the bot may be asked to do (from ACTIONS): the model may pick one
+    pub actions: Vec<String>,
+    /// "Bots can be rude" is on: without it the bot teases at most (and anything insulting is
+    /// dropped, so the written line is used)
+    pub rude: bool,
+    /// the lobby's mood: "toxic", "normal" or "friendly"
+    pub lobby: String,
 }
+
+/// Everything a bot can be asked to do in chat; the plugin decides yes or no as it would
+/// for a typed request.
+pub const ACTIONS: &[&str] = &["follow", "hold", "come", "goto_a", "goto_b", "spray", "jump", "crouch", "drop"];
 
 /// Plain printable ASCII, no newlines, at most `max` characters (game text is Latin-1,
 /// and a line break would end a prompt line early).
@@ -45,6 +62,19 @@ impl ReplyReq {
         self.message = plain(&self.message, 160);
         let n = self.history.len();
         self.history = self.history.split_off(n.saturating_sub(8)).iter().map(|l| plain(l, 160)).filter(|l| !l.is_empty()).collect();
+        self.traits = plain(&self.traits, 160);
+        self.relation = plain(&self.relation, 24).to_lowercase();
+        self.lobby = plain(&self.lobby, 12).to_lowercase();
+        let n = self.events.len();
+        self.events = self.events.split_off(n.saturating_sub(3)).iter().map(|l| plain(l, 80)).filter(|l| !l.is_empty()).collect();
+        let mut acts: Vec<String> = Vec::new();
+        for a in &self.actions {
+            let a = a.trim().to_lowercase();
+            if ACTIONS.contains(&a.as_str()) && !acts.contains(&a) {
+                acts.push(a);
+            }
+        }
+        self.actions = acts;
         self
     }
 
@@ -73,7 +103,7 @@ impl ReplyReq {
         }
         let bool_of = |k: &str| self.context.get(k).and_then(|v| v.as_bool().or(v.as_i64().map(|n| n != 0))).unwrap_or(false);
         for (key, label) in KNOWN_CONTEXT {
-            if parts.len() >= 9 {
+            if parts.len() >= 15 {
                 break;
             }
             match *key {
@@ -124,8 +154,29 @@ impl ReplyReq {
     /// One line about the bot and who it's talking to (both prompt modes use it).
     fn who(&self) -> String {
         let mut s = format!("{} is {}, {}", self.bot, persona_text(&self.persona), mood_text(&self.mood));
-        if self.knows_human() {
-            s.push_str(&format!(", has played with {} before", self.human));
+        if !self.traits.is_empty() {
+            s.push_str(&format!(" ({})", self.traits));
+        }
+        match self.relation.as_str() {
+            "" | "stranger" => {
+                if self.knows_human() {
+                    s.push_str(&format!(", has played with {} before", self.human));
+                }
+            }
+            "friend" => s.push_str(&format!(", friends with {}", self.human)),
+            "regular" => s.push_str(&format!(", knows {} from this server", self.human)),
+            "rival" => s.push_str(&format!(", {} is their rival", self.human)),
+            "clanmate" => s.push_str(&format!(", in a clan with {}", self.human)),
+            "dislikes them" => s.push_str(&format!(", doesn't like {}", self.human)),
+            r => s.push_str(&format!(", {r} of {}", self.human)),
+        }
+        match self.lobby.as_str() {
+            "toxic" => s.push_str(", the server is toxic tonight"),
+            "friendly" => s.push_str(", the server is friendly tonight"),
+            _ => {}
+        }
+        if !self.rude {
+            s.push_str(", never insults anyone");
         }
         if let Some(t) = self.topic() {
             s.push_str(&format!(", talking about {t}"));
@@ -136,6 +187,13 @@ impl ReplyReq {
 
 /// Context keys the plugin sends, in the order they matter, with a few words for each.
 const KNOWN_CONTEXT: &[(&str, &str)] = &[
+    ("mode", "mode"),
+    ("phase", "round:"),
+    ("alive_us", "teammates alive"),
+    ("alive_them", "enemies alive"),
+    ("hp", "health"),
+    ("gun", "holding"),
+    ("money", "money"),
     ("killer_place", "killed from"),
     ("enemy_place", "enemy at"),
     ("bomb_place", "bomb at"),
@@ -167,9 +225,9 @@ pub fn persona_text(p: &str) -> String {
         (&["b", "backseat"], "a backseat gamer who tells people what to do"),
         (&["i", "caller"], "the team's caller"),
         (&["d", "sleepy", "tired"], "half asleep"),
-        (&["u", "selfblame"], "quick to blame himself"),
+        (&["u", "selfblame"], "quick to blame themselves"),
         (&["B", "brit"], "british"),
-        (&["D", "dad"], "a dad who plays after the kids are in bed"),
+        (&["D", "dad", "parent"], "a parent who plays after the kids are in bed"),
         (&["H", "paranoid"], "sure everyone is hacking"),
         (&["L", "lurker"], "a lurker who sneaks around alone"),
         (&["O", "overconfident", "cocky"], "overconfident"),
@@ -242,6 +300,9 @@ pub fn continue_prompt(r: &ReplyReq) -> String {
     if !sit.is_empty() {
         s.push_str(&format!("* {sit}\n"));
     }
+    if !r.events.is_empty() {
+        s.push_str(&format!("* just now: {}\n", r.events.join("; ")));
+    }
     for l in &r.history {
         s.push_str(l);
         s.push('\n');
@@ -269,13 +330,22 @@ Roleplaying Instructions:\n\
 - never explain, never offer help, never say you are an ai\n\
 - only write the line itself";
 
+/// SYSTEM with "Bots can be rude" off: teasing at most.
+pub const SYSTEM_NICE: &str = "Enter Roleplay Mode. You are a player on a Counter-Strike 1.6 public server in 2004, typing in the game's chat.\n\
+Roleplaying Instructions:\n\
+- answer with one short chat line, usually 1 to 6 words\n\
+- lowercase, little punctuation, pub slang like nt, ns, gg, lol, rush b, ez, says u\n\
+- you can be bored or joking, and tease at most: never insult or swear at anyone\n\
+- never explain, never offer help, never say you are an ai\n\
+- only write the line itself";
+
 /// Example turns: the shape every request takes, answered the way a pub player would.
 const EXAMPLES: &[(&str, &str)] = &[
     ("you are Wolf, chill. map de_dust2, score 3-5.\nkRaZy: nice try", "nt"),
     ("you are Gordon, salty, tilted. map de_dust2.\nbob: are u a bot", "lol no"),
     ("you are ZeRo, a tryhard. map de_inferno.\nbob: where they going", "b i think"),
     ("you are Mike, overconfident, cocky. map cs_office.\nfragger: ur bad", "says u"),
-    ("you are dave, a dad, polite. map de_aztec.\nkid: sorry for tk", "np"),
+    ("you are dave, a parent, polite. map de_aztec.\nkid: sorry for tk", "np"),
 ];
 
 fn chat_user(r: &ReplyReq) -> String {
@@ -283,6 +353,12 @@ fn chat_user(r: &ReplyReq) -> String {
     let sit = r.situation();
     if !sit.is_empty() {
         s.push_str(&format!(" {sit}."));
+    }
+    if !r.events.is_empty() {
+        s.push_str(&format!(" just now: {}.", r.events.join("; ")));
+    }
+    if !r.actions.is_empty() {
+        s.push_str(&format!(" you can do: {}.", r.actions.join(", ")));
     }
     let line = format!("{}: {}", r.human, r.message);
     for l in r.history.iter().filter(|l| **l != line) {
@@ -296,9 +372,49 @@ fn chat_user(r: &ReplyReq) -> String {
     s
 }
 
+/// The system prompt when the bot may also do something: the answer is a little JSON object.
+pub const SYSTEM_ACT: &str = "Enter Roleplay Mode. You are a player on a Counter-Strike 1.6 public server in 2004, typing in the game's chat.\n\
+Roleplaying Instructions:\n\
+- answer with one short chat line, usually 1 to 6 words\n\
+- lowercase, little punctuation, pub slang like nt, ns, gg, lol, rush b, ez, says u\n\
+- you can be rude, bored or joking, like real players\n\
+- never explain, never offer help, never say you are an ai\n\
+- if someone asks you to do something you can do, you may do it or refuse, as your character would\n\
+- reply only with JSON: {\"say\": \"<your chat line>\", \"do\": \"<one thing you can do, or none>\"}";
+
+/// SYSTEM_ACT with "Bots can be rude" off.
+pub const SYSTEM_ACT_NICE: &str = "Enter Roleplay Mode. You are a player on a Counter-Strike 1.6 public server in 2004, typing in the game's chat.\n\
+Roleplaying Instructions:\n\
+- answer with one short chat line, usually 1 to 6 words\n\
+- lowercase, little punctuation, pub slang like nt, ns, gg, lol, rush b, ez, says u\n\
+- you can be bored or joking, and tease at most: never insult or swear at anyone\n\
+- never explain, never offer help, never say you are an ai\n\
+- if someone asks you to do something you can do, you may do it or refuse, as your character would\n\
+- reply only with JSON: {\"say\": \"<your chat line>\", \"do\": \"<one thing you can do, or none>\"}";
+
+/// The system prompt for a request: with or without actions, rude bots on or off.
+pub fn system_prompt(act: bool, rude: bool) -> &'static str {
+    match (act, rude) {
+        (true, true) => SYSTEM_ACT,
+        (true, false) => SYSTEM_ACT_NICE,
+        (false, true) => SYSTEM,
+        (false, false) => SYSTEM_NICE,
+    }
+}
+
+/// Example turns for SYSTEM_ACT.
+const EXAMPLES_ACT: &[(&str, &str)] = &[
+    ("you are Wolf, chill. map de_dust2, score 3-5. you can do: follow, hold, come, goto_a, goto_b.\nkRaZy: wolf come with me", r#"{"say": "ok omw", "do": "follow"}"#),
+    ("you are Gordon, salty, tilted. map de_dust2. you can do: follow, hold, come, goto_a, goto_b.\nbob: gordon stay here pls", r#"{"say": "no, we always lose waiting", "do": "none"}"#),
+    ("you are ZeRo, a tryhard. map de_inferno. you can do: follow, hold, come, goto_a, goto_b.\nbob: what do u think", r#"{"say": "b split, go banana", "do": "goto_b"}"#),
+    ("you are Mike, overconfident, cocky. map cs_office. you can do: follow, hold, come, jump.\nfragger: ur bad", r#"{"say": "says u", "do": "none"}"#),
+];
+
 pub fn chat_messages(r: &ReplyReq) -> Vec<Value> {
-    let mut m = vec![json!({"role": "system", "content": SYSTEM})];
-    for (u, a) in EXAMPLES {
+    let act = !r.actions.is_empty();
+    let mut m = vec![json!({"role": "system", "content": system_prompt(act, r.rude)})];
+    let examples: &[(&str, &str)] = if act { EXAMPLES_ACT } else { EXAMPLES };
+    for (u, a) in examples {
         m.push(json!({"role": "user", "content": u}));
         m.push(json!({"role": "assistant", "content": a}));
     }
@@ -314,7 +430,8 @@ pub fn request_body(mode: PromptMode, r: &ReplyReq) -> (&'static str, Value) {
     });
     let mut body = match mode {
         PromptMode::Continue => json!({"prompt": continue_prompt(r), "n_predict": 24, "stop": ["\n"]}),
-        PromptMode::Chat => json!({"messages": chat_messages(r), "max_tokens": 24, "stop": ["\n"],
+        PromptMode::Chat => json!({"messages": chat_messages(r), "max_tokens": if r.actions.is_empty() { 24 } else { 48 },
+                                   "stop": if r.actions.is_empty() { json!(["\n"]) } else { json!(["\n\n"]) },
                                    "chat_template_kwargs": {"enable_thinking": false}}),
     };
     if let (Value::Object(b), Value::Object(c)) = (&mut body, common) {
@@ -329,6 +446,49 @@ pub fn answer_text(mode: PromptMode, v: &Value) -> Option<String> {
         PromptMode::Continue => v["content"].as_str().map(String::from),
         PromptMode::Chat => v["choices"][0]["message"]["content"].as_str().map(String::from),
     }
+}
+
+// ---- what to do ---------------------------------------------------------------------
+
+/// The chat line and the action in the model's answer. Asked for JSON ({"say", "do"}) it
+/// may write that, JSON in a code fence, broken JSON, or just the line: anything that
+/// isn't clearly an offered action is no action, and the text is whatever reads as the line.
+pub fn split_action(raw: &str, offered: &[String]) -> (String, Option<String>) {
+    // (a code fence around it: its lines go)
+    let t: String = raw.lines().filter(|l| !l.trim_start().starts_with("```")).collect::<Vec<_>>().join("\n");
+    let t = t.trim();
+    let (Some(a), Some(b)) = (t.find('{'), t.rfind('}')) else {
+        return (t.to_string(), None);
+    };
+    if b <= a {
+        return (t.to_string(), None);
+    }
+    let obj = &t[a..=b];
+    let (say, act) = match serde_json::from_str::<Value>(obj) {
+        Ok(Value::Object(m)) => {
+            let get = |keys: &[&str]| keys.iter().find_map(|k| m.get(*k).and_then(|v| v.as_str()).map(String::from));
+            (get(&["say", "text", "reply", "line"]), get(&["do", "action"]))
+        }
+        _ => (loose_field(obj, &["say", "text", "reply"]), loose_field(obj, &["do", "action"])),
+    };
+    let act = act.map(|a| a.trim().to_lowercase()).filter(|a| a != "none" && offered.iter().any(|o| o == a));
+    match say {
+        Some(s) => (s, act),
+        // JSON without a line in it: nothing to say, so nothing to do either
+        None => (String::new(), None),
+    }
+}
+
+/// "key": "value" out of something that's nearly JSON (a missing brace, a trailing comma).
+fn loose_field(s: &str, keys: &[&str]) -> Option<String> {
+    for k in keys {
+        let pat = format!("\"{k}\"");
+        let Some(at) = s.find(&pat) else { continue };
+        let rest = s[at + pat.len()..].trim_start().strip_prefix(':')?.trim_start().strip_prefix('"')?;
+        let end = rest.find('"')?;
+        return Some(rest[..end].to_string());
+    }
+    None
 }
 
 // ---- the filter -------------------------------------------------------------------
@@ -348,6 +508,20 @@ const ASSISTANT: &[&str] = &[
 /// Slurs and the like: a reply containing one is dropped. Stems match the start of a word.
 const DENY_STEMS: &[&str] = &["nigg", "nigga", "fagg", "retard", "trann", "kike", "chink", "spick", "beaner", "wetback", "gook", "coon", "dyke"];
 const DENY_WORDS: &[&str] = &["fag", "fags", "spic", "spics", "kys", "rape", "raped", "nazi", "hitler"];
+
+/// Insults and swearing: with "Bots can be rude" off a reply with one is dropped (the written
+/// line is used). Stems match the start of a word.
+const INSULT_STEMS: &[&str] = &["fuck", "fuk", "fck", "shit", "bitch", "cunt", "bastard", "wank", "twat", "prick", "piss", "idiot", "moron", "loser", "noob", "n00b", "kurw", "scheis"];
+const INSULT_WORDS: &[&str] = &["ass", "asshole", "dumbass", "dick", "stfu", "gtfo", "stupid", "dumb", "nub", "newb", "trash", "garbage", "suck", "sucks", "sux", "suka", "blyat", "cyka", "merda", "l2p", "loser", "crap"];
+const INSULT_PHRASES: &[&str] = &["ur bad", "you are bad", "ur so bad", "you suck", "u suck", "learn to play", "learn to aim", "shut up"];
+
+pub fn has_insult(text: &str) -> bool {
+    let t: String = text.to_lowercase().chars().map(unleet).collect();
+    let words: Vec<&str> = t.split(|c: char| !c.is_ascii_alphabetic()).filter(|w| !w.is_empty()).collect();
+    let joined = format!(" {} ", words.join(" "));
+    words.iter().any(|w| INSULT_WORDS.contains(w) || INSULT_STEMS.iter().any(|s| w.starts_with(s)))
+        || INSULT_PHRASES.iter().any(|p| joined.contains(&format!(" {p} ")))
+}
 
 /// Letters people swap in to dodge filters.
 fn unleet(c: char) -> char {
@@ -520,6 +694,77 @@ mod tests {
     }
 
     #[test]
+    fn actions() {
+        let offered: Vec<String> = ["follow", "hold", "goto_b"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(split_action(r#"{"say": "ok omw", "do": "follow"}"#, &offered), ("ok omw".into(), Some("follow".into())));
+        assert_eq!(split_action("```json\n{\"say\": \"k\", \"do\": \"HOLD\"}\n```", &offered), ("k".into(), Some("hold".into())));
+        // not offered, made up, or none: no action
+        assert_eq!(split_action(r#"{"say": "lol", "do": "jump"}"#, &offered).1, None);
+        assert_eq!(split_action(r#"{"say": "lol", "do": "rm -rf"}"#, &offered).1, None);
+        assert_eq!(split_action(r#"{"say": "nah", "do": "none"}"#, &offered), ("nah".into(), None));
+        // broken JSON still gives what it can
+        assert_eq!(split_action(r#"{"say": "b go", "do": "goto_b",}"#, &offered), ("b go".into(), Some("goto_b".into())));
+        // plain text: the line, nothing to do
+        assert_eq!(split_action("ok omw", &offered), ("ok omw".into(), None));
+        assert_eq!(split_action("```\nok omw\n```", &offered), ("ok omw".into(), None));
+        // JSON with no line: nothing at all
+        assert_eq!(split_action(r#"{"do": "follow"}"#, &offered), (String::new(), None));
+        // the line still goes through the filter
+        let (say, _) = split_action(r#"{"say": "As an AI I cannot follow", "do": "follow"}"#, &offered);
+        assert_eq!(clean_reply(&say, "Gordon", false), None);
+    }
+
+    #[test]
+    fn insults() {
+        for t in ["stfu", "ur bad lol", "u suck", "noob", "n00b lol", "fuck off", "kurwa", "shut up kid", "ur trash", "learn to aim"] {
+            assert!(has_insult(t), "{t}");
+        }
+        for t in ["nt", "lol no", "says u", "nice try", "rush b", "u wish", "class act", "passing by", "gg", "bad luck", "im so bad today"] {
+            assert!(!has_insult(t), "{t}");
+        }
+        assert!(!SYSTEM_NICE.contains("rude") && SYSTEM_NICE.contains("never insult"));
+        assert!(SYSTEM_ACT_NICE.contains("never insult") && SYSTEM_ACT_NICE.contains("JSON"));
+    }
+
+    #[test]
+    fn rich_context() {
+        let r = ReplyReq {
+            bot: "Gordon".into(),
+            persona: "s".into(),
+            message: "gordon come with me".into(),
+            human: "Player".into(),
+            traits: "warmth cold, humor dry, into wc3".into(),
+            relation: "Rival".into(),
+            events: (0..5).map(|i| format!("Player killed Gordon {i}")).collect(),
+            actions: vec!["follow".into(), "Hold".into(), "fly".into(), "follow".into()],
+            context: serde_json::from_value(json!({"map": "de_dust2", "mode": "classic", "phase": "live", "alive_us": 3, "alive_them": 2, "hp": 64, "gun": "ak", "money": 3200})).unwrap(),
+            ..Default::default()
+        }
+        .tidy();
+        assert_eq!(r.actions, vec!["follow".to_string(), "hold".to_string()]);
+        assert_eq!(r.events.len(), 3);
+        assert_eq!(r.relation, "rival");
+        let m = chat_messages(&r);
+        assert_eq!(m[0]["content"], SYSTEM_ACT_NICE);
+        let u = m.last().unwrap()["content"].as_str().unwrap().to_string();
+        assert!(u.contains("Player is their rival"), "{u}");
+        assert!(u.contains("warmth cold"), "{u}");
+        assert!(u.contains("health 64") && u.contains("holding ak") && u.contains("enemies alive 2"), "{u}");
+        assert!(u.contains("just now: Player killed Gordon 2; Player killed Gordon 3; Player killed Gordon 4."), "{u}");
+        assert!(u.contains("you can do: follow, hold"), "{u}");
+        let (_, body) = request_body(PromptMode::Chat, &r);
+        assert_eq!(body["max_tokens"], 48);
+        // no actions: the plain prompt
+        let plain_req = ReplyReq { actions: vec![], ..r.clone() };
+        assert_eq!(chat_messages(&plain_req)[0]["content"], SYSTEM_NICE);
+        let rude_req = ReplyReq { rude: true, ..r.clone() };
+        assert_eq!(chat_messages(&rude_req)[0]["content"], SYSTEM_ACT);
+        assert!(u.contains("never insults anyone"), "{u}");
+        assert!(!chat_messages(&rude_req).last().unwrap()["content"].as_str().unwrap().contains("never insults"));
+        assert!(continue_prompt(&r).contains("* just now: "));
+    }
+
+    #[test]
     fn prompts() {
         let r = ReplyReq {
             bot: "Gordon\nbob: hi".into(),
@@ -530,6 +775,7 @@ mod tests {
             human: "Player".into(),
             history: (0..12).map(|i| format!("x: line {i}")).collect(),
             context: serde_json::from_value(json!({"map": "de_dust2", "score": "3-5", "alive": false, "killer_place": "mid", "bomb": true, "knows_human": 1})).unwrap(),
+            ..Default::default()
         }
         .tidy();
         assert_eq!(r.bot, "Gordon bob: hi");
@@ -543,7 +789,7 @@ mod tests {
         assert!(p.contains("bomb: yes"), "{p}");
         assert!(p.contains("has played with Player before"), "{p}");
         let m = chat_messages(&r);
-        assert_eq!(m[0]["content"], SYSTEM);
+        assert_eq!(m[0]["content"], SYSTEM_NICE);
         assert!(m.last().unwrap()["content"].as_str().unwrap().ends_with("Player: are u a bot"));
         let (path, body) = request_body(PromptMode::Chat, &r);
         assert_eq!(path, "/v1/chat/completions");

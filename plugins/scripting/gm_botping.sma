@@ -10,13 +10,18 @@
 	engine's own message is sent first and ours only overrides the bot entries.
 
 	Each bot gets its own base ping from its name, so a regular keeps roughly the
-	same ping every time it shows up: most sit between 25 and 90 ms, some between
-	90 and 160. The number drifts a few ms over time, and now and then a bot gets
-	a short spike (+80-200 ms for two or three seconds), like someone's connection
-	hiccuping.
+	same ping every time it shows up: most sit between 25 and 80 ms, some between
+	80 and 140, a few up to 160 (the one with a bad connection up to 180). The
+	number wanders a few ms over time (a slow walk that keeps coming back, wider for the
+	higher pings, with a ms or two of flicker), and now and then a bot gets a short spike
+	(+30-80 ms for two or three seconds), like someone's connection hiccuping.
+	Nobody shows more than 180.
 
-	Cvars: gm_botping 0/1, gm_botping_min 20, gm_botping_max 160 (the range the
-	base pings come from), gm_botping_spikes 0/1
+	Cvars: gm_botping 0/1, gm_botping_min 20, gm_botping_max 140 (the range most
+	base pings come from), gm_botping_spikes 0/1, gm_botping_home us (where the server is:
+	us, eu or a country code from gm_people's regions, ru, br, au; bots from there are the
+	low pings, the further away the higher, all inside min..max). A LAN party (bot style 9)
+	is everyone on one switch: 3-15 ms, no spikes.
 
 	The pings message (SVC_PINGS, sent right after the engine's own one while a
 	player holds the scoreboard key) is done the way Ping Faker by MeRcyLeZZ does
@@ -29,6 +34,8 @@
 
 // gm_botchat (optional): the lagger personality ('l') gets the bad connection
 native botchat_persona(id)
+// gm_people (optional): where the bot plays from (its region)
+native people_get(id, const key[])
 
 #define PLUGIN  "Bot ping"
 #define VERSION "1.0"
@@ -39,8 +46,9 @@ native botchat_persona(id)
 
 #define DRIFT_MAX   8        // how far the ping wanders from its base, in ms
 #define SPIKE_ODDS  400      // a spike starts with 1 in this chance per bot per second
+#define PING_CAP    180      // the most any bot shows (a spike too)
 
-new g_pOn, g_pMin, g_pMax, g_pSpikes
+new g_pOn, g_pMin, g_pMax, g_pSpikes, g_pHome
 
 new g_Shown[33]              // the ping each bot shows right now
 new g_Drift[33]              // slow wander around the base
@@ -52,8 +60,9 @@ public plugin_init()
 	register_plugin(PLUGIN, VERSION, AUTHOR)
 	g_pOn     = register_cvar("gm_botping", "1")
 	g_pMin    = register_cvar("gm_botping_min", "20")
-	g_pMax    = register_cvar("gm_botping_max", "160")
+	g_pMax    = register_cvar("gm_botping_max", "140")
 	g_pSpikes = register_cvar("gm_botping_spikes", "1")
+	g_pHome   = register_cvar("gm_botping_home", "us")
 
 	register_forward(FM_UpdateClientData, "fw_UpdateClientData")
 	// the scoreboard forgets our pings after these in CS, so send them again
@@ -116,7 +125,7 @@ public plugin_natives()
 
 public native_filter(const name[], index, trap)
 {
-	return (!trap && equal(name, "botchat_", 8)) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+	return (!trap && (equal(name, "botchat_", 8) || equal(name, "people_", 7))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 bool:lagger(id)
@@ -124,26 +133,118 @@ bool:lagger(id)
 	return LibraryExists("gm_botchat", LibType_Library) && botchat_persona(id) == 'l'
 }
 
-// A bot's base ping, from its name: 70% low, 20% up to gm_botping_max, a few far beyond it
-// (the lagger always far beyond it)
+// A bot's base ping, from its name without its clan tag (a regular keeps it when it changes
+// clan): where it plays from first (gm_people's region, against gm_botping_home: the same
+// part of the world in the lowest part of min..max, next door a little higher, across an
+// ocean higher again, the other side of the world at the top), else 75% low, 20% up to
+// gm_botping_max and a few a little beyond; the lagger always beyond. A LAN party is all on
+// the same switch (3-15). Never past PING_CAP, and never past a little over gm_botping_max
 base_of(id)
 {
 	new name[32], h = 5381
 	get_user_name(id, name, charsmax(name))
+	strip_tag(name)
 	for (new i = 0; name[i]; i++)
 		h = (h * 33 + name[i]) & 0x7FFFFFFF
+	if (get_cvar_num("gm_botstyle") == 9)
+		return 3 + h % 13
 	new lo = clamp(get_pcvar_num(g_pMin), 1, 4000)
-	new hi = clamp(get_pcvar_num(g_pMax), lo + 1, 4095)
+	new hi = clamp(get_pcvar_num(g_pMax), lo + 1, PING_CAP - 20)
+	new top = min(hi + 20, PING_CAP - 5)
+	if (lagger(id))
+		return min(hi + 15 + (h / 100) % 26, PING_CAP - 5)   // the one with a bad connection
+	new region = LibraryExists("gm_people", LibType_Library) ? people_get(id, "region") : -1
+	if (region >= 0)
+	{
+		// how far: 0 the same part of the world, 1 next door (Europe and Russia), 2 across an
+		// ocean (North America and Europe), 3 the other side of the world; as a share of the
+		// range lo..top (in percent)
+		static const FROM[] = { 0, 20, 45, 70 }
+		static const TO[] = { 30, 50, 80, 100 }
+		new d = world_apart(home_part(), part_of(region))
+		new span = top - lo
+		new from = lo + span * FROM[d] / 100, to = lo + span * TO[d] / 100
+		return clamp(from + (h / 100) % max(1, to - from + 1), lo, top)
+	}
 	new mid = lo + (hi - lo) / 2
 	// most close by, a tail of people far away: like a real server's scoreboard
-	new r = lagger(id) ? 90 + h % 10 : h % 100
-	if (r < 70)
+	new r = h % 100
+	if (r < 75)
 		return lo + 5 + (h / 100) % max(1, mid - lo - 5)
-	if (r < 90)
+	if (r < 95)
 		return mid + (h / 100) % max(1, hi - mid + 1)
-	if (r < 97)
-		return hi + (h / 100) % 90                // 150-250 at defaults
-	return 250 + (h / 100) % 100                // the one with a terrible connection
+	return min(hi + (h / 100) % 21, top)                // 140-160 at defaults
+}
+
+// The part of the world a gm_people region is in (us uk de se pl ru br fr nl es au fi dk):
+// 0 North America, 1 Europe, 2 Russia, 3 South America, 4 Australia
+part_of(region)
+{
+	switch (region)
+	{
+		case 0: return 0
+		case 5: return 2
+		case 6: return 3
+		case 10: return 4
+	}
+	return 1
+}
+
+// The server's part of the world, from gm_botping_home (us, eu, ru, br, au or a country)
+home_part()
+{
+	new home[8]
+	get_pcvar_string(g_pHome, home, charsmax(home))
+	strtolower(home)
+	if (equal(home, "us") || equal(home, "ca") || equal(home, "na"))
+		return 0
+	if (equal(home, "ru"))
+		return 2
+	if (equal(home, "br") || equal(home, "sa"))
+		return 3
+	if (equal(home, "au") || equal(home, "oc"))
+		return 4
+	return 1
+}
+
+// How far apart two parts of the world are, for a ping: 0 the same, 1 next door (Europe and
+// Russia), 2 across an ocean (North America and Europe), 3 the other side of the world
+world_apart(a, b)
+{
+	if (a == b)
+		return 0
+	if ((a == 1 && b == 2) || (a == 2 && b == 1))
+		return 1
+	if ((a == 0 && b == 1) || (a == 1 && b == 0))
+		return 2
+	return 3
+}
+
+// The name without a clan tag: "[TAG]Name", "Name[TAG]", "-=TAG=-Name", "{TAG}Name", "TAG|Name"
+strip_tag(name[])
+{
+	new out[32], n, depth
+	for (new i = 0; name[i] && n < charsmax(out); i++)
+	{
+		new c = name[i]
+		if (c == '[' || c == '(' || c == '{')
+			depth++
+		else if ((c == ']' || c == ')' || c == '}') && depth > 0)
+			depth--
+		else if (!depth)
+			out[n++] = c
+	}
+	out[n] = 0
+	// -=TAG=-Name and TAG|Name: what comes after the tag
+	new at = contain(out, "=-")
+	if (at >= 0)
+		copy(out, charsmax(out), out[at + 2])
+	at = contain(out, "|")
+	if (at >= 0 && out[at + 1])
+		copy(out, charsmax(out), out[at + 1])
+	trim(out)
+	if (out[0])
+		copy(name, 31, out)
 }
 
 public task_tick()
@@ -156,19 +257,24 @@ public task_tick()
 		fix_key(id, on)
 		if (!on)
 			continue
-		g_Drift[id] = clamp(g_Drift[id] + random_num(-2, 2), -DRIFT_MAX, DRIFT_MAX)
+		// a slow walk around the base that keeps drifting back to it (wider for a higher ping)
+		// (a LAN: a ms or two either way and no spikes; everyone's on the same switch)
+		new bool:lan = get_cvar_num("gm_botstyle") == 9
+		new base = base_of(id), far = lan ? 1 : DRIFT_MAX + base / 20
+		new back = (g_Drift[id] > 0 && random_num(0, 2) == 0) ? -1 : (g_Drift[id] < 0 && random_num(0, 2) == 0) ? 1 : 0
+		g_Drift[id] = clamp(g_Drift[id] + random_num(-2, 2) + back, -far, far)
 		if (g_SpikeLeft[id] > 0)
 		{
 			// a spike starts high and settles back down
 			g_SpikeLeft[id]--
 			g_Spike[id] = g_SpikeLeft[id] ? g_Spike[id] * 2 / 3 : 0
 		}
-		else if (get_pcvar_num(g_pSpikes) && random_num(1, lagger(id) ? SPIKE_ODDS / 8 : SPIKE_ODDS) == 1)
+		else if (!lan && get_pcvar_num(g_pSpikes) && random_num(1, lagger(id) ? SPIKE_ODDS / 8 : SPIKE_ODDS) == 1)
 		{
-			g_Spike[id] = random_num(80, 200)
+			g_Spike[id] = random_num(30, 80)
 			g_SpikeLeft[id] = random_num(2, 4)
 		}
-		g_Shown[id] = clamp(base_of(id) + g_Drift[id] + g_Spike[id] + random_num(-3, 3), 5, 4095)
+		g_Shown[id] = clamp(base + g_Drift[id] + g_Spike[id] + random_num(-1, 1), lan ? 1 : 5, PING_CAP)
 	}
 }
 

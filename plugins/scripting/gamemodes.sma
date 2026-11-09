@@ -58,7 +58,7 @@ enum _:SettingData
 	SD_Cvar[32],
 	SD_Name[24],
 	SD_Values[64],
-	SD_Labels[96],
+	SD_Labels[128],
 	SD_Cat,
 	SD_Scope,
 	SD_NeedFlag[4]
@@ -72,7 +72,8 @@ new const SETTINGS[][SettingData] =
 	{ "gm_bot_weapons",     "Bot weapons",      "0 1 2 3",                  "Any Pistols Snipers Knives",          CAT_BOT,    SC_MODE,   "" },
 	{ "bot_chatter",        "Bot chatter",      "normal minimal radio off", "Normal Minimal Radio Off",            CAT_BOT,    SC_GLOBAL, "" },
 	{ "bot_join_team",      "Bots join",        "any T CT",                 "Any Terrorists CTs",                  CAT_BOT,    SC_GLOBAL, "" },
-	{ "gm_botstyle",        "Bot style",        "0 4 1 8 2 3 5 6 7",        "Classic|Newbie lobby|Pub server|Mixed lobby|Matchmaking|Veterans|Locked In|Hackers|Gods", CAT_BOT, SC_GLOBAL, "" },
+	{ "gm_botstyle",        "Bot style",        "0 4 1 8 9 2 3 10 5 6 7",   "Classic|Newbie lobby|Pub server|Mixed lobby|LAN party|Matchmaking|Veterans|Old-timers|Locked In|Hackers|Gods", CAT_BOT, SC_GLOBAL, "" },
+	{ "gm_mood",            "Lobby mood",       "0 1 2",                    "Friendly|Normal|Toxic",               CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_reaction",     "Human reaction times", "1 0",                  "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_aim",          "Human aim & bursts", "1 0",                    "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_mistakes",     "Bot mistakes",     "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
@@ -100,6 +101,7 @@ new const SETTINGS[][SettingData] =
 	{ "gm_bf_breakables",   "Bots shoot breakables", "1 0",                    "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_bf_drop",         "Bots drop guns",   "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_bf_bad",          "Newbie bad habits", "1 0",                     "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_bf_cheeky",       "Cheeky bots",      "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botchat",         "Bot chat",         "0 1 2 3",                  "Off|Now and then|Normal|Chatty",      CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botchat_humans",  "Bots answer you",  "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_botchat_deadchat", "Dead bots' chat", "1 0",                      "Everyone sees it|Only the dead",      CAT_BOT,    SC_GLOBAL, "" },
@@ -539,6 +541,7 @@ public plugin_cfg()
 	exec_if_exists(path)
 	server_exec()
 	set_pcvar_num(g_pBotPlay, botplay_for(g_Cur, map))
+	apply_ls_cvars()
 	set_task(1.0, "task_apply")
 	set_task(4.0, "task_reapply_saved")
 	set_task(5.0, "task_learn_guard_start")
@@ -623,6 +626,7 @@ public task_reapply_saved()
 	apply_zp_specials()
 	apply_nobomb()
 	apply_botstyle()
+	apply_ls_cvars()
 }
 
 // Practice: a small box where each of your bullets landed (red on players), for 4s
@@ -722,6 +726,14 @@ career_cleanup()
 	apply_bot_weapons()
 	set_cvar_num("sv_gravity", 800)
 	set_cvar_num("sv_airaccelerate", 10)
+	// a mission keeps its designed bots: Loner-Strike's bot brain off (apply_ls_cvars puts it
+	// back on the next map that isn't a mission)
+	if (cvar_exists("bot_ls_fight"))
+	{
+		static const LS[][] = { "bot_ls_fight", "bot_ls_solo", "bot_ls_routes", "bot_ls_lines", "bot_ls_pauses", "bot_ls_own_memory", "bot_ls_match" }
+		for (new i = 0; i < sizeof LS; i++)
+			set_cvar_num(LS[i], 0)
+	}
 	log_amx("Tour of Duty match detected - game mode plugins paused, settings left alone.")
 }
 
@@ -883,6 +895,7 @@ apply_all(bool:restart)
 	apply_zp_specials()
 	apply_nobomb()
 	apply_botstyle()
+	apply_ls_cvars()
 	if (restart)
 		server_cmd("sv_restart 1")
 }
@@ -1672,10 +1685,12 @@ strip_c4(id)
 // Each bot style (gm_humanbots.amxx) has its own personality file. CZ reads
 // bot_profile_db when a map loads, so the personalities follow on the next map.
 #define BOTSTYLE_MATCHMAKING 2
+#define BOTSTYLE_LANPARTY    9
 new const BOTSTYLE_FILES[][] = { "", "BotProfile_Pub.db", "BotProfile_Matchmaking.db", "BotProfile_Veterans.db", "BotProfile_Newbie.db",
 	"BotProfile_LockedIn.db", "BotProfile_Hackers.db", "BotProfile_Gods.db",
 	// Mixed lobby: the Pub server file has the widest spread of personalities
-	"BotProfile_Pub.db" }
+	"BotProfile_Pub.db",
+	"BotProfile_LanParty.db", "BotProfile_OldTimers.db" }
 
 // How bots play together (configs/gamemodes/botplay.ini): each style has a file per way
 enum { PLAY_TEAM, PLAY_SOLO, PLAY_HOLD }
@@ -1757,8 +1772,9 @@ bool:botstyle_file(st, mode, const map[], file[], len)
 	if (!(0 < st < sizeof BOTSTYLE_FILES) || !file_exists(BOTSTYLE_FILES[st], true))
 		return false
 	new play = botplay_for(mode, map)
-	// Matchmaking is the team style: an organised side on Classic's objectives
-	if (st == BOTSTYLE_MATCHMAKING && play == PLAY_SOLO && mode >= 0 && equal(g_ModeId[mode], "classic"))
+	// Matchmaking is the team style: an organised side on Classic's objectives; a LAN party
+	// is friends playing together, so the team file there too
+	if ((st == BOTSTYLE_MATCHMAKING || st == BOTSTYLE_LANPARTY) && play == PLAY_SOLO && mode >= 0 && equal(g_ModeId[mode], "classic"))
 		play = PLAY_TEAM
 	copy(file, len, BOTSTYLE_FILES[st])
 	if (play != PLAY_TEAM)
@@ -1790,6 +1806,83 @@ wanted_profile(mode, const map[], out[], len)
 		copy(out, len, g_ProfileLoaded)
 	if (!out[0] || !file_exists(out, true))
 		copy(out, len, "BotProfile.db")
+}
+
+// Modes a plugin steers the bots through: Loner-Strike's bot brain stays out of them (their
+// cfgs say so too; keep the two lists alike, and gm_botfun's NOVELTY)
+new const STEERED_MODES[][] = { "hns", "deathrun", "kreedz", "surf", "soccerjam", "zombie", "zp5", "basebuilder" }
+
+bool:steered_mode(mode)
+{
+	if (mode < 0)
+		return false
+	for (new i = 0; i < sizeof STEERED_MODES; i++)
+		if (equal(g_ModeId[mode], STEERED_MODES[i]))
+			return true
+	return false
+}
+
+// Loner-Strike's bot brain (its game DLL's bot_ls_* cvars) for the bot style and the mode.
+// Run after every config (base.cfg, the mode's cfg, the saved settings) and when the style
+// changes, so it has the last word and agrees with the cfgs:
+//   the Original style (plain CZ bots): everything off, and each bot told it's nobody in
+//     particular any more (a persona reset); chat and fake pings stay, as their own
+//     features with their own settings
+//   a steered mode: all of it off (its plugin moves the bots; as its cfg sets)
+//   otherwise: all on (base.cfg's values)
+// Matchmaking on Classic plays as an organised side: the bot brain's match habits on, the
+// bots playing together (gm_botplay team, the team profile) and no rogues, the way
+// match_like() in the plugins sees it; a LAN party on Classic plays together too
+new bool:g_RoguesForced, g_RoguesWas
+
+apply_ls_cvars()
+{
+	if (!cvar_exists("bot_ls_fight") || g_Career)
+		return
+	new st = get_cvar_num("gm_botstyle")
+	new bool:original = st == 0
+	new bool:steered = steered_mode(g_Cur)
+	new bool:off = original || steered
+	set_cvar_num("bot_ls_fight", off ? 0 : 1)
+	set_cvar_num("bot_ls_solo", off ? 0 : 1)
+	set_cvar_string("bot_ls_routes", off ? "0" : "1.0")
+	set_cvar_string("bot_ls_lines", off ? "0" : "1.0")
+	set_cvar_string("bot_ls_pauses", off ? "0" : "1.0")
+	set_cvar_num("bot_ls_own_memory", off ? 0 : 1)
+	if (original)
+	{
+		for (new id = 1; id <= MaxClients; id++)
+			if (is_user_connected(id) && is_user_bot(id))
+				server_cmd("ls_bot %d persona -1 -1 -1 1 1 -1", id)
+	}
+	new bool:classic = g_Cur >= 0 && equal(g_ModeId[g_Cur], "classic")
+	new bool:mm = classic && st == BOTSTYLE_MATCHMAKING
+	// rogues: none for Matchmaking on Classic; back to the saved setting after (only if this
+	// set it: the setting is the user's otherwise)
+	if (mm && !g_RoguesForced)
+	{
+		g_RoguesWas = get_cvar_num("bot_allow_rogues")
+		g_RoguesForced = true
+	}
+	if (mm)
+		set_cvar_num("bot_allow_rogues", 0)
+	else if (g_RoguesForced)
+	{
+		set_cvar_num("bot_allow_rogues", g_RoguesWas)
+		g_RoguesForced = false
+	}
+	if (classic)
+	{
+		set_cvar_num("bot_ls_match", mm ? 1 : 0)
+		if (mm || st == BOTSTYLE_LANPARTY)
+			set_pcvar_num(g_pBotPlay, PLAY_TEAM)
+		else
+		{
+			new map[32]
+			get_mapname(map, charsmax(map))
+			set_pcvar_num(g_pBotPlay, botplay_for(g_Cur, map))
+		}
+	}
 }
 
 // ReGameDLL can stop the bomb being handed out at all; strip_c4 covers the rest
@@ -2784,8 +2877,8 @@ setting_visible(s, cat)
 		if ((equal(SETTINGS[s][SD_Cvar], "gm_hb_", 6) || equal(SETTINGS[s][SD_Cvar], "gm_bf_", 6) || equal(SETTINGS[s][SD_Cvar], "gm_personality")
 			|| equal(SETTINGS[s][SD_Cvar], "gm_botchat_stop")) && !styled)
 			return false
-		// only Locked In (5), Hackers (6) and Gods (7) hop
-		if (equal(SETTINGS[s][SD_Cvar], "gm_hb_bhop") && get_cvar_num("gm_botstyle") < 5)
+		// only Locked In (5), Hackers (6) and Gods (7) hop, and Mixed lobby's (8) Locked In players
+		if (equal(SETTINGS[s][SD_Cvar], "gm_hb_bhop") && !(5 <= get_cvar_num("gm_botstyle") <= 8))
 			return false
 	}
 	// saluting, looking around, celebrating and stopping to type need Loner-Strike's game DLL
@@ -2810,7 +2903,7 @@ show_settings(id, cat, page)
 	new title[96]
 	formatex(title, charsmax(title), "%s^n\dSaved for %s", titles[cat], g_Career ? "all modes" : g_ModeName[g_Cur])
 	new menu = menu_create(title, "settings_handler")
-	new text[96], info[16], label[40], cur[40], svals[64], slabels[96]
+	new text[96], info[16], label[40], cur[40], svals[64], slabels[128]
 
 	if (cat == CAT_BOT)
 	{
@@ -2880,7 +2973,7 @@ public settings_handler(id, menu, item)
 	parse(info, scat, charsmax(scat), sidx, charsmax(sidx))
 	new cat = str_to_num(scat), s = str_to_num(sidx)
 
-	new cur[40], val[40], svals[64], slabels[96]
+	new cur[40], val[40], svals[64], slabels[128]
 	get_cvar_string(SETTINGS[s][SD_Cvar], cur, charsmax(cur))
 	setting_choices(s, svals, charsmax(svals), slabels, charsmax(slabels))
 	next_value(svals, cur, val, charsmax(val))
@@ -2981,6 +3074,7 @@ do_set(id, s, const rawval[])
 		gm_print(id, "The bot roster changes on the next map.")
 	else if (equal(cvar, "gm_botstyle"))
 	{
+		apply_ls_cvars()
 		if (get_cvar_num("gm_botstyle"))
 			apply_botstyle()
 		else
@@ -3541,7 +3635,7 @@ public srv_status()
 			g_ModeId[i], esc, esc2, g_ModeFlags[i], g_ModeCmd[i][0] != 0)
 	}
 
-	new svals[64], slabels[96]
+	new svals[64], slabels[128]
 	for (new s = 0; s < sizeof SETTINGS; s++)
 	{
 		if (SETTINGS[s][SD_Cat] == CAT_HIDDEN)

@@ -31,15 +31,26 @@ TRAITS = {
 }
 HOBBIES = "wc3 wow halo school work cars music lan cz source awp sleep food girlfriend footy metal".split()
 WORDS = {"phase": "dead freeze live end", "other": "human bot none", "team": "t ct spec",
-         "time": "night morning day evening"}
+         "time": "night morning day evening",
+         # the round, for this bot (gm_botchat): its money at the start, or the map's last one
+         "round": "pistol eco force full last"}
 NUMERIC = {"kills", "deaths", "frags", "kd", "alive", "diff", "vs", "vsby", "joined",
            # memory (gm_people, stage 3): how it feels about the other one, sessions together,
            # days since it last saw them, its rival
-           "rel", "fam", "days", "rival"}
+           "rel", "fam", "days", "rival",
+           # enemies alive; a clanmate of the other one; usually wins (+1) or loses (-1) vs them
+           "enemies", "clanmate", "lop", "lkills", "ldeaths",
+           # 1: "Bots can be rude" is on (insults and swearing at people need it)
+           "rude"}
 FREE = {"map", "flag"}  # any value
+# mode=<prefix of a mode id in modes.ini> ("mode=csdm" is both deathmatches)
+MODES = [l.split()[0] for l in open(os.path.join(DIR, "modes.ini"), encoding="latin-1")
+         if l.strip() and not l.startswith(";")]
 OPTIONS = {"odds", "cd", "once", "set"}
 PLACEHOLDERS = {"name", "other", "map", "place", "weapon", "hs", "carrier", "us", "them", "diff",
-                "timeleft", "nextmap", "tag", "hobby"}
+                "timeleft", "nextmap", "tag", "hobby",
+                # answers to questions and requests
+                "money", "gun", "hp", "left", "ago", "site"}
 LETTERS = set("ftsjqncokxhzpbiduwrmABCDEFGHLMNOPSTYIJKQRUVWXZ0123aeglvy456789")
 MOODS = set("-+^=")
 # later than the era (about 2008 on), whole words
@@ -153,6 +164,9 @@ def check(files):
                             err(f"{k} needs a number")
                     elif k in FREE:
                         pass
+                    elif k == "mode":
+                        if op not in ("=", "!=") or not any(m.startswith(v) for m in MODES):
+                            err(f"mode= a mode id (or its start) from modes.ini")
                     else:
                         err(f"unknown condition '{k}'")
                     continue

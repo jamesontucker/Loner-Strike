@@ -21,7 +21,7 @@ export const BOT_NOTE: Record<BotRating, string> = { great: "Bots play this well
 export const BOT_RATING_INFO = "How well bots play each mode. Some modes are made for people, so bots are weak or missing there.";
 
 /** Bot styles (gm_botstyle), in the order the in-game menu shows them. */
-export const BOT_STYLES: [string, string][] = [["0", "Original"], ["4", "Newbie lobby"], ["1", "Pub server"], ["8", "Mixed lobby"], ["2", "Matchmaking"], ["3", "Veterans"], ["5", "Locked in"], ["6", "Hackers"], ["7", "Gods"]];
+export const BOT_STYLES: [string, string][] = [["0", "Original"], ["4", "Newbie lobby"], ["1", "Pub server"], ["8", "Mixed lobby"], ["9", "LAN party"], ["2", "Matchmaking"], ["3", "Veterans"], ["10", "Old-timers"], ["5", "Locked in"], ["6", "Hackers"], ["7", "Gods"]];
 
 /** What each bot style is like, by gm_botstyle value. */
 export const BOT_STYLE_NOTE: Record<string, string> = {
@@ -29,8 +29,10 @@ export const BOT_STYLE_NOTE: Record<string, string> = {
   "4": "New players: slow to react, they spray and miss a lot",
   "1": "A typical public server: a few sharp players, most average, some bad",
   "8": "Everyone different, from new to very good. A regular keeps their level",
+  "9": "Friends at a LAN: every level, lots of banter, and they play together",
   "2": "Solid players who work as a team",
   "3": "Experienced: quick, accurate, short bursts",
+  "10": "Good aim, slow and methodical. They camp a lot and rarely talk",
   "5": "Very good and focused. They bunnyhop between fights",
   "6": "Suspiciously good: most bullets find you and they notice you from behind",
   "7": "Everything maxed. Every bullet near you is a headshot",
