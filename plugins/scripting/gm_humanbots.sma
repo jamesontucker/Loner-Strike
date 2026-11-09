@@ -140,6 +140,7 @@ new g_pRoundInf                                 // mp_round_infinite (ReGameDLL;
 new g_pStyle, g_pReaction, g_pAim, g_pMistakes, g_pBhop, g_pFreeForAll, g_pTilt, g_pShowoff
 new g_Mix[33]                                   // Mixed lobby: this bot's own style
 new Float:g_TiltDecayAt[33]                     // deathmatch: tilt last eased then
+new Float:g_DmSprayAt[33]                       // deathmatch: last respawn spray (one a minute at most)
 new Float:g_Tilt[33], Float:g_TiltWay[33]       // >0 sloppier; some get careful instead
 new Float:g_ShowUntil[33], g_Show[33]           // a show-off moment: 1 crouch spam, 2 jump
 new g_ShowHp[33], Float:g_ShowNext[33], bool:g_ShowDuck[33]   // health then; the next crouch toggle
@@ -988,6 +989,20 @@ public fw_spawn_post(id)
 			g_Tilt[id] *= floatpower(0.9, floatclamp((now - g_TiltDecayAt[id]) / 15.0, 0.0, 40.0))
 		g_Tilt[id] *= 0.85
 		g_TiltDecayAt[id] = now
+		// a tag by the spawn now and then (deathmatch and Gun Game have no rounds to spray at
+		// the start of): about one respawn in seven for the ones who like to spray, rarely the
+		// rest, a minute apart at least
+		if (is_user_bot(id) && get_pcvar_num(g_pSprays) && g_IdleMode && (g_SprayCount || g_LogoSpray)
+			&& now - g_DmSprayAt[id] >= 60.0)
+		{
+			new p = persona(id)
+			if (random_float(0.0, 1.0) < floatmin((has(p, "9") ? 0.18 : has(p, "jkhXS3") ? 0.14 : 0.04) * pers(), 0.3))
+			{
+				g_DmSprayAt[id] = now
+				g_SprayTries[id] = 0
+				set_task(random_float(0.4, 1.4), "task_spray", TASK_SPRAY + get_user_userid(id))
+			}
+		}
 	}
 }
 
@@ -1024,6 +1039,7 @@ public task_old_rivals(tid)
 public client_putinserver(id)
 {
 	reset_bot(id)
+	g_DmSprayAt[id] = 0.0
 	g_SkillStyle[id] = STYLE_CLASSIC
 	g_Mix[id] = 0
 	g_Tilt[id] = 0.0
@@ -1885,9 +1901,10 @@ public ev_round_start()
 			&& random_float(0.0, 1.0) < (afker ? 0.06 : has(p, "dYLF") ? 0.015 : 0.007) * k)
 		{
 			g_AfkAt[id] = now + random_float(0.0, 6.0)
-			// (a short round: a short afk, a sixth of it at most)
+			// (a short round: a short afk, a sixth of it at most; and nobody but the one who's
+			// always half away holds the team up in spawn for more than a moment: 1.8 s at most)
 			new Float:len = round_minutes() * 60.0
-			g_AfkUntil[id] = g_AfkAt[id] + floatmin(random_float(3.0, afker ? 14.0 : 10.0), len > 0.0 ? len / 6.0 : 10.0)
+			g_AfkUntil[id] = g_AfkAt[id] + (afker ? floatmin(random_float(3.0, 14.0), len > 0.0 ? len / 6.0 : 10.0) : random_float(0.8, 1.8))
 			g_AfkHp[id] = get_user_health(id)
 		}
 		if (get_pcvar_num(g_pSprays) && silly && (g_SprayCount || g_LogoSpray) && random_float(0.0, 1.0) < (has(p, "9") ? 0.75 : has(p, "jkhXS3") ? 0.40 : 0.18) * k)

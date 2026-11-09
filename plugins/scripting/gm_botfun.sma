@@ -1240,14 +1240,17 @@ public task_leave(tid)
 		}
 		case 4:
 		{
-			// still sorting out its gear: looking down at it a moment before it goes
+			// still sorting out its gear: looking down at it a moment before it goes (gone by
+			// 1.8 s into the round at the latest: people don't stand about in spawn)
 			new Float:me[3], Float:at[3], Float:view[3]
 			eye_pos(id, me)
 			pev(id, pev_v_angle, view)
 			at[0] = me[0] + floatcos(view[1], degrees) * 90.0
 			at[1] = me[1] + floatsin(view[1], degrees) * 90.0
 			at[2] = me[2] - 60.0
-			new Float:secs = random_float(0.5, 1.3)
+			new Float:secs = floatmin(random_float(0.4, 1.2), 1.8 - (get_gametime() - g_RoundStartAt))
+			if (secs < 0.2)
+				return
 			ls_look(id, at, secs, secs)
 		}
 	}

@@ -236,6 +236,9 @@ new g_CtxMoney[16], g_CtxGun[24], g_CtxHp[8], g_CtxLeft[8], g_CtxAgo[16], g_CtxS
 #define TASK_REQ      8500                // a request tried again after "1 sec" (+ bot)
 #define TASK_SPRAYGO  8540                // walking over to spray where someone pointed (+ bot)
 #define TASK_KYS      8580                // "kys": typed, then done (+ bot)
+new g_Shots[33], Float:g_ShotAt[33], Float:g_WhiffAt[33]   // shots since its last hit; a whiffed spray
+// what each bot first saw this round (two or more together, or one at a site), for a callout
+new g_SpotSeenRound[33], g_SpotRound[33], Float:g_SpotSawAt[33], g_SpotN[33], g_SpotPlace[33][32]
 new g_ModeId[32], bool:g_BuyMode, bool:g_DmMode, bool:g_PeopleLib            // the mode's id; buying is normal here
 new g_BotSawPlace[33][32], Float:g_BotSawAt[33]   // where this bot last had an enemy in view, when
 new g_LastSpoke, Float:g_LastSpokeAt        // the last bot to say something
@@ -346,8 +349,9 @@ Float:phase_factor(id, const section[])
 {
 	if (!is_user_alive(id) || g_Freeze || g_RoundOver)
 		return 1.4
-	// deathmatch has no quiet phase: kill and death reactions are the chat
-	if (dm_like())
+	// deathmatch has no quiet phase: kill and death reactions are the chat; a callout is what
+	// one says mid-round
+	if (dm_like() || equal(section, "callout", 7))
 		return 1.0
 	static const BIG[][] = { "clutch", "ace", "teamkilled", "teamkill", "nemesis", "nemesis_won", "rage", "last_alive", "low_hp", "bomb_planted", "defuse_ninja" }
 	for (new i = 0; i < sizeof BIG; i++)
@@ -634,6 +638,12 @@ public plugin_init()
 	register_logevent("ev_defuse_begin", 3, "2=Begin_Bomb_Defuse_Without_Kit")
 	register_logevent("ev_defuse_begin", 3, "2=Begin_Bomb_Defuse_With_Kit")
 	RegisterHam(Ham_Weapon_PrimaryAttack, "weapon_c4", "fw_c4_attack", 1)
+	// a bot's shots, for a spray that hit nothing ("wtf my aim")
+	static const GUNS[][] = { "weapon_ak47", "weapon_m4a1", "weapon_famas", "weapon_galil", "weapon_aug", "weapon_sg552",
+		"weapon_mp5navy", "weapon_p90", "weapon_ump45", "weapon_mac10", "weapon_tmp", "weapon_m249", "weapon_glock18",
+		"weapon_usp", "weapon_p228", "weapon_fiveseven", "weapon_elite", "weapon_deagle", "weapon_m3", "weapon_xm1014" }
+	for (new i = 0; i < sizeof GUNS; i++)
+		RegisterHam(Ham_Weapon_PrimaryAttack, GUNS[i], "fw_shot", 1)
 	RegisterHamPlayer(Ham_TakeDamage, "fw_ff_post", 1)
 	register_logevent("ev_bomb_dropped", 3, "2=Dropped_The_Bomb")
 	register_logevent("ev_bomb_got", 3, "2=Got_The_Bomb")
@@ -3393,8 +3403,9 @@ public ev_death()
 		copy(g_SeenPlace[vt], charsmax(g_SeenPlace[]), g_Place[killer])
 		g_SeenAt[vt] = now
 	}
-	// the dead tell their team where the killer was, with what, how hurt
-	if (is_user_bot(victim) && (vt == 1 || vt == 2) && !get_cvar_num("mp_freeforall"))
+	// the dead tell their team where the killer was, with what, how hurt; one that saw a group
+	// just before dying says that instead, more often than not ("3 b")
+	if (is_user_bot(victim) && (vt == 1 || vt == 2) && !get_cvar_num("mp_freeforall") && !spot_last_words(victim))
 		callout(victim, killer, weapon)
 
 	g_RoundKills[killer]++
@@ -3629,7 +3640,10 @@ public ev_damage(victim)
 		g_FightAt[victim] = now
 		new attacker = get_user_attacker(victim)
 		if (attacker >= 1 && attacker <= MaxClients)
+		{
 			g_FightAt[attacker] = now
+			g_Shots[attacker] = 0
+		}
 	}
 }
 
@@ -4962,7 +4976,7 @@ enum
 	I_NONE,
 	I_MONEY, I_GUN, I_WHOHAS, I_HP, I_LEFT, I_SEEN, I_WHEREYOU, I_BOMB, I_SURE,
 	// (requests from here on)
-	I_DROP, I_RELEASE, I_FOLLOW, I_HOLD, I_GOTO, I_COME, I_SPRAY, I_JUMP, I_CROUCH, I_KYS
+	I_DROP, I_RELEASE, I_FOLLOW, I_HOLD, I_GOTO, I_COME, I_SPRAY, I_JUMP, I_CROUCH, I_KYS, I_PLANT, I_GIVEBOMB
 }
 
 // where a request is about: a bomb site, mid, where the person aims, the hostages, a place
@@ -5141,7 +5155,8 @@ round_kind(id, out[], len)
 // Answers that are facts: the written line says them (a model might get the number wrong)
 bool:factual(const section[])
 {
-	static const FACTS[][] = { "r_money", "r_gun", "r_hp", "r_left", "r_whereme", "r_whohas", "r_req_", "r_kys", "r_dead", "r_sure", "r_where_unknown", "drop_no", "drop_broke", "r_whokilled" }
+	static const FACTS[][] = { "r_money", "r_gun", "r_hp", "r_left", "r_whereme", "r_whohas", "r_req_", "r_kys", "r_dead", "r_sure", "r_where_unknown", "drop_no", "drop_broke", "r_whokilled",
+		"r_plant", "r_givebomb", "r_bomb_come", "r_bomb_almost", "r_bomb_notme", "r_bomb_none" }
 	for (new i = 0; i < sizeof FACTS; i++)
 		if (equal(section, FACTS[i], strlen(FACTS[i])))
 			return true
@@ -5266,6 +5281,7 @@ public task_watch()
 			rough_place(o, g_Place[i], charsmax(g_Place[]))
 		if (is_user_bot(i))
 		{
+			whiff_check(i, now)
 			new e = bot_target(i)
 			if (e >= 1 && e <= MaxClients && is_user_alive(e))
 			{
@@ -5281,6 +5297,7 @@ public task_watch()
 						copy(g_SeenPlace[t], charsmax(g_SeenPlace[]), place)
 						g_SeenAt[t] = now
 					}
+					spot_seen(i, e, place, now)
 				}
 			}
 			continue
@@ -5309,6 +5326,92 @@ public task_watch()
 			want(any_bot(0), "human_lag", i, 0.4, random_float(1.0, 3.0))
 		}
 	}
+}
+
+// A bot sees an enemy: the first time this round it's two or more together, or one at a bomb
+// site, it may tell the team ("2 long", "rush b", "1 short"). Team-minded ones mostly; more,
+// and shorter, in a match; never in deathmatch
+spot_seen(bot, enemy, const place[], Float:now)
+{
+	if (g_SpotSeenRound[bot] == g_Round || dm_like() || g_SteeredMode || g_Freeze)
+		return
+	new et = get_user_team(enemy), n
+	new Float:at[3], Float:o[3]
+	pev(enemy, pev_origin, at)
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_alive(i) && get_user_team(i) == et)
+		{
+			pev(i, pev_origin, o)
+			if (get_distance_f(at, o) < 500.0)
+				n++
+		}
+	new bool:site = !place[1] && (place[0] == 'a' || place[0] == 'b' || place[0] == 'c')
+	if (n < 2 && !site)
+		return
+	g_SpotSeenRound[bot] = g_Round
+	g_SpotSawAt[bot] = now
+	g_SpotN[bot] = n
+	copy(g_SpotPlace[bot], charsmax(g_SpotPlace[]), place)
+	if (random_float(0.0, 1.0) < spot_rate(bot, false))
+		spot_call(bot, random_float(0.3, 1.0))
+}
+
+Float:spot_rate(bot, bool:dying)
+{
+	new p = PERSONAS[g_Persona[bot]]
+	new Float:r = contain("itrEbN", fmt("%c", p)) != -1 ? 0.35 : contain("qLdu", fmt("%c", p)) != -1 ? 0.03 : 0.1
+	if (dying)
+		r = floatmin(r * 2.0 + 0.15, 0.8)
+	return match_like() ? floatmin(r * 1.8, 0.9) : r
+}
+
+spot_call(bot, Float:delay)
+{
+	g_SpotRound[bot] = g_Round
+	copy(g_CtxPlace, charsmax(g_CtxPlace), g_SpotPlace[bot])
+	formatex(g_CtxLeft, charsmax(g_CtxLeft), "%d", g_SpotN[bot])
+	new n = g_SpotN[bot]
+	want(bot, n >= 3 ? "callout_rush" : n == 2 ? "callout_spot" : "callout_spot_one", 0, 1.0, delay, 0, true)
+	g_CtxPlace[0] = g_CtxLeft[0] = 0
+}
+
+// Killed within 3 s of seeing a group it hadn't called: its last words are that (true: said)
+bool:spot_last_words(bot)
+{
+	if (g_SpotSeenRound[bot] != g_Round || g_SpotRound[bot] == g_Round || get_gametime() - g_SpotSawAt[bot] > 3.0 || dm_like())
+		return false
+	if (random_float(0.0, 1.0) >= spot_rate(bot, true))
+		return false
+	spot_call(bot, random_float(0.4, 1.2))
+	return true
+}
+
+// A bot's shot: ten in a row (no more than 3 s apart) with no hit is a whiffed spray
+
+public fw_shot(ent)
+{
+	new id = pev(ent, pev_owner)
+	if (id < 1 || id > MaxClients || !is_user_bot(id))
+		return HAM_IGNORED
+	new Float:now = get_gametime()
+	if (now - g_ShotAt[id] > 3.0)
+		g_Shots[id] = 0
+	g_ShotAt[id] = now
+	if (++g_Shots[id] == 10)
+		g_WhiffAt[id] = now
+	return HAM_IGNORED
+}
+
+// Out of the fight after a whiffed spray: now and then it says so ("how did i miss that")
+whiff_check(id, Float:now)
+{
+	if (g_WhiffAt[id] <= 0.0 || now - g_WhiffAt[id] > 15.0 || in_combat(id) || bot_target(id))
+		return
+	g_WhiffAt[id] = 0.0
+	new p = PERSONAS[g_Persona[id]]
+	// the hot-headed and the self-critical say it most, the quiet ones hardly
+	new Float:base = contain("stHuOk", fmt("%c", p)) != -1 ? 0.25 : contain("qLd", fmt("%c", p)) != -1 ? 0.02 : 0.08
+	want(id, "whiff", 0, base, random_float(0.5, 2.0))
 }
 
 // Every half minute: someone dead in the round chats about this and that now and then
@@ -5573,6 +5676,19 @@ clause_intent(id, const c[], &arg, place[], plen)
 	if (word_in(c, "dont") || word_in(c, "do not") || word_in(c, "no need") || word_in(c, "never") || word_in(c, "stop following"))
 		return I_NONE
 	new bool:bomb = word_in(c, "bomb") || word_in(c, "c4")
+	// "give me the bomb", "drop c4", "pass the bomb"
+	static const GIVE[][] = { "give me", "drop", "pass", "toss", "throw me", "can i have", "i want", "i need", "let me have", "i take" }
+	if (bomb && any_in(c, GIVE, sizeof GIVE) && !word_in(c, "who") && !word_in(c, "dropped"))
+		return I_GIVEBOMB
+	// "plant", "plant it", "plant at a", "plant near me"
+	static const PLANTS[][] = { "go plant", "plant it", "plant the bomb", "plant bomb", "plant c4", "can you plant", "please plant",
+		"plant at", "plant near", "plant here", "plant now", "plant already" }
+	if (lead_word(c, "plant") || any_in(c, PLANTS, sizeof PLANTS))
+	{
+		arg = site_named(c, "b") ? SPOT_B : site_named(c, "a") ? SPOT_A : (word_in(c, "near me") || word_in(c, "here")
+			|| word_in(c, "near them") || word_in(c, "near us")) ? SPOT_HUMAN : SPOT_NONE
+		return I_PLANT
+	}
 	// "drop pls", "drop me an ak", "can u drop" (not "did they drop the awp?")
 	static const DROPS[][] = { "drop me", "can you drop", "could you drop", "someone drop", "anyone drop", "pls drop", "please drop",
 		"drop please", "drop pls", "need a drop", "drop plz" }
@@ -5772,7 +5888,7 @@ bool:heard_intents(id, const msg[], to, bool:team, bool:typed)
 	for (new b = 1; b <= MaxClients; b++)
 		g_WasBusy[b] = is_user_connected(b) && is_user_bot(b) && named_busy(b, now)
 	static const INAME[][] = { "none", "money", "gun", "whohas", "hp", "left", "seen", "whereyou", "bomb", "sure",
-		"drop", "release", "follow", "hold", "goto", "come", "spray", "jump", "crouch", "kys" }
+		"drop", "release", "follow", "hold", "goto", "come", "spray", "jump", "crouch", "kys", "plant", "givebomb" }
 	new Float:extra = 0.0, handled
 	for (new k = 0; k < n; k++)
 	{
@@ -6384,6 +6500,8 @@ req_section(it, out[], len)
 		case I_SPRAY: copy(out, len, "r_req_spray")
 		case I_JUMP: copy(out, len, "r_req_jump")
 		case I_CROUCH: copy(out, len, "r_req_crouch")
+		case I_PLANT: copy(out, len, "r_plant_ok")
+		case I_GIVEBOMB: copy(out, len, "r_givebomb_ok")
 		default: copy(out, len, "r_req_ok")
 	}
 }
@@ -6395,7 +6513,9 @@ bool:req_ready(bot, it)
 {
 	if (!is_user_alive(bot) || bot_target(bot) || in_combat(bot) || g_BombPlanted)
 		return false
-	if (user_has_weapon(bot, CSW_C4) && !g_Freeze)
+	if (user_has_weapon(bot, CSW_C4) && !g_Freeze && it != I_PLANT && it != I_GIVEBOMB)
+		return false
+	if ((it == I_PLANT || it == I_GIVEBOMB) && !user_has_weapon(bot, CSW_C4))
 		return false
 	if (pev(bot, pev_movetype) == MOVETYPE_FLY)
 		return false
@@ -6448,6 +6568,16 @@ req_do(bot, human, it, arg)
 	switch (it)
 	{
 		case I_FOLLOW: server_cmd("ls_bot %d follow %d %d", bot, human, match_like() ? 45 : random_num(20, 40))
+		// plant: at the site nearest a point (a site asked for, or the person), else the one
+		// nearest the bot
+		case I_PLANT:
+		{
+			if (arg)
+				server_cmd("ls_bot %d plant -1 %.0f %.0f %.0f", bot, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2])
+			else
+				server_cmd("ls_bot %d plant -1", bot)
+		}
+		case I_GIVEBOMB: server_cmd("ls_bot %d dropbomb %d", bot, human)
 		case I_HOLD: server_cmd("ls_bot %d hold %d bc", bot, match_like() ? 15 : random_num(7, 13))
 		// "go b": it holds the spot a while once there (longer in a match); "come here" just comes
 		// (bc: a person's order, which the game's bot keeps through a fight; an unreachable spot it
@@ -6492,6 +6622,8 @@ req_attempt(bot)
 		req_clear(bot)
 		return
 	}
+	if (it == I_PLANT && g_ReqArg[bot] == SPOT_HUMAN && is_user_alive(human))
+		pev(human, pev_origin, g_ReqTo[bot])
 	// coming to them: where they are now
 	if (it == I_COME && !req_target(human, SPOT_HUMAN, "", g_ReqTo[bot], g_CtxSite, charsmax(g_CtxSite)))
 	{
@@ -6536,7 +6668,7 @@ public task_req_check(tid)
 		case I_JUMP: seen = !(flags & FL_ONGROUND)
 		case I_CROUCH: seen = (flags & FL_DUCKING) != 0
 		// the game's bot marks an order it took (fuser4: when)
-		case I_HOLD, I_GOTO, I_COME, I_FOLLOW:
+		case I_HOLD, I_GOTO, I_COME, I_FOLLOW, I_PLANT, I_GIVEBOMB:
 		{
 			new Float:took
 			pev(bot, pev_fuser4, took)
@@ -6699,9 +6831,130 @@ start_waiting_requests()
 		if (g_ReqWaitLive[b] && is_user_connected(b))
 		{
 			new it = g_ReqAct[b]
-			new bool:moving = it == I_GOTO || it == I_FOLLOW || it == I_COME
+			new bool:moving = it == I_GOTO || it == I_FOLLOW || it == I_COME || it == I_PLANT || it == I_GIVEBOMB
 			set_task(moving ? random_float(3.0, 4.5) : random_float(0.3, 1.5), "task_req_live", TASK_REQLIVE + b)
 		}
+}
+
+// The bot on the team with the bomb (0: none, or a person has it)
+bomb_carrier(t)
+{
+	for (new i = 1; i <= MaxClients; i++)
+		if (is_user_alive(i) && get_user_team(i) == t && user_has_weapon(i, CSW_C4))
+			return i
+	return 0
+}
+
+// "plant", "plant at b", "give me the bomb": the one with the bomb does it, or says why not
+Float:bomb_request(id, to, it, arg, bool:team, Float:extra)
+{
+	new t = get_user_team(id)
+	new bool:tt = !teams_off()
+	new carrier = bomb_carrier(t)
+	new speaker = to ? to : carrier
+	// no bomb here, the wrong side, someone else has it, nobody has it
+	if (!g_SiteCount || t != 1 || !carrier || !is_user_bot(carrier) || (to && to != carrier) || g_BombPlanted)
+	{
+		if (!speaker || !is_user_bot(speaker) || !can_answer(speaker, id))
+			speaker = pick_mate(id, I_MONEY, 0)
+		if (!speaker)
+			return 0.0
+		new sec[24]
+		if (!g_SiteCount || t != 1)
+			copy(sec, charsmax(sec), "r_bomb_none")
+		else if (g_BombPlanted)
+			copy(sec, charsmax(sec), "r_req_planted")
+		else if (carrier == id)
+			copy(sec, charsmax(sec), "r_bomb_you")
+		else if (carrier)
+		{
+			short_name(carrier, g_CtxCarrier, charsmax(g_CtxCarrier))
+			copy(sec, charsmax(sec), "r_bomb_notme")
+		}
+		else
+			copy(sec, charsmax(sec), "r_bomb_none")
+		trace_bot(speaker)
+		trace_add(g_TrDecision, charsmax(g_TrDecision), "no carrier")
+		answer(speaker, sec, id, tt, extra)
+		g_CtxCarrier[0] = 0
+		return 1.5
+	}
+	new bot = carrier
+	trace_bot(bot)
+	if (!can_answer(bot, id) || g_WasBusy[bot])
+		return 0.0
+	new Float:me[3], Float:them[3]
+	pev(bot, pev_origin, me)
+	pev(id, pev_origin, them)
+	new Float:apart = get_distance_f(me, them)
+	// the site it's nearest, and how far
+	new near = -1, Float:neard = 999999.0
+	for (new k = 0; k < g_SiteCount; k++)
+	{
+		new Float:d = get_distance_f(me, g_Sites[k])
+		if (d < neard)
+		{
+			neard = d
+			near = k
+		}
+	}
+	if (near >= 0)
+		formatex(g_CtxSite, charsmax(g_CtxSite), "%c", g_SiteLetter[near])
+	new Float:p = req_odds(bot, id, I_GOTO, to != 0)
+	if (match_like())
+		p = floatmax(p, 0.9)
+	new sec[24]
+	if (in_combat(bot) || bot_target(bot))
+		copy(sec, charsmax(sec), "r_req_busy")
+	else if (it == I_GIVEBOMB && (apart > 1200.0 || !alive_asker(id)))
+		copy(sec, charsmax(sec), "r_bomb_come")
+	else if (it == I_GIVEBOMB && neard < apart && neard < 900.0)
+		copy(sec, charsmax(sec), "r_bomb_almost")
+	else if (random_float(0.0, 1.0) >= p)
+		copy(sec, charsmax(sec), it == I_PLANT ? "r_plant_no" : "r_givebomb_no")
+	if (sec[0])
+	{
+		trace_add(g_TrDecision, charsmax(g_TrDecision), "no")
+		answer(bot, sec, id, tt, extra)
+		g_CtxSite[0] = 0
+		return 1.5
+	}
+	// where to plant: the site asked for, or the one nearest the person
+	new spot = SPOT_NONE
+	if (it == I_PLANT && arg)
+	{
+		if (arg == SPOT_HUMAN)
+		{
+			if (alive_asker(id))
+			{
+				g_ReqTo[bot] = them
+				spot = SPOT_HUMAN
+			}
+		}
+		else
+		{
+			new k = site_with(arg == SPOT_A ? 'a' : 'b')
+			if (k >= 0)
+			{
+				g_ReqTo[bot] = g_Sites[k]
+				formatex(g_CtxSite, charsmax(g_CtxSite), "%c", g_SiteLetter[k])
+				spot = arg
+			}
+		}
+	}
+	trace_add(g_TrDecision, charsmax(g_TrDecision), "yes")
+	new bool:say = random_float(0.0, 1.0) < (to ? 0.9 : 0.75)
+	req_set(bot, id, it, spot, "", team, say, true, 1)
+	if (g_Freeze)
+	{
+		g_ReqWaitLive[bot] = true
+		g_ReqSayYes[bot] = false
+		if (say)
+			answer(bot, "r_req_after", id, tt, extra)
+	}
+	else
+		req_attempt(bot)
+	return 2.0
 }
 
 // Asked to do something; how much later the next thing on the same line comes
@@ -6758,6 +7011,8 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 	if (it == I_KYS)
 		return kys(id, bot, team, extra)
 	g_AskBot[id] = bot
+	if (it == I_PLANT || it == I_GIVEBOMB)
+		return bomb_request(id, to, it, arg, team, extra)
 	g_AskIntent[id] = it
 	g_AskAt[id] = now
 	new section[24]
