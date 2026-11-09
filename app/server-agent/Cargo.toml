@@ -17,8 +17,9 @@ serde_json = "1"
 sha2 = "0.10"
 getrandom = "0.2"
 base64 = "0.22"
-# a small blocking HTTP/1.1 server: it only listens on 127.0.0.1, behind Caddy or cloudflared
-tiny_http = "0.12"
+# request heads, parsed (the listener itself is api.rs's own: it only listens on 127.0.0.1,
+# behind Caddy or cloudflared, with time limits on every connection)
+httparse = "1"
 
 [profile.release]
 opt-level = "s"

@@ -1723,3 +1723,6 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .notes-list li { margin: 4px 0; }
 .update-notes { margin-top: 6px; }
 .update-notes summary { cursor: pointer; }
+
+/* website status: the rest of what is set up, tried from outside */
+.health { display: grid; gap: 8px; justify-items: start; margin: 4px 0 12px; }

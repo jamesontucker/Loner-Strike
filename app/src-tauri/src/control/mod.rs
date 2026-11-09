@@ -618,7 +618,25 @@ pub async fn guard(State(st): State<Shared>, req: Request, next: Next) -> Respon
         let server = m.server.clone();
         let above = tokio::task::spawn_blocking(move || outranks_moderator(&server, &who)).await.unwrap_or(true);
         if above {
-            return refuse(StatusCode::FORBIDDEN, "Moderators can't ban or mute the server's owner, its Admins or Moderators, or anyone helping run it.");
+            return refuse(StatusCode::FORBIDDEN, common::OUTRANKED);
+        }
+    }
+    // a kick by userid: who it is, from the game (not the owner, an Admin or a helper)
+    if m.role == Role::Moderator && path == "/api/admins/kick" {
+        let uid = json_body.as_ref().and_then(|b| b["uid"].as_u64()).filter(|u| *u > 0 && *u < u32::MAX as u64).unwrap_or(0) as u32;
+        let server = m.server.clone();
+        let verdict = tokio::task::spawn_blocking(move || -> Result<(), &'static str> {
+            let status = crate::servers::get(&server).and_then(|e| e.rcon()).and_then(|rc| rc.send("status").ok()).ok_or("The server didn't answer. Check that it's running.")?;
+            let who = common::steamid_for_uid(&status, uid).ok_or("That player isn't in the game any more.")?;
+            if outranks_moderator(&server, &who.to_uppercase()) {
+                return Err(common::OUTRANKED);
+            }
+            Ok(())
+        })
+        .await
+        .unwrap_or(Err(common::OUTRANKED));
+        if let Err(why) = verdict {
+            return refuse(StatusCode::FORBIDDEN, why);
         }
     }
     // their server, whatever the request said; their key and anything else of theirs stays here
@@ -1068,7 +1086,7 @@ async fn api_helper_console(helper: Option<Extension<Helper>>, Json(req): Json<C
         if m.role == Role::Moderator {
             if let Some(id) = rules::mod_target(&req.command) {
                 if outranks_moderator(&m.server, &id) {
-                    return Err("Moderators can't ban or mute the server's owner, its Admins or Moderators, or anyone helping run it.".to_string());
+                    return Err(common::OUTRANKED.to_string());
                 }
             }
         }

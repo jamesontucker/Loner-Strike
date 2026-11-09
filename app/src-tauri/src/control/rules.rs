@@ -212,10 +212,11 @@ const CONSOLE_NEVER: &[&str] = &[
     "meta", "amxx", "amx_rcon", "amx_cvar", "amx_cfg", "amx_addadmin", "amx_reloadadmins", "amx_execall", "amx_exec", "amx_execteam", "amx_pausecfg", "amx_on", "amx_off",
     "amx_plugincmd", "gm_crash", "gm_fastdl", "gm_ai_url", "mapchangecfgfile", "motd_write", "ls_list", "setinfo", "localinfo", "motdfile", "mapcyclefile", "servercfgfile", "lservercfgfile", "bannedcfgfile", "listipcfgfile",
 ];
-/// What a Moderator types: talk, look, kick, ban and mute for up to 7 days, change the map.
+/// What a Moderator types: talk, look, kick, ban and mute for up to 7 days, change the map
+/// (kicks, slaps and slays by SteamID, like bans).
 /// (Lifting a mute is an Admin's call, as on the Community page: no amx_ungag.)
 const CONSOLE_MOD: &[&str] = &[
-    "say", "status", "users", "kick", "banid", "changelevel", "amx_kick", "amx_ban", "amx_banip", "amx_map", "amx_say", "amx_csay",
+    "say", "status", "users", "banid", "changelevel", "amx_kick", "amx_ban", "amx_banip", "amx_map", "amx_say", "amx_csay",
     "amx_tsay", "amx_chat", "amx_who", "amx_gag", "amx_slap", "amx_slay", "amx_last",
 ];
 
@@ -265,6 +266,11 @@ pub fn console_line(role: Role, line: &str) -> Result<(), String> {
         "amx_ban" | "amx_banip" | "amx_gag" => Some(words.get(2)),
         _ => None,
     };
+    // kicks, slaps and slays by SteamID too, so the guard can tell who it is (plain kick
+    // takes a name or #userid: the Players page kicks for them instead)
+    if matches!(cmd.as_str(), "amx_kick" | "amx_slap" | "amx_slay") && mod_target(line).is_none() {
+        return Err("Moderators kick, slap and slay by SteamID here (STEAM_0:1:12345). For a player in the game, use the Players page.".into());
+    }
     if let Some(m) = minutes {
         let ok = m.and_then(|m| m.parse::<u64>().ok()).is_some_and(|m| (1..=MOD_BAN_MINUTES).contains(&m));
         if !ok {
@@ -278,13 +284,13 @@ pub fn console_line(role: Role, line: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The SteamID a Moderator's console ban or mute is for: banid <minutes> <id>,
-/// amx_ban / amx_banip / amx_gag <player> <minutes>.
+/// The SteamID a Moderator's console ban, mute, kick, slap or slay is for: banid <minutes> <id>,
+/// amx_ban / amx_banip / amx_gag <player> <minutes>, amx_kick / amx_slap / amx_slay <player>.
 pub fn mod_target(line: &str) -> Option<String> {
     let words: Vec<&str> = line.split_whitespace().collect();
     let who = match words.first()?.to_ascii_lowercase().as_str() {
         "banid" => words.get(2)?,
-        "amx_ban" | "amx_banip" | "amx_gag" => words.get(1)?,
+        "amx_ban" | "amx_banip" | "amx_gag" | "amx_kick" | "amx_slap" | "amx_slay" => words.get(1)?,
         _ => return None,
     };
     let id = who.to_ascii_uppercase();
@@ -379,7 +385,11 @@ mod tests {
 quit", "SV_PASSWORD x", "sv_rcon_banpenalty 0", "amx_pluginsdisable x"] {
             assert!(console_line(a, bad).is_err(), "admin: {bad}");
         }
-        assert!(console_line(m, "kick bob").is_ok() && console_line(m, "say hi").is_ok() && console_line(m, "changelevel de_dust2").is_ok());
+        assert!(console_line(m, "say hi").is_ok() && console_line(m, "changelevel de_dust2").is_ok());
+        // kicks, slaps and slays by SteamID, so the guard knows who (the Players page for the rest)
+        assert!(console_line(m, "kick bob").is_err() && console_line(m, "amx_slay bob").is_err() && console_line(m, "amx_kick #5").is_err());
+        assert!(console_line(m, "amx_kick STEAM_0:1:5 afk").is_ok() && console_line(m, "amx_slap STEAM_0:1:5 0").is_ok());
+        assert_eq!(mod_target("amx_slay STEAM_0:1:5"), Some("STEAM_0:1:5".into()));
         assert!(console_line(m, "banid 60 STEAM_0:1:1 kick").is_ok() && console_line(m, "amx_ban STEAM_0:1:2 10080 spam").is_ok());
         assert!(console_line(m, "amx_ban bob 60 spam").is_err() && console_line(m, "banid 60 #5").is_err(), "by SteamID only");
         assert_eq!(mod_target("amx_gag steam_0:0:7 60"), Some("STEAM_0:0:7".into()));
@@ -392,7 +402,7 @@ quit", "SV_PASSWORD x", "sv_rcon_banpenalty 0", "amx_pluginsdisable x"] {
         assert!(console_line(m, "amx_ban \"#5 60 x\" 0 spam").is_err(), "quotes could hide a ban for good");
         assert!(console_line(a, "say \"hello there\"").is_ok(), "admins may quote what they say");
         assert!(console_line(m, "mp_timelimit 30").is_err() && console_line(m, "bot_add").is_err());
-        assert!(ok(&ask(m, "POST", "/api/servers/friday/console/send", Some(&json!({"command": "kick bob"})))));
+        assert!(ok(&ask(m, "POST", "/api/servers/friday/console/send", Some(&json!({"command": "amx_kick STEAM_0:1:9"})))));
         assert!(!ok(&ask(a, "POST", "/api/servers/friday/console/send", Some(&json!({"command": "rcon_password x"})))));
         assert!(!ok(&ask(a, "POST", "/api/servers/other/console/send", Some(&json!({"command": "status"})))));
     }

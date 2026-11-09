@@ -123,6 +123,24 @@ function describe(a: Activity) {
   return p;
 }
 
+/** Asked when an invite has no SteamID */
+const NO_STEAM = "Invite without their SteamID? Without it the server can't tell them apart in the game, so a Moderator could ban, mute or kick them. They find it by typing status in the game's console.";
+
+/** The Cloudflare route a tunnel needs for shared control (also shown in Website status). */
+export function ControlRoute({ domain, port }: { domain: string; port: number }) {
+  return (
+    <div className="muted small-note">
+      For shared control, add a second published application to the tunnel in Cloudflare:
+      <ul className="plain-list">
+        <li>Hostname: {domain || "the status address"}</li>
+        <li>Path: <code className="mono">^/control/</code></li>
+        <li>Service URL: <code className="mono">http://127.0.0.1:{port}</code></li>
+      </ul>
+      Then drag it above the {domain || "status"} route without a path. Cloudflare uses the first route that matches.
+    </div>
+  );
+}
+
 /** A Linux server's shared control: where helpers' apps reach it, and whether they can. */
 function ServerReach({ c }: { c: Control }) {
   if (!c.url) {
@@ -134,9 +152,7 @@ function ServerReach({ c }: { c: Control }) {
         Helpers connect to the server itself at <code className="mono">{c.url}</code>, so this computer can be off. Only invite people you trust.
       </p>
       {c.tunnel && (
-        <p className="muted small-note">
-          With a Cloudflare tunnel, add this in Cloudflare too: on the tunnel's public hostname {c.domain}, path <code className="mono">control/*</code>, service <code className="mono">http://localhost:{c.port}</code>.
-        </p>
+        <ControlRoute domain={c.domain ?? ""} port={c.port ?? 0} />
       )}
       {!c.reachable && (
         <p className="err-text small-note">Helpers' apps can't reach it there yet{c.reach_error ? ` (${c.reach_error})` : ""}. Check Website status, then open this tab again.</p>
@@ -194,6 +210,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
   const onServer = c?.mode === "server";
   const make = () => run(`${server.id}:invite`, async () => {
     if (!onServer && !list.length) return toast("Add at least one address friends reach this computer at.", true);
+    if (!steam.trim() && !(await ask(NO_STEAM, { ok: "Invite without it" }))) return;
     const r = await post(`/api/control/server/${server.id}/invite`, { role, steam: steam.trim(), addresses: list });
     if (r.error) return toast(r.error, true);
     setInvite(r.invite ?? "");
@@ -310,7 +327,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
         </div>
         <div className="row" style={{ marginTop: 12, alignItems: "start" }}>
           <label className="field" style={{ flex: "1 1 240px" }}>
-            <span>Their SteamID (optional)<Info text="Makes them an in-game admin on this server too, with the same powers. It looks like STEAM_0:1:12345: they find it by typing status in the game's console." /></span>
+            <span>Their SteamID (recommended)<Info text="Makes them an in-game admin on this server too, with the same powers, and stops Moderators banning, muting or kicking them. It looks like STEAM_0:1:12345: they find it by typing status in the game's console." /></span>
             <input className="search" placeholder="STEAM_0:1:12345" value={steam} onChange={(e) => setSteam(e.target.value.trim())} spellCheck={false} />
           </label>
           {!onServer && <div className="field" style={{ flex: "2 1 320px" }}>
@@ -441,10 +458,12 @@ export function AddShared({ initial = "", onClose, onAdded }: { initial?: string
 /** A shared server's Admin inviting a Moderator (the owner's app makes the invite). */
 export function InviteModerator({ server }: { server: ServerInfo }) {
   const toast = useToast();
+  const ask = useConfirm();
   const [steam, setSteam] = useState("");
   const [invite, setInvite] = useState("");
   const { run, busy } = useActions();
   const make = () => run(`${server.id}:invite`, async () => {
+    if (!steam.trim() && !(await ask(NO_STEAM, { ok: "Invite without it" }))) return;
     const r = await post("/api/control/invite", { steam: steam.trim() });
     if (r.error) return toast(r.error, true);
     setInvite(r.invite ?? "");
@@ -455,7 +474,7 @@ export function InviteModerator({ server }: { server: ServerInfo }) {
       <h3>Invite a Moderator</h3>
       <p className="muted measure">As an Admin you can bring in Moderators to help: {ROLE_NOTE.moderator.toLowerCase()}. The owner sees who you invite, and can remove them.</p>
       <label className="field">
-        <span>Their SteamID (optional)<Info text="Makes them an in-game Moderator on this server too. It looks like STEAM_0:1:12345." /></span>
+        <span>Their SteamID (recommended)<Info text="Makes them an in-game Moderator on this server too, and stops other Moderators banning, muting or kicking them. It looks like STEAM_0:1:12345." /></span>
         <input className="search" placeholder="STEAM_0:1:12345" value={steam} onChange={(e) => setSteam(e.target.value.trim())} spellCheck={false} />
       </label>
       <div className="row">

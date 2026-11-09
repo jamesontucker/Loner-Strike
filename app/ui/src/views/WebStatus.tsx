@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ControlRoute } from "./ShareControl";
 import { copyText, getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useToast } from "../ui";
@@ -36,6 +37,8 @@ type Form = { domain: string; origins: string; counter: boolean; mode: Mode; fas
 
 const post = (path: string, body: unknown = {}) => postJson<Reply>(path, body).catch((): Reply => ({ error: "Couldn't reach the app." }));
 const USUAL_PORT = 8090;
+/** shared control listens this far above the status service (control/agent.rs PORT_OFFSET) */
+const CONTROL_OFFSET = 1000;
 
 /** The sites that usually go with a status address: status.example.com gives
  *  https://example.com and https://www.example.com. */
@@ -187,6 +190,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
                   {st.live?.online ? `${st.live.name}, ${st.live.players} of ${st.live.max_players} playing on ${st.live.map}${st.live.bots ? ` (${st.live.bots} bots)` : ""}` : "The page works. The game server isn't answering it right now, so your site shows it as offline."}
                 </Fact>
               </dl>
+              <Health id={server.id} />
               <div className="hltv-addresses">
                 {st.status_url && <CopyRow label="Status address" value={st.status_url} />}
                 {st.visit_url && <CopyRow label="Visit counter address" value={st.visit_url} />}
@@ -245,6 +249,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
               <p className="muted">Using the Cloudflare Tunnel already on this machine.</p>
               <p className="muted small-note">In Cloudflare, the tunnel's public hostname {domain} should point at <code>{service}</code>.</p>
               {st.port !== USUAL_PORT && <PortNote port={st.port} />}
+              <ControlRoute domain={domain} port={st.port + CONTROL_OFFSET} />
             </div>
           ) : (
             <div className="hltv-addresses">
@@ -257,6 +262,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
                 <li>On the Install connector page, copy the token (the long text after cloudflared service install) and paste it here.</li>
               </ol>
               {st.port !== USUAL_PORT && <PortNote port={st.port} />}
+              <ControlRoute domain={domain} port={st.port + CONTROL_OFFSET} />
               <label className="field">
                 <span>Tunnel token<Info text="Kept on this computer and on the server, readable only by their administrators. It isn't shown again after it's saved." /></span>
                 <SecretInput placeholder={st.token_saved ? "Saved" : "Paste the token"} value={form.token} onChange={(v) => set({ token: v })} label="Tunnel token" saved={st.token_saved ? () => secret("token") : undefined} />
@@ -370,6 +376,51 @@ function PagesPreviews({ onAdd }: { onAdd: (origin: string) => void }) {
       <input className="search" placeholder="Pages project name" value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} autoComplete="off" aria-label="Pages project name" />
       <button type="button" className="btn small" disabled={!ok} onClick={() => { onAdd(`https://*.${clean}.pages.dev`); setOpen(false); setName(""); }}>Add</button>
       <button type="button" className="btn small" onClick={() => setOpen(false)}>Cancel</button>
+    </div>
+  );
+}
+
+type Check = { ok: boolean; why?: string };
+type HealthReply = { control?: Check | null; fastdl?: Check | null; discord?: Record<string, Check>; error?: string };
+
+/** The rest of what's set up, tried from outside when the page opens: shared control, fast
+ * downloads, the Discord links. */
+function Health({ id }: { id: string }) {
+  const [h, setH] = useState<HealthReply | null>(null);
+  const [checking, setChecking] = useState(false);
+  const check = async () => {
+    setChecking(true);
+    try {
+      setH(await getJson<HealthReply>(`/api/servers/${id}/webstatus/health`));
+    } catch {
+      setH({ error: "Couldn't reach the app." });
+    } finally {
+      setChecking(false);
+    }
+  };
+  useEffect(() => {
+    void check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+  const rows: [string, Check][] = [];
+  if (h?.control) rows.push(["Shared control", h.control]);
+  if (h?.fastdl) rows.push(["Fast downloads", h.fastdl]);
+  for (const [k, c] of Object.entries(h?.discord ?? {})) rows.push([k === "live" ? "Discord live message" : "Discord posts", c]);
+  if (!checking && h && !h.error && !rows.length) return null;
+  return (
+    <div className="health">
+      {h?.error && <p className="err-text small-note">{h.error}</p>}
+      {!h && checking && <p className="muted small-note"><span className="spinner" aria-hidden="true" />Checking the rest from outside…</p>}
+      {rows.length > 0 && (
+        <dl className="hltv-facts">
+          {rows.map(([label, c]) => (
+            <Fact key={label} label={label}>
+              {c.ok ? <span className="live on">Working</span> : <span className="err-text">Not working: {c.why}</span>}
+            </Fact>
+          ))}
+        </dl>
+      )}
+      {h && <BusyButton className="btn" busy={checking} label="Check again" busyLabel="Checking…" onClick={() => void check()} />}
     </div>
   );
 }

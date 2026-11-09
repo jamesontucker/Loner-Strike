@@ -1705,7 +1705,7 @@ pub fn update_files(e: Entry, res: Option<PathBuf>) -> Result<String, String> {
         let steps = vec![
             setup::server_step(&g, "srv-machine", &format!("Updating {host}: Valve's server files"), 10.0),
             setup::server_step(&g, "srv-upload", "Sending Loner-Strike's files again", 1.5),
-            setup::server_step(&g, "srv-control", "Updating shared control", 0.2),
+            setup::server_step(&g, "srv-control", "Updating the service and shared control", 0.2),
         ];
         let res = res.ok_or("Loner-Strike's mod files are missing from the app. Reinstalling the app should fix it.")?;
         return setup::start_job("server", steps, move |job| {
@@ -1715,6 +1715,10 @@ pub fn update_files(e: Entry, res: Option<PathBuf>) -> Result<String, String> {
             job.run(&format!("{g}/srv-upload"), || sync_as(&e, Send::AllButData, &|_, _| {}).map(|_| ()))?;
             // (the server works without it: only noted)
             job.run(&format!("{g}/srv-control"), || {
+                // the game's service as this version writes it (its sandbox), from the next start
+                if let Err(why) = write_service(&e) {
+                    setup::Progress::note(job, &format!("The server's service wasn't updated: {why}"));
+                }
                 if let Err(why) = crate::control::agent::install(&e, &res) {
                     setup::Progress::note(job, &format!("Shared control on the server wasn't updated: {why}"));
                 }

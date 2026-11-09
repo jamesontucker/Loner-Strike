@@ -15,16 +15,14 @@ use std::time::{Duration, Instant};
 
 /// The biggest request body taken
 const MAX_BODY: usize = 64 * 1024;
-/// Tries at accepting invites per address, and in all (whoever's asking), per window
+/// Tries at accepting invites per address, per window (no cap for everyone together: a
+/// flood from many addresses would then keep everyone out; invite secrets are 128-bit)
 const TRIES_MAX: u32 = 10;
-const TRIES_ALL_MAX: u32 = 60;
 /// Wrong keys from one address before it waits
 const BAD_KEYS_MAX: u32 = 30;
 const TRIES_WINDOW: u64 = 600;
 /// Addresses counted at once
 const MAX_TRACKED: usize = 10_000;
-/// Requests handled at once
-const WORKERS: usize = 16;
 
 pub const OWNER_APP: &str = "That's done from the owner's Loner-Strike for now. Ask the owner.";
 const NOT_SET_UP: &str = "That server isn't there any more.";
@@ -137,7 +135,7 @@ fn only_looks(path: &str) -> bool {
 }
 
 /// Everything from the listener goes through here (see the notes at the top of main.rs).
-pub fn handle(ctx: &Ctx, req: Req) -> Resp {
+pub fn handle(ctx: &Ctx, req: Req, count_redeem: bool) -> Resp {
     let method = req.method.to_ascii_uppercase();
     if method != "GET" && method != "POST" {
         return refuse(405, "Not allowed.");
@@ -156,7 +154,7 @@ pub fn handle(ctx: &Ctx, req: Req) -> Resp {
         return ok(json!({"ok": true, "version": VERSION}));
     }
     if method == "POST" && path == "/api/control/redeem" {
-        if too_many(&ctx.redeems, req.peer, TRIES_MAX, Some(TRIES_ALL_MAX)) {
+        if count_redeem && too_many(&ctx.redeems, req.peer, TRIES_MAX, None) {
             return refuse(429, "Too many tries. Wait a few minutes.");
         }
         return redeem(&files, &config, &req.body);
@@ -200,7 +198,7 @@ pub fn handle(ctx: &Ctx, req: Req) -> Resp {
     if m.role == Role::Moderator && (path == "/api/admins/ban" || path == "/api/community/gag") {
         let who = body.as_ref().and_then(|b| b["id"].as_str()).unwrap_or("").trim().to_uppercase();
         if outranks(&files, io.as_ref(), &who) {
-            return refuse(403, "Moderators can't ban or mute the server's owner, its Admins or Moderators, or anyone helping run it.");
+            return refuse(403, common::OUTRANKED);
         }
     }
     // 5. what they asked for
@@ -327,7 +325,7 @@ fn act(ctx: &Ctx, config: &Config, files: &Files, io: &dyn GameIo, m: &Member, m
             if m.role == Role::Moderator {
                 if let Some(id) = rules::mod_target(&line) {
                     if outranks(files, io, &id) {
-                        return err("Moderators can't ban or mute the server's owner, its Admins or Moderators, or anyone helping run it.");
+                        return err(common::OUTRANKED);
                     }
                 }
                 // a mute typed in: only ever adding to one that's there, as on the Community
@@ -370,6 +368,14 @@ fn act(ctx: &Ctx, config: &Config, files: &Files, io: &dyn GameIo, m: &Member, m
         ("POST", ["api", "admins", "kick"]) => {
             let uid = b["uid"].as_u64().filter(|u| *u > 0 && *u < u32::MAX as u64);
             let Some(uid) = uid else { return err("That player isn't in the game any more.") };
+            // a Moderator: not the owner, an Admin or a helper (who it is, from the game)
+            if m.role == Role::Moderator {
+                let Ok(status) = io.rcon("status") else { return err("The server didn't answer. Check that it's running.") };
+                let Some(who) = common::steamid_for_uid(&status, uid as u32) else { return err("That player isn't in the game any more.") };
+                if outranks(files, io, &who.to_uppercase()) {
+                    return err(common::OUTRANKED);
+                }
+            }
             match io.rcon(&common::kick_line(uid as u32, b["reason"].as_str().unwrap_or(""))) {
                 Ok(_) => ok(json!({"ok": true})),
                 Err(e) => err(e.say()),
@@ -523,11 +529,9 @@ fn edit_file(path: &std::path::Path, f: impl FnOnce(&str) -> String) -> Result<(
         return Ok(());
     }
     let bytes: Vec<u8> = new.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
-    let tmp = path.with_extension(format!("tmp-{}", store::random_hex(4)));
-    std::fs::write(&tmp, bytes).and_then(|_| std::fs::rename(&tmp, path)).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp);
-        format!("Couldn't save the ban list ({e}).")
-    })
+    // written in place: the service may write these two files and nothing else in the game
+    // folder (its unit's ReadWritePaths), so there's no temporary file to rename over them
+    std::fs::write(path, bytes).map_err(|e| format!("Couldn't save the ban list ({e})."))
 }
 
 /// The answer as sent: JSON with the RCON password blanked out, whatever it came from.
@@ -540,70 +544,196 @@ pub fn finish(resp: &Resp, game_dir: &std::path::Path) -> String {
 
 // ---- the listener ------------------------------------------------------------------------
 
-/// The address a request came from: behind Caddy or cloudflared (all from 127.0.0.1), the
-/// last X-Forwarded-For entry, which the front added itself.
+/// The address a request came from: behind cloudflared (all from 127.0.0.1) the visitor's
+/// address Cloudflare gives (CF-Connecting-IP, which its edge always sets itself; Caddy takes
+/// any such header off), else the last X-Forwarded-For entry, which the front added itself.
 fn peer_of(headers: &HashMap<String, String>, socket: Option<IpAddr>) -> Option<IpAddr> {
     if socket.is_some_and(|ip| ip.is_loopback()) {
-        if let Some(ip) = headers.get("x-forwarded-for").and_then(|v| v.rsplit(',').next()).and_then(|v| v.trim().parse().ok()) {
+        let cf = headers.get("cf-connecting-ip").and_then(|v| v.trim().parse().ok());
+        let xff = || headers.get("x-forwarded-for").and_then(|v| v.rsplit(',').next()).and_then(|v| v.trim().parse().ok());
+        if let Some(ip) = cf.or_else(xff) {
             return Some(ip);
         }
     }
     socket
 }
 
+/// Connections handled at once (more are turned away until one ends)
+const MAX_CONNS: usize = 64;
+/// How long a connection may take to send its request, and to take the answer
+const IO_TIMEOUT: Duration = Duration::from_secs(10);
+/// The most a request's line and headers may be
+const MAX_HEAD: usize = 16 * 1024;
+
 pub fn serve(paths: Paths, port: u16) -> Result<(), String> {
     // 127.0.0.1 only: the front (Caddy or cloudflared) is the way in
-    let server = Arc::new(tiny_http::Server::http(("127.0.0.1", port)).map_err(|e| format!("Couldn't listen on 127.0.0.1:{port} ({e})."))?);
+    let listener = std::net::TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("Couldn't listen on 127.0.0.1:{port} ({e})."))?;
     let ctx = Arc::new(Ctx::new(paths, None));
     eprintln!("ls-control {VERSION} for {} on 127.0.0.1:{port}", ctx.paths.id);
-    let workers: Vec<_> = (0..WORKERS)
-        .map(|_| {
-            let (server, ctx) = (server.clone(), ctx.clone());
-            std::thread::spawn(move || {
-                while let Ok(rq) = server.recv() {
-                    respond(&ctx, rq);
-                }
-            })
-        })
-        .collect();
-    for w in workers {
-        let _ = w.join();
-    }
+    serve_on(listener, ctx);
     Ok(())
 }
 
-fn respond(ctx: &Ctx, mut rq: tiny_http::Request) {
+/// One thread per connection, at most MAX_CONNS of them, each with time limits: a slow or
+/// silent connection is dropped instead of holding a place for long.
+fn serve_on(listener: std::net::TcpListener, ctx: Arc<Ctx>) {
+    let open = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    for stream in listener.incoming() {
+        let Ok(stream) = stream else { continue };
+        use std::sync::atomic::Ordering::SeqCst;
+        if open.fetch_add(1, SeqCst) >= MAX_CONNS {
+            open.fetch_sub(1, SeqCst);
+            continue;
+        }
+        let (ctx, open2) = (ctx.clone(), open.clone());
+        let spawned = std::thread::Builder::new().stack_size(256 * 1024).spawn(move || {
+            connection(&ctx, stream);
+            open2.fetch_sub(1, SeqCst);
+        });
+        if spawned.is_err() {
+            open.fetch_sub(1, SeqCst);
+        }
+    }
+}
+
+/// What came in on a connection, up to its body.
+struct Head {
+    method: String,
+    path: String,
+    headers: HashMap<String, String>,
+    /// bytes of the body already read with the head
+    rest: Vec<u8>,
+}
+
+/// The request line and headers (httparse), or the status to answer with.
+fn read_head(s: &mut std::net::TcpStream, started: Instant) -> Result<Head, u16> {
     use std::io::Read;
-    let mut headers: HashMap<String, String> = HashMap::new();
-    for h in rq.headers() {
-        let k = h.field.as_str().as_str().to_ascii_lowercase();
-        let v = h.value.as_str().to_string();
-        // repeated headers: the values in order, as one (X-Forwarded-For)
-        headers.entry(k).and_modify(|x| *x = format!("{x}, {v}")).or_insert(v);
+    let mut buf = Vec::with_capacity(2048);
+    let mut chunk = [0u8; 2048];
+    loop {
+        if started.elapsed() > IO_TIMEOUT {
+            return Err(408);
+        }
+        let n = s.read(&mut chunk).map_err(|_| 408u16)?;
+        if n == 0 {
+            return Err(400);
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        let mut hs = [httparse::EMPTY_HEADER; 48];
+        let mut req = httparse::Request::new(&mut hs);
+        match req.parse(&buf) {
+            Ok(httparse::Status::Complete(len)) => {
+                let mut headers: HashMap<String, String> = HashMap::new();
+                for h in req.headers.iter() {
+                    let k = h.name.to_ascii_lowercase();
+                    let v = String::from_utf8_lossy(h.value).to_string();
+                    // repeated headers: the values in order, as one (X-Forwarded-For)
+                    headers.entry(k).and_modify(|x| *x = format!("{x}, {v}")).or_insert(v);
+                }
+                return Ok(Head { method: req.method.unwrap_or("").to_string(), path: req.path.unwrap_or("").to_string(), headers, rest: buf[len..].to_vec() });
+            }
+            Ok(httparse::Status::Partial) if buf.len() < MAX_HEAD => continue,
+            Ok(httparse::Status::Partial) => return Err(431),
+            Err(_) => return Err(400),
+        }
     }
-    let socket = rq.remote_addr().map(|a| a.ip());
-    let peer = peer_of(&headers, socket);
-    let too_big = rq.body_length().is_some_and(|n| n > MAX_BODY);
-    let mut body = Vec::new();
-    if !too_big {
-        let _ = rq.as_reader().take(MAX_BODY as u64 + 1).read_to_end(&mut body);
+}
+
+/// The body (Content-Length only; the fronts never send anything else to here).
+fn read_body(s: &mut std::net::TcpStream, head: &mut Head, started: Instant) -> Result<Vec<u8>, u16> {
+    use std::io::Read;
+    if head.headers.contains_key("transfer-encoding") {
+        return Err(411);
     }
-    let req = Req { method: rq.method().as_str().to_string(), path: rq.url().to_string(), headers, body, peer };
-    let resp = if too_big {
-        refuse(413, "That's too big.")
-    } else {
-        // one request going wrong never takes the service down
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handle(ctx, req))).unwrap_or_else(|_| refuse(500, "Something went wrong on the server. Try again."))
+    let len = match head.headers.get("content-length") {
+        None => 0,
+        Some(v) => v.trim().parse::<usize>().map_err(|_| 400u16)?,
+    };
+    if len > MAX_BODY {
+        return Err(413);
+    }
+    let mut body = std::mem::take(&mut head.rest);
+    body.truncate(len);
+    let mut chunk = [0u8; 4096];
+    while body.len() < len {
+        if started.elapsed() > IO_TIMEOUT {
+            return Err(408);
+        }
+        let n = s.read(&mut chunk[..(len - body.len()).min(4096)]).map_err(|_| 408u16)?;
+        if n == 0 {
+            return Err(400);
+        }
+        body.extend_from_slice(&chunk[..n]);
+    }
+    Ok(body)
+}
+
+/// Whether a request's body is worth reading: a redeem or a ping, or someone with a key
+/// that works (a body from anyone else is never waited for).
+fn body_wanted(ctx: &Ctx, head: &Head) -> bool {
+    match clean_path(&head.path).as_deref() {
+        Some("/api/control/redeem") | Some("/api/control/ping") => true,
+        Some(_) => {
+            let key = head.headers.get("authorization").and_then(|v| v.strip_prefix("Bearer ")).unwrap_or("").trim();
+            matches!(Files::new(&ctx.paths).member_for(key), Ok(Some(_)))
+        }
+        None => false,
+    }
+}
+
+fn connection(ctx: &Ctx, mut s: std::net::TcpStream) {
+    let _ = s.set_read_timeout(Some(IO_TIMEOUT));
+    let _ = s.set_write_timeout(Some(IO_TIMEOUT));
+    let started = Instant::now();
+    let socket = s.peer_addr().ok().map(|a| a.ip());
+    let resp = match read_head(&mut s, started) {
+        Err(code) => refuse(code, "That isn't something Loner-Strike sends."),
+        Ok(mut head) => {
+            let peer = peer_of(&head.headers, socket);
+            // a redeem over its tries: no body read, no file touched
+            let redeem = clean_path(&head.path).as_deref() == Some("/api/control/redeem");
+            if redeem && too_many(&ctx.redeems, peer, TRIES_MAX, None) {
+                refuse(429, "Too many tries. Wait a few minutes.")
+            } else {
+                let body = if body_wanted(ctx, &head) { read_body(&mut s, &mut head, started) } else { Ok(Vec::new()) };
+                match body {
+                    Err(413) => refuse(413, "That's too big."),
+                    Err(code) => refuse(code, "That isn't something Loner-Strike sends."),
+                    Ok(body) => {
+                        let req = Req { method: head.method, path: head.path, headers: head.headers, body, peer };
+                        // one request going wrong never takes the service down
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handle(ctx, req, !redeem))).unwrap_or_else(|_| refuse(500, "Something went wrong on the server. Try again."))
+                    }
+                }
+            }
+        }
     };
     let game_dir = Config::read(&ctx.paths).map(|c| ctx.paths.server_dir().join(c.game)).unwrap_or_default();
     let text = finish(&resp, &game_dir);
-    let mut r = tiny_http::Response::from_string(text).with_status_code(resp.status);
-    for (k, v) in [("Content-Type", "application/json"), ("Cache-Control", "no-store"), ("X-Content-Type-Options", "nosniff")] {
-        if let Ok(h) = tiny_http::Header::from_bytes(k.as_bytes(), v.as_bytes()) {
-            r.add_header(h);
-        }
-    }
-    let _ = rq.respond(r);
+    let reason = match resp.status {
+        200 => "OK",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        408 => "Request Timeout",
+        411 => "Length Required",
+        413 => "Payload Too Large",
+        426 => "Upgrade Required",
+        429 => "Too Many Requests",
+        431 => "Request Header Fields Too Large",
+        503 => "Service Unavailable",
+        _ => "Error",
+    };
+    let out = format!(
+        "HTTP/1.1 {} {reason}\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}",
+        resp.status,
+        text.len()
+    );
+    use std::io::Write;
+    let _ = s.write_all(out.as_bytes());
+    let _ = s.flush();
 }
 
 #[cfg(test)]
@@ -656,7 +786,7 @@ mod tests {
         fn ask(&self, key: &str, method: &str, path: &str, body: Value) -> Resp {
             let headers = HashMap::from([("authorization".to_string(), format!("Bearer {key}")), ("x-ls-version".to_string(), VERSION.to_string())]);
             let body = if body.is_null() { vec![] } else { body.to_string().into_bytes() };
-            handle(&self.ctx, Req { method: method.into(), path: path.into(), headers, body, peer: Some("203.0.113.9".parse().unwrap()) })
+            handle(&self.ctx, Req { method: method.into(), path: path.into(), headers, body, peer: Some("203.0.113.9".parse().unwrap()) }, true)
         }
         fn sent(&self) -> Vec<String> {
             self.fake.sent.lock().unwrap().clone()
@@ -671,9 +801,9 @@ mod tests {
         assert_eq!(s.ask(&"a".repeat(64), "GET", "/api/state", Value::Null).status, 401);
         assert!(went(&s.ask(&key, "GET", "/control/api/control/me", Value::Null)), "behind a tunnel the /control prefix stays on");
         let mut r = Req { method: "GET".into(), path: "/api/control/me".into(), headers: HashMap::from([("authorization".to_string(), format!("Bearer {key}"))]), body: vec![], peer: None };
-        assert_eq!(handle(&s.ctx, r).status, 426, "same version only");
+        assert_eq!(handle(&s.ctx, r, true).status, 426, "same version only");
         r = Req { method: "DELETE".into(), path: "/api/state".into(), headers: HashMap::new(), body: vec![], peer: None };
-        assert_eq!(handle(&s.ctx, r).status, 405);
+        assert_eq!(handle(&s.ctx, r, true).status, 405);
         assert_eq!(s.ask(&key, "GET", "/api/../etc/passwd", Value::Null).status, 404);
         let me = s.ask(&key, "GET", "/api/control/me", Value::Null).body;
         assert_eq!((me["role"].as_str(), me["server"]["id"].as_str(), me["server"]["state"].as_str()), (Some("admin"), Some("friday"), Some("running")));
@@ -750,7 +880,7 @@ mod tests {
         let (_, text) = s.files.invite(&s.config, Role::Admin, "", "owner").unwrap();
         let try_it = |secret: &str, ip: &str| {
             let body = json!({"invite": secret, "name": "Bob", "version": VERSION}).to_string().into_bytes();
-            handle(&s.ctx, Req { method: "POST".into(), path: "/api/control/redeem".into(), headers: HashMap::new(), body, peer: Some(ip.parse().unwrap()) })
+            handle(&s.ctx, Req { method: "POST".into(), path: "/api/control/redeem".into(), headers: HashMap::new(), body, peer: Some(ip.parse().unwrap()) }, true)
         };
         for _ in 0..TRIES_MAX {
             assert!(try_it(&"0".repeat(32), "198.51.100.1").body["error"].is_string());
@@ -785,10 +915,41 @@ mod tests {
     }
 
     #[test]
+    fn over_a_socket() {
+        use std::io::{Read, Write};
+        let s = setup("ok");
+        let key = s.person(Role::Admin, "");
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = l.local_addr().unwrap();
+        let ctx = Arc::new(Ctx::new(s.ctx.paths.clone(), Some(s.fake.clone())));
+        std::thread::spawn(move || serve_on(l, ctx));
+        let ask = |raw: String| {
+            let mut c = std::net::TcpStream::connect(addr).unwrap();
+            c.write_all(raw.as_bytes()).unwrap();
+            let mut out = String::new();
+            let _ = c.read_to_string(&mut out);
+            out
+        };
+        let me = ask(format!("GET /control/api/control/me HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer {key}\r\nX-LS-Version: {VERSION}\r\n\r\n"));
+        assert!(me.starts_with("HTTP/1.1 200 OK") && me.contains("\"role\":\"admin\""), "{me}");
+        // no key: answered at once, the promised body never waited for
+        let t = Instant::now();
+        let no = ask("POST /api/cmd HTTP/1.1\r\nHost: x\r\nContent-Length: 500\r\n\r\n".into());
+        assert!(no.starts_with("HTTP/1.1 401") && t.elapsed() < Duration::from_secs(3), "{no}");
+        let chunked = ask(format!("POST /api/cmd HTTP/1.1\r\nAuthorization: Bearer {key}\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n"));
+        assert!(chunked.starts_with("HTTP/1.1 411"), "{chunked}");
+        let big = ask(format!("POST /api/cmd HTTP/1.1\r\nAuthorization: Bearer {key}\r\nContent-Length: {}\r\n\r\n", MAX_BODY + 1));
+        assert!(big.starts_with("HTTP/1.1 413"), "{big}");
+        assert!(ask("nonsense\r\n\r\n".into()).starts_with("HTTP/1.1 400"));
+    }
+
+    #[test]
     fn forwarded_addresses() {
         let h = HashMap::from([("x-forwarded-for".to_string(), "1.2.3.4, 198.51.100.7".to_string())]);
         assert_eq!(peer_of(&h, Some("127.0.0.1".parse().unwrap())), Some("198.51.100.7".parse().unwrap()), "the front's own entry");
         assert_eq!(peer_of(&h, Some("192.0.2.1".parse().unwrap())), Some("192.0.2.1".parse().unwrap()), "only trusted from the front");
+        let cf = HashMap::from([("x-forwarded-for".to_string(), "1.2.3.4, 198.51.100.7".to_string()), ("cf-connecting-ip".to_string(), "203.0.113.5".to_string())]);
+        assert_eq!(peer_of(&cf, Some("127.0.0.1".parse().unwrap())), Some("203.0.113.5".parse().unwrap()), "Cloudflare's own header first");
         assert_eq!(clean_path("/control/api/state?x=1").as_deref(), Some("/api/state"));
         assert_eq!(clean_path("/controlx/api/state"), None);
     }

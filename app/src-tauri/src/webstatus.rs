@@ -451,6 +451,7 @@ pub fn caddy_site(domain: &str, port: u16, fastdl: bool) -> String {
 \t\t\tmax_size 64KB
 \t\t}}
 \t\treverse_proxy 127.0.0.1:{control} {{
+\t\t\theader_up -CF-Connecting-IP
 \t\t\theader_down -Server
 \t\t}}
 \t}}
@@ -882,6 +883,54 @@ fn entry(id: &str) -> Result<Entry, String> {
     servers::get(id).ok_or_else(|| "That server isn't there any more.".to_string())
 }
 
+/// Whether the rest works from outside, asked when the page opens (not with every status
+/// check: Discord would see a request every few seconds): shared control's address, fast
+/// downloads (the current map, as a player's game would fetch it), and the Discord links.
+fn health(e: &Entry) -> Value {
+    let s = &e.web_status;
+    if !s.enabled || s.domain.is_empty() {
+        return json!({});
+    }
+    let http = crate::sys::http();
+    let said = |r: Result<(), String>| match r {
+        Ok(()) => json!({"ok": true}),
+        Err(why) => json!({"ok": false, "why": why}),
+    };
+    let control = crate::control::agent::used_for(e).then(|| crate::control::agent::url(e)).flatten().map(|url| {
+        said(crate::control::agent::reachable(&url).and_then(|v| if v == crate::control::VERSION { Ok(()) } else { Err(format!("it runs version {v}, this app {}", crate::control::VERSION)) }))
+    });
+    let fastdl = s.fastdl.then(|| {
+        let map = http.get(format!("https://{}/status", s.domain)).timeout(Duration::from_secs(6)).send().ok().and_then(|r| r.json::<Value>().ok()).and_then(|v| v["map"].as_str().map(String::from)).filter(|m| crate::control::common::safe_arg(m));
+        said(match map {
+            None => Err("the status page didn't say which map is on, so there's nothing to try. Start the server and check again".into()),
+            Some(map) => match http.head(format!("{}/maps/{map}.bsp", fastdl_url(&s.domain))).timeout(Duration::from_secs(8)).send() {
+                Ok(r) if r.status().is_success() => Ok(()),
+                Ok(r) => Err(format!("maps/{map}.bsp didn't download (HTTP {})", r.status().as_u16())),
+                Err(err) => Err(format!("it didn't answer ({err})")),
+            },
+        })
+    });
+    let discord: serde_json::Map<String, Value> = HOOKS
+        .iter()
+        .filter_map(|k| read_hook(k, &e.id).map(|url| (k, url)))
+        .map(|(k, url)| {
+            // a GET only reads the webhook: nothing is posted
+            let r = match http.get(&url).timeout(Duration::from_secs(6)).send() {
+                Ok(r) if r.status().is_success() => Ok(()),
+                Ok(r) if matches!(r.status().as_u16(), 401 | 404) => Err("Discord says this webhook was deleted. Make a new one and paste it here".to_string()),
+                Ok(r) => Err(format!("Discord answered HTTP {}", r.status().as_u16())),
+                Err(err) => Err(format!("Discord didn't answer ({err})")),
+            };
+            ((*k).to_string(), said(r))
+        })
+        .collect();
+    json!({"control": control, "fastdl": fastdl, "discord": discord})
+}
+
+async fn api_health(UrlPath(id): UrlPath<String>) -> (StatusCode, Json<Value>) {
+    blocking(move || entry(&id).map(|e| health(&e))).await
+}
+
 async fn api_status(UrlPath(id): UrlPath<String>) -> (StatusCode, Json<Value>) {
     blocking(move || entry(&id).map(|e| status(&e))).await
 }
@@ -1004,6 +1053,7 @@ pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/servers/:id/webstatus", route_get(api_status).post(api_save))
         .route("/api/servers/:id/webstatus/secret", axum::routing::post(api_secret))
+        .route("/api/servers/:id/webstatus/health", route_get(api_health))
 }
 
 #[cfg(test)]

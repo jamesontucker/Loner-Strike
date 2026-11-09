@@ -92,6 +92,10 @@ fn config(e: &Entry) -> Value {
     json!({"id": e.id, "game": e.game, "port": e.port, "url": url(e).unwrap_or_default(), "view": view})
 }
 
+/// A line in the service's unit naming how it's written: a unit without this one is set up
+/// again (raise it whenever the unit's text changes)
+const UNIT_REV: &str = "loner-strike unit 2";
+
 /// The service's unit, and turning it on (or restarting it with a new program or port).
 pub fn install_sh(id: &str, game: &str, port: u16) -> String {
     let u = unit(id);
@@ -102,8 +106,10 @@ fail() {{ echo "@@FAIL $*"; exit 3; }}
 [ "$(id -u)" = 0 ] && ! command -v sudo >/dev/null && sudo() {{ [ "$1" = -n ] && shift; "$@"; }}
 sudo -n true 2>/dev/null || fail "The user $(whoami) can't use sudo without a password, which this needs."
 install -d -m 700 "$HOME/loner-strike/control" "$HOME/{data}"
+for f in banned.cfg listip.cfg; do [ -e "$HOME/{dir}/{game}/$f" ] || : > "$HOME/{dir}/{game}/$f"; done
 sudo tee /etc/systemd/system/{u}.service >/dev/null <<EOF
 [Unit]
+# {rev}
 Description=Loner-Strike shared control {id}
 After=network-online.target
 Wants=network-online.target
@@ -115,13 +121,28 @@ Restart=always
 RestartSec=5
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=$HOME/{data} $HOME/{dir}/{game}
+ReadWritePaths=$HOME/{data} $HOME/{dir}/{game}/banned.cfg $HOME/{dir}/{game}/listip.cfg
 PrivateTmp=yes
 PrivateDevices=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
 CapabilityBoundingSet=
 AmbientCapabilities=
-MemoryMax=64M
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+UMask=077
+TasksMax=128
+MemoryMax=128M
 
 [Install]
 WantedBy=multi-user.target
@@ -135,6 +156,7 @@ echo "@@STEP ready"
 "#,
         data = data_dir(id),
         bin = BIN,
+        rev = UNIT_REV,
     )
 }
 
@@ -208,17 +230,21 @@ fn write_config(r: &RemoteInfo, e: &Entry) -> Result<(), String> {
 /// with the server's settings as they are now; sets it up if not.
 pub fn ensure(e: &Entry, res: &Path) -> Result<(), String> {
     let r = e.remote.as_ref().ok_or("Shared control on the server is for servers on a Linux machine.")?;
+    // the program itself (two builds of one version differ), running, on the port, and its
+    // unit as this app writes it
     let check = format!(
-        "\"$HOME/{BIN}\" version 2>/dev/null; systemctl is-active {u} 2>/dev/null; systemctl cat {u} 2>/dev/null | grep -c -- '--port {port}$' || true",
+        "sha256sum \"$HOME/{BIN}\" 2>/dev/null | cut -c1-64; echo; systemctl is-active {u} 2>/dev/null; systemctl cat {u} 2>/dev/null | grep -c -- '--port {port}$' || true; systemctl cat {u} 2>/dev/null | grep -c -F '# {UNIT_REV}' || true",
         u = unit(&e.id),
         port = port(e)
     );
+    let (sha, _) = shipped(res)?;
     let (_, out) = remote::exec_quick(r, &check)?;
-    let lines: Vec<&str> = out.lines().map(str::trim).collect();
-    let version_ok = lines.first().and_then(|l| serde_json::from_str::<Value>(l).ok()).is_some_and(|v| v["version"] == super::VERSION);
+    let lines: Vec<&str> = out.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let program_ok = lines.first() == Some(&sha.as_str());
     let running = lines.get(1) == Some(&"active");
     let port_ok = lines.get(2).is_some_and(|n| *n != "0");
-    if version_ok && running && port_ok {
+    let unit_ok = lines.get(3).is_some_and(|n| *n != "0");
+    if program_ok && running && port_ok && unit_ok {
         return write_config(r, e);
     }
     install(e, res)
@@ -248,6 +274,13 @@ pub fn cli(e: &Entry, args: &[&str]) -> Result<Value, String> {
 pub fn reachable(url: &str) -> Result<String, String> {
     let r = crate::sys::http().get(format!("{url}/api/control/ping")).timeout(std::time::Duration::from_secs(6)).send().map_err(|e| e.to_string())?;
     let status = r.status().as_u16();
+    // the ping is always there: a 404 is the status page answering (a tunnel without the
+    // /control/ route, or with it below the status route), a 5xx the front not reaching it
+    match status {
+        404 => return Err("the status page answered instead. In Cloudflare, add the ^/control/ route and move it above the status route".into()),
+        502..=504 | 530 => return Err(format!("the front couldn't reach shared control on the server (HTTP {status})")),
+        _ => {}
+    }
     let v: Value = r.json().map_err(|_| format!("it answered with something else (HTTP {status})"))?;
     v["version"].as_str().map(String::from).ok_or_else(|| format!("it answered with something else (HTTP {status})"))
 }
@@ -260,7 +293,7 @@ mod tests {
     fn service_text() {
         let sh = install_sh("friday", "cstrike", 9090);
         assert!(sh.contains("ExecStart=$HOME/loner-strike/bin/ls-control serve --server friday --port 9090"));
-        assert!(sh.contains("ReadWritePaths=$HOME/loner-strike/control/friday $HOME/loner-strike/servers/friday/cstrike"));
+        assert!(sh.contains("ReadWritePaths=$HOME/loner-strike/control/friday $HOME/loner-strike/servers/friday/cstrike/banned.cfg $HOME/loner-strike/servers/friday/cstrike/listip.cfg"));
         assert!(sh.contains("NoNewPrivileges=yes") && sh.contains("User=$(whoami)") && !sh.contains("0.0.0.0"));
         assert!(remove_sh("friday", true).contains("rm -rf \"$HOME/loner-strike/control/friday\""));
         assert!(!remove_sh("friday", false).contains("rm -rf"), "a rebuild keeps who helps run it");

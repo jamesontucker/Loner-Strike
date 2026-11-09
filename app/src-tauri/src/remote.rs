@@ -412,8 +412,9 @@ fn exec_feed(r: &RemoteInfo, cmd: &str, feed: impl FnOnce(&mut dyn Write) -> Res
     let mut fed: Result<(), String> = Ok(());
     let mut run = || -> Result<i32, ssh2::Error> {
         if let Some(feed) = feed.take() {
-            // (nothing reads the command's output meanwhile: what these commands print
-            // is small enough to wait in the channel)
+            // (nothing reads the command's output meanwhile, so a command fed a lot must
+            // keep what it prints until its input has ended, as upload_dir_with's does: what
+            // fills the channel meanwhile would stop it reading, and this writing, for good)
             if let Err(e) = feed(&mut ch) {
                 fed = Err(e);
                 let _ = ch.close();
@@ -530,7 +531,13 @@ pub fn upload_dir_with(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Pat
     // password) readable by this user only
     let code = exec_feed(
         r,
-        &format!("mkdir -p {to} && tar xzf - -C {to} && {{ chmod -R go-rwx {to}/addons/amxmodx/data 2>/dev/null || true; }}", to = shell_quote(to)),
+        // tar's own messages go to a file and only their end comes back once it's done:
+        // nothing reads the connection while the files go up, and a warning for every file
+        // would fill it, leave tar waiting to print and the upload waiting on tar for good
+        &format!(
+            "mkdir -p {to} && o=$(mktemp) && {{ tar xzf - -C {to} >\"$o\" 2>&1; c=$?; tail -n 5 \"$o\"; rm -f \"$o\"; [ $c = 0 ]; }} && {{ chmod -R go-rwx {to}/addons/amxmodx/data 2>/dev/null || true; }}",
+            to = shell_quote(to)
+        ),
         |w| {
             let gz = flate2::write::GzEncoder::new(w, flate2::Compression::fast());
             let mut tar = tar::Builder::new(gz);
@@ -689,6 +696,31 @@ pub const FOUNDATION_ENV: &[(&str, &str)] = &[
     ("MIRROR", crate::setup::fetch::MIRROR),
 ];
 
+/// What the game (and HLTV) may do on the machine, in their systemd units: never gain
+/// privileges (the login user's passwordless sudo stays out of reach of a hacked game), no
+/// root powers, nothing of the kernel's, its own /tmp; and nothing that runs later with more
+/// power can be changed from it: SSH keys, login scripts, user services, ls-control and its
+/// store. Its own files are left as they were (no ProtectSystem / ReadWritePaths: what Steam
+/// and add-ons write isn't all known). Not
+/// SystemCallArchitectures=native (hlds_linux is 32-bit) nor MemoryDenyWriteExecute
+/// (Metamod and AMX Mod X patch code in memory).
+pub const SANDBOX: &str = "NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+InaccessiblePaths=-$HOME/.ssh
+ReadOnlyPaths=-$HOME/loner-strike/bin -$HOME/loner-strike/control -$HOME/.bashrc -$HOME/.profile -$HOME/.bash_profile -$HOME/.bash_login -$HOME/.config/systemd";
+
 /// The systemd service for one server, and the `lsctl` helper for managing servers by hand.
 pub fn service_sh(id: &str, game: &str, args: &[String]) -> String {
     let unit = unit(id);
@@ -730,6 +762,7 @@ Environment=LD_LIBRARY_PATH=$SRV
 ExecStart=$SRV/hlds_linux {args}
 Restart=always
 RestartSec=5
+{sandbox}
 
 [Install]
 WantedBy=multi-user.target
@@ -838,7 +871,8 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable {unit} {unit}-watchdog >/dev/null 2>&1
 echo "@@STEP ready"
-"#
+"#,
+        sandbox = SANDBOX
     )
 }
 
@@ -943,6 +977,7 @@ ExecStartPre=/bin/sleep 5
 ExecStart=$SRV/hltv -port {port} +exec loner-strike-hltv.cfg
 Restart=always
 RestartSec=10
+{sandbox}
 
 [Install]
 WantedBy={main}.service
@@ -950,7 +985,8 @@ EOF
 sudo systemctl daemon-reload
 {switch}
 "#,
-        admin = shell_quote(admin)
+        admin = shell_quote(admin),
+        sandbox = SANDBOX
     )
 }
 
@@ -1117,6 +1153,9 @@ mod tests {
         let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into(), "-port".into(), "27016".into()]);
         assert!(svc.contains("ExecStart=/usr/local/bin/lswatchdog 27016 lonerstrike-x") && svc.contains("print(f\"{unit} hasn't"));
         assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike' '-port' '27016'") && svc.contains("lsctl") && svc.contains("b\"\\xff\\xff\\xff\\xff\""));
+        // the sandbox in the game's own unit (before the watchdog's), not the watchdog's
+        let game = &svc[svc.find("Description=Loner-Strike server x\n").unwrap()..svc.find("lsctl:").unwrap()];
+        assert!(game.contains("NoNewPrivileges=yes") && game.contains("InaccessiblePaths=-$HOME/.ssh") && !game.contains("ProtectSystem"));
     }
 
     #[test]

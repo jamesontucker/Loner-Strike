@@ -11,6 +11,19 @@ pub fn valid_steamid(s: &str) -> bool {
     digits(x, 1) && x.as_bytes()[0] <= b'5' && (y == "0" || y == "1") && digits(z, 10) && z.parse::<u32>().is_ok() && !(z.len() > 1 && z.starts_with('0'))
 }
 
+/// What a Moderator is told when the player is the owner, an Admin, a Moderator or a helper.
+pub const OUTRANKED: &str = "Moderators can't ban, mute, kick, slap or slay the server's owner, its Admins or Moderators, or anyone helping run it.";
+
+/// The SteamID of the player with this userid, from the game's `status` answer
+/// (`#  2 "Name" 7 STEAM_0:1:123 0 05:00 30 0 1.2.3.4:27005`). None: not in the game.
+pub fn steamid_for_uid(status: &str, uid: u32) -> Option<String> {
+    status.lines().filter(|l| l.trim_start().starts_with('#')).find_map(|l| {
+        let (_, rest) = l.rsplit_once('"')?;
+        let mut w = rest.split_whitespace();
+        (w.next()?.parse::<u32>().ok()? == uid).then(|| w.next().map(String::from)).flatten()
+    })
+}
+
 /// A command argument the panel may send: plain words only (the UI checks the same rule).
 pub fn safe_arg(a: &str) -> bool {
     !a.is_empty() && a.len() <= 64 && a.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
@@ -104,6 +117,14 @@ pub fn hide_passwords(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn userids_to_steamids() {
+        let st = "# userid name uniqueid connected ping loss state rate adr\n#  1 \"Pat \"the\" one\" 3 STEAM_0:1:42 0 05:00 30 0 1.2.3.4:27005\n#  2 \"Bot\" 4 BOT 0 05:00 0 0\n";
+        assert_eq!(steamid_for_uid(st, 3).as_deref(), Some("STEAM_0:1:42"));
+        assert_eq!(steamid_for_uid(st, 4).as_deref(), Some("BOT"));
+        assert_eq!(steamid_for_uid(st, 5), None);
+    }
 
     #[test]
     fn setting_lists_hide_keys() {
