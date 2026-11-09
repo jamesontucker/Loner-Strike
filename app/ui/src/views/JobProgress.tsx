@@ -122,3 +122,35 @@ export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, remote 
     </div>
   );
 }
+
+/** One line for a server whose Loner-Strike updates are going in: the step it's on and how far
+ * the whole update has got (the same job the setup bar follows). Before the job starts, the
+ * server is being stopped. */
+export function UpdateProgress({ restarts }: { restarts?: boolean }) {
+  const q = useSetupJob();
+  // (the shared query only polls a running job: this one asks while it's on screen, so a job
+  // that starts after the server stops is picked up)
+  const refetch = q.refetch;
+  useEffect(() => {
+    const t = window.setInterval(() => void refetch(), 2000);
+    return () => window.clearInterval(t);
+  }, [refetch]);
+  const job = q.data?.state === "running" ? q.data : null;
+  const steps = job?.steps ?? [];
+  const now = steps.find((s) => s.state === "running");
+  const transfer = transferOf(now);
+  const base = job?.progress ?? 0;
+  let value = base;
+  if (transfer && now) {
+    const end = steps.length > 1 ? (steps.indexOf(now) + 1) / steps.length : 1;
+    value = Math.max(base, base + (Math.max(base, end) - base) * Math.min(1, transfer.sent / transfer.total));
+  }
+  const n = now ? steps.indexOf(now) + 1 : 0;
+  const what = now ? `${now.label}${steps.length > 1 ? ` (step ${n} of ${steps.length})` : ""}` : "Stopping it first";
+  return (
+    <p className="muted small-note update-progress" role="status">
+      <span className="spinner" aria-hidden="true" />
+      Putting in Loner-Strike's updates: {what}{job ? ` · ${Math.round(value * 100)}%` : ""}…{restarts ? " It starts again when they're in." : ""}
+    </p>
+  );
+}

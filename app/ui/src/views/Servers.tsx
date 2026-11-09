@@ -5,7 +5,7 @@ import { reloadServers } from "../queries";
 import { useDirty, useDirtyStore, useNav } from "../store";
 import { restartPending, serverAddress, serverHost, type AppInfo, type MapInfo, type Online, type ServerInfo, type ServerList } from "../types";
 import { HostingGuide, SizingTable, troubleFor } from "./HostingGuide";
-import { JobProgress } from "./JobProgress";
+import { JobProgress, UpdateProgress } from "./JobProgress";
 import { BusyButton, Info, lazyPage, LoadError, PageBoundary, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
 import { BackupSheet, RestoreSheet } from "./Backup";
@@ -113,9 +113,7 @@ function StateTag({ s, inline }: { s: ServerInfo; inline?: boolean }) {
 
 /** Loner-Strike's updates for a server: going in now, or waiting (what, and when they'll go in). */
 function UpdateNote({ s, busy, onUpdate }: { s: ServerInfo; busy: boolean; onUpdate: () => void }) {
-  if (s.updating) {
-    return <p className="muted small-note" role="status"><span className="spinner" aria-hidden="true" />Putting in Loner-Strike's updates{s.restarts_after ? ". It starts again when they're in" : ""}…</p>;
-  }
+  if (s.updating) return <UpdateProgress restarts={s.restarts_after} />;
   if (s.update_queued) return <p className="muted small-note" role="status">Updates waiting their turn: another server's are going in now.</p>;
   const parts = s.outdated ?? [];
   if (!parts.length || s.state === "setting-up" || s.state === "failed") return null;
@@ -457,11 +455,11 @@ function SharedCard({ s, onOpen, onChanged }: { s: ServerInfo; onOpen: (id: stri
         {reachable && s.state === "running" && <BusyButton busy={busy(`${s.id}:join`)} label="Join" busyLabel="Joining…" onClick={join} />}
         {reachable && role === "admin" && s.state !== "checking" && (s.state === "running" ? (
           <>
-            <BusyButton busy={busy(`${s.id}:restart`)} label="Restart" busyLabel="Restarting…" onClick={() => act("restart")} />
-            <BusyButton className="btn danger" busy={busy(`${s.id}:stop`)} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
+            <BusyButton busy={busy(`${s.id}:restart`)} disabled={!!s.updating} label="Restart" busyLabel="Restarting…" onClick={() => act("restart")} />
+            <BusyButton className="btn danger" busy={busy(`${s.id}:stop`)} disabled={!!s.updating} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
           </>
         ) : (
-          <BusyButton busy={busy(`${s.id}:start`)} label="Start" busyLabel="Starting…" onClick={() => act("start")} />
+          <BusyButton busy={busy(`${s.id}:start`)} disabled={!!s.updating} label="Start" busyLabel="Starting…" onClick={() => act("start")} />
         ))}
         <BusyButton className="btn push" busy={busy(`${s.id}:leave`)} label="Take off my list" busyLabel="Removing…" onClick={leave} />
       </div>
@@ -652,16 +650,18 @@ export function ServerPage(props: {
             ) : running ? (
               <>
                 <BusyButton className="btn primary" busy={busy("join")} label={ON_THIS_COMPUTER ? "Join" : "Join on the computer"} busyLabel="Joining…" onClick={() => act("join")} />
-                <BusyButton busy={busy("restart")} label="Restart" busyLabel="Restarting…" onClick={() => act("restart")} />
-                <BusyButton className="btn danger" busy={busy("stop")} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
+                <BusyButton busy={busy("restart")} disabled={!!s.updating} label="Restart" busyLabel="Restarting…" onClick={() => act("restart")} />
+                <BusyButton className="btn danger" busy={busy("stop")} disabled={!!s.updating} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
               </>
             ) : (
-              <>{modePick}<BusyButton className="btn primary" busy={busy("start")} disabled={off} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} /></>
+              <>{modePick}<BusyButton className="btn primary" busy={busy("start")} disabled={off || !!s.updating} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} /></>
             )}
           </div>
         </div>
         <TabStrip label={`${s.name} sections`} tab={tab} remote={!!s.host} allowed={allowed} onPick={pick} />
       </div>
+      {!role && s.updating && <div className="banner" role="status"><UpdateProgress restarts={s.restarts_after} /></div>}
+      {!role && !s.updating && s.update_queued && <div className="banner" role="status"><p className="muted small-note">Its Loner-Strike updates are waiting their turn: another server's are going in now.</p></div>}
       {role && (
         <div className="banner" role="status">
           <span>You're {role === "admin" ? "an Admin" : "a Moderator"} on this shared server. What you change happens on its owner's server, and they see it in its activity.</span>
@@ -1087,12 +1087,12 @@ function Maintenance({ server, installed, act, rebuild, wipeRebuild, busy }: { s
   return (
     <div className="panel">
       <h3>Maintenance</h3>
-      {running && <p className="muted">Stop the server first to update or rebuild it.</p>}
+      {server.updating ? <p className="muted">Its Loner-Strike updates are going in now.</p> : running && <p className="muted">Stop the server first to update or rebuild it.</p>}
       <ul className="upkeep">
         {!server.imported && (
           <li>
             <div><b>Update Valve's server files</b><p className="muted">Gets the latest version of the server from Valve. Your mods and settings stay.</p></div>
-            <BusyButton className="btn" busy={busy("update")} disabled={running} label="Update" busyLabel="Starting…" onClick={() => act("update")} />
+            <BusyButton className="btn" busy={busy("update")} disabled={running || !!server.updating} label="Update" busyLabel="Starting…" onClick={() => act("update")} />
           </li>
         )}
         {server.loner && !server.host && (
