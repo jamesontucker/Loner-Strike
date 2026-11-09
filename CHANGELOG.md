@@ -10,10 +10,19 @@ What changed in each version. The downloads are on the [Releases](https://github
 - Freeze time and leaving spawn feel alive: looking about, flicking guns, hops and crouches, and a few always late out of the shop.
 - Team play: trades and flanks, CTs holding the sites, Ts picking a site together and switching after early losses, the bomb carrier going in with a teammate, guards spreading out round a planted bomb, defuses heard and kit holders let through.
 - They react like people: flashed bots panic their own way, AWPers step aside after a shot, a flanker who shoots them gets noticed, and being outnumbered makes the careful ones back off.
+- Retakes go for the bomb: CTs who can still make it run there, and learn the site from a teammate on it or one who just went down there. Ones who can't make it save.
+- They hold an angle for a few seconds instead of glancing round every second, and aim around the chest like most players, so headshots come at a pub's rate rather than every kill or none.
 - Each bot is its own person: a personality, mood and skill that show in how it plays and talks, regulars who remember you between sessions, tilt from a bad run, and callouts like "rush b" before they go down.
 - Chat volume fits the mode, deathmatch chat is short reactions, and with Bots can be rude off nobody gets insulted.
 - Every mode is played right: deathmatch spreads out and goes for the fighting, Gun Game's grenade and knife levels work, fy_ maps get a run for the floor guns, and rounds on awp_ and aim_ maps don't stall.
 - Deathmatch and Gun Game no longer end the round and respawn everyone at 9 minutes.
+
+### Servers
+- Servers update themselves: after an app update, each server gets its new plugins and bot brain once nobody's playing on it (bots don't count). The servers list shows what's waiting, with Update now, which asks first if people are on. Turn it off per server in its settings.
+- Linux servers are locked down further: the game can't use the login's admin rights or touch SSH keys and login scripts, and shared control runs with only what it needs. Both go in at the server's next start.
+- Shared control: Moderators can no longer kick, slap, slay, ban or mute the owner, Admins or other helpers, and invites ask for a SteamID. The Cloudflare steps are spelled out, with a clear message if the route is in the wrong order.
+- Website status checks shared control, fast downloads and the Discord messages from outside, so you can see they work.
+- Uploads to a Linux server go up in pieces and retry on their own when the connection stalls, instead of hanging.
 
 ### Other
 - Windows: "Remove everything" no longer deletes the installed app along with everything else, so Loner-Strike opens again afterwards (at its first-time setup). Its download cache moved out of the app's own folder, which also keeps it through updates.
