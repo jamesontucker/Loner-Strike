@@ -420,7 +420,7 @@ pub mod tests {
     pub fn temp(id: &str) -> (crate::Paths, Files, Config) {
         let home = std::env::temp_dir().join(format!("ls-control-test-{}", random_hex(6)));
         let p = crate::Paths::new(home, id).unwrap();
-        let c = Config { id: id.into(), game: "cstrike".into(), port: 27015, url: "https://status.example.com/control".into(), view: json!({"name": "Friday Frags"}) };
+        let c = Config { id: id.into(), game: "cstrike".into(), port: 27015, url: "https://status.example.com/control".into(), front: String::new(), view: json!({"name": "Friday Frags"}) };
         make_private_dir(&p.control_dir()).unwrap();
         std::fs::write(p.control_dir().join("config.json"), serde_json::to_string(&c).unwrap()).unwrap();
         (p.clone(), Files::new(&p), c)

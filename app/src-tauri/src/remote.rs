@@ -382,6 +382,9 @@ pub fn exec_stream(r: &RemoteInfo, cmd: &str, input: &[u8], line: impl FnMut(&st
 /// exec_stream with stdin written by `feed` as the command runs (an upload packed on the
 /// way out, never whole in memory). A feed that fails ends the command without
 /// finishing its input, and is the error returned.
+/// How long writing a command's input may go without the connection taking any of it
+const FEED_STALL_MS: u32 = 60_000;
+
 fn exec_feed(r: &RemoteInfo, cmd: &str, feed: impl FnOnce(&mut dyn Write) -> Result<(), String>, mut line: impl FnMut(&str)) -> Result<i32, String> {
     // a connection left idle may have been dropped on the way (nothing keeps it alive):
     // opening the command gets 30 s and, failing that, one more go on a fresh connection
@@ -405,9 +408,9 @@ fn exec_feed(r: &RemoteInfo, cmd: &str, feed: impl FnOnce(&mut dyn Write) -> Res
         }
     };
     let s = s.lock().unwrap();
-    // setup can be quiet for a while (Valve's download), but not forever: a machine that
-    // stops answering ends the job instead of holding the connection
-    s.set_timeout(15 * 60 * 1000);
+    // while the input goes up: a minute without the connection taking any is a stalled
+    // route, not a slow one (the caller may try again on a fresh connection)
+    s.set_timeout(FEED_STALL_MS);
     let mut feed = Some(feed);
     let mut fed: Result<(), String> = Ok(());
     let mut run = || -> Result<i32, ssh2::Error> {
@@ -422,6 +425,9 @@ fn exec_feed(r: &RemoteInfo, cmd: &str, feed: impl FnOnce(&mut dyn Write) -> Res
             }
         }
         ch.send_eof()?;
+        // setup can be quiet for a while (Valve's download), but not forever: a machine that
+        // stops answering ends the job instead of holding the connection
+        s.set_timeout(15 * 60 * 1000);
         // read until the command has really finished (a quiet spell isn't the end),
         // passing complete lines on as they come
         let mut pending: Vec<u8> = Vec::new();
@@ -525,7 +531,61 @@ pub fn upload_dir_with(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Pat
     let total: u64 = files.iter().filter_map(|f| std::fs::metadata(f).ok()).map(|m| m.len()).sum();
     let sent = std::cell::Cell::new(0u64);
     let mut count = 0u64;
+    // in pieces of about 24 MB, each its own archive: a route that stalls part way costs one
+    // piece, sent again on a fresh connection (three tries), not the whole upload
+    let mut pieces: Vec<&[PathBuf]> = Vec::new();
+    let (mut at, mut size) = (0usize, 0u64);
+    for (i, f) in files.iter().enumerate() {
+        size += std::fs::metadata(f).map(|m| m.len()).unwrap_or(0);
+        if size >= UPLOAD_PIECE || i + 1 - at >= 500 {
+            pieces.push(&files[at..=i]);
+            at = i + 1;
+            size = 0;
+        }
+    }
+    if at < files.len() {
+        pieces.push(&files[at..]);
+    }
+    for piece in pieces {
+        let before = sent.get();
+        let mut tries = 0;
+        loop {
+            match upload_piece(r, from, to, piece, &sent, total, progress) {
+                Ok(n) => {
+                    count += n;
+                    break;
+                }
+                // (the files themselves, or the server refusing them: trying again won't help)
+                Err(Piece::Final(e)) => return Err(e),
+                Err(Piece::Stalled(e)) => {
+                    tries += 1;
+                    drop_session(r, false);
+                    if tries >= 3 {
+                        return Err(format!("The connection to {} kept stalling while sending files ({e}). The route between your internet and the server may be having trouble: try again later.", r.host));
+                    }
+                    sent.set(before);
+                    progress(before, total);
+                }
+            }
+        }
+    }
+    Ok(count)
+}
+
+/// Upload pieces this big (before packing), at most
+const UPLOAD_PIECE: u64 = 24 * 1024 * 1024;
+
+/// Why a piece of an upload didn't go: worth another try, or not
+enum Piece {
+    Stalled(String),
+    Final(String),
+}
+
+/// One piece of an upload: its files packed into the connection and unpacked there.
+fn upload_piece(r: &RemoteInfo, from: &Path, to: &str, files: &[PathBuf], sent: &std::cell::Cell<u64>, total: u64, progress: &dyn Fn(u64, u64)) -> Result<u64, Piece> {
+    let mut count = 0u64;
     let mut last = String::new();
+    let read_error = std::cell::RefCell::new(None::<String>);
     // packed straight into the connection as it goes up (a map pack would otherwise
     // sit whole in memory first); settings (the panel's RCON password, the join
     // password) readable by this user only
@@ -541,10 +601,17 @@ pub fn upload_dir_with(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Pat
         |w| {
             let gz = flate2::write::GzEncoder::new(w, flate2::Compression::fast());
             let mut tar = tar::Builder::new(gz);
-            for file in &files {
+            for file in files {
                 let rel = file.strip_prefix(from).unwrap_or(file);
                 let name = rel.to_string_lossy().replace('\\', "/");
-                let mut data = std::fs::read(file).map_err(|e| format!("Couldn't read {name} ({e})."))?;
+                let mut data = match std::fs::read(file) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        let why = format!("Couldn't read {name} ({e}).");
+                        *read_error.borrow_mut() = Some(why.clone());
+                        return Err(why);
+                    }
+                };
                 // Linux reads a Windows line ending's CR as part of the line (in AMX Mod X's
                 // configs a path ending in CR is a folder that doesn't exist): text goes up
                 // with Linux line endings
@@ -557,18 +624,22 @@ pub fn upload_dir_with(r: &RemoteInfo, from: &Path, to: &str, keep: &dyn Fn(&Pat
                 h.set_mode(0o644);
                 h.set_mtime(std::fs::metadata(file).ok().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0));
                 h.set_cksum();
-                let reader = Counting { inner: &data[..], sent: &sent, total, progress };
+                let reader = Counting { inner: &data[..], sent, total, progress };
                 tar.append_data(&mut h, &name, reader).map_err(|e| format!("Couldn't send {name} ({e})."))?;
                 count += 1;
             }
             tar.into_inner().and_then(|gz| gz.finish()).map(|_| ()).map_err(|e| e.to_string())
         },
         |l| last = l.to_string(),
-    )?;
-    if code != 0 {
-        return Err(format!("Couldn't unpack the files on the server ({last}). Try again."));
+    );
+    if let Some(e) = read_error.into_inner() {
+        return Err(Piece::Final(e));
     }
-    Ok(count)
+    match code {
+        Ok(0) => Ok(count),
+        Ok(_) => Err(Piece::Final(format!("Couldn't unpack the files on the server ({last}). Try again."))),
+        Err(e) => Err(Piece::Stalled(e)),
+    }
 }
 
 /// Text with Windows line endings (CR LF) turned into Linux ones (LF).
@@ -719,7 +790,7 @@ RestrictRealtime=yes
 LockPersonality=yes
 RestrictNamespaces=yes
 InaccessiblePaths=-$HOME/.ssh
-ReadOnlyPaths=-$HOME/loner-strike/bin -$HOME/loner-strike/control -$HOME/.bashrc -$HOME/.profile -$HOME/.bash_profile -$HOME/.bash_login -$HOME/.config/systemd";
+ReadOnlyPaths=-$HOME/loner-strike/bin -$HOME/loner-strike/control -$HOME/.bashrc -$HOME/.profile -$HOME/.bash_profile -$HOME/.bash_login -$HOME/.bash_logout -$HOME/.zshrc -$HOME/.zprofile -$HOME/.zshenv -$HOME/.config -$HOME/.local/share/systemd";
 
 /// The systemd service for one server, and the `lsctl` helper for managing servers by hand.
 pub fn service_sh(id: &str, game: &str, args: &[String]) -> String {
@@ -751,6 +822,7 @@ fi
 for f in banned.cfg listip.cfg; do [ -e "$SRV/{game}/$f" ] || : > "$SRV/{game}/$f"; done
 sudo tee /etc/systemd/system/{unit}.service >/dev/null <<EOF
 [Unit]
+# {rev}
 Description=Loner-Strike server {id}
 After=network-online.target
 Wants=network-online.target
@@ -872,8 +944,20 @@ sudo systemctl daemon-reload
 sudo systemctl enable {unit} {unit}-watchdog >/dev/null 2>&1
 echo "@@STEP ready"
 "#,
-        sandbox = SANDBOX
+        sandbox = SANDBOX,
+        rev = SERVICE_REV
     )
+}
+
+/// A line in the game's unit naming how it's written: a unit without it is written again
+/// before the server's next start (raise it whenever service_sh's unit changes)
+pub const SERVICE_REV: &str = "loner-strike unit 3";
+
+/// Whether the server's unit on the machine is the one this version writes. (Not reachable,
+/// or no unit: says so, and the start that asked finds out the rest.)
+pub fn service_current(r: &RemoteInfo, id: &str) -> Result<bool, String> {
+    let (code, _) = exec_quick(r, &format!("grep -qxF '# {SERVICE_REV}' /etc/systemd/system/{}.service", unit(id)))?;
+    Ok(code == 0)
 }
 
 /// Is the server's service running, and for how many seconds?

@@ -2251,8 +2251,9 @@ pub fn start(id: &str) -> Result<(), String> {
         if bots_changed {
             let _ = sync(&e, false);
         }
-        // start options saved while the machine couldn't be reached go there first
-        if e.service_stale {
+        // start options saved while the machine couldn't be reached go there first; and a
+        // unit an older Loner-Strike wrote (its sandbox) is written again, without asking
+        if e.service_stale || !crate::remote::service_current(r, &e.id).unwrap_or(true) {
             write_service(&e)?;
         }
         // the fixed Ham Sandwich (the official one crashes on map changes): a server set

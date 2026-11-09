@@ -919,7 +919,8 @@ fn health(e: &Entry) -> Value {
                 Ok(r) if r.status().is_success() => Ok(()),
                 Ok(r) if matches!(r.status().as_u16(), 401 | 404) => Err("Discord says this webhook was deleted. Make a new one and paste it here".to_string()),
                 Ok(r) => Err(format!("Discord answered HTTP {}", r.status().as_u16())),
-                Err(err) => Err(format!("Discord didn't answer ({err})")),
+                // (never the error itself: it carries the webhook's address, token and all)
+                Err(err) => Err(if err.is_timeout() { "Discord didn't answer in time".to_string() } else { "couldn't reach Discord".to_string() }),
             };
             ((*k).to_string(), said(r))
         })

@@ -89,12 +89,12 @@ fn config(e: &Entry) -> Value {
             o.remove(k);
         }
     }
-    json!({"id": e.id, "game": e.game, "port": e.port, "url": url(e).unwrap_or_default(), "view": view})
+    json!({"id": e.id, "game": e.game, "port": e.port, "url": url(e).unwrap_or_default(), "front": if e.web_status.mode == "tunnel" { "tunnel" } else { "caddy" }, "view": view})
 }
 
 /// A line in the service's unit naming how it's written: a unit without this one is set up
 /// again (raise it whenever the unit's text changes)
-const UNIT_REV: &str = "loner-strike unit 2";
+const UNIT_REV: &str = "loner-strike unit 3";
 
 /// The service's unit, and turning it on (or restarting it with a new program or port).
 pub fn install_sh(id: &str, game: &str, port: u16) -> String {
@@ -106,7 +106,8 @@ fail() {{ echo "@@FAIL $*"; exit 3; }}
 [ "$(id -u)" = 0 ] && ! command -v sudo >/dev/null && sudo() {{ [ "$1" = -n ] && shift; "$@"; }}
 sudo -n true 2>/dev/null || fail "The user $(whoami) can't use sudo without a password, which this needs."
 install -d -m 700 "$HOME/loner-strike/control" "$HOME/{data}"
-for f in banned.cfg listip.cfg; do [ -e "$HOME/{dir}/{game}/$f" ] || : > "$HOME/{dir}/{game}/$f"; done
+# (the two files it may write: plain files, never links somewhere else)
+for f in banned.cfg listip.cfg; do p="$HOME/{dir}/{game}/$f"; [ -L "$p" ] && rm -f "$p"; [ -e "$p" ] || : > "$p"; done
 sudo tee /etc/systemd/system/{u}.service >/dev/null <<EOF
 [Unit]
 # {rev}

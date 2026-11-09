@@ -531,7 +531,20 @@ fn edit_file(path: &std::path::Path, f: impl FnOnce(&str) -> String) -> Result<(
     let bytes: Vec<u8> = new.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
     // written in place: the service may write these two files and nothing else in the game
     // folder (its unit's ReadWritePaths), so there's no temporary file to rename over them
-    std::fs::write(path, bytes).map_err(|e| format!("Couldn't save the ban list ({e})."))
+    // (never through a link: a game folder file swapped for one would aim the write elsewhere)
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).truncate(true);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // O_NOFOLLOW
+        opts.custom_flags(0o400000);
+    }
+    if std::fs::symlink_metadata(path).is_ok_and(|m| !m.file_type().is_file()) {
+        return Err("The ban list on the server isn't a plain file. Set up shared control again from the owner's app.".into());
+    }
+    use std::io::Write;
+    opts.open(path).and_then(|mut f| f.write_all(&bytes)).map_err(|e| format!("Couldn't save the ban list ({e})."))
 }
 
 /// The answer as sent: JSON with the RCON password blanked out, whatever it came from.
@@ -544,12 +557,12 @@ pub fn finish(resp: &Resp, game_dir: &std::path::Path) -> String {
 
 // ---- the listener ------------------------------------------------------------------------
 
-/// The address a request came from: behind cloudflared (all from 127.0.0.1) the visitor's
-/// address Cloudflare gives (CF-Connecting-IP, which its edge always sets itself; Caddy takes
-/// any such header off), else the last X-Forwarded-For entry, which the front added itself.
-fn peer_of(headers: &HashMap<String, String>, socket: Option<IpAddr>) -> Option<IpAddr> {
+/// The address a request came from: behind cloudflared (all from 127.0.0.1, and config.json
+/// says "tunnel") the visitor's address Cloudflare gives (CF-Connecting-IP, which its edge
+/// always sets itself), else the last X-Forwarded-For entry, which the front added itself.
+fn peer_of(headers: &HashMap<String, String>, socket: Option<IpAddr>, tunnel: bool) -> Option<IpAddr> {
     if socket.is_some_and(|ip| ip.is_loopback()) {
-        let cf = headers.get("cf-connecting-ip").and_then(|v| v.trim().parse().ok());
+        let cf = tunnel.then(|| headers.get("cf-connecting-ip").and_then(|v| v.trim().parse().ok())).flatten();
         let xff = || headers.get("x-forwarded-for").and_then(|v| v.rsplit(',').next()).and_then(|v| v.trim().parse().ok());
         if let Some(ip) = cf.or_else(xff) {
             return Some(ip);
@@ -689,7 +702,8 @@ fn connection(ctx: &Ctx, mut s: std::net::TcpStream) {
     let resp = match read_head(&mut s, started) {
         Err(code) => refuse(code, "That isn't something Loner-Strike sends."),
         Ok(mut head) => {
-            let peer = peer_of(&head.headers, socket);
+            let tunnel = Config::read(&ctx.paths).is_ok_and(|c| c.front == "tunnel");
+            let peer = peer_of(&head.headers, socket, tunnel);
             // a redeem over its tries: no body read, no file touched
             let redeem = clean_path(&head.path).as_deref() == Some("/api/control/redeem");
             if redeem && too_many(&ctx.redeems, peer, TRIES_MAX, None) {
@@ -946,10 +960,11 @@ mod tests {
     #[test]
     fn forwarded_addresses() {
         let h = HashMap::from([("x-forwarded-for".to_string(), "1.2.3.4, 198.51.100.7".to_string())]);
-        assert_eq!(peer_of(&h, Some("127.0.0.1".parse().unwrap())), Some("198.51.100.7".parse().unwrap()), "the front's own entry");
-        assert_eq!(peer_of(&h, Some("192.0.2.1".parse().unwrap())), Some("192.0.2.1".parse().unwrap()), "only trusted from the front");
+        assert_eq!(peer_of(&h, Some("127.0.0.1".parse().unwrap()), true), Some("198.51.100.7".parse().unwrap()), "the front's own entry");
+        assert_eq!(peer_of(&h, Some("192.0.2.1".parse().unwrap()), true), Some("192.0.2.1".parse().unwrap()), "only trusted from the front");
         let cf = HashMap::from([("x-forwarded-for".to_string(), "1.2.3.4, 198.51.100.7".to_string()), ("cf-connecting-ip".to_string(), "203.0.113.5".to_string())]);
-        assert_eq!(peer_of(&cf, Some("127.0.0.1".parse().unwrap())), Some("203.0.113.5".parse().unwrap()), "Cloudflare's own header first");
+        assert_eq!(peer_of(&cf, Some("127.0.0.1".parse().unwrap()), true), Some("203.0.113.5".parse().unwrap()), "behind a tunnel, Cloudflare's own header first");
+        assert_eq!(peer_of(&cf, Some("127.0.0.1".parse().unwrap()), false), Some("198.51.100.7".parse().unwrap()), "behind Caddy it could be anyone's: never trusted");
         assert_eq!(clean_path("/control/api/state?x=1").as_deref(), Some("/api/state"));
         assert_eq!(clean_path("/controlx/api/state"), None);
     }

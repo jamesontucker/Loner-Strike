@@ -117,6 +117,10 @@ pub struct Config {
     /// server has no website status front)
     #[serde(default)]
     pub url: String,
+    /// "tunnel" behind a Cloudflare Tunnel (whose CF-Connecting-IP is then the visitor's
+    /// address), anything else (Caddy) never trusts that header
+    #[serde(default)]
+    pub front: String,
     /// the server as helpers see it (name, map, address to join...): the owner's app
     /// writes only what it shows helpers, never a password
     #[serde(default)]
