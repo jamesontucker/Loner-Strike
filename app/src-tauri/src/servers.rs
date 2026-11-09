@@ -115,6 +115,10 @@ pub struct Entry {
     /// a notification when someone helping run it (shared control) makes a big change
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notify_helpers: Option<bool>,
+    /// Loner-Strike's updates (plugins, the bot brain) put in by themselves once nobody is
+    /// playing (None: on)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_update: Option<bool>,
 }
 
 /// What's waiting for the server to restart (or, for sounds, the map to change).
@@ -325,7 +329,7 @@ impl Entry {
     /// What Join on this computer connects to: the shared address for a server on another
     /// machine; a server on this computer is joined directly (a router may not loop its
     /// own internet address back)
-    fn join_address(&self) -> String {
+    pub(crate) fn join_address(&self) -> String {
         if self.remote.is_some() { self.connect() } else { self.address() }
     }
 }
@@ -898,7 +902,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         extra_args: String::new(),
         bots_when_empty: None,
         ls_listed: false,
-        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None,
+        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
     };
     let base = root.join(".base");
     let g = req.game.clone();
@@ -1571,7 +1575,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         extra_args: String::new(),
         bots_when_empty: None,
         ls_listed: false,
-        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None,
+        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
     };
     make_server_dir(&entry)?;
     edit(|l| l.push(entry.clone()))?;
@@ -1894,7 +1898,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         extra_args: String::new(),
         bots_when_empty: None,
         ls_listed: false,
-        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None,
+        public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
     };
     // name and password as the Friends tab keeps them (it writes friends.cfg only when
     // something changes there, so the server's own server.cfg keeps working meanwhile)
@@ -2388,7 +2392,7 @@ fn same_but_app_switches(a: &Entry, b: &Entry) -> bool {
     let strip = |e: &Entry| {
         let mut v = serde_json::to_value(e).unwrap_or_default();
         if let Some(o) = v.as_object_mut() {
-            for k in ["keep_running", "notify_joins", "notify_helpers"] {
+            for k in ["keep_running", "notify_joins", "notify_helpers", "auto_update"] {
                 o.remove(k);
             }
         }
@@ -2589,6 +2593,7 @@ pub(crate) fn view(e: &Entry) -> Value {
            // on another machine the daily restart is done by the app: only while it's open
            "restart_needs_app": e.remote.is_some() && e.restart.as_ref().is_some_and(|r| r.on),
            "service_stale": e.service_stale,
+           "auto_update": e.auto_update != Some(false),
            "installed": installed})
 }
 
@@ -2661,12 +2666,23 @@ pub(crate) fn client(st: &Shared) -> Option<Install> {
     crate::steam::find_installs().into_iter().find(|i| i.hl == local.hl)
 }
 
-async fn api_list(on: Option<axum::Extension<crate::server::OnComputer>>) -> Json<Value> {
+async fn api_list(State(st): State<Shared>, on: Option<axum::Extension<crate::server::OnComputer>>) -> Json<Value> {
     // servers friends shared with you are this computer's app's (a phone can't reach them)
     let with_shared = on.is_some();
+    let res = crate::setup_api::resources_for(&st).ok();
     // view() can ask a server left running over RCON: not on the async workers
     let v = tokio::task::spawn_blocking(move || {
-        let mut list: Vec<Value> = load().iter().map(view).collect();
+        let mut list: Vec<Value> = load()
+            .iter()
+            .map(|e| {
+                let mut v = view(e);
+                // Loner-Strike's parts older than this app's, and whether they're being put in
+                let outdated = res.as_ref().map(|r| crate::setup_api::server_outdated(r, e)).unwrap_or_default();
+                v["outdated"] = json!(outdated);
+                v["updating"] = json!(crate::setup_api::updating(&e.id));
+                v
+            })
+            .collect();
         // servers friends shared with you, after your own
         if with_shared {
             list.extend(crate::control::client::list());
@@ -2795,6 +2811,8 @@ struct Change {
     keep_running: Option<bool>,
     notify_joins: Option<bool>,
     notify_helpers: Option<bool>,
+    /// updates put in by themselves once nobody is playing
+    auto_update: Option<bool>,
     /// a domain name shown in place of the IP ("" clears it)
     public_address: Option<String>,
     /// on the Loner-Strike server list
@@ -2894,6 +2912,9 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 }
                 if let Some(n) = req.notify_helpers {
                     e.notify_helpers = Some(n);
+                }
+                if let Some(a) = req.auto_update {
+                    e.auto_update = Some(a);
                 }
                 if let Some(b) = req.bots_when_empty {
                     e.bots_when_empty = Some(b);
@@ -3062,6 +3083,9 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 stop(&id);
                 start(&id).map(|_| json!({"ok": true}))
             }
+            // Loner-Strike's updates for it now (its plugins and bot brain), stopped and started
+            // again around it if it's running; asks first when people are playing
+            "apply-updates" => crate::setup_api::apply_updates(&st2, &id, body["force"].as_bool() == Some(true)),
             "update" => {
                 let e = get(&id).ok_or("That server isn't there any more.")?;
                 // (a Linux server's shared control program comes from the app's resources)
@@ -3568,7 +3592,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None,
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -3648,7 +3672,7 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None,
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));

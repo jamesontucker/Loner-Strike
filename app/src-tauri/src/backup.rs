@@ -1602,7 +1602,7 @@ fn new_entry(st: &Shared, m: &Manifest, saved: Option<&Saved>, name: &str, remot
         service_stale: false,
         keep_running: None,
         notify_joins: None,
-        notify_helpers: None,
+        notify_helpers: None, auto_update: None,
     };
     if let Some(s) = saved {
         s.apply(&mut e, notes);

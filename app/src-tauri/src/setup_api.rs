@@ -281,3 +281,174 @@ mod tests {
         assert_eq!(code, StatusCode::BAD_REQUEST);
     }
 }
+
+// ---- servers' updates -----------------------------------------------------------------
+//
+// After an app update, each server's Loner-Strike parts (its plugins, the bot brain, mods
+// with our fixes) are older than the app's. They go in by themselves once nobody is playing
+// (bots don't count): a stopped server's files at once, a running one stopped, updated and
+// started again while it's empty. Or now, from the servers list, asking first if people are on.
+// (The plumbing, its service and shared control, goes in at its next start without this.)
+
+/// The servers being updated now, and when each failed last (tried again an hour later)
+static UPDATING: Mutex<Option<std::collections::HashSet<String>>> = Mutex::new(None);
+static FAILED_AT: Mutex<Option<std::collections::HashMap<String, std::time::Instant>>> = Mutex::new(None);
+/// Servers asked to update now while another was: in order (one at a time)
+static QUEUED: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Whether this server's updates are going in now.
+pub fn updating(id: &str) -> bool {
+    UPDATING.lock().unwrap().as_ref().is_some_and(|s| s.contains(id))
+}
+
+/// A server's Loner-Strike parts older than this app's (none for one Loner-Strike didn't set up).
+pub fn server_outdated(res: &Path, e: &crate::servers::Entry) -> Vec<String> {
+    if !e.ready {
+        return vec![];
+    }
+    let rec = setup::record::Record::open(&e.dir.join(&e.game));
+    if !rec.data.components.contains_key("core") {
+        return vec![];
+    }
+    setup::outdated(res, &rec)
+}
+
+/// People (not bots) on a running server now; None when it doesn't answer.
+fn people_on(e: &crate::servers::Entry) -> Option<u32> {
+    let (info, _) = crate::browser::info(&e.join_address())?;
+    Some(u32::from(info.players.saturating_sub(info.bots)))
+}
+
+/// Puts the server's outdated parts in (a setup job): on a Linux machine with a new bot
+/// brain, the machine's own update (it takes the Linux build); otherwise the parts again.
+fn update_server(res: &Path, e: &crate::servers::Entry, outdated: &[String]) -> Result<String, String> {
+    if e.remote.is_some() && outdated.iter().any(|c| c == "foundation") {
+        return crate::servers::update_files(e.clone(), Some(res.to_path_buf()));
+    }
+    let install = find_install(&e.dir.to_string_lossy())?;
+    let comps: Vec<String> = outdated.iter().filter(|c| *c != "core" && *c != "foundation").cloned().collect();
+    let plan = setup::plan_install(install, &[e.game.clone()], &comps, res, true)?;
+    let store = store_for(crate::servers::game_for(&e.id, || None), &plan.install.hl, &plan.games[0]);
+    setup::start_install(plan, res.to_path_buf(), Some(store))
+}
+
+/// Stops it if it's running, puts its updates in, waits for that, and starts it again if it
+/// was running. On its own thread; the server is marked as updating meanwhile.
+fn run_update(res: PathBuf, id: String) {
+    UPDATING.lock().unwrap().get_or_insert_with(Default::default).insert(id.clone());
+    std::thread::spawn(move || {
+        let outcome = (|| -> Result<(), String> {
+            let e = crate::servers::get(&id).ok_or("That server isn't there any more.")?;
+            let outdated = server_outdated(&res, &e);
+            if outdated.is_empty() {
+                return Ok(());
+            }
+            let was_running = crate::servers::view(&e)["state"] == "running";
+            if was_running {
+                crate::servers::stop(&id);
+                for _ in 0..60 {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    if crate::servers::view(&e)["state"] != "running" {
+                        break;
+                    }
+                }
+            }
+            let job = update_server(&res, &e, &outdated);
+            if let Ok(job) = &job {
+                // (a machine's update takes minutes: up to 45 of them)
+                for _ in 0..(45 * 60 / 2) {
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    let now = setup::current();
+                    if now.id != *job || now.state != "running" {
+                        break;
+                    }
+                }
+            }
+            // started again whatever happened: a server that was running stays running
+            if was_running {
+                crate::servers::start(&id)?;
+            }
+            let job = job?;
+            let done = setup::current();
+            if done.id == job && done.state == "error" {
+                return Err(done.error.unwrap_or_else(|| "The update didn't finish.".into()));
+            }
+            Ok(())
+        })();
+        if let Err(why) = outcome {
+            crate::diagnostics::log_error("server update", &format!("{id}: {why}"));
+            FAILED_AT.lock().unwrap().get_or_insert_with(Default::default).insert(id.clone(), std::time::Instant::now());
+        }
+        UPDATING.lock().unwrap().get_or_insert_with(Default::default).remove(&id);
+        // the next one asked for meanwhile
+        let next = {
+            let mut q = QUEUED.lock().unwrap();
+            (!q.is_empty()).then(|| q.remove(0))
+        };
+        if let Some(next) = next {
+            run_update(res, next);
+        }
+    });
+}
+
+/// The servers list's "Update now": at once if nobody's on (or the person said so), else
+/// the number of people playing, for the app to ask about.
+pub fn apply_updates(st: &Shared, id: &str, force: bool) -> Result<Value, String> {
+    let res = resources(st)?;
+    let e = crate::servers::get(id).ok_or("That server isn't there any more.")?;
+    if updating(id) || QUEUED.lock().unwrap().iter().any(|q| q == id) {
+        return Ok(json!({"ok": true}));
+    }
+    if server_outdated(&res, &e).is_empty() {
+        return Err("It's up to date.".into());
+    }
+    if !force && crate::servers::view(&e)["state"] == "running" {
+        let people = people_on(&e).unwrap_or(0);
+        if people > 0 {
+            return Ok(json!({"ok": false, "people": people}));
+        }
+    }
+    // another server updating, or other setup running: this one goes next
+    let busy = UPDATING.lock().unwrap().as_ref().is_some_and(|s| !s.is_empty()) || setup::current().state == "running";
+    if busy {
+        QUEUED.lock().unwrap().push(id.to_string());
+        return Ok(json!({"ok": true, "queued": true}));
+    }
+    run_update(res, id.to_string());
+    Ok(json!({"ok": true}))
+}
+
+/// Every few minutes: one server with updates waiting, its updates on, and nobody playing
+/// (stopped, or only bots), gets them. Never while a setup job runs.
+pub fn auto_update_loop(st: Shared) {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        std::thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_secs(5 * 60));
+            let Ok(res) = resources(&st) else { continue };
+            if setup::current().state == "running" || UPDATING.lock().unwrap().as_ref().is_some_and(|s| !s.is_empty()) {
+                continue;
+            }
+            for e in crate::servers::load() {
+                if e.auto_update == Some(false) || server_outdated(&res, &e).is_empty() {
+                    continue;
+                }
+                let failed = FAILED_AT.lock().unwrap().as_ref().and_then(|m| m.get(&e.id).copied());
+                if failed.is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(3600)) {
+                    continue;
+                }
+                let state = crate::servers::view(&e)["state"].as_str().unwrap_or("").to_string();
+                // (setting up, failed, or a machine not answering: not now)
+                if state != "running" && state != "stopped" {
+                    continue;
+                }
+                if state == "running" && people_on(&e) != Some(0) {
+                    continue;
+                }
+                run_update(res.clone(), e.id.clone());
+                // (one at a time)
+                break;
+            }
+        });
+    });
+}

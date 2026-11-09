@@ -1726,3 +1726,6 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 
 /* website status: the rest of what is set up, tried from outside */
 .health { display: grid; gap: 8px; justify-items: start; margin: 4px 0 12px; }
+
+/* a server card: Loner-Strike updates waiting for it */
+.update-note { gap: 10px; align-items: center; margin-top: 6px; }

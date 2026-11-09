@@ -111,6 +111,25 @@ function StateTag({ s, inline }: { s: ServerInfo; inline?: boolean }) {
   );
 }
 
+/** Loner-Strike's updates for a server: going in now, or waiting (what, and when they'll go in). */
+function UpdateNote({ s, busy, onUpdate }: { s: ServerInfo; busy: boolean; onUpdate: () => void }) {
+  if (s.updating) {
+    return <p className="muted small-note" role="status"><span className="spinner" aria-hidden="true" />Putting in Loner-Strike's updates{s.state === "running" ? "" : ". It starts again when they're in"}…</p>;
+  }
+  const parts = s.outdated ?? [];
+  if (!parts.length || s.state === "setting-up" || s.state === "failed") return null;
+  const names = parts.map((p) => (p === "core" ? "plugins" : p === "foundation" ? "bot brain" : "mods"));
+  const what = [...new Set(names)].join(", ");
+  return (
+    <div className="row between update-note">
+      <span className="muted small-note">
+        Updates waiting: {what}. {s.auto_update !== false ? "They go in by themselves once nobody's playing." : "Automatic updates are off for this server."}
+      </span>
+      <BusyButton className="btn small" busy={busy} label="Update now" busyLabel="Updating…" onClick={onUpdate} />
+    </div>
+  );
+}
+
 /** A server on a machine that didn't answer: why, the fix if one fits, and asking again. */
 function Unreachable({ s, onGuide }: { s: ServerInfo; onGuide?: () => void }) {
   const { run, busy } = useActions();
@@ -186,6 +205,22 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
     if (action === "delete") toast(r.note || `${s.name} ${s.imported ? "removed" : "deleted"}`, !!r.note);
     onChanged();
   }, `${ACTION_LABEL[action] ?? "Working on"} ${s.name}…`);
+  // Loner-Strike's updates for a server: now, or (people playing) after asking
+  const updateNow = (s: ServerInfo) => once(`${s.id}:apply-updates`, async () => {
+    let r = await postJson<Reply & { people?: number; queued?: boolean }>(`/api/servers/${s.id}/apply-updates`, {}).catch(() => ({ error: "Couldn't reach the app." }) as Reply & { people?: number; queued?: boolean });
+    if (r.people) {
+      const who = r.people === 1 ? "1 person is" : `${r.people} people are`;
+      if (!(await ask(`${who} playing on ${s.name}. Update it now anyway? It stops and starts again, so they're disconnected for a few minutes. Otherwise it updates by itself once they've left.`, { ok: "Update now", danger: true }))) return;
+      r = await postJson<Reply & { people?: number; queued?: boolean }>(`/api/servers/${s.id}/apply-updates`, { force: true }).catch(() => ({ error: "Couldn't reach the app." }) as Reply & { people?: number; queued?: boolean });
+    }
+    if (r.error) return toast(r.error, true);
+    toast(r.queued ? `${s.name} updates after the one going now` : `Updating ${s.name}`);
+    onChanged();
+  }, `Updating ${s.name}…`);
+  const waiting = (list?.servers ?? []).filter((s) => !s.shared && s.outdated?.length && !s.updating);
+  const updateAll = () => once("servers:apply-updates", async () => {
+    for (const s of waiting) await updateNow(s);
+  }, "Updating servers…");
   const installed = (scan?.installs ?? []).flatMap((i) => i.games.filter((g) => g.installed).map((g) => g.id));
   // your own servers, and ones friends shared with you (control/)
   const own = (list?.servers ?? []).filter((s) => !s.shared);
@@ -214,6 +249,13 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
         </div>
       )}
 
+      {ON_THIS_COMPUTER && waiting.length > 1 && (
+        <div className="panel row between">
+          <p className="muted">{waiting.length} servers have Loner-Strike updates waiting. Each gets them by itself once nobody's playing on it.</p>
+          <BusyButton className="btn primary" busy={busy("servers:apply-updates")} label="Update all now" busyLabel="Updating…" onClick={updateAll} />
+        </div>
+      )}
+
       <div className="server-list">
         {own.map((s) => (
           <div key={s.id} className="server">
@@ -228,6 +270,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
               <StateTag s={s} />
             </div>
             {s.error && <p className="err-text">{s.error}</p>}
+            {ON_THIS_COMPUTER && <UpdateNote s={s} busy={busy(`${s.id}:apply-updates`)} onUpdate={() => updateNow(s)} />}
             {s.restart_needs_app && <p className="muted small-note">The daily restart only happens while Loner-Strike is open on this computer.</p>}
             {s.unreachable && s.state !== "setting-up" && <Unreachable s={s} onGuide={ON_THIS_COMPUTER ? openGuide : undefined} />}
             {s.state === "setting-up" ? (
@@ -777,6 +820,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   const [listed, setListed] = useState(!!server.ls_listed);
   const [keep, setKeep] = useState(!!server.keep_running);
   const [joins, setJoins] = useState(server.notify_joins !== false);
+  const [autoUpdate, setAutoUpdate] = useState(server.auto_update !== false);
   const [problem, setProblem] = useState<{ name?: string; slots?: string; port?: string }>({});
   // the port is part of how the running server was started: changed only while it's stopped
   const portLocked = server.state === "running";
@@ -788,7 +832,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   const portMax = server.host ? 27019 : 65000;
 
   // what was last saved, to tell whether anything changed since
-  const snapshot = (pa: string) => JSON.stringify([name, map, slots.text, port.text, vis, password, listenIp, pa, extra, botsEmpty, listed, keep, joins]);
+  const snapshot = (pa: string) => JSON.stringify([name, map, slots.text, port.text, vis, password, listenIp, pa, extra, botsEmpty, listed, keep, joins, autoUpdate]);
   const now = snapshot(publicAddr);
   const [base, setBase] = useState(now);
   const dirty = !ro && now !== base;
@@ -811,7 +855,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
       const body = sharedRole
         ? { name: name.trim(), map, maxplayers: slots.value, ...bots }
         : { name: name.trim(), map, maxplayers: slots.value, port: portLocked ? server.port : port.value, visibility: vis, password, listen_ip: listenIp, public_address: publicAddr, extra_args: extra, ls_listed: listed, // (the per-server switches only once changed here: until then they follow the app's setting)
-          ...(server.host || keep === !!server.keep_running ? {} : { keep_running: keep }), ...(joins === (server.notify_joins !== false) ? {} : { notify_joins: joins }), ...bots };
+          ...(server.host || keep === !!server.keep_running ? {} : { keep_running: keep }), ...(joins === (server.notify_joins !== false) ? {} : { notify_joins: joins }), ...(autoUpdate === (server.auto_update !== false) ? {} : { auto_update: autoUpdate }), ...bots };
       const r = await post(`/api/servers/${server.id}`, body);
       if (r.error) return toast(r.error, true);
       // the address as saved (a trailing dot dropped, say)
@@ -893,6 +937,10 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
         {!sharedRole && <div className="setting">
           <span className="name">Tell me when someone joins<span className="note">A notification on this computer when a person joins this server, while Loner-Strike is in the background</span></span>
           <Switch on={joins} disabled={ro} label="Tell me when someone joins this server" onChange={setJoins} />
+        </div>}
+        {!sharedRole && server.loner && <div className="setting">
+          <span className="name">Update by itself when nobody's playing<span className="note">After you update Loner-Strike, this server gets its new plugins and bot brain once it's empty (bots don't count). Off: only when you press Update now on the servers list</span></span>
+          <Switch on={autoUpdate} disabled={ro} label="Update by itself when nobody's playing" onChange={setAutoUpdate} />
         </div>}
         {!sharedRole && !server.host && <div className="setting">
           <span className="name">Keep running after I close Loner-Strike<span className="note">Off: closing the app stops it. On: it keeps going, and the app picks it up again next time</span></span>

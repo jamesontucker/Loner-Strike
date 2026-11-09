@@ -141,6 +141,12 @@ export type ServerInfo = {
   /** notifications: someone joins; helpers (shared control) make a big change */
   notify_joins?: boolean;
   notify_helpers?: boolean;
+  /** Loner-Strike's parts older than this app's ("core" plugins, "foundation" bot brain, mods) */
+  outdated?: string[];
+  /** those updates going in now */
+  updating?: boolean;
+  /** they go in by themselves once nobody is playing */
+  auto_update?: boolean;
   /** on the Loner-Strike server list (Find servers) */
   ls_listed?: boolean;
   /** the join password ("" for none) */

@@ -104,6 +104,8 @@ fn main() {
             // dedicated servers' daily restarts (Server extras, Schedule)
             servers::schedule_restarts();
             servers::sync_loop();
+            // servers' Loner-Strike updates, once nobody is playing
+            setup_api::auto_update_loop(state.clone());
             notify::watch(app.handle().clone(), state.clone());
             // Smarter chat's llama-server: only while it's on and a game is hosted here
             smartchat::watch(state.clone());
