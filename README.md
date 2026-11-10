@@ -8,7 +8,7 @@
 
 **Play Counter-Strike like it's 2004, alone or with the friends you don't have.**
 
-> Early release (0.1): it works, but expect some rough edges. It's a side project I work on now and then; bugs and ideas are welcome on [Discord](https://discord.gg/K9eBHVVwZE) or in [Issues](https://github.com/jamesontucker/Loner-Strike/issues).
+> It's a side project I work on now and then. The [docs](https://lonerstrike.com/docs) cover setup and the usual problems; bugs and ideas are welcome in [Issues](https://github.com/jamesontucker/Loner-Strike/issues).
 
 Counter-Strike 1.6 and Condition Zero set up like an old community server, except it's only you, your bots and maybe a friend.
 
@@ -90,7 +90,7 @@ Updates come through the app (Settings, Updates). What changed in each version i
 - **A mod misbehaves after a game update.** Open Mods and click Repair; it puts Loner-Strike's basics back and keeps your settings and mods. Reinstall next to a mod puts its files in fresh.
 - **You want everything gone.** In Settings, Remove from (your game) puts that game back the way it was, and Remove everything also deletes Loner-Strike's own files.
 
-Still stuck? Ask in the [Discord](https://discord.gg/K9eBHVVwZE), or open Settings, and under Help click Copy next to Copy diagnostics (version, game folders, what's installed and recent errors; no passwords) and paste it into a [new issue](https://github.com/jamesontucker/Loner-Strike/issues/new).
+Still stuck? See the [docs](https://lonerstrike.com/docs#no-bots-help), or open Settings, and under Help click Copy next to Copy diagnostics (version, game folders, what's installed and recent errors; no passwords) and paste it into a [new issue](https://github.com/jamesontucker/Loner-Strike/issues/new).
 
 ## Run a server on a VPS
 
