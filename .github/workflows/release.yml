@@ -200,13 +200,16 @@ jobs:
           done
 
       # The C runtime is linked in (crt-static, and llama.cpp's own switch for it), so they run
-      # without Microsoft's Visual C++ redistributable; checked below
+      # without Microsoft's Visual C++ redistributable; checked below. CMake picks the runtime
+      # itself (CMP0091) and would add /MD after the /MT llama.cpp's switch gives the compiler,
+      # so it's told the static one too (llama-cpp-sys passes CMAKE_* through)
       - name: Build ls-voice and ls-intent (Windows)
         if: matrix.platform == 'windows-latest'
         shell: bash
         env:
           GGML_NATIVE: "OFF"
           LLAMA_STATIC_CRT: "1"
+          CMAKE_MSVC_RUNTIME_LIBRARY: "MultiThreaded"
           RUSTFLAGS: "-C target-feature=+crt-static"
         run: |
           mkdir -p app/src-tauri/binaries
