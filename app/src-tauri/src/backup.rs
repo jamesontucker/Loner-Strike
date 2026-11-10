@@ -1589,6 +1589,8 @@ fn new_entry(st: &Shared, m: &Manifest, saved: Option<&Saved>, name: &str, remot
         ready: false,
         imported: false,
         hltv: Default::default(),
+        // (voice stays off: the add-on may not be installed on this computer)
+        voice: Default::default(),
         restart: None,
         remote: remote.clone(),
         setup_with: None,

@@ -27,6 +27,7 @@ import { Welcome } from "./Welcome";
 
 // only servers that use it open this tab
 const Hltv = lazyPage(() => import("./Hltv").then((m) => ({ default: m.Hltv })));
+const Voice = lazyPage(() => import("./Voice").then((m) => ({ default: m.Voice })));
 const WebStatus = lazyPage(() => import("./WebStatus").then((m) => ({ default: m.WebStatus })));
 
 const GAME = { cstrike: "Counter-Strike 1.6", czero: "Condition Zero" } as const;
@@ -337,7 +338,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   );
 }
 
-type Tab = "share" | "community" | "hltv" | "webstatus" | "extras" | "sounds" | "overview" | "friends" | "modes" | "maps" | "skins" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
+type Tab = "share" | "community" | "voice" | "hltv" | "webstatus" | "extras" | "sounds" | "overview" | "friends" | "modes" | "maps" | "skins" | "bots" | "match" | "fun" | "players" | "mods" | "admins" | "welcome";
 /** remote: only for servers on a Linux machine */
 const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: boolean }[] = [
   { id: "overview", label: "Overview", group: "Server" },
@@ -347,6 +348,7 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "webstatus", label: "Website status", group: "Server", remote: true },
   { id: "modes", label: "Modes", group: "Game", live: true },
   { id: "bots", label: "Bots", group: "Game", live: true },
+  { id: "voice", label: "Bot voice commands", group: "Game" },
   { id: "match", label: "Rules", group: "Game", live: true },
   { id: "fun", label: "Fun", group: "Game", live: true },
   { id: "players", label: "Players", group: "People", live: true },
@@ -746,6 +748,7 @@ export function ServerPage(props: {
           {tab === "sounds" && <Sounds target={s.id} />}
           {tab === "extras" && <ServerExtras target={s.id} />}
           {tab === "webstatus" && s.host && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><WebStatus server={s} /></Suspense></PageBoundary>}
+          {tab === "voice" && <PageBoundary><Suspense fallback={<Skeleton rows={3} />}><Voice server={s} /></Suspense></PageBoundary>}
           {tab === "hltv" && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><Hltv server={s} /></Suspense></PageBoundary>}
           {tab === "community" && <Community target={s.id} />}
           {tab === "share" && !role && <ShareControl server={s} />}

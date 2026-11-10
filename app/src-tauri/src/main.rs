@@ -41,6 +41,7 @@ mod smartchat;
 mod sounds;
 mod steam;
 mod sys;
+mod voice;
 
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use tauri::{WebviewUrl, WebviewWindowBuilder};

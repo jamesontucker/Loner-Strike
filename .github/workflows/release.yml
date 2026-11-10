@@ -150,6 +150,30 @@ jobs:
             https://github.com/playit-cloud/playit-agent/releases/download/v1.2.0/playitd-windows-x86_64-signed.exe
           echo "e8dff30a9269a10d2c6786c95a0618567772e441d07dd7ebe3c1a37d3f35534d  app/src-tauri/binaries/playitd-x86_64-pc-windows-msvc.exe" | sha256sum -c -
 
+      # ls-voice (app/voice-agent): Advanced Bot Interaction's speech-to-text helper, shipped
+      # inside the app like playit's agent; it does nothing until a server turns voice on.
+      # Whisper and Opus are built into it (cmake), so it needs nothing installed
+      - name: Build ls-voice (Mac)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          cd app/voice-agent
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          B="$GITHUB_WORKSPACE/app/src-tauri/binaries"
+          mkdir -p "$B"
+          cp target/aarch64-apple-darwin/release/ls-voice "$B/ls-voice-aarch64-apple-darwin"
+          cp target/x86_64-apple-darwin/release/ls-voice "$B/ls-voice-x86_64-apple-darwin"
+          lipo -create "$B/ls-voice-aarch64-apple-darwin" "$B/ls-voice-x86_64-apple-darwin" -output "$B/ls-voice-universal-apple-darwin"
+
+      - name: Build ls-voice (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          cd app/voice-agent
+          cargo build --release --locked
+          mkdir -p ../src-tauri/binaries
+          cp target/release/ls-voice.exe ../src-tauri/binaries/ls-voice-x86_64-pc-windows-msvc.exe
+
       # Notarization reads the App Store Connect key from a file
       - name: Write the notarization key
         if: matrix.platform == 'macos-latest'
@@ -177,7 +201,7 @@ jobs:
           tauriScript: npx --yes @tauri-apps/cli@2.12.4
           # playitd goes next to the app's own program (and is signed with it on a Mac)
           args: >-
-            ${{ matrix.args }} --config '{"bundle":{"externalBin":["binaries/playitd"]}}'
+            ${{ matrix.args }} --config '{"bundle":{"externalBin":["binaries/playitd","binaries/ls-voice"]}}'
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: "Loner-Strike ${{ github.ref_name }}"
           releaseBody: ${{ steps.notes.outputs.body }}

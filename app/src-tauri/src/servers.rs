@@ -65,6 +65,9 @@ pub struct Entry {
     /// HLTV spectator relay (hltv.rs)
     #[serde(default)]
     pub hltv: crate::hltv::Settings,
+    /// Advanced Bot Interaction: the bots hear what people say on voice (voice.rs)
+    #[serde(default)]
+    pub voice: crate::voice::Settings,
     /// a daily restart at a set time (the Schedule tab of Server extras)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restart: Option<DailyRestart>,
@@ -894,7 +897,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         maxplayers: default_slots(),
         ready: false,
         imported: false,
-        hltv: Default::default(),
+        hltv: Default::default(), voice: Default::default(),
         restart: None,
         remote: None,
         setup_with: None,
@@ -1567,7 +1570,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         maxplayers: default_slots(),
         ready: false,
         imported: false,
-        hltv: Default::default(),
+        hltv: Default::default(), voice: Default::default(),
         restart: None,
         remote: Some(info.clone()),
         setup_with: Some(SetupWith { template: req.template.clone(), components: req.components.clone(), password: join_pw.clone() }),
@@ -1891,7 +1894,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         maxplayers: default_slots(),
         ready: true,
         imported: true,
-        hltv: Default::default(),
+        hltv: Default::default(), voice: Default::default(),
         restart: None,
         remote: None,
         setup_with: None,
@@ -2295,6 +2298,7 @@ pub fn start(id: &str) -> Result<(), String> {
     });
     clear_pending_restart(&e.id);
     crate::hltv::server_started(&e);
+    crate::voice::server_started(&e);
     watch();
     Ok(())
 }
@@ -2311,9 +2315,10 @@ pub fn stop(id: &str) {
         let _ = crate::remote::systemctl(e.remote.as_ref().unwrap(), &e.id, "stop");
         return;
     }
-    // HLTV first, so its demo is finished properly
+    // HLTV first, so its demo is finished properly; voice too
     if let Some(e) = &e {
         crate::hltv::stop(e);
+        crate::voice::stop(e);
         clear_pending_restart(&e.id);
     }
     let child = with_runs(|r| {
@@ -3735,7 +3740,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), voice: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -3815,7 +3820,7 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), voice: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));
