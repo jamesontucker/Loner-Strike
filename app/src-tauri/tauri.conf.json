@@ -46,7 +46,8 @@
       "../../catalog/": "catalog/",
       "resources/windows/hamsandwich/": "windows/hamsandwich/",
       "resources/linux/ls-control/": "linux/ls-control/",
-      "resources/linux/ls-voice/": "linux/ls-voice/"
+      "resources/linux/ls-voice/": "linux/ls-voice/",
+      "resources/linux/ls-intent/": "linux/ls-intent/"
     },
     "windows": {
       "nsis": {

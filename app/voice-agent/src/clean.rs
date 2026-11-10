@@ -35,7 +35,12 @@ fn fixes() -> &'static Fixes {
 /// Whisper's empty or made-up lines on silence and noise: dropped.
 pub fn junk(text: &str) -> bool {
     let t = text.trim().trim_matches(|c: char| ".!?,".contains(c)).to_lowercase();
-    t.is_empty()
+    // (a sound, not words: "Mm-.", "Hmm", "Uh")
+    let letters: String = t.chars().filter(|c| c.is_alphabetic()).collect();
+    let mumble = !letters.is_empty() && letters.len() <= 4 && ["m", "h", "u", "a", "e", "o"].iter().any(|s| letters.starts_with(s))
+        && letters.chars().all(|c| "mhuaeo".contains(c));
+    mumble
+        || t.is_empty()
         || t.starts_with('[')
         || t.starts_with('(')
         || t.starts_with('*')
@@ -196,6 +201,58 @@ pub fn clean(text: &str, name_parts: &[String]) -> String {
     t.replace('"', "'").replace(';', ",").chars().filter(|c| !c.is_control()).take(120).collect()
 }
 
+// ---- the understanding model's answers ---------------------------------------------------------
+
+fn command_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        let place = r"[a-z0-9][a-z0-9 ]{0,24}";
+        let one = [
+            format!(r"go {place}( slow)?"),
+            r"fake (a|b)".into(),
+            r"fall back|watch flank|follow me|come here|wait here|release|eco|force|full buy|go defuse|give me the bomb".into(),
+            r"buy me [a-z0-9]{2,8}|drop me ([a-z0-9]{2,8}|your gun)".into(),
+            format!(r"plant( (a|b|here))?|flash for me|flash {place}|smoke {place}|nade (them|{place})"),
+            format!(r"[1-5] {place}|they are {place}|awp {place}"),
+            r"money\?|what gun\?|hp\?|how many left\?|where are they\?|where are you\?|wheres the bomb\?|what do they have\?|who has [a-z0-9]{2,8}\?".into(),
+            r"jump|crouch|spray that wall".into(),
+        ]
+        .join("|");
+        let part = format!(r"([a-z0-9]{{2,24}}, )*({one})");
+        Regex::new(&format!(r"^{part}( and {part})*$")).unwrap()
+    })
+}
+
+/// What goes to the bots for a line, given the understanding model's answer: its command
+/// when it's one the bot chat knows (names put right, "release" said as "nvm"); otherwise,
+/// and for "nothing" (chatter, trash talk), the words as heard, so the bots still react.
+pub fn with_intent(heard: &str, answer: Option<&str>, name_parts: &[String]) -> String {
+    let Some(a) = answer.map(|a| a.trim().to_lowercase()) else { return heard.to_string() };
+    if a == "nothing" || a.is_empty() || !command_re().is_match(&a) {
+        return heard.to_string();
+    }
+    let a = Regex::new(r"\brelease\b").unwrap().replace_all(&a, "nvm").into_owned();
+    // ("gil, go mid": the bot's name as the server has it)
+    let fixed = fix_names(&a, name_parts);
+    fixed.replace('"', "'").replace(';', ",")
+}
+
+/// The places to tell the model about, for the maps people play most (the map's callouts);
+/// anything else gets the usual few.
+pub fn places(map: &str) -> &'static str {
+    match map {
+        "de_dust2" => "long, short, mid, catwalk, tunnels, upper tunnels, lower tunnels, ct spawn, t spawn, pit, car, goose, doors, outside long",
+        "de_inferno" => "banana, apartments, mid, pit, library, arch, graveyard, boiler, second mid, ct spawn, t spawn, construction",
+        "de_nuke" => "outside, ramp, hut, lobby, heaven, hell, secret, vents, squeaky, silo",
+        "de_aztec" => "bridge, water, ramp, double doors, cave, palace, ct spawn, t spawn, jungle",
+        "de_train" => "ivy, pop dog, z connector, ladder room, upper, lower, brown halls, sandwich",
+        "cs_office" => "front door, back hall, kitchen, snowy, conference, garage, fire exit, long hall",
+        "de_cbble" => "long a, drop, fountain, hut, connector, rock, b long, sewers",
+        "cs_italy" => "market, wine cellar, long hall, apartments, ct spawn, t spawn",
+        _ => "long, short, mid, ct spawn, t spawn, a site, b site",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,9 +279,24 @@ mod tests {
     }
 
     #[test]
+    fn uses_the_models_command_only_when_it_is_one() {
+        let n = names();
+        assert_eq!(with_intent("Can somebody get over to B real quick", Some("go b"), &n), "go b");
+        assert_eq!(with_intent("Yo Gil hold mid for me", Some("gil, go mid"), &n), "Gill, go mid");
+        assert_eq!(with_intent("Never mind", Some("release"), &n), "nvm");
+        assert_eq!(with_intent("You're trash", Some("nothing"), &n), "You're trash");
+        assert_eq!(with_intent("Anyone play Warcraft 3", Some("fake warcraft"), &n), "Anyone play Warcraft 3");
+        assert_eq!(with_intent("Money and HP?", Some("money? and hp?"), &n), "money? and hp?");
+        assert_eq!(with_intent("Two long", Some("2 long"), &n), "2 long");
+        assert_eq!(with_intent("Rush B", None, &n), "Rush B");
+    }
+
+    #[test]
     fn drops_junk() {
         assert!(junk(" [BLANK_AUDIO]"));
         assert!(junk("Thank you."));
+        assert!(junk("Mm-.") && junk("Hmm") && junk("Uh."));
+        assert!(!junk("Ok") && !junk("Go") && !junk("Eco"));
         assert!(!junk("Rush B."));
     }
 }

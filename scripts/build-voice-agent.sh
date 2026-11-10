@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # build-voice-agent.sh
 #
-# Builds ls-voice (app/voice-agent), Advanced Bot Interaction's speech-to-text helper, for
+# Builds ls-voice (app/voice-agent) and ls-intent (app/intent-agent), Advanced Bot Interaction's
+# speech-to-text and understanding helpers, for
 # servers on a Linux machine: one Linux x86_64 program, in Docker. Whisper (C++) and Opus are
 # built into it and its C++ runtime too, so it needs only glibc 2.31 or newer: Ubuntu 22.04
 # and up, Debian 11 and up. The app ships it and puts it on the server over SSH when voice is
 # turned on there, checked against the sha256 written here.
 #
-# Out: app/src-tauri/resources/linux/ls-voice/ls-voice and ls-voice.sha256
+# Out: app/src-tauri/resources/linux/ls-voice/ls-voice and ls-voice.sha256, and the same for
+# ls-intent in app/src-tauri/resources/linux/ls-intent/
 # Needs: Docker (Docker Desktop on a Mac runs the x86_64 image). The release workflow runs
 # this too (.github/workflows/release.yml, job server-agent).
 #
@@ -20,15 +22,18 @@ cd "$(dirname "$0")/.."
 IMAGE="rust:1.96-bullseye"
 IMAGE_DIGEST="sha256:21d112adb6ab370d39eef8f861f10b42342419b9569e7a05dac15e19eb65a3b4"
 OUT=app/src-tauri/resources/linux/ls-voice
+OUT2=app/src-tauri/resources/linux/ls-intent
 
 command -v docker >/dev/null || { echo "Docker is needed: https://docs.docker.com/get-docker/" >&2; exit 1; }
 docker info >/dev/null 2>&1 || { echo "Docker isn't running. Start Docker Desktop and try again." >&2; exit 1; }
-mkdir -p "$OUT"
+mkdir -p "$OUT" "$OUT2"
 ref="$IMAGE@$IMAGE_DIGEST"
 
 docker run --rm --platform linux/amd64 \
   -v "$PWD/app/voice-agent:/src/app/voice-agent:ro" \
+  -v "$PWD/app/intent-agent:/src/app/intent-agent:ro" \
   -v "$PWD/$OUT:/out" \
+  -v "$PWD/$OUT2:/out2" \
   -v loner-strike-voice-cargo:/usr/local/cargo/registry \
   -v loner-strike-voice-target:/target \
   -e CARGO_TARGET_DIR=/target \
@@ -47,9 +52,19 @@ docker run --rm --platform linux/amd64 \
     # (it runs with nothing else installed: usage, and exit 2)
     /out/ls-voice.new >/dev/null 2>&1 || [ \$? -eq 2 ]
     mv -f /out/ls-voice.new /out/ls-voice
+    cd /src/app/intent-agent
+    CARGO_TARGET_DIR=/target/intent cargo build --release --locked
+    cp /target/intent/release/ls-intent /out2/ls-intent.new
+    chmod 755 /out2/ls-intent.new
+    /out2/ls-intent.new >/dev/null 2>&1 || [ \$? -eq 2 ]
+    mv -f /out2/ls-intent.new /out2/ls-intent
   "
 
 head -c 20 "$OUT/ls-voice" | od -An -tx1 | tr -d ' \n' | grep -q '^7f454c46020101' || { echo "ls-voice isn't a 64-bit Linux program." >&2; exit 1; }
 if command -v sha256sum >/dev/null; then sum=$(sha256sum "$OUT/ls-voice" | cut -c1-64); else sum=$(shasum -a 256 "$OUT/ls-voice" | cut -c1-64); fi
 printf '%s  ls-voice\n' "$sum" > "$OUT/ls-voice.sha256"
 echo "Built $OUT/ls-voice ($(wc -c < "$OUT/ls-voice" | tr -d ' ') bytes, sha256 $sum)"
+head -c 20 "$OUT2/ls-intent" | od -An -tx1 | tr -d ' \n' | grep -q '^7f454c46020101' || { echo "ls-intent isn't a 64-bit Linux program." >&2; exit 1; }
+if command -v sha256sum >/dev/null; then sum=$(sha256sum "$OUT2/ls-intent" | cut -c1-64); else sum=$(shasum -a 256 "$OUT2/ls-intent" | cut -c1-64); fi
+printf '%s  ls-intent\n' "$sum" > "$OUT2/ls-intent.sha256"
+echo "Built $OUT2/ls-intent ($(wc -c < "$OUT2/ls-intent" | tr -d ' ') bytes, sha256 $sum)"

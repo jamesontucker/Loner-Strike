@@ -81,6 +81,14 @@ For a server on this computer or on a Linux machine, the app installs Valve's [S
 | [Ham Sandwich](https://github.com/alliedmodders/amxmodx) | AMX Mod X's Ham Sandwich module (GPL-3.0), rebuilt for Windows and for Linux servers with a fix for a crash on map changes; the patch and how each was built are in app/src-tauri/resources/windows/hamsandwich and resources/linux/hamsandwich |
 | [Tailscale](https://tailscale.com) | The app only reads Tailscale's status for this computer's address |
 
+## Advanced Bot Interaction
+| Part | Notes |
+|---|---|
+| [whisper.cpp](https://github.com/ggml-org/whisper.cpp) | Speech to text in ls-voice, by Georgi Gerganov and contributors (MIT), built in through [whisper-rs](https://github.com/tazz4843/whisper-rs) (Unlicense). The model is OpenAI's Whisper base.en (MIT), whisper.cpp's own copy, downloaded when the add-on is installed |
+| [Opus](https://opus-codec.org) | Decoding players' voice in ls-voice: libopus (BSD-3-Clause) through the [opus](https://github.com/SpaceManiac/opus-rs) crate (MIT/Apache-2.0) |
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) | Runs the understanding model in ls-intent (MIT), through [llama-cpp-2](https://github.com/utilityai/llama-cpp-rs) (MIT/Apache-2.0) |
+| [Gemma](https://ai.google.dev/gemma) | The understanding model is Loner-Strike's fine-tune of Google's Gemma 3 270M, downloaded when the add-on is installed. Gemma is provided under and subject to the Gemma Terms of Use found at ai.google.dev/gemma/terms, and the Gemma Prohibited Use Policy |
+
 ## Website
 | Image | Author | License |
 |---|---|---|

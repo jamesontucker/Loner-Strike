@@ -30,3 +30,5 @@ app/server-agent/target/
 # ls-voice for Linux servers, built by scripts/build-voice-agent.sh and the release workflow
 app/src-tauri/resources/linux/ls-voice/ls-voice
 app/src-tauri/resources/linux/ls-voice/ls-voice.sha256
+app/src-tauri/resources/linux/ls-intent/ls-intent
+app/src-tauri/resources/linux/ls-intent/ls-intent.sha256

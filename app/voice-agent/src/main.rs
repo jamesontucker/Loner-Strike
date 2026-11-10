@@ -6,7 +6,10 @@
 //! bots as if typed in team chat, through the server's console (gm_botchat_ask).
 //!
 //!   ls-voice --feed <port> --rcon-port <port> --rcon-password-file <file> --model <ggml model>
-//!            [--threads <n>]
+//!            [--threads <n>] [--intent <ls-intent program> --intent-model <gguf>]
+//!
+//! With --intent, each line is also given to ls-intent (the small model that turns loosely worded
+//! lines into the commands the bots know); its answer is used when it's one of those.
 
 mod clean;
 mod rcon;
@@ -31,10 +34,12 @@ struct Args {
     rcon_password_file: String,
     model: String,
     threads: i32,
+    intent: String,
+    intent_model: String,
 }
 
 fn args() -> Args {
-    let mut a = Args { feed: 0, rcon_port: 27015, rcon_password_file: String::new(), model: String::new(), threads: 2 };
+    let mut a = Args { feed: 0, rcon_port: 27015, rcon_password_file: String::new(), model: String::new(), threads: 2, intent: String::new(), intent_model: String::new() };
     let v: Vec<String> = std::env::args().collect();
     let mut i = 1;
     while i + 1 < v.len() {
@@ -45,6 +50,8 @@ fn args() -> Args {
             "--rcon-password-file" => a.rcon_password_file = val,
             "--model" => a.model = val,
             "--threads" => a.threads = val.parse().unwrap_or(2),
+            "--intent" => a.intent = val,
+            "--intent-model" => a.intent_model = val,
             _ => {
                 eprintln!("ls-voice: unknown option {}", v[i]);
                 std::process::exit(2);
@@ -93,7 +100,8 @@ fn main() {
     // the hearing: one thread, one line at a time, so voice keeps coming in while it works
     let (tx, rx) = mpsc::channel::<Clip>();
     let (model, threads, rcon_port, pw) = (a.model.clone(), a.threads, a.rcon_port, password.clone());
-    let worker = thread::spawn(move || hear(rx, &model, threads, rcon::Rcon::new(rcon_port, pw)));
+    let intent = (!a.intent.is_empty() && !a.intent_model.is_empty()).then(|| (a.intent.clone(), a.intent_model.clone()));
+    let worker = thread::spawn(move || hear(rx, &model, threads, rcon::Rcon::new(rcon_port, pw), intent));
 
     let console = rcon::Rcon::new(a.rcon_port, password);
     let mut told = Instant::now() - Duration::from_secs(3600);
@@ -133,8 +141,50 @@ fn main() {
     }
 }
 
+/// ls-intent, running: a line in, its answer out.
+struct Intent {
+    child: std::process::Child,
+    to: std::process::ChildStdin,
+    from: std::io::BufReader<std::process::ChildStdout>,
+}
+
+impl Intent {
+    fn start(program: &str, model: &str, threads: i32) -> Option<Intent> {
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(program)
+            .args(["--model", model, "--threads", &threads.to_string()])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|e| eprintln!("ls-voice: ls-intent didn't start ({e}); lines go to the bots as heard"))
+            .ok()?;
+        let to = child.stdin.take()?;
+        let from = std::io::BufReader::new(child.stdout.take()?);
+        Some(Intent { child, to, from })
+    }
+
+    fn ask(&mut self, bots: &str, places: &str, heard: &str) -> Option<String> {
+        use std::io::{BufRead, Write};
+        let clean = |s: &str| s.replace(['\t', '\n', '\r'], " ");
+        writeln!(self.to, "{}\t{}\t{}", clean(bots), clean(places), clean(heard)).ok()?;
+        self.to.flush().ok()?;
+        let mut line = String::new();
+        self.from.read_line(&mut line).ok()?;
+        let line = line.trim().to_string();
+        (!line.is_empty()).then_some(line)
+    }
+}
+
+impl Drop for Intent {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+    }
+}
+
 /// Lines in, text out to the bots.
-fn hear(rx: mpsc::Receiver<Clip>, model: &str, threads: i32, console: rcon::Rcon) {
+fn hear(rx: mpsc::Receiver<Clip>, model: &str, threads: i32, console: rcon::Rcon, intent: Option<(String, String)>) {
+    let mut understanding = intent.as_ref().and_then(|(p, m)| Intent::start(p, m, threads));
     whisper_rs::install_logging_hooks();
     let ctx = match whisper_rs::WhisperContext::new_with_params(model, whisper_rs::WhisperContextParameters::default()) {
         Ok(c) => c,
@@ -152,6 +202,7 @@ fn hear(rx: mpsc::Receiver<Clip>, model: &str, threads: i32, console: rcon::Rcon
     };
     // who's on the server (bot names, the map), looked up now and then
     let mut names: Vec<String> = Vec::new();
+    let mut map = String::new();
     let mut looked = Instant::now() - Duration::from_secs(3600);
     for clip in rx {
         let t0 = Instant::now();
@@ -162,8 +213,9 @@ fn hear(rx: mpsc::Receiver<Clip>, model: &str, threads: i32, console: rcon::Rcon
         }
         let audio = steam::to_16k(&pcm, rate);
         if looked.elapsed() > Duration::from_secs(10) {
-            let (bots, _map) = rcon::status(&console.cmd("status"));
+            let (bots, m) = rcon::status(&console.cmd("status"));
             names = clean::name_parts(&bots);
+            map = m;
             looked = Instant::now();
         }
         let hint = format!(
@@ -201,6 +253,16 @@ fn hear(rx: mpsc::Receiver<Clip>, model: &str, threads: i32, console: rcon::Rcon
         if line.is_empty() {
             continue;
         }
+        // (the understanding model, when it's there: a loosely worded line as the command it is)
+        let answer = understanding.as_mut().and_then(|u| {
+            let bots = names.iter().map(|n| n.to_lowercase()).collect::<Vec<_>>().join(", ");
+            u.ask(&bots, clean::places(&map), &line)
+        });
+        if understanding.is_some() && answer.is_none() {
+            eprintln!("ls-voice: ls-intent stopped answering; lines go to the bots as heard");
+            understanding = None;
+        }
+        let line = clean::with_intent(&line, answer.as_deref(), &names);
         println!("ls-voice: #{} ({:.1}s of talk, heard in {} ms): {}", clip.userid, audio.len() as f32 / 16000.0, t0.elapsed().as_millis(), line);
         console.cmd(&format!("gm_botchat_ask {} \"{}\" team", clip.userid, line));
     }

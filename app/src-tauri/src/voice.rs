@@ -41,6 +41,12 @@ const MODEL_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/ma
 const MODEL_SHA: &str = "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002";
 const MODEL_FILE: &str = "ggml-base.en.bin";
 pub const MODEL_BYTES: u64 = 147_964_211;
+/// The understanding model (ls-intent): Loner-Strike's fine-tune of Gemma 3 270M, on its mirror
+/// (models/GEMMA-NOTICE.txt beside it: Gemma's terms)
+const INTENT_URL: &str = "https://dl.lonerstrike.com/models/gemma3-270m-ls-intent-1-Q4_K_M.gguf";
+const INTENT_SHA: &str = "e550a1cbe3d84a3448194c4080a54c58c84d25fce0bfad4b4ca38d4f13b0fa50";
+const INTENT_FILE: &str = "gemma3-270m-ls-intent-1-Q4_K_M.gguf";
+pub const INTENT_BYTES: u64 = 368_458_496;
 const OUT_LOG: &str = "loner-strike-voice.log";
 /// ls-voice listens this far above its server's port, on 127.0.0.1 (27016 -> 27616)
 const FEED_OFFSET: u16 = 600;
@@ -61,20 +67,29 @@ fn model() -> PathBuf {
     dir().join(MODEL_FILE)
 }
 
-/// Installed: the model is here, whole.
-pub fn installed() -> bool {
-    std::fs::metadata(model()).map(|m| m.len() == MODEL_BYTES).unwrap_or(false)
+fn intent_model() -> PathBuf {
+    dir().join(INTENT_FILE)
 }
 
-/// ls-voice for this computer: next to the app (bundled like playit's agent), or the repo's
-/// build in dev.
-fn exe(_st: &Shared) -> Option<PathBuf> {
-    let name = if cfg!(windows) { "ls-voice.exe" } else { "ls-voice" };
-    let mut places = sys::bundled_places(name);
+/// Installed: both models are here, whole.
+pub fn installed() -> bool {
+    std::fs::metadata(model()).map(|m| m.len() == MODEL_BYTES).unwrap_or(false)
+        && std::fs::metadata(intent_model()).map(|m| m.len() == INTENT_BYTES).unwrap_or(false)
+}
+
+/// A helper program for this computer: next to the app (bundled like playit's agent), or the
+/// repo's build in dev ("voice": ls-voice, "intent": ls-intent).
+fn program(base: &str, crate_dir: &str) -> Option<PathBuf> {
+    let name = if cfg!(windows) { format!("{base}.exe") } else { base.to_string() };
+    let mut places = sys::bundled_places(&name);
     if cfg!(debug_assertions) {
-        places.push(crate::setup::repo_root().join("app/voice-agent/target/release").join(name));
+        places.push(crate::setup::repo_root().join("app").join(crate_dir).join("target/release").join(&name));
     }
     places.into_iter().find(|p| p.is_file())
+}
+
+fn exe(_st: &Shared) -> Option<PathBuf> {
+    program("ls-voice", "voice-agent")
 }
 
 /// The port it listens on for its server's voice.
@@ -99,6 +114,18 @@ fn args(e: &Entry) -> Vec<String> {
         "--threads".into(),
         "2".into(),
     ]
+    .into_iter()
+    // (the understanding model, when both it and its program are here)
+    .chain(match program("ls-intent", "intent-agent") {
+        Some(p) if intent_model().is_file() => vec![
+            "--intent".to_string(),
+            p.to_string_lossy().into_owned(),
+            "--intent-model".to_string(),
+            intent_model().to_string_lossy().into_owned(),
+        ],
+        _ => vec![],
+    })
+    .collect()
 }
 
 // ---- on a Linux server ---------------------------------------------------------------------
@@ -106,20 +133,23 @@ fn args(e: &Entry) -> Vec<String> {
 /// The program in the app's resources (its sha256 file beside it), and on the machine
 const RES: &str = "linux/ls-voice/ls-voice";
 const BIN: &str = "loner-strike/bin/ls-voice";
+const INTENT_RES: &str = "linux/ls-intent/ls-intent";
+const INTENT_BIN: &str = "loner-strike/bin/ls-intent";
+const REMOTE_INTENT: &str = "loner-strike/voice/gemma3-270m-ls-intent-1-Q4_K_M.gguf";
 /// The model on the machine, shared by its servers
 const REMOTE_MODEL: &str = "loner-strike/voice/ggml-base.en.bin";
 /// Raised whenever the unit's text changes: a unit without it is written again
-const UNIT_REV: &str = "loner-strike voice unit 1";
+const UNIT_REV: &str = "loner-strike voice unit 2";
 
 pub fn unit(id: &str) -> String {
     format!("lonerstrike-{id}-voice")
 }
 
-/// The Linux program as the app ships it, checked against its sha256 (sha256, bytes).
-fn shipped(res: &std::path::Path) -> Result<(String, Vec<u8>), String> {
-    let mut places = vec![res.join(RES)];
+/// A Linux program as the app ships it, checked against its sha256 (sha256, bytes).
+fn shipped(res: &std::path::Path, rel: &str) -> Result<(String, Vec<u8>), String> {
+    let mut places = vec![res.join(rel)];
     if cfg!(debug_assertions) {
-        places.push(crate::setup::repo_root().join("app/src-tauri/resources").join(RES));
+        places.push(crate::setup::repo_root().join("app/src-tauri/resources").join(rel));
     }
     let missing = "This copy of Loner-Strike doesn't include the voice program for Linux servers. Reinstalling the app should fix it; in a build from source, run scripts/build-voice-agent.sh.";
     let bin = places.into_iter().find(|p| p.is_file()).ok_or(missing)?;
@@ -133,14 +163,14 @@ fn shipped(res: &std::path::Path) -> Result<(String, Vec<u8>), String> {
     Ok((have, bytes))
 }
 
-/// The program, sent beside the old one, checked there, renamed over it (only when it changed).
-fn send_program(r: &RemoteInfo, sha: &str, bytes: &[u8]) -> Result<(), String> {
-    let q = shell_quote(BIN);
+/// A program, sent beside the old one, checked there, renamed over it (only when it changed).
+fn send_program(r: &RemoteInfo, bin: &str, sha: &str, bytes: &[u8]) -> Result<(), String> {
+    let q = shell_quote(bin);
     let (_, out) = remote::exec(r, &format!("cd \"$HOME\" && mkdir -p loner-strike/bin && if [ -f {q} ]; then sha256sum {q} | cut -c1-64; else echo none; fi"))?;
     if out.trim() == sha {
         return Ok(());
     }
-    let new = format!("{BIN}.new");
+    let new = format!("{bin}.new");
     remote::write_file(r, &new, bytes)?;
     let n = shell_quote(&new);
     let (code, out) = remote::exec(r, &format!("cd \"$HOME\" && [ \"$(sha256sum {n} | cut -c1-64)\" = {} ] && chmod 755 {n} && mv -f {n} {q}", shell_quote(sha)))?;
@@ -158,7 +188,7 @@ fn remote_sh(e: &Entry, on: bool) -> String {
             "set -u\n[ \"$(id -u)\" = 0 ] && ! command -v sudo >/dev/null && sudo() {{ [ \"$1\" = -n ] && shift; \"$@\"; }}\n\
              sudo -n systemctl disable --now {u} >/dev/null 2>&1; sudo -n rm -f /etc/systemd/system/{u}.service; sudo -n systemctl daemon-reload\n\
              # (the model goes when no server on the machine uses it)\n\
-             ls /etc/systemd/system/lonerstrike-*-voice.service >/dev/null 2>&1 || rm -f \"$HOME/{REMOTE_MODEL}\"\necho \"@@STEP off\"\n"
+             ls /etc/systemd/system/lonerstrike-*-voice.service >/dev/null 2>&1 || rm -f \"$HOME/{REMOTE_MODEL}\" \"$HOME/{REMOTE_INTENT}\"\necho \"@@STEP off\"\n"
         );
     }
     let server = remote::unit(&e.id);
@@ -176,6 +206,13 @@ if [ "$(sha256sum "$M" 2>/dev/null | cut -c1-64)" != "{sha}" ]; then
   [ "$(sha256sum "$M.part" | cut -c1-64)" = "{sha}" ] || {{ rm -f "$M.part"; fail "The speech model didn't download whole."; }}
   mv -f "$M.part" "$M"
 fi
+I="$HOME/{intent}"
+if [ "$(sha256sum "$I" 2>/dev/null | cut -c1-64)" != "{isha}" ]; then
+  echo "@@STEP intent"
+  curl -fsSL --retry 3 -o "$I.part" "{iurl}" || fail "Couldn't download the understanding model."
+  [ "$(sha256sum "$I.part" | cut -c1-64)" = "{isha}" ] || {{ rm -f "$I.part"; fail "The understanding model didn't download whole."; }}
+  mv -f "$I.part" "$I"
+fi
 sudo tee /etc/systemd/system/{u}.service >/dev/null <<EOF
 [Unit]
 # {rev}
@@ -185,7 +222,7 @@ PartOf={server}.service
 
 [Service]
 User=$(whoami)
-ExecStart=$HOME/{bin} --feed {feed} --rcon-port {port} --rcon-password-file $HOME/{pw} --model $M --threads 2
+ExecStart=$HOME/{bin} --feed {feed} --rcon-port {port} --rcon-password-file $HOME/{pw} --model $M --threads 2 --intent $HOME/{ibin} --intent-model $I
 Restart=always
 RestartSec=5
 Nice=10
@@ -212,7 +249,7 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service
 UMask=077
 TasksMax=64
-MemoryMax=768M
+MemoryMax=1536M
 
 [Install]
 WantedBy={server}.service
@@ -232,6 +269,10 @@ echo "@@STEP ready"
         feed = feed_port(e),
         port = e.port,
         pw = pw,
+        intent = REMOTE_INTENT,
+        isha = INTENT_SHA,
+        iurl = INTENT_URL,
+        ibin = INTENT_BIN,
     )
 }
 
@@ -246,8 +287,10 @@ pub fn remove_sh(id: &str) -> String {
 fn remote_apply(e: &Entry, on: bool, res: &std::path::Path) -> Result<(), String> {
     let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
     if on {
-        let (sha, bytes) = shipped(res)?;
-        send_program(r, &sha, &bytes)?;
+        let (sha, bytes) = shipped(res, RES)?;
+        send_program(r, BIN, &sha, &bytes)?;
+        let (sha, bytes) = shipped(res, INTENT_RES)?;
+        send_program(r, INTENT_BIN, &sha, &bytes)?;
     }
     let mut last = String::new();
     let code = remote::exec_stream(r, "bash -s", remote_sh(e, on).as_bytes(), |l| {
@@ -418,7 +461,7 @@ fn status(e: &Entry) -> Value {
         "remote": e.remote.is_some(),
         "installing": INSTALLING.lock().unwrap().is_some(),
         "progress": *PROGRESS.lock().unwrap(),
-        "model_bytes": MODEL_BYTES,
+        "model_bytes": MODEL_BYTES + INTENT_BYTES,
         "enabled": e.voice.enabled,
         "supported": true,
         "running": running,
@@ -433,11 +476,15 @@ static INSTALLING: Mutex<Option<Instant>> = Mutex::new(None);
 /// How far the download is (0..1), for the page
 static PROGRESS: Mutex<f64> = Mutex::new(0.0);
 
-struct Download;
+/// One download's progress, as part of the whole (it starts at `from` and is `share` of it)
+struct Download {
+    from: f64,
+    share: f64,
+}
 impl crate::setup::Progress for Download {
     fn detail(&self, _: &str) {}
     fn fraction(&self, f: f64) {
-        *PROGRESS.lock().unwrap() = f;
+        *PROGRESS.lock().unwrap() = self.from + self.share * f;
     }
     fn note(&self, _: &str) {}
 }
@@ -452,9 +499,16 @@ fn install() -> Result<(), String> {
     }
     let result = (|| {
         std::fs::create_dir_all(dir()).map_err(|err| format!("Couldn't make its folder ({err})."))?;
-        let got = crate::setup::fetch::download(MODEL_URL, Some(MODEL_SHA), "the speech model", &Download)?;
-        std::fs::copy(&got, model()).map_err(|err| format!("Couldn't save the speech model ({err})."))?;
-        let _ = std::fs::remove_file(&got);
+        let whole = (MODEL_BYTES + INTENT_BYTES) as f64;
+        let speech = MODEL_BYTES as f64 / whole;
+        for (url, sha, what, to, from, share) in [
+            (MODEL_URL, MODEL_SHA, "the speech model", model(), 0.0, speech),
+            (INTENT_URL, INTENT_SHA, "the understanding model", intent_model(), speech, 1.0 - speech),
+        ] {
+            let got = crate::setup::fetch::download(url, Some(sha), what, &Download { from, share })?;
+            std::fs::copy(&got, &to).map_err(|err| format!("Couldn't save {what} ({err})."))?;
+            let _ = std::fs::remove_file(&got);
+        }
         Ok(())
     })();
     *INSTALLING.lock().unwrap() = None;
@@ -598,7 +652,8 @@ mod tests {
         let on = remote_sh(&e, true);
         assert!(on.contains("lonerstrike-a-voice.service") && on.contains("PartOf=lonerstrike-a.service"));
         assert!(on.contains("--feed 27617 --rcon-port 27017") && on.contains("IPAddressAllow=localhost") && on.contains("IPAddressDeny=any"));
-        assert!(on.contains(MODEL_SHA) && on.contains("# loner-strike voice unit 1"));
+        assert!(on.contains(MODEL_SHA) && on.contains(INTENT_SHA) && on.contains("# loner-strike voice unit 2"));
+        assert!(on.contains("--intent $HOME/loner-strike/bin/ls-intent --intent-model $I"));
         let off = remote_sh(&e, false);
         assert!(off.contains("disable --now lonerstrike-a-voice") && off.contains("rm -f /etc/systemd/system/lonerstrike-a-voice.service"));
     }
