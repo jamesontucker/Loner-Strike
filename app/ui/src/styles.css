@@ -1352,6 +1352,12 @@ select option, select optgroup { background: var(--panel); color: var(--bone); }
 .where-to-host[open] > summary h2::before { transform: rotate(90deg); }
 .where-to-host > section { margin-top: 12px; }
 details.advanced { margin: 4px 0 12px; }
+.setting > .bot-commands { grid-column: 1 / -1; margin: 0; }
+.bot-commands dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 8px 0 0; }
+.bot-commands dl > div { display: contents; }
+.bot-commands dt { color: var(--bone-dim); font-weight: 600; }
+.bot-commands dd { margin: 0; }
+@media (max-width: 640px) { .bot-commands dl { grid-template-columns: 1fr; gap: 2px; } .bot-commands dd { margin-bottom: 6px; } }
 .share-list { margin: 0 0 12px; }
 .share-list > label { gap: 10px; align-items: center; cursor: pointer; }
 .share-with { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 0 4px; }

@@ -4,6 +4,7 @@ import { getJson, options, postJson, sameValue, targetKey, useActions } from "..
 import { BOT_STYLE_NOTE, BOT_STYLES } from "../games";
 import type { Mode, Online, Setting } from "../types";
 import { ModeVoteList } from "./ModeVote";
+import { BotCommands } from "./BotCommands";
 import { BusyButton, Info, SectionHead, Segmented, useCommand, useConfirm, useToast } from "../ui";
 
 // Short explanations under settings, as in the old panel
@@ -38,7 +39,7 @@ const NOTES: Record<string, string> = {
   gm_hb_radio: "The odd radio call that fits the moment: enemy spotted, enemy down, the team's caller says go",
   gm_hb_hold: "Careful players and lurkers stop now and then and hold an angle for a few seconds (not in deathmatch)",
   gm_botchat: "How often bots talk: kills, deaths, rage, callouts like rush b, encouraging teammates, answering you",
-  gm_botchat_humans: "Bots answer what people type and do what they're asked, like money?, where'd they go, cover me, go b, wait here, drop me an ak, plant at a or give me the bomb. Name a bot to ask that one. Each decides by its personality, and only says yes when it does it",
+  gm_botchat_humans: "Bots answer what people type in chat and do what they're asked, each by its personality",
   gm_botchat_stop: "Now and then a bot typing a long line stands still for the last few seconds of it",
   gm_botchat_deadchat: "In CS the living can't see what the dead say; like old pub servers, this shows dead bots' chat to everyone",
   gm_clans: "Bots with the same clan tag join together and play on the same side",
@@ -239,6 +240,7 @@ export function SettingsList({ data, cat, refresh, q = "", tab, editing }: { dat
               {note && <span className="note">{note}</span>}
             </div>
             <Segmented label={s.name} values={s.values} labels={labels} current={value} disabled={busy(key(s.cvar)) || moodOff} onPick={(v) => pick(s, v)} />
+            {s.cvar === "gm_botchat_humans" && <BotCommands />}
           </div>
         );
       })}
