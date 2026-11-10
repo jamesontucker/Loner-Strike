@@ -143,6 +143,15 @@ npm run tauri dev       # runs the app with the UI built in
 
 Contributions are welcome. It's a side project, so I work on it on and off and replies can take a while. For anything bigger than a fix, open an issue first so we can talk it through.
 
+## Support the people who made this possible
+
+Loner-Strike stands on twenty years of community work. If you enjoy it, give some love to them too:
+
+- **[GameBanana](https://gamebanana.com):** maps, skins and sounds come from its creators. Like and comment on what you play, and follow the people who make it.
+- **[AlliedModders](https://www.alliedmods.net):** home of AMX Mod X and most of the classic mods. Its forums and plugin library still keep these games alive.
+- **[The ReHLDS team](https://github.com/rehlds):** ReGameDLL and ReHLDS are the base of our bot brain and server engine. Star their projects, and report what you find.
+- **The mod and map makers:** Zombie Plague, Warcraft 3, SuperHero, Gun Game and the rest. Every author is named in [CREDITS.md](CREDITS.md).
+
 ## Credits
 
 Made by [nanoshrine](https://x.com/nanoshrine). See [CREDITS.md](CREDITS.md) for every mod and its authors.
