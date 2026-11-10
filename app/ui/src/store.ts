@@ -5,9 +5,9 @@ import { create } from "zustand";
 
 export type Section =
   | "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "browser" | "servers"
-  | "admins" | "community" | "extras" | "welcome" | "more" | "mods" | "skins" | "sounds" | "settings";
+  | "admins" | "community" | "stats" | "extras" | "welcome" | "more" | "mods" | "skins" | "sounds" | "settings";
 
-const SECTIONS: Section[] = ["play", "maps", "bots", "match", "fun", "players", "addons", "friends", "browser", "servers", "admins", "community", "extras", "welcome", "more", "mods", "skins", "sounds", "settings"];
+const SECTIONS: Section[] = ["play", "maps", "bots", "match", "fun", "players", "addons", "friends", "browser", "servers", "admins", "community", "stats", "extras", "welcome", "more", "mods", "skins", "sounds", "settings"];
 
 function saved<T>(key: string, fallback: T, ok: (v: string) => boolean = () => true): T {
   try {
@@ -36,10 +36,14 @@ type Nav = {
   setupIntro: boolean;
   /** "Set up later" on the first run (per device) */
   setupLater: boolean;
-  /** Settings to scroll to when it opens ("updates") */
+  /** What a page opens on: Settings' "updates", the Servers list's "new" or "guide", or
+   *  the open server's tab as "tab:<id>" (openServerTab) */
   focus: string | null;
   go: (s: Section, focus?: string) => void;
   openServer: (id: string | null) => void;
+  /** A tab on the open server's page (e.g. "players"), the server staying open. With no
+   *  server open: your own game's page of the same name. */
+  openServerTab: (tab: Section) => void;
   /** Back (or Forward) to a page from the history: like go/openServer, without a new entry. */
   restore: (s: Section, server: string | null) => void;
   setMoreOpen: (v: boolean) => void;
@@ -73,6 +77,16 @@ export const useNav = create<Nav>((set, get) => ({
     switchTarget(server);
     // a server's page, and going back to the list, are steps Back can undo
     pushPage(get().section, server);
+  },
+  openServerTab: (tab) => {
+    if (!get().server) return get().go(tab);
+    if (get().section !== "servers") {
+      keep("ls.section", "servers");
+      pushPage("servers", get().server);
+    }
+    set({ section: "servers", moreOpen: false, focus: `tab:${tab}` });
+    window.dispatchEvent(new Event("ls-nav"));
+    document.querySelector(".content")?.scrollTo({ top: 0 });
   },
   restore: (section, server) => {
     if (server !== get().server) switchTarget(server);

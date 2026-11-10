@@ -5,6 +5,7 @@ import { setAdminList, sharedRole, useAdminList } from "../queries";
 import type { AdminList, AdminReply, AdminRole, Online, Player } from "../types";
 import { BusyButton, SectionHead, useAskText, useCommand, useConfirm, useToast } from "../ui";
 import { ck, failed, MuteControl, OFFLINE, STEAMID, type Data as CommunityData, type Err } from "./MuteControl";
+import { TabLink } from "./goto";
 
 const WEAPONS: [string, string][] = [
   ["weapon_ak47", "AK-47"], ["weapon_m4a1", "M4A1"], ["weapon_awp", "AWP"], ["weapon_deagle", "Desert Eagle"],
@@ -100,7 +101,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
   const ban = async (p: Player, minutes: number) => {
     const id = p.steamid!;
     const how = BANS.find(([m]) => m === minutes)?.[1] ?? "forever";
-    const more = minutes ? "A timed ban also ends if the game or server restarts." : isSharedId(targetKey()) ? "Only the server's owner can lift it." : "Unban them on the Admins page.";
+    const more = minutes ? "A timed ban also ends if the game or server restarts." : isSharedId(targetKey()) ? "An Admin or the owner can lift it under Moderation, Bans." : "You can lift it under Moderation, Bans.";
     if (!(await ask(`Ban ${p.name} ${how}? They're kicked now. ${more}`, { ok: "Ban", danger: true }))) return;
     once(adminKey(`ban:${id}`), async () => {
       if (!(await sendAdmin("/api/admins/ban", { id, minutes }))) return;
@@ -252,7 +253,15 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
   return (
     <div className="stack">
       <div>
-        <SectionHead title="Players" note={sharedRole() === "moderator" ? "Kick, ban and mute are on each row." : "Select someone for god mode, weapons and teleporting. Kick, ban, roles and the rest are under … on their row."} />
+        <SectionHead
+          title="Players"
+          note={
+            <>
+              {sharedRole() === "moderator" ? "Kick, ban and mute are on each row." : "Select someone for god mode, weapons and teleporting. Kick, ban, roles and the rest are under … on their row."}{" "}
+              Reports, the chat log and bans are under <TabLink tab="moderation">Moderation</TabLink>.
+            </>
+          }
+        />
         <div className="player-actions">
           {sharedRole() !== "moderator" && <div className="row" role="group" aria-labelledby="pa-everyone">
             <span className="pa-label" id="pa-everyone">Everyone</span>

@@ -658,6 +658,20 @@ async fn api_list(State(st): State<Shared>) -> Reply {
     )
 }
 
+/// The bans for good and who has joined, without the admin list: for the Moderation page,
+/// which helpers on a shared server open too (control::rules lets both roles read it).
+async fn api_bans(State(st): State<Shared>, helper: Option<axum::Extension<crate::control::Helper>>) -> Reply {
+    // (helpers ban by SteamID: the IP list stays with the owner)
+    let helper = helper.is_some();
+    answer(
+        with_game(&st, move |g| {
+            let bans: Vec<Ban> = read_bans(g)?.into_iter().filter(|b| !helper || b.kind != "ip").collect();
+            Ok(json!({"bans": bans, "seen": seen_of(g), "today": today()}))
+        })
+        .await,
+    )
+}
+
 #[derive(Deserialize)]
 struct PersonReq {
     id: String,
@@ -904,6 +918,7 @@ async fn api_kick(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/admins", get(api_list))
+        .route("/api/admins/bans", get(api_bans))
         .route("/api/admins/person", post(api_person))
         .route("/api/admins/remove", post(api_remove))
         .route("/api/admins/settings", post(api_settings))

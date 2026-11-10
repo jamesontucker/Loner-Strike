@@ -88,7 +88,8 @@ export const MapCard = memo(function MapCard({ map, onClick, current, onFav, sel
 
 /** `current`: the map being played; `live`: a game is running to change maps on. Not the
  *  whole game state, which is new every 2 seconds. */
-/** getMore: a server's way to the map browser (the game's own is Get more in the sidebar). */
+/** getMore: a server's way to the map browser. Your own game's Get maps opens Get more on maps
+ *  (Back comes back here). */
 export function Maps({ current: currentMap, live, maps, loading, reload: reloadProp, refresh: refreshProp, getMore }: { current?: string; live: boolean; maps: MapInfo[]; loading?: boolean; reload: () => void; refresh: () => void; getMore?: () => void }) {
   const reload = useStable(reloadProp);
   const refresh = useStable(refreshProp);
@@ -96,6 +97,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   const run = useCommand(refresh);
   const toast = useToast();
   const go = useNav((s) => s.go);
+  const getMaps = currentTarget() ? getMore : () => go("more", "maps");
   const game = useAppInfo().data?.game?.id;
   /** No game running: the map goes into Play's Start a game form, and Play opens. */
   const startOn = (name: string) => {
@@ -256,7 +258,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               <Info text={TEACH_INFO} />
             </span>
           )}
-          {ON_THIS_COMPUTER && getMore && <button className="btn" onClick={getMore}>Get maps</button>}
+          {ON_THIS_COMPUTER && getMaps && <button className="btn" onClick={getMaps}>Get maps</button>}
           {ON_THIS_COMPUTER && server && !shared && (
             <button className="btn" onClick={() => setCopyFrom(true)}>Copy maps from your game</button>
           )}
@@ -335,7 +337,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               ? "This server has no maps. Get some with Get maps, or check the server's game files."
               : "Loner-Strike can't find any maps in your game. Get some from Get more, or add a map file."}
           </p>
-          {!currentTarget() ? <div className="row"><button className="btn primary" onClick={() => go("more")}>Get more maps</button></div> : getMore && ON_THIS_COMPUTER && <div className="row"><button className="btn primary" onClick={getMore}>Get maps</button></div>}
+          {getMaps && (ON_THIS_COMPUTER || !currentTarget()) && <div className="row"><button className="btn primary" onClick={getMaps}>Get maps</button></div>}
         </div>
       ) : (
         <div className="maps grid">

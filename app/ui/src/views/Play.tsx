@@ -7,13 +7,42 @@ import { reloadAppInfo, reloadScan, useTarget } from "../queries";
 import { useNav } from "../store";
 import { usePlayDraft, usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
-import { BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useCommand, useConfirm, useToast } from "../ui";
+import { Banner, BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 import { COLLATOR, MapCard } from "./Maps";
 import { MatchMode } from "./MatchMode";
 
 /** A start that hasn't brought the game up after this long can be sent again (CrossOver
  *  can take a minute to open the game). */
 const LAUNCH_CEILING_MS = 90000;
+/** The game open but not hosting this long: Play offers the repair (the plugin may not be loading). */
+const STUCK_MS = 20000;
+
+/** The game modes as cards, each saying how well bots play it: the same before a game (to
+ *  pick the one to start in) and in one (to switch). */
+function ModeCards({ modes, current, busy, onPick }: { modes: { id: string; name: string; desc?: string }[]; current?: string; busy?: string | null; onPick: (id: string) => void }) {
+  return (
+    <div className="modes">
+      {[...modes].sort((a, b) => a.name.localeCompare(b.name)).map((m) => {
+        const rating = BOT_RATING[m.id] ?? "great";
+        return (
+          <button key={m.id} className="mode" aria-pressed={current === m.id} disabled={!!busy} aria-busy={busy === m.id} onClick={() => onPick(m.id)}>
+            <span className="mode-icon">
+              <Icon name={m.id} size={26} />
+            </span>
+            <span className="mode-name">{busy === m.id && <span className="spinner" aria-hidden="true" />}{m.name}</span>
+            {m.desc && <span className="mode-desc">{m.desc}</span>}
+            <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const MODES_NOTE = <>Each mode remembers its own settings. Each card says how well bots <span className="nowrap">play it.<Info text={BOT_RATING_INFO} /></span></>;
+const getMoreModes = (before?: () => void) => (
+  <button className="link" onClick={() => { before?.(); useNav.getState().go("mods"); }}>Get more modes</button>
+);
 
 export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppInfo | null; reason: string; gameOpen: boolean; maps: MapInfo[]; openSetup: () => void }) {
   const toast = useToast();
@@ -33,6 +62,16 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
     return () => clearTimeout(timer);
   }, [launchedAt, overdue]);
   const starting = busy(key("launch")) || (launchedAt !== undefined && !overdue);
+  // open but not hosting for a while: Loner-Strike may not be loading in it
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    setStuck(false);
+    // (only after the app started it: open at its menu or on someone else's server is fine)
+    if (!gameOpen || launchedAt === undefined) return;
+    const timer = setTimeout(() => setStuck(true), STUCK_MS);
+    return () => clearTimeout(timer);
+  }, [gameOpen, launchedAt]);
+  const [pickingMode, setPickingMode] = useState(false);
   const game = gameTitle(app?.game?.id);
   const gameId = app?.game?.id ?? "";
   // the form, kept per game across pages and restarts
@@ -132,20 +171,37 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
             ? `${game} is open on the computer. Start a game from its New Game menu there, or close it and start one here.`
             : gameOpen
             ? `${game} is open, but not hosting a game. Pick everything here and Loner-Strike restarts it into your game, or start one from its New Game menu.`
-            : `${game} isn't running. Pick a mode, a map and the bots, and Loner-Strike starts it and connects by itself.`}
+            : "Pick a mode, a map and the bots. Loner-Strike starts the game and connects by itself."}
         </p>
+        {stuck && ON_THIS_COMPUTER && (
+          <Banner action={<button className="btn" onClick={() => useNav.getState().go("mods", "repair")}>Open Mods</button>}>
+            Still not connecting? Repair it in Mods.
+          </Banner>
+        )}
         <div className="start-box">
           {optsQ.isError && !opts && (
             <LoadError text="Couldn't load the modes and bot settings. Starting now uses the game's last settings." onRetry={() => optsQ.refetch()} />
           )}
           {optsQ.isLoading && <div className="start-skeleton"><Skeleton rows={2} /></div>}
           {modes.length > 0 && mode && (
-            <label className="field">
-              <span>Mode<Info text="The mode the game starts in. Each mode remembers its own settings, and you can switch once you're in." /></span>
-              <select value={mode.id} onChange={(e) => pickMode(e.target.value)}>
-                {modes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </label>
+            <div className="field">
+              <span id="start-mode">Mode<Info text="The mode the game starts in. Each mode remembers its own settings, and you can switch once you're in." /></span>
+              <button type="button" className="map-picker-button" aria-haspopup="dialog" aria-labelledby="start-mode start-mode-name" onClick={() => setPickingMode(true)}>
+                <span id="start-mode-name">{mode.name}</span>
+                <span className="caret" aria-hidden="true">▾</span>
+              </button>
+            </div>
+          )}
+          {pickingMode && (
+            <Sheet label="Pick a mode" onClose={() => setPickingMode(false)} className="sheet wide switch-mode">
+              <div className="sheet-body">
+                <SectionHead title="Pick a mode" note={MODES_NOTE}>{getMoreModes(() => setPickingMode(false))}</SectionHead>
+                <ModeCards modes={modes} current={mode?.id} onPick={(id) => { pickMode(id); setPickingMode(false); }} />
+                <div className="row">
+                  <button className="btn" onClick={() => setPickingMode(false)}>Cancel</button>
+                </div>
+              </div>
+            </Sheet>
           )}
           <div className="field">
             <span id="start-map">Map<Info text="Maps made for this mode come first, then recent ones and favourites. Open the list and type to search." /></span>
@@ -153,6 +209,26 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           </div>
         </div>
         <div className="start-box start-settings">
+          {/* the mode's own rules first, then the bots: Bot style's note sits on the last row, so it
+              never pushes a row of fields under it down */}
+          {mode && (
+            <label className="field">
+              <span>Time limit<Info text="How long a map lasts before the next one. None plays until you change it." /></span>
+              <select value={value("mp_timelimit") ?? ""} onChange={(e) => change("mp_timelimit", e.target.value)}>
+                {value("mp_timelimit") === null && <option value="">As the mode has it</option>}
+                {TIME_LIMITS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                {value("mp_timelimit") !== null && !TIME_LIMITS.some(([v]) => v === value("mp_timelimit")) && <option value={value("mp_timelimit")!}>{value("mp_timelimit")} min</option>}
+              </select>
+            </label>
+          )}
+          {mode && (
+            <div className="field">
+              <span>Friendly fire<Info text="On: bullets and grenades hurt your own team." /></span>
+              <div className="seg" role="group" aria-label="Friendly fire">
+                {[["0", "Off"], ["1", "On"]].map(([v, l]) => <button key={v} aria-pressed={(value("mp_friendlyfire") ?? "0") === v} onClick={() => change("mp_friendlyfire", v)}>{l}</button>)}
+              </div>
+            </div>
+          )}
           <div className="field">
             <span>Bots<Info text="How many bots play. Each one takes a player slot, so leave room for friends." /></span>
             <div className="seg" role="group" aria-label="Bots">
@@ -176,24 +252,6 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
               <span className="field-note">{BOT_STYLE_NOTE[value("gm_botstyle") ?? DEFAULTS.gm_botstyle]}</span>
             </label>
           )}
-          {mode && (
-            <label className="field">
-              <span>Time limit<Info text="How long a map lasts before the next one. None plays until you change it." /></span>
-              <select value={value("mp_timelimit") ?? ""} onChange={(e) => change("mp_timelimit", e.target.value)}>
-                {value("mp_timelimit") === null && <option value="">As the mode has it</option>}
-                {TIME_LIMITS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                {value("mp_timelimit") !== null && !TIME_LIMITS.some(([v]) => v === value("mp_timelimit")) && <option value={value("mp_timelimit")!}>{value("mp_timelimit")} min</option>}
-              </select>
-            </label>
-          )}
-          {mode && (
-            <div className="field">
-              <span>Friendly fire<Info text="On: bullets and grenades hurt your own team." /></span>
-              <div className="seg" role="group" aria-label="Friendly fire">
-                {[["0", "Off"], ["1", "On"]].map(([v, l]) => <button key={v} aria-pressed={(value("mp_friendlyfire") ?? "0") === v} onClick={() => change("mp_friendlyfire", v)}>{l}</button>)}
-              </div>
-            </div>
-          )}
         </div>
         <BusyButton
           className="btn launch"
@@ -202,10 +260,18 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           busyLabel={closeHere ? "Restarting…" : "Starting…"}
           onClick={() => launch(map, botCount)}
         />
-        <div className="last">
-          You can change all of this once you're in, here or with F3 in the game.{" "}
-          <button className="link inline" disabled={busy(key("open"))} aria-busy={busy(key("open"))} onClick={() => launchMenu()}>{busy(key("open")) ? `Opening ${game}…` : `Open ${game} to its main menu`}</button>
-        </div>
+        <p className="last">
+          Fine-tune it in{" "}
+          <button className="link inline" onClick={() => useNav.getState().go("bots")}>Bots</button>,{" "}
+          <button className="link inline" onClick={() => useNav.getState().go("match")}>Rules</button> or{" "}
+          <button className="link inline" onClick={() => useNav.getState().go("addons")}>Add-ons</button>, and change anything later, here or with F3 in the game.
+        </p>
+        <p className="last">
+          {/* the other way in, said like the not-set-up screen's "Or start it without it" */}
+          Or{" "}
+          <button className="link inline" disabled={busy(key("open"))} aria-busy={busy(key("open"))} onClick={() => launchMenu()}>{busy(key("open")) ? `opening ${game}…` : `open ${game} to its main menu`}</button>
+          {busy(key("open")) ? "" : "."}
+        </p>
       </div>
       {(recent.length > 0 || favs.length > 0) && (
         <section>
@@ -264,29 +330,8 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
         </section>
       )}
       <section>
-        <SectionHead title="Game mode" note={<>Switching reloads the map. Each mode remembers its own settings. Each card says how well bots <span className="nowrap">play it.<Info text={BOT_RATING_INFO} /></span></>} />
-        <div className="modes">
-          {[...data.modes].sort((a, b) => a.name.localeCompare(b.name)).map((m) => {
-            const rating = BOT_RATING[m.id] ?? "great";
-            return (
-              <button
-                key={m.id}
-                className="mode"
-                aria-pressed={st.mode === m.id}
-                disabled={!!modeBusy}
-                aria-busy={modeBusy === m.id}
-                onClick={() => setSwitching(m)}
-              >
-                <span className="mode-icon">
-                  <Icon name={m.id} size={26} />
-                </span>
-                <span className="mode-name">{modeBusy === m.id && <span className="spinner" aria-hidden="true" />}{m.name}</span>
-                <span className="mode-desc">{m.desc}</span>
-                <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>
-              </button>
-            );
-          })}
-        </div>
+        <SectionHead title="Game mode" note={<>Switching reloads the map. {MODES_NOTE}</>}>{getMoreModes()}</SectionHead>
+        <ModeCards modes={data.modes} current={st.mode} busy={modeBusy} onPick={(id) => { const m = data.modes.find((x) => x.id === id); if (m) setSwitching(m); }} />
       </section>
       {recent.length > 0 && (
         <section>
@@ -304,7 +349,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
   );
 }
 
-type StartOptions = { modes: { id: string; name: string; settings: Record<string, string | null> }[]; mode: string };
+type StartOptions = { modes: { id: string; name: string; desc?: string; settings: Record<string, string | null> }[]; mode: string };
 // What the screen shows (and starts the game with) when nothing's been chosen yet
 const DEFAULTS: Record<string, string> = { bot_difficulty: "2", gm_botstyle: "1" };
 const TIME_LIMITS: [string, string][] = [["0", "None"], ["10", "10 min"], ["20", "20 min"], ["30", "30 min"], ["45", "45 min"], ["60", "60 min"]];
@@ -380,7 +425,7 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
         <div className="map-picker-pop">
           <input className="search" type="search" autoFocus={!TOUCH} placeholder="Search maps" value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={key} aria-label="Search maps" role="combobox" aria-expanded="true" aria-controls={`${labelledBy}-list`} aria-autocomplete="list" aria-activedescendant={flat[active] ? optId(active) : undefined} />
           <div className="map-picker-list" id={`${labelledBy}-list`} role="listbox" aria-label="Maps">
-            {flat.length === 0 && <p className="muted small-note">No map matches. Find more in <button type="button" className="link inline" onClick={() => useNav.getState().go("more")}>Get more</button>.</p>}
+            {flat.length === 0 && <p className="muted small-note">No map matches. Find more in <button type="button" className="link inline" onClick={() => useNav.getState().go("more", "maps")}>Get more</button>.</p>}
             {shown.map(([label, list]) => (
               <div key={label || "results"}>
                 {label && <div className="map-picker-group">{label}</div>}
@@ -452,7 +497,8 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
   const shown = (query ? pool.filter((m) => m.name.toLowerCase().includes(query) || (m.title ?? "").toLowerCase().includes(query)) : pool).slice(0, 60);
   const goTo = (s: "maps" | "more") => {
     onClose();
-    useNav.getState().go(s);
+    // (Get more opens on maps)
+    useNav.getState().go(s, s === "more" ? "maps" : undefined);
   };
   const emptyNote =
     which === "fav" ? <>No favourite maps yet. Star maps on the <button type="button" className="link inline" onClick={() => goTo("maps")}>Maps page</button>.</>

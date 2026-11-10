@@ -38,6 +38,7 @@ mod setup;
 mod setup_api;
 mod sharing;
 mod smartchat;
+mod saved;
 mod sounds;
 mod steam;
 mod sys;
@@ -238,9 +239,10 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .build()?;
     let edit = SubmenuBuilder::new(app, "Edit").undo().redo().separator().cut().copy().paste().select_all().build()?;
     // ⌘1-⌘9 go to the first nine sections, the same as the keys in the window
+    // (the sidebar's order: Game, then People)
     let sections = [
-        ("play", "Play"), ("maps", "Maps"), ("bots", "Bots"), ("match", "Match"), ("fun", "Fun"), ("players", "Players"),
-        ("addons", "Add-ons"), ("friends", "Play with friends"), ("admins", "Admins"),
+        ("play", "Play"), ("bots", "Bots"), ("match", "Rules"), ("fun", "Fun"), ("addons", "Add-ons"), ("extras", "Rotation & extras"),
+        ("players", "Players"), ("community", "Moderation"), ("stats", "Stats"),
     ];
     let mut view = SubmenuBuilder::new(app, "Go");
     for (n, (id, label)) in sections.iter().enumerate() {
@@ -248,10 +250,18 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
     }
     let view = view
         .separator()
+        .item(&MenuItemBuilder::with_id("section:admins", "Admins").build(app)?)
         .item(&MenuItemBuilder::with_id("section:welcome", "Welcome page").build(app)?)
-        .item(&MenuItemBuilder::with_id("section:more", "Get more").build(app)?)
-        .item(&MenuItemBuilder::with_id("section:mods", "Mods").build(app)?)
+        .separator()
+        .item(&MenuItemBuilder::with_id("section:friends", "Play with friends").build(app)?)
         .item(&MenuItemBuilder::with_id("section:browser", "Find servers").build(app)?)
+        .separator()
+        .item(&MenuItemBuilder::with_id("section:maps", "Maps").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:mods", "Mods").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:skins", "Skins & models").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:sounds", "Sounds").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:more", "Get more").build(app)?)
+        .separator()
         .item(&MenuItemBuilder::with_id("section:servers", "Servers").build(app)?)
         .build()?;
     let window = SubmenuBuilder::new(app, "Window").minimize().maximize().separator().fullscreen().separator().close_window().build()?;

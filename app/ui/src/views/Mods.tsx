@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { currentTarget, getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useActivity, useStable } from "../api";
 import { Icon } from "../icons";
 import { reloadAppInfo, reloadScan, useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
+import { usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
@@ -44,7 +45,7 @@ const store = (k: string, v: string) => {
 };
 
 /** Install or remove game modes and add-ons one at a time, on the game or server being managed. */
-export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }: { app: AppInfo | null; scan: Scan | null; running: boolean; onChanged: () => void; openSetup: () => void }) {
+export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup, top }: { app: AppInfo | null; scan: Scan | null; running: boolean; onChanged: () => void; openSetup: () => void; top?: ReactNode }) {
   const onChanged = useStable(onChangedProp);
   const ask = useConfirm();
   const toast = useToast();
@@ -62,6 +63,21 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
   const setSort = (v: string) => (setSortRaw(v), store("ls.modsSort", v));
   const setFilter = (v: string) => (setFilterRaw(v), store("ls.modsFilter", v));
   const game = app?.game;
+  // opened from Settings' help or Play's hint: the Repair panel comes into view, lit up for a moment
+  const focus = useNav((s) => s.focus);
+  const repairRef = useRef<HTMLDivElement>(null);
+  const [lit, setLit] = useState(false);
+  useEffect(() => {
+    if (focus !== "repair" || !scan) return;
+    useNav.getState().clearFocus();
+    repairRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    setLit(true);
+  }, [focus, scan]);
+  useEffect(() => {
+    if (!lit) return;
+    const t = setTimeout(() => setLit(false), 2000);
+    return () => clearTimeout(t);
+  }, [lit]);
 
   if (!scan) return <Skeleton />;
   if (!game)
@@ -119,6 +135,13 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
   const now = job?.steps.find((s) => s.state === "running");
   // where an installed add-on is switched on and off (your own game only: a server has no Add-ons page)
   const own = !game.dedicated && !currentTarget();
+  /** An installed mode goes into Play's Start a game form (its bot choices stay), and Play opens. */
+  const playIt = (id: string) => {
+    const { drafts, set } = usePlayDrafts.getState();
+    const changed = Object.fromEntries(Object.entries(drafts[game.id]?.changed ?? {}).filter(([k]) => k === "bot_difficulty" || k === "gm_botstyle"));
+    set(game.id, { mode: id.replace(/^mode-/, ""), changed });
+    go("play");
+  };
   const switchAt = (c: { id: string; kind: string; on: boolean }) => {
     if (!own || !c.on || c.kind !== "addon") return null;
     const sounds = ON_SOUNDS.includes(c.id.replace(/^addon-/, ""));
@@ -141,6 +164,8 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
       </SectionHead>
       {/* installing copies files on the computer: a phone looks, it doesn't change */}
       {!ON_THIS_COMPUTER && <p className="muted">Install and remove mods on the computer running Loner-Strike.</p>}
+      {/* (a server's Copy mods: under the heading, not above it) */}
+      {top}
 
       {busy && (
         <SteamProgress
@@ -184,22 +209,28 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
                 <Icon name={c.id.replace(/^(mode|addon)-/, "")} size={22} />
                 <span className="mod-name">{c.name}<small>{c.kind === "addon" ? "Add-on" : "Game mode"}{!c.builtin && on ? " · installed" : ""}</small></span>
                 {c.description && <span className="mod-desc">{c.description}</span>}
+                {/* how bots play it, under the description as on Play's mode cards */}
+                {rating && <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>}
+                {/* a card's notes on a line of their own (.mod .row > .small-note), then its buttons:
+                    the one to use it first, keeping it up next, removing last */}
                 <div className="row">
                   {c.builtin ? (
                     <span className="muted small-note">Comes with Loner-Strike</span>
                   ) : !ON_THIS_COMPUTER ? (
                     on && <span className="muted small-note">Installed</span>
-                  ) : on ? (
+                  ) : on && unbuilt.includes(c.id) ? (
+                    <span className="err-text small-note">Didn't build, so it won't load</span>
+                  ) : null}
+                  {switchAt(c)}
+                  {own && !running && on && c.kind === "mode" && <button className="btn" onClick={() => playIt(c.id)}>Play it</button>}
+                  {c.builtin || !ON_THIS_COMPUTER ? null : on ? (
                     <>
-                      {unbuilt.includes(c.id) && <span className="err-text small-note">Didn't build, so it won't load</span>}
                       <BusyButton className={`btn${unbuilt.includes(c.id) ? " primary" : ""}`} busy={busy === `${c.id}:repair`} disabled={!!busy} label={unbuilt.includes(c.id) ? "Try again" : "Reinstall"} busyLabel={unbuilt.includes(c.id) ? "Trying again…" : "Reinstalling…"} onClick={() => change(c.id, false, c.name, true)} />
                       <BusyButton className="btn danger" busy={busy === `${c.id}:remove`} disabled={!!busy} label="Remove" busyLabel="Removing…" onClick={() => change(c.id, true, c.name)} />
                     </>
                   ) : (
                     <BusyButton className="btn primary" busy={busy === `${c.id}:install`} disabled={!!busy} label="Install" busyLabel="Installing…" onClick={() => change(c.id, false, c.name)} />
                   )}
-                  {switchAt(c)}
-                  {rating && <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>}
                 </div>
               </div>
             );
@@ -214,7 +245,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
       {/* the basics put in again where they are (a Steam update, a file check or an antivirus can undo
           them): settings, presets and add-ons stay */}
       {setUp && ON_THIS_COMPUTER && (
-        <div className="panel row between">
+        <div ref={repairRef} className={`panel row between lightable${lit ? " settings-lit" : ""}`}>
           <div>
             <b>Repair Loner-Strike</b>
             <p className="muted">No bots, or the app can't connect? This puts the bots, the Game Mode Menu and what they run on back in {where}. Your settings and mods stay.</p>
@@ -226,11 +257,14 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
       {/* your own game: one place to remove it all, in Settings; a server keeps its own button here */}
       {setUp && ON_THIS_COMPUTER && (
         <div className="panel row between">
-          <p className="muted">Take Loner-Strike off {where} completely: every mod, the Game Mode Menu and the bot setup.</p>
+          <div>
+            <b>Remove Loner-Strike</b>
+            <p className="muted">Take Loner-Strike off {where} completely: every mod, the Game Mode Menu and the bot setup.</p>
+          </div>
           {game.dedicated ? (
             <BusyButton className="btn danger" busy={busy === "core:remove"} disabled={!!busy} label="Remove Loner-Strike" busyLabel="Removing…" onClick={() => change(null, true)} />
           ) : (
-            <button className="link inline" onClick={() => go("settings", "setup")}>Remove it in Settings</button>
+            <button className="btn" onClick={() => go("settings", "setup")}>Remove it in Settings</button>
           )}
         </div>
       )}

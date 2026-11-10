@@ -165,7 +165,7 @@ export function HostingGuide() {
         <h4>Keeping it safe</h4>
         <p className="muted measure">
           Loner-Strike does the machine's side for you: the game runs in a sandbox, RCON (the console) only answers from the machine itself, security updates install
-          themselves, and fail2ban slows down the bots that guess SSH logins all day. The Security panel on the server's Overview checks all of it and fixes what it can.
+          themselves, and fail2ban slows down the bots that guess SSH logins all day. The Security and health panel on the server's Health tab checks all of it and fixes what it can.
           A few things only you can do:
         </p>
         <ul className="muted measure">

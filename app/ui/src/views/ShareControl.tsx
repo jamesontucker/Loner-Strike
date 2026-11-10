@@ -3,6 +3,7 @@ import { copyText, getJson, getJsonAt, postJson, useActions } from "../api";
 import { queryClient, reloadServers } from "../queries";
 import type { ServerInfo, ServerList } from "../types";
 import { BusyButton, Info, Sheet, Switch, useConfirm, useToast } from "../ui";
+import { openTab } from "./goto";
 
 /**
  * Shared control (control/ in the app): friends with Loner-Strike help run a server from
@@ -27,6 +28,22 @@ export const ROLE_NAME: Record<Role, string> = { admin: "Admin", moderator: "Mod
 const ROLE_NOTE: Record<Role, string> = {
   admin: "Settings, modes, rules and bots, maps and sounds, the rotation, restarts, kicks and bans, and inviting Moderators",
   moderator: "Kick, ban (up to 7 days), mute and gag players, change or restart the map, and see the console and chat",
+};
+/** What each role does, as a short list (the role banner on a shared server's page). */
+export const ROLE_CAN: Record<Role, string[]> = {
+  admin: [
+    "Change the settings, modes, rules and bots",
+    "Add maps and sounds, and set the map rotation",
+    "Start, stop and restart the server",
+    "Kick, ban and mute players, and lift bans",
+    "Invite Moderators",
+  ],
+  moderator: [
+    "Kick players, and ban or mute them for up to 7 days",
+    "Read reports, the chat log and the bans",
+    "Change or restart the map",
+    "See the console and send a Moderator's commands",
+  ],
 };
 const OWNER_ONLY = "Passwords and webhooks, the machine and its files, start options, your own plugins, backups, and deleting the server always stay with you.";
 
@@ -158,7 +175,14 @@ export function ControlRoute({ domain, port }: { domain: string; port: number })
  * and working, the Cloudflare steps fold away; not reachable, they're open with why. */
 function ServerReach({ c }: { c: Control }) {
   if (!c.url) {
-    return <p className="muted small-note">Helpers connect to the server itself at its status page address, so this computer can be off. Set up the status page first, in this server's Website status tab.</p>;
+    return (
+      <div className="stack-tight">
+        <p className="muted small-note">Helpers connect to the server itself at its status page address, so this computer can be off. Set up the status page first, in this server's Website status tab.</p>
+        <div className="row">
+          <button className="btn" onClick={() => openTab("webstatus")}>Set up Website status</button>
+        </div>
+      </div>
+    );
   }
   return (
     <div className="share-reach">
@@ -166,7 +190,14 @@ function ServerReach({ c }: { c: Control }) {
         Helpers connect to the server itself at <code className="mono">{c.url}</code>, so this computer can be off.{" "}
         {c.reachable ? <span className="live on inline">Reachable</span> : <span className="live inline">Not reachable yet</span>}
       </p>
-      {!c.reachable && <p className="err-text small-note">Helpers' apps can't reach it there yet{c.reach_error ? ` (${c.reach_error})` : ""}. Check the Website status tab, then open this tab again.</p>}
+      {!c.reachable && (
+        <>
+          <p className="err-text small-note">Helpers' apps can't reach it there yet{c.reach_error ? ` (${c.reach_error})` : ""}. Check the Website status tab, then open this tab again.</p>
+          <div className="row">
+            <button className="btn small" onClick={() => openTab("webstatus")}>Open Website status</button>
+          </div>
+        </>
+      )}
       {c.tunnel && (c.reachable ? (
         <details className="advanced">
           <summary>The Cloudflare route it uses</summary>
@@ -255,7 +286,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
       const x = await post(`/api/control/member/${m.id}/remove`, { server: server.id });
       if (x.error) return toast(x.error, true);
       removed = true;
-      toast(x.left_bans ? `${m.name} no longer has access. ${server.name} stopped sharing bans with your other servers, so changes made while helpers ran it stay there; turn sharing back on in its Admins tab.` : `${m.name} no longer has access`);
+      toast(x.left_bans ? `${m.name} no longer has access. ${server.name} stopped sharing bans with your other servers, so changes made while helpers ran it stay there; turn sharing back on under Moderation, Bans.` : `${m.name} no longer has access`);
       load();
     }, `Taking away ${m.name}'s access…`);
     // they could still join with the password their game kept: a new one shuts them out

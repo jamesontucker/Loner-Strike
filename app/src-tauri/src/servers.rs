@@ -900,15 +900,28 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         hltv: Default::default(), voice: Default::default(),
         restart: None,
         remote: None,
-        setup_with: None,
+        // kept so Try again can carry on with the same details
+        setup_with: Some(SetupWith { template: req.template.clone(), components: req.components.clone(), password: join_pw.clone() }),
         listen_ip: String::new(),
         extra_args: String::new(),
         bots_when_empty: None,
         ls_listed: false,
         public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
     };
-    let base = root.join(".base");
-    let g = req.game.clone();
+    make_server_dir(&entry)?;
+    edit(|l| l.push(entry.clone()))?;
+    let entry_id = entry.id.clone();
+    let job = local_setup(entry, root.join(".base"), source, components, join_pw, res).inspect_err(|_| {
+        // setup was busy with something else: don't leave a server that never gets set up
+        let _ = edit(|l| l.retain(|e| e.id != entry_id));
+    })?;
+    Ok((id, job))
+}
+
+/// Sets up a server on this computer (a new one, or one whose setup stopped part way: each
+/// step is safe to run again). base: Valve's download, shared by the servers. The job's id.
+fn local_setup(entry: Entry, base: PathBuf, source: Option<PathBuf>, components: Vec<String>, join_pw: String, res: PathBuf) -> Result<String, String> {
+    let g = entry.game.clone();
     let steps = vec![
         setup::server_step(&g, "srv-steamcmd", "Getting SteamCMD (Valve's server downloader)", 1.0),
         setup::server_step(&g, "srv-download", "Downloading the server from Valve", 8.0),
@@ -918,10 +931,8 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         setup::server_step(&g, "srv-maps", "Copying maps", 2.0),
         setup::server_step(&g, "srv-done", "Finishing up", 0.1),
     ];
-    make_server_dir(&entry)?;
-    edit(|l| l.push(entry.clone()))?;
     let entry_id = entry.id.clone();
-    let job = setup::start_job_for("server", Some(&entry_id), steps, move |job| {
+    setup::start_job_for("server", Some(&entry_id), steps, move |job| {
         job.run(&format!("{g}/srv-steamcmd"), || ensure_steamcmd(job))?;
         job.run(&format!("{g}/srv-download"), || download_hlds(job, &base, &g))?;
         job.run(&format!("{g}/srv-copy"), || {
@@ -960,13 +971,16 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
             Some(src) => copy_tree(src, &entry.dir.join(&g), false, &content_filter).map(|_| ()),
             None => Ok(()),
         })?;
-        job.run(&format!("{g}/srv-done"), || edit(|l| l.iter_mut().filter(|e| e.id == entry.id).for_each(|e| e.ready = true)))
+        job.run(&format!("{g}/srv-done"), || edit(|l| {
+            l.iter_mut().filter(|e| e.id == entry.id).for_each(|e| {
+                e.ready = true;
+                // (the join password setup used isn't kept once it's done: the server has it)
+                if let Some(w) = e.setup_with.as_mut() {
+                    w.password.clear();
+                }
+            })
+        }))
     })
-    .inspect_err(|_| {
-        // setup was busy with something else: don't leave a server that never gets set up
-        let _ = edit(|l| l.retain(|e| e.id != entry_id));
-    })?;
-    Ok((id, job))
 }
 
 // ---- a server on another machine (a Linux VPS) ------------------------------------------
@@ -1694,7 +1708,15 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
             }
             Ok(())
         })?;
-        job.run(&format!("{g}/srv-done"), || edit(|l| l.iter_mut().filter(|e| e.id == entry.id).for_each(|e| e.ready = true)))?;
+        job.run(&format!("{g}/srv-done"), || edit(|l| {
+            l.iter_mut().filter(|e| e.id == entry.id).for_each(|e| {
+                e.ready = true;
+                // (the join password setup used isn't kept once it's done: the server has it)
+                if let Some(w) = e.setup_with.as_mut() {
+                    w.password.clear();
+                }
+            })
+        }))?;
         // a rebuilt machine gets its website status page back (if it can't, its status says why)
         crate::webstatus::refresh(&entry.id);
         Ok(())
@@ -1892,7 +1914,9 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         dir: dir.clone(),
         kind,
         bottle,
-        visibility: if cfg_value(&cfg, "sv_lan").as_deref() == Some("1") { "lan".into() } else { "listed".into() },
+        // unlisted like a new server (listing it, and bots on empty with that, is the host's
+        // choice), or this network only when its server.cfg says so
+        visibility: if cfg_value(&cfg, "sv_lan").as_deref() == Some("1") { "lan".into() } else { default_visibility() },
         map: default_map(),
         maxplayers: default_slots(),
         ready: true,
@@ -2596,7 +2620,7 @@ pub(crate) fn view(e: &Entry) -> Value {
             ("setting-up", None)
         } else {
             let why = ours.then_some(job.error).flatten();
-            let again = if e.remote.is_some() { "Setting it up didn't finish. Try again carries on from where it stopped." } else { "Setting it up didn't finish. Delete it and make it again." };
+            let again = "Setting it up didn't finish. Try again carries on from where it stopped.";
             ("failed", Some(why.map(|w| format!("Setting it up stopped: {w}")).unwrap_or_else(|| again.into())))
         }
     };
@@ -3183,11 +3207,24 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
                 if crate::backup::restore_unfinished(&id) {
                     return Err("This server was made by a restore that didn't finish. Delete it in the list, then restore the backup again.".into());
                 }
-                if e.ready || e.remote.is_none() {
-                    return Err("Only a server on another machine whose setup didn't finish can be tried again.".into());
+                if e.ready {
+                    return Err("Only a server whose setup didn't finish can be tried again.".into());
                 }
                 let client = client(&st2).ok_or("Set up the game on this computer first.")?;
                 let res = crate::setup_api::resources_for(&st2)?;
+                // on this computer: the same steps again, in the folder it has
+                if e.remote.is_none() {
+                    let with = e.setup_with.clone().unwrap_or(SetupWith { template: "local".into(), components: vec![], password: join_password(&e) });
+                    let catalog = setup::components::load_catalog(&res)?;
+                    let (source, components) = match template_source(&with.template, &e.game, &client, &catalog) {
+                        Some((dir, comps)) => (Some(dir), comps),
+                        None => (None, with.components.clone()),
+                    };
+                    let base = root_for(&client)?.join(".base");
+                    make_server_dir(&e)?;
+                    let job = local_setup(e, base, source, components, with.password, res)?;
+                    return Ok(json!({"ok": true, "job": job}));
+                }
                 let with = e.setup_with.clone().unwrap_or(SetupWith { template: "local".into(), components: vec![], password: String::new() });
                 let catalog = setup::components::load_catalog(&res)?;
                 let (source, components) = match template_source(&with.template, &e.game, &client, &catalog) {

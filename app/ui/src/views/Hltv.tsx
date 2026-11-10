@@ -3,6 +3,7 @@ import { copyText, getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useAct
 import { restartPending, type ServerInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { useDirty } from "../store";
+import { TabLink } from "./goto";
 
 type Settings = { enabled: boolean; port: number; delay: number; max_spectators: number; name: string; password: string; record: boolean };
 type Demo = { name: string; size: number; modified: number };
@@ -209,7 +210,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
 
       {!st.available && (
         <div className="banner">
-          <div>{server.imported ? "This server's folder doesn't have HLTV. Add HLTV to the folder (it comes with Valve's server files), then restart the server." : !ON_THIS_COMPUTER ? `This server's folder doesn't have HLTV. ${ON_COMPUTER_ONLY}` : "This server's folder doesn't have HLTV. To get it, open Overview and click Update under Maintenance."}</div>
+          <div>{server.imported ? "This server's folder doesn't have HLTV. Add HLTV to the folder (it comes with Valve's server files), then restart the server." : !ON_THIS_COMPUTER ? `This server's folder doesn't have HLTV. ${ON_COMPUTER_ONLY}` : <>This server's folder doesn't have HLTV. To get it, open <TabLink tab="health">Health</TabLink> and click Update next to Update Valve's server files.</>}</div>
         </div>
       )}
 

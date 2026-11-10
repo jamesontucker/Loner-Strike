@@ -4,6 +4,7 @@ import { copyText, getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useAct
 import type { ServerInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { useDirty } from "../store";
+import { TabLink } from "./goto";
 
 type Mode = "caddy" | "tunnel";
 type Settings = { enabled: boolean; domain: string; origins: string[]; counter: boolean; mode: Mode; fastdl: boolean };
@@ -292,7 +293,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
             <span>Discord<Info text="Uses Discord webhooks: in a channel's settings, open Integrations, then Webhooks, make one and copy its URL. Kept on this computer and on the server, readable only by their administrators. Not shown again after it's saved." /></span>
             <small>
               Keeps a message in a channel up to date with who's playing, and posts when people come on to play, at most once an hour.
-              {!st.discord.address && " Set a Public address for the server first (Overview, Settings), so the messages can say how to join."}
+              {!st.discord.address && <> Set a Public address for the server first, under <TabLink tab="join">Who can join</TabLink>, so the messages can say how to join.</>}
             </small>
           </div>
           <HookField label="Live status message" what="the channel for the live message" reveal={() => secret("live")} saved={st.discord.live} value={form.live} drop={form.drop.live} disabled={working} onChange={(v) => set({ live: v })} onDrop={(d) => set({ drop: { ...form.drop, live: d } })} />

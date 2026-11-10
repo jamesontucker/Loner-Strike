@@ -479,7 +479,7 @@ fn flavoured_style_file(game_dir: &std::path::Path, file: &str, mode: &str, map:
 }
 
 /// `cvar "value"` lines from a config file.
-fn cfg_values(path: &std::path::Path) -> Vec<(String, String)> {
+pub(crate) fn cfg_values(path: &std::path::Path) -> Vec<(String, String)> {
     crate::sys::read_latin1(path)
         .unwrap_or_default()
         .lines()
@@ -492,7 +492,7 @@ fn cfg_values(path: &std::path::Path) -> Vec<(String, String)> {
 }
 
 /// Sets `cvar "value"` lines in a config file, keeping the rest.
-fn set_cfg_values(path: &std::path::Path, values: &[(String, String)]) -> std::io::Result<()> {
+pub(crate) fn set_cfg_values(path: &std::path::Path, values: &[(String, String)]) -> std::io::Result<()> {
     let old = crate::sys::read_latin1(path).unwrap_or_default();
     let mut lines: Vec<String> = old
         .lines()
@@ -505,7 +505,7 @@ fn set_cfg_values(path: &std::path::Path, values: &[(String, String)]) -> std::i
 
 /// What a setting is when the mode starts: the same order the plugin applies them
 /// (base.cfg, the mode's cfg, saved global settings, saved mode settings).
-fn effective(g: &crate::game::Game, mode: &str, cvar: &str) -> Option<String> {
+pub(crate) fn effective(g: &crate::game::Game, mode: &str, cvar: &str) -> Option<String> {
     let cfg = g.dir.join("addons/amxmodx/configs/gamemodes");
     [cfg.join("base.cfg"), cfg.join(format!("{mode}.cfg")), g.data.join("global.cfg"), g.data.join(format!("mode_{mode}.cfg"))]
         .iter()
@@ -515,7 +515,7 @@ fn effective(g: &crate::game::Game, mode: &str, cvar: &str) -> Option<String> {
         .map(|(_, v)| v)
 }
 
-fn current_mode(g: &crate::game::Game) -> String {
+pub(crate) fn current_mode(g: &crate::game::Game) -> String {
     std::fs::read_to_string(g.data.join("current.txt")).ok().map(|t| t.trim().to_string()).filter(|m| !m.is_empty()).unwrap_or_else(|| "classic".into())
 }
 
@@ -526,7 +526,7 @@ const REMOTE_MODE_SETTINGS: &str = "Changing another mode's settings isn't possi
 const START_CFG: &str = "loner_start.cfg";
 
 /// A mode id that modes.ini lists.
-fn known_mode(g: &crate::game::Game, mode: &str) -> bool {
+pub(crate) fn known_mode(g: &crate::game::Game, mode: &str) -> bool {
     let ini = g.dir.join("addons/amxmodx/configs/gamemodes/modes.ini");
     crate::extras::parse_modes(&crate::sys::read_latin1(&ini).unwrap_or_default()).iter().any(|(id, _)| id == mode)
 }
@@ -607,11 +607,14 @@ async fn api_mode_setting_set(State(st): State<Shared>, headers: HeaderMap, Json
 async fn api_start_options(State(st): State<Shared>) -> Json<Value> {
     let Some(g) = st.game() else { return Json(json!({"modes": []})) };
     let v = tokio::task::spawn_blocking(move || {
+        // (the description and flags too, for the same mode cards as in a game)
+        let about = crate::saved::modes(&g);
         let modes: Vec<Value> = crate::extras::parse_modes(&crate::sys::read_latin1(&g.dir.join("addons/amxmodx/configs/gamemodes/modes.ini")).unwrap_or_default())
             .into_iter()
             .map(|(id, name)| {
                 let settings: serde_json::Map<String, Value> = START_SETTINGS.iter().map(|(c, _, _)| (c.to_string(), json!(effective(&g, &id, c)))).collect();
-                json!({"id": id, "name": name, "settings": settings})
+                let m = about.iter().find(|m| m["id"] == id.as_str());
+                json!({"id": id, "name": name, "settings": settings, "desc": m.map_or(json!(""), |m| m["desc"].clone()), "flags": m.map_or(json!(""), |m| m["flags"].clone())})
             })
             .collect();
         json!({"modes": modes, "mode": current_mode(&g)})
@@ -660,7 +663,7 @@ fn start_in(g: &crate::game::Game, mode: &str, map: Option<&str>, settings: &std
 }
 
 /// Saves the bot count where the Game Mode Menu keeps it (global.cfg: bot_quota "9").
-fn save_bots(dir: &std::path::Path, bots: u32) -> std::io::Result<()> {
+pub(crate) fn save_bots(dir: &std::path::Path, bots: u32) -> std::io::Result<()> {
     let data = dir.join("addons/amxmodx/data/gamemodes");
     std::fs::create_dir_all(&data)?;
     let path = data.join("global.cfg");

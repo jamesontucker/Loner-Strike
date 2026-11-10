@@ -8,6 +8,8 @@ import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm,
 import { useDirty } from "../store";
 import { ck, failed, OFFLINE, STEAMID, MuteControl, type Data, type Err, type FilterMode, type Settings, type Gag } from "./MuteControl";
 import { ShareList } from "./ShareList";
+import { BanList, PlayerHistory } from "./Admins";
+import { takeSub, TabLink } from "./goto";
 
 type StatRow = {
   pos: number;
@@ -35,8 +37,17 @@ type Report = { t: number; from_id: string; from: string; about_id: string; abou
 /** Common English swearing, for a quick start. The host can change it. */
 const STARTER = ["fuck", "fucking", "shit", "bitch", "cunt", "asshole", "bastard", "motherfucker", "retard", "faggot", "nigger", "whore", "slut"];
 
-type Tab = "stats" | "matches" | "chat" | "reports" | "mod";
-const TABS: [Tab, string][] = [["stats", "Stats"], ["matches", "5v5 matches"], ["chat", "Chat log"], ["reports", "Reports"], ["mod", "Mutes & filter"]];
+type Tab = "stats" | "matches" | "chat" | "reports" | "mod" | "bans" | "history";
+const MOD_TABS: [Tab, string][] = [["reports", "Reports"], ["chat", "Chat log"], ["mod", "Mutes & filter"], ["bans", "Bans"], ["history", "Player history"]];
+const STAT_TABS: [Tab, string][] = [["stats", "Stats & ranks"], ["matches", "5v5 matches"]];
+const TAB_IDS = [...MOD_TABS, ...STAT_TABS].map(([id]) => id);
+/** Which part of the page: a server's Moderation or Stats tab, or both (your own game). */
+export type CommunityPart = "moderation" | "stats" | "all";
+const HEAD: Record<CommunityPart, [string, string]> = {
+  moderation: ["Moderation", "Player reports, the chat log, mutes and the swear filter, bans, and everyone who has joined."],
+  stats: ["Stats", "Player stats and ranks, and 5v5 matches."],
+  all: ["Moderation", "Player reports, the chat log, mutes and the swear filter, bans, everyone who has joined, stats and ranks, and 5v5 matches."],
+};
 
 function clockTime(t: number) {
   const d = new Date(t * 1000);
@@ -85,8 +96,9 @@ const SAVING: Record<keyof Settings, string> = {
 
 const teamClass = (t: string) => (t === "T" ? "t" : t === "CT" ? "ct" : "");
 
-/** Stats and ranks, the chat log, player reports, and mutes with the swear filter, for the game or server being managed. */
-export function Community({ target }: { target: string }) {
+/** Moderation (reports, the chat log, mutes and the swear filter, bans, player history) and
+ *  stats (ranks, 5v5 matches), for the game or server being managed. */
+export function Community({ target, part = "all" }: { target: string; part?: CommunityPart }) {
   const ask = useConfirm();
   const [d, setD] = useState<Data | null>(null);
   // unsaved changes on the open tab (the swear filter's word list)
@@ -100,13 +112,17 @@ export function Community({ target }: { target: string }) {
   useDirty("community", anyDirty);
   const [error, setError] = useState("");
   const [chatQuery, setChatQuery] = useState("");
+  // 5v5 matches isn't a Moderator's
+  const tabs = (part === "moderation" ? MOD_TABS : part === "stats" ? STAT_TABS : [...MOD_TABS, ...STAT_TABS]).filter(([id]) => id !== "matches" || sharedRole() !== "moderator");
   const [tab, setTabRaw] = useState<Tab>(() => {
+    // opened from a link elsewhere (Bans, say)
+    const asked = takeSub(TAB_IDS);
+    if (asked && tabs.some(([id]) => id === asked)) return asked;
     try {
-      const t = localStorage.getItem("ls.communityTab") as Tab;
-      // 5v5 matches isn't a Moderator's
-      return TABS.some(([id]) => id === t) && !(t === "matches" && sharedRole() === "moderator") ? t : "stats";
+      const t = localStorage.getItem(`ls.communityTab.${part}`) as Tab;
+      return tabs.some(([id]) => id === t) ? t : tabs[0][0];
     } catch {
-      return "stats";
+      return tabs[0][0];
     }
   });
   const setTab = async (t: Tab) => {
@@ -115,7 +131,7 @@ export function Community({ target }: { target: string }) {
     dirty.current = false;
     setTabRaw(t);
     try {
-      localStorage.setItem("ls.communityTab", t);
+      localStorage.setItem(`ls.communityTab.${part}`, t);
     } catch {
       /* private window */
     }
@@ -137,7 +153,7 @@ export function Community({ target }: { target: string }) {
   }, [target, reload]);
 
   // a failed reload keeps the page; the error only replaces it before anything loaded
-  const head = <SectionHead title="Stats & moderation" note="Player stats and ranks, 5v5 matches, the chat log, player reports, mutes and the swear filter." />;
+  const head = <SectionHead title={HEAD[part][0]} note={HEAD[part][1]} />;
   if (!d)
     return (
       <div className="stack narrow community">
@@ -158,20 +174,23 @@ export function Community({ target }: { target: string }) {
       {!d.plugin && (
         <NeedsSetup text="This game is missing the Loner-Strike plugin for stats and moderation." after="Until then your settings are saved here, but the game doesn't use them." />
       )}
-      <div className="chips admin-tabs" role="tablist" aria-label="Stats & moderation sections">
-        {TABS.filter(([id]) => id !== "matches" || sharedRole() !== "moderator").map(([id, label]) => (
+      {/* (one section, as a Moderator's Stats: no tab bar of one) */}
+      {tabs.length > 1 && <div className="chips admin-tabs" role="tablist" aria-label={`${HEAD[part][0]} sections`}>
+        {tabs.map(([id, label]) => (
           <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>
             {label}
             {id === "reports" && d.open_reports > 0 && <i className="tab-n">{d.open_reports}</i>}
             {id === "mod" && gagCount > 0 && <i className="tab-n">{gagCount}</i>}
           </button>
         ))}
-      </div>
+      </div>}
       {tab === "stats" && <StatsTab key={`stats-${target}`} d={d} setD={setD} />}
       {tab === "matches" && <MatchMode key={`match-${target}`} target={target} />}
       {tab === "chat" && <ChatTab key={`chat-${target}`} d={d} setD={setD} initial={chatQuery} />}
       {tab === "reports" && <ReportsTab key={`rep-${target}`} d={d} setD={setD} reload={reload} showChat={showChat} />}
       {tab === "mod" && <ModTab key={`mod-${target}`} d={d} setD={setD} reload={reload} onDirty={markDirty} />}
+      {tab === "bans" && <BanList key={`bans-${target}`} />}
+      {tab === "history" && <PlayerHistory key={`seen-${target}`} />}
     </div>
   );
 }
@@ -209,7 +228,7 @@ function useSettings(d: Data, setD: SetData) {
   };
 }
 
-/** Bans for good through the Admins page's ban (asks first); a Moderator's for a week. */
+/** Bans for good (asks first); a Moderator's for a week. */
 function useBan() {
   const ask = useConfirm();
   const toast = useToast();
@@ -217,7 +236,7 @@ function useBan() {
   return async (id: string, name: string) => {
     if (!STEAMID.test(id)) return toast("Only players with a SteamID can be banned. LAN players and bots can't.", true);
     const mod = sharedRole() === "moderator";
-    const lift = isSharedId(targetKey()) ? "Only the server's owner can lift it." : "You can unban them on the Admins page.";
+    const lift = isSharedId(targetKey()) ? "An Admin or the owner can lift it under Bans." : "You can lift it under Bans.";
     if (!(await ask(`Ban ${name || id} ${mod ? "for a week" : "for good"}? They're kicked if they're playing. ${mod ? "A timed ban also ends if the server restarts." : lift}`, { ok: "Ban", danger: true }))) return;
     await run(ck(`ban:${id}`), async () => {
       const r = await postJson<{ error?: string }>("/api/admins/ban", { id, minutes: mod ? 10080 : 0 }).catch(() => OFFLINE);
@@ -721,7 +740,7 @@ function ModTab({ d, setD, reload, onDirty }: { d: Data; setD: SetData; reload: 
           <label className="field">
             <span>Mute by SteamID<Info text="Mutes them for everyone on the server. Players can still mute someone only for themselves from the scoreboard." /></span>
             <input className="search" placeholder="SteamID, like STEAM_0:1:12345" value={id} onChange={(e) => setId(e.target.value)} spellCheck={false} />
-            <small>Or select someone on the Players page, in the chat log or in the stats.</small>
+            <small>Or select someone on the <TabLink tab="players">Players</TabLink> tab, in the chat log or in the stats.</small>
           </label>
           {STEAMID.test(id.trim()) ? (
             <MuteControl steamid={id.trim()} name="" onDone={(r) => (setD(r), setId(""))} />

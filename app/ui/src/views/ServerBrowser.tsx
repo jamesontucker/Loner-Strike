@@ -18,7 +18,7 @@ const GAMES: Record<string, string> = { cstrike: "Counter-Strike", czero: "Condi
 const PINGS = [0, 50, 100, 150, 250];
 const NO_FILTERS: Filters = { game: "", map: "", people: false, notFull: false, noPassword: false, ping: 0 };
 const EMPTY: Record<Tab, string> = {
-  internet: `No servers are on the list right now. Host one under Servers and turn on "On the Loner-Strike server list" on its Overview tab.`,
+  internet: `No servers are on the list right now. Host one under Servers and turn on "On the Loner-Strike server list" on its Who can join tab.`,
   favorites: "No favorites yet. Add a server by its address, or pick one in another tab and press Add to favorites.",
   history: "Servers you join from here show up here.",
   lan: "No games found on your network. Check the game is running on the other computer and that you're both on the same Wi-Fi, then click Refresh all.",

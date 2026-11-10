@@ -6,6 +6,7 @@ import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { NeedsSetup, setupPlace } from "./MatchMode";
 import { ShareList } from "./ShareList";
+import { openTab, takeSub, TabLink } from "./goto";
 
 type Color = "default" | "green" | "red" | "blue" | "grey";
 type Ad = { text: string; color: Color };
@@ -90,7 +91,7 @@ const EXTRAS_TABS: [ExtrasTab, string][] = [
   ["chat", "Chat messages"],
   ["kickers", "Away & ping"],
   ["people", "Joins & votes"],
-  ["schedule", "Schedule"],
+  ["schedule", "When it empties"],
   ["downloads", "Fast downloads"],
 ];
 
@@ -112,6 +113,8 @@ export function ServerExtras({ target }: { target: string }) {
   // bumped when the chat messages start coming from a shared list: load everything again
   const [version, setVersion] = useState(0);
   const [tab, setTabRaw] = useState<ExtrasTab>(() => {
+    const asked = takeSub(EXTRAS_TABS.map(([id]) => id));
+    if (asked) return asked;
     try {
       const t = localStorage.getItem("ls.extrasTab") as ExtrasTab;
       return EXTRAS_TABS.some(([id]) => id === t) ? t : "rotation";
@@ -160,7 +163,7 @@ export function ServerExtras({ target }: { target: string }) {
   const saveSettings: SaveSettings = (s, done) =>
     d ? queue(d.settings, (cur) => ({ ...cur, ...(typeof s === "function" ? s(cur) : s) }), (full) => send("/api/extras/settings", full, done)) : Promise.resolve(false);
 
-  const head = <SectionHead title="Rotation & extras" note="Map rotation, chat messages, away and ping kicks, joins and player votes, a daily restart, and fast downloads." />;
+  const head = <SectionHead title="Rotation & extras" note="Map rotation, chat messages, away and ping kicks, joins and player votes, what happens when the server empties, and fast downloads." />;
   if (error)
     return (
       <div className="stack narrow extras">
@@ -674,7 +677,6 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
 
 function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; send: (p: string, b: unknown, done?: string) => Promise<boolean>; saveSettings: SaveSettings }) {
   const empty = d.settings.empty;
-  const [time, setTime] = useState<string | null>(null);
   const { run, busy } = useActions();
   const pickEmpty = (what: "map" | "mode", v: string) => run(xk(`empty:${what}`), () => saveSettings((cur) => ({ empty: { ...cur.empty, [what]: v } })), what === "map" ? `Saving the map to go back to…` : "Saving the mode to go back to…");
   const names = useMemo(() => maps.map((m) => m.name).filter((n) => MAP_NAME.test(n)).sort((a, b) => a.localeCompare(b)), [maps]);
@@ -682,13 +684,6 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
   const firstMap = d.rotation.main.find((m) => names.includes(m)) ?? names[0] ?? "de_dust2";
   const turnOn = (on: boolean) => saveSettings((cur) => ({ empty: { ...cur.empty, on, map: cur.empty.map || firstMap } }));
   const sched = d.schedule;
-  const at = time ?? sched?.time ?? "05:00";
-  // a server on another machine is still restarted from here, on this computer's clock
-  const open = useNav((s) => s.server);
-  const servers = useServers().data?.servers;
-  const remote = !!open && !!servers?.find((x) => x.id === open)?.host;
-  const saveRestart = (on: boolean, t = at) =>
-    send("/api/extras/schedule", { on, time: t }, on ? `The server restarts every day at ${t}.` : "Daily restart is off").then((ok) => ok && setTime(null));
 
   return (
     <>
@@ -727,40 +722,111 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
           )}
         </div>
       </section>
-      {sched && (
-        <section>
-          <SectionHead title="Daily restart" note="Long-running servers stay smoother with a fresh start once a day. Players get a warning in chat 5 minutes and 1 minute before." />
-          {remote && (
-            <p className="panel extras-warn">
-              Runs from this computer: Loner-Strike has to be open at that time. The time is this computer's, not the server's.
-            </p>
-          )}
-          <div className="settings">
-            <Toggle label="Restart every day" note="Only while the server is running and Loner-Strike is open on this computer." on={sched.on} set={(v) => saveRestart(v)} />
-            <div className="setting">
-              <span className="name">At<span className="note">This computer's time. Pick a quiet hour.</span></span>
-              <div className="row sched-time">
-                <input type="time" className="search" aria-label="Restart time" value={at} onChange={(e) => setTime(e.target.value)} />
-                <BusyButton
-                  busy={busy(xk("schedule:time"))}
-                  disabled={time === null || time === sched.time || !/^\d{2}:\d{2}$/.test(at)}
-                  label="Save time"
-                  busyLabel="Saving…"
-                  onClick={() => run(xk("schedule:time"), () => saveRestart(sched.on, at), "Saving the restart time…")}
-                />
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
+      {sched && (isSharedId(targetKey()) ? (
+        // an Admin on a shared server: the owner's Health tab isn't theirs, so it stays here
+        <DailyRestartSection sched={sched} send={send} />
+      ) : (
+        <p className="muted small-note">The daily restart is on the <TabLink tab="health">Health</TabLink> tab.</p>
+      ))}
     </>
   );
+}
+
+type Send = (p: string, b: unknown, done?: string) => Promise<boolean>;
+
+const RESTART_NOTE = "Long-running servers stay smoother with a fresh start once a day. Players get a warning in chat 5 minutes and 1 minute before.";
+
+/** The daily restart: on or off, and when. `panel`: as one of the Health tab's panels. */
+function DailyRestartSection({ sched, send, panel }: { sched: NonNullable<Data["schedule"]>; send: Send; panel?: boolean }) {
+  const [time, setTime] = useState<string | null>(null);
+  const { run, busy } = useActions();
+  const at = time ?? sched.time ?? "05:00";
+  // a server on another machine is still restarted from here, on this computer's clock
+  const open = useNav((s) => s.server);
+  const servers = useServers().data?.servers;
+  const remote = !!open && !!servers?.find((x) => x.id === open)?.host;
+  const saveRestart = (on: boolean, t = at) =>
+    send("/api/extras/schedule", { on, time: t }, on ? `The server restarts every day at ${t}.` : "Daily restart is off").then((ok) => ok && setTime(null));
+  const Box = panel ? "div" : "section";
+  return (
+    <Box className={panel ? "panel" : undefined}>
+      {panel ? (
+        <>
+          <h3>Daily restart</h3>
+          <p className="muted measure">{RESTART_NOTE}</p>
+        </>
+      ) : (
+        <SectionHead title="Daily restart" note={RESTART_NOTE} />
+      )}
+      {remote && (
+        <p className={panel ? "extras-warn" : "panel extras-warn"}>
+          Runs from this computer: Loner-Strike has to be open at that time. The time is this computer's, not the server's.
+        </p>
+      )}
+      <div className="settings">
+        <Toggle label="Restart every day" note="Only while the server is running and Loner-Strike is open on this computer." on={sched.on} set={(v) => saveRestart(v)} />
+        <div className="setting">
+          <span className="name">At<span className="note">This computer's time. Pick a quiet hour.</span></span>
+          <div className="row sched-time">
+            <input type="time" className="search" aria-label="Restart time" value={at} onChange={(e) => setTime(e.target.value)} />
+            <BusyButton
+              busy={busy(xk("schedule:time"))}
+              disabled={time === null || time === sched.time || !/^\d{2}:\d{2}$/.test(at)}
+              label="Save time"
+              busyLabel="Saving…"
+              onClick={() => run(xk("schedule:time"), () => saveRestart(sched.on, at), "Saving the restart time…")}
+            />
+          </div>
+        </div>
+      </div>
+    </Box>
+  );
+}
+
+/** The daily restart on its own, for a server's Health tab (loads what it needs itself), as
+ *  one of its panels. */
+export function DailyRestart({ target }: { target: string }) {
+  const toast = useToast();
+  const [d, setD] = useState<Data | null>(null);
+  const [error, setError] = useState("");
+  const load = useCallback(() => {
+    setError("");
+    getJson<Reply>("/api/extras")
+      .then((r) => (failed(r) ? setError(r.error) : setD(r)))
+      .catch((e) => !isAbort(e) && setError("Couldn't reach the app."));
+  }, []);
+  useEffect(() => {
+    setD(null);
+    load();
+  }, [target, load]);
+  const send: Send = async (path, body, done) => {
+    const r = await postJson<Reply>(path, body).catch(() => ({ ok: false as const, error: "Couldn't reach the app." }));
+    if (failed(r)) {
+      toast(r.error, true);
+      return false;
+    }
+    setD(r);
+    if (done) toast(done);
+    return true;
+  };
+  if (error)
+    return (
+      <div className="panel">
+        <h3>Daily restart</h3>
+        <LoadError text={error} onRetry={load} />
+      </div>
+    );
+  if (!d) return <Skeleton rows={2} />;
+  return d.schedule ? <DailyRestartSection key={target} sched={d.schedule} send={send} panel /> : null;
 }
 
 // ---- fast downloads ------------------------------------------------------------------------
 
 function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }) {
   const toast = useToast();
+  // a Linux server of your own: its Website status serves the files itself
+  const open = useNav((s) => s.server);
+  const remote = !!open && !isSharedId(open) && !!useServers().data?.servers.find((x) => x.id === open)?.host;
   const [url, setUrl] = useState<string | null>(null);
   const { run, busy } = useActions();
   const value = url ?? d.settings.fastdl;
@@ -802,7 +868,16 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
         </div>
         {ON_THIS_COMPUTER && !bySt && <p className="muted small-note">Copies the custom maps and what they need, plus the sounds and models of your game modes, into a folder you pick, ready to upload.</p>}
         {bySt ? (
-          <p className="muted small-note">This address was set by Fast downloads under the server's Website status, which serves the files from the server itself. There's nothing to upload.</p>
+          <p className="muted small-note">
+            This address was set by Fast downloads under the server's {remote ? <TabLink tab="webstatus">Website status</TabLink> : "Website status"}, which serves the files from the server itself. There's nothing to upload.
+          </p>
+        ) : remote ? (
+          <div className="stack-tight">
+            <p className="muted small-note">This server is on a Linux machine, so it doesn't need a web server of your own: turn on Fast downloads in its Website status, and it serves the files and fills in this address.</p>
+            <div className="row">
+              <button className="btn" onClick={() => openTab("webstatus")}>Set up Website status</button>
+            </div>
+          </div>
         ) : (
           <p className="muted small-note">For a server on a Linux machine there's no need for a web server of your own: turn on Fast downloads under its Website status, and it serves the files and fills in this address.</p>
         )}

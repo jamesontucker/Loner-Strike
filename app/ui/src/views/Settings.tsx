@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { getJson, options, postJson, sameValue, targetKey, useActions } from "../api";
+import { currentTarget, getJson, options, postJson, sameValue, targetKey, useActions } from "../api";
 import { BOT_STYLE_NOTE, BOT_STYLES } from "../games";
-import type { Mode, Online, Setting } from "../types";
+import { reloadAppInfo, useAppInfo } from "../queries";
+import { usePlayDrafts } from "../stores/playDraft";
+import type { Addon, AddonSet, LiveState, Mode, Online, Setting } from "../types";
 import { ModeVoteList } from "./ModeVote";
-import { BotCommands } from "./BotCommands";
-import { BusyButton, Info, SectionHead, Segmented, useCommand, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, LoadError, SectionHead, Segmented, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 
 // Short explanations under settings, as in the old panel
 const NOTES: Record<string, string> = {
@@ -153,7 +154,7 @@ const DM = ["csdm", "csdm_ffa"];
 const FAMILIES: [string, string[]][] = [
   ["gm_gg_", GG], ["gg_", GG], ["gmdm_", DM], ["gm_zp_", ["zombie", "zp5"]], ["zp_", ["zombie", "zp5"]],
   ["wc3_", ["war3"]], ["sh_", ["shero"]], ["hns_", ["hns"]], ["pbmoves_", ["paintball"]], ["kz_", ["kreedz"]],
-  ["deathrun_", ["deathrun"]], ["bb_", ["basebuilder"]], ["sj_", ["soccerjam"]],
+  ["deathrun_", ["deathrun"]], ["dr_", ["deathrun"]], ["PBR_", ["paintball"]], ["bb_", ["basebuilder"]], ["sj_", ["soccerjam"]],
 ];
 /** Settings only for modes with a flag in modes.ini (the Game Mode Menu's SD_NeedFlag). */
 const NEEDS_FLAG: Record<string, string> = { gm_weapons: "w", gm_gg_order: "g", gm_zp_specials: "z", mp_forcerespawn: "w", gm_autorespawn: "w" };
@@ -191,15 +192,147 @@ function belongsTo(s: Setting, mode: Mode): boolean {
 /** Another mode's saved settings, for the Rules page's mode picker. */
 type Editing = { mode: Mode; values: Record<string, string | null>; save: (cvar: string, value: string) => Promise<boolean> };
 
-export function SettingsList({ data, cat, refresh, q = "", tab, editing }: { data: Online; cat: number; refresh: () => void; q?: string; tab?: string; editing?: Editing }) {
+// ---- settings for the next game, without a game running -------------------------------
+// The pages edit the files the game applies when it starts (saved.rs). The page gets the
+// same shape as a game's state, with what a running game would show worked out here.
+
+/** What saved.rs answers. */
+type SavedView = { mode: string; map: string; bots: number | null; modes: Mode[]; settings: Setting[]; addons: Addon[]; addonsets: AddonSet[]; foundation: boolean; error?: string };
+type SavedReply = { ok?: boolean; error?: string };
+
+/** Changing the next game's settings instead of a running one's. */
+export type Saved = {
+  /** the mode the per-mode settings are for: the one the next game starts in, or one picked */
+  mode: string;
+  setMode: (id: string | null) => void;
+  save: (cvar: string, value: string) => Promise<boolean>;
+  setBots: (n: number) => Promise<boolean>;
+  addon: (body: { id: string; on?: boolean; cvar?: string; value?: string }) => Promise<boolean>;
+  reset: (what: "shared" | "mode") => Promise<boolean>;
+};
+
+/** The note on every page without a game: where the changes go. */
+export const SAVED_NOTE = "Changes apply when you start a game.";
+
+/** Settings that need Loner-Strike's game DLL (its ls_bot), as gamemodes.sma's setting_visible. */
+const NEEDS_LS_DLL = ["gm_bf_salute", "gm_bf_look", "gm_bf_celebrate", "gm_botchat_stop"];
+/** Whether a setting shows for the next game: setting_visible's rules, without a game to ask. */
+function savedVisible(s: Setting, mode: Mode | undefined, all: Setting[], foundation: boolean): boolean {
+  if (s.scope === SCOPE_MODE) return !mode || belongsTo(s, mode);
+  if (NEEDS_LS_DLL.includes(s.cvar) && !foundation) return false;
+  const style = Number(all.find((x) => x.cvar === "gm_botstyle")?.value || "1");
+  // the style's own personalities replace the roster; its switches only matter with a style on
+  if (s.cvar === "bot_profile_db") return style === 0;
+  if ((/^gm_(hb|bf)_/.test(s.cvar) || s.cvar === "gm_personality" || s.cvar === "gm_botchat_stop") && style === 0) return false;
+  // only Locked In, Hackers, Gods and Mixed lobby's Locked In players hop
+  if (s.cvar === "gm_hb_bhop") return style >= 5 && style <= 8;
+  return true;
+}
+
+/** A game's state for pages that need one, from what the next game starts with. */
+function savedState(v: SavedView): LiveState {
+  // (no count saved yet: what Play starts a first game with)
+  const bots = v.bots ?? 9;
+  return {
+    mode: v.mode, map: v.map, nav: 1, career: 0, navbatch: 0, navleft: 0, bots, quota: bots, humans: 0, maxplayers: 32, timeleft: -1, presets: 0,
+    addons_pending: 0, version: "", crashmap: "", preset: "", peaceful: 0, paused: 0, recording: 0, timelimit: 0,
+  };
+}
+
+/** Keeps Play's Start a game form in step with a change made here, so starting doesn't put
+ *  back what the form had (it sends what was picked on it). Your own game only. */
+function followOnPlay(gameId: string | undefined, cvar: string, value: string, otherMode: boolean) {
+  if (!gameId || currentTarget()) return;
+  const { drafts, set } = usePlayDrafts.getState();
+  const d = drafts[gameId];
+  if (!d) return;
+  if (cvar === "bot_quota") return set(gameId, { bots: Number(value) });
+  // (a mode's own setting changed for a mode other than the one the form starts in: not the form's)
+  if (!(cvar in d.changed) || otherMode) return;
+  set(gameId, { changed: { ...d.changed, [cvar]: value } });
+}
+
+/** The next game's settings for the pages to edit, and how to change them. */
+export function useSaved() {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const gameId = useAppInfo().data?.game?.id;
+  // your own game starts in the mode on Play's form, a server in the one it ran last
+  const draftMode = usePlayDrafts((s) => (gameId && !currentTarget() ? s.drafts[gameId]?.mode : undefined));
+  const [picked, setPicked] = useState<string | null>(null);
+  const want = picked ?? draftMode ?? "";
+  const q = useQuery({
+    queryKey: ["savedSettings", targetKey(), want],
+    queryFn: () => getJson<SavedView>(`/api/app/saved-settings${want ? `?mode=${encodeURIComponent(want)}` : ""}`),
+    // another mode picked: the page stays while its settings load
+    placeholderData: (prev) => prev,
+  });
+  const v = q.data && !q.data.error && Array.isArray(q.data.settings) ? q.data : null;
+  const send = async (path: string, body: unknown) => {
+    const r = await postJson<SavedReply>(path, body).catch((): SavedReply => ({ error: "Couldn't reach the app." }));
+    if (r.error) toast(r.error, true);
+    await Promise.all([qc.invalidateQueries({ queryKey: ["savedSettings", targetKey()] }), qc.invalidateQueries({ queryKey: ["startOptions"] }), qc.invalidateQueries({ queryKey: ["modeSettings", targetKey()] })]);
+    return !r.error;
+  };
+  const mode = v?.mode ?? want;
+  const data: Online | null = v && {
+    online: true,
+    state: savedState(v),
+    modes: v.modes,
+    settings: v.settings.map((s) => ({ ...s, visible: savedVisible(s, v.modes.find((m) => m.id === v.mode), v.settings, v.foundation) ? 1 : 0 })),
+    addons: v.addons,
+    addonsets: v.addonsets,
+    players: [],
+    presets: [],
+    events: [],
+    me: {},
+  };
+  const saved: Saved = {
+    mode,
+    setMode: setPicked,
+    save: async (cvar, value) => {
+      const ok = await send("/api/app/saved-settings", { mode, cvar, value });
+      // (the form starts in its own mode, or without one the mode the game ran last)
+      const otherMode = v?.settings.find((s) => s.cvar === cvar)?.scope === SCOPE_MODE && (draftMode ? draftMode !== mode : picked !== null);
+      if (ok) followOnPlay(gameId, cvar, value, otherMode);
+      return ok;
+    },
+    setBots: async (n) => {
+      const ok = await send("/api/app/saved-settings/bots", { bots: n });
+      if (ok) {
+        followOnPlay(gameId, "bot_quota", String(n), false);
+        reloadAppInfo();
+      }
+      return ok;
+    },
+    addon: (body) => send("/api/app/saved-settings/addon", body),
+    reset: (what) => send("/api/app/saved-settings/reset", { what, mode }),
+  };
+  return { q, error: q.data?.error, data, saved };
+}
+
+/** A page for the next game: loads what it starts with, then shows the page with it. */
+export function WithSaved({ title, children }: { title: string; children: (data: Online, saved: Saved) => ReactNode }) {
+  const { q, error, data, saved } = useSaved();
+  if (data) return <>{children(data, saved)}</>;
+  return (
+    <div className="stack">
+      <SectionHead title={title} note={SAVED_NOTE} />
+      {error ? <p className="muted">{error}</p> : q.isError ? <LoadError text="Couldn't load the saved settings." onRetry={() => q.refetch()} /> : <Skeleton rows={4} />}
+    </div>
+  );
+}
+
+export function SettingsList({ data, cat, refresh, q = "", tab, editing, saved }: { data: Online; cat: number; refresh: () => void; q?: string; tab?: string; editing?: Editing; saved?: Saved }) {
   const run = useCommand(refresh);
   const { run: act, busy } = useActions();
-  const key = (cvar: string) => `settings:${targetKey()}:${editing ? editing.mode.id : "live"}:${cvar}`;
+  const key = (cvar: string) => `settings:${targetKey()}:${saved ? `saved:${saved.mode}` : editing ? editing.mode.id : "live"}:${cvar}`;
   const pending = usePending();
   const pick = (s: Setting, v: string) => act(key(s.cvar), async () => {
     pending.set(s.cvar, v);
-    // another mode's own settings go to its saved file; settings shared by every mode change live
-    const ok = editing && s.scope === SCOPE_MODE ? await editing.save(s.cvar, v) : await run("gm_set", [s.cvar, v], true);
+    // no game: into the next game's files; another mode's own settings go to its saved
+    // file; settings shared by every mode change live
+    const ok = saved ? await saved.save(s.cvar, v) : editing && s.scope === SCOPE_MODE ? await editing.save(s.cvar, v) : await run("gm_set", [s.cvar, v], true);
     if (!ok) pending.clear(s.cvar);
   }, `Changing ${s.name}${editing ? ` for ${editing.mode.name}` : ""}…`);
   const all = editing
@@ -240,7 +373,6 @@ export function SettingsList({ data, cat, refresh, q = "", tab, editing }: { dat
               {note && <span className="note">{note}</span>}
             </div>
             <Segmented label={s.name} values={s.values} labels={labels} current={value} disabled={busy(key(s.cvar)) || moodOff} onPick={(v) => pick(s, v)} />
-            {s.cvar === "gm_botchat_humans" && <BotCommands />}
           </div>
         );
       })}
@@ -256,6 +388,7 @@ export function SettingsPage({
   refresh,
   children,
   pickMode = false,
+  saved,
 }: {
   title: string;
   note: string;
@@ -265,6 +398,8 @@ export function SettingsPage({
   children?: ReactNode;
   /** a picker for editing another mode's saved settings */
   pickMode?: boolean;
+  /** no game running: the next game's settings */
+  saved?: Saved;
 }) {
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
@@ -273,8 +408,11 @@ export function SettingsPage({
   const toast = useToast();
   const qc = useQueryClient();
   const playing = data.state.mode;
-  useEffect(() => rememberSettings(data), [data]);
-  const other = pickMode && editId && editId !== playing ? data.modes.find((m) => m.id === editId) : undefined;
+  // (what the next game would show is worked out here, so only a game's own list is kept)
+  useEffect(() => {
+    if (!saved) rememberSettings(data);
+  }, [data, saved]);
+  const other = !saved && pickMode && editId && editId !== playing ? data.modes.find((m) => m.id === editId) : undefined;
   const otherCvars = other ? data.settings.filter((s) => s.cat === cat && s.scope === SCOPE_MODE && belongsTo(s, other)).map((s) => s.cvar) : [];
   const savedQ = useQuery({
     queryKey: ["modeSettings", targetKey(), other?.id, cat],
@@ -307,16 +445,23 @@ export function SettingsPage({
   return (
     <div className="stack">
       <div>
-        <SectionHead title={title} note={editing ? `Saved for ${editing.mode.name}: used the next time it starts. Ones marked "Every mode" are shared by all modes and change straight away.` : note} />
+        <SectionHead title={title} note={editing ? `Saved for ${editing.mode.name}: used the next time it starts. Ones marked "Every mode" are shared by all modes and change straight away.` : saved ? `${SAVED_NOTE} ${note}`.trim() : note} />
         {children}
       </div>
       <div className="stack-tight">
         {pickMode && data.modes.length > 1 && (
           <label className="sort mode-pick">
             <span>Settings for</span>
-            <select value={other ? other.id : playing} onChange={(e) => { setEditId(e.target.value === playing ? null : e.target.value); setPicked(null); }}>
+            <select
+              value={other ? other.id : playing}
+              onChange={(e) => {
+                if (saved) saved.setMode(e.target.value);
+                else setEditId(e.target.value === playing ? null : e.target.value);
+                setPicked(null);
+              }}
+            >
               {[...data.modes].sort((a, b) => a.name.localeCompare(b.name)).map((m) => (
-                <option key={m.id} value={m.id}>{m.name}{m.id === playing ? " (playing now)" : ""}</option>
+                <option key={m.id} value={m.id}>{m.name}{m.id === playing && !saved ? " (playing now)" : ""}</option>
               ))}
             </select>
           </label>
@@ -338,7 +483,7 @@ export function SettingsPage({
         ) : editing && savedQ.isLoading ? (
           <p className="muted"><span className="spinner" aria-hidden="true" />Loading {editing.mode.name}'s settings…</p>
         ) : (
-          <SettingsList data={data} cat={cat} refresh={refresh} q={q} tab={tab} editing={editing} />
+          <SettingsList data={data} cat={cat} refresh={refresh} q={q} tab={tab} editing={editing} saved={saved} />
         )}
         {cat === 2 && !editing && (tab === "voting" || searching) && <ModeVoteList data={data} />}
       </div>
@@ -346,13 +491,50 @@ export function SettingsPage({
   );
 }
 
-/** Restart / end the round / more time, for the Rules page. */
-export function MatchButtons({ refresh, data }: { refresh: () => void; data?: Online }) {
+/** Rules and Fun & effects with no game running: the next game's settings. */
+export function SavedSettingsPage({ cat }: { cat: 2 | 3 }) {
+  const title = cat === 2 ? "Rules" : "Fun & effects";
+  return (
+    <WithSaved title={title}>
+      {(data, saved) => (
+        <div className="stack">
+          {/* where the round buttons are with a game: what they need (as Bots says for its buttons) */}
+          <SettingsPage title={title} note={savedNote(data, cat)} data={data} cat={cat} refresh={() => undefined} pickMode saved={saved}>
+            {cat === 2 && <p className="muted small-note">Restarting or ending the round, adding time and mode votes work once a game is running.</p>}
+          </SettingsPage>
+          {/* the reset, last and in its own panel, as Bots' and Mods' are */}
+          {cat === 2 && <MatchButtons refresh={() => undefined} data={data} saved={saved} />}
+        </div>
+      )}
+    </WithSaved>
+  );
+}
+
+/** Restart / end the round / more time, for the Rules page. Without a game, only the reset (a panel at the page's foot). */
+export function MatchButtons({ refresh, data, saved }: { refresh: () => void; data?: Online; saved?: Saved }) {
   const mode = data ? modeName(data) : "this mode";
   const ask = useConfirm();
   const run = useCommand(refresh);
   const { run: act, busy } = useActions();
   const key = (what: string) => `match:${targetKey()}:${what}`;
+  const resetAsk = `Reset ${mode}'s own settings to their defaults? That includes its rules, fun settings and its own bot settings. Settings shared by every mode stay.`;
+  if (saved) {
+    return (
+      <div className="panel row between">
+        <div>
+          <b>Reset {mode}'s settings</b>
+          <p className="muted">Its own rules, fun settings and bot settings go back to their defaults. Settings shared by every mode stay.</p>
+        </div>
+        <BusyButton
+          className="btn danger"
+          busy={busy(key(`reset:${saved.mode}`))}
+          label="Reset"
+          busyLabel="Resetting…"
+          onClick={async () => (await ask(resetAsk, { ok: "Reset", danger: true })) && act(key(`reset:${saved.mode}`), () => saved.reset("mode"), `Resetting ${mode}'s settings…`)}
+        />
+      </div>
+    );
+  }
   return (
     <div className="row">
       <BusyButton className="btn primary" busy={busy(key("restart"))} label="Restart round" busyLabel="Restarting…" onClick={() => act(key("restart"), () => run("gm_match", ["restart"]), "Restarting the round…")} />
@@ -364,7 +546,7 @@ export function MatchButtons({ refresh, data }: { refresh: () => void; data?: On
         busy={busy(key("reset"))}
         label="Reset this mode's settings"
         busyLabel="Resetting…"
-        onClick={async () => (await ask(`Reset ${mode}'s own settings to their defaults? That includes its rules, fun settings and its own bot settings. Settings shared by every mode stay.`, { ok: "Reset", danger: true })) && act(key("reset"), () => run("gm_match", ["reset"]), "Resetting this mode's settings…")}
+        onClick={async () => (await ask(resetAsk, { ok: "Reset", danger: true })) && act(key("reset"), () => run("gm_match", ["reset"]), "Resetting this mode's settings…")}
       />
     </div>
   );

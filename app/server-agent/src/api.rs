@@ -403,6 +403,22 @@ fn act(ctx: &Ctx, config: &Config, files: &Files, io: &dyn GameIo, m: &Member, m
                 Err(e) => err(e.say()),
             }
         }
+        // the bans for good (the game keeps timed ones in memory); who has joined is the owner's app's
+        ("GET", ["api", "admins", "bans"]) => {
+            let dir = io.game_dir();
+            let mut bans = vec![];
+            // (SteamID bans only: this is for helpers, and the IP list stays with the owner)
+            for (kind, word) in [("id", "banid")] {
+                let text: String = std::fs::read(dir.join(game::ban_file(kind))).unwrap_or_default().iter().map(|&c| c as char).collect();
+                for l in text.lines() {
+                    let w: Vec<&str> = l.split_whitespace().collect();
+                    if w.len() >= 3 && w[0].eq_ignore_ascii_case(word) {
+                        bans.push(json!({"kind": kind, "value": w[2]}));
+                    }
+                }
+            }
+            ok(json!({"bans": bans, "seen": [], "today": ""}))
+        }
         ("POST", ["api", "admins", "ban"]) => ban(io, b),
         ("POST", ["api", "admins", "unban"]) => unban(io, b),
         ("POST", ["api", "community", "gag"]) => gag(io, m, b),

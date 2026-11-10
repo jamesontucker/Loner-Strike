@@ -1,5 +1,7 @@
-// What people can say to the bots (gm_botchat), shown under the setting that turns it on. Kept
-// in step with clause_intent in plugins/scripting/gm_botchat.sma.
+import { SectionHead } from "../ui";
+
+// What people can say to the bots (gm_botchat), its own section on the Bots page. Kept in
+// step with clause_intent in plugins/scripting/gm_botchat.sma.
 const GROUPS: [string, string[]][] = [
   ["Moving", ["go b", "rush a", "split a", "everyone mid", "go b slow", "fake b", "fall back", "watch flank", "follow me", "trade me", "come here", "wait here", "nvm"]],
   ["Buying", ["eco", "force", "full buy", "someone buy me an awp", "drop me an ak", "give me the bomb"]],
@@ -12,12 +14,11 @@ const GROUPS: [string, string[]][] = [
 
 export function BotCommands() {
   return (
-    <details className="advanced bot-commands">
-      <summary>What you can tell the bots</summary>
-      <p className="muted">
-        Any wording close to these works, in team chat. Start with a bot's name to ask just that one. Each bot decides by its personality: a lurker
-        may ignore a call, a rich one may buy you that AWP, and most of the time somebody answers.
-      </p>
+    <section className="bot-commands">
+      <SectionHead
+        title="What you can tell the bots"
+        note="Any wording close to these works, in team chat, with Bots answer you on. Start with a bot's name to ask just that one. Each bot decides by its personality: a lurker may ignore a call, a rich one may buy you that AWP, and most of the time somebody answers."
+      />
       <dl>
         {GROUPS.map(([group, lines]) => (
           <div key={group}>
@@ -26,6 +27,6 @@ export function BotCommands() {
           </div>
         ))}
       </dl>
-    </details>
+    </section>
   );
 }

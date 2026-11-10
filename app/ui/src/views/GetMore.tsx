@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { addFromFile, getJson, isAbort, ON_THIS_COMPUTER, isSharedId, postJson, targetKey, useActions, usePoll, useStable } from "../api";
 import { useAppInfo, useGameState, useMaps } from "../queries";
-import { useNav } from "../store";
+import { useNav, type Section } from "../store";
 import { usePlayDrafts } from "../stores/playDraft";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
 import { BusyButton, LoadError, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
@@ -19,19 +19,29 @@ const SERVER_SECTIONS = ["maps", "skins", "players"];
 const SERVER_NOTE = "Players download what this server uses when they join. Skins and player models go in under their own names, so everyone sees them, not just you.";
 type Slots = { map?: string; models?: number; sounds?: number; generic?: number };
 type ServerContent = { items: { mod: number; section: string }[]; slots: Slots | null; limit: number; ours: number };
-/** Shared by the browser and the Installed list, so removing shows on both. */
+/** Shared by the browser and the lists of what you have, so removing shows on both. */
 const removeKey = (section: string, mod: number) => `getmore:${targetKey()}:remove:${section}:${mod}`;
+/** Every kind GameBanana's browser has: a page elsewhere opens Get more on one with
+ *  go("more", kind). */
+const KINDS = ["maps", "skins", "players", "sprays", "sprites", "gui", "sounds"];
+/** Where what you have of each kind lives in My library (removing is there too): page, its
+ *  focus (Sounds' own tab) and name. */
+const LIBRARY: [Section, string | undefined, string][] = [["maps", undefined, "Maps"], ["skins", undefined, "Skins & models"], ["sounds", "yours", "Sounds"]];
 const size = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 /** GameBanana's Counter-Strike 1.6 section: maps, skins, models, sounds and more.
  *  server: for a dedicated server (maps, skins and player models it sends players).
  *  only: just these sections, opened from the page that manages them (a server's Maps or
- *  Skins & models), with a way back there instead of an Installed list. */
+ *  Skins & models), with a way back there instead of the links to My library.
+ *  Your own game's Get more opens on the kind in the nav focus ("skins"), from a page's Get button. */
 export function GetMore({ onInstalled: onInstalledProp, server, only, title = "Get more", back }: { onInstalled: () => void; server?: boolean; only?: string[]; title?: string; back?: { label: string; go: () => void } }) {
   const onInstalled = useStable(onInstalledProp);
   const ask = useConfirm();
   const toast = useToast();
-  const [section, setSection] = useState(only?.[0] ?? "maps");
+  const [section, setSection] = useState(() => {
+    const f = useNav.getState().focus;
+    return only?.[0] ?? (!server && f && KINDS.includes(f) ? f : "maps");
+  });
   const [sections, setSections] = useState<GbSection[]>(FALLBACK_SECTIONS);
   const [cat, setCat] = useState<number | null>(null);
   const [sort, setSort] = useState("popular");
@@ -58,6 +68,17 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
     useNav.getState().go("play");
   };
   const cats = sections.find((s) => s[0] === section)?.[2] ?? [];
+  // a Get button elsewhere: that kind, also when this page is already open
+  const focus = useNav((s) => s.focus);
+  useEffect(() => {
+    if (!focus || only || server || !KINDS.includes(focus)) return;
+    useNav.getState().clearFocus();
+    if (focus === section) return;
+    setSection(focus);
+    setCat(null);
+    setItems([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
 
   // only the newest browse request may fill the grid (searches and tabs change fast)
   const latest = useRef(0);
@@ -172,7 +193,6 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
     setPlaying(null);
   }, [section]);
 
-  const [showInstalled, setShowInstalled] = useState(false);
   const active = jobs.filter((j) => !["done", "error"].includes(j.state));
   const jobFor = (mod: number) => active.find((j) => j.mod === mod);
   const jobText = (j: GbJob) => (j.size && (j.got ?? 0) < j.size ? `Downloading ${Math.round(((j.got ?? 0) / j.size) * 100)}%` : j.size ? "Installing…" : "Downloading…");
@@ -183,7 +203,7 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
       <div>
         <SectionHead title={title} note={`From GameBanana's Counter-Strike 1.6 section. ${server ? (section === "maps" ? NOTES.maps : SERVER_NOTE) : NOTES[section] ?? NOTES.default}`}>
           {back && <button className="btn" onClick={back.go}>{back.label}</button>}
-          {ON_THIS_COMPUTER && !showInstalled && !isSharedId(targetKey()) && (
+          {ON_THIS_COMPUTER && !isSharedId(targetKey()) && (
             <BusyButton busy={busy(key(`add-file:${section}`))} label="Add from a file" busyLabel="Adding…" onClick={() => run(key(`add-file:${section}`), async () => {
               const r = await addFromFile(section);
               if (!r) return;
@@ -193,11 +213,23 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
           )}
         </SectionHead>
         {server && !only && <SlotsBar />}
+        {/* where what's downloaded is: under the heading, so the tabs sit on the search they go with */}
+        {!only && !server && (
+          <p className="muted small-note">
+            What you've downloaded is in My library, to remove what you don't want:{" "}
+            {LIBRARY.map(([id, f, name], i) => (
+              <span key={id}>
+                {i ? (i === LIBRARY.length - 1 ? " and " : ", ") : ""}
+                <button type="button" className="link inline" onClick={() => useNav.getState().go(id, f)}>{name}</button>
+              </span>
+            ))}
+            .
+          </p>
+        )}
         {(!only || sections.length > 1) && <div className="chips section-tabs" role="tablist" aria-label="What to get">
           {sections.map(([id, name]) => (
-            <button key={id} className="chip" role="tab" aria-selected={section === id && !showInstalled} onClick={() => {
-              setShowInstalled(false);
-              // the same tab again (or back from Installed) keeps what's shown and checks for new
+            <button key={id} className="chip" role="tab" aria-selected={section === id} onClick={() => {
+              // the same tab again keeps what's shown and checks for new
               if (id === section) return void load(true);
               setSection(id);
               setCat(null);
@@ -206,7 +238,6 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
               {name}
             </button>
           ))}
-          {!only && <button className="chip" role="tab" aria-selected={showInstalled} onClick={() => setShowInstalled(true)}>Installed</button>}
         </div>}
         {active.map((j) => (
           <div className="job" key={j.id}>
@@ -214,73 +245,65 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
             {j.size ? <progress max={j.size} value={j.got ?? 0} /> : null}
           </div>
         ))}
-        {!showInstalled && (
-          <div className="toolbar">
-            <input className="search" type="search" aria-label={`Search ${label.toLowerCase()}`} placeholder={`Search ${label.toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} />
-            {cats.length > 1 && (
-              <select value={cat ?? cats[0][0]} onChange={(e) => setCat(+e.target.value)} aria-label="Type">
-                {cats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-              </select>
-            )}
-            <div className="seg" role="group" aria-label="Sort">
-              {SORTS.map(([id, l]) => (
-                <button key={id} aria-pressed={sort === id} onClick={() => setSort(id)}>{l}</button>
-              ))}
-            </div>
+        <div className="toolbar">
+          <input className="search" type="search" aria-label={`Search ${label.toLowerCase()}`} placeholder={`Search ${label.toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} />
+          {cats.length > 1 && (
+            <select value={cat ?? cats[0][0]} onChange={(e) => setCat(+e.target.value)} aria-label="Type">
+              {cats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+          )}
+          <div className="seg" role="group" aria-label="Sort">
+            {SORTS.map(([id, l]) => (
+              <button key={id} aria-pressed={sort === id} onClick={() => setSort(id)}>{l}</button>
+            ))}
           </div>
-        )}
+        </div>
       </div>
-      {showInstalled ? (
-        <InstalledList onChanged={onInstalled} server={server} />
-      ) : (
-        <>
-          {error && !items.length && !loading && <LoadError text={error} onRetry={() => load(lastReset.current)} />}
-          <div className="maps grid">
-            {items.map((m) => {
-              const job = jobFor(m.id);
-              return (
-                <div key={m.id} className="card-wrap">
-                  <button className="map-card" aria-busy={busy(key(`details:${m.id}`))} onClick={() => details(m.id, m.name)} title={m.name}>
-                    <div className="map-pic">
-                      {m.image ? (
-                        <img src={m.image} alt="" loading="lazy" />
-                      ) : (
-                        <div className="no-pic" aria-hidden="true">
-                          <span className="no-pic-kind">{label.replace(/s$/, "")}</span>
-                          <span className="no-pic-name small-name">{m.name}</span>
-                        </div>
-                      )}
-                      {m.installed && !job && <span className="badge">Installed</span>}
-                      {job && <span className="badge busy" role="status">{jobText(job)}</span>}
-                    </div>
-                    <span className="map-label">{m.name}</span>
-                    <span className="map-sub">{m.author} · ♥ {m.likes}</span>
-                  </button>
-                  {m.audio && (
-                    <div className="card-pic-overlay">
-                      <button
-                        type="button"
-                        className={`play-preview${playing === m.id ? " on" : ""}`}
-                        aria-label={playing === m.id ? `Stop ${m.name}` : `Play ${m.name}`}
-                        onClick={() => preview(m.id, m.audio!)}
-                      >
-                        {playing === m.id ? "■" : "▶"}
-                      </button>
+      {error && !items.length && !loading && <LoadError text={error} onRetry={() => load(lastReset.current)} />}
+      <div className="maps grid">
+        {items.map((m) => {
+          const job = jobFor(m.id);
+          return (
+            <div key={m.id} className="card-wrap">
+              <button className="map-card" aria-busy={busy(key(`details:${m.id}`))} onClick={() => details(m.id, m.name)} title={m.name}>
+                <div className="map-pic">
+                  {m.image ? (
+                    <img src={m.image} alt="" loading="lazy" />
+                  ) : (
+                    <div className="no-pic" aria-hidden="true">
+                      <span className="no-pic-kind">{label.replace(/s$/, "")}</span>
+                      <span className="no-pic-name small-name">{m.name}</span>
                     </div>
                   )}
+                  {m.installed && !job && <span className="badge">Installed</span>}
+                  {job && <span className="badge busy" role="status">{jobText(job)}</span>}
                 </div>
-              );
-            })}
-            {!items.length && !loading && !error && <p className="muted">Nothing matches. Try another search or type.</p>}
-            {!items.length && loading && Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>)}
-          </div>
-          {!done && items.length > 0 && (
-            <div className="row center">
-              {error && !loading && <p className="err-text" role="alert">{error}</p>}
-              <BusyButton busy={loading} label={error ? "Try again" : "Show more"} busyLabel="Loading…" onClick={() => load(error ? lastReset.current : false)} />
+                <span className="map-label">{m.name}</span>
+                <span className="map-sub">{m.author} · ♥ {m.likes}</span>
+              </button>
+              {m.audio && (
+                <div className="card-pic-overlay">
+                  <button
+                    type="button"
+                    className={`play-preview${playing === m.id ? " on" : ""}`}
+                    aria-label={playing === m.id ? `Stop ${m.name}` : `Play ${m.name}`}
+                    onClick={() => preview(m.id, m.audio!)}
+                  >
+                    {playing === m.id ? "■" : "▶"}
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </>
+          );
+        })}
+        {!items.length && !loading && !error && <p className="muted">Nothing matches. Try another search or type.</p>}
+        {!items.length && loading && Array.from({ length: 10 }, (_, i) => <div key={i} className="map-card ghost" aria-hidden="true"><div className="map-pic" /><span className="ghost-label" /></div>)}
+      </div>
+      {!done && items.length > 0 && (
+        <div className="row center">
+          {error && !loading && <p className="err-text" role="alert">{error}</p>}
+          <BusyButton busy={loading} label={error ? "Try again" : "Show more"} busyLabel="Loading…" onClick={() => load(error ? lastReset.current : false)} />
+        </div>
       )}
 
       {open && (
@@ -430,38 +453,32 @@ function InstalledList({ onChanged, server, only, empty = "Nothing downloaded ye
 /** A server's weapon skins and player models: what it uses, who sees each, and the map's
  *  model and sound count against the engine's limit. Getting more opens the browser. */
 /** What you have of some kinds of GameBanana content in your own game, with Remove on each
- *  and a way to get more of that kind: a chip per kind when there's more than one. */
+ *  and a way to get more of that kind (Get more, opened on it): a chip per kind when there's
+ *  more than one. */
 const KIND_NAMES: Record<string, string> = { skins: "Weapon skins", players: "Player models", sprays: "Sprays", sprites: "Effects", gui: "HUD & menus", sounds: "Sounds" };
 export function MyContent({ kinds, title, note, empty }: { kinds: string[]; title: string; note: string; empty: string }) {
   const [kind, setKind] = useState<string>(kinds.length > 1 ? "all" : kinds[0]);
-  const [shop, setShop] = useState(false);
-  const [seen, setSeen] = useState(0);
   const these = kind === "all" ? kinds : [kind];
   const name = kind === "all" ? title.toLowerCase() : KIND_NAMES[kind]?.toLowerCase() ?? kind;
-  if (shop) {
-    return (
-      <GetMore
-        only={these}
-        title={`Get ${name}`}
-        back={{ label: `Back to ${title.toLowerCase()}`, go: () => { setShop(false); setSeen((n) => n + 1); } }}
-        onInstalled={() => {}}
-      />
-    );
-  }
+  // Get more, on this kind (Back comes back here)
+  const shop = () => useNav.getState().go("more", these[0]);
   return (
     <div className="stack">
-      <SectionHead title={title} note={note}>
-        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setShop(true)}>{`Get ${name}`}</button>}
-      </SectionHead>
-      {kinds.length > 1 && (
-        <div className="chips" role="group" aria-label="Show">
-          {["all", ...kinds].map((k) => (
-            <button key={k} className="chip" aria-pressed={kind === k} onClick={() => setKind(k)}>{k === "all" ? "All" : KIND_NAMES[k] ?? k}</button>
-          ))}
-        </div>
-      )}
-      {!ON_THIS_COMPUTER && <p className="muted small-note">To add or remove them, use the computer.</p>}
-      <InstalledList key={`${seen}:${kind}`} only={these} onChanged={() => {}} empty={empty} />
+      {/* the heading, its filter and note together (as Get more and Maps have them), then the list */}
+      <div>
+        <SectionHead title={title} note={note}>
+          {ON_THIS_COMPUTER && <button className="btn" onClick={shop}>{`Get ${name}`}</button>}
+        </SectionHead>
+        {kinds.length > 1 && (
+          <div className="chips" role="group" aria-label="Show">
+            {["all", ...kinds].map((k) => (
+              <button key={k} className="chip" aria-pressed={kind === k} onClick={() => setKind(k)}>{k === "all" ? "All" : KIND_NAMES[k] ?? k}</button>
+            ))}
+          </div>
+        )}
+        {!ON_THIS_COMPUTER && <p className="muted small-note">To add or remove them, use the computer.</p>}
+      </div>
+      <InstalledList key={kind} only={these} onChanged={() => {}} empty={empty} />
     </div>
   );
 }

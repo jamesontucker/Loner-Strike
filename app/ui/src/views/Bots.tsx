@@ -5,10 +5,17 @@ import { botsNote, botTarget, type Online, type Setting } from "../types";
 /** Keys that move a range input: only these send the new bot count. */
 const SLIDER_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
 import { Banner, BusyButton, Info, useCommand, useConfirm } from "../ui";
-import { SettingsPage, usePending } from "./Settings";
+import { BotCommands } from "./BotCommands";
+import { SettingsPage, usePending, WithSaved, type Saved } from "./Settings";
 import { SMARTER_CHAT, SmarterChat } from "./SmarterChat";
 
-export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
+/** The Bots page: the game's bots live, or with no game the next game's bot settings. */
+export function Bots({ data, refresh }: { data: Online | null; refresh: () => void }) {
+  if (data) return <BotsPage data={data} refresh={refresh} />;
+  return <WithSaved title="Bots">{(d, saved) => <BotsPage data={d} refresh={refresh} saved={saved} />}</WithSaved>;
+}
+
+function BotsPage({ data, refresh, saved }: { data: Online; refresh: () => void; saved?: Saved }) {
   const ask = useConfirm();
   const run = useCommand(refresh);
   const { run: act, busy } = useActions();
@@ -48,7 +55,7 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
       try {
         while (wantN.current !== null && wantN.current !== sent) {
           sent = wantN.current;
-          if (!(await run("gm_bots", ["count", String(sent)], true))) {
+          if (!(await (saved ? saved.setBots(sent) : run("gm_bots", ["count", String(sent)], true)))) {
             setWant(null);
             return;
           }
@@ -75,16 +82,21 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
     settle.current = window.setTimeout(() => sendCount(n), 500);
   };
 
+  const resetShared = async () => {
+    if (!(await ask("Reset bot and fun settings? This puts every bot and fun setting shared by all modes back to its default. The bot count stays, and so do each mode's own settings.", { ok: "Reset", danger: true }))) return;
+    act(key("resetshared"), () => (saved ? saved.reset("shared") : run("gm_match", ["resetshared"])), "Resetting bot and fun settings…");
+  };
+
   return (
     <div className="stack">
-    <SettingsPage title="Bots" note="Difficulty changes re-add the bots so they pick it up straight away." data={data} cat={1} refresh={refresh}>
-      {!st.nav && !learning && !learnSent && (
+    <SettingsPage title="Bots" note={saved ? "" : "Difficulty changes re-add the bots so they pick it up straight away."} data={data} cat={1} refresh={refresh} saved={saved}>
+      {!saved && !st.nav && !learning && !learnSent && (
         <Banner action={<BusyButton className="btn primary" busy={busy(key("learn"))} label="Learn this map" busyLabel="Starting…" onClick={learn} />}>
           Bots don't know {st.map} yet. Learning it takes a few minutes. The game may pause, then the map restarts.
         </Banner>
       )}
-      {learnSent && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}. The game may pause, then the map restarts.</Banner>}
-      {learning && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}… {st.navleft} map{st.navleft === 1 ? "" : "s"} left.</Banner>}
+      {!saved && learnSent && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}. The game may pause, then the map restarts.</Banner>}
+      {!saved && learning && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}… {st.navleft} map{st.navleft === 1 ? "" : "s"} left.</Banner>}
       <div className="slider-row">
         <label htmlFor="botCount">Bots<Info text="How many bots play. Each one takes a player slot, so leave room for friends." /></label>
         <div className="slider-step">
@@ -125,6 +137,9 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
             note
           )}
         </span>
+        {saved ? (
+          <p className="muted small-note">Adding a bot to a team, killing and kicking bots work once a game is running.</p>
+        ) : (
         <div className="row">
           <BusyButton busy={busy(key("addt"))} label="Add a Terrorist" busyLabel="Adding…" onClick={() => bots("addt", "Adding a Terrorist bot…")} />
           <BusyButton busy={busy(key("addct"))} label="Add a Counter-Terrorist" busyLabel="Adding…" onClick={() => bots("addct", "Adding a Counter-Terrorist bot…")} />
@@ -132,10 +147,20 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
           <BusyButton className="btn danger" busy={busy(key("kick"))} label="Kick all" busyLabel="Kicking…" onClick={async () => (await ask("Kick every bot? They stay out until you add more.", { ok: "Kick all", danger: true })) && bots("kick", "Kicking all bots…")} />
           <Info text="Kill all only kills the bots, and they're back next round. Kick all takes every bot out until you add more." />
         </div>
+        )}
       </div>
-      {personality?.visible ? <PersonalitySlider setting={personality} refresh={refresh} /> : null}
+      {personality?.visible ? <PersonalitySlider setting={personality} refresh={refresh} nextGame={saved} /> : null}
     </SettingsPage>
+    <BotCommands />
     {SMARTER_CHAT && <SmarterChat />}
+    {/* resetting goes last, as on Rules and Mods */}
+    <div className="panel row between">
+      <div>
+        <b>Reset bot and fun settings</b>
+        <p className="muted">Every bot and fun setting shared by all modes goes back to its default. The bot count stays.</p>
+      </div>
+      <BusyButton className="btn danger" busy={busy(key("resetshared"))} label="Reset" busyLabel="Resetting…" onClick={resetShared} />
+    </div>
     </div>
   );
 }
@@ -150,11 +175,11 @@ function strength(v: number) {
 }
 
 /** How strongly the bots' personalities show (gm_personality, 0 to 200 percent). */
-function PersonalitySlider({ setting, refresh }: { setting: Setting; refresh: () => void }) {
+function PersonalitySlider({ setting, refresh, nextGame }: { setting: Setting; refresh: () => void; nextGame?: Saved }) {
   const run = useCommand(refresh);
   const { run: act, busy } = useActions();
   const pending = usePending();
-  const key = `settings:${targetKey()}:gm_personality`;
+  const key = `settings:${targetKey()}:${nextGame ? "saved:" : ""}gm_personality`;
   const saved = Math.min(200, Math.max(0, Math.round(Number(pending.value(setting.cvar, setting.value)) || 0)));
   const [draft, setDraft] = useState<number | null>(null);
   const value = draft ?? saved;
@@ -172,7 +197,7 @@ function PersonalitySlider({ setting, refresh }: { setting: Setting; refresh: ()
       try {
         while (next.current !== null && next.current !== sent) {
           sent = next.current;
-          if (!(await run("gm_set", [setting.cvar, String(sent)], true))) {
+          if (!(await (nextGame ? nextGame.save(setting.cvar, String(sent)) : run("gm_set", [setting.cvar, String(sent)], true)))) {
             pending.clear(setting.cvar);
             return;
           }

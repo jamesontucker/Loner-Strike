@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { cmd, getJson, isAbort, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, useActions, useActivity, useQueuedSave } from "../api";
+import { cmd, getJson, isAbort, isSharedId, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, useActions, useActivity, useQueuedSave } from "../api";
 import { useGameState } from "../queries";
 import { useNav } from "../store";
+import { openTab } from "./goto";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
 type Settings = {
@@ -75,7 +76,7 @@ export function NeedsSetup({ text, after, className = "panel extras-warn" }: { t
         {text} {setupPlace(server)}
         {after ? <> {after}</> : null}
       </p>
-      {!server && ON_THIS_COMPUTER && <button className="btn" onClick={() => go("mods")}>Open Mods</button>}
+      {ON_THIS_COMPUTER && !isSharedId(server) && <button className="btn" onClick={() => (server ? openTab("mods") : go("mods"))}>Open Mods</button>}
     </div>
   );
 }

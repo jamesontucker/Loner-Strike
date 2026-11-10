@@ -32,7 +32,7 @@
 	            game would kick the first bot in the list (the longest-standing regulars);
 	            here a bot that's dead, a newcomer, and new on the server goes instead, and
 	            it says it's off a moment after the person connects, before they pick a team.
-	Life:       bots join a few at a time when a map starts (gm_botjoin), say they're
+	Life:       bots join a few at a time when a later map starts (gm_botjoin; on the first, all at once), say they're
 	            going before they leave (gm_churn), and some come back later; now and
 	            then one has tweaked its name. Bots join in on rock the vote and vote
 	            for maps (gm_botvotes); people's votes decide, bots only break ties.
@@ -519,6 +519,15 @@ public task_kick(userid)
 
 public task_ramp_start()
 {
+	// the first map after the game (or server) starts has everyone in at once: nobody is
+	// waiting on a filling server then. localinfo outlasts map changes, not a restart
+	new first[4]
+	get_localinfo("gm_botjoin_seen", first, charsmax(first))
+	if (!first[0])
+	{
+		set_localinfo("gm_botjoin_seen", "1")
+		return
+	}
 	new q = get_cvar_num("bot_quota")
 	if (!get_pcvar_num(g_pBotJoin) || g_Career || q < 4 || get_cvar_num("gm_scrim_phase"))
 		return

@@ -187,7 +187,7 @@ new const SETTINGS[][SettingData] =
 	{ "gg_dm",              "Respawn",          "1 0",                       "Instant|Next round",                  CAT_MATCH,  SC_MODE,   "" },
 	{ "gg_dm_spawn_random", "Spawn points",     "2 0",                       "Random|Team spawns",                  CAT_MATCH,  SC_MODE,   "" },
 	{ "gg_dm_spawn_delay",  "Respawn delay",    "0.5 1.5 3 5",               "0.5s 1.5s 3s 5s",                     CAT_MATCH,  SC_MODE,   "" },
-	{ "gg_dm_sp_time",      "Spawn protection", "0 1 3",                     "Off 1s 3s",                           CAT_MATCH,  SC_MODE,   "" },
+	{ "gg_dm_sp_time",      "Spawn protection", "0 2 4",                     "Off 2s 4s",                           CAT_MATCH,  SC_MODE,   "" },
 	{ "gm_gg_order",        "Weapon order",     "0 1 2 3 4",                "Classic|No shotguns|Short game|Big guns first|Pistols & snipers", CAT_MATCH, SC_MODE, "g" },
 	{ "gg_warmup_timer_setting", "Warmup",       "0 30 60",                  "Off 30s 60s",                         CAT_MATCH,  SC_MODE,   "" },
 	{ "gg_ignore_bots",     "Bots can win",     "0 2",                      "Yes No",                              CAT_MATCH,  SC_MODE,   "" },
@@ -2983,7 +2983,7 @@ public settings_handler(id, menu, item)
 	return PLUGIN_HANDLED
 }
 
-// restart | reset
+// restart | reset | resetshared
 do_match(const action[])
 {
 	if (equal(action, "reset"))
@@ -2996,6 +2996,21 @@ do_match(const action[])
 				g_SavedHas[s] = false
 		apply_all(true)
 		gm_print(0, "%s settings reset to defaults.", g_ModeName[g_Cur])
+	}
+	else if (equal(action, "resetshared"))
+	{
+		// every bot and fun setting shared by all modes back to its default (base.cfg has
+		// them); the bot count, map presets and the shared rules stay
+		for (new s = 0; s < sizeof SETTINGS; s++)
+			if (SETTINGS[s][SD_Scope] == SC_GLOBAL && (SETTINGS[s][SD_Cat] == CAT_BOT || SETTINGS[s][SD_Cat] == CAT_FUN))
+				g_SavedHas[s] = false
+		write_saved(SC_GLOBAL)
+		// the roster isn't in base.cfg (a bot style picks its own): back to the game's own
+		set_cvar_string("bot_profile_db", "BotProfile.db")
+		apply_all(false)
+		// difficulty only reaches bots added from now on
+		respawn_bots()
+		gm_print(0, "Bot and fun settings reset to defaults.")
 	}
 	else
 		server_cmd("sv_restart 1")
@@ -4025,7 +4040,7 @@ public srv_bots()
 	return PLUGIN_HANDLED
 }
 
-// gm_match <restart|reset>
+// gm_match <restart|reset|resetshared>
 public srv_match()
 {
 	status_stale()

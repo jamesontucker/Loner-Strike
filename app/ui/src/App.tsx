@@ -1,12 +1,12 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { clock, isSignedOut, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, SIGNED_OUT, withTarget, useActions, useActivity } from "./api";
-import { gameTitle } from "./games";
+import { clock, getJsonAt, isSignedOut, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, SIGNED_OUT, withTarget, useActions, useActivity } from "./api";
+import { gameShort, gameTitle } from "./games";
 import { Icon } from "./icons";
 import { forgetLive, queryClient, reloadAppInfo, useOpenReports, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
 import { hasUnsavedEdits, isPageEntry, useNav, type Section } from "./store";
 import { usePlayDrafts } from "./stores/playDraft";
-import { waitsForRestart, type AppInfo, type Online, type ServerInfo } from "./types";
+import { waitsForRestart, type AppInfo, type GameState, type Online, type ServerInfo } from "./types";
 import { applyScale, closeSheetsAbove, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, ToastProvider, useConfirm, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
 import { Addons } from "./views/Addons";
@@ -21,7 +21,7 @@ import { PlayIdle, PlayLive } from "./views/Play";
 import { Players } from "./views/Players";
 import { QuickBar } from "./views/QuickBar";
 import { Sounds } from "./views/Sounds";
-import { FUN_NOTE, MatchButtons, RULES_NOTE, SettingsPage } from "./views/Settings";
+import { FUN_NOTE, MatchButtons, RULES_NOTE, SavedSettingsPage, SettingsPage } from "./views/Settings";
 import { Welcome } from "./views/Welcome";
 import { WhatsNew } from "./views/WhatsNew";
 import { anySetUp, Setup } from "./views/Setup";
@@ -36,19 +36,22 @@ const ServerBrowser = lazyPage(() => import("./views/ServerBrowser").then((m) =>
 const GetMore = lazyPage(() => import("./views/GetMore").then((m) => ({ default: m.GetMore })));
 const MySkins = lazyPage(() => import("./views/GetMore").then((m) => ({ default: m.MySkins })));
 
+// Your own game's pages, grouped like a server's tabs (Game, People), then the rest.
+// ⌘1-⌘9 follow this order.
 const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean }[] = [
-  { id: "play", label: "Play", icon: "play" },
+  { id: "play", label: "Play", icon: "play", group: "Game" },
   { id: "bots", label: "Bots", icon: "bots", live: true },
   { id: "match", label: "Rules", icon: "rules", live: true },
   { id: "fun", label: "Fun", icon: "fun", live: true },
-  { id: "players", label: "Players", icon: "players", live: true },
   { id: "addons", label: "Add-ons", icon: "addons", live: true },
+  { id: "extras", label: "Rotation & extras", icon: "extras" },
+  { id: "players", label: "Players", icon: "players", live: true, group: "People" },
+  { id: "community", label: "Moderation", icon: "moderation" },
+  { id: "stats", label: "Stats", icon: "stats" },
+  { id: "admins", label: "Admins", icon: "admins" },
+  { id: "welcome", label: "Welcome page", icon: "welcome" },
   { id: "friends", label: "Play with friends", icon: "friends", group: "Online" },
   { id: "browser", label: "Find servers", icon: "browser" },
-  { id: "admins", label: "Admins", icon: "admins" },
-  { id: "community", label: "Stats & moderation", icon: "stats" },
-  { id: "welcome", label: "Welcome page", icon: "welcome" },
-  { id: "extras", label: "Rotation & extras", icon: "extras" },
   { id: "maps", label: "Maps", icon: "maps", group: "My library" },
   { id: "mods", label: "Mods", icon: "mods" },
   { id: "skins", label: "Skins & models", icon: "skins" },
@@ -78,7 +81,7 @@ export default function App() {
 
 function Shell() {
   const { state, reconnecting, lost, refresh } = useGameState();
-  const { section, server: openServer, moreOpen, setupOpen, setupIntro, setupLater, go, openServer: enterServer, setMoreOpen, setSetupOpen, laterSetup } = useNav();
+  const { section, server: openServer, moreOpen, setupOpen, setupIntro, setupLater, go, openServer: enterServer, openServerTab, setMoreOpen, setSetupOpen, laterSetup } = useNav();
   const appQ = useAppInfo();
   // the game's own maps for every picker; the Maps page can show the other game's too
   const mapsQ = useMaps();
@@ -89,6 +92,20 @@ function Shell() {
   const maps = mapsQ.data ?? [];
   const scan = scanQ.data ?? null;
   const servers = serversQ.data ?? null;
+  // Your own game while a server is open: the sidebar's own-game pages and the game
+  // switcher show its state, not the server's (the same cache entries as when it's open)
+  const localStateQ = useQuery({
+    queryKey: ["state", null],
+    queryFn: ({ signal }) => getJsonAt<GameState>("/api/state", null, signal),
+    refetchInterval: 5000,
+    retry: 0,
+    enabled: !!openServer,
+  });
+  const localAppQ = useQuery({ queryKey: ["app", null], queryFn: ({ signal }) => getJsonAt<AppInfo>("/api/app", null, signal), enabled: !!openServer });
+  const localState = openServer ? localStateQ.data ?? null : state;
+  const localOnline = localState?.online ? (localState as Online) : null;
+  const localGameOpen = !!localState && !localState.online && !!localState.game_open;
+  const localApp = openServer ? localAppQ.data ?? null : app;
   const toast = useToast();
   const ask = useConfirm();
   const answered = useRef(false);
@@ -119,7 +136,7 @@ function Shell() {
       if (hasUnsavedEdits() && !(await ask("Switch game without saving your changes?", { ok: "Switch", danger: true }))) return;
       // (switching while a game is going: the app then controls the other game, and starting
       // one there would close the game being played)
-      if ((!!online || gameOpen) && !(await ask(`Switch to ${gameTitle(game)}? The game that's open keeps going, but the app shows ${gameTitle(game)} until you switch back.`, { ok: "Switch" }))) return;
+      if ((!!localOnline || localGameOpen) && !(await ask(`Switch to ${gameTitle(game)}? The game that's open keeps going, but the app shows ${gameTitle(game)} until you switch back.`, { ok: "Switch" }))) return;
       const r = hl
         ? await postJson<{ ok?: boolean; error?: string }>("/api/app/game", { hl, game })
         : await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id: `local:${game}` });
@@ -141,7 +158,19 @@ function Shell() {
   }, [openServer, servers, current, enterServer]);
   // CS 1.6 and Condition Zero on this computer, CS 1.6 first
   const localGames = (["cstrike", "czero"] as const).filter((g) => scan?.installs.some((i) => i.games.some((x) => x.id === g)));
-  const myGame = openServer ? null : app?.game?.id;
+  const myGame = localApp?.game?.id;
+  /** Leaves the open server for your own game (its Play page). */
+  const backToMyGame = () => nav("play");
+  /** The game switcher: switches your game, or with a server open, goes back to your game
+   *  first (then switches, if it was the other game). */
+  const pickGame = async (g: string) => {
+    if (openServer) {
+      await backToMyGame();
+      // (stayed for unsaved edits, or your game isn't known yet: just back)
+      if (useNav.getState().server || !myGame) return;
+    }
+    if (myGame !== g) switchGame(null, g);
+  };
 
   // the macOS menu bar: "section:<id>" or "updates"
   useEffect(() => {
@@ -242,7 +271,9 @@ function Shell() {
     if (navKey) reloadMaps();
   }, [navKey]);
 
-  const players = openServer ? 0 : online?.players.length ?? 0;
+  // who's in the open game or server (the phone's Players), and in your own game (the sidebar's)
+  const players = online?.players.length ?? 0;
+  const myPlayers = localOnline?.players.length ?? 0;
   // things to look at, shown as a small count on their section
   const reports = useOpenReports().data ?? 0;
   const attention: Partial<Record<Section, { n: number; why: string }>> = {
@@ -250,9 +281,9 @@ function Shell() {
       n: (servers?.servers ?? []).filter((x) => x.unreachable || x.state === "crashed" || x.state === "failed" || (x.state === "running" && waitsForRestart(x))).length,
       why: "to look at: servers not answering, stopped by a crash, not finished setting up or waiting for a restart",
     },
-    mods: { n: app?.game?.outdated?.length ?? 0, why: "to update: parts of Loner-Strike with updates waiting" },
+    mods: { n: localApp?.game?.outdated?.length ?? 0, why: "to update: parts of Loner-Strike with updates waiting" },
     community: { n: reports, why: "to read: player reports nobody has looked at yet" },
-    settings: { n: app?.update ? 1 : 0, why: "update for Loner-Strike" },
+    settings: { n: localApp?.update ? 1 : 0, why: "update for Loner-Strike" },
   };
   const pill = (id: Section, cls = "attn") => {
     const a = attention[id];
@@ -311,26 +342,33 @@ function Shell() {
     return <Setup scan={scan!} fromSettings={setupOpen && anySetUp(scan) && !setupIntro} onClose={laterSetup} onDone={done} onRescan={() => reloadScan()} />;
   }
   const isLive = (id: Section) => !!NAV.find((n) => n.id === id)?.live;
-  const needsGame = section !== "servers" && isLive(section) && !online;
+  // Bots, Rules, Fun and Add-ons also work without a game: they change the next game's settings
+  const worksSaved = (id: Section) => ["bots", "match", "fun", "addons"].includes(id) && !!localApp?.game?.installed?.includes("core");
+  const needsGame = section !== "servers" && isLive(section) && !online && !worksSaved(section);
   // the game is open here but isn't hosting a map (its main menu, or someone else's server)
   const gameOpen = !!state && !state.online && !!state.game_open;
   const gameName = gameTitle(app?.game?.id);
+  // the sidebar's pages are your own game's, even with a server open: greyed by whether
+  // YOUR game is hosting one, not the server
   const navButton = (n: (typeof NAV)[number], cls = "nav-item", sub = false) => (
     <button
       key={n.id}
-      className={`${cls}${n.live && !online ? " needs-game" : ""}`}
+      className={`${cls}${n.live && !localOnline && !worksSaved(n.id) ? " needs-game" : ""}`}
       aria-current={section === n.id ? "page" : undefined}
-      title={n.live && !online ? "Needs a game you're hosting" : undefined}
+      title={n.live && !localOnline && !worksSaved(n.id) ? "Needs a game you're hosting" : undefined}
       onClick={() => nav(n.id)}
     >
       <Icon name={n.icon} />
       {n.label}
       {/* the title above doesn't show on touch: the More sheet says it */}
-      {sub && n.live && !online && <small className="nav-sub">Needs a game</small>}
-      {n.id === "players" && players > 0 && <span className="count">{players}</span>}
+      {sub && n.live && !localOnline && !worksSaved(n.id) && <small className="nav-sub">Needs a game</small>}
+      {n.id === "players" && myPlayers > 0 && <span className="count">{myPlayers}</span>}
       {pill(n.id)}
     </button>
   );
+  // your own game's pages (everything above Hosting), and the rest
+  const hostingAt = NAV.findIndex((n) => n.id === "servers");
+  const myGameName = localApp?.game ? gameTitle(localApp.game.id) : null;
 
   return (
     <div className="shell">
@@ -340,14 +378,28 @@ function Shell() {
         {localGames.length > 1 && (
           <div className="game-switch" role="group" aria-label="Your game">
             {localGames.map((g) => (
-              <button key={g} title={openServer ? "Go back to your game to switch" : g === "cstrike" ? "Counter-Strike 1.6" : "Counter-Strike: Condition Zero"} aria-pressed={myGame === g} disabled={!!openServer || busy(`app:game::${g}`)} onClick={() => myGame !== g && switchGame(null, g)}>
+              <button key={g} title={openServer ? `Back to your game${myGame && myGame !== g ? `, then switch to ${gameTitle(g)}` : ""}` : g === "cstrike" ? "Counter-Strike 1.6" : "Counter-Strike: Condition Zero"} aria-pressed={myGame === g} disabled={busy(`app:game::${g}`)} onClick={() => void pickGame(g)}>
                 {g === "cstrike" ? "CS 1.6" : "CZ"}
               </button>
             ))}
           </div>
         )}
         <nav className="nav" aria-label="Sections">
-          {NAV.filter((n) => n.id !== "settings").map((n) => (
+          {/* with a server open, these still go to your own game: said, and a little dimmer */}
+          {openServer && (
+            <div className="nav-mine-head" title={`These pages are your own game${myGameName ? ` (${myGameName})` : ""}, not ${current?.name ?? "the server"}`}>
+              My game{myGameName && <span>{gameShort(localApp?.game?.id)}</span>}
+            </div>
+          )}
+          <div className={openServer ? "nav-mine away" : "nav-mine"}>
+            {NAV.slice(0, hostingAt).map((n) => (
+              <div key={n.id}>
+                {n.group && <div className="nav-group">{n.group}</div>}
+                {navButton(n)}
+              </div>
+            ))}
+          </div>
+          {NAV.slice(hostingAt).filter((n) => n.id !== "settings").map((n) => (
             <div key={n.id}>
               {n.group && <div className="nav-group">{n.group}</div>}
               {n.id === "servers" ? (
@@ -375,8 +427,8 @@ function Shell() {
         {/* Settings stays in view however short the window is */}
         <div className="nav-pinned">{navButton(NAV.find((n) => n.id === "settings")!)}</div>
         <div className="side-foot">
-          {current ? `Server: ${current.name}` : app?.game ? gameTitle(app.game.id) : appQ.isError ? "Couldn't load your game" : "No game found"}
-          {app?.version && <span> · v{app.version}</span>}
+          {myGameName ?? ((openServer ? localAppQ : appQ).isError ? "Couldn't load your game" : localApp ? "No game found" : "")}
+          {localApp?.version && <span> · v{localApp.version}</span>}
           <div className="made-by">
             by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a>
             <span aria-hidden="true"> · </span>
@@ -387,6 +439,7 @@ function Shell() {
 
       <div className="main">
         <Strip data={online} reconnecting={reconnecting} lost={lost} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} gameOpen={gameOpen} />
+        <Where server={current} game={myGameName} onBack={() => void backToMyGame()} />
         {online && <QuickBar data={online} maps={maps} refresh={refresh} reloadMaps={refreshMaps} />}
         <main className="content">
           {/* the app stopped answering: said once, at the top, with a way to try again */}
@@ -414,15 +467,16 @@ function Shell() {
                   <PlayIdle app={app} reason={state.online ? "" : state.reason} gameOpen={gameOpen} maps={maps} openSetup={openSetup} />
                 ))}
               {section === "maps" && <Maps current={online?.state.map} live={!!online} maps={allMaps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} getMore={() => go("more")} />}
-              {section === "bots" && online && <Bots data={online} refresh={refresh} />}
+              {section === "bots" && (online || !lost) && <Bots data={online} refresh={refresh} />}
+              {section === "match" && !online && !lost && <SavedSettingsPage cat={2} />}
               {section === "match" && online && (
                 <SettingsPage title="Rules" note={RULES_NOTE(online)} data={online} cat={2} refresh={refresh} pickMode>
                   <MatchButtons refresh={refresh} data={online} />
                 </SettingsPage>
               )}
-              {section === "fun" && online && <SettingsPage title="Fun & effects" note={FUN_NOTE(online)} data={online} cat={3} refresh={refresh} pickMode />}
+              {section === "fun" && (online ? <SettingsPage title="Fun & effects" note={FUN_NOTE(online)} data={online} cat={3} refresh={refresh} pickMode /> : !lost && <SavedSettingsPage cat={3} />)}
               {section === "players" && online && <Players data={online} refresh={refresh} />}
-              {section === "addons" && online && <Addons data={online} refresh={refresh} />}
+              {section === "addons" && (online || !lost) && <Addons data={online} refresh={refresh} />}
               {section === "friends" && <Friends data={online} refresh={refresh} />}
               {section === "browser" && <ServerBrowser />}
               {section === "servers" &&
@@ -449,7 +503,8 @@ function Shell() {
               {section === "welcome" && <Welcome target="local" />}
               {section === "sounds" && <Sounds target="local" />}
               {section === "extras" && <ServerExtras target="local" />}
-              {section === "community" && <Community target="local" />}
+              {section === "community" && <Community target="local" part="moderation" />}
+              {section === "stats" && <Community target="local" part="stats" />}
               {section === "more" && <GetMore onInstalled={refreshMaps} />}
               {section === "skins" && <MySkins />}
               {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={openSetup} />}
@@ -465,7 +520,8 @@ function Shell() {
         {tabbar.map((id) => {
           const n = NAV.find((x) => x.id === id)!;
           return (
-            <button key={id} aria-current={section === id && !moreOpen ? "page" : undefined} onClick={() => nav(id)}>
+            // with a server open, Players is that server's Players tab (the server stays open)
+            <button key={id} aria-current={section === id && !moreOpen ? "page" : undefined} onClick={() => (id === "players" && openServer ? openServerTab("players") : nav(id))}>
               <Icon name={n.icon} size={22} />
               <span>{n.label}</span>
               {id === "players" && players > 0 && <i className="tab-count">{players}</i>}
@@ -485,6 +541,7 @@ function Shell() {
       </nav>
       {moreOpen && (
         <Sheet label="More sections" className="more-sheet" bottom keepApp onClose={() => setMoreOpen(false)}>
+          {current && <p className="more-mine">These open your own game, not {current.name}.</p>}
           {NAV.filter((n) => !tabbar.includes(n.id)).map((n, i, list) => (
             <div key={n.id}>
               {/* the sidebar's groups, so 13 items aren't one long list */}
@@ -627,13 +684,9 @@ function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { da
     return (
       <header className="strip" data-tauri-drag-region>
         <div className="strip-meta idle" data-tauri-drag-region>
-          {lost
-            ? reason
-            : server
-              ? `${server} isn't running`
-              : app?.game
-                ? `${gameTitle(app.game.id)} ${gameOpen ? "is open, but not hosting a game" : "isn't running"}`
-                : reason}
+          {/* the bar under this names the game or server, and the badge on the right says Not
+              running / Not hosting: only what neither says goes here */}
+          {lost ? reason : server || app?.game ? "" : reason}
         </div>
         <div className="strip-actions">
           {ON_THIS_COMPUTER && <RadioButton />}
@@ -671,6 +724,31 @@ function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { da
       </div>
       <Working phone />
     </header>
+  );
+}
+
+/** Which game the page controls, under the top bar on every page: your own game, or the
+ *  open server with a way back. */
+function Where({ server, game, onBack }: { server: ServerInfo | null; game: string | null; onBack: () => void }) {
+  if (server) {
+    return (
+      <div className="where away">
+        <Icon name="server" size={16} />
+        <span className="where-text">
+          Server: <b>{server.name}</b>
+          {server.shared && <span className="where-note"> · shared with you as {server.shared.role === "admin" ? "admin" : "moderator"}</span>}
+        </span>
+        <button className="btn small where-back" onClick={onBack}>Back to my game</button>
+      </div>
+    );
+  }
+  return (
+    <div className="where">
+      <Icon name="play" size={16} />
+      <span className="where-text">
+        Your game{game && <> · <b>{game}</b></>}
+      </span>
+    </div>
   );
 }
 

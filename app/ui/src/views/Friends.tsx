@@ -4,6 +4,7 @@ import { useServers } from "../queries";
 import { useNav } from "../store";
 import { serverAddress, serverHost, type Online } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
+import { TabLink } from "./goto";
 
 type Share = {
   installed: boolean;
@@ -96,8 +97,24 @@ function loadMethod(): Method {
   }
 }
 
-/** server: when it's a dedicated server's page (its name and who it lets in). */
-export function Friends({ data, refresh, server }: { data: Online | null; refresh: () => void; server?: { name: string; visibility: string } }) {
+/** Your own game: how it differs from a dedicated server, and a way to make one. */
+function OwnGameNote() {
+  return (
+    <div className="panel">
+      <h3>Your game or a dedicated server</h3>
+      <p className="muted measure">Friends join the game you're playing: your game is the server. When you quit, change games or your game crashes, everyone drops.</p>
+      <p className="muted measure">For a bigger group or a whole evening, run a dedicated server: it keeps going on its own, on this computer or a rented machine, while you play like everyone else.</p>
+      <div className="row">
+        {ON_THIS_COMPUTER && <button className="btn" onClick={() => useNav.getState().go("servers", "new")}>Make a dedicated server</button>}
+        <a className="btn" href="https://lonerstrike.com/docs#lan-which" target="_blank" rel="noreferrer">Which should I use?</a>
+      </div>
+    </div>
+  );
+}
+
+/** server: when it's a dedicated server's page (its name and who it lets in). settings: that
+ *  page's own Who can join form, shown in place of the name and password form here. */
+export function Friends({ data, refresh, server, settings }: { data: Online | null; refresh: () => void; server?: { name: string; visibility: string }; settings?: ReactNode }) {
   const ask = useConfirm();
   const toast = useToast();
   const run = useCommand(refresh);
@@ -167,11 +184,13 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     if (r.error) toast(r.error, true);
   }, on ? "Asking your router to open the port…" : "Closing the port on your router…");
 
-  if (missing) return <div className="stack"><SectionHead title="Play with friends" /><p className="muted">Sharing isn't in this version of the app yet.</p></div>;
+  const title = server ? "Who can join" : "Play with friends";
+  if (missing) return <div className="stack"><SectionHead title={title} />{settings}<p className="muted">Sharing isn't in this version of the app yet.</p></div>;
   if (!sh)
     return (
       <div className="stack">
-        <SectionHead title="Play with friends" />
+        <SectionHead title={title} />
+        {settings}
         {loadErr ? <LoadError text="Couldn't load how friends connect." onRetry={() => (setLoadErr(false), setTries((n) => n + 1))} /> : <Skeleton />}
       </div>
     );
@@ -255,7 +274,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
         </li>
         <li className={live ? "now" : ""}>
           <strong>Send friends your address</strong>
-          <p>It's your home's internet address, so only share it with friends. Set a join password under Your server.</p>
+          <p>It's your home's internet address, so only share it with friends. Set a join password under {settings ? "Who can join" : "Your server"}.</p>
         </li>
       </ol>
     );
@@ -320,8 +339,8 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
 
   const text = address ? inviteText(serverName, password, address, intro, lanTab) : "";
 
-  // the name and join password, the same for every way of connecting
-  const yourServer = (
+  // the name and join password, the same for every way of connecting (a server's page has its own)
+  const yourServer = settings ?? (
     <form
       className="panel"
       onSubmit={async (e) => {
@@ -362,7 +381,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     const invite = inviteText(serverName, password, at, [], false);
     return (
       <div className="stack">
-        <SectionHead title="Play with friends" note={`${vps.name} runs on ${serverHost(vps)}, so friends connect straight to it. They need Counter-Strike on Steam.`} />
+        <SectionHead title={title} note={`${vps.name} runs on ${serverHost(vps)}, so friends connect straight to it. They need Counter-Strike on Steam.`} />
         <div className="friends">
           <div className="panel">
             <span className={`live ${vps.state === "running" ? "on" : ""}`}>{vps.state === "running" ? "Friends can join now" : "Start the server and friends can join"}</span>
@@ -388,9 +407,10 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
 
   return (
     <div className="stack">
-      <SectionHead title="Play with friends" note={server ? `Friends join ${server.name}. They need Counter-Strike on Steam. Pick how they connect.` : "They need Counter-Strike on Steam. Pick how they connect."} />
+      <SectionHead title={title} note={server ? `Friends join ${server.name}. They need Counter-Strike on Steam. Pick how they connect.` : "They need Counter-Strike on Steam. Pick how they connect."} />
+      {!server && <OwnGameNote />}
       {lanOnly && method !== "lan" && (
-        <div className="banner"><div>This server only lets in people on your network. To use this, change "Who can join" in the server's Overview.</div></div>
+        <div className="banner"><div>This server only lets in people on your network. To use this, pick Anyone with the address or Listed on Steam under Who can join, then save.</div></div>
       )}
       <div className="methods" role="radiogroup" aria-label="How friends connect">
         {METHODS.map((m) => (
@@ -416,7 +436,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
               <div className="address">{address}</div>
               {full && st && st.bots === 0 && (
                 <div className="banner">
-                  <div>{server ? "The server is full, so there's no room for friends. Add more Player slots on its Overview tab." : "Your game is full, so there's no room for friends."}</div>
+                  <div>{server ? <>The server is full, so there's no room for friends. Add more Player slots on its <TabLink tab="overview">Overview</TabLink> tab.</> : "Your game is full, so there's no room for friends."}</div>
                 </div>
               )}
               {full && st && st.bots > 0 && (

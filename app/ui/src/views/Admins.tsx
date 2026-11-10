@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { getJson, isAbort, postJson, targetKey, useActions, useQueuedSave } from "../api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getJson, isAbort, isSharedId, postJson, targetKey, useActions, useQueuedSave } from "../api";
 import type { Online } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
-import { setAdminList } from "../queries";
+import { setAdminList, sharedRole, useGameState } from "../queries";
+import { TabLink } from "./goto";
 import { NeedsSetup } from "./MatchMode";
 import { ShareList } from "./ShareList";
 import { useDirty, useNav } from "../store";
@@ -92,8 +93,8 @@ const GIVE: { key: string; label: string; role: Role; days?: number }[] = [
 type Draft = { id: string; name: string; role: Role; expires: string; note: string; was?: string };
 const EMPTY: Draft = { id: "", name: "", role: "vip", expires: "", note: "" };
 
-const TABS: [Tab, string][] = [["people", "Admins & VIPs"], ["players", "Player history"], ["bans", "Bans"], ["abilities", "What each role gets"], ["vip", "VIP & donations"]];
-type Tab = "people" | "players" | "bans" | "abilities" | "vip";
+const TABS: [Tab, string][] = [["people", "Admins & VIPs"], ["abilities", "What each role gets"], ["vip", "VIP & donations"]];
+type Tab = "people" | "abilities" | "vip";
 
 export function Admins({ data, installed }: { data: Online | null; installed?: string[] }) {
   const ask = useConfirm();
@@ -114,10 +115,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
     setDraft(next);
     setDraftBase(JSON.stringify(next));
   };
-  const [banId, setBanId] = useState("");
-  const [banTime, setBanTime] = useState(0);
   const [donate, setDonate] = useState<string | null>(null);
-  const [q, setQ] = useState("");
   const [tab, setTabRaw] = useState<Tab>(() => {
     try {
       const t = localStorage.getItem("ls.adminTab") as Tab;
@@ -187,24 +185,6 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
     if (ok) setDraft(null);
   }, `Saving ${draft?.name || draft?.id.trim() || "them"}…`);
   const remove = async (p: Person) => (await ask(`Take ${p.name || p.id} off the list?`, { ok: "Remove", danger: true })) && act(`remove:${p.id}`, () => send("/api/admins/remove", { id: p.id }, "Removed"), `Removing ${p.name || p.id}…`);
-  const grant = async (pl: { steamid: string; name: string }, role: Role, days?: number) => {
-    const existing = d.people.find((p) => p.id === pl.steamid);
-    // admin powers are worth a second look before they're handed out
-    if (role === "owner" && !(await ask(`Make ${pl.name} an owner? Owners can change server settings and run console commands.`, { ok: "Make owner" }))) return;
-    if (role === "admin" && !(await ask(`Make ${pl.name} an admin? Admins can kick, ban, slay and change maps.`, { ok: "Make admin" }))) return;
-    act(`grant:${pl.steamid}`, () => send(
-      "/api/admins/person",
-      { id: pl.steamid, name: existing?.name || pl.name, role, expires: days ? addDays(d.today, days) : null, note: existing?.note ?? "", was: existing?.id },
-      role === "vip" ? (days ? `${pl.name} is a VIP for ${days} days` : `${pl.name} is now a VIP`) : `${pl.name} is now ${role === "admin" ? "an admin" : `a ${roleName(role).toLowerCase()}`}`,
-    ), `Giving ${pl.name} a role…`);
-  };
-  const ban = async (id: string, minutes: number, name?: string, after?: () => void) => {
-    const what = minutes ? BAN_TIMES.find((t) => t[0] === minutes)?.[1].toLowerCase() : "for good";
-    if (!(await ask(`Ban ${name || id} ${minutes ? `for ${what}` : "for good"}? They're kicked if they're playing.`, { ok: "Ban", danger: true }))) return;
-    await act(`ban:${id.trim()}`, async () => {
-      if (await send("/api/admins/ban", { id: id.trim(), minutes }, "Banned")) after?.();
-    }, `Banning ${name || id.trim()}…`);
-  };
   const settings = (change: (s: RoleSettings) => RoleSettings, done?: string) =>
     queue({ donate: d.donate, perks: d.perks, abilities: d.abilities }, change, (full) => send("/api/admins/settings", full, done));
   // each control is off while its own change is saving; different ones still queue up
@@ -217,27 +197,16 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
     }), "Saving what each role gets…");
   const noHook = !!installed && !installed.includes("addon-hook");
 
-  // who's playing now first, then everyone who's been here
-  const humans = data ? data.players.filter((p) => !p.bot && !p.host && !!p.steamid && STEAMID.test(p.steamid)) : [];
-  const players = [
-    ...humans.map((h) => {
-      const s = d.seen.find((x) => x.id === h.steamid);
-      return { id: h.steamid!, name: h.name, aka: s?.aka ?? [], last: s?.last ?? 0, visits: s?.visits ?? 1, online: true };
-    }),
-    ...d.seen.filter((x) => !humans.some((h) => h.steamid === x.id)).map((x) => ({ ...x, online: false })),
-  ];
   const people = [...d.people].sort((a, b) => ROLES.findIndex((r) => r.id === a.role) - ROLES.findIndex((r) => r.id === b.role) || (a.name || a.id).localeCompare(b.name || b.id));
 
   return (
     <div className="stack narrow">
-      <SectionHead title="Admins" note="Who has admin powers or VIP perks, who has joined, and who is banned." />
+      <SectionHead title="Admins" note={<>Who has admin powers or VIP perks, and what each role gets. Bans and everyone who has joined are under <TabLink tab="moderation" sub="bans">Moderation</TabLink>.</>} />
       <div className="chips admin-tabs" role="tablist" aria-label="Admins sections">
         {TABS.map(([id, label]) => (
           <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>
             {label}
             {id === "people" && d.people.length > 0 && <i className="tab-n">{d.people.length}</i>}
-            {id === "players" && players.length > 0 && <i className="tab-n">{players.length}</i>}
-            {id === "bans" && d.bans.length > 0 && <i className="tab-n">{d.bans.length}</i>}
           </button>
         ))}
       </div>
@@ -286,95 +255,6 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
       </div>
       )}
 
-      {tab === "players" && (
-      <div>
-        <SectionHead title="Player history" note="Everyone who's joined, newest first. Give someone a role, or ban them, in one click." />
-        <input className="search full" type="search" placeholder="Search names or SteamIDs" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search players" />
-        <ul className="people">
-          {players
-            .filter((pl) => !q.trim() || `${pl.name} ${pl.aka.join(" ")} ${pl.id}`.toLowerCase().includes(q.trim().toLowerCase()))
-            .slice(0, 200)
-            .map((pl) => {
-              const listed = d.people.find((p) => p.id === pl.id);
-              const banned = d.bans.some((b) => b.value === pl.id);
-              return (
-                <li key={pl.id}>
-                  <div className="person">
-                    <span className="person-name">
-                      {pl.name}
-                      {pl.online && <i className="role-badge online">Playing now</i>}
-                      {listed && <i className={`role-badge ${listed.role}`}>{roleName(listed.role)}</i>}
-                      {banned && <i className="role-badge banned">Banned</i>}
-                    </span>
-                    <span className="person-sub">
-                      <span className="mono">{pl.id}</span>
-                      {pl.last ? ` · ${pl.online ? "joined" : "last seen"} ${ago(pl.last)} · ${pl.visits} visit${pl.visits === 1 ? "" : "s"}` : ""}
-                      {pl.aka.length > 0 && ` · also ${pl.aka.slice(0, 3).join(", ")}`}
-                    </span>
-                  </div>
-                  <div className="row">
-                    <select
-                      value=""
-                      disabled={busy(`grant:${pl.id}`)}
-                      aria-busy={busy(`grant:${pl.id}`)}
-                      aria-label={`Give ${pl.name} a role`}
-                      onChange={(e) => {
-                        const g = GIVE.find((x) => x.key === e.target.value);
-                        if (g) grant({ steamid: pl.id, name: pl.name }, g.role, g.days);
-                      }}
-                    >
-                      <option value="">{listed ? "Change role" : "Give a role"}</option>
-                      {GIVE.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
-                    </select>
-                    {!banned && <BusyButton className="btn danger" busy={busy(`ban:${pl.id}`)} label="Ban" busyLabel="Banning…" onClick={() => ban(pl.id, 0, pl.name)} />}
-                  </div>
-                </li>
-              );
-            })}
-          {!players.length && <li className="empty">Nobody has joined yet. People show up here the first time they connect.</li>}
-        </ul>
-        <p className="muted small-note">
-          Only people joining through Steam have a SteamID. On a LAN or offline game they show up as STEAM_ID_LAN and can't be listed, given roles or banned here.
-        </p>
-      </div>
-      )}
-
-      {tab === "bans" && (
-      <div>
-        <SectionHead title="Bans" note="People who can't join your server." />
-        <ShareList list="bans" onShared={load} />
-        <div className="row ban-form">
-          <input className="search" placeholder="SteamID, like STEAM_0:1:12345" value={banId} onChange={(e) => setBanId(e.target.value)} aria-label="SteamID to ban" />
-          <Info text="Find someone's SteamID by typing status in the game console." />
-          <select value={banTime} onChange={(e) => setBanTime(Number(e.target.value))} aria-label="How long">
-            {BAN_TIMES.map(([m, l]) => <option key={m} value={m}>{l}</option>)}
-          </select>
-          <BusyButton className="btn danger" busy={busy(`ban:${banId.trim()}`)} disabled={!STEAMID.test(banId.trim())} label="Ban" busyLabel="Banning…" onClick={() => ban(banId, banTime, undefined, () => setBanId(""))} />
-        </div>
-        <ul className="people">
-          {d.bans.map((b) => {
-            const who = d.people.find((p) => p.id === b.value);
-            return (
-              <li key={b.kind + b.value}>
-                <div className="person">
-                  <span className="person-name">{who?.name || <span className="mono">{b.value}</span>}</span>
-                  <span className="person-sub">{b.kind === "ip" ? "IP address" : "SteamID"}{who ? <> · <span className="mono">{b.value}</span></> : null} · for good</span>
-                </div>
-                <BusyButton
-                  busy={busy(`unban:${b.value}`)}
-                  label="Unban"
-                  busyLabel="Unbanning…"
-                  onClick={async () => (await ask(`Unban ${who?.name || b.value}?`, { ok: "Unban" })) && act(`unban:${b.value}`, () => send("/api/admins/unban", b, "Unbanned"), `Unbanning ${who?.name || b.value}…`)}
-                />
-              </li>
-            );
-          })}
-          {!d.bans.length && <li className="empty">Nobody is banned for good.</li>}
-        </ul>
-        <p className="muted small-note">Bans for a set time last until they run out or the game restarts, so they aren't listed here. To lift one early, restart the game or server.</p>
-      </div>
-      )}
-
       {tab === "abilities" && (
       <div>
         <SectionHead title="What each role gets" note="Tick the abilities each role can use in the game. Changes reach a running game straight away." />
@@ -401,7 +281,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
                     </span>
                     <span className="ability-what">{a.what}</span>
                     <span className="ability-how">{a.how}</span>
-                    {a.key === "hook" && noHook && <span className="ability-how err-text">The hook add-on isn't installed, so this does nothing yet. Add it from Mods.</span>}
+                    {a.key === "hook" && noHook && <span className="ability-how err-text">The hook add-on isn't installed, so this does nothing yet. Add it from <TabLink tab="mods">Mods</TabLink>.</span>}
                   </th>
                   {COLUMNS.map((r) => (
                     <td key={r}>
@@ -557,5 +437,237 @@ function Editor({ draft, setDraft, today, onSave, saving }: { draft: Draft; setD
         <button className="btn" onClick={() => setDraft(null)}>Cancel</button>
       </div>
     </div>
+  );
+}
+
+// ---- bans and who has joined (the Moderation page) -----------------------------------------
+
+/** What Moderation's Bans and Player history show. On a shared server the owner's app sends
+ *  only the bans and who has joined (people stays empty: the admin list is the owner's). */
+type ModList = { bans: Ban[]; seen: Seen[]; people: Person[]; today: string };
+
+function useModList() {
+  const toast = useToast();
+  const shared = isSharedId(targetKey());
+  const [d, setD] = useState<ModList | null>(null);
+  const [failed, setFailed] = useState("");
+  const loaded = useRef(false);
+  const load = useCallback(() => {
+    const oops = (msg: string) => (loaded.current ? toast(msg, true) : setFailed(msg));
+    return getJson<Partial<Data> | { ok: false; error: string }>(shared ? "/api/admins/bans" : "/api/admins")
+      .then((r) => {
+        if (!("bans" in r) || !r.bans) return oops(("error" in r && r.error) || "Couldn't load the bans.");
+        loaded.current = true;
+        setD({ bans: r.bans, seen: r.seen ?? [], people: r.people ?? [], today: r.today ?? "" });
+        setFailed("");
+        // the Players page's menus read the same list
+        if ("people" in r && r.people) setAdminList(r as Data);
+      })
+      .catch((e) => !isAbort(e) && oops("Couldn't reach the app."));
+  }, [shared, toast]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  /** Posts a change. Your own list comes back with the answer; a shared server's owner only says it worked. */
+  const send = async (path: string, body: unknown, done?: string) => {
+    const r = await postJson<Data | { ok?: boolean; error?: string }>(path, body).catch(() => null);
+    if (!r) return toast("Couldn't reach the app.", true), false;
+    if ("people" in r) {
+      setD({ bans: r.bans, seen: r.seen, people: r.people, today: r.today });
+      setAdminList(r);
+    } else if (r.ok && !r.error) void load();
+    else return toast(r.error || "Couldn't save that. Try again.", true), false;
+    if (done) toast(done);
+    return true;
+  };
+  return { d, failed, load, send };
+}
+
+/** Same action keys as the Players page, so a ban shows running in both. */
+function useAdminActions() {
+  const { run, busy } = useActions();
+  return {
+    act: (what: string, fn: () => Promise<unknown>, label: string) => run(`admins:${targetKey()}:${what}`, fn, label),
+    busy: (what: string) => busy(`admins:${targetKey()}:${what}`),
+  };
+}
+
+/** Banning for good (a Moderator: up to a week), asked first. */
+function useBanAsk(send: (path: string, body: unknown, done?: string) => Promise<boolean>) {
+  const ask = useConfirm();
+  const { act } = useAdminActions();
+  return async (id: string, minutes: number, name?: string, after?: () => void) => {
+    const what = minutes ? `for ${BAN_TIMES.find((t) => t[0] === minutes)?.[1].toLowerCase() ?? `${minutes} minutes`}` : "for good";
+    const timed = minutes ? " A timed ban also ends if the server restarts." : "";
+    if (!(await ask(`Ban ${name || id} ${what}? They're kicked if they're playing.${timed}`, { ok: "Ban", danger: true }))) return;
+    await act(`ban:${id.trim()}`, async () => {
+      if (await send("/api/admins/ban", { id: id.trim(), minutes }, "Banned")) after?.();
+    }, `Banning ${name || id.trim()}…`);
+  };
+}
+
+/** Moderation, Bans: who can't join, banning by SteamID, and lifting a ban. */
+export function BanList() {
+  const ask = useConfirm();
+  const { d, failed, load, send } = useModList();
+  const { act, busy } = useAdminActions();
+  const ban = useBanAsk(send);
+  const mod = sharedRole() === "moderator";
+  // a Moderator bans for up to a week (the owner's app holds them to it)
+  const times = mod ? BAN_TIMES.filter(([m]) => m > 0) : BAN_TIMES;
+  const [banId, setBanId] = useState("");
+  const [banTime, setBanTime] = useState(times[0][0]);
+  const head = <SectionHead title="Bans" note="People who can't join. Ban someone by their SteamID, or from the Players tab, the chat log or a report." />;
+  if (!d)
+    return (
+      <section>
+        {head}
+        {failed ? <LoadError text={failed} onRetry={() => void load()} /> : <Skeleton rows={3} />}
+      </section>
+    );
+  return (
+    <section>
+      {head}
+      <ShareList list="bans" onShared={() => void load()} />
+      <div className="row ban-form">
+        <input className="search" placeholder="SteamID, like STEAM_0:1:12345" value={banId} onChange={(e) => setBanId(e.target.value)} aria-label="SteamID to ban" />
+        <Info text="Find someone's SteamID by typing status in the game console, or in the chat log." />
+        <select value={banTime} onChange={(e) => setBanTime(Number(e.target.value))} aria-label="How long">
+          {times.map(([m, l]) => <option key={m} value={m}>{l}</option>)}
+        </select>
+        <BusyButton className="btn danger" busy={busy(`ban:${banId.trim()}`)} disabled={!STEAMID.test(banId.trim())} label="Ban" busyLabel="Banning…" onClick={() => ban(banId, banTime, undefined, () => setBanId(""))} />
+      </div>
+      <ul className="people">
+        {d.bans.map((b) => {
+          const who = d.people.find((p) => p.id === b.value) ?? d.seen.find((p) => p.id === b.value);
+          return (
+            <li key={b.kind + b.value}>
+              <div className="person">
+                <span className="person-name">{who?.name || <span className="mono">{b.value}</span>}</span>
+                <span className="person-sub">{b.kind === "ip" ? "IP address" : "SteamID"}{who ? <> · <span className="mono">{b.value}</span></> : null} · for good</span>
+              </div>
+              {!mod && (
+                <BusyButton
+                  busy={busy(`unban:${b.value}`)}
+                  label="Unban"
+                  busyLabel="Unbanning…"
+                  onClick={async () => (await ask(`Unban ${who?.name || b.value}?`, { ok: "Unban" })) && act(`unban:${b.value}`, () => send("/api/admins/unban", b, "Unbanned"), `Unbanning ${who?.name || b.value}…`)}
+                />
+              )}
+            </li>
+          );
+        })}
+        {!d.bans.length && <li className="empty">Nobody is banned for good.</li>}
+      </ul>
+      <p className="muted small-note">
+        Bans for a set time last until they run out or the server restarts, so they aren't listed here. To lift one early, restart the game or server.
+        {mod ? " Moderators ban for up to a week; an Admin or the owner lifts bans for good." : ""}
+      </p>
+    </section>
+  );
+}
+
+/** Moderation, Player history: everyone who's joined, newest first, with a ban and (your own) a role in one click. */
+export function PlayerHistory() {
+  const ask = useConfirm();
+  const { d, failed, load, send } = useModList();
+  const { act, busy } = useAdminActions();
+  const ban = useBanAsk(send);
+  const live = useGameState().state;
+  const data = live?.online ? live : null;
+  const role = sharedRole();
+  const [q, setQ] = useState("");
+  const head = <SectionHead title="Player history" note={role ? "Everyone who's joined, newest first." : "Everyone who's joined, newest first. Give someone a role, or ban them, in one click."} />;
+  if (!d)
+    return (
+      <section>
+        {head}
+        {failed ? <LoadError text={failed} onRetry={() => void load()} /> : <Skeleton rows={4} />}
+      </section>
+    );
+
+  const grant = async (pl: { steamid: string; name: string }, r: Role, days?: number) => {
+    const existing = d.people.find((p) => p.id === pl.steamid);
+    // admin powers are worth a second look before they're handed out
+    if (r === "owner" && !(await ask(`Make ${pl.name} an owner? Owners can change server settings and run console commands.`, { ok: "Make owner" }))) return;
+    if (r === "admin" && !(await ask(`Make ${pl.name} an admin? Admins can kick, ban, slay and change maps.`, { ok: "Make admin" }))) return;
+    act(`grant:${pl.steamid}`, () => send(
+      "/api/admins/person",
+      { id: pl.steamid, name: existing?.name || pl.name, role: r, expires: days ? addDays(d.today, days) : null, note: existing?.note ?? "", was: existing?.id },
+      r === "vip" ? (days ? `${pl.name} is a VIP for ${days} days` : `${pl.name} is now a VIP`) : `${pl.name} is now ${r === "admin" ? "an admin" : `a ${roleName(r).toLowerCase()}`}`,
+    ), `Giving ${pl.name} a role…`);
+  };
+
+  // who's playing now first, then everyone who's been here
+  const humans = data ? data.players.filter((p) => !p.bot && !p.host && !!p.steamid && STEAMID.test(p.steamid)) : [];
+  const players = [
+    ...humans.map((h) => {
+      const s = d.seen.find((x) => x.id === h.steamid);
+      return { id: h.steamid!, name: h.name, aka: s?.aka ?? [], last: s?.last ?? 0, visits: s?.visits ?? 1, online: true };
+    }),
+    ...d.seen.filter((x) => !humans.some((h) => h.steamid === x.id)).map((x) => ({ ...x, online: false })),
+  ];
+  return (
+    <section>
+      {head}
+      <input className="search full" type="search" placeholder="Search names or SteamIDs" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search players" />
+      <ul className="people">
+        {players
+          .filter((pl) => !q.trim() || `${pl.name} ${pl.aka.join(" ")} ${pl.id}`.toLowerCase().includes(q.trim().toLowerCase()))
+          .slice(0, 200)
+          .map((pl) => {
+            const listed = d.people.find((p) => p.id === pl.id);
+            const banned = d.bans.some((b) => b.value === pl.id);
+            return (
+              <li key={pl.id}>
+                <div className="person">
+                  <span className="person-name">
+                    {pl.name}
+                    {pl.online && <i className="role-badge online">Playing now</i>}
+                    {listed && <i className={`role-badge ${listed.role}`}>{roleName(listed.role)}</i>}
+                    {banned && <i className="role-badge banned">Banned</i>}
+                  </span>
+                  <span className="person-sub">
+                    <span className="mono">{pl.id}</span>
+                    {pl.last ? ` · ${pl.online ? "joined" : "last seen"} ${ago(pl.last)} · ${pl.visits} visit${pl.visits === 1 ? "" : "s"}` : ""}
+                    {pl.aka.length > 0 && ` · also ${pl.aka.slice(0, 3).join(", ")}`}
+                  </span>
+                </div>
+                <div className="row">
+                  {/* roles on a shared server are its owner's */}
+                  {!role && (
+                    <select
+                      value=""
+                      disabled={busy(`grant:${pl.id}`)}
+                      aria-busy={busy(`grant:${pl.id}`)}
+                      aria-label={`Give ${pl.name} a role`}
+                      onChange={(e) => {
+                        const g = GIVE.find((x) => x.key === e.target.value);
+                        if (g) grant({ steamid: pl.id, name: pl.name }, g.role, g.days);
+                      }}
+                    >
+                      <option value="">{listed ? "Change role" : "Give a role"}</option>
+                      {GIVE.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+                    </select>
+                  )}
+                  {!banned && (
+                    <BusyButton
+                      className="btn danger"
+                      busy={busy(`ban:${pl.id}`)}
+                      label={role === "moderator" ? "Ban for a week" : "Ban"}
+                      busyLabel="Banning…"
+                      onClick={() => ban(pl.id, role === "moderator" ? 10080 : 0, pl.name)}
+                    />
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        {!players.length && <li className="empty">{role && !d.today ? "Who has joined is kept by the owner's Loner-Strike, which isn't sharing it here." : "Nobody has joined yet. People show up here the first time they connect."}</li>}
+      </ul>
+      <p className="muted small-note">
+        Only people joining through Steam have a SteamID. On a LAN or offline game they show up as STEAM_ID_LAN and can't be listed, given roles or banned here.
+      </p>
+    </section>
   );
 }

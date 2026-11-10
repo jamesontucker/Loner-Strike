@@ -25,8 +25,9 @@ const failed = (): Reply => ({ error: "Couldn't reach the app." });
 const busyState = (s: string) => !["done", "error"].includes(s);
 
 /** Round-end music, Quake sounds and sound packs, for the player's game or a dedicated server. */
-type SoundTab = "music" | "quake" | "packs";
-const SOUND_TABS: [SoundTab, string][] = [["music", "Round-end music"], ["quake", "Quake sounds"], ["packs", "Sound packs"]];
+type SoundTab = "music" | "quake" | "packs" | "yours";
+/** yours: sounds downloaded from Get more, only in your own game */
+const SOUND_TABS: [SoundTab, string][] = [["music", "Round-end music"], ["quake", "Quake sounds"], ["packs", "Sound packs"], ["yours", "Your sounds"]];
 
 export function Sounds({ target }: { target: string }) {
   const toast = useToast();
@@ -34,10 +35,12 @@ export function Sounds({ target }: { target: string }) {
   const run = useCommand();
   const [d, setD] = useState<Data | null>(null);
   const [tab, setTabRaw] = useState<SoundTab>(() => {
+    // opened from Get more's link to what you've downloaded
+    if (target === "local" && useNav.getState().focus === "yours") return "yours";
     try {
       const t = localStorage.getItem("ls.soundTab") as SoundTab;
       // sound packs stay with a shared server's owner
-      return SOUND_TABS.some(([id]) => id === t) && !(t === "packs" && isSharedId(target)) ? t : "music";
+      return SOUND_TABS.some(([id]) => id === t) && !(t === "packs" && isSharedId(target)) && !(t === "yours" && target !== "local") ? t : "music";
     } catch {
       return "music";
     }
@@ -50,6 +53,13 @@ export function Sounds({ target }: { target: string }) {
       /* private window */
     }
   };
+  const focus = useNav((s) => s.focus);
+  useEffect(() => {
+    if (focus !== "yours" || target !== "local") return;
+    useNav.getState().clearFocus();
+    setTab("yours");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
   const [packs, setPacks] = useState<Packs | null>(null);
   const [packsFailed, setPacksFailed] = useState(false);
   const go = useNav((s) => s.go);
@@ -265,7 +275,7 @@ export function Sounds({ target }: { target: string }) {
       ))}
 
       <div className="chips admin-tabs" role="tablist" aria-label="Sounds sections">
-        {SOUND_TABS.filter(([t]) => t !== "packs" || !isSharedId(target)).map(([id, label]) => (
+        {SOUND_TABS.filter(([t]) => (t !== "packs" || !isSharedId(target)) && (t !== "yours" || target === "local")).map(([id, label]) => (
           <button key={id} role="tab" className="chip" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
         ))}
       </div>
@@ -452,18 +462,17 @@ export function Sounds({ target }: { target: string }) {
             })}
           </div>
         )}
-        {/* sounds downloaded from Get more, which change only what you hear in your own game */}
-        {target === "local" && (
-          <div className="sound-downloads">
-            <MyContent
-              kinds={["sounds"]}
-              title="Your downloaded sounds"
-              note="Sounds you got from GameBanana. They replace the game's own, and removing one puts them back."
-              empty="None yet. Get some from GameBanana with the button above."
-            />
-          </div>
-        )}
       </section>
+      )}
+
+      {/* ---- sounds downloaded from Get more, which change only what you hear in your own game ---- */}
+      {tab === "yours" && target === "local" && (
+        <MyContent
+          kinds={["sounds"]}
+          title="Your downloaded sounds"
+          note="Sounds you got from GameBanana. They replace the game's own, and removing one puts them back."
+          empty="None yet. Get some from GameBanana with the button above."
+        />
       )}
     </div>
   );

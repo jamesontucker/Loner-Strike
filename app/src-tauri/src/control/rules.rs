@@ -83,6 +83,8 @@ pub fn check(a: &Ask, known_setting: &dyn Fn(&str, &str) -> bool) -> Verdict {
             }
         }
         ("POST", ["api", "servers", _, "console", "hints"]) => both,
+        // the ban list and who has joined (not the admin list: that's the owner's)
+        ("GET", ["api", "admins", "bans"]) => both,
         ("GET", ["api", "community"] | ["api", "community", "chat"] | ["api", "community", "reports"] | ["api", "community", "stats"]) => both,
         (
             "GET",
@@ -348,6 +350,15 @@ mod tests {
                 assert!(!ok(&ask(r, m, p, None)), "{r:?} {m} {p}");
             }
         }
+    }
+
+    #[test]
+    fn both_read_bans() {
+        for r in [Role::Moderator, Role::Admin] {
+            assert!(ok(&ask(r, "GET", "/api/admins/bans", None)), "{r:?}");
+            assert!(!ok(&ask(r, "GET", "/api/admins", None)), "{r:?}");
+        }
+        assert!(!ok(&ask(Role::Moderator, "POST", "/api/admins/unban", Some(&json!({"kind": "id", "value": "STEAM_0:1:1"})))));
     }
 
     #[test]

@@ -6,7 +6,7 @@ import type { AppInfo, PhoneInfo } from "../types";
 import { ON_THIS_COMPUTER } from "../api";
 import { gameTitle } from "../games";
 import { queryClient, reloadScan, useServers, waitForSetupJob } from "../queries";
-import { useNav } from "../store";
+import { useNav, type Section } from "../store";
 import { applyScale, savedScale, BusyButton, Info, LoadError, SCALES, SectionHead, Sheet, Switch, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
 import { BackupSheet, RestoreSheet } from "./Backup";
@@ -19,6 +19,12 @@ const mb = (n: number) => (n < 1048576 ? `${Math.max(0, Math.round(n / 1024))} K
 
 // The app's own settings (always this computer's, whichever server is open), cached so
 // Settings opens with the last values instead of loading them again each time.
+/** Help by symptom: what's wrong, where to fix it (page and its focus) and the docs' anchor. */
+const TROUBLE: [string, string, Section, string | undefined, string][] = [
+  ["No bots, or the app can't reach the game", "Repair", "mods", "repair", "no-bots-help"],
+  ["Friends can't join", "Play with friends", "friends", undefined, "friends-cant-join"],
+  ["A server won't start", "Servers", "servers", undefined, "server-wont-start"],
+];
 const PREFS = ["appPrefs"];
 const PHONE = ["appPhone"];
 const STORAGE = ["appStorage"];
@@ -405,20 +411,30 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
 
       <section>
         <SectionHead title="Backup & restore" note="Everything in one file: your game's mode settings, presets, admins, bans, map rotation, your own plugins and maps, and which mods it has; every server; and the app's preferences. For after a reinstall, or moving to another computer. A single server is backed up from its own page." />
-        <div className="panel row between">
-          <p className="muted">Passwords are only included if you lock them with a password of your own.</p>
-          {ON_THIS_COMPUTER ? (
-            <div className="row">
-              <button className="btn primary" onClick={() => setBackup("backup")}>Back up everything</button>
-              <button className="btn" disabled={!ownGame} title={ownGame ? undefined : NO_GAME_TO_BACK_UP} onClick={() => setBackup("game")}>Just your game</button>
+        {ON_THIS_COMPUTER ? (
+          <div className="panel settings-list">
+            <div className="row between setting-line">
+              <div>
+                <b>Back up to a file</b>
+                <p className="muted">{ownGame ? "Passwords are only included if you lock the backup with a password of your own." : NO_GAME_TO_BACK_UP}</p>
+              </div>
+              <div className="row nowrap">
+                <button className="btn primary" onClick={() => setBackup("backup")}>Back up everything</button>
+                <button className="btn" disabled={!ownGame} onClick={() => setBackup("game")}>Just your game</button>
+              </div>
+            </div>
+            <div className="row between setting-line">
+              <div>
+                <b>Restore a backup</b>
+                <p className="muted">Puts back everything in a backup file, or just the parts you pick.</p>
+              </div>
               <button className="btn" onClick={() => setBackup("restore")}>Restore a backup</button>
             </div>
-          ) : (
-            <p className="muted">{ON_COMPUTER_ONLY}</p>
-          )}
-        </div>
-        {ON_THIS_COMPUTER && !ownGame && <p className="muted small-note">{NO_GAME_TO_BACK_UP}</p>}
-        {ON_THIS_COMPUTER && <DailyBackups on={prefs?.auto_backups !== false} busy={busy("app:pref:auto_backups")} disabled={!prefs} onChange={(v) => setPref({ auto_backups: v })} />}
+            <DailyBackups on={prefs?.auto_backups !== false} busy={busy("app:pref:auto_backups")} disabled={!prefs} onChange={(v) => setPref({ auto_backups: v })} />
+          </div>
+        ) : (
+          <p className="muted">{ON_COMPUTER_ONLY}</p>
+        )}
         {backup === "backup" && <BackupSheet onClose={() => setBackup(null)} />}
         {backup === "game" && ownGame && <BackupSheet only={[`local:${ownGame}`]} onClose={() => setBackup(null)} />}
         {backup === "restore" && <RestoreAll onClose={() => setBackup(null)} onChanged={reloadApp} />}
@@ -456,16 +472,29 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
 
       <section>
         <SectionHead title="Help" />
-        <div className="panel row between">
-          <div>
-            <b>Copy diagnostics</b>
-            <p className="muted">Version, game folders, what's installed and recent errors, for a bug report. No passwords.</p>
+        {/* one list, like Storage's: diagnostics, then troubleshooting by symptom (where to fix it,
+            and the docs on it) */}
+        <div className="panel settings-list">
+          <div className="row between setting-line">
+            <div>
+              <b>Copy diagnostics</b>
+              <p className="muted">Version, game folders, what's installed and recent errors, for a bug report. No passwords.</p>
+            </div>
+            <div className="row">
+              <BusyButton busy={busy("app:diagnostics")} label="Copy" busyLabel="Collecting…" onClick={copyDiagnostics} />
+              <a className="btn" href="https://lonerstrike.com/docs" target="_blank" rel="noreferrer">Docs</a>
+              <a className="btn" href="https://github.com/jamesontucker/Loner-Strike/issues" target="_blank" rel="noreferrer">Report a problem</a>
+            </div>
           </div>
-          <div className="row">
-            <BusyButton busy={busy("app:diagnostics")} label="Copy" busyLabel="Collecting…" onClick={copyDiagnostics} />
-            <a className="btn" href="https://lonerstrike.com/docs" target="_blank" rel="noreferrer">Docs</a>
-            <a className="btn" href="https://github.com/jamesontucker/Loner-Strike/issues" target="_blank" rel="noreferrer">Report a problem</a>
-          </div>
+          {TROUBLE.map(([what, label, section, focus, doc]) => (
+            <div key={doc} className="row between setting-line">
+              <b>{what}</b>
+              <div className="row">
+                <button className="btn" onClick={() => useNav.getState().go(section, focus)}>{label}</button>
+                <a className="btn" href={`https://lonerstrike.com/docs#${doc}`} target="_blank" rel="noreferrer">Docs</a>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -617,12 +646,12 @@ function DailyBackups({ on, busy, disabled, onChange }: { on: boolean; busy: boo
     return h < 1 ? "less than an hour ago" : h < 48 ? `${h} hour${h === 1 ? "" : "s"} ago` : `${Math.round(h / 24)} days ago`;
   };
   return (
-    <div className="panel">
-      <div className="setting">
-        <span className="name">
-          Back up servers on Linux machines every day
-          <span className="note">Their bans, admins and settings live on the machine. A copy is kept here, the last 7 days of each, while Loner-Strike is open. Passwords and Discord links aren't included.</span>
-        </span>
+    <div className="setting-line daily-backups">
+      <div className="row between nowrap toggle">
+        <div>
+          <b>Back up servers on Linux machines every day</b>
+          <p className="muted">Their bans, admins and settings live on the machine. A copy of each is kept here, the last 7 days, while Loner-Strike is open. Passwords and Discord links aren't included.</p>
+        </div>
         <Switch on={on} label="Back up servers on Linux machines every day" disabled={disabled || busy} onChange={onChange} />
       </div>
       {info && info.servers.length > 0 && (
