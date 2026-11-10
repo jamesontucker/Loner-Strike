@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getJson, ON_THIS_COMPUTER, postJson, useActions } from "../api";
+import { getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
@@ -66,11 +66,11 @@ export function Voice({ server }: { server: ServerInfo }) {
     }, "Downloading the models…");
 
   const uninstall = async () => {
-    if (!(await ask("Remove Advanced Bot Interaction? Voice turns off on every server and the models are deleted from this computer. You can install it again any time.", { ok: "Remove", danger: true }))) return;
+    if (!(await ask("Remove bot voice commands? Voice turns off on every server and the models are deleted from this computer. You can install it again any time.", { ok: "Remove", danger: true }))) return;
     run(key("uninstall"), async () => {
       const r = await post("/api/voice/uninstall");
       if (r.error) toast(r.error, true);
-      else toast("Removed.");
+      else toast("Bot voice commands removed.");
       await load();
     }, "Removing…");
   };
@@ -85,13 +85,13 @@ export function Voice({ server }: { server: ServerInfo }) {
   return (
     <div className="voice-addon">
       <SectionHead
-        title="Advanced Bot Interaction"
-        note="The bots hear what people say on voice chat and answer, the same way as typed team chat: rush b, two long, flash for me, someone buy me an awp."
+        title="Bot voice commands"
+        note={'The bots hear what people say on voice chat and answer, the same way as typed team chat: "rush b", "two long", "flash for me", "someone buy me an AWP".'}
       />
       <div className="panel">
         <p className="muted">
-          Speech is turned into text on this computer and given to the bots. Nothing is recorded, kept or sent anywhere. Only teammates' voice
-          reaches them, as in the game.
+          Speech is turned into text on {st.remote ? "the server's machine" : "this computer"} and given to the bots. No audio is kept or sent
+          anywhere; the lines it heard go in the server's log. Only teammates' voice reaches the bots, as in the game.
         </p>
         {!st.installed ? (
           <div className="row between">
@@ -99,7 +99,7 @@ export function Voice({ server }: { server: ServerInfo }) {
               <b>Install</b>
               <p className="muted">Downloads the speech and understanding models ({mb(st.model_bytes)}) once, for every server on this computer.</p>
             </div>
-            {ON_THIS_COMPUTER && (
+            {ON_THIS_COMPUTER ? (
               <BusyButton
                 className="btn primary"
                 busy={busy(key("install")) || st.installing}
@@ -107,6 +107,8 @@ export function Voice({ server }: { server: ServerInfo }) {
                 busyLabel={st.progress > 0 ? `Downloading ${Math.round(st.progress * 100)}%…` : "Downloading…"}
                 onClick={install}
               />
+            ) : (
+              <p className="muted small-note">{ON_COMPUTER_ONLY}</p>
             )}
           </div>
         ) : (
@@ -114,25 +116,31 @@ export function Voice({ server }: { server: ServerInfo }) {
             {st.remote && !st.enabled && (
               <p className="muted">Turning it on puts the voice programs on the server and downloads the models there ({mb(st.model_bytes)}). It runs with the server and can only talk to the server itself.</p>
             )}
-            {!st.supported ? null : (
+            {(
               <div className="setting">
                 <div className="name">
                   Bots understand voice chat
                   <span className="note">
-                    {st.enabled
+                    {busy(key("save")) ? (
+                      <>
+                        <span className="spinner" aria-hidden="true" /> {st.remote ? "Setting up on the server. This can take a few minutes…" : "Saving…"}
+                      </>
+                    ) : st.enabled
                       ? st.running
                         ? "On, and listening"
                         : st.remote ? "On. It runs while the server does" : "On. It starts with the server"
                       : "Off"}
+                    {!ON_THIS_COMPUTER && <> {ON_COMPUTER_ONLY}</>}
                   </span>
                 </div>
                 <Switch on={st.enabled} label="Bots understand voice chat" disabled={!ON_THIS_COMPUTER || busy(key("save"))} onChange={toggle} />
               </div>
             )}
-            {st.error && <p className="error">{st.error}</p>}
-            {st.enabled && st.log.length > 0 && (
+            {st.error && <p className="err-text">{st.error}</p>}
+            {failed && <p className="muted">Couldn't check on it just now. Showing what it last reported.</p>}
+            {(st.enabled || st.error) && st.log.length > 0 && (
               <details className="advanced">
-                <summary>What it heard</summary>
+                <summary>What it heard (its log)</summary>
                 <pre className="console small">{st.log.join("\n")}</pre>
               </details>
             )}

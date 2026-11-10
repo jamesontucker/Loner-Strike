@@ -226,9 +226,9 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
     lanTab = true;
     steps = (
       <ol className="steps">
-        <li className="done"><strong>Get everyone on the same network</strong><p>Same Wi-Fi, or plugged into the same router.</p>{lanErr && <p className="err-text">{NO_ADDRESS}</p>}</li>
-        <li className="now"><strong>{server ? "Start the server" : "Start your game"}</strong>{OS === "mac" ? <p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (CrossOver): click Allow.</p> : OS === "windows" ? <p>The first time, Windows may ask whether to let the game through its firewall: allow it on private networks. If friends still can't see it, Windows may think this Wi-Fi is public: in Settings, Network & internet, open your Wi-Fi and pick Private network.</p> : null}</li>
-        <li className="now"><strong>Friends join from the LAN tab</strong><p>In Counter-Strike, open <b>Find Servers</b> and the <b>LAN</b> tab, and your server is there{serverName ? ` as "${serverName}"` : ""}.</p></li>
+        <li className={lanErr ? "now" : "done"}><strong>Get everyone on the same network</strong><p>Same Wi-Fi, or plugged into the same router.</p>{lanErr && <p className="err-text">{NO_ADDRESS}</p>}</li>
+        <li className={data ? "done" : "now"}><strong>{server ? "Start the server" : "Start your game"}</strong>{OS === "mac" ? <p>The first time a friend joins, your Mac may ask whether to allow incoming connections for the game (CrossOver): click Allow.</p> : OS === "windows" ? <p>The first time, Windows may ask whether to let the game through its firewall: allow it on private networks. If friends still can't see it, Windows may think this Wi-Fi is public: in Settings, Network & internet, open your Wi-Fi and pick Private network.</p> : null}</li>
+        <li className={data ? "now" : ""}><strong>Friends join from the LAN tab</strong><p>In Counter-Strike, open <b>Find Servers</b> and the <b>LAN</b> tab, and your server is there{serverName ? ` as "${serverName}"` : ""}.</p></li>
       </ol>
     );
   } else if (method === "direct") {
@@ -275,7 +275,7 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
           ) : sh.claim?.step === "failed" ? (
             <><p className="err-text">{sh.claim.error}</p><BusyButton className="btn primary" busy={busy("connect")} label="Try again" busyLabel="Connecting…" onClick={() => act("connect")} /></>
           ) : sh.claim ? (
-            <><p><a href={sh.claim.url} target="_blank" rel="noreferrer">Open playit.gg to approve this computer</a>, then come back. {sh.claim.step === "approve" ? "Waiting for you to approve…" : "Waiting for the page to open…"}</p><BusyButton busy={busy("cancel")} label="Cancel" busyLabel="Cancelling…" onClick={() => act("cancel")} /></>
+            <><p><a href={sh.claim.url} target="_blank" rel="noreferrer">Open playit.gg to approve this computer</a>, then come back. {sh.claim.step === "approve" ? <><span className="spinner" aria-hidden="true" />Waiting for you to approve…</> : "Waiting for the page to open…"}</p><BusyButton busy={busy("cancel")} label="Cancel" busyLabel="Cancelling…" onClick={() => act("cancel")} /></>
           ) : (
             <BusyButton className="btn primary" busy={busy("connect")} label="Connect to playit.gg" busyLabel="Connecting…" onClick={async () => { const r = await act("connect"); if (r?.claim) window.open(r.claim.url, "_blank"); }} />
           )}
@@ -407,7 +407,12 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
             <div className="panel">
               <span className={`live ${data ? "on" : ""}`}>{data ? "Friends can join now" : "Start the game and friends can join"}</span>
               <div className="address">{address}</div>
-              {full && st && (
+              {full && st && st.bots === 0 && (
+                <div className="banner">
+                  <div>{server ? "The server is full, so there's no room for friends. Add more Player slots on its Overview tab." : "Your game is full, so there's no room for friends."}</div>
+                </div>
+              )}
+              {full && st && st.bots > 0 && (
                 <div className="banner">
                   <div>The server is full of bots, so there's no room for friends.</div>
                   <BusyButton

@@ -16,7 +16,7 @@ export function BotCommands() {
       <summary>What you can tell the bots</summary>
       <p className="muted">
         Any wording close to these works, in team chat. Start with a bot's name to ask just that one. Each bot decides by its personality: a lurker
-        may ignore a call, a rich one may buy you that awp, and most of the time somebody answers.
+        may ignore a call, a rich one may buy you that AWP, and most of the time somebody answers.
       </p>
       <dl>
         {GROUPS.map(([group, lines]) => (

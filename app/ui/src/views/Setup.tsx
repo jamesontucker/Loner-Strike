@@ -119,7 +119,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
   const finish = () => run("setup:finish", async () => {
     await postJson("/api/app/game", { hl: install.hl, game: games[0] }).catch(() => null);
     onDone();
-  }, "Opening the panel…");
+  }, "Opening Loner-Strike…");
 
   if (!scan.installs.length) return <NoGame nativeMac={scan.native_mac} onRescan={onRescan} onClose={onClose} />;
 
@@ -308,7 +308,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             {job?.state === "error" && (
               <>
                 <p className="err-text">{job.error}</p>
-                <p className="muted">Nothing that finished is lost. Try again to carry on.</p>
+                <p className="muted">Nothing that finished is lost. Go back to review and install again to carry on.</p>
                 <div className="row">
                   <button className="btn primary" onClick={() => setStage("review")}>Back to review</button>
                   <button className="btn" onClick={onClose}>Close</button>
@@ -331,7 +331,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             </ul>
             {!!job?.failed_compiles?.length && <p className="err-text">These didn't build, so they won't load: {job.failed_compiles.join(", ")}.</p>}
             {job?.notes?.map((n) => <p key={n} className="muted">{n}</p>)}
-            <BusyButton className="btn primary big-btn" busy={busy("setup:finish")} label="Open the panel" busyLabel="Opening…" onClick={finish} />
+            <BusyButton className="btn primary big-btn" busy={busy("setup:finish")} label="Start playing" busyLabel="Opening…" onClick={finish} />
             <p className="muted done-links">
               Find people to play with on <a href="https://discord.gg/K9eBHVVwZE" target="_blank" rel="noreferrer">our Discord</a>, and what's new at <a href="https://lonerstrike.com" target="_blank" rel="noreferrer">lonerstrike.com</a>.
             </p>

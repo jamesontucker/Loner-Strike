@@ -158,7 +158,7 @@ export function ControlRoute({ domain, port }: { domain: string; port: number })
  * and working, the Cloudflare steps fold away; not reachable, they're open with why. */
 function ServerReach({ c }: { c: Control }) {
   if (!c.url) {
-    return <p className="muted small-note">Helpers connect to the server itself at its website status address, so this computer can be off. Set up Website status for this server in Overview first.</p>;
+    return <p className="muted small-note">Helpers connect to the server itself at its website status address, so this computer can be off. Set up Website status first, in this server's Website status tab.</p>;
   }
   return (
     <div className="share-reach">
@@ -227,9 +227,10 @@ export function ShareControl({ server }: { server: ServerInfo }) {
   const list = addresses.split(/[\s,]+/).map((a) => a.trim()).filter(Boolean);
   // a Linux server: helpers reach the server itself, at its website status address
   const onServer = c?.mode === "server";
-  const make = () => run(`${server.id}:invite`, async () => {
+  const make = async () => {
     if (!onServer && !list.length) return toast("Add at least one address friends reach this computer at.", true);
     if (!steam.trim() && !(await ask(NO_STEAM, { ok: "Invite without it" }))) return;
+    return run(`${server.id}:invite`, async () => {
     const r = await post(`/api/control/server/${server.id}/invite`, { role, steam: steam.trim(), addresses: list });
     if (r.error) return toast(r.error, true);
     setInvite(r.invite ?? "");
@@ -237,64 +238,77 @@ export function ShareControl({ server }: { server: ServerInfo }) {
     setSteam("");
     load();
   }, "Making an invite…");
+  };
   const setMemberRole = (m: Member, r: Role) => run(`member:${m.id}`, async () => {
     const x = await post(`/api/control/member/${m.id}`, { role: r, server: server.id });
     if (x.error) return toast(x.error, true);
     toast(`${m.name} is now ${r === "admin" ? "an Admin" : "a Moderator"}`);
     load();
   });
-  const remove = (m: Member) => run(`member:${m.id}`, async () => {
+  const remove = async (m: Member) => {
     if (!(await ask(`Take away ${m.name}'s access to ${server.name}? Their app stops working on it straight away.`, { ok: "Take away access", danger: true }))) return;
-    const x = await post(`/api/control/member/${m.id}/remove`, { server: server.id });
-    if (x.error) return toast(x.error, true);
-    toast(x.left_bans ? `${m.name} no longer has access. ${server.name} stopped sharing bans with your other servers, so changes made while helpers ran it stay there; turn sharing back on in its Admins tab.` : `${m.name} no longer has access`);
-    load();
+    let removed = false;
+    await run(`member:${m.id}`, async () => {
+      const x = await post(`/api/control/member/${m.id}/remove`, { server: server.id });
+      if (x.error) return toast(x.error, true);
+      removed = true;
+      toast(x.left_bans ? `${m.name} no longer has access. ${server.name} stopped sharing bans with your other servers, so changes made while helpers ran it stay there; turn sharing back on in its Admins tab.` : `${m.name} no longer has access`);
+      load();
+    }, `Taking away ${m.name}'s access…`);
     // they could still join with the password their game kept: a new one shuts them out
-    if (server.password && (await ask(`Change ${server.name}'s join password too? ${m.name}'s game may still have the old one.`, { ok: "Make a new password" }))) {
+    if (!removed || !server.password || !(await ask(`Change ${server.name}'s join password too? ${m.name}'s game may still have the old one.`, { ok: "Make a new password" }))) return;
+    await run(`member:${m.id}`, async () => {
       const pw = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
       const r = await post(`/api/servers/${server.id}`, { password: pw });
       if (r.error) return toast(r.error, true);
-      toast(`New join password: ${pw}. Join in this app uses it for you; tell the people you play with.`);
+      // (stays up until closed, with a copy button: it's needed afterwards)
+      toast(`New join password: ${pw}. Join in this app uses it for you; tell the people you play with.`, false, { label: "Copy", run: () => void copyText(pw) });
       void reloadServers();
-    }
-  });
-  const cancel = (i: OpenInvite) => run(`invite:${i.id}`, async () => {
+    }, "Making a new password…");
+  };
+  const cancel = async (i: OpenInvite) => {
     if (!(await ask("Cancel this invite? Whoever has it can't use it any more.", { ok: "Cancel the invite", danger: true }))) return;
+    return run(`invite:${i.id}`, async () => {
     const r = await post(`/api/control/invite/${i.id}/cancel`, { server: server.id });
     if (r.error) return toast(r.error, true);
     toast("Invite cancelled");
     if (i.id === inviteId) setInvite("");
     load();
   });
+  };
   const undo = (a: Activity) => run(`undo:${keyOf(a)}`, async () => {
     const r = await post(`/api/control/server/${server.id}/undo`, { key: keyOf(a) });
     if (r.error) return toast(r.error, true);
-    toast("Put back");
+    toast("Undone.");
     load();
-  }, "Putting it back…");
-  const openPort = () => run("share:upnp", async () => {
+  }, "Undoing…");
+  const openPort = async () => {
     const ok = await ask(
       `Open TCP port ${c?.port ?? 27030} on your router? Only people with an invite get in, but invite only people you trust. It closes within an hour after you quit Loner-Strike.`,
       { ok: "Open the port", danger: true },
     );
     if (!ok) return;
+    return run("share:upnp", async () => {
     const r = await post("/api/control/open-port");
     if (r.error) return toast(r.error, true);
     setAddresses((a) => (a.split(/[\s,]+/).includes(r.address!) ? a : [r.address, a].filter(Boolean).join(", ")));
     toast(`Your router forwards port ${r.port} to this computer. Your internet address ${r.address} was added.`);
     load();
   }, "Asking your router…");
+  };
   const [portText, setPortText] = useState("");
-  const setPort = () => run("share:port", async () => {
+  const setPort = async () => {
     const p = Number(portText);
     if (!Number.isInteger(p) || p < 1024 || p > 65535 || (p >= 27015 && p <= 27020)) return toast("Pick a port from 1024 to 65535 that isn't a game port (27015 to 27020).", true);
     if (members.length && !(await ask(`Move sharing to port ${p}? Everyone who has access now loses it until you send them a new invite.`, { ok: "Move it", danger: true }))) return;
+    return run("share:port", async () => {
     const r = await post("/api/control/port", { port: p });
     if (r.error) return toast(r.error, true);
     setPortText("");
     toast(`Friends' apps now reach this computer on port ${p}. Send new invites: older ones, and people who had access, use the old port.`);
     load();
   });
+  };
 
   const members = c?.members ?? [];
   return (
@@ -481,13 +495,15 @@ export function InviteModerator({ server }: { server: ServerInfo }) {
   const [steam, setSteam] = useState("");
   const [invite, setInvite] = useState("");
   const { run, busy } = useActions();
-  const make = () => run(`${server.id}:invite`, async () => {
+  const make = async () => {
     if (!steam.trim() && !(await ask(NO_STEAM, { ok: "Invite without it" }))) return;
+    return run(`${server.id}:invite`, async () => {
     const r = await post("/api/control/invite", { steam: steam.trim() });
     if (r.error) return toast(r.error, true);
     setInvite(r.invite ?? "");
     setSteam("");
   }, "Making an invite…");
+  };
   return (
     <section className="panel">
       <h3>Invite a Moderator</h3>

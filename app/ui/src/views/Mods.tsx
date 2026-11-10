@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { currentTarget, getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useActivity, useStable } from "../api";
 import { Icon } from "../icons";
-import { useSetupJob, waitForSetupJob } from "../queries";
+import { reloadAppInfo, reloadScan, useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import type { AppInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
@@ -52,7 +52,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
   // the setup job while one runs (the action itself waits for the end)
   const jobQ = useSetupJob();
   const job = jobQ.data?.state === "running" ? jobQ.data : null;
-  const { run } = useActions();
+  const { run, busy: acting } = useActions();
   // the mod being installed or removed here ("core" for the basics), kept app-wide so it
   // still shows after leaving the page and coming back
   const prefix = `mods:${targetKey()}:change:`;
@@ -63,7 +63,18 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
   const setFilter = (v: string) => (setFilterRaw(v), store("ls.modsFilter", v));
   const game = app?.game;
 
-  if (!game || !scan) return (scan ? <p className="muted">No game found.</p> : <Skeleton />);
+  if (!scan) return <Skeleton />;
+  if (!game)
+    return (
+      <div className="panel">
+        <h3>No game yet</h3>
+        <p className="muted measure">Loner-Strike couldn't find Counter-Strike 1.6 or Condition Zero on this computer.</p>
+        <div className="row">
+          <BusyButton className="btn primary" busy={acting("mods:rescan")} label="Look again" busyLabel="Looking…" onClick={() => run("mods:rescan", async () => { await Promise.all([reloadScan(), reloadAppInfo()]); }, "Looking for the game…")} />
+          {ON_THIS_COMPUTER && <button className="btn" onClick={() => go("settings", "game")}>Choose the game folder</button>}
+        </div>
+      </div>
+    );
   const installed = new Set(game.installed ?? []);
   const setUp = installed.has("core");
   type Item = { id: string; name: string; kind: "mode" | "addon"; description?: string; builtin: boolean; on: boolean; rating: "great" | "ok" | "weak" | "none" | null };
@@ -92,14 +103,14 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
     // again: an installed mod put in once more (its files fresh, its plugins built again)
     const body = { hl: game.hl, games: [game.id], ...(id ? { components: [id] } : remove ? {} : { components: [] }), ...(again ? { repair: true } : {}) };
     const label = id ? `${remove ? "Removing" : again ? "Reinstalling" : "Installing"} ${name ?? id}…` : remove ? `Removing Loner-Strike from ${where}…` : again ? `Repairing Loner-Strike in ${where}…` : "Installing the basics…";
-    await run(`${prefix}${id ?? "core"}`, async () => {
+    await run(`${prefix}${id ?? "core"}:${remove ? "remove" : again ? "repair" : "install"}`, async () => {
       const r = await postJson<{ ok?: boolean; error?: string }>(remove ? "/api/setup/uninstall" : "/api/setup/install", body).catch(() => ({ error: "Couldn't reach the app." }));
       if (r.error) return toast(r.error, true);
       const j = await waitForSetupJob();
       const what = id ? name ?? id : remove ? `Loner-Strike from ${where}` : "the basics";
-      if (!j) toast("Lost track of the install. Open Mods again to see if it finished.", true);
+      if (!j) toast("Lost track of it. Reload this page to see if it finished.", true);
       else if (j.state === "done" && !id && again) toast(`Repaired.${running || !game.dedicated ? " Restart the game so it loads." : ""}`);
-      else if (j.state === "done") toast(`${remove ? "Removed" : "Installed"} ${what}${running ? ". It changes on the next map." : ""}`);
+      else if (j.state === "done") toast(`${remove ? "Removed" : again ? "Reinstalled" : "Installed"} ${what}${running ? ". It changes on the next map." : ""}`);
       else toast(j.error || (remove ? `Couldn't remove ${what}.` : `Couldn't install ${what}.`), true);
       onChanged();
     }, label);
@@ -134,7 +145,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
       {busy && (
         <SteamProgress
           value={job?.progress ?? 0}
-          title={job?.kind === "uninstall" ? "Removing…" : "Installing…"}
+          title={busy.endsWith(":remove") ? "Removing…" : busy === "core:repair" ? "Repairing…" : busy.endsWith(":repair") ? "Reinstalling…" : "Installing…"}
           text={now ? `${now.label}${now.detail ? ` · ${now.detail}` : ""}` : "Getting ready…"}
         />
       )}
@@ -146,7 +157,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
           <p className="muted measure">The basics come first: Metamod-P, AMX Mod X, ReGameDLL and the Game Mode Menu, with the built-in modes. Then add whatever you like below.</p>
           {ON_THIS_COMPUTER && (
             <div className="row">
-              <BusyButton className="btn primary" busy={busy === "core"} disabled={!!busy} label="Install the basics" busyLabel="Installing…" onClick={() => change(null, false)} />
+              <BusyButton className="btn primary" busy={busy === "core:install"} disabled={!!busy} label="Install the basics" busyLabel="Installing…" onClick={() => change(null, false)} />
             </div>
           )}
         </div>
@@ -171,7 +182,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
             return (
               <div key={c.id} className={`mod${on ? " on" : ""}`}>
                 <Icon name={c.id.replace(/^(mode|addon)-/, "")} size={22} />
-                <span className="mod-name">{c.name}<small>{c.kind === "addon" ? "Add-on" : "Game mode"}{c.builtin ? " · built in" : on ? " · installed" : ""}</small></span>
+                <span className="mod-name">{c.name}<small>{c.kind === "addon" ? "Add-on" : "Game mode"}{!c.builtin && on ? " · installed" : ""}</small></span>
                 {c.description && <span className="mod-desc">{c.description}</span>}
                 <div className="row">
                   {c.builtin ? (
@@ -181,11 +192,11 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
                   ) : on ? (
                     <>
                       {unbuilt.includes(c.id) && <span className="err-text small-note">Didn't build, so it won't load</span>}
-                      <BusyButton className={`btn${unbuilt.includes(c.id) ? " primary" : ""}`} busy={busy === c.id} disabled={!!busy} label={unbuilt.includes(c.id) ? "Try again" : "Reinstall"} busyLabel="Reinstalling…" onClick={() => change(c.id, false, c.name, true)} />
-                      <BusyButton className="btn danger" busy={busy === c.id} disabled={!!busy} label="Remove" busyLabel="Removing…" onClick={() => change(c.id, true, c.name)} />
+                      <BusyButton className={`btn${unbuilt.includes(c.id) ? " primary" : ""}`} busy={busy === `${c.id}:repair`} disabled={!!busy} label={unbuilt.includes(c.id) ? "Try again" : "Reinstall"} busyLabel={unbuilt.includes(c.id) ? "Trying again…" : "Reinstalling…"} onClick={() => change(c.id, false, c.name, true)} />
+                      <BusyButton className="btn danger" busy={busy === `${c.id}:remove`} disabled={!!busy} label="Remove" busyLabel="Removing…" onClick={() => change(c.id, true, c.name)} />
                     </>
                   ) : (
-                    <BusyButton className="btn primary" busy={busy === c.id} disabled={!!busy} label="Install" busyLabel="Installing…" onClick={() => change(c.id, false, c.name)} />
+                    <BusyButton className="btn primary" busy={busy === `${c.id}:install`} disabled={!!busy} label="Install" busyLabel="Installing…" onClick={() => change(c.id, false, c.name)} />
                   )}
                   {switchAt(c)}
                   {rating && <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>}
@@ -208,7 +219,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
             <b>Repair Loner-Strike</b>
             <p className="muted">No bots, or the app can't connect? This puts Metamod, AMX Mod X, the bot brain and the menu back in {where}. Your settings and mods stay.</p>
           </div>
-          <BusyButton className="btn" busy={busy === "core"} disabled={!!busy} label="Repair" busyLabel="Repairing…" onClick={() => change(null, false, undefined, true)} />
+          <BusyButton className="btn" busy={busy === "core:repair"} disabled={!!busy} label="Repair" busyLabel="Repairing…" onClick={() => change(null, false, undefined, true)} />
         </div>
       )}
 
@@ -217,9 +228,9 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
         <div className="panel row between">
           <p className="muted">Take Loner-Strike off {where} completely: every mod, the Game Mode Menu and the bot setup.</p>
           {game.dedicated ? (
-            <BusyButton className="btn danger" busy={busy === "core"} disabled={!!busy} label="Remove Loner-Strike" busyLabel="Removing…" onClick={() => change(null, true)} />
+            <BusyButton className="btn danger" busy={busy === "core:remove"} disabled={!!busy} label="Remove Loner-Strike" busyLabel="Removing…" onClick={() => change(null, true)} />
           ) : (
-            <button className="link inline" onClick={() => go("settings")}>Remove Loner-Strike in Settings</button>
+            <button className="link inline" onClick={() => go("settings", "setup")}>Remove it in Settings</button>
           )}
         </div>
       )}

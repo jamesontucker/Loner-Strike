@@ -336,7 +336,7 @@ export function SettingsPage({
         {editing && savedQ.data?.error ? (
           <p className="muted">{savedQ.data.error}</p>
         ) : editing && savedQ.isLoading ? (
-          <p className="muted">Loading {editing.mode.name}'s settings…</p>
+          <p className="muted"><span className="spinner" aria-hidden="true" />Loading {editing.mode.name}'s settings…</p>
         ) : (
           <SettingsList data={data} cat={cat} refresh={refresh} q={q} tab={tab} editing={editing} />
         )}

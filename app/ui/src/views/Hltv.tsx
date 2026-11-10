@@ -209,7 +209,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
 
       {!st.available && (
         <div className="banner">
-          <div>This server's folder doesn't have HLTV. Update Valve's server files in Overview, under Maintenance, to get it.</div>
+          <div>{server.imported ? "This server's folder doesn't have HLTV. Add HLTV to the folder (it comes with Valve's server files), then restart the server." : !ON_THIS_COMPUTER ? `This server's folder doesn't have HLTV. ${ON_COMPUTER_ONLY}` : "This server's folder doesn't have HLTV. To get it, open Overview and click Update under Maintenance."}</div>
         </div>
       )}
 
@@ -401,7 +401,8 @@ function Demos({ server, st, reload, ask }: { server: ServerInfo; st: Status; re
   const fetchDemo = (d: Demo) => run(fetchKey(d), async () => {
     const r = await post(`/api/servers/${server.id}/hltv/fetch-demo`, { name: d.name });
     if (r.error) return toast(r.error, true);
-    toast(`${d.name} is in your game's ${server.game} folder. Type viewdemo ${d.name.replace(/\.dem$/i, "")} in the console.`);
+    const cmd = `viewdemo ${d.name.replace(/\.dem$/i, "")}`;
+    toast(`${d.name} is in your game's ${server.game} folder. Type ${cmd} in the console.`, false, { label: "Copy", run: () => void copyText(cmd) });
   }, `Copying ${d.name} to your game…`);
   const show = async (name = "") => {
     const r = await post(`/api/servers/${server.id}/hltv-folder`, { name });

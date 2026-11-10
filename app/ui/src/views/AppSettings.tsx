@@ -61,21 +61,26 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
   const loadStorage = () => queryClient.invalidateQueries({ queryKey: STORAGE });
   const [scale, setScale] = useState(savedScale);
 
-  // opened from the update dot or the menu: Updates comes into view, lit up for a moment
+  // opened from the update dot or the menu (Updates), or a link elsewhere (Game, Setup):
+  // that section comes into view, lit up for a moment
   const focus = useNav((s) => s.focus);
   const updatesRef = useRef<HTMLElement>(null);
-  const [lit, setLit] = useState(false);
+  const gameRef = useRef<HTMLElement>(null);
+  const setupRef = useRef<HTMLElement>(null);
+  const [lit, setLit] = useState<string | null>(null);
   useEffect(() => {
-    if (focus !== "updates") return;
+    const ref = focus === "updates" ? updatesRef : focus === "game" ? gameRef : focus === "setup" ? setupRef : null;
+    if (!ref) return;
     useNav.getState().clearFocus();
-    updatesRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-    setLit(true);
+    ref.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    setLit(focus);
   }, [focus]);
   useEffect(() => {
     if (!lit) return;
-    const t = setTimeout(() => setLit(false), 2000);
+    const t = setTimeout(() => setLit(null), 2000);
     return () => clearTimeout(t);
   }, [lit]);
+  const litClass = (k: string) => (lit === k ? "settings-lit" : undefined);
 
   type R = { ok?: boolean; error?: string; cancelled?: boolean };
   const post = <T extends R>(path: string, body: unknown = {}) => postJson<T>(path, body).catch((): T => ({ error: "Couldn't reach the app." }) as T);
@@ -195,7 +200,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
   };
 
   const updates = (
-    <section ref={updatesRef} className={lit ? "settings-lit" : undefined}>
+    <section ref={updatesRef} className={litClass("updates")}>
       <SectionHead title="Updates" />
       <div className="panel settings-list">
         <div className="row between setting-line">
@@ -299,7 +304,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
       </section>
 
       <section>
-        <SectionHead title="Notifications" note="Shown on the computer running Loner-Strike while the app is in the background. Each dedicated server has its own: in its settings (joins) and its Shared control tab (helpers). Player reports (say /report) always notify." />
+        <SectionHead title="Notifications" note="Shown on the computer running Loner-Strike while the app is in the background. Each dedicated server has its own: on its Overview tab (joins) and its Shared control tab (helpers). Player reports (say /report) always notify." />
         <div className="panel settings-list">
           <div className="row between setting-line toggle">
             <div>
@@ -311,7 +316,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
         </div>
       </section>
 
-      <section>
+      <section ref={gameRef} className={litClass("game")}>
         <SectionHead title="Game" />
         <div className="panel">
           {app?.game ? (
@@ -374,7 +379,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
         </section>
       )}
 
-      <section>
+      <section ref={setupRef} className={litClass("setup")}>
         <SectionHead title="Setup" note="Add or remove game modes and add-ons, or set up another game." />
         <div className="panel row between">
           <p className="muted">Everything Loner-Strike changed is backed up, so removing it puts your game back the way it was.</p>
@@ -403,12 +408,13 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
             <div className="row">
               <button className="btn primary" onClick={() => setBackup("backup")}>Back up everything</button>
               <button className="btn" disabled={!ownGame} title={ownGame ? undefined : NO_GAME_TO_BACK_UP} onClick={() => setBackup("game")}>Just your game</button>
-              <button className="btn" onClick={() => setBackup("restore")}>Restore</button>
+              <button className="btn" onClick={() => setBackup("restore")}>Restore a backup</button>
             </div>
           ) : (
             <p className="muted">{ON_COMPUTER_ONLY}</p>
           )}
         </div>
+        {ON_THIS_COMPUTER && !ownGame && <p className="muted small-note">{NO_GAME_TO_BACK_UP}</p>}
         {ON_THIS_COMPUTER && <DailyBackups on={prefs?.auto_backups !== false} busy={busy("app:pref:auto_backups")} disabled={!prefs} onChange={(v) => setPref({ auto_backups: v })} />}
         {backup === "backup" && <BackupSheet onClose={() => setBackup(null)} />}
         {backup === "game" && ownGame && <BackupSheet only={[`local:${ownGame}`]} onClose={() => setBackup(null)} />}
@@ -595,7 +601,7 @@ function DailyBackups({ on, busy, disabled, onChange }: { on: boolean; busy: boo
         </ul>
       )}
       {info && info.servers.length === 0 && <p className="muted small-note">No servers on Linux machines yet.</p>}
-      {info && <p className="muted small-note">They're in <code className="mono">{info.dir}</code>, and restore like any backup (Restore, then pick the file).</p>}
+      {info && <p className="muted small-note">They're in <code className="mono">{info.dir}</code>, and restore like any backup (Restore a backup, then pick the file).</p>}
     </div>
   );
 }

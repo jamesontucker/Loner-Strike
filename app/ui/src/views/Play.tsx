@@ -113,7 +113,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           <p>{reason || "Loner-Strike couldn't find Counter-Strike 1.6 or Condition Zero on this computer."}</p>
           <div className="row">
             <BusyButton className="btn primary" busy={busy(key("rescan"))} label="Look again" busyLabel="Looking…" onClick={() => run(key("rescan"), async () => { await Promise.all([reloadScan(), reloadAppInfo()]); }, "Looking for the game…")} />
-            {ON_THIS_COMPUTER && <button className="btn" onClick={() => useNav.getState().go("settings")}>Choose the game folder</button>}
+            {ON_THIS_COMPUTER && <button className="btn" onClick={() => useNav.getState().go("settings", "game")}>Choose the game folder</button>}
           </div>
         </div>
       </div>
@@ -151,7 +151,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           <div className="field">
             <span>Bots<Info text="How many bots play. Each one takes a player slot, so leave room for friends." /></span>
             <div className="seg" role="group" aria-label="Bots">
-              {[0, 5, 9, 15].map((n) => <button key={n} aria-pressed={botCount === n} onClick={() => setDraft({ bots: n })}>{n === 0 ? "None" : n}</button>)}
+              {[...new Set([0, 5, 9, 15, botCount])].sort((a, b) => a - b).map((n) => <button key={n} aria-pressed={botCount === n} onClick={() => setDraft({ bots: n })}>{n === 0 ? "None" : n}</button>)}
             </div>
           </div>
           {mode && botCount > 0 && (
@@ -372,7 +372,7 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
         <div className="map-picker-pop">
           <input className="search" type="search" autoFocus={!TOUCH} placeholder={`Search ${have.length} maps`} value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={key} aria-label="Search maps" role="combobox" aria-expanded="true" aria-controls={`${labelledBy}-list`} aria-autocomplete="list" aria-activedescendant={flat[active] ? optId(active) : undefined} />
           <div className="map-picker-list" id={`${labelledBy}-list`} role="listbox" aria-label="Maps">
-            {flat.length === 0 && <p className="muted small-note">No map matches. Find more in Get more.</p>}
+            {flat.length === 0 && <p className="muted small-note">No map matches. Find more in <button type="button" className="link inline" onClick={() => useNav.getState().go("more")}>Get more</button>.</p>}
             {shown.map(([label, list]) => (
               <div key={label || "results"}>
                 {label && <div className="map-picker-group">{label}</div>}
@@ -442,10 +442,14 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
     : which === "recent" ? have.filter((m) => m.recent >= 0).sort((a, b) => a.recent - b.recent)
     : have;
   const shown = (query ? pool.filter((m) => m.name.toLowerCase().includes(query) || (m.title ?? "").toLowerCase().includes(query)) : pool).slice(0, 60);
+  const goTo = (s: "maps" | "more") => {
+    onClose();
+    useNav.getState().go(s);
+  };
   const emptyNote =
-    which === "fav" ? "No favourite maps yet. Star maps on the Maps page."
+    which === "fav" ? <>No favourite maps yet. Star maps on the <button type="button" className="link inline" onClick={() => goTo("maps")}>Maps page</button>.</>
     : which === "recent" ? "No maps played yet."
-    : "No maps yet. Get some from Get more.";
+    : <>No maps yet. Get some from <button type="button" className="link inline" onClick={() => goTo("more")}>Get more</button>.</>;
   const fits = !listed?.length && (!prefixes.length || prefixes.some((p) => map.toLowerCase().startsWith(p)));
   // a map built for one particular mode (a SoccerJam pitch, a zombie or climb map): its goals,
   // traps or course are part of the map and stay whatever mode is loaded
@@ -477,7 +481,7 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
               </button>
             ))}
           </div>
-          {listed === null && which === "mode" && <p className="muted small-note">Finding maps for this mode…</p>}
+          {listed === null && which === "mode" && <p className="muted small-note"><span className="spinner" aria-hidden="true" />Finding maps for this mode…</p>}
           {listed !== null && !suggested.length && which === "all" && !query && <p className="muted small-note">No maps look made for this mode yet, so here's every map.</p>}
           {shown.length === 0 && listed !== null && <p className="muted small-note">{query ? `No map matches "${q.trim()}" here.` : emptyNote}</p>}
           <div className="maps grid switch-maps">

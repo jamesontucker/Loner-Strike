@@ -77,7 +77,7 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
           Bots don't know {st.map} yet. Learning it takes a few minutes, and the map timer waits.
         </Banner>
       )}
-      {learning && <Banner>Bots are learning {st.map}… {st.navleft} step{st.navleft === 1 ? "" : "s"} left.</Banner>}
+      {learning && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}… {st.navleft} step{st.navleft === 1 ? "" : "s"} left.</Banner>}
       <div className="slider-row">
         <label htmlFor="botCount">Bots<Info text="How many bots play. Each one takes a player slot, so leave room for friends." /></label>
         <div className="slider-step">
@@ -212,7 +212,7 @@ function PersonalitySlider({ setting, refresh }: { setting: Setting; refresh: ()
             Saving…
           </>
         ) : (
-          `${strength(value)} (${value}%)`
+          strength(value)
         )}
       </span>
     </div>

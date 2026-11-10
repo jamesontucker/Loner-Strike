@@ -39,7 +39,7 @@ const VISIBILITY = [
 const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up", failed: "Not finished", checking: "Checking…" };
 
 /** How long a server on this computer keeps running (the switch's name is in AppSettings). */
-const RUNS_WHILE = "A server on this computer runs while Loner-Strike is open, or after you quit if Keep running after I close Loner-Strike is on in its settings.";
+const RUNS_WHILE = "A server on this computer runs while Loner-Strike is open, or after you quit if you switch on Keep running after I close Loner-Strike on its Overview tab.";
 const PUBLIC_ADDRESS_INFO =
   "A domain name that points at this server. The app shows it in place of the IP: in invites, the HLTV address and the join links. Point the name at the server's IP with your DNS provider; with Cloudflare, set it to DNS only (grey cloud), since the game's traffic can't go through its proxy.";
 const WHO_CAN_JOIN = "This network: only people on your Wi-Fi. Anyone with the address: friends join with the address you send, strangers can't find it. Listed on Steam: anyone can find it in the Internet tab.";
@@ -158,9 +158,12 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   // New server in the sidebar: this page, with its window open
   const focus = useNav((s) => s.focus);
   useEffect(() => {
-    if (focus !== "new") return;
+    if (focus !== "new" && focus !== "guide") return;
     useNav.getState().clearFocus();
-    if (ON_THIS_COMPUTER) setCreating(true);
+    if (!ON_THIS_COMPUTER) return;
+    // the hosting guide's troubleshooting, from an unreachable server's page
+    if (focus === "guide") openGuide();
+    else setCreating(true);
   }, [focus]);
   const [importing, setImporting] = useState(false);
   // Add a shared server: the invite to start with ("" for none), or null when closed
@@ -187,7 +190,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
 
   const { run: once, busy } = useActions();
   const joinRestart = useJoinRestart();
-  const act = (s: ServerInfo, action: string) => once(`${s.id}:${action}`, async () => {
+  const act = async (s: ServerInfo, action: string) => {
     if (action === "delete") {
       const [q, ok] = deleteQuestion(s);
       if (!(await ask(q, { ok, danger: true }))) return;
@@ -195,6 +198,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
     if (action === "rebuild" && !(await ask(wipeQuestion(s), { ok: "Wipe and rebuild", danger: true }))) return;
     // the list doesn't know who's on, so stopping always asks
     if (action === "stop" && !(await ask(`Stop ${s.name}? Anyone playing is disconnected.`, { ok: "Stop the server", danger: true }))) return;
+    return once(`${s.id}:${action}`, async () => {
     let r: Reply | null = await post(action === "join" ? joinPath(s) : `/api/servers/${s.id}/${action}`);
     if (r.need_restart_game) r = await joinRestart(s);
     if (!r) return;
@@ -205,6 +209,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
     if (action === "delete") toast(r.note || `${s.name} ${s.imported ? "removed" : "deleted"}`, !!r.note);
     onChanged();
   }, `${ACTION_LABEL[action] ?? "Working on"} ${s.name}…`);
+  };
   // Loner-Strike's updates for a server: now, or (people playing) after asking
   const updateNow = (s: ServerInfo) => once(`${s.id}:apply-updates`, async () => {
     let r = await postJson<Reply & { people?: number | null; queued?: boolean }>(`/api/servers/${s.id}/apply-updates`, {}).catch(() => ({ error: "Couldn't reach the app." }) as Reply & { people?: number | null; queued?: boolean });
@@ -229,7 +234,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   return (
     <div className="stack">
       <SectionHead title="Servers" note={`Optional: dedicated servers that run without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game. ${RUNS_WHILE}`}>
-        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setRestoring(true)}>Import a backup</button>}
+        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setRestoring(true)}>Restore a backup</button>}
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setExporting(true)}>Back up servers</button>}
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setImporting(true)}>Add one you already run</button>}
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setAddingShared("")}>Add a shared server</button>}
@@ -246,6 +251,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
             running while you're not playing. Loner-Strike downloads Valve's free server (about 1 GB), sets it up and runs it for you.
             {!ON_THIS_COMPUTER && " Make one from the computer running Loner-Strike."}
           </p>
+          {ON_THIS_COMPUTER && <div className="row"><button className="btn primary" onClick={() => setCreating(true)}>New server</button></div>}
         </div>
       )}
 
@@ -278,8 +284,8 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
             ) : s.state === "failed" ? (
               ON_THIS_COMPUTER ? (
                 <div className="row">
-                  {s.host && <BusyButton className="btn primary" busy={busy(`${s.id}:retry`)} label="Try again" busyLabel="Starting…" onClick={() => act(s, "retry")} />}
-                  {s.host && <BusyButton busy={busy(`${s.id}:rebuild`)} label="Rebuild from scratch" busyLabel="Starting…" onClick={() => act(s, "rebuild")} />}
+                  {s.host && <BusyButton className="btn primary" busy={busy(`${s.id}:retry`)} label="Try again" busyLabel="Trying again…" onClick={() => act(s, "retry")} />}
+                  {s.host && <BusyButton busy={busy(`${s.id}:rebuild`)} label="Wipe and rebuild" busyLabel="Wiping…" onClick={() => act(s, "rebuild")} />}
                   <BusyButton className="btn danger" busy={busy(`${s.id}:delete`)} label={s.imported ? "Remove" : "Delete"} busyLabel={s.imported ? "Removing…" : "Deleting…"} onClick={() => act(s, "delete")} />
                 </div>
               ) : (
@@ -418,13 +424,15 @@ function SharedCard({ s, onOpen, onChanged }: { s: ServerInfo; onOpen: (id: stri
   const { run, busy } = useActions();
   const role = s.shared!.role;
   const reachable = s.shared!.reachable;
-  const act = (action: "start" | "stop" | "restart") => run(`${s.id}:${action}`, async () => {
+  const act = async (action: "start" | "stop" | "restart") => {
     if (action !== "start" && !(await ask(`${action === "stop" ? "Stop" : "Restart"} ${s.name}? Anyone playing is disconnected.`, { ok: action === "stop" ? "Stop the server" : "Restart the server", danger: true }))) return;
+    return run(`${s.id}:${action}`, async () => {
     const r = await post(`/api/servers/${s.id}/${action}`);
     if (r.error) return toast(r.error, true);
     toast(action === "start" ? `Starting ${s.name}…` : action === "stop" ? `${s.name} stopped` : `Restarting ${s.name}…`);
     onChanged();
   }, `${ACTION_LABEL[action] ?? "Working on"} ${s.name}…`);
+  };
   const joinRestart = useJoinRestart();
   const join = () => run(`${s.id}:join`, async () => {
     let r: Reply | null = await post(joinPath(s));
@@ -433,13 +441,15 @@ function SharedCard({ s, onOpen, onChanged }: { s: ServerInfo; onOpen: (id: stri
     if (r.error) return toast(r.error, true);
     toast(`Joining ${s.name}…`);
   }, `Joining ${s.name}…`);
-  const leave = () => run(`${s.id}:leave`, async () => {
+  const leave = async () => {
     if (!(await ask(`Take ${s.name} off your list? To get it back you'd need a new invite from its owner.`, { ok: "Take it off", danger: true }))) return;
+    return run(`${s.id}:leave`, async () => {
     const r = await post(`/api/control/shared/${s.id}/leave`);
     if (r.error) return toast(r.error, true);
     toast(`${s.name} is off your list`);
     onChanged();
   });
+  };
   return (
     <div className={`server shared-server role-${role}`}>
       <div className="server-head">
@@ -537,7 +547,7 @@ export function ServerPage(props: {
   // same keys as the server list, so a spinner follows the server, not the page
   const busy = (action: string) => busyKey(`${s.id}:${action}`);
   const humans = data?.state.humans ?? 0;
-  const act = (action: string) => once(`${s.id}:${action}`, async () => {
+  const act = async (action: string) => {
     if (action === "delete") {
       const [q, ok] = deleteQuestion(s);
       if (!(await ask(q, { ok, danger: true }))) return;
@@ -550,6 +560,7 @@ export function ServerPage(props: {
         : action === "stop" && !data ? `Stop ${s.name}? Anyone playing is disconnected.` : null;
       if (q && !(await ask(q, { ok: `${verb} the server`, danger: true }))) return;
     }
+    return once(`${s.id}:${action}`, async () => {
     const startIn = action === "start" && startMode && startMode !== startModes?.mode ? { mode: startMode } : {};
     let r: Reply | null = await post(action === "join" ? joinPath(s) : `/api/servers/${s.id}/${action}`, startIn);
     if (r.need_restart_game) r = await joinRestart(s);
@@ -563,6 +574,7 @@ export function ServerPage(props: {
     onChanged();
     setTimeout(refresh, 1500);
   }, `${ACTION_LABEL[action] ?? "Working on"} ${s.name}…`);
+  };
 
   const modePick = startModes && (
     <label className="start-mode">
@@ -575,14 +587,14 @@ export function ServerPage(props: {
 
   // reinstall everything that's on the server, keeping its settings
   const rebuild = async () => {
-    if (!(await ask(`Rebuild Loner-Strike on ${s.name}? It reinstalls its files; settings, admins and maps stay.`, { ok: "Rebuild Loner-Strike" }))) return;
-    once(`${s.id}:reinstall`, reinstall, `Rebuilding Loner-Strike on ${s.name}…`);
+    if (!(await ask(`Repair Loner-Strike on ${s.name}? It reinstalls its files; settings, admins and maps stay.`, { ok: "Repair" }))) return;
+    once(`${s.id}:reinstall`, reinstall, `Repairing Loner-Strike on ${s.name}…`);
   };
   const reinstall = async () => {
     const components = (app?.game?.installed ?? []).filter((c) => c !== "foundation" && c !== "core");
     const r = await post("/api/setup/install", { hl: s.dir, games: [s.game], components, repair: true });
     if (r.error) return toast(r.error, true);
-    setJob({ title: "Rebuilding Loner-Strike…", done: `Loner-Strike is rebuilt on ${s.name}`, retry: reinstall });
+    setJob({ title: "Repairing Loner-Strike…", done: `Loner-Strike is repaired on ${s.name}`, retry: reinstall });
   };
   // a server on another machine: wipe it and set it up again with the same details
   // (same key as the server list's Rebuild, so either shows it's under way)
@@ -684,7 +696,7 @@ export function ServerPage(props: {
           </span>
         </div>
       )}
-      {off && <Unreachable s={s} />}
+      {off && <Unreachable s={s} onGuide={ON_THIS_COMPUTER ? async () => { if (await leaveOk()) useNav.getState().go("servers", "guide"); } : undefined} />}
       {s.error && <p className="err-text">{s.error}</p>}
       {s.service_stale && <p className="muted small-note">The server's settings will be applied on the machine before it next starts.</p>}
       {!s.loner && !role && <AddLoner server={s} onDone={() => { onChanged(); reloadApp(); }} />}
@@ -725,7 +737,7 @@ export function ServerPage(props: {
               {s.shared && s.maxplayers === undefined ? <Skeleton rows={3} /> : <ServerDetails key={s.shared ? "loaded" : s.id} server={s} maps={maps} onChanged={onChanged} />}
               {!role && ON_THIS_COMPUTER && <CopyMods server={s} others={others} onStarted={(title) => setJob({ title, done: `Mods copied to ${s.name}` })} />}
               {!role && ON_THIS_COMPUTER && <BackupPanel server={s} others={others} onChanged={onChanged} />}
-              {!role && ON_THIS_COMPUTER && s.host && <SecurityPanel server={s} />}
+              {!role && ON_THIS_COMPUTER && s.host && <SecurityPanel key={s.id} server={s} />}
               {!role && ON_THIS_COMPUTER && <Maintenance server={s} installed={app?.game?.installed ?? []} act={act} rebuild={rebuild} wipeRebuild={wipeRebuild} busy={busy} />}
             </>
           )}
@@ -1003,11 +1015,13 @@ function ConsolePassword({ server }: { server: ServerInfo }) {
   const [shown, setShown] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
   const { run, busy } = useActions();
-  const show = async () => {
+  const show = () => {
     if (shown !== null) return setShown(null);
-    const r = await postJson<Reply>(`/api/servers/${server.id}/rcon-password/show`).catch((): Reply => ({ error: "Couldn't reach the app." }));
-    if (r.error) return toast(r.error, true);
-    setShown(r.password ?? "");
+    return run(`${server.id}:rcon:show`, async () => {
+      const r = await postJson<Reply>(`/api/servers/${server.id}/rcon-password/show`).catch((): Reply => ({ error: "Couldn't reach the app." }));
+      if (r.error) return toast(r.error, true);
+      setShown(r.password ?? "");
+    }, `Getting ${server.name}'s console password…`);
   };
   const change = (password?: string) => run(`${server.id}:rcon`, async () => {
     const r = await postJson<Reply>(`/api/servers/${server.id}/rcon-password`, password ? { password } : {}).catch((): Reply => ({ error: "Couldn't reach the app." }));
@@ -1022,7 +1036,7 @@ function ConsolePassword({ server }: { server: ServerInfo }) {
       <span>Console password<Info text="The RCON password, for running the server from tools like HLSW. The app sets a random one and uses it too; a change applies straight away." /></span>
       <div className="row">
         <code className="secret">{shown ?? "••••••••••••"}</code>
-        <button className="btn small" type="button" onClick={show}>{shown === null ? "Show" : "Hide"}</button>
+        <BusyButton className="btn small" busy={busy(`${server.id}:rcon:show`)} label={shown === null ? "Show" : "Hide"} busyLabel="Showing…" onClick={show} />
         <BusyButton className="btn small" busy={changing} label="Make a random one" busyLabel="Changing…" onClick={() => change()} />
       </div>
       <form className="row" onSubmit={(e) => { e.preventDefault(); if (typed.length >= 8) change(typed); }}>
@@ -1077,7 +1091,7 @@ function BackupPanel({ server, others, onChanged }: { server: ServerInfo; others
       </p>
       <div className="row">
         <button className="btn" onClick={() => setOpen("backup")}>Back up this server</button>
-        <button className="btn" onClick={() => setOpen("restore")}>Restore from a backup</button>
+        <button className="btn" onClick={() => setOpen("restore")}>Restore a backup</button>
       </div>
       {open === "backup" && <BackupSheet only={[server.id]} onClose={() => setOpen(null)} />}
       {open === "restore" && <RestoreSheet to={{ where: "server", id: server.id }} servers={[server, ...others]} onClose={() => setOpen(null)} onChanged={onChanged} />}
@@ -1097,8 +1111,12 @@ function SecurityPanel({ server }: { server: ServerInfo }) {
   const [items, setItems] = useState<SecurityItem[] | null>(null);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const recheck = useRef(0);
+  useEffect(() => () => window.clearTimeout(recheck.current), []);
   const check = async () => {
     setChecking(true);
+    setRestarting(false);
     try {
       const r = await getJson<{ items?: SecurityItem[]; error?: string }>(`/api/servers/${server.id}/security`);
       if (r.error) setError(r.error);
@@ -1118,20 +1136,26 @@ function SecurityPanel({ server }: { server: ServerInfo }) {
     void check();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [server.id]);
-  const fix = (item: SecurityItem) => run(`${server.id}:security:${item.id}`, async () => {
+  const fixLabel = (f: string) => (f === "reboot" ? "Restart the machine" : f === "logs" ? "Clean up logs now" : f === "passwords" ? "Turn off password logins" : "Fix it");
+  const fixDone = (f: string) => (f === "logs" ? "Logs cleaned up." : f === "passwords" ? "Password logins turned off." : "Fixed.");
+  const fix = async (item: SecurityItem) => {
     if (item.fix === "reboot" && !(await ask(`Restart the machine ${server.host} now? The server goes down for a minute or two and starts again by itself. Do it when nobody's playing.`, { ok: "Restart the machine", danger: true }))) return;
-    if (item.fix === "passwords" && !(await ask("Turn off SSH password logins? Loner-Strike and anyone with your key still get in. If you ever log in to this machine with a password yourself, set up a key first.", { ok: "Keys only" }))) return;
+    if (item.fix === "passwords" && !(await ask("Turn off SSH password logins? Loner-Strike and anyone with your key still get in. If you ever log in to this machine with a password yourself, set up a key first.", { ok: "Turn off password logins", danger: true }))) return;
+    run(`${server.id}:security:${item.id}`, async () => {
     type FixReply = { items?: SecurityItem[]; rebooting?: boolean; error?: string };
     const r = await postJson<FixReply>(`/api/servers/${server.id}/security/fix`, { item: item.fix }).catch((): FixReply => ({ error: "Couldn't reach the app." }));
     if (r.error) return toast(r.error, true);
     if (r.rebooting) {
-      toast(`${server.host} is restarting. Check again in a couple of minutes.`);
+      toast(`${server.host} is restarting.`);
       setItems(null);
+      setRestarting(true);
+      recheck.current = window.setTimeout(() => void check(), 120000);
       return;
     }
     if (r.items) setItems(r.items);
-    toast("Done");
-  }, item.fix === "reboot" ? "Restarting the machine…" : item.fix === "logs" ? "Cleaning up logs…" : "Fixing it on the machine…");
+    toast(fixDone(item.fix ?? ""));
+    }, item.fix === "reboot" ? "Restarting the machine…" : item.fix === "logs" ? "Cleaning up logs…" : "Fixing it on the machine…");
+  };
   const bad = (items ?? []).filter((i) => !i.ok);
   return (
     <div className="panel">
@@ -1140,7 +1164,8 @@ function SecurityPanel({ server }: { server: ServerInfo }) {
         <BusyButton className="btn small" busy={checking} label="Check again" busyLabel="Checking…" onClick={() => void check()} />
       </div>
       {error && <p className="err-text small-note">{error}</p>}
-      {!items && !error && <p className="muted small-note"><span className="spinner" aria-hidden="true" />Checking the machine…</p>}
+      {restarting && !items && <p className="muted small-note">{server.host} is restarting. It's checked again in two minutes, or click Check again once it's back.</p>}
+      {!items && !error && !restarting && <p className="muted small-note"><span className="spinner" aria-hidden="true" />Checking the machine…</p>}
       {items && (
         <>
           <p className="muted small-note">{bad.length ? `${bad.length} ${bad.length === 1 ? "thing needs" : "things need"} a look.` : "Everything Loner-Strike checks looks right."}</p>
@@ -1152,7 +1177,7 @@ function SecurityPanel({ server }: { server: ServerInfo }) {
                   {!i.ok && <p className="muted">{i.why}</p>}
                 </div>
                 {!i.ok && i.fix && (
-                  <BusyButton className="btn small" busy={busy(`${server.id}:security:${i.id}`)} label={i.fix === "reboot" ? "Restart the machine" : i.fix === "logs" ? "Clean up logs now" : "Fix it"} busyLabel="Working…" onClick={() => fix(i)} />
+                  <BusyButton className="btn small" busy={busy(`${server.id}:security:${i.id}`)} label={fixLabel(i.fix)} busyLabel={i.fix === "reboot" ? "Restarting…" : i.fix === "logs" ? "Cleaning up…" : "Fixing…"} onClick={() => fix(i)} />
                 )}
               </li>
             ))}
@@ -1168,18 +1193,18 @@ function Maintenance({ server, installed, act, rebuild, wipeRebuild, busy }: { s
   return (
     <div className="panel">
       <h3>Maintenance</h3>
-      {server.updating ? <p className="muted">Its Loner-Strike updates are going in now.</p> : running && <p className="muted">Stop the server first to update or rebuild it.</p>}
+      {server.updating ? <p className="muted">Its Loner-Strike updates are going in now.</p> : running && <p className="muted">Stop the server first to update or repair it.</p>}
       <ul className="upkeep">
         {!server.imported && (
           <li>
             <div><b>Update Valve's server files</b><p className="muted">Gets the latest version of the server from Valve. Your mods and settings stay.</p></div>
-            <BusyButton className="btn" busy={busy("update")} disabled={running || !!server.updating} label="Update" busyLabel="Starting…" onClick={() => act("update")} />
+            <BusyButton className="btn" busy={busy("update")} disabled={running || !!server.updating} label="Update" busyLabel="Updating…" onClick={() => act("update")} />
           </li>
         )}
         {server.loner && !server.host && (
           <li>
-            <div><b>Rebuild Loner-Strike</b><p className="muted">Reinstalls Metamod-P, AMX Mod X, ReGameDLL{installed.length > 2 ? ` and the ${installed.length - 2} extra mode${installed.length === 3 ? "" : "s"} and add-ons on it` : " and the built-in modes"}. Fixes a server that won't start or lost its mods. Settings, admins and maps stay.</p></div>
-            <BusyButton className="btn" busy={busy("reinstall")} disabled={running || !!server.updating} label="Rebuild" busyLabel="Starting…" onClick={rebuild} />
+            <div><b>Repair Loner-Strike</b><p className="muted">Reinstalls Metamod-P, AMX Mod X, ReGameDLL{installed.length > 2 ? ` and the ${installed.length - 2} extra mode${installed.length === 3 ? "" : "s"} and add-ons on it` : " and the built-in modes"}. Fixes a server that won't start or lost its mods. Settings, admins and maps stay.</p></div>
+            <BusyButton className="btn" busy={busy("reinstall")} disabled={running || !!server.updating} label="Repair" busyLabel="Repairing…" onClick={rebuild} />
           </li>
         )}
         {server.host && (
@@ -1199,7 +1224,7 @@ function Maintenance({ server, installed, act, rebuild, wipeRebuild, busy }: { s
                   : "Deletes its folder, maps, settings and admins. Your own game isn't touched."}
             </p>
           </div>
-          <BusyButton className="btn danger" busy={busy("delete")} label={server.imported ? "Remove" : "Delete"} busyLabel={server.imported ? "Removing…" : "Deleting…"} onClick={() => act("delete")} />
+          <BusyButton className="btn danger" busy={busy("delete")} disabled={!!server.updating} label={server.imported ? "Remove" : "Delete"} busyLabel={server.imported ? "Removing…" : "Deleting…"} onClick={() => act("delete")} />
         </li>
       </ul>
     </div>
@@ -1367,7 +1392,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
   // why Make the server can't be pressed yet
   const why = where === "vps" && !probe ? "Check the server first." : where === "vps" && probe && !probe.x86 ? "This machine can't run the server." : !name.trim() ? "Give it a name." : "";
   return (
-    <Sheet label="New server" onClose={close}>
+    <Sheet label="New server" onClose={close} className="sheet new-server">
       <div className="sheet-body">
         <h2>New server</h2>
         {ON_THIS_COMPUTER && (

@@ -389,9 +389,9 @@ export function RestoreSheet({ to, scope = "all", servers, onClose, onChanged }:
   };
 
   return (
-    <Sheet label="Restore from a backup" onClose={starting || running ? undefined : onClose}>
+    <Sheet label="Restore a backup" onClose={starting || running ? undefined : onClose}>
       <div className="sheet-body">
-        <h2>Restore from a backup</h2>
+        <h2>Restore a backup</h2>
         {running ? (
           <JobProgress title="Restoring…" remote={where === "new-remote"} onEnd={finished} />
         ) : ended ? (

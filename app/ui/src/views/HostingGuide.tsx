@@ -37,7 +37,7 @@ const TROUBLE: { q: string; a: string; match?: RegExp }[] = [
   { q: "The key has a passphrase", a: "Not supported yet. Make a key without one and add its .pub line to ~/.ssh/authorized_keys on the machine.", match: /passphrase/i },
   { q: "The server's identity has changed", a: "Expected if you rebuilt the machine: run ssh-keygen -R with its address, then delete the server here and add it again. Otherwise, don't connect.", match: /identity has changed/i },
   { q: "The machine is aarch64", a: "It's an Arm machine. Make an x86 (AMD or Intel) one.", match: /aarch64|arm64|only runs on x86/i },
-  { q: "Setup stopped part way", a: "Try again carries on where it stopped. Rebuild from scratch wipes the server's folder on the machine and starts over." },
+  { q: "Setup stopped part way", a: "Try again carries on where it stopped. Wipe and rebuild deletes the server's folder on the machine and starts over." },
 ];
 
 /** The troubleshooting tip that fits an SSH or setup error, if one does. */

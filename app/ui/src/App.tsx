@@ -540,7 +540,7 @@ function ServersNav({ servers, section, openId, pill, onOverview, onNew, onOpen 
               <rect x="4" y="13" width="7" height="7" />
               <rect x="13" y="13" width="7" height="7" />
             </svg>
-            <span className="side-server-name">Overview</span>
+            <span className="side-server-name">All servers</span>
           </button>
           {shown.map((s) => (
             <button key={s.id} className="side-server" aria-current={here && openId === s.id ? "page" : undefined} title={`${s.name} · ${say(s)}`} onClick={() => onOpen(s.id)}>
@@ -672,7 +672,7 @@ function Waiting({ label, game, gameOpen, reason, onPlay, setUp, openSetup }: { 
           </p>
           {/* the plain "nothing loaded" reason only repeats the line above */}
           {reason && !gameOpen && !reason.startsWith("No game is loaded") && <p className="muted small-note">{reason}</p>}
-          {!gameOpen && <button className="btn primary" onClick={onPlay}>Start a game</button>}
+          <button className={gameOpen ? "btn" : "btn primary"} onClick={onPlay}>{gameOpen ? "Go to Play" : "Start a game"}</button>
         </>
       ) : (
         <>
