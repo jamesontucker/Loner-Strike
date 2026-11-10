@@ -1241,6 +1241,31 @@ public task_scan()
 			}
 		}
 
+		// the bot's own brain picks who to fight by threat (shooting at it, facing it, an AWPer,
+		// the one it's on); it says who in pev_euser4: the reaction and aim go to the same one
+		// (when it can be seen from here: the brain's notice is its own)
+		if (g_Brain)
+		{
+			new foe = pev(id, pev_euser4)
+			if (foe != best && 1 <= foe <= MaxClients && is_enemy(id, foe))
+			{
+				new Float:to[3], Float:dir[3]
+				eye_pos(foe, to)
+				for (new i = 0; i < 3; i++)
+					dir[i] = to[i] - eye[i]
+				new Float:dist = vector_length(dir)
+				if (dist >= 1.0 && can_see(id, eye, foe))
+				{
+					new Float:dot = (dir[0] * fwd[0] + dir[1] * fwd[1] + dir[2] * fwd[2]) / dist
+					best = foe
+					bestAngle = floatacos(floatclamp(dot, -1.0, 1.0), degrees)
+					bestDist = dist
+					if (!seen)
+						seen = 1
+				}
+			}
+		}
+
 		// holding an angle: over when it's hit or the bomb goes down (CTs go for it)
 		if (g_HoldUntil[id] > 0.0 && (best || get_user_health(id) < g_HoldHp[id] || g_BombPlanted || now >= g_HoldUntil[id]))
 		{
