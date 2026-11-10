@@ -35,7 +35,7 @@ const NOTES: Record<string, string> = {
   gm_bf_breakables: "Shooting the glass in view after the round, and a few slash the same crate every time they walk past",
   gm_bf_drop: "A well-off bot sometimes drops its gun for a broke teammate who asks in chat, like drop pls, and broke bots sometimes ask",
   gm_bf_bad: "Newer players reload after every kill, flick weapons for no reason, walk about with the knife out and pull a grenade out of spawn",
-  gm_bf_cheeky: "On public games a few jokers teabag a kill, slash a teammate on the way out of spawn (only with friendly fire off) and jump about after the round",
+  gm_bf_cheeky: "On public games a few jokers slash a teammate on the way out of spawn (only with friendly fire off) and jump about after the round (and teabag a kill, with Bots can be rude on)",
   gm_hb_radio: "The odd radio call that fits the moment: enemy spotted, enemy down, the team's caller says go",
   gm_hb_hold: "Careful players and lurkers stop now and then and hold an angle for a few seconds (not in deathmatch)",
   gm_botchat: "How often bots talk: kills, deaths, rage, callouts like rush b, encouraging teammates, answering you",

@@ -311,7 +311,7 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
                       )}
                       {f.listed === false && <p className="muted small-note">Its contents are checked after downloading.</p>}
                     </div>
-                    {f.virus ? <span className="muted">Flagged by GameBanana's virus scan</span> : f.supported ? (
+                    {f.virus ? <span className="muted">Flagged by GameBanana's virus scan</span> : !ON_THIS_COMPUTER ? <span className="muted small-note">Install it on the computer.</span> : f.supported ? (
                       <BusyButton className="btn primary" busy={busy(key(`install:${open.id}:${f.id}`))} disabled={!!jobFor(open.id)} label={jobFor(open.id) ? jobText(jobFor(open.id)!) : server && section !== "maps" ? "Use on this server" : "Install"} busyLabel="Installing…" onClick={() => install(open.id, f.id, open.name)} />
                     ) : <span className="muted">Can't open this kind of file</span>}
                   </li>
@@ -351,7 +351,7 @@ function SlotsBar() {
     </p>
   );
 }
-const SECTION_NAME: Record<string, string> = { maps: "Map", skins: "Weapon skin", players: "Player model", sounds: "Sound", sprays: "Spray", sprites: "Effect", gui: "HUD & menu" };
+const SECTION_NAME: Record<string, string> = { maps: "Map", skins: "Weapon skin", players: "Player model", sounds: "Sound", sprays: "Spray", sprites: "Effect", gui: "HUD & menus" };
 
 /** Everything downloaded into this game, in one place, to remove what you don't want. */
 function InstalledList({ onChanged, server, only, empty = "Nothing downloaded yet. Anything you install from here shows up in this list." }: { onChanged: () => void; server?: boolean; only?: string[]; empty?: string }) {
@@ -431,7 +431,7 @@ function InstalledList({ onChanged, server, only, empty = "Nothing downloaded ye
  *  model and sound count against the engine's limit. Getting more opens the browser. */
 /** What you have of some kinds of GameBanana content in your own game, with Remove on each
  *  and a way to get more of that kind: a chip per kind when there's more than one. */
-const KIND_NAMES: Record<string, string> = { skins: "Weapon skins", players: "Player models", sprays: "Sprays", sprites: "Sprites", gui: "Menus", sounds: "Sounds" };
+const KIND_NAMES: Record<string, string> = { skins: "Weapon skins", players: "Player models", sprays: "Sprays", sprites: "Effects", gui: "HUD & menus", sounds: "Sounds" };
 export function MyContent({ kinds, title, note, empty }: { kinds: string[]; title: string; note: string; empty: string }) {
   const [kind, setKind] = useState<string>(kinds.length > 1 ? "all" : kinds[0]);
   const [shop, setShop] = useState(false);
@@ -471,7 +471,7 @@ export function MySkins() {
     <MyContent
       kinds={["skins", "players", "sprays", "sprites", "gui"]}
       title="Skins & models"
-      note="Weapon skins, player models, sprays, sprites and menus in your game. Only you see them. Removing one puts the game's own back."
+      note="Weapon skins, player models, sprays, effects and HUD in your game. Only you see them. Removing one puts the game's own back."
       empty="Nothing here yet: your game uses its own. Get some from GameBanana with the button above."
     />
   );

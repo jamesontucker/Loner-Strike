@@ -117,6 +117,9 @@ function Shell() {
   const switchGame = (hl: string | null, game: string) =>
     once(`app:game:${hl ?? ""}:${game}`, async () => {
       if (hasUnsavedEdits() && !(await ask("Switch game without saving your changes?", { ok: "Switch", danger: true }))) return;
+      // (switching while a game is going: the app then controls the other game, and starting
+      // one there would close the game being played)
+      if ((!!online || gameOpen) && !(await ask(`Switch to ${gameTitle(game)}? The game that's open keeps going, but the app shows ${gameTitle(game)} until you switch back.`, { ok: "Switch" }))) return;
       const r = hl
         ? await postJson<{ ok?: boolean; error?: string }>("/api/app/game", { hl, game })
         : await postJson<{ ok?: boolean; error?: string }>("/api/servers/select", { id: `local:${game}` });
@@ -337,7 +340,7 @@ function Shell() {
         {localGames.length > 1 && (
           <div className="game-switch" role="group" aria-label="Your game">
             {localGames.map((g) => (
-              <button key={g} title={g === "cstrike" ? "Counter-Strike 1.6" : "Counter-Strike: Condition Zero"} aria-pressed={myGame === g} disabled={!!openServer || busy(`app:game::${g}`)} onClick={() => myGame !== g && switchGame(null, g)}>
+              <button key={g} title={openServer ? "Go back to your game to switch" : g === "cstrike" ? "Counter-Strike 1.6" : "Counter-Strike: Condition Zero"} aria-pressed={myGame === g} disabled={!!openServer || busy(`app:game::${g}`)} onClick={() => myGame !== g && switchGame(null, g)}>
                 {g === "cstrike" ? "CS 1.6" : "CZ"}
               </button>
             ))}
@@ -410,7 +413,7 @@ function Shell() {
                 ) : (
                   <PlayIdle app={app} reason={state.online ? "" : state.reason} gameOpen={gameOpen} maps={maps} openSetup={openSetup} />
                 ))}
-              {section === "maps" && <Maps current={online?.state.map} live={!!online} maps={allMaps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} />}
+              {section === "maps" && <Maps current={online?.state.map} live={!!online} maps={allMaps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} getMore={() => go("more")} />}
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
               {section === "match" && online && (
                 <SettingsPage title="Rules" note={RULES_NOTE(online)} data={online} cat={2} refresh={refresh} pickMode>

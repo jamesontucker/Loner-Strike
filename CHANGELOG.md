@@ -17,6 +17,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 - They look where it matters: running somewhere they face the way they're going and glance over a shoulder now and then, a sound from behind gets a quick look (or none, from a rusher) instead of running backwards, and holding a spot they check the openings in turn, through glass and doors, never staring at a wall. How often they check, and how long they hold an angle, depends on who they are.
 - They hold an angle for a few seconds instead of glancing round every second, and aim around the chest like most players, so headshots come at a pub's rate rather than every kill or none.
 - Each bot is its own person: a personality, mood and skill that show in how it plays and talks, regulars who remember you between sessions, tilt from a bad run, and callouts like "rush b" before they go down.
+- New installs start with bot chat at Normal and Quake sounds off, both a click away to change; a bot style's name is Original everywhere for the game's own bots.
 - Chat volume fits the mode, deathmatch chat is short reactions, and with Bots can be rude off nobody gets insulted.
 - Every mode is played right: deathmatch spreads out and goes for the fighting, Gun Game's grenade and knife levels work, fy_ maps get a run for the floor guns, and rounds on awp_ and aim_ maps don't stall.
 - Deathmatch and Gun Game no longer end the round and respawn everyone at 9 minutes.
