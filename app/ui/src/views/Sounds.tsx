@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getJson, isSharedId, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, useActions, useActivity, usePoll, isAbort } from "../api";
 import { reloadServers, useGameState, useServers, useSetupJob, waitForSetupJob } from "../queries";
 import { restartPending } from "../types";
-import { MyContent } from "./GetMore";
+// (loaded when the tab opens, so Get more stays out of the app's first download)
+const MyContent = lazyPage(() => import("./GetMore").then((m) => ({ default: m.MyContent })));
 import { useNav } from "../store";
-import { Banner, BusyButton, LoadError, SectionHead, Segmented, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
+import { Banner, BusyButton, lazyPage, LoadError, SectionHead, Segmented, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
 
 type Track = { name: string; size: number; on: boolean; kind: "mp3" | "wav"; pack?: string | null; problem?: string | null };
 type Pool = { id: "t" | "ct" | "any"; label: string; tracks: Track[]; on: number; over: boolean };

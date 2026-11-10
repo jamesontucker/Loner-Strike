@@ -77,7 +77,7 @@ impl<T: Clone> Recent<T> {
 }
 
 /// Is the game open on this computer? (a process search: not on every state check)
-fn game_open() -> bool {
+pub(crate) fn game_open() -> bool {
     static OPEN: Recent<bool> = Recent::new(Duration::from_secs(5));
     OPEN.get_or(sys::game_running)
 }
@@ -276,9 +276,10 @@ impl Game {
     }
 
     /// The game turned the app's console password away: why, and what to do. On this
-    /// computer the setup is checked (and what a Steam update or file check undid is put
-    /// back); then either Loner-Strike isn't loading at all (no password gets set, so none is
-    /// accepted: also why there are no bots), or it is and a config sets its own after it.
+    /// computer the setup is checked (and in the player's own game, what a Steam update or
+    /// file check undid is put back); then either Loner-Strike isn't loading at all (no
+    /// password gets set, so none is accepted: also why there are no bots), or it is and a
+    /// config sets its own after it.
     /// The same, worked out at most every 15 seconds: it looks at running processes (a
     /// PowerShell on Windows) and the setup, and the panel asks every second or so.
     fn bad_password_reason_cached(&self) -> String {
@@ -294,8 +295,16 @@ impl Game {
         if CHECKING.swap(true, std::sync::atomic::Ordering::AcqRel) {
             return last.filter(|(dir, _, _)| *dir == self.dir).map(|(_, _, why)| why).unwrap_or_else(|| BAD_PASSWORD.into());
         }
+        // (let go when done, even if the check panics: otherwise no check would ever run again)
+        struct Done;
+        impl Drop for Done {
+            fn drop(&mut self) {
+                CHECKING.store(false, std::sync::atomic::Ordering::Release);
+            }
+        }
+        let done = Done;
         let why = self.bad_password_reason();
-        CHECKING.store(false, std::sync::atomic::Ordering::Release);
+        drop(done);
         *LAST.lock().unwrap() = Some((self.dir.clone(), std::time::Instant::now(), why.clone()));
         why
     }
@@ -317,7 +326,9 @@ impl Game {
         if !self.dedicated && crate::steam::too_old(&self.hl) {
             return crate::steam::TOO_OLD.into();
         }
-        let h = health_check(&self.dir, true);
+        // (put right by itself only in the player's own game: a dedicated or imported server's
+        // files are only checked here)
+        let h = health_check(&self.dir, !self.dedicated);
         let fixed: Vec<String> = h["fixed"].as_array().map(|a| a.iter().filter_map(|f| f.as_str().map(String::from)).collect()).unwrap_or_default();
         if !fixed.is_empty() {
             return fixed.join(" ");
@@ -394,7 +405,7 @@ pub fn health_check(cz: &Path, repair: bool) -> Value {
                     let backup = cz.join(format!("liblist.gam.steam-{}", sys::stamp()));
                     let new = format!("{}{}{}", &text[..m.start()], METAMOD_DLL, &text[m.end()..]);
                     sys::make_writable(&liblist);
-                    if sys::write_latin1(&backup, &text).is_ok() && sys::write_latin1(&liblist, &new).is_ok() {
+                    if sys::write_latin1(&backup, &text).is_ok() && sys::write_latin1_atomic(&liblist, &new).is_ok() {
                         fixed.push("Steam had reset liblist.gam, so the mods weren't loading. Fixed it. Restart the game.");
                         check("Game loads Metamod", true, "repaired");
                     } else {
@@ -420,7 +431,7 @@ pub fn health_check(cz: &Path, repair: bool) -> Value {
             list.push_str("\r\n");
         }
         list.push_str("win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n");
-        if sys::write_latin1(&mm_ini, &list).is_ok() {
+        if sys::write_latin1_atomic(&mm_ini, &list).is_ok() {
             fixed.push("Metamod's plugin list was missing AMX Mod X. Fixed it. Restart the game.");
             check("Metamod loads AMX Mod X", true, "repaired");
         } else {

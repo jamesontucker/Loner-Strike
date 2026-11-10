@@ -738,6 +738,9 @@ export function ServerPage(props: {
                 <BusyButton busy={busy("restart")} disabled={!!s.updating} label="Restart" busyLabel="Restarting…" onClick={() => act("restart")} />
                 <BusyButton className="btn danger" busy={busy("stop")} disabled={!!s.updating} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
               </>
+            ) : s.state === "setting-up" ? null : s.state === "failed" ? (
+              // (setup didn't finish: carrying on is the way forward, not starting it)
+              <BusyButton className="btn primary" busy={busy("retry")} label="Try again" busyLabel="Trying again…" onClick={() => act("retry")} />
             ) : (
               <>{modePick}<BusyButton className="btn primary" busy={busy("start")} disabled={off || !!s.updating} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} /></>
             )}
@@ -745,6 +748,11 @@ export function ServerPage(props: {
         </div>
         <TabStrip label={`${s.name} sections`} tab={tab} shown={shown} allowed={allowed} onPick={pick} />
       </div>
+      {!role && s.state === "setting-up" && (
+        <div className="banner" role="status">
+          <JobProgress server={s.id} long={!!s.host} onEnd={() => void reloadServers()} />
+        </div>
+      )}
       {!role && s.updating && <div className="banner" role="status"><UpdateProgress restarts={s.restarts_after} phase={s.update_phase} job={s.update_job} /></div>}
       {!role && !s.updating && s.update_queued && <div className="banner" role="status"><div>Its Loner-Strike updates are waiting their turn: another server's are going in now.</div></div>}
       {role && (

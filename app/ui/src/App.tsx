@@ -111,7 +111,7 @@ function Shell() {
   const answered = useRef(false);
   // setup copies files on the computer; from a phone it can only be pointed at
   const openSetup = () => (ON_THIS_COMPUTER ? setSetupOpen(true) : toast(SETUP_ON_COMPUTER));
-  const { run: once, busy } = useActions();
+  const { run: once } = useActions();
   /** Goes to a section, asking first when a page has edits that aren't saved. */
   const nav = async (s: Section, focus?: string) => {
     // a dialog is open (the app behind it is inert): shortcuts and the menu wait
@@ -273,13 +273,17 @@ function Shell() {
 
   // who's in the open game or server (the phone's Players), and in your own game (the sidebar's)
   const players = online?.players.length ?? 0;
+  const useActivityKeys = useActivity().map(([k]) => k);
   const myPlayers = localOnline?.players.length ?? 0;
   // things to look at, shown as a small count on their section
   const reports = useOpenReports().data ?? 0;
   const attention: Partial<Record<Section, { n: number; why: string }>> = {
     servers: {
-      n: (servers?.servers ?? []).filter((x) => x.unreachable || x.state === "crashed" || x.state === "failed" || (x.state === "running" && waitsForRestart(x))).length,
-      why: "to look at: servers not answering, stopped by a crash, not finished setting up or waiting for a restart",
+      n: (servers?.servers ?? []).filter((x) =>
+        x.unreachable || x.state === "crashed" || x.state === "failed" || (x.state === "running" && waitsForRestart(x))
+        // (updates waiting that aren't going in already)
+        || (!x.shared && !x.updating && !x.update_queued && (x.outdated?.length ?? 0) > 0 && x.state !== "setting-up")).length,
+      why: "to look at: servers with updates waiting, not answering, stopped by a crash, not finished setting up or waiting for a restart",
     },
     mods: { n: localApp?.game?.outdated?.length ?? 0, why: "to update: parts of Loner-Strike with updates waiting" },
     community: { n: reports, why: "to read: player reports nobody has looked at yet" },
@@ -378,7 +382,7 @@ function Shell() {
         {localGames.length > 1 && (
           <div className="game-switch" role="group" aria-label="Your game">
             {localGames.map((g) => (
-              <button key={g} title={openServer ? `Back to your game${myGame && myGame !== g ? `, then switch to ${gameTitle(g)}` : ""}` : g === "cstrike" ? "Counter-Strike 1.6" : "Counter-Strike: Condition Zero"} aria-pressed={myGame === g} disabled={busy(`app:game::${g}`)} onClick={() => void pickGame(g)}>
+              <button key={g} title={openServer ? `Back to your game${myGame && myGame !== g ? `, then switch to ${gameTitle(g)}` : ""}` : g === "cstrike" ? "Counter-Strike 1.6" : "Counter-Strike: Condition Zero"} aria-pressed={myGame === g} disabled={useActivityKeys.some((k) => k.startsWith("app:game:"))} onClick={() => void pickGame(g)}>
                 {g === "cstrike" ? "CS 1.6" : "CZ"}
               </button>
             ))}
@@ -446,7 +450,8 @@ function Shell() {
           {lost && state && !state.online && <LoadError title={state.reason === SIGNED_OUT ? "Not signed in" : "Can't reach Loner-Strike"} text={state.reason} onRetry={() => queryClient.invalidateQueries()} />}
           <HomeScreenHint />
           <WhatsNew version={app?.version} />
-          {!setupOpen && !current?.shared && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} server={current?.name} />}
+          {/* (not on the servers list: it's about your servers, which show their own updates) */}
+          {!setupOpen && !current?.shared && !(section === "servers" && !openServer) && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} server={current?.name} />}
           {state === null ? (
             <Skeleton rows={4} />
           ) : needsGame && !lost ? (
@@ -458,7 +463,7 @@ function Shell() {
               )}
             </>
           ) : (
-            <PageBoundary key={`${section}:${openServer ?? ""}:${app?.game?.id ?? ""}`}>
+            <PageBoundary key={`${section}:${openServer ?? localApp?.game?.id ?? ""}`}>
             <Suspense fallback={<Skeleton rows={4} />}>
               {section === "play" &&
                 (online ? (

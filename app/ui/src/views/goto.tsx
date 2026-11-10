@@ -8,14 +8,17 @@ const OWN_PAGE: Partial<Record<string, Section>> = {
   modes: "play", bots: "bots", match: "match", fun: "fun", join: "friends",
 };
 
-// a section inside the tab to open on (Moderation's "bans", say), taken once by the page that has it
-let pendingSub: string | null = null;
+// a section inside the tab to open on (Moderation's "bans", say), taken once by the page that has
+// it, and only just after the link (a switch that was refused or went elsewhere leaves it unused,
+// and it mustn't turn up later on another server's page)
+let pendingSub: { sub: string; at: number } | null = null;
+const SUB_FOR_MS = 3000;
 
 /** Opens a tab of the open server's page (or your own game's page of the same kind), and
  *  optionally a section inside it. */
 export function openTab(tab: string, sub?: string) {
   const nav = useNav.getState();
-  pendingSub = sub ?? null;
+  pendingSub = sub ? { sub, at: Date.now() } : null;
   if (nav.server) return nav.openServerTab(tab as Section);
   const page = OWN_PAGE[tab];
   if (page) nav.go(page);
@@ -23,10 +26,14 @@ export function openTab(tab: string, sub?: string) {
 
 /** The section openTab asked for, if it's one of ids (taken, so it's used only once). */
 export function takeSub<T extends string>(ids: readonly T[]): T | null {
-  const s = pendingSub as T | null;
-  if (!s || !ids.includes(s)) return null;
+  const p = pendingSub;
+  if (!p || Date.now() - p.at > SUB_FOR_MS) {
+    pendingSub = null;
+    return null;
+  }
+  if (!ids.includes(p.sub as T)) return null;
   pendingSub = null;
-  return s;
+  return p.sub as T;
 }
 
 /** A link in running text that opens another tab. */

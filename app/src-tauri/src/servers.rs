@@ -3672,6 +3672,22 @@ fn local_now() -> (u32, u32) {
 
 /// Starts the one thread that runs every server's daily restart (main.rs, and when a
 /// schedule is saved).
+/// Servers on this computer kept running from an earlier session (the app quit, or was
+/// updated: the Windows installer ends ls-voice) get their voice back, once at launch. Only a
+/// server the app starts itself gets it otherwise, and start() leaves one already up alone.
+pub fn resume_voice() {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        std::thread::spawn(|| {
+            for e in load().into_iter().filter(|e| e.remote.is_none() && e.voice.enabled) {
+                if !with_runs(|r| r.procs.contains_key(&e.id)) && left_running(&e) {
+                    crate::voice::server_started(&e);
+                }
+            }
+        });
+    });
+}
+
 pub fn schedule_restarts() {
     static STARTED: std::sync::Once = std::sync::Once::new();
     STARTED.call_once(|| {

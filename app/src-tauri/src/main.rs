@@ -106,6 +106,8 @@ fn main() {
             // dedicated servers' daily restarts (Server extras, Schedule)
             servers::schedule_restarts();
             servers::sync_loop();
+            // voice for servers kept running while the app was closed
+            servers::resume_voice();
             // servers' Loner-Strike updates, once nobody is playing
             setup_api::auto_update_loop(state.clone());
             // Linux servers' bans, admins and settings kept here too, once a day

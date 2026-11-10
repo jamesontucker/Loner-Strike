@@ -63,6 +63,7 @@ const COMMANDS: [string, string][] = [
  *  server, Repair in its Mods tab (puts every part of Loner-Strike back, keeping its settings). */
 export function setupPlace(server: string | null) {
   if (!ON_THIS_COMPUTER) return SETUP_ON_COMPUTER;
+  if (server && isSharedId(server)) return "Ask the server's owner to add it (its Mods tab, Repair).";
   return server ? "To add it, open this server's Mods tab and click Repair. Its settings, admins and maps stay." : "To add it, use Run full setup in Mods.";
 }
 

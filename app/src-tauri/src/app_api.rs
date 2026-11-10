@@ -666,11 +666,8 @@ fn start_in(g: &crate::game::Game, mode: &str, map: Option<&str>, settings: &std
 pub(crate) fn save_bots(dir: &std::path::Path, bots: u32) -> std::io::Result<()> {
     let data = dir.join("addons/amxmodx/data/gamemodes");
     std::fs::create_dir_all(&data)?;
-    let path = data.join("global.cfg");
-    let old = std::fs::read_to_string(&path).unwrap_or_default();
-    let mut lines: Vec<String> = old.lines().filter(|l| !l.trim_start().starts_with("bot_quota")).map(String::from).collect();
-    lines.push(format!("bot_quota \"{}\"", bots.min(31)));
-    std::fs::write(path, lines.join("\n") + "\n")
+    // (only bot_quota itself: bot_quota_mode and the rest stay)
+    set_cfg_values(&data.join("global.cfg"), &[("bot_quota".into(), bots.min(31).to_string())])
 }
 
 async fn api_launch(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<LaunchReq>) -> (StatusCode, Json<Value>) {
@@ -892,6 +889,19 @@ mod start_tests {
         let v = cfg_values(&p);
         assert!(v.contains(&("bot_quota".into(), "9".into())));
         assert_eq!(v.iter().filter(|(k, _)| k == "bot_difficulty").collect::<Vec<_>>(), vec![&("bot_difficulty".to_string(), "3".to_string())]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn bot_count_keeps_quota_mode() {
+        let dir = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "bots-").unwrap();
+        let data = dir.join("addons/amxmodx/data/gamemodes");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(data.join("global.cfg"), "BOT_QUOTA \"9\"\nbot_quota_mode \"fill\"\ngm_botstyle \"6\"\n").unwrap();
+        save_bots(&dir, 4).unwrap();
+        let v = cfg_values(&data.join("global.cfg"));
+        assert_eq!(v.iter().filter(|(k, _)| k == "bot_quota").collect::<Vec<_>>(), vec![&("bot_quota".to_string(), "4".to_string())]);
+        assert!(v.contains(&("bot_quota_mode".into(), "fill".into())) && v.contains(&("gm_botstyle".into(), "6".into())));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

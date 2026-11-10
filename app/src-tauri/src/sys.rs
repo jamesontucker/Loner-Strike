@@ -204,7 +204,17 @@ pub fn make_writable(path: &Path) {
 }
 
 pub fn write_latin1(path: &Path, text: &str) -> std::io::Result<()> {
-    std::fs::write(path, text.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect::<Vec<u8>>())
+    std::fs::write(path, latin1_bytes(text))
+}
+
+/// write_latin1, but written whole or not at all (write_atomic): for a config the game or
+/// the plugin reads, which a crash part way mustn't leave cut short.
+pub fn write_latin1_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+    write_atomic(path, &latin1_bytes(text))
+}
+
+fn latin1_bytes(text: &str) -> Vec<u8> {
+    text.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect()
 }
 
 /// A program on PATH, or in one of the usual extra places (Homebrew on a Mac).

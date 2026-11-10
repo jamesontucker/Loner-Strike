@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ReleaseNotes } from "./WhatsNew";
 import { useQuery } from "@tanstack/react-query";
-import { copyText, getJson, getJsonAt, ON_COMPUTER_ONLY, postJson, useActions } from "../api";
+import { copyText, getJson, getJsonAt, ON_COMPUTER_ONLY, postJson, useActions, useActivity } from "../api";
 import type { AppInfo, PhoneInfo } from "../types";
 import { ON_THIS_COMPUTER } from "../api";
 import { gameTitle } from "../games";
@@ -51,6 +51,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
   const ask = useConfirm();
   const toast = useToast();
   const { run, busy } = useActions();
+  // (one game switch at a time, from here or the sidebar)
+  const switching = useActivity().some(([k]) => k.startsWith("app:game:"));
   // the update installed and the app is restarting: the button stays busy until it does
   const [restarting, setRestarting] = useState(false);
   const [checked, setChecked] = useState<string>("");
@@ -345,6 +347,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
                     <BusyButton
                       key={i.hl + g.id}
                       busy={busy(`app:game:${i.hl}:${g.id}`)}
+                      disabled={switching}
                       label={<>Switch to {gameTitle(g.id)}{g.installed ? "" : " (not set up)"}</>}
                       busyLabel="Switching…"
                       onClick={() => switchGame(i.hl, g.id)}
@@ -560,8 +563,12 @@ function RemoveEverything({ scan, onClose }: { scan: Scan; onClose: () => void }
     for (const g of games) {
       setStep(`Removing from ${gameTitle(g.id)}…`);
       const r = await postJson<{ ok?: boolean; error?: string }>("/api/setup/uninstall", { hl: g.hl, games: [g.id] }).catch(() => ({ error: "Couldn't reach the app." }));
-      if (r.error) return toast(r.error, true);
+      if (r.error) {
+        setStep("");
+        return toast(r.error, true);
+      }
       const j = await waitForSetupJob();
+      if (!j || j.state === "error") setStep("");
       if (!j || j.state === "error") return toast(j?.error || `Couldn't remove Loner-Strike from ${gameTitle(g.id)}. Nothing else was deleted.`, true);
     }
     setStep("Deleting the servers and the app's data…");

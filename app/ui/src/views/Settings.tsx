@@ -274,7 +274,8 @@ export function useSaved() {
     await Promise.all([qc.invalidateQueries({ queryKey: ["savedSettings", targetKey()] }), qc.invalidateQueries({ queryKey: ["startOptions"] }), qc.invalidateQueries({ queryKey: ["modeSettings", targetKey()] })]);
     return !r.error;
   };
-  const mode = v?.mode ?? want;
+  // (while a picked mode loads, the old one's view stays on screen: edits go to the picked one)
+  const mode = q.isPlaceholderData ? want : v?.mode ?? want;
   const data: Online | null = v && {
     online: true,
     state: savedState(v),

@@ -5067,6 +5067,7 @@ enum
 #define TASK_FAKE 8780
 new bool:g_ReqWalk[33]                      // walking there ("go b slow")
 new g_ReqFakeTo[33]                         // a fake: the site it goes to after (SPOT_A/B), 0 none
+new bool:g_ReqBomb                          // the request being decided is a CT's "go defuse" (the bomb down is why)
 new g_BuyForRound[33]                       // the round someone last had a gun bought for them (one a round)
 new g_SawGuns[3], g_SawGunsRound[3]         // what a team has seen the other carry this round (1 awp, 2 a rifle or smg, 4 a pistol only)
 
@@ -5739,11 +5740,11 @@ bool:goto_target(const c[], &arg, place[], plen)
 
 // ---- callouts from people ("two long", "awp mid", "they are b") ----
 
-new g_InfoCount                             // how many the callout being read named (0: not said)
 new Float:g_InfoAt[3], Float:g_InfoPos[3][3], g_InfoPlace[3][32], g_InfoN[3]   // a team's last one
 
 // What someone saw, said to the team: enemies (a number, "they", "awp", "rushing", or a CT's
-// "rush b", since CTs don't rush) and a place the map knows. Not a question
+// "rush b", since CTs don't rush) and a place the map knows. Not a question. The arg has the
+// spot, and how many were named times 16 (0: not said; 9: "all", "stacked")
 bool:info_said(id, const c[], &arg, place[], plen)
 {
 	if (contain(c, "?") != -1)
@@ -5752,16 +5753,53 @@ bool:info_said(id, const c[], &arg, place[], plen)
 	if (any_in(c, ASKS, sizeof ASKS))
 		return false
 	static const NUM[][] = { "one", "two", "three", "four", "five", "1", "2", "3", "4", "5" }
-	g_InfoCount = 0
-	for (new i = 0; i < sizeof NUM && !g_InfoCount; i++)
-		if (word_in(c, NUM[i]))
-			g_InfoCount = (i % 5) + 1
 	static const MANY[][] = { "all", "all of them", "everyone", "full", "stack", "stacked", "stacking", "rush", "rushing", "lots", "a lot",
 		"bunch", "many", "five", "whole team" }
 	static const THEM[][] = { "they", "they are", "them", "enemy", "enemies", "awp", "awper", "sniper", "lurker", "lurking", "flank",
 		"flanking", "stacked", "stacking", "coming", "pushing", "rushing", "ts", "cts", "terrorists", "spotted", "saw", "seen",
-		"contact", "low", "lit", "tagged", "hurt", "one shot" }
-	new bool:them = g_InfoCount > 0 || any_in(c, THEM, sizeof THEM)
+		"contact" }
+	// (hurt: about them, "one b he is low"; not "im low at b", about themself)
+	static const HURT[][] = { "low", "lit", "tagged", "hurt", "one shot" }
+	new bool:self = word_in(c, "im") || word_in(c, "i am")
+	new bool:themw = any_in(c, THEM, sizeof THEM) || (!self && any_in(c, HURT, sizeof HURT))
+	// how many: the first number said, and whether a place or an enemy word comes right after
+	// it ("two long", "one b", "2 awpers")
+	new n, bool:placed, bool:after, word[24], probe[160], a, p[32]
+	for (new i = 0; c[i]; )
+	{
+		while (c[i] && !isalnum(c[i]))
+			i++
+		new k
+		while (c[i] && isalnum(c[i]))
+		{
+			if (k < 23)
+				word[k++] = c[i]
+			i++
+		}
+		word[k] = 0
+		if (!k)
+			break
+		if (after)
+		{
+			formatex(probe, charsmax(probe), "go %s", word)
+			placed = any_in(word, THEM, sizeof THEM) || (goto_target(probe, a, p, charsmax(p)) && a != SPOT_THERE && a != SPOT_HOST)
+			break
+		}
+		for (new j = 0; j < sizeof NUM && !after; j++)
+			if (equal(word, NUM[j]))
+			{
+				n = (j % 5) + 1
+				after = true
+			}
+	}
+	// a number in an order to teammates is how many of them go ("one of you go b", "2 rush a,
+	// rest b", "one go long"), and "im one shot at b" is about themself: no enemies, unless
+	// they're named too, or it's right before a place ("two long go")
+	static const ORDER[][] = { "go", "push", "come", "hold", "of you", "you guys", "rest" }
+	new bool:order = any_in(c, ORDER, sizeof ORDER) || (get_user_team(id) != 2 && word_in(c, "rush"))
+	if (n && (order || self) && !themw && !placed)
+		n = 0
+	new bool:them = n > 0 || themw
 	// (the bomb's down: "bomb b", "its a", "planted b" is where)
 	if (!them && g_BombPlanted && (word_in(c, "bomb") || word_in(c, "planted") || word_in(c, "its") || word_in(c, "c4")))
 		them = true
@@ -5771,12 +5809,12 @@ bool:info_said(id, const c[], &arg, place[], plen)
 	if (!them)
 		return false
 	// ("follow them", "kill them": orders, no place)
-	new probe[160]
 	formatex(probe, charsmax(probe), "go %s", c)
 	if (!goto_target(probe, arg, place, plen) || arg == SPOT_THERE || arg == SPOT_HOST)
 		return false
-	if (!g_InfoCount && any_in(c, MANY, sizeof MANY))
-		g_InfoCount = 9
+	if (!n && any_in(c, MANY, sizeof MANY))
+		n = 9
+	arg |= n << 4
 	return true
 }
 
@@ -5799,8 +5837,9 @@ bool:sees_point(bot, const Float:at[3])
 
 // A teammate's callout: remembered for the team; bots that can see the place glance at it;
 // on CT, a site being hit (two or more, or "they are b") pulls a few from elsewhere over,
-// each by its own nature (req_decide); now and then one says ok, or that it's rotating
-Float:info_heard(id, spot, const place[], bool:team, Float:extra)
+// each by its own nature (req_decide); now and then one says ok, or that it's rotating. `count`:
+// how many it named (0: not said, 9: "all")
+Float:info_heard(id, spot, const place[], bool:team, Float:extra, count)
 {
 	new t = get_user_team(id)
 	if (teams_off() || (t != 1 && t != 2) || g_SteeredMode)
@@ -5818,13 +5857,13 @@ Float:info_heard(id, spot, const place[], bool:team, Float:extra)
 	g_InfoAt[t] = now
 	g_InfoPos[t] = at
 	copy(g_InfoPlace[t], charsmax(g_InfoPlace[]), label)
-	g_InfoN[t] = g_InfoCount
+	g_InfoN[t] = count
 	// (the team's "where are they" answers go by it too)
 	copy(g_SeenPlace[t], charsmax(g_SeenPlace[]), label)
 	g_SeenAt[t] = now
 	trace_add(g_TrDecision, charsmax(g_TrDecision), "info")
 	new bool:site = spot == SPOT_A || spot == SPOT_B || spot == SPOT_C
-	new bool:many = g_InfoCount != 1
+	new bool:many = count != 1
 	new bool:moves = puppets_ok() && !g_Freeze && !g_RoundOver
 	new rotated, maxrot = match_like() ? 4 : 2, first_rot, acker
 	for (new b = 1; b <= MaxClients; b++)
@@ -6649,7 +6688,7 @@ bool:heard_intents(id, const msg[], to, bool:team, bool:typed)
 		// a callout is for the whole team, whoever's named
 		if (it == I_INFO)
 		{
-			most = info_heard(id, args[k], places[k], team, extra)
+			most = info_heard(id, args[k] & 15, places[k], team, extra, args[k] >> 4)
 			if (most >= 0.0)
 			{
 				handled++
@@ -7321,9 +7360,9 @@ req_decide(bot, human, it, bool:named, section[], len)
 		copy(section, len, "r_req_busy")
 		return REQ_BUSY
 	}
-	// nothing with the bomb down, or in its hands (a hold in freeze time too: it'd stand there
-	// with the bomb once the round starts)
-	if (g_BombPlanted && it != I_SPRAY)
+	// nothing with the bomb down (but going to defuse it), or in its hands (a hold in freeze
+	// time too: it'd stand there with the bomb once the round starts)
+	if (g_BombPlanted && it != I_SPRAY && !(it == I_GOTO && g_ReqBomb && get_user_team(bot) == 2))
 	{
 		copy(section, len, "r_req_planted")
 		return REQ_NOPE
@@ -7360,11 +7399,11 @@ req_section(it, out[], len)
 }
 
 // Would the game's bot take it right now? What it turns down: an enemy in view, attacking or
-// just hit, the bomb, a ladder; a jump or crouch also wants it calm (no enemy just seen, no
-// danger around)
+// just hit, the bomb (down, unless it's going to defuse it, or in its hands), a ladder; a jump
+// or crouch also wants it calm (no enemy just seen, no danger around)
 bool:req_ready(bot, it)
 {
-	if (!is_user_alive(bot) || bot_target(bot) || in_combat(bot) || g_BombPlanted)
+	if (!is_user_alive(bot) || bot_target(bot) || in_combat(bot) || (g_BombPlanted && !(it == I_GOTO && g_ReqArg[bot] == SPOT_BOMB)))
 		return false
 	if (user_has_weapon(bot, CSW_C4) && !g_Freeze && it != I_PLANT && it != I_GIVEBOMB)
 		return false
@@ -7909,6 +7948,8 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 		answer(bot, "r_req_where", id, !teams_off(), extra)
 		return 1.5
 	}
+	// ("go defuse": the one thing asked with the bomb down)
+	g_ReqBomb = it == I_GOTO && arg == SPOT_BOMB
 	new res = req_decide(bot, id, it, to != 0, section, charsmax(section))
 	new bool:say = random_float(0.0, 1.0) < (to ? 0.9 : 0.65 * (0.6 + 0.4 * personality()))
 	// still typing something: it does it, but doesn't queue another line
@@ -7998,6 +8039,7 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 				req_attempt(other)
 		}
 	}
+	g_ReqBomb = false
 	return 2.0
 }
 

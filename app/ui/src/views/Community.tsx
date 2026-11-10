@@ -40,7 +40,6 @@ const STARTER = ["fuck", "fucking", "shit", "bitch", "cunt", "asshole", "bastard
 type Tab = "stats" | "matches" | "chat" | "reports" | "mod" | "bans" | "history";
 const MOD_TABS: [Tab, string][] = [["reports", "Reports"], ["chat", "Chat log"], ["mod", "Mutes & filter"], ["bans", "Bans"], ["history", "Player history"]];
 const STAT_TABS: [Tab, string][] = [["stats", "Stats & ranks"], ["matches", "5v5 matches"]];
-const TAB_IDS = [...MOD_TABS, ...STAT_TABS].map(([id]) => id);
 /** Which part of the page: a server's Moderation or Stats tab, or both (your own game). */
 export type CommunityPart = "moderation" | "stats" | "all";
 const HEAD: Record<CommunityPart, [string, string]> = {
@@ -116,7 +115,7 @@ export function Community({ target, part = "all" }: { target: string; part?: Com
   const tabs = (part === "moderation" ? MOD_TABS : part === "stats" ? STAT_TABS : [...MOD_TABS, ...STAT_TABS]).filter(([id]) => id !== "matches" || sharedRole() !== "moderator");
   const [tab, setTabRaw] = useState<Tab>(() => {
     // opened from a link elsewhere (Bans, say)
-    const asked = takeSub(TAB_IDS);
+    const asked = takeSub(tabs.map(([id]) => id));
     if (asked && tabs.some(([id]) => id === asked)) return asked;
     try {
       const t = localStorage.getItem(`ls.communityTab.${part}`) as Tab;
@@ -731,7 +730,7 @@ function ModTab({ d, setD, reload, onDirty }: { d: Data; setD: SetData; reload: 
                   {g.name ? <> · <span className="mono">{g.id}</span></> : null}
                 </span>
               </div>
-              <BusyButton busy={busy(ck(`unmute:${g.id}`))} label="Unmute" busyLabel="Unmuting…" onClick={() => unmute(g)} />
+              {sharedRole() === "moderator" ? <span className="muted small-note">An admin or the owner lifts mutes</span> : <BusyButton busy={busy(ck(`unmute:${g.id}`))} label="Unmute" busyLabel="Unmuting…" onClick={() => unmute(g)} />}
             </li>
           ))}
           {!gags.length && <li className="empty">Nobody is muted.</li>}

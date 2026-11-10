@@ -826,7 +826,8 @@ function FastDownloads({ d, saveSettings }: { d: Data; saveSettings: SaveSetting
   const toast = useToast();
   // a Linux server of your own: its Website status serves the files itself
   const open = useNav((s) => s.server);
-  const remote = !!open && !isSharedId(open) && !!useServers().data?.servers.find((x) => x.id === open)?.host;
+  const serverList = useServers().data;
+  const remote = !!open && !isSharedId(open) && !!serverList?.servers.find((x) => x.id === open)?.host;
   const [url, setUrl] = useState<string | null>(null);
   const { run, busy } = useActions();
   const value = url ?? d.settings.fastdl;

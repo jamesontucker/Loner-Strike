@@ -88,10 +88,6 @@ fn program(base: &str, crate_dir: &str) -> Option<PathBuf> {
     places.into_iter().find(|p| p.is_file())
 }
 
-fn exe(_st: &Shared) -> Option<PathBuf> {
-    program("ls-voice", "voice-agent")
-}
-
 /// The port it listens on for its server's voice.
 pub fn feed_port(e: &Entry) -> u16 {
     e.port.saturating_add(FEED_OFFSET)
@@ -334,13 +330,41 @@ struct Proc {
 struct Runs {
     procs: HashMap<String, Proc>,
     errors: HashMap<String, String>,
-    /// servers whose voice is waiting for them to answer (one waiter each)
-    pending: std::collections::HashSet<String>,
+    /// servers whose voice is waiting for them to answer: one waiter each, which carries on
+    /// only while its number is still the one here (turned off and on again meanwhile, the
+    /// newer waiter has it)
+    pending: HashMap<String, u64>,
+    /// the last waiter's number
+    waiters: u64,
+}
+
+impl Runs {
+    /// A new waiter for a server's voice, unless it's running or already waited for.
+    fn claim(&mut self, id: &str) -> Option<u64> {
+        if alive(self, id) || self.pending.contains_key(id) {
+            return None;
+        }
+        self.waiters += 1;
+        self.pending.insert(id.into(), self.waiters);
+        Some(self.waiters)
+    }
+
+    /// Whether this waiter is still the one for the server.
+    fn owns(&self, id: &str, waiter: u64) -> bool {
+        self.pending.get(id) == Some(&waiter)
+    }
+
+    /// The waiter is done: whether it was still the one (only then is its place cleared).
+    fn release(&mut self, id: &str, waiter: u64) -> bool {
+        let mine = self.owns(id, waiter);
+        if mine {
+            self.pending.remove(id);
+        }
+        mine
+    }
 }
 
 static RUNS: Mutex<Option<Runs>> = Mutex::new(None);
-/// Where ls-voice is, worked out once the app's resources are known
-static EXE: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 fn with_runs<T>(f: impl FnOnce(&mut Runs) -> T) -> T {
     let mut r = RUNS.lock().unwrap();
@@ -366,7 +390,10 @@ fn alive(r: &mut Runs, id: &str) -> bool {
 /// Called when a server on this computer has just been started: voice follows once it's up.
 pub fn server_started(e: &Entry) {
     if e.voice.enabled && e.remote.is_none() {
-        let _ = start(e);
+        // (nobody's there to be told: the Voice tab shows it)
+        if let Err(err) = start(e) {
+            with_runs(|r| r.errors.insert(e.id.clone(), err));
+        }
     }
 }
 
@@ -388,7 +415,7 @@ pub fn start(e: &Entry) -> Result<(), String> {
     if !installed() {
         return Err("Install bot voice commands first, from this tab.".into());
     }
-    let exe = EXE.lock().unwrap().clone().ok_or(
+    let exe = program("ls-voice", "voice-agent").ok_or(
         "The voice program is missing from the app. An antivirus may have removed it: allow Loner-Strike's folder in it, then reinstall Loner-Strike.",
     )?;
     if let Some(why) = cpu_too_old() {
@@ -396,13 +423,8 @@ pub fn start(e: &Entry) -> Result<(), String> {
     }
     let id = e.id.clone();
     // (already running, or already waiting for its server)
-    if with_runs(|r| alive(r, &id) || !r.pending.insert(id.clone())) {
-        return Ok(());
-    }
+    let Some(waiter) = with_runs(|r| r.claim(&id)) else { return Ok(()) };
     std::thread::spawn(move || {
-        let done = |r: &mut Runs| {
-            r.pending.remove(&id);
-        };
         // (its server first: it needs the console to tell the server where to send voice)
         let mut up = false;
         for _ in 0..90 {
@@ -410,8 +432,8 @@ pub fn start(e: &Entry) -> Result<(), String> {
                 up = true;
                 break;
             }
-            if !servers::running(&id) || !with_runs(|r| r.pending.contains(&id)) {
-                with_runs(done);
+            if !servers::running(&id) || !with_runs(|r| r.owns(&id, waiter)) {
+                with_runs(|r| r.release(&id, waiter));
                 return;
             }
             std::thread::sleep(Duration::from_secs(2));
@@ -419,12 +441,14 @@ pub fn start(e: &Entry) -> Result<(), String> {
         let result = match (up, servers::get(&id)) {
             (false, _) => Err("The server didn't come up, so voice wasn't started.".to_string()),
             (true, None) => Err("That server isn't there any more.".to_string()),
+            // (turned off, or off and on again, while it waited: not this one's to start)
+            (true, Some(_)) if !with_runs(|r| r.owns(&id, waiter)) => return,
             (true, Some(e)) => spawn(&e, &exe),
         };
         // (stopped while it waited, or the server's gone again: the new one isn't wanted)
         let wanted = servers::running(&id);
         let extra = with_runs(|r| {
-            let still = r.pending.remove(&id) && wanted;
+            let still = r.release(&id, waiter) && wanted;
             match result {
                 // (not tied to the app, like its server: one kept running when the app quits keeps
                 // its voice; a leftover ends itself once its server is gone, or at the next start)
@@ -451,7 +475,10 @@ pub fn start(e: &Entry) -> Result<(), String> {
 
 fn spawn(e: &Entry, exe: &PathBuf) -> Result<Child, String> {
     let port = feed_port(e);
-    end_leftover(e);
+    // (only one from an earlier session: never the one this app is running for it)
+    if !with_runs(|r| alive(r, &e.id)) {
+        end_leftover(e);
+    }
     if std::net::UdpSocket::bind(("127.0.0.1", port)).is_err() {
         return Err(format!("Port {port} on this computer is in use by another program, so voice couldn't start."));
     }
@@ -645,15 +672,7 @@ fn entry(id: &str) -> Result<Entry, String> {
     servers::get(id).ok_or_else(|| "That server isn't there any more.".to_string())
 }
 
-fn remember_exe(st: &Shared) {
-    let mut x = EXE.lock().unwrap();
-    if x.is_none() {
-        *x = exe(st);
-    }
-}
-
-async fn api_status(State(st): State<Shared>, UrlPath(id): UrlPath<String>) -> (StatusCode, Json<Value>) {
-    remember_exe(&st);
+async fn api_status(UrlPath(id): UrlPath<String>) -> (StatusCode, Json<Value>) {
     blocking(move || entry(&id).map(|e| status(&e))).await
 }
 
@@ -667,7 +686,6 @@ async fn api_save(State(st): State<Shared>, UrlPath(id): UrlPath<String>, header
     if !from_panel(&headers) || on.is_none() {
         return forbidden();
     }
-    remember_exe(&st);
     let st = st.clone();
     blocking(move || {
         let e = entry(&id)?;
@@ -702,11 +720,10 @@ async fn api_save(State(st): State<Shared>, UrlPath(id): UrlPath<String>, header
 }
 
 /// Install or remove the add-on on this computer.
-async fn api_addon(State(st): State<Shared>, UrlPath(action): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
+async fn api_addon(UrlPath(action): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) || on.is_none() {
         return forbidden();
     }
-    remember_exe(&st);
     blocking(move || {
         match action.as_str() {
             "install" => install()?,
@@ -751,6 +768,27 @@ mod tests {
         assert!(on.contains("--intent $HOME/loner-strike/bin/ls-intent --intent-model $I"));
         let off = remote_sh(&e, false);
         assert!(off.contains("disable --now lonerstrike-a-voice") && off.contains("rm -f /etc/systemd/system/lonerstrike-a-voice.service"));
+    }
+
+    /// Off and on again while the first waiter still waits: only the newer one carries on.
+    #[test]
+    fn off_and_on_again_keeps_one_waiter() {
+        let mut r = Runs::default();
+        let first = r.claim("a").unwrap();
+        // (a second start meanwhile waits on the same one)
+        assert_eq!(r.claim("a"), None);
+        // stop() clears it, and the next start gets its own
+        r.pending.remove("a");
+        let second = r.claim("a").unwrap();
+        assert_ne!(first, second);
+        assert!(!r.owns("a", first) && r.owns("a", second));
+        // the first one finishing leaves the second's place alone
+        assert!(!r.release("a", first));
+        assert!(r.owns("a", second));
+        assert!(r.release("a", second));
+        assert!(r.pending.is_empty());
+        // (each server has its own)
+        assert!(r.claim("b").is_some());
     }
 
     #[test]

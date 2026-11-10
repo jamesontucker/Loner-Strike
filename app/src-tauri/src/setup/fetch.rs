@@ -113,7 +113,7 @@ fn download_from(from: &str, url: &str, sha: Option<&str>, what: &str, p: &dyn P
     let mut tries = 0;
     // (what's already on disk from a try that dropped part way: the next try asks for the rest)
     let mut have: u64 = 0;
-    let out = loop {
+    loop {
         let again = |tries: usize| {
             p.detail(&format!("Downloading {what} (trying again)"));
             std::thread::sleep(Duration::from_secs(WAITS[tries]));
@@ -133,6 +133,10 @@ fn download_from(from: &str, url: &str, sha: Option<&str>, what: &str, p: &dyn P
             continue;
         }
         let mut resp = sent.map_err(|e| fail(short_err(&e)))?;
+        // (the try that dropped had in fact got it all: nothing left to send)
+        if already_whole(have, resp.status().as_u16()) {
+            break;
+        }
         if !resp.status().is_success() {
             return Err(fail(format!("the server answered {}", resp.status())));
         }
@@ -175,7 +179,7 @@ fn download_from(from: &str, url: &str, sha: Option<&str>, what: &str, p: &dyn P
             }
         };
         match dropped {
-            None => break out,
+            None => break,
             Some(e) => {
                 drop(out);
                 // (kept: the next try carries on from here)
@@ -189,8 +193,7 @@ fn download_from(from: &str, url: &str, sha: Option<&str>, what: &str, p: &dyn P
                 return Err(fail(e.to_string()));
             }
         }
-    };
-    drop(out);
+    }
     if let Some(s) = sha {
         if !sha256(&tmp).map(|h| h.eq_ignore_ascii_case(s)).unwrap_or(false) {
             let _ = std::fs::remove_file(&tmp);
@@ -201,6 +204,13 @@ fn download_from(from: &str, url: &str, sha: Option<&str>, what: &str, p: &dyn P
     }
     std::fs::rename(&tmp, &path).map_err(|e| fail(e.to_string()))?;
     Ok(path)
+}
+
+/// A resume (asking from byte `have` on) that the server answers 416, range not
+/// satisfiable: there's nothing after `have`, so the file is already whole (the sha check
+/// after still says if it isn't).
+fn already_whole(have: u64, status: u16) -> bool {
+    have > 0 && status == 416
 }
 
 fn short_err(e: &reqwest::Error) -> String {
@@ -326,6 +336,14 @@ mod tests {
             cache_name("https://github.com/rehlds/ReGameDLL_CS/releases/download/5.30.0.814/regamedll-bin-5.30.0.814.zip"),
             "1b489a21eb2b1398-regamedll-bin-5.30.0.814.zip"
         );
+    }
+
+    #[test]
+    fn resume_past_the_end_is_done() {
+        assert!(already_whole(1024, 416));
+        // (a fresh download answered 416 is a real failure)
+        assert!(!already_whole(0, 416));
+        assert!(!already_whole(1024, 206) && !already_whole(1024, 200));
     }
 
     #[test]

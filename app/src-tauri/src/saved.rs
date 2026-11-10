@@ -200,7 +200,10 @@ fn blocked(g: &Game) -> Option<&'static str> {
     if crate::backup::restoring_game(&g.hl) {
         return Some(crate::backup::RESTORING_GAME);
     }
-    if g.state()["online"] == json!(true) {
+    // (starting counts too: the console doesn't answer for the first 10-30 seconds, and the
+    // plugin writes what it holds back over a change made meanwhile once the map starts)
+    let starting = if g.dedicated { crate::servers::running_at(&g.hl) } else { crate::game::game_open() };
+    if starting || g.state()["online"] == json!(true) {
         return Some("The game is running now: change it live instead.");
     }
     None
@@ -322,8 +325,8 @@ async fn api_saved_addon(State(st): State<Shared>, headers: HeaderMap, Json(req)
         if let Some(on) = req.on {
             // what the plugin writes when one is switched (sounds.rs does the same for Sounds)
             let (txt, plugins) = crate::sounds::write_addons_offline(&read(&ini), &read(&g.data.join("addons.txt")), &req.id, on)?;
-            crate::sys::write_latin1(&g.data.join("addons.txt"), &txt).map_err(|e| e.to_string())?;
-            crate::sys::write_latin1(&g.dir.join("addons/amxmodx/configs/plugins-gmaddons.ini"), &plugins).map_err(|e| e.to_string())?;
+            crate::sys::write_latin1_atomic(&g.data.join("addons.txt"), &txt).map_err(|e| e.to_string())?;
+            crate::sys::write_latin1_atomic(&g.dir.join("addons/amxmodx/configs/plugins-gmaddons.ini"), &plugins).map_err(|e| e.to_string())?;
             return Ok(());
         }
         let (Some(cvar), Some(value)) = (req.cvar, req.value) else { return Err("Nothing to change.".into()) };
@@ -364,7 +367,7 @@ async fn api_saved_reset(State(st): State<Shared>, headers: HeaderMap, Json(req)
             if !path.is_file() {
                 return Ok(());
             }
-            crate::sys::write_latin1(&path, &without_shared(&read(&path))).map_err(|e| format!("Couldn't reset them ({e})."))
+            crate::sys::write_latin1_atomic(&path, &without_shared(&read(&path))).map_err(|e| format!("Couldn't reset them ({e})."))
         }
         "mode" => {
             let mode = req.mode.unwrap_or_else(|| current_mode(g));

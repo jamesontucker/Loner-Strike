@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { clock, usePoll, useStable } from "../api";
-import { useSetupJob } from "../queries";
+import { reloadServers, useSetupJob } from "../queries";
 import { SteamProgress } from "../ui";
 import type { Step, Transfer } from "./Setup";
 
@@ -69,6 +69,15 @@ export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, long, s
   usePoll(async () => {
     const cur = latest.current;
     const d = cur.isFetchedAfterMount ? cur.data : undefined;
+    // another server's job has started since this one was seen: this one is over (how it went
+    // shows on the server itself), so the bar stops instead of waiting on a job it can't see
+    const other = (d as { server?: string } | undefined)?.server;
+    if (server && seen.current && other && other !== server && !ended.current) {
+      ended.current = true;
+      void reloadServers();
+      tick((n) => n + 1);
+      return;
+    }
     if (cur.isError || !seen.current || d?.state !== "running") {
       if (++misses.current >= 15 && !ended.current) {
         ended.current = true;
