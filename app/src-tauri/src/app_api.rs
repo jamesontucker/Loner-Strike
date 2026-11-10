@@ -699,10 +699,12 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, on: Option<axu
             return (StatusCode::OK, Json(json!({"error": format!("Couldn't save the bot count ({e}).")})));
         }
     }
-    let map = req
-        .map
-        .filter(|m| m.len() <= 31 && m.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c)))
-        .or_else(|| last_map(&st));
+    let map = req.map.filter(|m| m.len() <= 31 && m.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c)));
+    if let Some(why) = map.as_deref().and_then(|m| g.cant_load(m)) {
+        return (StatusCode::OK, Json(json!({"error": why})));
+    }
+    // (a last map this game can't load, say from a start that failed, isn't tried again)
+    let map = map.or_else(|| last_map(&st).map(|m| if g.cant_load(&m).is_some() { crate::servers::default_map() } else { m }));
     if let Some(m) = req.mode.as_deref().filter(|m| !m.is_empty()) {
         if let Err(e) = start_in(&g, m, map.as_deref().filter(|_| !req.menu), &req.settings) {
             return (StatusCode::OK, Json(json!({"error": e})));

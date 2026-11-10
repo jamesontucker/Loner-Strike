@@ -2861,6 +2861,9 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
             if !safe_map(m) {
                 return Err("That isn't a map name.".into());
             }
+            if let Some(why) = game_for(&id, || None).and_then(|g| g.cant_load(m)) {
+                return Err(why.into());
+            }
         }
         let host = |o: &Entry| o.remote.as_ref().map(|r| r.host.clone());
         if let Some(p) = req.port {

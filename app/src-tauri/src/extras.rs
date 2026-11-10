@@ -462,8 +462,10 @@ fn schedule(g: &Game) -> Value {
     }
 }
 
+/// The game's own maps (not those only in the other game's folder: a rotation never
+/// offers them).
 fn installed_maps(g: &Game) -> BTreeMap<String, String> {
-    g.maps(false).iter().filter_map(|m| m["name"].as_str()).map(|n| (n.to_lowercase(), n.to_string())).collect()
+    g.own_maps(false).iter().filter_map(|m| m["name"].as_str()).map(|n| (n.to_lowercase(), n.to_string())).collect()
 }
 
 fn listing(g: &Game) -> Value {

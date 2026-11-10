@@ -88,6 +88,10 @@ export type MapInfo = {
   fav: boolean;
   hidden: boolean;
   recent: number;
+  /** only in the other game's maps folder: left out of lists unless asked for */
+  other?: boolean;
+  /** that game: "Condition Zero" or "Counter-Strike 1.6" */
+  otherGame?: string;
 };
 
 export type GbItem = { id: number; name: string; author: string; type: string; image: string | null; likes: number; views: number; added: number; installed: boolean; audio?: string | null };

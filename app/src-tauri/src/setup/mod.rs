@@ -576,11 +576,12 @@ fn install_game_with(job: &Job, plan: &InstallPlan, ctx: &Ctx, g: &str, rec: &mu
     }
     run_step(job, &format!("{g}/core-configs"), || core::configs(rec, ctx, &modes, &addons))?;
     run_step(job, &format!("{g}/core-quake"), || core::quake_sounds(rec, ctx))?;
-    // a first setup starts with Quake sounds on (the old pub-server announcer); once the
-    // player has switched any add-on, addons.txt is theirs and stays as it is
+    // a first setup starts with every add-on off, Quake sounds included (installed, one click
+    // away in Add-ons or Sounds); once the player has switched any add-on, addons.txt is
+    // theirs and stays as it is
     if !rec.exists("addons/amxmodx/data/gamemodes/addons.txt") {
         if let Some(ini) = rec.read("addons/amxmodx/configs/gamemodes/addons.ini") {
-            if let Ok((on, plugins)) = crate::sounds::write_addons_offline(&ini, "", "quakesounds", true) {
+            if let Ok((on, plugins)) = crate::sounds::write_addons_offline(&ini, "", "quakesounds", false) {
                 rec.write("addons/amxmodx/data/gamemodes/addons.txt", &on)?;
                 rec.write("addons/amxmodx/configs/plugins-gmaddons.ini", &plugins)?;
             }

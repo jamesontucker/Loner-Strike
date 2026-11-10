@@ -244,6 +244,15 @@ impl Game {
             if !args.iter().all(|a| crate::maps::safe_arg(a)) {
                 return Err(CmdError::Bad("invalid argument".into()));
             }
+            // the map a change goes to (gm_map <map>, gm_mode <mode> <map>)
+            let map = match cmd {
+                "gm_map" => args.first(),
+                "gm_mode" => args.get(1),
+                _ => None,
+            };
+            if let Some(why) = map.and_then(|m| self.cant_load(m)) {
+                return Err(CmdError::Bad(why.into()));
+            }
             std::iter::once(cmd.to_string()).chain(args.iter().cloned()).collect::<Vec<_>>().join(" ")
         };
         // the next state() shows what the command did

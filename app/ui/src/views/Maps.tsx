@@ -16,12 +16,20 @@ const SHOW: [string, string][] = [
 const TEACH_INFO = "A hidden server on this computer loads each map and a bot walks all of it, a few minutes per map. It runs in the background at low priority; the game doesn't need to be open. What the bots learn goes to your servers too.";
 const RELEARN_INFO = "Bots learn the picked maps again even if they know them already, replacing what they learned before. Useful when bots get stuck on a map.";
 const SEND_INFO = "Sends what bots learned about this map (its .nav file) to all your servers now. Only that file goes: a server without the map itself still needs the map.";
-const SHOW_INFO = "Hidden maps stay installed but are left out of lists, the in-game map menu and map votes. Bots spend a few minutes learning a map the first time it's played.";
+const SHOW_INFO = "Hidden maps stay installed but are left out of lists, the in-game map menu and map votes. Bots spend a few minutes learning a map the first time it's played. Maps only in the other game's folder (Condition Zero or Counter-Strike 1.6) show only when you pick them here.";
 const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favourites first"], ["type", "By type"], ["source", "Downloaded first"]];
 const SOURCE_ORDER = ["download", "added", "stock"];
 const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by you" };
 /** Where a map came from: one added with "Add a map file" is filed as a download (with a negative mod) but is yours. */
 const sourceOf = (m: MapInfo): MapInfo["source"] => (m.source === "download" && (m.mod ?? 0) < 0 ? "added" : m.source);
+/** A map only in the other game's folder that this game can't load: a Condition Zero map
+ *  in Counter-Strike 1.6 (Condition Zero loads 1.6's maps too). */
+const cantLoad = (m: MapInfo) => !!m.other && m.otherGame === "Condition Zero";
+/** What a map from the other game's folder says about itself: short on its card, whole on its sheet. */
+const otherNote = (m: MapInfo): [string, string] =>
+  cantLoad(m)
+    ? ["For Condition Zero", "For Condition Zero: Counter-Strike 1.6 can't load it"]
+    : [`From ${m.otherGame ?? "the other game"}`, "From Counter-Strike 1.6. Usually works in Condition Zero"];
 /** Cards drawn at first: a few thousand at once makes the page slow; the rest come with Show more. */
 const PAGE = 150;
 
@@ -55,6 +63,7 @@ export const MapCard = memo(function MapCard({ map, onClick, current, onFav, sel
         {!onFav && map.fav && <span className="fav-star" aria-label="Favourite">★</span>}
       </div>
       <span className="map-label">{map.name}</span>
+      {map.other && <span className="map-sub" title={otherNote(map)[1]}>{otherNote(map)[0]}</span>}
     </button>
   );
   if (!onFav) return card;
@@ -146,7 +155,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   const [copyFrom, setCopyFrom] = useState(false);
   const jobQ = useSetupJob();
   const learning = jobQ.data?.state === "running" && jobQ.data.kind === "navlearn";
-  const togglePick = useStable((m: MapInfo) => setChosen((c) => {
+  const togglePick = useStable((m: MapInfo) => !cantLoad(m) && setChosen((c) => {
     const n = new Set(c);
     if (n.has(m.name)) n.delete(m.name);
     else n.add(m.name);
@@ -179,9 +188,13 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
     toast(r.message || "Sent.");
   }, `Sending ${name} to your servers…`);
 
+  // the other game's maps (a Condition Zero map in CS 1.6, a CS 1.6 map in Condition
+  // Zero) only show when asked for
+  const otherGame = maps.find((m) => m.other)?.otherGame;
+  const shows = otherGame ? [...SHOW, ["other", `${otherGame} maps`] as [string, string]] : SHOW;
   const shown = useMemo(() => {
     const query = search.trim().toLowerCase();
-    let list = maps.filter((m) => (show === "hidden" ? m.hidden : !m.hidden));
+    let list = show === "other" ? maps.filter((m) => m.other) : maps.filter((m) => !m.other && (show === "hidden" ? m.hidden : !m.hidden));
     if (show === "nonav") list = list.filter((m) => !m.nav);
     else if (show === "stock" || show === "download" || show === "added") list = list.filter((m) => sourceOf(m) === show);
     if (cat === "fav") list = list.filter((m) => m.fav);
@@ -256,7 +269,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           )}
           <span className="random-map" title={live ? undefined : "Start the game to change maps."}>
             <BusyButton busy={busy(key("change"))} disabled={!live} label="Random map" busyLabel="Changing…" onClick={() => {
-              const pool = shown.filter((m) => !m.hidden && m.name.toLowerCase() !== current);
+              const pool = shown.filter((m) => !m.hidden && !m.other && m.name.toLowerCase() !== current);
               if (!live) return;
               if (!pool.length) return toast("No other map matches these filters.", true);
               changeMap(pool[Math.floor(Math.random() * pool.length)].name);
@@ -268,7 +281,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           <label className="sort">
             <span>Show</span>
             <select value={show} onChange={(e) => setShow(e.target.value)}>
-              {SHOW.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+              {shows.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
             </select>
           </label>
           <Info text={SHOW_INFO} />
@@ -299,7 +312,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           <h3>Teach bots maps</h3>
           <p className="muted measure">Pick the maps below, then start. {chosen.size ? `${chosen.size} map${chosen.size === 1 ? "" : "s"} picked.` : "No maps picked yet."}</p>
           <div className="row">
-            <button className="btn" onClick={() => setChosen(new Set(shown.filter((m) => !m.nav).map((m) => m.name)))}>Pick the ones bots don't know</button>
+            <button className="btn" onClick={() => setChosen(new Set(shown.filter((m) => !m.nav && !m.other).map((m) => m.name)))}>Pick the ones bots don't know</button>
             <button className="btn" disabled={!chosen.size} onClick={() => setChosen(new Set())}>Clear</button>
           </div>
           <div className="setting">
@@ -358,10 +371,11 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               {picked.source === "download" && (picked.mod ?? 0) > 0 && picked.modName ? `: ${picked.modName}` : ""}
               {picked.pack && picked.pack.length > 1 ? ` (a pack of ${picked.pack.length} maps)` : ""}
             </p>
-            {!live && currentTarget() && <p className="muted">Start the server to play it.</p>}
+            {picked.other && <p className="muted">{otherNote(picked)[1]}.</p>}
+            {!live && currentTarget() && !cantLoad(picked) && <p className="muted">Start the server to play it.</p>}
             {!live && !currentTarget() && picked.hidden && <p className="muted">Show it again to start a game on it.</p>}
             <div className="row">
-              {live ? (
+              {cantLoad(picked) ? null : live ? (
                 <BusyButton className="btn primary" busy={busy(key("change"))} label={`Play ${picked.name}`} busyLabel="Changing…" onClick={() => { setPicked(null); changeMap(picked.name); }} />
               ) : (
                 !currentTarget() && !picked.hidden && <button className="btn primary" onClick={() => startOn(picked.name)}>Start a game on {picked.name}</button>

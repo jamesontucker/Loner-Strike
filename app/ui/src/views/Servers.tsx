@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions, useOnce, usePoll } from "../api";
-import { reloadServers } from "../queries";
+import { ownMaps, reloadServers } from "../queries";
 import { useDirty, useDirtyStore, useNav } from "../store";
 import { restartPending, serverAddress, serverHost, type AppInfo, type MapInfo, type Online, type ServerInfo, type ServerList } from "../types";
 import { HostingGuide, SizingTable, troubleFor } from "./HostingGuide";
@@ -495,7 +495,9 @@ export function ServerPage(props: {
   onBack: () => void;
 }) {
   const ask = useConfirm();
-  const { server: s, others, data, reason, app, scan, maps, refresh, reloadMaps, reloadApp, onChanged, onBack } = props;
+  // (every map, for the Maps tab; the rest only offer the server's own game's)
+  const { server: s, others, data, reason, app, scan, maps: allMaps, refresh, reloadMaps, reloadApp, onChanged, onBack } = props;
+  const maps = ownMaps(allMaps);
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("overview");
   // the map browser, opened from the Maps tab
@@ -742,7 +744,7 @@ export function ServerPage(props: {
           )}
           {tab === "friends" && <Friends data={data} refresh={refresh} server={{ name: s.name, visibility: s.visibility }} />}
           {tab === "modes" && data && <PlayLive data={data} maps={maps} refresh={refresh} openMaps={() => setTab("maps")} />}
-          {tab === "maps" && !getMaps && <Maps current={data?.state.map} live={!!data} maps={maps} reload={reloadMaps} refresh={refresh} getMore={() => setGetMaps(true)} />}
+          {tab === "maps" && !getMaps && <Maps current={data?.state.map} live={!!data} maps={allMaps} reload={reloadMaps} refresh={refresh} getMore={() => setGetMaps(true)} />}
           {tab === "maps" && getMaps && <GetMore server only={["maps"]} title="Get maps" back={{ label: "Back to maps", go: () => setGetMaps(false) }} onInstalled={reloadMaps} />}
           {tab === "skins" && <ServerSkins />}
           {tab === "bots" && data && <Bots data={data} refresh={refresh} />}

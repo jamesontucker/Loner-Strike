@@ -5,7 +5,7 @@ import { create } from "zustand";
 
 export type Section =
   | "play" | "maps" | "bots" | "match" | "fun" | "players" | "addons" | "friends" | "browser" | "servers"
-  | "admins" | "community" | "extras" | "welcome" | "more" | "mods" | "sounds" | "settings";
+  | "admins" | "community" | "extras" | "welcome" | "more" | "mods" | "skins" | "sounds" | "settings";
 
 const SECTIONS: Section[] = ["play", "maps", "bots", "match", "fun", "players", "addons", "friends", "browser", "servers", "admins", "community", "extras", "welcome", "more", "mods", "sounds", "settings"];
 

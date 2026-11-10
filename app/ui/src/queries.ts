@@ -96,8 +96,13 @@ export function useAppInfo() {
 }
 export const reloadAppInfo = () => queryClient.invalidateQueries({ queryKey: ["app"] });
 
-/** The target's maps. */
-export function useMaps() {
+/** The game's own maps: without those only in the other game's maps folder (a Condition
+ *  Zero map in CS 1.6, a CS 1.6 map in Condition Zero), which pickers, rotations and votes
+ *  never offer. */
+export const ownMaps = (maps: MapInfo[]) => maps.filter((m) => !m.other);
+
+/** The target's maps: its own, or with `other` the other game's too (the Maps page can show them). */
+export function useMaps({ other = false }: { other?: boolean } = {}) {
   const target = useTarget();
   return useQuery({
     queryKey: ["maps", target],
@@ -105,6 +110,7 @@ export function useMaps() {
       const m = await getJsonAt<MapInfo[]>("/api/maps", target, signal);
       return Array.isArray(m) ? m : [];
     },
+    select: other ? undefined : ownMaps,
     // the app looks for map pictures in the background: the cards fill in as they're found
     refetchInterval: (q) => (q.state.data?.some((m) => m.thumb === "lookup") ? 5000 : false),
   });

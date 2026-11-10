@@ -34,10 +34,10 @@ const ServerExtras = lazyPage(() => import("./views/ServerExtras").then((m) => (
 const Admins = lazyPage(() => import("./views/Admins").then((m) => ({ default: m.Admins })));
 const ServerBrowser = lazyPage(() => import("./views/ServerBrowser").then((m) => ({ default: m.ServerBrowser })));
 const GetMore = lazyPage(() => import("./views/GetMore").then((m) => ({ default: m.GetMore })));
+const MySkins = lazyPage(() => import("./views/GetMore").then((m) => ({ default: m.MySkins })));
 
 const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean }[] = [
   { id: "play", label: "Play", icon: "play" },
-  { id: "maps", label: "Maps", icon: "maps" },
   { id: "bots", label: "Bots", icon: "bots", live: true },
   { id: "match", label: "Rules", icon: "rules", live: true },
   { id: "fun", label: "Fun", icon: "fun", live: true },
@@ -49,9 +49,11 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "community", label: "Stats & moderation", icon: "stats" },
   { id: "welcome", label: "Welcome page", icon: "welcome" },
   { id: "extras", label: "Rotation & extras", icon: "extras" },
-  { id: "more", label: "Get more", icon: "more", group: "Library" },
+  { id: "maps", label: "Maps", icon: "maps", group: "My library" },
   { id: "mods", label: "Mods", icon: "mods" },
+  { id: "skins", label: "Skins & models", icon: "skins" },
   { id: "sounds", label: "Sounds", icon: "sound" },
+  { id: "more", label: "Get more", icon: "more" },
   { id: "servers", label: "Servers", icon: "server", group: "Hosting" },
   // (the sidebar keeps it below the list, always in view)
   { id: "settings", label: "Settings", icon: "settings", group: "App" },
@@ -78,7 +80,9 @@ function Shell() {
   const { state, reconnecting, lost, refresh } = useGameState();
   const { section, server: openServer, moreOpen, setupOpen, setupIntro, setupLater, go, openServer: enterServer, setMoreOpen, setSetupOpen, laterSetup } = useNav();
   const appQ = useAppInfo();
+  // the game's own maps for every picker; the Maps page can show the other game's too
   const mapsQ = useMaps();
+  const allMaps = useMaps({ other: true }).data ?? [];
   const scanQ = useScan();
   const serversQ = useServers();
   const app = appQ.data ?? null;
@@ -120,6 +124,9 @@ function Shell() {
       // a start sent to the other game isn't this one's, and neither is its live state
       usePlayDrafts.getState().endLaunch("local");
       forgetLive();
+      // (lists that belong to one game are dropped, not just refreshed, so the other game's
+      // maps or admins never show for a moment while the new ones load)
+      for (const k of ["maps", "admins", "reports", "state"]) queryClient.removeQueries({ queryKey: [k] });
       await queryClient.invalidateQueries();
       reloadMaps();
     }, `Switching to ${gameTitle(game)}…`);
@@ -403,7 +410,7 @@ function Shell() {
                 ) : (
                   <PlayIdle app={app} reason={state.online ? "" : state.reason} gameOpen={gameOpen} maps={maps} openSetup={openSetup} />
                 ))}
-              {section === "maps" && <Maps current={online?.state.map} live={!!online} maps={maps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} />}
+              {section === "maps" && <Maps current={online?.state.map} live={!!online} maps={allMaps} loading={mapsQ.isLoading} reload={refreshMaps} refresh={refresh} />}
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
               {section === "match" && online && (
                 <SettingsPage title="Rules" note={RULES_NOTE(online)} data={online} cat={2} refresh={refresh} pickMode>
@@ -425,7 +432,7 @@ function Shell() {
                     reason={state.online ? "" : state.reason}
                     app={app}
                     scan={scan}
-                    maps={maps}
+                    maps={allMaps}
                     refresh={refresh}
                     reloadMaps={refreshMaps}
                     reloadApp={reloadApp}
@@ -441,6 +448,7 @@ function Shell() {
               {section === "extras" && <ServerExtras target="local" />}
               {section === "community" && <Community target="local" />}
               {section === "more" && <GetMore onInstalled={refreshMaps} />}
+              {section === "skins" && <MySkins />}
               {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={openSetup} />}
               {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={openSetup} switchGame={switchGame} />}
             </Suspense>

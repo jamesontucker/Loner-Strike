@@ -33,6 +33,9 @@ pub fn is_stock_file(rel: &str) -> bool {
     !file.contains('/') && STOCK_CS.contains(&stem)
 }
 
+/// Starting or changing to a map only Condition Zero has, in Counter-Strike 1.6.
+pub const CZ_ONLY_MAP: &str = "That map is for Condition Zero, so Counter-Strike 1.6 can't load it.";
+
 const FUN_PREFIXES: &[&str] = &[
     "fy_", "aim_", "awp_", "ka_", "35hp", "scout", "he_", "gg_", "zm_", "dm_", "mg_", "fun_", "knife", "arena",
     "pool_", "deathrun", "jail", "bhop", "kz_",
@@ -108,6 +111,34 @@ impl Game {
         [self.hl.join("czero"), self.hl.join("cstrike")]
     }
 
+    /// Condition Zero (else Counter-Strike 1.6): the game folder's own name, for a game and
+    /// for a dedicated server (whose folder has cstrike, and czero for a Condition Zero one).
+    pub fn is_czero(&self) -> bool {
+        self.dir.file_name().map(|n| n.to_string_lossy().eq_ignore_ascii_case("czero")).unwrap_or(self.name == "czero")
+    }
+
+    /// The maps this game calls its own: maps() without those only in the other game's
+    /// folder (what rotations, pickers and votes offer).
+    pub fn own_maps(&self, refresh: bool) -> Vec<Value> {
+        self.maps(refresh).into_iter().filter(|m| m["other"] != json!(true)).collect()
+    }
+
+    /// Why this game can't load `name`: Counter-Strike 1.6 doesn't look in Condition Zero's
+    /// maps folder (Condition Zero does look in 1.6's, so the other way round loads).
+    pub fn cant_load(&self, name: &str) -> Option<&'static str> {
+        if self.is_czero() || find_in(&self.dir.join("maps"), name, &[".bsp"]).is_some() {
+            return None;
+        }
+        if find_in(&self.hl.join("czero").join("maps"), name, &[".bsp"]).is_none() {
+            return None; // not here at all: the game says so itself
+        }
+        // a server on another machine has its own maps there
+        if self.remote_maps().iter().any(|m| m.eq_ignore_ascii_case(name)) {
+            return None;
+        }
+        Some(CZ_ONLY_MAP)
+    }
+
     pub fn maps(&self, refresh: bool) -> Vec<Value> {
         let list = {
             let mut cache = self.maps_cache.lock().unwrap();
@@ -174,27 +205,30 @@ impl Game {
     /// The map list, from the disk only: no network (pictures GameBanana might have
     /// are marked "lookup" and fetched when /thumb asks for them).
     fn scan_maps(&self) -> Vec<Value> {
-        // name -> (file name, in czero/maps)
-        let mut found: BTreeMap<String, (String, bool)> = BTreeMap::new();
+        // name -> (file name, in czero/maps, in the game's own maps folder)
+        let mut found: BTreeMap<String, (String, bool, bool)> = BTreeMap::new();
         let mut navs: HashSet<String> = HashSet::new();
+        let own_cz = self.is_czero();
         for g in self.game_dirs() {
             let is_cz = g.file_name().map(|n| n == "czero").unwrap_or(false);
             for e in std::fs::read_dir(g.join("maps")).into_iter().flatten().flatten() {
                 let f = e.file_name().to_string_lossy().to_string();
                 let low = f.to_lowercase();
                 if low.ends_with(".bsp") {
-                    let entry = found.entry(low[..low.len() - 4].to_string()).or_insert_with(|| (f[..f.len() - 4].to_string(), false));
+                    let entry = found.entry(low[..low.len() - 4].to_string()).or_insert_with(|| (f[..f.len() - 4].to_string(), false, false));
                     entry.1 |= is_cz;
+                    entry.2 |= is_cz == own_cz;
                 } else if low.ends_with(".nav") {
                     navs.insert(low[..low.len() - 4].to_string());
                 }
             }
         }
         // a server on another machine: the maps that came with Valve's server download are
-        // only there (this computer's copy has just what Loner-Strike adds)
+        // only there (this computer's copy has just what Loner-Strike adds). That's its
+        // own game's maps folder.
         for name in self.remote_maps() {
             let low = name.to_lowercase();
-            found.entry(low).or_insert_with(|| (name.clone(), false));
+            found.entry(low).or_insert_with(|| (name.clone(), false, false)).2 = true;
         }
         let mut by = self.map_sources();
         by.extend(self.store.authors());
@@ -212,7 +246,7 @@ impl Game {
         let mut lookups = Vec::new();
         let list = found
             .into_iter()
-            .map(|(key, (name, in_cz))| {
+            .map(|(key, (name, in_cz, own))| {
                 let thumb = if pics.shots.contains_key(&key) || self.store.shot_for(&key).is_some() {
                     Some("shot")
                 } else if !crate::gamebanana::MapStore::missed_recently(&misses, &key) {
@@ -234,6 +268,13 @@ impl Game {
                     }
                     None if in_cz || STOCK_CS.contains(&key.as_str()) => m["source"] = json!("stock"),
                     None => m["source"] = json!("added"),
+                }
+                // a Condition Zero only map in a 1.6 game: left out of lists unless asked for.
+                // (not the other way: Condition Zero's own folder holds only its _cz maps, and
+                // it plays everything in 1.6's, the classics and every downloaded map included)
+                if !own && !own_cz {
+                    m["other"] = json!(true);
+                    m["otherGame"] = json!(if own_cz { "Counter-Strike 1.6" } else { "Condition Zero" });
                 }
                 m
             })
@@ -518,6 +559,43 @@ mod tests {
         assert_eq!(png.get_pixel(0, 0).0[3], 0, "the green background is see-through");
         assert_eq!(png.get_pixel(10, 10).0, [90, 90, 90, 255], "the map itself stays");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn other_games_maps() {
+        let root = sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "other-").unwrap();
+        let hl = root.join("Half-Life");
+        let app = root.join("app");
+        for d in ["czero/maps", "cstrike/maps"] {
+            std::fs::create_dir_all(hl.join(d)).unwrap();
+        }
+        std::fs::create_dir_all(app.join("cache/gbshots")).unwrap();
+        std::fs::write(hl.join("czero/maps/de_dust2_cz.bsp"), b"").unwrap(); // Condition Zero's only
+        std::fs::write(hl.join("cstrike/maps/fy_pool.bsp"), b"").unwrap(); // CS 1.6's only
+        std::fs::write(hl.join("czero/maps/de_both.bsp"), b"").unwrap();
+        std::fs::write(hl.join("cstrike/maps/DE_BOTH.bsp"), b"").unwrap();
+        let get = |maps: &[Value], n: &str| maps.iter().find(|m| m["name"].as_str().unwrap().eq_ignore_ascii_case(n)).cloned().unwrap();
+
+        let cs = Game::with_app_dir(&hl, "cstrike", &app);
+        let maps = cs.maps(true);
+        assert_eq!(get(&maps, "de_dust2_cz")["other"], true);
+        assert_eq!(get(&maps, "de_dust2_cz")["otherGame"], "Condition Zero");
+        assert!(get(&maps, "fy_pool").get("other").is_none());
+        assert!(get(&maps, "de_both").get("other").is_none());
+        let own: Vec<String> = cs.own_maps(false).iter().map(|m| m["name"].as_str().unwrap().to_lowercase()).collect();
+        assert_eq!(own, vec!["de_both", "fy_pool"]);
+        assert_eq!(cs.cant_load("de_dust2_cz"), Some(CZ_ONLY_MAP));
+        assert_eq!(cs.cant_load("fy_pool"), None);
+        assert_eq!(cs.cant_load("de_both"), None);
+        assert_eq!(cs.cant_load("de_nowhere"), None, "not there at all is the game's to say");
+
+        let cz = Game::with_app_dir(&hl, "czero", &app);
+        let maps = cz.maps(true);
+        assert!(get(&maps, "fy_pool").get("other").is_none(), "Condition Zero's maps include 1.6's");
+        assert!(get(&maps, "de_dust2_cz").get("other").is_none());
+        assert!(get(&maps, "de_both").get("other").is_none());
+        assert_eq!(cz.cant_load("fy_pool"), None, "Condition Zero loads 1.6's maps too");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

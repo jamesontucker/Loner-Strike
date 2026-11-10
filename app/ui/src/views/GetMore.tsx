@@ -429,6 +429,54 @@ function InstalledList({ onChanged, server, only, empty = "Nothing downloaded ye
 
 /** A server's weapon skins and player models: what it uses, who sees each, and the map's
  *  model and sound count against the engine's limit. Getting more opens the browser. */
+/** What you have of some kinds of GameBanana content in your own game, with Remove on each
+ *  and a way to get more of that kind: a chip per kind when there's more than one. */
+const KIND_NAMES: Record<string, string> = { skins: "Weapon skins", players: "Player models", sprays: "Sprays", sprites: "Sprites", gui: "Menus", sounds: "Sounds" };
+export function MyContent({ kinds, title, note, empty }: { kinds: string[]; title: string; note: string; empty: string }) {
+  const [kind, setKind] = useState<string>(kinds.length > 1 ? "all" : kinds[0]);
+  const [shop, setShop] = useState(false);
+  const [seen, setSeen] = useState(0);
+  const these = kind === "all" ? kinds : [kind];
+  const name = kind === "all" ? title.toLowerCase() : KIND_NAMES[kind]?.toLowerCase() ?? kind;
+  if (shop) {
+    return (
+      <GetMore
+        only={these}
+        title={`Get ${name}`}
+        back={{ label: `Back to ${title.toLowerCase()}`, go: () => { setShop(false); setSeen((n) => n + 1); } }}
+        onInstalled={() => {}}
+      />
+    );
+  }
+  return (
+    <div className="stack">
+      <SectionHead title={title} note={note}>
+        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setShop(true)}>{`Get ${name}`}</button>}
+      </SectionHead>
+      {kinds.length > 1 && (
+        <div className="chips" role="group" aria-label="Show">
+          {["all", ...kinds].map((k) => (
+            <button key={k} className="chip" aria-pressed={kind === k} onClick={() => setKind(k)}>{k === "all" ? "All" : KIND_NAMES[k] ?? k}</button>
+          ))}
+        </div>
+      )}
+      {!ON_THIS_COMPUTER && <p className="muted small-note">To add or remove them, use the computer.</p>}
+      <InstalledList key={`${seen}:${kind}`} only={these} onChanged={() => {}} empty={empty} />
+    </div>
+  );
+}
+
+export function MySkins() {
+  return (
+    <MyContent
+      kinds={["skins", "players", "sprays", "sprites", "gui"]}
+      title="Skins & models"
+      note="Weapon skins, player models, sprays, sprites and menus in your game. Only you see them. Removing one puts the game's own back."
+      empty="Nothing here yet: your game uses its own. Get some from GameBanana with the button above."
+    />
+  );
+}
+
 export function ServerSkins() {
   const [shop, setShop] = useState<string | null>(null);
   // a new list after the browser, for what was added there

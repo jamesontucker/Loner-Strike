@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getJson, isAbort, isSharedId, ON_THIS_COMPUTER, postJson, targetKey, useActions, useQueuedSave } from "../api";
-import { useServers } from "../queries";
+import { ownMaps, useServers } from "../queries";
 import { useDirty, useNav } from "../store";
 import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
@@ -138,7 +138,8 @@ export function ServerExtras({ target }: { target: string }) {
       .then((r) => (failed(r) ? setError(r.error) : setD(r)))
       .catch((e) => !isAbort(e) && setError("Couldn't reach the app."));
     getJson<MapInfo[]>("/api/maps")
-      .then((m) => setMaps(Array.isArray(m) ? m : []))
+      // the server's own game's maps: a rotation never offers the other game's
+      .then((m) => setMaps(Array.isArray(m) ? ownMaps(m) : []))
       .catch(() => setMaps([]));
   }, [target, version]);
 

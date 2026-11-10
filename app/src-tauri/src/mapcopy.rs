@@ -745,7 +745,7 @@ pub fn upload_progress(sent: u64, total: u64, secs: f64) -> (String, Value) {
 /// size: a texture file two maps share counts once, so the page adds them up itself).
 fn local_for_server(local: &crate::game::Game, e: &Entry) -> Value {
     let server_maps: HashSet<String> = servers::game_for(&e.id, || None)
-        .map(|g| g.maps(false).iter().filter_map(|m| m["name"].as_str().map(|n| n.to_lowercase())).collect())
+        .map(|g| g.own_maps(false).iter().filter_map(|m| m["name"].as_str().map(|n| n.to_lowercase())).collect())
         .unwrap_or_default();
     let t = Target::of(e);
     let f = Finder::default();
@@ -755,6 +755,12 @@ fn local_for_server(local: &crate::game::Game, e: &Entry) -> Value {
         let low = name.to_lowercase();
         // every server has CS 1.6's own maps
         if server_maps.contains(&low) || m["hidden"] == json!(true) || crate::maps::STOCK_CS.contains(&low.as_str()) || !servers::safe_map(&name) {
+            continue;
+        }
+        // a Condition Zero only map isn't offered to a 1.6 server, which can't load it (a
+        // Condition Zero server takes 1.6's maps too: it plays them)
+        let Some(lm) = find_local(&f, &local.hl, &name, &e.game) else { continue };
+        if e.game == "cstrike" && lm.game != "cstrike" {
             continue;
         }
         let Ok(p) = plan(&f, &local.hl, &name, &t) else { continue };
@@ -773,7 +779,7 @@ fn servers_for_map(local: &crate::game::Game, map: &str) -> Value {
         .into_iter()
         .filter(|e| e.ready)
         .map(|e| {
-            let has = servers::game_for(&e.id, || None).is_some_and(|g| g.maps(false).iter().any(|m| m["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(map))));
+            let has = servers::game_for(&e.id, || None).is_some_and(|g| g.own_maps(false).iter().any(|m| m["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(map))));
             let found = find_local(&f, &local.hl, map, &e.game);
             json!({"id": e.id, "name": e.name, "game": e.game, "remote": e.remote.is_some(), "has": has,
                    "czOnly": found.as_ref().is_some_and(|m| m.cz_only), "missing": found.is_none()})

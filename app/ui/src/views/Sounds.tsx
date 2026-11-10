@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getJson, isSharedId, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, useActions, useActivity, usePoll, isAbort } from "../api";
 import { reloadServers, useGameState, useServers, useSetupJob, waitForSetupJob } from "../queries";
 import { restartPending } from "../types";
+import { MyContent } from "./GetMore";
 import { useNav } from "../store";
 import { Banner, BusyButton, LoadError, SectionHead, Segmented, Skeleton, SteamProgress, Switch, useCommand, useConfirm, useToast } from "../ui";
 
@@ -449,6 +450,17 @@ export function Sounds({ target }: { target: string }) {
                 </div>
               );
             })}
+          </div>
+        )}
+        {/* sounds downloaded from Get more, which change only what you hear in your own game */}
+        {target === "local" && (
+          <div className="sound-downloads">
+            <MyContent
+              kinds={["sounds"]}
+              title="Your downloaded sounds"
+              note="Sounds you got from GameBanana. They replace the game's own, and removing one puts them back."
+              empty="None yet. Get some from GameBanana with the button above."
+            />
           </div>
         )}
       </section>

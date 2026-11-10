@@ -1011,6 +1011,7 @@ a.btn.primary { color: var(--signal-ink); }
 .track-info small.warn { color: var(--warn); }
 .track-actions { display: flex; align-items: center; gap: 10px; }
 .track-actions select { font: inherit; font-size: 14px; color: var(--bone); background: var(--panel); box-shadow: var(--raised); border: 0; border-radius: 2px; padding: 5px 8px; max-width: 190px; }
+.sound-downloads { margin-top: 32px; }
 .sound-packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 .sound-pack { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .sound-pack h3 { margin-top: 6px; }
