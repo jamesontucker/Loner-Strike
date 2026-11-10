@@ -442,7 +442,7 @@ function Shell() {
       </aside>
 
       <div className="main">
-        <Strip data={online} reconnecting={reconnecting} lost={lost} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} gameOpen={gameOpen} />
+        <Strip data={online} reconnecting={reconnecting} lost={lost} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} srv={current} gameOpen={gameOpen} />
         <Where server={current} game={myGameName} listing={section === "servers" && !current} onBack={() => void backToMyGame()} />
         {online && <QuickBar data={online} maps={maps} refresh={refresh} reloadMaps={refreshMaps} />}
         <main className="content">
@@ -684,7 +684,7 @@ function Working({ phone }: { phone?: boolean }) {
   );
 }
 
-function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { data: Online | null; reconnecting: boolean; lost: boolean; reason: string; app: AppInfo | null; server?: string; gameOpen: boolean }) {
+function Strip({ data, reconnecting, lost, reason, app, server, srv, gameOpen }: { data: Online | null; reconnecting: boolean; lost: boolean; reason: string; app: AppInfo | null; server?: string; srv?: ServerInfo | null; gameOpen: boolean }) {
   if (!data) {
     return (
       <header className="strip" data-tauri-drag-region>
@@ -721,6 +721,7 @@ function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { da
             </button>
             <span className="strip-slots"> of {st.maxplayers}</span>
             {st.timelimit > 0 && st.timeleft >= 0 ? ` · ${clock(st.timeleft)} left` : ""}
+            {st.nextmap ? <span className="strip-next"> · next {st.nextmap}</span> : null}
             {st.paused ? <span className="strip-pill">Paused</span> : null}
             {st.recording ? <span className="strip-pill rec">Recording</span> : null}
           </div>
@@ -736,6 +737,12 @@ function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { da
         {!byRounds && <span className="score-kind">kills</span>}
       </div>
       <div className="strip-actions">
+        {/* a server: how long it's been up, and its updates (to the Health tab) */}
+        {srv && !srv.shared && srv.updating ? <span className="strip-pill">Updating…</span>
+          : srv && !srv.shared && (srv.outdated?.length ?? 0) > 0 ? (
+            <button type="button" className="strip-pill strip-pill-btn" title="Its Health tab" onClick={() => useNav.getState().openServerTab("health" as Section)}>Update waiting</button>
+          ) : null}
+        {srv && srv.state === "running" && srv.uptime > 0 && <span className="strip-up">{srvUptime(srv.uptime)}</span>}
         {ON_THIS_COMPUTER && <RadioButton />}
         <Working />
         <span className={`live${reconnecting ? "" : " on"}`}>{reconnecting ? "Reconnecting…" : "Live"}</span>
@@ -743,6 +750,14 @@ function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { da
       <Working phone />
     </header>
   );
+}
+
+/** "up 2 h 5 min", for a server's top bar. */
+function srvUptime(s: number) {
+  if (s < 60) return "just started";
+  if (s < 3600) return `up ${Math.floor(s / 60)} min`;
+  if (s < 86400) return `up ${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
+  return `up ${Math.floor(s / 86400)} d ${Math.floor((s % 86400) / 3600)} h`;
 }
 
 /** Which game the page controls, under the top bar on every page: your own game, or the

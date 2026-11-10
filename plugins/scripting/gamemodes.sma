@@ -396,6 +396,21 @@ public native_filter(const name[], index, trap)
 	return (!trap && equal(name, "gm_chat_blocked")) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
+// the map that comes next (nextmap.amxx's amx_nextmap), for the app's top bar: "" when it's
+// this one again or not known
+next_map_name()
+{
+	static next[32]
+	next[0] = 0
+	if (get_cvar_pointer("amx_nextmap"))
+		get_cvar_string("amx_nextmap", next, charsmax(next))
+	new cur[32]
+	get_mapname(cur, charsmax(cur))
+	if (!next[0] || equali(next, cur) || !is_map_valid(next) || contain(next, "^"") != -1)
+		next[0] = 0
+	return next
+}
+
 // rounds won by each team this map (the game's TeamScore), for the app's top bar
 new g_RoundsT, g_RoundsCT
 
@@ -3652,10 +3667,10 @@ public srv_status()
 	if (!f)
 		return PLUGIN_HANDLED
 
-	fprintf(f, "{^"t^":^"state^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"quota^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d,^"rounds_t^":%d,^"rounds_ct^":%d}^n",
+	fprintf(f, "{^"t^":^"state^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"quota^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d,^"rounds_t^":%d,^"rounds_ct^":%d,^"nextmap^":^"%s^"}^n",
 		g_ModeId[g_Cur], map, has_nav(map), g_Career, navbatch_active(), navbatch_active() ? navqueue_count() : 0,
 		get_playersnum_ex(GetPlayers_ExcludeHuman), bot_quota_target(), get_playersnum_ex(GetPlayers_ExcludeBots), MaxClients,
-		get_timeleft(), presets_enabled(), addons_pending(), VERSION, g_CrashMap, pesc, get_cvar_num("bot_zombie"), g_Paused, g_Recording, get_cvar_num("mp_timelimit"), g_RoundsT, g_RoundsCT)
+		get_timeleft(), presets_enabled(), addons_pending(), VERSION, g_CrashMap, pesc, get_cvar_num("bot_zombie"), g_Paused, g_Recording, get_cvar_num("mp_timelimit"), g_RoundsT, g_RoundsCT, next_map_name())
 
 	for (new i = 0; i < g_ModeCount; i++)
 	{

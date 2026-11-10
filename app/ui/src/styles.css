@@ -186,6 +186,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .strip-link:hover { color: var(--signal); }
 .strip-link:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 .strip-slots { color: var(--bone-faint); }
+/* one line that trims, and the extras give way first on a narrower window */
+.strip-map > div { min-width: 0; }
+.strip-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1180px) { .strip-next { display: none; } }
+@media (max-width: 1020px) { .strip-up { display: none; } }
+.strip-next { color: var(--bone-faint); }
+.strip-up { color: var(--bone-faint); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.strip-pill.strip-pill-btn { border: 0; cursor: pointer; font: 600 12px/1.4 var(--text); background: rgba(196,181,80,.18); color: var(--signal); }
+.strip-pill.strip-pill-btn:hover { background: rgba(196,181,80,.28); }
 .strip-pill { margin-left: 8px; padding: 1px 6px; border-radius: 2px; background: rgba(255,255,255,.08); color: var(--bone); font-size: 12px; }
 .strip-pill.rec { background: rgba(224,134,106,.2); color: #eba58a; }
 .score-tag { font: 700 10px/1 var(--text); letter-spacing: .04em; padding: 3px 4px 2px; border-radius: 2px; align-self: center; }
