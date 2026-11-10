@@ -301,7 +301,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
 
 type StartOptions = { modes: { id: string; name: string; settings: Record<string, string | null> }[]; mode: string };
 // What the screen shows (and starts the game with) when nothing's been chosen yet
-const DEFAULTS: Record<string, string> = { bot_difficulty: "2", gm_botstyle: "8" };
+const DEFAULTS: Record<string, string> = { bot_difficulty: "2", gm_botstyle: "1" };
 const TIME_LIMITS: [string, string][] = [["0", "None"], ["10", "10 min"], ["20", "20 min"], ["30", "30 min"], ["45", "45 min"], ["60", "60 min"]];
 
 /** A touch screen: the search box doesn't take focus by itself (that opens the keyboard over the list). */
