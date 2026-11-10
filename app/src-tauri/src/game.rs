@@ -193,7 +193,7 @@ impl Game {
         };
         let (reply, file) = match sent {
             Ok(r) => r,
-            Err(RconError::BadPassword) => return json!({"online": false, "reason": BAD_PASSWORD}),
+            Err(RconError::BadPassword) => return json!({"online": false, "reason": self.bad_password_reason()}),
             // game_open: the game is open on this computer but not hosting a map (main menu,
             // or playing on someone else's server)
             Err(RconError::Offline) => return json!({"online": false, "reason": OFFLINE, "game_open": !self.dedicated && game_open()}),
@@ -265,6 +265,55 @@ impl Game {
     pub fn health(&self) -> Value {
         health_check(&self.dir, true)
     }
+
+    /// The game turned the app's console password away: why, and what to do. On this
+    /// computer the setup is checked (and what a Steam update or file check undid is put
+    /// back); then either Loner-Strike isn't loading at all (no password gets set, so none is
+    /// accepted: also why there are no bots), or it is and a config sets its own after it.
+    fn bad_password_reason(&self) -> String {
+        if self.remote.is_some() {
+            return BAD_PASSWORD.into();
+        }
+        let h = health_check(&self.dir, true);
+        let fixed: Vec<String> = h["fixed"].as_array().map(|a| a.iter().filter_map(|f| f.as_str().map(String::from)).collect()).unwrap_or_default();
+        if !fixed.is_empty() {
+            return fixed.join(" ");
+        }
+        let failed: Vec<String> = h["checks"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter(|c| !c["ok"].as_bool().unwrap_or(true) && c["name"].as_str() != Some("F3 and F4 keys bound"))
+                    .filter_map(|c| c["name"].as_str().map(|n| n.to_lowercase()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !failed.is_empty() {
+            return format!(
+                "Loner-Strike isn't loading in this game, so there are no bots and the panel can't connect. Not working: {}. \
+                 Set it up again from Mods, then restart the game. Still stuck? Copy diagnostics in Settings and send it to us.",
+                failed.join(", ")
+            );
+        }
+        // (AMX Mod X writes its log as each map starts: a recent one means it's running)
+        let amxx_running = std::fs::read_dir(self.dir.join("addons/amxmodx/logs"))
+            .map(|d| {
+                d.flatten().any(|e| {
+                    e.file_name().to_string_lossy().starts_with('L')
+                        && e.metadata().and_then(|m| m.modified()).map(|t| t.elapsed().map(|a| a.as_secs() < 3600).unwrap_or(false)).unwrap_or(false)
+                })
+            })
+            .unwrap_or(false);
+        if amxx_running {
+            "Something in the game sets its own console password after Loner-Strike does. Remove the rcon_password line from \
+             server.cfg, autoexec.cfg or listenserver.cfg in the game's folder, then restart the map."
+                .into()
+        } else {
+            "Loner-Strike's plugins didn't start in this game, so there are no bots and the panel can't connect. Restart the \
+             game. Still stuck? Copy diagnostics in Settings and send it to us."
+                .into()
+        }
+    }
 }
 
 /// The health check: {"ok", "checks": [{"name", "ok", "detail"}], "fixed": [...]}.
@@ -285,7 +334,7 @@ pub fn health_check(cz: &Path, repair: bool) -> Value {
                     let backup = cz.join(format!("liblist.gam.steam-{}", sys::stamp()));
                     let new = format!("{}{}{}", &text[..m.start()], METAMOD_DLL, &text[m.end()..]);
                     if sys::write_latin1(&backup, &text).is_ok() && sys::write_latin1(&liblist, &new).is_ok() {
-                        fixed.push("Steam had reset liblist.gam, so the mods weren't loading. Fixed it. Restart Condition Zero.");
+                        fixed.push("Steam had reset liblist.gam, so the mods weren't loading. Fixed it. Restart the game.");
                         check("Game loads Metamod", true, "repaired");
                     } else {
                         check("Game loads Metamod", false, "liblist.gam doesn't point at Metamod");
@@ -304,7 +353,7 @@ pub fn health_check(cz: &Path, repair: bool) -> Value {
         check("Metamod loads AMX Mod X", true, "");
     } else if repair && mm_ini.parent().map(|d| d.is_dir()).unwrap_or(false) {
         if std::fs::write(&mm_ini, "win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n").is_ok() {
-            fixed.push("Metamod's plugin list was missing AMX Mod X. Fixed it. Restart Condition Zero.");
+            fixed.push("Metamod's plugin list was missing AMX Mod X. Fixed it. Restart the game.");
             check("Metamod loads AMX Mod X", true, "repaired");
         } else {
             check("Metamod loads AMX Mod X", false, "");
