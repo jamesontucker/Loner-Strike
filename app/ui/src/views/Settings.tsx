@@ -42,6 +42,7 @@ const NOTES: Record<string, string> = {
   gm_botchat: "How often bots talk: kills, deaths, rage, callouts like rush b, encouraging teammates, answering you",
   gm_botchat_humans: "Bots answer what people type in chat and do what they're asked, each by its personality",
   gm_botchat_stop: "Now and then a bot typing a long line stands still for the last few seconds of it",
+  gm_botchat_obey: "Whether bots do what you ask in chat or by voice. Their own way: each bot decides by its personality, and some rarely listen. Mostly: nearly everyone goes along. Always: every bot that can, does",
   gm_botchat_deadchat: "In CS the living can't see what the dead say; like old pub servers, this shows dead bots' chat to everyone",
   gm_clans: "Bots with the same clan tag join together and play on the same side",
   gm_botjoin: "When a map starts, bots join a few at a time instead of all at once",

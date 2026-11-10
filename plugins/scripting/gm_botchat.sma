@@ -163,7 +163,7 @@ new const WORDS[][] = { "", "", "", "", "", "", "", "", "man", "dude", "mate", "
 new const EMOTES[][] = { "", "", "", "", "", ":)", ":D", "^^", ":P", ";)", ":/", ":(", "=)" }
 new g_Laugh[33], g_Word[33], g_Emote[33], bool:g_TextSpeak[33], g_Typos[33], g_Shouty[33], Float:g_Chatty[33]
 
-new g_pLevel, g_pHumans, g_pDeadChat, g_pStop
+new g_pLevel, g_pHumans, g_pDeadChat, g_pStop, g_pObey
 new bool:g_BotFun                   // gm_botfun is running (bf_danger)
 new bool:g_Fork                     // Loner-Strike's game DLL (ls_bot)
 new bool:g_MatchMode, bool:g_ClassicMode, bool:g_SteeredMode   // from the mode's id
@@ -610,6 +610,7 @@ public plugin_init()
 	g_pHumans = register_cvar("gm_botchat_humans", "1")
 	g_pDeadChat = register_cvar("gm_botchat_deadchat", "1")
 	g_pStop = register_cvar("gm_botchat_stop", "1")
+	g_pObey = register_cvar("gm_botchat_obey", "1")
 	register_srvcmd("gm_botchat_reload", "cmd_reload")
 	// Loner-Strike's engine (ReHLDS fork) runs this when a person starts and stops talking
 	register_srvcmd("gm_voice", "cmd_voice")
@@ -6191,6 +6192,7 @@ Float:buy_heard(id, to, plan, Float:extra)
 			p *= 0.8
 		if (to)
 			p = floatmin(1.0, p + 0.15)
+		p = obey_odds(p)
 		if (random_float(0.0, 1.0) < p)
 		{
 			server_cmd("ls_bot %d buyplan %d", b, plan)
@@ -7312,7 +7314,22 @@ Float:req_odds(bot, human, it, bool:named)
 		p += 0.2
 	new m = lobby_mood()
 	p += m == 2 ? -0.1 : m == 0 ? 0.05 : 0.0
-	return floatclamp(p, 0.05, 0.97)
+	return obey_odds(floatclamp(p, 0.05, 0.97))
+}
+
+// gm_botchat_obey: how much the lobby goes along with what people ask, over each bot's own
+// mind. 0 rarely (most do their own thing), 1 their own way (each bot's personality, as
+// above), 2 mostly (even a cold one usually does it), 3 always (whenever it can: not dead,
+// not in a fight, nothing the round rules out)
+Float:obey_odds(Float:p)
+{
+	switch (get_pcvar_num(g_pObey))
+	{
+		case 0: return floatclamp(p * 0.45, 0.02, 0.6)
+		case 2: return floatmin(0.98, 0.35 + 0.65 * p)
+		case 3: return 1.0
+	}
+	return p
 }
 
 // Yes or no, and the section for what it says (YES: "" for the action's own). Whether the
