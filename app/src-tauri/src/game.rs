@@ -284,6 +284,9 @@ impl Game {
                 );
             }
         }
+        if !self.dedicated && crate::steam::too_old(&self.hl) {
+            return crate::steam::TOO_OLD.into();
+        }
         let h = health_check(&self.dir, true);
         let fixed: Vec<String> = h["fixed"].as_array().map(|a| a.iter().filter_map(|f| f.as_str().map(String::from)).collect()).unwrap_or_default();
         if !fixed.is_empty() {
@@ -299,10 +302,13 @@ impl Game {
             })
             .unwrap_or_default();
         if !failed.is_empty() {
+            // (files gone that Loner-Strike put there: often an antivirus taking them)
+            let gone = failed.iter().any(|f| f.ends_with("installed"));
             return format!(
-                "Loner-Strike isn't loading in this game, so there are no bots and the panel can't connect. Not working: {}. \
-                 Set it up again from Mods, then restart the game. Still stuck? Copy diagnostics in Settings and send it to us.",
-                failed.join(", ")
+                "Loner-Strike isn't loading in this game, so there are no bots and the panel can't connect. Not working: {}. {}\
+                 Open Mods and click Repair, then restart the game. Still stuck? Copy diagnostics in Settings and send it to us.",
+                failed.join(", "),
+                if gone { "Your antivirus may have removed its files: allow the game's folder in it first. " } else { "" }
             );
         }
         // (AMX Mod X writes its log as each map starts: a recent one means it's running)
@@ -320,7 +326,7 @@ impl Game {
                 .into()
         } else {
             "Loner-Strike's plugins didn't start in this game, so there are no bots and the panel can't connect. Restart the \
-             game. Still stuck? Copy diagnostics in Settings and send it to us."
+             game. Still the same? Open Mods and click Repair, or copy diagnostics in Settings and send it to us."
                 .into()
         }
     }

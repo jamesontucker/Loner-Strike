@@ -15,6 +15,15 @@ pub struct Install {
     pub dedicated: bool,
 }
 
+/// A copy of the game from before Valve's 2013 update (an old retail or repacked one), which
+/// Loner-Strike's mods (ReGameDLL, Metamod-P, AMX Mod X 1.10) can't load on: its own game
+/// (hl.exe there) without the SDL2.dll that update added. Dedicated server folders aren't asked.
+pub fn too_old(hl: &Path) -> bool {
+    hl.join("hl.exe").is_file() && !hl.join("SDL2.dll").is_file()
+}
+
+pub const TOO_OLD: &str = "This copy of the game is older than Loner-Strike supports (from before Valve's 2013 update), so its mods can't load on it. Use the current Steam version of Counter-Strike 1.6 or Condition Zero.";
+
 fn games_in(hl: &Path) -> Vec<String> {
     ["czero", "cstrike"]
         .iter()
@@ -266,4 +275,20 @@ fn steam_exe() -> Option<PathBuf> {
         RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey("SOFTWARE\\WOW6432Node\\Valve\\Steam").ok().and_then(|k| k.get_value::<String, _>("InstallPath").ok()).map(|v| PathBuf::from(v).join("steam.exe"))
     });
     exe.filter(|p| p.is_file())
+}
+
+#[cfg(test)]
+mod too_old_tests {
+    #[test]
+    fn spots_a_pre_2013_copy() {
+        let d = std::env::temp_dir().join(format!("ls-tooold-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        // a dedicated server's folder (no hl.exe): never asked
+        assert!(!super::too_old(&d));
+        std::fs::write(d.join("hl.exe"), b"").unwrap();
+        assert!(super::too_old(&d), "the game without SDL2.dll: from before 2013");
+        std::fs::write(d.join("SDL2.dll"), b"").unwrap();
+        assert!(!super::too_old(&d));
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }

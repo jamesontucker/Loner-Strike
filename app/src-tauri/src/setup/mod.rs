@@ -466,6 +466,9 @@ pub fn plan_install(install: Install, games: &[String], component_ids: &[String]
             return Err(format!("{} isn't installed in {}.", game_name(g), install.hl.display()));
         }
     }
+    if !install.dedicated && crate::steam::too_old(&install.hl) {
+        return Err(crate::steam::TOO_OLD.into());
+    }
     let catalog = components::load_catalog(res)?;
     let mut chosen = Vec::new();
     for id in component_ids {

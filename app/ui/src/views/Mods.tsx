@@ -91,13 +91,14 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
     if (remove && !(await ask(id ? `Remove ${name ?? id}? Its files go, and anything it replaced is put back.` : `Remove Loner-Strike from ${where}? Everything it changed is put back.`, { ok: "Remove", danger: true }))) return;
     // again: an installed mod put in once more (its files fresh, its plugins built again)
     const body = { hl: game.hl, games: [game.id], ...(id ? { components: [id] } : remove ? {} : { components: [] }), ...(again ? { repair: true } : {}) };
-    const label = id ? `${remove ? "Removing" : again ? "Reinstalling" : "Installing"} ${name ?? id}…` : remove ? `Removing Loner-Strike from ${where}…` : "Installing the basics…";
+    const label = id ? `${remove ? "Removing" : again ? "Reinstalling" : "Installing"} ${name ?? id}…` : remove ? `Removing Loner-Strike from ${where}…` : again ? `Repairing Loner-Strike in ${where}…` : "Installing the basics…";
     await run(`${prefix}${id ?? "core"}`, async () => {
       const r = await postJson<{ ok?: boolean; error?: string }>(remove ? "/api/setup/uninstall" : "/api/setup/install", body).catch(() => ({ error: "Couldn't reach the app." }));
       if (r.error) return toast(r.error, true);
       const j = await waitForSetupJob();
       const what = id ? name ?? id : remove ? `Loner-Strike from ${where}` : "the basics";
       if (!j) toast("Lost track of the install. Open Mods again to see if it finished.", true);
+      else if (j.state === "done" && !id && again) toast(`Repaired.${running || !game.dedicated ? " Restart the game so it loads." : ""}`);
       else if (j.state === "done") toast(`${remove ? "Removed" : "Installed"} ${what}${running ? ". It changes on the next map." : ""}`);
       else toast(j.error || (remove ? `Couldn't remove ${what}.` : `Couldn't install ${what}.`), true);
       onChanged();
@@ -198,6 +199,18 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
       )}
 
       {setUp && <OwnPlugins />}
+
+      {/* the basics put in again where they are (a Steam update, a file check or an antivirus can undo
+          them): settings, presets and add-ons stay */}
+      {setUp && ON_THIS_COMPUTER && (
+        <div className="panel row between">
+          <div>
+            <b>Repair Loner-Strike</b>
+            <p className="muted">No bots, or the app can't connect? This puts Metamod, AMX Mod X, the bot brain and the menu back in {where}. Your settings and mods stay.</p>
+          </div>
+          <BusyButton className="btn" busy={busy === "core"} disabled={!!busy} label="Repair" busyLabel="Repairing…" onClick={() => change(null, false, undefined, true)} />
+        </div>
+      )}
 
       {/* your own game: one place to remove it all, in Settings; a server keeps its own button here */}
       {setUp && ON_THIS_COMPUTER && (
