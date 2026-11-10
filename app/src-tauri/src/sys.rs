@@ -454,6 +454,51 @@ pub fn game_running() -> bool {
     false
 }
 
+/// The folders the running game (hl.exe) was started from, as the system names them: a full
+/// Windows path on Windows; under CrossOver the Windows path from its command line.
+pub fn running_game_dirs() -> Vec<String> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut c = command("/usr/bin/pgrep");
+        c.args(["-ifl", r"\\hl\.exe"]);
+        match run_output(c, Duration::from_secs(3)) {
+            Some((true, out, _)) => out.lines().filter_map(game_dir_in).collect(),
+            _ => Vec::new(),
+        }
+    }
+    #[cfg(windows)]
+    {
+        let mut c = command("powershell");
+        c.args(["-NoProfile", "-Command", "(Get-Process hl -ErrorAction SilentlyContinue).Path"]);
+        match run_output(c, Duration::from_secs(8)) {
+            Some((_, out, _)) => out.lines().filter_map(game_dir_in).collect(),
+            _ => Vec::new(),
+        }
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    Vec::new()
+}
+
+/// The folder before \hl.exe in a process line or path ("C:\Games\Half-Life\hl.exe -steam"
+/// -> "C:\Games\Half-Life").
+fn game_dir_in(line: &str) -> Option<String> {
+    let low = line.to_lowercase();
+    let at = low.find("\\hl.exe")?;
+    let start = line[..at].find(|c: char| c.is_ascii_alphabetic() && line[line[..at].find(c).unwrap()..].get(1..2) == Some(":")).unwrap_or(0);
+    Some(line[start..at].trim().to_string())
+}
+
+/// Whether a running game's folder (a Windows path) is the game folder Loner-Strike set up
+/// (this computer's path to it: under CrossOver, inside the bottle). Compared by the folders'
+/// own names and, on Windows, the whole path.
+pub fn same_game_dir(running: &str, ours: &Path) -> bool {
+    let name = |s: &str| s.trim_end_matches(['\\', '/']).rsplit(['\\', '/']).next().unwrap_or("").to_lowercase();
+    if cfg!(windows) {
+        return running.trim_end_matches('\\').eq_ignore_ascii_case(ours.to_string_lossy().trim_end_matches('\\'));
+    }
+    name(running) == name(&ours.to_string_lossy())
+}
+
 #[cfg(test)]
 mod path_tests {
     use super::clean_path;
@@ -465,5 +510,18 @@ mod path_tests {
         assert_eq!(clean_path("/"), "/");
         assert_eq!(clean_path("'/Users/me/key'"), "/Users/me/key");
         assert_eq!(clean_path(""), "");
+    }
+
+    #[test]
+    fn running_game_folder() {
+        use super::{game_dir_in, same_game_dir};
+        assert_eq!(game_dir_in(r"12345 C:\Program Files (x86)\Steam\steamapps\common\Half-Life\hl.exe -steam -game czero").as_deref(), Some(r"C:\Program Files (x86)\Steam\steamapps\common\Half-Life"));
+        assert_eq!(game_dir_in(r"F:\Counter-Strike Condition Zero 1.2 build 2771\hl.exe").as_deref(), Some(r"F:\Counter-Strike Condition Zero 1.2 build 2771"));
+        assert_eq!(game_dir_in("bash something"), None);
+        if !cfg!(windows) {
+            let ours = std::path::Path::new("/Users/x/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life");
+            assert!(same_game_dir(r"C:\Program Files (x86)\Steam\steamapps\common\Half-Life", ours));
+            assert!(!same_game_dir(r"F:\Counter-Strike Condition Zero 1.2 build 2771", ours));
+        }
     }
 }

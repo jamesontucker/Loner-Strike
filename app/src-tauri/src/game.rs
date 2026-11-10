@@ -274,6 +274,16 @@ impl Game {
         if self.remote.is_some() {
             return BAD_PASSWORD.into();
         }
+        // (another copy of the game running: the app's setup isn't in it at all)
+        if !self.dedicated {
+            let running = sys::running_game_dirs();
+            if let Some(other) = running.iter().find(|d| !sys::same_game_dir(d, &self.hl)) {
+                return format!(
+                    "A different copy of the game is running ({other}), not the one Loner-Strike is set up in ({}). Close it and start the game from Play.",
+                    self.hl.display()
+                );
+            }
+        }
         let h = health_check(&self.dir, true);
         let fixed: Vec<String> = h["fixed"].as_array().map(|a| a.iter().filter_map(|f| f.as_str().map(String::from)).collect()).unwrap_or_default();
         if !fixed.is_empty() {
