@@ -410,7 +410,7 @@ pub fn part_of(rel: &str, ours: bool) -> &'static str {
 /// What the server or the app writes as it runs, which belongs to where it ran: live
 /// status, stats and history, logs, half-written files, the bots' learned maps.
 pub fn runtime(rel: &str) -> bool {
-    const MORE: &[&str] = &["content_status.json", "loner-strike-hltv.cfg", ".uploaded.json", ".installed_maps.json", ".loner-strike-server", ".engine-update-pending"];
+    const MORE: &[&str] = &["content_status.json", "loner-strike-hltv.cfg", ".uploaded.json", ".installed_maps.json", ".loner-strike-server", ".engine-update-pending", ".update-failed"];
     let l = rel.replace('\\', "/").to_ascii_lowercase();
     let name = l.rsplit('/').next().unwrap_or("");
     l.starts_with("addons/amxmodx/logs/")

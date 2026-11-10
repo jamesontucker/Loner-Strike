@@ -154,8 +154,11 @@ export type ServerInfo = {
   /** what that update is doing ("stopping", "installing", "machine", "uploading", "starting"...) and its setup job */
   update_phase?: string | null;
   update_job?: string | null;
-  /** they go in by themselves once nobody is playing */
+  /** they go in by themselves once nobody is playing; not any more after failing too often */
   auto_update?: boolean;
+  auto_update_stopped?: boolean;
+  /** on another machine, its bot brain update not in yet: uploads but settings wait for it */
+  uploads_held?: boolean;
   /** on the Loner-Strike server list (Find servers) */
   ls_listed?: boolean;
   /** the join password ("" for none) */

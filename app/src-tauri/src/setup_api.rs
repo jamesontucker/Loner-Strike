@@ -123,9 +123,12 @@ async fn install(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Re
             return Err("Stop the server first, then try again.".into());
         }
         let plan = setup::plan_install(install, &list(&req["games"]), &list(&req["components"]), &res, req["repair"].as_bool() == Some(true))?;
-        hold_server_engine(&plan, &res)?;
+        let held = held_server(&plan, &res);
         let store = store_for(target, &plan.install.hl, &plan.games[0]);
-        setup::start_install(plan, res, Some(store))
+        match held {
+            Some(e) => crate::servers::hold_engine_update_for(&e, || setup::start_install(plan, res, Some(store))),
+            None => setup::start_install(plan, res, Some(store)),
+        }
     })
     .await;
     started(r)
@@ -133,19 +136,15 @@ async fn install(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Re
 
 /// A server's copy here getting a new bot brain from setup itself (the Files bar's update):
 /// its engine side (on a Linux machine, the machine) only follows with the server's own update
-/// (update_server), so it's marked as waiting for that (servers::hold_engine_update).
-fn hold_server_engine(plan: &setup::InstallPlan, res: &Path) -> Result<(), String> {
+/// (update_server), so it's marked as waiting for that (servers::hold_engine_update_for): the
+/// server to mark, if there's one.
+fn held_server(plan: &setup::InstallPlan, res: &Path) -> Option<crate::servers::Entry> {
     if !plan.install.dedicated {
-        return Ok(());
+        return None;
     }
-    let Some(e) = crate::servers::load().into_iter().find(|e| e.ready && e.dir == plan.install.hl && plan.games.contains(&e.game)) else {
-        return Ok(());
-    };
+    let e = crate::servers::load().into_iter().find(|e| e.ready && e.dir == plan.install.hl && plan.games.contains(&e.game))?;
     let rec = setup::record::Record::open(&e.dir.join(&e.game));
-    if rec.installed("foundation") && setup::outdated(res, &rec).iter().any(|c| c == "foundation") {
-        crate::servers::hold_engine_update(&e)?;
-    }
-    Ok(())
+    (rec.installed("foundation") && setup::outdated(res, &rec).iter().any(|c| c == "foundation")).then_some(e)
 }
 
 async fn uninstall(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Response {
@@ -298,6 +297,26 @@ mod tests {
         let (code, _) = call(&st, "POST", "/api/setup/install", Some(json!([1])), true).await;
         assert_eq!(code, StatusCode::BAD_REQUEST);
     }
+
+    /// A server whose updates keep failing isn't stopped every hour: 6 hours, a day, then only
+    /// Update now; another app version's failures don't count.
+    #[test]
+    fn failed_updates_back_off() {
+        use super::{parse_failures, retry_due};
+        let v = env!("CARGO_PKG_VERSION");
+        assert_eq!(parse_failures(&format!("2 1000 {v}\n")), Some((2, 1000)));
+        assert_eq!(parse_failures("2 1000 0.0.0-old\n"), None);
+        assert_eq!(parse_failures("nonsense"), None);
+        let h = 3600;
+        assert!(retry_due(None, 0));
+        assert!(!retry_due(Some((1, 1000)), 1000 + h));
+        assert!(retry_due(Some((1, 1000)), 1000 + 6 * h));
+        assert!(!retry_due(Some((2, 1000)), 1000 + 6 * h));
+        assert!(retry_due(Some((2, 1000)), 1000 + 24 * h));
+        assert!(!retry_due(Some((3, 1000)), 1000 + 1000 * h));
+        // (a clock put back doesn't make it due)
+        assert!(!retry_due(Some((1, 1000)), 10));
+    }
 }
 
 // ---- servers' updates -----------------------------------------------------------------
@@ -310,7 +329,8 @@ mod tests {
 
 /// The updater's state: the server being updated (one at a time, and whether it was running),
 /// servers asked for meanwhile (in order, and whether the person said to go ahead with people
-/// on), and when each failed last (tried again an hour later)
+/// on), and when each failed last (tried again an hour later at the soonest; one that failed
+/// after it was stopped or while its updates went in waits longer, see retry_due)
 #[derive(Default)]
 struct Updates {
     now: Option<(String, bool)>,
@@ -349,6 +369,54 @@ fn set_phase(phase: &str, job: Option<&str>) {
 /// Whether this server is waiting its turn for its updates.
 pub fn queued(id: &str) -> bool {
     updates(|u| u.queued.iter().any(|(q, _)| q == id))
+}
+
+/// A server whose updates failed once tried for real (it was stopped, or they went in and
+/// didn't work): how many times in a row, when last (Unix seconds) and the app version that
+/// tried, in its folder beside the game (never uploaded), so an app restart doesn't try again at
+/// once. Cleared when its updates go in.
+fn failed_path(e: &crate::servers::Entry) -> PathBuf {
+    e.dir.join(".update-failed")
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// (failures, when) from the file; nothing from another app version's (a newer app may have
+/// fixed what went wrong: its own tries start again)
+fn parse_failures(text: &str) -> Option<(u32, u64)> {
+    let mut w = text.split_whitespace();
+    let n = w.next()?.parse().ok()?;
+    let at = w.next()?.parse().ok()?;
+    (w.next() == Some(env!("CARGO_PKG_VERSION"))).then_some((n, at))
+}
+
+fn update_failures(e: &crate::servers::Entry) -> Option<(u32, u64)> {
+    parse_failures(&std::fs::read_to_string(failed_path(e)).ok()?)
+}
+
+fn note_update_failed(e: &crate::servers::Entry) {
+    let n = update_failures(e).map_or(0, |(n, _)| n).saturating_add(1);
+    let _ = crate::sys::write_atomic(&failed_path(e), format!("{n} {} {}\n", unix_now(), env!("CARGO_PKG_VERSION")).as_bytes());
+}
+
+/// Whether the updater may try a server again by itself (Update now always can): 6 hours after
+/// its first failure, a day after its second, and after the third not by itself any more (each
+/// try can stop a server with bots on and keep it down while the update runs).
+fn retry_due(failures: Option<(u32, u64)>, now: u64) -> bool {
+    let wait = match failures {
+        None | Some((0, _)) => return true,
+        Some((1, _)) => 6 * 3600,
+        Some((2, _)) => 24 * 3600,
+        Some(_) => return false,
+    };
+    failures.is_some_and(|(_, at)| now.saturating_sub(at) >= wait)
+}
+
+/// Whether the updater stopped trying this server by itself (it failed too often).
+pub fn auto_update_stopped(e: &crate::servers::Entry) -> bool {
+    update_failures(e).is_some_and(|(n, _)| n >= 3)
 }
 
 /// A server's Loner-Strike parts older than this app's (none for one Loner-Strike didn't set
@@ -436,11 +504,9 @@ fn update_server(res: &Path, e: &crate::servers::Entry, outdated: &[String]) -> 
     let plan = setup::plan_install(install, &[e.game.clone()], &comps, res, true)?;
     // a new bot brain: noted before the copy here changes, so if the engine side (the machine)
     // doesn't follow, the plugins for it aren't sent there and the update is offered again
-    if outdated.iter().any(|c| c == "foundation") {
-        crate::servers::hold_engine_update(e)?;
-    }
     let store = store_for(crate::servers::game_for(&e.id, || None), &plan.install.hl, &plan.games[0]);
-    let job = setup::start_install(plan, res.to_path_buf(), Some(store))?;
+    let start = || setup::start_install(plan, res.to_path_buf(), Some(store));
+    let job = if outdated.iter().any(|c| c == "foundation") { crate::servers::hold_engine_update_for(e, start)? } else { start()? };
     set_phase("installing", Some(&job));
     wait_job(&job)?;
     if outdated.iter().any(|c| c == "foundation") {
@@ -489,6 +555,8 @@ fn run_update(res: PathBuf, id: String) -> bool {
             }
         }
         let _done = Done(res.clone());
+        // (past the checks: the server was stopped or its updates started going in)
+        let mut tried = false;
         let outcome = (|| -> Result<(), String> {
             let outdated = server_outdated(&res, &e);
             if outdated.is_empty() {
@@ -502,6 +570,7 @@ fn run_update(res: PathBuf, id: String) -> bool {
             }
             // (it can go ahead, before anything is stopped)
             find_install(&e.dir.to_string_lossy())?;
+            tried = true;
             if was_running {
                 crate::servers::stop(&id);
                 let mut stopped = false;
@@ -539,9 +608,18 @@ fn run_update(res: PathBuf, id: String) -> bool {
             }
             Ok(())
         })();
-        if let Err(why) = outcome {
-            crate::diagnostics::log_error("server update", &format!("{}: {why}", e.name));
-            updates(|u| u.failed_at.insert(id.clone(), std::time::Instant::now()));
+        match outcome {
+            Ok(()) => {
+                let _ = std::fs::remove_file(failed_path(&e));
+            }
+            Err(why) => {
+                crate::diagnostics::log_error("server update", &format!("{}: {why}", e.name));
+                updates(|u| u.failed_at.insert(id.clone(), std::time::Instant::now()));
+                // (a check that said not now isn't counted: nothing was stopped or changed)
+                if tried {
+                    note_update_failed(&e);
+                }
+            }
         }
     });
     true
@@ -633,6 +711,10 @@ pub fn auto_update_loop(st: Shared) {
                 }
                 let failed = updates(|u| u.failed_at.get(&e.id).copied());
                 if failed.is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(3600)) {
+                    continue;
+                }
+                // (failed after it was stopped: much later, then not by itself; see retry_due)
+                if !retry_due(update_failures(&e), unix_now()) {
                     continue;
                 }
                 let state = crate::servers::view(&e)["state"].as_str().unwrap_or("").to_string();

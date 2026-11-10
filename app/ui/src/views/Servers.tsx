@@ -124,7 +124,9 @@ function UpdateNote({ s, busy, onUpdate }: { s: ServerInfo; busy: boolean; onUpd
   return (
     <div className="row between update-note">
       <span className="muted small-note">
-        Updates waiting: {what}. {s.auto_update !== false ? "They go in by themselves once nobody's playing." : "Automatic updates are off for this server."}
+        Updates waiting: {what}.{" "}
+        {s.auto_update === false ? "Automatic updates are off for this server." : s.auto_update_stopped ? "They didn't go in by themselves after 3 tries, so they wait for Update now." : "They go in by themselves once nobody's playing."}
+        {s.uploads_held && " Uploads (other than its settings) wait until its update goes in."}
       </span>
       <BusyButton className="btn small" busy={busy} label="Update now" busyLabel="Updating…" onClick={onUpdate} />
     </div>

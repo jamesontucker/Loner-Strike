@@ -162,7 +162,12 @@ pub fn plugins_ini(pl: &str, mine: &[String]) -> String {
     let add: Vec<&str> = ALWAYS_ON
         .iter()
         .copied()
-        .filter(|n| !Regex::new(&format!(r"(?m)^\s*{}\.amxx", regex::escape(n))).unwrap().is_match(pl))
+        .filter(|n| {
+            // one the player switched off with ; stays off (not added again), except restmenu,
+            // which AMX Mod X's own plugins.ini ships switched off (see ALWAYS_ON)
+            let off = if *n == "restmenu" { "" } else { r"(?:;\s*)?" };
+            !Regex::new(&format!(r"(?m)^\s*{off}{}\.amxx", regex::escape(n))).unwrap().is_match(pl)
+        })
         .collect();
     let mut out = pl.to_string();
     if !add.is_empty() {
@@ -488,6 +493,11 @@ mod tests {
         let back = plugins_ini(stock, &["mine".into()]);
         assert!(back.contains("\r\nmine.amxx\r\n") && back.contains("gm_people.amxx"));
         assert_eq!(plugins_ini(&back, &["mine".into()]), back);
+        // an always-on plugin they switched off stays off; restmenu (stock: off) is switched on
+        assert!(first.contains("\r\nrestmenu.amxx\t\t; Loner-Strike\r\n"));
+        let off = first.replace("\r\ngm_botping.amxx", "\r\n;gm_botping.amxx");
+        assert_eq!(plugins_ini(&off, &[]), off);
+        assert!(!plugins_ini(&off, &[]).contains("\r\ngm_botping.amxx"));
     }
 
     #[test]

@@ -1097,8 +1097,21 @@ pub fn engine_update_pending(e: &Entry) -> bool {
     engine_pending_path(e).exists()
 }
 
-pub fn hold_engine_update(e: &Entry) -> Result<(), String> {
+fn hold_engine_update(e: &Entry) -> Result<(), String> {
     sys::write_atomic(&engine_pending_path(e), b"1\n").map_err(|err| format!("Couldn't note the update in the server's folder ({err})."))
+}
+
+/// hold_engine_update around `start`, which starts the job that changes the copy here: noted
+/// first (so nothing built for the new engine goes up while it runs), and taken back if the job
+/// didn't start (one noted before, by an update that stopped part way, stays).
+pub fn hold_engine_update_for<T>(e: &Entry, start: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    let before = engine_update_pending(e);
+    hold_engine_update(e)?;
+    let r = start();
+    if r.is_err() && !before {
+        engine_update_done(e);
+    }
+    r
 }
 
 fn engine_update_done(e: &Entry) {
@@ -2788,6 +2801,11 @@ async fn api_list(State(st): State<Shared>, on: Option<axum::Extension<crate::se
                 let (phase, job) = crate::setup_api::update_phase(&e.id).unzip();
                 v["update_phase"] = json!(phase);
                 v["update_job"] = json!(job.filter(|j| !j.is_empty()));
+                // (failed too often: tried again only with Update now)
+                v["auto_update_stopped"] = json!(crate::setup_api::auto_update_stopped(e));
+                // on another machine, its bot brain update not in yet: uploads but settings wait
+                // for it (held_back)
+                v["uploads_held"] = json!(e.remote.is_some() && e.ready && engine_update_pending(e));
                 v
             })
             .collect();

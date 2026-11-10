@@ -840,10 +840,13 @@ fetch() {
 fetch "$MM_URL" mm.tar.xz "$MM_SHA"; tar xJf "$TMP/mm.tar.xz" -C .
 fetch "$AMXX_URL" amxx.tar.gz "$AMXX_SHA"; fetch "$AMXXCS_URL" amxxcs.tar.gz "$AMXXCS_SHA"
 # AMX Mod X's own settings already here stay as they are (users.ini with admins added in the
-# game, plugins.ini; the app sends its copy of the rest): only missing ones come from the download
-[ -d addons/amxmodx/configs ] && cp -a addons/amxmodx/configs "$TMP/configs-kept"
-tar xzf "$TMP/amxx.tar.gz" -C .; tar xzf "$TMP/amxxcs.tar.gz" -C .
-[ -d "$TMP/configs-kept" ] && cp -a "$TMP/configs-kept/." addons/amxmodx/configs/
+# game, plugins.ini; the app sends its copy of the rest): only missing ones come from the download.
+# Never written over, not even for a moment (an unpack that stops part way leaves them as they
+# were): everything else first, then the settings without replacing any (GNU tar 1.27+), the
+# cstrike package's before the base's, as it went over the base's where both have one
+CFGS='addons/amxmodx/configs/*'
+tar xzf "$TMP/amxx.tar.gz" -C . --exclude="$CFGS"; tar xzf "$TMP/amxxcs.tar.gz" -C . --exclude="$CFGS"
+tar xzf "$TMP/amxxcs.tar.gz" -C . --skip-old-files --wildcards "$CFGS"; tar xzf "$TMP/amxx.tar.gz" -C . --skip-old-files --wildcards "$CFGS"
 fetch "$RG_URL" rg.zip "$RG_SHA"; unzip -o -q "$TMP/rg.zip" "bin/linux32/cstrike/*" -d "$TMP/rg"; cp -rf "$TMP/rg/bin/linux32/cstrike/." .
 # Loner-Strike's engine (ReHLDS, which also tells the bots who is talking on voice). Valve's
 # engine files, which steamcmd just checked, are kept in .valve-engine to go back to
@@ -1518,11 +1521,14 @@ mod tests {
             p.stdin.take().unwrap().write_all(sh.as_bytes()).unwrap();
             assert!(p.wait().unwrap().success());
         }
-        // the machine's own AMX Mod X settings (admins added in the game) survive its update
-        let keep = SETUP_SH.find("configs-kept\"").unwrap();
-        let untar = SETUP_SH.find("tar xzf \"$TMP/amxx.tar.gz\"").unwrap();
-        let back = SETUP_SH.find("cp -a \"$TMP/configs-kept/.\" addons/amxmodx/configs/").unwrap();
-        assert!(keep < untar && untar < back);
+        // the machine's own AMX Mod X settings (admins added in the game) survive its update:
+        // every AMX Mod X unpack either leaves the settings out or never replaces one
+        assert!(SETUP_SH.contains("CFGS='addons/amxmodx/configs/*'"));
+        let untars: Vec<&str> = SETUP_SH.split([';', '\n']).map(str::trim).filter(|c| c.contains("tar xzf \"$TMP/amxx")).collect();
+        assert_eq!(untars.len(), 4);
+        for t in untars {
+            assert!(t.ends_with("--exclude=\"$CFGS\"") || t.ends_with("--skip-old-files --wildcards \"$CFGS\""), "{t}");
+        }
     }
 
     #[test]
