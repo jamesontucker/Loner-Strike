@@ -4,6 +4,7 @@ import { useNav } from "../store";
 import { sharedRole } from "../queries";
 import { botsNote, botTarget, type MapInfo, type Online } from "../types";
 import { Menu, type MenuItem } from "../menu";
+import { BOT_STYLE_NOTE, BOT_STYLES } from "../games";
 import { useCommand, useToast } from "../ui";
 
 type Item = MenuItem;
@@ -77,23 +78,34 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
     { label: "Restart round", on: () => run("gm_match", ["restart"]) },
     { label: "End round", on: () => run("gm_do", ["endround"]) },
     { label: "Add 10 minutes", on: () => run("gm_do", ["addtime"]), show: st.timelimit > 0 },
+    {
+      label: "Start a mode vote",
+      on: () => once(`quick:${targetKey()}:modevote`, () => run("gm_votemode"), "Starting a mode vote…"),
+      show: data.settings.some((s) => s.cvar === "gm_modevote"),
+      title: "Everyone votes for the next mode, then a map for it",
+    },
   ];
   const botMenu: Item[] = [
     { label: "Peaceful bots", on: () => run("gm_set", ["bot_zombie", st.peaceful ? "0" : "1"]), pressed: !!st.peaceful, title: "Bots stand still and don't shoot. Turn it off to fight again." },
     // (on a server's page its own Bots tab has them; this would leave the server)
     ...(onServer ? [] : [{ label: "All bot settings", on: () => go("bots") }]),
   ];
+  // the live game's bot difficulty and style (hidden if the game doesn't list them)
+  const live = (cvar: string) => data.settings.find((s) => s.cvar === cvar)?.value;
+  const difficulty = live("bot_difficulty");
+  const style = live("gm_botstyle");
+  const setBot = (cvar: string, value: string, label: string) => once(`quick:${targetKey()}:${cvar}`, () => run("gm_set", [cvar, value]), `Changing ${label}…`);
+  const difficultyMenu: Item[] = difficulty === undefined ? [] : ["Easy", "Normal", "Hard", "Expert"].map((l, i) => (
+    { label: l, on: () => setBot("bot_difficulty", String(i), "the bot difficulty"), pressed: difficulty === String(i), title: "Changing it re-adds the bots" }
+  ));
+  const styleMenu: Item[] = style === undefined ? [] : BOT_STYLES.map(([v, l]) => (
+    { label: l, on: () => setBot("gm_botstyle", v, "the bot style"), pressed: style === v, title: BOT_STYLE_NOTE[v] }
+  ));
   const map: Item[] = [
     { label: "Restart map", on: () => once(`quick:${targetKey()}:restartmap`, () => run("gm_restartmap"), "Restarting the map…") },
     { label: "Random map", on: randomMap },
     { label: "Change map…", on: () => setPicking(true), show: sharedRole() === "moderator" },
     { label: here?.fav ? "Favourite map" : "Favourite this map", on: favourite, pressed: !!here?.fav, show: !!here && sharedRole() !== "moderator" },
-    {
-      label: "Start a mode vote",
-      on: () => once(`quick:${targetKey()}:modevote`, () => run("gm_votemode"), "Starting a mode vote…"),
-      show: data.settings.some((s) => s.cvar === "gm_modevote") && sharedRole() !== "moderator",
-      title: "Everyone votes for the next mode, then a map for it",
-    },
   ];
   const you: Item[] = me
     ? [
@@ -122,7 +134,12 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
             <Menu
               label={`${botCount} bot${botCount === 1 ? "" : "s"}`}
               ariaLabel={`${botCount} bot${botCount === 1 ? "" : "s"}${note && !want ? `, ${note.toLowerCase()}` : ""}: bot options`}
-              groups={[{ items: botMenu, note: note && !want ? note : undefined }]}
+              groups={[
+                { items: botMenu, note: note && !want ? note : undefined },
+                { title: "Difficulty", items: difficultyMenu, note: difficultyMenu.length ? "Changing it re-adds the bots" : undefined },
+                { title: "Bot style", items: styleMenu },
+              ]}
+              wide
               active={!!st.peaceful}
             />
             <button className="qb" aria-label="One more bot" disabled={botsBusy || botCount >= st.maxplayers - 1} aria-busy={botsBusy || undefined} onClick={() => setBots(Math.min(st.maxplayers - 1, botCount + 1))}>+</button>

@@ -151,7 +151,7 @@ Leave SSH (TCP 22) open as it is. The app uses it to set up and manage the serve
 10. **Who can join:**
     - **Listed on Steam** shows it in the Internet tab of Find Servers.
     - **Anyone with the address** keeps it out of the list; people join with the address you send them.
-    - Either way, a join password keeps strangers out. Set it in the form or later on the server's Overview.
+    - Either way, a join password keeps strangers out. Set it in the form or later on the server's Who can join tab.
 11. Click **Make the server**.
 
 Setup takes 5 to 15 minutes. It:
@@ -197,9 +197,9 @@ With more than one server, add its name: `lsctl restart friday-night-frags`. The
 ## Updating
 
 - **The machine:** log in over SSH and run `sudo apt update && sudo apt upgrade`. If it asks for a reboot, run `sudo reboot`; the server starts again by itself.
-- **Valve's server files** rarely change. Stop the server, then press **Update** in its Maintenance panel. SteamCMD checks Valve's files on the machine and the app sends Loner-Strike's files again; settings, admins, bans and stats stay.
+- **Valve's server files** rarely change. Stop the server, then press **Update** on its Health tab. SteamCMD checks Valve's files on the machine and the app sends Loner-Strike's files again; settings, admins, bans and stats stay.
 - **Mods, plugins, maps and sounds:** changes you make in the app go to the machine by themselves within a few seconds, and only the files that changed are sent. Settings and admins take effect right away. New plugins, mods, maps and sounds load when the map changes; the server's page shows a **Restart now** button when there are some waiting.
-- **Wipe and rebuild** in the Maintenance panel sets the server up again from scratch. It deletes everything in the server's folder on the machine first (settings, admins, bans, stats, added maps) and takes about as long as the first setup. Use it only when the server is broken.
+- **Wipe and rebuild** on the Health tab sets the server up again from scratch. It deletes everything in the server's folder on the machine first (settings, admins, bans, stats, added maps) and takes about as long as the first setup. Use it only when the server is broken.
 
 ## Troubleshooting
 
@@ -234,12 +234,12 @@ Make the machine again with an Ubuntu image.
 See the Oracle notes in step 3.
 
 **Setup stopped part way.**
-The server shows as Not finished with two buttons. **Try again** carries on; every step is safe to run again. **Rebuild from scratch** deletes everything in the server's folder on the machine (settings, admins, bans, stats, added maps) and sets it up again like when you made it. Valve's download sometimes stops part way; Try again after a few minutes usually gets past it.
+The server shows as Setup didn't finish, with two buttons. **Try again** carries on; every step is safe to run again. **Wipe and rebuild** deletes everything in the server's folder on the machine (settings, admins, bans, stats, added maps) and sets it up again like when you made it. Valve's download sometimes stops part way; Try again after a few minutes usually gets past it.
 
 **The machine got a new IP address.**
 The app keeps the old one. Give the machine a fixed address (Oracle reserved IP, Lightsail static IP) to avoid this. Otherwise delete the server in the app and add it again with the new address.
 
 ## Removing it
 
-1. In the app, open the server and use **Delete the server** in Maintenance (or Delete in the server list). It stops the service, removes it and deletes the server's folder on the machine.
+1. In the app, open the server and use **Delete the server** on its Health tab (or Delete in the server list). It stops the service, removes it and deletes the server's folder on the machine.
 2. If you're done with the machine, delete or terminate it at your provider so it stops costing money. Deleting the server in the app doesn't do that.

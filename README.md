@@ -23,9 +23,10 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 - Bots that play like people, from a newbie lobby up to bunnyhopping pros: they aim like a hand on a mouse, Ts take sites together, CTs hold them and retake, and each bot has its own personality, skill and habits
 - Talk to them in chat: ask "money?" or "where'd they go" and they answer from what's really happening; ask "cover me", "plant at a" or "give me the bomb" and they do it, or say no in character
 - 1,600 bot names, a few of them in small clans with a tag, so the same "regulars" keep showing up
-- Thousands of maps from GameBanana with pictures, favourites and search, plus skins, models, sounds and sprays
+- Thousands of maps from GameBanana with pictures, favourites and search, plus weapon skins, player models, sprays and sounds
 - Round-end music, Quake sounds and classic sound packs
 - Add your own maps, sounds and AMX Mod X plugins from a file
+- Set up bots, rules and fun before you start a game; changes apply when it starts
 - The Game Mode Menu in the game (F3) and quick actions in the app while you play
 
 **Friends**
@@ -36,12 +37,12 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 **Servers**
 - Dedicated servers on your computer, or on a rented Linux machine (a VPS) that the app sets up over SSH and that keeps running without it
 - Friends help run it from their own Loner-Strike as an Admin or Moderator, even with your computer off, and you see what each of them did
-- Servers update themselves once nobody's playing; on a Linux machine the game runs in a sandbox, RCON is closed to the internet, and a Security and health panel checks the machine and fixes what it can
+- Servers update themselves once nobody's playing; on a Linux machine the game runs in a sandbox, RCON is closed to the internet, and the server's Health tab checks the machine and fixes what it can
 - Linux servers backed up to your computer every day, and a message in your Discord if one goes down
 - Bring a server you already run, or copy one server's mods to another
-- Admins, moderators and VIPs with abilities per role, bans, mutes, a swear filter, a chat log and player reports
+- Admins, moderators and VIPs with abilities per role; Moderation with player reports, a chat log, mutes, a swear filter, bans and player history
 - Share the admin list, bans, swear filter, welcome page and chat messages across servers; mods and settings stay per server
-- Map rotation, timed chat messages, AFK and high-ping kickers, stats and ranks, votekick and voteban
+- Map rotation, timed chat messages, AFK and high-ping kickers, votekick and voteban, and Stats with ranks and 5v5 results
 - Match mode for 5v5s, HLTV spectators and demos, fast downloads and scheduled restarts
 - Join password, console password and extra start options per server
 - A live status in your Discord, and the Loner-Strike server list for anyone to find your server
@@ -50,8 +51,10 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 
 **The app**
 - Guided setup that finds your game
+- One sidebar for your own game, grouped like a server's tabs (Game, People, Online, My library, Hosting), and a bar on every page that says whether you're changing your game or a server
 - Control it from your phone by scanning a QR code (anything that deletes or reinstalls stays on the computer)
-- Export your setup to another computer or server
+- Back up everything to one file and restore it, on this computer or another
+- Help in Settings: the docs, diagnostics to copy, and the usual problems with a button to the page that fixes each
 - Signed automatic updates
 
 ## What we made
@@ -84,10 +87,10 @@ Updates come through the app (Settings, Updates). What changed in each version i
 
 - **The game won't start or the panel says no game is loaded.** Start the game from Play in the app, not from Steam, so it loads with the mods.
 - **Friends can't see your game on the LAN tab.** Allow the game through the firewall when asked. On Windows, also make sure your Wi-Fi is set to Private network (Settings, Network & internet).
-- **A mod misbehaves after a game update.** Open Settings and click Run full setup; it reinstalls what's missing and keeps your settings.
+- **A mod misbehaves after a game update.** Open Mods and click Repair; it puts Loner-Strike's basics back and keeps your settings and mods. Reinstall next to a mod puts its files in fresh.
 - **You want everything gone.** In Settings, Remove from (your game) puts that game back the way it was, and Remove everything also deletes Loner-Strike's own files.
 
-Still stuck? Ask in the [Discord](https://discord.gg/K9eBHVVwZE), or open Settings, click Copy next to Copy diagnostics (version, game folders, what's installed and recent errors; no passwords) and paste it into a [new issue](https://github.com/jamesontucker/Loner-Strike/issues/new).
+Still stuck? Ask in the [Discord](https://discord.gg/K9eBHVVwZE), or open Settings, and under Help click Copy next to Copy diagnostics (version, game folders, what's installed and recent errors; no passwords) and paste it into a [new issue](https://github.com/jamesontucker/Loner-Strike/issues/new).
 
 ## Run a server on a VPS
 
@@ -95,11 +98,11 @@ The app can set up an always-on server on a Linux machine you rent (Ubuntu or De
 
 After that it's managed like any other server:
 - Changes you make in the app (settings, admins, mods, maps, sounds) go up by themselves, and only the files that changed. New plugins and maps load on the next map, or with Restart now.
-- Update gets Valve's latest server files on the machine. Bans and stats made on the server stay there.
+- Update on its Health tab gets Valve's latest server files on the machine. Bans and stats made on the server stay there.
 - HLTV runs next to it on UDP 27020, and its demos can be copied to your game.
 - If the machine stops answering, the app says so instead of showing it as running, and with Discord set up you hear about a server that stays down.
 - After an app update, each server updates itself once nobody's playing.
-- The game runs in a sandbox, RCON only answers from the machine itself, security updates and fail2ban are turned on, and old logs are trimmed. The server's Security and health panel checks all of it and fixes what it can.
+- The game runs in a sandbox, RCON only answers from the machine itself, security updates and fail2ban are turned on, and old logs are trimmed. The Security and health panel on the server's Health tab checks all of it and fixes what it can.
 - Admins and Moderators you invite help from their own Loner-Strike through the server itself (a small service, `ls-control`), so your computer can be off.
 - Its bans, admins and settings are backed up to your computer every day.
 
