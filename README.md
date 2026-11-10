@@ -21,7 +21,8 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 **Playing**
 - 22 game modes: Classic, Match (5v5), Deathmatch, Free for all, Gun Game (solo and teams), Zombie Plague (two versions), Warcraft 3, SuperHero, Hide and Seek, Paintball, Deathrun, Base Builder, SoccerJam, Surf, Kreedz, plus knife, pistol, deagle, AWP and scout modes
 - Bots that play like people, from a newbie lobby up to bunnyhopping pros: they aim like a hand on a mouse, Ts take sites together, CTs hold them and retake, and each bot has its own personality, skill and habits
-- Talk to them in chat: ask "money?" or "where'd they go" and they answer from what's really happening; ask "cover me", "plant at a" or "give me the bomb" and they do it, or say no in character
+- Talk to them in team chat: ask "money?" or "where'd they go" and they answer from what's really happening; call "rush b", "fake a", "flash for me", "two long" or "someone buy me an awp" and they do it, or say no in character
+- Or say it on your mic: on a dedicated server, the optional voice commands add-on turns what you say into the same orders, on the machine running the server (no audio is kept or sent anywhere)
 - 1,600 bot names, a few of them in small clans with a tag, so the same "regulars" keep showing up
 - Thousands of maps from GameBanana with pictures, favourites and search, plus weapon skins, player models, sprays and sounds
 - Round-end music, Quake sounds and classic sound packs
@@ -62,6 +63,7 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 The mods are community classics. We added:
 
 - **A bot brain.** Our own build of [ReGameDLL](https://github.com/jamesontucker/ReGameDLL_CS) (branch `loner-strike`) changes how the bots think, not just how they aim: a hand-like aim (still most of the time, flicks that land a touch off, a little tremor), their own routes and habits, Ts gathering and taking a site together, CTs holding sites and retaking, and chat that answers and takes requests. Stock CZ bots react instantly and aim like turrets; these were tuned against recordings of a person playing.
+- **Voice commands.** A small program beside the server turns what players say on voice chat into text with [Whisper](https://github.com/ggerganov/whisper.cpp), and a small model of our own (a fine-tuned Gemma 3 270M, run with [llama.cpp](https://github.com/ggerganov/llama.cpp)) turns loose wording into the order it means. It runs on the machine running the server, and needs our build of [ReHLDS](https://github.com/jamesontucker/ReHLDS) for the voice feed.
 - **Bot styles.** On top of the brain, lobbies from newbies to bunnyhopping pros, or a mixed lobby where each bot keeps its own level.
 - **Bot fixes in every mod.** A lot of old plugins don't see CZ bots at all, so hits, kills and spawns get missed. Every mod here is patched for that. Some also got bot logic they never had: SuperHero bots pick heroes, SoccerJam bots chase the ball and Roll the Dice bots roll.
 - **The Game Mode Menu, the server plugins and the app**, so you never have to edit a config file.
@@ -73,6 +75,7 @@ The mods are community classics. We added:
 - Windows 10 or 11, or a Mac with [CrossOver](https://www.codeweavers.com/crossover) (Apple Silicon or Intel)
 - About 1 GB free for the mods, plus room for any maps you add
 - For a server on a VPS: an Ubuntu or Debian machine on x86 (AMD or Intel) with SSH access
+- For voice commands (optional): a dedicated server, about 500 MB for the speech models, and a processor from about 2013 on (AVX2)
 
 ## Install
 
@@ -116,6 +119,8 @@ Setup installs [Metamod-P](https://github.com/Bots-United/metamod-p), [AMX Mod X
 app/src-tauri/   the app: setup, the game and server control API, sharing (Rust, Tauri)
 app/ui/          the control panel (React), shown in the app window and on your phone
 app/server-agent/ ls-control: shared control on a Linux server (Rust)
+app/voice-agent/ ls-voice: players' voice to text for the bots (Rust, Whisper)
+app/intent-agent/ ls-intent: loosely worded lines to the bots' commands (Rust, llama.cpp)
 plugins/         our AMX Mod X plugins and the mode settings
 mods/            the community mods' code with our bot fixes
 catalog/         what each mod installs and where it comes from
@@ -132,7 +137,7 @@ npm install
 npm run tauri dev       # runs the app with the UI built in
 ```
 
-`cargo test` in `app/src-tauri` runs the tests. Releases are built by GitHub Actions when a `v*` tag is pushed (see `.github/workflows/release.yml`).
+`cargo test` in `app/src-tauri` runs the tests. The voice programs build with `cargo build --release` in `app/voice-agent` and `app/intent-agent`, and for Linux servers with `scripts/build-voice-agent.sh` (Docker). Releases are built by GitHub Actions when a `v*` tag is pushed (see `.github/workflows/release.yml`).
 
 ## Contributing
 
