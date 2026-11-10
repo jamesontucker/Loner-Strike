@@ -68,7 +68,7 @@ export function HostingGuide() {
       <p className="muted measure">
         Loner-Strike can set up an always-on server on a Linux machine you rent. It connects over SSH, installs Valve's server and Loner-Strike there and runs it as a
         service that keeps going when your computer is off. You need Ubuntu or Debian on an x86 (AMD or Intel) machine with a public IPv4 address. Arm machines (Oracle
-        Ampere, AWS Graviton, Hetzner CAX, Raspberry Pi) can't run the game server. The same guide, with each provider's steps, is in 
+        Ampere, AWS Graviton, Hetzner CAX, Raspberry Pi) can't run the game server. The same guide, with each provider's steps, is in{" "}
         <a href="https://lonerstrike.com/docs#vps" target="_blank" rel="noreferrer">the docs</a>.
       </p>
 
