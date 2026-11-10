@@ -5,7 +5,7 @@ import { useNav, type Section } from "../store";
 const OWN_PAGE: Partial<Record<string, Section>> = {
   players: "players", moderation: "community", stats: "stats", admins: "admins", welcome: "welcome",
   mods: "mods", maps: "maps", skins: "skins", sounds: "sounds", extras: "extras",
-  modes: "play", bots: "bots", match: "match", fun: "fun", join: "friends",
+  modes: "play", bots: "bots", match: "match", fun: "fun", addons: "addons", join: "friends",
 };
 
 // a section inside the tab to open on (Moderation's "bans", say), taken once by the page that has

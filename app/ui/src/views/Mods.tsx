@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { currentTarget, getJson, isAbort, ON_THIS_COMPUTER, postJson, targetKey, useActions, useActivity, useStable } from "../api";
+import { getJson, isAbort, isSharedId, ON_THIS_COMPUTER, postJson, targetKey, useActions, useActivity, useStable } from "../api";
+import { openTab } from "./goto";
 import { Icon } from "../icons";
 import { reloadAppInfo, reloadScan, useSetupJob, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
@@ -133,8 +134,8 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup, 
   };
 
   const now = job?.steps.find((s) => s.state === "running");
-  // where an installed add-on is switched on and off (your own game only: a server has no Add-ons page)
-  const own = !game.dedicated && !currentTarget();
+  // where an installed add-on is switched on and off: Add-ons (or Sounds), your game's or the server's
+  const own = !isSharedId(targetKey());
   /** An installed mode goes into Play's Start a game form (its bot choices stay), and Play opens. */
   const playIt = (id: string) => {
     const { drafts, set } = usePlayDrafts.getState();
@@ -148,7 +149,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup, 
     return (
       <>
         <span className="muted small-note">Turn it on or off in {sounds ? "Sounds" : "Add-ons"}</span>
-        <button className="btn" onClick={() => go(sounds ? "sounds" : "addons")}>{sounds ? "Open Sounds" : "Open Add-ons"}</button>
+        <button className="btn" onClick={() => openTab(sounds ? "sounds" : "addons")}>{sounds ? "Open Sounds" : "Open Add-ons"}</button>
       </>
     );
   };

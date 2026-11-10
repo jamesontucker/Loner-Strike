@@ -30,6 +30,7 @@ import { Welcome } from "./Welcome";
 // only servers that use it open this tab
 const Hltv = lazyPage(() => import("./Hltv").then((m) => ({ default: m.Hltv })));
 const Voice = lazyPage(() => import("./Voice").then((m) => ({ default: m.Voice })));
+const Addons = lazyPage(() => import("./Addons").then((m) => ({ default: m.Addons })));
 const WebStatus = lazyPage(() => import("./WebStatus").then((m) => ({ default: m.WebStatus })));
 
 const GAME = { cstrike: "Counter-Strike 1.6", czero: "Condition Zero" } as const;
@@ -378,7 +379,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
 
 type Tab =
   | "overview" | "join" | "health" | "extras" | "hltv" | "webstatus"
-  | "modes" | "bots" | "match" | "fun" | "voice"
+  | "modes" | "bots" | "match" | "fun" | "addons" | "voice"
   | "players" | "moderation" | "stats" | "admins" | "welcome" | "share"
   | "mods" | "maps" | "skins" | "sounds";
 /** remote: only for servers on a Linux machine. Server comes first: a server's page opens on its Overview. */
@@ -393,6 +394,7 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "bots", label: "Bots", group: "Game", live: true },
   { id: "match", label: "Rules", group: "Game", live: true },
   { id: "fun", label: "Fun", group: "Game", live: true },
+  { id: "addons", label: "Add-ons", group: "Game", live: true },
   { id: "voice", label: "Bot voice commands", group: "Game" },
   { id: "players", label: "Players", group: "People", live: true },
   { id: "moderation", label: "Moderation", group: "People" },
@@ -865,6 +867,7 @@ export function ServerPage(props: {
             </SettingsPage>
           )}
           {tab === "fun" && data && <SettingsPage title="Fun & effects" note={FUN_NOTE(data)} data={data} cat={3} refresh={refresh} pickMode />}
+          {tab === "addons" && data && <Addons data={data} refresh={refresh} />}
           {tab === "players" && data && <Players data={data} refresh={refresh} />}
           {tab === "mods" && (
             <Mods
