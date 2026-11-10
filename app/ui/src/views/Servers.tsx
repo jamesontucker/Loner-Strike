@@ -5,6 +5,7 @@ import { ownMaps, reloadServers } from "../queries";
 import { useDirty, useDirtyStore, useNav } from "../store";
 import { restartPending, serverAddress, serverHost, type AppInfo, type MapInfo, type Online, type ServerInfo, type ServerList } from "../types";
 import { HostingGuide, SizingTable, troubleFor } from "./HostingGuide";
+import { copyText } from "../api";
 import { JobProgress, UpdateProgress } from "./JobProgress";
 import { BusyButton, Info, lazyPage, LoadError, PageBoundary, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { Admins } from "./Admins";
@@ -1476,7 +1477,7 @@ function Console({ server }: { server: ServerInfo }) {
   const [sent, setSent] = useState<string[]>([]);
   const [failed, setFailed] = useState(false);
   const [cmd, setCmd] = useState("");
-  const box = useRef<HTMLPreElement>(null);
+  const box = useRef<HTMLDivElement>(null);
   // off: the console stays where you scrolled it while new lines come in
   const [follow, setFollow] = useState(true);
   usePoll(() =>
@@ -1500,23 +1501,27 @@ function Console({ server }: { server: ServerInfo }) {
     setCmd("");
     setSent((l) => [...l, `] ${c}`, ...(r.reply?.trim() ? r.reply.trim().split("\n") : [])].slice(-200));
   });
+  const copy = async () => toast((await copyText(shown.filter((l) => l.trim()).join("\n"))) ? "Console copied." : "Couldn't copy it.", false);
   return (
-    <div className="panel console-panel">
+    <div className="panel">
       <div className="row between">
         <h3>Console</h3>
-        <label className="follow-toggle small-note">
-          <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow new lines
-        </label>
+        <div className="console-tools">
+          <label className="follow-toggle small-note">
+            <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow new lines
+          </label>
+          <button type="button" className="btn small" disabled={!shown.length} onClick={() => void copy()}>Copy</button>
+        </div>
       </div>
-      <pre className="console" ref={box}>
+      <div className="console" ref={box} role="log" aria-live="off">
         {shown.length
-          ? shown.join("\n")
+          ? shown.filter((l) => l.trim()).map((l, i) => <ConsoleLine key={i} line={l} />)
           : failed
             ? "Can't read the console right now."
             : server.state === "running"
               ? "Waiting for the server's console…"
               : "Nothing yet. Start the server to see its console."}
-      </pre>
+      </div>
       {failed && shown.length > 0 && <p className="muted small-note">Can't read the console right now. These are the last lines it showed.</p>}
       {server.shared && <p className="muted small-note">{server.shared.role === "admin" ? "Most commands work, sent one at a time. Passwords, keys, running files, admins and plugins stay with the owner." : "A Moderator's commands: say, kick, ban for up to 7 days, change the map, status. Suggestions show only those."}</p>}
       {ON_THIS_COMPUTER ? (
@@ -1538,6 +1543,44 @@ function Console({ server }: { server: ServerInfo }) {
       )}
     </div>
   );
+}
+
+// "*DEAD*(Terrorist) Coyote : watch out", "[ZZZ] Weasel : kkkkk head"
+const CHAT_LINE = /^(\*DEAD\*\s*)?(\((?:Terrorist|Counter-Terrorist|Spectator)\)\s*)?(.{1,40}?) : (.*)$/;
+// a command typed here or by a helper, as the server logged it (the password already hidden)
+const RCON_LINE = /^rcon \d+ "[^"]*" (.*)$/;
+const JOIN_LINE = /\b(connected|entered the game|has joined|joined the game)\b/i;
+const LEAVE_LINE = /\b(disconnected|left the game|was kicked|dropped)\b/i;
+const MAP_LINE = /^(?:Started map "?([\w.-]+)|Changelevel to ([\w.-]+)|Mapchange to ([\w.-]+)|-+ ?([\w.-]+) ?-+$)/i;
+const KILL_LINE = /^(.{1,40}?) killed (.{1,40}?)(?: with (\w+))?\.?$/;
+/** One console line, laid out by what it is: chat (team, speaker, words), a command sent from
+ *  the app, a kill, someone joining or leaving, a new map, an error, or the server's own words. */
+function ConsoleLine({ line }: { line: string }) {
+  if (line.startsWith("] ")) return <div className="cl cl-cmd"><span className="cl-mark">&gt;</span>{line.slice(2)}</div>;
+  const rc = RCON_LINE.exec(line);
+  if (rc) return <div className="cl cl-cmd"><span className="cl-mark">&gt;</span>{rc[1]}</div>;
+  if (/^Rcon from /.test(line)) return null;
+  const map = MAP_LINE.exec(line);
+  if (map) return <div className="cl cl-map"><span>{map[1] ?? map[2] ?? map[3] ?? map[4]}</span></div>;
+  const m = CHAT_LINE.exec(line);
+  if (m) {
+    const team = m[2] ? (m[2].includes("Counter") ? "ct" : m[2].includes("Terrorist") ? "t" : "spec") : "";
+    return (
+      <div className="cl cl-chat">
+        {m[1] && <span className="cl-tag cl-tag-dead">dead</span>}
+        {team && <span className={`cl-tag cl-tag-${team}`}>{team === "ct" ? "CT" : team === "t" ? "T" : "Spec"}</span>}
+        <span className={`cl-who${team ? ` cl-who-${team}` : ""}`}>{m[3]}</span>
+        <span className="cl-say">{m[4]}</span>
+      </div>
+    );
+  }
+  const k = KILL_LINE.exec(line);
+  if (k) return <div className="cl cl-kill"><b>{k[1]}</b> killed <b>{k[2]}</b>{k[3] && <span className="cl-weapon">{k[3]}</span>}</div>;
+  if (/\b(error|failed|couldn't|can't|unknown command|bad rcon)\b/i.test(line)) return <div className="cl cl-err">{line}</div>;
+  if (JOIN_LINE.test(line)) return <div className="cl cl-join">{line}</div>;
+  if (LEAVE_LINE.test(line)) return <div className="cl cl-leave">{line}</div>;
+  if (/^(L \d|\[\w[\w ]*\]|Server |Executing |Loading |Scrolling |\s|\*\*\*|Metamod|AMX|ReGameDLL|ReHLDS)/.test(line)) return <div className="cl cl-sys">{line}</div>;
+  return <div className="cl">{line}</div>;
 }
 
 /** A tip from the hosting guide's troubleshooting under an SSH error, when one fits. */

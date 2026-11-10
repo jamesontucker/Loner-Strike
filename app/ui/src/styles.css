@@ -765,14 +765,34 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .server.selected { border-color: var(--signal); }
 .server h3 { margin: 0; font-size: 18px; }
 .server-head { display: flex; justify-content: space-between; gap: 14px; align-items: start; }
-.server-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; align-items: stretch; }
+.server-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; }
 .server-details .panel { background: var(--panel-2); }
-/* the console fills its panel (beside the settings it's as tall as they are) */
-.console-panel { display: flex; flex-direction: column; min-height: 0; }
-.console-panel > .console { flex: 1 1 auto; min-height: 300px; height: auto; max-height: 70vh; }
-.console-panel > .row:first-child { margin-bottom: 8px; }
-.console { margin: 0 0 10px; height: 260px; overflow: auto; background: #23271c; box-shadow: var(--sunken); padding: 10px 12px; font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; color: var(--bone-dim); }
+.console { margin: 0 0 10px; height: 260px; overflow: auto; background: #23271c; box-shadow: var(--sunken); padding: 10px 12px; font: 12.5px/1.55 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; color: var(--bone-dim); }
 /* the console's command box and its suggestions (ConsoleInput.tsx) */
+/* each console line, by kind: chat with its team and speaker, your commands, errors */
+.console .cl { padding: 1px 6px; margin: 0 -6px; border-radius: 2px; overflow-wrap: anywhere; }
+.console .cl:hover { background: rgba(255,255,255,.035); }
+.console .cl-chat { display: flex; align-items: baseline; gap: 7px; }
+.console .cl-tag { flex: none; font: 700 9.5px/1 var(--text); letter-spacing: .04em; text-transform: uppercase; padding: 3px 4px 2px; border-radius: 2px; transform: translateY(-1px); }
+.console .cl-tag-t { color: #26170f; background: #d98a6b; }
+.console .cl-tag-ct { color: #0f1a26; background: #92b4d6; }
+.console .cl-tag-spec, .console .cl-tag-dead { color: var(--bone-faint); background: rgba(255,255,255,.07); }
+.console .cl-who { flex: none; color: var(--bone); font-weight: 700; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.console .cl-who-t { color: #eba58a; }
+.console .cl-who-ct { color: #a9c6e4; }
+.console .cl-say { color: var(--bone); min-width: 0; }
+.console .cl-cmd { color: var(--signal); }
+.console .cl-mark { display: inline-block; width: 1.4em; opacity: .75; }
+.console .cl-kill { color: var(--bone-dim); }
+.console .cl-kill b { color: var(--bone); font-weight: 600; }
+.console .cl-weapon { margin-left: 8px; padding: 0 4px; border-radius: 2px; background: rgba(255,255,255,.06); color: var(--bone-faint); font-size: 11px; }
+.console .cl-join { color: #a8c98a; }
+.console .cl-leave { color: var(--bone-faint); }
+.console .cl-err { color: #e0866a; }
+.console .cl-sys { color: var(--bone-faint); }
+.console .cl-map { display: flex; align-items: center; gap: 10px; margin: 8px -6px 6px; color: var(--signal); font-weight: 700; }
+.console .cl-map::before, .console .cl-map::after { content: ""; flex: 1; height: 1px; background: rgba(196,181,80,.25); }
+.console-tools { display: flex; align-items: center; gap: 14px; }
 .console-input { position: relative; flex: 1 1 260px; display: flex; flex-direction: column; min-width: 0; }
 .console-form { align-items: flex-start; }
 .console-input > .search { width: 100%; max-width: none; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
