@@ -43,6 +43,7 @@ The first full release:
 - No bots or "Bad Rcon": the app puts back what a Steam update undid and says what's wrong. Mods has a Repair button.
 - Windows: voice runs without extra installs on any processor from about 2013 on, updates don't trip over it, and game folders in any language work.
 - Big downloads resume where they stopped, and a full disk is named as such.
+- Paintball runs lighter in busy fights: fewer balls and marks on screen at once, marks that fade sooner, and splash sounds heard nearby only.
 - Old retail or repacked copies of the game are caught at setup.
 - "Remove everything" no longer deletes the app itself on Windows.
 - Updates show what's new before you install, and once after.

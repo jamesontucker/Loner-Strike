@@ -159,7 +159,7 @@ bool:is_our_grenade(ent)
 public plugin_init()
 {
 	register_plugin(PLUGIN, VERSION, AUTHOR)
-	g_Cvar_MaxBalls = register_cvar("PBR_MaxBalls", "85") // Loner-Strike: paintballs and splashes at once
+	g_Cvar_MaxBalls = register_cvar("PBR_MaxBalls", "60") // Loner-Strike: paintballs and splashes at once
 	
 	register_event("CurWeapon", "Event_CurWeapon", "be", "1=1")
 	register_touch("paintball", "*", "fw_PaintBall_Touch")
@@ -668,7 +668,7 @@ public fw_PaintBall_Touch(Ent, id)
 			paint_splat(Ent)
 			// the paint mark on the wall (this sprite) stays a few seconds; under heavy fire the
 			// oldest ones make room sooner (ball_slot_free), so busy areas stay quick to draw
-			set_pev(Ent, pev_nextthink, get_gametime() + random_float(1.0, 3.0))
+			set_pev(Ent, pev_nextthink, get_gametime() + random_float(0.6, 1.8))
 		} else {
 			set_pev(Ent, pev_movetype, MOVETYPE_BOUNCE)
 		
@@ -681,7 +681,10 @@ public fw_PaintBall_Touch(Ent, id)
 			set_pev(Ent, pev_nextthink, get_gametime() + 3.0)
 		}
 		
-		emit_sound(Ent, CHAN_AUTO, WeaponFireSounds[random_num(1, 4)], 1.0, ATTN_NORM, 0, PITCH_NORM)
+		// Loner-Strike: a splash is heard nearby only, and only some of them: with a full server
+		// dozens land a second, and every one was a sound for everyone around
+		if (random_num(0, 2) == 0)
+			emit_sound(Ent, CHAN_AUTO, WeaponFireSounds[random_num(1, 4)], 0.8, ATTN_STATIC, 0, PITCH_NORM)
 		
 	}
 }
@@ -694,7 +697,8 @@ public PaintBall_Exp(Ent, Float:Origin[3])
 	static colors[4]
 	colors = (pev(Ent, pev_iuser2) == 1) ? { 255, 0, 247, 70} : { 0, 255, 208, 30};
 	
-	message_begin(MSG_BROADCAST, SVC_TEMPENTITY);
+	// Loner-Strike: only to players who can see it, not the whole server
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, Origin, 0);
 	write_byte(TE_BLOODSPRITE);
 	write_coord(IOrigin[0]);
 	write_coord(IOrigin[1]);
