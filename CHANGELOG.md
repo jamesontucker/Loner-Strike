@@ -32,7 +32,9 @@ What changed in each version. The downloads are on the [Releases](https://github
 - Uploads to a Linux server go up in pieces and retry on their own when the connection stalls, instead of hanging.
 
 ### Other
-- When the game won't let the app in (no bots, "Bad Rcon" in the console), the app checks the game's setup and puts back what a Steam update or file check undid, then says what was wrong: Loner-Strike not loading, or a config setting its own console password.
+- When the game won't let the app in (no bots, "Bad Rcon" in the console), the app checks the game's setup and puts back what a Steam update or file check undid, then says what was wrong: Loner-Strike not loading (and that an antivirus may have taken its files), a different copy of the game running, or a config setting its own console password.
+- Mods has a Repair button that puts Loner-Strike's basics back in place, keeping your settings and mods.
+- A copy of the game from before Valve's 2013 update (old retail or repacked ones) is caught at setup: Loner-Strike's mods can't load on it.
 - Windows: "Remove everything" no longer deletes the installed app along with everything else, so Loner-Strike opens again afterwards (at its first-time setup). Its download cache moved out of the app's own folder, which also keeps it through updates.
 - Updates show what's new before you install, and once after.
 
