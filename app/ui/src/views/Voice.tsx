@@ -63,10 +63,10 @@ export function Voice({ server }: { server: ServerInfo }) {
       if (r.error) toast(r.error, true);
       else toast("Installed. Turn it on for this server below.");
       await load();
-    }, "Downloading the speech model…");
+    }, "Downloading the models…");
 
   const uninstall = async () => {
-    if (!(await ask("Remove Advanced Bot Interaction? Voice turns off on every server and the speech model is deleted from this computer. You can install it again any time.", { ok: "Remove", danger: true }))) return;
+    if (!(await ask("Remove Advanced Bot Interaction? Voice turns off on every server and the models are deleted from this computer. You can install it again any time.", { ok: "Remove", danger: true }))) return;
     run(key("uninstall"), async () => {
       const r = await post("/api/voice/uninstall");
       if (r.error) toast(r.error, true);
@@ -97,7 +97,7 @@ export function Voice({ server }: { server: ServerInfo }) {
           <div className="row between">
             <div>
               <b>Install</b>
-              <p className="muted">Downloads the speech model ({mb(st.model_bytes)}) once, for every server on this computer.</p>
+              <p className="muted">Downloads the speech and understanding models ({mb(st.model_bytes)}) once, for every server on this computer.</p>
             </div>
             {ON_THIS_COMPUTER && (
               <BusyButton
@@ -112,7 +112,7 @@ export function Voice({ server }: { server: ServerInfo }) {
         ) : (
           <>
             {st.remote && !st.enabled && (
-              <p className="muted">Turning it on puts the voice program on the server and downloads the speech model there ({mb(st.model_bytes)}). It runs with the server and can only talk to the server itself.</p>
+              <p className="muted">Turning it on puts the voice programs on the server and downloads the models there ({mb(st.model_bytes)}). It runs with the server and can only talk to the server itself.</p>
             )}
             {!st.supported ? null : (
               <div className="setting">
@@ -139,7 +139,7 @@ export function Voice({ server }: { server: ServerInfo }) {
             {ON_THIS_COMPUTER && !st.remote && (
               <div className="row">
                 <BusyButton className="btn danger" busy={busy(key("uninstall"))} label="Remove" busyLabel="Removing…" onClick={uninstall} />
-                <Info text={`Turns voice off on every server and deletes the speech model (${mb(st.model_bytes)}).`} />
+                <Info text={`Turns voice off on every server and deletes the models (${mb(st.model_bytes)}).`} />
               </div>
             )}
           </>
