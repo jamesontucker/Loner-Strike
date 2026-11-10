@@ -123,7 +123,9 @@ pub fn shipped_version(res: &Path, id: &str) -> String {
 }
 
 /// The foundation's version: our ReGameDLL and (for servers) ReHLDS, so a new release of
-/// either fork is an update
+/// either fork is an update. 0.1.2 and earlier noted it as the number 1, with the original
+/// ReGameDLL in: outdated on purpose, so those games and servers get the fork once (after
+/// that, this string is noted and nothing is flagged until a fork changes).
 pub fn foundation_version() -> String {
     format!("{}{}", &foundation::REGAMEDLL.sha256[..8], &foundation::REHLDS.sha256[..8])
 }
@@ -547,7 +549,11 @@ fn install_game_with(job: &Job, plan: &InstallPlan, ctx: &Ctx, g: &str, rec: &mu
     if has("metamod") {
         rec.begin("foundation");
         let tmp = TempDir::new()?;
-        run_step(job, &format!("{g}/metamod"), || foundation::metamod(rec, ctx, &tmp))?;
+        // every download first: one that fails leaves the game as it was
+        run_step(job, &format!("{g}/metamod"), || {
+            foundation::prefetch(rec, ctx)?;
+            foundation::metamod(rec, ctx, &tmp)
+        })?;
         run_step(job, &format!("{g}/amxmodx"), || foundation::amxmodx(rec, ctx, &tmp))?;
         run_step(job, &format!("{g}/regamedll"), || foundation::regamedll(rec, ctx, &tmp))?;
         drop(tmp);
@@ -589,7 +595,10 @@ fn install_game_with(job: &Job, plan: &InstallPlan, ctx: &Ctx, g: &str, rec: &mu
     }
     run_step(job, &format!("{g}/core-bots"), || core::bot_styles(rec, ctx, g))?;
     run_step(job, &format!("{g}/core-keys"), || core::binds(rec))?;
-    rec.done("core", json!(shipped_version(ctx.res, "core")))
+    rec.done("core", json!(shipped_version(ctx.res, "core")))?;
+    // the Admins page's people in users.ini again (as at app start)
+    crate::admins::sync_users_file(&rec.game);
+    Ok(())
 }
 
 /// Runs an install plan on this thread, reporting to job.

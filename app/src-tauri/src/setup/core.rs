@@ -144,16 +144,36 @@ pub fn plugins(rec: &mut Record, ctx: &Ctx) -> Result<bool, String> {
         ok = compile_plugin(rec, ctx, &format!("{name}.sma"), name, None)? && ok;
     }
     let pl = rec.read("addons/amxmodx/configs/plugins.ini").unwrap_or_default();
+    let mine: Vec<String> = rec.read(MY_PLUGINS).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let new = plugins_ini(&pl, &mine);
+    if new != pl {
+        rec.write("addons/amxmodx/configs/plugins.ini", &new)?;
+    }
+    Ok(ok)
+}
+
+/// The Mods page's list of the player's own plugins (plugins.rs)
+const MY_PLUGINS: &str = "addons/amxmodx/data/gamemodes/my_plugins.json";
+
+/// plugins.ini with Loner-Strike's always-on plugins added if missing, and the player's own
+/// plugins (`mine`, from the Mods page) in their block. Everything else in it stays as it is
+/// (the player's own lines, plugins switched off with ;).
+pub fn plugins_ini(pl: &str, mine: &[String]) -> String {
     let add: Vec<&str> = ALWAYS_ON
         .iter()
         .copied()
-        .filter(|n| !Regex::new(&format!(r"(?m)^\s*{}\.amxx", regex::escape(n))).unwrap().is_match(&pl))
+        .filter(|n| !Regex::new(&format!(r"(?m)^\s*{}\.amxx", regex::escape(n))).unwrap().is_match(pl))
         .collect();
+    let mut out = pl.to_string();
     if !add.is_empty() {
         let lines: String = add.iter().map(|n| format!("{n}.amxx\t\t; Loner-Strike\r\n")).collect();
-        rec.write("addons/amxmodx/configs/plugins.ini", &format!("{}\r\n{lines}", pl.trim_end_matches(['\r', '\n'])))?;
+        out = format!("{}\r\n{lines}", pl.trim_end_matches(['\r', '\n']));
     }
-    Ok(ok)
+    // (a plugins.ini an older Loner-Strike put back to stock gets the block again)
+    if !mine.is_empty() {
+        out = crate::plugins::rewrite_ini(&out, mine);
+    }
+    out
 }
 
 /// Keeps comment lines and lines whose first word (an id) passes keep(id).
@@ -230,6 +250,47 @@ pub fn quake_sounds(rec: &mut Record, ctx: &Ctx) -> Result<(), String> {
     rec.write("addons/amxmodx/configs/stats.ini", &stats_ini_with_quake(&stats))
 }
 
+/// Settings files the player is told to edit ("Edit freely" in their header). An update
+/// doesn't write over their changes: Loner-Strike notes (in the install record) what it last
+/// wrote to each, and only replaces one that's still that, or still what an earlier version
+/// shipped. One the player changed stays; the new version goes beside it as <name>.new.
+pub const EDITABLE: &[&str] = &["adverts.ini", "botchat.ini", "people.ini", "regular_names.ini"];
+
+/// What Loner-Strike shipped of the editable files before it noted what it wrote (0.1.0 to
+/// 0.1.2, the same in each; adverts.ini and people.ini are new in 0.1.3), as content_hash
+/// gives it. Add a line here only for a release that didn't note what it wrote.
+const SHIPPED_BEFORE: &[(&str, &str)] = &[
+    ("botchat.ini", "6525f811c236ac3f47be247dd11132eb6682dd783ffc54bfdfd0e8a20c0ace69"),
+    ("regular_names.ini", "cc8f3cf201af36d7441743d2e5b2577fbe0e8c6272b637e07c36f7954eb3182b"),
+];
+
+/// Where the install record keeps what Loner-Strike last wrote to each editable file
+/// (path -> content_hash)
+const WRITTEN: &str = "config_hashes";
+
+/// A settings file's content for comparing versions: sha256 with \r\n read as \n (a Windows
+/// build or editor may have changed the line ends, not what's in it).
+fn content_hash(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if !(bytes[i] == b'\r' && bytes.get(i + 1) == Some(&b'\n')) {
+            h.update([bytes[i]]);
+        }
+        i += 1;
+    }
+    format!("{:x}", h.finalize())
+}
+
+/// Whether an editable file may be replaced: it isn't there, or it's what Loner-Strike last
+/// wrote to it (`written`), or what a version before that shipped.
+fn untouched(name: &str, current: Option<&[u8]>, written: Option<&str>) -> bool {
+    let Some(current) = current else { return true };
+    let h = content_hash(current);
+    written == Some(h.as_str()) || SHIPPED_BEFORE.iter().any(|(n, s)| *n == name && *s == h)
+}
+
 pub fn configs(rec: &mut Record, ctx: &Ctx, modes: &BTreeSet<String>, addons: &BTreeSet<String>) -> Result<(), String> {
     let cfg_src = ctx.res.join("plugins").join("configs").join("gamemodes");
     let quoted = Regex::new(r#""([^"]*)""#).unwrap();
@@ -274,6 +335,27 @@ pub fn configs(rec: &mut Record, ctx: &Ctx, modes: &BTreeSet<String>, addons: &B
             }
             _ => text,
         };
+        if EDITABLE.contains(&rel.as_str()) {
+            // as it'll be on disk (written as Latin-1)
+            let bytes: Vec<u8> = text.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
+            let current = std::fs::read(rec.full(&dest)?).ok();
+            let written = rec.data.extra.get(WRITTEN).and_then(|w| w.get(&dest)).and_then(|h| h.as_str()).map(String::from);
+            let same = current.as_deref().map(content_hash) == Some(content_hash(&bytes));
+            if !same && !untouched(&rel, current.as_deref(), written.as_deref()) {
+                // the player's changes stay; this version's goes beside it, to compare or take
+                let beside = format!("{dest}.new");
+                rec.write(&beside, &text)?;
+                wanted.insert(beside);
+                wanted.insert(dest);
+                ctx.progress.note(&format!("Kept your changes to {rel}. This version's is beside it as {rel}.new."));
+                continue;
+            }
+            let notes = rec.data.extra.entry(WRITTEN.to_string()).or_insert_with(|| serde_json::json!({}));
+            if !notes.is_object() {
+                *notes = serde_json::json!({});
+            }
+            notes[dest.as_str()] = serde_json::json!(content_hash(&bytes));
+        }
         rec.write(&dest, &text)?;
         wanted.insert(dest);
     }
@@ -368,6 +450,45 @@ pub fn binds(rec: &mut Record) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The editable files as 0.1.2 shipped them count as Loner-Strike's (its history needed:
+    /// skipped without it), whatever their line ends; anything else is the player's
+    #[test]
+    fn editable_files_before_notes() {
+        for (name, hash) in SHIPPED_BEFORE {
+            let out = std::process::Command::new("git")
+                .args(["show", &format!("v0.1.2:plugins/configs/gamemodes/{name}")])
+                .current_dir(super::super::repo_root())
+                .output();
+            let Some(old) = out.ok().filter(|o| o.status.success()).map(|o| o.stdout) else { return };
+            assert_eq!(content_hash(&old), *hash, "{name}");
+            assert!(untouched(name, Some(&old), None));
+            let crlf = String::from_utf8_lossy(&old).replace('\n', "\r\n");
+            assert!(untouched(name, Some(crlf.as_bytes()), None));
+            assert!(!untouched(name, Some(b"; mine\n"), None));
+        }
+        assert!(untouched("botchat.ini", None, None));
+        assert!(untouched("people.ini", Some(b"x\r\n"), Some(&content_hash(b"x\n"))));
+        assert!(!untouched("people.ini", Some(b"x"), None));
+        assert!(!untouched("people.ini", Some(b"y"), Some(&content_hash(b"x"))));
+    }
+
+    #[test]
+    fn plugins_ini_keeps_the_players_lines() {
+        let stock = "; AMX Mod X plugins\r\nadmin.amxx\r\n;restmenu.amxx\r\n";
+        let first = plugins_ini(stock, &[]);
+        assert!(first.starts_with(stock.trim_end()) && first.contains("\r\ngamemodes.amxx\t\t; Loner-Strike\r\n"));
+        // their own line, a Loner-Strike plugin they moved, and the Mods page's block all stay
+        let theirs = format!("{first}myline.amxx debug\r\n");
+        let with_block = crate::plugins::rewrite_ini(&theirs, &["mine".into()]);
+        let again = plugins_ini(&with_block, &["mine".into()]);
+        assert_eq!(again, with_block);
+        assert!(again.contains("myline.amxx debug") && again.contains("\r\nmine.amxx\r\n"));
+        // a stock plugins.ini (what an older repair left) gets the block back
+        let back = plugins_ini(stock, &["mine".into()]);
+        assert!(back.contains("\r\nmine.amxx\r\n") && back.contains("gm_people.amxx"));
+        assert_eq!(plugins_ini(&back, &["mine".into()]), back);
+    }
 
     #[test]
     fn filters_like_python() {

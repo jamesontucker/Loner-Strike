@@ -46,6 +46,23 @@ export function ReleaseNotes({ text }: { text: string }) {
 
 const SEEN = "ls-seen-version";
 
+/** Keys 0.1.2 and earlier saved (before SEEN existed), all only after something was used: with
+ * any of them and no SEEN, this is an update from one of those versions, not a first install. */
+const OLDER_KEYS = [
+  "ls.section", "ls.setupLater", "ls.playDraft", "ls.scale", "ls.method", "ls.lan", "ls.homeHint", "ls.mapSort",
+  "ls.modsSort", "ls.modsFilter", "ls.adminTab", "ls.communityTab", "ls.extrasTab", "ls.soundTab",
+];
+
+/** Whether an older version was used here, looked at as the page loads (before this version
+ * saves any of the same keys). */
+const USED_BEFORE = (() => {
+  try {
+    return OLDER_KEYS.some((k) => localStorage.getItem(k) !== null);
+  } catch {
+    return false;
+  }
+})();
+
 /** The first time a new version opens: what changed, once, until dismissed. Not on a first
  * install (there's nothing it was new to). */
 export function WhatsNew({ version }: { version?: string }) {
@@ -58,7 +75,8 @@ export function WhatsNew({ version }: { version?: string }) {
     } catch {
       return;
     }
-    if (seen === null) {
+    // (no SEEN: a first install, or an update from a version before it remembered one)
+    if (seen === null && !USED_BEFORE) {
       try {
         localStorage.setItem(SEEN, version);
       } catch {

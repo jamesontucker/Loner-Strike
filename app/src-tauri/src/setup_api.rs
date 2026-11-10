@@ -123,11 +123,29 @@ async fn install(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Re
             return Err("Stop the server first, then try again.".into());
         }
         let plan = setup::plan_install(install, &list(&req["games"]), &list(&req["components"]), &res, req["repair"].as_bool() == Some(true))?;
+        hold_server_engine(&plan, &res)?;
         let store = store_for(target, &plan.install.hl, &plan.games[0]);
         setup::start_install(plan, res, Some(store))
     })
     .await;
     started(r)
+}
+
+/// A server's copy here getting a new bot brain from setup itself (the Files bar's update):
+/// its engine side (on a Linux machine, the machine) only follows with the server's own update
+/// (update_server), so it's marked as waiting for that (servers::hold_engine_update).
+fn hold_server_engine(plan: &setup::InstallPlan, res: &Path) -> Result<(), String> {
+    if !plan.install.dedicated {
+        return Ok(());
+    }
+    let Some(e) = crate::servers::load().into_iter().find(|e| e.ready && e.dir == plan.install.hl && plan.games.contains(&e.game)) else {
+        return Ok(());
+    };
+    let rec = setup::record::Record::open(&e.dir.join(&e.game));
+    if rec.installed("foundation") && setup::outdated(res, &rec).iter().any(|c| c == "foundation") {
+        crate::servers::hold_engine_update(&e)?;
+    }
+    Ok(())
 }
 
 async fn uninstall(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Response {
@@ -336,6 +354,17 @@ pub fn queued(id: &str) -> bool {
 /// A server's Loner-Strike parts older than this app's (none for one Loner-Strike didn't set
 /// up). The record is read again only when it changed (the list asks every few seconds).
 pub fn server_outdated(res: &Path, e: &crate::servers::Entry) -> Vec<String> {
+    let mut v = record_outdated(res, e);
+    // its copy here has the new bot brain but the engine side didn't follow (an update that
+    // stopped part way, or one put in from the Files bar): offered again until it does
+    if !v.iter().any(|c| c == "foundation") && e.ready && crate::servers::engine_update_pending(e) {
+        v.push("foundation".into());
+    }
+    v
+}
+
+/// server_outdated from its install record alone.
+fn record_outdated(res: &Path, e: &crate::servers::Entry) -> Vec<String> {
     static CACHE: Mutex<Option<std::collections::HashMap<PathBuf, ((std::time::SystemTime, u64), Vec<String>)>>> = Mutex::new(None);
     if !e.ready {
         return vec![];
@@ -405,6 +434,11 @@ fn update_server(res: &Path, e: &crate::servers::Entry, outdated: &[String]) -> 
     let install = find_install(&e.dir.to_string_lossy())?;
     let comps: Vec<String> = outdated.iter().filter(|c| *c != "core" && *c != "foundation").cloned().collect();
     let plan = setup::plan_install(install, &[e.game.clone()], &comps, res, true)?;
+    // a new bot brain: noted before the copy here changes, so if the engine side (the machine)
+    // doesn't follow, the plugins for it aren't sent there and the update is offered again
+    if outdated.iter().any(|c| c == "foundation") {
+        crate::servers::hold_engine_update(e)?;
+    }
     let store = store_for(crate::servers::game_for(&e.id, || None), &plan.install.hl, &plan.games[0]);
     let job = setup::start_install(plan, res.to_path_buf(), Some(store))?;
     set_phase("installing", Some(&job));

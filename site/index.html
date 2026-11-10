@@ -3,19 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Loner-Strike: CS 1.6 and Condition Zero mod manager with bots</title>
-<meta name="description" content="Free app for Counter-Strike 1.6 and Condition Zero: bots that play like people, classic community mods like Zombie Plague and Warcraft 3 patched for bots, and a control panel for your game or a dedicated server.">
+<title>Loner-Strike: CS 1.6 and Condition Zero with bots that play like people</title>
+<meta name="description" content="Free app for Counter-Strike 1.6 and Condition Zero: bots that play like real people, 22 classic mods, and a full control panel for your game and servers.">
 <link rel="canonical" href="https://lonerstrike.com/">
 <meta name="author" content="nanoshrine">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#3e4637">
 <link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/img/icon-48.png" type="image/png" sizes="48x48">
+<link rel="icon" href="/img/icon-96.png" type="image/png" sizes="96x96">
+<link rel="icon" href="/img/icon-192.png" type="image/png" sizes="192x192">
 <link rel="icon" href="img/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="alternate" type="text/plain" href="https://lonerstrike.com/llms.txt" title="Loner-Strike for AI assistants">
 <meta property="og:site_name" content="Loner-Strike">
-<meta property="og:title" content="Loner-Strike: CS 1.6 and Condition Zero mod manager with bots">
-<meta property="og:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Free, for CS 1.6 and Condition Zero on Steam.">
+<meta property="og:title" content="Loner-Strike: CS 1.6 and Condition Zero with bots that play like people">
+<meta property="og:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, classic mods and a full panel to run your game and servers. Free, for CS 1.6 and Condition Zero.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://lonerstrike.com/">
 <meta property="og:locale" content="en_US">
@@ -25,8 +28,8 @@
 <meta property="og:image:alt" content="Loner-Strike: Play Counter-Strike like it's 2004, alone or with the friends you don't have. Free, for CS 1.6 and Condition Zero.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:creator" content="@nanoshrine">
-<meta name="twitter:title" content="Loner-Strike: CS 1.6 and Condition Zero mod manager with bots">
-<meta name="twitter:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Free, for CS 1.6 and Condition Zero on Steam.">
+<meta name="twitter:title" content="Loner-Strike: CS 1.6 and Condition Zero with bots that play like people">
+<meta name="twitter:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, classic mods and a full panel to run your game and servers. Free, for CS 1.6 and Condition Zero.">
 <meta name="twitter:image" content="https://lonerstrike.com/img/og.jpg">
 <script type="application/ld+json">
 {
@@ -35,7 +38,7 @@
  "name": "Loner-Strike",
  "alternateName": "Loner Strike",
  "url": "https://lonerstrike.com/",
- "description": "A free desktop app for Counter-Strike 1.6 and Condition Zero on Steam. It installs classic community mods (Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf and more) patched so bots can play them, gives bots human reaction times, personalities and chat, and controls your game or a dedicated server from one panel, including from your phone. It can also set up an always-on server on a rented Linux machine.",
+ "description": "A free desktop app for Counter-Strike 1.6 and Condition Zero on Steam. Its own build of the game's bot brain makes bots move, fight and chat like real players, each with a personality, habits and a skill level of its own. It installs classic community mods (Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf and more) patched so bots can play them, and controls your game or a dedicated server from one panel, including from your phone. It can set up an always-on server on a rented Linux machine, with admins and moderators who help run it from their own app.",
  "applicationCategory": "GameApplication",
  "applicationSubCategory": "Game mod manager and server control panel",
  "operatingSystem": "Windows, macOS (through CrossOver)",
@@ -63,6 +66,7 @@
  "featureList": [
   "Bots with human reaction times and aim, from a newbie lobby to bunnyhopping pros",
   "Bot personalities that chat, banter and rage, with regulars and clan tags",
+  "Bots that understand team chat and voice commands",
   "22 classic community modes patched so bots can play them",
   "Thousands of maps from GameBanana",
   "Seven ways for friends to connect: LAN, router, playit.gg, Tailscale, ZeroTier, Radmin VPN, Hamachi",
@@ -292,6 +296,14 @@ html { scroll-padding-top: 72px; }
 .feature { padding: 64px 0; }
 .feature .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
 .feature.flip .text { order: 2; }
+.where { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 22px; }
+.where a { display: block; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; padding: 12px 14px; text-decoration: none; }
+.where a:hover { background: var(--panel-2); }
+.where b { display: block; color: var(--bone); font-size: 18px; margin-bottom: 2px; }
+.where span { display: block; color: var(--dim); font-size: 16px; line-height: 1.45; }
+.feature h4 { font-size: 18px; color: var(--bone); margin: 0 0 8px; }
+@media (max-width: 520px) { .where { grid-template-columns: 1fr; } }
+
 .feature h3 { font: 400 28px/1.1 var(--stencil); margin-bottom: 12px; }
 .feature p { color: var(--dim); margin: 0 0 12px; }
 .feature ul { margin: 0; padding-left: 20px; color: var(--dim); }
@@ -308,10 +320,9 @@ html { scroll-padding-top: 72px; }
 .box p { color: var(--dim); margin: 0 0 18px; }
 .price { font: 400 54px/1 var(--stencil); margin: 6px 0 4px; }
 .price small { font: 600 16px var(--text); color: var(--faint); margin-left: 6px; }
-.steps { list-style: none; margin: 18px 0 0; padding: 0; counter-reset: s; }
-.steps li { counter-increment: s; position: relative; padding: 0 0 14px 40px; color: var(--dim); }
-.steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px; display: grid; place-items: center; font: 400 15px var(--stencil);
-  background: var(--bg); box-shadow: var(--sunken); color: var(--bone); }
+.steps { list-style: none; margin: 18px 0 0; padding: 0; }
+.steps li { position: relative; padding: 0 0 14px 30px; color: var(--dim); }
+.steps li::before { content: ""; position: absolute; left: 1px; top: 6px; width: 14px; height: 14px; background: var(--signal); box-shadow: inset -2px -2px 0 #8c7f33, inset 2px 2px 0 #e3d683; }
 .steps b { color: var(--bone); }
 
 /* why this exists */
@@ -413,6 +424,10 @@ html { scroll-padding-top: 72px; }
 /* faq */
 .faq { padding: 70px 0; }
 .faq .wrap { max-width: 820px; }
+.docs-callout { display: flex; align-items: center; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; padding: 16px 18px; margin-bottom: 36px; }
+.docs-callout > div { flex: 1 1 320px; }
+.docs-callout b { font-size: 21px; }
+.docs-callout p { margin: 2px 0 0; color: var(--dim); }
 details { background: var(--panel); box-shadow: var(--raised); border-radius: 2px; margin-top: 10px; }
 summary { cursor: pointer; padding: 14px 18px; font-weight: 700; font-size: 19px; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
 summary::-webkit-details-marker { display: none; }
@@ -447,6 +462,21 @@ footer a { color: var(--dim); }
 .killfeed .ct { color: #9cbcdc; }
 .killfeed svg { display: block; height: 14px; fill: var(--signal); }
 .killfeed .hs { fill: #e0866a; }
+/* team chat with the bots, over the bots screenshot (the game's own chat look) */
+.window.chatty { position: relative; }
+.gamechat { position: absolute; left: 4px; right: 4px; bottom: 4px; margin: 0; padding: 26px 14px 10px; list-style: none; border-radius: 0 0 2px 2px;
+  background: linear-gradient(to bottom, rgba(16,18,12,0), rgba(16,18,12,.82) 34%); font: 600 13px/1.5 Tahoma, Verdana, sans-serif; color: #f1e6c4;
+  text-shadow: 1px 1px 0 #000; min-height: 8em; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; }
+.gamechat li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gamechat li.new { animation: kf-in .25s both; }
+.gamechat .who { color: #e0866a; }
+.gamechat .you { color: #e8c76a; }
+.gamechat .tag { color: #b7b9a6; font-weight: 500; }
+.gamechat svg { width: 10px; height: 13px; fill: var(--signal); vertical-align: -1px; margin-right: 5px; }
+@media (max-width: 520px) {
+  .gamechat { position: static; background: #171a12; border-radius: 0 0 2px 2px; font-size: 13px; padding: 10px 12px; min-height: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .gamechat li.new { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .killfeed li, .killfeed li.new { animation: none; transition: none; } }
 @media (max-width: 860px) { .killfeed { display: none; } }
 
@@ -492,6 +522,18 @@ footer a { color: var(--dim); }
 .radio-controls input:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
 .radio-list { list-style: none; margin: 3px 0 0; padding: 3px; max-height: 210px; overflow-y: auto; background: #171a12; box-shadow: var(--sunken); border-radius: 2px; }
 .radio-list[hidden] { display: none; }
+/* the station list's scrollbar: Steam's old one, as in the app (sunken track, raised thumb, arrow buttons) */
+@supports not selector(::-webkit-scrollbar) { .radio-list { scrollbar-color: var(--panel-2) #353c2f; } }
+.radio-list::-webkit-scrollbar { width: 16px; background: var(--bg); }
+.radio-list::-webkit-scrollbar-track { background: #353c2f; box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 rgba(136,145,128,.3); }
+.radio-list::-webkit-scrollbar-thumb { background: var(--panel-2); box-shadow: var(--raised); min-height: 28px; }
+.radio-list::-webkit-scrollbar-thumb:hover { background: #66785b; }
+.radio-list::-webkit-scrollbar-thumb:active { background: #727f5f; }
+.radio-list::-webkit-scrollbar-button:single-button { display: block; width: 16px; height: 16px; background-color: var(--panel); background-repeat: no-repeat; background-position: center; box-shadow: var(--raised); }
+.radio-list::-webkit-scrollbar-button:single-button:hover { background-color: var(--panel-2); }
+.radio-list::-webkit-scrollbar-button:single-button:active { box-shadow: var(--sunken); }
+.radio-list::-webkit-scrollbar-button:single-button:vertical:decrement { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M8 5l4 5H4z' fill='%23c2c9b7'/%3E%3C/svg%3E"); }
+.radio-list::-webkit-scrollbar-button:single-button:vertical:increment { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M8 11L4 6h8z' fill='%23c2c9b7'/%3E%3C/svg%3E"); }
 .radio .radio-list button { display: grid; justify-items: start; gap: 1px; width: 100%; height: auto; padding: 3px 6px; background: none; box-shadow: none; text-align: left; color: var(--dim); font: 600 13px/1.2 var(--text); }
 .radio .radio-list button small { font-weight: 500; font-size: 11px; color: var(--faint); }
 .radio .radio-list button[aria-current="true"] { color: var(--signal); background: rgba(196, 181, 80, .08); }
@@ -535,6 +577,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <a href="#gallery">Screenshots</a>
       <a href="#community">Community</a>
       <a href="#faq">FAQ</a>
+      <a href="docs">Docs</a>
       <a class="btn primary" href="#get" data-event="Get it (top)">Get it</a>
     </nav>
   </div>
@@ -595,16 +638,19 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     <div class="wrap">
       <div class="text">
         <h3>Bots that play like people</h3>
-        <p>The game's own bots react instantly and never miss. Loner-Strike gives them human reaction times, flicks that overshoot, aim that wobbles and sprays that get away from them. Pick how good they are, from a newbie lobby to players who bunnyhop, or a mixed lobby where each bot has its own level.</p>
+        <p>The game's own bots react instantly, never miss and move as one squad. Loner-Strike rebuilds how they think, so a server full of bots feels like a server full of people.</p>
         <ul>
-          <li>Each bot has a personality and plays and types to match</li>
-          <li>They chat, reply to each other and to you, rage when they keep dying and cheer up a teammate</li>
-          <li>Regulars with clan tags keep coming back, with believable pings on the scoreboard</li>
-          <li>They get tilted, panic, make radio calls, spray their logo and learn new maps by themselves</li>
+          <li>Each bot has its own personality, skill and habits</li>
+          <li>They chat, banter and rage, and answer you in chat or on your mic: "rush b", "flash for me", "someone buy me an awp"</li>
+          <li>Ts take sites together; CTs hold them and retake</li>
+          <li>Lone wolves in a pub, a team in a match</li>
+          <li>Regulars with clan tags who remember you</li>
         </ul>
       </div>
-      <div class="window">
+      <div class="window chatty">
         <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
+        <!-- Team chat with the bots, filled by the script at the bottom. Decorative: the list says it. -->
+        <ul class="gamechat" id="gamechat" aria-hidden="true"></ul>
         <img src="img/play.jpg" alt="The Players page in a live game: two teams of bots with clan tags, health, scores and actions" width="1280" height="950" loading="lazy">
       </div>
     </div>
@@ -613,23 +659,27 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   <section class="botplay" id="bots">
     <div class="wrap">
       <h2>How the bots play</h2>
-      <p class="lede">The game's own bots don't hesitate and don't miss. Loner-Strike leaves how they move and plan alone, and changes what happens once they see you.</p>
+      <p class="lede">The game's own bots walk the same lines, freeze to reload and backpedal in every fight. Loner-Strike doesn't just tweak their settings: it ships its own bot brain, a rework of the game's bot code that changes how they see, aim, move and plan.</p>
       <div class="botplay-grid">
-        <ol class="steps">
-          <li><b>They notice you.</b> Each bot takes a human moment to react before it fires. A newbie takes longer than a veteran.</li>
-          <li><b>They aim.</b> The first flick overshoots or falls short, then settles. Tracking you while you move wobbles.</li>
-          <li><b>They shoot.</b> Good players tap and fire short bursts. Worse ones hold the trigger and the spray climbs away from them.</li>
-          <li><b>They feel it.</b> A bot that keeps dying gets tilted and plays worse, some panic when they're cornered, and the best ones bunnyhop and show off.</li>
-        </ol>
+        <ul class="steps">
+          <li><b>They aim like a hand on a mouse.</b> Still most of the time, then a quick flick that lands a touch off and gets corrected. Good players tap; worse ones spray and run.</li>
+          <li><b>They react like people.</b> A human moment before they fire, longer for a newbie than a veteran.</li>
+          <li><b>They move like players.</b> Their own routes, quiet near enemies, peeking corners and stopping to shoot.</li>
+          <li><b>They take sites together.</b> Ts gather out of sight and go in at once. CTs hold the sites and run back to retake.</li>
+          <li><b>They have habits.</b> Spawn hops, freeze-time flicks, reloading after every kill. A bot that keeps dying gets tilted; the best bunnyhop.</li>
+          <li><b>They play the mode.</b> Run and gun in Deathmatch and Gun Game, lone wolves in a pub, a team in a 5v5.</li>
+        </ul>
         <div class="ladder">
           <h3>Pick the lobby</h3>
           <ul>
           <li><div><b>Newbie lobby</b><span>Slow to react, they spray and miss a lot</span></div><div class="meter" role="img" aria-label="Skill 2 of 10"><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></div></li>
           <li><div><b>Pub server</b><span>A few sharp players, most average, some bad</span></div><div class="meter" role="img" aria-label="Skill 4 of 10"><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></div></li>
           <li><div><b>Mixed lobby</b><span>Everyone different. A regular keeps their level</span></div><div class="meter" role="img" aria-label="Varies"><i></i><i class="off"></i><i></i><i></i><i class="off"></i><i></i><i></i><i class="off"></i><i></i><i></i></div></li>
+          <li><div><b>LAN party</b><span>Every level, lots of banter, and they play together</span></div><div class="meter" role="img" aria-label="Varies"><i></i><i></i><i class="off"></i><i></i><i></i><i class="off"></i><i></i><i class="off"></i><i></i><i></i></div></li>
           <li><div><b>Matchmaking</b><span>Solid players who work as a team</span></div><div class="meter" role="img" aria-label="Skill 5 of 10"><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></div></li>
+          <li><div><b>Old-timers</b><span>Good aim, slow and methodical. They camp and rarely talk</span></div><div class="meter" role="img" aria-label="Skill 6 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></div></li>
           <li><div><b>Veterans</b><span>Quick, accurate, short bursts</span></div><div class="meter" role="img" aria-label="Skill 7 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i></div></li>
-          <li><div><b>Locked in</b><span>Very good and focused. They bunnyhop between fights</span></div><div class="meter" role="img" aria-label="Skill 8 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i></div></li>
+          <li><div><b>Locked In</b><span>Very good and focused. They bunnyhop between fights</span></div><div class="meter" role="img" aria-label="Skill 8 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i></div></li>
           <li><div><b>Hackers</b><span>Suspiciously good. They notice you from behind</span></div><div class="meter" role="img" aria-label="Skill 9 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i></div></li>
           <li><div><b>Gods</b><span>Everything maxed. Every bullet near you is a headshot</span></div><div class="meter" role="img" aria-label="Skill 10 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></li>
           </ul>
@@ -659,6 +709,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <ul>
           <li>Control everything from your phone by scanning a QR code</li>
           <li>Admins, VIPs and bans</li>
+          <li>Friends who help run it from their own Loner-Strike, as an admin or moderator</li>
           <li>A custom welcome page for people who join</li>
         </ul>
       </div>
@@ -673,15 +724,27 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     <div class="wrap">
       <div class="text">
         <h3>Dedicated servers</h3>
-        <p>For a server that's always on, even when your computer isn't. Give the app a rented Linux machine and it sets up the rest. Or run one on your own computer, or bring in one you already have.</p>
+        <p>A server that runs on its own, apart from your game, so nobody drops when you quit or change maps. Pick where it lives:</p>
+        <div class="where">
+          <a href="docs#lan-party">
+            <b>On your network</b>
+            <span>Your computer, or a spare one at the LAN party. Nothing to open: everyone finds it in the LAN tab.</span>
+          </a>
+          <a href="docs#vps">
+            <b>Online, always on</b>
+            <span>A rented Linux machine, set up for you. Runs with your computer off, for anyone to join.</span>
+          </a>
+        </div>
+        <h4>Run it like a real community server</h4>
         <ul>
-          <li>Each server has its own modes, maps, admins and console</li>
-          <li>Share admins, bans and the swear filter across your servers</li>
-          <li>Players vote on the mode and the map with rtv</li>
-          <li>A live player count for your website, from the server itself</li>
-          <li>HLTV for spectators and demos</li>
+          <li>Admins, moderators and helpers who run it from their own app, each within their role</li>
+          <li>Bans, mutes, a swear filter and reports, shared across your servers</li>
+          <li>Mode and map votes with rtv, 5v5 matches, HLTV and demos</li>
+          <li>Updates itself once nobody's playing, and checks its own security and health</li>
+          <li>Backed up daily, and restarts itself after a crash</li>
+          <li>Live player count on your website, and Discord hears if it goes down</li>
         </ul>
-        <p style="margin-top:18px"><a class="btn" href="servers.html">How to set one up, step by step</a></p>
+        <p style="margin-top:18px"><a class="btn" href="docs#servers">How to set one up</a></p>
       </div>
       <div class="pair">
         <div class="window">
@@ -700,73 +763,52 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <div class="group">
           <h3>Bots</h3>
           <ul>
-            <li>Human reaction times and aim, from a newbie lobby to bunnyhopping pros</li>
-            <li>A mixed lobby where every bot plays at its own level</li>
-            <li>Personalities that chat, banter, rage and cheer each other up</li>
-            <li>Regulars with clan tags and believable pings on the scoreboard</li>
-            <li>They get tilted, panic, make radio calls and spray their logo</li>
+            <li>Our own bot brain, reworked from the game's bot code: hand-like aim, their own routes, site takes and retakes</li>
+            <li>Talk to them in team chat or on your mic: they answer and take orders</li>
+            <li>Ten lobbies, from newbies to bunnyhopping pros</li>
+            <li>Regulars with personalities and clan tags who remember you</li>
             <li>They learn new maps by themselves</li>
           </ul>
         </div>
         <div class="group">
           <h3>Modes and maps</h3>
           <ul>
-            <li>22 classic community modes, from Zombie Plague to Warcraft 3 and Gun Game</li>
-            <li>Patched so bots play them: SuperHero bots pick heroes, SoccerJam bots chase the ball</li>
+            <li>22 classic community modes, patched so bots play them</li>
             <li>Players vote on the mode, then a map for it, with rtv</li>
-            <li>Thousands of maps from GameBanana, with screenshots, favourites and search</li>
-            <li>Skins, player models, sounds and sprays, backed up and removable</li>
-            <li>Round-end music, Quake sounds and classic sound packs</li>
-            <li>Add your own maps, sounds and AMX Mod X plugins from a file</li>
+            <li>Thousands of maps from GameBanana, with screenshots and search</li>
+            <li>Skins, models, sprays, round-end music, Quake sounds and sound packs</li>
+            <li>Your own maps, sounds and AMX Mod X plugins from a file</li>
           </ul>
         </div>
         <div class="group">
           <h3>Friends</h3>
           <ul>
-            <li>Seven ways to connect: LAN, your router, playit.gg, Tailscale, ZeroTier, Radmin VPN and Hamachi</li>
+            <li>Seven ways to connect, from a LAN party to playit.gg and Hamachi</li>
             <li>Server name, join password and a ready-to-send invite</li>
-            <li>A custom welcome page when people join</li>
             <li>A notification when someone joins while you're away</li>
-            <li>Find servers: a server browser like Steam's old one, with games on your own network</li>
+            <li>Find servers: a server browser like Steam's old one</li>
           </ul>
         </div>
         <div class="group">
-          <h3>Running a server</h3>
+          <h3>Servers</h3>
           <ul>
-            <li>Admins, moderators and VIPs, with abilities per role and end dates</li>
-            <li>Bans, mutes, a swear filter, a chat log and player reports</li>
-            <li>Map rotation, timed chat messages, AFK and high-ping kickers</li>
-            <li>Stats and ranks, votekick and voteban, join messages with country</li>
-            <li>Match mode for 5v5s: ready-up, knife round, half-time swap</li>
-            <li>HLTV for spectators and demos, fast downloads, scheduled restarts</li>
-          </ul>
-        </div>
-        <div class="group">
-          <h3>Hosting</h3>
-          <ul>
-            <li>Dedicated servers on your computer or a rented Linux machine, set up for you</li>
-            <li>Bring in a server you already run</li>
-            <li>Changes in the app reach the server by themselves</li>
-            <li>Admins, bans and the swear filter shared across your servers</li>
-            <li>Copy one server's mods to another</li>
-            <li>Send your own maps to a server, with everything they need</li>
-            <li>A live player count and visitor counter for your own website</li>
-            <li>A live server status in your Discord</li>
-            <li>Put your server on the Loner-Strike server list for anyone to join</li>
-            <li>Weapon skins and player models everyone on the server sees</li>
-            <li>Join and console passwords, and a warning when a server stops answering</li>
+            <li>On your computer or a rented Linux machine, set up for you</li>
+            <li>Admins, moderators and VIPs, and helpers with their own app</li>
+            <li>Bans, mutes, a swear filter, reports, stats and votes</li>
+            <li>5v5 match mode, HLTV and demos</li>
+            <li>Updates, security checks and daily backups by themselves, all on one Health tab</li>
+            <li>Live status on your website and in Discord</li>
           </ul>
         </div>
         <div class="group">
           <h3>The app</h3>
           <ul>
-            <li>Guided setup that finds your game, on Windows or a Mac with CrossOver</li>
-            <li>The Game Mode Menu in the game (F3), and quick actions in the app while you play</li>
-            <li>Control everything from your phone by scanning a QR code</li>
-            <li>Export your setup to another computer or server</li>
-            <li>Automatic updates, signed and checked</li>
-            <li>A built-in radio, with drum and bass and trance stations</li>
-            <li>Open source under the GPL</li>
+            <li>Guided setup on Windows, or a Mac with CrossOver</li>
+            <li>Set up bots, rules and fun before you start a game</li>
+            <li>The Game Mode Menu in game (F3), and control from your phone</li>
+            <li>Backup, restore and moving to another computer</li>
+            <li>Signed automatic updates, and <a href="docs">docs</a> for everything</li>
+            <li>Open source (GPL), with a built-in radio</li>
           </ul>
         </div>
       </div>
@@ -825,12 +867,13 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <h3>Download free</h3>
         <p>Every release is also free on GitHub.</p>
         <a class="btn release" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download free">Download from GitHub</a>
-        <p class="fine">Version 0.1, an early release. Found a bug? Tell us on <a href="https://discord.gg/K9eBHVVwZE">Discord</a>.</p>
+        <p class="fine">It updates itself from the app. Something not working? <a href="docs#no-bots-help">The docs</a> cover the usual problems.</p>
         <ol class="steps">
           <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a>, or use the Windows version of Loner-Strike in Parallels.</li>
           <li><b>Open Loner-Strike.</b> It finds the game and walks you through setup. Everything it changes is backed up.</li>
           <li><b>Press Play.</b> Bots fill the server.</li>
         </ol>
+        <p class="fine">No account, no sign-up and no ads. The app talks to your game on your own computer, and voice commands never leave the machine running the server.</p>
       </div>
     </div>
   </section>
@@ -875,6 +918,13 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 
   <section class="faq" id="faq">
     <div class="wrap">
+      <div class="docs-callout">
+        <div>
+          <b>Docs</b>
+          <p>Setup, the bots, voice commands, servers, and fixes for the usual problems, in one place.</p>
+        </div>
+        <a class="btn primary" href="docs">Read the docs</a>
+      </div>
       <h2>Questions</h2>
       <details>
         <summary>Is it really free?</summary>
@@ -906,7 +956,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       </details>
       <details>
         <summary>What does a server cost?</summary>
-        <p>On your own computer, nothing. A rented Linux machine runs from free (Oracle's free tier, when it has room) to a small monthly plan for a server with 20 to 32 players and bots. <a href="servers.html">The guide</a> covers where to rent one and what size to pick.</p>
+        <p>On your own computer, nothing. A rented Linux machine runs from free (Oracle's free tier, when it has room) to a small monthly plan for a server with 20 to 32 players and bots. <a href="docs#vps">The guide</a> covers where to rent one and what size to pick.</p>
       </details>
       <details>
         <summary>Can people join without Loner-Strike?</summary>
@@ -922,7 +972,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 
 <footer>
   <div class="wrap">
-    <span>Made by <a href="https://x.com/nanoshrine" data-event="X profile">nanoshrine</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a> · <a href="#community" id="dc-footer" hidden>Discord</a><span hidden> ·</span> <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CHANGELOG.md">Changelog</a> · <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md">Credits</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></span>
+    <span>Made by <a href="https://x.com/nanoshrine" data-event="X profile">nanoshrine</a> · <a href="docs">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a> · <a href="#community" id="dc-footer" hidden>Discord</a><span hidden> ·</span> <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CHANGELOG.md">Changelog</a> · <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md">Credits</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></span>
     <span>Not affiliated with Valve. Counter-Strike is a trademark of Valve Corporation.</span>
     <p class="counter" id="counter" hidden></p>
   </div>
@@ -1197,6 +1247,50 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     el.append("You are visitor", odo, sr);
     el.hidden = false;
   })();
+
+  // Team chat with the bots, over the bots screenshot: a few conversations in turn
+  {
+    const box = document.getElementById("gamechat");
+    const MIC = '<svg viewBox="0 0 10 14"><path d="M3 1a2 2 0 0 1 4 0v5a2 2 0 0 1-4 0zM1 5.5h1V6a3 3 0 0 0 6 0v-.5h1V6a4 4 0 0 1-3.5 4v2H7v1H3v-1h1.5v-2A4 4 0 0 1 1 6z"/></svg>';
+    // [who, what]: "you" is the player; a line said on the mic starts with "~"
+    const TALKS = [
+      [["you", "rush b"], ["Derek", "ok"], ["[NoS]Rook", "nah im lurking mid"], ["kenji", "go go go"]],
+      [["you", "someone buy me an awp"], ["Derek", "cant, 2k"], ["kenji", "got u, check the floor"], ["you", "ty"]],
+      [["you", "~flash for me"], ["kenji", "flashing long, go"], ["Mittens", "nice"]],
+      [["you", "money?"], ["Mittens", "4300"], ["Derek", "1900, eco pls"], ["[NoS]Rook", "full buy next"]],
+      [["you", "~two long, one is low"], ["Derek", "rotating"], ["Mittens", "ill hold a"]],
+    ];
+    const line = ([who, what]) => {
+      const li = document.createElement("li");
+      const said = what.startsWith("~");
+      li.innerHTML = (said ? MIC : "") + '<span class="tag">(Terrorist) </span><span></span> : <span></span>';
+      const [name, text] = li.querySelectorAll("span:not(.tag)");
+      name.className = who === "you" ? "you" : "who";
+      name.textContent = who === "you" ? "You" : who;
+      text.textContent = said ? `"${what.slice(1)}"` : what;
+      return li;
+    };
+    if (reduce) {
+      TALKS[0].concat(TALKS[1].slice(0, 2)).forEach((l) => box.append(line(l)));
+    } else {
+      let t = 0, i = 0, timer = null, visible = false;
+      const next = () => {
+        timer = null;
+        const talk = TALKS[t];
+        const li = line(talk[i]);
+        li.className = "new";
+        box.append(li);
+        while (box.children.length > 5) box.firstChild.remove();
+        i++;
+        let wait = talk[i - 1][0] === "you" ? 1300 : 1000 + Math.random() * 900;
+        if (i >= talk.length) { i = 0; t = (t + 1) % TALKS.length; wait = 3200; }
+        if (visible && !document.hidden) timer = setTimeout(next, wait);
+      };
+      const run = () => { if (visible && !document.hidden && !timer) timer = setTimeout(next, 600); };
+      new IntersectionObserver((e) => { visible = e[0].isIntersecting; run(); }).observe(box);
+      document.addEventListener("visibilitychange", run);
+    }
+  }
 
   // Kill feed in the corner of the hero
   {

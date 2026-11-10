@@ -24,13 +24,16 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 - Each bot has a personality and plays and types to match: it chats, replies to other bots and to people, rages after a run of deaths, and cheers up a teammate.
 - A cast of regular bot names with clan tags, and believable pings on the scoreboard instead of "BOT".
 - Bots get tilted, panic, make radio calls, spray their logo, and learn new maps by themselves.
-- Bot styles, weakest to strongest: Newbie lobby, Pub server, Mixed lobby, Matchmaking, Veterans, Locked in, Hackers, Gods. Or the game's own bots (instant reactions, perfect aim).
+- Bot styles: Newbie lobby, Pub server (the default), Mixed lobby, LAN party, Matchmaking, Old-timers, Veterans, Locked In, Hackers and Gods. Or Original, the game's own bots (instant reactions, perfect aim).
+- Bot settings: difficulty, style, personality strength, lobby mood, how much they chat (Normal to start with), whether they answer people, and players coming and going. Reset bot and fun settings puts them back to the defaults.
+- Talk to them in team chat, or by voice on a dedicated server: "rush b", "flash for me", "money?". The Bots page lists what they understand under What you can tell the bots.
 
 ## Modes and content
 
 - 22 game modes: Classic, Match (5v5), Deathmatch, Free for all, Gun Game (solo and teams), Zombie Plague (two versions), Warcraft 3, SuperHero, Hide and Seek, Paintball, Deathrun, Base Builder, SoccerJam, Surf, Kreedz, plus knife, pistol, deagle, AWP and scout modes.
 - The mods are community classics, patched so they notice CZ bots. Some got bot logic they never had: SuperHero bots pick heroes, SoccerJam bots chase the ball, Roll the Dice bots roll.
-- Thousands of maps from GameBanana with screenshots, favourites and search; skins, player models, sounds and sprays; round-end music, Quake sounds and classic sound packs.
+- Thousands of maps from GameBanana with screenshots, favourites and search; weapon skins, player models, sprays, effects and HUD; round-end music, Quake sounds (off on a new setup) and classic sound packs. Every Get button opens the GameBanana browser (Get more) on that kind.
+- Maps for the game you play: Counter-Strike 1.6 leaves Condition Zero only maps out of its lists, rotations and votes; Condition Zero shows everything.
 - Mode voting: players type rtv, vote for the next mode, then for a map that suits it. The host picks which modes are in the vote.
 - Add your own maps, sounds and AMX Mod X plugins from a file.
 - Mods are downloaded from their original sources and checked against pinned checksums.
@@ -43,7 +46,8 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 
 ## Running a server
 
-- Admins, moderators and VIPs with abilities per role and end dates; bans, gags, a swear filter, a chat log and player reports.
+- Admins, moderators and VIPs with abilities per role and end dates.
+- Moderation: player reports, the chat log, mutes and the swear filter, bans and player history. Stats: ranks and 5v5 match results. Both work for your own game and for each server.
 - Map rotation, timed chat messages, AFK and high-ping kickers, stats and ranks, votekick and voteban, join messages with country.
 - Match mode for 5v5s (ready-up, knife round, half-time swap), HLTV for spectators and demos, fast downloads, scheduled restarts.
 
@@ -51,23 +55,29 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 
 - Dedicated servers on your own computer (Valve's free dedicated server, downloaded and set up for you), or bring in one you already run.
 - Always-on servers on a rented Linux machine (a VPS: Ubuntu or Debian, x86, public IPv4). The app connects over SSH with your key, confirms the machine's identity, installs Valve's server and the mods, opens the game ports and runs it as a service that keeps going without your computer.
+- Each server's page has tabs in four groups: Server (Overview, Who can join, Health, Rotation & extras, Spectators & demos, Website status), Game (Modes, Bots, Rules, Fun, Bot voice commands), People (Players, Moderation, Stats, Admins, Welcome page, Shared control) and Library (Mods, Maps, Skins & models, Sounds).
+- Who can join: this network only, anyone with the address, or listed on Steam; a join password, a public address, the Loner-Strike server list and how to connect.
+- Health: Loner-Strike and Valve updates, the security check (Linux), backup and restore, a daily restart, and Reinstall, Wipe and rebuild or Delete.
+- Shared control: friends help run a server from their own Loner-Strike as an Admin or Moderator, even with the owner's computer off (Linux). Tabs their role can't use show dimmed as Owner only or Admins only. Moderators see the ban list and can ban by SteamID for up to a week.
 - After that: changes made in the app (settings, admins, mods, maps, sounds) are uploaded automatically, only the files that changed; Valve's server files update from the app; HLTV runs next to it on UDP 27020 and its demos can be copied to your game; the app says when a server stops answering, and why.
 - Admins, bans, the swear filter, the welcome page and chat messages can be shared across servers. Mods and other settings stay per server. One server's mods can be copied to another, and your own maps can be sent to a server with everything they need.
-- Website status: a small service on a Linux server that gives your website the live player count and a visitor counter, over its own HTTPS or a Cloudflare Tunnel.
+- Website status: a small service on a Linux server that gives your website the live player count and a visitor counter, over its own HTTPS or a Cloudflare Tunnel. It also keeps a Discord status message up to date and serves fast downloads.
 - Each server has a join password, a console (RCON) password and extra start options.
-- Discord: a live server status message in your Discord channel. Fast map downloads (FastDL) for players joining.
 - The Loner-Strike server list: hosts can put a server on it, and players find it in the app's Find servers (a server browser after Steam's old one, with games on your own network) or on lonerstrike.com.
 - Weapon skins and player models per server, under their own names so every player downloads and sees them; the app shows how close each map gets to the engine's limit of 512 models.
 - Ports: servers on your computer start at UDP 27016 (27015 is your own game's); on a VPS, 27015 to 27019 for servers and 27020 for HLTV. Open UDP 27015-27020 in the provider's firewall.
 - Cost: free on your own computer. A VPS runs from free (Oracle Cloud's Always Free AMD machines, when available) to a small monthly plan at providers like Hetzner, DigitalOcean or Vultr. ARM machines can't run the game server.
-- Guide: https://lonerstrike.com/servers.html
+- Guide: https://lonerstrike.com/docs#vps
 
 ## The app
 
 - Guided setup that finds your game, on Windows or a Mac with CrossOver.
-- An in-game menu on F3, and quick actions in the app while you play (pause, bots, god mode, noclip and more).
+- The sidebar for your own game is grouped like a server's tabs: Game (Play, Bots, Rules, Fun, Add-ons, Rotation & extras), People (Players, Moderation, Stats, Admins, Welcome page), Online (Play with friends, Find servers), My library (Maps, Mods, Skins & models, Sounds, Get more) and Hosting (Servers). A bar on every page says whether you're changing your own game or a server, with Back to my game.
+- Bots, Rules, Fun and Add-ons can be changed before a game starts; changes apply when you start one.
+- An in-game menu on F3, and quick actions in the app while you play: pause, round (including Start a mode vote), map, bot count with difficulty and style, god mode, noclip, announce and more.
 - Control it from your phone by scanning a QR code on the same Wi-Fi. Actions that delete or reinstall stay on the computer.
-- Export your setup to another computer or server. Signed automatic updates.
+- Backup and restore in Settings: everything to one file, or just your game, and daily backups of Linux servers. Signed automatic updates.
+- Settings, Help: the docs, Report a problem, Copy diagnostics, and the usual problems with a button to the page that fixes each.
 - A built-in radio with eleven stations, from drum and bass, jungle, hardstyle, trance and demoscene music to video game music, 2000s hits and nu metal (Bassdrive, Kniteforce, TechnoBase.FM, HardBase.FM, SomaFM, SceneSat, Rainwave, 0nlineradio, Radio Bob), with shuffle and a station list.
 - Built with Rust (Tauri) and React. It talks to the game over RCON on your own computer; nothing goes through a server run by the makers.
 

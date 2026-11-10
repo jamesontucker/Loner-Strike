@@ -1,3 +1,6 @@
 # Cloudflare Pages redirects (see developers.cloudflare.com/pages/configuration/redirects)
 /discord   https://discord.gg/K9eBHVVwZE   302
+# the server guide moved into the docs
+/servers.html  /docs#vps  301
+/servers       /docs#vps  301
 /discord/  https://discord.gg/K9eBHVVwZE   302

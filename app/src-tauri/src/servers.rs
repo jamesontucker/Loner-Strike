@@ -1083,6 +1083,47 @@ fn manifest_path(e: &Entry) -> PathBuf {
     e.dir.join(".uploaded.json")
 }
 
+/// A server whose bot brain update isn't finished: its copy here has (or is getting) the new
+/// foundation and plugins, but its engine side (on a Linux machine, the machine's own
+/// foundation) doesn't yet. Set before the copy here changes, cleared when update_files
+/// finishes. Meanwhile the update is offered again (setup_api::server_outdated) and a Linux
+/// server only gets its settings, not plugins built for the new engine. In the server's
+/// folder beside the game (never uploaded), so it outlasts an app restart.
+fn engine_pending_path(e: &Entry) -> PathBuf {
+    e.dir.join(".engine-update-pending")
+}
+
+pub fn engine_update_pending(e: &Entry) -> bool {
+    engine_pending_path(e).exists()
+}
+
+pub fn hold_engine_update(e: &Entry) -> Result<(), String> {
+    sys::write_atomic(&engine_pending_path(e), b"1\n").map_err(|err| format!("Couldn't note the update in the server's folder ({err})."))
+}
+
+fn engine_update_done(e: &Entry) {
+    let _ = std::fs::remove_file(engine_pending_path(e));
+}
+
+/// What a sync sends while the server's engine update isn't finished (engine_update_pending):
+/// only its settings (data/), and the upload record moves on for those alone, so the rest goes
+/// up once the update is in.
+fn held_back(saved: Option<&Manifest>, now: &Manifest, changed: &mut std::collections::HashSet<String>, gone: &mut Vec<String>) -> Option<Manifest> {
+    let settings = |k: &String| k.starts_with("addons/amxmodx/data/");
+    changed.retain(settings);
+    gone.retain(settings);
+    let mut m = saved?.clone();
+    for k in changed.iter() {
+        if let Some(v) = now.get(k) {
+            m.insert(k.clone(), *v);
+        }
+    }
+    for k in gone.iter() {
+        m.remove(k);
+    }
+    Some(m)
+}
+
 /// The same file as recorded (records from before kept whole seconds)
 fn same_file(old: &(u64, u64), now: &(u64, u64)) -> bool {
     old.0 == now.0 && (old.1 == now.1 || (old.1 < 100_000_000_000 && now.1 / 1_000_000_000 == old.1))
@@ -1324,7 +1365,7 @@ fn sync_files(e: &Entry, mode: Send, progress: &dyn Fn(u64, u64)) -> Result<(usi
     let to = format!("{}/{}", crate::remote::server_dir(&e.id), e.game);
     let saved: Option<Manifest> = std::fs::read_to_string(manifest_path(e)).ok().and_then(|t| serde_json::from_str(&t).ok());
     let now = current_files(e);
-    let (mut changed, gone) = plan_sync(mode, saved.as_ref(), &now);
+    let (mut changed, mut gone) = plan_sync(mode, saved.as_ref(), &now);
     if saved.is_none() && mode == Send::Changes {
         // a server from before the app kept a record: only what the machine doesn't have
         // goes up. What's there stays (it may have changed on the machine, and sending all
@@ -1332,6 +1373,8 @@ fn sync_files(e: &Entry, mode: Send, progress: &dyn Fn(u64, u64)) -> Result<(usi
         let there = crate::remote::list_files(r, &to)?;
         changed = now.keys().filter(|k| !there.contains(*k)).cloned().collect();
     }
+    // its bot brain update didn't finish on the machine: settings only (see held_back)
+    let held = (mode == Send::Changes && engine_update_pending(e)).then(|| held_back(saved.as_ref(), &now, &mut changed, &mut gone));
     if everything {
         // a new server: the template's admins, mutes and map lists go up once
         changed.extend(MACHINE_KEPT.iter().filter(|k| e.dir.join(&e.game).join(k).is_file()).map(|k| k.to_string()));
@@ -1343,7 +1386,16 @@ fn sync_files(e: &Entry, mode: Send, progress: &dyn Fn(u64, u64)) -> Result<(usi
         let list = chunk.iter().map(|g| crate::remote::shell_quote(g)).collect::<Vec<_>>().join(" ");
         crate::remote::exec(r, &format!("cd {} && rm -f -- {list}", crate::remote::shell_quote(&to)))?;
     }
-    save_manifest(&manifest_path(e), saved.as_ref(), &now);
+    match &held {
+        None => {
+            save_manifest(&manifest_path(e), saved.as_ref(), &now);
+        }
+        // (no record yet: the next sync compares with the machine again)
+        Some(None) => {}
+        Some(Some(m)) => {
+            save_manifest(&manifest_path(e), saved.as_ref(), m);
+        }
+    }
     let touched = || changed.iter().chain(gone.iter());
     if touched().any(|p| p.starts_with("addons/amxmodx/data/") || p.starts_with("addons/amxmodx/configs/")) {
         if let Some(rc) = e.rcon() {
@@ -1754,6 +1806,11 @@ pub fn update_files(e: Entry, res: Option<PathBuf>) -> Result<String, String> {
                 if let Err(why) = crate::control::agent::install(&e, &res) {
                     setup::Progress::note(job, &format!("Shared control on the server wasn't updated: {why}"));
                 }
+                // the machine and its files are this version's now: plugins go up again
+                engine_update_done(&e);
+                // the website status page as this version writes it (its routes, its status
+                // script), if it's on (nothing otherwise; a problem shows in its status)
+                crate::webstatus::refresh(&e.id);
                 Ok(())
             })
         });
@@ -1774,7 +1831,9 @@ pub fn update_files(e: Entry, res: Option<PathBuf>) -> Result<String, String> {
             copy_tree(&base, &e.dir, true, &|rel: &Path| rel.components().count() == 1 && rel.extension().map(|x| x != "gam").unwrap_or(true)).map(|_| ())
         })?;
         // Valve's engine files just came back: Loner-Strike's go over them again
-        job.run(&format!("{g}/srv-engine"), || install_engine(job, &e.dir, &g))
+        job.run(&format!("{g}/srv-engine"), || install_engine(job, &e.dir, &g))?;
+        engine_update_done(&e);
+        Ok(())
     })
 }
 
@@ -3978,6 +4037,34 @@ mod tests {
         // a map cycle at the game folder's root is read as it's needed
         assert!(!needs_restart("mapcycle.txt") && !needs_restart("motd.txt"));
         assert!(needs_restart("maps/de_x.bsp") && needs_restart("addons/amxmodx/plugins/x.amxx") && !needs_restart("maps/de_x.nav"));
+    }
+
+    /// While a bot brain update hasn't reached the machine, only settings go up, and the record
+    /// moves on for those alone (the plugins go up once the update is in)
+    #[test]
+    fn held_sync_sends_settings_only() {
+        let mut old = Manifest::new();
+        old.insert("addons/amxmodx/plugins/gamemodes.amxx".into(), (5, 1));
+        old.insert("addons/amxmodx/data/gamemodes/global.cfg".into(), (5, 1));
+        old.insert("addons/amxmodx/data/gamemodes/old.cfg".into(), (5, 1));
+        old.insert("maps/de_old.bsp".into(), (5, 1));
+        let mut now = Manifest::new();
+        now.insert("addons/amxmodx/plugins/gamemodes.amxx".into(), (6, 2));
+        now.insert("addons/amxmodx/plugins/gm_new.amxx".into(), (6, 2));
+        now.insert("addons/amxmodx/data/gamemodes/global.cfg".into(), (6, 2));
+        let (mut changed, mut gone) = plan_sync(Send::Changes, Some(&old), &now);
+        let m = held_back(Some(&old), &now, &mut changed, &mut gone).unwrap();
+        assert_eq!(changed.into_iter().collect::<Vec<_>>(), vec!["addons/amxmodx/data/gamemodes/global.cfg".to_string()]);
+        assert_eq!(gone, vec!["addons/amxmodx/data/gamemodes/old.cfg".to_string()]);
+        assert_eq!(m.get("addons/amxmodx/data/gamemodes/global.cfg"), Some(&(6, 2)));
+        assert_eq!(m.get("addons/amxmodx/plugins/gamemodes.amxx"), Some(&(5, 1)), "still the old one there");
+        assert!(!m.contains_key("addons/amxmodx/plugins/gm_new.amxx") && m.contains_key("maps/de_old.bsp") && !m.contains_key("addons/amxmodx/data/gamemodes/old.cfg"));
+        // after the update, the next sync sends the rest
+        let (changed, gone) = plan_sync(Send::Changes, Some(&m), &now);
+        assert!(changed.contains("addons/amxmodx/plugins/gm_new.amxx") && changed.contains("addons/amxmodx/plugins/gamemodes.amxx") && gone == vec!["maps/de_old.bsp".to_string()]);
+        // no record yet: nothing is noted
+        let (mut changed, mut gone) = (now.keys().cloned().collect(), vec![]);
+        assert!(held_back(None, &now, &mut changed, &mut gone).is_none() && changed.len() == 1);
     }
 
     #[test]

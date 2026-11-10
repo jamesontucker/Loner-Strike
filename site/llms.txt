@@ -15,7 +15,8 @@ Key facts:
 
 - [Website](https://lonerstrike.com/): what it does, screenshots, download and FAQ
 - [Full details for AI assistants](https://lonerstrike.com/llms-full.txt): features, setup, servers and FAQ in plain text
-- [Run a server on a VPS](https://lonerstrike.com/servers.html): step-by-step guide to an always-on server on a rented Linux machine
+- [Docs](https://lonerstrike.com/docs): setup, the app, bot styles and settings, talking to the bots, voice commands, servers, in-game commands and troubleshooting
+- [Run a server on a VPS](https://lonerstrike.com/docs#vps): step-by-step guide to an always-on server on a rented Linux machine
 - [README on GitHub](https://github.com/jamesontucker/Loner-Strike#readme): features, install and how it works
 - [Linux server guide (Markdown)](https://github.com/jamesontucker/Loner-Strike/blob/main/docs/linux-server.md): the full VPS guide, with troubleshooting
 

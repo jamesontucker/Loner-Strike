@@ -450,6 +450,23 @@ pub fn sync(g: &Game) {
     let _ = write_files(g, &load(&g.data));
 }
 
+/// After setup put a game's files in (an update, a repair): users.ini's admin block again from
+/// the game's own list, as at app start. Only the files on this computer: a Linux server's
+/// machine keeps its own users.ini. Nothing for a game with no list.
+pub fn sync_users_file(game_dir: &Path) {
+    let data = game_dir.join("addons/amxmodx/data/gamemodes");
+    let users = game_dir.join("addons/amxmodx/configs/users.ini");
+    if !data.join("admins.json").is_file() || !users.parent().is_some_and(|d| d.is_dir()) {
+        return;
+    }
+    let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let old = crate::sys::read_latin1(&users).unwrap_or_default();
+    let new = rewrite_users(&old, &load(&data).people, &today());
+    if new != old {
+        let _ = crate::sys::write_latin1(&users, &new);
+    }
+}
+
 /// A fixed command for the running game (never free text). Offline is fine.
 fn tell_game(g: &Game, line: &str) -> Result<bool, String> {
     match g.rcon.send(line) {

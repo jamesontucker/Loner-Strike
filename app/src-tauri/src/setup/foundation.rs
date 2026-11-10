@@ -56,7 +56,10 @@ pub const RELOCALIZEBUGFIX: Pinned = Pinned {
 };
 pub const METAMOD_DLL: &str = r"addons\metamod\dlls\metamod.dll";
 
-/// AMX Mod X files a player may have customised: never replaced if present
+/// AMX Mod X files a player may have customised: never replaced if present, whoever put
+/// them there (plugins.ini with the player's own plugins, users.ini with admins added in the
+/// game, amxx.cfg). Only missing ones come from the download; core::plugins adds Loner-Strike's
+/// lines to plugins.ini.
 const KEEP_IF_PRESENT: &[&str] = &["addons/amxmodx/configs/"];
 
 /// Every file under root as (full path, '/'-separated relative path), sorted.
@@ -88,6 +91,12 @@ fn need(path: std::path::PathBuf, what: &str) -> Result<std::path::PathBuf, Stri
     }
 }
 
+/// The KEEP_IF_PRESENT files a game has now ('/'-separated, lower case: Windows and Mac
+/// folders ignore case).
+fn present(game: &Path) -> Vec<String> {
+    KEEP_IF_PRESENT.iter().flat_map(|k| tree(&game.join(k)).into_iter().map(move |(_, rel)| format!("{k}{rel}").to_lowercase())).collect()
+}
+
 /// A file the game already had that Loner-Strike didn't put there.
 fn theirs(rec: &Record, rel: &str) -> bool {
     rec.exists(rel) && !rec.ours(rel)
@@ -96,6 +105,20 @@ fn theirs(rec: &Record, rel: &str) -> bool {
 /// Whether a file contains `needle` (to recognise ReGameDLL and Metamod builds).
 fn mentions(rec: &Record, rel: &str, needle: &[u8]) -> bool {
     rec.full(rel).ok().and_then(|p| std::fs::read(p).ok()).map(|d| d.windows(needle.len()).any(|w| w == needle)).unwrap_or(false)
+}
+
+/// Downloads every foundation archive into the download cache before anything in the game is
+/// changed, so a download that fails (no internet, a checksum that doesn't match) leaves the
+/// game as it was instead of half updated. The steps then unpack them from the cache.
+pub fn prefetch(rec: &Record, ctx: &Ctx) -> Result<(), String> {
+    let mut all = vec![&AMXX_BASE, &AMXX_CSTRIKE, &REGAMEDLL];
+    if !theirs(rec, "addons/metamod/dlls/metamod.dll") {
+        all.insert(0, &METAMOD);
+    }
+    for p in all {
+        fetch::download(p.url, Some(p.sha256), p.what, ctx.progress)?;
+    }
+    Ok(())
 }
 
 pub fn metamod(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
@@ -116,6 +139,9 @@ pub fn metamod(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
 }
 
 pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
+    // what's there before this step (the Counter-Strike addon's plugins.ini still replaces the
+    // base one it just put in on a first install)
+    let kept = present(&rec.game);
     for (p, sub) in [(&AMXX_BASE, "amxx_base"), (&AMXX_CSTRIKE, "amxx_cstrike")] {
         let src = get(p, ctx, tmp, sub)?;
         ctx.progress.detail("Copying AMX Mod X into the game");
@@ -123,7 +149,7 @@ pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
             if !rel.starts_with("addons/") {
                 continue;
             }
-            if KEEP_IF_PRESENT.iter().any(|k| rel.starts_with(k)) && rec.exists(&rel) && !rec.ours(&rel) {
+            if kept.contains(&rel.to_lowercase()) {
                 continue;
             }
             rec.copy(&full, &rel)?;
@@ -208,5 +234,24 @@ mod tests {
         );
         assert_eq!(point_at_metamod(&point_at_metamod(lib).unwrap()), None);
         assert_eq!(point_at_metamod("game \"x\"\n\n").unwrap(), "game \"x\"\r\ngamedll \"addons\\metamod\\dlls\\metamod.dll\"\r\n");
+    }
+
+    /// AMX Mod X's own configs a game already has (admins, the player's plugins) are kept on a
+    /// repair: only these are skipped when the download is copied in
+    #[test]
+    fn existing_configs_are_kept() {
+        let root = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "configs-").unwrap();
+        let cfg = root.join("addons/amxmodx/configs");
+        std::fs::create_dir_all(cfg.join("maps")).unwrap();
+        std::fs::write(cfg.join("Plugins.ini"), "admin.amxx\r\n").unwrap();
+        std::fs::write(cfg.join("users.ini"), "\"STEAM_0:1:2\" \"\" \"abcdefghijklmnopqrstu\" \"ce\"\r\n").unwrap();
+        std::fs::write(cfg.join("maps/de_dust2.cfg"), "").unwrap();
+        std::fs::create_dir_all(root.join("addons/amxmodx/plugins")).unwrap();
+        std::fs::write(root.join("addons/amxmodx/plugins/admin.amxx"), "").unwrap();
+        let mut kept = present(&root);
+        kept.sort();
+        assert_eq!(kept, ["addons/amxmodx/configs/maps/de_dust2.cfg", "addons/amxmodx/configs/plugins.ini", "addons/amxmodx/configs/users.ini"]);
+        assert!(present(&root.join("nothing-here")).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -838,8 +838,12 @@ fetch() {
   curl -fsSL --proto '=https' --retry 5 --retry-delay 3 "$1" -o "$TMP/$2" || fail "Couldn't download $2."; echo "$3  $TMP/$2" | sha256sum -c --quiet - || fail "$2 didn't match its checksum."
 }
 fetch "$MM_URL" mm.tar.xz "$MM_SHA"; tar xJf "$TMP/mm.tar.xz" -C .
-fetch "$AMXX_URL" amxx.tar.gz "$AMXX_SHA"; tar xzf "$TMP/amxx.tar.gz" -C .
-fetch "$AMXXCS_URL" amxxcs.tar.gz "$AMXXCS_SHA"; tar xzf "$TMP/amxxcs.tar.gz" -C .
+fetch "$AMXX_URL" amxx.tar.gz "$AMXX_SHA"; fetch "$AMXXCS_URL" amxxcs.tar.gz "$AMXXCS_SHA"
+# AMX Mod X's own settings already here stay as they are (users.ini with admins added in the
+# game, plugins.ini; the app sends its copy of the rest): only missing ones come from the download
+[ -d addons/amxmodx/configs ] && cp -a addons/amxmodx/configs "$TMP/configs-kept"
+tar xzf "$TMP/amxx.tar.gz" -C .; tar xzf "$TMP/amxxcs.tar.gz" -C .
+[ -d "$TMP/configs-kept" ] && cp -a "$TMP/configs-kept/." addons/amxmodx/configs/
 fetch "$RG_URL" rg.zip "$RG_SHA"; unzip -o -q "$TMP/rg.zip" "bin/linux32/cstrike/*" -d "$TMP/rg"; cp -rf "$TMP/rg/bin/linux32/cstrike/." .
 # Loner-Strike's engine (ReHLDS, which also tells the bots who is talking on voice). Valve's
 # engine files, which steamcmd just checked, are kept in .valve-engine to go back to
@@ -922,12 +926,29 @@ fi
 for f in .bashrc .profile .bash_login .bash_logout .bash_aliases .zshrc .zprofile .zshenv; do [ -e "$HOME/$f" ] || : > "$HOME/$f"; done
 umask 022"#;
 
+/// Where the watchdog asks a server whether it's answering: the address it listens on (the
+/// last +ip, as the game runs its + commands in order) when that's one address, else 127.0.0.1.
+fn watch_address(args: &[String]) -> String {
+    args.iter()
+        .enumerate()
+        .filter(|(_, a)| *a == "+ip")
+        .filter_map(|(i, _)| args.get(i + 1))
+        .last()
+        .and_then(|ip| ip.parse::<std::net::Ipv4Addr>().ok())
+        .filter(|ip| !ip.is_unspecified())
+        .map(|ip| ip.to_string())
+        .unwrap_or_else(|| "127.0.0.1".into())
+}
+
 /// The systemd service for one server, and the `lsctl` helper for managing servers by hand.
 pub fn service_sh(id: &str, game: &str, args: &[String]) -> String {
     let unit = unit(id);
     let dir = server_dir(id);
     // the game's port, for the watchdog to knock on
     let port = args.iter().position(|a| a == "-port").and_then(|i| args.get(i + 1)).and_then(|p| p.parse::<u16>().ok()).unwrap_or(27015);
+    // and the address to knock on: the one the game is told to listen on (+ip: the server's
+    // listen address, or one in its extra start options), else this machine itself
+    let watch_ip = watch_address(args);
     // (the game's command line splits words at "-", so file names here have none)
     // all addresses: left to itself the server picks the name entry's 127.0.1.1 and
     // doesn't answer from outside; and the panel's RCON password from a file only this
@@ -974,7 +995,9 @@ sudo tee /usr/local/bin/lsctl >/dev/null <<'EOF'
 #!/bin/sh
 # lsctl: Loner-Strike servers on this machine.  lsctl list | status | start | stop | restart | logs [server]
 cmd=${{1:-help}}; id=${{2:-}}
-units() {{ systemctl list-unit-files 'lonerstrike-*' --no-legend 2>/dev/null | awk '{{print $1}}' | sed 's/\.service$//; s/^lonerstrike-//'; }}
+# the servers: units that run a game (not their watchdog, HLTV or shared control, nor the
+# firewall or log upkeep). Server names can have - in them, so it's what the unit runs
+units() {{ for f in /etc/systemd/system/lonerstrike-*.service; do grep -q '^ExecStart=.*/hlds_linux ' "$f" 2>/dev/null && basename "$f" .service | sed 's/^lonerstrike-//'; done; }}
 [ -z "$id" ] && id=$(units | head -n 1)
 case "$cmd" in
   list) units ;;
@@ -1023,16 +1046,18 @@ sudo chmod 755 /usr/local/bin/lsrcon
 # again like after a crash
 sudo tee /usr/local/bin/lswatchdog >/dev/null <<'LSWATCH'
 #!/usr/bin/env python3
-# lswatchdog <port> <unit>: ends the game if it stops answering for 90 s, so systemd
-# starts it again (Restart=always). Any answer counts; a map change takes far less.
+# lswatchdog <port> <unit> [address]: ends the game if it stops answering for 90 s, so systemd
+# starts it again (Restart=always). Any answer counts; a map change takes far less. The
+# address is the one the game listens on when it's set to one (+ip), else 127.0.0.1.
 import os, signal, socket, subprocess, sys, time
 port, unit = int(sys.argv[1]), sys.argv[2]
+host = sys.argv[3] if len(sys.argv) > 3 else "127.0.0.1"
 GRACE, LIMIT, EVERY = 120, 90, 15
 def answers():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.settimeout(2)
     try:
-        s.sendto(b"\xff\xff\xff\xffTSource Engine Query\x00", ("127.0.0.1", port))
+        s.sendto(b"\xff\xff\xff\xffTSource Engine Query\x00", (host, port))
         return len(s.recv(1400)) > 4
     except OSError:
         return False
@@ -1064,7 +1089,7 @@ BindsTo={unit}.service
 
 [Service]
 User=$(whoami)
-ExecStart=/usr/local/bin/lswatchdog {port} {unit}
+ExecStart=/usr/local/bin/lswatchdog {port} {unit} {watch_ip}
 Restart=always
 RestartSec=10
 
@@ -1083,7 +1108,7 @@ echo "@@STEP ready"
 
 /// A line in the game's unit naming how it's written: a unit without it is written again
 /// before the server's next start (raise it whenever service_sh's unit changes)
-pub const SERVICE_REV: &str = "loner-strike unit 4";
+pub const SERVICE_REV: &str = "loner-strike unit 5";
 
 /// Whether the server's HLTV unit on the machine is the one this version writes (true when it
 /// has none).
@@ -1445,6 +1470,59 @@ mod tests {
         // the sandbox in the game's own unit (before the watchdog's), not the watchdog's
         let game = &svc[svc.find("Description=Loner-Strike server x\n").unwrap()..svc.find("lsctl:").unwrap()];
         assert!(game.contains("NoNewPrivileges=yes") && game.contains("InaccessiblePaths=$HOME/.ssh") && svc.contains("mkdir -p \"$HOME/.ssh\"") && !game.contains("ProtectSystem"));
+    }
+
+    /// The watchdog knocks where the game listens: a set +ip (the last one), else this machine
+    #[test]
+    fn watchdog_address() {
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<String>>();
+        assert_eq!(watch_address(&a(&["-game", "cstrike", "-port", "27015"])), "127.0.0.1");
+        assert_eq!(watch_address(&a(&["+ip", "0.0.0.0"])), "127.0.0.1");
+        assert_eq!(watch_address(&a(&["+ip", "10.0.0.5", "+maxplayers", "20"])), "10.0.0.5");
+        assert_eq!(watch_address(&a(&["+ip", "10.0.0.5", "+ip", "192.168.1.9"])), "192.168.1.9");
+        assert_eq!(watch_address(&a(&["+ip", "not;an ip"])), "127.0.0.1");
+        let svc = service_sh("x", "cstrike", &a(&["-game", "cstrike", "-port", "27016", "+ip", "10.0.0.5"]));
+        assert!(svc.contains("ExecStart=/usr/local/bin/lswatchdog 27016 lonerstrike-x 10.0.0.5\n"));
+    }
+
+    /// lsctl's list (and the server it picks with no name) is the game servers only, not the
+    /// other lonerstrike-* units the machine has
+    #[test]
+    #[cfg(unix)]
+    fn lsctl_lists_only_servers() {
+        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()]);
+        let line = svc.lines().find(|l| l.starts_with("units() {")).unwrap();
+        let dir = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "units-").unwrap();
+        let unit = |name: &str, exec: &str| std::fs::write(dir.join(format!("{name}.service")), format!("[Service]\nExecStart={exec}\n")).unwrap();
+        unit("lonerstrike-firewall", "/usr/local/sbin/lonerstrike-firewall");
+        unit("lonerstrike-logs", "/usr/local/sbin/lonerstrike-logs");
+        std::fs::write(dir.join("lonerstrike-logs.timer"), "[Timer]\n").unwrap();
+        unit("lonerstrike-friday-night", "/home/u/loner-strike/servers/friday-night/hlds_linux '-game' 'cstrike'");
+        unit("lonerstrike-friday-night-watchdog", "/usr/local/bin/lswatchdog 27015 lonerstrike-friday-night 127.0.0.1");
+        unit("lonerstrike-friday-night-hltv", "/home/u/loner-strike/servers/friday-night/hltv -port 27020");
+        unit("lonerstrike-friday-night-control", "/home/u/loner-strike/bin/ls-control serve --server friday-night --port 9090");
+        unit("lonerstrike-zz-control", "/home/u/loner-strike/servers/zz-control/hlds_linux '-game' 'czero'");
+        let script = format!("{}\nunits\n", line.replace("/etc/systemd/system", &dir.to_string_lossy()));
+        let out = std::process::Command::new("sh").arg("-c").arg(script).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "friday-night\nzz-control\n");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn scripts_parse() {
+        use std::io::Write;
+        let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into()]);
+        for sh in [SETUP_SH.to_string(), svc] {
+            let mut p = std::process::Command::new("bash").arg("-n").stdin(std::process::Stdio::piped()).spawn().unwrap();
+            p.stdin.take().unwrap().write_all(sh.as_bytes()).unwrap();
+            assert!(p.wait().unwrap().success());
+        }
+        // the machine's own AMX Mod X settings (admins added in the game) survive its update
+        let keep = SETUP_SH.find("configs-kept\"").unwrap();
+        let untar = SETUP_SH.find("tar xzf \"$TMP/amxx.tar.gz\"").unwrap();
+        let back = SETUP_SH.find("cp -a \"$TMP/configs-kept/.\" addons/amxmodx/configs/").unwrap();
+        assert!(keep < untar && untar < back);
     }
 
     #[test]

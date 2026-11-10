@@ -1,0 +1,1068 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Docs · Loner-Strike</title>
+<meta name="description" content="How to use Loner-Strike: setup, the app, bot styles and settings, talking to the bots in chat and on voice, servers, and fixes for common problems like no bots or Bad Rcon.">
+<link rel="canonical" href="https://lonerstrike.com/docs">
+<meta name="author" content="nanoshrine">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#3e4637">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/img/icon-48.png" type="image/png" sizes="48x48">
+<link rel="icon" href="/img/icon-96.png" type="image/png" sizes="96x96">
+<link rel="icon" href="/img/icon-192.png" type="image/png" sizes="192x192">
+<link rel="icon" href="img/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta property="og:site_name" content="Loner-Strike">
+<meta property="og:title" content="Loner-Strike docs">
+<meta property="og:description" content="Setup, the app, the bots, servers, and fixes for common problems.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://lonerstrike.com/docs">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:creator" content="@nanoshrine">
+<script type="application/ld+json">
+{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Loner-Strike", "item": "https://lonerstrike.com/"}, {"@type": "ListItem", "position": 2, "name": "Docs", "item": "https://lonerstrike.com/docs"}]}
+</script>
+<link rel="stylesheet" href="fonts/barlow.css">
+
+<!-- Plausible (self-hosted) -->
+<script defer data-domain="lonerstrike.com" src="https://analytics.nanoshrine.com/js/script.file-downloads.hash.outbound-links.pageview-props.tagged-events.js"></script>
+<script>window.plausible = window.plausible || function () { (window.plausible.q = window.plausible.q || []).push(arguments) }</script>
+<script>document.documentElement.classList.add("js")</script>
+
+<style>
+@font-face { font-family: "Counter-Strike"; src: url("fonts/counter-strike.ttf") format("truetype"); font-display: swap; }
+:root {
+  --bg: #3e4637; --side: #353c2f; --panel: #4c5844; --panel-2: #5a6a50;
+  --bevel-hi: rgba(136,145,128,.55); --bevel-lo: #292c21;
+  --bone: #d8ded3; --dim: #c2c9b7; --faint: #aeb7a2;
+  --signal: #c4b550; --ink: #26240f;
+  --raised: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
+  --sunken: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
+  --stencil: "Counter-Strike", Impact, sans-serif;
+  --text: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --top: 58px;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: calc(var(--top) + 16px); }
+body { margin: 0; background: var(--bg); color: var(--bone); font: 500 18px/1.6 var(--text); -webkit-font-smoothing: antialiased; }
+a { color: var(--signal); }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip:focus { position: fixed; left: 16px; top: 12px; z-index: 9; width: auto; height: auto; clip: auto; background: var(--signal); color: var(--ink); padding: 6px 12px; }
+
+/* top bar, as on the home page */
+.top { position: sticky; top: 0; z-index: 6; background: rgba(53,60,47,.96); backdrop-filter: blur(6px); box-shadow: 0 1px 0 var(--bevel-lo); }
+.top .wrap { width: min(1200px, 100% - 32px); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: var(--top); gap: 16px; }
+.brand { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
+.wordmark { font: 400 22px/1 var(--stencil); color: var(--bone); text-decoration: none; }
+.brand .here { color: var(--faint); font-weight: 600; }
+.top nav { display: flex; gap: 22px; align-items: center; }
+.top nav a { color: var(--dim); text-decoration: none; font-weight: 600; }
+.top nav a:hover { color: var(--bone); }
+.top nav a.btn { color: var(--ink); background: var(--signal); padding: 7px 14px; border-radius: 2px; font-weight: 700; font-size: 16px;
+  box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
+.top nav a.btn:hover { background: #d4c55d; }
+
+/* the topic list on the left (sticky), one topic at a time on the right */
+.docs { width: min(1200px, 100% - 32px); margin: 0 auto; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 48px; align-items: start; }
+.rail { align-self: stretch; }
+.side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); max-height: calc(100dvh - var(--top) - 40px); overflow-y: auto; overscroll-behavior: contain;
+  margin: 20px 0 40px; background: var(--side); box-shadow: var(--raised); border-radius: 3px; padding: 12px 0 14px; scrollbar-width: thin; scrollbar-color: var(--panel-2) transparent; }
+.search { margin: 0 12px 6px; }
+.search input { width: 100%; font: 500 16px/1.2 var(--text); color: var(--bone); background: #2b3125; box-shadow: var(--sunken); border: 0; border-radius: 2px; padding: 9px 10px; }
+.search input::placeholder { color: var(--faint); opacity: .85; }
+.group { margin-top: 8px; }
+.group > b { display: block; padding: 2px 16px 3px; color: var(--faint); font-size: 14px; font-weight: 700; }
+.side ul { list-style: none; margin: 0; padding: 0; }
+.side li + li { margin-top: 0; }
+.side a { display: block; padding: 3px 16px; color: var(--dim); text-decoration: none; font-weight: 600; line-height: 1.3; border-left: 3px solid transparent; }
+.side a:hover { color: var(--bone); background: rgba(255,255,255,.04); }
+.side a[aria-current="page"] { color: var(--bone); background: var(--panel); border-left-color: var(--signal); }
+.side .sub { display: none; padding: 2px 0 6px; }
+.side a[aria-current="page"] + .sub { display: block; }
+.side .sub a { padding: 2px 16px 2px 30px; font-size: 16px; font-weight: 500; color: var(--faint); }
+.side .sub a:hover, .side .sub a.on { color: var(--bone); }
+.results a small { display: block; color: var(--faint); font-weight: 500; font-size: 14px; }
+.results p { margin: 6px 16px; color: var(--faint); font-size: 16px; }
+html:not(.js) .search { display: none; }
+html:not(.js) .side .sub { display: block; }
+
+.menu-btn { display: none; }
+
+article { padding: 26px 0 64px; min-width: 0; max-width: 780px; }
+.topic + .topic { margin-top: 56px; }
+.js .topic { display: none; }
+.js .topic + .topic { margin-top: 0; }
+.js .topic.on { display: block; }
+.crumb { color: var(--faint); font-size: 15px; font-weight: 600; margin: 0; }
+h1 { font: 400 38px/1.1 var(--stencil); margin: 4px 0 6px; }
+h2 { font-size: 23px; line-height: 1.3; margin: 32px 0 4px; }
+h2 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
+h2:hover .anchor, h2 .anchor:focus { opacity: .8; }
+h3 { font-size: 19px; margin: 22px 0 4px; }
+p, li, td { color: var(--dim); text-wrap: pretty; }
+ul, ol { padding-left: 22px; }
+li + li { margin-top: 4px; }
+b, strong { color: var(--bone); }
+.lead { font-size: 20px; margin: 6px 0 0; }
+code { font: 15px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--side); padding: 1px 5px; border-radius: 2px; color: var(--bone); overflow-wrap: anywhere; }
+pre { background: #23271c; box-shadow: var(--sunken); padding: 12px 14px; border-radius: 2px; overflow-x: auto; margin: 10px 0 14px; }
+pre code { background: none; padding: 0; font-size: 14px; white-space: pre; overflow-wrap: normal; }
+.table { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 17px; }
+th, td { text-align: left; padding: 7px 14px 7px 0; border-bottom: 1px solid rgba(0,0,0,.2); vertical-align: top; }
+th { color: var(--faint); font-weight: 600; font-size: 15px; }
+td:first-child { white-space: nowrap; }
+.kbd { font: 600 14px/1 ui-monospace, Menlo, Consolas, monospace; background: var(--panel-2); box-shadow: var(--raised); padding: 3px 7px; border-radius: 2px; color: var(--bone); white-space: nowrap; }
+.note { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; margin: 16px 0; }
+.note p { margin: 4px 0; }
+.msg { border-left: 3px solid var(--panel-2); padding: 2px 0 2px 12px; margin: 8px 0; color: var(--bone); font-style: italic; }
+article ul { list-style: none; padding-left: 22px; }
+article ul > li { position: relative; }
+article ul > li::before { content: ""; position: absolute; left: -18px; top: .66em; width: 7px; height: 7px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
+article ol { list-style: none; padding-left: 34px; counter-reset: step; }
+article ol > li { position: relative; counter-increment: step; }
+article ol > li::before { content: counter(step); position: absolute; left: -34px; top: .15em; width: 22px; height: 22px; display: grid; place-items: center; background: var(--signal); color: var(--ink); font-weight: 700; font-size: 14px; line-height: 1; box-shadow: inset -2px -2px 0 #8c7f33, inset 2px 2px 0 #e3d683; }
+.side .sub a { position: relative; }
+.side .sub a::before { content: ""; position: absolute; left: 17px; top: .72em; width: 5px; height: 5px; background: var(--faint); opacity: .6; }
+.side .sub a.on::before, .side .sub a:hover::before { background: var(--signal); opacity: 1; }
+.menu-label { color: var(--faint); font-size: 14px; font-weight: 600; margin-right: 8px; }
+details.prov { background: var(--panel); box-shadow: var(--raised); border-radius: 2px; margin: 8px 0; }
+details.prov summary { cursor: pointer; padding: 9px 14px; font-weight: 700; color: var(--bone); }
+details.prov p { margin: 0; padding: 0 14px 12px; }
+@media (hover: none) { h2 .anchor { display: none; } }
+@media (max-width: 520px) {
+  .table tr { display: block; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.2); }
+  .table td, .table th { display: block; border: 0; padding: 0; }
+  .table td:first-child { margin-bottom: 2px; }
+  .table thead { display: none; }
+}
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; padding-top: 16px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
+.pager a { display: block; text-decoration: none; background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; min-width: 0; color: var(--bone); font-weight: 700; }
+.pager a small { display: block; color: var(--faint); font-weight: 500; font-size: 14px; }
+.pager a:hover { background: var(--panel-2); }
+.pager .next { margin-left: auto; text-align: right; }
+.pager a[hidden] { display: none; }
+html:not(.js) .pager { display: none; }
+
+footer { width: min(1200px, 100% - 32px); margin: 0 auto; padding: 24px 0 48px; color: var(--faint); font-size: 15px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
+footer a { color: var(--dim); }
+
+@media (max-width: 900px) {
+  .top nav a:not(.btn) { display: none; }
+  .brand .here { display: none; }
+  html { scroll-padding-top: calc(var(--top) + 64px); }
+  .docs { grid-template-columns: 1fr; gap: 0; }
+  .rail { display: contents; }
+  .js .menu-btn { position: sticky; top: var(--top); z-index: 5; display: flex; align-items: center; justify-content: space-between; width: calc(100% + 32px); margin: 0 -16px; padding: 12px 16px;
+    font: 700 17px/1.2 var(--text); color: var(--bone); background: var(--panel); box-shadow: 0 1px 0 var(--bevel-lo); border: 0; cursor: pointer; text-align: left; }
+  .menu-btn .chev { transition: transform .15s; }
+  .menu-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .side { position: static; max-height: none; margin: 0; border-radius: 0 0 3px 3px; }
+  .js .side { display: none; position: sticky; top: calc(var(--top) + 46px); z-index: 4; max-height: calc(100dvh - var(--top) - 60px); overflow-y: auto; }
+  .js .side.open { display: block; }
+  h1 { font-size: 32px; }
+  td:first-child { white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) { .menu-btn .chev { transition: none; } }
+</style>
+</head>
+<body>
+<a class="sr-only skip" href="#content">Skip to the docs</a>
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Docs</span></div>
+    <nav aria-label="Site">
+      <a href="/">Home</a>
+      <a href="#vps">Run a server</a>
+      <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CHANGELOG.md">What's new</a>
+      <a class="btn" href="/#get">Get it</a>
+    </nav>
+  </div>
+</header>
+
+<div class="docs">
+  <div class="rail">
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side"><span><span class="menu-label">Topics</span><span id="menu-now">Getting started</span></span><span class="chev" aria-hidden="true">&#9662;</span></button>
+    <nav class="side" id="side" aria-label="Docs">
+      <div class="search" role="search">
+        <label class="sr-only" for="q">Search the docs</label>
+        <input id="q" type="search" placeholder="Search the docs" autocomplete="off">
+      </div>
+      <div class="results" id="results" aria-live="polite" hidden></div>
+      <div id="tree"></div>
+    </nav>
+  </div>
+
+  <article id="content" tabindex="-1">
+
+<!-- ============ Basics ============ -->
+
+<section class="topic" id="getting-started" data-group="Basics">
+  <p class="crumb">Basics</p>
+  <h1>Getting started</h1>
+  <p class="lead">Install in a few minutes, then pick where to go next: <a href="#playing">play with bots</a>, <a href="#friends">play with friends</a> or <a href="#servers">run a server</a>.</p>
+  <h2 id="requirements">What you need</h2>
+  <ul>
+    <li><b>Counter-Strike 1.6 or Condition Zero on Steam</b>, the current version. Old retail or repacked copies can't run the mods (<a href="#old-copy">why</a>).</li>
+    <li><b>Windows 10 or 11</b>, or <b>a Mac</b> with the Windows version of Steam and the game in CrossOver (<a href="#mac">Mac setup</a>).</li>
+  </ul>
+  <h2 id="install">Install</h2>
+  <ol>
+    <li>Download Loner-Strike from <a href="/#get">lonerstrike.com</a>: the <code>.dmg</code> on a Mac, the <code>-setup.exe</code> on Windows.</li>
+    <li>On Windows, if it says it protected your PC, click <b>More info</b>, then <b>Run anyway</b> (<a href="#smartscreen">why</a>).</li>
+    <li>Close Counter-Strike. Setup can't change the game's files while it runs.</li>
+    <li>Open Loner-Strike. Setup finds your game, and you pick what to install. The basics take under a minute, everything 2 to 5 minutes.</li>
+  </ol>
+  <h2 id="mac">On a Mac</h2>
+  <p>The Mac version of Counter-Strike can't run mods, so the game runs through CrossOver (paid, with a free trial):</p>
+  <ol>
+    <li>Install CrossOver in <b>Applications</b>.</li>
+    <li>Make a bottle, install the <b>Windows</b> version of Steam in it, then install the game from there.</li>
+    <li>Open Loner-Strike. It finds Steam in your CrossOver bottles by itself. With more than one, setup asks which to use.</li>
+  </ol>
+  <p>A folder you choose by hand has to be inside the bottle's <code>drive_c</code>, and servers on this Mac live in the same bottle as the game. With Parallels instead, install the Windows version of Loner-Strike inside Windows.</p>
+  <h2 id="what-setup-installs">What setup installs</h2>
+  <ul>
+    <li><b>The mod loader</b> (Metamod-P, AMX Mod X and ReGameDLL).</li>
+    <li><b>The bot brain</b>: Loner-Strike's own build of the game's bots, which play like people.</li>
+    <li><b>The Game Mode Menu</b>: the in-game menu on <span class="kbd">F3</span>, and the part the app talks to.</li>
+    <li><b>The mods you pick</b>, which you can change later in Mods.</li>
+  </ul>
+  <p>Setup backs up every file it replaces, and mods only run in games you host.</p>
+</section>
+
+<section class="topic" id="the-app" data-group="Basics">
+  <p class="crumb">Basics</p>
+  <h1>Finding your way around</h1>
+  <p class="lead">What each page in the app's sidebar is for. They're grouped the same way as a server's tabs.</p>
+  <h2 id="pages">The pages</h2>
+  <div class="table">
+  <table>
+    <thead><tr><th>Group</th><th>Pages</th></tr></thead>
+    <tbody>
+      <tr><td><b>Game</b></td><td><b>Play</b> (mode, map, bots, presets), <b>Bots</b>, <b>Rules</b> (round time, money, friendly fire), <b>Fun</b> (gravity, unlimited ammo, auto bunnyhop), <b>Add-ons</b>, <b>Rotation &amp; extras</b></td></tr>
+      <tr><td><b>People</b></td><td><b>Players</b> (heal, give, kick, ban, swap teams), <b>Moderation</b>, <b>Stats</b>, <b>Admins</b>, <b>Welcome page</b></td></tr>
+      <tr><td><b>Online</b></td><td><b>Play with friends</b>, <b>Find servers</b></td></tr>
+      <tr><td><b>My library</b></td><td><b>Maps</b>, <b>Mods</b>, <b>Skins &amp; models</b>, <b>Sounds</b>, <b>Get more</b></td></tr>
+      <tr><td><b>Hosting</b></td><td><b>Servers</b></td></tr>
+      <tr><td><b>Settings</b></td><td>Updates, phone access, your game folder, backup and restore, help</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Most of these have their own topic in this sidebar.</p>
+  <h2 id="live-pages">Before and during a game</h2>
+  <p>Bots, Rules, Fun and Add-ons work before you start: changes apply when you start a game. A few things, like kicking bots or restarting the round, need a game running. Players fills in once one is going.</p>
+  <p>The bar at the top of every page says what you're changing: <b>Your game</b> and which one, or <b>Server:</b> and its name, with <b>Back to my game</b>.</p>
+  <h2 id="shortcuts">Shortcuts</h2>
+  <p><span class="kbd">Cmd</span> plus <span class="kbd">1</span> to <span class="kbd">9</span> (<span class="kbd">Ctrl</span> on Windows) jumps to the first nine pages, and <span class="kbd">Cmd</span> <span class="kbd">,</span> opens Settings.</p>
+  <h2 id="phone">On your phone</h2>
+  <p>The app also runs in your phone's browser, so you can change things without leaving the game.</p>
+  <ol>
+    <li>In <b>Settings</b>, under <b>Use on your phone</b>, turn on <b>Phone access</b>.</li>
+    <li>Scan the QR code with a phone on the same Wi-Fi. You can add it to your home screen.</li>
+    <li>On Windows, set your Wi-Fi to a <b>Private network</b>, or the phone can't reach it.</li>
+  </ol>
+  <p>Installing and removing things only works on the computer. <b>Sign out all phones</b> in the same place signs every phone out.</p>
+  <h2 id="notifications">Notifications</h2>
+  <p><b>Tell me when someone joins your game</b> in Settings, and the same switch on each server's Overview, sends a notification on your computer. Player reports always notify.</p>
+</section>
+
+<section class="topic" id="playing" data-group="Basics">
+  <p class="crumb">Basics</p>
+  <h1>Playing</h1>
+  <p class="lead">Starting a game and changing things while you play.</p>
+  <h2 id="start-a-game">Start a game</h2>
+  <p>On <b>Play</b>, pick a mode and a map, set the bots, and start. The app opens the game and loads straight in. If the game is already open, it restarts it into your game.</p>
+  <ul>
+    <li><b>Presets</b> set everything at once: Competitive 5v5, Arcade chaos, Zombie night and more.</li>
+    <li><b>Recently played</b> starts a game you've played before.</li>
+    <li>Changes you make while playing load on the next map, or the next round for round settings.</li>
+  </ul>
+  <h2 id="in-game-menu">In the game</h2>
+  <ul>
+    <li><span class="kbd">F3</span> opens the Game Mode Menu: modes, maps, bots and settings. Typing <code>/menu</code> in chat does the same.</li>
+    <li><span class="kbd">F4</span> opens quick actions: restart the round, add or remove a bot, god mode, noclip, respawn, heal, $16000 and more. Typing <code>/q</code> does the same.</li>
+  </ul>
+  <p>Both are for you as the host and for admins. If <span class="kbd">F3</span> does nothing, type <code>bind F3 gamemenu</code> in the game console.</p>
+  <p>In the app, a bar of quick actions sits at the top while a game runs: <b>Pause</b>, <b>Round</b> (restart, end, add time, <b>Start a mode vote</b>), <b>Map</b>, the bot count with <b>Difficulty</b> and <b>Bot style</b> in its menu, <b>You</b> (god mode, noclip, respawn), <b>Announce</b> and <b>Record demo</b>.</p>
+  <h2 id="modes">Game modes</h2>
+  <p>Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf, Paintball and the rest are installed from <b>Mods</b>. Each one is patched so bots can play it, and each has a note on how well they do. Switch modes from Play or the F3 menu; switching reloads the map.</p>
+  <p>Modes have their own chat commands, like <code>/war3menu</code> in Warcraft 3 or <code>/guns</code> in deathmatch. See <a href="#commands-modes">In-game commands</a>.</p>
+  <h2 id="match-mode">5v5 matches</h2>
+  <p>Match mode runs a proper match: warmup, <code>/ready</code>, a knife round for sides, and pauses. The Play page shows the match panel when it's on. The commands are under <a href="#commands-match">In-game commands</a>.</p>
+</section>
+
+<section class="topic" id="maps" data-group="Basics">
+  <p class="crumb">Basics</p>
+  <h1>Maps</h1>
+  <p class="lead">Finding maps, getting new ones, and teaching them to the bots.</p>
+  <h2 id="browse-maps">Browse</h2>
+  <p>The Maps page shows every map you have, with pictures, search, map types, favourites and hidden maps. Pictures fill in by themselves in the background. Open a map to start a game on it or send it to your servers.</p>
+  <p>Maps you download work in both games. Condition Zero's own <code>_cz</code> maps only load in Condition Zero, so Counter-Strike 1.6 leaves them out of its lists, rotations and votes; <b>Show</b> lists them if you want to look.</p>
+  <h2 id="get-maps">Get new maps</h2>
+  <ul>
+    <li><b>Get maps</b> downloads from GameBanana, with what each map needs.</li>
+    <li><b>Add a map file</b> takes a <code>.bsp</code> or an archive (zip, rar or 7z).</li>
+    <li><b>Copy maps from your game</b>, on a server, copies maps you already have.</li>
+  </ul>
+  <h2 id="teach-bots">Bots on new maps</h2>
+  <p>Bots need to learn a map before they can play it. On a map they don't know, a <b>Learn this map</b> banner appears on the Bots page: it takes a few minutes, and the map timer waits. To do several at once ahead of time, use <b>Teach bots maps</b> on the Maps page, which can also <b>Re-learn maps bots already know</b> if they play one badly.</p>
+  <p>Maps the bots know are shared from your game to your servers.</p>
+  <h2 id="map-downloads">When a download fails</h2>
+  <ul>
+    <li><b>GameBanana is busy</b>: try again in a minute.</li>
+    <li><b>No map found in that download</b>: it isn't a map, or it's for another game.</li>
+    <li><b>No longer on GameBanana</b>: the author removed it.</li>
+    <li><b>Already installed</b>: remove the old one first to install another version.</li>
+  </ul>
+
+</section>
+
+<section class="topic" id="mods-and-sounds" data-group="Basics">
+  <p class="crumb">Basics</p>
+  <h1>Mods, sounds and more</h1>
+  <p class="lead">Adding modes, add-ons, sounds and your own plugins.</p>
+  <h2 id="mods-page">Mods</h2>
+  <p>A game mode changes how the whole game plays, and you switch between modes. An add-on, like the grappling hook (bind a key to it: <code>bind v +hook</code> in the console), works on top of whichever mode is on and is switched on and off in <b>Add-ons</b>.</p>
+  <ul>
+    <li><b>Install</b> and <b>Remove</b> each one. Removing puts back anything it replaced.</li>
+    <li><b>Reinstall</b> puts a mod's files in fresh. A mod that says <b>Didn't build</b> needs <b>Try again</b>.</li>
+    <li><b>Repair</b> puts Loner-Strike's basics back if something removed them. Your settings and mods stay.</li>
+  </ul>
+  <h2 id="own-plugins">Your own plugins</h2>
+  <p>Under <b>Your own plugins</b> in Mods, <b>Add a plugin</b> takes an AMX Mod X plugin. A <code>.sma</code> source file is compiled for you.</p>
+  <h2 id="skins">Skins and models</h2>
+  <p>Weapon skins, player models, sprays, effects, and HUD and menus you've installed show on <b>Skins &amp; models</b> under My library, with <b>Remove</b> on each. Only you see them in your own game; removing one puts the game's own back. A server has its own Skins &amp; models tab, where players download what it uses.</p>
+  <h2 id="get-more">Get more</h2>
+  <p>Browses GameBanana's Counter-Strike 1.6 section for maps, skins, models and sounds, sorted by most downloaded, newest or most liked. <b>Add from a file</b> takes one you already downloaded. The Get buttons on Maps, Skins &amp; models and Sounds open it on that kind.</p>
+  <h2 id="sounds">Sounds</h2>
+  <ul>
+    <li><b>Round-end music</b>: songs at the end of each round. <b>Add tracks</b> for your own.</li>
+    <li><b>Quake sounds</b>: first blood, multi kill, godlike and the rest, with two announcers to pick from. A new setup starts with them off: switch them on here or in Add-ons.</li>
+    <li><b>Sound packs</b>: other sets of game sounds.</li>
+    <li><b>Your sounds</b>: sounds you got from GameBanana, with <b>Remove</b> to put the game's own back.</li>
+  </ul>
+  <p>Changes to sounds load on the next map. The app also has a radio with eleven stations.</p>
+</section>
+
+<!-- ============ The bots ============ -->
+
+<section class="topic" id="bot-styles" data-group="The bots">
+  <p class="crumb">The bots</p>
+  <h1>Bot styles</h1>
+  <p class="lead">A bot style sets who's in the lobby: how good they are, how they play and how much they talk. Pick one on the Bots page.</p>
+  <div class="table">
+  <table>
+    <thead><tr><th>Style</th><th>What it's like</th></tr></thead>
+    <tbody>
+      <tr><td><b>Pub server</b></td><td>The default. A typical public server: a few sharp players, most average, some bad</td></tr>
+      <tr><td><b>Newbie lobby</b></td><td>New players: slow to react, they spray and miss a lot</td></tr>
+      <tr><td><b>Mixed lobby</b></td><td>Everyone different, from new to very good. A regular keeps their level</td></tr>
+      <tr><td><b>LAN party</b></td><td>Friends at a LAN: every level, lots of banter, and they play together</td></tr>
+      <tr><td><b>Matchmaking</b></td><td>Solid players who work as a team</td></tr>
+      <tr><td><b>Veterans</b></td><td>Experienced: quick, accurate, short bursts</td></tr>
+      <tr><td><b>Old-timers</b></td><td>Good aim, slow and methodical. They camp a lot and rarely talk</td></tr>
+      <tr><td><b>Locked In</b></td><td>Very good and focused. They bunnyhop between fights</td></tr>
+      <tr><td><b>Hackers</b></td><td>Suspiciously good: most bullets find you and they notice you from behind</td></tr>
+      <tr><td><b>Gods</b></td><td>Everything maxed. Every bullet near you is a headshot</td></tr>
+      <tr><td><b>Original</b></td><td>The game's own bots: instant reactions, perfect aim</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h2 id="every-bot">Every bot is someone</h2>
+  <p>Each bot has its own personality, mood and skill. They tilt, panic when flashed and back off when outnumbered. About 1,600 regulars return with the same names, some in clans, and remember you.</p>
+  <p>Bots play as a team in 5v5 matches, Base Builder, and the Classic mode with the Matchmaking style. Everywhere else they play as individuals, the way a pub does.</p>
+</section>
+
+<section class="topic" id="bot-settings" data-group="The bots">
+  <p class="crumb">The bots</p>
+  <h1>Bot settings</h1>
+  <p class="lead">Everything on the Bots page. Change them before a game or during one. <b>Reset bot and fun settings</b>, at the bottom, puts them all back to the defaults and keeps the bot count.</p>
+  <h2 id="how-many">How many</h2>
+  <p>The <b>Bots</b> slider sets how many; each one takes a player slot. <b>Add a Terrorist</b>, <b>Add a Counter-Terrorist</b>, <b>Kill all</b> and <b>Kick all</b> are beside it.</p>
+  <p><b>Bot count mode</b> decides how that number is kept: a fixed number, filling the server, or a number per human. If the count keeps changing, that's why.</p>
+  <h2 id="skill">Skill and style</h2>
+  <div class="table">
+  <table>
+    <thead><tr><th>Setting</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><b>Difficulty</b></td><td>Easy, Normal, Hard or Expert. Hard to start with. Changing it adds the bots again</td></tr>
+      <tr><td><b>Bot style</b></td><td>Who's in the lobby (<a href="#bot-styles">the styles</a>)</td></tr>
+      <tr><td><b>Auto difficulty</b></td><td>Adjusts their skill to how you're doing</td></tr>
+      <tr><td><b>Personality</b></td><td>How much of each bot's character shows, from Plain to Exaggerated</td></tr>
+      <tr><td><b>Lobby mood</b></td><td>Friendly, Normal or Toxic</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h2 id="chat-settings">Chat</h2>
+  <div class="table">
+  <table>
+    <thead><tr><th>Setting</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><b>Bot chat</b></td><td>Off, Now and then, Normal or Chatty. Normal to start with. Off means they don't listen either</td></tr>
+      <tr><td><b>Bot chatter</b></td><td>Their radio voice lines ("Enemy spotted"), separate from typed chat</td></tr>
+      <tr><td><b>Bots answer you</b></td><td>They answer and follow what people say in chat (<a href="#talking-to-bots">what they understand</a>)</td></tr>
+      <tr><td><b>Bots can be rude</b></td><td>Off by default, so nobody gets insulted</td></tr>
+      <tr><td><b>Dead bots' chat</b></td><td>Everyone sees it, or only the dead, as in the real game</td></tr>
+      <tr><td><b>Bots stop to type</b></td><td>They stand still for a moment to type, like people</td></tr>
+      <tr><td><b>Bot names</b></td><td>Regulars and clan tags, or the game's own names</td></tr>
+      <tr><td><b>Players come &amp; go</b></td><td>Bots leave and new ones join, like a real server</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h2 id="more-bot-settings">The rest</h2>
+  <p>Further down: how human they play, their quirks, and server life. Each switch has a note in the app.</p>
+</section>
+
+<section class="topic" id="talking-to-bots" data-group="The bots">
+  <p class="crumb">The bots</p>
+  <h1>Talking to the bots</h1>
+  <p class="lead">Type in team chat and they answer, or do what you ask.</p>
+  <h2 id="how-they-listen">How they listen</h2>
+  <ul>
+    <li>Any wording close to the examples below works.</li>
+    <li>Start with a bot's name to ask just that one. A short form or nickname works.</li>
+    <li>The whole team hears a call, and each bot decides for itself by its personality: a lurker may ignore "rush b", a rich one may buy you that AWP. Only one bot ever buys you something.</li>
+    <li>A bot only says yes when it actually does it.</li>
+    <li>They also react to chat that isn't an order: praise, trash talk, "gg", someone who's tilted.</li>
+  </ul>
+  <h2 id="commands">What you can say</h2>
+  <div class="table">
+  <table>
+    <thead><tr><th>For</th><th>Say</th></tr></thead>
+    <tbody>
+      <tr><td><b>Moving</b></td><td>go b, rush a, split a, everyone mid, go b slow, fake b, fall back, watch flank, follow me, trade me, come here, wait here, nvm</td></tr>
+      <tr><td><b>Buying</b></td><td>eco, force, full buy, someone buy me an awp, drop me an ak, give me the bomb</td></tr>
+      <tr><td><b>Grenades</b></td><td>flash for me, flash long, smoke mid, nade them</td></tr>
+      <tr><td><b>Callouts</b></td><td>two long, awp mid, they're all b, bomb b, one short he's low</td></tr>
+      <tr><td><b>The bomb</b></td><td>plant b, plant here, go defuse, where's the bomb</td></tr>
+      <tr><td><b>Questions</b></td><td>money?, hp?, what gun?, how many left?, where'd they go, where are you?, who killed me, who has awp?, are they eco?</td></tr>
+      <tr><td><b>Just for fun</b></td><td>jump, crouch spam, spray that wall</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The app lists all of this too, in <b>What you can tell the bots</b>, its own section on the Bots page.</p>
+  <h2 id="not-answering">When they don't answer</h2>
+  <ul>
+    <li>Check <b>Bots answer you</b> is on, and that you're typing in <b>team</b> chat for orders.</li>
+    <li>With <b>Bot chat</b> Off they don't listen at all. Set low, they still follow orders but say less.</li>
+    <li>Lines starting with <code>/</code> or <code>!</code> are commands, so bots ignore them.</li>
+    <li>Someone sending lots of lines in a few seconds makes them stop listening for a bit.</li>
+    <li>A dead bot can't go anywhere. It may still answer.</li>
+  </ul>
+</section>
+
+<section class="topic" id="voice" data-group="The bots">
+  <p class="crumb">The bots</p>
+  <h1>Voice commands</h1>
+  <p class="lead">Bots understand voice chat the same as typed team chat. It works on <a href="#servers">dedicated servers</a> only, not in games hosted from Play.</p>
+  <p>Hold your voice key and say "rush b" or "Derek, flash for me". Loose wording works too, like "can somebody get over to B real quick". Anything that isn't an order reaches the bots as said, and they answer in team chat.</p>
+  <h2 id="voice-setup">Set it up</h2>
+  <ol>
+    <li>Open the server's <b>Bot voice commands</b> tab. For a server on this computer, click <b>Install</b> first: about 500 MB of models, once for every server here.</li>
+    <li>Turn on <b>Bots understand voice chat</b>. On a Linux server this puts the models on the machine, which takes a few minutes.</li>
+    <li>Join the server and talk on your team's voice chat.</li>
+  </ol>
+  <h2 id="voice-privacy">Privacy</h2>
+  <p>Speech is turned into text on the machine running the server. No audio is kept or sent anywhere; the lines it heard are in the server's log, shown under <b>What it heard</b>. Only teammates reach the bots, and muted players and filtered words are left out.</p>
+  <h2 id="voice-remove">Remove it</h2>
+  <p>On this computer, <b>Remove</b> in the same tab turns voice off on every server here and deletes the models. On a Linux server, turn the switch off.</p>
+  <h2 id="voice-not-working" data-keywords="voice not working broken mic microphone">When it doesn't work</h2>
+  <ul>
+    <li>Check the server's <b>Bot voice commands</b> tab says <b>On, and listening</b>. <b>What it heard</b> shows each line it understood.</li>
+    <li>Nothing there means your voice isn't reaching the server. Check voice chat works for other players, and that <code>sv_voiceenable</code> is <code>1</code>.</li>
+    <li>It only works on dedicated servers, and only for your teammates' bots.</li>
+    <li><b>"Voice stopped by itself"</b>: turn it off and on again. Its log under <b>What it heard</b> may say why.</li>
+    <li><b>"Port … on this computer is in use"</b>: another program has the voice port. Close it, or restart the computer.</li>
+    <li><b>"can't use sudo without a password"</b> (Linux): connect as <code>root</code>, or give the user passwordless sudo.</li>
+    <li>Heard wrong? Speak a little slower and start with the order: "rush b", "flash long".</li>
+  </ul>
+
+</section>
+
+<!-- ============ Multiplayer ============ -->
+
+<section class="topic" id="friends" data-group="Multiplayer">
+  <p class="crumb">Multiplayer</p>
+  <h1>Playing with friends</h1>
+  <p class="lead">Friends only need Counter-Strike, not Loner-Strike.</p>
+  <div class="note"><p><b>Your game is the server.</b> Friends join the game you're playing, so when you quit or your game crashes, everyone drops. For a bigger group or a whole evening, run a <a href="#servers">dedicated server</a>: it keeps going on its own while you play like everyone else. <a href="#lan-which">Which should I use?</a></p></div>
+  <p>They join like any other server, and it sends them the maps, sounds and models. In the app, <b>Play with friends</b> sets your server's name and join password ("everyone who joins needs this"), and walks you through one of these:</p>
+  <div class="table">
+  <table>
+    <thead><tr><th>Way</th><th>When to use it</th></tr></thead>
+    <tbody>
+      <tr><td><b>This network</b></td><td>Same Wi-Fi, or a <a href="#lan-party">LAN party</a></td></tr>
+      <tr><td><b>Direct</b></td><td>Over the internet, through your router. The app asks your router to open the port</td></tr>
+      <tr><td><b>playit.gg</b></td><td>Over the internet with nothing to open on your router</td></tr>
+      <tr><td><b>Tailscale</b>, <b>ZeroTier</b></td><td>A private network between you and your friends</td></tr>
+      <tr><td><b>Radmin VPN</b>, <b>Hamachi</b></td><td>The classic LAN-over-internet tools (Radmin is Windows only)</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Friends who can't get in: see <a href="#friends-cant-join">Friends can't join</a>. For a server that stays up with your computer off, see <a href="#servers">Servers</a>.</p>
+  <h2 id="find-servers">Find a server to join</h2>
+  <p>Counter-Strike's server browser, in the app:</p>
+  <ul>
+    <li><b>Internet</b>: servers other Loner-Strike players put on the list.</li>
+    <li><b>Favorites</b> and <b>History</b>: servers you've saved or played on.</li>
+    <li><b>LAN</b>: games on your network.</li>
+  </ul>
+  <p>Click <b>Connect</b>, or double-click a server, to play. Open its info to see who's on, with <b>Join game</b> there too. Filters narrow it by game, map, latency, servers with people, servers not full, and no password. To put your own server on the list, turn on <b>On the Loner-Strike server list</b> in its <b>Who can join</b> tab.</p>
+</section>
+
+<section class="topic" id="lan-party" data-group="Multiplayer">
+  <p class="crumb">Multiplayer</p>
+  <h1>LAN party</h1>
+  <p class="lead">Everyone on the same Wi-Fi or router finds your server in the LAN tab, with nothing to install or open. Friends who can't make it can still join from home.</p>
+  <h2 id="lan-which">Your game or a dedicated server</h2>
+  <div class="table">
+  <table>
+    <thead><tr><th>Host from</th><th>Best for</th></tr></thead>
+    <tbody>
+      <tr><td><b>Your game</b></td><td>A few people, quickly. The game you play in is the server, so it ends when you quit or your game crashes</td></tr>
+      <tr><td><b>A dedicated server</b></td><td>Bigger parties, or a whole evening. It runs on its own, so map changes, your game restarting or you leaving don't drop anyone. Run it on your own computer or a spare one at the party</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h2 id="lan-own-game">From your game</h2>
+  <ol>
+    <li>In <b>Play with friends</b>, pick <b>This network</b>. Set a server name and, if you like, a join password.</li>
+    <li>Start a game from <b>Play</b>.</li>
+    <li>Everyone opens <b>Find Servers</b> in Counter-Strike, then the <b>LAN</b> tab, and joins.</li>
+  </ol>
+  <h2 id="lan-dedicated">With a dedicated server</h2>
+  <ol>
+    <li>In <b>Servers</b>, click <b>New server</b> and pick <b>This computer</b>.</li>
+    <li>Under <b>Who can join</b>, pick <b>This network</b>: only people on your Wi-Fi or LAN can see it.</li>
+    <li>Start it. You join it from the app like everyone else, with <b>Join</b>.</li>
+    <li>Everyone else finds it in the <b>LAN</b> tab of Find Servers, or types <code>connect</code> and the address the server's <b>Who can join</b> tab shows.</li>
+  </ol>
+  <p>A dedicated server is also where <a href="#voice">voice commands</a> work, and the bots keep the server full while people come and go.</p>
+  <h2 id="lan-checklist">Before everyone arrives</h2>
+  <ul>
+    <li><b>Same game for everyone.</b> A Condition Zero server needs Condition Zero; a 1.6 server needs 1.6.</li>
+    <li><b>Firewall.</b> Allow the game when Windows or macOS asks. On Windows, set the Wi-Fi to a <b>Private network</b>.</li>
+    <li><b>Guest Wi-Fi</b> networks often keep devices apart, so the server won't show up. Use the main network, or plug into the router.</li>
+  </ul>
+  <h2 id="lan-remote">Friends who can't be there</h2>
+  <p>Everyone in the room needs nothing extra: the server shows up in their LAN tab on its own. Friends somewhere else can still join the party through ZeroTier, Radmin VPN or Hamachi. Everyone joins the same virtual network, and your server shows up in their LAN tab as if they were in the room. <a href="#friends">Playing with friends</a> walks you through each.</p>
+</section>
+
+
+<section class="topic" id="in-game-commands" data-group="Multiplayer">
+  <p class="crumb">Multiplayer</p>
+  <h1>In-game commands</h1>
+  <p class="lead">What players type in chat. The <code>/</code> is optional for most.</p>
+  <h2 id="commands-everyone">For everyone</h2>
+  <div class="table">
+  <table>
+    <thead><tr><th>Type</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>rtv</code></td><td>Vote to change the map. The vote picks the mode first, then a map that suits it</td></tr>
+      <tr><td><code>nominate &lt;map&gt;</code></td><td>Put a map in the next vote</td></tr>
+      <tr><td><code>rtm</code>, <code>nominatemode &lt;mode&gt;</code></td><td>Vote for, or suggest, a mode</td></tr>
+      <tr><td><code>/report &lt;name&gt; &lt;what happened&gt;</code></td><td>Tell the admins about a player (one a minute)</td></tr>
+      <tr><td><code>/rank</code>, <code>/top15</code>, <code>/statsme</code>, <code>/hp</code></td><td>Stats, and who hurt you</td></tr>
+      <tr><td><code>/welcome</code>, <code>/rules</code></td><td>The server's welcome page and rules</td></tr>
+      <tr><td><code>votekick</code>, <code>voteban</code></td><td>Start a vote against a player, when the server allows it</td></tr>
+      <tr><td><code>/vips</code>, <code>/donate</code></td><td>Who's VIP, and how to support the server</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h2 id="commands-admins">For the host and admins</h2>
+  <ul>
+    <li><span class="kbd">F3</span> (<code>/menu</code>) and <span class="kbd">F4</span> (<code>/q</code>): see <a href="#in-game-menu">In the game</a>.</li>
+    <li>VIPs, if their role allows: <code>/vip</code>, <code>/noclip</code>, <code>/god</code>, <code>/respawn</code>, <code>/save</code> and <code>/tp</code>.</li>
+  </ul>
+  <h2 id="commands-match">5v5 matches</h2>
+  <div class="table">
+  <table>
+    <thead><tr><th>Type</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>/ready</code>, <code>/notready</code></td><td>Everyone. The match starts when all are ready. The first to ready up on each team is its captain</td></tr>
+      <tr><td><code>/score</code>, <code>/match</code></td><td>The score and the match's state</td></tr>
+      <tr><td><code>/stay</code>, <code>/switch</code></td><td>The knife round's winners pick a side</td></tr>
+      <tr><td><code>/pause</code>, <code>/unpause</code></td><td>Captains and admins. The pause starts at the next freeze time</td></tr>
+      <tr><td><code>/start</code>, <code>/restart</code>, <code>/warmup</code></td><td>Admins: start now, start over from 0 - 0, or stop the match</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h2 id="commands-modes">In some modes</h2>
+  <ul>
+    <li>Deathmatch: <code>/guns</code> to pick your weapons again.</li>
+    <li>Zombie Plague: <code>zpmenu</code>.</li>
+    <li>Warcraft 3: <code>/war3menu</code>, <code>/changerace</code>, <code>/shopmenu</code>.</li>
+    <li>SuperHero: <code>/herolist</code>, <code>/myheroes</code>, <code>/drop &lt;hero&gt;</code>.</li>
+  </ul>
+</section>
+
+<!-- ============ Servers ============ -->
+
+<section class="topic" id="servers" data-group="Servers">
+  <p class="crumb">Servers</p>
+  <h1>Your servers</h1>
+  <p class="lead">A dedicated server runs on its own, apart from your game, so you join it like anyone else.</p>
+  <h2 id="new-server">Make one</h2>
+  <p>In <b>Servers</b>, click <b>New server</b> and pick where it runs:</p>
+  <ul>
+    <li><b>This computer</b>: ready in a few minutes. With <b>Keep running after I close Loner-Strike</b> on, it stays up when you quit the app.</li>
+    <li><b>A Linux server (VPS)</b>: an always-on server on a rented machine, running with your computer off. The app sets it up over SSH. Follow <a href="#vps">Run a server on a VPS</a>.</li>
+  </ul>
+  <p>Already run a server? <b>Add one you already run</b> brings it into the app. <b>Bots play on an empty server</b>, on its Overview tab, keeps a few bots on it so it shows players in the server list; it uses some CPU.</p>
+  <h2 id="server-tabs">A server's tabs</h2>
+  <div class="table">
+  <table>
+    <thead><tr><th>Tab</th><th>What's in it</th></tr></thead>
+    <tbody>
+      <tr><td><b>Overview</b></td><td>Status, its main settings and the console</td></tr>
+      <tr><td><b>Who can join</b></td><td>Who finds it, join password, public address, the Loner-Strike server list, and how people connect</td></tr>
+      <tr><td><b>Health</b></td><td>Updates, security checks (Linux), backup and restore, daily restart, and repair or delete</td></tr>
+      <tr><td><b>Rotation &amp; extras</b></td><td>Map rotation, adverts, AFK and ping kicks, votes, what happens when it empties</td></tr>
+      <tr><td><b>Spectators &amp; demos</b></td><td>HLTV: watch matches live and record demos</td></tr>
+      <tr><td><b>Website status</b></td><td>Live player count for your site, Discord messages and fast downloads (Linux)</td></tr>
+      <tr><td><b>Modes</b>, <b>Bots</b>, <b>Rules</b>, <b>Fun</b></td><td>As for your own game</td></tr>
+      <tr><td><b>Bot voice commands</b></td><td><a href="#voice">Voice commands</a> for this server</td></tr>
+      <tr><td><b>Players</b>, <b>Moderation</b>, <b>Stats</b>, <b>Admins</b>, <b>Welcome page</b></td><td>Its people</td></tr>
+      <tr><td><b>Shared control</b></td><td><a href="#shared-control">Friends who help run it</a></td></tr>
+      <tr><td><b>Mods</b>, <b>Maps</b>, <b>Skins &amp; models</b>, <b>Sounds</b></td><td>Its content. Changes go up as you make them</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Someone you <a href="#shared-control">share a server with</a> sees the tabs their role can't use dimmed, marked <b>Owner only</b> or <b>Admins only</b>.</p>
+  <h2 id="maintenance">Health and repairs</h2>
+  <p>On the server's <b>Health</b> tab, under <b>Updates</b> and <b>Repair or remove</b>. Stop the server first.</p>
+  <ul>
+    <li><b>Update Valve's server files</b> gets the latest server from Valve. Mods and settings stay.</li>
+    <li><b>Repair</b> in its Mods tab puts Loner-Strike's basics back. <b>Reinstall Loner-Strike and its mods</b> (servers on this computer) puts everything back, for a server that won't start or lost its mods. Settings, admins and maps stay.</li>
+    <li><b>Wipe and rebuild</b> (Linux) deletes everything in the server's folder and sets it up again. Bans, admins, stats and added maps go. Takes 5 to 15 minutes. For a badly broken server only.</li>
+    <li><b>Delete the server</b> stops it and deletes its folder. A server you added with Add one you already run has <b>Remove</b> instead, which leaves its folder alone.</li>
+  </ul>
+</section>
+
+<section class="topic" id="vps" data-group="Servers">
+  <p class="crumb">Servers</p>
+  <h1>Run a server on a VPS</h1>
+  <p class="lead">An always-on server on a Linux machine you rent, running with your computer off. The app connects over SSH, installs Valve's server and Loner-Strike, and runs it as a service. It takes 15 to 30 minutes, mostly waiting for downloads.</p>
+  <h2 id="vps-needs">What you need</h2>
+  <ul>
+    <li>Loner-Strike on Windows, or on a Mac with the game in CrossOver. The server's plugins are built on your computer.</li>
+    <li>A machine with <b>Ubuntu or Debian</b> (Ubuntu 22.04 or 24.04 is safest) on an <b>x86 (AMD or Intel)</b> CPU, with a <b>public IPv4 address</b>.</li>
+    <li>Not Arm: Oracle Ampere A1, AWS Graviton, Hetzner CAX and Raspberry Pi can't run the Counter-Strike server.</li>
+  </ul>
+  <h2 id="vps-size" data-short="1. Host and size">1. Choose a host and size</h2>
+  <div class="table">
+  <table>
+    <thead><tr><th>Players (bots included)</th><th>CPU</th><th>Memory</th></tr></thead>
+    <tbody>
+      <tr><td>Up to about 10, a few bots</td><td>1 vCPU</td><td>1 GB</td></tr>
+      <tr><td>20 to 32, with bots</td><td>2 vCPU</td><td>2 to 4 GB</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The game uses one core, so a fast core beats many. About 2 GB of disk plus your maps.</p>
+  <ul>
+    <li><b>Free:</b> Oracle Cloud's Always Free AMD machines (VM.Standard.E2.1.Micro), when Oracle has capacity. Oracle's trial credits cover bigger machines for a while.</li>
+    <li><b>Paid:</b> Hetzner, Vultr, DigitalOcean, OVH and Linode have small x86 plans. Pick a location near your players.</li>
+  </ul>
+  <h2 id="ssh-key" data-short="2. SSH key">2. Make an SSH key</h2>
+  <p><b>Windows 10 or 11</b>, in PowerShell (press Enter twice when it asks for a passphrase):</p>
+  <pre><code>mkdir $HOME\.ssh -Force
+ssh-keygen -t ed25519 -f $HOME\.ssh\loner-strike -C loner-strike
+Get-Content $HOME\.ssh\loner-strike.pub</code></pre>
+  <p><b>Mac or Linux</b>, in Terminal:</p>
+  <pre><code>mkdir -p ~/.ssh
+ssh-keygen -t ed25519 -f ~/.ssh/loner-strike -N "" -C loner-strike
+cat ~/.ssh/loner-strike.pub</code></pre>
+  <p>The last line it prints, starting with <code>ssh-ed25519</code>, is the public key. Copy it for the next step. Keys with a passphrase aren't supported yet. A PuTTY key (<code>.ppk</code>) needs converting in PuTTYgen first (Conversions, then Export OpenSSH key).</p>
+  <h2 id="create-machine" data-short="3. Create the machine">3. Create the machine</h2>
+  <ol>
+    <li>Create a new server (instance, droplet) with <b>Ubuntu 24.04 or 22.04</b> on an <b>x86</b> plan.</li>
+    <li>Make sure it gets a <b>public IPv4 address</b>.</li>
+    <li>Under SSH keys, paste the public key.</li>
+    <li>Once it's running, note its <b>public IP</b> and <b>SSH user</b>: <code>ubuntu</code> on Oracle and AWS, <code>root</code> on Hetzner, DigitalOcean and Vultr.</li>
+  </ol>
+  <p>Notes for each provider:</p>
+  <details class="prov"><summary>Oracle Cloud</summary><p>Shape: AMD, VM.Standard.E2.1.Micro (not Ampere). Turn on <b>Assign a public IPv4 address</b>; if it ends up without one, add an <b>ephemeral public IP</b> on the instance's VNIC (Attached VNICs, then IPv4 addresses, then edit). Firewall: the subnet's <b>security list</b> (Virtual cloud networks, your network, then Security). "Out of capacity" means no free machines there right now: try another availability domain, another shape, or later.</p></details>
+  <details class="prov"><summary>Hetzner Cloud</summary><p>Shared vCPU x86 (CX or CPX), not Arm (CAX). Keep Public IPv4 on. No firewall by default; if you attach one (Firewalls), allow inbound UDP 27015 to 27020.</p></details>
+  <details class="prov"><summary>DigitalOcean</summary><p>Any Basic droplet with Ubuntu. No firewall by default; if you use one (Networking, then Firewalls), add inbound UDP 27015 to 27020.</p></details>
+  <details class="prov"><summary>Vultr</summary><p>Cloud Compute, an Intel or AMD plan. No firewall by default; if the server is in a firewall group (Network, then Firewall), add inbound UDP 27015 to 27020.</p></details>
+  <details class="prov"><summary>AWS Lightsail</summary><p>Linux/Unix, OS only, Ubuntu. Upload your key under Change SSH key pair. Firewall: the instance's <b>Networking</b> tab, then IPv4 firewall and Add rule (Custom, UDP, 27015 to 27020). Attach a static IP so the address doesn't change when the instance restarts.</p></details>
+  <h2 id="open-ports" data-short="4. Open the ports">4. Open UDP 27015 to 27020</h2>
+  <p>The app opens the ports in the machine's own firewall during setup. It can't reach your <b>provider's</b> firewall (security list, security group, firewall group), so add an inbound rule there: protocol <b>UDP</b>, ports <b>27015 to 27020</b>, source anywhere (<code>0.0.0.0/0</code>). Leave SSH (TCP 22) open; the app uses it for everything else.</p>
+  <h2 id="add-vps" data-short="5. Add it in the app">5. Add it in Loner-Strike</h2>
+  <ol>
+    <li>In Servers, click <b>New server</b> and pick <b>A Linux server (VPS)</b>.</li>
+    <li><b>Address:</b> the public IP. <b>User:</b> <code>ubuntu</code> or <code>root</code>.</li>
+    <li><b>SSH key:</b> browse to the private key, the file without <code>.pub</code>. On a Mac, press Cmd+Shift+G in the picker and type <code>~/.ssh</code>.</li>
+    <li><b>Check the machine.</b> It shows the machine's fingerprint (<code>SHA256:...</code>) and whether it matches your computer's <code>known_hosts</code>. To check a new one, run <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code> in your provider's web console and compare.</li>
+    <li>Pick a <b>name</b>, the <b>game</b>, and <b>Set it up like</b>: My game (your modes, settings, admins and maps) or Start fresh.</li>
+    <li><b>Who can join:</b> Listed on Steam shows it in the server browser. Anyone with the address keeps it unlisted. A join password keeps strangers out either way.</li>
+    <li><b>Make the server.</b></li>
+  </ol>
+  <p>Setup takes 5 to 15 minutes. The server then runs on UDP 27015, keeps running with the app closed and restarts after a crash or reboot. If setup stops, <b>Try again</b> carries on.</p>
+  <h2 id="manage-vps" data-short="6. Join and manage it">6. Join and manage it</h2>
+  <ul>
+    <li><b>Join</b>, <b>Start</b>, <b>Stop</b> and <b>Open</b> are in Servers. Join on a listed server works with the game open; on an unlisted one it restarts the game to connect.</li>
+    <li>Friends use <code>connect &lt;address&gt;:27015</code> in the game console, or Find servers if it's listed.</li>
+    <li>The server's Overview tab has its <b>console</b>, where you can send commands like <code>status</code>.</li>
+  </ul>
+  <p>Over SSH (<code>ssh -i ~/.ssh/loner-strike ubuntu@&lt;address&gt;</code>), the <code>lsctl</code> helper manages it:</p>
+  <pre><code>lsctl list        the servers on the machine
+lsctl status      running or not
+lsctl restart     also start, stop
+lsctl logs        the last 100 console lines</code></pre>
+  <h2 id="vps-tunnel" data-short="7. Website and tunnel">7. Website status, and keeping ports closed</h2>
+  <p>Optional, and worth it: <b>Website status</b> on the server gives you a live player count for your site, Discord messages, fast downloads, and the address helpers use for <a href="#shared-control">shared control</a>. It needs a web address, and there are two ways to serve it:</p>
+  <ul>
+    <li><b>Cloudflare Tunnel</b> (recommended if your domain is on Cloudflare): the machine connects out to Cloudflare, so <b>no web ports are opened</b> on it. Make a tunnel in Cloudflare's dashboard (Zero Trust, then Networks, then Tunnels), copy its token, and paste it in Website status. The app installs and runs it.</li>
+    <li><b>Its own HTTPS (Caddy)</b>: works without Cloudflare, but opens TCP 80 and 443 on the machine, and in your provider's firewall too.</li>
+  </ul>
+  <p>Either way, the game itself still needs <b>UDP 27015 to 27020</b> open: players connect to it directly, and no tunnel can carry that. With a tunnel, everything else can stay closed except SSH (TCP 22), which you can limit to your own address. More in <a href="#security">Security and health</a>.</p>
+  <h2 id="remove-vps">Removing it</h2>
+  <p>Use <b>Delete the server</b> on its Health tab; that stops the service and removes its folder on the machine. Then delete the machine at your provider so it stops costing money.</p>
+  <p>Problems connecting or joining: see <a href="#ssh-problems">Can't connect to a Linux machine</a> and <a href="#friends-cant-join">Friends can't join</a>.</p>
+</section>
+
+<section class="topic" id="running-a-server" data-group="Servers">
+  <p class="crumb">Servers</p>
+  <h1>Running a server</h1>
+  <p class="lead">Admins, moderation, the welcome page and the extras. Your own game has the same pages in the sidebar, and each server has them as tabs.</p>
+  <h2 id="admins">Admins and VIPs</h2>
+  <p>In <b>Admins</b>, add people by SteamID as admins or VIPs, for good or for a number of days. <b>What each role gets</b> sets each role's powers. VIP perks (free armour, a defuse kit, extra money, a tag) are under <b>VIP &amp; donations</b>, with an optional donate link. Admin lists, and the ban list on Moderation, can be shared across your servers.</p>
+  <h2 id="moderation">Moderation and stats</h2>
+  <p><b>Moderation</b> has player reports, the chat log, mutes and the word filter, bans and player history. Reports show up as a notification on your computer. <b>Stats</b> has player ranks and 5v5 match results.</p>
+  <h2 id="welcome-page">Welcome page</h2>
+  <p>What players see when they join: pick a style or write your own HTML. Players can see it again by typing <code>/welcome</code>.</p>
+  <h2 id="rotation">Rotation and extras</h2>
+  <p>The map rotation, chat messages (adverts), kicks for AFK players and high ping, join and leave messages, vote kick and vote ban, and what happens when the server empties. A server's daily restart is on its Health tab; players get a warning 5 minutes and 1 minute before.</p>
+  <h2 id="hltv">Spectators and demos</h2>
+  <p>HLTV lets people watch a match with a delay and records demos. Copy a demo to your game from the list, then play it with <code>viewdemo &lt;name&gt;</code> in the console.</p>
+  <h2 id="website-status">Website status</h2>
+  <p>On a Linux server: a small service that tells your website the live player count, keeps a Discord message up to date with who's playing, says when the server stops answering, and serves fast downloads so players get maps quickly. It also checks these from outside, so you can see they work.</p>
+  <h2 id="server-skins">Skins and models</h2>
+  <p>A server's <b>Skins &amp; models</b> tab lists the weapon skins and player models a server uses and who sees each: everyone, one team or admins. Players download them when they join. It also shows how close each map gets to the game's limit of 512 models and 512 sounds.</p>
+</section>
+
+<section class="topic" id="shared-control" data-group="Servers">
+  <p class="crumb">Servers</p>
+  <h1>Shared control</h1>
+  <p class="lead">Friends can help run your server from their own Loner-Strike.</p>
+  <p>Helpers connect through <a href="#website-status">Website status</a> for a Linux server, or to this computer (TCP 27030, which <b>Open the port on my router</b> can open) while Loner-Strike is open.</p>
+  <ol>
+    <li>In the server's <b>Shared control</b> tab, make an invite and pick a role. Adding their SteamID is recommended (they see it by typing <code>status</code> in the game console). An invite works once, for 24 hours.</li>
+    <li>They paste it in <b>Servers</b>, <b>Add a shared server</b>.</li>
+  </ol>
+  <h2 id="roles">What each role can do</h2>
+  <ul>
+    <li><b>Moderators</b> kick, mute and gag, ban for up to 7 days, change or restart the map and make announcements, but never against you, your admins or anyone helping run it. In the app they open on Players, and also see Moderation (bans by SteamID included) and Stats.</li>
+    <li><b>Admins</b> can also ban for good, start and stop it, change the mode, the server name, the map, player slots and bots, and invite Moderators from their Shared control tab.</li>
+    <li><b>Only you</b> change who can join and the join password, the machine, files and plugins, or delete the server.</li>
+  </ul>
+  <h2 id="cloudflare-route">With a Cloudflare Tunnel</h2>
+  <p>Add the one route the tab shows: a second published application on your status hostname, path <code>^/control/</code>, service <code>http://127.0.0.1:</code> and the port it shows. Drag it above the route without a path, since Cloudflare uses the first that matches. With the app's own web front, there's nothing to add.</p>
+  <h2 id="remove-helper">Taking access away</h2>
+  <p>Tabs a helper's role can't use show dimmed, marked <b>Owner only</b> or <b>Admins only</b>. The Shared control tab logs what helpers change, with <b>Undo</b>. <b>Remove</b> next to a helper takes away their access: their app stops working on it straight away. Afterwards, change the join password: the app offers to.</p>
+</section>
+
+<section class="topic" id="server-upkeep" data-group="Servers">
+  <p class="crumb">Servers</p>
+  <h1>Updates, security and backups</h1>
+  <p class="lead">What the app does on its own to keep your servers running.</p>
+  <h2 id="server-updates">Updates</h2>
+  <p>After an app update, each server updates its plugins and bot brain once nobody's playing (bots don't count). <b>Update now</b> in Servers or on the server's Health tab does it right away. Turn off <b>Update by itself when nobody's playing</b> on its Health tab to update only by hand.</p>
+  <p>On a Linux machine, security updates install themselves; for the rest, <code>sudo apt update &amp;&amp; sudo apt upgrade</code>. <b>Valve's server files</b>: stop the server and click <b>Update</b> next to Update Valve's server files on its Health tab. Changes to mods, maps and sounds reach the machine within a few seconds and load on the next map.</p>
+  <h2 id="security">Security and health</h2>
+  <p>On each Linux server's Health tab, this panel checks the machine in plain words: password logins, RCON, automatic updates, fail2ban, a restart waiting, the game's sandbox, disk space, memory and CPU. It has a button for what the app can fix, including a restart the machine is waiting for. Logs are trimmed once a day so they can't fill the disk.</p>
+  <p>The app already runs the game in a sandbox, keeps RCON (the console) answering only on the machine, and installs fail2ban. A few things only you can do:</p>
+  <ul>
+    <li><b>Your provider's firewall.</b> Allow only UDP 27015 to 27020 (the game) and TCP 22 (SSH). If your home address doesn't change, allow SSH from that address only.</li>
+    <li><b>Your SSH key.</b> The file without <code>.pub</code> is the key to the machine. Never share it. If it might have leaked, remove its line from <code>~/.ssh/authorized_keys</code> on the machine and make a new one.</li>
+    <li><b>Password logins.</b> Keep them off; the panel can do it. Loner-Strike always uses your key.</li>
+    <li><b>Website status.</b> A Cloudflare Tunnel opens no web ports on the machine (only the game's UDP ports stay open), so it's the safer choice if you use Cloudflare. Caddy works without Cloudflare but opens TCP 80 and 443.</li>
+    <li><b>Another game server on the same machine.</b> Loner-Strike sets up beside it and leaves it alone, but closing RCON to the internet would cover every game server there, so it stays open until you choose in the panel.</li>
+  </ul>
+  <h2 id="backups">Backups</h2>
+  <ul>
+    <li>Linux servers are backed up every day while Loner-Strike is open: bans, admins and settings, the last 7 kept on your computer. Turn it off in Settings, under <b>Backup &amp; restore</b>.</li>
+    <li>In Settings, <b>Back up to a file</b> saves your game, your servers and the app's preferences to one file (<b>Back up everything</b>), or only your game (<b>Just your game</b>). Passwords are only included if you lock the backup with a password of your own.</li>
+    <li><b>Restore a backup</b> in Settings puts all or part of a backup back; close the game first. The same button in Servers brings back a single server, and each server's Health tab has <b>Back up this server</b>.</li>
+  </ul>
+</section>
+
+<!-- ============ Help ============ -->
+
+<section class="topic" id="no-bots-help" data-group="Help">
+  <p class="crumb">Help</p>
+  <h1>No bots or Bad Rcon</h1>
+  <p class="lead">When the bots don't show up or the app can't reach the game. The app checks for these itself and fixes what it can; its message says what's left.</p>
+  <h2 id="no-bots" data-keywords="bots missing not joining empty no bots" data-short="No bots">No bots, or the app can't connect to the game <a class="anchor" href="#no-bots" aria-label="Link to this">#</a></h2>
+  <p>Loner-Strike isn't loading in the game.</p>
+  <ol>
+    <li>Quit the game completely and start it again from <b>Play</b>.</li>
+    <li>Still nothing? Open <b>Mods</b>, click <b>Repair</b>, then restart the game. Your settings and mods stay.</li>
+    <li>If your antivirus removed files, allow the game's folder first (<a href="#antivirus">more</a>).</li>
+    <li>Still stuck? <a href="#diagnostics">Copy your diagnostics</a>.</li>
+  </ol>
+
+  <h2 id="bad-rcon" data-keywords="rcon password console" data-short=""Bad Rcon"">"Bad Rcon" lines in the game console <a class="anchor" href="#bad-rcon" aria-label="Link to this">#</a></h2>
+  <p>That's the app knocking on the game's console with a password the game doesn't know. You don't need to set one: Loner-Strike sets it each map.</p>
+  <ul>
+    <li>If <code>rcon_password</code> in the console shows <code>""</code>, Loner-Strike isn't loading: see <a href="#no-bots">No bots</a>.</li>
+    <li>If it shows a different password, a config file sets its own. Remove the <code>rcon_password</code> line from <code>server.cfg</code>, <code>autoexec.cfg</code> or <code>listenserver.cfg</code> in the game's <code>cstrike</code> or <code>czero</code> folder, then restart the map.</li>
+  </ul>
+
+  <h2 id="steam-reset" data-short="After a Steam update">It stopped working after a Steam update <a class="anchor" href="#steam-reset" aria-label="Link to this">#</a></h2>
+  <p>Steam updates, and "Verify integrity of game files", put back the game's original <code>liblist.gam</code>, which unhooks the mods. The app notices and fixes it by itself; restart the game afterwards.</p>
+  <p>To check by hand: the <code>gamedll</code> line in <code>Half-Life\cstrike\liblist.gam</code> (or <code>czero\</code>) should read</p>
+  <pre><code>gamedll "addons\metamod\dlls\metamod.dll"</code></pre>
+  <p>and <code>meta list</code> in the game console should list AMX Mod X. "Unknown command" means the mods aren't loading.</p>
+
+  <h2 id="antivirus" data-short="Antivirus">Files keep disappearing <a class="anchor" href="#antivirus" aria-label="Link to this">#</a></h2>
+  <p>Some antivirus programs, Windows Defender included, remove <code>metamod.dll</code> or <code>amxmodx_mm.dll</code> by mistake. Allow the game's folder in your antivirus, then click <b>Repair</b> in Mods.</p>
+
+  <h2 id="different-copy" data-short="A different copy is running">"A different copy of the game is running" <a class="anchor" href="#different-copy" aria-label="Link to this">#</a></h2>
+  <p>You have more than one copy installed and started one that Loner-Strike isn't set up in. Close it and start the game from the app's <b>Play</b> page. To use the other copy instead, change it in Settings, under <b>Game</b>.</p>
+
+</section>
+
+<section class="topic" id="setup-help" data-group="Help">
+  <p class="crumb">Help</p>
+  <h1>Setup and updates</h1>
+  <p class="lead">Installing Loner-Strike, finding your game, and updating.</p>
+  <h2 id="no-game-found">"No game found" <a class="anchor" href="#no-game-found" aria-label="Link to this">#</a></h2>
+  <ul>
+    <li>Install Counter-Strike 1.6 or Condition Zero from Steam, then click <b>Look again</b>.</li>
+    <li>In a different place? <b>Choose the game folder</b> and pick the <code>Half-Life</code> folder, the one with <code>cstrike</code> or <code>czero</code> in it.</li>
+    <li>On a Mac it has to be the Windows version, in CrossOver (<a href="#mac">Mac setup</a>).</li>
+  </ul>
+
+  <h2 id="old-copy" data-short="Old copy of the game">"This copy of the game is older than Loner-Strike supports" <a class="anchor" href="#old-copy" aria-label="Link to this">#</a></h2>
+  <p>It's a copy from before Valve's 2013 update, such as an old retail or repacked one. Its engine can't load the mods. Use Counter-Strike 1.6 or Condition Zero from Steam.</p>
+
+  <h2 id="game-open-setup" data-short=""Counter-Strike is open"">"Counter-Strike is open" during setup or restore <a class="anchor" href="#game-open-setup" aria-label="Link to this">#</a></h2>
+  <p>The game's files can't change while it runs. Quit the game, then try again. If it says Counter-Strike didn't close, quit it yourself, from Task Manager on Windows if needed.</p>
+
+  <h2 id="setup-failed" data-short="Setup or download failed">Setup or a download failed <a class="anchor" href="#setup-failed" aria-label="Link to this">#</a></h2>
+  <ul>
+    <li><b>Couldn't download</b>: check your internet connection and try again.</li>
+    <li><b>Couldn't unpack a download</b>: try again. If it keeps happening, clear downloads in Settings, under <b>Storage</b>.</li>
+    <li><b>A mod didn't build</b>: click <b>Try again</b> next to it in Mods. On a Mac, CrossOver has to be in Applications.</li>
+    <li><b>Mod files missing from the app</b>: download and install Loner-Strike again.</li>
+  </ul>
+
+  <h2 id="game-wont-start" data-short="Game won't start">The game doesn't start, or keeps saying "Starting" <a class="anchor" href="#game-wont-start" aria-label="Link to this">#</a></h2>
+  <p>Under CrossOver the first start can be slow. After a while Play offers to start again. If the game is open on another screen at its menu, close it and start from Play. Changing the resolution in the game while hosting sends you back to the game's main menu: start again from there or from the app.</p>
+
+  <h2 id="smartscreen" data-short="Windows protected my PC">Windows says it protected my PC <a class="anchor" href="#smartscreen" aria-label="Link to this">#</a></h2>
+  <p>That's SmartScreen, which warns about apps that aren't widely downloaded yet. Click <b>More info</b>, then <b>Run anyway</b>. The code is open on <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a> if you want to check what it does.</p>
+
+  <h2 id="update-problems" data-short="App updates">The app won't update <a class="anchor" href="#update-problems" aria-label="Link to this">#</a></h2>
+  <ul>
+    <li><b>Couldn't check for updates</b>: check your internet connection.</li>
+    <li><b>Something is being set up or restored</b>: wait for it to finish, then update.</li>
+    <li>Otherwise, download the newest version from <a href="/#get">lonerstrike.com</a> and install it over the old one. Your settings stay.</li>
+  </ul>
+
+</section>
+
+<section class="topic" id="connect-help" data-group="Help">
+  <p class="crumb">Help</p>
+  <h1>Connecting</h1>
+  <p class="lead">Friends, servers, Linux machines and your phone.</p>
+  <h2 id="friends-cant-join" data-keywords="connect failed timeout cant join">Friends can't join <a class="anchor" href="#friends-cant-join" aria-label="Link to this">#</a></h2>
+  <ul>
+    <li>They need the same game: a Condition Zero server needs Condition Zero.</li>
+    <li>Check the address and the join password.</li>
+    <li>Over the internet without a tunnel, your router has to forward UDP 27015 to your computer, and your firewall has to allow it. playit.gg or Tailscale in Play with friends avoid all of that.</li>
+    <li>The first time, your Mac asks whether to allow incoming connections: click <b>Allow</b>. On Windows, allow it on private networks.</li>
+    <li>"Failed to contact game server" on a Linux server: its firewall has to allow UDP 27015 to 27020 in. Check <a href="#open-ports">the provider's firewall</a>.</li>
+  </ul>
+
+  <h2 id="server-wont-start" data-keywords="crash port in use" data-short="Server won't start">A server won't start <a class="anchor" href="#server-wont-start" aria-label="Link to this">#</a></h2>
+  <ul>
+    <li><b>"… is using port … already"</b>: the server it names has that port. Stop it, or give this server another port on its Overview tab.</li>
+    <li><b>"keeps crashing, so it was left off"</b>: check its console on the Overview tab. A mod you just added is the usual cause: remove it and start again.</li>
+    <li>On this computer, <b>Reinstall Loner-Strike and its mods</b> on its Health tab fixes a server that lost its files.</li>
+    <li>On a Mac, CrossOver has to be in Applications, and the servers folder inside the game's bottle.</li>
+    <li>Your Windows user name has letters from another language than Windows itself is set to? The old game server can trip over that folder name. In Settings, <b>Servers folder</b>, move the servers to a plain folder such as <code>C:\LonerStrike</code>.</li>
+  </ul>
+
+  <h2 id="ssh-problems" data-short="Linux machine connection">Can't connect to a Linux machine <a class="anchor" href="#ssh-problems" aria-label="Link to this">#</a></h2>
+  <ul>
+    <li><b>Couldn't reach it</b>: check the machine is running and SSH (TCP 22) is open in your provider's firewall.</li>
+    <li><b>Key rejected</b>: check the user (often <code>root</code> or <code>ubuntu</code>), that the key was added to the machine, and that you picked the private key, not the <code>.pub</code> file. Keys with a passphrase aren't supported yet.</li>
+    <li><b>The machine's identity changed</b>: expected after rebuilding it. Run <code>ssh-keygen -R &lt;address&gt;</code>, then add the server again. If you didn't rebuild it, don't connect: check the fingerprint in your provider's web console.</li>
+    <li><b>Only runs on x86</b>: the Counter-Strike server needs an AMD or Intel machine, not ARM.</li>
+    <li><b>Can't use sudo</b>: connect as <code>root</code>, or give the user passwordless sudo.</li>
+    <li><b>Can't reach port 22 on Oracle</b>: the machine has no public IP. Add one (<a href="#create-machine">how</a>).</li>
+    <li><b>Setup stopped part way</b>: <b>Try again</b> carries on where it stopped. <b>Wipe and rebuild</b> deletes the server's folder on the machine and starts over.</li>
+  </ul>
+
+  <h2 id="phone-cant-connect" data-keywords="qr phone mobile" data-short="Phone can't connect">My phone can't connect <a class="anchor" href="#phone-cant-connect" aria-label="Link to this">#</a></h2>
+  <ul>
+    <li>The phone has to be on the same Wi-Fi as the computer, and Loner-Strike open on the computer.</li>
+    <li>On Windows, set the Wi-Fi to a <b>Private network</b>.</li>
+    <li>"This phone isn't signed in any more": scan the QR code in Settings again.</li>
+    <li>"Port 8028 is busy": something else is using it, often an older copy of the phone panel. Close it and try again.</li>
+  </ul>
+
+</section>
+
+
+<section class="topic" id="faq" data-group="Help">
+  <p class="crumb">Help</p>
+  <h1>Questions</h1>
+  <h2 id="free">Is it really free? <a class="anchor" href="#free" aria-label="Link to this">#</a></h2>
+  <p>Yes. The code is open source (GPL-3) and every release is on GitHub.</p>
+  <h2 id="breaks-game">Will it mess up my game? <a class="anchor" href="#breaks-game" aria-label="Link to this">#</a></h2>
+  <p>Every file it changes is backed up first. Remove a mode, or all of Loner-Strike, and your game goes back the way it was.</p>
+  <p>If something ever went badly wrong, which it shouldn't, Steam can always put the game back: right-click the game in your Steam library, then <b>Properties</b>, <b>Installed Files</b>, <b>Verify integrity of game files</b>. Afterwards, <b>Repair</b> in Mods sets Loner-Strike up again.</p>
+  <h2 id="vac">What about VAC and other people's servers? <a class="anchor" href="#vac" aria-label="Link to this">#</a></h2>
+  <p>The mods are standard server mods (Metamod and AMX Mod X), the kind community servers have run for twenty years, and they only load in games you host. On someone else's server, nothing of Loner-Strike's runs.</p>
+  <h2 id="which-game">1.6 or Condition Zero? <a class="anchor" href="#which-game" aria-label="Link to this">#</a></h2>
+  <p>Both work, and you can set up both. Settings, under <b>Game</b>, switches between them. Friends need the same one to join you.</p>
+  <h2 id="updates">How do updates work? <a class="anchor" href="#updates" aria-label="Link to this">#</a></h2>
+  <p>The app checks when it starts, tells you when there's a new version and shows what's new before you install it. Your servers update themselves afterwards, once nobody's playing. Every change is in the <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CHANGELOG.md">changelog</a>.</p>
+  <h2 id="uninstall">How do I remove it? <a class="anchor" href="#uninstall" aria-label="Link to this">#</a></h2>
+  <ul>
+    <li><b>From one game</b>: in Settings, under <b>Setup</b>, <b>Remove from Counter-Strike 1.6</b> or <b>Remove from Condition Zero</b>. Your files are put back; settings, admins and stats are kept in case you set it up again.</li>
+    <li><b>Everything</b>: <b>Remove everything</b> in the same place takes it off every game and deletes your servers on this computer and all its data. Servers on Linux machines keep running.</li>
+    <li>Then uninstall the app like any other.</li>
+  </ul>
+  <h2 id="where-files">Where are its files? <a class="anchor" href="#where-files" aria-label="Link to this">#</a></h2>
+  <p>In Settings, <b>Storage</b> shows Loner-Strike's folder, and downloads and map pictures can be cleared there to save space. <b>Servers folder</b> shows where your servers are.</p>
+  <h2 id="diagnostics">Still stuck? Send diagnostics <a class="anchor" href="#diagnostics" aria-label="Link to this">#</a></h2>
+  <p>In the app's <b>Settings</b>, under <b>Help</b>, click <b>Copy</b> next to <b>Copy diagnostics</b>. It copies a short report (version, game folders, what's installed, recent errors) with no passwords. Paste it with your question in a <a href="https://github.com/jamesontucker/Loner-Strike/issues">GitHub issue</a>; <b>Report a problem</b> opens one.</p>
+  <p>The same list has the usual problems (no bots, friends can't join, a server won't start), each with a button to the page that fixes it and a link to its docs.</p>
+</section>
+
+    <nav class="pager" aria-label="Next and previous">
+      <a class="prev" id="prev" href="#" hidden></a>
+      <a class="next" id="next" href="#" hidden></a>
+    </nav>
+  </article>
+</div>
+
+<footer>
+  <a href="/">lonerstrike.com</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a>
+</footer>
+
+<script>
+(function () {
+  var topics = [].slice.call(document.querySelectorAll(".topic"));
+  var tree = document.getElementById("tree");
+  var side = document.getElementById("side"), menu = document.querySelector(".menu-btn");
+  var prev = document.getElementById("prev"), next = document.getElementById("next");
+  var q = document.getElementById("q"), results = document.getElementById("results");
+  var title = function (t) { return t.querySelector("h1").textContent; };
+  var heading = function (h) { return h.firstChild.textContent.trim(); };
+  var esc = function (s) { return s.replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+
+  // the sidebar, from the topics: groups, topics, and each topic's headings under it when open
+  var html = "", group = "";
+  topics.forEach(function (t) {
+    if (t.dataset.group !== group) {
+      html += (group ? "</ul></div>" : "") + '<div class="group"><b>' + esc(t.dataset.group) + "</b><ul>";
+      group = t.dataset.group;
+    }
+    html += '<li><a href="#' + t.id + '">' + esc(title(t)) + '</a><ul class="sub">';
+    [].forEach.call(t.querySelectorAll("h2[id]"), function (h) {
+      html += '<li><a href="#' + h.id + '">' + esc(h.dataset.short || heading(h)) + "</a></li>";
+    });
+    html += "</ul></li>";
+  });
+  tree.innerHTML = html + "</ul></div>";
+  var links = [].slice.call(tree.querySelectorAll("a"));
+
+  function show(hash, jump) {
+    var el = hash && document.getElementById(decodeURIComponent(hash.slice(1)));
+    var topic = el && el.closest(".topic") || topics[0];
+    topics.forEach(function (t) { t.classList.toggle("on", t === topic); });
+    links.forEach(function (a) {
+      var id = a.getAttribute("href").slice(1);
+      if (a.closest(".sub")) a.classList.toggle("on", !!el && el.id === id);
+      else if (id === topic.id) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    });
+    var i = topics.indexOf(topic);
+    [[prev, topics[i - 1], "Previous"], [next, topics[i + 1], "Next"]].forEach(function (p) {
+      if (!p[1]) { p[0].hidden = true; return; }
+      p[0].hidden = false;
+      p[0].href = "#" + p[1].id;
+      p[0].innerHTML = "<small>" + p[2] + "</small>" + esc(title(p[1]));
+    });
+    document.title = title(topic) + " · Loner-Strike docs";
+    document.getElementById("menu-now").textContent = title(topic);
+    var cur = tree.querySelector('[aria-current="page"]');
+    if (cur && !side.classList.contains("open")) {
+      var r = cur.getBoundingClientRect(), s = side.getBoundingClientRect();
+      if (r.top < s.top || r.bottom > s.bottom) side.scrollTop += r.top - s.top - 60;
+    }
+    if (jump) {
+      if (el && el !== topic) el.scrollIntoView();
+      else window.scrollTo(0, 0);
+    }
+  }
+
+  function closeMenu() { side.classList.remove("open"); menu.setAttribute("aria-expanded", "false"); }
+  window.addEventListener("hashchange", function () { closeMenu(); show(location.hash, true); });
+  menu.addEventListener("click", function () {
+    var open = side.classList.toggle("open");
+    menu.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+
+  // search: every topic and heading, with the text under it
+  var index = [];
+  topics.forEach(function (t) {
+    index.push({ id: t.id, name: title(t), where: t.dataset.group, text: t.textContent, keys: "", topic: true });
+    [].forEach.call(t.querySelectorAll("h2[id]"), function (h) {
+      var text = "", n = h.nextElementSibling;
+      while (n && n.tagName !== "H2") { text += " " + n.textContent; n = n.nextElementSibling; }
+      index.push({ id: h.id, name: heading(h), where: title(t), text: text, keys: h.dataset.keywords || "" });
+    });
+  });
+  // words that say nothing about what's wanted
+  var STOP = " a an the my me i it its is are am be to of in on for and or not no dont doesnt cant wont can how why what when where do does with this that from at ";
+  function search() {
+    var words = q.value.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(function (w) { return w && STOP.indexOf(" " + w + " ") < 0; })
+      // (the word's stem: "working" finds "work", "servers" finds "server")
+      .map(function (w) { return w.length > 5 ? w.replace(/(ing|ed|es|s)$/, "") : w.length > 3 ? w.replace(/s$/, "") : w; });
+    if (!words.length) { results.hidden = true; tree.hidden = false; return; }
+    // (a word matched at a word's start: "vac" finds VAC, not privacy)
+    var res = words.map(function (w) { return new RegExp("(^|[^a-z0-9])" + w, "i"); });
+    var hits = index.map(function (e) {
+      var score = 0, matched = 0;
+      for (var i = 0; i < res.length; i++) {
+        if (res[i].test(e.name) || res[i].test(e.keys)) { score += 4; matched++; }
+        else if (res[i].test(e.text)) { score += 1; matched++; }
+      }
+      // most of the words, and every one for a short search
+      if (!matched || matched < Math.ceil(res.length * (res.length > 2 ? 0.6 : 1))) return null;
+      if (!e.topic) score += 1;
+      return { e: e, score: score + matched * 2 };
+    }).filter(Boolean).sort(function (a, b) { return b.score - a.score; }).slice(0, 10);
+    results.innerHTML = hits.length
+      ? "<ul>" + hits.map(function (h) { return '<li><a href="#' + h.e.id + '">' + esc(h.e.name) + "<small>" + esc(h.e.where) + "</small></a></li>"; }).join("") + "</ul>"
+      : "<p>Nothing found. Try another word.</p>";
+    results.hidden = false; tree.hidden = true;
+  }
+  q.addEventListener("input", search);
+  q.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { var a = results.querySelector("a"); if (a) location.hash = a.getAttribute("href"); }
+    if (e.key === "Escape") { q.value = ""; search(); }
+  });
+  results.addEventListener("click", function (e) { if (e.target.closest("a")) { q.value = ""; search(); } });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "/" && document.activeElement !== q && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); q.focus(); }
+  });
+
+  show(location.hash, !!location.hash);
+})();
+</script>
+</body>
+</html>
