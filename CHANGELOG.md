@@ -5,18 +5,22 @@ What changed in each version. The downloads are on the [Releases](https://github
 ## 0.1.3
 
 ### Bots that play like people
-- Talk to them in chat. Ask "money?", "hp?", "where'd they go", "who killed me" or "anyone got a flash" and they answer from what's really going on. Ask "cover me", "go b", "wait here", "drop me an ak", "plant at a" or "give me the bomb" and they do it, or say no in character. A bot only says yes when it actually does it.
+- Talk to them in chat. Ask "money?", "hp?", "where'd they go", "who killed me" or "are they eco" and they answer from what's really going on. Call "rush b", "fake a", "fall back", "watch flank", "eco", "force", "flash for me", "smoke mid" or "someone buy me an awp" and they do it, or say no in character: the whole team hears a call and each decides for itself, and only one bot ever buys you that awp. Callouts like "two long" or "awp mid" turn their heads and pull CTs over to a site being hit. Start with a bot's name, a short form or a nickname to ask just that one. Settings lists what they understand. A bot only says yes when it actually does it.
 - They look around and aim like a hand on a mouse: still most of the time, quick flicks that land a touch off and get corrected, a small tremor, and a lag behind fast strafes. Better players are quicker and steadier.
 - Freeze time and leaving spawn feel alive: looking about, flicking guns, hops and crouches, and a few always late out of the shop.
 - Team play: trades and flanks, CTs holding the sites, Ts picking a site together and switching after early losses, the bomb carrier going in with a teammate, guards spreading out round a planted bomb, defuses heard and kit holders let through.
 - They react like people: flashed bots panic their own way, AWPers step aside after a shot, a flanker who shoots them gets noticed, and being outnumbered makes the careful ones back off.
 - Ts take a site together: they gather just out of sight on their ways in, then go in at once, instead of walking into the CTs one at a time.
 - Retakes go for the bomb: CTs who can still make it run there, and learn the site from a teammate on it or one who just went down there. Ones who can't make it save.
+- They look where it matters: running somewhere they face the way they're going and glance over a shoulder now and then, a sound from behind gets a quick look (or none, from a rusher) instead of running backwards, and holding a spot they check the openings in turn, through glass and doors, never staring at a wall. How often they check, and how long they hold an angle, depends on who they are.
 - They hold an angle for a few seconds instead of glancing round every second, and aim around the chest like most players, so headshots come at a pub's rate rather than every kill or none.
 - Each bot is its own person: a personality, mood and skill that show in how it plays and talks, regulars who remember you between sessions, tilt from a bad run, and callouts like "rush b" before they go down.
 - Chat volume fits the mode, deathmatch chat is short reactions, and with Bots can be rude off nobody gets insulted.
 - Every mode is played right: deathmatch spreads out and goes for the fighting, Gun Game's grenade and knife levels work, fy_ maps get a run for the floor guns, and rounds on awp_ and aim_ maps don't stall.
 - Deathmatch and Gun Game no longer end the round and respawn everyone at 9 minutes.
+
+### Advanced Bot Interaction
+- The bots understand what people say on voice chat, the same as typed team chat: say "rush b" or "Derek, flash for me" on your mic and they react. An optional add-on per server, installed from its Bot voice commands tab (a 148 MB speech model, once per computer) and removed just as easily. Speech is turned into text on the computer running the server and nothing is recorded or sent anywhere. For servers on this computer; Linux servers follow in an update.
 
 ### Servers
 - Servers update themselves: after an app update, each server gets its new plugins and bot brain once nobody's playing on it (bots don't count). The servers list shows what's waiting, with Update now, which asks first if people are on. Turn it off per server in its settings. While one updates, its card and its page show the step it's on and how far along it is, and Start, Stop and the other buttons wait until it's done.
@@ -28,6 +32,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 - Uploads to a Linux server go up in pieces and retry on their own when the connection stalls, instead of hanging.
 
 ### Other
+- When the game won't let the app in (no bots, "Bad Rcon" in the console), the app checks the game's setup and puts back what a Steam update or file check undid, then says what was wrong: Loner-Strike not loading, or a config setting its own console password.
 - Windows: "Remove everything" no longer deletes the installed app along with everything else, so Loner-Strike opens again afterwards (at its first-time setup). Its download cache moved out of the app's own folder, which also keeps it through updates.
 - Updates show what's new before you install, and once after.
 
