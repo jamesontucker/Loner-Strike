@@ -1729,3 +1729,13 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 
 /* a server card: Loner-Strike updates waiting for it */
 .update-note { gap: 10px; align-items: center; margin-top: 6px; }
+
+/* shared control: two role cards across, the Cloudflare route as a tidy list */
+.methods.two { grid-template-columns: 1fr 1fr; }
+@media (max-width: 560px) { .methods.two { grid-template-columns: 1fr; } }
+.share-reach { display: grid; gap: 6px; margin: 12px 0; }
+.control-route dl { display: grid; gap: 6px; margin: 6px 0; }
+.control-route dl > div { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 10px; }
+.control-route dt { color: var(--bone-faint); font-weight: 600; }
+.control-route dd { display: flex; align-items: center; gap: 8px; margin: 0; min-width: 0; }
+.control-route dd code { overflow-wrap: anywhere; }

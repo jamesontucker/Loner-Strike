@@ -126,37 +126,56 @@ function describe(a: Activity) {
 /** Asked when an invite has no SteamID */
 const NO_STEAM = "Invite without their SteamID? Without it the server can't tell them apart in the game, so a Moderator could ban, mute or kick them. They find it by typing status in the game's console.";
 
-/** The Cloudflare route a tunnel needs for shared control (also shown in Website status). */
+/** The Cloudflare route a tunnel needs for shared control (also shown in Website status):
+ * each value with a copy button, and where it goes in the list. */
 export function ControlRoute({ domain, port }: { domain: string; port: number }) {
+  const toast = useToast();
+  const rows: [string, string][] = [
+    ["Hostname", domain || "the status address"],
+    ["Path", "^/control/"],
+    ["Service URL", `http://127.0.0.1:${port}`],
+  ];
   return (
-    <div className="muted small-note">
-      For shared control, add a second published application to the tunnel in Cloudflare:
-      <ul className="plain-list">
-        <li>Hostname: {domain || "the status address"}</li>
-        <li>Path: <code className="mono">^/control/</code></li>
-        <li>Service URL: <code className="mono">http://127.0.0.1:{port}</code></li>
-      </ul>
-      Then drag it above the {domain || "status"} route without a path. Cloudflare uses the first route that matches.
+    <div className="control-route">
+      <p className="muted small-note">In Cloudflare, add a second published application to the tunnel:</p>
+      <dl>
+        {rows.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>
+              <code className="mono">{v}</code>
+              <button type="button" className="btn small" onClick={() => void copyText(v).then(() => toast(`${k} copied`))}>Copy</button>
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="muted small-note">Then drag it above the {domain || "status"} route without a path: Cloudflare uses the first route that matches.</p>
     </div>
   );
 }
 
-/** A Linux server's shared control: where helpers' apps reach it, and whether they can. */
+/** A Linux server's shared control: where helpers' apps reach it, and whether they can. Set up
+ * and working, the Cloudflare steps fold away; not reachable, they're open with why. */
 function ServerReach({ c }: { c: Control }) {
   if (!c.url) {
     return <p className="muted small-note">Helpers connect to the server itself at its website status address, so this computer can be off. Set up Website status for this server in Overview first.</p>;
   }
   return (
-    <div className="stack">
+    <div className="share-reach">
       <p className="muted small-note">
-        Helpers connect to the server itself at <code className="mono">{c.url}</code>, so this computer can be off. Only invite people you trust.
+        Helpers connect to the server itself at <code className="mono">{c.url}</code>, so this computer can be off.{" "}
+        {c.reachable ? <span className="live on inline">Reachable</span> : <span className="live inline">Not reachable yet</span>}
       </p>
-      {c.tunnel && (
+      {!c.reachable && <p className="err-text small-note">Helpers' apps can't reach it there yet{c.reach_error ? ` (${c.reach_error})` : ""}. Check Website status, then open this tab again.</p>}
+      {c.tunnel && (c.reachable ? (
+        <details className="advanced">
+          <summary>The Cloudflare route it uses</summary>
+          <ControlRoute domain={c.domain ?? ""} port={c.port ?? 0} />
+        </details>
+      ) : (
         <ControlRoute domain={c.domain ?? ""} port={c.port ?? 0} />
-      )}
-      {!c.reachable && (
-        <p className="err-text small-note">Helpers' apps can't reach it there yet{c.reach_error ? ` (${c.reach_error})` : ""}. Check Website status, then open this tab again.</p>
-      )}
+      ))}
+      <p className="muted small-note">Only invite people you trust.</p>
     </div>
   );
 }
@@ -317,7 +336,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
 
       <section className="panel">
         <h3>Invite someone</h3>
-        <div className="methods" role="radiogroup" aria-label="Their role">
+        <div className="methods two" role="radiogroup" aria-label="Their role">
           {(["admin", "moderator"] as Role[]).map((r) => (
             <button key={r} type="button" className="method" role="radio" aria-checked={role === r} onClick={() => setRole(r)}>
               <span className="method-name">{ROLE_NAME[r]}</span>
