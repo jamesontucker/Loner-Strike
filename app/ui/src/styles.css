@@ -1882,3 +1882,9 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .control-route dt { color: var(--bone-faint); font-weight: 600; }
 .control-route dd { display: flex; align-items: center; gap: 8px; margin: 0; min-width: 0; }
 .control-route dd code { overflow-wrap: anywhere; }
+
+/* Get more: a search on its way */
+.gb-search { display: flex; gap: 6px; flex: 1; min-width: 0; }
+.gb-search .search { flex: 1; min-width: 0; }
+.search-status { display: inline-flex; align-items: center; gap: 6px; color: var(--bone-dim); font-size: 13px; white-space: nowrap; }
+.maps.grid.stale { opacity: .45; transition: opacity .15s; pointer-events: none; }

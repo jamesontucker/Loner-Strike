@@ -119,10 +119,19 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, cat, sort, query]);
 
+  // searched on Enter or the Search button only (GameBanana isn't asked on every keystroke);
+  // clearing the box goes back to browsing at once
   useEffect(() => {
-    const t = setTimeout(() => setQuery(q.trim()), 450);
-    return () => clearTimeout(t);
+    if (!q.trim() && query) setQuery("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
+  const search = () => {
+    const t = q.trim();
+    if (t === query) load(true);
+    else setQuery(t);
+  };
+  // a new search (or browse) on its way back
+  const searching = loading && lastReset.current;
 
   // install progress
   const first = useRef(true);
@@ -246,7 +255,11 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
           </div>
         ))}
         <div className="toolbar">
-          <input className="search" type="search" aria-label={`Search ${label.toLowerCase()}`} placeholder={`Search ${label.toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} />
+          <form className="gb-search" role="search" onSubmit={(e) => { e.preventDefault(); search(); }}>
+            <input className="search" type="search" aria-label={`Search ${label.toLowerCase()}`} placeholder={`Search ${label.toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} />
+            <BusyButton type="submit" busy={searching && !!query} label="Search" busyLabel="Searching…" />
+          </form>
+          {searching && !query && <span className="search-status" role="status"><span className="spinner" aria-hidden="true" />Loading…</span>}
           {cats.length > 1 && (
             <select value={cat ?? cats[0][0]} onChange={(e) => setCat(+e.target.value)} aria-label="Type">
               {cats.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
@@ -260,7 +273,7 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
         </div>
       </div>
       {error && !items.length && !loading && <LoadError text={error} onRetry={() => load(lastReset.current)} />}
-      <div className="maps grid">
+      <div className={`maps grid${searching && items.length ? " stale" : ""}`} aria-busy={searching}>
         {items.map((m) => {
           const job = jobFor(m.id);
           return (
@@ -275,8 +288,9 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
                       <span className="no-pic-name small-name">{m.name}</span>
                     </div>
                   )}
-                  {m.installed && !job && <span className="badge">Installed</span>}
+                  {m.installed && !job && !busy(key(`details:${m.id}`)) && <span className="badge">Installed</span>}
                   {job && <span className="badge busy" role="status">{jobText(job)}</span>}
+                  {!job && busy(key(`details:${m.id}`)) && <span className="badge busy" role="status"><span className="spinner" aria-hidden="true" />Opening…</span>}
                 </div>
                 <span className="map-label">{m.name}</span>
                 <span className="map-sub">{m.author} · ♥ {m.likes}</span>
