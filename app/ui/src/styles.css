@@ -416,9 +416,13 @@ code, pre, .mono, .address, .err-text, .copyable, .load-error p, .console, input
 
 /* settings rows */
 .settings { border-top: 1px solid var(--bevel-lo); }
-.setting { display: grid; grid-template-columns: minmax(170px, 240px) 1fr; gap: 10px 20px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--bevel-lo); box-shadow: 0 1px 0 rgba(136,145,128,.12); }
+.setting { display: grid; grid-template-columns: minmax(200px, 340px) 1fr; gap: 10px 20px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--bevel-lo); box-shadow: 0 1px 0 rgba(136,145,128,.12); }
 .setting .name { font-weight: 600; }
 .setting .note { display: block; color: var(--bone-faint); font-weight: 500; font-size: 14px; }
+/* a row that ends in a switch: the words take the width, the switch sits at the right edge
+   (the 240px name column is for a short label next to a row of choices) */
+.setting:has(> .switch) { grid-template-columns: minmax(0, 1fr) auto; }
+.setting:has(> .switch) .note { max-width: 70ch; }
 
 .slider-row { display: grid; grid-template-columns: auto minmax(160px, 320px) 40px 1fr; gap: 14px; align-items: center; margin: 4px 0 6px; }
 .slider-row label { font-weight: 700; }
@@ -611,6 +615,7 @@ input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
   .maps, .maps.grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 
   .setting { grid-template-columns: 1fr; gap: 8px; }
+  .setting:has(> .switch) { grid-template-columns: minmax(0, 1fr) auto; }
   .slider-row { grid-template-columns: auto 1fr 40px; }
   .slider-row .row { grid-column: 1 / -1; }
   .slider-row.wide-out { grid-template-columns: auto 1fr 56px; }
