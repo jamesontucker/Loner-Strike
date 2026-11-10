@@ -132,7 +132,7 @@ new const STYLES[STYLE_COUNT][StyleData] =
 	{ 0.32, 0.06,  0.20, 2.6,  0.28, 0.30, 8,   20,  0.20, 0.8,  1.4,  50.0,  0,   0  },  // Newbie lobby
 	{ 0.15, 0.02,  0.03, 0.4,  0.05, 0.11, 4,   10,  0.01, 0.9,  1.1,  70.0,  0,   0  },  // Locked In
 	{ 0.06, 0.01,  0.01, 0.15, 0.0,  0.05, 99,  99,  0.0,  0.2,  0.3,  180.0, 65,  27 },  // Hackers
-	{ 0.03, 0.005, 0.0,  0.0,  0.0,  0.01, 999, 999, 0.0,  0.0,  0.0,  180.0, 85,  12 }   // Gods
+	{ 0.025, 0.004, 0.0, 0.0,  0.0,  0.008, 999, 999, 0.0, 0.0,  0.0,  180.0, 89,  9  }   // Gods
 }
 
 new g_pRoundTime                                // mp_roundtime (read often: kept)
@@ -162,6 +162,9 @@ new Trie:g_LastMap                              // bots here at the end of the l
 new g_RoundKills[33]                            // kills this round (a better kill, a bigger show-off)
 new bool:g_FailHops[33]                         // these hops are a pub player's failed bunnyhop
 new Float:g_JoinedAt[33], Float:g_ReloadAt[33], Float:g_AfkUntil[33], Float:g_NoTargetSince[33], Float:g_NextKnifeTry[33]
+new Float:g_NextGunPull[33]                      // the gun back from the brain's knife (not every frame)
+#define PISTOLS   ((1<<CSW_GLOCK18)|(1<<CSW_USP)|(1<<CSW_P228)|(1<<CSW_DEAGLE)|(1<<CSW_FIVESEVEN)|(1<<CSW_ELITE))
+#define NOT_GUNS  ((1<<CSW_KNIFE)|(1<<CSW_HEGRENADE)|(1<<CSW_FLASHBANG)|(1<<CSW_SMOKEGRENADE)|(1<<CSW_C4)|(1<<0))
 new bool:g_KnifeRun[33], g_Fav[33], g_Rival[33], g_DeathsBy[33][33]
 new g_RivalAuth[33][34], Float:g_RivalLeft[33]   // a human rival who left: theirs again if they're back within 10 minutes
 new g_SprayDecals[8], g_SprayCount, g_RadioCall[33], Float:g_Habit[33] = { 1.0, ... }
@@ -174,6 +177,7 @@ new bool:g_Career
 new g_pPersonality, g_pHold, g_pBotPlay
 new Float:g_NextRadio[33], Float:g_TeamRadioAt[3]       // radio cooldowns: each bot, each team
 new Float:g_HoldUntil[33], Float:g_NextHoldTry[33], bool:g_HoldDuck[33], g_HoldHp[33]
+new Float:g_HoldYaw[33], bool:g_HoldYawSet[33], Float:g_HoldLookAt[33]   // where a hold watches
 // gm_people loaded (looked up once), each bot's temper from it (cached: not per frame), and
 // when it last turned urgently to someone behind it
 new bool:g_PeopleLib, g_Temper[33] = { -1, ... }, Float:g_UrgentAt[33]
@@ -1267,6 +1271,10 @@ public task_scan()
 			}
 			if (!g_Target[id] && now >= g_NextHoldTry[id] && g_HoldUntil[id] == 0.0)
 				try_hold(id, now)
+			// holding: eyes kept on its spot the whole hold (the brain's own looking can
+			// wander onto a wall)
+			else if (g_HoldUntil[id] > now && now >= g_HoldLookAt[id])
+				hold_look(id, g_HoldUntil[id] - now)
 			continue
 		}
 		// several enemies at once, or nearly dead: some panic for a moment
@@ -1310,7 +1318,7 @@ engage(id, target, Float:angle, Float:dist, s, Float:now)
 
 	// (Gods' skill is 0: a hair of it, so the flick and its overshoot are a real person's,
 	// not a frame's)
-	new Float:skill = s == STYLE_GOD ? floatmax(skill_of(id), 0.12) : skill_of(id)
+	new Float:skill = s == STYLE_GOD ? floatmax(skill_of(id), 0.10) : skill_of(id)
 	new Float:rt = ex_gaussian(STYLES[s][ST_RtMu], STYLES[s][ST_RtSigma], STYLES[s][ST_RtTau]) * skill
 	rt *= (1.0 + dist / 3000.0) * (1.0 + angle / 90.0)
 	new Float:vel[3]
@@ -1409,6 +1417,82 @@ new_burst(id, s)
 // Every frame: hold the trigger, move the wobble along
 // ---------------------------------------------------------------------------
 
+bool:held_knife(id)
+{
+	new item = get_pdata_cbase(id, OFFSET_ACTIVE_ITEM)
+	return pev_valid(item) && cs_get_weapon_id(item) == CSW_KNIFE
+}
+
+// Its best gun in hand: the main one, else the pistol. Only one with ammo, and only what the
+// mode lets bots use (none in a knives-only mode, or SoccerJam's: it keeps the knife)
+gun_out(id)
+{
+	static pPistols, pKnives
+	if (!pPistols)
+	{
+		pPistols = get_cvar_pointer("bot_allow_pistols")
+		pKnives = get_cvar_pointer("bot_knives_only")
+	}
+	if (pKnives && get_pcvar_num(pKnives))
+		return
+	new bool:pistolsOk = !pPistols || get_pcvar_num(pPistols) != 0
+	new weapons[32], n, best, pistol
+	get_user_weapons(id, weapons, n)
+	for (new i = 0; i < n; i++)
+	{
+		new w = weapons[i]
+		if ((1 << w) & NOT_GUNS || !has_ammo(id, w))
+			continue
+		if ((1 << w) & PISTOLS)
+		{
+			if (pistolsOk)
+				pistol = w
+		}
+		else if (main_allowed(w))
+			best = w
+	}
+	if (!best)
+		best = pistol
+	if (!best)
+		return
+	new name[32]
+	get_weaponname(best, name, charsmax(name))
+	engclient_cmd(id, name)
+}
+
+// Any ammo for it: in the gun, or to load
+bool:has_ammo(id, w)
+{
+	new name[32]
+	get_weaponname(w, name, charsmax(name))
+	new ent = -1
+	while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", name)) > 0)
+	{
+		if (pev(ent, pev_owner) == id)
+			return cs_get_weapon_ammo(ent) > 0 || cs_get_user_bpammo(id, w) > 0
+	}
+	return cs_get_user_bpammo(id, w) > 0
+}
+
+// A main gun of a kind the mode lets bots use (bot_allow_rifles and the rest)
+bool:main_allowed(w)
+{
+	switch (w)
+	{
+		case CSW_M3, CSW_XM1014: return allow_cvar("bot_allow_shotguns")
+		case CSW_MAC10, CSW_TMP, CSW_MP5NAVY, CSW_UMP45, CSW_P90: return allow_cvar("bot_allow_sub_machine_guns")
+		case CSW_M249: return allow_cvar("bot_allow_machine_guns")
+		case CSW_SCOUT, CSW_AWP, CSW_G3SG1, CSW_SG550: return allow_cvar("bot_allow_snipers")
+	}
+	return allow_cvar("bot_allow_rifles")
+}
+
+bool:allow_cvar(const name[])
+{
+	new p = get_cvar_pointer(name)
+	return !p || get_pcvar_num(p) != 0
+}
+
 bool:holding_gun(id)
 {
 	new item = get_pdata_cbase(id, OFFSET_ACTIVE_ITEM)
@@ -1444,6 +1528,14 @@ public fw_cmdstart(id, uc, seed)
 		g_KnifeRun[id] = g_KnifeOut[id] = false
 		remove_task(TASK_KNIFE + id)
 		ensure_gun(id)
+	}
+	// the bot's own brain runs between spots with the knife out, and keeps it out when
+	// shot by someone it hasn't spotted yet: anyone past a newer player gets a gun out
+	// at once (a newer player sometimes keeps fumbling with it)
+	else if ((fight || now - g_HurtAt[id] < 1.5) && now >= g_NextGunPull[id] && s != STYLE_NEWBIE && held_knife(id))
+	{
+		g_NextGunPull[id] = now + 0.6
+		gun_out(id)
 	}
 
 	// standing still for a moment (afk): no shooting either. It starts once it's standing
@@ -2111,16 +2203,85 @@ bool:find_wall(id, Float:end[3], Float:normal[3])
 		new Float:f
 		get_tr2(tr, TR_flFraction, f)
 		new hit = get_tr2(tr, TR_pHit)
-		// only a wall (not another entity)
+		// only a wall (not another entity), and one the whole logo fits on
 		if (f < 1.0 && !(hit > 0 && pev_valid(hit)))
 		{
-			frac = f
-			get_tr2(tr, TR_vecEndPos, end)
-			get_tr2(tr, TR_vecPlaneNormal, normal)
+			new Float:at[3], Float:n[3]
+			get_tr2(tr, TR_vecEndPos, at)
+			get_tr2(tr, TR_vecPlaneNormal, n)
+			if (spray_fits(id, at, n))
+			{
+				frac = f
+				end = at
+				normal = n
+			}
 		}
 	}
 	free_tr2(tr)
 	return frac < 1.0
+}
+
+// The whole logo (64 units across) on one flat, solid surface: an upright wall or the floor,
+// not the top of a low wall or a crate's edge with half of it hanging in the air, nor across
+// a corner, a ledge or a gap. Nine points over it, each on the same plane right behind it.
+bool:spray_fits(id, const Float:at[3], const Float:normal[3])
+{
+	new bool:wall = floatabs(normal[2]) < 0.25, bool:floor = normal[2] > 0.9
+	if (!wall && !floor)
+		return false
+	new Float:right[3], Float:up[3]
+	if (wall)
+	{
+		// (along the wall, and straight up it)
+		new Float:len = floatsqroot(normal[0] * normal[0] + normal[1] * normal[1])
+		right[0] = -normal[1] / len
+		right[1] = normal[0] / len
+		right[2] = 0.0
+		up[0] = 0.0
+		up[1] = 0.0
+		up[2] = 1.0
+	}
+	else
+	{
+		right[0] = 1.0
+		up[1] = 1.0
+	}
+	new Float:front[3]
+	for (new i = 0; i < 3; i++)
+		front[i] = at[i] + normal[i] * 6.0
+	new tr = create_tr2(), bool:ok = true
+	for (new a = -1; a <= 1 && ok; a++)
+	{
+		for (new b = -1; b <= 1 && ok; b++)
+		{
+			new Float:p[3], Float:q[3]
+			for (new i = 0; i < 3; i++)
+			{
+				p[i] = front[i] + right[i] * 34.0 * float(a) + up[i] * 34.0 * float(b)
+				q[i] = p[i] - normal[i] * 14.0
+			}
+			// open in front of that part (nothing sticking out over it)...
+			new Float:f
+			engfunc(EngFunc_TraceLine, front, p, IGNORE_MONSTERS, id, tr)
+			get_tr2(tr, TR_flFraction, f)
+			if (f < 1.0)
+			{
+				ok = false
+				break
+			}
+			// ...and the same flat surface right behind it
+			engfunc(EngFunc_TraceLine, p, q, IGNORE_MONSTERS, id, tr)
+			get_tr2(tr, TR_flFraction, f)
+			new hit = get_tr2(tr, TR_pHit)
+			new Float:n[3]
+			get_tr2(tr, TR_vecPlaneNormal, n)
+			new Float:dist = f * 14.0
+			if (f >= 1.0 || (hit > 0 && pev_valid(hit)) || dist < 3.0 || dist > 9.0 || n[0] * normal[0] + n[1] * normal[1] + n[2] * normal[2] < 0.97)
+				ok = false
+		}
+	}
+	free_tr2(tr)
+	return ok
 }
 
 // The spray itself: facing it (with Loner-Strike's game DLL, a short look at the spot), the
@@ -2321,7 +2482,8 @@ try_hold(id, Float:now)
 	chance *= (play == PLAY_HOLD ? 1.6 : play == PLAY_SOLO ? 1.2 : 1.0) * pers()
 	if (random_float(0.0, 1.0) >= chance)
 		return
-	// not in a doorway with a teammate right behind it
+	// not with a teammate right by it (in a doorway behind it, or holding the same spot):
+	// people spread out to hold a place
 	new Float:at[3], Float:o[3]
 	pev(id, pev_origin, at)
 	for (new m = 1; m <= MaxClients; m++)
@@ -2329,7 +2491,7 @@ try_hold(id, Float:now)
 		if (m == id || !is_user_alive(m) || get_user_team(m) != get_user_team(id))
 			continue
 		pev(m, pev_origin, o)
-		if (get_distance_f(at, o) < 96.0)
+		if (get_distance_f(at, o) < 220.0)
 			return
 	}
 	new Float:len = kind == KIND_CAREFUL ? random_float(6.0, 14.0) : kind == KIND_LURKER ? random_float(4.0, 9.0) : random_float(3.0, 6.0)
@@ -2339,11 +2501,52 @@ try_hold(id, Float:now)
 	len = floatmin(len, 0.25 * round_left())
 	if (len < 2.0)
 		return
+	// where to watch first: no open line anywhere (a corner, a cupboard), no hold
+	g_HoldYawSet[id] = false
+	if (cvar_exists("bot_ls_routes") && !pick_hold_yaw(id))
+		return
 	g_HoldUntil[id] = now + len
 	g_HoldDuck[id] = random_float(0.0, 1.0) < (kind == KIND_CAREFUL ? 0.35 : 0.15)
 	g_HoldHp[id] = get_user_health(id)
 	brain_hold(id, len)
 	hold_look(id, len)
+}
+
+// The way someone would come from: of the lines all round it, the longest open one (a lane,
+// a doorway across the room), turning less breaking near ties. false: nothing's open (a wall
+// a step away is nobody's approach)
+bool:pick_hold_yaw(id)
+{
+	new Float:eye[3], Float:view[3]
+	eye_pos(id, eye)
+	pev(id, pev_v_angle, view)
+	new Float:bestYaw = view[1], Float:best = -1.0, Float:bestOpen = 0.0
+	new tr = create_tr2()
+	for (new k = 0; k < 16; k++)
+	{
+		new Float:turn = 22.5 * float(k <= 8 ? k : k - 16)        // -157.5 .. 180
+		new Float:yaw = view[1] + turn
+		new Float:to[3]
+		to[0] = eye[0] + floatcos(yaw, degrees) * 2000.0
+		to[1] = eye[1] + floatsin(yaw, degrees) * 2000.0
+		to[2] = eye[2]
+		engfunc(EngFunc_TraceLine, eye, to, IGNORE_MONSTERS, id, tr)
+		new Float:frac
+		get_tr2(tr, TR_flFraction, frac)
+		new Float:score = frac * 2000.0 - 4.0 * floatabs(turn)
+		if (score > best)
+		{
+			best = score
+			bestYaw = yaw
+			bestOpen = frac * 2000.0
+		}
+	}
+	free_tr2(tr)
+	if (bestOpen < 350.0)
+		return false
+	g_HoldYaw[id] = bestYaw
+	g_HoldYawSet[id] = true
+	return true
 }
 
 // mp_roundtime in minutes; 0 (no clock) when rounds never run out (mp_round_infinite, any
@@ -2428,48 +2631,26 @@ public Float:n_urgent_until(plugin, params)
 // side, some a touch low), not dead-on at head height like a bot
 hold_look(id, Float:secs)
 {
-	if (!cvar_exists("bot_ls_routes"))
+	if (!cvar_exists("bot_ls_routes") || !g_HoldYawSet[id])
 		return
 	new h = name_hash(id)
 	new Float:side = float(5 + (h / 3) % 21) * ((h & 1) ? 1.0 : -1.0)
 	new Float:rise = (h / 63) % 3 == 0 ? -float(8 + (h / 7) % 11) : float((h / 11) % 6)
 	new Float:eye[3], Float:view[3], Float:fwd[3], Float:right[3], Float:at[3]
 	eye_pos(id, eye)
-	pev(id, pev_v_angle, view)
 	view[0] = 0.0
-	// (the way someone would come from: of the lines within 60 degrees of where it faces, the
-	// longest open one (a lane, a doorway across the room), the straight-ahead one breaking
-	// ties; a wall a step away is nobody's approach)
-	new Float:bestYaw = view[1], Float:best = -1.0
-	new tr = create_tr2()
-	for (new k = -3; k <= 3; k++)
-	{
-		new Float:yaw = view[1] + 20.0 * float(k)
-		new Float:dir[3], Float:to[3]
-		dir[0] = floatcos(yaw, degrees)
-		dir[1] = floatsin(yaw, degrees)
-		for (new i = 0; i < 3; i++)
-			to[i] = eye[i] + (i < 2 ? dir[i] * 2000.0 : 0.0)
-		engfunc(EngFunc_TraceLine, eye, to, IGNORE_MONSTERS, id, tr)
-		new Float:frac
-		get_tr2(tr, TR_flFraction, frac)
-		new Float:score = frac * 2000.0 - 60.0 * float(abs(k))
-		if (score > best)
-		{
-			best = score
-			bestYaw = yaw
-		}
-	}
-	free_tr2(tr)
-	view[1] = bestYaw
+	view[1] = g_HoldYaw[id]
+	view[2] = 0.0
 	angle_vector(view, ANGLEVECTOR_FORWARD, fwd)
 	angle_vector(view, ANGLEVECTOR_RIGHT, right)
 	for (new i = 0; i < 3; i++)
 		at[i] = eye[i] + fwd[i] * 600.0 + right[i] * side
 	at[2] += rise
-	// (a moment to settle the aim, not the whole hold: a hold that ends early, for an order
-	// or a hit, doesn't leave it staring at the spot as it walks off)
-	server_cmd("ls_bot %d look %.0f %.0f %.0f %.1f", id, at[0], at[1], at[2], floatmin(secs, 2.5))
+	// (a few seconds at a time, asked again while it holds: a hold that ends early, for an
+	// order or a hit, doesn't leave it staring at the spot as it walks off)
+	new Float:t = floatmin(secs, 2.5)
+	g_HoldLookAt[id] = get_gametime() + t - 0.3
+	server_cmd("ls_bot %d look %.0f %.0f %.0f %.1f", id, at[0], at[1], at[2], t)
 }
 
 brain_hold(id, Float:secs)
