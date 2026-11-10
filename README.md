@@ -20,7 +20,8 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 
 **Playing**
 - 22 game modes: Classic, Match (5v5), Deathmatch, Free for all, Gun Game (solo and teams), Zombie Plague (two versions), Warcraft 3, SuperHero, Hide and Seek, Paintball, Deathrun, Base Builder, SoccerJam, Surf, Kreedz, plus knife, pistol, deagle, AWP and scout modes
-- Bot styles with human reaction times and aim, from a newbie lobby up to bunnyhopping pros
+- Bots that play like people, from a newbie lobby up to bunnyhopping pros: they aim like a hand on a mouse, Ts take sites together, CTs hold them and retake, and each bot has its own personality, skill and habits
+- Talk to them in chat: ask "money?" or "where'd they go" and they answer from what's really happening; ask "cover me", "plant at a" or "give me the bomb" and they do it, or say no in character
 - 1,600 bot names, a few of them in small clans with a tag, so the same "regulars" keep showing up
 - Thousands of maps from GameBanana with pictures, favourites and search, plus skins, models, sounds and sprays
 - Round-end music, Quake sounds and classic sound packs
@@ -34,6 +35,9 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 
 **Servers**
 - Dedicated servers on your computer, or on a rented Linux machine (a VPS) that the app sets up over SSH and that keeps running without it
+- Friends help run it from their own Loner-Strike as an Admin or Moderator, even with your computer off, and you see what each of them did
+- Servers update themselves once nobody's playing; on a Linux machine the game runs in a sandbox, RCON is closed to the internet, and a Security and health panel checks the machine and fixes what it can
+- Linux servers backed up to your computer every day, and a message in your Discord if one goes down
 - Bring a server you already run, or copy one server's mods to another
 - Admins, moderators and VIPs with abilities per role, bans, mutes, a swear filter, a chat log and player reports
 - Share the admin list, bans, swear filter, welcome page and chat messages across servers; mods and settings stay per server
@@ -54,7 +58,8 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 
 The mods are community classics. We added:
 
-- **Bot styles.** Stock CZ bots react instantly and aim like turrets. The styles give them reaction delays, overshooting flicks, shaky tracking, burst fire and the occasional whiff. The top styles bunnyhop.
+- **A bot brain.** Our own build of [ReGameDLL](https://github.com/jamesontucker/ReGameDLL_CS) (branch `loner-strike`) changes how the bots think, not just how they aim: a hand-like aim (still most of the time, flicks that land a touch off, a little tremor), their own routes and habits, Ts gathering and taking a site together, CTs holding sites and retaking, and chat that answers and takes requests. Stock CZ bots react instantly and aim like turrets; these were tuned against recordings of a person playing.
+- **Bot styles.** On top of the brain, lobbies from newbies to bunnyhopping pros, or a mixed lobby where each bot keeps its own level.
 - **Bot fixes in every mod.** A lot of old plugins don't see CZ bots at all, so hits, kills and spawns get missed. Every mod here is patched for that. Some also got bot logic they never had: SuperHero bots pick heroes, SoccerJam bots chase the ball and Roll the Dice bots roll.
 - **The Game Mode Menu, the server plugins and the app**, so you never have to edit a config file.
 - **Fixes** for Gun Game and Deathmatch spawns on maps without spawn files, the map timer while bots learn a map, and a Deathmatch crash on long sessions.
@@ -92,17 +97,22 @@ After that it's managed like any other server:
 - Changes you make in the app (settings, admins, mods, maps, sounds) go up by themselves, and only the files that changed. New plugins and maps load on the next map, or with Restart now.
 - Update gets Valve's latest server files on the machine. Bans and stats made on the server stay there.
 - HLTV runs next to it on UDP 27020, and its demos can be copied to your game.
-- If the machine stops answering, the app says so instead of showing it as running.
+- If the machine stops answering, the app says so instead of showing it as running, and with Discord set up you hear about a server that stays down.
+- After an app update, each server updates itself once nobody's playing.
+- The game runs in a sandbox, RCON only answers from the machine itself, security updates and fail2ban are turned on, and old logs are trimmed. The server's Security and health panel checks all of it and fixes what it can.
+- Admins and Moderators you invite help from their own Loner-Strike through the server itself (a small service, `ls-control`), so your computer can be off.
+- Its bans, admins and settings are backed up to your computer every day.
 
 [docs/linux-server.md](docs/linux-server.md) walks through it: picking a host and size, making an SSH key, opening UDP 27015-27020 in the provider's firewall, managing the server and fixing common problems.
 
 ## How it works
 
-Setup installs [Metamod-P](https://github.com/Bots-United/metamod-p), [AMX Mod X](https://www.amxmodx.org) and [ReGameDLL](https://github.com/rehlds/ReGameDLL_CS), then our plugins and the mods you pick from [catalog/](catalog). Mods are downloaded from their original sources and checked against pinned checksums. The app talks to the game over RCON on your computer; nothing goes through a server of ours.
+Setup installs [Metamod-P](https://github.com/Bots-United/metamod-p), [AMX Mod X](https://www.amxmodx.org) and our builds of [ReGameDLL](https://github.com/jamesontucker/ReGameDLL_CS) (the bot brain) and, for servers, [ReHLDS](https://github.com/jamesontucker/ReHLDS), then our plugins and the mods you pick from [catalog/](catalog). Mods are downloaded from their original sources and checked against pinned checksums. The app talks to the game over RCON on your computer; nothing goes through a server of ours.
 
 ```
 app/src-tauri/   the app: setup, the game and server control API, sharing (Rust, Tauri)
 app/ui/          the control panel (React), shown in the app window and on your phone
+app/server-agent/ ls-control: shared control on a Linux server (Rust)
 plugins/         our AMX Mod X plugins and the mode settings
 mods/            the community mods' code with our bot fixes
 catalog/         what each mod installs and where it comes from
