@@ -161,7 +161,14 @@ struct Intent {
 impl Intent {
     fn start(program: &str, model: &str, threads: i32) -> Option<Intent> {
         use std::process::{Command, Stdio};
-        let mut child = Command::new(program)
+        let mut cmd = Command::new(program);
+        // (no console window of its own on Windows)
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000);
+        }
+        let mut child = cmd
             .args(["--model", model, "--threads", &threads.to_string()])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

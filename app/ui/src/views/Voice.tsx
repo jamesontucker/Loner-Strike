@@ -111,7 +111,9 @@ export function Voice({ server }: { server: ServerInfo }) {
               <p className="muted small-note">{ON_COMPUTER_ONLY}</p>
             )}
           </div>
-        ) : (
+        ) : null}
+        {!st.installed && st.error ? <p className="err-text">{st.error}</p> : null}
+        {st.installed && (
           <>
             {st.remote && !st.enabled && (
               <p className="muted">Turning it on puts the voice programs on the server and downloads the models there ({mb(st.model_bytes)}). It runs with the server and can only talk to the server itself.</p>

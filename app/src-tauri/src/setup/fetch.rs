@@ -98,19 +98,31 @@ fn download_from(from: &str, url: &str, sha: Option<&str>, what: &str, p: &dyn P
     }
     p.detail(&format!("Downloading {what}"));
     let tmp = cache.join(format!("{name}.part"));
-    let fail = |e: String| format!("Couldn't download {what} ({e}). Check your internet connection and try again.");
+    let fail = |e: String| {
+        if e == DISK_FULL {
+            format!("Couldn't download {what}: the disk is full. Free some space and try again.")
+        } else {
+            format!("Couldn't download {what} ({e}). Check your internet connection and try again.")
+        }
+    };
     // the download servers (GitHub's above all) now and then answer 502/503/504 or drop the
     // connection for a moment, before or during the download: a few tries, a little apart,
     // before giving up
     const WAITS: [u64; 4] = [2, 5, 10, 20];
     let most = if retry { WAITS.len() } else { 0 };
     let mut tries = 0;
+    // (what's already on disk from a try that dropped part way: the next try asks for the rest)
+    let mut have: u64 = 0;
     let out = loop {
         let again = |tries: usize| {
             p.detail(&format!("Downloading {what} (trying again)"));
             std::thread::sleep(Duration::from_secs(WAITS[tries]));
         };
-        let sent = crate::sys::http().get(from).header("User-Agent", USER_AGENT).timeout(Duration::from_secs(900)).send();
+        let mut req = crate::sys::http_download().get(from).header("User-Agent", USER_AGENT);
+        if have > 0 {
+            req = req.header("Range", format!("bytes={have}-"));
+        }
+        let sent = req.send();
         let retry = match &sent {
             Ok(r) => r.status().is_server_error() || r.status().as_u16() == 429,
             Err(e) => e.is_connect() || e.is_timeout() || e.is_request(),
@@ -124,9 +136,19 @@ fn download_from(from: &str, url: &str, sha: Option<&str>, what: &str, p: &dyn P
         if !resp.status().is_success() {
             return Err(fail(format!("the server answered {}", resp.status())));
         }
-        let size = resp.content_length().unwrap_or(0);
-        let mut out = std::fs::File::create(&tmp).map_err(|e| fail(e.to_string()))?;
-        let mut got: u64 = 0;
+        // the rest of it (206), or the whole thing again (a server that won't resume)
+        let resumed = have > 0 && resp.status().as_u16() == 206;
+        if !resumed {
+            have = 0;
+        }
+        let size = resp.content_length().map(|n| n + have).unwrap_or(0);
+        let mut out = if resumed {
+            std::fs::OpenOptions::new().append(true).open(&tmp)
+        } else {
+            std::fs::File::create(&tmp)
+        }
+        .map_err(|e| fail(disk_err(&e)))?;
+        let mut got: u64 = have;
         let mut last_shown = 0u64;
         let mut buf = vec![0u8; 256 * 1024];
         let dropped = loop {
@@ -140,7 +162,7 @@ fn download_from(from: &str, url: &str, sha: Option<&str>, what: &str, p: &dyn P
                 let _ = std::fs::remove_file(&tmp);
                 return Err(fail("it's far bigger than expected".into()));
             }
-            out.write_all(&buf[..n]).map_err(|e| fail(e.to_string()))?;
+            out.write_all(&buf[..n]).map_err(|e| fail(disk_err(&e)))?;
             if got - last_shown >= 512 * 1024 {
                 last_shown = got;
                 let mb = |b: u64| b as f64 / 1_048_576.0;
@@ -156,12 +178,14 @@ fn download_from(from: &str, url: &str, sha: Option<&str>, what: &str, p: &dyn P
             None => break out,
             Some(e) => {
                 drop(out);
-                let _ = std::fs::remove_file(&tmp);
+                // (kept: the next try carries on from here)
+                have = got;
                 if tries < most {
                     again(tries);
                     tries += 1;
                     continue;
                 }
+                let _ = std::fs::remove_file(&tmp);
                 return Err(fail(e.to_string()));
             }
         }
@@ -312,5 +336,17 @@ mod tests {
         assert!(safe_target(d, "a/../../b").is_err());
         assert_eq!(safe_target(d, "./a/b").unwrap(), Some(d.join("a/b")));
         assert_eq!(safe_target(d, "./").unwrap(), None);
+    }
+}
+
+const DISK_FULL: &str = "disk full";
+
+/// A disk problem in plain words (a full disk isn't the internet's fault).
+fn disk_err(e: &std::io::Error) -> String {
+    let full = e.raw_os_error().is_some_and(|c| c == 112 || c == 28) || e.to_string().to_lowercase().contains("no space");
+    if full {
+        DISK_FULL.into()
+    } else {
+        e.to_string()
     }
 }

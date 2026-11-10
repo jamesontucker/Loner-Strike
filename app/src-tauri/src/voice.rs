@@ -200,6 +200,7 @@ fn remote_sh(e: &Entry, on: bool) -> String {
 fail() {{ echo "@@FAIL $*"; exit 3; }}
 [ "$(id -u)" = 0 ] && ! command -v sudo >/dev/null && sudo() {{ [ "$1" = -n ] && shift; "$@"; }}
 sudo -n true 2>/dev/null || fail "The user $(whoami) can't use sudo without a password, which this needs. Give it passwordless sudo, or connect as root."
+grep -qw avx2 /proc/cpuinfo && grep -qw fma /proc/cpuinfo || fail "This machine's processor is too old for voice commands: they need AVX2."
 M="$HOME/{model}"
 mkdir -p "$(dirname "$M")"
 if [ "$(sha256sum "$M" 2>/dev/null | cut -c1-64)" != "{sha}" ]; then
@@ -369,6 +370,16 @@ pub fn server_started(e: &Entry) {
     }
 }
 
+/// Speech-to-text needs AVX2 and FMA (Intel from 2013, AMD from 2015): an older processor
+/// would crash it, so it's said plainly instead.
+pub fn cpu_too_old() -> Option<&'static str> {
+    #[cfg(target_arch = "x86_64")]
+    if !(std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")) {
+        return Some("This computer's processor is too old for voice commands: they need AVX2, which Intel processors have from 2013 and AMD from 2015.");
+    }
+    None
+}
+
 /// Starts ls-voice for a server on this computer, once the server answers.
 pub fn start(e: &Entry) -> Result<(), String> {
     if e.remote.is_some() {
@@ -377,7 +388,12 @@ pub fn start(e: &Entry) -> Result<(), String> {
     if !installed() {
         return Err("Install bot voice commands first, from this tab.".into());
     }
-    let exe = EXE.lock().unwrap().clone().ok_or("This copy of the app doesn't include the voice program. Update the app.")?;
+    let exe = EXE.lock().unwrap().clone().ok_or(
+        "The voice program is missing from the app. An antivirus may have removed it: allow Loner-Strike's folder in it, then reinstall Loner-Strike.",
+    )?;
+    if let Some(why) = cpu_too_old() {
+        return Err(why.into());
+    }
     let id = e.id.clone();
     // (already running, or already waiting for its server)
     if with_runs(|r| alive(r, &id) || !r.pending.insert(id.clone())) {
@@ -495,6 +511,8 @@ pub fn stop(e: &Entry) {
     if e.remote.is_some() {
         return;
     }
+    // (one from an earlier session the app lost track of, too)
+    end_leftover(e);
     let child = with_runs(|r| {
         r.errors.remove(&e.id);
         r.pending.remove(&e.id);
@@ -516,7 +534,10 @@ fn log_tail(e: &Entry) -> Vec<String> {
 }
 
 fn status(e: &Entry) -> Value {
-    let (mut running, error) = with_runs(|r| (alive(r, &e.id), r.errors.get(&e.id).cloned()));
+    let (mut running, mut error) = with_runs(|r| (alive(r, &e.id), r.errors.get(&e.id).cloned()));
+    if e.remote.is_none() && error.is_none() {
+        error = cpu_too_old().map(String::from);
+    }
     let mut log = if e.remote.is_none() { log_tail(e) } else { vec![] };
     if e.remote.is_some() && e.voice.enabled {
         (running, log) = remote_state(e);
@@ -556,6 +577,9 @@ impl crate::setup::Progress for Download {
 }
 
 fn install() -> Result<(), String> {
+    if let Some(why) = cpu_too_old() {
+        return Err(why.into());
+    }
     {
         let mut busy = INSTALLING.lock().unwrap();
         if busy.is_some() {
@@ -572,7 +596,11 @@ fn install() -> Result<(), String> {
             (INTENT_URL, INTENT_SHA, "the understanding model", intent_model(), speech, 1.0 - speech),
         ] {
             let got = crate::setup::fetch::download(url, Some(sha), what, &Download { from, share })?;
-            std::fs::copy(&got, &to).map_err(|err| format!("Couldn't save {what} ({err})."))?;
+            // (moved, not copied: no second copy of a few hundred MB on the disk)
+            if std::fs::rename(&got, &to).is_err() {
+                std::fs::copy(&got, &to).map_err(|err| format!("Couldn't save {what} ({err})."))?;
+                let _ = std::fs::remove_file(&got);
+            }
             let _ = std::fs::remove_file(&got);
         }
         Ok(())
@@ -583,7 +611,8 @@ fn install() -> Result<(), String> {
 
 /// Removes the add-on: voice off on every server (stopped where it runs), the model deleted.
 fn uninstall() -> Result<(), String> {
-    for e in servers::load().into_iter().filter(|e| e.voice.enabled && e.remote.is_none()) {
+    // (every server on this computer: a leftover holds the model files open on Windows)
+    for e in servers::load().into_iter().filter(|e| e.remote.is_none()) {
         stop(&e);
     }
     servers::edit(|l| {

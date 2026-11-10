@@ -159,6 +159,21 @@ pub fn adopt(from: &Path, to: &Path) {
 }
 
 /// A blocking HTTPS client. Only use from std threads or spawn_blocking.
+/// For big downloads: hours for the whole download (a slow connection still gets there; a
+/// dropped one is resumed), and keepalives so a dead connection is noticed.
+pub fn http_download() -> &'static reqwest::blocking::Client {
+    static CLIENT: OnceLock<reqwest::blocking::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        reqwest::blocking::Client::builder()
+            .connect_timeout(Duration::from_secs(15))
+            .tcp_keepalive(Duration::from_secs(30))
+            .timeout(Duration::from_secs(3 * 3600))
+            .build()
+            .expect("https client")
+    })
+}
+
 pub fn http() -> &'static reqwest::blocking::Client {
     static CLIENT: OnceLock<reqwest::blocking::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
@@ -173,6 +188,19 @@ pub fn http() -> &'static reqwest::blocking::Client {
 /// GoldSrc text is Latin-1: every byte is one character.
 pub fn read_latin1(path: &Path) -> std::io::Result<String> {
     std::fs::read(path).map(|b| b.iter().map(|&c| c as char).collect())
+}
+
+/// Clears a file's read-only mark (some guides tell people to set it on liblist.gam), so a
+/// repair can write it.
+pub fn make_writable(path: &Path) {
+    if let Ok(meta) = std::fs::metadata(path) {
+        let mut perms = meta.permissions();
+        if perms.readonly() {
+            #[allow(clippy::permissions_set_readonly_false)]
+            perms.set_readonly(false);
+            let _ = std::fs::set_permissions(path, perms);
+        }
+    }
 }
 
 pub fn write_latin1(path: &Path, text: &str) -> std::io::Result<()> {
@@ -469,9 +497,17 @@ pub fn running_game_dirs() -> Vec<String> {
     #[cfg(windows)]
     {
         let mut c = command("powershell");
-        c.args(["-NoProfile", "-Command", "(Get-Process hl -ErrorAction SilentlyContinue).Path"]);
+        // (UTF-8 out: Windows PowerShell otherwise writes the old code page, and a folder like
+        // D:\Игры would come back garbled and never match)
+        c.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "[Console]::OutputEncoding=[Text.Encoding]::UTF8; (Get-Process hl -ErrorAction SilentlyContinue).Path",
+        ]);
         match run_output(c, Duration::from_secs(8)) {
-            Some((_, out, _)) => out.lines().filter_map(game_dir_in).collect(),
+            // (a line that still came back garbled can't be compared: left out)
+            Some((_, out, _)) => out.lines().filter(|l| !l.contains('\u{FFFD}')).filter_map(game_dir_in).collect(),
             _ => Vec::new(),
         }
     }

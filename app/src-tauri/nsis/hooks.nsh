@@ -1,10 +1,31 @@
-; Loner-Strike's additions to Tauri's Windows uninstaller (tauri.conf.json:
-; bundle > windows > nsis > installerHooks). Nothing here runs when an app update replaces
-; the old version ($UpdateMode = 1): only a real uninstall from Programs and Features.
+; Loner-Strike's additions to Tauri's Windows installer and uninstaller (tauri.conf.json:
+; bundle > windows > nsis > installerHooks). The folder clean-up below doesn't run when an app
+; update replaces the old version ($UpdateMode = 1): only a real uninstall from Programs and Features.
 ;
 ; Only Loner-Strike's own, named folders, never the install folder as a whole: a person
 ; can install into a folder of their own (D:\Games), and %LOCALAPPDATA%\Loner-Strike also
 ; holds the dedicated servers (Servers\), which an uninstall keeps.
+
+; The helpers that run beside the app (voice commands, playit's agent) keep running when it
+; quits for an update, and a running program can't be replaced: they're stopped first, on
+; updates and uninstalls alike. (They start again with the server, or when turned on.)
+!macro LS_STOP_HELPERS
+  nsExec::Exec 'taskkill /F /T /IM ls-voice.exe'
+  Pop $0
+  nsExec::Exec 'taskkill /F /T /IM ls-intent.exe'
+  Pop $0
+  nsExec::Exec 'taskkill /F /T /IM playitd.exe'
+  Pop $0
+  Sleep 500
+!macroend
+
+!macro NSIS_HOOK_PREINSTALL
+  !insertmacro LS_STOP_HELPERS
+!macroend
+
+!macro NSIS_HOOK_PREUNINSTALL
+  !insertmacro LS_STOP_HELPERS
+!macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
   ${If} $UpdateMode <> 1

@@ -269,7 +269,7 @@ async fn api_update_check(State(st): State<Shared>, headers: HeaderMap) -> (Stat
     let Some(app) = st.app.get() else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "not ready"})));
     };
-    let found = match app.updater() {
+    let found = match app.updater_builder().on_before_exit(crate::before_update_exit).build() {
         Ok(u) => u.check().await,
         Err(e) => return (StatusCode::OK, Json(json!({"error": e.to_string()}))),
     };

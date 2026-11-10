@@ -37,6 +37,7 @@ docker run --rm --platform linux/amd64 \
   -v loner-strike-voice-cargo:/usr/local/cargo/registry \
   -v loner-strike-voice-target:/target \
   -e CARGO_TARGET_DIR=/target \
+  -e GGML_NATIVE=OFF \
   -e RUSTFLAGS="-C link-arg=-static-libstdc++ -C link-arg=-static-libgcc --remap-path-prefix=/src=/src --remap-path-prefix=/usr/local/cargo=/cargo" \
   -w /src/app/voice-agent \
   "$ref" \

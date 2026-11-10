@@ -180,9 +180,13 @@ jobs:
 
       # ls-voice (app/voice-agent): Advanced Bot Interaction's speech-to-text helper, shipped
       # inside the app like playit's agent; it does nothing until a server turns voice on.
-      # Whisper and Opus are built into it (cmake), so it needs nothing installed
+      # Whisper and Opus are built into it (cmake). GGML_NATIVE=OFF: ggml is built for a fixed
+      # baseline (AVX2 on x86), not for whatever CPU the build machine happens to have, which
+      # would crash on players' older ones
       - name: Build ls-voice and ls-intent (Mac)
         if: matrix.platform == 'macos-latest'
+        env:
+          GGML_NATIVE: "OFF"
         run: |
           B="$GITHUB_WORKSPACE/app/src-tauri/binaries"
           mkdir -p "$B"
@@ -195,14 +199,31 @@ jobs:
             lipo -create "$B/ls-$p-aarch64-apple-darwin" "$B/ls-$p-x86_64-apple-darwin" -output "$B/ls-$p-universal-apple-darwin"
           done
 
+      # The C runtime is linked in (crt-static, and llama.cpp's own switch for it), so they run
+      # without Microsoft's Visual C++ redistributable; checked below
       - name: Build ls-voice and ls-intent (Windows)
         if: matrix.platform == 'windows-latest'
         shell: bash
+        env:
+          GGML_NATIVE: "OFF"
+          LLAMA_STATIC_CRT: "1"
+          RUSTFLAGS: "-C target-feature=+crt-static"
         run: |
           mkdir -p app/src-tauri/binaries
           for p in voice intent; do
             ( cd app/$p-agent && cargo build --release --locked && cp target/release/ls-$p.exe ../src-tauri/binaries/ls-$p-x86_64-pc-windows-msvc.exe )
           done
+
+      - name: Check ls-voice and ls-intent need no Visual C++ runtime (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $dumpbin = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -find "VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe" | Select-Object -First 1
+          foreach ($p in "voice", "intent") {
+            $deps = & $dumpbin /dependents "app\src-tauri\binaries\ls-$p-x86_64-pc-windows-msvc.exe" | Out-String
+            Write-Output $deps
+            if ($deps -match "(?i)msvcp|vcruntime|vcomp") { throw "ls-$p needs the Visual C++ runtime" }
+          }
 
       # Notarization reads the App Store Connect key from a file
       - name: Write the notarization key

@@ -178,13 +178,23 @@ fn fit_on_screen(window: &tauri::WebviewWindow) {
     let _ = window.center();
 }
 
+/// On Windows the updater ends the app itself to run the installer, so the usual clean-up on
+/// quitting never runs: the same, first.
+pub fn before_update_exit() {
+    servers::stop_on_exit();
+    if connect::DIRECT.lock().map(|d| d.on).unwrap_or(false) {
+        connect::close_direct();
+    }
+    control::shutdown();
+}
+
 /// Looks for a newer release on GitHub and offers to install it.
 /// Updates are signed; the updater refuses anything not signed with Loner-Strike's key.
 async fn check_for_update(app: tauri::AppHandle) {
     use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
     use tauri_plugin_updater::UpdaterExt;
 
-    let Ok(updater) = app.updater() else { return };
+    let Ok(updater) = app.updater_builder().on_before_exit(before_update_exit).build() else { return };
     let Ok(Some(update)) = updater.check().await else { return };
     let install = app
         .dialog()

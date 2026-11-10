@@ -274,12 +274,19 @@ impl Game {
     /// PowerShell on Windows) and the setup, and the panel asks every second or so.
     fn bad_password_reason_cached(&self) -> String {
         static LAST: std::sync::Mutex<Option<(std::path::PathBuf, std::time::Instant, String)>> = std::sync::Mutex::new(None);
-        if let Some((dir, at, why)) = LAST.lock().unwrap().as_ref() {
+        // (one check at a time: the others meanwhile get the last answer, or the plain one)
+        static CHECKING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        let last = LAST.lock().unwrap().clone();
+        if let Some((dir, at, why)) = &last {
             if *dir == self.dir && at.elapsed() < std::time::Duration::from_secs(15) {
                 return why.clone();
             }
         }
+        if CHECKING.swap(true, std::sync::atomic::Ordering::AcqRel) {
+            return last.filter(|(dir, _, _)| *dir == self.dir).map(|(_, _, why)| why).unwrap_or_else(|| BAD_PASSWORD.into());
+        }
         let why = self.bad_password_reason();
+        CHECKING.store(false, std::sync::atomic::Ordering::Release);
         *LAST.lock().unwrap() = Some((self.dir.clone(), std::time::Instant::now(), why.clone()));
         why
     }
@@ -377,6 +384,7 @@ pub fn health_check(cz: &Path, repair: bool) -> Value {
                 Some(m) if repair => {
                     let backup = cz.join(format!("liblist.gam.steam-{}", sys::stamp()));
                     let new = format!("{}{}{}", &text[..m.start()], METAMOD_DLL, &text[m.end()..]);
+                    sys::make_writable(&liblist);
                     if sys::write_latin1(&backup, &text).is_ok() && sys::write_latin1(&liblist, &new).is_ok() {
                         fixed.push("Steam had reset liblist.gam, so the mods weren't loading. Fixed it. Restart the game.");
                         check("Game loads Metamod", true, "repaired");
@@ -396,7 +404,14 @@ pub fn health_check(cz: &Path, repair: bool) -> Value {
     if mm_text.to_lowercase().contains("amxmodx_mm.dll") {
         check("Metamod loads AMX Mod X", true, "");
     } else if repair && mm_ini.parent().map(|d| d.is_dir()).unwrap_or(false) {
-        if std::fs::write(&mm_ini, "win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n").is_ok() {
+        // (added to what's there: other Metamod plugins stay)
+        sys::make_writable(&mm_ini);
+        let mut list = mm_text.clone();
+        if !list.is_empty() && !list.ends_with('\n') {
+            list.push_str("\r\n");
+        }
+        list.push_str("win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n");
+        if sys::write_latin1(&mm_ini, &list).is_ok() {
             fixed.push("Metamod's plugin list was missing AMX Mod X. Fixed it. Restart the game.");
             check("Metamod loads AMX Mod X", true, "repaired");
         } else {
