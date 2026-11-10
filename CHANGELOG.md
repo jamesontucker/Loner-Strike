@@ -20,7 +20,7 @@ What changed in each version. The downloads are on the [Releases](https://github
 - Deathmatch and Gun Game no longer end the round and respawn everyone at 9 minutes.
 
 ### Advanced Bot Interaction
-- The bots understand what people say on voice chat, the same as typed team chat: say "rush b" or "Derek, flash for me" on your mic and they react. An optional add-on per server, installed from its Bot voice commands tab (a 148 MB speech model, once per computer) and removed just as easily. Speech is turned into text on the computer running the server and nothing is recorded or sent anywhere. For servers on this computer; Linux servers follow in an update.
+- The bots understand what people say on voice chat, the same as typed team chat: say "rush b" or "Derek, flash for me" on your mic and they react. An optional add-on per server, installed from its Bot voice commands tab (a 148 MB speech model, once per computer) and removed just as easily. Speech is turned into text on the machine running the server and nothing is recorded or sent anywhere. Works for servers on this computer and on Linux machines (there it runs beside the server, only able to talk to the server itself). Not for playing from the game's own Play page: it needs Loner-Strike's server engine.
 
 ### Servers
 - Servers update themselves: after an app update, each server gets its new plugins and bot brain once nobody's playing on it (bots don't count). The servers list shows what's waiting, with Update now, which asks first if people are on. Turn it off per server in its settings. While one updates, its card and its page show the step it's on and how far along it is, and Start, Stop and the other buttons wait until it's done.
