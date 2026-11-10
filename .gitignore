@@ -27,3 +27,6 @@ app/src-tauri/binaries/
 app/src-tauri/resources/linux/ls-control/ls-control
 app/src-tauri/resources/linux/ls-control/ls-control.sha256
 app/server-agent/target/
+# ls-voice for Linux servers, built by scripts/build-voice-agent.sh and the release workflow
+app/src-tauri/resources/linux/ls-voice/ls-voice
+app/src-tauri/resources/linux/ls-voice/ls-voice.sha256

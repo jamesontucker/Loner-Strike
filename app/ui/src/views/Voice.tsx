@@ -9,8 +9,9 @@ type Status = {
   installing: boolean;
   progress: number;
   model_bytes: number;
+  /** a server on a Linux machine: the model goes there when voice is turned on */
+  remote: boolean;
   enabled: boolean;
-  /** a server on this computer (a Linux server gets it in a later update) */
   supported: boolean;
   running: boolean;
   error: string | null;
@@ -42,7 +43,8 @@ export function Voice({ server }: { server: ServerInfo }) {
     let live = true;
     const tick = async () => {
       if (!document.hidden) await load();
-      if (live) t = window.setTimeout(tick, 3000);
+      // (a Linux server's state comes over SSH: less often)
+      if (live) t = window.setTimeout(tick, server.host ? 10000 : 3000);
     };
     tick();
     return () => {
@@ -78,7 +80,7 @@ export function Voice({ server }: { server: ServerInfo }) {
       const r = await post(`/api/servers/${server.id}/voice`, { enabled: on });
       if (r.error) toast(r.error, true);
       await load();
-    }, on ? "Turning voice on…" : "Turning voice off…");
+    }, on ? (st?.remote ? "Setting up voice on the server…" : "Turning voice on…") : "Turning voice off…");
 
   return (
     <div className="voice-addon">
@@ -109,9 +111,10 @@ export function Voice({ server }: { server: ServerInfo }) {
           </div>
         ) : (
           <>
-            {!st.supported ? (
-              <p className="muted">Voice for servers on a Linux machine comes in a later update. It works on servers on this computer.</p>
-            ) : (
+            {st.remote && !st.enabled && (
+              <p className="muted">Turning it on puts the voice program on the server and downloads the speech model there ({mb(st.model_bytes)}). It runs with the server and can only talk to the server itself.</p>
+            )}
+            {!st.supported ? null : (
               <div className="setting">
                 <div className="name">
                   Bots understand voice chat
@@ -119,7 +122,7 @@ export function Voice({ server }: { server: ServerInfo }) {
                     {st.enabled
                       ? st.running
                         ? "On, and listening"
-                        : "On. It starts with the server"
+                        : st.remote ? "On. It runs while the server does" : "On. It starts with the server"
                       : "Off"}
                   </span>
                 </div>
@@ -133,7 +136,7 @@ export function Voice({ server }: { server: ServerInfo }) {
                 <pre className="console small">{st.log.join("\n")}</pre>
               </details>
             )}
-            {ON_THIS_COMPUTER && (
+            {ON_THIS_COMPUTER && !st.remote && (
               <div className="row">
                 <BusyButton className="btn danger" busy={busy(key("uninstall"))} label="Remove" busyLabel="Removing…" onClick={uninstall} />
                 <Info text={`Turns voice off on every server and deletes the speech model (${mb(st.model_bytes)}).`} />

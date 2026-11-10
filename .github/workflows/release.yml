@@ -44,6 +44,19 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # ls-voice for Linux servers (Advanced Bot Interaction), the same way
+      - name: Build ls-voice (Linux x86_64, in Docker)
+        run: ./scripts/build-voice-agent.sh
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ls-voice-linux
+          path: |
+            app/src-tauri/resources/linux/ls-voice/ls-voice
+            app/src-tauri/resources/linux/ls-voice/ls-voice.sha256
+          if-no-files-found: error
+          retention-days: 7
+
   build:
     needs: server-agent
     strategy:
@@ -110,6 +123,17 @@ jobs:
         run: |
           cd app/src-tauri/resources/linux/ls-control
           if command -v sha256sum >/dev/null; then sha256sum -c ls-control.sha256; else shasum -a 256 -c ls-control.sha256; fi
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ls-voice-linux
+          path: app/src-tauri/resources/linux/ls-voice
+
+      - name: Check ls-voice (Linux)
+        shell: bash
+        run: |
+          cd app/src-tauri/resources/linux/ls-voice
+          if command -v sha256sum >/dev/null; then sha256sum -c ls-voice.sha256; else shasum -a 256 -c ls-voice.sha256; fi
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

@@ -13,8 +13,14 @@
 //!
 //! Only dedicated servers: the engine's voice feed is in Loner-Strike's server engine, not in
 //! the game itself (playing from the game's own Play page).
+//!
+//! On a Linux server (a VPS) the app puts its Linux ls-voice there (shipped in the app, like
+//! ls-control) and the machine downloads the model itself; a systemd service runs it with the
+//! server's (started and stopped with it), sandboxed to talking to the machine itself.
 
 use crate::panel_api::from_panel;
+use crate::remote::{self, shell_quote, RemoteInfo};
+use sha2::{Digest, Sha256};
 use crate::server::Shared;
 use crate::servers::{self, Entry};
 use crate::sys;
@@ -93,6 +99,183 @@ fn args(e: &Entry) -> Vec<String> {
         "--threads".into(),
         "2".into(),
     ]
+}
+
+// ---- on a Linux server ---------------------------------------------------------------------
+
+/// The program in the app's resources (its sha256 file beside it), and on the machine
+const RES: &str = "linux/ls-voice/ls-voice";
+const BIN: &str = "loner-strike/bin/ls-voice";
+/// The model on the machine, shared by its servers
+const REMOTE_MODEL: &str = "loner-strike/voice/ggml-base.en.bin";
+/// Raised whenever the unit's text changes: a unit without it is written again
+const UNIT_REV: &str = "loner-strike voice unit 1";
+
+pub fn unit(id: &str) -> String {
+    format!("lonerstrike-{id}-voice")
+}
+
+/// The Linux program as the app ships it, checked against its sha256 (sha256, bytes).
+fn shipped(res: &std::path::Path) -> Result<(String, Vec<u8>), String> {
+    let mut places = vec![res.join(RES)];
+    if cfg!(debug_assertions) {
+        places.push(crate::setup::repo_root().join("app/src-tauri/resources").join(RES));
+    }
+    let missing = "This copy of Loner-Strike doesn't include the voice program for Linux servers. Reinstalling the app should fix it; in a build from source, run scripts/build-voice-agent.sh.";
+    let bin = places.into_iter().find(|p| p.is_file()).ok_or(missing)?;
+    let bytes = std::fs::read(&bin).map_err(|e| format!("Couldn't read the voice program ({e})."))?;
+    let want = std::fs::read_to_string(PathBuf::from(format!("{}.sha256", bin.display()))).map_err(|_| missing.to_string())?;
+    let want = want.split_whitespace().next().unwrap_or("").to_ascii_lowercase();
+    let have: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+    if want.len() != 64 || want != have || !bytes.starts_with(b"\x7fELF\x02") {
+        return Err("The app's copy of the voice program doesn't match its checksum. Reinstalling the app should fix it.".into());
+    }
+    Ok((have, bytes))
+}
+
+/// The program, sent beside the old one, checked there, renamed over it (only when it changed).
+fn send_program(r: &RemoteInfo, sha: &str, bytes: &[u8]) -> Result<(), String> {
+    let q = shell_quote(BIN);
+    let (_, out) = remote::exec(r, &format!("cd \"$HOME\" && mkdir -p loner-strike/bin && if [ -f {q} ]; then sha256sum {q} | cut -c1-64; else echo none; fi"))?;
+    if out.trim() == sha {
+        return Ok(());
+    }
+    let new = format!("{BIN}.new");
+    remote::write_file(r, &new, bytes)?;
+    let n = shell_quote(&new);
+    let (code, out) = remote::exec(r, &format!("cd \"$HOME\" && [ \"$(sha256sum {n} | cut -c1-64)\" = {} ] && chmod 755 {n} && mv -f {n} {q}", shell_quote(sha)))?;
+    if code != 0 {
+        return Err(format!("The voice program didn't arrive whole on the server ({}). Try again.", out.trim()));
+    }
+    Ok(())
+}
+
+/// The model (downloaded there, checked), and the service: on with the server, or off.
+fn remote_sh(e: &Entry, on: bool) -> String {
+    let u = unit(&e.id);
+    if !on {
+        return format!(
+            "set -u\n[ \"$(id -u)\" = 0 ] && ! command -v sudo >/dev/null && sudo() {{ [ \"$1\" = -n ] && shift; \"$@\"; }}\n\
+             sudo -n systemctl disable --now {u} >/dev/null 2>&1; sudo -n rm -f /etc/systemd/system/{u}.service; sudo -n systemctl daemon-reload\n\
+             # (the model goes when no server on the machine uses it)\n\
+             ls /etc/systemd/system/lonerstrike-*-voice.service >/dev/null 2>&1 || rm -f \"$HOME/{REMOTE_MODEL}\"\necho \"@@STEP off\"\n"
+        );
+    }
+    let server = remote::unit(&e.id);
+    let pw = format!("{}/{}/addons/amxmodx/data/gamemodes/panel_rcon.txt", remote::server_dir(&e.id), e.game);
+    format!(
+        r#"set -eu
+fail() {{ echo "@@FAIL $*"; exit 3; }}
+[ "$(id -u)" = 0 ] && ! command -v sudo >/dev/null && sudo() {{ [ "$1" = -n ] && shift; "$@"; }}
+sudo -n true 2>/dev/null || fail "The user $(whoami) can't use sudo without a password, which this needs."
+M="$HOME/{model}"
+mkdir -p "$(dirname "$M")"
+if [ "$(sha256sum "$M" 2>/dev/null | cut -c1-64)" != "{sha}" ]; then
+  echo "@@STEP model"
+  curl -fsSL --retry 3 -o "$M.part" "{url}" || fail "Couldn't download the speech model."
+  [ "$(sha256sum "$M.part" | cut -c1-64)" = "{sha}" ] || {{ rm -f "$M.part"; fail "The speech model didn't download whole."; }}
+  mv -f "$M.part" "$M"
+fi
+sudo tee /etc/systemd/system/{u}.service >/dev/null <<EOF
+[Unit]
+# {rev}
+Description=Loner-Strike voice for the bots {id}
+After={server}.service
+PartOf={server}.service
+
+[Service]
+User=$(whoami)
+ExecStart=$HOME/{bin} --feed {feed} --rcon-port {port} --rcon-password-file $HOME/{pw} --model $M --threads 2
+Restart=always
+RestartSec=5
+Nice=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+UMask=077
+TasksMax=64
+MemoryMax=768M
+
+[Install]
+WantedBy={server}.service
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable {u} >/dev/null 2>&1
+# (with the server running, now; otherwise it starts with it)
+if systemctl is-active --quiet {server}; then sudo systemctl restart {u}; fi
+echo "@@STEP ready"
+"#,
+        model = REMOTE_MODEL,
+        sha = MODEL_SHA,
+        url = MODEL_URL,
+        rev = UNIT_REV,
+        id = e.id,
+        bin = BIN,
+        feed = feed_port(e),
+        port = e.port,
+        pw = pw,
+    )
+}
+
+/// What takes its service off the machine when the server is removed or rebuilt (in
+/// remote::remove's command; the shared model stays while another server uses it).
+pub fn remove_sh(id: &str) -> String {
+    let u = unit(id);
+    format!("sudo systemctl disable --now {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service; ")
+}
+
+/// Voice on or off for a server on a Linux machine.
+fn remote_apply(e: &Entry, on: bool, res: &std::path::Path) -> Result<(), String> {
+    let r = e.remote.as_ref().ok_or("That server is on this computer.")?;
+    if on {
+        let (sha, bytes) = shipped(res)?;
+        send_program(r, &sha, &bytes)?;
+    }
+    let mut last = String::new();
+    let code = remote::exec_stream(r, "bash -s", remote_sh(e, on).as_bytes(), |l| {
+        if let Some(why) = l.strip_prefix("@@FAIL ") {
+            last = why.to_string();
+        } else if !l.starts_with("@@") && !l.trim().is_empty() {
+            last = l.trim().to_string();
+        }
+    })?;
+    if code != 0 {
+        return Err(format!("Couldn't {} voice on the server ({last}).", if on { "set up" } else { "turn off" }));
+    }
+    Ok(())
+}
+
+/// On a Linux server: running, and the last lines it wrote.
+fn remote_state(e: &Entry) -> (bool, Vec<String>) {
+    let Some(r) = &e.remote else { return (false, vec![]) };
+    let u = unit(&e.id);
+    let cmd = format!("systemctl is-active {u} 2>/dev/null; sudo -n journalctl -u {u} -n 12 --no-pager -o cat 2>/dev/null");
+    match remote::exec_quick(r, &cmd) {
+        Ok((_, out)) => {
+            let mut lines = out.lines();
+            let running = lines.next().map(|l| l.trim() == "active").unwrap_or(false);
+            (running, lines.map(|l| l.trim_start_matches("ls-voice: ").to_string()).filter(|l| !l.is_empty()).collect())
+        }
+        Err(_) => (false, vec![]),
+    }
 }
 
 // ---- running beside a server on this computer ---------------------------------------------
@@ -224,17 +407,23 @@ fn log_tail(e: &Entry) -> Vec<String> {
 }
 
 fn status(e: &Entry) -> Value {
-    let (running, error) = with_runs(|r| (alive(r, &e.id), r.errors.get(&e.id).cloned()));
+    let (mut running, error) = with_runs(|r| (alive(r, &e.id), r.errors.get(&e.id).cloned()));
+    let mut log = if e.remote.is_none() { log_tail(e) } else { vec![] };
+    if e.remote.is_some() && e.voice.enabled {
+        (running, log) = remote_state(e);
+    }
     json!({
-        "installed": installed(),
+        // (a Linux server's model goes on the machine itself: nothing to install here)
+        "installed": e.remote.is_some() || installed(),
+        "remote": e.remote.is_some(),
         "installing": INSTALLING.lock().unwrap().is_some(),
         "progress": *PROGRESS.lock().unwrap(),
         "model_bytes": MODEL_BYTES,
         "enabled": e.voice.enabled,
-        "supported": e.remote.is_none(),
+        "supported": true,
         "running": running,
         "error": error,
-        "log": if e.remote.is_none() { log_tail(e) } else { vec![] },
+        "log": log,
     })
 }
 
@@ -274,11 +463,11 @@ fn install() -> Result<(), String> {
 
 /// Removes the add-on: voice off on every server (stopped where it runs), the model deleted.
 fn uninstall() -> Result<(), String> {
-    for e in servers::load().into_iter().filter(|e| e.voice.enabled) {
+    for e in servers::load().into_iter().filter(|e| e.voice.enabled && e.remote.is_none()) {
         stop(&e);
     }
     servers::edit(|l| {
-        for x in l.iter_mut() {
+        for x in l.iter_mut().filter(|x| x.remote.is_none()) {
             x.voice.enabled = false;
         }
     })?;
@@ -330,10 +519,19 @@ async fn api_save(State(st): State<Shared>, UrlPath(id): UrlPath<String>, header
         return forbidden();
     }
     remember_exe(&st);
+    let st = st.clone();
     blocking(move || {
         let e = entry(&id)?;
         if e.remote.is_some() {
-            return Err("Voice for a Linux server comes in a later update.".into());
+            // (the machine first: if it can't be reached nothing changes, and trying again works)
+            let res = crate::setup_api::resources_for(&st)?;
+            remote_apply(&e, req.enabled, &res)?;
+            servers::edit(|l| {
+                if let Some(x) = l.iter_mut().find(|x| x.id == id) {
+                    x.voice.enabled = req.enabled;
+                }
+            })?;
+            return Ok(status(&entry(&id)?));
         }
         if req.enabled && !installed() {
             return Err("Install Advanced Bot Interaction first.".into());
@@ -391,6 +589,18 @@ mod tests {
         let e = server("a", 27016);
         assert_eq!(e.voice, Settings::default());
         assert!(!e.voice.enabled);
+    }
+
+    #[test]
+    fn linux_service() {
+        let mut e = server("a", 27017);
+        e.remote = serde_json::from_value(json!({"host": "203.0.113.5", "key": "/k"})).unwrap();
+        let on = remote_sh(&e, true);
+        assert!(on.contains("lonerstrike-a-voice.service") && on.contains("PartOf=lonerstrike-a.service"));
+        assert!(on.contains("--feed 27617 --rcon-port 27017") && on.contains("IPAddressAllow=localhost") && on.contains("IPAddressDeny=any"));
+        assert!(on.contains(MODEL_SHA) && on.contains("# loner-strike voice unit 1"));
+        let off = remote_sh(&e, false);
+        assert!(off.contains("disable --now lonerstrike-a-voice") && off.contains("rm -f /etc/systemd/system/lonerstrike-a-voice.service"));
     }
 
     #[test]

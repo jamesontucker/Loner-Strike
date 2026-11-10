@@ -1150,9 +1150,10 @@ pub fn remove(r: &RemoteInfo, id: &str, for_good: bool) -> Result<(), String> {
     let (code, out) = exec(
         r,
         &format!(
-            "{}{}sudo systemctl disable --now {u}-watchdog {u}-hltv {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service /etc/systemd/system/{u}-hltv.service /etc/systemd/system/{u}-watchdog.service; sudo systemctl daemon-reload; rm -rf \"$HOME/{}\"",
+            "{}{}{}sudo systemctl disable --now {u}-watchdog {u}-hltv {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service /etc/systemd/system/{u}-hltv.service /etc/systemd/system/{u}-watchdog.service; sudo systemctl daemon-reload; rm -rf \"$HOME/{}\"",
             if for_good { crate::webstatus::remove_sh(id) } else { crate::webstatus::off_sh(id) },
             crate::control::agent::remove_sh(id, for_good),
+            crate::voice::remove_sh(id),
             server_dir(id)
         ),
     )?;
