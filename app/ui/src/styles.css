@@ -170,7 +170,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: 0 1px 0 rgba(136,145,128,.25);
   background: var(--panel);
 }
-.strip-map { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.strip-map { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
 .thumb {
   width: 64px; height: 38px; border-radius: 4px; flex: none;
   background:
@@ -197,15 +197,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .strip-pill.strip-pill-btn:hover { background: rgba(196,181,80,.28); }
 .strip-pill { margin-left: 8px; padding: 1px 6px; border-radius: 2px; background: rgba(255,255,255,.08); color: var(--bone); font-size: 12px; }
 .strip-pill.rec { background: rgba(224,134,106,.2); color: #eba58a; }
-.score-tag { font: 700 10px/1 var(--text); letter-spacing: .04em; padding: 3px 4px 2px; border-radius: 2px; align-self: center; }
-.score .score-tag-t { color: #26170f; background: #d98a6b; }
-.score .score-tag-ct { color: #0f1a26; background: #92b4d6; }
-.score-kind { align-self: center; margin-left: 4px; color: var(--bone-faint); font: 600 11px/1 var(--text); }
 .strip-meta.idle { flex: 1; }
-.score { font: 400 26px/1 var(--stencil); display: flex; gap: 6px; }
-.score .t { color: var(--t); }
-.score .ct { color: var(--ct); }
-.score .vs { color: var(--bone-faint); }
+/* the score: a small scoreboard, team over number, each half tinted its team's colour;
+   fixed widths so counting up never moves it */
+.score {
+  flex: none; align-self: center; display: grid; grid-template-columns: 3.6ch 38px 3.6ch; column-gap: 4px; row-gap: 4px; align-items: baseline;
+  padding: 5px 10px 6px; border-radius: 2px; box-shadow: var(--sunken);
+  background: linear-gradient(90deg, rgba(217,164,65,.12), rgba(217,164,65,0) 48%, rgba(143,180,214,0) 52%, rgba(143,180,214,.12)), var(--bg);
+  font: 400 22px/1 var(--stencil);
+}
+.score-side { font: 700 10px/1 var(--text); letter-spacing: .06em; }
+.score-side-t { color: var(--t); text-align: right; }
+.score-side-ct { color: var(--ct); text-align: left; }
+.score-kind { font: 600 10px/1 var(--text); color: var(--bone-faint); text-align: center; justify-self: center; white-space: nowrap; }
+.score-n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.score-n.t { color: var(--t); text-align: right; }
+.score-n.ct { color: var(--ct); text-align: left; }
+.score .vs { color: var(--bone-faint); text-align: center; }
 .strip-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .live {
   display: inline-flex; align-items: center; gap: 7px;
@@ -594,7 +602,7 @@ input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
   .thumb { width: 52px; height: 32px; }
   .map-name { font-size: 20px; }
   .strip-meta { font-size: 13px; }
-  .score { font-size: 22px; }
+  .score { font-size: 19px; }
   .strip-actions { display: none; }
 
   .tabbar {
@@ -1395,8 +1403,8 @@ button.cm-stat[aria-expanded="true"] { background: var(--panel); }
 
 /* "by Nanoshrine": small and quiet */
 .made-by { margin-top: 3px; font-size: 12px; color: var(--bone-faint); }
-.made-by a { color: inherit; text-decoration: none; }
-.made-by a:hover { color: var(--signal); text-decoration: underline; }
+.side-foot a { color: inherit; text-decoration: none; }
+.side-foot a:hover { color: var(--signal); text-decoration: underline; }
 .setup-by { margin-top: 18px; }
 
 /* ---- start a game: map picker you can type into ----------------------------------- */

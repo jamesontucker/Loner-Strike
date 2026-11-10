@@ -176,10 +176,14 @@ pub fn merge(cmdlist: &str, cvarlist: &str, amxx_cmds: &str, amxx_cvars: &str, h
     }
 
     // settings: "name : value, flags" (the value as a number, even for text: not used)
-    for l in listed(cvarlist) {
+    // (an older helper on a VPS could send a long list out of order, its rules in the middle:
+    // then every "name : value" line is taken, wherever it is)
+    let rows = listed(cvarlist);
+    let rows: Vec<&str> = if rows.len() >= 20 || !cvarlist.contains(" : ") { rows } else { cvarlist.lines().map(str::trim).collect() };
+    for l in rows {
         let Some((name, _)) = l.split_once(" :").or_else(|| l.split_once(':')) else { continue };
         let name = name.trim();
-        if name.is_empty() || name.contains(' ') {
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.') {
             continue;
         }
         all.insert(name.to_ascii_lowercase(), Item { n: name.into(), k: "cvar", ..Default::default() });

@@ -89,7 +89,7 @@ function BotsPage({ data, refresh, saved }: { data: Online; refresh: () => void;
 
   return (
     <div className="stack">
-    <SettingsPage title="Bots" note={saved ? "" : "Difficulty changes re-add the bots so they pick it up straight away."} data={data} cat={1} refresh={refresh} saved={saved}>
+    <SettingsPage title="Bots" note={saved ? "" : "Difficulty changes re-add the bots so they pick it up straight away."} data={data} cat={1} refresh={refresh} pickMode saved={saved}>
       {!saved && !st.nav && !learning && !learnSent && (
         <Banner action={<BusyButton className="btn primary" busy={busy(key("learn"))} label="Learn this map" busyLabel="Starting…" onClick={learn} />}>
           Bots don't know {st.map} yet. Learning it takes a few minutes. The game may pause, then the map restarts.

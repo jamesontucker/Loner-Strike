@@ -53,7 +53,8 @@ impl Rcon {
         if let Some((r, pw_file)) = &self.via {
             return match crate::remote::exec_quick(r, &self.lsrcon(pw_file, command)) {
                 Ok((0, out)) if out.contains("Bad rcon_password") => Err(RconError::BadPassword),
-                Ok((0, out)) => Ok(out),
+                // (the game's NUL padding, as on this computer)
+                Ok((0, out)) => Ok(out.replace('\0', "")),
                 _ => Err(RconError::Offline),
             };
         }
@@ -144,12 +145,17 @@ const QUIET_WAIT: Duration = Duration::from_millis(40);
 const MISSING_PART_WAIT: Duration = Duration::from_millis(400);
 
 /// An answer's packets: whole ones, and long answers split into numbered parts
-/// (0xFE header; byte 8 is the part's number << 4 | how many parts there are).
+/// (0xFE header; byte 8 is the part's number << 4 | how many parts there are). A long
+/// answer (cvarlist) mixes both, so they're kept in the order they came in.
 #[derive(Default)]
 struct Packets {
-    singles: Vec<Vec<u8>>,
-    /// (answer id, how many parts, the parts so far)
-    splits: Vec<(Vec<u8>, u8, Vec<(u8, Vec<u8>)>)>,
+    /// whole packets, and split answers as (id, how many parts, the parts so far)
+    got: Vec<Got>,
+}
+
+enum Got {
+    Whole(Vec<u8>),
+    Split(Vec<u8>, u8, Vec<(u8, Vec<u8>)>),
 }
 
 impl Packets {
@@ -157,31 +163,42 @@ impl Packets {
         if d.len() > 9 && d[..4] == [0xfe, 0xff, 0xff, 0xff] {
             let id = d[4..8].to_vec();
             let (num, total) = (d[8] >> 4, d[8] & 0x0f);
-            let part = (num, d[9..].to_vec());
-            match self.splits.iter_mut().find(|(k, _, _)| *k == id) {
-                Some((_, _, v)) => {
+            // the latest answer with this id, while it still has parts to come (a part sent
+            // twice is dropped); once it's whole, the id may be used again for a new one
+            let open = self.got.iter_mut().rev().find_map(|g| match g {
+                Got::Split(k, t, v) if *k == id => Some((t, v)),
+                _ => None,
+            });
+            match open {
+                Some((t, v)) if v.len() < *t as usize => {
                     if !v.iter().any(|p| p.0 == num) {
-                        v.push(part)
+                        v.push((num, d[9..].to_vec()));
                     }
                 }
-                None => self.splits.push((id, total, vec![part])),
+                _ => self.got.push(Got::Split(id, total, vec![(num, d[9..].to_vec())])),
             }
         } else {
-            self.singles.push(d.to_vec());
+            self.got.push(Got::Whole(d.to_vec()));
         }
     }
 
     /// A split answer that hasn't all its parts yet.
     fn missing_parts(&self) -> bool {
-        self.splits.iter().any(|(_, total, parts)| parts.len() < *total as usize)
+        self.got.iter().any(|g| matches!(g, Got::Split(_, total, parts) if parts.len() < *total as usize))
     }
 
     fn text(self) -> String {
-        let mut all = self.singles;
-        for (_, _, mut parts) in self.splits {
-            parts.sort_by_key(|p| p.0);
-            all.push(parts.into_iter().flat_map(|p| p.1).collect());
-        }
+        let all: Vec<Vec<u8>> = self
+            .got
+            .into_iter()
+            .map(|g| match g {
+                Got::Whole(d) => d,
+                Got::Split(_, _, mut parts) => {
+                    parts.sort_by_key(|p| p.0);
+                    parts.into_iter().flat_map(|p| p.1).collect()
+                }
+            })
+            .collect();
         // the game pads its answers with NULs ("\0\0" when a command prints nothing), which
         // aren't text: kept, they'd show as an empty message
         let text: String = all.iter().map(|d| latin1(if d.starts_with(PREFIX) && d.len() > 5 { &d[5..] } else { d })).collect();
@@ -211,6 +228,15 @@ mod tests {
         p.add(&part(1, 2, 3, b"world"));
         assert!(!p.missing_parts());
         assert_eq!(p.text(), "hello world");
+
+        // a long answer: whole packets and split ones mixed, kept in the order they came
+        let mut p = Packets::default();
+        p.add(b"\xff\xff\xff\xfflCVar List\n");
+        p.add(&part(2, 0, 2, b"\xff\xff\xff\xfflaaa\n"));
+        p.add(&part(2, 1, 2, b"bbb\n"));
+        p.add(b"\xff\xff\xff\xfflccc\n");
+        p.add(&part(2, 0, 1, b"\xff\xff\xff\xffldone\n")); // the id again, for a new answer
+        assert_eq!(p.text(), "CVar List\naaa\nbbb\nccc\ndone\n");
 
         let mut p = Packets::default();
         p.add(b"\xff\xff\xff\xfflGM status written\n");

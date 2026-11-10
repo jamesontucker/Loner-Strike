@@ -431,12 +431,14 @@ function Shell() {
         {/* Settings stays in view however short the window is */}
         <div className="nav-pinned">{navButton(NAV.find((n) => n.id === "settings")!)}</div>
         <div className="side-foot">
-          {myGameName ?? ((openServer ? localAppQ : appQ).isError ? "Couldn't load your game" : localApp ? "No game found" : "")}
-          {localApp?.version && <span> · v{localApp.version}</span>}
-          <div className="made-by">
-            by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a>
+          <div>
+            <a href="https://lonerstrike.com" target="_blank" rel="noreferrer">Website</a>
             <span aria-hidden="true"> · </span>
             <a href="https://lonerstrike.com/docs" target="_blank" rel="noreferrer">Docs</a>
+            {localApp?.version && <><span aria-hidden="true"> · </span>v{localApp.version}</>}
+          </div>
+          <div className="made-by">
+            Made by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a>
           </div>
         </div>
       </aside>
@@ -705,7 +707,10 @@ function Strip({ data, reconnecting, lost, reason, app, server, srv, gameOpen }:
   const st = data.state;
   const score = (team: string) => data.players.filter((p) => p.team === team).reduce((n, p) => n + p.frags, 0);
   const mode = data.modes.find((m) => m.id === st.mode)?.name ?? st.mode;
-  const byRounds = (st.rounds_t ?? 0) + (st.rounds_ct ?? 0) > 0;
+  // modes with rounds show rounds won from 0:0 (so it doesn't flip from kills after the first round)
+  const byRounds = !NO_ROUNDS.has(st.mode) || (st.rounds_t ?? 0) + (st.rounds_ct ?? 0) > 0;
+  const tScore = (byRounds ? st.rounds_t : score("T")) ?? 0;
+  const ctScore = (byRounds ? st.rounds_ct : score("CT")) ?? 0;
   // the map and the players open that page, for your game or the open server
   const openPage = (p: "maps" | "players") => (useNav.getState().server ? useNav.getState().openServerTab(p as Section) : useNav.getState().go(p));
   return (
@@ -728,13 +733,13 @@ function Strip({ data, reconnecting, lost, reason, app, server, srv, gameOpen }:
         </div>
       </div>
       {/* rounds won, or (a mode without rounds, like deathmatch) kills by team */}
-      <div className="score" aria-label={byRounds ? "Rounds won by team" : "Kills by team"} title={byRounds ? "Rounds won" : "Kills by team"}>
-        <span className="score-tag score-tag-t">T</span>
-        <span className="t">{byRounds ? st.rounds_t : score("T")}</span>
-        <span className="vs">:</span>
-        <span className="ct">{byRounds ? st.rounds_ct : score("CT")}</span>
-        <span className="score-tag score-tag-ct">CT</span>
-        {!byRounds && <span className="score-kind">kills</span>}
+      <div className="score" role="group" aria-label={`${byRounds ? "Rounds won" : "Kills"}: T ${tScore}, CT ${ctScore}`} title={`${byRounds ? "Rounds won" : "Kills by team"}: T ${tScore}, CT ${ctScore}`}>
+        <span className="score-side score-side-t">T</span>
+        <span className="score-kind">{byRounds ? "rounds" : "kills"}</span>
+        <span className="score-side score-side-ct">CT</span>
+        <span className="score-n t">{shortCount(tScore)}</span>
+        <span className="vs" aria-hidden="true">:</span>
+        <span className="score-n ct">{shortCount(ctScore)}</span>
       </div>
       <div className="strip-actions">
         {/* a server: how long it's been up, and its updates (to the Health tab) */}
@@ -751,6 +756,16 @@ function Strip({ data, reconnecting, lost, reason, app, server, srv, gameOpen }:
     </header>
   );
 }
+
+/** At most four characters, so a long game's score never widens the top bar: 999, 1.2k, 12k. */
+function shortCount(n: number) {
+  if (n < 1000) return String(n);
+  if (n < 10000) return `${(Math.floor(n / 100) / 10).toString()}k`;
+  return n < 1e6 ? `${Math.floor(n / 1000)}k` : "1m+";
+}
+
+/** Modes that never end a round (respawn or climb): the top bar counts kills instead. */
+const NO_ROUNDS = new Set(["csdm", "csdm_ffa", "gungame", "gungame_team", "kreedz"]);
 
 /** "up 2 h 5 min", for a server's top bar. */
 function srvUptime(s: number) {

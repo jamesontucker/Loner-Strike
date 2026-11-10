@@ -480,9 +480,12 @@ fn flavoured_style_file(game_dir: &std::path::Path, file: &str, mode: &str, map:
 
 /// `cvar "value"` lines from a config file.
 pub(crate) fn cfg_values(path: &std::path::Path) -> Vec<(String, String)> {
-    crate::sys::read_latin1(path)
-        .unwrap_or_default()
-        .lines()
+    cfg_pairs(&crate::sys::read_latin1(path).unwrap_or_default())
+}
+
+/// A config's `cvar "value"` lines.
+fn cfg_pairs(text: &str) -> Vec<(String, String)> {
+    text.lines()
         .filter_map(|l| {
             let l = l.trim();
             let (k, v) = l.split_once(char::is_whitespace)?;
@@ -494,13 +497,29 @@ pub(crate) fn cfg_values(path: &std::path::Path) -> Vec<(String, String)> {
 /// Sets `cvar "value"` lines in a config file, keeping the rest.
 pub(crate) fn set_cfg_values(path: &std::path::Path, values: &[(String, String)]) -> std::io::Result<()> {
     let old = crate::sys::read_latin1(path).unwrap_or_default();
+    crate::sys::write_atomic(path, with_cfg_values(&old, values).as_bytes())
+}
+
+/// A config's text with these `cvar "value"` lines set, the rest kept.
+fn with_cfg_values(old: &str, values: &[(String, String)]) -> String {
     let mut lines: Vec<String> = old
         .lines()
         .filter(|l| !values.iter().any(|(k, _)| l.split_whitespace().next().is_some_and(|w| w.eq_ignore_ascii_case(k))))
         .map(String::from)
         .collect();
     lines.extend(values.iter().map(|(k, v)| format!("{k} \"{v}\"")));
-    crate::sys::write_atomic(path, (lines.join("\n") + "\n").as_bytes())
+    lines.join("\n") + "\n"
+}
+
+/// A server on another machine: its saved settings (global.cfg, mode_<id>.cfg) and the mode
+/// it's in, read there in one go (they're the game's own, written there).
+fn remote_mode_files(g: &crate::game::Game, mode: &str) -> Result<(String, String, String), String> {
+    let (r, dir) = g.remote.as_ref().ok_or("That server is on this computer.")?;
+    let own = format!("mode_{mode}.cfg");
+    let got = crate::remote::cat_files(r, &format!("{dir}/addons/amxmodx/data/gamemodes"), &["global.cfg", &own, "current.txt"])?;
+    let text = |i: usize| got.get(i).cloned().flatten().map(|b| crate::rcon::latin1(&b)).unwrap_or_default();
+    let current = text(2).trim().to_string();
+    Ok((text(0), text(1), if current.is_empty() { "classic".into() } else { current }))
 }
 
 /// What a setting is when the mode starts: the same order the plugin applies them
@@ -519,8 +538,8 @@ pub(crate) fn current_mode(g: &crate::game::Game) -> String {
     std::fs::read_to_string(g.data.join("current.txt")).ok().map(|t| t.trim().to_string()).filter(|m| !m.is_empty()).unwrap_or_else(|| "classic".into())
 }
 
-/// A server on another machine keeps its mode files there (not reachable from here yet).
-const REMOTE_MODE_SETTINGS: &str = "Changing another mode's settings isn't possible for a server on another machine yet. Switch the server to that mode to change them.";
+/// A server on another machine whose files couldn't be reached just now.
+const REMOTE_MODE_SETTINGS: &str = "Couldn't reach the server's machine to read that mode's settings. Try again in a moment.";
 
 /// The one-shot start file in the game folder (see api_launch); gamemodes.sma empties it.
 const START_CFG: &str = "loner_start.cfg";
@@ -548,15 +567,26 @@ async fn api_mode_settings(State(st): State<Shared>, helper: Option<axum::Extens
         q.cvars = q.cvars.split(',').filter(|c| !crate::control::rules::secret_setting(c)).collect::<Vec<_>>().join(",");
     }
     let Some(g) = st.game() else { return Json(json!({"error": "Couldn't find the game."})) };
-    if g.remote.is_some() {
-        return Json(json!({"error": REMOTE_MODE_SETTINGS}));
-    }
     let v = tokio::task::spawn_blocking(move || {
         if !crate::maps::safe_arg(&q.mode) || !known_mode(&g, &q.mode) {
             return json!({"error": "That mode isn't installed."});
         }
-        let values: serde_json::Map<String, Value> =
-            q.cvars.split(',').filter(|c| crate::maps::safe_arg(c)).map(|c| (c.to_string(), json!(effective(&g, &q.mode, c)))).collect();
+        let cvars = q.cvars.split(',').filter(|c| crate::maps::safe_arg(c));
+        if g.remote.is_some() {
+            // the mode's files are ours (here too); what was saved is the server's
+            let (global, own, current) = match remote_mode_files(&g, &q.mode) {
+                Ok(f) => f,
+                Err(_) => return json!({"error": REMOTE_MODE_SETTINGS}),
+            };
+            let cfg = g.dir.join("addons/amxmodx/configs/gamemodes");
+            let mut all = cfg_values(&cfg.join("base.cfg"));
+            all.extend(cfg_values(&cfg.join(format!("{}.cfg", q.mode))));
+            all.extend(cfg_pairs(&global));
+            all.extend(cfg_pairs(&own));
+            let values: serde_json::Map<String, Value> = cvars.map(|c| (c.to_string(), json!(all.iter().filter(|(k, _)| k == c).last().map(|(_, v)| v.clone())))).collect();
+            return json!({"mode": q.mode, "current": current == q.mode, "values": values});
+        }
+        let values: serde_json::Map<String, Value> = cvars.map(|c| (c.to_string(), json!(effective(&g, &q.mode, c)))).collect();
         json!({"mode": q.mode, "current": current_mode(&g) == q.mode, "values": values})
     })
     .await
@@ -579,15 +609,21 @@ async fn api_mode_setting_set(State(st): State<Shared>, headers: HeaderMap, Json
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
     let Some(g) = st.game() else { return (StatusCode::OK, Json(json!({"error": "Couldn't find the game."}))) };
-    if g.remote.is_some() {
-        return (StatusCode::OK, Json(json!({"error": REMOTE_MODE_SETTINGS})));
-    }
     let r = tokio::task::spawn_blocking(move || {
         if !crate::maps::safe_arg(&req.mode) || !known_mode(&g, &req.mode) {
             return Err("That mode isn't installed.".to_string());
         }
         if !crate::maps::safe_arg(&req.cvar) || !crate::maps::safe_arg(&req.value) {
             return Err("That isn't a setting value.".into());
+        }
+        if g.remote.is_some() {
+            // written there (and the copy here kept the same)
+            let (_, own, current) = remote_mode_files(&g, &req.mode).map_err(|_| REMOTE_MODE_SETTINGS.to_string())?;
+            if current == req.mode {
+                return Err("That's the mode being played: change it live instead.".into());
+            }
+            let text = with_cfg_values(&own, &[(req.cvar.to_lowercase(), req.value)]);
+            return crate::remote::put_game_file(&g, &format!("addons/amxmodx/data/gamemodes/mode_{}.cfg", req.mode), text.as_bytes()).map_err(|e| format!("Couldn't save the setting on the server ({e})."));
         }
         if current_mode(&g) == req.mode {
             return Err("That's the mode being played: change it live instead.".into());

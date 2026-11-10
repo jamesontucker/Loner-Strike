@@ -1028,21 +1028,25 @@ except (socket.timeout, OSError, IndexError):
     sys.exit(2)
 # the first packet may take a while; after it a short quiet spell ends the answer,
 # unless a split one (byte 8: part number << 4 | parts) is still missing parts
-singles, splits, totals = [], {{}}, {{}}
+# a long answer (cvarlist) mixes whole packets and split ones: kept in the order they came
+got, open_ = [], {{}}
 while True:
     try:
         d = s.recv(65535)
     except socket.timeout:
         break
     if len(d) > 9 and d[:4] == b"\xfe\xff\xff\xff":
-        splits.setdefault(d[4:8], {{}})[d[8] >> 4] = d[9:]
-        totals[d[4:8]] = d[8] & 15
+        k, n, t = d[4:8], d[8] >> 4, d[8] & 15
+        g = open_.get(k)
+        if g is None or len(g[1]) >= g[0]:
+            g = open_[k] = (t, {{}})
+            got.append(g)
+        g[1].setdefault(n, d[9:])
     else:
-        singles.append(d)
-    s.settimeout(0.4 if any(len(v) < totals[k] for k, v in splits.items()) else 0.05)
-for parts in splits.values():
-    singles.append(b"".join(p for _, p in sorted(parts.items())))
-sys.stdout.buffer.write(b"".join(d[5:] if d[:4] == P and len(d) > 5 else d for d in singles))
+        got.append(d)
+    s.settimeout(0.4 if any(len(g[1]) < g[0] for g in open_.values()) else 0.05)
+out = [d if isinstance(d, bytes) else b"".join(p for _, p in sorted(d[1].items())) for d in got]
+sys.stdout.buffer.write(b"".join(d[5:] if d[:4] == P and len(d) > 5 else d for d in out).replace(b"\0", b""))
 LSRCON
 sudo chmod 755 /usr/local/bin/lsrcon
 # a server that froze (still running, no longer answering) is ended, and systemd starts it
@@ -1111,7 +1115,7 @@ echo "@@STEP ready"
 
 /// A line in the game's unit naming how it's written: a unit without it is written again
 /// before the server's next start (raise it whenever service_sh's unit changes)
-pub const SERVICE_REV: &str = "loner-strike unit 5";
+pub const SERVICE_REV: &str = "loner-strike unit 6";
 
 /// Whether the server's HLTV unit on the machine is the one this version writes (true when it
 /// has none).

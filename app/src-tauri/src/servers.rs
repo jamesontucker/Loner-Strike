@@ -1530,8 +1530,13 @@ pub fn sync_loop() {
                 match sync(&e, false) {
                     Ok(_) => {
                         wait.remove(&e.id);
-                        // start options saved while the machine couldn't be reached
-                        if e.service_stale {
+                        // start options saved while the machine couldn't be reached, or its
+                        // service and helpers (lsrcon) from an older Loner-Strike: written
+                        // again now (checked once a run; it doesn't restart the server)
+                        static CHECKED: Mutex<Option<std::collections::HashSet<String>>> = Mutex::new(None);
+                        let first = CHECKED.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(Default::default).insert(e.id.clone());
+                        let old = first && e.remote.as_ref().is_some_and(|r| !crate::remote::service_current(r, &e.id).unwrap_or(true));
+                        if e.service_stale || old {
                             let _ = write_service(&e);
                         }
                     }
@@ -3171,7 +3176,12 @@ async fn api_modes(UrlPath(id): UrlPath<String>, headers: HeaderMap) -> (StatusC
         let e = get(&id).ok_or("That server isn't there any more.")?;
         let am = e.dir.join(&e.game).join("addons/amxmodx");
         let modes = crate::extras::parse_modes(&sys::read_latin1(&am.join("configs/gamemodes/modes.ini")).unwrap_or_default());
-        let current = std::fs::read_to_string(am.join("data/gamemodes/current.txt")).ok().map(|t| t.trim().to_string()).filter(|m| !m.is_empty()).unwrap_or_else(|| "classic".into());
+        // the mode it was last in, as the server has it (a VPS server's copy here can be old)
+        let saved = match game_for(&id, || None) {
+            Some(g) if g.remote.is_some() => crate::remote::game_file(&g, "addons/amxmodx/data/gamemodes/current.txt").ok().flatten().map(|b| crate::rcon::latin1(&b)),
+            _ => std::fs::read_to_string(am.join("data/gamemodes/current.txt")).ok(),
+        };
+        let current = saved.map(|t| t.trim().to_string()).filter(|m| !m.is_empty() && modes.iter().any(|(id, _)| id == m)).unwrap_or_else(|| "classic".into());
         Ok(json!({"modes": modes.iter().map(|(id, name)| json!({"id": id, "name": name})).collect::<Vec<_>>(), "mode": current}))
     })
     .await

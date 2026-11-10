@@ -83,6 +83,10 @@ pub fn without_polls(lines: Vec<String>, from: &str, is_setting: &dyn Fn(&str) -
             if t.ends_with(" gm_status") || t.ends_with(" gm_status_full") {
                 return false;
             }
+            // the voice add-on telling the server where to send voice, every 30 s
+            if t.splitn(2, "\" ").nth(1).is_some_and(|c| c.trim().starts_with("sv_ls_voice_feed ")) {
+                return false;
+            }
             // rcon <challenge> "<password>" <command>
             let cmd = t.splitn(2, "\" ").nth(1).unwrap_or("").trim();
             let lists = matches!(cmd, "cmdlist" | "cvarlist" | "amxx cmds" | "amxx cvars") || cmd.strip_prefix("amx_help ").is_some_and(|n| n.parse::<u32>().is_ok());

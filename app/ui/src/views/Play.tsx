@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getJson, getJsonAt, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, targetKey, useActions, useActivity } from "../api";
 import { BOT_NOTE, BOT_RATING, BOT_RATING_INFO, BOT_STYLE_NOTE, BOT_STYLES, gameTitle } from "../games";
 import { Icon } from "../icons";
@@ -113,7 +113,27 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
   const modes = opts ? [...opts.modes].sort((a, b) => a.name.localeCompare(b.name)) : [];
   const mode = modes.find((m) => m.id === (draft.mode ?? opts?.mode)) ?? modes.find((m) => m.id === "classic") ?? modes[0];
   const value = (cvar: string) => changed[cvar] ?? mode?.settings[cvar] ?? DEFAULTS[cvar] ?? null;
-  const change = (cvar: string, v: string) => setDraft({ changed: { ...changed, [cvar]: v } });
+  // saved for the next game straight away too, so the Bots and Rules pages show the same
+  // (not while the game's open: then it's kept here and goes in when the game starts)
+  const qc = useQueryClient();
+  const keep = (path: string, body: unknown) => {
+    if (gameOpen) return;
+    void postJson<{ error?: string }>(path, body)
+      .then((r) => {
+        if (r.error) return;
+        void qc.invalidateQueries({ queryKey: ["savedSettings"] });
+        if (path.endsWith("/bots")) reloadAppInfo();
+      })
+      .catch(() => {});
+  };
+  const change = (cvar: string, v: string) => {
+    setDraft({ changed: { ...changed, [cvar]: v } });
+    if (mode) keep("/api/app/saved-settings", { mode: mode.id, cvar, value: v });
+  };
+  const setBots = (n: number) => {
+    setDraft({ bots: n });
+    keep("/api/app/saved-settings/bots", { bots: n });
+  };
   const pickMode = (id: string) =>
     // time limit and friendly fire belong to the mode: show the new mode's own (bot settings stay)
     setDraft({ mode: id, changed: Object.fromEntries(Object.entries(changed).filter(([k]) => k === "bot_difficulty" || k === "gm_botstyle")) });
@@ -232,7 +252,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           <div className="field">
             <span>Bots<Info text="How many bots play. Each one takes a player slot, so leave room for friends." /></span>
             <div className="seg" role="group" aria-label="Bots">
-              {[...new Set([0, 5, 9, 15, botCount])].sort((a, b) => a - b).map((n) => <button key={n} aria-pressed={botCount === n} onClick={() => setDraft({ bots: n })}>{n === 0 ? "None" : n}</button>)}
+              {[...new Set([0, 5, 9, 15, botCount])].sort((a, b) => a - b).map((n) => <button key={n} aria-pressed={botCount === n} onClick={() => setBots(n)}>{n === 0 ? "None" : n}</button>)}
             </div>
           </div>
           {mode && botCount > 0 && (
