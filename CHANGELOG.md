@@ -4,61 +4,47 @@ What changed in each version. The downloads are on the [Releases](https://github
 
 ## 0.1.3
 
-### Bots that play like people
-- The bots run on Loner-Strike's own bot brain: a fork of ReGameDLL (github.com/jamesontucker/ReGameDLL_CS) that rebuilds how the game's bots see, aim, move, plan and talk, installed by setup in place of the stock one. Dedicated servers also run Loner-Strike's fork of the ReHLDS engine (github.com/jamesontucker/ReHLDS), which is what lets the bots hear voice chat. Both are open source like the rest, and credited in CREDITS.md.
-- Talk to them in chat. Ask "money?", "hp?", "where'd they go", "who killed me" or "are they eco" and they answer from what's really going on. Call "rush b", "fake a", "fall back", "watch flank", "eco", "force", "flash for me", "smoke mid" or "someone buy me an awp" and they do it, or say no in character: the whole team hears a call and each decides for itself, and only one bot ever buys you that awp. Callouts like "two long" or "awp mid" turn their heads and pull CTs over to a site being hit. Start with a bot's name, a short form or a nickname to ask just that one. The app lists what they understand, beside Bots answer you. A bot only says yes when it actually does it.
-- They look around and aim like a hand on a mouse: still most of the time, quick flicks that land a touch off and get corrected, a small tremor, and a lag behind fast strafes. Better players are quicker and steadier.
-- Freeze time and leaving spawn feel alive: looking about, flicking guns, hops and crouches, and a few always late out of the shop.
-- Team play: trades and flanks, CTs holding the sites, Ts picking a site together and switching after early losses, the bomb carrier going in with a teammate, guards spreading out round a planted bomb, defuses heard and kit holders let through.
-- They react like people: flashed bots panic their own way, AWPers step aside after a shot, a flanker who shoots them gets noticed, and being outnumbered makes the careful ones back off.
-- Ts take a site together: they gather just out of sight on their ways in, then go in at once, instead of walking into the CTs one at a time.
-- A dropped bomb gets picked up: one T goes for it (not none, and not all of them), the rest of the push leaves them to it, and they find their way to it from wherever it landed.
-- Retakes go for the bomb: CTs who can still make it run there, and learn the site from a teammate on it or one who just went down there. Ones who can't make it save.
-- They look where it matters: running somewhere they face the way they're going and glance over a shoulder now and then, a sound from behind gets a quick look (or none, from a rusher) instead of running backwards, and holding a spot they check the openings in turn, through glass and doors, never staring at a wall. How often they check, and how long they hold an angle, depends on who they are.
-- They hold an angle for a few seconds instead of glancing round every second, and aim around the chest like most players, so headshots come at a pub's rate rather than every kill or none.
-- Each bot is its own person: a personality, mood and skill that show in how it plays and talks, regulars who remember you between sessions, tilt from a bad run, and callouts like "rush b" before they go down.
-- Chat volume fits the mode, deathmatch chat is short reactions, and with Bots can be rude off nobody gets insulted.
-- Every mode is played right: deathmatch spreads out and goes for the fighting, Gun Game's grenade and knife levels work, fy_ maps get a run for the floor guns, and rounds on awp_ and aim_ maps don't stall.
-- Deathmatch and Gun Game no longer end the round and respawn everyone at 9 minutes.
+The biggest update yet:
+- Bots that play like people, on Loner-Strike's own bot brain
+- Talk to them in team chat, or on your mic with voice commands
+- An easier app: a clearer sidebar, settings before a game, and My library
+- Servers that look after themselves: updates, health checks and daily backups
+- Docs for everything at lonerstrike.com/docs
 
-### Advanced Bot Interaction
-- The bots understand what people say on voice chat, the same as typed team chat: say "rush b" or "Derek, flash for me" on your mic and they react. Loose wording works too ("can somebody get over to B real quick"): a small model made for this turns it into the order it is, and anything that isn't one (chat, trash talk) reaches the bots as said. An optional add-on per server, installed from its Bot voice commands tab (about 500 MB of models, once per computer) and removed just as easily. Speech is turned into text on the machine running the server, and no audio is kept or sent anywhere. Works for servers on this computer and on Linux machines (there it runs beside the server, only able to talk to the server itself). Not for games hosted from Play: it needs Loner-Strike's server engine. It needs a processor from about 2013 on (AVX2), and says so plainly on an older one.
+### Bots
+- Loner-Strike's own bot brain (a fork of ReGameDLL) rebuilds how bots see, aim, move, plan and talk. Dedicated servers also run our fork of the ReHLDS engine. Both are open source.
+- Talk to them in team chat: "money?", "where'd they go", "rush b", "fake a", "flash for me", "two long", "someone buy me an awp". They answer from what's really going on, do it or say no in character, and only one ever buys you that awp. Start with a name or nickname to ask just one.
+- They aim like a hand on a mouse: still, then a flick that lands a touch off and gets corrected. Better players are quicker and steadier.
+- They play as a team: trades and flanks, Ts gathering out of sight and taking a site together, CTs holding and retaking, one T picking up a dropped bomb, guards around a planted one.
+- They look where it matters, hold angles, aim around the chest, glance back at a sound, and panic, tilt and back off like people.
+- Each bot is someone: a personality, mood and skill, and regulars who remember you.
+- Every mode is played right, from deathmatch to Gun Game's knife level, and fy_, awp_ and aim_ maps no longer stall.
 
-### Easier to find your way around
-- The sidebar is grouped by what you're doing: Game (Play, Bots, Rules, Fun, Add-ons, Rotation & extras), People (Players, Moderation, Stats, Admins, Welcome page), Online (Play with friends, Find servers), My library and Hosting. A bar at the top of every page says what you're changing, your own game or a server, with Back to my game.
-- Bots, Rules, Fun and Add-ons work before a game starts: changes apply when you start one. Reset bot and fun settings puts every shared bot and fun setting back to its default, and what you can tell the bots has its own section on the Bots page.
-- My library: Maps, Mods, Skins & models (new: the weapon skins, player models, sprays, effects and HUD you've installed, with Remove on each), Sounds (with a Your sounds tab for downloaded ones) and Get more. Every Get button opens Get more on that kind.
-- Each game shows its own maps: Counter-Strike 1.6 leaves Condition Zero's own _cz maps out of its lists, rotations and votes (it can't load them), while Condition Zero shows everything it plays. Show lists the other game's maps.
-- The same mode cards before and during a game, with Get more modes, and Play it on installed modes in Mods.
-- A server's tabs are grouped Server, Game, People and Library. New tabs: Health (updates, security checks, backup and restore, daily restart, and repairs), Who can join (listing, password, address and how people connect), and Moderation (reports, chat log, mutes and the filter, bans, player history) apart from Stats. Helpers see what's owner only instead of tabs vanishing, and Moderators can see the ban list.
-- The quick bar while you play changes bot difficulty and style in one click, and Start a mode vote is under Round.
-- Settings, Help has troubleshooting by symptom with a button to the fix and a link to the docs, and Play with friends explains when a dedicated server is the better choice.
-- Servers shows a count when one has updates waiting, and your game's update banner stays off the servers list.
+### Voice commands
+- On a dedicated server, the bots understand voice chat the same as typed team chat, loose wording included. An optional add-on per server (about 500 MB, once per computer), installed and removed from its Bot voice commands tab. Speech is turned into text on the machine running the server; no audio is kept or sent anywhere.
 
-### Out of the box
-- New installs start with Quake sounds off and bot chat at Normal, both a click away to change. Existing installs keep what they had.
-- Gun Game has a 30 second warmup and a 1.5 second respawn, like deathmatch; Zombie Plague is dark rather than pitch black; and all the bots join at once on the first map.
-- Auto bunnyhop no longer carries over from one mode into others, and a few modes' settings now show which option they're on.
-- The game's own bots are called Original everywhere (Classic is a mode), adverts no longer promise punishments nothing hands out, and imported servers come in unlisted, like new ones.
+### The app
+- The sidebar is grouped Game, People, Online, My library and Hosting, and a bar on every page says whether you're changing your game or a server.
+- Bots, Rules, Fun and Add-ons work before a game starts, and Reset bot and fun settings puts the defaults back.
+- My library: Maps, Mods, Skins & models (what you've installed, with Remove), Sounds and Get more.
+- Counter-Strike 1.6 no longer lists Condition Zero only maps it can't load.
+- The quick bar changes bot difficulty and style in one click.
+- Settings, Help fixes the usual problems by symptom, and the app's messages say what to do next.
+- New installs start with Quake sounds off and bot chat at Normal. Your settings, plugins, admins and edited config files are kept through updates.
 
 ### Servers
-- Servers update themselves: after an app update, each server gets its new plugins and bot brain once nobody's playing on it (bots don't count). The servers list shows what's waiting, with Update now, which asks first if people are on. Turn it off per server on its Health tab. While one updates, its card and its page show the step it's on and how far along it is, and Start, Stop and the other buttons wait until it's done.
-- A Security and health panel on each Linux server's Health tab checks the machine (password logins, RCON, automatic updates, fail2ban, a restart waiting, the game's sandbox, disk space, memory and CPU) in plain words, with a button for what the app can fix. The servers' logs are trimmed once a day so they can't fill the disk. New servers get RCON closed to the internet, automatic security updates and fail2ban from the start, and the docs have a Keeping it safe section.
-- Linux servers are locked down further: the game can't use the login's admin rights or touch SSH keys and login scripts, and shared control runs with only what it needs. Both go in at the server's next start.
-- Shared control: Moderators can no longer kick, slap, slay, ban or mute the owner, Admins or other helpers, and invites ask for a SteamID. The Cloudflare steps are spelled out with copy buttons and fold away once the route works, with a clear message if it's in the wrong order.
-- Website status checks shared control, fast downloads and the Discord messages from outside, so you can see they work. With Discord set up, it also says when a server stops answering while it's meant to be running, and when it's back (a server stopped on purpose says nothing).
-- Servers on Linux machines are backed up every day while Loner-Strike is open (bans, admins and settings, the last 7 kept on this computer), so losing the machine doesn't lose them. Turn it off in Settings, Backup & restore.
-- Uploads to a Linux server go up in pieces and retry on their own when the connection stalls, instead of hanging.
+- A server's tabs are grouped Server, Game, People and Library, with new Health, Who can join, Moderation and Stats tabs. Helpers see what's owner only.
+- Servers update themselves once nobody's playing, or with Update now, and show their progress.
+- Health checks a Linux machine in plain words (logins, RCON, updates, fail2ban, disk, memory) and fixes what it can. New servers start locked down.
+- Linux servers are backed up to your computer every day, and Discord hears when one goes down.
+- Shared control is safer: Moderators can't act against the owner or Admins, and can see bans.
 
-### Other
-- When the game won't let the app in (no bots, "Bad Rcon" in the console), the app checks the game's setup and puts back what a Steam update or file check undid, then says what was wrong: Loner-Strike not loading (and that an antivirus may have taken its files), a different copy of the game running, or a config setting its own console password.
-- Mods has a Repair button that puts Loner-Strike's basics back in place, keeping your settings and mods. It also mends a read-only liblist.gam, and keeps any other Metamod plugins you had.
-- Windows: the voice helpers run without Microsoft's Visual C++ runtime and on any processor from about 2013 on, an app update no longer trips over voice running in the background, and a game folder named in Russian, Chinese or any other language is read right.
-- Big downloads (the voice models, maps) carry on where they stopped when the connection drops, a slow connection gets there however long it takes, and a full disk is named as such instead of blamed on the internet.
-- Docs at lonerstrike.com/docs: getting started, every page of the app, the bots, voice commands, LAN parties, servers (the VPS guide moved here) and fixes for the usual problems, with search. The app's messages link to the right part.
-- Clearer all round: questions are asked before anything says it's busy, buttons only spin for what you pressed, one name for each thing (Repair, Restore a backup, All servers), links that land on the right part of Settings, and no dead ends when the game isn't found or a server is full.
-- A copy of the game from before Valve's 2013 update (old retail or repacked ones) is caught at setup: Loner-Strike's mods can't load on it.
-- Windows: "Remove everything" no longer deletes the installed app along with everything else, so Loner-Strike opens again afterwards (at its first-time setup). Its download cache moved out of the app's own folder, which also keeps it through updates.
+### Fixes
+- No bots or "Bad Rcon": the app puts back what a Steam update undid and says what's wrong. Mods has a Repair button.
+- Windows: voice runs without extra installs on any processor from about 2013 on, updates don't trip over it, and game folders in any language work.
+- Big downloads resume where they stopped, and a full disk is named as such.
+- Old retail or repacked copies of the game are caught at setup.
+- "Remove everything" no longer deletes the app itself on Windows.
 - Updates show what's new before you install, and once after.
 
 ## 0.1.2
