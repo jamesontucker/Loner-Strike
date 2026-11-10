@@ -443,7 +443,7 @@ function Shell() {
 
       <div className="main">
         <Strip data={online} reconnecting={reconnecting} lost={lost} reason={state && !state.online ? state.reason : ""} app={app} server={current?.name} gameOpen={gameOpen} />
-        <Where server={current} game={myGameName} onBack={() => void backToMyGame()} />
+        <Where server={current} game={myGameName} listing={section === "servers" && !current} onBack={() => void backToMyGame()} />
         {online && <QuickBar data={online} maps={maps} refresh={refresh} reloadMaps={refreshMaps} />}
         <main className="content">
           {/* the app stopped answering: said once, at the top, with a way to try again */}
@@ -734,7 +734,7 @@ function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { da
 
 /** Which game the page controls, under the top bar on every page: your own game, or the
  *  open server with a way back. */
-function Where({ server, game, onBack }: { server: ServerInfo | null; game: string | null; onBack: () => void }) {
+function Where({ server, game, listing, onBack }: { server: ServerInfo | null; game: string | null; listing?: boolean; onBack: () => void }) {
   if (server) {
     return (
       <div className="where away">
@@ -744,6 +744,15 @@ function Where({ server, game, onBack }: { server: ServerInfo | null; game: stri
           {server.shared && <span className="where-note"> · shared with you as {server.shared.role === "admin" ? "admin" : "moderator"}</span>}
         </span>
         <button className="btn small where-back" onClick={onBack}>Back to my game</button>
+      </div>
+    );
+  }
+  // (the servers list is about your servers, not your game)
+  if (listing) {
+    return (
+      <div className="where">
+        <Icon name="server" size={16} />
+        <span className="where-text"><b>All servers</b></span>
       </div>
     );
   }

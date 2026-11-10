@@ -351,7 +351,8 @@ h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; white-
 .row.between { justify-content: space-between; flex-wrap: nowrap; gap: 20px; }
 .row.center { justify-content: center; }
 .spacer { flex: 1; }
-.section-actions { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.section-actions { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; min-width: 0; max-width: 100%; }
+.server-more { margin: 4px 0 28px; gap: 8px; }
 p { margin: 0 0 8px; }
 a { color: var(--signal); }
 .btn.primary { background: var(--signal); color: var(--signal-ink); box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }

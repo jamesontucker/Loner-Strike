@@ -250,9 +250,6 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   return (
     <div className="stack">
       <SectionHead title="Servers" note={`Optional: dedicated servers that run without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game. ${RUNS_WHILE}`}>
-        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setRestoring(true)}>Restore a backup</button>}
-        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setExporting(true)}>Back up servers</button>}
-        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setImporting(true)}>Add one you already run</button>}
         {ON_THIS_COMPUTER && <button className="btn" onClick={() => setAddingShared("")}>Add a shared server</button>}
         {ON_THIS_COMPUTER && <button className="btn primary" onClick={() => setCreating(true)}>New server</button>}
       </SectionHead>
@@ -339,6 +336,15 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
           </div>
           <p className="muted small-note measure">These run on their owners' computers or machines. You do what your role there allows; the owner sees what you change.</p>
         </section>
+      )}
+
+      {/* the less common ones, under the list rather than crowding the heading */}
+      {ON_THIS_COMPUTER && (
+        <div className="row server-more">
+          <button className="btn" onClick={() => setImporting(true)}>Add one you already run</button>
+          {list && list.servers.length > 0 && <button className="btn" onClick={() => setExporting(true)}>Back up servers</button>}
+          <button className="btn" onClick={() => setRestoring(true)}>Restore a backup</button>
+        </div>
       )}
 
       <WhereToHost />
