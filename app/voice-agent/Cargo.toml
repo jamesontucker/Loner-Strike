@@ -1,0 +1,22 @@
+[package]
+name = "ls-voice"
+# (its real version is Loner-Strike's own, like ls-control's)
+version = "0.0.0"
+description = "Loner-Strike's speech-to-text helper: players' voice to text for the bots (Advanced Bot Interaction)"
+license = "GPL-3.0"
+edition = "2021"
+publish = false
+
+# not part of any workspace: built on its own for each platform the app runs servers on
+[workspace]
+
+[dependencies]
+whisper-rs = "0.16"
+opus = "0.4"
+regex = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+codegen-units = 1
