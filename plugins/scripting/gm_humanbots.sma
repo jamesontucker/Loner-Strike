@@ -1312,6 +1312,10 @@ Float:angular_speed(id, target, Float:dist)
 engage(id, target, Float:angle, Float:dist, s, Float:now)
 {
 	new bool:recent = target == g_LastTarget[id] && now - g_LostAt[id] < 1.5
+	// already in a fight (another enemy now, or one lost a moment ago): a quick switch, not a
+	// fresh "who's that" (with two in view the nearest one can flip back and forth, and each
+	// fresh reaction held the trigger again)
+	new bool:switching = (g_Target[id] && g_Target[id] != target) || (!recent && now - g_LostAt[id] < 1.5)
 	g_Target[id] = target
 	if (g_SkillStyle[id] != s)
 		sample_skill(id, s)
@@ -1371,6 +1375,21 @@ engage(id, target, Float:angle, Float:dist, s, Float:now)
 		}
 	}
 	over = floatclamp(over, 0.3, 12.0)
+
+	// a reaction has a ceiling: however far off or far away, a person has seen and fired by
+	// then (the brain's aim is already turning meanwhile: a long hold looks like hesitating)
+	static const Float:RT_CAP[STYLE_COUNT] = { 0.5, 0.8, 0.6, 0.5, 1.1, 0.42, 0.3, 0.25 }
+	new Float:cap = (s >= 0 && s < STYLE_COUNT) ? RT_CAP[s] : 0.8
+	rt = floatmin(rt, cap)
+	if (switching)
+		rt = floatmin(rt, 0.15 + 0.25 * floatmin(skill, 1.0))
+	// newer players start spraying before they've lined it up: firing while still turning
+	// (and missing), never standing there not shooting
+	else if ((s == STYLE_NEWBIE || s == STYLE_PUB) && random_float(0.0, 1.0) < (s == STYLE_NEWBIE ? 0.45 : 0.25))
+	{
+		rt *= 0.55
+		over *= 1.6
+	}
 
 	g_Unlock[id] = get_pcvar_num(g_pReaction) ? now + rt : now
 	g_FlickStart[id] = g_Unlock[id]
