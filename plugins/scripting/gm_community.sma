@@ -90,6 +90,7 @@ public plugin_natives()
 	set_native_filter("native_filter")
 	register_library("gm_community")
 	register_native("gm_chat_blocked", "n_chat_blocked")
+	register_native("gm_voice_blocked", "n_voice_blocked")
 }
 
 // gm_chat_blocked(id, const text[]): true when this chat line never shows (a muted
@@ -101,6 +102,22 @@ public n_chat_blocked(plugin, params)
 	if (id < 1 || id > MaxClients || !g_Human[id])
 		return 0
 	if (muted(id, GAG_CHAT))
+		return 1
+	if (get_pcvar_num(g_pFilter) != 2 || !ArraySize(g_Words))
+		return 0
+	new text[192]
+	get_string(2, text, charsmax(text))
+	return has_swear(text) ? 1 : 0
+}
+
+// gm_voice_blocked(id, const text[]): the same for what someone said on voice (turned into
+// text for the bots): muted from voice, or a filtered word when the filter hides them
+public n_voice_blocked(plugin, params)
+{
+	new id = get_param(1)
+	if (id < 1 || id > MaxClients || !g_Human[id])
+		return 0
+	if (muted(id, GAG_VOICE))
 		return 1
 	if (get_pcvar_num(g_pFilter) != 2 || !ArraySize(g_Words))
 		return 0

@@ -104,6 +104,7 @@
 
 // gm_community: true for chat that never shows (muted player, filtered out)
 native gm_chat_blocked(id, const text[])
+native gm_voice_blocked(id, const text[])
 
 // gm_people (optional): who the bots are and what they remember. people_match: 1 the
 // condition holds, 0 it doesn't, -1 it doesn't know the key
@@ -265,12 +266,14 @@ new Float:g_SprayAt[33][3], Float:g_SprayNormal[33][3], Float:g_SprayUntil[33]
 new Float:g_Sites[3][3], g_SiteCount        // the bomb sites' middles, A first
 new Float:g_SpawnT[3], Float:g_SpawnCT[3], bool:g_HaveT, bool:g_HaveCT
 new Trie:g_PlaceAt                          // a place as people say it -> where someone stood in it
+new Trie:g_PlaceWord                        // a place's telling word -> the place ("long" -> "long a"; "" two share it)
 new bool:g_NavPlaces                        // the nav names its places (Location messages come)
 new bool:g_NoReleaseNative, bool:g_NoPeopleName
 new g_Bare[33][32]                          // each player's name without its tag (bare_of)
 #define TASK_FORGET 8700                    // a slot emptied: its name forgotten (+ slot)
 new Float:g_GreetAt, g_GreetCount, g_GreetCap   // hellos lately (a lobby filling up all at once)
 new bool:g_NoDropNative, bool:g_NoSprayNative, bool:g_NoDangerNative, bool:g_NoTargetNative, bool:g_NoAfkNative
+new bool:g_NoVoiceBlocked                   // gm_community is older: no gm_voice_blocked
 new Float:g_KysAt                           // the last "kys" a bot went along with
 new bool:g_KysDone[33]
 new g_AiAction[33][12]                      // what the model said the bot should do
@@ -665,6 +668,7 @@ public plugin_init()
 	g_LineOnce = TrieCreate()
 	g_Flags = TrieCreate()
 	g_PlaceAt = TrieCreate()
+	g_PlaceWord = TrieCreate()
 	load_lines()
 }
 
@@ -787,6 +791,12 @@ public native_filter(const name[], index, trap)
 		g_NoAfkNative = true
 	if (!trap && (equal(name, "people_", 7) || equal(name, "hb_", 3) || equal(name, "bf_", 3)))
 		return PLUGIN_HANDLED
+	// (an older gm_community without the voice filter: voice goes unfiltered there)
+	if (!trap && equal(name, "gm_voice_blocked"))
+	{
+		g_NoVoiceBlocked = true
+		return PLUGIN_HANDLED
+	}
 	return (!trap && (equal(name, "gm_chat_blocked") || equal(name, "socket_", 7))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
@@ -3616,6 +3626,7 @@ public ev_location()
 			new Float:o[3]
 			pev(id, pev_origin, o)
 			TrieSetArray(g_PlaceAt, g_Place[id], o, 3)
+			place_words(g_Place[id])
 			place_learned(g_Place[id], o)
 		}
 	}
@@ -4522,8 +4533,61 @@ name_score(const msg[], id)
 				best = max(best, 2)
 		}
 		best = max(best, typo_score(msg, parts[p]))
+		best = max(best, short_score(msg, parts[p]))
 	}
 	return best
+}
+
+// 2 when a word in msg is a short form of the name part: its start, three letters or more
+// ("jon" for "jonny", "alex" for "alexander"), or the usual nickname ("john" for "jonny",
+// "mike" for "michael"). addressed() drops it when two bots fit as well
+short_score(const msg[], const part[])
+{
+	static const NICK[][2][] = { {"john", "jon"}, {"johnny", "jon"}, {"jonny", "john"}, {"jon", "john"}, {"mike", "mich"},
+		{"mikey", "mich"}, {"dave", "david"}, {"davey", "david"}, {"bob", "rob"}, {"bobby", "rob"}, {"bill", "will"},
+		{"billy", "will"}, {"tom", "thom"}, {"tommy", "tom"}, {"jim", "jam"}, {"jimmy", "jam"}, {"chris", "kris"},
+		{"kris", "chris"}, {"nick", "nik"}, {"dan", "dann"}, {"danny", "dan"}, {"matt", "math"}, {"sam", "samu"},
+		{"alex", "alek"}, {"steve", "stev"}, {"steve", "steph"}, {"joe", "jos"}, {"joey", "jos"}, {"tony", "anto"},
+		{"ben", "benj"}, {"benny", "ben"}, {"kenny", "ken"}, {"rick", "rich"}, {"ricky", "rich"}, {"rich", "rick"} }
+	new pl = strlen(part)
+	if (pl < 4 || common_word(part))
+		return 0
+	// (only the first two words, where people put a name, and never a game word: "rush b" isn't
+	// for a bot called Rusher)
+	static const GAME[][] = { "rush", "push", "flash", "smoke", "nade", "mid", "long", "short", "drop", "buy", "eco", "force",
+		"save", "plant", "bomb", "follow", "wait", "hold", "cover", "fake", "split", "awp", "come", "watch", "fall", "back",
+		"stack", "rotate", "trade", "peek", "defuse", "money", "where", "what", "who", "how", "nice", "good", "lol", "sorry" }
+	new word[24], seen
+	for (new i = 0; msg[i] && seen < 2; )
+	{
+		while (msg[i] && !isalnum(msg[i]))
+			i++
+		new k
+		while (msg[i] && isalnum(msg[i]))
+		{
+			if (k < 23)
+				word[k++] = msg[i]
+			i++
+		}
+		word[k] = 0
+		if (!k)
+			break
+		seen++
+		if (k < 3 || common_word(word))
+			continue
+		new bool:game
+		for (new g = 0; g < sizeof GAME; g++)
+			if (equal(word, GAME[g]))
+				game = true
+		if (game)
+			continue
+		if (k < pl && equal(part, word, k))
+			return 2
+		for (new n = 0; n < sizeof NICK; n++)
+			if (equal(word, NICK[n][0]) && equal(part, NICK[n][1], strlen(NICK[n][1])))
+				return 2
+	}
+	return 0
 }
 
 // 1 when a word in msg is the name part with one letter off ("tarik" for "tariq")
@@ -4975,16 +5039,36 @@ enum
 {
 	I_NONE,
 	I_MONEY, I_GUN, I_WHOHAS, I_HP, I_LEFT, I_SEEN, I_WHEREYOU, I_BOMB, I_SURE,
+	// "what do they have", "are they eco": what the team has seen them carry this round
+	I_THEIRS,
+	// what someone saw ("two long", "awp mid"): told to the team, not asked of anyone
+	I_INFO,
 	// (requests from here on)
-	I_DROP, I_RELEASE, I_FOLLOW, I_HOLD, I_GOTO, I_COME, I_SPRAY, I_JUMP, I_CROUCH, I_KYS, I_PLANT, I_GIVEBOMB
+	I_DROP, I_RELEASE, I_FOLLOW, I_HOLD, I_GOTO, I_COME, I_SPRAY, I_JUMP, I_CROUCH, I_KYS, I_PLANT, I_GIVEBOMB,
+	// "eco", "force", "full buy" (arg: 1 save, 2 force, 0 buy); "flash for me", "smoke mid"
+	// (arg: the spot, and the grenade times 16); "fake b" (arg: the site faked); "go defuse"
+	I_BUYCALL, I_UTIL, I_FAKE, I_DEFUSE,
+	// "someone buy me an awp" (arg: the gun): one teammate at most, now and then
+	I_BUYFOR
 }
 
 // where a request is about: a bomb site, mid, where the person aims, the hostages, a place
 // someone has stood in, the person
 enum
 {
-	SPOT_NONE, SPOT_A, SPOT_B, SPOT_C, SPOT_MID, SPOT_THERE, SPOT_HOST, SPOT_PLACE, SPOT_HUMAN
+	SPOT_NONE, SPOT_A, SPOT_B, SPOT_C, SPOT_MID, SPOT_THERE, SPOT_HOST, SPOT_PLACE, SPOT_HUMAN,
+	// "fall back": its own side's spawn; "watch flank": a little behind the person, towards
+	// their spawn; "go defuse": the planted bomb
+	SPOT_BACK, SPOT_FLANK, SPOT_BOMB
 }
+// (a goto said with "slow", "walk", "quiet": walking, not running; the arg's bit)
+#define SPOT_WALK 0x100
+#define TASK_UTIL 8740
+#define TASK_FAKE 8780
+new bool:g_ReqWalk[33]                      // walking there ("go b slow")
+new g_ReqFakeTo[33]                         // a fake: the site it goes to after (SPOT_A/B), 0 none
+new g_BuyForRound[33]                       // the round someone last had a gun bought for them (one a round)
+new g_SawGuns[3], g_SawGunsRound[3]         // what a team has seen the other carry this round (1 awp, 2 a rifle or smg, 4 a pistol only)
 
 enum
 {
@@ -5296,6 +5380,7 @@ public task_watch()
 					{
 						copy(g_SeenPlace[t], charsmax(g_SeenPlace[]), place)
 						g_SeenAt[t] = now
+						saw_guns(t, e)
 					}
 					spot_seen(i, e, place, now)
 				}
@@ -5591,7 +5676,7 @@ bool:site_named(const c[], const letter[])
 bool:goto_target(const c[], &arg, place[], plen)
 {
 	static const VERBS[][] = { "go", "rush", "push", "come", "hit", "take", "head", "move", "run", "all", "everyone",
-		"everybody", "to", "cover", "check", "lets", "stack", "retake", "defend" }
+		"everybody", "to", "cover", "check", "lets", "stack", "retake", "defend", "split", "execute", "exec", "walk", "sneak" }
 	// ("b b b", "bbb" said alone is a call too)
 	new bool:alone = phrase_is(c, "b b") || phrase_is(c, "b b b") || phrase_is(c, "a a a")
 	if (!alone && !any_in(c, VERBS, sizeof VERBS))
@@ -5639,9 +5724,584 @@ bool:goto_target(const c[], &arg, place[], plen)
 			arg = SPOT_PLACE
 			return true
 		}
+		// (a word only one place has: "long" for "long a", "tunnels" for "upper tunnels")
+		new full[32]
+		if (k >= 3 && TrieGetString(g_PlaceWord, word, full, charsmax(full)) && full[0])
+		{
+			copy(place, plen, full)
+			arg = SPOT_PLACE
+			return true
+		}
 		copy(prev, charsmax(prev), word)
 	}
 	return false
+}
+
+// ---- callouts from people ("two long", "awp mid", "they are b") ----
+
+new g_InfoCount                             // how many the callout being read named (0: not said)
+new Float:g_InfoAt[3], Float:g_InfoPos[3][3], g_InfoPlace[3][32], g_InfoN[3]   // a team's last one
+
+// What someone saw, said to the team: enemies (a number, "they", "awp", "rushing", or a CT's
+// "rush b", since CTs don't rush) and a place the map knows. Not a question
+bool:info_said(id, const c[], &arg, place[], plen)
+{
+	if (contain(c, "?") != -1)
+		return false
+	static const ASKS[][] = { "where", "wheres", "how", "who", "whos", "what", "whats", "is it", "are they", "did" }
+	if (any_in(c, ASKS, sizeof ASKS))
+		return false
+	static const NUM[][] = { "one", "two", "three", "four", "five", "1", "2", "3", "4", "5" }
+	g_InfoCount = 0
+	for (new i = 0; i < sizeof NUM && !g_InfoCount; i++)
+		if (word_in(c, NUM[i]))
+			g_InfoCount = (i % 5) + 1
+	static const MANY[][] = { "all", "all of them", "everyone", "full", "stack", "stacked", "stacking", "rush", "rushing", "lots", "a lot",
+		"bunch", "many", "five", "whole team" }
+	static const THEM[][] = { "they", "they are", "them", "enemy", "enemies", "awp", "awper", "sniper", "lurker", "lurking", "flank",
+		"flanking", "stacked", "stacking", "coming", "pushing", "rushing", "ts", "cts", "terrorists", "spotted", "saw", "seen",
+		"contact", "low", "lit", "tagged", "hurt", "one shot" }
+	new bool:them = g_InfoCount > 0 || any_in(c, THEM, sizeof THEM)
+	// (the bomb's down: "bomb b", "its a", "planted b" is where)
+	if (!them && g_BombPlanted && (word_in(c, "bomb") || word_in(c, "planted") || word_in(c, "its") || word_in(c, "c4")))
+		them = true
+	// (a CT's "rush b": the Ts are rushing it; not "lets rush", "we rush")
+	if (!them && get_user_team(id) == 2 && word_in(c, "rush") && !word_in(c, "lets") && !word_in(c, "we") && !word_in(c, "go"))
+		them = true
+	if (!them)
+		return false
+	// ("follow them", "kill them": orders, no place)
+	new probe[160]
+	formatex(probe, charsmax(probe), "go %s", c)
+	if (!goto_target(probe, arg, place, plen) || arg == SPOT_THERE || arg == SPOT_HOST)
+		return false
+	if (!g_InfoCount && any_in(c, MANY, sizeof MANY))
+		g_InfoCount = 9
+	return true
+}
+
+// Whether a bot could see a point from where it stands (to look there, not at a wall)
+bool:sees_point(bot, const Float:at[3])
+{
+	new Float:eye[3], Float:ofs[3], Float:to[3], Float:f
+	pev(bot, pev_origin, eye)
+	pev(bot, pev_view_ofs, ofs)
+	for (new i = 0; i < 3; i++)
+		eye[i] += ofs[i]
+	to = at
+	to[2] += 36.0
+	new tr = create_tr2()
+	engfunc(EngFunc_TraceLine, eye, to, IGNORE_MONSTERS | IGNORE_GLASS, bot, tr)
+	get_tr2(tr, TR_flFraction, f)
+	free_tr2(tr)
+	return f >= 0.97
+}
+
+// A teammate's callout: remembered for the team; bots that can see the place glance at it;
+// on CT, a site being hit (two or more, or "they are b") pulls a few from elsewhere over,
+// each by its own nature (req_decide); now and then one says ok, or that it's rotating
+Float:info_heard(id, spot, const place[], bool:team, Float:extra)
+{
+	new t = get_user_team(id)
+	if (teams_off() || (t != 1 && t != 2) || g_SteeredMode)
+	{
+		trace_add(g_TrDecision, charsmax(g_TrDecision), "not here")
+		return -1.0
+	}
+	new Float:at[3], label[32]
+	if (!req_target(id, spot, place, at, label, charsmax(label)))
+	{
+		trace_add(g_TrDecision, charsmax(g_TrDecision), "no place")
+		return -1.0
+	}
+	new Float:now = get_gametime()
+	g_InfoAt[t] = now
+	g_InfoPos[t] = at
+	copy(g_InfoPlace[t], charsmax(g_InfoPlace[]), label)
+	g_InfoN[t] = g_InfoCount
+	// (the team's "where are they" answers go by it too)
+	copy(g_SeenPlace[t], charsmax(g_SeenPlace[]), label)
+	g_SeenAt[t] = now
+	trace_add(g_TrDecision, charsmax(g_TrDecision), "info")
+	new bool:site = spot == SPOT_A || spot == SPOT_B || spot == SPOT_C
+	new bool:many = g_InfoCount != 1
+	new bool:moves = puppets_ok() && !g_Freeze && !g_RoundOver
+	new rotated, maxrot = match_like() ? 4 : 2, first_rot, acker
+	for (new b = 1; b <= MaxClients; b++)
+	{
+		if (b == id || !is_user_alive(b) || !is_user_bot(b) || get_user_team(b) != t || bot_afk(b) || fighting(b))
+			continue
+		new Float:o[3]
+		pev(b, pev_origin, o)
+		new Float:d = get_distance_f(o, at)
+		if (t == 2 && site && many && moves && d > 1200.0 && rotated < maxrot && !g_ReqAct[b] && random_float(0.0, 1.0) < rotate_odds(b))
+		{
+			new sec[24]
+			if (req_decide(b, id, I_GOTO, false, sec, charsmax(sec)) == REQ_YES)
+			{
+				spread_spot(at, g_ReqTo[b])
+				copy(g_CtxSite, charsmax(g_CtxSite), label)
+				req_set(b, id, I_GOTO, spot, place, team, false, false, 1)
+				g_CtxSite[0] = 0
+				req_attempt(b)
+				rotated++
+				if (!first_rot)
+					first_rot = b
+				trace_bot(b)
+				continue
+			}
+		}
+		if (moves && d < 2500.0 && sees_point(b, at) && random_float(0.0, 1.0) < glance_odds(b))
+			server_cmd("ls_bot %d look %.0f %.0f %.0f %.1f", b, at[0], at[1], at[2] + 36.0, random_float(1.5, 3.0))
+		// (the one who'd say "ok": a chatty one before a quiet one; a silent one never)
+		if (!g_WasBusy[b] && can_answer(b, id) && !trait(b, "talk", "silent")
+			&& (!acker || (talk_rate(b) > talk_rate(acker))))
+			acker = b
+	}
+	if (rotated)
+		trace_add(g_TrDecision, charsmax(g_TrDecision), fmt("rotate %d", rotated))
+	// someone answers now and then: the one rotating says so, else an "ok"
+	if (first_rot && !g_WasBusy[first_rot] && random_float(0.0, 1.0) < 0.6)
+	{
+		copy(g_CtxSite, charsmax(g_CtxSite), label)
+		answer(first_rot, "r_info_rotate", id, true, extra + random_float(0.4, 1.2))
+		g_CtxSite[0] = 0
+	}
+	else if (acker && random_float(0.0, 1.0) < 0.3 * talk_rate(acker) * (0.6 + 0.4 * personality()))
+		answer(acker, "r_info_ok", id, true, extra + random_float(0.3, 1.0))
+	return 1.5
+}
+
+// How often this bot does its own thing when the team's told to go somewhere, on a pub
+Float:ignores_calls(bot)
+{
+	if (trait(bot, "style", "lurker") || trait(bot, "style", "roamer") || trait(bot, "style", "ninja"))
+		return 0.55
+	if (trait(bot, "style", "camper") || trait(bot, "style", "awper"))
+		return 0.4
+	if (trait(bot, "style", "rusher") || trait(bot, "style", "objective"))
+		return 0.08
+	return 0.25
+}
+
+// A callout: how likely it glances at the place (careful ones always look, a lurker on its
+// own plan less) and, a CT elsewhere, rotates to a site being hit (objective and careful
+// ones come, a lurker mostly stays)
+Float:glance_odds(bot)
+{
+	if (trait(bot, "style", "careful") || trait(bot, "style", "awper") || trait(bot, "style", "camper"))
+		return 0.9
+	if (trait(bot, "style", "lurker") || trait(bot, "style", "ninja"))
+		return 0.5
+	if (trait(bot, "style", "rusher"))
+		return 0.6
+	return 0.75
+}
+
+Float:rotate_odds(bot)
+{
+	if (trait(bot, "style", "objective") || trait(bot, "style", "careful"))
+		return 0.85
+	if (trait(bot, "style", "lurker") || trait(bot, "style", "ninja") || trait(bot, "style", "camper"))
+		return 0.35
+	if (trait(bot, "style", "rusher"))
+		return 0.75
+	return 0.65
+}
+
+// How much this bot says: silent 0, quiet 0.4, normal 1, chatty 1.8, spammer 2.5
+Float:talk_rate(bot)
+{
+	if (trait(bot, "talk", "silent"))
+		return 0.0
+	if (trait(bot, "talk", "quiet"))
+		return 0.4
+	if (trait(bot, "talk", "chatty"))
+		return 1.8
+	if (trait(bot, "talk", "spammer"))
+		return 2.5
+	return 1.0
+}
+
+// ---- buy calls, grenades, fakes, what they have ----
+
+// "eco", "lets save", "force", "full buy": 1 save, 2 force, 0 buy; -1 not a buy call ("save
+// the awp" is keeping a gun, not a save round)
+buy_call(const c[])
+{
+	if (count_words(c) > 6 || word_in(c, "awp") || word_in(c, "gun") || word_in(c, "weapon") || word_in(c, "your"))
+		return -1
+	static const SAVE[][] = { "eco", "lets eco", "full eco", "eco round", "we eco", "save", "lets save", "save round", "we save",
+		"save this round", "full save", "everyone save", "eco this round" }
+	static const FORCE[][] = { "force", "force buy", "lets force", "forcebuy", "we force", "everyone force", "force this round" }
+	static const BUY[][] = { "full buy", "buy up", "everyone buy", "buy guns", "buy rifles", "lets buy", "we buy", "buy everything",
+		"buy this round", "full buy this round" }
+	for (new i = 0; i < sizeof FORCE; i++)
+		if (phrase_is(c, FORCE[i]) || lead_word(c, "force"))
+			return 2
+	for (new i = 0; i < sizeof BUY; i++)
+		if (phrase_is(c, BUY[i]) || (word_in(c, BUY[i]) && i < 3))
+			return 0
+	for (new i = 0; i < sizeof SAVE; i++)
+		if (phrase_is(c, SAVE[i]) || (word_in(c, SAVE[i]) && (lead_word(c, "eco") || lead_word(c, "save") || lead_word(c, "lets"))))
+			return 1
+	return -1
+}
+
+// A gun's price, 0 for what this doesn't buy
+gun_price(csw)
+{
+	switch (csw)
+	{
+		case CSW_AWP: return 4750
+		case CSW_M4A1: return 3100
+		case CSW_AK47: return 2500
+		case CSW_AUG, CSW_SG552: return 3500
+		case CSW_FAMAS: return 2250
+		case CSW_GALIL: return 2000
+		case CSW_SCOUT: return 2750
+		case CSW_MP5NAVY: return 1500
+		case CSW_P90: return 2350
+		case CSW_M3: return 1700
+		case CSW_XM1014: return 3000
+		case CSW_M249: return 5750
+		case CSW_DEAGLE: return 650
+	}
+	return 0
+}
+
+// "someone buy me an awp": in buy time, of the teammates in the buy zone with the money for
+// it (and still enough for their own: a gun of their own already, or 1,500 left), each in
+// turn may (who it is and how it feels about them: warm ones, friends, clanmates, the rich;
+// not the cold or tilted); the first that does buys it and brings it, and that's it for the
+// round. Mostly nobody: one says so now and then
+Float:buyfor_heard(id, to, csw, Float:extra)
+{
+	new t = get_user_team(id)
+	if (teams_off() || (t != 1 && t != 2) || g_SteeredMode || !puppets_ok() || !is_user_alive(id))
+	{
+		trace_add(g_TrDecision, charsmax(g_TrDecision), "not here")
+		return -1.0
+	}
+	if (g_BuyForRound[id] == g_Round)
+	{
+		trace_add(g_TrDecision, charsmax(g_TrDecision), "already")
+		return 0.5
+	}
+	new price = gun_price(csw)
+	new Float:bt = get_cvar_float("mp_buytime") * 60.0
+	new bool:buytime = g_Freeze || get_gametime() - g_RoundLiveAt < bt
+	if (!price || !buytime)
+	{
+		new b = to ? to : pick_mate(id, I_MONEY, 0)
+		if (b && is_user_connected(b) && !g_WasBusy[b] && random_float(0.0, 1.0) < 0.5)
+			answer(b, "r_buyfor_late", id, true, extra)
+		trace_add(g_TrDecision, charsmax(g_TrDecision), "not buy time")
+		return 1.0
+	}
+	new list[32], n
+	for (new b = 1; b <= MaxClients; b++)
+	{
+		if (b == id || !is_user_alive(b) || !is_user_bot(b) || get_user_team(b) != t || bot_afk(b) || (to && b != to)
+			|| !cs_get_user_buyzone(b))
+			continue
+		new spare = user_has_primary(b) ? 0 : 1500
+		if (cs_get_user_money(b) >= price + spare)
+			list[n++] = b
+	}
+	// (in a random order: not always the same one)
+	for (new i = n - 1; i > 0; i--)
+	{
+		new j = random_num(0, i), x = list[i]
+		list[i] = list[j]
+		list[j] = x
+	}
+	for (new i = 0; i < n; i++)
+	{
+		new b = list[i]
+		new Float:p = match_like() ? 0.45 : 0.22
+		if (trait(b, "warmth", "warm") || clanmates(b, id))
+			p *= 2.0
+		if (LibraryExists("gm_people", LibType_Library) && people_match(b, id, "rel", ">=", "2") == 1)
+			p *= 1.6
+		if (trait(b, "warmth", "cold") || trait(b, "temper", "tilty"))
+			p *= 0.4
+		if (cs_get_user_money(b) >= 10000)
+			p *= 1.5
+		if (to)
+			p *= 2.5
+		if (random_float(0.0, 1.0) < floatmin(p, 0.9))
+		{
+			g_BuyForRound[id] = g_Round
+			server_cmd("ls_bot %d buyfor %d %d", b, id, csw)
+			trace_bot(b)
+			if (!g_WasBusy[b] && random_float(0.0, 1.0) < 0.8 * floatmax(talk_rate(b), 0.5))
+				answer(b, "r_buyfor_ok", id, true, extra + random_float(0.3, 1.0))
+			trace_add(g_TrDecision, charsmax(g_TrDecision), "buying")
+			return 2.0
+		}
+	}
+	// nobody: one of them says no now and then (the one asked, mostly)
+	new b = to ? to : pick_mate(id, I_MONEY, 0)
+	if (b && is_user_connected(b) && !g_WasBusy[b] && random_float(0.0, 1.0) < (to ? 0.85 : 0.35) * floatmax(talk_rate(b), 0.3))
+		answer(b, (cs_get_user_money(b) < price + 1500) ? "r_buyfor_broke" : "r_buyfor_no", id, true, extra + random_float(0.5, 1.5))
+	trace_add(g_TrDecision, charsmax(g_TrDecision), "nobody")
+	return 1.0
+}
+
+// Has a primary gun (a rifle, smg, shotgun, sniper or the para)
+bool:user_has_primary(id)
+{
+	static const PRIMARY[] = { CSW_AK47, CSW_M4A1, CSW_AUG, CSW_SG552, CSW_FAMAS, CSW_GALIL, CSW_MP5NAVY, CSW_P90, CSW_UMP45,
+		CSW_MAC10, CSW_TMP, CSW_M3, CSW_XM1014, CSW_M249, CSW_SCOUT, CSW_G3SG1, CSW_SG550, CSW_AWP }
+	for (new i = 0; i < sizeof PRIMARY; i++)
+		if (user_has_weapon(id, PRIMARY[i]))
+			return true
+	return false
+}
+
+// "flash for me", "smoke mid", "nade them": 1 flash, 2 smoke, 3 an HE; 0 none ("nice flash",
+// "got flashed" and "dont flash me" aren't asking)
+util_kind(const c[])
+{
+	if (word_in(c, "nice") || word_in(c, "flashed") || word_in(c, "smoked") || word_in(c, "naded"))
+		return 0
+	static const FLASH[][] = { "flash for", "flash me in", "pop a flash", "pop flash", "popflash", "throw a flash", "throw flash",
+		"need a flash", "can you flash", "someone flash", "flash over", "flash it", "flash them", "flash pls", "flash please", "flash in" }
+	if (lead_word(c, "flash") || any_in(c, FLASH, sizeof FLASH))
+		return 1
+	static const SMOKE[][] = { "throw a smoke", "smoke it", "smoke for", "need a smoke", "someone smoke", "can you smoke", "smoke off",
+		"smoke pls", "smoke please", "smoke that", "smoke there" }
+	if (lead_word(c, "smoke") || any_in(c, SMOKE, sizeof SMOKE))
+		return 2
+	static const NADE[][] = { "throw a nade", "nade them", "nade it", "nade him", "throw he", "throw an he", "he grenade", "throw nade",
+		"nade pls", "nade there", "frag them", "throw a frag", "nade that", "nade please" }
+	if (lead_word(c, "nade") || lead_word(c, "frag") || any_in(c, NADE, sizeof NADE))
+		return 3
+	return 0
+}
+
+// The extras an order was given with: walking there; a fake's second site (then over there
+// after a few seconds)
+req_extras(bot, bool:walk, fakeTo)
+{
+	g_ReqWalk[bot] = walk
+	g_ReqFakeTo[bot] = fakeTo
+	remove_task(TASK_FAKE + bot)
+	if (fakeTo)
+	{
+		new data[2]
+		data[0] = g_Round
+		data[1] = get_user_userid(bot)
+		set_task(random_float(8.0, 14.0), "task_fake_rotate", TASK_FAKE + bot, data, 2)
+	}
+}
+
+public task_fake_rotate(const data[], tid)
+{
+	new bot = tid - TASK_FAKE
+	if (data[0] != g_Round || !is_user_alive(bot) || get_user_userid(bot) != data[1] || g_ReqAct[bot] != I_GOTO || !g_ReqFakeTo[bot])
+		return
+	new human = g_ReqFor[bot], label[32]
+	if (human < 1 || human > MaxClients || !is_user_connected(human))
+		return
+	new spot = g_ReqFakeTo[bot]
+	g_ReqFakeTo[bot] = 0
+	if (fighting(bot) || !req_target(human, spot, "", g_ReqTo[bot], label, charsmax(label)))
+		return
+	new Float:to[3]
+	to = g_ReqTo[bot]
+	spread_spot(to, g_ReqTo[bot])
+	g_ReqArg[bot] = spot
+	server_cmd("ls_bot %d goto %.0f %.0f %.0f %d %d bc", bot, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2], 0,
+		match_like() ? random_num(20, 30) : random_num(8, 15))
+	if (random_float(0.0, 1.0) < 0.35 * talk_rate(bot))
+	{
+		copy(g_CtxSite, charsmax(g_CtxSite), label)
+		answer(bot, "r_fake_go", human, !teams_off(), random_float(0.2, 0.8))
+		g_CtxSite[0] = 0
+	}
+}
+
+// "eco" / "force" / "full buy" to the team (or one): each teammate bot goes along or not (in a
+// match nearly all do; on a pub most; one with plenty of money ignores an eco, a careful one
+// a force), and its next buy (this one, in freeze time) follows. One or two say so
+Float:buy_heard(id, to, plan, Float:extra)
+{
+	new t = get_user_team(id)
+	if (teams_off() || (t != 1 && t != 2) || g_SteeredMode || !puppets_ok())
+	{
+		trace_add(g_TrDecision, charsmax(g_TrDecision), "not here")
+		return -1.0
+	}
+	new took, said, refused
+	for (new b = 1; b <= MaxClients; b++)
+	{
+		if (!is_user_connected(b) || !is_user_bot(b) || get_user_team(b) != t || bot_afk(b) || (to && b != to))
+			continue
+		new money = cs_get_user_money(b)
+		new Float:p = match_like() ? 0.95 : 0.75
+		if (plan == 1 && money >= 6000)
+			p *= 0.4
+		if (plan == 2 && trait(b, "style", "careful"))
+			p *= 0.7
+		if (trait(b, "temper", "tilty") || trait(b, "role", "drifter"))
+			p *= 0.8
+		if (to)
+			p = floatmin(1.0, p + 0.15)
+		if (random_float(0.0, 1.0) < p)
+		{
+			server_cmd("ls_bot %d buyplan %d", b, plan)
+			took++
+			if (!said && can_answer(b, id) && !g_WasBusy[b] && random_float(0.0, 1.0) < (to ? 0.85 : 0.45) * talk_rate(b))
+			{
+				answer(b, plan == 1 ? "r_buy_save" : plan == 2 ? "r_buy_force" : "r_buy_full", id, true, extra + random_float(0.3, 1.2))
+				said = b
+			}
+		}
+		else if (!refused && can_answer(b, id) && !g_WasBusy[b] && random_float(0.0, 1.0) < 0.5 * talk_rate(b))
+		{
+			answer(b, "r_buy_no", id, true, extra + random_float(0.8, 2.0))
+			refused = b
+		}
+	}
+	trace_add(g_TrDecision, charsmax(g_TrDecision), fmt("buy %d took %d", plan, took))
+	return (said || refused) ? 1.5 : 0.5
+}
+
+// A grenade asked for: the one named, else the teammate nearest the spot with one, not in a
+// fight, close enough to throw it there; it says so, and a moment later (a flash for
+// someone: time for them to look away) throws it
+Float:util_heard(id, to, packed, const place[], Float:extra)
+{
+	new t = get_user_team(id)
+	if (teams_off() || (t != 1 && t != 2) || g_SteeredMode || !puppets_ok() || g_Freeze)
+	{
+		trace_add(g_TrDecision, charsmax(g_TrDecision), "not here")
+		return -1.0
+	}
+	new kind = packed >> 4, spot = packed & 15
+	new csw = kind == 1 ? CSW_FLASHBANG : kind == 2 ? CSW_SMOKEGRENADE : CSW_HEGRENADE
+	new Float:at[3], Float:normal[3], label[32]
+	new bool:found = spot == SPOT_THERE ? aim_point(id, at, normal) : req_target(id, spot, place, at, label, charsmax(label))
+	if (spot == SPOT_THERE && found)
+		for (new i = 0; i < 3; i++)
+			at[i] += normal[i] * 16.0
+	new bot = 0, Float:bestd = 1600.0
+	if (to && is_user_alive(to) && get_user_team(to) == t && user_has_weapon(to, csw))
+		bot = to
+	else if (!to)
+	{
+		for (new b = 1; b <= MaxClients; b++)
+		{
+			if (b == id || !is_user_alive(b) || !is_user_bot(b) || get_user_team(b) != t || bot_afk(b) || fighting(b) || !user_has_weapon(b, csw))
+				continue
+			new Float:o[3]
+			pev(b, pev_origin, o)
+			new Float:d = found ? get_distance_f(o, at) : 0.0
+			if (d < bestd)
+			{
+				bestd = d
+				bot = b
+			}
+		}
+	}
+	if (!bot)
+	{
+		// nobody with one (or the one named hasn't): it says so, now and then
+		new b = to ? to : pick_mate(id, I_MONEY, 0)
+		if (b && is_user_connected(b) && !g_WasBusy[b] && random_float(0.0, 1.0) < (to ? 0.8 : 0.4))
+			answer(b, "r_util_none", id, true, extra)
+		trace_add(g_TrDecision, charsmax(g_TrDecision), "no grenade")
+		return 1.0
+	}
+	trace_bot(bot)
+	if (!found)
+	{
+		answer(bot, "r_req_where", id, true, extra)
+		return 1.5
+	}
+	new Float:o[3]
+	pev(bot, pev_origin, o)
+	if (get_distance_f(o, at) > 1600.0)
+	{
+		answer(bot, "r_util_far", id, true, extra)
+		return 1.5
+	}
+	new sec[24]
+	if (req_decide(bot, id, I_UTIL, to != 0, sec, charsmax(sec)) != REQ_YES)
+	{
+		if (sec[0] && !g_WasBusy[bot])
+			answer(bot, sec, id, true, extra)
+		trace_add(g_TrDecision, charsmax(g_TrDecision), "no")
+		return 1.5
+	}
+	copy(g_CtxSite, charsmax(g_CtxSite), label)
+	if (!g_WasBusy[bot])
+		answer(bot, kind == 1 ? "r_util_flash" : kind == 2 ? "r_util_smoke" : "r_util_he", id, true, extra)
+	g_CtxSite[0] = 0
+	new data[4]
+	data[0] = kind
+	data[1] = floatround(at[0])
+	data[2] = floatround(at[1])
+	data[3] = floatround(at[2])
+	remove_task(TASK_UTIL + bot)
+	set_task(extra + (kind == 1 ? random_float(0.9, 1.4) : random_float(0.3, 0.8)), "task_util_throw", TASK_UTIL + bot, data, 4)
+	trace_add(g_TrDecision, charsmax(g_TrDecision), "throw")
+	return 2.0
+}
+
+public task_util_throw(const data[], tid)
+{
+	new bot = tid - TASK_UTIL
+	if (!is_user_alive(bot))
+		return
+	static const KIND[][] = { "", "flash", "smoke", "he" }
+	server_cmd("ls_bot %d throw %s %d %d %d", bot, KIND[data[0]], data[1], data[2], data[3])
+}
+
+// What one of the other side was seen carrying (by a bot of team t): an awp, a rifle or smg,
+// or a pistol only
+saw_guns(t, e)
+{
+	if (g_SawGunsRound[t] != g_Round)
+	{
+		g_SawGunsRound[t] = g_Round
+		g_SawGuns[t] = 0
+	}
+	if (user_has_weapon(e, CSW_AWP))
+	{
+		g_SawGuns[t] |= 1
+		return
+	}
+	static const PRIMARY[] = { CSW_AK47, CSW_M4A1, CSW_AUG, CSW_SG552, CSW_FAMAS, CSW_GALIL, CSW_MP5NAVY, CSW_P90, CSW_UMP45,
+		CSW_MAC10, CSW_TMP, CSW_M3, CSW_XM1014, CSW_M249, CSW_SCOUT, CSW_G3SG1, CSW_SG550 }
+	for (new i = 0; i < sizeof PRIMARY; i++)
+		if (user_has_weapon(e, PRIMARY[i]))
+		{
+			g_SawGuns[t] |= 2
+			return
+		}
+	g_SawGuns[t] |= 4
+}
+
+// "what do they have", "are they eco": what the team saw them with this round (an awp, rifles,
+// pistols only), or that nobody's seen them yet
+Float:theirs_heard(id, to, Float:extra)
+{
+	new t = get_user_team(id)
+	if (teams_off() || (t != 1 && t != 2))
+		return -1.0
+	new g = g_SawGunsRound[t] == g_Round ? g_SawGuns[t] : 0
+	new bot = to && is_user_connected(to) && get_user_team(to) == t && can_answer(to, id) && !g_WasBusy[to] ? to : pick_mate(id, I_SEEN, 0)
+	if (!bot)
+		return 0.0
+	trace_bot(bot)
+	if (random_float(0.0, 1.0) > (to ? 0.92 : 0.8))
+		return 0.0
+	answer(bot, (g & 1) ? "r_theirs_awp" : (g & 2) ? "r_theirs_rifles" : (g & 4) ? "r_theirs_eco" : "r_theirs_unknown", id, true, extra)
+	trace_add(g_TrDecision, charsmax(g_TrDecision), "theirs")
+	return 2.0
 }
 
 // What one part of a line asks ("money?", "cover me", "go b"), I_NONE if nothing this handles
@@ -5703,6 +6363,24 @@ clause_intent(id, const c[], &arg, place[], plen)
 		return I_KYS
 	if (bomb && (q || word_in(c, "where") || word_in(c, "wheres") || word_in(c, "who") || word_in(c, "has") || word_in(c, "got")))
 		return I_BOMB
+	// "someone buy me an awp", "can u buy me an ak"
+	static const BUYME[][] = { "buy me", "buy for me", "someone buy", "anyone buy", "can you buy", "could you buy", "please buy",
+		"pls buy", "buy one for me", "get me an", "get me a" }
+	if (any_in(c, BUYME, sizeof BUYME) && (arg = gun_asked(c)) != 0 && arg != ITEM_KIT)
+		return I_BUYFOR
+	arg = 0
+	// a buy call ("eco", "lets force", "full buy"); asked ("eco?") it's about the money
+	if (!q)
+	{
+		new b = buy_call(c)
+		if (b >= 0)
+		{
+			arg = b
+			return I_BUYCALL
+		}
+	}
+	if (q && (phrase_is(c, "eco") || phrase_is(c, "save") || phrase_is(c, "force") || phrase_is(c, "buy")))
+		return I_MONEY
 	// money
 	if ((word_in(c, "money") || word_in(c, "cash") || word_in(c, "$") || word_in(c, "how rich")) && !word_in(c, "save")
 		&& !word_in(c, "eco") && !word_in(c, "need") && !word_in(c, "i have") && !word_in(c, "im") && !word_in(c, "no money")
@@ -5731,6 +6409,12 @@ clause_intent(id, const c[], &arg, place[], plen)
 		"how many terrorists", "how many still", "how many more" }
 	if (any_in(c, LEFT, sizeof LEFT) || (q && (phrase_is(c, "how many") || phrase_is(c, "left"))))
 		return I_LEFT
+	// what the other side has
+	static const THEIRS[][] = { "what do they have", "what guns do they", "what are they buying", "what did they buy", "what they got",
+		"what have they got", "they eco", "are they eco", "is it eco", "they saving", "are they saving", "they have an awp",
+		"do they have", "they got an awp", "their guns", "they buy", "are they rich", "they broke", "they poor" }
+	if (any_in(c, THEIRS, sizeof THEIRS))
+		return I_THEIRS
 	// where
 	if (word_in(c, "where") || word_in(c, "wheres"))
 	{
@@ -5774,13 +6458,69 @@ clause_intent(id, const c[], &arg, place[], plen)
 		arg = (word_in(c, "spam") || word_in(c, "teabag") || word_in(c, "tbag") || word_in(c, "updown")) ? 1 : 0
 		return I_CROUCH
 	}
-	// go somewhere
-	if (goto_target(c, arg, place, plen))
+	// a grenade asked for ("flash for me", "smoke mid", "nade them")
+	new kind = util_kind(c)
+	if (kind)
+	{
+		new probe[160], spot
+		formatex(probe, charsmax(probe), "go %s", c)
+		if (!goto_target(probe, spot, place, plen) || spot == SPOT_HOST)
+		{
+			spot = SPOT_THERE
+			place[0] = 0
+		}
+		arg = spot | (kind << 4)
+		return I_UTIL
+	}
+	// a fake ("fake b", "fake a then b")
+	if ((lead_word(c, "fake") || word_in(c, "fake it") || word_in(c, "lets fake")) && (site_named(c, "a") || site_named(c, "b")))
+	{
+		new ia = contain(c, " a"), ib = contain(c, " b")
+		// (the site named first is the one faked)
+		arg = (ia != -1 && (ib == -1 || ia < ib)) ? SPOT_A : SPOT_B
+		if (!site_named(c, "a"))
+			arg = SPOT_B
+		else if (!site_named(c, "b"))
+			arg = SPOT_A
+		return I_FAKE
+	}
+	// "go defuse" (a CT, the bomb down)
+	static const DEFUSES[][] = { "defuse", "go defuse", "defuse it", "def it", "tap it", "stick it", "get the defuse", "go for the defuse",
+		"defuse pls", "defuse please", "ill cover you", "i cover you", "go def" }
+	if (g_BombPlanted && get_user_team(id) == 2 && !q && any_in(c, DEFUSES, sizeof DEFUSES) && !word_in(c, "kit") && !word_in(c, "defuser"))
+		return I_DEFUSE
+	// "fall back", "watch flank"
+	static const BACK[][] = { "fall back", "back up", "pull back", "retreat", "go back", "get back", "back off", "everyone back" }
+	if (any_in(c, BACK, sizeof BACK) && !word_in(c, "back me") && !word_in(c, "my back"))
+	{
+		arg = SPOT_BACK
 		return I_GOTO
+	}
+	static const FLANK[][] = { "watch flank", "cover flank", "watch the flank", "watch our back", "watch behind", "watch our flank",
+		"hold flank", "someone flank", "check flank", "watch our six", "watch the back" }
+	if (any_in(c, FLANK, sizeof FLANK) || phrase_is(c, "flank"))
+	{
+		arg = SPOT_FLANK
+		return I_GOTO
+	}
+	// what they saw ("two long", "they are b"), before "go" ("they are rushing b" isn't an order)
+	if (info_said(id, c, arg, place, plen))
+		return I_INFO
+	arg = 0
+	place[0] = 0
+	// go somewhere (slowly, said so: walking)
+	if (goto_target(c, arg, place, plen))
+	{
+		static const SLOW[][] = { "slow", "slowly", "walk", "walking", "quiet", "quietly", "sneak", "shift", "silent" }
+		if (any_in(c, SLOW, sizeof SLOW))
+			arg |= SPOT_WALK
+		return I_GOTO
+	}
 	arg = 0
 	// tag along
 	static const FOLLOW[][] = { "follow me", "cover me", "come with me", "stick with me", "go with me", "back me up",
-		"escort me", "stay with me", "guard me", "watch my back", "cover my back", "stick together", "bodyguard me", "tag along" }
+		"escort me", "stay with me", "guard me", "watch my back", "cover my back", "stick together", "bodyguard me", "tag along",
+		"trade me", "trade frag me", "peek with me", "push with me", "entry with me", "swing with me", "on me", "group up", "with me" }
 	// ("follow", "cover", "with me" on their own; not "thanks for the cover")
 	if (any_in(c, FOLLOW, sizeof FOLLOW) || (words <= 3 && (lead_word(c, "follow") || lead_word(c, "cover") || phrase_is(c, "with me"))
 		&& !word_in(c, "nice") && !word_in(c, "thanks")))
@@ -5887,8 +6627,9 @@ bool:heard_intents(id, const msg[], to, bool:team, bool:typed)
 	new Float:now = get_gametime()
 	for (new b = 1; b <= MaxClients; b++)
 		g_WasBusy[b] = is_user_connected(b) && is_user_bot(b) && named_busy(b, now)
-	static const INAME[][] = { "none", "money", "gun", "whohas", "hp", "left", "seen", "whereyou", "bomb", "sure",
-		"drop", "release", "follow", "hold", "goto", "come", "spray", "jump", "crouch", "kys", "plant", "givebomb" }
+	static const INAME[][] = { "none", "money", "gun", "whohas", "hp", "left", "seen", "whereyou", "bomb", "sure", "theirs", "info",
+		"drop", "release", "follow", "hold", "goto", "come", "spray", "jump", "crouch", "kys", "plant", "givebomb",
+		"buycall", "util", "fake", "defuse", "buyfor" }
 	new Float:extra = 0.0, handled
 	for (new k = 0; k < n; k++)
 	{
@@ -5900,6 +6641,17 @@ bool:heard_intents(id, const msg[], to, bool:team, bool:typed)
 			continue
 		trace_add(g_TrIntents, charsmax(g_TrIntents), INAME[it])
 		new Float:most = -1.0
+		// a callout is for the whole team, whoever's named
+		if (it == I_INFO)
+		{
+			most = info_heard(id, args[k], places[k], team, extra)
+			if (most >= 0.0)
+			{
+				handled++
+				extra += most
+			}
+			continue
+		}
 		if (!ntargets[k])
 			most = it >= I_DROP ? request(id, def, it, args[k], places[k], team, typed, extra) : question(id, def, it, args[k], extra)
 		for (new t = 0; t < ntargets[k]; t++)
@@ -6027,6 +6779,8 @@ Float:question(id, to, it, arg, Float:extra)
 			return 1.5
 		return 0.0
 	}
+	if (it == I_THEIRS)
+		return theirs_heard(id, to, extra)
 	static const SEC[][] = { "", "r_money", "r_gun", "r_whohas_me", "r_hp", "r_left", "r_where", "r_whereme", "r_bomb" }
 	static const Float:CHANCE[] = { 0.0, 0.75, 0.7, 0.85, 0.75, 0.6, 0.7, 0.75, 0.65 }
 	new Float:chance = CHANCE[it]
@@ -6241,6 +6995,46 @@ bool:site_from_name(ent, k)
 	return false
 }
 
+// A place of more than one word: each telling word of it is that place, as long as no other
+// place has the word too ("long a": "long"; "upper tunnel" and "lower tunnel": not "tunnel")
+place_words(const place[])
+{
+	if (contain(place, " ") == -1)
+		return
+	static const PLAIN[][] = { "upper", "lower", "spawn", "side", "the", "back", "front", "top", "bottom", "middle", "inner",
+		"outer", "near", "far", "left", "right", "small", "big" }
+	new word[24], i, k
+	while (place[i])
+	{
+		while (place[i] == ' ')
+			i++
+		k = 0
+		while (place[i] && place[i] != ' ')
+		{
+			if (k < 23)
+				word[k++] = place[i]
+			i++
+		}
+		word[k] = 0
+		if (k < 3)
+			continue
+		new bool:plain
+		for (new p = 0; p < sizeof PLAIN; p++)
+			if (equal(word, PLAIN[p]))
+				plain = true
+		if (plain)
+			continue
+		new had[32]
+		if (TrieGetString(g_PlaceWord, word, had, charsmax(had)))
+		{
+			if (had[0] && !equal(had, place))
+				TrieSetString(g_PlaceWord, word, "")
+		}
+		else
+			TrieSetString(g_PlaceWord, word, place)
+	}
+}
+
 // The nav names a place a site ("BombsiteA" -> "a"): the site nearest where someone stood in it
 // is that letter (and on a two-site map, the other one the other letter)
 place_learned(const place[], const Float:at[3])
@@ -6341,6 +7135,60 @@ bool:req_target(human, spot, const place[], Float:out[3], label[], len)
 				return false
 			pev(human, pev_origin, out)
 			return true
+		}
+		case SPOT_BACK:
+		{
+			copy(label, len, "back")
+			new t = get_user_team(human)
+			if (t == 1 && g_HaveT)
+				out = g_SpawnT
+			else if (t == 2 && g_HaveCT)
+				out = g_SpawnCT
+			else
+				return false
+			return true
+		}
+		case SPOT_FLANK:
+		{
+			copy(label, len, "flank")
+			new t = get_user_team(human)
+			if (!is_user_alive(human) || (t == 1 && !g_HaveT) || (t == 2 && !g_HaveCT) || (t != 1 && t != 2))
+				return false
+			new Float:ho[3], Float:dir[3], Float:p[3]
+			pev(human, pev_origin, ho)
+			for (new i = 0; i < 2; i++)
+				dir[i] = (t == 1 ? g_SpawnT[i] : g_SpawnCT[i]) - ho[i]
+			new Float:l = floatmax(floatsqroot(dir[0] * dir[0] + dir[1] * dir[1]), 1.0)
+			// (a few distances back the way they came, a little to either side; none free: by them)
+			static const Float:DIST[] = { 350.0, 250.0, 450.0, 180.0 }
+			static const Float:SIDE[] = { 0.0, 0.35, -0.35 }
+			for (new d = 0; d < sizeof DIST; d++)
+				for (new e = 0; e < sizeof SIDE; e++)
+				{
+					p[0] = ho[0] + (dir[0] / l - dir[1] / l * SIDE[e]) * DIST[d]
+					p[1] = ho[1] + (dir[1] / l + dir[0] / l * SIDE[e]) * DIST[d]
+					p[2] = ho[2] + 32.0
+					if (walkable_near(p, ho, out))
+						return true
+				}
+			out = ho
+			return true
+		}
+		case SPOT_BOMB:
+		{
+			copy(label, len, "bomb")
+			new ent = -1
+			while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", "grenade")) > 0)
+			{
+				new model[32]
+				pev(ent, pev_model, model, charsmax(model))
+				if (contain(model, "c4") != -1)
+				{
+					pev(ent, pev_origin, out)
+					return true
+				}
+			}
+			return false
 		}
 	}
 	return false
@@ -6553,6 +7401,10 @@ req_clear(bot)
 {
 	g_ReqAct[bot] = g_ReqFor[bot] = g_ReqPrevFor[bot] = 0
 	g_ReqWaitLive[bot] = false
+	g_ReqWalk[bot] = false
+	g_ReqFakeTo[bot] = 0
+	remove_task(TASK_FAKE + bot)
+	remove_task(TASK_UTIL + bot)
 	remove_task(TASK_REQ + bot)
 	remove_task(TASK_REQCHECK + bot)
 	remove_task(TASK_REQLIVE + bot)
@@ -6582,8 +7434,9 @@ req_do(bot, human, it, arg)
 		// "go b": it holds the spot a while once there (longer in a match); "come here" just comes
 		// (bc: a person's order, which the game's bot keeps through a fight; an unreachable spot it
 		// turns down, and the check below says "cant rn")
-		case I_GOTO: server_cmd("ls_bot %d goto %.0f %.0f %.0f 0 %d bc", bot, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2],
-			match_like() ? random_num(20, 30) : random_num(8, 15))
+		// (at the bomb it doesn't hold: its own brain defuses; walking when asked to)
+		case I_GOTO: server_cmd("ls_bot %d goto %.0f %.0f %.0f %d %d bc", bot, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2],
+			g_ReqWalk[bot] ? 1 : 0, g_ReqArg[bot] == SPOT_BOMB ? 0 : match_like() ? random_num(20, 30) : random_num(8, 15))
 		case I_COME: server_cmd("ls_bot %d goto %.0f %.0f %.0f 0 0 bc", bot, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2])
 		case I_JUMP: server_cmd("ls_bot %d jump %d %.2f", bot, arg, random_float(0.65, 0.95))
 		case I_CROUCH:
@@ -6757,6 +7610,14 @@ req_took(bot, bool:ok)
 			// "go hostages": a CT goes to get them, a T guards them
 			else if (it == I_GOTO && g_ReqArg[bot] == SPOT_HOST)
 				copy(sec, charsmax(sec), get_user_team(bot) == 2 ? "r_req_host_ct" : "r_req_host_t")
+			else if (it == I_GOTO && g_ReqFakeTo[bot])
+				copy(sec, charsmax(sec), "r_req_fake")
+			else if (it == I_GOTO && g_ReqArg[bot] == SPOT_FLANK)
+				copy(sec, charsmax(sec), "r_req_flank")
+			else if (it == I_GOTO && g_ReqArg[bot] == SPOT_BACK)
+				copy(sec, charsmax(sec), "r_req_back")
+			else if (it == I_GOTO && g_ReqArg[bot] == SPOT_BOMB)
+				copy(sec, charsmax(sec), "r_req_defuse")
 			else
 				req_section(it, sec, charsmax(sec))
 			answer(bot, sec, human, team, 0.0)
@@ -6985,6 +7846,26 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 	}
 	if (it == I_RELEASE)
 		return release_for(id, to, extra)
+	if (it == I_BUYCALL)
+		return buy_heard(id, to, arg, extra)
+	if (it == I_BUYFOR)
+		return buyfor_heard(id, to, arg, extra)
+	if (it == I_UTIL)
+		return util_heard(id, to, arg, place, extra)
+	// a fake: going to the site faked, then over to the other one; "go defuse": to the bomb
+	new fakeTo = 0
+	if (it == I_FAKE)
+	{
+		fakeTo = arg == SPOT_A ? SPOT_B : SPOT_A
+		it = I_GOTO
+	}
+	else if (it == I_DEFUSE)
+	{
+		it = I_GOTO
+		arg = SPOT_BOMB
+	}
+	new bool:walk = it == I_GOTO && (arg & SPOT_WALK) != 0
+	arg &= ~SPOT_WALK
 	new bool:fun = fun_request(it)
 	// free for all: no teammates to ask, only the silly things, of someone named
 	if (teams_off() && !fun)
@@ -6993,7 +7874,7 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 			answer(to, "r_req_mode", id, false, extra)
 		return to ? 1.5 : 0.0
 	}
-	new bot = to, done[6], nd
+	new bot = to, done[33], nd
 	// one who can't see it (alive, and they're dead with alltalk off) never heard it
 	if (bot && !can_answer(bot, id))
 		return 0.0
@@ -7034,6 +7915,7 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 	if (res == REQ_YES)
 	{
 		req_set(bot, id, it, arg, place, team, say, !g_WasBusy[bot], 1)
+		req_extras(bot, walk, fakeTo)
 		// in freeze time it all waits for the round (it buys first): "k" now; on a map with guns
 		// on the floor, going somewhere waits until it has one
 		if (armoury_wait(bot, it))
@@ -7055,11 +7937,22 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 	else if (section[0] && !g_WasBusy[bot] && (res == REQ_BUSY ? say && random_num(0, 1) == 1 : say || to))
 		answer(bot, section, id, !teams_off(), extra)
 	g_CtxSite[0] = 0
-	// "go b" or "wait" to the team: in a match that's the call and the rest go too; on a pub
-	// one more might
-	if (!to && (it == I_GOTO || it == I_HOLD))
+	// said to the team, not to one: "go b" is a call the whole team hears, and each decides for
+	// itself (in a match nearly all go; on a pub some do, a lurker may not); "wait" is for the
+	// ones close by; "follow me", "come here" maybe one more. The first one being busy doesn't
+	// stop the rest, and if it didn't take it, the first that does may say so
+	if (!to && (it == I_GOTO || it == I_HOLD || it == I_FOLLOW || it == I_COME))
 	{
-		new more = match_like() ? 4 : (random_float(0.0, 1.0) < 0.4 ? 1 : 0)
+		// (a call to the team: every teammate hears it and decides for itself)
+		new more = (it == I_GOTO || it == I_HOLD) ? 31 : (random_float(0.0, 1.0) < 0.35 ? 1 : 0)
+		// (one watches the flank, one goes for the defuse; "fall back" is for the ones close by)
+		if (it == I_GOTO && (arg == SPOT_FLANK || arg == SPOT_BOMB))
+			more = 0
+		new bool:near = it == I_HOLD || (it == I_GOTO && arg == SPOT_BACK)
+		new bool:acked = res == REQ_YES && say
+		new Float:ho[3], bool:halive = bool:is_user_alive(id)
+		if (halive)
+			pev(id, pev_origin, ho)
 		done[nd++] = bot
 		for (new k = 0; k < more; k++)
 		{
@@ -7067,13 +7960,28 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 			if (!other)
 				break
 			done[nd++] = other
+			if (near && halive)
+			{
+				new Float:oo[3]
+				pev(other, pev_origin, oo)
+				if (get_distance_f(ho, oo) > 1200.0)
+					break
+			}
+			// (on a pub not everyone listens: a lurker or roamer often does its own thing, a
+			// rusher or objective player is happy to go)
+			if (it == I_GOTO && !match_like() && random_float(0.0, 1.0) < ignores_calls(other))
+				continue
 			new sec2[24]
 			// (not all on the same spot: each a little to the side)
 			if (it == I_GOTO)
 				spread_spot(g_ReqTo[bot], g_ReqTo[other])
 			if (req_decide(other, id, it, false, sec2, charsmax(sec2)) != REQ_YES)
 				continue
-			req_set(other, id, it, arg, place, team, false, false, 1)
+			new bool:sayit = !acked && !g_WasBusy[other] && random_float(0.0, 1.0) < 0.6
+			if (sayit)
+				acked = true
+			req_set(other, id, it, arg, place, team, sayit, false, 1)
+			req_extras(other, walk, fakeTo)
 			if (armoury_wait(other, it))
 			{
 				g_ReqWaitLive[other] = true
@@ -7477,7 +8385,7 @@ heard_line(id, const said[], bool:team, bool:typed)
 	if (!msg[0] || msg[0] == '/' || msg[0] == '!')
 		return
 	// nobody else saw it (muted or filtered), so no bot answers it
-	if (typed && LibraryExists("gm_community", LibType_Library) && gm_chat_blocked(id, msg))
+	if (LibraryExists("gm_community", LibType_Library) && (typed ? gm_chat_blocked(id, msg) != 0 : (!g_NoVoiceBlocked && gm_voice_blocked(id, msg) != 0)))
 		return
 	copy(g_HumanMsg, charsmax(g_HumanMsg), msg)
 	hist_add(id, msg, team ? get_user_team(id) : 0)
