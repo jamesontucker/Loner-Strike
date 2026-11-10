@@ -18,10 +18,10 @@ const GAMES: Record<string, string> = { cstrike: "Counter-Strike", czero: "Condi
 const PINGS = [0, 50, 100, 150, 250];
 const NO_FILTERS: Filters = { game: "", map: "", people: false, notFull: false, noPassword: false, ping: 0 };
 const EMPTY: Record<Tab, string> = {
-  internet: "No servers are on the list right now. Host one under Servers and turn on On the server list in its settings.",
+  internet: `No servers are on the list right now. Host one under Servers and turn on "On the Loner-Strike server list" on its Overview tab.`,
   favorites: "No favorites yet. Add a server by its address, or pick one in another tab and press Add to favorites.",
   history: "Servers you join from here show up here.",
-  lan: "No games found on your network.",
+  lan: "No games found on your network. Check the game is running on the other computer and that you're both on the same Wi-Fi, then click Refresh all.",
 };
 
 const humans = (i: Info) => i.players - i.bots;
@@ -190,7 +190,7 @@ export function ServerBrowser() {
                     <span className="c-players" role="gridcell" title={i ? `${humans(i)} ${humans(i) === 1 ? "person" : "people"} of ${i.max_players} slots` : undefined}>{i ? `${humans(i)} / ${i.max_players}` : ""}</span>
                     <span className="c-bots" role="gridcell">{i ? i.bots : ""}</span>
                     <span className="c-map" role="gridcell">{i?.map ?? ""}</span>
-                    <span className="c-ping" role="gridcell">{r.answered && r.ping !== null ? r.ping : r.answered ? "" : "Not answering"}</span>
+                    <span className="c-ping" role="gridcell">{r.answered && r.ping !== null ? `${r.ping} ms` : r.answered ? "" : "Not answering"}</span>
                     {tab === "history" && <span className="c-last" role="gridcell">{r.last_played ? ago(r.last_played) : ""}</span>}
                   </div>
                 );
@@ -253,7 +253,7 @@ function FilterBar({ filters, setFilters }: { filters: Filters; setFilters: (f: 
       <label className="field">
         <span>Latency</span>
         <select value={filters.ping} onChange={(e) => set({ ping: Number(e.target.value) })}>
-          {PINGS.map((p) => <option key={p} value={p}>{p ? `Less than ${p}` : "All"}</option>)}
+          {PINGS.map((p) => <option key={p} value={p}>{p ? `Less than ${p} ms` : "All"}</option>)}
         </select>
       </label>
       <div className="browser-checks">
@@ -294,7 +294,7 @@ function ServerInfo({ address, row, onClose, onConnect, joining, onFresh }: { ad
           {info && <div><dt>Map</dt><dd>{info.map}</dd></div>}
           {info && <div><dt>Players</dt><dd>{humans(info)} / {info.max_players}</dd></div>}
           {info && <div><dt>Bots</dt><dd>{info.bots}</dd></div>}
-          {d?.ping !== undefined && <div><dt>Latency</dt><dd>{d.ping}</dd></div>}
+          {d?.ping !== undefined && <div><dt>Latency</dt><dd>{d.ping} ms</dd></div>}
           {info && <div><dt>Valve Anti-Cheat</dt><dd>{info.secure ? "Secure" : "Not secure"}</dd></div>}
         </dl>
         <div className="browser-table">

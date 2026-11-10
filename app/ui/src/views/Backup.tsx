@@ -27,7 +27,7 @@ const PART_NOTE: Record<string, string> = {
   content: "Maps, models and sounds you added, round music and skins, and the GameBanana downloads. For your game, maps you copied in yourself are only told apart from Valve's when a server here has Valve's files to compare with",
   mods: "The modes and add-ons installed",
 };
-const PREFS_NOTE = "Checking for updates when the app starts, keeping servers running when the app closes, join and helper notifications, and Smarter chat. Not phone access, which game is picked, or folders: those belong to this computer.";
+const PREFS_NOTE = "Checking for updates when the app starts, keeping servers running when the app closes, and join and helper notifications. Not phone access, which game is picked, or folders: those belong to this computer.";
 const PASSWORDS_NOTE = "The console (RCON) password, the join password, the HLTV spectator password, Discord webhooks, the website status tunnel token, and passwords in settings files (rcon_password and sv_password in server.cfg, admins' passwords in users.ini). They're locked with the password you pick here, and asked for when restoring.";
 /** The player's own compiled plugins: code, so only restored when they say so. */
 const PLUGIN_CODE_NOTE = "Compiled plugins (.amxx) run inside the server, and anyone could have made or changed this file. Only tick this if you made the backup yourself or trust whoever did. Left unticked, their source (.sma) still comes back, and you can build them again on the Mods page.";
@@ -171,7 +171,7 @@ export function BackupSheet({ only, scope = "all", onClose }: { only?: string[];
             </ul>
             {saved.app_prefs && <p className="muted small-note">App preferences included.</p>}
             {saved.skipped?.length ? <ul className="plain-list err-text">{saved.skipped.map((n) => <li key={n}>{n}</li>)}</ul> : null}
-            <p className="muted measure">Keep it somewhere safe, like a USB stick or cloud storage. To bring it back: Settings, Backup & restore (or a server's own Restore).</p>
+            <p className="muted measure">Keep it somewhere safe, like a USB stick or cloud storage. To bring it back: Servers, Restore a backup, or Settings, Backup & restore.</p>
             <div className="row"><button className="btn primary" onClick={onClose}>Done</button></div>
           </>
         ) : (
@@ -275,7 +275,7 @@ function PrefsBack({ file, prefs }: { file: string; prefs: AppPrefs }) {
         {done ? <span className="muted small-note">Put back</span> : <BusyButton className="btn small" busy={working} label="Put them back" busyLabel="Putting back…" onClick={put} />}
       </div>
       <p className="muted small-note">
-        Check for updates when the app starts: {onOff(!prefs.manual_updates)} · Keep servers running when the app closes: {onOff(prefs.keep_servers)} · Join notifications: {onOff(!prefs.mute_joins)} · Helper notifications: {prefs.mute_helpers == null ? "unchanged" : onOff(!prefs.mute_helpers)} · Smarter chat: {onOff(prefs.smart_chat)}
+        Check for updates when the app starts: {onOff(!prefs.manual_updates)} · Keep servers running when the app closes: {onOff(prefs.keep_servers)} · Join notifications: {onOff(!prefs.mute_joins)} · Helper notifications: {prefs.mute_helpers == null ? "unchanged" : onOff(!prefs.mute_helpers)}
       </p>
       {done?.map((n) => <p key={n} className="small-note">{n}</p>)}
     </div>
@@ -363,11 +363,13 @@ export function RestoreSheet({ to, scope = "all", servers, onClose, onChanged }:
         ? "Pick a machine."
         : where === "server" && !over.some((s) => s.id === server)
           ? "Pick a server."
-          : where === "game" && !games.includes(src.game)
-            ? `${GAME[src.game]} isn't installed on this computer.`
-            : src.secrets && !src.secrets_kept && !skipSecrets && !pw
-              ? "Type the backup's password, or restore without the passwords."
-              : "";
+          : where === "server" && over.find((s) => s.id === server)?.state === "running"
+            ? "Stop it first."
+            : where === "game" && !games.includes(src.game)
+              ? `${GAME[src.game]} isn't installed on this computer.`
+              : src.secrets && !src.secrets_kept && !skipSecrets && !pw
+                ? "Type the backup's password, or restore without the passwords."
+                : "";
   const restore = async () => {
     if (!src) return;
     if ((where === "server" || where === "game") && !(await ask(`Restore over ${targetName}? Its settings${partSet.has("mods") ? ", mods" : ""} and files are replaced with the ones in the backup. A copy of its settings and your own files is saved first, so you can undo it (maps and skins from GameBanana come back as downloads).`, { ok: "Restore over it", danger: true }))) return;
@@ -393,7 +395,7 @@ export function RestoreSheet({ to, scope = "all", servers, onClose, onChanged }:
       <div className="sheet-body">
         <h2>Restore a backup</h2>
         {running ? (
-          <JobProgress title="Restoring…" remote={where === "new-remote"} onEnd={finished} />
+          <JobProgress title="Restoring…" long={where === "new-remote"} onEnd={finished} />
         ) : ended ? (
           <>
             <p>{ended.ok ? "Done." : "The restore stopped part way."}</p>
@@ -476,7 +478,6 @@ export function RestoreSheet({ to, scope = "all", servers, onClose, onChanged }:
                       <option value="">Pick one</option>
                       {over.map((s) => <option key={s.id} value={s.id}>{s.name}{s.host ? ` (on ${s.host})` : ""}</option>)}
                     </select>
-                    <small>Stop it first.</small>
                   </label>
                 )}
                 {src.source === "game" && where !== "game" && <p className="muted small-note">It's a backup of a game, so the server keeps its own name, slots and start options.</p>}
@@ -495,7 +496,7 @@ export function RestoreSheet({ to, scope = "all", servers, onClose, onChanged }:
                       <input type="checkbox" checked={updateMods} disabled={starting} onChange={(e) => setUpdateMods(e.target.checked)} />
                       <span>
                         Update mods to this version of Loner-Strike
-                        <Info text={`${src.app_version && info?.app_version && src.app_version !== info.app_version ? `This backup was made with ${src.app_version}. ` : ""}Mods from an older version get this version's fixes and patches after they're put back; their settings stay. Without it they're left as they were, and Update all on the page updates them later.`} />
+                        <Info text={`${src.app_version && info?.app_version && src.app_version !== info.app_version ? `This backup was made with ${src.app_version}. ` : ""}Mods from an older version get this version's fixes and patches after they're put back; their settings stay. Without it they're left as they were, and update by themselves later (or with Update now on the servers list).`} />
                       </span>
                     </label>
                   )}

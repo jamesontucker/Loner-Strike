@@ -195,7 +195,7 @@ fn download_from(from: &str, url: &str, sha: Option<&str>, what: &str, p: &dyn P
         if !sha256(&tmp).map(|h| h.eq_ignore_ascii_case(s)).unwrap_or(false) {
             let _ = std::fs::remove_file(&tmp);
             return Err(format!(
-                "The download of {what} isn't the file Loner-Strike was tested with (it changed upstream), so setup stopped to keep your game safe."
+                "The download of {what} isn't the file Loner-Strike was tested with, so setup stopped to keep your game safe. Check for a Loner-Strike update in Settings, or try again later."
             ));
         }
     }
@@ -222,7 +222,7 @@ pub fn unpack(archive_path: &Path, dest: &Path) -> Result<PathBuf, String> {
     let mut magic = [0u8; 6];
     let n = std::fs::File::open(archive_path).and_then(|mut f| f.read(&mut magic)).map_err(|e| e.to_string())?;
     let magic = &magic[..n];
-    let bad = |e: String| format!("Couldn't unpack a download ({e}). Try again; if it keeps happening, clear Loner-Strike's download cache.");
+    let bad = |e: String| format!("Couldn't unpack a download ({e}). Try again. If it keeps happening, clear Downloads under Settings, Storage.");
     let open = || std::fs::File::open(archive_path).map(std::io::BufReader::new).map_err(|e| bad(e.to_string()));
     if magic.starts_with(b"PK\x03\x04") || magic.starts_with(b"PK\x05\x06") {
         unzip(archive_path, dest).map_err(bad)?;

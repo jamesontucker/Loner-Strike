@@ -323,7 +323,7 @@ function StatsTab({ d, setD }: { d: Data; setD: SetData }) {
       ) : (
         <>
           {s.reset_pending && <p className="panel cm-note">Stats clear when the map changes. Until then the old ones show here.</p>}
-          {!s.csx && <NeedsSetup className="panel cm-note" text="Stats need the CSX module, which AMX Mod X includes, and this game doesn't have it." />}
+          {!s.csx && <NeedsSetup className="panel cm-note" text="Stats need AMX Mod X's stats module, and this game is missing it." />}
           <input className="search full" type="search" placeholder="Search names or SteamIDs" value={q} onChange={(e) => (setQ(e.target.value), setShown(PAGE))} aria-label="Search players" />
           <div className="row cm-sort">
             <span className="muted">Sort by<Info text="Rank is the order /rank and /top15 use: kills minus deaths and team kills. HS is the share of kills that were headshots, Acc. the share of shots that hit." /></span>
@@ -739,7 +739,7 @@ function ModTab({ d, setD, reload, onDirty }: { d: Data; setD: SetData; reload: 
         <ShareList list="filter" onShared={() => { setDraft(null); reload(); }} />
         <div className="settings">
           <div className="setting">
-            <span className="name">When someone swears<Info text="Star it out still sends the message, with the word hidden behind stars. Don't send it drops the whole message and tells the sender why." /><span className="note">{words.length ? `${words.length} ${words.length === 1 ? "word" : "words"} on the list.` : "Add words below first."}</span></span>
+            <span className="name">When someone swears<Info text="Star it out still sends the message, with the word hidden behind stars. Don't send it drops the whole message and tells the sender why." /><span className="note">{words.length ? `${words.length} ${words.length === 1 ? "word" : "words"} on the list.` : "Add words below first."}{sharedRole() === "moderator" && ` ${OWNER_ONLY}`}</span></span>
             <div className="seg" role="group" aria-label="When someone swears">
               {([["off", "Nothing"], ["replace", "Star it out"], ["block", "Don't send it"]] as [FilterMode, string][]).map(([m, l]) => (
                 <button key={m} type="button" aria-pressed={d.settings.filter === m} disabled={busy(settingKey({ filter: m })) || sharedRole() === "moderator"} onClick={() => save({ filter: m })}>{l}</button>
@@ -800,11 +800,13 @@ function Glyph({ d }: { d: string }) {
   );
 }
 
+const OWNER_ONLY = "Only the server's owner and admins can change this.";
+
 function Toggle({ label, note, on, set, busy }: { label: string; note: ReactNode; on: boolean; set: (v: boolean) => void; busy?: boolean }) {
   return (
     <div className="setting">
-      <span className="name">{label}<span className="note">{note}</span></span>
       {/* a Moderator sees the settings; the owner and Admins change them */}
+      <span className="name">{label}<span className="note">{note}{sharedRole() === "moderator" && ` ${OWNER_ONLY}`}</span></span>
       <Switch on={on} onChange={set} label={label} disabled={busy || sharedRole() === "moderator"} />
     </div>
   );

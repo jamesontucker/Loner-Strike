@@ -42,7 +42,7 @@ export function ModeVoteList({ data }: { data: Online }) {
     <div className="modevote">
       <h3>
         Modes in the vote
-        <Info text="Players pick from these when they rock the vote and at the end of a map. Up to four show each time, the ones players nominated first. A mode that needs its own maps, like Deathrun or Base Builder, is left out while no map for it is installed." />
+        <Info text="Players pick from these when they rock the vote (type rtv in chat) and at the end of a map. Up to four show each time, the ones players nominated first. A mode that needs its own maps, like Deathrun or Base Builder, is left out while no map for it is installed." />
         {working && (
           <span className="muted small-note">
             {" "}

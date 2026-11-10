@@ -176,7 +176,7 @@ pub fn probe(r: &RemoteInfo) -> Result<(String, bool, String), String> {
 /// Is this really the machine? Its key must match what this computer's SSH has on
 /// record for it (~/.ssh/known_hosts) and what the app saved the first time.
 fn check_identity(s: &Session, r: &RemoteInfo) -> Result<(), String> {
-    const CHANGED: &str = "The server's identity has changed since this computer last connected, so the app won't connect. If you rebuilt the machine, remove its line from ~/.ssh/known_hosts and add the server again; otherwise someone may be intercepting the connection.";
+    const CHANGED: &str = "The server's identity has changed since this computer last connected, so the app won't connect. If you rebuilt the machine, run ssh-keygen -R with its address, then delete this server in Loner-Strike and make it again with New server. Otherwise don't connect: someone may be intercepting the connection.";
     let (key, _) = s.host_key().ok_or("The server didn't identify itself.")?;
     if let Some(kh) = dirs::home_dir().and_then(|home| known_hosts(s, &home)) {
         if let ssh2::CheckResult::Mismatch = kh.check_port(&r.host, r.ssh_port, key) {
@@ -694,10 +694,10 @@ BASE="$HOME/loner-strike"; SRV="$HOME/$SRVDIR"; G="$GAME"
 [ "$(uname -m)" = x86_64 ] || fail "This machine is $(uname -m). The Counter-Strike server only runs on x86 (AMD or Intel) machines."
 # root on an image without sudo: run the commands directly
 [ "$(id -u)" = 0 ] && ! command -v sudo >/dev/null && sudo() { [ "$1" = -n ] && shift; "$@"; }
-sudo -n true 2>/dev/null || fail "The user $(whoami) can't use sudo without a password, which setup needs."
+sudo -n true 2>/dev/null || fail "The user $(whoami) can't use sudo without a password, which setup needs. Use the root user instead, or give this user sudo without a password."
 
 step packages
-command -v apt-get >/dev/null || fail "Only Ubuntu and Debian are supported for now."
+command -v apt-get >/dev/null || fail "Only Ubuntu and Debian are supported. Reinstall the machine with Ubuntu 24.04 at your provider."
 # a machine that just booted is often still setting itself up and installing updates:
 # wait for that instead of failing on apt's lock. No questions asked (sudo drops the
 # environment, so it goes through env), and nothing may read this script from stdin.

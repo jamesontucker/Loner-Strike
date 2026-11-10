@@ -190,6 +190,12 @@ export function Radio() {
     setAnnounce(`${STATIONS[next].name}, ${STATIONS[next].desc.toLowerCase()}`);
     if (wasOn) play(next);
   };
+  // picking one from the list plays it, even when the radio was stopped
+  const pick = (next: number) => {
+    const wasOn = stateRef.current === "playing" || stateRef.current === "connecting";
+    tuneTo(next);
+    if (!wasOn) play(next);
+  };
   const tune = (step: number) => tuneTo((at + step + STATIONS.length) % STATIONS.length);
   // any station but this one
   const shuffle = () => tuneTo((at + 1 + Math.floor(Math.random() * (STATIONS.length - 1))) % STATIONS.length);
@@ -293,7 +299,13 @@ export function Radio() {
   useEffect(() => {
     if (!open) return;
     requestAnimationFrame(() => playRef.current?.focus());
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    // not when a dialog is open over the app, or when focus is somewhere else on the page
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.getElementById("root")?.hasAttribute("inert")) return;
+      const at = document.activeElement;
+      if (at && at !== document.body && !panel.current?.contains(at) && !document.getElementById("radio-button")?.contains(at)) return;
+      close();
+    };
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
       if (!useRadioStore.getState().pinned && !panel.current?.contains(t) && !document.getElementById("radio-button")?.contains(t)) useRadioStore.getState().close();
@@ -351,7 +363,7 @@ export function Radio() {
         <ol id="radio-list" className="radio-list">
           {STATIONS.map((s, i) => (
             <li key={s.name}>
-              <button type="button" aria-current={i === at ? "true" : undefined} onClick={() => tuneTo(i)}>
+              <button type="button" aria-current={i === at ? "true" : undefined} onClick={() => pick(i)}>
                 <span>{i + 1}. {s.name}</span>
                 <small>{s.desc}</small>
               </button>

@@ -35,7 +35,7 @@ const TROUBLE: { q: string; a: string; match?: RegExp }[] = [
   { q: "Couldn't reach it on port 22", a: "The machine is off, the address is wrong, or (on Oracle) it has no public IP.", match: /couldn't reach \S+ on port|couldn't find \S+\. check the address|can't reach (?!the app)|port 22|timed out|connection to .*(failed|dropped)|couldn't connect to/i },
   { q: "The server didn't accept the key", a: "Wrong user (ubuntu or root), the key wasn't added when the machine was made, or you picked the .pub file.", match: /didn't accept the key|key file/i },
   { q: "The key has a passphrase", a: "Not supported yet. Make a key without one and add its .pub line to ~/.ssh/authorized_keys on the machine.", match: /passphrase/i },
-  { q: "The server's identity has changed", a: "Expected if you rebuilt the machine: run ssh-keygen -R with its address, then delete the server here and add it again. Otherwise, don't connect.", match: /identity has changed/i },
+  { q: "The server's identity has changed", a: "If you rebuilt the machine, run ssh-keygen -R with its address, then delete this server in Loner-Strike and make it again with New server. Otherwise don't connect: someone may be intercepting the connection.", match: /identity has changed/i },
   { q: "The machine is aarch64", a: "It's an Arm machine. Make an x86 (AMD or Intel) one.", match: /aarch64|arm64|only runs on x86/i },
   { q: "Setup stopped part way", a: "Try again carries on where it stopped. Wipe and rebuild deletes the server's folder on the machine and starts over." },
 ];
@@ -68,7 +68,8 @@ export function HostingGuide() {
       <p className="muted measure">
         Loner-Strike can set up an always-on server on a Linux machine you rent. It connects over SSH, installs Valve's server and Loner-Strike there and runs it as a
         service that keeps going when your computer is off. You need Ubuntu or Debian on an x86 (AMD or Intel) machine with a public IPv4 address. Arm machines (Oracle
-        Ampere, AWS Graviton, Hetzner CAX, Raspberry Pi) can't run the game server.
+        Ampere, AWS Graviton, Hetzner CAX, Raspberry Pi) can't run the game server. The same guide, with each provider's steps, is in 
+        <a href="https://lonerstrike.com/docs#vps" target="_blank" rel="noreferrer">the docs</a>.
       </p>
 
       <div className="panel">
@@ -142,7 +143,7 @@ export function HostingGuide() {
           <li>Make the server.</li>
         </ol>
         <p className="muted measure">
-          Setup takes 5 to 15 minutes; keep Loner-Strike open until it finishes. The first server runs on UDP 27015 as a service called <code>lonerstrike-&lt;name&gt;</code>, keeps running with the app closed and
+          Setup takes 5 to 15 minutes; keep Loner-Strike open until it finishes. The first server runs on UDP 27015 as a service called <code>lonerstrike-</code> plus the server's short name (<code>lsctl list</code> shows it), keeps running with the app closed and
           restarts after a crash or a reboot.
         </p>
       </div>

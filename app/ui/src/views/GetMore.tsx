@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { addFromFile, getJson, isAbort, ON_THIS_COMPUTER, isSharedId, postJson, targetKey, useActions, usePoll, useStable } from "../api";
+import { useAppInfo, useGameState, useMaps } from "../queries";
+import { useNav } from "../store";
+import { usePlayDrafts } from "../stores/playDraft";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
 import { BusyButton, LoadError, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
@@ -44,6 +47,16 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
   const { run, busy } = useActions();
   const key = (what: string) => `getmore:${targetKey()}:${what}`;
   const seenDone = useRef(new Set<string>());
+  // a downloaded map can go straight into Play's Start a game form (your own game, not running)
+  const allMaps = useMaps().data;
+  const gameId = useAppInfo().data?.game?.id;
+  const live = !!useGameState().state?.online;
+  const startMap = open && !server && !live && gameId && section === "maps" && open.installed ? allMaps?.find((m) => m.mod === open.id && !m.hidden)?.name : undefined;
+  const startOn = (name: string) => {
+    if (gameId) usePlayDrafts.getState().set(gameId, { map: name });
+    setOpen(null);
+    useNav.getState().go("play");
+  };
   const cats = sections.find((s) => s[0] === section)?.[2] ?? [];
 
   // only the newest browse request may fill the grid (searches and tabs change fast)
@@ -280,7 +293,8 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
             <p className="gb-text">{open.text}</p>
             {open.installed ? (
               <div className="banner">
-                <div>Installed.</div>
+                <div>Installed.{ON_THIS_COMPUTER ? "" : " Remove it on the computer."}</div>
+                {startMap && <button className="btn primary" onClick={() => startOn(startMap)}>Start a game on {startMap}</button>}
                 {ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={busy(removeKey(section, open.id))} label="Remove" busyLabel="Removing…" onClick={() => remove(open.id, open.name)} />}
               </div>
             ) : (
@@ -378,6 +392,8 @@ function InstalledList({ onChanged, server, only, empty = "Nothing downloaded ye
   if (!list) return <Skeleton />;
   if (!list.length) return <p className="muted">{empty}</p>;
   return (
+    <>
+    {!ON_THIS_COMPUTER && <p className="muted small-note">To remove one, use the computer.</p>}
     <ul className="people installed-list">
       {list.map((it) => (
         <li key={`${it.section}:${it.mod}`}>
@@ -407,6 +423,7 @@ function InstalledList({ onChanged, server, only, empty = "Nothing downloaded ye
         </li>
       ))}
     </ul>
+    </>
   );
 }
 

@@ -28,14 +28,16 @@ function transferText(label: string, t: Transfer) {
 
 /** The setup job's progress. A failed job stays on screen with why it stopped until
  *  Close (and Try again, when the caller can start it again). */
-export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, remote }: {
+export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, long, server }: {
   onEnd: (ok: boolean) => void;
   onClose?: () => void;
   onRetry?: () => void;
   /** what it's doing, e.g. "Updating Valve's server files…" */
   title?: string;
-  /** on another machine: setup there takes 5 to 15 minutes */
-  remote?: boolean;
+  /** setting up a machine (setup, Wipe and rebuild): it takes 5 to 15 minutes */
+  long?: boolean;
+  /** the server this bar is for: another server's job isn't this one */
+  server?: string;
 }) {
   const onEnd = useStable(onEndProp);
   const q = useSetupJob();
@@ -46,7 +48,10 @@ export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, remote 
   const [lost, setLost] = useState(false);
   const [opened] = useState(() => Date.now());
   const [, tick] = useState(0);
-  const data = q.isFetchedAfterMount ? q.data : undefined;
+  const fetched = q.isFetchedAfterMount ? q.data : undefined;
+  // (a job that doesn't say which server it's for counts for any)
+  const jobServer = (fetched as { server?: string } | undefined)?.server;
+  const data = fetched && (!server || !jobServer || jobServer === server) ? fetched : undefined;
   const job = data && (data.state === "running" || seen.current || (data.state !== "idle" && data.id !== startId)) ? data : null;
   if (job) seen.current = true;
   const over = !!job && (job.state === "done" || job.state === "error");
@@ -96,7 +101,7 @@ export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, remote 
   const under = transfer && now ? transferText(now.label, transfer) : uploading && !now?.detail ? "Big batches take a few minutes." : "";
   const foot = failed
     ? ""
-    : [steps.length > 1 && n > 0 ? `Step ${n} of ${steps.length}` : "", `${clock(elapsed)} so far`, remote ? "usually 5 to 15 minutes" : ""].filter(Boolean).join(" · ");
+    : [steps.length > 1 && n > 0 ? `Step ${n} of ${steps.length}` : "", `${clock(elapsed)} so far`, long ? "usually 5 to 15 minutes" : ""].filter(Boolean).join(" · ");
   const name = title ?? (job?.kind === "server" ? "Setting up the server…" : "Installing…");
   return (
     <div className="job-progress">

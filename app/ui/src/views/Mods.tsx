@@ -110,7 +110,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
       const what = id ? name ?? id : remove ? `Loner-Strike from ${where}` : "the basics";
       if (!j) toast("Lost track of it. Reload this page to see if it finished.", true);
       else if (j.state === "done" && !id && again) toast(`Repaired.${running || !game.dedicated ? " Restart the game so it loads." : ""}`);
-      else if (j.state === "done") toast(`${remove ? "Removed" : again ? "Reinstalled" : "Installed"} ${what}${running ? ". It changes on the next map." : ""}`);
+      else if (j.state === "done") toast(`${remove ? "Removed" : again ? "Reinstalled" : "Installed"} ${what}${running ? ". It loads on the next map." : ""}`);
       else toast(j.error || (remove ? `Couldn't remove ${what}.` : `Couldn't install ${what}.`), true);
       onChanged();
     }, label);
@@ -154,7 +154,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
       {!setUp ? (
         <div className="panel">
           <h3>Loner-Strike isn't on {where} yet</h3>
-          <p className="muted measure">The basics come first: Metamod-P, AMX Mod X, ReGameDLL and the Game Mode Menu, with the built-in modes. Then add whatever you like below.</p>
+          <p className="muted measure">The basics come first: the bots, the Game Mode Menu and the built-in modes. Then add whatever you like below.</p>
           {ON_THIS_COMPUTER && (
             <div className="row">
               <BusyButton className="btn primary" busy={busy === "core:install"} disabled={!!busy} label="Install the basics" busyLabel="Installing…" onClick={() => change(null, false)} />
@@ -217,7 +217,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup }
         <div className="panel row between">
           <div>
             <b>Repair Loner-Strike</b>
-            <p className="muted">No bots, or the app can't connect? This puts Metamod, AMX Mod X, the bot brain and the menu back in {where}. Your settings and mods stay.</p>
+            <p className="muted">No bots, or the app can't connect? This puts the bots, the Game Mode Menu and what they run on back in {where}. Your settings and mods stay.</p>
           </div>
           <BusyButton className="btn" busy={busy === "core:repair"} disabled={!!busy} label="Repair" busyLabel="Repairing…" onClick={() => change(null, false, undefined, true)} />
         </div>

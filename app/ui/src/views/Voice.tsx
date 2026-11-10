@@ -88,6 +88,9 @@ export function Voice({ server }: { server: ServerInfo }) {
         title="Bot voice commands"
         note={'The bots hear what people say on voice chat and answer, the same way as typed team chat: "rush b", "two long", "flash for me", "someone buy me an AWP".'}
       />
+      <p className="muted small-note">
+        <a href="https://lonerstrike.com/docs#voice" target="_blank" rel="noreferrer">How voice commands work</a>, and <a href="https://lonerstrike.com/docs#voice-not-working" target="_blank" rel="noreferrer">what to check</a> if the bots don't react.
+      </p>
       <div className="panel">
         <p className="muted">
           Speech is turned into text on {st.remote ? "the server's machine" : "this computer"} and given to the bots. No audio is kept or sent

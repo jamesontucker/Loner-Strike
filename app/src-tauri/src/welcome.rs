@@ -62,13 +62,13 @@ fn save(data: &Path, req: &Save) -> Result<(), String> {
     }
     let url = req.url.trim();
     if req.style == "url" && !(url.starts_with("http://") || url.starts_with("https://")) {
-        return Err("Enter a web address starting with https://".into());
+        return Err("Enter a web address that starts with https://.".into());
     }
     if url.len() > 200 || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
         return Err("That web address doesn't look right.".into());
     }
     if req.html.len() > MAX_HTML {
-        return Err(format!("The page is {} characters; the game only shows about {MAX_HTML}.", req.html.len()));
+        return Err(format!("The page is {} bytes, and the game only shows {MAX_HTML}. Trim it, or host it as a web page.", req.html.len()));
     }
     if req.style == "custom" && req.html.trim().is_empty() {
         return Err("Write the page first, or pick the built-in one.".into());

@@ -12,7 +12,7 @@ const NOTES: Record<string, string> = {
   bot_profile_db: "Takes effect on the next map",
   gm_bot_weapons: "What bots buy and use",
   gm_weapons: "Restricts buying and hands out the gun",
-  sv_airaccelerate: "Surf / bhop for surf maps",
+  sv_airaccelerate: "Lets players steer in mid-air. Surf maps need it",
   gm_hb_reaction: "Bots wait a human reaction time before shooting",
   gm_hb_aim: "Flicks that overshoot, aim wobble, sprays in bursts",
   gm_hb_mistakes: "The odd whiffed shot, late reaction or panic spray",
@@ -23,7 +23,7 @@ const NOTES: Record<string, string> = {
   gm_hb_tilt: "A bad run makes most bots sloppier (some careful); outnumbered or low on health, some panic",
   gm_hb_afk: "Now and then a bot is a moment slow to move at round start, and the odd regular one stands still a few seconds (not in deathmatch or matches)",
   gm_hb_sprays: "Bots spray the Loner-Strike logo now and then, after respawning in deathmatch too",
-  gm_hb_disrespect: "Insults and teabagging: crouch spam over someone they killed. Off by default, and off whatever the lobby mood. A friendly lobby is never rude",
+  gm_hb_disrespect: "Insults and teabagging (crouch spam over someone they killed). Stays off until you turn it on, and a Friendly lobby is never rude even then",
   gm_mood: "How the lobby gets along. Toxic brings rage, tilt and hack accusations, and with Bots can be rude on, trash talk and teabagging too. Friendly is warm and polite",
   gm_hb_showoff: "Now and then after a kill: a jump or the knife out, and crouch spam if bots can be rude (never in a match)",
   gm_bf_weapons: "Flicking between weapons, the silencer off and on, the scope in and out, reloading a nearly full gun",
@@ -347,7 +347,8 @@ export function SettingsPage({
 }
 
 /** Restart / end the round / more time, for the Rules page. */
-export function MatchButtons({ refresh }: { refresh: () => void }) {
+export function MatchButtons({ refresh, data }: { refresh: () => void; data?: Online }) {
+  const mode = data ? modeName(data) : "this mode";
   const ask = useConfirm();
   const run = useCommand(refresh);
   const { run: act, busy } = useActions();
@@ -363,7 +364,7 @@ export function MatchButtons({ refresh }: { refresh: () => void }) {
         busy={busy(key("reset"))}
         label="Reset this mode's settings"
         busyLabel="Resetting…"
-        onClick={async () => (await ask("Reset every match and fun setting for this mode to its defaults?", { ok: "Reset", danger: true })) && act(key("reset"), () => run("gm_match", ["reset"]), "Resetting this mode's settings…")}
+        onClick={async () => (await ask(`Reset ${mode}'s own settings to their defaults? That includes its rules, fun settings and its own bot settings. Settings shared by every mode stay.`, { ok: "Reset", danger: true })) && act(key("reset"), () => run("gm_match", ["reset"]), "Resetting this mode's settings…")}
       />
     </div>
   );

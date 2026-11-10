@@ -234,7 +234,8 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
   } else if (method === "direct") {
     // a server with a public address (a home server's dynamic DNS name, say) shares that
     address = directHere && direct?.address ? (mine?.public_address ? serverAddress(mine) : direct.address) : "";
-    live = !!address;
+    // a shared address (carrier-grade NAT) can't be reached from outside, open port or not
+    live = !!address && !direct?.shared_address;
     steps = (
       <ol className="steps">
         <li className={direct?.on ? "done" : "now"}>
@@ -287,7 +288,8 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
           {sh.connected && (isLive || (sh.phase === "starting" && !playitElsewhere)
             ? <BusyButton className="btn danger" busy={busy("stop")} disabled={busy("start")} label="Stop sharing" busyLabel="Stopping…" onClick={() => act("stop")} />
             : <BusyButton className="btn primary" busy={busy("start")} disabled={busy("stop")} label="Start sharing" busyLabel="Starting…" onClick={() => act("start")} />)}
-          {sh.error && <p className="err-text">{sh.error}</p>}
+          {/* still picking an address while starting is a wait, not a fault (sharing.rs read_tunnel) */}
+          {sh.error && <p className={sh.phase === "starting" && sh.error.startsWith("playit.gg is still picking") ? "muted" : "err-text"}>{sh.error}</p>}
         </li>
       </ol>
     );
@@ -399,7 +401,12 @@ export function Friends({ data, refresh, server }: { data: Online | null; refres
         ))}
       </div>
       <div className="friends">
-        <div>{steps}</div>
+        <div>
+          {steps}
+          <p className="muted small-note">
+            Friends can't get in? <a href="https://lonerstrike.com/docs#friends-cant-join" target="_blank" rel="noreferrer">What to check</a>.
+          </p>
+        </div>
         <div className="stack">
           {yourServer}
 

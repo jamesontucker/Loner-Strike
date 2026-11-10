@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ControlRoute } from "./ShareControl";
 import { copyText, getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
-import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useToast } from "../ui";
+import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { useDirty } from "../store";
 
 type Mode = "caddy" | "tunnel";
@@ -55,6 +55,7 @@ const originList = (text: string) => text.split(/[\s,]+/).map((o) => o.trim()).f
  *  the host's own site, and an optional visit counter. */
 export function WebStatus({ server }: { server: ServerInfo }) {
   const toast = useToast();
+  const ask = useConfirm();
   const { run, busy } = useActions();
   const [st, setSt] = useState<Status | null>(null);
   const [form, setForm] = useState<Form | null>(null);
@@ -132,14 +133,15 @@ export function WebStatus({ server }: { server: ServerInfo }) {
         return;
       }
       markDirty(false);
-      if (r.port_moved && form.mode === "tunnel") toast(`The status service moved to port ${r.port}. In Cloudflare, point the hostname at http://localhost:${r.port}.`, true);
+      if (r.port_moved && form.mode === "tunnel") toast(`The status page moved to port ${r.port}. In Cloudflare, point the hostname at http://localhost:${r.port}.`, true);
       else toast(again ? "The status page is updated" : form.mode === "caddy" ? "The status page is set up. The HTTPS certificate can take a minute." : "The status page is set up");
       load();
     }, again ? `Updating the status page on ${server.name}…` : `Setting up the status page on ${server.name}…`);
   };
-  const turnOff = () => {
+  const turnOff = async () => {
     if (!form || !st || working) return;
-    run(key("off"), async () => {
+    if (!(await ask("Turn off the status page? Fast downloads, the Discord messages and Shared control for helpers stop working too.", { ok: "Turn it off", danger: true }))) return;
+    return run(key("off"), async () => {
       // only turns it off: edits not saved yet stay in the form, unsaved
       const s = st.settings;
       const r = await post(`/api/servers/${server.id}/webstatus`, { enabled: false, domain: s.domain, origins: s.origins, counter: s.counter, mode: s.mode, fastdl: s.fastdl });
@@ -159,7 +161,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
   }
 
   const saved = st.settings;
-  const domain = form.domain.trim().toLowerCase() || "your status address";
+  const domain = form.domain.trim().toLowerCase() || "your status page address";
   const tunnel = form.mode === "tunnel";
   const usesExisting = tunnel && st.existing_tunnel === "running" && !st.own_tunnel;
   const service = `http://localhost:${st.port}`;
@@ -192,11 +194,11 @@ export function WebStatus({ server }: { server: ServerInfo }) {
               </dl>
               <Health id={server.id} />
               <div className="hltv-addresses">
-                {st.status_url && <CopyRow label="Status address" value={st.status_url} />}
+                {st.status_url && <CopyRow label="Status page address" value={st.status_url} />}
                 {st.visit_url && <CopyRow label="Visit counter address" value={st.visit_url} />}
                 {saved.fastdl && st.fastdl_url && <CopyRow label="Fast downloads" value={st.fastdl_url} />}
                 <p className="muted small-note">
-                  Paste the status address where your site asks for it.{st.visit_url ? " The counter address goes where it asks for a visit counter." : ""}
+                  Paste the status page address where your site asks for it.{st.visit_url ? " The counter address goes where it asks for a visit counter." : ""}
                 </p>
               </div>
             </>
@@ -254,7 +256,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
           ) : (
             <div className="hltv-addresses">
               {st.existing_tunnel === "stopped" && (
-                <p className="err-text small-note">There's a Cloudflare Tunnel on this machine, but it isn't running. Start it with sudo systemctl start cloudflared, or paste a token below for a new one.</p>
+                <p className="err-text small-note">There's a Cloudflare Tunnel on this machine, but it isn't running. Start it again over SSH with sudo systemctl start cloudflared, or paste a token below to make a new one.</p>
               )}
               <ol className="muted small-note">
                 <li>In Cloudflare, open Zero Trust, then Networks, then Tunnels, and create a tunnel of type Cloudflared.</li>
@@ -290,7 +292,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
             <span>Discord<Info text="Uses Discord webhooks: in a channel's settings, open Integrations, then Webhooks, make one and copy its URL. Kept on this computer and on the server, readable only by their administrators. Not shown again after it's saved." /></span>
             <small>
               Keeps a message in a channel up to date with who's playing, and posts when people come on to play, at most once an hour.
-              {!st.discord.address && " Set a public address for the server first, so the messages can say how to join."}
+              {!st.discord.address && " Set a Public address for the server first (Overview, Settings), so the messages can say how to join."}
             </small>
           </div>
           <HookField label="Live status message" what="the channel for the live message" reveal={() => secret("live")} saved={st.discord.live} value={form.live} drop={form.drop.live} disabled={working} onChange={(v) => set({ live: v })} onDrop={(d) => set({ drop: { ...form.drop, live: d } })} />

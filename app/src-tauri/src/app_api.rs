@@ -157,7 +157,7 @@ pub fn start_phone(st: &Shared) {
     let listener = match std::net::TcpListener::bind(("0.0.0.0", PHONE_PORT)) {
         Ok(l) => l,
         Err(_) => {
-            phone.error = Some(format!("Port {PHONE_PORT} is busy. Close the old phone panel if it's running, then try again."));
+            phone.error = Some(format!("Another program is using port {PHONE_PORT}, maybe a second copy of Loner-Strike. Quit it, then turn Phone access off and on again."));
             return;
         }
     };
@@ -800,14 +800,30 @@ async fn api_remove_everything(State(st): State<Shared>, headers: HeaderMap) -> 
     })
     .await
     .unwrap_or_else(|_| json!({"error": "Loner-Strike hit an internal error part way. Some things may be left."}));
-    if r.get("ok").is_some() {
-        // a moment for the reply to reach the page, then quit without saving anything again
-        std::thread::spawn(|| {
-            std::thread::sleep(std::time::Duration::from_millis(1500));
-            std::process::exit(0);
-        });
+    // with nothing left over the app quits by itself; otherwise the page lists what's left
+    // and quits when the player has seen it (api_quit_after_remove)
+    let clean = r.get("failed").and_then(|f| f.as_array()).is_some_and(|f| f.is_empty());
+    if r.get("ok").is_some() && clean {
+        quit_soon();
     }
     (StatusCode::OK, Json(r))
+}
+
+/// A moment for the reply to reach the page, then quit without saving anything again.
+fn quit_soon() {
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        std::process::exit(0);
+    });
+}
+
+/// Quit after Remove everything left some things to delete by hand.
+async fn api_quit_after_remove(headers: HeaderMap) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    quit_soon();
+    (StatusCode::OK, Json(json!({"ok": true})))
 }
 
 /// What a removal leaves in a game folder on purpose (so setting up again keeps it):
@@ -839,6 +855,7 @@ fn clear_game_leftovers(game_dir: &Path) -> Vec<String> {
 pub fn local_routes() -> Router<Shared> {
     Router::new()
         .route("/api/app/remove-everything", post(api_remove_everything))
+        .route("/api/app/remove-everything/quit", post(api_quit_after_remove))
         .route("/api/app/update/install", post(api_update_install))
         .route("/api/app/game", post(api_use_game))
         .route("/api/app/restart", post(api_restart))

@@ -88,7 +88,7 @@ new const SETTINGS[][SettingData] =
 	{ "gm_hb_habits",       "Bots play in character", "1 0",               "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_tilt",         "Bots tilt & panic", "1 0",                     "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_showoff",      "Bots show off",    "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
-	{ "gm_hb_afk",          "Bots go afk",      "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
+	{ "gm_hb_afk",          "Bots go AFK",      "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_sprays",       "Bots spray",       "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_radio",        "Bots use the radio", "1 0",                    "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_hb_disrespect",   "Bots can be rude", "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },

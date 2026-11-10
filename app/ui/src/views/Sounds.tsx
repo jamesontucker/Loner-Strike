@@ -243,7 +243,7 @@ export function Sounds({ target }: { target: string }) {
   const toMods = !ON_THIS_COMPUTER
     ? <p className="muted">{SETUP_ON_COMPUTER}</p>
     : target === "local"
-      ? <div className="row"><button className="btn" onClick={() => go("mods")}>Run full setup in Mods</button></div>
+      ? <div className="row"><button className="btn" onClick={() => go("mods")}>Set it up in Mods</button></div>
       : null;
 
   return (

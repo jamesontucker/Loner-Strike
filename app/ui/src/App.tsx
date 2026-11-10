@@ -48,7 +48,7 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "admins", label: "Admins", icon: "admins" },
   { id: "community", label: "Stats & moderation", icon: "stats" },
   { id: "welcome", label: "Welcome page", icon: "welcome" },
-  { id: "extras", label: "Rotation & rules", icon: "extras" },
+  { id: "extras", label: "Rotation & extras", icon: "extras" },
   { id: "more", label: "Get more", icon: "more", group: "Library" },
   { id: "mods", label: "Mods", icon: "mods" },
   { id: "sounds", label: "Sounds", icon: "sound" },
@@ -145,9 +145,11 @@ function Shell() {
         // same key as Settings' Check now button, so it shows there too
         await once("app:update:check", async () => {
           const r = await postJson<{ available?: boolean; version?: string; error?: string }>("/api/app/update/check").catch((): { available?: boolean; version?: string; error?: string } => ({ error: "Couldn't check for updates." }));
-          noteUpdateChecked();
           if (r.error) toast(r.error, true);
-          else toast(r.available ? `Loner-Strike ${r.version} is out. Install it from Settings.` : "You're on the latest version.");
+          else {
+            noteUpdateChecked();
+            toast(r.available ? `Loner-Strike ${r.version} is out. Install it from Settings.` : "You're on the latest version.");
+          }
           reloadAppInfo();
         }, "Checking for updates…");
       }
@@ -367,6 +369,8 @@ function Shell() {
           {app?.version && <span> · v{app.version}</span>}
           <div className="made-by">
             by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a>
+            <span aria-hidden="true"> · </span>
+            <a href="https://lonerstrike.com/docs" target="_blank" rel="noreferrer">Docs</a>
           </div>
         </div>
       </aside>
@@ -403,7 +407,7 @@ function Shell() {
               {section === "bots" && online && <Bots data={online} refresh={refresh} />}
               {section === "match" && online && (
                 <SettingsPage title="Rules" note={RULES_NOTE(online)} data={online} cat={2} refresh={refresh} pickMode>
-                  <MatchButtons refresh={refresh} />
+                  <MatchButtons refresh={refresh} data={online} />
                 </SettingsPage>
               )}
               {section === "fun" && online && <SettingsPage title="Fun & effects" note={FUN_NOTE(online)} data={online} cat={3} refresh={refresh} pickMode />}
@@ -617,13 +621,13 @@ function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { da
             : server
               ? `${server} isn't running`
               : app?.game
-                ? `${gameTitle(app.game.id)} ${gameOpen ? "is open, but no game is loaded" : "isn't running"}`
+                ? `${gameTitle(app.game.id)} ${gameOpen ? "is open, but not hosting a game" : "isn't running"}`
                 : reason}
         </div>
         <div className="strip-actions">
           {ON_THIS_COMPUTER && <RadioButton />}
           <Working />
-          <span className={`live${lost ? " off-line" : ""}`}>{lost ? "Can't reach it" : "Offline"}</span>
+          <span className={`live${lost ? " off-line" : ""}`}>{lost ? "Can't reach it" : gameOpen ? "Not hosting" : "Not running"}</span>
         </div>
         <Working phone />
       </header>
@@ -644,7 +648,7 @@ function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { da
           </div>
         </div>
       </div>
-      <div className="score" aria-label="Kills by team">
+      <div className="score" aria-label="Kills by team" title="Kills by team">
         <span className="t">{score("T")}</span>
         <span className="vs">:</span>
         <span className="ct">{score("CT")}</span>
@@ -667,7 +671,7 @@ function Waiting({ label, game, gameOpen, reason, onPlay, setUp, openSetup }: { 
         <>
           <p className="muted">
             {gameOpen
-              ? `This works in a game you host. ${game} is open, but no map is loaded: start a game from its New Game menu, or quit it and start one from Play.`
+              ? `This works in a game you host. ${game} is open, but not hosting a game: start a game from its New Game menu, or ${ON_THIS_COMPUTER ? "pick one on Play and Loner-Strike restarts it" : "close it on the computer and start one from Play"}.`
               : "This works in a game you host. Start one from Play and this page fills in."}
           </p>
           {/* the plain "nothing loaded" reason only repeats the line above */}

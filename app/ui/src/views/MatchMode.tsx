@@ -88,6 +88,7 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
   const [error, setError] = useState("");
   const { run, busy: isBusy } = useActions();
   const key = (what: string) => `matchmode:${target}:${what}`;
+  const local = target === "local";
   // one match action at a time
   const busy = useActivity().some(([k]) => k.startsWith(key("act:")));
   const loading = useRef(false);
@@ -161,9 +162,9 @@ export function MatchMode({ target = "local" }: { target?: string } = {}) {
   return (
     <div className="stack narrow match">
       {!d.installed && (
-        <NeedsSetup className="panel match-note" text="This game doesn't have Match mode yet." after="Your settings here are kept until then." />
+        <NeedsSetup className="panel match-note" text={`${local ? "This game" : "This server"} doesn't have Match mode yet.`} after="Your settings here are kept until then." />
       )}
-      <Now d={d} busy={busy} acting={(a) => isBusy(key(`act:${a}`))} act={act} switchMode={switchMode} />
+      <Now d={d} local={local} busy={busy} acting={(a) => isBusy(key(`act:${a}`))} act={act} switchMode={switchMode} />
       <MatchSettings s={d.settings} save={save} target={target} />
       <History matches={d.matches} />
       <section>
@@ -193,7 +194,7 @@ const ACTING: Record<string, string> = {
 /** The confirm button for an action that asks first. */
 const CONFIRM_OK: Record<string, string> = { restart: "Restart match", warmup: "Stop match" };
 
-function Now({ d, busy, acting, act, switchMode }: { d: Data; busy: boolean; acting: (action: string) => boolean; act: Act; switchMode: () => void }) {
+function Now({ d, local, busy, acting, act, switchMode }: { d: Data; local: boolean; busy: boolean; acting: (action: string) => boolean; act: Act; switchMode: () => void }) {
   const on = d.current_mode === MODE;
   const s = d.status;
   if (!on) {
@@ -214,9 +215,9 @@ function Now({ d, busy, acting, act, switchMode }: { d: Data; busy: boolean; act
       <section>
         <SectionHead title="Now" />
         {d.plugin ? (
-          <p className="panel match-now muted">The game isn't running, or Match mode hasn't answered yet.</p>
+          <p className="panel match-now muted">{local ? "The game isn't running" : "The server isn't running"}, or Match mode hasn't answered yet.</p>
         ) : (
-          <NeedsSetup className="panel match-now" text="This game doesn't have Match mode yet." />
+          <NeedsSetup className="panel match-now" text={`${local ? "This game" : "This server"} doesn't have Match mode yet.`} />
         )}
       </section>
     );

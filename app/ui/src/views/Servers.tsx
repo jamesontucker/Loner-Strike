@@ -34,9 +34,9 @@ const GAME = { cstrike: "Counter-Strike 1.6", czero: "Condition Zero" } as const
 const VISIBILITY = [
   { id: "lan", name: "This network", note: "Only people on your Wi-Fi or LAN" },
   { id: "unlisted", name: "Anyone with the address", note: "Not in Steam's server list" },
-  { id: "listed", name: "Listed on Steam", note: "Shows up in the Internet tab of Find Servers" },
+  { id: "listed", name: "Listed on Steam", note: "In the game's own server browser, for anyone on Steam" },
 ] as const;
-const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up", failed: "Not finished", checking: "Checking…" };
+const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up", failed: "Setup didn't finish", checking: "Checking…" };
 
 /** How long a server on this computer keeps running (the switch's name is in AppSettings). */
 const RUNS_WHILE = "A server on this computer runs while Loner-Strike is open, or after you quit if you switch on Keep running after I close Loner-Strike on its Overview tab.";
@@ -280,7 +280,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
             {s.restart_needs_app && <p className="muted small-note">The daily restart only happens while Loner-Strike is open on this computer.</p>}
             {s.unreachable && s.state !== "setting-up" && <Unreachable s={s} onGuide={ON_THIS_COMPUTER ? openGuide : undefined} />}
             {s.state === "setting-up" ? (
-              <JobProgress remote={!!s.host} onEnd={(ok) => { toast(ok ? `${s.name} is ready` : `Setting up ${s.name} stopped. It says why below.`, !ok); onChanged(); }} />
+              <JobProgress server={s.id} long={!!s.host} onEnd={(ok) => { toast(ok ? `${s.name} is ready` : `Setting up ${s.name} stopped. It says why below.`, !ok); onChanged(); }} />
             ) : s.state === "failed" ? (
               ON_THIS_COMPUTER ? (
                 <div className="row">
@@ -349,7 +349,7 @@ type Tab = "share" | "community" | "voice" | "hltv" | "webstatus" | "extras" | "
 const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: boolean }[] = [
   { id: "overview", label: "Overview", group: "Server" },
   { id: "friends", label: "Play with friends", group: "Server" },
-  { id: "extras", label: "Rotation & rules", group: "Server" },
+  { id: "extras", label: "Rotation & extras", group: "Server" },
   { id: "hltv", label: "Spectators & demos", group: "Server" },
   { id: "webstatus", label: "Website status", group: "Server", remote: true },
   { id: "modes", label: "Modes", group: "Game", live: true },
@@ -587,14 +587,14 @@ export function ServerPage(props: {
 
   // reinstall everything that's on the server, keeping its settings
   const rebuild = async () => {
-    if (!(await ask(`Repair Loner-Strike on ${s.name}? It reinstalls its files; settings, admins and maps stay.`, { ok: "Repair" }))) return;
-    once(`${s.id}:reinstall`, reinstall, `Repairing Loner-Strike on ${s.name}…`);
+    if (!(await ask(`Reinstall Loner-Strike and its mods on ${s.name}? Settings, admins and maps stay.`, { ok: "Reinstall" }))) return;
+    once(`${s.id}:reinstall`, reinstall, `Reinstalling Loner-Strike on ${s.name}…`);
   };
   const reinstall = async () => {
     const components = (app?.game?.installed ?? []).filter((c) => c !== "foundation" && c !== "core");
     const r = await post("/api/setup/install", { hl: s.dir, games: [s.game], components, repair: true });
     if (r.error) return toast(r.error, true);
-    setJob({ title: "Repairing Loner-Strike…", done: `Loner-Strike is repaired on ${s.name}`, retry: reinstall });
+    setJob({ title: "Reinstalling Loner-Strike and its mods…", done: `Loner-Strike and its mods are reinstalled on ${s.name}`, retry: reinstall });
   };
   // a server on another machine: wipe it and set it up again with the same details
   // (same key as the server list's Rebuild, so either shows it's under way)
@@ -703,7 +703,6 @@ export function ServerPage(props: {
       {job && (
         <JobProgress
           title={job.title}
-          remote={!!s.host}
           onEnd={(ok) => { if (ok) setJob(null); toast(ok ? job.done : "That stopped. The bar shows why.", !ok); reloadApp(); onChanged(); }}
           onClose={() => setJob(null)}
           onRetry={job.retry && (() => { const again = job.retry!; setJob(null); again(); })}
@@ -777,6 +776,8 @@ function AddLoner({ server, onDone }: { server: ServerInfo; onDone: () => void }
   const toast = useToast();
   const { run, busy } = useActions();
   const [running, setRunning] = useState(false);
+  // a running server on this computer has its files open: the install is refused
+  const localRunning = !server.host && server.state === "running";
   const install = () => run(`${server.id}:add-loner`, async () => {
     const r = await post("/api/setup/install", { hl: server.dir, games: [server.game], components: [] });
     if (r.error) return toast(r.error, true);
@@ -797,7 +798,10 @@ function AddLoner({ server, onDone }: { server: ServerInfo; onDone: () => void }
   ) : (
     <div className="banner">
       <div>This server doesn't have Loner-Strike yet, so here you can only start it, stop it and manage admins. Add Loner-Strike to get modes, bots and the rest.</div>
-      <BusyButton className="btn primary" busy={busy(`${server.id}:add-loner`)} label="Add Loner-Strike" busyLabel="Adding…" onClick={start} />
+      <div className="row">
+        <BusyButton className="btn primary" busy={busy(`${server.id}:add-loner`)} disabled={localRunning} label="Add Loner-Strike" busyLabel="Adding…" onClick={start} />
+        {localRunning && <span className="muted small-note">Stop the server first.</span>}
+      </div>
     </div>
   );
 }
@@ -916,7 +920,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
           <small>{VISIBILITY.find((v) => v.id === vis)?.note}. {sharedRole ? "" : server.host ? "Friends join with the address shown above: see Play with friends." : "Friends outside your network also need a way in: see Play with friends."}</small>
         </div>
         {!sharedRole && <label className="field">
-          <span>Join password<Info text="Players type this to get in. Leave it empty for no password. It takes effect straight away, and Join in this app uses it for you." /></span>
+          <span>Join password<Info text="Players type this to get in. Leave it empty for no password. It takes effect as soon as you save, and Join in this app uses it for you." /></span>
           <input className="search" disabled={ro} maxLength={24} placeholder="None" value={password} onChange={(e) => setPassword(e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} spellCheck={false} autoComplete="off" />
           <small>Letters, numbers, - and _.</small>
         </label>}
@@ -964,7 +968,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
           <Switch on={keep} disabled={ro} label="Keep running after I close Loner-Strike" onChange={setKeep} />
         </div>}
         {!sharedRole && <div className="setting">
-          <span className="name">On the server list<span className="note">Other Loner-Strike players find it under Find servers and join with a click. It has to be reachable from the internet</span></span>
+          <span className="name">On the Loner-Strike server list<span className="note">Shows in Find servers in Loner-Strike, so other players join with a click. It has to be reachable from the internet</span></span>
           <Switch on={listed} disabled={ro} label="On the Loner-Strike server list" onChange={setListed} />
         </div>}
         {!sharedRole && <details className="advanced">
@@ -1057,11 +1061,12 @@ function CopyMods({ server, others, onStarted }: { server: ServerInfo; others: S
   const source = sources.find((o) => o.id === from) ?? sources[0];
   const have = new Set(server.installed ?? []);
   const missing = (source.installed ?? []).filter((c) => c !== "foundation" && c !== "core" && !have.has(c));
+  // a running server on this computer has its files open: the install is refused
+  const localRunning = !server.host && server.state === "running";
   const copy = () => run(`${server.id}:copy-mods`, async () => {
     if (!missing.length) return toast(`${server.name} already has everything ${source.name} has.`);
     const r = await post("/api/setup/install", { hl: server.dir, games: [server.game], components: missing });
     if (r.error) return toast(r.error, true);
-    toast(`Installing ${missing.length} from ${source.name}…`);
     onStarted(`Copying ${missing.length} mod${missing.length === 1 ? "" : "s"} from ${source.name}…`);
   }, `Copying mods to ${server.name}…`);
   return (
@@ -1073,8 +1078,9 @@ function CopyMods({ server, others, onStarted }: { server: ServerInfo; others: S
           {sources.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
         </select>
         <span className="muted small-note">{missing.length ? `${missing.length} to add` : "Nothing to add"}</span>
-        <BusyButton className="btn" busy={busy(`${server.id}:copy-mods`)} label="Copy mods" busyLabel="Starting…" disabled={!missing.length} onClick={copy} />
+        <BusyButton className="btn" busy={busy(`${server.id}:copy-mods`)} label="Copy mods" busyLabel="Starting…" disabled={!missing.length || localRunning} onClick={copy} />
       </div>
+      {localRunning && missing.length > 0 && <p className="muted small-note">Stop the server first.</p>}
     </div>
   );
 }
@@ -1193,7 +1199,7 @@ function Maintenance({ server, installed, act, rebuild, wipeRebuild, busy }: { s
   return (
     <div className="panel">
       <h3>Maintenance</h3>
-      {server.updating ? <p className="muted">Its Loner-Strike updates are going in now.</p> : running && <p className="muted">Stop the server first to update or repair it.</p>}
+      {server.updating ? <p className="muted">Its Loner-Strike updates are going in now.</p> : running && <p className="muted">Stop the server first to update or {server.host ? "rebuild" : "reinstall"} it.</p>}
       <ul className="upkeep">
         {!server.imported && (
           <li>
@@ -1203,13 +1209,13 @@ function Maintenance({ server, installed, act, rebuild, wipeRebuild, busy }: { s
         )}
         {server.loner && !server.host && (
           <li>
-            <div><b>Repair Loner-Strike</b><p className="muted">Reinstalls Metamod-P, AMX Mod X, ReGameDLL{installed.length > 2 ? ` and the ${installed.length - 2} extra mode${installed.length === 3 ? "" : "s"} and add-ons on it` : " and the built-in modes"}. Fixes a server that won't start or lost its mods. Settings, admins and maps stay.</p></div>
-            <BusyButton className="btn" busy={busy("reinstall")} disabled={running || !!server.updating} label="Repair" busyLabel="Repairing…" onClick={rebuild} />
+            <div><b>Reinstall Loner-Strike and its mods</b><p className="muted">Reinstalls Metamod-P, AMX Mod X, ReGameDLL{installed.length > 2 ? ` and the ${installed.length - 2} extra mode${installed.length === 3 ? "" : "s"} and add-ons on it` : " and the built-in modes"}. Fixes a server that won't start or lost its mods. Settings, admins and maps stay.</p></div>
+            <BusyButton className="btn" busy={busy("reinstall")} disabled={running || !!server.updating} label="Reinstall" busyLabel="Reinstalling…" onClick={rebuild} />
           </li>
         )}
         {server.host && (
           <li>
-            <div><b>Wipe and rebuild</b><p className="muted">Deletes everything in its folder on {server.host} (settings, admins, bans, stats and added maps) and sets it up again like when you made it. For a server that won't start or is badly broken. Takes 5 to 15 minutes.</p></div>
+            <div><b>Wipe and rebuild</b><p className="muted">Try Repair in the Mods tab first. Deletes everything in its folder on {server.host} (settings, admins, bans, stats and added maps) and sets it up again like when you made it. For a server that won't start or is badly broken. Takes 5 to 15 minutes.</p></div>
             <BusyButton className="btn danger" busy={busy("rebuild")} disabled={running || !!server.updating} label="Wipe and rebuild" busyLabel="Wiping…" onClick={wipeRebuild} />
           </li>
         )}
@@ -1280,7 +1286,7 @@ function Console({ server }: { server: ServerInfo }) {
               : "Nothing yet. Start the server to see its console."}
       </pre>
       {failed && shown.length > 0 && <p className="muted small-note">Can't read the console right now. These are the last lines it showed.</p>}
-      {server.shared && <p className="muted small-note">{server.shared.role === "admin" ? "Most commands work. Passwords, keys, running other files, admins and plugins stay with the owner, one command at a time." : "A Moderator's commands: say, kick, ban for up to 7 days, change the map, status. Suggestions show only those."}</p>}
+      {server.shared && <p className="muted small-note">{server.shared.role === "admin" ? "Most commands work, sent one at a time. Passwords, keys, running files, admins and plugins stay with the owner." : "A Moderator's commands: say, kick, ban for up to 7 days, change the map, status. Suggestions show only those."}</p>}
       {ON_THIS_COMPUTER ? (
         <form className="row console-form" onSubmit={(e) => { e.preventDefault(); send(); }}>
           <ConsoleInput serverId={server.id} running={server.state === "running"} value={cmd} onChange={setCmd} />
@@ -1384,13 +1390,13 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
     if (r.error) return setMakeErr(r.error);
     // the setup runs inside the app: closing this window is fine, quitting stops it
     toast(where === "vps"
-      ? `Setting up on ${host}. It takes 5 to 15 minutes; it keeps going if you close this window but not if you quit Loner-Strike.`
-      : "Setting up the server. It takes a few minutes; it keeps going if you close this window but not if you quit Loner-Strike.");
+      ? `Setting up on ${host}. It takes 5 to 15 minutes. Keep Loner-Strike open until it's done.`
+      : "Setting up the server. It takes a few minutes. Keep Loner-Strike open until it's done.");
     onCreated();
   }, where === "vps" ? `Starting the setup on ${host}…` : "Starting the server setup…");
 
   // why Make the server can't be pressed yet
-  const why = where === "vps" && !probe ? "Check the server first." : where === "vps" && probe && !probe.x86 ? "This machine can't run the server." : !name.trim() ? "Give it a name." : "";
+  const why = where === "vps" && !probe ? "Check the machine first." : where === "vps" && probe && !probe.x86 ? "This machine can't run the server." : !name.trim() ? "Give it a name." : "";
   return (
     <Sheet label="New server" onClose={close} className="sheet new-server">
       <div className="sheet-body">
@@ -1413,7 +1419,7 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
             <label className="field">
               <span>User<Info text="The account you log in with over SSH: ubuntu on Oracle and AWS, root on Hetzner, DigitalOcean and Vultr. It needs to be root or able to use sudo." /></span>
               <input className="search" placeholder="ubuntu or root" value={user} onChange={(e) => { setUser(e.target.value.trim()); machineChanged(); }} spellCheck={false} />
-              {user === "root" && <small>Works. The game server then runs as root too; the guide shows how to add a separate user if you'd rather it didn't.</small>}
+              {user === "root" && <small>Works. The game server then runs as root too; the full guide on GitHub shows how to add a separate user if you'd rather it didn't.</small>}
             </label>
             <div className="field">
               <span>SSH key<Info text="The private key you log in with (the file without .pub), usually in the .ssh folder in your home folder. It stays on this computer; the app uses it to connect." /></span>
@@ -1423,11 +1429,11 @@ function NewServer({ servers, games, onClose, onCreated }: { servers: ServerInfo
               </div>
             </div>
             <div className="field">
-              <span>Server's identity<Info text="Every SSH server has a fingerprint. Checking it once makes sure you're connected to your machine and not something pretending to be it; the app then refuses to connect if it ever changes." /></span>
+              <span>Machine's identity<Info text="Every SSH server has a fingerprint. Checking it once makes sure you're connected to your machine and not something pretending to be it; the app then refuses to connect if it ever changes." /></span>
               {!probe ? (
                 <>
                   <div className="row">
-                    <BusyButton className="btn" busy={checking} disabled={!host || !key || !user} label="Check the server" busyLabel="Connecting…" onClick={check} />
+                    <BusyButton className="btn" busy={checking} disabled={!host || !key || !user} label="Check the machine" busyLabel="Connecting…" onClick={check} />
                     {(!host || !key || !user) && <span className="muted small-note">Fill in the address, user and key first.</span>}
                   </div>
                   {checkErr && <ErrorWithFix error={checkErr} />}
@@ -1598,15 +1604,15 @@ const GOOD_PRACTICE: { title: string; points: string[] }[] = [
       "Invite only people you trust, and start them as Moderators: kicking, muting, short bans and changing the map cover most nights.",
       "Make someone an Admin when they need to change settings, modes, maps and restarts. Who can join, passwords, the machine and deleting stay with you.",
       "Look at What people changed now and then; Undo puts settings back and lifts bans. Remove access as soon as someone stops helping, and change the join password if they should stay out.",
-      "Friends reach your app on one TCP port (27030 unless you change it): open it on your router with the button, or use a virtual LAN. Your app has to be open for them.",
+      "Friends reach your app on one TCP port (27030 unless you change it): open it on your router with the button, or use a virtual LAN. Your app has to be open for them. On a Linux server, helpers reach the server itself through Website status, so your computer can be off.",
     ],
   },
   {
     title: "Keep it running smoothly",
     points: [
-      "Back up a server before big changes (Overview, Back up), and keep a copy somewhere else. Settings, Backup & restore saves everything at once.",
+      "Back up a server before big changes (Overview, Back up this server), and keep a copy somewhere else. Settings, Backup & restore saves everything at once.",
       "Bots cost CPU: on a small machine, fewer bots or none while nobody plays (Bots play on an empty server).",
-      "A daily restart keeps a long-running server fresh (Rotation & rules, Schedule).",
+      "A daily restart keeps a long-running server fresh (Rotation & extras, Schedule).",
       "Don't give everyone admin: a few trusted people with the right role beats a crowd with every power.",
     ],
   },

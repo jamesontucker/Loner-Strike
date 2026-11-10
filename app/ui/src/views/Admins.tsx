@@ -5,7 +5,7 @@ import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm,
 import { setAdminList } from "../queries";
 import { NeedsSetup } from "./MatchMode";
 import { ShareList } from "./ShareList";
-import { useDirty } from "../store";
+import { useDirty, useNav } from "../store";
 
 type Role = "owner" | "admin" | "moderator" | "vip";
 type Person = { id: string; name: string; role: Role; expires: string | null; note: string; expired: boolean };
@@ -106,6 +106,8 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
   const editing = draft !== null && JSON.stringify(draft) !== draftBase;
   // leaving the page (or another server tab) asks first
   useDirty("admins-editor", editing);
+  // a dedicated server: the host has no powers there until they add themselves
+  const dedicated = useNav((s) => s.server) !== null;
   const leaveEditor = async () => !editing || (await ask("Leave without saving your changes to this person?", { ok: "Leave without saving", danger: true }));
   const openDraft = async (next: Draft) => {
     if (!(await leaveEditor())) return;
@@ -275,7 +277,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
               </div>
             </li>
           ))}
-          {!people.length && <li className="empty">Nobody yet. As the host you already have every power in your own game.</li>}
+          {!people.length && <li className="empty">{dedicated ? "Nobody yet. Add yourself as Owner to get admin powers on this server." : "Nobody yet. As the host you already have every power in your own game."}</li>}
         </ul>
         <p className="muted small-note">
           People are recognised by their SteamID. Admins open the admin menu with <b>amxmodmenu</b> in the console. When a VIP's time runs out they go back to
@@ -362,14 +364,14 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
                   busy={busy(`unban:${b.value}`)}
                   label="Unban"
                   busyLabel="Unbanning…"
-                  onClick={async () => (await ask(`Unban ${b.value}?`, { ok: "Unban" })) && act(`unban:${b.value}`, () => send("/api/admins/unban", b, "Unbanned"), `Unbanning ${who?.name || b.value}…`)}
+                  onClick={async () => (await ask(`Unban ${who?.name || b.value}?`, { ok: "Unban" })) && act(`unban:${b.value}`, () => send("/api/admins/unban", b, "Unbanned"), `Unbanning ${who?.name || b.value}…`)}
                 />
               </li>
             );
           })}
           {!d.bans.length && <li className="empty">Nobody is banned for good.</li>}
         </ul>
-        <p className="muted small-note">Bans for a set time last until they run out or the game restarts, so they aren't listed here.</p>
+        <p className="muted small-note">Bans for a set time last until they run out or the game restarts, so they aren't listed here. To lift one early, restart the game or server.</p>
       </div>
       )}
 
@@ -437,7 +439,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
           />
         </div>
         <p className="muted small-note">
-          A player counts as their highest role. Bots never get abilities. You, the host, count as an owner only with "You get the perks too" switched on below. Players
+          A player counts as their highest role. Bots never get abilities. You, the host, count as an owner only with "You get the perks too" switched on under VIP & donations. Players
           can say <b>/vip</b> in the game to see what they can use.
         </p>
       </div>

@@ -49,11 +49,13 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
     if (r.error) toast(r.error, true);
     else toast(`Opening ${game}…`);
   }, `Opening ${game}…`);
-  // an open game ignores a new launch, so starting means closing it first (asked)
-  const restart = gameOpen && ON_THIS_COMPUTER;
+  // an open game ignores a new launch, so starting means closing it first (asked here; a
+  // phone can't close it, and the app answers it with what to do)
+  const restart = gameOpen;
+  const closeHere = restart && ON_THIS_COMPUTER;
   const launch = async (map?: string, bots?: number) => {
     if (starting) return;
-    if (restart && !(await ask(`${game} is open at its menu. Close it and start ${map ? `on ${map}` : "the game"}?`, { ok: "Restart and start" }))) return;
+    if (closeHere && !(await ask(`${game} is open (at its menu or on another server). Close it and start ${map ? `on ${map}` : "the game"}?`, { ok: "Restart and start" }))) return;
     // never chosen before: start with the defaults shown, so they're saved like a choice
     const fresh = Object.fromEntries(Object.entries(DEFAULTS).filter(([k]) => !changed[k] && mode?.settings[k] == null));
     const start = mode ? { mode: mode.id, settings: { ...fresh, ...changed } } : {};
@@ -66,7 +68,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
         toast(`Starting ${game}…`);
         startLaunch(t);
       }
-    }, `${restart ? "Restarting" : "Starting"} ${game}${map ? ` on ${map}` : ""}…`);
+    }, `${closeHere ? "Restarting" : "Starting"} ${game}${map ? ` on ${map}` : ""}…`);
   };
   const bots = app?.bots ?? null;
   const modes = opts ? [...opts.modes].sort((a, b) => a.name.localeCompare(b.name)) : [];
@@ -91,7 +93,8 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
             <p className="muted">{SETUP_ON_COMPUTER}</p>
           )}
           <div className="last">
-            Or <button className="link inline" disabled={starting} aria-busy={starting} onClick={() => launch()}>{starting ? "starting…" : overdue ? "still starting? Start again" : `start ${game} without it`}</button>.
+            {overdue ? "Still not open? " : "Or "}
+            <button className="link inline" disabled={starting} aria-busy={starting} onClick={() => launch()}>{starting ? `starting ${game}…` : overdue ? "Start it again" : `start ${game} without it`}</button>.
           </div>
         </div>
       </div>
@@ -125,8 +128,10 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
       <div className="idle-hero">
         <h1>Start a game</h1>
         <p>
-          {gameOpen
-            ? `${game} is open, but no game is loaded. Pick everything here and Loner-Strike restarts it into your game, or start one from its New Game menu.`
+          {gameOpen && !ON_THIS_COMPUTER
+            ? `${game} is open on the computer. Start a game from its New Game menu there, or close it and start one here.`
+            : gameOpen
+            ? `${game} is open, but not hosting a game. Pick everything here and Loner-Strike restarts it into your game, or start one from its New Game menu.`
             : `${game} isn't running. Pick a mode, a map and the bots, and Loner-Strike starts it and connects by itself.`}
         </p>
         <div className="start-box">
@@ -156,8 +161,8 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
           </div>
           {mode && botCount > 0 && (
             <div className="field">
-              <span>Bot skill<Info text="How smart the bots are: how aware they are, their tactics, how they move as a team. Their aim and reactions come from the bot style. Hard suits most bot styles." /></span>
-              <div className="seg" role="group" aria-label="Bot skill">
+              <span>Bot difficulty<Info text="How smart the bots are: how aware they are, their tactics, how they move as a team. Their aim and reactions come from the bot style. Hard suits most bot styles." /></span>
+              <div className="seg" role="group" aria-label="Bot difficulty">
                 {["Easy", "Normal", "Hard", "Expert"].map((l, i) => <button key={l} aria-pressed={value("bot_difficulty") === String(i)} onClick={() => change("bot_difficulty", String(i))}>{l}</button>)}
               </div>
             </div>
@@ -193,8 +198,8 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
         <BusyButton
           className="btn launch"
           busy={starting}
-          label={<><Icon name="play" size={22} />{overdue ? "Still starting? Start again" : restart ? `Restart ${game} and play ${mode ? `${mode.name} on ` : ""}${map}` : mode ? `Play ${mode.name} on ${map}` : `Play ${map}`}</>}
-          busyLabel={restart ? "Restarting…" : "Starting…"}
+          label={<><Icon name="play" size={22} />{overdue ? "Still not open? Start again" : closeHere ? `Restart ${game} and play ${mode ? `${mode.name} on ` : ""}${map}` : mode ? `Play ${mode.name} on ${map}` : `Play ${map}`}</>}
+          busyLabel={closeHere ? "Restarting…" : "Starting…"}
           onClick={() => launch(map, botCount)}
         />
         <div className="last">
@@ -204,7 +209,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
       </div>
       {(recent.length > 0 || favs.length > 0) && (
         <section>
-          <h2>{recent.length > 0 ? "Recently played" : "Favourites"}</h2>
+          <SectionHead title="Jump straight in" note="Starts right away with the settings above." />
           <div className="maps">
             {(recent.length > 0 ? recent.slice(0, 6) : favs.slice(0, 6)).map((m) => (
               <MapCard key={m.name} map={m} onClick={() => launch(m.name, botCount)} />
@@ -363,14 +368,17 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
   let n = -1;
   const optId = (i: number) => `map-opt-${labelledBy}-${i}`;
   return (
-    <div className="map-picker" ref={box}>
+    <div className="map-picker" ref={box} onBlur={(e) => {
+      // Tab out of it closes it (a click outside is the pointerdown above)
+      if (open && e.relatedTarget && !box.current?.contains(e.relatedTarget as Node)) setOpen(false);
+    }}>
       <button ref={button} type="button" className="map-picker-button" aria-haspopup="listbox" aria-expanded={open} aria-labelledby={labelledBy} onClick={() => { setOpen((o) => !o); setActive(Math.max(0, flat.findIndex((m) => m.name === value))); }}>
         <span>{value}</span>
         <span className="caret" aria-hidden="true">▾</span>
       </button>
       {open && (
         <div className="map-picker-pop">
-          <input className="search" type="search" autoFocus={!TOUCH} placeholder={`Search ${have.length} maps`} value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={key} aria-label="Search maps" role="combobox" aria-expanded="true" aria-controls={`${labelledBy}-list`} aria-autocomplete="list" aria-activedescendant={flat[active] ? optId(active) : undefined} />
+          <input className="search" type="search" autoFocus={!TOUCH} placeholder="Search maps" value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={key} aria-label="Search maps" role="combobox" aria-expanded="true" aria-controls={`${labelledBy}-list`} aria-autocomplete="list" aria-activedescendant={flat[active] ? optId(active) : undefined} />
           <div className="map-picker-list" id={`${labelledBy}-list`} role="listbox" aria-label="Maps">
             {flat.length === 0 && <p className="muted small-note">No map matches. Find more in <button type="button" className="link inline" onClick={() => useNav.getState().go("more")}>Get more</button>.</p>}
             {shown.map(([label, list]) => (
@@ -430,7 +438,7 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
   // the search narrows whichever is picked
   const [show, setShow] = useState<"mode" | "all" | "fav" | "recent" | null>(null);
   const filters: ["mode" | "all" | "fav" | "recent", string][] = [
-    ...(suggested.length ? [["mode", listed?.length ? `${mode.name}'s maps` : "Made for this mode"] as ["mode", string]] : []),
+    ...(suggested.length ? [["mode", `Maps for ${mode.name}`] as ["mode", string]] : []),
     ["all", "All"],
     ["fav", "Favourites"],
     ["recent", "Recent"],
@@ -472,7 +480,7 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
                 Keep {map}{fits ? "" : madeForOther ? " (built for another mode)" : " (may not suit this mode)"}
               </button>
             )}
-            <input className="search grow" type="search" placeholder={`Search ${filters.find(([id]) => id === which)?.[1].toLowerCase() ?? "maps"}`} aria-label="Search maps" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className="search grow" type="search" placeholder="Search maps" aria-label="Search maps" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <div className="chips" role="tablist" aria-label="Which maps">
             {filters.map(([id, label]) => (

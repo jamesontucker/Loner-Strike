@@ -59,6 +59,12 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
     }, "Saving the bot count…");
   };
   const learning = st.navleft > 0;
+  // learning one map doesn't show in navleft: remember it was started until the map has its nav
+  const [learnStarted, setLearnStarted] = useState<Record<string, boolean>>({});
+  const learnSent = !!learnStarted[st.map] && !st.nav && !learning;
+  const learn = () => act(key("learn"), async () => {
+    if (await run("gm_nav", ["learn"])) setLearnStarted((l) => ({ ...l, [st.map]: true }));
+  }, `Starting to learn ${st.map}…`);
   const most = Math.max(1, st.maxplayers - 1);
   /** One more or one fewer, for the buttons beside the slider (easier than dragging on a phone). */
   const step = (d: number) => {
@@ -72,12 +78,13 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
   return (
     <div className="stack">
     <SettingsPage title="Bots" note="Difficulty changes re-add the bots so they pick it up straight away." data={data} cat={1} refresh={refresh}>
-      {!st.nav && !learning && (
-        <Banner action={<BusyButton className="btn primary" busy={busy(key("learn"))} label="Learn this map" busyLabel="Starting…" onClick={() => act(key("learn"), () => run("gm_nav", ["learn"]), `Starting to learn ${st.map}…`)} />}>
-          Bots don't know {st.map} yet. Learning it takes a few minutes, and the map timer waits.
+      {!st.nav && !learning && !learnSent && (
+        <Banner action={<BusyButton className="btn primary" busy={busy(key("learn"))} label="Learn this map" busyLabel="Starting…" onClick={learn} />}>
+          Bots don't know {st.map} yet. Learning it takes a few minutes. The game may pause, then the map restarts.
         </Banner>
       )}
-      {learning && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}… {st.navleft} step{st.navleft === 1 ? "" : "s"} left.</Banner>}
+      {learnSent && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}. The game may pause, then the map restarts.</Banner>}
+      {learning && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}… {st.navleft} map{st.navleft === 1 ? "" : "s"} left.</Banner>}
       <div className="slider-row">
         <label htmlFor="botCount">Bots<Info text="How many bots play. Each one takes a player slot, so leave room for friends." /></label>
         <div className="slider-step">
@@ -136,9 +143,9 @@ export function Bots({ data, refresh }: { data: Online; refresh: () => void }) {
 /** A few words for a personality strength (gm_personality, percent). */
 function strength(v: number) {
   if (v <= 0) return "Plain";
-  if (v < 100) return "Toned down";
+  if (v < 100) return "Mild";
   if (v === 100) return "Normal";
-  if (v < 200) return "Stronger";
+  if (v < 200) return "Strong";
   return "Exaggerated";
 }
 

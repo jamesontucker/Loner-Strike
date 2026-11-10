@@ -224,7 +224,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
             <span className="name">
               HLTV
               <Info text="Lets people watch without joining a team, and can record demos. Starts and stops with the server." />
-              <span className="note">Turns on now. It starts and stops with the server</span>
+              <span className="note">Saves straight away. It starts and stops with the server</span>
             </span>
             <Switch on={form.enabled} disabled={saving || ro} onChange={setEnabled} label="HLTV" />
           </div>
@@ -243,7 +243,7 @@ export function Hltv({ server }: { server: ServerInfo }) {
           ) : st.state === "starting" ? (
             <p className="muted">Waiting for the server to finish loading its map. HLTV starts right after.</p>
           ) : st.server_running ? (
-            <p className="muted">The server is running but HLTV isn't.</p>
+            <p className="muted">The server is running but HLTV isn't. Start it below; if it stops again, the HLTV console at the bottom says why.</p>
           ) : (
             <p className="muted">It starts with the server.</p>
           )}

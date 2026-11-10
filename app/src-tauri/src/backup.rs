@@ -111,11 +111,8 @@ impl AppPrefs {
             }
             s.smart_chat = self.smart_chat;
         });
-        let mut notes = Vec::new();
-        if self.smart_chat && crate::smartchat::chosen().is_none() {
-            notes.push("Smarter chat is on, but its model isn't on this computer yet: download it in Settings.".into());
-        }
-        notes
+        // (no note for Smarter chat's missing model: it's hidden this release)
+        Vec::new()
     }
 }
 
@@ -2811,7 +2808,9 @@ fn start_restore(st: &Shared, req: RestoreReq) -> Result<Value, String> {
             return Err(why);
         }
     }
-    let job = setup::start_job(kind, steps, move |job| {
+    // (a new server shows this job as its own setting up; no other server does)
+    let for_server = r.entry().filter(|_| new).map(|e| e.id.clone());
+    let job = setup::start_job_for(kind, for_server.as_deref(), steps, move |job| {
         let _busy = busy;
         r.run(job)
     })

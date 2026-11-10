@@ -190,8 +190,8 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
         note: !roster
           ? admins.isError ? "Couldn't load roles. Open Admins to try again." : "Loading roles…"
           : now
-            ? `${ROLE_NAME[now.role]}${now.expires ? ` until ${dayDate(now.expires)}` : ""}.${roster.users_ini ? "" : " AMX Mod X isn't set up for this game yet, so roles can't take effect."}`
-            : roster.users_ini ? undefined : "AMX Mod X isn't set up for this game yet, so roles can't take effect.",
+            ? `${ROLE_NAME[now.role]}${now.expires ? ` until ${dayDate(now.expires)}` : ""}.${roster.users_ini ? "" : " Loner-Strike isn't set up for this game yet, so roles don't do anything."}`
+            : roster.users_ini ? undefined : "Loner-Strike isn't set up for this game yet, so roles don't do anything.",
       });
     }
     // (gm_player: the owner's and Admins')
@@ -252,7 +252,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
   return (
     <div className="stack">
       <div>
-        <SectionHead title="Players" note="Select someone for god mode, weapons and teleporting. Kick, ban, roles and the rest are under … on their row." />
+        <SectionHead title="Players" note={sharedRole() === "moderator" ? "Kick, ban and mute are on each row." : "Select someone for god mode, weapons and teleporting. Kick, ban, roles and the rest are under … on their row."} />
         <div className="player-actions">
           {sharedRole() !== "moderator" && <div className="row" role="group" aria-labelledby="pa-everyone">
             <span className="pa-label" id="pa-everyone">Everyone</span>

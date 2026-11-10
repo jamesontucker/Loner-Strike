@@ -160,7 +160,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               <button className="btn" onClick={onClose}>{intro ? "Close" : "Set up later"}</button>
             </div>
             <p className="muted later">Later, you can add or remove any of it under Mods.</p>
-            <p className="made-by setup-by">by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a></p>
+            <p className="made-by setup-by">by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a><span aria-hidden="true"> · </span><a href="https://lonerstrike.com/docs" target="_blank" rel="noreferrer">Docs</a></p>
           </section>
         )}
 
@@ -256,7 +256,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             </ul>
             <p className="muted">It downloads from the original projects (GameBanana for maps), compiles the plugins, and backs up every file it replaces.</p>
             <p className="estimate">
-              {preset === "basics"
+              {preset === "basics" || !chosen.length
                 ? "About 15 MB to download. Usually under a minute."
                 : preset === "all"
                   ? "About 100 MB to download. Usually 2 to 5 minutes."
@@ -286,7 +286,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             )}
             {!(lost && job?.state !== "error") && <>
             <h2>{job?.state === "error" ? "Setup stopped" : "Installing"}</h2>
-            {job?.state !== "error" && <p className="muted">Keep Loner-Strike open until this finishes.</p>}
+            {job?.state !== "error" && <p className="muted">Keep Loner-Strike open and Counter-Strike closed until this finishes.</p>}
             <SteamProgress
               value={job?.progress ?? 0}
               title={job?.state === "error" ? "Setup stopped" : "Installing Loner-Strike…"}
@@ -308,7 +308,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             {job?.state === "error" && (
               <>
                 <p className="err-text">{job.error}</p>
-                <p className="muted">Nothing that finished is lost. Go back to review and install again to carry on.</p>
+                <p className="muted">Nothing that finished is lost. Go back to review and install again to carry on. Still failing? <a href="https://lonerstrike.com/docs#setup-help" target="_blank" rel="noreferrer">The docs</a> cover the usual causes.</p>
                 <div className="row">
                   <button className="btn primary" onClick={() => setStage("review")}>Back to review</button>
                   <button className="btn" onClick={onClose}>Close</button>
@@ -328,8 +328,11 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               <li><span className="kbd">F3</span><span>In the game: modes, maps, bots and settings. <b>F4</b> is the quick menu.</span></li>
               <li><span className="kbd">Maps</span><span>The first time you play a map, the bots spend a few minutes learning it.</span></li>
               <li><span className="kbd">Phone</span><span>Run everything from here, or from your phone (see Use on your phone in Settings).</span></li>
+              {new Set([...games, ...(install?.games.filter((g) => g.installed).map((g) => g.id) ?? [])]).size > 1 && (
+                <li><span className="kbd">Games</span><span>Two games: switch between them with the CS 1.6 and CZ buttons at the top.</span></li>
+              )}
             </ul>
-            {!!job?.failed_compiles?.length && <p className="err-text">These didn't build, so they won't load: {job.failed_compiles.join(", ")}.</p>}
+            {!!job?.failed_compiles?.length && <p className="err-text">These didn't build, so they won't load: {job.failed_compiles.join(", ")}. Run full setup again from Settings to retry. If it keeps failing, use Copy diagnostics under Settings, Help.</p>}
             {job?.notes?.map((n) => <p key={n} className="muted">{n}</p>)}
             <BusyButton className="btn primary big-btn" busy={busy("setup:finish")} label="Start playing" busyLabel="Opening…" onClick={finish} />
             <p className="muted done-links">
@@ -386,9 +389,9 @@ function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan
           <img src={logo} alt="" width={96} height={96} />
           <h1>No game found</h1>
           {nativeMac ? (
-            <p>You have the Mac version of Half-Life, which mods can't run on. Install the Windows version of Steam in CrossOver, install Counter-Strike 1.6 or Condition Zero there, then reopen Loner-Strike. With Parallels, install the game and the Windows version of Loner-Strike inside Windows instead.</p>
+            <p>You have the Mac version of Half-Life, which mods can't run on. Install the Windows version of Steam in CrossOver, install Counter-Strike 1.6 or Condition Zero there, then click Look again. With Parallels, install the game and the Windows version of Loner-Strike inside Windows instead.</p>
           ) : (
-            <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Steam in CrossOver (or, with Parallels, use the Windows version of Loner-Strike inside Windows)" : ""}. Install one, then reopen Loner-Strike.</p>
+            <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Steam in CrossOver (or, with Parallels, use the Windows version of Loner-Strike inside Windows)" : ""}. Install one, then click Look again.</p>
           )}
           <div className="row">
             <BusyButton className="btn primary" busy={looking} label="Look again" busyLabel="Looking…" onClick={() => { setLooking(true); onRescan(); setTimeout(() => setLooking(false), 1500); }} />

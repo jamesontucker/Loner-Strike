@@ -921,7 +921,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
     make_server_dir(&entry)?;
     edit(|l| l.push(entry.clone()))?;
     let entry_id = entry.id.clone();
-    let job = setup::start_job("server", steps, move |job| {
+    let job = setup::start_job_for("server", Some(&entry_id), steps, move |job| {
         job.run(&format!("{g}/srv-steamcmd"), || ensure_steamcmd(job))?;
         job.run(&format!("{g}/srv-download"), || download_hlds(job, &base, &g))?;
         job.run(&format!("{g}/srv-copy"), || {
@@ -1636,7 +1636,8 @@ fn remote_setup(entry: Entry, source: Option<PathBuf>, components: Vec<String>, 
         setup::server_step(&g, "srv-service", "Starting it as a service", 0.3),
         setup::server_step(&g, "srv-done", "Finishing up", 0.1),
     ];
-    setup::start_job("server", steps, move |job| {
+    let server = entry.id.clone();
+    setup::start_job_for("server", Some(&server), steps, move |job| {
         let r = entry.remote.clone().unwrap();
         job.run(&format!("{g}/srv-machine"), || machine_setup(job, &r, &entry.id, &g))?;
         // this computer's copy: the game's own liblist.gam from the machine, then Loner-Strike
@@ -1716,7 +1717,8 @@ pub fn update_files(e: Entry, res: Option<PathBuf>) -> Result<String, String> {
             setup::server_step(&g, "srv-control", "Updating the service and shared control", 0.2),
         ];
         let res = res.ok_or("Loner-Strike's mod files are missing from the app. Reinstalling the app should fix it.")?;
-        return setup::start_job("server", steps, move |job| {
+        let id = e.id.clone();
+        return setup::start_job_for("server", Some(&id), steps, move |job| {
             job.run(&format!("{g}/srv-machine"), || machine_setup(job, &r, &e.id, &g))?;
             // everything but the settings goes up again over what setup put back (the
             // machine's own stats and bans stay as they are)
@@ -1741,7 +1743,8 @@ pub fn update_files(e: Entry, res: Option<PathBuf>) -> Result<String, String> {
         setup::server_step(&g, "srv-copy", "Updating the server", 1.0),
         setup::server_step(&g, "srv-engine", "Installing Loner-Strike's server engine", 0.5),
     ];
-    setup::start_job("server", steps, move |job| {
+    let id = e.id.clone();
+    setup::start_job_for("server", Some(&id), steps, move |job| {
         job.run(&format!("{g}/srv-steamcmd"), || ensure_steamcmd(job))?;
         job.run(&format!("{g}/srv-download"), || download_hlds(job, &base, &g))?;
         // engine files only: never the game folders, which hold Loner-Strike's changes
@@ -2013,7 +2016,7 @@ fn remote_state(e: &Entry) -> (bool, u64) {
 pub fn last_state(e: &Entry) -> (String, Option<String>) {
     if !e.ready {
         let job = setup::current();
-        let busy = job.kind == "server" && job.state == "running";
+        let busy = job.kind == "server" && job.state == "running" && job.server.as_ref().is_none_or(|id| *id == e.id);
         return (if busy { "setting up" } else { "setup failed" }.into(), None);
     }
     if e.remote.is_some() {
@@ -2520,7 +2523,7 @@ fn watch() {
                     list.len()
                 });
                 if recent > MAX_RESTARTS {
-                    with_runs(|r| r.errors.insert(id.clone(), "The server keeps crashing, so it was left off. Check its console.".into()));
+                    with_runs(|r| r.errors.insert(id.clone(), "The server keeps crashing, so it was left off. Check its console. If it started after a mod or plugin change, remove that, or use Repair in the Mods tab.".into()));
                 } else if let Err(e) = start(&id) {
                     // a restore stopped it on purpose: nothing to report on its card
                     if e != crate::backup::RESTORING_SERVER {
@@ -2587,11 +2590,14 @@ pub(crate) fn view(e: &Entry) -> Value {
         (state, error)
     } else {
         let job = setup::current();
-        if job.kind == "server" && job.state == "running" {
+        // (a job that doesn't say which server it's for counts for any)
+        let ours = job.kind == "server" && job.server.as_ref().is_none_or(|id| *id == e.id);
+        if ours && job.state == "running" {
             ("setting-up", None)
         } else {
-            let why = (job.kind == "server").then_some(job.error).flatten();
-            ("failed", Some(why.map(|w| format!("Setting it up stopped: {w}")).unwrap_or_else(|| "Setting it up didn't finish. Delete it and make it again.".into())))
+            let why = ours.then_some(job.error).flatten();
+            let again = if e.remote.is_some() { "Setting it up didn't finish. Try again carries on from where it stopped." } else { "Setting it up didn't finish. Delete it and make it again." };
+            ("failed", Some(why.map(|w| format!("Setting it up stopped: {w}")).unwrap_or_else(|| again.into())))
         }
     };
     json!({"id": e.id, "name": e.name, "game": e.game, "port": e.port, "visibility": e.visibility, "map": e.map,
@@ -3240,7 +3246,7 @@ fn security_items(e: &Entry) -> Result<Value, String> {
         item("passwords", "SSH logins with a key only", !known || (get("passwordauthentication") == "no" && get("kbdinteractiveauthentication") != "yes"),
             "Password logins are on, so anyone on the internet can keep guessing. Loner-Strike uses your key, so turning passwords off is safe.", Some("passwords")),
         item("user", "Not running as root", get("uid") != "0",
-            "The server runs as root, the most powerful account. It still works, but a bug in the game could reach the whole machine. A separate user is safer (Loner-Strike will do this for you in a later version).", None),
+            "The server runs as root, the most powerful account. It still works, but a bug in the game could reach the whole machine. A separate user is safer: the full guide on GitHub shows how to add one.", None),
         item("rcon", "RCON closed to the internet", get("rcon_rules").parse::<u32>().unwrap_or(0) >= 1 && get("firewall_boot") == "enabled",
             if get("rcon_open_choice") == "yes" {
                 "Left open because another game server runs on this machine, and its owner may manage it with remote RCON (HLSW or a web panel). Closing it covers every game server here (UDP 27015-27020): Loner-Strike's own servers don't need it open."

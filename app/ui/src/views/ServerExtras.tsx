@@ -159,7 +159,7 @@ export function ServerExtras({ target }: { target: string }) {
   const saveSettings: SaveSettings = (s, done) =>
     d ? queue(d.settings, (cur) => ({ ...cur, ...(typeof s === "function" ? s(cur) : s) }), (full) => send("/api/extras/settings", full, done)) : Promise.resolve(false);
 
-  const head = <SectionHead title="Rotation & rules" note="Map rotation, chat messages, away and ping kicks, joins and player votes, a daily restart, and fast downloads." />;
+  const head = <SectionHead title="Rotation & extras" note="Map rotation, chat messages, away and ping kicks, joins and player votes, a daily restart, and fast downloads." />;
   if (error)
     return (
       <div className="stack narrow extras">
@@ -392,7 +392,7 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
         />
         <Toggle
           label="Map votes use the rotation"
-          note="Rock the vote and nominations only offer maps from the rotation, instead of every map bots can play."
+          note="Map votes (rtv and nominate) only offer maps from the rotation, instead of every map bots can play."
           on={d.settings.rtv_cycle}
           set={(v) => saveSettings({ rtv_cycle: v })}
         />
@@ -619,7 +619,7 @@ function JoinsVotes({ d, saveSettings }: { d: Data; saveSettings: SaveSettings }
       <section>
         <SectionHead
           title="Player votes"
-          note={`Players say /votekick or /voteban, pick someone from a menu, and everyone else votes for 20 seconds. Owners with immunity${host} and HLTV can't be voted on.`}
+          note={`Players say /votekick or /voteban, pick someone from a menu, and everyone else votes for 20 seconds. Owners with immunity${host} and HLTV (the spectator relay) can't be voted on.`}
         />
         <div className="settings">
           <Toggle label="Vote kick" note="Someone kicked this way can join again straight away." on={votes.kick} set={(v) => saveSettings((cur) => ({ votes: { ...cur.votes, kick: v } }))} />
@@ -734,7 +734,6 @@ function Schedule({ d, maps, send, saveSettings }: { d: Data; maps: MapInfo[]; s
               Runs from this computer: Loner-Strike has to be open at that time. The time is this computer's, not the server's.
             </p>
           )}
-          {sched.needs_app && <p className="muted small-note">The daily restart only happens while Loner-Strike is open on this computer.</p>}
           <div className="settings">
             <Toggle label="Restart every day" note="Only while the server is running and Loner-Strike is open on this computer." on={sched.on} set={(v) => saveRestart(v)} />
             <div className="setting">
@@ -820,7 +819,7 @@ function Toggle({ label, note, on, set }: { label: string; note: ReactNode; on: 
   return (
     <div className="setting">
       <span className="name">{label}<span className="note">{note}</span></span>
-      <Switch on={on} onChange={(v) => run(k, async () => { await set(v); }, `Saving ${label.toLowerCase()}…`)} label={label} disabled={busy(k)} />
+      <Switch on={on} onChange={(v) => run(k, async () => { await set(v); }, "Saving the setting…")} label={label} disabled={busy(k)} />
     </div>
   );
 }
@@ -835,7 +834,7 @@ function Choice({ label, note, values, current, show, pick }: { label: string; n
       <span className="name">{label}<span className="note">{note}</span></span>
       <div className="seg" role="group" aria-label={label}>
         {all.map((v) => (
-          <button key={v} type="button" aria-pressed={current === v} disabled={busy(k)} onClick={() => run(k, async () => { await pick(v); }, `Saving ${label.toLowerCase()}…`)}>{show(v)}</button>
+          <button key={v} type="button" aria-pressed={current === v} disabled={busy(k)} onClick={() => run(k, async () => { await pick(v); }, "Saving the setting…")}>{show(v)}</button>
         ))}
       </div>
     </div>

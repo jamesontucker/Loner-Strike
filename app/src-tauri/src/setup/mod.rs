@@ -307,11 +307,14 @@ pub struct JobView {
     pub failed_compiles: Vec<String>,
     /// Things worth knowing that didn't stop setup (why a plugin didn't compile...)
     pub notes: Vec<String>,
+    /// The server a server job is setting up (None: not known, or not for one server)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server: Option<String>,
 }
 
 impl JobView {
     pub fn idle() -> JobView {
-        JobView { id: String::new(), state: "idle".into(), kind: String::new(), game: None, steps: vec![], progress: 0.0, error: None, failed_compiles: vec![], notes: vec![] }
+        JobView { id: String::new(), state: "idle".into(), kind: String::new(), game: None, steps: vec![], progress: 0.0, error: None, failed_compiles: vec![], notes: vec![], server: None }
     }
 }
 
@@ -800,7 +803,13 @@ pub fn server_step(game: &str, id: &str, label: impl Into<String>, weight: f64) 
 
 /// Runs f as the one setup job (its steps show in the same progress view).
 pub fn start_job(kind: &str, steps: Vec<Step>, f: impl FnOnce(&Job) -> Result<(), String> + Send + 'static) -> Result<String, String> {
+    start_job_for(kind, None, steps, f)
+}
+
+/// start_job for one server (its id goes with the job, so only that server shows it).
+pub fn start_job_for(kind: &str, server: Option<&str>, steps: Vec<Step>, f: impl FnOnce(&Job) -> Result<(), String> + Send + 'static) -> Result<String, String> {
     let job = begin(kind, steps)?;
+    job.view.lock().unwrap().server = server.map(String::from);
     let id = job.view().id;
     spawn_job(job, move |job| match f(job) {
         Ok(()) => job.complete(),

@@ -931,6 +931,7 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 /* ---- quick actions under the top bar ---------------------------------------------- */
 .quick { flex: none; background: var(--side); box-shadow: inset 0 -1px 0 var(--bevel-lo); }
 .quick-inner { display: flex; gap: 6px; align-items: center; padding: 8px var(--gutter); overflow-x: auto; scrollbar-width: none; }
+.quick-inner .contents { display: contents; }
 .quick-inner::-webkit-scrollbar { display: none; }
 .qb { flex: none; border: 0; border-radius: 2px; padding: 5px 10px; background: var(--panel); color: var(--bone-dim); box-shadow: var(--raised); font: 600 13px/1.2 var(--text); white-space: nowrap; cursor: pointer; }
 .qb:hover { color: var(--bone); }
@@ -1675,6 +1676,9 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .browser-body.short { max-height: 240px; }
 .browser-row { display: grid; grid-template-columns: 22px 22px minmax(140px, 3fr) minmax(110px, 1fr) 84px 48px minmax(100px, 1fr) 76px; align-items: center; min-height: 34px; padding: 0 12px; gap: 14px; color: var(--bone); font-size: 15px; cursor: default; }
 .browser-row.with-last { grid-template-columns: 22px 22px minmax(140px, 3fr) minmax(110px, 1fr) 84px 48px minmax(100px, 1fr) 76px 100px; }
+/* (a narrow window scrolls the list sideways rather than squeezing it) */
+.browser-table { overflow-x: auto; }
+.browser-row:not(.players-row) { min-width: 640px; }
 .browser-row > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser-row.head { position: sticky; top: 0; z-index: 1; min-height: 30px; padding: 0 12px; background: var(--panel); box-shadow: var(--raised); color: var(--bone-dim); }
 .browser-row.head button { all: unset; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--bone-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

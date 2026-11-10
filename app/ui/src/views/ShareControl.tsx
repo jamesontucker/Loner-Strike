@@ -131,7 +131,7 @@ const NO_STEAM = "Invite without their SteamID? Without it the server can't tell
 export function ControlRoute({ domain, port }: { domain: string; port: number }) {
   const toast = useToast();
   const rows: [string, string][] = [
-    ["Hostname", domain || "the status address"],
+    ["Hostname", domain || "the status page address"],
     ["Path", "^/control/"],
     ["Service URL", `http://127.0.0.1:${port}`],
   ];
@@ -158,7 +158,7 @@ export function ControlRoute({ domain, port }: { domain: string; port: number })
  * and working, the Cloudflare steps fold away; not reachable, they're open with why. */
 function ServerReach({ c }: { c: Control }) {
   if (!c.url) {
-    return <p className="muted small-note">Helpers connect to the server itself at its website status address, so this computer can be off. Set up Website status first, in this server's Website status tab.</p>;
+    return <p className="muted small-note">Helpers connect to the server itself at its status page address, so this computer can be off. Set up the status page first, in this server's Website status tab.</p>;
   }
   return (
     <div className="share-reach">
@@ -166,7 +166,7 @@ function ServerReach({ c }: { c: Control }) {
         Helpers connect to the server itself at <code className="mono">{c.url}</code>, so this computer can be off.{" "}
         {c.reachable ? <span className="live on inline">Reachable</span> : <span className="live inline">Not reachable yet</span>}
       </p>
-      {!c.reachable && <p className="err-text small-note">Helpers' apps can't reach it there yet{c.reach_error ? ` (${c.reach_error})` : ""}. Check Website status, then open this tab again.</p>}
+      {!c.reachable && <p className="err-text small-note">Helpers' apps can't reach it there yet{c.reach_error ? ` (${c.reach_error})` : ""}. Check the Website status tab, then open this tab again.</p>}
       {c.tunnel && (c.reachable ? (
         <details className="advanced">
           <summary>The Cloudflare route it uses</summary>
@@ -239,12 +239,15 @@ export function ShareControl({ server }: { server: ServerInfo }) {
     load();
   }, "Making an invite…");
   };
-  const setMemberRole = (m: Member, r: Role) => run(`member:${m.id}`, async () => {
+  const setMemberRole = async (m: Member, r: Role) => {
+    if (r === "admin" && !(await ask(`Make ${m.name} an Admin? They can change settings, modes, maps and restart the server.`, { ok: "Make them an Admin" }))) return;
+    return run(`member:${m.id}`, async () => {
     const x = await post(`/api/control/member/${m.id}`, { role: r, server: server.id });
     if (x.error) return toast(x.error, true);
     toast(`${m.name} is now ${r === "admin" ? "an Admin" : "a Moderator"}`);
     load();
-  });
+  }, `Changing ${m.name}'s role…`);
+  };
   const remove = async (m: Member) => {
     if (!(await ask(`Take away ${m.name}'s access to ${server.name}? Their app stops working on it straight away.`, { ok: "Take away access", danger: true }))) return;
     let removed = false;
@@ -332,7 +335,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
               <div>
                 <b>{m.name}</b> <span className={`tag role-${m.role}`}>{ROLE_NAME[m.role]}</span>
                 <p className="muted small-note">
-                  {m.steam ? `${m.steam} · ` : ""}added {made(m.added)} · last here {ago(m.seen)}{m.invited_by && m.invited_by !== "owner" ? " · invited by an Admin" : ""}
+                  {m.steam ? `${m.steam} · ` : ""}added {made(m.added)} · {m.seen ? `last here ${ago(m.seen)}` : "hasn't connected yet"}{m.invited_by && m.invited_by !== "owner" ? " · invited by an Admin" : ""}
                   {onServer && m.via_app ? " · connects through this computer" : ""}
                 </p>
               </div>
@@ -368,7 +371,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
             <input id="share-addresses" className="search" placeholder="Your internet address, or a virtual LAN address" value={addresses} onChange={(e) => setAddresses(e.target.value)} spellCheck={false} />
             <span className="row">
               <BusyButton className="btn small" busy={busy("share:upnp")} label="Open the port on my router" busyLabel="Asking…" onClick={openPort} />
-              <span className="muted small-note">Port {c?.port ?? 27030} (TCP){c?.listening ? "" : " · not listening yet"}</span>
+              <span className="muted small-note">Port {c?.port ?? 27030} (TCP){c?.listening || (!members.length && !c?.invites?.length) ? "" : " · not listening: another program may be using this port. Pick another below."}</span>
               <input className="search narrow" type="number" min={1024} max={65535} placeholder="Change" aria-label="Sharing port" value={portText} onChange={(e) => setPortText(e.target.value)} />
               {portText && <BusyButton className="btn small" busy={busy("share:port")} label="Use it" busyLabel="Moving…" onClick={setPort} />}
             </span>

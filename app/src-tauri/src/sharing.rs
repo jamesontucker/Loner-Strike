@@ -26,7 +26,7 @@ const PLAYITD: &str = if cfg!(windows) { "playitd.exe" } else { "playitd" };
 fn error_words(code: &str) -> Option<&'static str> {
     Some(match code {
         "RequiresPlayitPremium" | "PublicPortRequiresPlayitPremium" | "RegionRequiresPlayitPremium" => {
-            "playit.gg wants a Premium account for this tunnel."
+            "playit.gg wants a paid Premium account for this. Use Direct or a virtual LAN instead."
         }
         "RequiresVerifiedAccount" => "Verify your email on playit.gg (check your inbox), then press Start sharing again.",
         "AgentVersionTooOld" => "playit.gg says this copy of playit is too old. Update Loner-Strike to update it.",
@@ -645,11 +645,11 @@ impl Sharing {
             run.error.clear();
         } else if let Some(r) = reasons.first() {
             run.error = match r.as_str() {
-                "PublicAllocationPending" => "playit.gg is still picking an address...".into(),
-                "AgentOverLimit" => "Your playit.gg account has too many agents. Remove an old one on playit.gg.".into(),
+                "PublicAllocationPending" => "playit.gg is still picking an address. This can take a minute.".into(),
+                "AgentOverLimit" => "Your playit.gg account has too many computers connected. Remove an old one on playit.gg.".into(),
                 "AgentDisabled" => "This computer is turned off on playit.gg. Turn it back on there.".into(),
-                "TunnelDisabled" => "The tunnel is turned off on playit.gg. Turn it back on there.".into(),
-                other => format!("playit.gg: {other}"),
+                "TunnelDisabled" => "Sharing for this game is turned off on playit.gg. Turn it back on there.".into(),
+                other => format!("playit.gg says: {other}. Stop sharing and start it again."),
             };
         }
     }

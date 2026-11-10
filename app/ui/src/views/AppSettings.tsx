@@ -5,7 +5,7 @@ import { copyText, getJson, getJsonAt, ON_COMPUTER_ONLY, postJson, useActions } 
 import type { AppInfo, PhoneInfo } from "../types";
 import { ON_THIS_COMPUTER } from "../api";
 import { gameTitle } from "../games";
-import { queryClient, useServers, waitForSetupJob } from "../queries";
+import { queryClient, reloadScan, useServers, waitForSetupJob } from "../queries";
 import { useNav } from "../store";
 import { applyScale, savedScale, BusyButton, Info, LoadError, SCALES, SectionHead, Sheet, Switch, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
@@ -122,6 +122,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
     const r = await post<Prefs & R>("/api/app/game-folder", { dir: picked.dir });
     if (r.error) return toast(r.error, true);
     setPrefsData((p) => ({ ...p, game_folders: r.game_folders }));
+    reloadScan();
     toast("Added. Run full setup to set up the game in it.");
   }, "Choosing a folder…");
   const serversDir = useServersDir();
@@ -143,6 +144,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
     const r = await post<Prefs & R>("/api/app/game-folder/remove", { dir });
     if (r.error) return toast(r.error, true);
     setPrefsData((p) => ({ ...p, game_folders: r.game_folders }));
+    reloadScan();
     toast("Forgotten. Nothing was deleted.");
   }, "Forgetting the folder…");
   const openFolder = () => run("app:open-folder", async () => {
@@ -158,8 +160,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
 
   const check = () => run("app:update:check", async () => {
     const r = await postJson<{ available?: boolean; version?: string; error?: string }>("/api/app/update/check").catch((): { available?: boolean; error?: string } => ({ error: "Couldn't check for updates." }));
-    noteUpdateChecked();
     if (r.error) return toast(r.error, true);
+    noteUpdateChecked();
     setChecked(r.available ? "" : "You're on the latest version.");
     reloadApp();
   }, "Checking for updates…");
@@ -217,8 +219,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
                 )}
               </>
             ) : (
-              // checked here, from the menu, or when the app started (with that switch on)
-              <p className="muted">{checked || (checkedOnce || prefs?.auto_update ? "You're up to date as of the last check." : "Not checked yet.")}</p>
+              // only after a check here or from the menu that worked (the one at start says nothing when it fails)
+              <p className="muted">{checked || (checkedOnce ? "You're up to date as of the last check." : "Not checked yet.")}</p>
             )}
           </div>
           {app?.update && !ON_THIS_COMPUTER ? (
@@ -264,6 +266,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
                   <p className="address small">{phone.address}</p>
                   <p className="muted">The first visit needs the code (it's in the QR). After that the phone stays signed in.</p>
                   {/Win/.test(navigator.platform) && <p className="muted">If the phone can't open it, Windows may think this Wi-Fi is public: in Settings, Network & internet, open your Wi-Fi and pick Private network.</p>}
+                  {/Mac/.test(navigator.platform) && <p className="muted">If your Mac asked whether Loner-Strike may accept incoming connections, choose Allow. To change it later: System Settings, Network, Firewall.</p>}
                 </div>
               </div>
             )}
@@ -309,7 +312,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           <div className="row between setting-line toggle">
             <div>
               <b>Tell me when someone joins your game</b>
-              <p className="muted">When a person (not a bot) joins the game you host from Play. Also the starting point for servers you haven't set their own.</p>
+              <p className="muted">When a person (not a bot) joins the game you host from Play. Dedicated servers without their own setting follow this one too.</p>
             </div>
             <Switch on={!!prefs?.notify_joins} label="Tell me when someone joins" disabled={!prefs || busy("app:pref:notify_joins")} onChange={(v) => setPref({ notify_joins: v })} />
           </div>
@@ -460,6 +463,7 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           </div>
           <div className="row">
             <BusyButton busy={busy("app:diagnostics")} label="Copy" busyLabel="Collecting…" onClick={copyDiagnostics} />
+            <a className="btn" href="https://lonerstrike.com/docs" target="_blank" rel="noreferrer">Docs</a>
             <a className="btn" href="https://github.com/jamesontucker/Loner-Strike/issues" target="_blank" rel="noreferrer">Report a problem</a>
           </div>
         </div>
@@ -512,6 +516,8 @@ function RemoveEverything({ scan, onClose }: { scan: Scan; onClose: () => void }
   const serversQ = useServers();
   const [sure, setSure] = useState(false);
   const [step, setStep] = useState("");
+  // what couldn't be deleted: listed to delete by hand, and the app stays open until Quit
+  const [left, setLeft] = useState<string[] | null>(null);
   const games = scan.installs.flatMap((i) => i.games.filter((g) => g.installed).map((g) => ({ hl: i.hl, id: g.id })));
   const servers = serversQ.data?.servers ?? [];
   // (servers friends share with you are theirs: nothing of them is here)
@@ -530,36 +536,62 @@ function RemoveEverything({ scan, onClose }: { scan: Scan; onClose: () => void }
       if (!j || j.state === "error") return toast(j?.error || `Couldn't remove Loner-Strike from ${gameTitle(g.id)}. Nothing else was deleted.`, true);
     }
     setStep("Deleting the servers and the app's data…");
-    try { localStorage.clear(); sessionStorage.clear(); } catch { /* private window */ }
     type Done = { ok?: boolean; error?: string; failed?: string[] };
     const r: Done = await postJson<Done>("/api/app/remove-everything").catch((): Done => ({ error: "Couldn't reach the app." }));
-    if (r.error) return toast(r.error, true);
-    const left = r.failed ?? [];
-    setStep(left.length ? `Done, except: ${left.join("; ")}. Delete those by hand. Loner-Strike is quitting.` : "Everything is removed. Loner-Strike is quitting.");
+    if (r.error) {
+      setStep("");
+      return toast(r.error, true);
+    }
+    try { localStorage.clear(); sessionStorage.clear(); } catch { /* private window */ }
+    const failed = r.failed ?? [];
+    if (failed.length) {
+      setStep("");
+      setLeft(failed);
+    } else setStep("Everything is removed. Loner-Strike is quitting.");
   }, "Removing everything…");
+  const quit = () => run("app:quit", async () => {
+    await postJson("/api/app/remove-everything/quit").catch(() => null); // the app going away can drop the reply
+  }, "Quitting…");
+  const mac = navigator.platform.startsWith("Mac");
 
   return (
-    <Sheet label="Remove everything" onClose={() => !working && onClose()}>
+    <Sheet label="Remove everything" onClose={() => !working && !left && onClose()}>
       <div className="sheet-body">
         <h2>Remove everything</h2>
-        <p>This takes Loner-Strike off this computer completely:</p>
-        <ul className="plain-list">
-          {games.length > 0 && <li>It's removed from {list(games.map((g) => gameTitle(g.id)))}, and their original files are put back. Your own maps and files from before Loner-Strike stay.</li>}
-          {here.length > 0 && <li>The servers on this computer are stopped and deleted, with their folders: {list(here.map((s) => s.name))}.</li>}
-          <li>Its settings, servers list, map records, caches and downloads are deleted, and so are the stats, admins and XP a normal remove keeps. Then the app quits.</li>
-        </ul>
-        {away.length > 0 && (
-          <p className="muted">Servers on other machines aren't touched and keep running: {list(away.map((s) => s.name))}. To take one down too, delete it in Servers first.</p>
+        {left ? (
+          <>
+            <p>Everything else is removed, but these couldn't be deleted. Delete them by hand:</p>
+            <ul className="plain-list mono small">
+              {left.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+            <p className="muted">{mac ? "Then drag Loner-Strike to the Trash." : "Then uninstall Loner-Strike in Windows Settings, Apps."}</p>
+            <div className="row">
+              <BusyButton className="btn primary" busy={busy("app:quit")} label="Quit Loner-Strike" busyLabel="Quitting…" onClick={quit} />
+            </div>
+          </>
+        ) : (
+          <>
+            <p>This takes Loner-Strike off this computer completely:</p>
+            <ul className="plain-list">
+              {games.length > 0 && <li>It's removed from {list(games.map((g) => gameTitle(g.id)))}, and their original files are put back. Your own maps and files from before Loner-Strike stay.</li>}
+              {here.length > 0 && <li>The servers on this computer are stopped and deleted, with their folders: {list(here.map((s) => s.name))}.</li>}
+              <li>Its settings, servers list, map records, caches and downloads are deleted, and so are the stats, admins and XP a normal remove keeps. Then the app quits.</li>
+            </ul>
+            <p className="muted">The app itself stays. Afterwards, {mac ? "drag Loner-Strike to the Trash" : "uninstall it in Windows Settings, Apps"}.</p>
+            {away.length > 0 && (
+              <p className="muted">Servers on other machines aren't touched and keep running: {list(away.map((s) => s.name))}. To take one down too, delete it in Servers first.</p>
+            )}
+            <label className="check-row">
+              <input type="checkbox" checked={sure} disabled={working} onChange={(e) => setSure(e.target.checked)} />
+              <span>I understand this can't be undone</span>
+            </label>
+            {step && <p className="muted" role="status">{step}</p>}
+            <div className="row">
+              <BusyButton className="btn danger" busy={working} disabled={!sure} label="Remove everything" busyLabel="Removing…" onClick={go} />
+              <button className="btn" disabled={working} onClick={onClose}>Cancel</button>
+            </div>
+          </>
         )}
-        <label className="check-row">
-          <input type="checkbox" checked={sure} disabled={working} onChange={(e) => setSure(e.target.checked)} />
-          <span>I understand this can't be undone</span>
-        </label>
-        {step && <p className="muted" role="status">{step}</p>}
-        <div className="row">
-          <BusyButton className="btn danger" busy={working} disabled={!sure} label="Remove everything" busyLabel="Removing…" onClick={go} />
-          <button className="btn" disabled={working} onClick={onClose}>Cancel</button>
-        </div>
       </div>
     </Sheet>
   );
@@ -589,7 +621,7 @@ function DailyBackups({ on, busy, disabled, onChange }: { on: boolean; busy: boo
       <div className="setting">
         <span className="name">
           Back up servers on Linux machines every day
-          <span className="note">Their bans, admins and settings live on the machine. A copy is kept here, the last 7 days of each, while Loner-Strike is open. No passwords or webhooks are included</span>
+          <span className="note">Their bans, admins and settings live on the machine. A copy is kept here, the last 7 days of each, while Loner-Strike is open. Passwords and Discord links aren't included.</span>
         </span>
         <Switch on={on} label="Back up servers on Linux machines every day" disabled={disabled || busy} onChange={onChange} />
       </div>
