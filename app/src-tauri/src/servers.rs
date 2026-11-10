@@ -2468,7 +2468,9 @@ fn watch_frozen() {
         let due: Vec<String> = with_runs(|r| r.procs.iter().filter(|(_, p)| !p.stopping && p.started.elapsed() > FROZEN_GRACE).map(|(id, _)| id.clone()).collect());
         for id in due {
             let Some(e) = get(&id) else { continue };
-            let answers = crate::browser::info(&format!("{}:{}", e.local_host(), e.port)).is_some();
+            // the server-info query, else RCON: a server started with -nomaster (not on the
+            // public list) may never answer the query while it plays on fine
+            let answers = crate::browser::info(&format!("{}:{}", e.local_host(), e.port)).is_some() || e.rcon().is_some_and(|r| r.send("gm_status").is_ok());
             with_runs(|r| {
                 let Some(p) = r.procs.get_mut(&id) else { return };
                 if answers {
