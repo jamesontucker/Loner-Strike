@@ -482,9 +482,12 @@ pub fn running_game_dirs() -> Vec<String> {
 /// The folder before \hl.exe in a process line or path ("C:\Games\Half-Life\hl.exe -steam"
 /// -> "C:\Games\Half-Life").
 fn game_dir_in(line: &str) -> Option<String> {
-    let low = line.to_lowercase();
+    // (ASCII lowercase keeps byte positions the same as the line's)
+    let low = line.to_ascii_lowercase();
     let at = low.find("\\hl.exe")?;
-    let start = line[..at].find(|c: char| c.is_ascii_alphabetic() && line[line[..at].find(c).unwrap()..].get(1..2) == Some(":")).unwrap_or(0);
+    // the drive: a letter just before the first ":\" (not any earlier letter, like CrossOver's C)
+    let b = line.as_bytes();
+    let start = line[..at].find(":\\").filter(|&i| i > 0 && b[i - 1].is_ascii_alphabetic()).map(|i| i - 1).unwrap_or(0);
     Some(line[start..at].trim().to_string())
 }
 
@@ -518,6 +521,7 @@ mod path_tests {
         assert_eq!(game_dir_in(r"12345 C:\Program Files (x86)\Steam\steamapps\common\Half-Life\hl.exe -steam -game czero").as_deref(), Some(r"C:\Program Files (x86)\Steam\steamapps\common\Half-Life"));
         assert_eq!(game_dir_in(r"F:\Counter-Strike Condition Zero 1.2 build 2771\hl.exe").as_deref(), Some(r"F:\Counter-Strike Condition Zero 1.2 build 2771"));
         assert_eq!(game_dir_in("bash something"), None);
+        assert_eq!(game_dir_in(r"812 /Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine C:\Games\Half-Life\hl.exe -steam").as_deref(), Some(r"C:\Games\Half-Life"));
         if !cfg!(windows) {
             let ours = std::path::Path::new("/Users/x/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life");
             assert!(same_game_dir(r"C:\Program Files (x86)\Steam\steamapps\common\Half-Life", ours));

@@ -193,7 +193,7 @@ impl Game {
         };
         let (reply, file) = match sent {
             Ok(r) => r,
-            Err(RconError::BadPassword) => return json!({"online": false, "reason": self.bad_password_reason()}),
+            Err(RconError::BadPassword) => return json!({"online": false, "reason": self.bad_password_reason_cached()}),
             // game_open: the game is open on this computer but not hosting a map (main menu,
             // or playing on someone else's server)
             Err(RconError::Offline) => return json!({"online": false, "reason": OFFLINE, "game_open": !self.dedicated && game_open()}),
@@ -208,7 +208,7 @@ impl Game {
             reply.lines().filter_map(|l| l.strip_prefix("GM ").map(String::from)).collect()
         };
         if lines.is_empty() {
-            return json!({"online": false, "reason": "The game is running but the Game Mode Menu plugin didn't answer."});
+            return json!({"online": false, "reason": "The game is running but Loner-Strike isn't answering in it. Restart the map; if that doesn't help, open Mods and click Repair."});
         }
         let mut out = json!({"online": true, "modes": [], "settings": [], "addons": [], "addonsets": [],
                              "players": [], "presets": [], "events": [], "me": {}});
@@ -270,6 +270,20 @@ impl Game {
     /// computer the setup is checked (and what a Steam update or file check undid is put
     /// back); then either Loner-Strike isn't loading at all (no password gets set, so none is
     /// accepted: also why there are no bots), or it is and a config sets its own after it.
+    /// The same, worked out at most every 15 seconds: it looks at running processes (a
+    /// PowerShell on Windows) and the setup, and the panel asks every second or so.
+    fn bad_password_reason_cached(&self) -> String {
+        static LAST: std::sync::Mutex<Option<(std::path::PathBuf, std::time::Instant, String)>> = std::sync::Mutex::new(None);
+        if let Some((dir, at, why)) = LAST.lock().unwrap().as_ref() {
+            if *dir == self.dir && at.elapsed() < std::time::Duration::from_secs(15) {
+                return why.clone();
+            }
+        }
+        let why = self.bad_password_reason();
+        *LAST.lock().unwrap() = Some((self.dir.clone(), std::time::Instant::now(), why.clone()));
+        why
+    }
+
     fn bad_password_reason(&self) -> String {
         if self.remote.is_some() {
             return BAD_PASSWORD.into();
@@ -297,16 +311,16 @@ impl Game {
             .map(|a| {
                 a.iter()
                     .filter(|c| !c["ok"].as_bool().unwrap_or(true) && c["name"].as_str() != Some("F3 and F4 keys bound"))
-                    .filter_map(|c| c["name"].as_str().map(|n| n.to_lowercase()))
+                    .filter_map(|c| c["name"].as_str().map(plain_check))
                     .collect()
             })
             .unwrap_or_default();
         if !failed.is_empty() {
             // (files gone that Loner-Strike put there: often an antivirus taking them)
-            let gone = failed.iter().any(|f| f.ends_with("installed"));
+            let gone = failed.iter().any(|f| f.contains("missing"));
             return format!(
-                "Loner-Strike isn't loading in this game, so there are no bots and the panel can't connect. Not working: {}. {}\
-                 Open Mods and click Repair, then restart the game. Still stuck? Copy diagnostics in Settings and send it to us.",
+                "Loner-Strike isn't loading in this game, so there are no bots and the panel can't connect: {}. {}\
+                 Open Mods and click Repair, then restart the game. More help: lonerstrike.com/docs#no-bots",
                 failed.join(", "),
                 if gone { "Your antivirus may have removed its files: allow the game's folder in it first. " } else { "" }
             );
@@ -322,14 +336,28 @@ impl Game {
             .unwrap_or(false);
         if amxx_running {
             "Something in the game sets its own console password after Loner-Strike does. Remove the rcon_password line from \
-             server.cfg, autoexec.cfg or listenserver.cfg in the game's folder, then restart the map."
+             server.cfg, autoexec.cfg or listenserver.cfg in the game's folder, then restart the map. More help: lonerstrike.com/docs#bad-rcon"
                 .into()
         } else {
-            "Loner-Strike's plugins didn't start in this game, so there are no bots and the panel can't connect. Restart the \
-             game. Still the same? Open Mods and click Repair, or copy diagnostics in Settings and send it to us."
+            "Loner-Strike didn't start in this game, so there are no bots and the panel can't connect. Restart the \
+             game. Still the same? Open Mods and click Repair. More help: lonerstrike.com/docs#no-bots"
                 .into()
         }
     }
+}
+
+/// A failed check in plain words, for a message.
+fn plain_check(name: &str) -> String {
+    match name {
+        "Game loads Metamod" => "the game isn't set to load the mods",
+        "Metamod installed" => "Metamod is missing",
+        "Metamod loads AMX Mod X" => "Metamod isn't set to load AMX Mod X",
+        "AMX Mod X installed" => "AMX Mod X is missing",
+        "Game Mode Menu installed" => "the Game Mode Menu is missing",
+        "Game Mode Menu enabled" => "the Game Mode Menu is switched off",
+        other => return other.to_string(),
+    }
+    .into()
 }
 
 /// The health check: {"ok", "checks": [{"name", "ok", "detail"}], "fixed": [...]}.

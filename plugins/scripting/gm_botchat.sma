@@ -5931,6 +5931,9 @@ buy_call(const c[])
 {
 	if (count_words(c) > 6 || word_in(c, "awp") || word_in(c, "gun") || word_in(c, "weapon") || word_in(c, "your"))
 		return -1
+	// ("save me", "save him": a player asking for help, not a save round)
+	if (word_in(c, "me") || word_in(c, "us") || word_in(c, "him") || word_in(c, "her") || word_in(c, "them"))
+		return -1
 	static const SAVE[][] = { "eco", "lets eco", "full eco", "eco round", "we eco", "save", "lets save", "save round", "we save",
 		"save this round", "full save", "everyone save", "eco this round" }
 	static const FORCE[][] = { "force", "force buy", "lets force", "forcebuy", "we force", "everyone force", "force this round" }
@@ -6366,7 +6369,9 @@ clause_intent(id, const c[], &arg, place[], plen)
 	// "someone buy me an awp", "can u buy me an ak"
 	static const BUYME[][] = { "buy me", "buy for me", "someone buy", "anyone buy", "can you buy", "could you buy", "please buy",
 		"pls buy", "buy one for me", "get me an", "get me a" }
-	if (any_in(c, BUYME, sizeof BUYME) && (arg = gun_asked(c)) != 0 && arg != ITEM_KIT)
+	// (grenades aren't bought for others: "buy me a flash" falls through to asking for a flash)
+	if (any_in(c, BUYME, sizeof BUYME) && (arg = gun_asked(c)) != 0 && arg != ITEM_KIT
+		&& arg != CSW_FLASHBANG && arg != CSW_SMOKEGRENADE && arg != CSW_HEGRENADE)
 		return I_BUYFOR
 	arg = 0
 	// a buy call ("eco", "lets force", "full buy"); asked ("eco?") it's about the money

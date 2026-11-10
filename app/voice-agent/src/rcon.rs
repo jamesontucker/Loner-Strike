@@ -26,6 +26,11 @@ impl Rcon {
         String::new()
     }
 
+    /// Runs a command; None when the server didn't answer at all (gone, or not this password).
+    pub fn reach(&self, command: &str) -> Option<String> {
+        (0..3).find_map(|_| self.try_cmd(command))
+    }
+
     fn try_cmd(&self, command: &str) -> Option<String> {
         let s = UdpSocket::bind("127.0.0.1:0").ok()?;
         s.set_read_timeout(Some(Duration::from_millis(1500))).ok()?;

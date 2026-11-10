@@ -105,13 +105,23 @@ fn main() {
 
     let console = rcon::Rcon::new(a.rcon_port, password);
     let mut told = Instant::now() - Duration::from_secs(3600);
+    // (its server gone for a few minutes, and no app to stop it: a crash, or the server ended by hand)
+    let mut unanswered = 0;
     let mut talking: HashMap<u32, Talk> = HashMap::new();
     let mut buf = [0u8; 8192];
     println!("ls-voice: listening on 127.0.0.1:{} for the server on port {}", a.feed, a.rcon_port);
     loop {
         // (the server is told where to send, and again now and then: after a restart it has forgotten)
         if told.elapsed() > Duration::from_secs(30) {
-            console.cmd(&format!("sv_ls_voice_feed {}", a.feed));
+            if console.reach(&format!("sv_ls_voice_feed {}", a.feed)).is_some() {
+                unanswered = 0;
+            } else {
+                unanswered += 1;
+                if unanswered >= 6 {
+                    println!("ls-voice: the server hasn't answered for 3 minutes; stopping");
+                    std::process::exit(0);
+                }
+            }
             told = Instant::now();
         }
         if let Ok((n, from)) = feed.recv_from(&mut buf) {

@@ -185,8 +185,10 @@ fn remote_sh(e: &Entry, on: bool) -> String {
     let u = unit(&e.id);
     if !on {
         return format!(
-            "set -u\n[ \"$(id -u)\" = 0 ] && ! command -v sudo >/dev/null && sudo() {{ [ \"$1\" = -n ] && shift; \"$@\"; }}\n\
+            "set -u\nfail() {{ echo \"@@FAIL $*\"; exit 3; }}\n[ \"$(id -u)\" = 0 ] && ! command -v sudo >/dev/null && sudo() {{ [ \"$1\" = -n ] && shift; \"$@\"; }}\n\
+             sudo -n true 2>/dev/null || fail \"The user $(whoami) can't use sudo without a password, which this needs. Give it passwordless sudo, or connect as root.\"\n\
              sudo -n systemctl disable --now {u} >/dev/null 2>&1; sudo -n rm -f /etc/systemd/system/{u}.service; sudo -n systemctl daemon-reload\n\
+             [ -e /etc/systemd/system/{u}.service ] && fail \"Its service couldn't be removed.\"\n\
              # (the model goes when no server on the machine uses it)\n\
              ls /etc/systemd/system/lonerstrike-*-voice.service >/dev/null 2>&1 || rm -f \"$HOME/{REMOTE_MODEL}\" \"$HOME/{REMOTE_INTENT}\"\necho \"@@STEP off\"\n"
         );
@@ -197,7 +199,7 @@ fn remote_sh(e: &Entry, on: bool) -> String {
         r#"set -eu
 fail() {{ echo "@@FAIL $*"; exit 3; }}
 [ "$(id -u)" = 0 ] && ! command -v sudo >/dev/null && sudo() {{ [ "$1" = -n ] && shift; "$@"; }}
-sudo -n true 2>/dev/null || fail "The user $(whoami) can't use sudo without a password, which this needs."
+sudo -n true 2>/dev/null || fail "The user $(whoami) can't use sudo without a password, which this needs. Give it passwordless sudo, or connect as root."
 M="$HOME/{model}"
 mkdir -p "$(dirname "$M")"
 if [ "$(sha256sum "$M" 2>/dev/null | cut -c1-64)" != "{sha}" ]; then
@@ -301,7 +303,7 @@ fn remote_apply(e: &Entry, on: bool, res: &std::path::Path) -> Result<(), String
         }
     })?;
     if code != 0 {
-        return Err(format!("Couldn't {} voice on the server ({last}).", if on { "set up" } else { "turn off" }));
+        return Err(format!("Couldn't {} voice on the server ({last}). Try again; if it keeps failing, check the server's Security and health panel.", if on { "set up" } else { "turn off" }));
     }
     Ok(())
 }
@@ -331,6 +333,8 @@ struct Proc {
 struct Runs {
     procs: HashMap<String, Proc>,
     errors: HashMap<String, String>,
+    /// servers whose voice is waiting for them to answer (one waiter each)
+    pending: std::collections::HashSet<String>,
 }
 
 static RUNS: Mutex<Option<Runs>> = Mutex::new(None);
@@ -350,7 +354,7 @@ fn alive(r: &mut Runs, id: &str) -> bool {
                 if let Some(p) = r.procs.remove(id) {
                     sys::untie(p.child.id());
                 }
-                r.errors.insert(id.into(), "Voice stopped by itself. The log below may say why.".into());
+                r.errors.insert(id.into(), "Voice stopped by itself. Its log below may say why. Turn it off and on again to restart it.".into());
                 false
             }
         },
@@ -371,14 +375,18 @@ pub fn start(e: &Entry) -> Result<(), String> {
         return Err("Voice on a Linux server is set up from its page.".into());
     }
     if !installed() {
-        return Err("Install Advanced Bot Interaction first.".into());
+        return Err("Install bot voice commands first, from this tab.".into());
     }
     let exe = EXE.lock().unwrap().clone().ok_or("This copy of the app doesn't include the voice program. Update the app.")?;
     let id = e.id.clone();
-    if with_runs(|r| alive(r, &id)) {
+    // (already running, or already waiting for its server)
+    if with_runs(|r| alive(r, &id) || !r.pending.insert(id.clone())) {
         return Ok(());
     }
     std::thread::spawn(move || {
+        let done = |r: &mut Runs| {
+            r.pending.remove(&id);
+        };
         // (its server first: it needs the console to tell the server where to send voice)
         let mut up = false;
         for _ in 0..90 {
@@ -386,7 +394,8 @@ pub fn start(e: &Entry) -> Result<(), String> {
                 up = true;
                 break;
             }
-            if !servers::running(&id) {
+            if !servers::running(&id) || !with_runs(|r| r.pending.contains(&id)) {
+                with_runs(done);
                 return;
             }
             std::thread::sleep(Duration::from_secs(2));
@@ -396,21 +405,37 @@ pub fn start(e: &Entry) -> Result<(), String> {
             (true, None) => Err("That server isn't there any more.".to_string()),
             (true, Some(e)) => spawn(&e, &exe),
         };
-        with_runs(|r| match result {
-            Ok(child) => {
-                r.errors.remove(&id);
-                r.procs.insert(id.clone(), Proc { child });
-            }
-            Err(err) => {
-                r.errors.insert(id.clone(), err);
+        // (stopped while it waited, or the server's gone again: the new one isn't wanted)
+        let wanted = servers::running(&id);
+        let extra = with_runs(|r| {
+            let still = r.pending.remove(&id) && wanted;
+            match result {
+                // (not tied to the app, like its server: one kept running when the app quits keeps
+                // its voice; a leftover ends itself once its server is gone, or at the next start)
+                Ok(child) if still => {
+                    r.errors.remove(&id);
+                    r.procs.insert(id.clone(), Proc { child });
+                    None
+                }
+                Ok(child) => Some(child),
+                Err(err) => {
+                    if still {
+                        r.errors.insert(id.clone(), err);
+                    }
+                    None
+                }
             }
         });
+        if let Some(child) = extra {
+            sys::stop_child(child, Duration::from_secs(2));
+        }
     });
     Ok(())
 }
 
 fn spawn(e: &Entry, exe: &PathBuf) -> Result<Child, String> {
     let port = feed_port(e);
+    end_leftover(e);
     if std::net::UdpSocket::bind(("127.0.0.1", port)).is_err() {
         return Err(format!("Port {port} on this computer is in use by another program, so voice couldn't start."));
     }
@@ -422,7 +447,47 @@ fn spawn(e: &Entry, exe: &PathBuf) -> Result<Child, String> {
         .stdout(log.try_clone().map_err(|err| err.to_string())?)
         .stderr(log)
         .spawn()
-        .map_err(|err| format!("Voice didn't start ({err})."))
+        .map_err(|err| format!("Voice didn't start ({err}). Try turning it off and on again, or Remove and install it again."))
+        .inspect(|child| {
+            let _ = std::fs::write(pid_file(e), child.id().to_string());
+        })
+}
+
+fn pid_file(e: &Entry) -> PathBuf {
+    e.dir.join("loner-strike-voice.pid")
+}
+
+/// Ends this server's ls-voice from an earlier session the app lost track of (it crashed, or
+/// the server was kept running when it quit), so the new one can have the feed port: only
+/// when that pid is still an ls-voice.
+fn end_leftover(e: &Entry) {
+    let file = pid_file(e);
+    let Ok(text) = std::fs::read_to_string(&file) else { return };
+    let _ = std::fs::remove_file(&file);
+    #[cfg(unix)]
+    if let Ok(pid) = text.trim().parse::<i32>() {
+        let mut c = sys::command("ps");
+        c.args(["-p", &pid.to_string(), "-o", "command="]);
+        if let Some((_, out, _)) = sys::run_output(c, Duration::from_secs(3)) {
+            if out.contains("ls-voice") {
+                unsafe { libc::kill(pid, libc::SIGKILL) };
+                std::thread::sleep(Duration::from_millis(300));
+            }
+        }
+    }
+    #[cfg(windows)]
+    if let Ok(pid) = text.trim().parse::<u32>() {
+        let mut c = sys::command("tasklist");
+        c.args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"]);
+        if let Some((_, out, _)) = sys::run_output(c, Duration::from_secs(3)) {
+            if out.to_lowercase().contains("ls-voice") {
+                let mut k = sys::command("taskkill");
+                k.args(["/PID", &pid.to_string(), "/T", "/F"]);
+                let _ = sys::run_output(k, Duration::from_secs(5));
+                std::thread::sleep(Duration::from_millis(300));
+            }
+        }
+    }
 }
 
 /// Stops ls-voice for a server (the server stops sending voice when it's gone: nothing listens).
@@ -432,6 +497,7 @@ pub fn stop(e: &Entry) {
     }
     let child = with_runs(|r| {
         r.errors.remove(&e.id);
+        r.pending.remove(&e.id);
         r.procs.remove(&e.id).map(|p| p.child)
     });
     if let Some(r) = e.rcon() {
@@ -498,7 +564,7 @@ fn install() -> Result<(), String> {
         *busy = Some(Instant::now());
     }
     let result = (|| {
-        std::fs::create_dir_all(dir()).map_err(|err| format!("Couldn't make its folder ({err})."))?;
+        std::fs::create_dir_all(dir()).map_err(|err| format!("Couldn't make a folder for the models ({err}). Check there's free disk space and try again."))?;
         let whole = (MODEL_BYTES + INTENT_BYTES) as f64;
         let speech = MODEL_BYTES as f64 / whole;
         for (url, sha, what, to, from, share) in [
@@ -528,7 +594,7 @@ fn uninstall() -> Result<(), String> {
     match std::fs::remove_dir_all(dir()) {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(err) => Err(format!("Couldn't delete its files ({err}).")),
+        Err(err) => Err(format!("Couldn't delete the models ({err}). Stop any server using voice and try again.")),
     }
 }
 
@@ -588,7 +654,7 @@ async fn api_save(State(st): State<Shared>, UrlPath(id): UrlPath<String>, header
             return Ok(status(&entry(&id)?));
         }
         if req.enabled && !installed() {
-            return Err("Install Advanced Bot Interaction first.".into());
+            return Err("Install bot voice commands first, from this tab.".into());
         }
         servers::edit(|l| {
             if let Some(x) = l.iter_mut().find(|x| x.id == id) {
