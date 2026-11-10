@@ -17,7 +17,10 @@ Downloaded at setup, one pinned version each.
 |---|---|---|---|
 | [AMX Mod X](https://github.com/alliedmodders/amxmodx) (base and Counter-Strike addon) | 1.10.0 build 5487 | AMX Mod X Development Team (AlliedModders) | GPL-3.0-or-later, with the Half-Life linking exception |
 | [Metamod-P](https://github.com/Bots-United/metamod-p) | 1.21p109 | Will Day, Jussi Kivilinna, and Bots-United | GPL-2.0-or-later |
-| [ReGameDLL_CS](https://github.com/rehlds/ReGameDLL_CS) | 5.30.0.814 | s1lent and the ReGameDLL_CS contributors | MIT |
+| [ReGameDLL_CS](https://github.com/rehlds/ReGameDLL_CS), in Loner-Strike's fork ([jamesontucker/ReGameDLL_CS](https://github.com/jamesontucker/ReGameDLL_CS), branch loner-strike: the bot brain) | 5.30.0.814 | s1lent and the ReGameDLL_CS contributors; the bot changes by Loner-Strike | MIT |
+| [ReHLDS](https://github.com/rehlds/ReHLDS), in Loner-Strike's fork ([jamesontucker/ReHLDS](https://github.com/jamesontucker/ReHLDS), branch loner-strike: the voice feed), for dedicated servers | 3.15.0.896 | dreamstalker, s1lent and the ReHLDS contributors | MIT |
+| [ReAPI](https://github.com/rehlds/ReAPI), for dedicated servers | 5.29.0.358 | s1lent, asmodai and the ReAPI contributors | GPL-3.0 |
+| [relocalizebugfix](https://github.com/rehlds/relocalizebugfix), for dedicated servers | 2.8 | the ReHLDS team | MIT |
 
 ## Game modes
 | Mode | Authors | Source | License |
