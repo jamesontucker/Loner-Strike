@@ -271,9 +271,37 @@ pub fn copy_with(e: &Entry, hl: &Path, local: &LocalNavs, only: Option<&str>, qu
         let name = there.get(stem).map(|(n, _)| n.clone()).unwrap_or_else(|| nav.file.clone());
         if place(&nav.path, &dest_dir.join(name), nav.modified).is_ok() {
             out.sent.push(stem.clone());
+            // what the bot brain worked out from that nav goes with it
+            send_knowledge(nav, &dest_dir);
+        }
+    }
+    // a server on this computer that already has the same nav: its knowledge too, if ours is
+    // newer (a machine's own nav may be one it learned itself: its knowledge is its own)
+    if e.remote.is_none() {
+        for (stem, navs) in &local.usable {
+            if only.is_some_and(|m| !m.eq_ignore_ascii_case(stem)) || !out.had.contains(stem) {
+                continue;
+            }
+            let size = bsp_size(&game_dirs(&e.dir, &e.game), stem).or_else(|| bsp_size(&game_dirs(hl, &e.game), stem));
+            if let Some(nav) = pick(navs, &e.game, size) {
+                send_knowledge(nav, &dest_dir);
+            }
         }
     }
     out
+}
+
+/// The bot brain's map knowledge (<map>.lsv: sightlines, cover, angles, worked out from a
+/// nav) next to that nav, sent where the nav went when it's newer there. It only counts for the
+/// nav it was made from (the bot brain checks), so it only goes with this computer's own nav.
+fn send_knowledge(nav: &Nav, dest_dir: &Path) {
+    let src = nav.path.with_extension("lsv");
+    let Ok(modified) = std::fs::metadata(&src).and_then(|m| m.modified()) else { return };
+    let dest = dest_dir.join(Path::new(&nav.file).with_extension("lsv"));
+    if std::fs::metadata(&dest).and_then(|m| m.modified()).is_ok_and(|t| t >= modified) {
+        return;
+    }
+    let _ = place(&src, &dest, modified);
 }
 
 /// The navs on a server's machine: map (lower case) -> modified (seconds since 1970).

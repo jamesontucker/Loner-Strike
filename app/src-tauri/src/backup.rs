@@ -414,7 +414,7 @@ pub fn runtime(rel: &str) -> bool {
     let l = rel.replace('\\', "/").to_ascii_lowercase();
     let name = l.rsplit('/').next().unwrap_or("");
     l.starts_with("addons/amxmodx/logs/")
-        || [".log", ".reading", ".taking", ".nav", ".part", ".lsrestore"].iter().any(|x| name.ends_with(x))
+        || [".log", ".reading", ".taking", ".nav", ".lsv", ".part", ".lsrestore"].iter().any(|x| name.ends_with(x))
         || MORE.contains(&name)
         || (l.starts_with(DATA) && crate::prefs::SETUP_SKIP.contains(&name))
 }
@@ -3245,7 +3245,7 @@ mod tests {
 
     #[test]
     fn runtime_files_stay_behind() {
-        for f in ["addons/amxmodx/logs/L0101.log", "maps/de_x.nav", "stats.json.part", "addons/amxmodx/data/gamemodes/status.json", "addons/amxmodx/data/gamemodes/stats.json", "addons/amxmodx/data/gamemodes/panel_rcon.txt", "addons/amxmodx/data/gamemodes/friends.cfg", "addons/amxmodx/data/gamemodes/seen.log.reading", "addons/amxmodx/data/gamemodes/content_status.json", "qconsole.log"] {
+        for f in ["addons/amxmodx/logs/L0101.log", "maps/de_x.nav", "maps/de_x.lsv", "stats.json.part", "addons/amxmodx/data/gamemodes/status.json", "addons/amxmodx/data/gamemodes/stats.json", "addons/amxmodx/data/gamemodes/panel_rcon.txt", "addons/amxmodx/data/gamemodes/friends.cfg", "addons/amxmodx/data/gamemodes/seen.log.reading", "addons/amxmodx/data/gamemodes/content_status.json", "qconsole.log"] {
             assert!(runtime(f), "{f}");
         }
         for f in ["addons/amxmodx/data/gamemodes/global.cfg", "addons/amxmodx/data/gamemodes/admins.json", "addons/amxmodx/data/gamemodes/friends.json", "maps/de_x.bsp", "server.cfg"] {
