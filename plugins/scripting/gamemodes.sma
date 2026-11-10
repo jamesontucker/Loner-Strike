@@ -414,6 +414,9 @@ next_map_name()
 
 // rounds won by each team this map (the game's TeamScore), for the app's top bar
 new g_RoundsT, g_RoundsCT
+new g_LearnPct = -1                              // bots learning the map: percent (-1: not), and the step
+new g_LearnStep[32]
+new Float:g_LearnShownAt
 
 public ev_teamscore()
 {
@@ -429,6 +432,11 @@ public ev_teamscore()
 public plugin_init()
 {
 	register_event("TeamScore", "ev_teamscore", "a")
+	// the bots learning a map: their progress bar is made for Condition Zero's screen and
+	// comes out squashed in 1.6, so it's shown here instead (and passed to the app)
+	new mBot = get_user_msgid("BotProgress")
+	if (mBot)
+		register_message(mBot, "msg_botprogress")
 	register_plugin(PLUGIN, VERSION, AUTHOR)
 
 	g_pWeapons    = register_cvar("gm_weapons", "0")
@@ -3668,8 +3676,8 @@ public srv_status()
 	if (!f)
 		return PLUGIN_HANDLED
 
-	fprintf(f, "{^"t^":^"state^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"quota^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d,^"rounds_t^":%d,^"rounds_ct^":%d,^"nextmap^":^"%s^"}^n",
-		g_ModeId[g_Cur], map, has_nav(map), g_Career, navbatch_active(), navbatch_active() ? navqueue_count() : 0,
+	fprintf(f, "{^"t^":^"state^",^"learn^":%d,^"learnstep^":^"%s^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"quota^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d,^"rounds_t^":%d,^"rounds_ct^":%d,^"nextmap^":^"%s^"}^n",
+		g_LearnPct, g_LearnStep, g_ModeId[g_Cur], map, has_nav(map), g_Career, navbatch_active(), navbatch_active() ? navqueue_count() : 0,
 		get_playersnum_ex(GetPlayers_ExcludeHuman), bot_quota_target(), get_playersnum_ex(GetPlayers_ExcludeBots), MaxClients,
 		get_timeleft(), presets_enabled(), addons_pending(), VERSION, g_CrashMap, pesc, get_cvar_num("bot_zombie"), g_Paused, g_Recording, get_cvar_num("mp_timelimit"), g_RoundsT, g_RoundsCT, next_map_name())
 
@@ -5291,4 +5299,38 @@ apply_next_mode()
 		write_data_line("reloadnote.txt", fmt("Players voted for %s", g_ModeName[g_NextMode]))
 	}
 	g_NextMode = -1
+}
+
+// ---------------------------------------------------------------------------------------
+// Bots learning a map (the game's BotProgress message: 0 draw <percent> <title>, 1 start
+// <title>, 2 hide): shown as a plain line on screen, and in the app's status
+// ---------------------------------------------------------------------------------------
+
+public msg_botprogress(msgid, dest, ent)
+{
+	new kind = get_msg_arg_int(1)
+	new title[48]
+	if (kind == 2)
+	{
+		g_LearnPct = -1
+		g_LearnStep[0] = 0
+		return PLUGIN_HANDLED
+	}
+	get_msg_arg_string(kind == 0 ? 3 : 2, title, charsmax(title))
+	if (containi(title, "Hiding") != -1)
+		copy(g_LearnStep, charsmax(g_LearnStep), "finding hiding spots")
+	else if (containi(title, "Approach") != -1)
+		copy(g_LearnStep, charsmax(g_LearnStep), "working out the approaches")
+	else
+		copy(g_LearnStep, charsmax(g_LearnStep), "walking the map")
+	g_LearnPct = kind == 0 ? clamp(get_msg_arg_int(2), 0, 100) : 0
+	// (on screen at most twice a second)
+	new Float:now = get_gametime()
+	if (now - g_LearnShownAt >= 0.5)
+	{
+		g_LearnShownAt = now
+		set_hudmessage(233, 210, 120, -1.0, 0.30, 0, 0.0, 1.2, 0.0, 0.1, -1)
+		show_hudmessage(0, "Bots are learning this map: %s, %d%%^nIt's once per map; the game may pause while they work", g_LearnStep, g_LearnPct)
+	}
+	return PLUGIN_HANDLED
 }

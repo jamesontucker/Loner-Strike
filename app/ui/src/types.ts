@@ -28,6 +28,9 @@ export type LiveState = {
   rounds_ct?: number;
   /** the map after this one ("" when it's this one again) */
   nextmap?: string;
+  /** bots learning this map: percent done (-1 or missing: not learning), and what step */
+  learn?: number;
+  learnstep?: string;
 };
 
 export type Mode = { id: string; name: string; desc: string; flags: string; options: number };

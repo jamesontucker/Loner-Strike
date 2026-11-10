@@ -95,7 +95,8 @@ function BotsPage({ data, refresh, saved }: { data: Online; refresh: () => void;
           Bots don't know {st.map} yet. Learning it takes a few minutes. The game may pause, then the map restarts.
         </Banner>
       )}
-      {!saved && learnSent && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}. The game may pause, then the map restarts.</Banner>}
+      {!saved && (st.learn ?? -1) >= 0 && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}: {st.learnstep || "working"}, {st.learn}%. It's once per map, and a big one can take a while; the game may pause, then the map restarts.</Banner>}
+      {!saved && learnSent && (st.learn ?? -1) < 0 && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}. The game may pause, then the map restarts.</Banner>}
       {!saved && learning && <Banner><span className="spinner" aria-hidden="true" />Bots are learning {st.map}… {st.navleft} map{st.navleft === 1 ? "" : "s"} left.</Banner>}
       <div className="slider-row">
         <label htmlFor="botCount">Bots<Info text="How many bots play. Each one takes a player slot, so leave room for friends." /></label>
