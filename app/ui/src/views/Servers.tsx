@@ -1488,7 +1488,18 @@ function Console({ server }: { server: ServerInfo }) {
         setLines(r.lines ?? []);
       })
       .catch(() => setFailed(true)), 2000, [server.id]);
-  const shown = [...lines, ...sent];
+  // Clear: the view starts after the last line there was (the server's log stays as it is)
+  const [clearedAfter, setClearedAfter] = useState<string | null>(null);
+  const fresh = (() => {
+    if (clearedAfter === null) return lines;
+    const at = lines.lastIndexOf(clearedAfter);
+    return at >= 0 ? lines.slice(at + 1) : lines;
+  })();
+  const shown = [...fresh, ...sent];
+  const clear = () => {
+    setClearedAfter(lines.length ? lines[lines.length - 1] : "");
+    setSent([]);
+  };
   useEffect(() => {
     if (follow) box.current?.scrollTo({ top: box.current.scrollHeight });
   }, [lines, sent, follow]);
@@ -1511,6 +1522,7 @@ function Console({ server }: { server: ServerInfo }) {
             <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow new lines
           </label>
           <button type="button" className="btn small" disabled={!shown.length} onClick={() => void copy()}>Copy</button>
+          <button type="button" className="btn small" disabled={!shown.length} title="Clears what's shown here; the server's log stays" onClick={clear}>Clear</button>
         </div>
       </div>
       <div className="console" ref={box} role="log" aria-live="off">
@@ -1518,6 +1530,8 @@ function Console({ server }: { server: ServerInfo }) {
           ? shown.filter((l) => l.trim()).map((l, i) => <ConsoleLine key={i} line={l} />)
           : failed
             ? "Can't read the console right now."
+            : clearedAfter !== null
+              ? <span className="cl cl-sys">Cleared. New lines show up here.</span>
             : server.state === "running"
               ? "Waiting for the server's console…"
               : "Nothing yet. Start the server to see its console."}
