@@ -4,7 +4,7 @@ import { useNav, type Section } from "../store";
 /** For your own game, the sidebar page that matches a server tab (Servers.tsx TABS ids). */
 const OWN_PAGE: Partial<Record<string, Section>> = {
   players: "players", moderation: "community", stats: "stats", admins: "admins", welcome: "welcome",
-  mods: "mods", maps: "maps", skins: "skins", sounds: "sounds", extras: "extras",
+  mods: "mods", maps: "maps", skins: "skins", sounds: "sounds", more: "more", extras: "extras",
   modes: "play", bots: "bots", match: "match", fun: "fun", addons: "addons", join: "friends",
 };
 

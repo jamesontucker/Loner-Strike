@@ -381,7 +381,7 @@ type Tab =
   | "overview" | "join" | "health" | "extras" | "hltv" | "webstatus"
   | "modes" | "bots" | "match" | "fun" | "addons" | "voice"
   | "players" | "moderation" | "stats" | "admins" | "welcome" | "share"
-  | "mods" | "maps" | "skins" | "sounds";
+  | "mods" | "maps" | "skins" | "sounds" | "more";
 /** remote: only for servers on a Linux machine. Server comes first: a server's page opens on its Overview. */
 const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: boolean }[] = [
   { id: "overview", label: "Overview", group: "Server" },
@@ -402,10 +402,12 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "admins", label: "Admins", group: "People" },
   { id: "welcome", label: "Welcome page", group: "People" },
   { id: "share", label: "Shared control", group: "People" },
-  { id: "mods", label: "Mods", group: "Library" },
+  // (the same order as your own game's My library)
   { id: "maps", label: "Maps", group: "Library" },
+  { id: "mods", label: "Mods", group: "Library" },
   { id: "skins", label: "Skins & models", group: "Library" },
   { id: "sounds", label: "Sounds", group: "Library" },
+  { id: "more", label: "Get more", group: "Library" },
 ];
 const TAB_GROUPS = [...new Set(TABS.map((t) => t.group))];
 /** Older names for a tab, as other pages may still ask for it (openServerTab). */
@@ -860,6 +862,8 @@ export function ServerPage(props: {
           {tab === "maps" && !getMaps && <Maps current={data?.state.map} live={!!data} maps={allMaps} reload={reloadMaps} refresh={refresh} getMore={() => setGetMaps(true)} />}
           {tab === "maps" && getMaps && <GetMore server only={["maps"]} title="Get maps" back={{ label: "Back to maps", go: () => setGetMaps(false) }} onInstalled={reloadMaps} />}
           {tab === "skins" && <ServerSkins />}
+          {/* what a server can send players: maps, weapon skins and player models */}
+          {tab === "more" && <GetMore server onInstalled={reloadMaps} />}
           {tab === "bots" && data && <Bots data={data} refresh={refresh} />}
           {tab === "match" && data && (
             <SettingsPage title="Rules" note={RULES_NOTE(data)} data={data} cat={2} refresh={refresh} pickMode>
