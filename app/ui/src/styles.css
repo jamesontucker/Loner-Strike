@@ -181,6 +181,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .map-name { font: 400 24px/1 var(--stencil); letter-spacing: .02em; }
 .strip-meta { color: var(--bone-dim); font-size: 14px; font-weight: 600; }
+.strip-link { background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; letter-spacing: inherit; text-align: left; cursor: pointer; border-radius: 2px; }
+.strip-link.map-name { font: 400 24px/1 var(--stencil); letter-spacing: .02em; display: block; }
+.strip-link:hover { color: var(--signal); }
+.strip-link:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.strip-slots { color: var(--bone-faint); }
+.strip-pill { margin-left: 8px; padding: 1px 6px; border-radius: 2px; background: rgba(255,255,255,.08); color: var(--bone); font-size: 12px; }
+.strip-pill.rec { background: rgba(224,134,106,.2); color: #eba58a; }
+.score-tag { font: 700 10px/1 var(--text); letter-spacing: .04em; padding: 3px 4px 2px; border-radius: 2px; align-self: center; }
+.score .score-tag-t { color: #26170f; background: #d98a6b; }
+.score .score-tag-ct { color: #0f1a26; background: #92b4d6; }
+.score-kind { align-self: center; margin-left: 4px; color: var(--bone-faint); font: 600 11px/1 var(--text); }
 .strip-meta.idle { flex: 1; }
 .score { font: 400 26px/1 var(--stencil); display: flex; gap: 6px; }
 .score .t { color: var(--t); }

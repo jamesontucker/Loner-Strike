@@ -23,6 +23,9 @@ export type LiveState = {
   paused: number;
   recording: number;
   timelimit: number;
+  /** rounds won this map (newer plugins; 0 in modes without rounds) */
+  rounds_t?: number;
+  rounds_ct?: number;
 };
 
 export type Mode = { id: string; name: string; desc: string; flags: string; options: number };

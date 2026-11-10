@@ -396,8 +396,23 @@ public native_filter(const name[], index, trap)
 	return (!trap && equal(name, "gm_chat_blocked")) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
+// rounds won by each team this map (the game's TeamScore), for the app's top bar
+new g_RoundsT, g_RoundsCT
+
+public ev_teamscore()
+{
+	new team[16]
+	read_data(1, team, charsmax(team))
+	new n = read_data(2)
+	if (equal(team, "TERRORIST"))
+		g_RoundsT = n
+	else if (equal(team, "CT"))
+		g_RoundsCT = n
+}
+
 public plugin_init()
 {
+	register_event("TeamScore", "ev_teamscore", "a")
 	register_plugin(PLUGIN, VERSION, AUTHOR)
 
 	g_pWeapons    = register_cvar("gm_weapons", "0")
@@ -3637,10 +3652,10 @@ public srv_status()
 	if (!f)
 		return PLUGIN_HANDLED
 
-	fprintf(f, "{^"t^":^"state^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"quota^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d}^n",
+	fprintf(f, "{^"t^":^"state^",^"mode^":^"%s^",^"map^":^"%s^",^"nav^":%d,^"career^":%d,^"navbatch^":%d,^"navleft^":%d,^"bots^":%d,^"quota^":%d,^"humans^":%d,^"maxplayers^":%d,^"timeleft^":%d,^"presets^":%d,^"addons_pending^":%d,^"version^":^"%s^",^"crashmap^":^"%s^",^"preset^":^"%s^",^"peaceful^":%d,^"paused^":%d,^"recording^":%d,^"timelimit^":%d,^"rounds_t^":%d,^"rounds_ct^":%d}^n",
 		g_ModeId[g_Cur], map, has_nav(map), g_Career, navbatch_active(), navbatch_active() ? navqueue_count() : 0,
 		get_playersnum_ex(GetPlayers_ExcludeHuman), bot_quota_target(), get_playersnum_ex(GetPlayers_ExcludeBots), MaxClients,
-		get_timeleft(), presets_enabled(), addons_pending(), VERSION, g_CrashMap, pesc, get_cvar_num("bot_zombie"), g_Paused, g_Recording, get_cvar_num("mp_timelimit"))
+		get_timeleft(), presets_enabled(), addons_pending(), VERSION, g_CrashMap, pesc, get_cvar_num("bot_zombie"), g_Paused, g_Recording, get_cvar_num("mp_timelimit"), g_RoundsT, g_RoundsCT)
 
 	for (new i = 0; i < g_ModeCount; i++)
 	{

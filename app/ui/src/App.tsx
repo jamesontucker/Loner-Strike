@@ -705,22 +705,35 @@ function Strip({ data, reconnecting, lost, reason, app, server, gameOpen }: { da
   const st = data.state;
   const score = (team: string) => data.players.filter((p) => p.team === team).reduce((n, p) => n + p.frags, 0);
   const mode = data.modes.find((m) => m.id === st.mode)?.name ?? st.mode;
+  const byRounds = (st.rounds_t ?? 0) + (st.rounds_ct ?? 0) > 0;
+  // the map and the players open that page, for your game or the open server
+  const openPage = (p: "maps" | "players") => (useNav.getState().server ? useNav.getState().openServerTab(p as Section) : useNav.getState().go(p));
   return (
     <header className="strip" data-tauri-drag-region>
       <div className="strip-map">
         <div className="thumb" style={{ backgroundImage: `url(${withTarget(`/thumb/${encodeURIComponent(st.map)}.png`)})` }} aria-hidden="true" />
         <div>
-          <div className="map-name">{st.map}</div>
+          <button type="button" className="map-name strip-link" title="Maps" onClick={() => openPage("maps")}>{st.map}</button>
           <div className="strip-meta">
-            {mode} · {st.humans + st.bots}/{st.maxplayers} players{st.timelimit > 0 && st.timeleft >= 0 ? ` · ${clock(st.timeleft)} left` : ""}
-            {st.paused ? " · paused" : ""}
+            {mode} ·{" "}
+            <button type="button" className="strip-link" title="Players" onClick={() => openPage("players")}>
+              {st.humans} {st.humans === 1 ? "person" : "people"}, {st.bots} {st.bots === 1 ? "bot" : "bots"}
+            </button>
+            <span className="strip-slots"> of {st.maxplayers}</span>
+            {st.timelimit > 0 && st.timeleft >= 0 ? ` · ${clock(st.timeleft)} left` : ""}
+            {st.paused ? <span className="strip-pill">Paused</span> : null}
+            {st.recording ? <span className="strip-pill rec">Recording</span> : null}
           </div>
         </div>
       </div>
-      <div className="score" aria-label="Kills by team" title="Kills by team">
-        <span className="t">{score("T")}</span>
+      {/* rounds won, or (a mode without rounds, like deathmatch) kills by team */}
+      <div className="score" aria-label={byRounds ? "Rounds won by team" : "Kills by team"} title={byRounds ? "Rounds won" : "Kills by team"}>
+        <span className="score-tag score-tag-t">T</span>
+        <span className="t">{byRounds ? st.rounds_t : score("T")}</span>
         <span className="vs">:</span>
-        <span className="ct">{score("CT")}</span>
+        <span className="ct">{byRounds ? st.rounds_ct : score("CT")}</span>
+        <span className="score-tag score-tag-ct">CT</span>
+        {!byRounds && <span className="score-kind">kills</span>}
       </div>
       <div className="strip-actions">
         {ON_THIS_COMPUTER && <RadioButton />}
