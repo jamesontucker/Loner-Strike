@@ -1103,8 +1103,10 @@ function SecurityPanel({ server }: { server: ServerInfo }) {
         setItems(r.items ?? []);
         setError("");
       }
-    } catch {
-      setError("Couldn't reach the app.");
+    } catch (e) {
+      // (refused or not there: an app older than this page, until it restarts)
+      const status = (e as { status?: number })?.status;
+      setError(status === 404 || status === 403 ? "This copy of Loner-Strike can't check that yet. Restart it, then check again." : "Couldn't reach the app.");
     } finally {
       setChecking(false);
     }

@@ -3275,8 +3275,10 @@ fn security_items(e: &Entry) -> Result<Value, String> {
     Ok(json!({"ok": true, "items": items, "user": get("user")}))
 }
 
-async fn api_security(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) || on.is_none() {
+async fn api_security(UrlPath(id): UrlPath<String>, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
+    // (a GET that only reads the machine: this computer only, like the fixes; the page's
+    // X-Panel header only comes with its POSTs)
+    if on.is_none() {
         return forbidden();
     }
     answer(tokio::task::spawn_blocking(move || get(&id).ok_or("That server isn't there any more.".to_string()).and_then(|e| security_items(&e))).await.unwrap_or_else(|_| Err("The check didn't finish.".into())))

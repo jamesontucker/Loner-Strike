@@ -3460,10 +3460,7 @@ pub fn auto_backup_loop(st: Shared) {
 }
 
 /// What the daily backups have: the folder, and each Linux server's newest one.
-async fn api_auto(headers: HeaderMap) -> Reply {
-    if !from_panel(&headers) {
-        return forbidden();
-    }
+async fn api_auto() -> Reply {
     let each: Vec<Value> = servers::load()
         .into_iter()
         .filter(|e| e.ready && e.remote.is_some())
