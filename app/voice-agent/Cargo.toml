@@ -1,7 +1,7 @@
 [package]
 name = "ls-voice"
 # (its real version is Loner-Strike's own, like ls-control's)
-version = "0.0.0"
+version = "1.0.0"
 description = "Loner-Strike's speech-to-text helper: players' voice to text for the bots (Advanced Bot Interaction)"
 license = "GPL-3.0"
 edition = "2021"

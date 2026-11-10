@@ -193,9 +193,9 @@ pub fn handle(ctx: &Ctx, req: Req, count_redeem: bool) -> Resp {
     };
     // 2. the same version
     let theirs = req.headers.get("x-ls-version").map(String::as_str).unwrap_or("");
-    if theirs != VERSION {
+    if !crate::same_series(theirs, VERSION) {
         let you = if theirs.is_empty() { "an older one" } else { theirs };
-        return Resp { status: 426, body: json!({"error": format!("Both of you need the same Loner-Strike version to share a server. The server has {VERSION}, you have {you}."), "version": VERSION}) };
+        return Resp { status: 426, body: json!({"error": format!("Both of you need the same Loner-Strike version (the first two numbers) to share a server. The server has {VERSION}, you have {you}."), "version": VERSION}) };
     }
     // 3. pinned to this server
     if m.server != config.id {
@@ -242,8 +242,8 @@ fn outranks(files: &Files, io: &dyn GameIo, steamid: &str) -> bool {
 fn redeem(files: &Files, config: &Config, body: &[u8]) -> Resp {
     let Ok(b) = serde_json::from_slice::<Value>(body) else { return refuse(400, "That isn't something Loner-Strike sends.") };
     let version = b["version"].as_str().unwrap_or("");
-    if version != VERSION {
-        return err(format!("Both of you need the same Loner-Strike version to share a server. The server has {VERSION}."));
+    if !crate::same_series(version, VERSION) {
+        return err(format!("Both of you need the same Loner-Strike version (the first two numbers) to share a server. The server has {VERSION}."));
     }
     let invite = b["invite"].as_str().unwrap_or("");
     let name = b["name"].as_str().unwrap_or("");

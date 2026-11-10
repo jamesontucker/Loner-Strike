@@ -48,6 +48,13 @@ use std::path::PathBuf;
 
 /// Loner-Strike's version (build.rs): helpers' apps must have the same one
 pub const VERSION: &str = env!("LS_VERSION");
+/// Two Loner-Strike versions that can share a server: the same major and minor version
+/// (1.0.0 and 1.0.3 work together, so a helper isn't locked out while one app updates).
+pub fn same_series(a: &str, b: &str) -> bool {
+    let series = |v: &str| v.splitn(3, '.').take(2).collect::<Vec<_>>().join(".");
+    !a.is_empty() && series(a) == series(b)
+}
+
 
 /// A helper's role on the server (the same names and JSON as the app's control::Role).
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]

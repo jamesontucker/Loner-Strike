@@ -56,6 +56,13 @@ const INVITE_HOURS: u64 = 24;
 const INVITE_PREFIX: &str = "LS1.";
 /// Both sides must run the same version (sent as X-LS-Version)
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Two Loner-Strike versions that can share a server: the same major and minor version
+/// (1.0.0 and 1.0.3 work together, so a helper isn't locked out while one app updates).
+pub fn same_series(a: &str, b: &str) -> bool {
+    let series = |v: &str| v.splitn(3, '.').take(2).collect::<Vec<_>>().join(".");
+    !a.is_empty() && series(a) == series(b)
+}
+
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -573,8 +580,8 @@ pub async fn guard(State(st): State<Shared>, req: Request, next: Next) -> Respon
         _ => return refuse(StatusCode::SERVICE_UNAVAILABLE, "The owner's Loner-Strike is busy. Try again in a moment."),
     };
     let theirs = parts.headers.get("x-ls-version").and_then(|v| v.to_str().ok()).unwrap_or("");
-    if theirs != VERSION {
-        return (StatusCode::UPGRADE_REQUIRED, Json(json!({"error": format!("Both of you need the same Loner-Strike version to share a server. The owner has {VERSION}, you have {}.", if theirs.is_empty() { "an older one" } else { theirs }), "version": VERSION}))).into_response();
+    if !same_series(theirs, VERSION) {
+        return (StatusCode::UPGRADE_REQUIRED, Json(json!({"error": format!("Both of you need the same Loner-Strike version (the first two numbers) to share a server. The owner has {VERSION}, you have {}.", if theirs.is_empty() { "an older one" } else { theirs }), "version": VERSION}))).into_response();
     }
     let method = parts.method.as_str().to_string();
     let bytes = match axum::body::to_bytes(body, 2 * 1024 * 1024).await {
@@ -992,8 +999,8 @@ struct RedeemReq {
 
 /// A friend's app accepting an invite (the sharing listener, no key yet).
 async fn api_redeem(Json(req): Json<RedeemReq>) -> Reply {
-    if req.version != VERSION {
-        return answer(Err(format!("Both of you need the same Loner-Strike version to share a server. The owner has {VERSION}.")));
+    if !same_series(&req.version, VERSION) {
+        return answer(Err(format!("Both of you need the same Loner-Strike version (the first two numbers) to share a server. The owner has {VERSION}.")));
     }
     blocking(move || {
         let (m, key) = redeem(&req.invite, &req.name)?;
@@ -1576,6 +1583,13 @@ pub mod tls {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn versions_in_one_series_share() {
+        assert!(super::same_series("1.0.3", "1.0.0"));
+        assert!(!super::same_series("1.1.0", "1.0.0"));
+        assert!(!super::same_series("", "1.0.0"));
+    }
+
     use super::*;
 
     #[test]

@@ -2,7 +2,7 @@
 name = "ls-control"
 # (its real version is Loner-Strike's own: build.rs reads it from app/src-tauri/Cargo.toml,
 # so the app and the service on the server always agree)
-version = "0.0.0"
+version = "1.0.0"
 description = "Loner-Strike's shared control service for a server on a Linux machine"
 license = "GPL-3.0"
 edition = "2021"
