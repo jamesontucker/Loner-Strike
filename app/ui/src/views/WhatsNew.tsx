@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 // the changelog, bundled with the app: what's new in this version, without asking the internet
 import changelog from "../../../../CHANGELOG.md?raw";
 
-/** A version's section of CHANGELOG.md ("## 0.1.3" up to the next "## "), or "". */
+/** A version's section of CHANGELOG.md ("## 1.0.0" up to the next "## "), or "". */
 export function changelogFor(version: string): string {
   const lines = changelog.split(/\r?\n/);
   const at = lines.findIndex((l) => l.trim() === `## ${version}`);

@@ -2,9 +2,9 @@
 
 What changed in each version. The downloads are on the [Releases](https://github.com/jamesontucker/Loner-Strike/releases) page.
 
-## 0.1.3
+## 1.0.0
 
-The biggest update yet:
+The first full release:
 - Bots that play like people, on Loner-Strike's own bot brain
 - Talk to them in team chat, or on your mic with voice commands
 - An easier app: a clearer sidebar, settings before a game, and My library
