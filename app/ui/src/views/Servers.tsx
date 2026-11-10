@@ -1501,7 +1501,7 @@ function Console({ server }: { server: ServerInfo }) {
     setSent((l) => [...l, `] ${c}`, ...(r.reply?.trim() ? r.reply.trim().split("\n") : [])].slice(-200));
   });
   return (
-    <div className="panel">
+    <div className="panel console-panel">
       <div className="row between">
         <h3>Console</h3>
         <label className="follow-toggle small-note">

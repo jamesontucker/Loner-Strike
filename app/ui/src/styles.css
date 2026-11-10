@@ -765,9 +765,13 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .server.selected { border-color: var(--signal); }
 .server h3 { margin: 0; font-size: 18px; }
 .server-head { display: flex; justify-content: space-between; gap: 14px; align-items: start; }
-.server-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; }
+.server-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; align-items: stretch; }
 .server-details .panel { background: var(--panel-2); }
-.console { margin: 0 0 10px; height: 260px; overflow: auto; background: #23271c; box-shadow: var(--sunken); padding: 10px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; color: var(--bone-dim); }
+/* the console fills its panel (beside the settings it's as tall as they are) */
+.console-panel { display: flex; flex-direction: column; min-height: 0; }
+.console-panel > .console { flex: 1 1 auto; min-height: 300px; height: auto; max-height: 70vh; }
+.console-panel > .row:first-child { margin-bottom: 8px; }
+.console { margin: 0 0 10px; height: 260px; overflow: auto; background: #23271c; box-shadow: var(--sunken); padding: 10px 12px; font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; color: var(--bone-dim); }
 /* the console's command box and its suggestions (ConsoleInput.tsx) */
 .console-input { position: relative; flex: 1 1 260px; display: flex; flex-direction: column; min-width: 0; }
 .console-form { align-items: flex-start; }
