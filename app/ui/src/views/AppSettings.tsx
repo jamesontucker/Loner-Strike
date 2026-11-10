@@ -654,7 +654,7 @@ function DailyBackups({ on, busy, disabled, onChange }: { on: boolean; busy: boo
   };
   return (
     <div className="setting-line daily-backups">
-      <div className="row between nowrap toggle">
+      <div className="row between toggle">
         <div>
           <b>Back up servers on Linux machines every day</b>
           <p className="muted">Their bans, admins and settings live on the machine. A copy of each is kept here, the last 7 days, while Loner-Strike is open. Passwords and Discord links aren't included.</p>
