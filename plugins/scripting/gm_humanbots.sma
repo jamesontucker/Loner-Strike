@@ -156,6 +156,7 @@ new bool:g_Chat                                 // gm_botchat is running
 new bool:g_BotFun                               // gm_botfun is running (bf_danger)
 new bool:g_NoBfDanger                           // ...but an older one, without bf_danger (never called)
 new bool:g_AfkOn[33]                            // the afk has started (it waits for solid ground)
+new bool:g_ByBrain[33]                          // the enemy it's on came from the brain's pick (it already reacted)
 new bool:g_Brain                                // Loner-Strike's bot brain (ls_bot) is there: it does the standing still
 new Float:g_BlockedSince[33]                    // a teammate has been waiting behind this one since
 new Trie:g_LastMap                              // bots here at the end of the last map (gm_botchat writes it)
@@ -955,7 +956,11 @@ public ev_death()
 				return
 			g_KnifeOut[killer] = true
 			engclient_cmd(killer, "weapon_knife")
-			set_task(random_float(1.5, 3.0) + 0.3 * float(min(g_RoundKills[killer], 4)), "task_lastinv", TASK_KNIFE + killer)
+			new Float:secs = random_float(1.5, 3.0) + 0.3 * float(min(g_RoundKills[killer], 4))
+			set_task(secs, "task_lastinv", TASK_KNIFE + killer)
+			// (the brain leaves it in hand that long, unless someone shows up)
+			if (g_Brain)
+				server_cmd("ls_bot %d knife %.1f", killer, secs + 0.2)
 		}
 	}
 }
@@ -1244,6 +1249,7 @@ public task_scan()
 		// the bot's own brain picks who to fight by threat (shooting at it, facing it, an AWPer,
 		// the one it's on); it says who in pev_euser4: the reaction and aim go to the same one
 		// (when it can be seen from here: the brain's notice is its own)
+		g_ByBrain[id] = false
 		if (g_Brain)
 		{
 			new foe = pev(id, pev_euser4)
@@ -1258,6 +1264,7 @@ public task_scan()
 				{
 					new Float:dot = (dir[0] * fwd[0] + dir[1] * fwd[1] + dir[2] * fwd[2]) / dist
 					best = foe
+					g_ByBrain[id] = true
 					bestAngle = floatacos(floatclamp(dot, -1.0, 1.0), degrees)
 					bestDist = dist
 					if (!seen)
@@ -1298,7 +1305,9 @@ public task_scan()
 				try_hold(id, now)
 			// holding: eyes kept on its spot the whole hold (the brain's own looking can
 			// wander onto a wall)
-			else if (g_HoldUntil[id] > now && now >= g_HoldLookAt[id])
+			// (with Loner-Strike's brain only the first look: after that it scans the angles it
+			// knows from the map, and gives the hold up when something happens)
+			else if (!g_Brain && g_HoldUntil[id] > now && now >= g_HoldLookAt[id])
 				hold_look(id, g_HoldUntil[id] - now)
 			continue
 		}
@@ -1400,6 +1409,14 @@ engage(id, target, Float:angle, Float:dist, s, Float:now)
 		}
 	}
 	over = floatclamp(over, 0.3, 12.0)
+
+	// (the brain picked this one: it has already noticed them and is turning to them with its
+	// own reaction and flick, so only a little more here, not a second full reaction)
+	if (g_Brain && g_ByBrain[id] && target == pev(id, pev_euser4))
+	{
+		rt *= 0.35
+		over *= 0.6
+	}
 
 	// a reaction has a ceiling: however far off or far away, a person has seen and fired by
 	// then (the brain's aim is already turning meanwhile: a long hold looks like hesitating)
@@ -1621,7 +1638,9 @@ public fw_cmdstart(id, uc, seed)
 	if (g_HoldUntil[id] > now)
 	{
 		// (or on the move: a person's "go b" took it off the angle; no crouch-walking there)
-		if (fight || unsteady(id) || (buttons0 & IN_USE) || mate_waiting(id, now) || hspeed(id) > 100.0)
+		// (the brain stands it still while it holds: moving at all means the brain let go of it -
+		// a noise, an enemy - and the hold's over; crouched walking is slower than 100)
+		if (fight || unsteady(id) || (buttons0 & IN_USE) || mate_waiting(id, now) || hspeed(id) > (g_Brain ? 40.0 : 100.0))
 		{
 			g_HoldUntil[id] = 0.0
 			g_NextHoldTry[id] = now + random_float(15.0, 40.0)
@@ -1634,7 +1653,7 @@ public fw_cmdstart(id, uc, seed)
 			set_uc(uc, UC_ForwardMove, 0.0)
 			set_uc(uc, UC_SideMove, 0.0)
 		}
-		else if (g_HoldDuck[id])
+		else if (g_HoldDuck[id] && hspeed(id) < 40.0)
 			set_uc(uc, UC_Buttons, get_uc(uc, UC_Buttons) | IN_DUCK)
 	}
 	// a nervous reload, unless someone showed up meanwhile (the danger it just fought
@@ -2250,6 +2269,8 @@ knife_run(id, Float:now)
 	{
 		g_KnifeRun[id] = true
 		engclient_cmd(id, "weapon_knife")
+		if (g_Brain)
+			server_cmd("ls_bot %d knife %.1f", id, floatmax(1.0, knife_window(id) - (now - g_RoundStartAt)))
 	}
 }
 
