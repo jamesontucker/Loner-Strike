@@ -1793,7 +1793,7 @@ public task_tbag(tid)
 bool:team_section(const section[])
 {
 	static const TEAM[][] = { "teamkill", "teamkilled", "r_sorry_tk", "r_ok_tk", "teammate_clutch", "losing_streak_team", "winning_streak_team",
-		"support", "nice_shot", "spectating", "last_alive", "callout", "callout_low", "callout_vague", "callout_hurt", "ghost", "comeback", "blocked", "in_my_way",
+		"support", "nice_shot", "spectating", "last_alive", "callout", "callout_low", "callout_vague", "callout_hurt", "ghost", "mate_fell", "comeback", "blocked", "in_my_way",
 		"clan", "clan_avenge" }
 	for (new i = 0; i < sizeof TEAM; i++)
 		if (equal(section, TEAM[i]))
@@ -3391,6 +3391,16 @@ public ev_death()
 	{
 		g_DeathRow[victim]++
 		want(victim, "death_self", 0, 0.25)
+		// (a fall - the world killed them: a teammate may laugh)
+		if (equal(weapon, "worldspawn") && !teams_off())
+		{
+			new mates[32], nm, team = get_user_team(victim)
+			for (new i = 1; i <= MaxClients; i++)
+				if (i != victim && is_user_connected(i) && is_user_bot(i) && get_user_team(i) == team)
+					mates[nm++] = i
+			if (nm)
+				want(mates[random(nm)], "mate_fell", victim, 0.35, random_float(1.0, 2.5), 0, true)
+		}
 		return
 	}
 	if (tk)
