@@ -101,7 +101,7 @@ native people_match(id, other, const key[], const op[], const value[])
 #define TASK_SPRAY    2100000             // a spray (+ userid)
 #define TASK_RADIO    2200000             // the caller's call (+ userid)
 #define TASK_RIVAL    2300000             // old rivals looked up after joining (+ userid)
-#define KNIFE_WINDOW  14.0                // knife runs only this early in a round
+#define KNIFE_WINDOW  14.0                // knife runs at most this early in a round (less on a small map: g_KnifeWindow)
 
 enum { STYLE_CLASSIC, STYLE_PUB, STYLE_MM, STYLE_VET, STYLE_NEWBIE, STYLE_LOCKED, STYLE_HACKER, STYLE_GOD, STYLE_COUNT }
 
@@ -1289,7 +1289,7 @@ public task_scan()
 			else if (get_pcvar_num(g_pHabits) && g_IdleMode && bad_ok(id, BAD_KNIFE) && now >= g_NextKnifeTry[id])
 				knife_run(id, now)
 			// the early part of the round is over: the gun comes back out
-			if (g_KnifeRun[id] && now - g_RoundStartAt > KNIFE_WINDOW + 2.0)
+			if (g_KnifeRun[id] && now - g_RoundStartAt > knife_window(id))
 			{
 				g_KnifeRun[id] = false
 				ensure_gun(id)
@@ -2190,11 +2190,60 @@ drop_slot(id, slot)
 }
 
 // Every few seconds without a fight, early in the round: some put the knife out to run faster
+// How long into the round a knife run lasts on this map: until a few seconds before the two
+// teams could first meet (half the distance between the spawns, at running speed), never on a
+// map where fights start at once (aim_, fy_, awp_, 35hp_ and 1v1 maps). A better player has
+// the gun out a little sooner
+new Float:g_KnifeWindow = -1.0
+
+Float:knife_window(id)
+{
+	if (g_KnifeWindow < 0.0)
+	{
+		new map[32]
+		get_mapname(map, charsmax(map))
+		if (equali(map, "aim_", 4) || equali(map, "fy_", 3) || equali(map, "awp_", 4) || equali(map, "35hp_", 5) || equali(map, "1v1", 3))
+			g_KnifeWindow = 0.0
+		else
+		{
+			new Float:t[3], Float:ct[3], nt, nct, ent = -1
+			while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", "info_player_deathmatch")) > 0)
+			{
+				new Float:o[3]
+				pev(ent, pev_origin, o)
+				for (new i = 0; i < 3; i++) t[i] += o[i]
+				nt++
+			}
+			ent = -1
+			while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", "info_player_start")) > 0)
+			{
+				new Float:o[3]
+				pev(ent, pev_origin, o)
+				for (new i = 0; i < 3; i++) ct[i] += o[i]
+				nct++
+			}
+			if (nt && nct)
+			{
+				for (new i = 0; i < 3; i++)
+				{
+					t[i] /= float(nt)
+					ct[i] /= float(nct)
+				}
+				// (straight-line distance: real routes are longer, so this errs on the early side)
+				g_KnifeWindow = floatclamp(get_distance_f(t, ct) * 0.5 / 250.0 - 3.0, 0.0, KNIFE_WINDOW)
+			}
+			else
+				g_KnifeWindow = KNIFE_WINDOW
+		}
+	}
+	return g_KnifeWindow * (1.0 - 0.3 * floatclamp(1.4 - skill_of(id), 0.0, 1.0))
+}
+
 knife_run(id, Float:now)
 {
 	g_NextKnifeTry[id] = now + 3.0
 	// only early in the round, when nobody can be close yet (and never in a match)
-	if (g_KnifeRun[id] || now - g_NoTargetSince[id] < 5.0 || now - g_RoundStartAt > KNIFE_WINDOW || is_match() || !holding_gun(id) || danger(id))
+	if (g_KnifeRun[id] || now - g_NoTargetSince[id] < 5.0 || now - g_RoundStartAt > knife_window(id) - 1.0 || is_match() || !holding_gun(id) || danger(id))
 		return
 	new p = persona(id)
 	if (random_float(0.0, 1.0) < (has(p, "P5") ? 0.30 : has(p, "SJne") ? 0.25 : has(p, "46") ? 0.02 : 0.07) * pers())

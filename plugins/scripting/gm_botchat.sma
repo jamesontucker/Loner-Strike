@@ -264,6 +264,7 @@ new g_SiteLetter[3]                         // each bomb site's letter ('a', 'b'
 new bool:g_SiteFixed[2]                     // a and b placed by the nav's names
 new Float:g_SprayAt[33][3], Float:g_SprayNormal[33][3], Float:g_SprayUntil[33]
 new Float:g_Sites[3][3], g_SiteCount        // the bomb sites' middles, A first
+new Float:g_SiteHalf[3][3]                   // ...and half their size (a point target: a site's usual size)
 new Float:g_SpawnT[3], Float:g_SpawnCT[3], bool:g_HaveT, bool:g_HaveCT
 new Trie:g_PlaceAt                          // a place as people say it -> where someone stood in it
 new Trie:g_PlaceWord                        // a place's telling word -> the place ("long" -> "long a"; "" two share it)
@@ -5171,12 +5172,30 @@ place_of(id, out[], len)
 rough_place(const Float:o[3], out[], len)
 {
 	out[0] = 0
+	// on a site (or right at its edge, on its level): "b"; on the way to one, closer to it than
+	// to anything else: "b side" (a site's middle 800 units away is often the tunnels or a door
+	// short of it, and "at b" there sent people to the wrong place)
+	new nearest = -1, Float:nearD = 1100.0
 	for (new i = 0; i < g_SiteCount; i++)
-		if (get_distance_f(o, g_Sites[i]) < 800.0)
+	{
+		if (floatabs(o[0] - g_Sites[i][0]) <= g_SiteHalf[i][0] + 150.0 && floatabs(o[1] - g_Sites[i][1]) <= g_SiteHalf[i][1] + 150.0
+			&& floatabs(o[2] - g_Sites[i][2]) <= g_SiteHalf[i][2] + 200.0)
 		{
 			formatex(out, len, "%c", g_SiteLetter[i])
 			return
 		}
+		new Float:d = get_distance_f(o, g_Sites[i])
+		if (d < nearD)
+		{
+			nearD = d
+			nearest = i
+		}
+	}
+	if (nearest >= 0 && !(g_HaveT && get_distance_f(o, g_SpawnT) < 700.0) && !(g_HaveCT && get_distance_f(o, g_SpawnCT) < 700.0))
+	{
+		formatex(out, len, "%c side", g_SiteLetter[nearest])
+		return
+	}
 	if (g_HaveT && get_distance_f(o, g_SpawnT) < 700.0)
 		copy(out, len, "t spawn")
 	else if (g_HaveCT && get_distance_f(o, g_SpawnCT) < 700.0)
@@ -5194,12 +5213,20 @@ find_spots()
 		pev(ent, pev_absmin, mins)
 		pev(ent, pev_absmax, maxs)
 		for (new i = 0; i < 3; i++)
+		{
 			g_Sites[g_SiteCount][i] = (mins[i] + maxs[i]) * 0.5
+			g_SiteHalf[g_SiteCount][i] = (maxs[i] - mins[i]) * 0.5
+		}
 		g_SiteCount++
 	}
 	ent = -1
 	while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", "info_bomb_target")) > 0 && g_SiteCount < 3)
-		pev(ent, pev_origin, g_Sites[g_SiteCount++])
+	{
+		pev(ent, pev_origin, g_Sites[g_SiteCount])
+		g_SiteHalf[g_SiteCount][0] = g_SiteHalf[g_SiteCount][1] = 256.0
+		g_SiteHalf[g_SiteCount][2] = 128.0
+		g_SiteCount++
+	}
 	name_sites()
 	g_HaveT = spawn_middle("info_player_deathmatch", g_SpawnT)
 	g_HaveCT = spawn_middle("info_player_start", g_SpawnCT)
