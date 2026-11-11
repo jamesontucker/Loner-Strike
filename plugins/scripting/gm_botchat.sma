@@ -614,7 +614,7 @@ public plugin_init()
 	register_plugin(PLUGIN, VERSION, AUTHOR)
 	g_pLevel  = register_cvar("gm_botchat", "2")
 	g_pHumans = register_cvar("gm_botchat_humans", "1")
-	g_pDeadChat = register_cvar("gm_botchat_deadchat", "1")
+	g_pDeadChat = register_cvar("gm_botchat_deadchat", "-1")
 	g_pStop = register_cvar("gm_botchat_stop", "1")
 	g_pObey = register_cvar("gm_botchat_obey", "1")
 	register_srvcmd("gm_botchat_reload", "cmd_reload")
@@ -1268,6 +1268,20 @@ public client_disconnected(id)
 			g_PendBot[i] = 0
 			remove_task(TASK_SAY + i)
 		}
+}
+
+// Dead bots' chat for the living (gm_botchat_deadchat): -1 automatic is settled to what fits -
+// a dedicated server only the dead, as standard CS; a game of your own everyone - and written
+// back, so the app shows it as the one picked (a choice made there replaces it)
+bool:dead_chat_on()
+{
+	new v = get_pcvar_num(g_pDeadChat)
+	if (v < 0)
+	{
+		v = is_dedicated_server() ? 0 : 1
+		set_pcvar_num(g_pDeadChat, v)
+	}
+	return v != 0
 }
 
 // A dead bot's line, shown to the living too (with the game's own *DEAD* tag)
@@ -2964,7 +2978,9 @@ public task_say(task)
 	g_LastSpoke = id
 	g_LastSpokeAt = get_gametime()
 	// the living don't see the dead talk; like pub servers' dead-chat plugins, show it to them
-	if (!is_user_alive(id) && get_pcvar_num(g_pDeadChat))
+	// (automatic: not on a dedicated server, where standard is only the dead; in a game of
+	// your own, yes)
+	if (!is_user_alive(id) && dead_chat_on())
 		dead_chat(id, text, team)
 	// said to a person who can see it: they may answer, and this bot carries on (a thread)
 	if (other && !is_user_bot(other) && !g_PendQuiet[slot] && (!team || get_user_team(other) == get_user_team(id)))
@@ -3303,6 +3319,7 @@ public task_idle_chatter()
 
 public ev_newround()
 {
+	dead_chat_on()
 	for (new i = 0; i <= MaxClients; i++)
 		g_HurtCalled[i] = false
 	g_Freeze = true
