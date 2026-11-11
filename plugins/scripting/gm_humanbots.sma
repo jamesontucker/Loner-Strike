@@ -177,7 +177,7 @@ new bool:g_Career
 
 new g_pPersonality, g_pHold, g_pBotPlay
 new Float:g_NextRadio[33], Float:g_TeamRadioAt[3]       // radio cooldowns: each bot, each team
-new Float:g_HoldUntil[33], Float:g_NextHoldTry[33], bool:g_HoldDuck[33], g_HoldHp[33]
+new Float:g_HoldStart[33], Float:g_HoldUntil[33], Float:g_NextHoldTry[33], bool:g_HoldDuck[33], g_HoldHp[33]
 new Float:g_HoldYaw[33], bool:g_HoldYawSet[33], Float:g_HoldLookAt[33]   // where a hold watches
 // gm_people loaded (looked up once), each bot's temper from it (cached: not per frame), and
 // when it last turned urgently to someone behind it
@@ -1253,6 +1253,9 @@ public task_scan()
 		if (g_Brain)
 		{
 			new foe = pev(id, pev_euser4)
+			// (the brain's pick and the plugin's the same one: the brain still noticed first)
+			if (foe == best && best)
+				g_ByBrain[id] = true
 			if (foe != best && 1 <= foe <= MaxClients && is_enemy(id, foe))
 			{
 				new Float:to[3], Float:dir[3]
@@ -1640,7 +1643,9 @@ public fw_cmdstart(id, uc, seed)
 		// (or on the move: a person's "go b" took it off the angle; no crouch-walking there)
 		// (the brain stands it still while it holds: moving at all means the brain let go of it -
 		// a noise, an enemy - and the hold's over; crouched walking is slower than 100)
-		if (fight || unsteady(id) || (buttons0 & IN_USE) || mate_waiting(id, now) || hspeed(id) > (g_Brain ? 40.0 : 100.0))
+		// (the first moments it's still coming to a stop: the brain's hold is only just taking it)
+		if (fight || unsteady(id) || (buttons0 & IN_USE) || mate_waiting(id, now)
+			|| hspeed(id) > (g_Brain ? (now - g_HoldStart[id] < 0.8 ? 400.0 : 40.0) : 100.0))
 		{
 			g_HoldUntil[id] = 0.0
 			g_NextHoldTry[id] = now + random_float(15.0, 40.0)
@@ -2620,6 +2625,7 @@ try_hold(id, Float:now)
 	if (cvar_exists("bot_ls_routes") && !pick_hold_yaw(id))
 		return
 	g_HoldUntil[id] = now + len
+	g_HoldStart[id] = now
 	g_HoldDuck[id] = random_float(0.0, 1.0) < (kind == KIND_CAREFUL ? 0.35 : 0.15)
 	g_HoldHp[id] = get_user_health(id)
 	brain_hold(id, len)
