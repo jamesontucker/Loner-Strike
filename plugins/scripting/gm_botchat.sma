@@ -2818,7 +2818,8 @@ public task_stop_type(const secs[], tid)
 	new id = g_PendBot[slot]
 	if (!id || !is_user_connected(id) || get_user_userid(id) != g_PendUser[slot] || !stop_ok(id))
 		return
-	server_cmd("ls_bot %d hold %s bc", id, secs)
+	// (its own tag: a typing pause isn't a person's order, and gives way when something happens)
+	server_cmd("ls_bot %d hold %s ty", id, secs)
 	g_TypeHoldUntil[id] = get_gametime() + str_to_float(secs)
 	g_TypeBlocked[id] = 0.0
 	remove_task(TASK_TYPEHOLD + id)
@@ -2864,7 +2865,7 @@ public task_type_hold(tid)
 		g_TypeBlocked[id] = now
 	else if (now - g_TypeBlocked[id] >= 0.9)
 	{
-		server_cmd("ls_bot %d release bc", id)
+		server_cmd("ls_bot %d release ty", id)
 		g_TypeHoldUntil[id] = 0.0
 		remove_task(tid)
 	}
@@ -9188,7 +9189,7 @@ bool:word_in(const msg[], const word[])
 // living bots go on it as on a callout. Not in matches or steered modes
 public task_ghost()
 {
-	if (!get_pcvar_num(g_pGhost) || g_SteeredMode || match_like() || teams_off() || !cvar_exists("bot_ls_routes"))
+	if (!get_pcvar_num(g_pGhost) || g_SteeredMode || match_like() || teams_off() || dm_like() || !cvar_exists("bot_ls_routes"))
 		return
 	new Float:now = get_gametime()
 	for (new id = 1; id <= MaxClients; id++)

@@ -382,6 +382,24 @@ bool:unsteady(id)
 	return !(pev(id, pev_flags) & FL_ONGROUND) || pev(id, pev_movetype) == MOVETYPE_FLY
 }
 
+// What Loner-Strike's brain says the bot is doing (pev_vuser1[1], bits): defusing, planting,
+// running from the bomb, holding for a plugin, hiding
+#define BS_DEFUSE  1
+#define BS_PLANT   2
+#define BS_ESCAPE  4
+#define BS_HOLD    8
+#define BS_HIDE    16
+#define BS_BOMB    (BS_DEFUSE | BS_PLANT)
+
+brain_state(id)
+{
+	if (!g_Brain)
+		return 0
+	new Float:v[3]
+	pev(id, pev_vuser1, v)
+	return floatround(v[1])
+}
+
 // A match (gm_scrim): only the guns, nothing silly
 bool:is_match()
 {
@@ -1596,7 +1614,7 @@ public fw_cmdstart(id, uc, seed)
 	// the bot's own brain runs between spots with the knife out, and keeps it out when
 	// shot by someone it hasn't spotted yet: anyone past a newer player gets a gun out
 	// at once (a newer player sometimes keeps fumbling with it)
-	else if ((fight || now - g_HurtAt[id] < 1.5) && now >= g_NextGunPull[id] && s != STYLE_NEWBIE && held_knife(id))
+	else if ((fight || now - g_HurtAt[id] < 1.5) && now >= g_NextGunPull[id] && s != STYLE_NEWBIE && held_knife(id) && !(brain_state(id) & BS_ESCAPE))
 	{
 		g_NextGunPull[id] = now + 0.6
 		gun_out(id)
@@ -1658,7 +1676,8 @@ public fw_cmdstart(id, uc, seed)
 			set_uc(uc, UC_ForwardMove, 0.0)
 			set_uc(uc, UC_SideMove, 0.0)
 		}
-		else if (g_HoldDuck[id] && hspeed(id) < 40.0)
+		// (only while the brain still has it holding: once the brain lets go it stands)
+		else if (g_HoldDuck[id] && hspeed(id) < 40.0 && (brain_state(id) & BS_HOLD))
 			set_uc(uc, UC_Buttons, get_uc(uc, UC_Buttons) | IN_DUCK)
 	}
 	// a nervous reload, unless someone showed up meanwhile (the danger it just fought
@@ -1672,7 +1691,8 @@ public fw_cmdstart(id, uc, seed)
 	// a show-off moment, only while nothing's going on: a fight or getting hurt ends it
 	if (g_Show[id])
 	{
-		if (now >= g_ShowUntil[id] || fight || get_user_health(id) < g_ShowHp[id])
+		// (never on the bomb: a jump or a duck would stop a plant or a defuse)
+		if (now >= g_ShowUntil[id] || fight || get_user_health(id) < g_ShowHp[id] || (brain_state(id) & BS_BOMB))
 			g_Show[id] = 0
 		else
 		{
@@ -1694,7 +1714,7 @@ public fw_cmdstart(id, uc, seed)
 		}
 	}
 	// panicking players jump about
-	if (g_IdleMode && g_PanicUntil[id] > now && (s == STYLE_PUB || s == STYLE_NEWBIE) && random_float(0.0, 1.0) < 0.02 * pers())
+	if (g_IdleMode && g_PanicUntil[id] > now && (s == STYLE_PUB || s == STYLE_NEWBIE) && random_float(0.0, 1.0) < 0.02 * pers() && !(brain_state(id) & BS_BOMB))
 		set_uc(uc, UC_Buttons, get_uc(uc, UC_Buttons) | IN_JUMP)
 
 	new buttons = get_uc(uc, UC_Buttons)
@@ -1706,6 +1726,10 @@ public fw_cmdstart(id, uc, seed)
 		hold = true                             // still reacting
 	else if (get_pcvar_num(g_pAim) && now < g_PauseUntil[id])
 		hold = true                             // between bursts
+	// (the brain firing at something else - a wallbang, a prefire, another enemy: not this
+	// one's reaction to hold back)
+	if (hold && g_Brain && pev(id, pev_euser4) != g_Target[id])
+		hold = false
 	if (hold)
 		set_uc(uc, UC_Buttons, buttons & ~IN_ATTACK)
 	return FMRES_IGNORED
@@ -2267,7 +2291,7 @@ knife_run(id, Float:now)
 {
 	g_NextKnifeTry[id] = now + 3.0
 	// only early in the round, when nobody can be close yet (and never in a match)
-	if (g_KnifeRun[id] || now - g_NoTargetSince[id] < 5.0 || now - g_RoundStartAt > knife_window(id) - 1.0 || is_match() || !holding_gun(id) || danger(id))
+	if (g_KnifeRun[id] || now - g_NoTargetSince[id] < 5.0 || now - g_RoundStartAt > knife_window(id) - 1.0 || match_like() || !holding_gun(id) || danger(id))
 		return
 	new p = persona(id)
 	if (random_float(0.0, 1.0) < (has(p, "P5") ? 0.30 : has(p, "SJne") ? 0.25 : has(p, "46") ? 0.02 : 0.07) * pers())
