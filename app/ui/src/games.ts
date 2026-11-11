@@ -27,7 +27,7 @@ export const BOT_STYLES: [string, string][] = [["0", "Original"], ["4", "Newbie 
 
 /** What each bot style is like, by gm_botstyle value. */
 export const BOT_STYLE_NOTE: Record<string, string> = {
-  "0": "The game's own bots: instant reactions, perfect aim",
+  "0": "Robotic: the game's stock bots, with instant reactions and perfect aim",
   "4": "New players: slow to react, they spray and miss a lot",
   "1": "A typical public server: a few sharp players, most average, some bad",
   "8": "Everyone different, from new to very good. A regular keeps their level",
