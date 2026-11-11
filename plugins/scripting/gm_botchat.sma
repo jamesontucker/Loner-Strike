@@ -248,6 +248,7 @@ new g_BotSawPlace[33][32], Float:g_BotSawAt[33]   // where this bot last had an 
 new g_LastSpoke, Float:g_LastSpokeAt        // the last bot to say something
 new g_AskBot[33], g_AskIntent[33], Float:g_AskAt[33]  // per person: the bot they last asked, what, when
 // what a bot was asked to do: the request, by whom, tries left after "1 sec", where to
+new Float:g_ReqHoldEnd[33]           // when a person's "wait" it took runs out
 new g_ReqAct[33], g_ReqFor[33], g_ReqForUser[33], g_ReqArg[33], g_ReqTries[33], g_ReqPlace[33][32], bool:g_ReqTeam[33]
 #define TASK_REQCHECK 8620                 // did it take? (+ bot)
 #define TASK_REQLIVE  8660                 // asked in freeze time: once the round starts (+ bot)
@@ -5935,7 +5936,7 @@ Float:info_heard(id, spot, const place[], bool:team, Float:extra, count)
 		new Float:o[3]
 		pev(b, pev_origin, o)
 		new Float:d = get_distance_f(o, at)
-		if (t == 2 && site && many && moves && d > 1200.0 && rotated < maxrot && !g_ReqAct[b] && random_float(0.0, 1.0) < rotate_odds(b))
+		if (t == 2 && site && many && moves && d > 1200.0 && rotated < maxrot && !req_live(b) && random_float(0.0, 1.0) < rotate_odds(b))
 		{
 			new sec[24]
 			if (req_decide(b, id, I_GOTO, false, sec, charsmax(sec)) == REQ_YES)
@@ -7519,8 +7520,36 @@ req_set(bot, human, it, arg, const place[], bool:team, bool:sayyes, bool:sayfail
 }
 
 // Forgets it: the bot died, the round's over, it gave up, they left
+// A person's order this bot took that's still on: a "wait" until its time runs out; a "go" or a
+// "follow" while the brain still says so (pev_vuser1 x: until when, 0 once it's over - done, the
+// leader dead, given up). One that's over is cleared here
+bool:req_live(bot)
+{
+	if (!g_ReqAct[bot])
+		return false
+	new Float:now = get_gametime()
+	if (g_ReqAct[bot] == I_HOLD && g_ReqHoldEnd[bot] > 0.0 && now > g_ReqHoldEnd[bot])
+	{
+		req_clear(bot)
+		return false
+	}
+	if (g_Fork && (g_ReqAct[bot] == I_GOTO || g_ReqAct[bot] == I_FOLLOW || g_ReqAct[bot] == I_COME) && !g_ReqWaitLive[bot])
+	{
+		new Float:took, Float:v[3]
+		pev(bot, pev_fuser4, took)
+		pev(bot, pev_vuser1, v)
+		if (took > 0.0 && now - took > 2.0 && v[0] <= now)
+		{
+			req_clear(bot)
+			return false
+		}
+	}
+	return true
+}
+
 req_clear(bot)
 {
+	g_ReqHoldEnd[bot] = 0.0
 	g_ReqAct[bot] = g_ReqFor[bot] = g_ReqPrevFor[bot] = 0
 	g_ReqWaitLive[bot] = false
 	g_ReqWalk[bot] = false
@@ -7552,7 +7581,12 @@ req_do(bot, human, it, arg)
 				server_cmd("ls_bot %d plant -1", bot)
 		}
 		case I_GIVEBOMB: server_cmd("ls_bot %d dropbomb %d", bot, human)
-		case I_HOLD: server_cmd("ls_bot %d hold %d bc", bot, match_like() ? 15 : random_num(7, 13))
+		case I_HOLD:
+		{
+			new secs = match_like() ? 15 : random_num(7, 13)
+			server_cmd("ls_bot %d hold %d bc", bot, secs)
+			g_ReqHoldEnd[bot] = get_gametime() + float(secs) + 1.0
+		}
 		// "go b": it holds the spot a while once there (longer in a match); "come here" just comes
 		// (bc: a person's order, which the game's bot keeps through a fight; an unreachable spot it
 		// turns down, and the check below says "cant rn")
@@ -8128,9 +8162,9 @@ Float:release_for(id, to, Float:extra)
 	new first
 	for (new b = 1; b <= MaxClients; b++)
 	{
-		if (!is_user_connected(b) || !is_user_bot(b) || (to && b != to) || g_ReqFor[b] != id || !g_ReqAct[b])
+		if (!is_user_connected(b) || !is_user_bot(b) || (to && b != to) || g_ReqFor[b] != id || !req_live(b))
 			continue
-		if (is_user_alive(b) && !g_ReqWaitLive[b])
+		if (is_user_alive(b) && !g_ReqWaitLive[b] && g_Fork)
 			server_cmd("ls_bot %d release bc", b)
 		req_clear(b)
 		if (!first)
