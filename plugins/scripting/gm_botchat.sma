@@ -215,6 +215,8 @@ new g_KillerOf[33], Float:g_KillerOfAt[33], g_VictimOf[33], Float:g_VictimOfAt[3
 new g_HeardRun, Float:g_HeardRunAt
 
 // Game state, for answers that use it (empty when the game doesn't say)
+new g_pGhost                              // gm_botchat_ghost: hot-headed dead bots ghost (off by default)
+new Float:g_GhostNext[33]
 new bool:g_HurtCalled[33]                // "he's lit" said about them this life
 new g_Place[33][32]                  // where each player last was: the map's place names (CZ navs)
 new g_KillerPlace[33][32]            // how each person last died: where the killer was,
@@ -624,6 +626,8 @@ public plugin_init()
 	if (!g_pAiUrl)
 		g_pAiUrl = register_cvar("gm_ai_url", "")
 
+	g_pGhost = register_cvar("gm_botchat_ghost", "0")
+	set_task(3.0, "task_ghost", 0, "", 0, "b")
 	register_event("DeathMsg", "ev_death", "a")
 	register_event("SendAudio", "ev_twin", "a", "2&%!MRAD_terwin")
 	register_event("SendAudio", "ev_ctwin", "a", "2&%!MRAD_ctwin")
@@ -1789,7 +1793,7 @@ public task_tbag(tid)
 bool:team_section(const section[])
 {
 	static const TEAM[][] = { "teamkill", "teamkilled", "r_sorry_tk", "r_ok_tk", "teammate_clutch", "losing_streak_team", "winning_streak_team",
-		"support", "nice_shot", "spectating", "last_alive", "callout", "callout_low", "callout_vague", "callout_hurt", "comeback", "blocked", "in_my_way",
+		"support", "nice_shot", "spectating", "last_alive", "callout", "callout_low", "callout_vague", "callout_hurt", "ghost", "comeback", "blocked", "in_my_way",
 		"clan", "clan_avenge" }
 	for (new i = 0; i < sizeof TEAM; i++)
 		if (equal(section, TEAM[i]))
@@ -9166,4 +9170,54 @@ bool:word_in(const msg[], const word[])
 		from = s + 1
 	}
 	return false
+}
+
+
+// Ghosting (gm_botchat_ghost, off by default): a hot-headed bot that's dead now and then tells
+// its team where an enemy is from the spectator view - bad manners some people have - and the
+// living bots go on it as on a callout. Not in matches or steered modes
+public task_ghost()
+{
+	if (!get_pcvar_num(g_pGhost) || g_SteeredMode || match_like() || teams_off() || !cvar_exists("bot_ls_routes"))
+		return
+	new Float:now = get_gametime()
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (!is_user_connected(id) || !is_user_bot(id) || is_user_alive(id) || now < g_GhostNext[id])
+			continue
+		new team = get_user_team(id)
+		if (team != 1 && team != 2)
+			continue
+		new bool:hot = has_persona(id, "rtsHOo") || (LibraryExists("gm_people", LibType_Library) && people_get(id, "temper") == 2)
+		if (!hot)
+		{
+			g_GhostNext[id] = now + 9999.0
+			continue
+		}
+		g_GhostNext[id] = now + random_float(25.0, 45.0)
+		// an enemy alive, and a teammate alive to tell
+		new foes[32], nf, mates[32], nm
+		for (new i = 1; i <= MaxClients; i++)
+		{
+			if (!is_user_alive(i))
+				continue
+			if (get_user_team(i) == team)
+			{
+				if (is_user_bot(i))
+					mates[nm++] = i
+			}
+			else if (get_user_team(i) == 3 - team)
+				foes[nf++] = i
+		}
+		if (!nf || !nm)
+			continue
+		new foe = foes[random(nf)]
+		copy(g_CtxPlace, charsmax(g_CtxPlace), g_Place[foe])
+		want(id, "ghost", foe, 0.9, random_float(0.3, 1.0), 0, true)
+		g_CtxPlace[0] = 0
+		new Float:at[3]
+		pev(foe, pev_origin, at)
+		for (new k = 0; k < nm; k++)
+			server_cmd("ls_bot %d callout %.0f %.0f %.0f", mates[k], at[0], at[1], at[2])
+	}
 }
