@@ -248,6 +248,7 @@ new g_BotSawPlace[33][32], Float:g_BotSawAt[33]   // where this bot last had an 
 new g_LastSpoke, Float:g_LastSpokeAt        // the last bot to say something
 new g_AskBot[33], g_AskIntent[33], Float:g_AskAt[33]  // per person: the bot they last asked, what, when
 // what a bot was asked to do: the request, by whom, tries left after "1 sec", where to
+new Float:g_ReqSetAt[33]             // when it took the order it has
 new Float:g_ReqHoldEnd[33]           // when a person's "wait" it took runs out
 new g_ReqAct[33], g_ReqFor[33], g_ReqForUser[33], g_ReqArg[33], g_ReqTries[33], g_ReqPlace[33][32], bool:g_ReqTeam[33]
 #define TASK_REQCHECK 8620                 // did it take? (+ bot)
@@ -7451,6 +7452,15 @@ req_decide(bot, human, it, bool:named, section[], len)
 		copy(section, len, "r_req_bomb")
 		return REQ_NOPE
 	}
+	// someone else's order taken a moment ago (go, follow, wait): most stick with the first
+	// call for a bit, as people do, and say so - not flip to whoever spoke last
+	if (it != I_SPRAY && !fun && g_ReqFor[bot] && g_ReqFor[bot] != human && get_gametime() - g_ReqSetAt[bot] < 10.0 && req_live(bot)
+		&& (g_ReqAct[bot] == I_GOTO || g_ReqAct[bot] == I_FOLLOW || g_ReqAct[bot] == I_COME || g_ReqAct[bot] == I_HOLD)
+		&& random_float(0.0, 1.0) < 0.7)
+	{
+		copy(section, len, "r_req_other")
+		return REQ_NO
+	}
 	if (random_float(0.0, 1.0) >= req_odds(bot, human, it, named))
 	{
 		copy(section, len, it == I_HOLD ? "r_req_no_hold" : (it == I_FOLLOW || it == I_COME) ? "r_req_no_follow" : fun ? "r_req_no_fun" : "r_req_no")
@@ -7516,6 +7526,7 @@ req_set(bot, human, it, arg, const place[], bool:team, bool:sayyes, bool:sayfail
 	g_ReqFirst[bot] = true
 	g_ReqWaitLive[bot] = false
 	g_ReqRound[bot] = g_Round
+	g_ReqSetAt[bot] = get_gametime()
 	copy(g_ReqPlace[bot], charsmax(g_ReqPlace[]), place)
 }
 
