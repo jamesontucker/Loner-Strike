@@ -101,6 +101,9 @@ native people_match(id, other, const key[], const op[], const value[])
 #define TASK_SPRAY    2100000             // a spray (+ userid)
 #define TASK_RADIO    2200000             // the caller's call (+ userid)
 #define TASK_RIVAL    2300000             // old rivals looked up after joining (+ userid)
+#define TASK_CELEB    2400000             // a celebration when the other team's all dead (+ id)
+new Float:g_WipeHopAt                            // the shared beat bots hop on after a wipe
+new g_WipeHops[33]                               // hops left on it
 #define KNIFE_WINDOW  14.0                // knife runs at most this early in a round (less on a small map: g_KnifeWindow)
 
 enum { STYLE_CLASSIC, STYLE_PUB, STYLE_MM, STYLE_VET, STYLE_NEWBIE, STYLE_LOCKED, STYLE_HACKER, STYLE_GOD, STYLE_COUNT }
@@ -924,6 +927,9 @@ public ev_death()
 		new p = persona(killer)
 		radio(killer, "enemydown", has(p, "r") ? 0.12 : has(p, "it") ? 0.06 : 0.02, 30.0, 15.0)
 	}
+	// the last of a team down: the winners left alive may celebrate
+	if (victim >= 1 && victim <= MaxClients)
+		check_wiped(victim)
 	if (killer < 1 || killer > MaxClients || killer == victim || !is_user_bot(killer))
 		return
 	g_Tilt[killer] = floatmax(g_Tilt[killer] - 0.08, -0.1)
@@ -979,6 +985,101 @@ public ev_death()
 			// (the brain leaves it in hand that long, unless someone shows up)
 			if (g_Brain)
 				server_cmd("ls_bot %d knife %.1f", killer, secs + 0.2)
+		}
+	}
+}
+
+// The whole other team dead: the round's won and nothing's left to shoot. The bots still alive
+// on the winning side may play about - the jokers and show-offs most, serious ones hardly - with
+// a hop or three, crouch spam, the knife out or a spray, each at its own moment. Not in a match,
+// deathmatch, or with the game's own bots
+check_wiped(victim)
+{
+	new team = get_user_team(victim)
+	if ((team != 1 && team != 2) || !get_pcvar_num(g_pShowoff) || !g_IdleMode || style() == STYLE_CLASSIC || match_like() || dm_mode())
+		return
+	for (new i = 1; i <= MaxClients; i++)
+		if (i != victim && is_user_alive(i) && get_user_team(i) == team)
+			return
+	// (one beat for everyone hopping: bots close together jump together)
+	g_WipeHopAt = get_gametime() + random_float(1.0, 1.6)
+	new bool:sprays = get_pcvar_num(g_pSprays) && (g_SprayCount || g_LogoSpray)
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (!is_user_alive(id) || !is_user_bot(id) || get_user_team(id) != 3 - team)
+			continue
+		new p = persona(id)
+		new Float:chance = (has(p, "jkhOmX9") ? 0.65 : has(p, "qLdu") ? 0.05 : 0.25) * pers()
+		if (random_float(0.0, 1.0) >= floatmin(chance, 0.9))
+			continue
+		remove_task(TASK_CELEB + id)
+		// a tag on the wall: the ones who love spraying nearly always, others now and then
+		if (sprays && random_float(0.0, 1.0) < (has(p, "9") ? 0.8 : has(p, "jkhXS3") ? 0.5 : 0.2))
+		{
+			g_SprayTries[id] = 0
+			set_task(random_float(0.3, 1.2), "task_spray", TASK_SPRAY + get_user_userid(id))
+		}
+		// hopping about with the others (the jokers and the young ones most), or a bit of
+		// showing off of its own
+		if (random_float(0.0, 1.0) < (has(p, "jkhOm") ? 0.7 : 0.35))
+			g_WipeHops[id] = 2 + random(3)
+		else
+			g_WipeHops[id] = 0
+		set_task(g_WipeHops[id] ? floatmax(0.1, g_WipeHopAt - get_gametime()) : random_float(0.6, 2.2), "task_celebrate", TASK_CELEB + id)
+	}
+}
+
+public task_celebrate(tid)
+{
+	new id = tid - TASK_CELEB
+	if (!is_user_alive(id) || !is_user_bot(id) || g_KnifeOut[id])
+		return
+	new Float:now = get_gametime()
+	g_ShowHp[id] = get_user_health(id)
+	// hopping on the shared beat: everyone hopping goes up at the same moment
+	if (g_WipeHops[id] > 0)
+	{
+		g_WipeHops[id]--
+		g_Show[id] = 2
+		g_ShowUntil[id] = now + 0.3
+		if (g_WipeHops[id] > 0)
+		{
+			// (the next beat: the same rhythm for all of them)
+			new Float:beat = 0.85
+			new Float:next = g_WipeHopAt
+			while (next <= now + 0.05)
+				next += beat
+			set_task(next - now, "task_celebrate", TASK_CELEB + id)
+		}
+		return
+	}
+	if (g_Show[id])
+		return
+	switch (random(3))
+	{
+		case 0:
+		{
+			g_Show[id] = 1
+			g_ShowUntil[id] = now + random_float(1.5, 3.0)
+			g_ShowDuck[id] = bool:random(2)
+			g_ShowNext[id] = now + random_float(0.0, 0.15)
+		}
+		case 1:
+		{
+			if (!holding_gun(id))
+				return
+			g_KnifeOut[id] = true
+			engclient_cmd(id, "weapon_knife")
+			new Float:secs = random_float(2.0, 4.0)
+			set_task(secs, "task_lastinv", TASK_KNIFE + id)
+			if (g_Brain)
+				server_cmd("ls_bot %d knife %.1f", id, secs + 0.2)
+		}
+		default:
+		{
+			// (a single hop of its own)
+			g_Show[id] = 2
+			g_ShowUntil[id] = now + 0.3
 		}
 	}
 }
@@ -2052,6 +2153,12 @@ public ev_new_round_sprays()
 
 public ev_round_start()
 {
+	// (a celebration still pending from the last round is over)
+	for (new c = 1; c <= MaxClients; c++)
+	{
+		remove_task(TASK_CELEB + c)
+		g_WipeHops[c] = 0
+	}
 	clear_sprays()
 	g_RoundStartAt = get_gametime()
 	g_BombPlanted = false
