@@ -1433,7 +1433,9 @@ engage(id, target, Float:angle, Float:dist, s, Float:now)
 
 	// (the brain picked this one: it has already noticed them and is turning to them with its
 	// own reaction and flick, so only a little more here, not a second full reaction)
-	if (g_Brain && g_ByBrain[id] && target == pev(id, pev_euser4))
+	// (with the brain, it has already reacted - the bot profile's reaction time - before it
+	// turns to anyone: only a little more here, never a second full reaction stacked on it)
+	if (g_Brain)
 	{
 		rt *= 0.35
 		over *= 0.6

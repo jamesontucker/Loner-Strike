@@ -21,7 +21,9 @@ export const BOT_NOTE: Record<BotRating, string> = { great: "Bots play this well
 export const BOT_RATING_INFO = "How well bots play each mode. Some modes are made for people, so bots are weak or missing there.";
 
 /** Bot styles (gm_botstyle), in the order the in-game menu shows them. */
-export const BOT_STYLES: [string, string][] = [["0", "Original"], ["4", "Newbie lobby"], ["1", "Pub server"], ["8", "Mixed lobby"], ["9", "LAN party"], ["2", "Matchmaking"], ["3", "Veterans"], ["10", "Old-timers"], ["5", "Locked in"], ["6", "Hackers"], ["7", "Gods"]];
+// Original first, then easiest to hardest (Mixed and LAN party are mixes of levels, about Pub to
+// Matchmaking on average; Old-timers mostly Veteran level with a few a notch below)
+export const BOT_STYLES: [string, string][] = [["0", "Original"], ["4", "Newbie lobby"], ["1", "Pub server"], ["8", "Mixed lobby"], ["9", "LAN party"], ["2", "Matchmaking"], ["10", "Old-timers"], ["3", "Veterans"], ["5", "Locked in"], ["6", "Hackers"], ["7", "Gods"]];
 
 /** What each bot style is like, by gm_botstyle value. */
 export const BOT_STYLE_NOTE: Record<string, string> = {

@@ -374,7 +374,16 @@ export function SettingsList({ data, cat, refresh, q = "", tab, editing, saved }
               {editing && s.scope === SCOPE_EVERY && <span className="tag scope-tag" title="The same in every mode: changing it here changes it everywhere, straight away">Every mode</span>}
               {note && <span className="note">{note}</span>}
             </div>
-            <Segmented label={s.name} values={s.values} labels={labels} current={value} disabled={busy(key(s.cvar)) || moodOff} onPick={(v) => pick(s, v)} />
+            {style ? (
+              // (bot style: a dropdown in order of difficulty, Original first - too many for buttons)
+              <select className="style-select" aria-label={s.name} value={value} disabled={busy(key(s.cvar))} onChange={(e) => pick(s, e.target.value)}>
+                {BOT_STYLES.filter(([v]) => options(s.values, s.labels).some(([id]) => id === v)).map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </select>
+            ) : (
+              <Segmented label={s.name} values={s.values} labels={labels} current={value} disabled={busy(key(s.cvar)) || moodOff} onPick={(v) => pick(s, v)} />
+            )}
           </div>
         );
       })}
