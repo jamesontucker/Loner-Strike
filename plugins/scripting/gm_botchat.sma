@@ -215,6 +215,7 @@ new g_KillerOf[33], Float:g_KillerOfAt[33], g_VictimOf[33], Float:g_VictimOfAt[3
 new g_HeardRun, Float:g_HeardRunAt
 
 // Game state, for answers that use it (empty when the game doesn't say)
+new bool:g_HurtCalled[33]                // "he's lit" said about them this life
 new g_Place[33][32]                  // where each player last was: the map's place names (CZ navs)
 new g_KillerPlace[33][32]            // how each person last died: where the killer was,
 new g_KillWeapon[33][16], bool:g_KillHs[33], Float:g_DiedAt[33]   // with what, a headshot, when
@@ -1392,6 +1393,22 @@ public task_nav_hint()
 // The tilted and the cold say it sooner. It never shoots back
 public fw_ff_post(victim, inflictor, attacker, Float:damage, bits)
 {
+	// a bot that hit an enemy who's still up and hurt: "he's lit" to its team (now and then,
+	// the chattier and team-minded more; once a life for each enemy)
+	if (1 <= attacker <= MaxClients && attacker != victim && is_user_connected(attacker) && is_user_bot(attacker) && is_user_alive(attacker)
+		&& is_user_alive(victim) && !teams_off() && get_user_team(attacker) != get_user_team(victim) && damage > 0.0)
+	{
+		new hp = get_user_health(victim)
+		if (hp < 50 && !g_HurtCalled[victim])
+		{
+			g_HurtCalled[victim] = true
+			copy(g_CtxPlace, charsmax(g_CtxPlace), g_Place[victim])
+			formatex(g_CtxHp, charsmax(g_CtxHp), "%d", hp < 10 ? 1 : (hp / 10) * 10)
+			want(attacker, "callout_hurt", victim, 0.3, random_float(0.4, 1.2), 0, true)
+			g_CtxPlace[0] = g_CtxHp[0] = 0
+		}
+		return
+	}
 	if (!(1 <= attacker <= MaxClients) || attacker == victim || !is_user_connected(attacker) || is_user_bot(attacker)
 		|| !is_user_connected(victim) || !is_user_bot(victim) || teams_off() || get_user_team(attacker) != get_user_team(victim) || damage <= 0.0)
 		return
@@ -1772,7 +1789,7 @@ public task_tbag(tid)
 bool:team_section(const section[])
 {
 	static const TEAM[][] = { "teamkill", "teamkilled", "r_sorry_tk", "r_ok_tk", "teammate_clutch", "losing_streak_team", "winning_streak_team",
-		"support", "nice_shot", "spectating", "last_alive", "callout", "callout_low", "callout_vague", "comeback", "blocked", "in_my_way",
+		"support", "nice_shot", "spectating", "last_alive", "callout", "callout_low", "callout_vague", "callout_hurt", "comeback", "blocked", "in_my_way",
 		"clan", "clan_avenge" }
 	for (new i = 0; i < sizeof TEAM; i++)
 		if (equal(section, TEAM[i]))
@@ -3279,6 +3296,8 @@ public task_idle_chatter()
 
 public ev_newround()
 {
+	for (new i = 0; i <= MaxClients; i++)
+		g_HurtCalled[i] = false
 	g_Freeze = true
 	g_RoundOver = false
 	g_LastRound = get_gametime()
