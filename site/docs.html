@@ -311,7 +311,13 @@ footer a { color: var(--dim); }
     <li><b>Copy maps from your game</b>, on a server, copies maps you already have.</li>
   </ul>
   <h2 id="teach-bots">Bots on new maps</h2>
-  <p>Bots need to learn a map before they can play it. On a map they don't know, a <b>Learn this map</b> banner appears on the Bots page: it takes a few minutes, and the map timer waits. To do several at once ahead of time, use <b>Teach bots maps</b> on the Maps page, which can also <b>Re-learn maps bots already know</b> if they play one badly.</p>
+  <p>Bots need to learn a map before they can play it. Condition Zero comes with this for its own maps; Counter-Strike 1.6 never had bots, so in 1.6 every map is new to them the first time, even de_dust2. On a map they don't know, a <b>Learn this map</b> banner appears on the Bots page, and the map timer waits while they learn.</p>
+  <ul>
+    <li><b>It can take a while.</b> A small map takes a few minutes; a big or detailed one like de_inferno can take 15 minutes or more on a slower computer. The game may seem to pause while it works.</li>
+    <li><b>It's once per map.</b> After that the bots know it for good, in your game and on your servers.</li>
+    <li><b>Do it ahead of time.</b> <b>Teach bots maps</b> on the Maps page learns several in one go, so it's done before you play. It can also <b>Re-learn maps bots already know</b> if they play one badly.</li>
+  </ul>
+  <p>Once a map is learned, Loner-Strike also works out where people can see from, where to take cover and which angles to watch, in the background during the first minute or two of play. You won't notice it; the bots just play the map better from then on.</p>
   <p>Maps the bots know are shared from your game to your servers.</p>
   <h2 id="map-downloads">When a download fails</h2>
   <ul>
@@ -370,13 +376,73 @@ footer a { color: var(--dim); }
       <tr><td><b>Locked In</b></td><td>Very good and focused. They bunnyhop between fights</td></tr>
       <tr><td><b>Hackers</b></td><td>Suspiciously good: most bullets find you and they notice you from behind</td></tr>
       <tr><td><b>Gods</b></td><td>Everything maxed. Every bullet near you is a headshot</td></tr>
-      <tr><td><b>Original</b></td><td>The game's own bots: instant reactions, perfect aim</td></tr>
+      <tr><td><b>Original</b></td><td>The game's stock bots, unchanged: robotic and predictable</td></tr>
     </tbody>
   </table>
   </div>
+  <h2 id="skill-style-personality" data-keywords="difficulty skill personality playstyle rusher camper lurker">Skill, style and personality</h2>
+  <p>Three settings decide who you're playing with, and they work together:</p>
+  <ul>
+    <li><b>Bot style</b> picks the kind of lobby: which sorts of players turn up and how they play, as in the table above.</li>
+    <li><b>Difficulty</b> picks how strong that lobby is. Each style has its own range of players, and Difficulty decides which of them join: Easy brings in that style's weaker players, Expert its strongest. A Pub server on Expert is a strong pub, not a different lobby.</li>
+    <li><b>Personality</b> decides how much each bot's own character shows. On Plain they play to their style; on Normal each bot's own habits lead; on Exaggerated their quirks show at full strength.</li>
+  </ul>
+  <p>Every bot keeps its own skill. It sets how fast they react, how quickly and accurately they aim, how well they read a fight, how long they remember where you were, and how sensibly they decide what to do next.</p>
+  <p>Every bot also has a playstyle, which shapes what it tends to do in each of those moments:</p>
+  <div class="table">
+  <table>
+    <thead><tr><th>Playstyle</th><th>How they play</th></tr></thead>
+    <tbody>
+      <tr><td><b>Rusher</b></td><td>Pushes first and goes back in after a fight</td></tr>
+      <tr><td><b>Roamer</b></td><td>Wanders the map looking for fights</td></tr>
+      <tr><td><b>Lurker</b></td><td>Goes round on its own and catches people from behind</td></tr>
+      <tr><td><b>Careful</b></td><td>Checks every angle, holds, and keeps an eye on where it last saw you</td></tr>
+      <tr><td><b>Camper</b></td><td>Picks a spot and stays there</td></tr>
+      <tr><td><b>AWPer</b></td><td>Buys the AWP and holds long angles</td></tr>
+      <tr><td><b>Knifer</b></td><td>Loves the knife, even when it shouldn't</td></tr>
+      <tr><td><b>Nader</b></td><td>Throws a lot of grenades</td></tr>
+      <tr><td><b>Ninja</b></td><td>Sneaks: slow, quiet, goes for the bomb when nobody's looking</td></tr>
+      <tr><td><b>Objective</b></td><td>Goes for the bomb or the hostages before anything else</td></tr>
+      <tr><td><b>Odd guns</b></td><td>Buys the weapons nobody else does</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>How these show in a fight is on <a href="#how-bots-work">How the bots work</a>.</p>
   <h2 id="every-bot">Every bot is someone</h2>
   <p>Each bot has its own personality, mood and skill. They tilt, panic when flashed and back off when outnumbered. About 1,600 regulars return with the same names, some in clans, and remember you.</p>
   <p>Bots play as a team in 5v5 matches, Base Builder, and the Classic mode with the Matchmaking style. Everywhere else they play as individuals, the way a pub does.</p>
+</section>
+
+<section class="topic" id="how-bots-work" data-group="The bots">
+  <p class="crumb">The bots</p>
+  <h1>How the bots work</h1>
+  <p class="lead">Loner-Strike's bots run on our own bot brain. Each one sees, hears, aims and decides the way a person in its place would, at its own skill and in its own style. Nothing they do is scripted per map.</p>
+  <h2 id="bots-fair" data-keywords="wallhack cheat know">They only know what you would</h2>
+  <p>A bot has no wallhack. It knows where you are because it saw you, heard you, saw you on the radar or in the kill feed, or a teammate called you out. It forgets over time, the newer ones sooner. Sounds point roughly where they came from, not to the exact spot.</p>
+  <h2 id="bots-see" data-keywords="vision notice flash smoke">How they see</h2>
+  <ul>
+    <li>They see you when your eyes, chest, sides or feet are in view. A gun barrel, a shoulder or a foot sticking out past cover can be noticed too: the better and more watchful ones catch it, newer ones mostly don't.</li>
+    <li>Someone still and far off, or at the edge of the view, takes longer to notice than someone running across in front of them.</li>
+    <li>They turn away from a flashbang they see coming, then look back to where it came from. A flash they didn't see blinds them like it blinds you.</li>
+    <li>Smoke blocks their view. They don't see through it.</li>
+  </ul>
+  <h2 id="bots-aim" data-keywords="aim reaction flick headshot">How they aim</h2>
+  <p>Their aim is modelled on a hand on a mouse: still most of the time, then a flick that lands a touch off and gets corrected. They react after a moment, not instantly. Better players react sooner, flick faster and land closer; newer ones turn slower and miss more. They aim around head height, and at the head when that's all that shows over cover.</p>
+  <h2 id="bots-fight" data-keywords="cover reload strafe wallbang">How they fight</h2>
+  <ul>
+    <li>Each bot has its own habit for stopping to shoot: a quick counter-strafe for the good ones, a walk or a crouch for others, and some just run and gun.</li>
+    <li>They spread out instead of stacking on a teammate, take cover, reload out of sight when they can, and switch to the pistol up close.</li>
+    <li>The better ones shoot through doors, crates and thin walls when they know someone is behind them.</li>
+    <li>Out of bullets, they stay out of fights and look for a gun on the floor.</li>
+  </ul>
+  <h2 id="bots-think" data-keywords="memory decide retreat">How they decide</h2>
+  <p>When a bot backs off from someone, it remembers where they were and how many it saw, and keeps an eye on that spot. Then it decides what to do about it: hold from cover, take another angle, go back in with a teammate, go round, or fall back to the team. It weighs what it knows (how many, their guns, its own health and ammo, who's nearby, the bomb and the clock). Good players weigh all of it and pick the sensible thing; newer ones go more on nerves and often forget. A spot where a teammate died is remembered as dangerous for a while.</p>
+  <h2 id="bots-team" data-keywords="team site take rotate trade">Playing as a team</h2>
+  <p>In team modes, Ts gather out of sight and take a site together, with someone going in first and others trading. CTs hold sites, rotate when one is hit, and retake. They trade kills, call out what they see, and follow your <a href="#talking-to-bots">team chat and voice commands</a>.</p>
+  <h2 id="bots-who" data-keywords="personality style skill mood">Who they are</h2>
+  <p>Every bot has a skill level and a personality, and both shape every choice above. Rushers push and go back in, careful players and campers hold, lurkers go round, team players wait for help and call things out. Their mood changes too: they tilt after losses, crack under pressure or tighten up, depending on who they are. The same bot plays the same way each time it shows up. The playstyles and settings are on <a href="#skill-style-personality">Skill, style and personality</a>.</p>
+  <h2 id="bots-modes">Every mode</h2>
+  <p>In deathmatch and Gun Game they play for themselves and keep moving. In team modes they play the objective: planting, defusing, rescuing hostages, or saving their gun when a round is lost.</p>
 </section>
 
 <section class="topic" id="bot-settings" data-group="The bots">
@@ -391,10 +457,10 @@ footer a { color: var(--dim); }
   <table>
     <thead><tr><th>Setting</th><th>What it does</th></tr></thead>
     <tbody>
-      <tr><td><b>Difficulty</b></td><td>Easy, Normal, Hard or Expert. Hard to start with. Changing it adds the bots again</td></tr>
+      <tr><td><b>Difficulty</b></td><td>Easy, Normal, Hard or Expert: how strong the lobby is within its style (<a href="#skill-style-personality">how it works</a>). Hard to start with. Changing it adds the bots again</td></tr>
       <tr><td><b>Bot style</b></td><td>Who's in the lobby (<a href="#bot-styles">the styles</a>)</td></tr>
       <tr><td><b>Auto difficulty</b></td><td>Adjusts their skill to how you're doing</td></tr>
-      <tr><td><b>Personality</b></td><td>How much of each bot's character shows, from Plain to Exaggerated</td></tr>
+      <tr><td><b>Personality</b></td><td>How much of each bot's character shows, from Plain to Exaggerated (<a href="#skill-style-personality">more</a>)</td></tr>
       <tr><td><b>Lobby mood</b></td><td>Friendly, Normal or Toxic</td></tr>
     </tbody>
   </table>
@@ -635,6 +701,15 @@ footer a { color: var(--dim); }
   </table>
   </div>
   <p>Someone you <a href="#shared-control">share a server with</a> sees the tabs their role can't use dimmed, marked <b>Owner only</b> or <b>Admins only</b>.</p>
+  <h2 id="tick-rate" data-keywords="sys_ticrate tickrate hit registration fps">Tick rate</h2>
+  <p>How many times a second the server runs the game, the bots' thinking included. Set it on the server's <b>Overview</b> tab, under <b>Advanced</b>; it takes effect from the next start.</p>
+  <ul>
+    <li><b>300</b> (the default) suits most servers, bots included.</li>
+    <li><b>500</b> is a little smoother if the machine has CPU to spare.</li>
+    <li><b>1000</b> mostly costs CPU, more so with many bots, for little you'd notice.</li>
+    <li><b>100</b> is the old default, for a slow machine.</li>
+  </ul>
+  <p>Players get at most 101 updates a second whatever the tick rate. A <code>+sys_ticrate</code> in <b>Extra start options</b>, or a <code>sys_ticrate</code> line in the server's server.cfg, is used instead of the pick.</p>
   <h2 id="maintenance">Health and repairs</h2>
   <p>On the server's <b>Health</b> tab, under <b>Updates</b> and <b>Repair or remove</b>. Stop the server first.</p>
   <ul>

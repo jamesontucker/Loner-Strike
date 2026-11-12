@@ -170,6 +170,14 @@
   },
   {
    "@type": "Question",
+   "name": "Why do bots need to learn a map first?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Counter-Strike 1.6 never came with bots, so its maps have nothing telling bots where they can walk. The first time you play a map, they learn it, which takes a few minutes on a small map and can take 15 minutes or more on a big one like de_inferno. It's once per map, and Teach bots maps can do it ahead of time."
+   }
+  },
+  {
+   "@type": "Question",
    "name": "Who made the mods?",
    "acceptedAnswer": {
     "@type": "Answer",
@@ -219,6 +227,9 @@ p { text-wrap: pretty; }
 .btn.primary:hover { background: #d4c55d; color: var(--ink); }
 
 /* top */
+.release-banner { background: var(--signal); color: var(--ink); font-family: var(--text); font-weight: 600; font-size: 1rem; line-height: 1.35; text-align: center; padding: 9px 16px; box-shadow: inset 0 -1px 0 var(--bevel-lo); }
+.release-banner a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.release-banner a:hover, .release-banner a:focus-visible { text-decoration-thickness: 2px; }
 .top { position: sticky; top: 0; z-index: 5; background: rgba(53,60,47,.94); backdrop-filter: blur(6px); box-shadow: 0 1px 0 var(--bevel-lo); }
 .top .wrap { display: flex; align-items: center; justify-content: space-between; height: 58px; gap: 16px; }
 .wordmark { font: 400 22px/1 var(--stencil); color: var(--bone); text-decoration: none; letter-spacing: .01em; white-space: nowrap; }
@@ -483,7 +494,11 @@ footer a { color: var(--dim); }
 .gamechat .tag { color: #b7b9a6; font-weight: 500; }
 .gamechat svg { width: 10px; height: 13px; fill: var(--signal); vertical-align: -1px; margin-right: 5px; }
 @media (max-width: 520px) {
-  .gamechat { position: static; background: #171a12; border-radius: 0 0 2px 2px; font-size: 13px; padding: 10px 12px; min-height: 0; }
+  /* (in the page here, not over the screenshot: room for all five lines from the start, so the
+     page doesn't jump down a line with each message) */
+  .gamechat { position: static; background: #171a12; border-radius: 0 0 2px 2px; font-size: 13px; padding: 10px 12px; box-sizing: border-box;
+    min-height: 0; height: calc(5 * 1.5em + 20px); overflow: hidden; }
+  .gamechat li { line-height: 1.5; }
 }
 @media (prefers-reduced-motion: reduce) { .gamechat li.new { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .killfeed li, .killfeed li.new { animation: none; transition: none; } }
@@ -575,6 +590,8 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 </style>
 </head>
 <body>
+
+<div class="release-banner" role="note">Loner-Strike 1.0.0, the full release, comes out November 12. <a href="/discord">Join the Discord to hear when it's out</a></div>
 
 <header class="top">
   <div class="wrap">
@@ -692,7 +709,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li><div><b>Hackers</b><span>Suspiciously good. They notice you from behind</span></div><div class="meter" role="img" aria-label="Skill 9 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i></div></li>
           <li><div><b>Gods</b><span>Everything maxed. Every bullet near you is a headshot</span></div><div class="meter" role="img" aria-label="Skill 10 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></li>
           </ul>
-          <p class="fine">Or keep the game's own bots, with instant reactions and perfect aim.</p>
+          <p class="fine">Or keep the game's stock bots, unchanged: robotic and predictable.</p>
         </div>
       </div>
     </div>
@@ -923,7 +940,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <div class="window-bar"><span></span><span></span><span></span>Our server</div>
           <div class="srv-body">
             <div>
-              <b class="srv-name" id="ourserver-name">Alone Together</b>
+              <b class="srv-name" id="ourserver-name">Loner-Strike | Alone Together</b>
               <p class="server-live" id="ourserver-live" hidden></p>
               <p class="server-addr">Bots and the community modes, 24/7.<br>Console: <code id="ourserver-addr"></code></p>
             </div>
@@ -995,6 +1012,10 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <details>
         <summary>Can people join without Loner-Strike?</summary>
         <p>Yes. Anyone with Counter-Strike 1.6 (or Condition Zero, for a CZ server) joins like any other server, and it sends them the maps and sounds they need.</p>
+      </details>
+      <details>
+        <summary>Why do bots need to learn a map first?</summary>
+        <p>Counter-Strike 1.6 never came with bots, so its maps have nothing telling bots where they can walk. The first time you play a map, they learn it, which takes a few minutes on a small map and can take 15 minutes or more on a big one like de_inferno. It's once per map, and <a href="docs#teach-bots">Teach bots maps</a> can do it ahead of time.</p>
       </details>
       <details>
         <summary>Who made the mods?</summary>
@@ -1075,7 +1096,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           ? `${people} ${people === 1 ? "person" : "people"} and ${s.bots || 0} bots on ${s.map}`
           : `${s.bots || 0} bots on ${s.map}, waiting for you`);
         live.hidden = false;
-        if (s.name) document.getElementById("ourserver-name").textContent = s.name;
+        // (the name stays the one written above, whatever the server calls itself in game)
       } catch {
         live.hidden = true;
       }
@@ -1305,7 +1326,8 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       return li;
     };
     if (reduce) {
-      TALKS[0].concat(TALKS[1].slice(0, 2)).forEach((l) => box.append(line(l)));
+      // (five lines: what the box holds)
+      TALKS[0].concat(TALKS[1].slice(0, 1)).forEach((l) => box.append(line(l)));
     } else {
       let t = 0, i = 0, timer = null, visible = false;
       const next = () => {
