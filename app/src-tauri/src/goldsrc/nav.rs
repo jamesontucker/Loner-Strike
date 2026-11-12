@@ -169,6 +169,7 @@ impl Nav {
 
     /// Writes the nav as version 5 (what the game writes). A version-5 file read by `parse`
     /// comes back byte for byte.
+    #[allow(dead_code)] // (the nav fixer, phase 2, writes navs; tests round-trip now)
     pub fn write(&self) -> Vec<u8> {
         let mut o = Vec::with_capacity(64 + self.areas.len() * 120);
         put32(&mut o, NAV_MAGIC);
@@ -228,6 +229,7 @@ impl Nav {
     }
 
     /// An area's place name ("" for none).
+    #[allow(dead_code)]
     pub fn place_name(&self, a: &Area) -> &str {
         if a.place == 0 {
             return "";
@@ -286,9 +288,11 @@ impl Nav {
     }
 }
 
+#[allow(dead_code)]
 fn put16(o: &mut Vec<u8>, v: u16) {
     o.extend_from_slice(&v.to_le_bytes());
 }
+#[allow(dead_code)]
 fn put32(o: &mut Vec<u8>, v: u32) {
     o.extend_from_slice(&v.to_le_bytes());
 }

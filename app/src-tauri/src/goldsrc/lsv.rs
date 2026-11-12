@@ -225,6 +225,7 @@ impl Lsv {
     }
 
     /// Whether area `i` sees area `j` (file-order indices).
+    #[allow(dead_code)] // (the page decodes the bits itself; the health check will use this)
     pub fn sees(&self, i: usize, j: usize) -> bool {
         let n = self.head.count as usize;
         if i >= n || j >= n {
@@ -240,6 +241,7 @@ impl Lsv {
     }
 
     /// Writes the file back as the brain does (tests, and the nav fixer later).
+    #[allow(dead_code)]
     pub fn write(&self) -> Vec<u8> {
         let h = &self.head;
         let mut o = Vec::new();
@@ -315,6 +317,7 @@ fn read_area(r: &Le, n: usize) -> Result<AreaKnow> {
     Ok(k)
 }
 
+#[allow(dead_code)]
 fn write_area(o: &mut Vec<u8>, k: &AreaKnow) {
     let start = o.len();
     o.extend(k.cover_low);

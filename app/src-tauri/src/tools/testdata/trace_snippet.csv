@@ -1,0 +1,56 @@
+#cols,time,id,team,state,task,enemy,leader,goal_x,goal_y,noise_x,noise_y,why,why_ago,speed,view_off,attacking,look,x,y,z,hp,weapon,crouched,pitch
+#cols_why,time,id,team,x,y,z,why
+#cols_attack,time,id,team,enemy,since_first_saw,range
+#cols_seen,time,id,team,enemy,range
+#map,cs_rats2
+#map,cs_rats2
+70.17,1,2,Hunt,0,9,0,0,0,-684,-137,flanked,0.9,120,91,1,Loner-Strike: caught the eye,504,-679,228,94,16,0,31
+70.42,5,2,Hunt,0,0,0,-462,550,-538,-7,grenade,0.6,156,-14,0,-,-281,652,-604,40,25,0,2
+#why,70.54,5,2,-301,636,-604,out of ammo: with a teammate
+70.77,1,2,Hunt,0,9,0,0,0,-684,-137,flanked,1.5,51,91,1,Loner-Strike: caught the eye,494,-697,228,94,16,0,31
+#why,70.90,5,2,-380,647,-604,jump-peek
+71.03,5,2,Hunt,0,0,0,-462,550,-538,-7,jump-peek,0.1,31,-58,0,Loner-Strike: peek,-384,646,-577,40,25,0,2
+71.38,1,2,Hunt,0,9,0,0,0,-684,-137,flanked,2.1,66,91,1,Loner-Strike: caught the eye,492,-701,228,90,16,0,31
+71.62,5,2,Hunt,0,0,0,-462,550,-538,-7,jump-peek,0.7,131,138,0,Loner-Strike: away from its flash,-378,675,-604,40,29,0,8
+#why,71.74,11,1,-381,348,-604,to cover
+#why,71.74,11,1,-381,348,-604,out of ammo: out of sight
+#why,71.86,5,2,-384,702,-604,out of ammo: with a teammate
+71.97,1,2,Hunt,0,9,0,0,0,-584,-151,flanked,2.7,17,90,1,Loner-Strike: caught the eye,511,-669,228,90,16,0,30
+#why,72.11,11,1,-352,398,-604,threat: another angle on them
+72.25,5,2,Hunt,0,0,0,-462,550,-621,128,out of ammo: with a teammate,0.4,126,132,0,Noise,-393,744,-604,40,29,0,4
+72.48,1,2,Hunt,0,9,0,0,0,-584,-151,flanked,3.2,158,-90,1,Loner-Strike: caught the eye,495,-694,228,90,16,0,31
+#why,72.61,1,2,495,-694,228,threat: remembered
+#why,72.61,1,2,495,-694,228,retreat
+#why,72.63,4,2,-336,521,-296,out of ammo: with a teammate
+72.76,5,2,Hunt,0,0,0,-462,550,-621,128,out of ammo: with a teammate,0.9,250,25,0,Noise,-495,701,-604,40,29,0,3
+73.08,1,2,Hide,0,9,0,388,-588,-671,336,retreat,0.5,30,90,0,Noise,502,-683,273,90,16,1,30
+73.36,5,2,InvestigateNoise,0,0,0,-576,189,-339,523,out of ammo: with a teammate,1.5,137,-18,0,Noise,-515,597,-604,40,29,0,2
+#attack,73.43,1,2,9,4.25,1652
+#seen,73.48,11,1,12,102
+#attack,73.48,11,1,12,23.88,102
+#seen,73.52,12,2,11,102
+#attack,73.52,12,2,11,0.00,102
+73.67,1,2,Hide,0,9,0,0,0,-558,163,retreat,1.1,151,-90,1,Noise,497,-690,228,90,16,0,31
+73.97,5,2,InvestigateNoise,0,0,0,-576,189,-339,523,out of ammo: with a teammate,2.1,130,-2,0,Noise,-579,554,-604,40,29,0,3
+74.27,1,2,Hide,0,9,0,0,0,-558,163,retreat,1.7,194,-89,1,Noise,463,-733,228,90,16,0,31
+74.56,5,2,InvestigateNoise,0,0,0,-576,189,-339,523,out of ammo: with a teammate,2.7,183,35,0,-,-658,535,-604,40,29,0,3
+74.87,1,2,Hide,0,9,0,0,0,-558,163,retreat,2.3,255,-23,1,Noise,344,-715,228,90,16,0,30
+#why,75.05,4,2,-336,464,-375,off the wall
+#why,75.05,9,1,-646,-23,-604,reload-hide
+#why,75.17,4,2,-336,464,-378,hostages-late
+75.17,5,2,InvestigateNoise,0,0,0,-576,189,-339,523,out of ammo: with a teammate,3.3,115,-15,0,Loner-Strike: peek,-723,512,-604,40,29,0,-2
+#why,75.17,5,2,-723,512,-604,hostages-late
+75.37,1,2,Hide,0,9,0,0,0,-538,-27,retreat,2.8,258,-15,1,Noise,225,-710,228,90,16,0,35
+75.67,5,2,InvestigateNoise,0,0,0,-576,189,-339,523,hostages-late,0.5,227,22,0,Loner-Strike: peek,-814,469,-604,40,29,0,-3
+75.87,1,2,Hide,0,9,0,0,0,-538,-27,retreat,3.3,49,-37,1,Noise,219,-645,214,90,16,0,38
+#attack,75.93,9,1,1,10.35,1329
+#why,75.93,11,1,-260,497,-604,swap-gun
+76.18,5,2,InvestigateNoise,0,0,0,-576,189,-339,523,hostages-late,1.0,72,63,0,Loner-Strike: peek,-910,467,-604,40,29,0,-3
+#why,76.18,5,2,-910,467,-604,swap-gun
+#why,76.18,11,1,-260,497,-604,hunt
+#why,76.18,11,1,-260,497,-604,hunt-stock
+76.50,1,2,Hide,0,9,0,0,0,-538,-27,retreat,3.9,48,38,1,Noise,200,-633,-30,90,16,0,33
+76.80,5,2,MoveTo,0,0,0,-865,-288,-339,523,swap-gun,0.6,75,51,0,Loner-Strike: peek,-900,438,-622,40,29,1,-9
+#seen,77.30,5,2,9,517
+#why,77.30,11,1,-260,497,-604,hunt: forward
+77.42,5,2,MoveTo,0,9,0,-865,-288,-339,523,swap-gun,1.2,86,75,0,Loner-Strike: caught the eye,-896,387,-622,40,29,1,-7
