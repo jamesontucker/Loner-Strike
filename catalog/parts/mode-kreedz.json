@@ -26,24 +26,10 @@
  ],
  "maps": [
   {
-   "mod": 97293,
-   "file": 298475,
-   "maps": [
-    "bkz_goldbhop"
-   ]
-  },
-  {
    "mod": 97370,
    "file": 295876,
    "maps": [
     "kz_beginner"
-   ]
-  },
-  {
-   "mod": 96907,
-   "file": 293712,
-   "maps": [
-    "kz_summercliff2"
    ]
   },
   {
