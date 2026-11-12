@@ -73,6 +73,18 @@ export function toNav(raw: Record<string, unknown>): Nav {
       adj[j].push(i);
     }
   }));
+  // ladders join their bottom area to the areas at the top (the game links them itself)
+  for (const l of Array.isArray(raw.ladders) ? (raw.ladders as Record<string, unknown>[]) : []) {
+    const b = index.get(num(l.bottomArea, -1));
+    if (b === undefined) continue;
+    for (const k of ["topForward", "topLeft", "topRight", "topBehind"]) {
+      const t = index.get(num(l[k], -1));
+      if (t !== undefined) {
+        adj[b].push(t);
+        adj[t].push(b);
+      }
+    }
+  }
   let groups = 0;
   const sizes: number[] = [];
   for (let s = 0; s < areas.length; s++) {

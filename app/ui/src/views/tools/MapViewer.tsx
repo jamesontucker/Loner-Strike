@@ -8,7 +8,9 @@ import { Banner, LoadError, Segmented, Skeleton } from "../../ui";
 import { COLLATOR, MapCard } from "../Maps";
 import { Inspector } from "./panels/Inspector";
 import { Layers } from "./panels/Layers";
-import { useEntities, useMesh, useToolsInfo, type MapEntity } from "./toolsApi";
+import type { Know, Nav, Replay, Trace } from "./overlays";
+import { Timeline } from "./panels/Timeline";
+import { useEntities, useKnow, useMesh, useNavData, useToolsInfo, type MapEntity } from "./toolsApi";
 import type { MeshBundle } from "./viewer/bundle";
 import { fmtVec } from "./viewer/coords";
 import { canDraw3d, Scene, SceneBoundary } from "./viewer/Scene";
@@ -21,7 +23,7 @@ const NO_3D = (
   />
 );
 
-export function MapViewer({ maps }: { maps: MapInfo[] }) {
+export default function MapViewer({ maps }: { maps: MapInfo[] }) {
   const map = useTools((s) => s.map);
   return map ? <Viewer map={map} /> : <MapPicker maps={maps} />;
 }
@@ -64,14 +66,31 @@ function MapPicker({ maps }: { maps: MapInfo[] }) {
 
 const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
 
-function Viewer({ map }: { map: string }) {
+/** What a replay adds to the viewer: the recording, its trace, and the bar's title/back. */
+export type ReplayExtra = { data: Replay; trace: Trace | null; title: string; onBack: () => void };
+
+export function Viewer({ map, replay = null }: { map: string; replay?: ReplayExtra | null }) {
   const openMap = useTools((s) => s.openMap);
+  const navOn = useTools((s) => s.layers.nav);
+  const knowMode = useTools((s) => s.know);
   const camera = useTools((s) => s.camera);
   const setCamera = useTools((s) => s.setCamera);
   const webgl = useMemo(canDraw3d, []);
   const mesh = useMesh(webgl ? map : null);
   const ents = useEntities(map, mesh.isSuccess);
   const info = useToolsInfo(map, mesh.isSuccess);
+  const nav = useNavData(map, mesh.isSuccess && navOn);
+  const know = useKnow(map, mesh.isSuccess && navOn && knowMode !== "off");
+  const overlays: Overlays = {
+    nav: navOn ? nav.data ?? null : null,
+    navError: navOn && nav.error instanceof Error ? nav.error.message : null,
+    navLoading: navOn && nav.isLoading,
+    know: navOn && knowMode !== "off" ? know.data ?? null : null,
+    knowError: navOn && knowMode !== "off" && know.error instanceof Error ? know.error.message : null,
+    knowLoading: navOn && knowMode !== "off" && know.isLoading,
+    replay: replay?.data ?? null,
+    trace: replay?.trace ?? null,
+  };
 
   // F fly, O orbit, T top-down; Esc clears what's picked (and lets go of the mouse)
   useEffect(() => {
@@ -93,8 +112,9 @@ function Viewer({ map }: { map: string }) {
   return (
     <div className="tools-page">
       <div className="tools-bar">
-        <span className="map-title">{map}</span>
-        <button className="btn small" onClick={() => openMap(null)}>Other map</button>
+        <span className="map-title">{replay ? replay.title : map}</span>
+        {replay ? <span className="muted small">on {map}</span> : null}
+        <button className="btn small" onClick={() => (replay ? replay.onBack() : openMap(null))}>{replay ? "Other recording" : "Other map"}</button>
         <span className="push" />
         <Segmented values="orbit fly top" labels="Orbit|Fly|Top-down" current={camera} onPick={(v) => setCamera(v as CameraMode)} label="Camera" />
       </div>
@@ -111,14 +131,17 @@ function Viewer({ map }: { map: string }) {
       ) : failed ? (
         <LoadError title={`Couldn't open ${map}`} text={failed} onRetry={() => void mesh.refetch()} />
       ) : (
-        <Loaded bundle={!loading ? mesh.data ?? null : null} entities={ents.data ?? []} map={map} />
+        <Loaded bundle={!loading ? mesh.data ?? null : null} entities={ents.data ?? []} map={map} overlays={overlays} />
       )}
     </div>
   );
 }
 
 /** The view and its side panels; while the map's data is on its way, a spinner and placeholders. */
-function Loaded({ bundle, entities, map }: { bundle: MeshBundle | null; entities: MapEntity[]; map: string }) {
+/** The bots' data shown on the map, and how fetching it went. */
+export type Overlays = { nav: Nav | null; navError: string | null; navLoading: boolean; know: Know | null; knowError: string | null; knowLoading: boolean; replay: Replay | null; trace: Trace | null };
+
+function Loaded({ bundle, entities, map, overlays }: { bundle: MeshBundle | null; entities: MapEntity[]; map: string; overlays: Overlays }) {
   const looking = useTools((s) => s.looking);
   const meshes = useModelMeshes(bundle, entities);
   // the 3D view lost its context or crashed: a way to start it again (n remounts it)
@@ -145,7 +168,7 @@ function Loaded({ bundle, entities, map }: { bundle: MeshBundle | null; entities
             stopped
           ) : bundle ? (
             <SceneBoundary key={n} fallback={stopped}>
-              <Scene bundle={bundle} meshes={meshes} entities={entities} map={map} onLost={() => setLost(true)} />
+              <Scene bundle={bundle} meshes={meshes} entities={entities} map={map} overlays={overlays} onLost={() => setLost(true)} />
             </SceneBoundary>
           ) : (
             <div className="tools-overlay" role="status">
@@ -158,8 +181,9 @@ function Loaded({ bundle, entities, map }: { bundle: MeshBundle | null; entities
         <StatusBar />
       </div>
       <aside className="tools-side">
-        <Layers />
-        {bundle ? <Inspector entities={entities} meshes={meshes} /> : <section className="tools-panel"><Skeleton rows={4} /></section>}
+        {overlays.replay && <Timeline replay={overlays.replay} />}
+        <Layers overlays={overlays} />
+        {bundle ? <Inspector entities={entities} meshes={meshes} overlays={overlays} /> : <section className="tools-panel"><Skeleton rows={4} /></section>}
       </aside>
     </div>
   );

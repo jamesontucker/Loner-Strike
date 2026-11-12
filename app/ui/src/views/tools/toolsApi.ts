@@ -202,7 +202,7 @@ async function getKnow(map: string, signal?: AbortSignal): Promise<Know> {
 }
 
 /** The map's nav (only fetched while a nav layer is on). */
-export function useNav(map: string | null, on: boolean) {
+export function useNavData(map: string | null, on: boolean) {
   return useQuery({ queryKey: ["tools", "nav", map], queryFn: ({ signal }) => getNav(map!, signal), enabled: !!map && on, retry: false, staleTime: 30_000 });
 }
 /** What the bots learned about the map (.lsv). */

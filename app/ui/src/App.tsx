@@ -59,10 +59,10 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "skins", label: "Skins & models", icon: "skins" },
   { id: "sounds", label: "Sounds", icon: "sound" },
   { id: "more", label: "Get more", icon: "more" },
-  // looking inside maps, right above Servers: on the computer only (3D over Wi-Fi on a phone
+  { id: "servers", label: "Servers", icon: "server", group: "Hosting" },
+  // looking inside maps, right after Servers: on the computer only (3D over Wi-Fi on a phone
   // isn't a goal)
   ...(ON_THIS_COMPUTER ? [{ id: "tools" as Section, label: "Tools", icon: "tools", beta: true }] : []),
-  { id: "servers", label: "Servers", icon: "server", group: "Hosting" },
   // (the sidebar keeps it below the list, always in view)
   { id: "settings", label: "Settings", icon: "settings", group: "App" },
 ];

@@ -9,13 +9,15 @@ import type { MapEntity } from "../toolsApi";
 import { fmtVec, type Vec3 } from "../viewer/coords";
 import { entityCentre } from "../viewer/Entities";
 import type { ModelMesh } from "../viewer/World";
+import type { Overlays } from "../MapViewer";
+import { AreaPanel, BotPanel } from "./OverlayPanels";
 
 /** Keys whose value names another entity's targetname. */
 const LINK_KEYS = new Set(["target", "killtarget", "master", "netname"]);
 
 const nameOf = (e: MapEntity) => e.keys.targetname || (e.origin ? fmtVec(e.origin) : e.model ?? `#${e.index}`);
 
-export function Inspector({ entities, meshes }: { entities: MapEntity[]; meshes: ModelMesh[] }) {
+export function Inspector({ entities, meshes, overlays }: { entities: MapEntity[]; meshes: ModelMesh[]; overlays: Overlays }) {
   const sel = useTools((s) => s.selection);
   const { select, look } = useTools.getState();
   const toast = useToast();
@@ -31,6 +33,9 @@ export function Inspector({ entities, meshes }: { entities: MapEntity[]; meshes:
     const c = entityCentre(e, meshes);
     if (c) look(c.point, c.size);
   };
+
+  if (sel?.kind === "area" && overlays.nav) return <AreaPanel nav={overlays.nav} know={overlays.know} index={sel.index} />;
+  if (sel?.kind === "bot" && overlays.replay) return <BotPanel replay={overlays.replay} trace={overlays.trace} id={sel.id} />;
 
   if (sel?.kind === "face") {
     const brush = sel.model ? meshes.find((m) => m.model === sel.model)?.entity : null;

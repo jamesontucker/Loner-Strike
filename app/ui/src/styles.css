@@ -1947,6 +1947,30 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .tools-groups { display: grid; gap: 2px; }
 .tools-groups summary { cursor: pointer; padding: 3px 0; font-size: 14px; }
 .tools-groups summary .mono { font-size: 13px; }
+/* the bots' data: nav, knowledge, replay */
+.tools-sub { display: grid; gap: 6px; padding: 2px 0 6px 10px; border-left: 2px solid var(--bevel-lo); }
+.tools-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.tools-field select { max-width: 170px; }
+.tools-warn { color: var(--warn); }
+.tools-oneway { color: #f08a3c; }
+.tools-place { font: 600 12px/1 var(--text); color: #fff; background: rgba(20, 24, 16, .72); padding: 2px 6px; border-radius: 2px; white-space: nowrap; }
+.tools-name { font: 700 11px/1 var(--text); background: rgba(20, 24, 16, .7); padding: 1px 4px; border-radius: 2px; white-space: nowrap; }
+.tools-name.picked { outline: 1px solid #fff6b0; }
+.tools-scrub { position: relative; padding-top: 8px; }
+.tools-scrub input { width: 100%; }
+.tools-ticks { position: absolute; left: 7px; right: 7px; top: 0; height: 10px; pointer-events: none; }
+.tools-ticks i { position: absolute; top: 0; width: 2px; height: 8px; margin-left: -1px; }
+.tools-ticks i.round { background: var(--bone-faint); height: 10px; }
+.tools-ticks i.kill { background: #ff5a4a; }
+.tools-ticks i.fall { background: #ff4fd8; height: 10px; }
+.tools-players li { display: flex; align-items: center; gap: 6px; }
+.tools-follow { padding: 0 6px; font-size: 12px; margin-left: auto; }
+.tools-follow.on { color: var(--signal); }
+.tools-recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.tools-rec { display: grid; gap: 3px; text-align: left; border: 1px solid transparent; border-radius: 3px; background: var(--panel); box-shadow: var(--raised); padding: 12px 14px; }
+.tools-rec:hover:not(:disabled) { background: var(--panel-2); }
+.tools-rec:disabled { opacity: .6; cursor: default; }
+.tools-rec-map { font: 400 17px/1.1 var(--stencil); letter-spacing: .02em; }
 @media (max-width: 1020px) {
   .tools-viewer { grid-template-columns: 1fr; grid-template-rows: minmax(360px, 1fr) auto; }
   .tools-side { overflow: visible; }

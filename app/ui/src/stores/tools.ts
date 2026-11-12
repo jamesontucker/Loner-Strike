@@ -4,7 +4,8 @@ import type { Vec3 } from "../views/tools/viewer/coords";
 // The Tools page's view state (plan 3.1): which tool and map are open, the layers, the
 // camera, what's picked. Documents (the mesh, entities) live in TanStack Query.
 
-export type Tool = "map" | "replay";
+/** a tool's id in views/tools/registry.tsx */
+export type Tool = string;
 export type CameraMode = "orbit" | "fly" | "top";
 
 export type Layers = {
@@ -18,11 +19,21 @@ export type Layers = {
   moving: boolean;
   /** triggers, buy zones, bomb spots (invisible in the game) */
   triggers: boolean;
+  /** the bots' nav: where they can walk */
+  nav: boolean;
 };
+
+export type NavColour = "place" | "island" | "moves";
+export type KnowMode = "off" | "cover" | "sight" | "bangs" | "corners" | "angles";
+export type HeatMode = "off" | "time" | "deaths" | "stuck";
 
 export type Selection =
   | { kind: "entity"; index: number }
   | { kind: "face"; texture: string; model: number; face: number | null; point: Vec3 }
+  /** a nav area, by its place in the nav file */
+  | { kind: "area"; index: number }
+  /** a player in the open recording */
+  | { kind: "bot"; id: number }
   | null;
 
 export type CameraStatus = { pos: Vec3; yaw: number; pitch: number };
@@ -40,7 +51,27 @@ type ToolsState = {
   looking: boolean;
   /** a request to move the camera to a point; n changes on every request */
   lookAt: { point: Vec3; size: number; n: number } | null;
+  /** what the nav focus asked a tool to open ("<tool>:<arg>"), for tools that take one */
+  arg: string | null;
+  navColour: NavColour;
+  know: KnowMode;
+  /** the open recording (Replay) and where it's at */
+  replay: string | null;
+  time: number;
+  playing: boolean;
+  speed: number;
+  /** the camera follows this player */
+  follow: number | null;
+  heat: HeatMode;
   setTool: (t: Tool) => void;
+  setNavColour: (c: NavColour) => void;
+  setKnow: (k: KnowMode) => void;
+  openReplay: (id: string | null, map?: string | null) => void;
+  setTime: (t: number) => void;
+  setPlaying: (v: boolean) => void;
+  setSpeed: (v: number) => void;
+  setFollow: (id: number | null) => void;
+  setHeat: (h: HeatMode) => void;
   openMap: (m: string | null) => void;
   setLayer: (k: keyof Layers, on: boolean) => void;
   setCamera: (c: CameraMode) => void;
@@ -51,7 +82,7 @@ type ToolsState = {
   look: (point: Vec3, size?: number) => void;
 };
 
-const DEFAULT_LAYERS: Layers = { textures: true, lighting: true, entities: true, moving: true, triggers: false };
+const DEFAULT_LAYERS: Layers = { textures: true, lighting: true, entities: true, moving: true, triggers: false, nav: false };
 
 function savedLayers(): Layers {
   try {
@@ -87,7 +118,25 @@ export const useTools = create<ToolsState>((set, get) => ({
   status: null,
   looking: false,
   lookAt: null,
+  arg: null,
+  navColour: "island",
+  know: "off",
+  replay: null,
+  time: 0,
+  playing: false,
+  speed: 4,
+  follow: null,
+  heat: "off",
   setTool: (tool) => set({ tool }),
+  setNavColour: (navColour) => set({ navColour }),
+  setKnow: (know) => set({ know }),
+  // a recording opens on its own map
+  openReplay: (replay, map = null) => set({ replay, map: replay ? map : get().map, time: 0, playing: false, follow: null, selection: null }),
+  setTime: (time) => set({ time }),
+  setPlaying: (playing) => set({ playing }),
+  setSpeed: (speed) => set({ speed }),
+  setFollow: (follow) => set({ follow }),
+  setHeat: (heat) => set({ heat }),
   openMap: (map) => set({ map, selection: null, hover: null, status: null, lookAt: null }),
   setLayer: (k, on) => {
     const layers = { ...get().layers, [k]: on };
@@ -111,3 +160,6 @@ export const useTools = create<ToolsState>((set, get) => ({
   setLooking: (looking) => set({ looking }),
   look: (point, size = 64) => set((s) => ({ lookAt: { point, size, n: (s.lookAt?.n ?? 0) + 1 } })),
 }));
+
+/** The argument the nav focus gave the open tool (e.g. a file or map name), or null. */
+export const useToolArg = () => useTools((s) => s.arg);

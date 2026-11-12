@@ -11,6 +11,10 @@ import { Cameras } from "./Cameras";
 import { ROOT_ROTATION } from "./coords";
 import { Entities } from "./Entities";
 import { World, type ModelMesh } from "./World";
+import type { Overlays } from "../MapViewer";
+import { KnowLayer } from "./KnowLayer";
+import { NavLayer } from "./NavLayer";
+import { ReplayLayer } from "./ReplayLayer";
 
 /** Whether this system can draw 3D at all (checked before making the Canvas). */
 export function canDraw3d(): boolean {
@@ -56,7 +60,8 @@ export class SceneBoundary extends Component<{ fallback: ReactNode; children: Re
   }
 }
 
-export function Scene({ bundle, meshes, entities, map, onLost }: { bundle: MeshBundle; meshes: ModelMesh[]; entities: MapEntity[]; map: string; onLost: () => void }) {
+export function Scene({ bundle, meshes, entities, map, overlays, onLost }: { bundle: MeshBundle; meshes: ModelMesh[]; entities: MapEntity[]; map: string; overlays: Overlays; onLost: () => void }) {
+  const knowOk = overlays.nav && overlays.know && overlays.know.count === overlays.nav.areas.length && overlays.know.keyMatches !== false ? overlays.know : null;
   return (
     <Canvas
       // the graphics driver can drop the 3D context (sleep, a driver update, too much else open)
@@ -84,6 +89,9 @@ export function Scene({ bundle, meshes, entities, map, onLost }: { bundle: MeshB
       <group rotation={ROOT_ROTATION}>
         <World meshes={meshes} bundle={bundle} map={map} />
         <Entities entities={entities} meshes={meshes} />
+        {overlays.nav && <NavLayer nav={overlays.nav} know={knowOk} />}
+        {overlays.nav && knowOk && <KnowLayer nav={overlays.nav} know={knowOk} />}
+        {overlays.replay && <ReplayLayer replay={overlays.replay} trace={overlays.trace} top={bundle.bounds[1][2] + 16} />}
       </group>
       <Cameras bounds={bundle.bounds} />
     </Canvas>
