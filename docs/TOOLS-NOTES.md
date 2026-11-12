@@ -7,6 +7,12 @@
 - (B, UI) Maps page map sheet: an "Open in Tools" button calling `go("tools", "map:" + name)`. The
   Tools page already opens a map from that focus string. Maps.tsx isn't mine.
 
+- (D, spray maker) Tools.tsx + `stores/tools.ts`: a "Spray maker" tool in the tools row. Add `"spray"` to
+  `Tool`, `spray` / `Spray maker` to the Segmented values/labels, and render
+  `<SprayMaker />` (lazy is fine: `import("./spray/SprayMaker")`, default export) when `tool === "spray"`.
+  Focus string `spray` could open it too. It needs nothing else (no three.js); its CSS comes with it
+  (`spray/spray.css`). Owner: agent B.
+
 ## Progress
 
 ### Agent A (Rust core: goldsrc readers + map routes) — M1/M2 server side done
@@ -236,3 +242,53 @@ webview, including pointer lock in WKWebView; the Replay tool (M6) and the nav/k
   BSP faces (A's bsp.rs); easy to add as `coverage` there.
 - Recordings: the map name comes from the file name (longest tail that's an installed map); the trace's
   `#map` is in the trace answer. Player ids reused after a reconnect keep the last name.
+
+### Agent D (spray maker) — done, waiting on the Tools.tsx entry (request above)
+
+**Built**
+- `goldsrc/wadwrite.rs`: picture → spray → `tempdecal.wad`. Median-cut palette (pure Rust), optional
+  Floyd-Steinberg dithering, fit to a valid size keeping the shape (see-through padding), Lanczos resize with
+  premultiplied alpha, see-through from the picture's alpha / the corner colour / none, one-colour sprays.
+  Reader too (`read_wad`), used for "Spray now" and the round-trip tests.
+- `tools/spray.rs` (`routes()`, merged in `tools::local_routes()` with `pub mod spray;` — A's routes were in):
+  `GET /api/tools/spray` (games found, the spray in each as PNG, read-only, can put back, the chosen picture),
+  `POST .../pick` (system file dialog, like /api/gb/add-file; the page never names a path; the picture is kept in
+  memory), `POST .../preview` (choices → PNG data URL as the game draws it, size, colours),
+  `POST .../install` ({choice, games, lock}), `POST .../restore` ({game}). POSTs need X-Panel; local listener only.
+  Pictures: PNG/JPEG/BMP/TGA/WebP, ≤ 40 MB, ≤ 8192 px a side, damaged/odd files give plain words.
+- `views/tools/spray/` (`SprayMaker.tsx`, `sprayApi.ts`, `spray.css`): choose a picture, live preview on a CSS
+  brick wall (2x, multiply blend), Size (Small/Medium/Large, default Large), Full colour / One colour (+ paint
+  colour, paint light parts), See-through (picture's own / plain background / none), Smooth photo colours,
+  Install for (each game found), Keep it from being replaced (default on), Install with busy state and
+  "Spray installed. Press T in game to spray it.", and a "Spray now" panel per game with "Put back the previous one".
+
+**The format, as verified** (the game's own czero/ and cstrike/ tempdecal.wad here, decals.wad, community guides)
+- WAD3, one lump of type 0x40, miptex with 4 mips + 256-colour palette, padded to 4 bytes. The game names its lump
+  `LOGO`, community tools `{LOGO`; only the first lump is read. We write `{LOGO`. Our 64x64 output is
+  byte-for-byte the game's layout (6296 bytes); the game's files read back and re-write identically.
+- Palette colour 255 decides the look: pure blue (0,0,255) = colour spray, index 255 see-through; anything else =
+  one-colour ("indexalpha"): every pixel in colour 255 with the index as opacity (the game's own file: colours 0-254
+  black, 255 = cl_logocolor orange, background index 0). So colour sprays always get blue at 255, and a one-colour
+  paint of pure blue is nudged to (0,0,254).
+- Size: sides multiples of 16, ≤ 256, width×height ≤ 12288 (guides say 12288 or 14336; we use the smaller).
+  Large = 96x96 square, 128x96 for 4:3, 144x80 for 16:9.
+- The game rewrites tempdecal.wad from `logos/<cl_logofile>.bmp` when a spray is picked in Options > Multiplayer.
+  The community makes the file read-only; we do too by default (unix 0444 — CrossOver/Wine sees that as read-only;
+  Windows read-only attribute), and clear it before the next install. A changed spray reaches others on the next
+  server join (it's uploaded as a custom resource).
+- Backups: the replaced file goes to `<app dir>/sprays/backups/<game>-<ms>.wad`, 10 kept per game. "Put back"
+  restores the newest (keeping the read-only state) and uses that copy up, so pressing it again goes further back.
+
+**How to try it**
+- `cd app/src-tauri && cargo test wadwrite` and `cargo test tools::spray` (size rules, palette, quantiser, round trip, game layout, install
+  with backup/read-only/restore in temp folders, damaged files).
+- Real files: `LS_TEST_GAME="$HOME/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life" cargo test real_sprays -- --nocapture`.
+- A picture as every kind of spray: `LS_SPRAY_SAMPLE=<picture> LS_TEST_DUMP=<folder> cargo test sample_picture -- --nocapture`.
+- In the app (once the Tools entry is in): Tools > Spray maker > Choose a picture > Install spray, start the game,
+  join a server, press T.
+
+**Left / not done**
+- Not seen in a real game yet: it needs the Tools entry, then a check in CS and CZ (spray shows, colours right,
+  read-only holds after opening Options).
+- No crop tool (the picture is fitted whole); no drag-and-drop (the page can't name files by design).
+
