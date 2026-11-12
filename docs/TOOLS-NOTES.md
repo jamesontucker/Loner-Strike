@@ -323,3 +323,59 @@ webview, including pointer lock in WKWebView; the Replay tool (M6) and the nav/k
 FGD parsing, prefabs, BSP "trace over" import, compile runner + leak line from `.lin`.
 
 **Requests**: none yet. The UI agent needs the editor routes agreed in TOOLS-PLAN §3.8 before building.
+
+### Agent B: real routes, overlays (M4-M6 UI), registry — 2026-11-12, later
+
+**Run the dev app from this worktree** (builds the UI, then the app with it; first build ~1 min):
+
+    cd ~/loner-strike-tools/app/ui && npm install && npm run tauri dev
+
+It's the real app (same settings and app folder as an installed Loner-Strike; if the installed one is open it
+takes another port). Tools is in the sidebar right after Servers, tagged Beta. `cargo build` of this branch
+passes (checked 2026-11-12).
+
+**Checked against real data** (bundles made by A's/C's own Rust code in a scratch harness, served at the real
+routes): de_dust2, cs_rats2, surf_ski_2 meshes with textures and lightmaps; the fixed cs_rats2 nav + .lsv;
+de_dust2 nav + .lsv; the rats2_v5 W1-1 recording (12 bots, 63 kills, 13 falls) with its trace. Decoder checks
+in `bundle.ts` hold: zero-copy views, CCW winding detected, damaged bundles rejected with plain words.
+
+**Changes to match the contract**: brush models placed by the bundle's `models[].origin`; sky faces drawn only in
+Fly (sky volumes have faces on both sides, so from above they'd hide the map); water front-only (it has a face
+per side); JSON routes' 200 `{error}` treated as errors; a 404 that carries `{error}` is the app's words, not a
+missing route (only a bare 404 brings in the dev mock).
+
+**Overlays (first pass, all in the Map viewer and Replay)**
+- Layers: "Bots' nav" switch, then Colour by (connected or cut off / place names / crouch and jump spots) and
+  "What bots learned" (Cover, What they see, Wallbangs, Corners, Angles they watch), with plain help lines,
+  loading spinners, and the route's own warnings (no nav, nav for another map version, knowledge for a different
+  nav, still learning).
+- `viewer/NavLayer.tsx`: tiles on the four corner heights (islands red; ladders count as links), area outlines,
+  links (one-way orange with arrowheads), hiding spots (sniper spots yellow), ladders, place names (DOM labels,
+  no font download). Click an area: Inspector shows size, heights, moves, group, hiding spots, links per
+  direction (click to go), one-way in/out, and the area's knowledge facts.
+- `viewer/KnowLayer.tsx`: cover rose (16 directions, crouched yellow / standing blue), sightlines from the picked
+  area (yellow = sees even a crouching player), wallbangs by material, corners with opening direction, watched
+  angles by weight; area tints for cover and "how much it sees".
+- Replay tool (`Replay.tsx`): recordings list (map, date, length, bots, kills, "with bot thoughts") + "Open a
+  recording…" (the app's dialog, busy spinner); opens the recording's own map. `panels/Timeline.tsx`: play/pause
+  (Space), speed 1-16×, scrubber with round, kill and fall ticks, players (pick; Follow keeps the Orbit camera
+  on them), "Just now" feed and a list of every fall/map death (click jumps 2 s before, looks at the spot).
+  `viewer/ReplayLayer.tsx`: hull boxes (stand/duck) in team colours, view lines, 15 s trails, names, kill crosses,
+  fall crosses with a line from where the bot stood, heat map (time / deaths / stuck, 128-unit squares).
+  Picked bot: the trace row at that moment (state, task, why + age, look, enemy), its last notes, and its goal
+  and heard noise drawn in yellow.
+
+**Registry**: `views/tools/registry.tsx` (see Requests). Each tool is its own chunk now.
+
+**Sizes now**: start chunk 509.63 kB (163.57 gz), unchanged from before Tools. Lazy: `three` 687.7 kB,
+`MapViewer` 232.4 kB (R3F + drei + viewer + overlays), `Tools` 3.7 kB, `Replay` 3.4 kB, `SprayMaker` 7.9 kB.
+
+**Acceptance (plan)**: to see the fixed rats2 nav in the app, copy `loner-strike-sim/navpack/fixes/cs_rats2.{nav,lsv}`
+into cstrike/maps (C's note). To list the rats2_v5 recording, copy
+`results/rats2_v5/W1-1_classic_cs_rats2_150726_cs_rats2_1794524249.csv` and `trace_W1-1_classic_cs_rats2_150726.csv`
+into `~/Library/Application Support/Loner-Strike/tools/recordings/`, or use Open. Not yet looked at in the
+real Tauri window (only Chromium via the dev server): pointer lock and WebGL in WKWebView still to check.
+
+**Left / ideas**: nav coverage readout (needs C's `coverage`), exposure/objects/point-cover modes, a trace
+timeline of #why notes, bot view cones as meshes, Replay heat by round.
+
