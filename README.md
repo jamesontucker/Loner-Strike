@@ -20,11 +20,12 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 
 **Playing**
 - 22 game modes: Classic, Match (5v5), Deathmatch, Free for all, Gun Game (solo and teams), Zombie Plague (two versions), Warcraft 3, SuperHero, Hide and Seek, Paintball, Deathrun, Base Builder, SoccerJam, Surf, Kreedz, plus knife, pistol, deagle, AWP and scout modes
-- Bots that play like people, from a newbie lobby up to bunnyhopping pros: they aim like a hand on a mouse, Ts take sites together, CTs hold them and retake, and each bot has its own personality, skill and habits
+- Bots that play like people, from a newbie lobby up to bunnyhopping pros: they study every map, see only what you could, make their own calls, aim like a hand on a mouse and play as a team; each one has its own playstyle, skill and about 70 habits
 - Talk to them in team chat: ask "money?" or "where'd they go" and they answer from what's really happening; call "rush b", "fake a", "flash for me", "two long" or "someone buy me an awp" and they do it, or say no in character
 - Or say it on your mic: on a dedicated server, the optional voice commands add-on turns what you say into the same orders, on the machine running the server (no audio is kept or sent anywhere)
-- 1,600 bot names, a few of them in small clans with a tag, so the same "regulars" keep showing up
-- Thousands of maps from GameBanana with pictures, favourites and search, plus weapon skins, player models, sprays and sounds
+- 1,600 regulars, a few of them in small clans with a tag, who keep showing up and remember you: friends, rivals and grudges, kept by Steam ID on a server
+- 27 fun and popular maps installed for you (scoutzknivez, aim_map, fy_iceworld, awp_india, he_glass, de_mirage, the Rats pack and more), and the stock and included maps come ready for bots
+- Thousands more maps from GameBanana with pictures, favourites and search, each checked for missing files before it's installed, plus weapon skins, player models, sprays and sounds
 - Round-end music, Quake sounds and classic sound packs
 - Add your own maps, sounds and AMX Mod X plugins from a file
 - Set up bots, rules and fun before you start a game; changes apply when it starts
@@ -43,9 +44,9 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 - Bring a server you already run, or copy one server's mods to another
 - Admins, moderators and VIPs with abilities per role; Moderation with player reports, a chat log, mutes, a swear filter, bans and player history
 - Share the admin list, bans, swear filter, welcome page and chat messages across servers; mods and settings stay per server
-- Map rotation, timed chat messages, AFK and high-ping kickers, votekick and voteban, and Stats with ranks and 5v5 results
+- Map rotation per mode (modes like Deathrun or Zombie Plague go through their own maps by themselves), mode votes or a mode rotation, timed chat messages, AFK and high-ping kickers, votekick and voteban, and Stats with ranks and 5v5 results
 - Match mode for 5v5s, HLTV spectators and demos, fast downloads and scheduled restarts
-- Join password, console password and extra start options per server
+- Join password, console password, tick rate and extra start options per server
 - A live status in your Discord, and the Loner-Strike server list for anyone to find your server
 - Weapon skins and player models everyone on the server sees
 - A step-by-step guide in the app to renting a server: where, what size and how to set it up
@@ -62,7 +63,14 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 
 The mods are community classics. We added:
 
-- **A bot brain.** Our own build of [ReGameDLL](https://github.com/jamesontucker/ReGameDLL_CS) (branch `loner-strike`) changes how the bots think, not just how they aim: a hand-like aim (still most of the time, flicks that land a touch off, a little tremor), their own routes and habits, Ts gathering and taking a site together, CTs holding sites and retaking, and chat that answers and takes requests. Stock CZ bots react instantly and aim like turrets; these were tuned against recordings of a person playing.
+- **A bot brain.** Our own build of [ReGameDLL](https://github.com/jamesontucker/ReGameDLL_CS) (branch `loner-strike`) with a bot brain built from the ground up:
+  - **Map study:** each map is studied once in the background (millions of sightlines, cover, corners, the angles enemies come from, and wallbangs by the game's real penetration rules), and bots use as much of it as their skill would know.
+  - **Fair vision:** no wallhack knowledge. They notice a barrel or a foot past cover, read flashes and sounds, and remember where they last saw you, then decide whether to hold, re-peek, flank or fall back.
+  - **Human aim and movement:** still most of the time, flicks that land a touch off, a little tremor; their own routes, Ts taking sites together, CTs holding and retaking.
+  - **People:** 11 playstyles, about 70 personal habits each, moods, and regulars who remember the players they meet.
+  - **Chat:** they answer questions and take orders from what's really going on.
+
+  Stock CZ bots react instantly and aim like turrets; these were tuned against recordings of a person playing. The ideas come from games known for their AI: Killzone, Quake III, Unreal Tournament 2004's BotPrize and F.E.A.R.
 - **Voice commands.** A small program beside the server turns what players say on voice chat into text with [Whisper](https://github.com/ggerganov/whisper.cpp), and a small model of our own (a fine-tuned Gemma 3 270M, run with [llama.cpp](https://github.com/ggerganov/llama.cpp)) turns loose wording into the order it means. It runs on the machine running the server, and needs our build of [ReHLDS](https://github.com/jamesontucker/ReHLDS) for the voice feed.
 - **Bot styles.** On top of the brain, lobbies from newbies to bunnyhopping pros, or a mixed lobby where each bot keeps its own level.
 - **Bot fixes in every mod.** A lot of old plugins don't see CZ bots at all, so hits, kills and spawns get missed. Every mod here is patched for that. Some also got bot logic they never had: SuperHero bots pick heroes, SoccerJam bots chase the ball and Roll the Dice bots roll.
