@@ -66,7 +66,21 @@ people can work in this worktree at once without stepping on each other.
 Append to `docs/TOOLS-NOTES.md`: what you built, how to try it, what's left, and any requests.
 
 ## Release target (from the user)
-Tools ships in 1.0.0 as **Tools (Beta)**: phase 1 only (viewer, entities/inspector, nav and
+Tools ships in 1.0.0 as **Tools (Beta)** (scope since widened: see "Scope update" below). Viewer first (entities/inspector, nav and
 knowledge overlays, replay). No editing. Solid over complete: clean errors, no crashes on odd maps,
 main bundle unchanged. It merges to main only after two reviews, the security fixes with tests,
 green cargo test / npm run build, a size check and a real check in the app.
+
+## Scope update (from the user): editing and the spray maker are in 1.0.0 too
+All as Beta. Order: viewer (A, B, C) → spray maker (D, independent, now) → nav fixer (after nav.rs
+writer + viewer land) → map editing: BSP-direct edits first (entity keys, move/place entities,
+texture swaps — works on any map), and the modern-Hammer brush editor (geometry core E now; UI
+after the viewer). Compiling is the riskiest part (GoldSrc compilers are Windows tools under
+Valve's SDK terms): if it isn't ready, the editor ships with .map export + direct BSP edits.
+
+- **Spray maker (agent D):** `app/src-tauri/src/goldsrc/wadwrite.rs`, `app/src-tauri/src/tools/spray.rs`
+  (its own `pub fn routes()`; ask A in TOOLS-NOTES to merge it, or add `pub mod spray;` + merge
+  line in tools/mod.rs yourself only after A has finished), `app/ui/src/views/tools/spray/*`.
+- **Editor core (agent E):** `app/src-tauri/src/editor/*` (brush geometry, plane math, CSG ops,
+  .map read/write, the map document model, command-based undo/redo) — pure Rust with tests, no
+  routes or UI yet; mount `pub mod editor;` in main.rs with one line.
