@@ -64,3 +64,9 @@ people can work in this worktree at once without stepping on each other.
 
 ## When you finish a piece
 Append to `docs/TOOLS-NOTES.md`: what you built, how to try it, what's left, and any requests.
+
+## Release target (from the user)
+Tools ships in 1.0.0 as **Tools (Beta)**: phase 1 only (viewer, entities/inspector, nav and
+knowledge overlays, replay). No editing. Solid over complete: clean errors, no crashes on odd maps,
+main bundle unchanged. It merges to main only after two reviews, the security fixes with tests,
+green cargo test / npm run build, a size check and a real check in the app.
