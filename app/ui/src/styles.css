@@ -981,10 +981,12 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
 .home-hint { margin-bottom: 16px; }
 
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) {
-  .server-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+  /* (a thin visible bar, so the strip reads as one you can swipe) */
+  .server-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 8px; scrollbar-width: thin; scrollbar-color: var(--signal) transparent; }
   .tab-group { flex: none; }
   .tab-group .chips { flex-wrap: nowrap; }
-  .server-tabs::-webkit-scrollbar { display: none; }
+  .server-tabs::-webkit-scrollbar { height: 3px; }
+  .server-tabs::-webkit-scrollbar-thumb { background: var(--signal); border-radius: 2px; }
   /* 44px touch targets, and 16px text so phones don't zoom into fields */
   .btn, .chip, .seg button, .method, .nav-item { min-height: 44px; }
   .chip { padding: 8px 12px; }
@@ -992,6 +994,13 @@ p, li, .mode-desc, .preset-desc, .pick-desc, .note, .muted, .err-text, small { t
   .upkeep li { flex-direction: column; align-items: stretch; }
   .server-top .row.between { gap: 10px; }
 }
+/* touch screens of any size (tablets are wider than the phone layout): 44px targets */
+@media (pointer: coarse) {
+  .btn, .chip, .seg button, .method, .nav-item { min-height: 44px; }
+  .link.inline { padding: 10px 4px; margin: -10px -4px; }
+}
+/* a section jumped to clears the sticky top bar */
+[id] { scroll-margin-top: 84px; }
 .server-details .seg { display: grid; grid-template-columns: repeat(3, 1fr); }
 .server-details .seg button { white-space: normal; line-height: 1.2; }
 .search.full { width: 100%; max-width: none; margin-bottom: 4px; }
@@ -1102,8 +1111,9 @@ a.btn.primary { color: var(--signal-ink); }
 
 /* ---- admins: tabs ------------------------------------------------------------------- */
 .admin-tabs { margin-bottom: -8px; } /* 24px to the section below, inside a .stack */
-.rule-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-.rule-tabs::-webkit-scrollbar { display: none; }
+.rule-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--signal) transparent; padding-bottom: 6px; }
+.rule-tabs::-webkit-scrollbar { height: 3px; }
+.rule-tabs::-webkit-scrollbar-thumb { background: var(--signal); border-radius: 2px; }
 .tab-n { font-style: normal; margin-left: 6px; font-size: 12px; color: var(--bone-faint); background: var(--bg); border-radius: 8px; padding: 0 6px; }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) { .admin-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .admin-tabs::-webkit-scrollbar { display: none; } }
 
@@ -1627,7 +1637,7 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
   .strip > .working-phone { flex-basis: 100%; margin: 0; padding: 2px 0 0; max-width: none; background: none; box-shadow: none; }
   /* long titles and buttons wrap instead of running off the screen */
   h2, .btn, .chip { white-space: normal; overflow-wrap: anywhere; }
-  .server-tabs .chip, .admin-tabs .chip { white-space: nowrap; }
+  .server-tabs .chip, .admin-tabs .chip, .rule-tabs .chip { white-space: nowrap; overflow-wrap: normal; flex-shrink: 0; }
   .launch { text-align: center; }
   .map-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* the keyboard is up: the tab bar would sit on top of it */
@@ -1702,6 +1712,11 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 }
 /* Rules page: the modes in the mode vote */
 .modevote { margin-top: 16px; }
+@media (max-width: 760px), (pointer: coarse) {
+  .modevote .share-with { display: grid; grid-template-columns: 1fr; gap: 0; margin-left: 0; }
+  .modevote .share-with label { min-height: 44px; display: flex; align-items: center; gap: 10px; border-top: 1px solid rgba(0,0,0,.18); }
+  .modevote .share-with input[type="checkbox"] { width: 20px; height: 20px; }
+}
 .modevote h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; }
 .modevote h3 .spinner { width: 12px; height: 12px; margin-right: 4px; }
 

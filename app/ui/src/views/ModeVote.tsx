@@ -62,7 +62,7 @@ export function ModeVoteList({ data }: { data: Online }) {
             {d.modes.map((m) => (
               <label key={m.id} className="follow-toggle small-note">
                 <input type="checkbox" checked={chosen.includes(m.id)} disabled={working} onChange={(e) => tick(m.id, e.target.checked)} /> {m.name}
-                {m.id === "zp5" && !zombieToo && <span className="muted"> (Zombie Plague in the vote)</span>}
+                {m.id === "zp5" && !zombieToo && <span className="muted"> (shows as Zombie Plague)</span>}
               </label>
             ))}
           </div>

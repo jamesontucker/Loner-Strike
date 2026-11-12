@@ -731,7 +731,7 @@ export function ServerPage(props: {
           <div>
             <h2 className="server-title">{s.name}{role && <> <span className={`tag role-${role}`}>{ROLE_NAME[role]}</span></>}</h2>
             <p className="muted">
-              {role ? `Shared with you · ${GAME[s.game]}${s.connect ? ` · ${s.connect}` : ""}` : `${s.host ? "Linux server" : "Dedicated server"} · ${GAME[s.game]} · ${s.host || s.public_address ? serverAddress(s) : `port ${s.port}`}`} · <StateTag s={s} inline />
+              {role ? `Shared with you · ${GAME[s.game]}${s.connect ? ` · ${s.connect}` : ""}` : `${s.host ? "Linux server" : "Dedicated server"} · ${GAME[s.game]} · ${s.host || s.public_address ? serverAddress(s) : `port ${s.port}`}`} <span style={{ whiteSpace: "nowrap" }}>· <StateTag s={s} inline /></span>
             </p>
           </div>
           <div className="row">
