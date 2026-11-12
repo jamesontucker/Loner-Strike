@@ -23,7 +23,7 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 - Bot styles give bots human reaction times, flicks that overshoot, aim that wobbles and sprays that drift, from a newbie lobby to bunnyhopping pros. A mixed lobby gives each bot its own level.
 - Each bot has a personality and plays and types to match: it chats, replies to other bots and to people, rages after a run of deaths, and cheers up a teammate.
 - A cast of regular bot names with clan tags, and believable pings on the scoreboard instead of "BOT".
-- Bots get tilted, panic, make radio calls, spray their logo, and learn new maps by themselves.
+- Bots get tilted, panic, make radio calls, spray their logo, and learn new maps by themselves; the stock and included maps come with ready-made navigation and map knowledge.
 - Bot styles: Newbie lobby, Pub server (the default), Mixed lobby, LAN party, Matchmaking, Old-timers, Veterans, Locked In, Hackers and Gods. Or Original, the game's stock bots, unchanged (robotic and predictable).
 - Bot settings: difficulty, style, personality strength, lobby mood, how much they chat (Normal to start with), whether they answer people, and players coming and going. Reset bot and fun settings puts them back to the defaults.
 - Talk to them in team chat, or by voice on a dedicated server: "rush b", "flash for me", "money?". The Bots page lists what they understand under What you can tell the bots.

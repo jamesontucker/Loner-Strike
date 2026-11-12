@@ -311,14 +311,27 @@ footer a { color: var(--dim); }
     <li><b>Copy maps from your game</b>, on a server, copies maps you already have.</li>
   </ul>
   <h2 id="teach-bots">Bots on new maps</h2>
-  <p>Bots need to learn a map before they can play it. Condition Zero comes with this for its own maps; Counter-Strike 1.6 never had bots, so in 1.6 every map is new to them the first time, even de_dust2. On a map they don't know, a <b>Learn this map</b> banner appears on the Bots page, and the map timer waits while they learn.</p>
+  <p>Bots need to know a map before they can play it well. That's two things, made once per map and kept for good:</p>
   <ul>
-    <li><b>It can take a while.</b> A small map takes a few minutes; a big or detailed one like de_inferno can take 15 minutes or more on a slower computer. The game may seem to pause while it works.</li>
-    <li><b>It's once per map.</b> After that the bots know it for good, in your game and on your servers.</li>
-    <li><b>Do it ahead of time.</b> <b>Teach bots maps</b> on the Maps page learns several in one go, so it's done before you play. It can also <b>Re-learn maps bots already know</b> if they play one badly.</li>
+    <li><b>Navigation</b>: where they can walk, jump, drop and climb, as a mesh of areas over the floor (the map's <code>.nav</code> file).</li>
+    <li><b>Map knowledge</b>: where each spot can be seen from, where the cover is, which corners and angles to watch and which walls bullets go through (the map's <code>.lsv</code> file).</li>
   </ul>
-  <p>Once a map is learned, Loner-Strike also works out where people can see from, where to take cover and which angles to watch, in the background during the first minute or two of play. You won't notice it; the bots just play the map better from then on.</p>
-  <p>Maps the bots know are shared from your game to your servers.</p>
+  <h3>Maps that come ready</h3>
+  <p>The stock Counter-Strike 1.6 maps and every map Loner-Strike installs (the modes' maps and the fun and popular ones) come with both files ready, so bots play them straight away. On the stock maps they also know the places by name, like BombsiteA, Middle or Tunnel. Condition Zero's own maps come with Valve's navigation already.</p>
+  <p>These come down by themselves: a few minutes after the app starts, and every few hours after that, it checks for ready-made files for the maps you have and puts them in. It only adds files for a map; it never changes the map itself.</p>
+  <ul>
+    <li><b>Only the exact map.</b> A ready-made file fits only the map file it was made from. If you have a different version of a map (another download, an older build), it's left alone and your bots learn that version themselves.</li>
+    <li><b>Bots' own files are replaced.</b> If your bots learned one of these maps before, their files are swapped for the ready-made ones, which know the map at least as well.</li>
+    <li><b>Hand-made ones are kept.</b> A navigation file with place names in it was made by hand (or by Valve), so it's never replaced.</li>
+  </ul>
+  <h3>Any other map</h3>
+  <p>A map you add yourself, from <b>Get maps</b> or a file, is learned the first time it's played. On a map they don't know, a <b>Learn this map</b> banner appears on the Bots page, and the map timer waits while they learn.</p>
+  <ul>
+    <li><b>Navigation first.</b> A bot walks the map to work out where everyone can go. A small map takes a few minutes; a big or detailed one can take 15 minutes or more on a slower computer, and the game may seem to pause while it works.</li>
+    <li><b>Then the map knowledge.</b> Loner-Strike studies the map in the background during the first minute or two of play, tracing sightlines, cover and wallbangs. You won't notice it; the bots just play the map better once it's done.</li>
+    <li><b>Do it ahead of time.</b> <b>Teach bots maps</b> on the Maps page learns several in one go, so it's done before you play. It can also <b>Re-learn maps bots already know</b> if they play one badly. (A map that came ready gets its ready-made files back at the next check.)</li>
+  </ul>
+  <p>What the bots know about your maps is shared from your game to your servers.</p>
   <h2 id="map-downloads">When a download fails</h2>
   <ul>
     <li><b>GameBanana is busy</b>: try again in a minute.</li>
