@@ -110,7 +110,7 @@ new g_MNomBy[MAX_NOMS], g_MNoms[MAX_NOMS], g_MNomCount        // nominated modes
 new g_MVMode[VOTE_MODES + 1], g_MVCount[VOTE_MODES + 1], g_MVBot[VOTE_MODES + 1], g_MVOptions
 new bool:g_ModeFlow          // this vote can change the mode (rtv with mode voting on)
 new bool:g_EndVote           // this vote runs because the map is ending
-new bool:g_EndDue            // this map ends with a mode-then-map vote
+new g_MapsSince              // maps played to the end since the last mode change
 new bool:g_EndStarted        // ... and it has started
 new bool:g_McPaused          // mapchooser paused for this map
 new bool:g_Changing          // a vote's map change is on its way
@@ -204,10 +204,11 @@ public plugin_cfg()
 	if (!g_Career)
 		set_cvar_string("motdfile", "addons/amxmodx/data/gamemodes/no_motd.txt")
 	remember_mode()
-	// every Nth map ends with a mode-then-map vote (maps played since the last one)
-	new every = get_pcvar_num(g_pModeEvery), since[8]
+	// every Nth map ends with a mode change (maps played since the last one); whether this is
+	// that map is settled when it's checked, since the saved settings come in after this
+	new since[8]
 	get_localinfo("gm_mvmaps", since, charsmax(since))
-	g_EndDue = every > 0 && str_to_num(since) >= every - 1
+	g_MapsSince = str_to_num(since)
 }
 
 public plugin_end()
@@ -1863,13 +1864,15 @@ public ev_teamscore()
 }
 
 // Close to the end, the way mapchooser judges it (rounds or wins to go, or time left)
+// Near the end of the map by whichever comes first: a win or round limit, or the time limit
+// (a mode can set both, and the clock often runs out first)
 bool:near_end()
 {
 	new winlimit = get_cvar_num("mp_winlimit"), maxrounds = get_cvar_num("mp_maxrounds")
-	if (winlimit)
-		return max(g_Score[0], g_Score[1]) >= winlimit - 2
-	if (maxrounds)
-		return g_Score[0] + g_Score[1] >= maxrounds - 2
+	if (winlimit && max(g_Score[0], g_Score[1]) >= winlimit - 2)
+		return true
+	if (maxrounds && g_Score[0] + g_Score[1] >= maxrounds - 2)
+		return true
 	new left = get_timeleft()
 	return get_cvar_float("mp_timelimit") > 0.0 && left > 0 && left <= END_LEAD
 }
@@ -1888,8 +1891,8 @@ set_mapchooser(bool:paused)
 
 public task_end_check()
 {
-	new rotate = get_pcvar_num(g_pModeRotate)
-	new bool:due = g_EndDue && get_pcvar_num(g_pModeEvery) > 0 && (rotate ? mode_rotating() : mode_voting())
+	new rotate = get_pcvar_num(g_pModeRotate), every = get_pcvar_num(g_pModeEvery)
+	new bool:due = every > 0 && g_MapsSince >= every - 1 && (rotate ? mode_rotating() : mode_voting())
 	if (!g_EndStarted && due != g_McPaused)
 		set_mapchooser(due)
 	// (a rotation needs nobody there; a vote needs people to vote)
