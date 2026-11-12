@@ -32,6 +32,10 @@ pub struct PackMap {
     pub bsp: u64,
     pub nav_sha256: String,
     pub lsv_sha256: String,
+    /// earlier pack navs for this map (sha256): a player who has one gets this one instead,
+    /// though it has place names (ours do, on the stock maps; a hand-made one never matches)
+    #[serde(default)]
+    pub replaces: Vec<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -97,6 +101,11 @@ pub fn step_for(maps_dir: &Path, m: &PackMap) -> Option<Step> {
     if sha_hex(&b) == m.nav_sha256 {
         let lsv_ok = find(maps_dir, &m.map, "lsv").and_then(|p| std::fs::read(p).ok()).is_some_and(|x| lsv_done(&x) || sha_hex(&x) == m.lsv_sha256);
         return if lsv_ok { None } else { Some(Step::Knowledge) };
+    }
+    // (an earlier pack nav of ours: the new one goes in)
+    let have = sha_hex(&b);
+    if m.replaces.iter().any(|h| h.eq_ignore_ascii_case(&have)) {
+        return Some(Step::Replace);
     }
     // (one with place names: made by hand, or by Valve - left alone; a broken one is replaced)
     match place_count(&b) {
@@ -242,7 +251,7 @@ mod tests {
         let maps = hl.join("cstrike/maps");
         std::fs::write(maps.join("de_x.bsp"), vec![0u8; 500]).unwrap();
         let packed = nav(5, 500, 12);
-        let m = PackMap { map: "de_x".into(), bsp: 500, nav_sha256: sha_hex(&packed), lsv_sha256: sha_hex(b"lsv") };
+        let m = PackMap { map: "de_x".into(), bsp: 500, nav_sha256: sha_hex(&packed), lsv_sha256: sha_hex(b"lsv"), replaces: vec![] };
         assert_eq!(step_for(&maps, &m), Some(Step::Add), "no nav yet");
         std::fs::write(maps.join("de_x.nav"), nav(5, 500, 0)).unwrap();
         assert_eq!(step_for(&maps, &m), Some(Step::Replace), "a learned nav without names");
@@ -262,6 +271,13 @@ mod tests {
         assert_eq!(step_for(&maps, &m), None, "already the pack's pair");
         let other = PackMap { bsp: 501, ..m.clone() };
         assert_eq!(step_for(&maps, &other), None, "another version of the map");
+        // an update to the pack: our earlier named nav is replaced, a hand-made named one isn't
+        let old_ours = nav(5, 500, 9);
+        std::fs::write(maps.join("de_x.nav"), &old_ours).unwrap();
+        let newer = PackMap { nav_sha256: sha_hex(&nav(5, 500, 10)), replaces: vec![sha_hex(&old_ours).to_uppercase()], ..m.clone() };
+        assert_eq!(step_for(&maps, &newer), Some(Step::Replace), "an earlier pack nav of ours");
+        std::fs::write(maps.join("de_x.nav"), nav(5, 500, 11)).unwrap();
+        assert_eq!(step_for(&maps, &newer), None, "a hand-made named nav still stays");
         let _ = std::fs::remove_dir_all(&hl);
     }
 
@@ -271,7 +287,7 @@ mod tests {
         let maps = hl.join("cstrike/maps");
         std::fs::write(maps.join("DE_Y.bsp"), vec![0u8; 300]).unwrap();
         let packed = nav(5, 300, 4);
-        let good = PackMap { map: "de_y".into(), bsp: 300, nav_sha256: sha_hex(&packed), lsv_sha256: sha_hex(b"knowledge") };
+        let good = PackMap { map: "de_y".into(), bsp: 300, nav_sha256: sha_hex(&packed), lsv_sha256: sha_hex(b"knowledge"), replaces: vec![] };
         let list = PackList { maps: vec![good.clone()] };
         let p2 = packed.clone();
         let fetch = move |url: &str| -> Result<Vec<u8>, String> { Ok(if url.ends_with(".nav") { p2.clone() } else { b"knowledge".to_vec() }) };
