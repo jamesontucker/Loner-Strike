@@ -146,3 +146,93 @@ planned: three 0.170.0, @types/three 0.170.0, @react-three/fiber 8.17.10, @react
 webview, including pointer lock in WKWebView; the Replay tool (M6) and the nav/knowledge layers
 (M4/M5) UI; the Go menu item and "Open in Tools" (requests above); site docs/CHANGELOG.
 
+
+### Agent C (Rust overlays: nav, knowledge, probe, replay) — M4/M5/M6 server side done
+
+**Built**
+- `goldsrc/nav.rs`: .nav reader for versions 1-5 (areas with both corners and the ne/sw heights,
+  connections per direction, hiding spots, approach and encounter data kept, places) and a v5 writer;
+  real navs (fixed cs_rats2, de_dust2) write back byte for byte. `z_at`, `closest_point`, `area_at` (the
+  game's GetNavArea), `one_way_links`, `dangling_links`. `build_ladders` redoes the game's BuildLadders
+  from `func_ladder` boxes with our own traces (facing, top/bottom pulled past blockages, bottom area,
+  forward/left/right/behind top areas, top height, dangling).
+- `goldsrc/hull.rs`: hull 0 (point, from nodes + leaves) and hull 1 (player, clip nodes) traces, a port of
+  surfsim.py's Hull, with solid brush entities (func_wall/door/breakable...) by origin; `floor_below`,
+  `ceiling_above`, `contents`. Implements `nav::LineTrace` for the ladders.
+- `goldsrc/lsv.rs`: .lsv v6 reader + writer, the brain's own checks (exact length, indices in range,
+  counts clamped, an angle past the areas ends the list) and `nav_key` (LsNavKey). Sizes asserted:
+  head 44, pair 6, area 315. Real files: keys match their navs (cs_rats2 fixes, de_dust2, de_nuke), and the
+  fixed cs_rats2 knowledge does NOT match the unfixed nav.
+- `tools/replay.rs` (declared from overlays.rs with `#[path]`, see Requests): recordings stream-parsed
+  into per-player columns, rounds, kills with `cause` enemy/world/trigger_hurt/suicide (+ `teamKill`),
+  falls (world deaths faster than 580 u/s down, with where it last stood and the drop), stuck spans
+  (< 20 u/s for 8 s, no enemy in view, in play), 128-unit heat grids (seconds, deaths, seconds stuck),
+  hits, shots, events, chat. Trace files: per-bot rows (24 columns, commas in why/look handled), #why,
+  #attack, #seen, #mark; split into map visits (#map or the clock going back) and the visit whose bots
+  stand where the recording has them is kept (same game clock, offset 0). 200 MB cap with a plain
+  message; lines over 4 KB skipped; trace rows capped per visit.
+- `tools/overlays.rs`, `routes()`:
+  - `GET /api/tools/map/:name/nav` JSON: `{version, bspSize, matchesMap, places[], areas[{id, attr, nw, se,
+    neZ, swZ, conns[4][ids], hiding[{id,pos,flags}], place (1-based, 0 none), approach, encounters}],
+    ladders[{entity, top, bottom, length, dir, bottomArea, topForward, topLeft, topRight, topBehind (area ids
+    or null), dangling}], oneWay[[from,to]], danglingLinks[], attrBits, spotFlags, dirs, warning}`.
+  - `GET /api/tools/map/:name/know` LSMB bundle (A's `write_bundle`), header `{kind:"know", stage,
+    stageName, done, count, navCount, key, navKey, keyMatches, warning, traces, spentSeconds, pairs, bangs,
+    materials{code: name}, objectTypes[], stages[], units{}}`; sections (count = areas unless said):
+    `sight` u8 (count² bits row-major), `pairA/pairB` u16, `pairQuality/pairFlags` u8, `bangA/bangB` u16,
+    `bangThick/bangMat` u8, `coverLow/coverHigh` u16×16 (units), `coverMat` u8×16, `ceiling` u16 (units),
+    `sees` u16, `high` u8, `cornerCount` u8 + `corners` f32×32 (8 × x,y,z,yawDeg), `angleCount` u8 +
+    `angles` f32×40 (8 × yawDeg, pitchDeg (+up), dist, weight, areaIndex), `objectCount` u8 + `objects`
+    f32×48 (8 × type,x,y,z,top,mat), `exposedStand/exposedCrouch` u16×8, `pointCoverLow/High` u16×9.
+    Indices are nav file order. Warning text when the key differs: "Knowledge was built for a different nav…".
+  - `GET /api/tools/map/:name/probe?x&y&z&dir=down|up` → `{hit, dir, z (feet height of the floor, or head
+    height of the ceiling), normal, fraction, contents}` or `{hit:false, startSolid, contents}`. x/y/z = feet.
+  - `GET /api/tools/recordings` → `{recordings:[{id, file, map, when, size, hasTrace, seconds, bots,
+    players, kills, rounds, error?}], folders[]}` from `<app dir>/tools/recordings/`, the game's
+    `addons/amxmodx/data/simrec/`, and files opened this session.
+  - `POST /api/tools/recordings/open` (needs `x-panel: 1`) → dialog → `{id, recording}` or `{cancelled}`.
+  - `GET /api/tools/recording/:id` LSMB bundle: header = `{kind:"replay", id, file, map, hasTrace, seconds,
+    bots, players[{id,name,bot,team,start,count}], rounds[{start,end}], kills[{t,killer,victim,headshot,
+    weapon,cause,team_kill,at,fall{from,from_t,drop,speed}}], hits, shots, events, chat, stuck[{id,from,to,at}],
+    heat{cell,x0,y0,w,h}, falls, start, end}`; sections `t x y z vx vy vz yaw pitch` f32, `hp duck ground
+    weapon venemy team` u8, `keys` u32 (all players back to back; slice with start/count), `heatTime` f32,
+    `heatDeaths` u32, `heatStuck` f32 (w×h row-major).
+  - `GET /api/tools/recording/:id/trace` → `{map, file, offset:0, matched, rows, matches, truncated,
+    columns[24], tasks[20], bots[{id, rows[[...24 values]]}], why[{t,id,team,at,why}], attack[...],
+    seen[...], marks[...]}`.
+  - Errors: JSON routes 200 `{error}` (400 bad name/id/point); binary routes `{error}` with 404/413/422.
+- Security pass (coordinator's review): ladder boxes must be finite and inside ±32768, the pull-in loop is
+  an integer step count capped at 1000 (`crafted_ladder_boxes_end`); hull recursion and contents walks stop
+  at depth 1024 (looping trees → solid, `damaged_maps_are_errors`); nav counts are checked against the bytes
+  left before allocating; .lsv sizes are checked exactly before anything is read by them (≤ 6000 areas);
+  recordings/traces: total and per-line caps, ids ≤ 64, heat grid bounded by the world size, trace rows and
+  notes capped per visit.
+
+**How to try it**
+- `cd app/src-tauri && cargo test nav lsv hull overlays` (fixtures: a 3-area nav, a box room BSP with a
+  ladder and a func_wall, a built .lsv, a rats2_v5 recording + trace snippet in `tools/testdata/`).
+- Real files: `LS_TEST_SIM=/Users/jameson/loner-strike-sim LS_TEST_GAME="$HOME/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life" cargo test -- nav lsv hull overlays`
+  (navs round-trip, .lsv keys match, de_dust2 floors match its nav, de_nuke ladders build, the whole
+  W1-1 rats2_v5 recording: 63 kills, falls found, its trace matches).
+- App running: `curl -s 127.0.0.1:<port>/api/tools/map/cs_rats2/nav | head -c 400`,
+  `.../map/cs_rats2/probe?x=0&y=0&z=100`, `.../recordings`. To see the fixed rats2 nav, copy
+  `loner-strike-sim/navpack/fixes/cs_rats2.{nav,lsv}` into cstrike/maps. To list a sim recording, copy it
+  (and its `trace_*.csv`) into `~/Library/Application Support/Loner-Strike/tools/recordings/`, or use Open.
+
+**Requests**
+- (A) `tools/mod.rs`: add `pub mod replay;` and I'll drop the `#[path = "replay.rs"]` line in overlays.rs
+  (it's `crate::tools::overlays::replay` until then). overlays.rs uses mod.rs's private `Fail`, `Done`,
+  `blocking`, `find_map`, `locate`, `json_answer` — please keep those names (or tell me).
+- (A) `/api/tools/maps` could show the .lsv key check: `lsv::nav_key(&nav) == Lsv head.key` (bytes 8..12 of
+  the .lsv) — needs the full nav read; fine for the cached facts.
+- The plan says navs.rs/navpack.rs should switch to `goldsrc::nav` for parse_head/place_count; not done
+  (not my files).
+
+**Left / notes**
+- Ladders: BuildLadders' GetGroundHeight samples several start heights; mine traces once (only used for a
+  fallback nearest-area pick). de_nuke's two vent ladders find no top area (they end under breakable grates,
+  which the game's traces hit too, I believe; unverified in game).
+- Nav coverage readout (share of upward floor faces near an area) isn't in the nav route yet — it needs the
+  BSP faces (A's bsp.rs); easy to add as `coverage` there.
+- Recordings: the map name comes from the file name (longest tail that's an installed map); the trace's
+  `#map` is in the trace answer. Player ids reused after a reconnect keep the last name.
