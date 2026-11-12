@@ -285,7 +285,7 @@ p { text-wrap: pretty; }
 .bot-stats b { display: block; font: 400 26px/1.05 var(--stencil); color: var(--signal); margin-bottom: 4px; }
 .unique { margin-top: 30px; }
 .unique h3 { font: 400 24px/1.1 var(--stencil); margin: 0; }
-.unique-grid { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 28px; }
+.unique-grid { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 24px; }
 .unique-grid li { color: var(--dim); border-top: 2px solid var(--signal); padding-top: 10px; }
 .unique-grid b { display: block; color: var(--bone); margin-bottom: 3px; }
 .botplay .also { margin: 30px 0 0; font: 400 20px/1.1 var(--stencil); }
@@ -697,33 +697,32 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   <section class="botplay" id="bots">
     <div class="wrap">
       <h2>How the bots play</h2>
-      <p class="lede">The game's own bots walk the same lines, freeze to reload and backpedal in every fight. Loner-Strike replaces their brain with one built from the ground up: it studies every map, sees only what a player could, makes its own decisions, and gives every bot a personality and a memory.</p>
+      <p class="lede">The game's own bots run on rails. Ours have a brain built from the ground up: they study the map, see only what you could, and decide for themselves.</p>
       <ul class="bot-stats" aria-label="The bot brain in numbers">
-        <li><b>Millions</b>of sightlines studied on every map</li>
-        <li><b>11</b>playstyles, from rusher to ninja</li>
-        <li><b>70</b>personal habits in every bot, give or take</li>
-        <li><b>1,600</b>regulars who come back and remember you</li>
+        <li><b>Millions</b>of sightlines per map</li>
+        <li><b>11</b>playstyles</li>
+        <li><b>70</b>habits in every bot</li>
+        <li><b>1,600</b>regulars who remember you</li>
       </ul>
       <div class="unique">
         <h3>What no other Counter-Strike bot does</h3>
         <ul class="unique-grid">
-          <li><b>They study every map.</b> Before they play, they trace millions of sightlines and work out cover, corners, the angles enemies come from and which walls bullets really go through.</li>
-          <li><b>They only know what they could see.</b> No wallhack knowledge. They notice a barrel or a foot past cover, read flashes and sounds, and remember where they last saw you.</li>
-          <li><b>They make their own calls.</b> After backing off from a fight they decide what's next: hold, take another angle, go back in, go round or fall back, each by its own skill and personality.</li>
-          <li><b>They're people.</b> A playstyle, about 70 personal habits, a mood that shifts through the match, and 1,600 regulars who come back with the same names.</li>
-          <li><b>They remember you.</b> On a server, every regular knows each player by their Steam ID: who they get along with, who usually wins, and who's become a rival.</li>
-          <li><b>You can talk to them.</b> Type or say "rush b", "flash for me" or "where'd they go", and they answer from what's actually happening.</li>
+          <li><b>They study every map.</b> Sightlines, cover, angles and real wallbang spots.</li>
+          <li><b>They don't cheat.</b> They see a barrel or a foot past cover, and remember where you were.</li>
+          <li><b>They make their own calls.</b> Hold, re-peek, flank or fall back, by skill and personality.</li>
+          <li><b>They remember you.</b> Friends, rivals and grudges, kept by Steam ID across days.</li>
+          <li><b>You can talk to them.</b> Type or say "rush b" or "flash for me" and they answer.</li>
         </ul>
       </div>
       <h3 class="also">And in every fight</h3>
       <div class="botplay-grid">
         <ul class="steps">
-          <li><b>They aim like a hand on a mouse.</b> Still most of the time, then a quick flick that lands a touch off and gets corrected. Good players tap; worse ones spray and run.</li>
-          <li><b>They react like people.</b> A human moment before they fire, longer for a newbie than a veteran.</li>
-          <li><b>They move like players.</b> Their own routes, quiet near enemies, peeking corners and stopping to shoot.</li>
-          <li><b>They take sites together.</b> Ts gather out of sight and go in at once. CTs hold the sites and run back to retake.</li>
-          <li><b>They have habits.</b> Spawn hops, freeze-time flicks, reloading after every kill. A bot that keeps dying gets tilted; the best bunnyhop.</li>
-          <li><b>They play the mode.</b> Run and gun in Deathmatch and Gun Game, lone wolves in a pub, a team in a 5v5.</li>
+          <li><b>They aim like a hand on a mouse.</b> A flick that lands a touch off, then a correction.</li>
+          <li><b>They react like people.</b> Newbies hesitate; veterans don't.</li>
+          <li><b>They move like players.</b> Quiet near enemies, peeking corners, stopping to shoot.</li>
+          <li><b>They play as a team.</b> Ts take sites together; CTs hold and retake.</li>
+          <li><b>They have habits.</b> Spawn hops, tilt after a bad streak, the best bunnyhop.</li>
+          <li><b>They play the mode.</b> Run and gun in Deathmatch, a team in a 5v5.</li>
         </ul>
         <div class="ladder">
           <h3>Pick the lobby</h3>
@@ -742,7 +741,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <p class="fine">Or keep the game's stock bots, unchanged: robotic and predictable.</p>
         </div>
       </div>
-      <p class="deep">The ideas come from games known for their AI: Killzone's precomputed cover, Quake III's map study, the human-likeness of Unreal Tournament 2004's BotPrize and F.E.A.R.'s squad chatter. <a href="docs#how-bots-work">See how the bots work</a></p>
+      <p class="deep">Built on ideas from Killzone, Quake III, Unreal Tournament and F.E.A.R. <a href="docs#how-bots-work">How the bots work</a></p>
     </div>
   </section>
 
