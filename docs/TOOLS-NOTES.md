@@ -379,3 +379,13 @@ real Tauri window (only Chromium via the dev server): pointer lock and WebGL in 
 **Left / ideas**: nav coverage readout (needs C's `coverage`), exposure/objects/point-cover modes, a trace
 timeline of #why notes, bot view cones as meshes, Replay heat by round.
 
+
+## Decision: compiling with SDHLT (user + coordinator, 2026-11-12)
+- Compiler: https://github.com/seedee/SDHLT, pinned to v1.3.1 (release asset `sdhlt-v1.3.1.zip`, 2026-10-16).
+  Windows binaries only (sdHLCSG/sdHLBSP/sdHLVIS/sdHLRAD, x86 and x64). Licence: GPLv2 with the Valve SDK 2.3 EULA
+  overriding where needed (and id's Quake 2 licence) — so we DON'T bundle it.
+- Download on first compile from the official GitHub release, verify a pinned SHA-256, keep its LICENSE.md beside it,
+  store under the app dir (e.g. tools/sdhlt/v1.3.1/). Windows: run the exes directly. macOS: run them through the
+  app's existing CrossOver/Wine path (as it runs HLDS). Stream output to the editor; translate common errors (leak,
+  limits, missing textures) into plain words.
+- Separate task after the editor UI. Fallback if not ready: .map export + direct BSP edits.
