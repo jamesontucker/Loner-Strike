@@ -65,7 +65,11 @@ export class MapMaterials {
   /** the textures that couldn't be loaded */
   readonly missing = new Set<string>();
 
-  constructor(private urls: Urls, private opts: MaterialOptions, private redraw: () => void, private anisotropy = 4) {
+  /** the side faces are seen from: their front, so you can look into the map from outside */
+  private front: THREE.Side;
+
+  constructor(private urls: Urls, private opts: MaterialOptions, private redraw: () => void, private anisotropy = 4, clockwise = false) {
+    this.front = clockwise ? THREE.BackSide : THREE.FrontSide;
     urls.lightmap().then((url) => {
       if (!url || this.disposed) return;
       this.loader.load(url, (t) => {
@@ -134,7 +138,8 @@ export class MapMaterials {
     const lit = this.opts.lighting && !!this.lightmap && kind !== "sky" && kind !== "trigger";
     // with the map's own lighting it's all in the lightmap; without, a simple sun shades the faces
     const m = lit || kind === "sky" || kind === "trigger" ? new THREE.MeshBasicMaterial() : new THREE.MeshLambertMaterial();
-    m.side = THREE.DoubleSide;
+    // see-through things are seen from both sides; walls only from inside the map
+    m.side = kind === "water" || kind === "masked" || kind === "trigger" ? THREE.DoubleSide : this.front;
     m.name = d.texture;
     m.userData.kind = kind;
     this.fill(m, d.texture, kind);

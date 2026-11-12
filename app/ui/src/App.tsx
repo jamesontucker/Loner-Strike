@@ -40,7 +40,7 @@ const Tools = lazyPage(() => import("./views/tools/Tools"));
 
 // Your own game's pages, grouped like a server's tabs (Game, People), then the rest.
 // ⌘1-⌘9 follow this order.
-const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean }[] = [
+const NAV: { id: Section; label: string; icon: string; group?: string; live?: boolean; beta?: boolean }[] = [
   { id: "play", label: "Play", icon: "play", group: "Game" },
   { id: "bots", label: "Bots", icon: "bots", live: true },
   { id: "match", label: "Rules", icon: "rules", live: true },
@@ -61,7 +61,7 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "more", label: "Get more", icon: "more" },
   { id: "servers", label: "Servers", icon: "server", group: "Hosting" },
   // looking inside maps: on the computer only (3D over Wi-Fi on a phone isn't a goal)
-  ...(ON_THIS_COMPUTER ? [{ id: "tools" as Section, label: "Tools", icon: "tools", group: "Workshop" }] : []),
+  ...(ON_THIS_COMPUTER ? [{ id: "tools" as Section, label: "Tools", icon: "tools", group: "Workshop", beta: true }] : []),
   // (the sidebar keeps it below the list, always in view)
   { id: "settings", label: "Settings", icon: "settings", group: "App" },
 ];
@@ -368,6 +368,7 @@ function Shell() {
     >
       <Icon name={n.icon} />
       {n.label}
+      {n.beta && <span className="tag nav-beta">Beta</span>}
       {/* the title above doesn't show on touch: the More sheet says it */}
       {sub && n.live && !localOnline && !worksSaved(n.id) && <small className="nav-sub">Needs a game</small>}
       {n.id === "players" && myPlayers > 0 && <span className="count">{myPlayers}</span>}

@@ -78,8 +78,10 @@ export function World({ meshes, bundle, map }: { meshes: ModelMesh[]; bundle: Me
   const layers = useTools((s) => s.layers);
   const { select, setHover } = useTools.getState();
   const [version, setVersion] = useState(0);
+  // (the dev test room draws its own pictures; a real map's come from the app)
+  const mock = import.meta.env.DEV && bundle.header.mock === true;
   const mats = useMemo(
-    () => new MapMaterials({ tex: (n) => texUrl(map, n), lightmap: () => lightmapUrl(map) }, { textures: layers.textures, lighting: layers.lighting, triggers: layers.triggers }, invalidate, Math.min(8, gl.capabilities.getMaxAnisotropy())),
+    () => new MapMaterials({ tex: (n) => texUrl(map, n, mock), lightmap: () => (bundle.uv2 ? lightmapUrl(map, mock) : Promise.resolve(null)) }, { textures: layers.textures, lighting: layers.lighting, triggers: layers.triggers }, invalidate, Math.min(8, gl.capabilities.getMaxAnisotropy()), bundle.clockwise),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [map, bundle],
   );

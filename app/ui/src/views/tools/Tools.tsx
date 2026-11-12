@@ -27,8 +27,15 @@ export default function Tools({ maps }: { maps: MapInfo[] }) {
 
   return (
     <>
-      <SectionHead title="Tools" note="Look inside your maps: walk around them, see every spawn, door and trigger, and click anything to see what it is.">
-        <Segmented values="map,replay" labels="Map viewer,Replay" current={tool} onPick={(v) => setTool(v as Tool)} label="Tool" />
+      <SectionHead
+        title="Tools"
+        note={
+          <>
+            <span className="tag tools-beta">Beta</span> New in 1.0: look inside maps and watch the bots. More tools are on the way. Walk around a map, see every spawn, door and trigger, and click anything to see what it is.
+          </>
+        }
+      >
+        <Segmented values="map replay" labels="Map viewer|Replay" current={tool} onPick={(v) => setTool(v as Tool)} label="Tool" />
       </SectionHead>
       {!ON_THIS_COMPUTER ? (
         <div className="panel">

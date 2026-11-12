@@ -30,9 +30,16 @@ export type ToolsMapInfo = {
 
 /** A request the app answered with an error (its own words when it gave some). */
 export class ToolsError extends Error {
-  constructor(message: string, readonly status = 0) {
+  /** json: the app answered in its own words (not a missing route) */
+  constructor(message: string, readonly status = 0, readonly json = false) {
     super(message);
   }
+}
+
+/** JSON routes answer {error} with 200 (like the rest of the app): that's a failure too. */
+function checked<T>(v: unknown): T {
+  if (v && typeof v === "object" && !Array.isArray(v) && typeof (v as { error?: unknown }).error === "string") throw new ToolsError((v as { error: string }).error, 200, true);
+  return v as T;
 }
 
 const base = (map: string) => `/api/tools/map/${encodeURIComponent(map)}`;
@@ -53,7 +60,7 @@ function forcedMock() {
 // (import.meta.env.DEV is false in a release build, so the mock file isn't even built)
 const loadMock = () => (mock ??= import.meta.env.DEV ? import("./mock") : Promise.reject(new ToolsError("Not available.")));
 /** In development: whether a failed answer means the Rust routes aren't there yet. */
-const noServer = (status: number, json: boolean) => import.meta.env.DEV && (status === 404 || ((status === 500 || status === 502 || status === 504) && !json));
+const noServer = (e: ToolsError) => import.meta.env.DEV && !e.json && [0, 404, 500, 502, 504].includes(e.status);
 
 // ---- requests ------------------------------------------------------------------------------
 
@@ -75,7 +82,7 @@ async function fetchOk(path: string, signal?: AbortSignal): Promise<Response> {
       /* no message */
     }
   }
-  throw new ToolsError(msg || (r.status === 404 ? "That map isn't in your game any more." : "Something went wrong reading this map. Try again."), r.status);
+  throw new ToolsError(msg || (r.status === 404 ? "That map isn't in your game any more." : "Something went wrong reading this map. Try again."), r.status, json && !!msg);
 }
 
 /** Runs a slow read with the app's spinner and label in the top bar (kept across pages). */
@@ -96,7 +103,7 @@ async function getMesh(map: string, signal?: AbortSignal): Promise<MeshBundle> {
     try {
       buf = await (await fetchOk(`${base(map)}/mesh`, signal)).arrayBuffer();
     } catch (e) {
-      if (e instanceof ToolsError && (noServer(e.status, false) || (import.meta.env.DEV && e.status === 0))) {
+      if (e instanceof ToolsError && noServer(e)) {
         console.info("Tools: the app's map routes aren't answering, so a test room stands in (dev only).");
         mockOn = true;
         return (await loadMock()).mockBundle();
@@ -124,23 +131,23 @@ function toEntity(e: Record<string, unknown>, i: number): MapEntity {
 
 async function getEntities(map: string, signal?: AbortSignal): Promise<MapEntity[]> {
   if (forcedMock() || mockOn) return (await loadMock()).mockEntities().map(toEntity);
-  const r = await (await fetchOk(`${base(map)}/entities`, signal)).json();
+  const r = checked<unknown>(await (await fetchOk(`${base(map)}/entities`, signal)).json());
   return Array.isArray(r) ? r.map(toEntity) : [];
 }
 
 async function getInfo(map: string, signal?: AbortSignal): Promise<ToolsMapInfo | null> {
   if (forcedMock() || mockOn) return (await loadMock()).mockInfo();
-  return (await (await fetchOk(`${base(map)}/info`, signal)).json()) as ToolsMapInfo;
+  return checked<ToolsMapInfo>(await (await fetchOk(`${base(map)}/info`, signal)).json());
 }
 
-/** A texture's picture (RGBA PNG); a failed load draws a checker. */
-export function texUrl(map: string, name: string): Promise<string | null> {
-  if (forcedMock() || mockOn) return loadMock().then((m) => m.mockTexture(name));
+/** A texture's picture (RGBA PNG); a failed load draws a checker. `mock`: the bundle is the dev test room. */
+export function texUrl(map: string, name: string, mock = false): Promise<string | null> {
+  if (mock) return loadMock().then((m) => m.mockTexture(name));
   return Promise.resolve(`${base(map)}/tex/${encodeURIComponent(name)}.png`);
 }
 /** The map's lighting as one picture; a failed load draws without lighting. */
-export function lightmapUrl(map: string): Promise<string | null> {
-  if (forcedMock() || mockOn) return loadMock().then((m) => m.mockLightmap());
+export function lightmapUrl(map: string, mock = false): Promise<string | null> {
+  if (mock) return loadMock().then((m) => m.mockLightmap());
   return Promise.resolve(`${base(map)}/lightmap.png`);
 }
 

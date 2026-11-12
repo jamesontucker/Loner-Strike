@@ -1907,6 +1907,9 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .setting .style-pick select { min-width: 200px; }
 
 /* ---- Tools: the map viewer ------------------------------------------------ */
+/* Tools is in beta for 1.0: a small tag in the sidebar and on the page */
+.nav-beta { margin-left: auto; font-size: 11px; padding: 0 6px; letter-spacing: .03em; text-transform: uppercase; }
+.tools-beta { font-size: 11px; padding: 0 6px; letter-spacing: .03em; text-transform: uppercase; vertical-align: 1px; margin-right: 4px; }
 /* the viewer fills the page's height: the page stops scrolling and the view takes the rest */
 .content:has(> .tools-page) { display: flex; flex-direction: column; padding-bottom: 16px; }
 .tools-page { flex: 1 1 auto; min-height: 460px; display: flex; flex-direction: column; gap: 10px; }

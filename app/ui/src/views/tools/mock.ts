@@ -70,7 +70,7 @@ function build() {
     if (last && last.model === f.model && last.texture === f.texture) (last.count as number) += 6;
     else draws.push({ model: f.model, texture: f.texture, start, count: 6, flags: f.flags, ...(f.model ? { entityIndex: f.model === 1 ? 6 : 7 } : {}) });
   });
-  return { order, buf: encodeBundle({ draws, map: "test room" }, [
+  return { order, buf: encodeBundle({ draws, map: "test room", mock: true }, [
     { name: "positions", data: new Float32Array(pos), stride: 3 },
     { name: "normals", data: new Float32Array(nrm), stride: 3 },
     { name: "uv", data: new Float32Array(uv), stride: 2 },
@@ -176,7 +176,7 @@ export async function mockLightmap(): Promise<string> {
         const p = [0, 1, 2].map((k) => a[k] + (b[k] - a[k]) * u + (d[k] - a[k]) * v);
         const dist2 = (p[0] - 0) ** 2 + (p[1] - 0) ** 2 + (p[2] - 300) ** 2;
         // half brightness is "normal": the viewer doubles it, like the game's overbright
-        const l = Math.min(1, 0.12 + 60000 / dist2) * 0.62;
+        const l = Math.min(1, 0.3 + 150000 / dist2) * 0.55;
         const o = ((cy + y) * ATLAS + cx + x) * 4;
         img.data[o] = 255 * l; img.data[o + 1] = 235 * l; img.data[o + 2] = 205 * l; img.data[o + 3] = 255;
       }

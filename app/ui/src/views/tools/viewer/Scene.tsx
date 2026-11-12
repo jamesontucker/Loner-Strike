@@ -56,9 +56,14 @@ export class SceneBoundary extends Component<{ fallback: ReactNode; children: Re
   }
 }
 
-export function Scene({ bundle, meshes, entities, map }: { bundle: MeshBundle; meshes: ModelMesh[]; entities: MapEntity[]; map: string }) {
+export function Scene({ bundle, meshes, entities, map, onLost }: { bundle: MeshBundle; meshes: ModelMesh[]; entities: MapEntity[]; map: string; onLost: () => void }) {
   return (
     <Canvas
+      // the graphics driver can drop the 3D context (sleep, a driver update, too much else open)
+      onCreated={({ gl }) => gl.domElement.addEventListener("webglcontextlost", (e) => {
+        e.preventDefault();
+        onLost();
+      })}
       frameloop="demand"
       dpr={[1, 1.5]}
       linear

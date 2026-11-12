@@ -86,6 +86,7 @@ function Viewer({ map }: { map: string }) {
   }, [setCamera]);
 
   const missing = (info.data?.textures ?? []).filter((t) => t.from === "missing").map((t) => t.name);
+  const wads = Array.isArray(info.data?.missingWads) ? (info.data.missingWads as string[]) : [];
   const loading = mesh.isLoading || (mesh.isSuccess && ents.isLoading);
   const failed = mesh.error instanceof Error ? mesh.error.message || "Something went wrong reading this map." : null;
 
@@ -95,12 +96,13 @@ function Viewer({ map }: { map: string }) {
         <span className="map-title">{map}</span>
         <button className="btn small" onClick={() => openMap(null)}>Other map</button>
         <span className="push" />
-        <Segmented values="orbit,fly,top" labels="Orbit,Fly,Top-down" current={camera} onPick={(v) => setCamera(v as CameraMode)} label="Camera" />
+        <Segmented values="orbit fly top" labels="Orbit|Fly|Top-down" current={camera} onPick={(v) => setCamera(v as CameraMode)} label="Camera" />
       </div>
       {missing.length > 0 && (
         <Banner>
           {missing.length === 1 ? "1 texture is missing" : `${missing.length} textures are missing`}: {missing.slice(0, 6).join(", ")}
           {missing.length > 6 ? "…" : ""}. They show as a magenta checker.
+          {wads.length > 0 && <> {wads.length === 1 ? `The file ${wads[0]} isn't in your game.` : `These files aren't in your game: ${wads.join(", ")}.`}</>}
         </Banner>
       )}
       {ents.isError && <Banner>This map's entities couldn't be read, so spawns and doors aren't shown.</Banner>}
@@ -119,13 +121,31 @@ function Viewer({ map }: { map: string }) {
 function Loaded({ bundle, entities, map }: { bundle: MeshBundle | null; entities: MapEntity[]; map: string }) {
   const looking = useTools((s) => s.looking);
   const meshes = useModelMeshes(bundle, entities);
+  // the 3D view lost its context or crashed: a way to start it again (n remounts it)
+  const [lost, setLost] = useState(false);
+  const [n, setN] = useState(0);
+  const restart = () => {
+    setLost(false);
+    setN((v) => v + 1);
+  };
+  const stopped = (
+    <div className="tools-overlay">
+      <LoadError title="The 3D view stopped" text="Your computer's graphics stopped drawing the map. This can happen after sleep or a driver update." onRetry={restart} />
+    </div>
+  );
   return (
     <div className="tools-viewer">
       <div className="tools-stage">
         <div className="tools-canvas">
-          {bundle ? (
-            <SceneBoundary fallback={<div className="tools-overlay">{NO_3D}</div>}>
-              <Scene bundle={bundle} meshes={meshes} entities={entities} map={map} />
+          {bundle && !bundle.draws.length ? (
+            <div className="tools-overlay">
+              <LoadError title="Nothing to show" text="This map file has no surfaces to draw. It may be unfinished or damaged." />
+            </div>
+          ) : bundle && lost ? (
+            stopped
+          ) : bundle ? (
+            <SceneBoundary key={n} fallback={stopped}>
+              <Scene bundle={bundle} meshes={meshes} entities={entities} map={map} onLost={() => setLost(true)} />
             </SceneBoundary>
           ) : (
             <div className="tools-overlay" role="status">

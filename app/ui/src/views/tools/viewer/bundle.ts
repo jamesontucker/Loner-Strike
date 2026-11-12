@@ -42,6 +42,9 @@ export type MeshBundle = {
   models: number[];
   /** [min, max] of every position, GoldSrc units */
   bounds: [[number, number, number], [number, number, number]];
+  /** true when triangles wind clockwise seen from the front (checked against the normals),
+   *  so the viewer draws their other side instead */
+  clockwise: boolean;
   /** the rest of the JSON header, for things added later */
   header: Record<string, unknown>;
 };
@@ -136,10 +139,12 @@ export function decodeBundle(buf: ArrayBuffer): MeshBundle {
     max.fill(0);
   }
 
+  const normals = f32("normals", 3);
   return {
     version,
+    clockwise: normals ? isClockwise(positions, normals, idx) : false,
     positions,
-    normals: f32("normals", 3),
+    normals,
     uv: f32("uv", 2),
     uv2: f32("uv2", 2),
     indices: idx,
@@ -149,6 +154,22 @@ export function decodeBundle(buf: ArrayBuffer): MeshBundle {
     bounds: [min, max],
     header,
   };
+}
+
+/** Whether most triangles (a sample) wind clockwise around their normal. */
+function isClockwise(p: Float32Array, n: Float32Array, idx: Uint32Array) {
+  let cw = 0, ccw = 0;
+  const tris = idx.length / 3;
+  const step = Math.max(1, Math.floor(tris / 500));
+  for (let t = 0; t < tris; t += step) {
+    const a = idx[t * 3] * 3, b = idx[t * 3 + 1] * 3, c = idx[t * 3 + 2] * 3;
+    const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2];
+    const vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
+    const d = (uy * vz - uz * vy) * n[a] + (uz * vx - ux * vz) * n[a + 1] + (ux * vy - uy * vx) * n[a + 2];
+    if (d > 0) ccw++;
+    else if (d < 0) cw++;
+  }
+  return cw > ccw;
 }
 
 /** Builds a bundle (the dev mock uses it; it's also the reference for the Rust writer). */
