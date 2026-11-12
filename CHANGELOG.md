@@ -36,7 +36,7 @@ The first full release:
 - Counter-Strike 1.6 no longer lists Condition Zero only maps it can't load.
 - The quick bar changes bot difficulty and style in one click.
 - Settings, Help fixes the usual problems by symptom, and the app's messages say what to do next.
-- The maps Loner-Strike installs and the stock maps (all but the two biggest, de_survivor and de_torn) come with ready-made bot navigation and map knowledge, so bots play them straight away with no learning. On the stock maps bots name places in chat, like BombsiteA, Middle or Tunnel.
+- The maps Loner-Strike installs and the stock maps (all but the biggest, de_survivor) come with ready-made bot navigation and map knowledge, so bots play them straight away with no learning. On the stock maps bots name places in chat, like BombsiteA, Middle or Tunnel.
 - Bots learn maps split by a wall or barrier properly (Base Builder, Deathrun): every spawn gets navigation.
 - Zombie Plague Advanced no longer crashes when a map loads on Windows and Mac servers: its settings were read back empty.
 - Base Builder: aiming at a block on maps with long entity names (bb_street) no longer breaks that player's building controls.
