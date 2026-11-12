@@ -30,6 +30,7 @@ mod remote;
 mod scrim;
 mod server;
 mod navs;
+mod goldsrc;
 mod navpack;
 mod servercontent;
 mod servers;
