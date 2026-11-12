@@ -460,13 +460,6 @@
    ]
   },
   {
-   "mod": 89041,
-   "file": 282133,
-   "maps": [
-    "zm_tehina"
-   ]
-  },
-  {
    "mod": 88204,
    "file": 289762,
    "maps": [
@@ -474,5 +467,5 @@
    ]
   }
  ],
- "credits": "Zombie Plague 5.0.8 by MeRcyLeZZ and the ZP Dev Team (GPL), sources from github.com/evandrocoan/MultiModServer @ 5073cacd70da48a52953e8f9d9a39ec2d5fadd62; Sniper/Assassin classes and modes, models and resources from github.com/ecks3/zp508-similar-to-zod @ 9f74a1455538ca9d6f3bbf4d91cfca515c1dbb48; CZ bot fixes and Advance-style patches by Loner-Strike. Maps from GameBanana: zm_silent_hill, zm_zod_labtest, zm_ice_attack3, zm_tehina, zm_deko2 (by their authors)."
+ "credits": "Zombie Plague 5.0.8 by MeRcyLeZZ and the ZP Dev Team (GPL), sources from github.com/evandrocoan/MultiModServer @ 5073cacd70da48a52953e8f9d9a39ec2d5fadd62; Sniper/Assassin classes and modes, models and resources from github.com/ecks3/zp508-similar-to-zod @ 9f74a1455538ca9d6f3bbf4d91cfca515c1dbb48; CZ bot fixes and Advance-style patches by Loner-Strike. Maps from GameBanana: zm_silent_hill, zm_zod_labtest, zm_ice_attack3, zm_deko2 (by their authors)."
 }
