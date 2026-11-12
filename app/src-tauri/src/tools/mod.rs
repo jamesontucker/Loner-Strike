@@ -9,6 +9,7 @@
 pub mod cache;
 pub mod mapinfo;
 pub mod overlays;
+pub mod replay;
 
 use crate::goldsrc::{self, bsp::Bsp, entities, mesh, wad};
 use crate::server::Shared;

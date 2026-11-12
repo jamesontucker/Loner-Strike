@@ -13,8 +13,7 @@
 //! Recordings are named by an id the server hands out (a hash of the path); the page never
 //! names a path.
 
-#[path = "replay.rs"]
-pub mod replay;
+use super::replay;
 
 use super::{blocking, cache, find_map, json_answer, locate, mapinfo::MapFile, Done, Fail};
 use crate::goldsrc::{self, hull::MapHulls, lsv, mesh, nav};
