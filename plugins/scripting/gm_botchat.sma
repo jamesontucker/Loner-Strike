@@ -7167,6 +7167,13 @@ bool:site_from_name(ent, k)
 // place has the word too ("long a": "long"; "upper tunnel" and "lower tunnel": not "tunnel")
 place_words(const place[])
 {
+	// other words people use for a place (dust2's Catwalk is "cat", "catwalk" or "short";
+	// inferno's Apartments "apps")
+	static const ALIAS_OF[][] = { "cat", "cat", "apartments", "apartments" }
+	static const ALIAS[][] = { "catwalk", "short", "apps", "apartment" }
+	for (new i = 0; i < sizeof ALIAS; i++)
+		if (equal(place, ALIAS_OF[i]))
+			TrieSetString(g_PlaceWord, ALIAS[i], place)
 	if (contain(place, " ") == -1)
 		return
 	static const PLAIN[][] = { "upper", "lower", "spawn", "side", "the", "back", "front", "top", "bottom", "middle", "inner",
