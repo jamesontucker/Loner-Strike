@@ -84,3 +84,14 @@ Valve's SDK terms): if it isn't ready, the editor ships with .map export + direc
 - **Editor core (agent E):** `app/src-tauri/src/editor/*` (brush geometry, plane math, CSG ops,
   .map read/write, the map document model, command-based undo/redo) — pure Rust with tests, no
   routes or UI yet; mount `pub mod editor;` in main.rs with one line.
+
+## More tools (user approved, 2026-11-12)
+Each new tool lives in its own folder (`app/ui/src/views/tools/<tool>/`, `app/src-tauri/src/tools/<tool>.rs`
+with its own `pub fn routes()`), mounted with one `pub mod` + one merge line in tools/mod.rs, and
+registered with ONE appended line in `app/ui/src/views/tools/registry.tsx` (B creates it; re-read
+the file right before appending). Shared files: one-line additions only.
+- **F: map health check** (bots on any map in the background → report: falls, stuck spots, coverage, errors).
+- **G: map doctor + callout editor** (missing files / .res / nav present; name places on the nav).
+- **H: texture & model browser** (WAD textures, MDL models in 3D, GameBanana browse + import, own files).
+- Queued: crosshair & config builder, demo manager (list/play via the game's +playdemo; later parse
+  .dem into the 3D replay), bot personality editor, game mode lab (surf/deathrun lab + no-code designer).
