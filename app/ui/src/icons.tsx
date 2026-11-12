@@ -44,6 +44,8 @@ const P: Record<string, string> = {
   moderation: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
   stats: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  // a wrench: tools for looking inside (and later fixing) maps
+  tools: '<path d="M4.5 19.5l7.8-7.8"/><path d="M12.3 11.7a4.5 4.5 0 0 1 5.9-6.6l-2.7 2.7.3 2.4 2.4.3 2.7-2.7a4.5 4.5 0 0 1-6.6 5.9"/>',
   kreedz: '<path d="M3 21l6-10 4 5 3-4 5 9z"/><path d="M14 6l2-3 2 3"/>',
 };
 

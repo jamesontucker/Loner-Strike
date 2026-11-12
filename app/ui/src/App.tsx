@@ -35,6 +35,8 @@ const Admins = lazyPage(() => import("./views/Admins").then((m) => ({ default: m
 const ServerBrowser = lazyPage(() => import("./views/ServerBrowser").then((m) => ({ default: m.ServerBrowser })));
 const GetMore = lazyPage(() => import("./views/GetMore").then((m) => ({ default: m.GetMore })));
 const MySkins = lazyPage(() => import("./views/GetMore").then((m) => ({ default: m.MySkins })));
+// (three.js comes with it, in its own chunks: never imported from here)
+const Tools = lazyPage(() => import("./views/tools/Tools"));
 
 // Your own game's pages, grouped like a server's tabs (Game, People), then the rest.
 // ⌘1-⌘9 follow this order.
@@ -58,6 +60,8 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "sounds", label: "Sounds", icon: "sound" },
   { id: "more", label: "Get more", icon: "more" },
   { id: "servers", label: "Servers", icon: "server", group: "Hosting" },
+  // looking inside maps: on the computer only (3D over Wi-Fi on a phone isn't a goal)
+  ...(ON_THIS_COMPUTER ? [{ id: "tools" as Section, label: "Tools", icon: "tools", group: "Workshop" }] : []),
   // (the sidebar keeps it below the list, always in view)
   { id: "settings", label: "Settings", icon: "settings", group: "App" },
 ];
@@ -514,6 +518,7 @@ function Shell() {
               {section === "stats" && <Community target="local" part="stats" />}
               {section === "more" && <GetMore onInstalled={refreshMaps} />}
               {section === "skins" && <MySkins />}
+              {section === "tools" && <Tools maps={allMaps} />}
               {section === "mods" && <Mods app={app} scan={scan} running={!!online} onChanged={() => { reloadApp(); reloadScan(); }} openSetup={openSetup} />}
               {section === "settings" && <AppSettings app={app} reloadApp={reloadApp} scan={scan} openSetup={openSetup} switchGame={switchGame} />}
             </Suspense>

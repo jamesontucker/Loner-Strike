@@ -1,11 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// three.js and React Three Fiber are only used by the Tools page (loaded on first open):
-// they get their own chunks, cached apart from our code. Only packages the 3D stack alone
-// uses are named here, so nothing the start bundle needs (react, zustand) moves into them.
-const THREE_ONLY = /[\\/]node_modules[\\/](three|three-stdlib|three-mesh-bvh|troika-[^\\/]+|bidi-js|webgl-sdf-generator|@monogrid|meshline|camera-controls|maath|stats-gl|stats\.js|detect-gpu|hls\.js)[\\/]/;
-const R3F = /[\\/]node_modules[\\/](@react-three|@react-spring|@use-gesture|its-fine|suspend-react|react-reconciler|tunnel-rat|react-use-measure|debounce)[\\/]/;
+// three.js is only used by the Tools page (loaded on first open) and gets its own chunk,
+// cached apart from our code. Only the `three` package itself is named: a manual chunk also
+// takes in what its modules import, so naming React Three Fiber here would move React (and
+// a CommonJS helper from the smaller 3D packages) out of the start bundle and make the app
+// load the 3D chunks at start. R3F and drei land in the Tools page's own chunk instead.
+const THREE = /[\\/]node_modules[\\/]three[\\/]/;
 
 // In development the panel API is the Rust server inside the app (port 8027)
 export default defineConfig({
@@ -17,8 +18,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (THREE_ONLY.test(id)) return "three";
-          if (R3F.test(id)) return "r3f";
+          if (THREE.test(id)) return "three";
         },
       },
     },

@@ -1,0 +1,168 @@
+// The map viewer: pick a map, then walk around it in 3D, switch what's shown, and click
+// anything to see what it is.
+
+import { useEffect, useMemo, useState } from "react";
+import { useTools, type CameraMode } from "../../stores/tools";
+import type { MapInfo } from "../../types";
+import { Banner, LoadError, Segmented, Skeleton } from "../../ui";
+import { COLLATOR, MapCard } from "../Maps";
+import { Inspector } from "./panels/Inspector";
+import { Layers } from "./panels/Layers";
+import { useEntities, useMesh, useToolsInfo, type MapEntity } from "./toolsApi";
+import type { MeshBundle } from "./viewer/bundle";
+import { fmtVec } from "./viewer/coords";
+import { canDraw3d, Scene, SceneBoundary } from "./viewer/Scene";
+import { useModelMeshes } from "./viewer/World";
+
+const NO_3D = (
+  <LoadError
+    title="Your system can't show 3D"
+    text="Loner-Strike couldn't start 3D drawing on this computer. Updating your system or graphics drivers usually fixes this."
+  />
+);
+
+export function MapViewer({ maps }: { maps: MapInfo[] }) {
+  const map = useTools((s) => s.map);
+  return map ? <Viewer map={map} /> : <MapPicker maps={maps} />;
+}
+
+/** Cards drawn at first; the rest come with Show more. */
+const PAGE = 120;
+
+function MapPicker({ maps }: { maps: MapInfo[] }) {
+  const openMap = useTools((s) => s.openMap);
+  const [q, setQ] = useState("");
+  const [limit, setLimit] = useState(PAGE);
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return maps
+      .filter((m) => !m.other && (!s || m.name.toLowerCase().includes(s) || (m.title ?? "").toLowerCase().includes(s)))
+      .sort((a, b) => COLLATOR.compare(a.name, b.name));
+  }, [maps, q]);
+  const pick = (m: MapInfo) => openMap(m.name);
+  return (
+    <div className="stack-tight">
+      <div className="toolbar">
+        <input className="search" type="search" aria-label="Search maps" placeholder="Pick a map to look inside" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+      {!maps.length ? (
+        <p className="muted">Loner-Strike can't find any maps in your game yet.</p>
+      ) : (
+        <div className="maps grid">
+          {shown.slice(0, limit).map((m) => <MapCard key={m.name} map={m} onClick={pick} />)}
+          {!shown.length && <p className="muted">No maps match.</p>}
+        </div>
+      )}
+      {shown.length > limit && (
+        <div className="row center">
+          <button className="btn" onClick={() => setLimit(limit + PAGE * 2)}>Show more ({shown.length - limit} left)</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
+
+function Viewer({ map }: { map: string }) {
+  const openMap = useTools((s) => s.openMap);
+  const camera = useTools((s) => s.camera);
+  const setCamera = useTools((s) => s.setCamera);
+  const webgl = useMemo(canDraw3d, []);
+  const mesh = useMesh(webgl ? map : null);
+  const ents = useEntities(map, mesh.isSuccess);
+  const info = useToolsInfo(map, mesh.isSuccess);
+
+  // F fly, O orbit, T top-down; Esc clears what's picked (and lets go of the mouse)
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (isField(e.target) || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".sheet-backdrop")) return;
+      const to: Record<string, CameraMode> = { KeyF: "fly", KeyO: "orbit", KeyT: "top" };
+      if (to[e.code]) setCamera(to[e.code]);
+      else if (e.key === "Escape" && !document.pointerLockElement) useTools.getState().select(null);
+    };
+    window.addEventListener("keydown", on);
+    return () => window.removeEventListener("keydown", on);
+  }, [setCamera]);
+
+  const missing = (info.data?.textures ?? []).filter((t) => t.from === "missing").map((t) => t.name);
+  const loading = mesh.isLoading || (mesh.isSuccess && ents.isLoading);
+  const failed = mesh.error instanceof Error ? mesh.error.message || "Something went wrong reading this map." : null;
+
+  return (
+    <div className="tools-page">
+      <div className="tools-bar">
+        <span className="map-title">{map}</span>
+        <button className="btn small" onClick={() => openMap(null)}>Other map</button>
+        <span className="push" />
+        <Segmented values="orbit,fly,top" labels="Orbit,Fly,Top-down" current={camera} onPick={(v) => setCamera(v as CameraMode)} label="Camera" />
+      </div>
+      {missing.length > 0 && (
+        <Banner>
+          {missing.length === 1 ? "1 texture is missing" : `${missing.length} textures are missing`}: {missing.slice(0, 6).join(", ")}
+          {missing.length > 6 ? "…" : ""}. They show as a magenta checker.
+        </Banner>
+      )}
+      {ents.isError && <Banner>This map's entities couldn't be read, so spawns and doors aren't shown.</Banner>}
+      {!webgl ? (
+        NO_3D
+      ) : failed ? (
+        <LoadError title={`Couldn't open ${map}`} text={failed} onRetry={() => void mesh.refetch()} />
+      ) : (
+        <Loaded bundle={!loading ? mesh.data ?? null : null} entities={ents.data ?? []} map={map} />
+      )}
+    </div>
+  );
+}
+
+/** The view and its side panels; while the map's data is on its way, a spinner and placeholders. */
+function Loaded({ bundle, entities, map }: { bundle: MeshBundle | null; entities: MapEntity[]; map: string }) {
+  const looking = useTools((s) => s.looking);
+  const meshes = useModelMeshes(bundle, entities);
+  return (
+    <div className="tools-viewer">
+      <div className="tools-stage">
+        <div className="tools-canvas">
+          {bundle ? (
+            <SceneBoundary fallback={<div className="tools-overlay">{NO_3D}</div>}>
+              <Scene bundle={bundle} meshes={meshes} entities={entities} map={map} />
+            </SceneBoundary>
+          ) : (
+            <div className="tools-overlay" role="status">
+              <span className="spinner" aria-hidden="true" />
+              Reading the map…
+            </div>
+          )}
+          {looking && <div className="tools-crosshair" aria-hidden="true" />}
+        </div>
+        <StatusBar />
+      </div>
+      <aside className="tools-side">
+        <Layers />
+        {bundle ? <Inspector entities={entities} meshes={meshes} /> : <section className="tools-panel"><Skeleton rows={4} /></section>}
+      </aside>
+    </div>
+  );
+}
+
+const HINTS: Record<CameraMode, string> = {
+  orbit: "Drag to turn · Right-drag to move · Scroll to zoom · Click to pick",
+  fly: "Click the view to look around",
+  top: "Drag to move · Scroll to zoom · Click to pick",
+};
+
+function StatusBar() {
+  const status = useTools((s) => s.status);
+  const hover = useTools((s) => s.hover);
+  const camera = useTools((s) => s.camera);
+  const looking = useTools((s) => s.looking);
+  return (
+    <div className="tools-status" aria-live="off">
+      <span className="mono" title="Where the camera is, in game units (x y z), and which way it faces">
+        {status ? <>{fmtVec(status.pos)} · facing {Math.round(status.yaw)}°</> : "—"}
+      </span>
+      <span className="tools-hover mono">{hover ? <>{hover.label}{hover.point && <span className="muted"> at {fmtVec(hover.point)}</span>}</> : ""}</span>
+      <span className="tools-hint">{camera === "fly" && looking ? "WASD to move · Shift faster · Click to pick · Esc to let go" : HINTS[camera]}</span>
+    </div>
+  );
+}
