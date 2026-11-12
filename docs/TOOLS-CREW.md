@@ -13,8 +13,17 @@ people can work in this worktree at once without stepping on each other.
   `cd app/ui && npm install && npm run build`. Leave the build green when you stop.
 
 ## Product direction (from the user)
-- Simple and modern, not a Hammer/TrenchBroom-style expert tool. Plain words, few controls,
-  obvious defaults, everything discoverable. Phase 1 is a viewer: no editing.
+- A modern Hammer: keep the depth mappers need (real brushes, entities, texture alignment,
+  compiling), but modernise the experience. Plain words, obvious defaults, everything
+  discoverable. Phase 1 is a viewer: no editing.
+- For the editor phases, design toward: one 3D view first (2D top/front/side a key away, not four
+  panes up front); direct manipulation (click a face and drag to push/pull, W/E/R gizmos, snapping
+  on by default, Alt to ignore it); brushes under the hood with modelling-style tools (box,
+  cylinder, clip, hollow) and click-and-drag texture alignment with live preview; an entity
+  inspector with real controls (colour pickers, angle dials, sound preview, tooltips) and
+  target/targetname links drawn in 3D; live checks (leaks, BSP limits, missing textures, spawns)
+  instead of after a compile; one-click playtest with our bots and our overlays; prefabs and a
+  searchable drag-and-drop asset browser.
 - Follow the app's existing patterns: React 18 + TypeScript + Vite + Zustand + TanStack Query in
   `app/ui`; the Rust axum server in `app/src-tauri/src/server.rs` (no Tauri `invoke`); slow
   actions show a spinner and a label; UI copy is plain and friendly (see existing views).
