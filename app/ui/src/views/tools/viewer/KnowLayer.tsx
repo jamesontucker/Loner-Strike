@@ -40,7 +40,7 @@ export function KnowLayer({ nav, know }: { nav: Nav; know: Know }) {
         }
       }
     } else if (mode === "sight" && area >= 0) {
-      // crouched-only sightlines (pair flag 1) in a second colour
+      // sightlines that see even a crouching head (pair flag 1) in a second colour
       const crouched = new Set<number>();
       for (let p = 0; p < know.pairA.length; p++) {
         if (!(know.pairFlags[p] & 1)) continue;

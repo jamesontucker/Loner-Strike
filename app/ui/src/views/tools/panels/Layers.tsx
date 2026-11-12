@@ -21,7 +21,7 @@ const KNOW: [KnowMode, string][] = [
 const KNOW_HELP: Record<KnowMode, string> = {
   off: "",
   cover: "Green areas are sheltered, red ones open. Pick an area for how far it's open in 16 directions (yellow crouched, blue standing).",
-  sight: "Areas tinted by how much they see. Pick an area for lines to everything visible from it (yellow: only when crouched).",
+  sight: "Areas tinted by how much they see. Pick an area for lines to everything visible from it (yellow: it sees even a crouching player there).",
   bangs: "Walls bots learned to shoot through, coloured by material. Pick an area to see only its own.",
   corners: "Corners bots peek around, with the way each opens.",
   angles: "Pick an area for the angles bots watch from it; brighter = more important.",

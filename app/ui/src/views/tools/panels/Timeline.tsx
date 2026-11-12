@@ -73,7 +73,7 @@ export function Timeline({ replay }: { replay: Replay }) {
           if (time >= replay.end) setTime(replay.start);
           setPlaying(!playing);
         }}>{playing ? "Pause" : "Play"}</button>
-        <span className="mono small">{clock(Math.max(0, time - replay.start))} / {clock(span)}</span>
+        <span className="mono small">{clock(Math.floor(Math.max(0, time - replay.start)))} / {clock(Math.floor(span))}</span>
         <label className="sort push">
           <span>Speed</span>
           <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
@@ -146,7 +146,7 @@ function FallList({ replay, names }: { replay: Replay; names: Map<number, string
               s.setPlaying(false);
               s.setTime(Math.max(replay.start, (k.fall?.fromT ?? k.t) - 2));
               s.look(k.fall?.from ?? k.at, 300);
-            }}>{clock(k.t - replay.start)} {names.get(k.victim) ?? "?"}{k.fall ? ` · dropped ${Math.round(k.fall.drop)}` : ` · ${k.cause}`}</button>
+            }}>{clock(Math.floor(Math.max(0, k.t - replay.start)))} {names.get(k.victim) ?? "?"}{k.fall ? ` · dropped ${Math.round(k.fall.drop)}` : ` · ${k.cause}`}</button>
           </li>
         ))}
       </ul>
