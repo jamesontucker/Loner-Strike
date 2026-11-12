@@ -22,6 +22,11 @@ use std::collections::BTreeMap;
 
 pub const BUNDLE_VERSION: u32 = 1;
 
+/// Most vertices and indices one map may produce (de_survivor needs ~0.2M vertices): faces
+/// can claim huge edge ranges, so the output isn't bounded by the file size cap alone.
+pub const MAX_VERTICES: usize = 4_000_000;
+pub const MAX_INDICES: usize = 12_000_000;
+
 pub const FLAG_SKY: u32 = 1;
 pub const FLAG_WATER: u32 = 2;
 pub const FLAG_TRIGGER: u32 = 4;
@@ -67,6 +72,7 @@ fn winding(pts: &[[f32; 3]], n: [f32; 3]) -> f32 {
 pub struct Built {
     pub bundle: Vec<u8>,
     pub atlas: Atlas,
+    #[allow(dead_code)] // tests and the real-map check
     pub triangles: usize,
 }
 
@@ -120,6 +126,11 @@ pub fn build(bsp: &Bsp, ents: &[Entity], map: &str) -> super::Result<Built> {
     let mut tri_face: Vec<u32> = Vec::new();
     let mut draws: Vec<Draw> = Vec::new();
     let mut model_ranges: Vec<(usize, usize, usize)> = Vec::new();
+    // surface edges walked in all: a map whose faces share/overlap ranges far more than a
+    // compiler would is damaged
+    let edge_budget = bsp.surfedges.len().saturating_mul(4) + 1024;
+    let mut edges_walked = 0usize;
+    let too_big = || super::Error::damaged("map file", "its faces claim far more corners than the file holds");
     for (mi, texs) in &groups {
         let m_start = idx.len();
         let entity = owner.get(mi).copied();
@@ -130,9 +141,16 @@ pub fn build(bsp: &Bsp, ents: &[Entity], map: &str) -> super::Result<Built> {
             let start = idx.len();
             for &fi in faces {
                 let f = &bsp.faces[fi];
+                edges_walked += f.num_edges as usize;
+                if edges_walked > edge_budget {
+                    return Err(too_big());
+                }
                 let (Some(pts), Some(n), Some((ti, _))) = (bsp.face_points(f), bsp.face_normal(f), bsp.face_texture(f)) else { continue };
                 if pts.iter().flatten().any(|c| !c.is_finite()) {
                     continue;
+                }
+                if pos.len() / 3 + pts.len() > MAX_VERTICES || idx.len() + (pts.len() - 2) * 3 > MAX_INDICES {
+                    return Err(too_big());
                 }
                 let base = (pos.len() / 3) as u32;
                 for p in &pts {
@@ -224,6 +242,7 @@ pub struct Section {
     pub bytes: Vec<u8>,
 }
 
+#[allow(dead_code)] // u16/u8 sections are for the other bundles (knowledge, replays)
 impl Section {
     pub fn f32(name: &'static str, stride: usize, v: &[f32]) -> Section {
         Section { name, kind: "f32", stride, bytes: v.iter().flat_map(|x| x.to_le_bytes()).collect() }
@@ -392,6 +411,24 @@ mod tests {
         let (h, s) = read_bundle(&write_bundle(big, &[Section::u32("i", 1, &[42])]));
         assert_eq!(h["pad"].as_str().unwrap().len(), 5000);
         assert_eq!(s["i"], 42u32.to_le_bytes().to_vec());
+    }
+
+    #[test]
+    fn overlapping_faces_are_capped() {
+        // 200k faces all claiming the same 4 corners: the edge budget stops it with an error
+        let mut bsp = Bsp::parse(&fixture::build(), false).unwrap();
+        let f = bsp.faces[0];
+        bsp.faces = vec![f; 200_000];
+        bsp.models.truncate(1);
+        bsp.models[0].first_face = 0;
+        bsp.models[0].num_faces = 200_000;
+        let e = build(&bsp, &[], "room").err().expect("capped");
+        assert!(e.to_string().contains("damaged"), "{e}");
+        // a face claiming more than the edge limit is skipped, not drawn
+        let mut bsp = Bsp::parse(&fixture::build(), false).unwrap();
+        bsp.faces[0].num_edges = (crate::goldsrc::bsp::MAX_FACE_EDGES + 1) as u16;
+        assert!(bsp.face_points(&bsp.faces[0]).is_none());
+        assert_eq!(build(&bsp, &[], "room").unwrap().triangles, 12);
     }
 
     #[test]

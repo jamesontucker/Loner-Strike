@@ -31,6 +31,7 @@ mod scrim;
 mod server;
 mod navs;
 mod goldsrc;
+mod tools;
 mod navpack;
 mod servercontent;
 mod servers;

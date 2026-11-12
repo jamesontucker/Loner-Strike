@@ -35,7 +35,9 @@ pub const LUMP_MODELS: usize = 14;
 
 const WHAT: &str = "map file";
 /// Most edges one face may have (the compilers stop well below this).
-pub const MAX_FACE_EDGES: usize = 256;
+pub const MAX_FACE_EDGES: usize = 64;
+/// Most bytes of embedded texture records one map may keep in memory.
+pub const MAX_EMBEDDED: usize = 64 << 20;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Plane {
@@ -202,6 +204,7 @@ pub fn textures(b: &[u8], pixels: bool) -> Result<Vec<MipTex>> {
     }
     let blank = || MipTex { name: String::new(), width: 16, height: 16, embedded: None };
     let mut out = Vec::with_capacity(count);
+    let mut kept = 0usize;
     for i in 0..count {
         let at = r.i32(4 + i * 4)?;
         if at < 0 || at as usize + 40 > b.len() {
@@ -216,13 +219,18 @@ pub fn textures(b: &[u8], pixels: bool) -> Result<Vec<MipTex>> {
             continue;
         }
         let mip0 = r.u32(at + 24)?;
-        // the record runs to the next texture or the lump's end; decoding checks inside it
-        let embedded = (pixels && mip0 != 0).then(|| b[at..].to_vec());
-        let embedded = match embedded {
-            Some(e) => Some(e),
-            // without pixels: still say it's embedded, with just the header
-            None if mip0 != 0 => Some(b[at..at + 40].to_vec()),
-            None => None,
+        // keep only what the record needs (header, four mips, palette), never the rest of
+        // the lump: many entries pointing at the start mustn't each copy the whole lump
+        let need = 40 + (w as usize * h as usize) * 85 / 64 + 2 + 768 + 2;
+        let end = (at + need).min(b.len());
+        let embedded = if mip0 == 0 {
+            None
+        } else if pixels && kept + (end - at) <= MAX_EMBEDDED {
+            kept += end - at;
+            Some(b[at..end].to_vec())
+        } else {
+            // without pixels (or past the cap): still say it's embedded, with just the header
+            Some(b[at..at + 40].to_vec())
         };
         out.push(MipTex { name, width: w, height: h, embedded });
     }
@@ -591,6 +599,34 @@ mod tests {
             g[i] = g[i].wrapping_mul(31).wrapping_add(7);
         }
         let _ = Bsp::parse(&g, true).map(|bsp| bsp.faces.iter().map(|f| bsp.face_points(f)).count());
+    }
+
+    #[test]
+    fn embedded_textures_copy_only_their_record() {
+        // 2000 entries all pointing at the same 16x16 embedded record: each keeps one
+        // record's worth, not the rest of the lump
+        let rec = fixture::miptex("brick", true);
+        let n = 2000usize;
+        let mut lump = (n as u32).to_le_bytes().to_vec();
+        let at = 4 + 4 * n as u32;
+        for _ in 0..n {
+            lump.extend(at.to_le_bytes());
+        }
+        lump.extend(&rec);
+        lump.extend(vec![0u8; 1 << 20]);
+        let t = textures(&lump, true).unwrap();
+        assert_eq!(t.len(), n);
+        let need = 40 + 256 * 85 / 64 + 2 + 768 + 2;
+        assert!(t.iter().all(|t| t.embedded.as_ref().is_some_and(|e| e.len() == need)));
+        assert!(crate::goldsrc::wad::decode_miptex(t[5].embedded.as_ref().unwrap(), "").is_ok());
+        // oversized sides become blank textures
+        let mut big = rec.clone();
+        big[16..20].copy_from_slice(&2048u32.to_le_bytes());
+        let mut lump = 1u32.to_le_bytes().to_vec();
+        lump.extend(8u32.to_le_bytes());
+        lump.extend(&big);
+        let t = textures(&lump, true).unwrap();
+        assert_eq!((t[0].width, t[0].embedded.is_none()), (16, true));
     }
 
     #[test]

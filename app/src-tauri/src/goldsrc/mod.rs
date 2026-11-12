@@ -74,6 +74,7 @@ pub struct Le<'a> {
     pub what: &'static str,
 }
 
+#[allow(dead_code)] // the overlay readers use the rest
 impl<'a> Le<'a> {
     pub fn new(b: &'a [u8], what: &'static str) -> Le<'a> {
         Le { b, what }

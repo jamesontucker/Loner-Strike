@@ -330,6 +330,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
             .merge(crate::app_api::local_routes())
             .merge(crate::servers::local_routes())
             .merge(crate::mapcopy::local_routes())
+            .merge(crate::tools::local_routes())
             .merge(crate::hltv::local_routes())
             .merge(crate::prefs::local_routes())
             .merge(crate::backup::local_routes())
