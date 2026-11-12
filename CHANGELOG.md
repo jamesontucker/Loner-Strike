@@ -57,6 +57,7 @@ The first full release:
 
 ### Fixes
 - No bots or "Bad Rcon": the app puts back what a Steam update undid and says what's wrong. Mods has a Repair button.
+- Dedicated servers load de_survivor, cs_siege, cs_747 and other maps the 25th anniversary update changed, which used to stop the server with an error.
 - Windows: voice runs without extra installs on any processor from about 2013 on, updates don't trip over it, and game folders in any language work.
 - Big downloads resume where they stopped, and a full disk is named as such.
 - Paintball runs lighter in busy fights: fewer balls and marks on screen at once, marks that fade sooner, and splash sounds heard nearby only.
