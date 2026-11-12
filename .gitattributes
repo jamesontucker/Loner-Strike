@@ -1,0 +1,3 @@
+# Zombie Plague Advanced reads its settings with ftell/fseek, which needs Windows line
+# endings on Windows servers (Unix endings make every setting read back empty and crash the map)
+mods/zp5/addons/amxmodx/configs/zp50/*.ini text eol=crlf
