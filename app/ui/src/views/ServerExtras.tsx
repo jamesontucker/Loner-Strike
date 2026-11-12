@@ -309,7 +309,7 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
               ? own
                 ? `While ${modeName(scope)} is on, the next map comes from this list instead of the main rotation.`
                 : OWN_MAP_MODES.has(scope)
-                  ? `${modeName(scope)} goes through the maps made for it on its own: the ones that came with it and any named for it. Give it its own list to choose them yourself.`
+                  ? `${modeName(scope)} picks maps that suit it on its own: the ones that came with it and any named for it (and, with only a few of those, some everyday maps). Give it its own list to choose them yourself.`
                   : `${modeName(scope)} uses the main rotation. Give it its own list to play other maps while it's on.`
               : "Used by modes played on everyday maps that have no list of their own. This is the game's own map cycle, so map votes from the admin menu use it too."}
           </small>

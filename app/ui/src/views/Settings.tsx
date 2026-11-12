@@ -78,7 +78,7 @@ const INFO: Record<string, string> = {
   bb_build_time: "How long the builders have to put up barricades before the zombies are let out.",
   gm_modevote: "Players type rtv or rtm in chat to vote for a different mode. If it passes they pick the mode, then a map for it.",
   gm_modevote_every: "Every few maps, the mode changes near the end of the map: by a vote or by the rotation, as set below.",
-  gm_moderotate: "Players vote picks the mode, then a map for it (needs mode voting on). Next on the list and Random from the list change it with nobody needed, to a mode from Modes in the vote, with a map made for it. Rock the vote still works on top.",
+  gm_moderotate: "With Players vote, a vote picks the mode and then a map for it (needs mode voting on). With Next on the list or Random from the list, the mode changes on its own, even with nobody on, to one of the Modes in the vote with a map that suits it. Rock the vote still works on top.",
   sh_maxbinds: "How many heroes with a power you trigger with a key each player can pick. The rest of their heroes work on their own.",
 };
 

@@ -289,6 +289,7 @@ p { text-wrap: pretty; }
 .unique-grid li { color: var(--dim); border-top: 2px solid var(--signal); padding-top: 10px; }
 .unique-grid b { display: block; color: var(--bone); margin-bottom: 3px; }
 .botplay .also { margin: 30px 0 0; font: 400 20px/1.1 var(--stencil); }
+.botplay .deep .btn { margin-top: 12px; }
 .botplay .deep { color: var(--dim); margin: 10px 0 0; padding: 14px 16px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; font-size: 16px; line-height: 1.45; }
 @media (max-width: 860px) { .bot-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .unique-grid { grid-template-columns: 1fr; } }
 
@@ -725,7 +726,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li><b>They have habits.</b> Spawn hops, tilt after a bad streak, the best bunnyhop.</li>
           <li><b>They play the mode.</b> Run and gun in Deathmatch, a team in a 5v5.</li>
         </ul>
-        <p class="deep">The ideas come from games known for their AI: Killzone's precomputed cover, Quake III's map study, the human-likeness of Unreal Tournament 2004's BotPrize and F.E.A.R.'s squad chatter. <a href="docs#how-bots-work">See how the bots work</a></p>
+        <p class="deep">The ideas come from games known for their AI: Killzone's precomputed cover, Quake III's map study, the human-likeness of Unreal Tournament 2004's BotPrize and F.E.A.R.'s squad chatter.<br><a class="btn" href="docs#how-bots-work">See how the bots work</a></p>
         </div>
         <div class="ladder">
           <h3>Pick the lobby</h3>
@@ -739,7 +740,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li><div><b>Veterans</b><span>Quick, accurate, short bursts</span></div><div class="meter" role="img" aria-label="Skill 7 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i></div></li>
           <li><div><b>Locked In</b><span>Very good and focused. They bunnyhop between fights</span></div><div class="meter" role="img" aria-label="Skill 8 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i></div></li>
           <li><div><b>Hackers</b><span>Suspiciously good. They notice you from behind</span></div><div class="meter" role="img" aria-label="Skill 9 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i></div></li>
-          <li><div><b>Gods</b><span>Everything maxed. Nearly every bullet near you is a headshot</span></div><div class="meter" role="img" aria-label="Skill 10 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></li>
+          <li><div><b>Gods</b><span>Everything maxed. Nearly every shot is a headshot</span></div><div class="meter" role="img" aria-label="Skill 10 of 10"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></li>
           </ul>
           <p class="fine">Or keep the game's stock bots, unchanged: robotic and predictable.</p>
         </div>
