@@ -11,9 +11,9 @@ stock canBeMoved(id, ent){
 	if(ent == gBarrier) return 0;
 	if(!pev_valid(ent)) return 0;
 		
-	new szClass[14], szTarget[7];
-	entity_get_string(ent, EV_SZ_classname, szClass, sizeof(szClass));
-	entity_get_string(ent, EV_SZ_targetname, szTarget, sizeof(szTarget));
+	new szClass[32], szTarget[64];
+	entity_get_string(ent, EV_SZ_classname, szClass, charsmax(szClass));
+	entity_get_string(ent, EV_SZ_targetname, szTarget, charsmax(szTarget));
 	if( isAdmin(id) ){
 		if( isPlayer(ent) || ( equal(szClass, "func_wall") && containi(szTarget, "ignore")==-1 &&  !equal(szTarget, "barrier") && !equal(szTarget, "JUMP"))) 
 			return ent;
