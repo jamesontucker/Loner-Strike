@@ -3647,13 +3647,18 @@ fn console_check(cmd: &str, on_phone: bool) -> Result<(), String> {
     if cmd.is_empty() || cmd.len() > 200 || cmd.chars().any(|c| c.is_control()) {
         return Err("That command can't be sent.".into());
     }
-    if cmd.contains(';') {
+    // (several commands joined with ; are fine at the computer, each one checked: none may set
+    // the console password, which would cut the app off from the server; the phone sends one
+    // at a time, within the helpers' rules below)
+    if on_phone && cmd.contains(';') {
         return Err("One command at a time (no ;).".into());
     }
-    // the game reads a quoted name as the command itself, in any case
-    let word = cmd.trim_start_matches(|c: char| c == '"' || c.is_whitespace()).split(|c: char| c == '"' || c.is_whitespace()).next().unwrap_or("").to_ascii_lowercase();
-    if word.starts_with("rcon_password") {
-        return Err("That command can't be sent.".into());
+    for part in cmd.split(';') {
+        // the game reads a quoted name as the command itself, in any case
+        let word = part.trim_start_matches(|c: char| c == '"' || c.is_whitespace()).split(|c: char| c == '"' || c.is_whitespace()).next().unwrap_or("").to_ascii_lowercase();
+        if word.starts_with("rcon_password") {
+            return Err("That command can't be sent.".into());
+        }
     }
     if on_phone {
         crate::control::rules::console_line(crate::control::Role::Admin, cmd).map_err(|_| "That command can only be sent from the computer running Loner-Strike.".to_string())?;
@@ -3941,9 +3946,14 @@ mod tests {
     #[test]
     fn console_lines_by_who_sends_them() {
         // anyone: one command, never the console password (in any case, quoted or chained)
-        for line in ["status;rcon_password x", "RCON_PASSWORD x", "\"rcon_password\" x", "  rcon_password x", "status\nquit", "say a; quit", ""] {
+        for line in ["status;rcon_password x", "say hi; RCON_PASSWORD x", "RCON_PASSWORD x", "\"rcon_password\" x", "  rcon_password x", "status\nquit", ""] {
             assert!(console_check(line, false).is_err(), "computer: {line:?}");
             assert!(console_check(line, true).is_err(), "phone: {line:?}");
+        }
+        // joined with ; at the computer, each part checked; the phone sends one at a time
+        for line in ["status; say hi", "mp_restartgame 1;say back in a sec"] {
+            assert!(console_check(line, false).is_ok(), "computer: {line}");
+            assert!(console_check(line, true).is_err(), "phone: {line}");
         }
         // the computer: the rest goes
         for line in ["status", "exec server.cfg", "meta list", "sv_downloadurl http://example.com", "say hi"] {
