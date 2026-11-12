@@ -40,7 +40,7 @@ The first full release:
 - Bots learn maps split by a wall or barrier properly (Base Builder, Deathrun): every spawn gets navigation.
 - Setup now adds 27 fun and popular maps (about 70 MB): scoutzknivez, aim_map, fy_iceworld, awp_india, he_glass, de_mirage, de_tuscan, the Rats pack and more. Remove any it added that you don't want in Maps, and they won't come back. Dedicated servers keep to the maps you give them.
 - Map downloads are checked first: one missing a model or sprite it needs, which would crash the game when it loads, isn't installed.
-- Kreedz now comes with kz_longjumps2 instead of kz_urban, and Zombie Plague with zm_zod_labtest instead of zm_halloween. Both old maps crashed on loading and are removed when you update.
+- Zombie Plague now comes with zm_zod_labtest instead of zm_halloween, and Kreedz drops kz_urban. Both old maps crashed on loading and are removed when you update.
 - Scoutz on scoutzdeaglez gives you the deagle the map is made for.
 - New installs start with Quake sounds off and bot chat at Normal. Your settings, plugins, admins and edited config files are kept through updates.
 
