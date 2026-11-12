@@ -6,7 +6,9 @@
 // mock is a separate file loaded only in development, so it never ships.
 
 import { useQuery } from "@tanstack/react-query";
+import { postJson } from "../../api";
 import { useActivityStore } from "../../store";
+import { decodeKnow, decodeReplay, toNav, toTrace, type Know, type Nav, type RecordingInfo } from "./overlays";
 import { decodeBundle, type MeshBundle } from "./viewer/bundle";
 import { parseVec, type Vec3 } from "./viewer/coords";
 
@@ -183,5 +185,71 @@ export function useToolsInfo(map: string | null, ready = true) {
     enabled: !!map && ready,
     retry: false,
     staleTime: Infinity,
+  });
+}
+
+// ---- the bots' data: nav, knowledge, recordings (agent C's routes) --------------------------
+
+async function getNav(map: string, signal?: AbortSignal): Promise<Nav> {
+  if (forcedMock() || mockOn) throw new ToolsError("The test room has no nav.", 200, true);
+  const r = checked<Record<string, unknown>>(await (await fetchOk(`${base(map)}/nav`, signal)).json());
+  return toNav(r);
+}
+
+async function getKnow(map: string, signal?: AbortSignal): Promise<Know> {
+  if (forcedMock() || mockOn) throw new ToolsError("The test room has no knowledge.", 200, true);
+  return decodeKnow(await (await fetchOk(`${base(map)}/know`, signal)).arrayBuffer());
+}
+
+/** The map's nav (only fetched while a nav layer is on). */
+export function useNav(map: string | null, on: boolean) {
+  return useQuery({ queryKey: ["tools", "nav", map], queryFn: ({ signal }) => getNav(map!, signal), enabled: !!map && on, retry: false, staleTime: 30_000 });
+}
+/** What the bots learned about the map (.lsv). */
+export function useKnow(map: string | null, on: boolean) {
+  return useQuery({ queryKey: ["tools", "know", map], queryFn: ({ signal }) => getKnow(map!, signal), enabled: !!map && on, retry: false, staleTime: 30_000, structuralSharing: false });
+}
+
+export function useRecordings(on: boolean) {
+  return useQuery({
+    queryKey: ["tools", "recordings"],
+    queryFn: async ({ signal }) => {
+      const r = checked<{ recordings?: RecordingInfo[]; folders?: string[] }>(await (await fetchOk("/api/tools/recordings", signal)).json());
+      return { recordings: Array.isArray(r.recordings) ? r.recordings : [], folders: Array.isArray(r.folders) ? r.folders : [] };
+    },
+    enabled: on,
+    retry: false,
+  });
+}
+
+/** Asks for a recording file (the app's file dialog). null when cancelled. */
+export async function openRecording(): Promise<{ id: string; recording?: RecordingInfo } | null> {
+  const r = await postJson<{ id?: string; recording?: RecordingInfo; cancelled?: boolean; error?: string }>("/api/tools/recordings/open");
+  if (r.error) throw new ToolsError(r.error, 200, true);
+  if (r.cancelled || !r.id) return null;
+  return { id: r.id, recording: r.recording };
+}
+
+export function useReplay(id: string | null) {
+  return useQuery({
+    queryKey: ["tools", "recording", id],
+    queryFn: ({ signal }) =>
+      withActivity(`tools:replay:${id}`, "Reading the recording…", async () => decodeReplay(await (await fetchOk(`/api/tools/recording/${encodeURIComponent(id!)}`, signal)).arrayBuffer())),
+    enabled: !!id,
+    retry: false,
+    staleTime: Infinity,
+    gcTime: 60_000,
+    structuralSharing: false,
+  });
+}
+
+export function useTrace(id: string | null, on: boolean) {
+  return useQuery({
+    queryKey: ["tools", "trace", id],
+    queryFn: async ({ signal }) => toTrace(checked<Record<string, unknown>>(await (await fetchOk(`/api/tools/recording/${encodeURIComponent(id!)}/trace`, signal)).json())),
+    enabled: !!id && on,
+    retry: false,
+    staleTime: Infinity,
+    structuralSharing: false,
   });
 }

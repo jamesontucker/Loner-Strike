@@ -77,26 +77,40 @@ function flagsOf(v: unknown): number {
   return names.reduce((f: number, n) => f | (FLAG[String(n) as keyof typeof FLAG] ?? 0), 0);
 }
 
-export function decodeBundle(buf: ArrayBuffer): MeshBundle {
-  if (buf.byteLength < 12) throw new BundleError(DAMAGED);
+/** Any LSMB bundle (mesh, knowledge, replay): its header and its sections by name. */
+export type Lsmb = { version: number; header: Record<string, unknown>; get: (name: string) => Float32Array | Uint32Array | Uint16Array | Uint8Array | null };
+
+export function readLsmb(buf: ArrayBuffer, damaged = DAMAGED): Lsmb {
+  if (buf.byteLength < 12) throw new BundleError(damaged);
   const dv = new DataView(buf);
   const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
-  if (magic !== "LSMB") throw new BundleError(DAMAGED);
+  if (magic !== "LSMB") throw new BundleError(damaged);
   const version = dv.getUint32(4, true);
-  if (version > LSMB_VERSION) throw new BundleError("This map was prepared by a newer Loner-Strike. Update the app to view it.");
+  if (version > LSMB_VERSION) throw new BundleError("This was prepared by a newer Loner-Strike. Update the app to view it.");
   const jsonLen = dv.getUint32(8, true);
-  if (12 + jsonLen > buf.byteLength) throw new BundleError(DAMAGED);
+  if (12 + jsonLen > buf.byteLength) throw new BundleError(damaged);
   let header: Record<string, unknown>;
   try {
     header = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 12, jsonLen)));
   } catch {
-    throw new BundleError(DAMAGED);
+    throw new BundleError(damaged);
   }
+  if (!header || typeof header !== "object") throw new BundleError(damaged);
   const sections = Array.isArray(header.sections) ? (header.sections as Section[]) : [];
   const get = (name: string) => {
     const s = sections.find((x) => x.name === name);
-    return s ? view(buf, s) : null;
+    if (!s) return null;
+    try {
+      return view(buf, s);
+    } catch {
+      throw new BundleError(damaged);
+    }
   };
+  return { version, header, get };
+}
+
+export function decodeBundle(buf: ArrayBuffer): MeshBundle {
+  const { version, header, get } = readLsmb(buf);
   const positions = get("positions");
   const indices = get("indices");
   if (!(positions instanceof Float32Array) || positions.length % 3) throw new BundleError(DAMAGED);
