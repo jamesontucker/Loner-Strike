@@ -1446,6 +1446,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       { name: "Bassdrive", desc: "Worldwide drum and bass", stream: "https://ice.bassdrive.net/stream", site: "https://www.bassdrive.com/", credit: "Bassdrive", now: "https://ice.bassdrive.net/status-json.xsl" },
       { name: "Kniteforce Radio", desc: "Old-school hardcore, jungle and breakbeat", stream: "https://kniteforce.out.airtime.pro/kniteforce_a", site: "https://kniteforce-radio.com/", credit: "Kniteforce Radio", airtime: true, now: "https://kniteforce.airtime.pro/api/live-info" },
       { name: "SomaFM The Trip", desc: "Progressive house and trance", stream: "https://ice1.somafm.com/thetrip-128-mp3", site: "https://somafm.com/thetrip/", credit: "SomaFM: The Trip", soma: true, now: "https://somafm.com/songs/thetrip.json" },
+      { name: "PsyStream", desc: "Psytrance, from Goa to forest, by PsyMusic UK", stream: "https://radio.psymusic.co.uk/listen/psystream/lofi.mp3", site: "https://www.psymusic.co.uk/", credit: "PsyMusic UK: PsyStream", azuracast: true, now: "https://radio.psymusic.co.uk/api/nowplaying/psystream" },
       { name: "TechnoBase.FM", desc: "Hands up, dance and techno, a German webradio classic", stream: "https://listener3.mp3.tb-group.fm/tb.mp3", site: "https://www.technobase.fm/", credit: "TechnoBase.FM" },
       { name: "HardBase.FM", desc: "Hardstyle and jumpstyle", stream: "https://listener3.mp3.tb-group.fm/hb.mp3", site: "https://www.hardbase.fm/", credit: "HardBase.FM" },
       { name: "SomaFM DEF CON Radio", desc: "Music for hacking, from the DEF CON hacker conference", stream: "https://ice1.somafm.com/defcon-128-mp3", site: "https://somafm.com/defcon/", credit: "SomaFM: DEF CON Radio", soma: true, now: "https://somafm.com/songs/defcon.json" },
@@ -1486,7 +1487,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       title.classList.add("scroll");
       title.style.setProperty("--marquee-s", `${Math.round(span.offsetWidth / 2 / 28)}s`);
     };
-    // What's on now, asked for only while playing: SomaFM and Rainwave list the track, Bassdrive
+    // What's on now, asked for only while playing: SomaFM, Rainwave and AzuraCast stations list the track, Bassdrive
     // (mostly live DJ sets) names the show
     let track = "";
     let nowTimer = null;
@@ -1509,6 +1510,9 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           t = song ? [song.title, game && `(${game})`].filter(Boolean).join(" ") : "";
         } else if (s.airtime) {
           t = String(j?.current?.name ?? "").trim();
+        } else if (s.azuracast) {
+          const song = j?.now_playing?.song;
+          t = song ? [song.artist, song.title].filter(Boolean).join(" - ") : "";
         } else {
           const src = [j?.icestats?.source].flat().filter(Boolean);
           t = String((src.find((x) => x.listenurl?.endsWith(s.mount ?? "/stream")) ?? src[0])?.title ?? "").trim();

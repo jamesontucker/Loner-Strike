@@ -16,6 +16,8 @@ type Station = {
   rainwave?: boolean;
   /** an Airtime station: its live-info API */
   airtime?: boolean;
+  /** an AzuraCast station: its now-playing API */
+  azuracast?: boolean;
   /** what's on now: SomaFM's or Rainwave's JSON, or an Icecast status-json.xsl */
   now?: string;
   /** the stream's mount in an Icecast status with several (the one ending in /stream if not given) */
@@ -26,6 +28,7 @@ const STATIONS: Station[] = [
   { name: "Bassdrive", desc: "Worldwide drum and bass", stream: "https://ice.bassdrive.net/stream", site: "https://www.bassdrive.com/", credit: "Bassdrive", now: "https://ice.bassdrive.net/status-json.xsl" },
   { name: "Kniteforce Radio", desc: "Old-school hardcore, jungle and breakbeat", stream: "https://kniteforce.out.airtime.pro/kniteforce_a", site: "https://kniteforce-radio.com/", credit: "Kniteforce Radio", airtime: true, now: "https://kniteforce.airtime.pro/api/live-info" },
   { name: "SomaFM The Trip", desc: "Progressive house and trance", stream: "https://ice1.somafm.com/thetrip-128-mp3", site: "https://somafm.com/thetrip/", credit: "SomaFM: The Trip", soma: true, now: "https://somafm.com/songs/thetrip.json" },
+  { name: "PsyStream", desc: "Psytrance, from Goa to forest, by PsyMusic UK", stream: "https://radio.psymusic.co.uk/listen/psystream/lofi.mp3", site: "https://www.psymusic.co.uk/", credit: "PsyMusic UK: PsyStream", azuracast: true, now: "https://radio.psymusic.co.uk/api/nowplaying/psystream" },
   { name: "TechnoBase.FM", desc: "Hands up, dance and techno, a German webradio classic", stream: "https://listener3.mp3.tb-group.fm/tb.mp3", site: "https://www.technobase.fm/", credit: "TechnoBase.FM" },
   { name: "HardBase.FM", desc: "Hardstyle and jumpstyle", stream: "https://listener3.mp3.tb-group.fm/hb.mp3", site: "https://www.hardbase.fm/", credit: "HardBase.FM" },
   { name: "SomaFM DEF CON Radio", desc: "Music for hacking, from the DEF CON hacker conference", stream: "https://ice1.somafm.com/defcon-128-mp3", site: "https://somafm.com/defcon/", credit: "SomaFM: DEF CON Radio", soma: true, now: "https://somafm.com/songs/defcon.json" },
@@ -36,7 +39,7 @@ const STATIONS: Station[] = [
   { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true, now: "https://somafm.com/songs/groovesalad.json" },
 ];
 
-/** What's on now: SomaFM and Rainwave list the track; Bassdrive (mostly live DJ sets) names the show. */
+/** What's on now: SomaFM, Rainwave and AzuraCast stations list the track; Bassdrive (mostly live DJ sets) names the show. */
 async function nowPlaying(s: Station, signal: AbortSignal): Promise<string> {
   if (!s.now) return "";
   const r = await fetch(s.now, { signal, cache: "no-store" });
@@ -51,6 +54,10 @@ async function nowPlaying(s: Station, signal: AbortSignal): Promise<string> {
     return song ? [song.title, game && `(${game})`].filter(Boolean).join(" ") : "";
   }
   if (s.airtime) return String(j?.current?.name ?? "").trim();
+  if (s.azuracast) {
+    const song = j?.now_playing?.song;
+    return song ? [song.artist, song.title].filter(Boolean).join(" - ") : "";
+  }
   const sources = [j?.icestats?.source].flat().filter(Boolean);
   const main = sources.find((x: { listenurl?: string }) => x.listenurl?.endsWith(s.mount ?? "/stream")) ?? sources[0];
   return String(main?.title ?? "").trim();
