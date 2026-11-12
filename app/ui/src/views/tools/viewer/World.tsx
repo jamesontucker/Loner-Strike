@@ -9,9 +9,12 @@ import { notAPick } from "./Cameras";
 import type { MapEntity } from "../toolsApi";
 import { lightmapUrl, texUrl } from "../toolsApi";
 import type { Draw, MeshBundle } from "./bundle";
+import { parseVec, type Vec3 } from "./coords";
 import { MapMaterials, isSky, isTrigger } from "./materials";
 
-export type ModelMesh = { model: number; geometry: THREE.BufferGeometry; draws: Draw[]; entity: MapEntity | null; kind: "world" | "moving" | "trigger" };
+/** origin: where the model sits (GoldSrc); models built around an origin brush (rotating
+ *  doors) are at 0,0,0 in the buffers and moved there. */
+export type ModelMesh = { model: number; geometry: THREE.BufferGeometry; draws: Draw[]; entity: MapEntity | null; kind: "world" | "moving" | "trigger"; origin: Vec3 };
 
 /** Which layer a brush entity belongs to. */
 function kindOf(model: number, draws: Draw[], ent: MapEntity | null): ModelMesh["kind"] {
@@ -35,6 +38,9 @@ export function useModelMeshes(bundle: MeshBundle | null, entities: MapEntity[])
       uv1: bundle.uv2 ? new THREE.BufferAttribute(bundle.uv2, 2) : null,
       index: new THREE.BufferAttribute(bundle.indices, 1),
     };
+    // the header's per-model facts (origin), by model number
+    const headerModels = new Map<number, Record<string, unknown>>();
+    if (Array.isArray(bundle.header.models)) for (const m of bundle.header.models as Record<string, unknown>[]) headerModels.set(Number(m.index), m);
     const byModel = new Map<string, MapEntity>();
     for (const e of entities) if (e.model?.startsWith("*")) byModel.set(e.model.slice(1), e);
     return bundle.models.map((model): ModelMesh => {
@@ -54,7 +60,8 @@ export function useModelMeshes(bundle: MeshBundle | null, entities: MapEntity[])
       g.boundingSphere = box.isEmpty() ? new THREE.Sphere() : box.getBoundingSphere(new THREE.Sphere());
       const ei = draws.find((d) => d.entityIndex !== undefined)?.entityIndex;
       const ent = (ei !== undefined ? entities.find((e) => e.index === ei) : undefined) ?? byModel.get(String(model)) ?? null;
-      return { model, geometry: g, draws, entity: model === 0 ? null : ent, kind: kindOf(model, draws, ent) };
+      const origin: Vec3 = model === 0 ? [0, 0, 0] : parseVec(headerModels.get(model)?.origin) ?? ent?.origin ?? [0, 0, 0];
+      return { model, geometry: g, draws, entity: model === 0 ? null : ent, kind: kindOf(model, draws, ent), origin };
     });
   }, [bundle, entities]);
   useEffect(() => () => meshes.forEach((m) => m.geometry.dispose()), [meshes]);
@@ -76,12 +83,13 @@ export function World({ meshes, bundle, map }: { meshes: ModelMesh[]; bundle: Me
   const invalidate = useThree((s) => s.invalidate);
   const gl = useThree((s) => s.gl);
   const layers = useTools((s) => s.layers);
+  const camera = useTools((s) => s.camera);
   const { select, setHover } = useTools.getState();
   const [version, setVersion] = useState(0);
   // (the dev test room draws its own pictures; a real map's come from the app)
   const mock = import.meta.env.DEV && bundle.header.mock === true;
   const mats = useMemo(
-    () => new MapMaterials({ tex: (n) => texUrl(map, n, mock), lightmap: () => (bundle.uv2 ? lightmapUrl(map, mock) : Promise.resolve(null)) }, { textures: layers.textures, lighting: layers.lighting, triggers: layers.triggers }, invalidate, Math.min(8, gl.capabilities.getMaxAnisotropy()), bundle.clockwise),
+    () => new MapMaterials({ tex: (n) => texUrl(map, n, mock), lightmap: () => (bundle.uv2 ? lightmapUrl(map, mock) : Promise.resolve(null)) }, { textures: layers.textures, lighting: layers.lighting, triggers: layers.triggers, sky: camera === "fly" }, invalidate, Math.min(8, gl.capabilities.getMaxAnisotropy()), bundle.clockwise),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [map, bundle],
   );
@@ -89,7 +97,7 @@ export function World({ meshes, bundle, map }: { meshes: ModelMesh[]; bundle: Me
     mats.onChange = (remade) => remade && setVersion((v) => v + 1);
     return () => mats.dispose();
   }, [mats]);
-  useEffect(() => mats.setOptions({ textures: layers.textures, lighting: layers.lighting, triggers: layers.triggers }), [mats, layers.textures, layers.lighting, layers.triggers]);
+  useEffect(() => mats.setOptions({ textures: layers.textures, lighting: layers.lighting, triggers: layers.triggers, sky: camera === "fly" }), [mats, layers.textures, layers.lighting, layers.triggers, camera]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const materialSets = useMemo(() => meshes.map((m) => m.draws.map((d) => mats.get(d))), [meshes, mats, version]);
   useEffect(() => invalidate(), [materialSets, layers, invalidate]);
@@ -124,7 +132,7 @@ export function World({ meshes, bundle, map }: { meshes: ModelMesh[]; bundle: Me
             material={materialSets[i]}
             visible={visible}
             // brush entities with an origin (rotating doors) are built around it
-            position={m.entity?.origin ?? [0, 0, 0]}
+            position={m.origin}
             userData={{ model: m.model }}
             onClick={pick(m, i)}
             onPointerMove={hover(m, i)}

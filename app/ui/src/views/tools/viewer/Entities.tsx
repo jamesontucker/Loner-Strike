@@ -44,7 +44,7 @@ export function entityCentre(e: MapEntity, meshes: ModelMesh[]): { point: Vec3; 
     if (b && !b.isEmpty()) {
       const c = b.getCenter(new THREE.Vector3());
       const s = b.getSize(new THREE.Vector3());
-      const o = e.origin ?? [0, 0, 0];
+      const o = m!.origin;
       return { point: [c.x + o[0], c.y + o[1], c.z + o[2]], size: Math.max(s.x, s.y, s.z) };
     }
   }
@@ -148,7 +148,7 @@ function Picked({ entities, meshes }: { entities: MapEntity[]; meshes: ModelMesh
   return (
     <>
       {outline && <lineSegments geometry={outline.g} material={outlineMat} position={outline.pos} renderOrder={10} />}
-      {brush && overlay && <mesh geometry={brush.geometry} material={overlay} position={ent?.origin ?? [0, 0, 0]} renderOrder={10} raycast={() => null} />}
+      {brush && overlay && <mesh geometry={brush.geometry} material={overlay} position={brush.origin} renderOrder={10} raycast={() => null} />}
       {links && <lineSegments geometry={links} material={linkMat} renderOrder={10} />}
     </>
   );

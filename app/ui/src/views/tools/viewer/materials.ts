@@ -13,7 +13,9 @@ import { FLAG, type Draw } from "./bundle";
 export const OVERBRIGHT = 2;
 export const SKY_COLOUR = "#8aa4ba";
 
-export type MaterialOptions = { textures: boolean; lighting: boolean; triggers: boolean };
+/** sky: draw the sky faces. Sky volumes have faces on both sides (the map keeps them as
+ *  their own contents), so from outside they're a lid over the map: shown only when flying. */
+export type MaterialOptions = { textures: boolean; lighting: boolean; triggers: boolean; sky: boolean };
 
 /** Names that are tool textures: never drawn in the game, shown with Triggers. */
 const TOOL_TEXTURES = /^(aaatrigger|clip|null|origin|hint|skip|bevel)$/i;
@@ -138,8 +140,9 @@ export class MapMaterials {
     const lit = this.opts.lighting && !!this.lightmap && kind !== "sky" && kind !== "trigger";
     // with the map's own lighting it's all in the lightmap; without, a simple sun shades the faces
     const m = lit || kind === "sky" || kind === "trigger" ? new THREE.MeshBasicMaterial() : new THREE.MeshLambertMaterial();
-    // see-through things are seen from both sides; walls only from inside the map
-    m.side = kind === "water" || kind === "masked" || kind === "trigger" ? THREE.DoubleSide : this.front;
+    // walls only from inside the map; water already has a face for each side (like sky), so
+    // it's front-only too; fences and triggers from both sides
+    m.side = kind === "masked" || kind === "trigger" ? THREE.DoubleSide : this.front;
     m.name = d.texture;
     m.userData.kind = kind;
     this.fill(m, d.texture, kind);
@@ -150,6 +153,7 @@ export class MapMaterials {
     if (kind === "sky") {
       m.color.set(SKY_COLOUR);
       m.map = null;
+      m.visible = this.opts.sky;
     } else if (kind === "trigger") {
       m.color.set("#e08a3c");
       m.map = null;
