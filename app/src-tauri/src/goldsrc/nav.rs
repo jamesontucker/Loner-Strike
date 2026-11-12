@@ -405,6 +405,10 @@ fn read_area(p: &mut Cursor, version: u32) -> Result<Area> {
 const STEP: f32 = 25.0;
 const HALF_HUMAN_WIDTH: f32 = 16.0;
 const HUMAN_HEIGHT: f32 = 72.0;
+/// GoldSrc coordinates stay within +-32768 (4096 in stock maps; 32768 with big-map builds).
+const WORLD_LIMIT: f32 = 32768.0;
+/// A ladder is never taller than the world: 65536 / 10 steps at most, and far fewer in practice.
+const MAX_LADDER_STEPS: usize = 1000;
 
 /// A `func_ladder`'s box as the engine links it: the brush model's bounds plus the entity's
 /// origin, grown by 1 unit each way (absmin/absmax).
@@ -505,6 +509,11 @@ fn nearest_area(nav: &Nav, tr: &dyn LineTrace, pos: [f32; 3]) -> Option<usize> {
 pub fn build_ladders(nav: &Nav, boxes: &[LadderBox], tr: &dyn LineTrace) -> Vec<Ladder> {
     let mut out = Vec::new();
     for bx in boxes {
+        // (the boxes come from the map file: nothing outside the world's range is a real ladder)
+        let sane = |v: &[f32; 3]| v.iter().all(|c| c.is_finite() && c.abs() <= WORLD_LIMIT);
+        if !sane(&bx.mins) || !sane(&bx.maxs) || (0..3).any(|i| bx.mins[i] > bx.maxs[i]) {
+            continue;
+        }
         let cx = (bx.mins[0] + bx.maxs[0]) / 2.0;
         let cy = (bx.mins[1] + bx.maxs[1]) / 2.0;
         let mut top = [cx, cy, bx.maxs[2]];
@@ -540,23 +549,23 @@ pub fn build_ladders(nav: &Nav, boxes: &[LadderBox], tr: &dyn LineTrace) -> Vec<
             f == 1.0 && !s
         };
         let (b0, t0) = (bottom, top);
-        let mut t = 0.0;
-        while t <= length {
+        // (an integer step count, capped: never an endless loop whatever the box says)
+        let steps = ((length / 10.0) as usize).min(MAX_LADDER_STEPS);
+        for k in 0..=steps {
+            let t = k as f32 * 10.0;
             let on = [b0[0] + t * unit[0], b0[1] + t * unit[1], b0[2] + t * unit[2]];
             if clear(on) {
                 bottom = on;
                 break;
             }
-            t += 10.0;
         }
-        t = 0.0;
-        while t <= length {
+        for k in 0..=steps {
+            let t = k as f32 * 10.0;
             let on = [t0[0] - t * unit[0], t0[1] - t * unit[1], t0[2] - t * unit[2]];
             if clear(on) {
                 top = on;
                 break;
             }
-            t += 10.0;
         }
         let length = ((top[0] - bottom[0]).powi(2) + (top[1] - bottom[1]).powi(2) + (top[2] - bottom[2]).powi(2)).sqrt();
 
@@ -694,6 +703,27 @@ mod tests {
         let l = &build_ladders(&nav, &[bx], &Open)[0];
         assert_eq!(l.dir, 2);
         assert_eq!(l.bottom_area, Some(0));
+    }
+
+    #[test]
+    fn crafted_ladder_boxes_end() {
+        let nav = sample();
+        let bad = [
+            LadderBox { mins: [0.0, 0.0, f32::NEG_INFINITY], maxs: [10.0, 10.0, f32::INFINITY], entity: 0 },
+            LadderBox { mins: [0.0, 0.0, f32::NAN], maxs: [10.0, 10.0, 100.0], entity: 1 },
+            LadderBox { mins: [0.0, 0.0, -1.0e30], maxs: [10.0, 10.0, 1.0e30], entity: 2 },
+            LadderBox { mins: [0.0, 0.0, 100.0], maxs: [10.0, 10.0, 0.0], entity: 3 },
+        ];
+        assert!(build_ladders(&nav, &bad, &Open).is_empty());
+        // the tallest real one: the step loop is capped (a wall everywhere: never clear)
+        struct Shut;
+        impl LineTrace for Shut {
+            fn line(&self, _: [f32; 3], _: [f32; 3]) -> (f32, bool) {
+                (0.0, true)
+            }
+        }
+        let tall = LadderBox { mins: [0.0, 0.0, -32768.0], maxs: [10.0, 10.0, 32768.0], entity: 4 };
+        assert_eq!(build_ladders(&nav, &[tall], &Shut).len(), 1);
     }
 
     /// LS_TEST_SIM=<loner-strike-sim folder>: the fixed cs_rats2 nav reads and writes back exactly.

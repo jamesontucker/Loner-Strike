@@ -22,7 +22,7 @@ pub const MAX_BSP: u64 = 64 << 20;
 /// The biggest texture file we open (halflife.wad is ~20 MB).
 pub const MAX_WAD: u64 = 256 << 20;
 /// The biggest texture side we decode (GoldSrc itself stops at 512; some tools allow more).
-pub const MAX_TEX_SIDE: u32 = 4096;
+pub const MAX_TEX_SIDE: u32 = 1024;
 
 /// What went wrong reading a file, in words the page can show.
 #[derive(Debug, Clone, PartialEq)]
@@ -163,3 +163,5 @@ mod tests {
         assert_eq!(cname(b"abc"), "abc");
     }
 }
+pub mod hull;
+pub mod nav;
