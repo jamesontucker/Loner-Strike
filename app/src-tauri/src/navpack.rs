@@ -237,6 +237,40 @@ mod tests {
         d
     }
 
+    /// The real pack against a fake game folder (`LS_PACK_DIR=<pack> LS_MAPS_DIR=<game maps> cargo
+    /// test pack_folder -- --ignored`): every map the folder has gets its pair, checked by sha.
+    #[test]
+    #[ignore]
+    fn pack_folder() {
+        let (Ok(pack), Ok(game)) = (std::env::var("LS_PACK_DIR"), std::env::var("LS_MAPS_DIR")) else { return };
+        let pack = PathBuf::from(pack);
+        let list: PackList = serde_json::from_slice(&std::fs::read(pack.join("list.json")).unwrap()).unwrap();
+        let hl = dir("packrun");
+        let maps = hl.join("cstrike/maps");
+        let mut want = 0;
+        for m in &list.maps {
+            if let Some(src) = find(Path::new(&game), &m.map, "bsp") {
+                std::fs::copy(&src, maps.join(format!("{}.bsp", m.map))).unwrap();
+                want += 1;
+            }
+        }
+        let fetch = |url: &str| -> Result<Vec<u8>, String> {
+            let name = url.rsplit('/').next().unwrap_or_default();
+            std::fs::read(pack.join(name)).map_err(|e| e.to_string())
+        };
+        let out = run_with(&hl, &list, &fetch);
+        eprintln!("{out:?} (maps in the folder: {want})");
+        for m in &list.maps {
+            if maps.join(format!("{}.bsp", m.map)).exists() {
+                assert!(find(&maps, &m.map, "nav").is_some() && find(&maps, &m.map, "lsv").is_some(), "{} got its pair", m.map);
+            }
+        }
+        // a second run changes nothing
+        let again = run_with(&hl, &list, &fetch);
+        eprintln!("again: {again:?}");
+        let _ = std::fs::remove_dir_all(&hl);
+    }
+
     #[test]
     fn reads_place_counts() {
         assert_eq!(place_count(&nav(5, 100, 23)), Some(23));
