@@ -582,6 +582,14 @@ mod tests {
     }
 
     #[test]
+    fn truncated_files_never_panic() {
+        let text = write_map(&sample_doc(), &WriteOptions::default()).unwrap();
+        for (i, _) in text.char_indices().step_by(3) {
+            let _ = read_map(&text[..i]);
+        }
+    }
+
+    #[test]
     fn number_format() {
         assert_eq!(fmt_num(64.0), "64");
         assert_eq!(fmt_num(-0.0), "0");

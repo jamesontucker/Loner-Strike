@@ -518,6 +518,14 @@ mod tests {
         let l = merge(&[a.clone(), c]).unwrap();
         assert!(!l.exact);
         assert!(merge(&[a]).is_err());
+        // Big point sets (two 32-sided cylinders) stay quick enough.
+        let c1 = make_cylinder(v3(0.0, 0.0, 0.0), 64.0, 64.0, 32, 0.0, "P").unwrap();
+        let c2 = make_cylinder(v3(0.0, 0.0, 64.0), 64.0, 64.0, 32, 0.0, "P").unwrap();
+        let t = std::time::Instant::now();
+        let m = merge(&[c1, c2]).unwrap();
+        assert!(m.exact);
+        assert_eq!(m.brush.faces.len(), 34);
+        assert!(t.elapsed().as_secs_f64() < 10.0);
     }
 
     #[test]
