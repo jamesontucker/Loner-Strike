@@ -36,7 +36,7 @@ The first full release:
 - Counter-Strike 1.6 no longer lists Condition Zero only maps it can't load.
 - The quick bar changes bot difficulty and style in one click.
 - Settings, Help fixes the usual problems by symptom, and the app's messages say what to do next.
-- The stock maps and the maps Loner-Strike installs come with ready-made bot navigation and map knowledge, so bots play them straight away with no learning. On the stock maps bots name places in chat, like BombsiteA, Middle or Tunnel.
+- The maps Loner-Strike installs and the stock maps (all but the two biggest, de_survivor and de_torn) come with ready-made bot navigation and map knowledge, so bots play them straight away with no learning. On the stock maps bots name places in chat, like BombsiteA, Middle or Tunnel.
 - Bots learn maps split by a wall or barrier properly (Base Builder, Deathrun): every spawn gets navigation.
 - Setup now adds 27 fun and popular maps (about 70 MB): scoutzknivez, aim_map, fy_iceworld, awp_india, he_glass, de_mirage, de_tuscan, the Rats pack and more. Remove any it added that you don't want in Maps, and they won't come back. Dedicated servers keep to the maps you give them.
 - Map downloads are checked first: one missing a model or sprite it needs, which would crash the game when it loads, isn't installed.

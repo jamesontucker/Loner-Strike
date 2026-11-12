@@ -24,7 +24,7 @@ Loner-Strike is a free desktop app for Windows, and for Mac through CrossOver, t
 - Talk to them in team chat: ask "money?" or "where'd they go" and they answer from what's really happening; call "rush b", "fake a", "flash for me", "two long" or "someone buy me an awp" and they do it, or say no in character
 - Or say it on your mic: on a dedicated server, the optional voice commands add-on turns what you say into the same orders, on the machine running the server (no audio is kept or sent anywhere)
 - 1,600 regulars, a few of them in small clans with a tag, who keep showing up and remember you: friends, rivals and grudges, kept by Steam ID on a server
-- 27 fun and popular maps installed for you (scoutzknivez, aim_map, fy_iceworld, awp_india, he_glass, de_mirage, the Rats pack and more), and the stock and included maps come ready for bots
+- 27 fun and popular maps installed for you (scoutzknivez, aim_map, fy_iceworld, awp_india, he_glass, de_mirage, the Rats pack and more), and the included maps and almost every stock map come ready for bots
 - Thousands more maps from GameBanana with pictures, favourites and search, each checked for missing files before it's installed, plus weapon skins, player models, sprays and sounds
 - Round-end music, Quake sounds and classic sound packs
 - Add your own maps, sounds and AMX Mod X plugins from a file
