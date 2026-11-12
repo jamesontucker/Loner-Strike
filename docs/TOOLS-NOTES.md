@@ -2,6 +2,12 @@
 
 ## Requests
 
+- **Adding a tool to the Tools page (everyone):** append ONE line to `app/ui/src/views/tools/registry.tsx`:
+  `{ id, label, blurb, icon?, beta?, load: () => import("./<tool>/<Page>") }`. The page is a default export
+  taking `ToolProps` (`{ maps }`), loaded on first open in its own chunk. Don't edit Tools.tsx. The nav focus
+  `"<id>:<arg>"` opens your tool; read the arg with `useToolArg()` from `stores/tools.ts`. Keep three.js out of
+  your page unless it's a 3D tool. (Spray maker is in; the D request below is done.)
+
 - (B, UI) `main.rs::mac_menu`: a "Tools" item under Go sending `section:tools` (the page already
   answers that event). Owner: agent A / whoever owns main.rs.
 - (B, UI) Maps page map sheet: an "Open in Tools" button calling `go("tools", "map:" + name)`. The
