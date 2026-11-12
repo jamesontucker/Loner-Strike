@@ -243,6 +243,9 @@ p { text-wrap: pretty; }
 .hero { padding: 64px 0 40px; }
 .hero .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
 .hero-logo { width: 112px; height: 112px; margin-bottom: 18px; }
+.hero .byline { color: var(--faint); font-size: 14px; letter-spacing: .02em; margin: 6px 0 0; }
+.hero .byline a { color: var(--dim); text-decoration: underline; text-underline-offset: 2px; }
+.hero .byline a:hover, .hero .byline a:focus-visible { color: var(--signal); }
 .hero h1 { font: 400 clamp(38px, 5.2vw, 66px)/1 var(--stencil); letter-spacing: .01em; white-space: nowrap; }
 .tagline { font-size: 23px; line-height: 1.35; color: var(--dim); margin: 18px 0 26px; max-width: 34ch; text-wrap: balance; }
 .nobr { white-space: nowrap; }
@@ -637,6 +640,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <div>
         <img class="hero-logo" src="img/logo.svg" alt="" width="112" height="112">
         <h1>Loner-Strike</h1>
+        <p class="byline">A <a href="https://x.com/nanoshrine" rel="noopener">nanoshrine</a> side project</p>
         <p class="tagline">Play <span class="nobr">Counter-Strike</span> like it's 2004,<br>alone or with the friends you don't have.</p>
         <div class="ctas">
           <a class="btn primary" href="#get" data-event="Get it (hero)">Get Loner-Strike</a>
