@@ -289,7 +289,7 @@ p { text-wrap: pretty; }
 .unique-grid li { color: var(--dim); border-top: 2px solid var(--signal); padding-top: 10px; }
 .unique-grid b { display: block; color: var(--bone); margin-bottom: 3px; }
 .botplay .also { margin: 30px 0 0; font: 400 20px/1.1 var(--stencil); }
-.botplay .deep { color: var(--dim); margin: 6px 0 0; max-width: 70ch; }
+.botplay .deep { color: var(--dim); margin: 10px 0 0; padding: 14px 16px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; font-size: 16px; line-height: 1.45; }
 @media (max-width: 860px) { .bot-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .unique-grid { grid-template-columns: 1fr; } }
 
 html { scroll-padding-top: 72px; }
@@ -708,7 +708,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <h3>What no other Counter-Strike bot does</h3>
         <ul class="unique-grid">
           <li><b>They study every map.</b> Sightlines, cover, angles and real wallbang spots.</li>
-          <li><b>They play fair.</b> No wallhacks: they spot a barrel or a foot past cover, and remember where you were.</li>
+          <li><b>They see what you'd see.</b> No wallhacks: they spot a barrel or a foot past cover, and remember where you were.</li>
           <li><b>They make their own calls.</b> Hold, re-peek, flank or fall back, by skill and personality.</li>
           <li><b>They remember you.</b> Friends, rivals and grudges, kept by Steam ID across days.</li>
           <li><b>You can talk to them.</b> Type or say "rush b" or "flash for me" and they answer.</li>
@@ -716,6 +716,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       </div>
       <h3 class="also">And in every fight</h3>
       <div class="botplay-grid">
+        <div>
         <ul class="steps">
           <li><b>They aim like a hand on a mouse.</b> A flick that lands a touch off, then a correction.</li>
           <li><b>They react like people.</b> Newbies hesitate; veterans don't.</li>
@@ -724,6 +725,8 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li><b>They have habits.</b> Spawn hops, tilt after a bad streak, the best bunnyhop.</li>
           <li><b>They play the mode.</b> Run and gun in Deathmatch, a team in a 5v5.</li>
         </ul>
+        <p class="deep">The ideas come from games known for their AI: Killzone's precomputed cover, Quake III's map study, the human-likeness of Unreal Tournament 2004's BotPrize and F.E.A.R.'s squad chatter. <a href="docs#how-bots-work">See how the bots work</a></p>
+        </div>
         <div class="ladder">
           <h3>Pick the lobby</h3>
           <ul>
@@ -741,7 +744,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <p class="fine">Or keep the game's stock bots, unchanged: robotic and predictable.</p>
         </div>
       </div>
-      <p class="deep">Built on ideas from Killzone, Quake III, Unreal Tournament and F.E.A.R. <a href="docs#how-bots-work">How the bots work</a></p>
     </div>
   </section>
 
