@@ -292,3 +292,28 @@ webview, including pointer lock in WKWebView; the Replay tool (M6) and the nav/k
   read-only holds after opening Options).
 - No crop tool (the picture is fitted whole); no drag-and-drop (the page can't name files by design).
 
+
+### Agent E: map editor core (2026-11-12)
+
+**Built** (`app/src-tauri/src/editor/`, mounted with `pub mod editor;` in main.rs; pure Rust, no routes or UI)
+- Map document (versioned project JSON): brushes as three-point planes with Valve 220 texture axes,
+  entities with ordered key-values, groups, materials (texture sizes), world settings (WAD list + worldspawn keys).
+- Geometry: plane sets to face polygons, validity (closed, convex, no degenerate or duplicate faces), bounds,
+  volume, convex hulls.
+- Operations: box, cylinder, move/rotate/scale/mirror with texture lock, push/pull a face, clip, hollow,
+  carve, merge (convex hull, says when it isn't exact), snap to grid; texture fit/centre/shift/scale/rotate,
+  align to world/face; `brush_mesh` gives polygons + UVs for drawing.
+- .map read/write: Valve 220 and the old standard format in, Valve 220 out, TrenchBroom groups, readable
+  errors, byte-stable round trip.
+- Undo/redo: transactions that commit as one step or roll back, drags fold into one step, saved/dirty state,
+  and ~20 editor commands (`history::cmd_*`).
+- Checks: GoldSrc limits, broken brushes, outside the world, missing textures, spawns, dangling targets.
+- docs/TOOLS-EDITOR.md: the compile path (SDHLT as an optional download; on a Mac its Windows exes run
+  through the CrossOver wine we already use for HLDS), what's realistic for 1.0.0, and the UI-to-core map.
+
+**Try it**: `cd app/src-tauri && cargo test editor::` (38 tests).
+
+**Left**: routes (proposal in TOOLS-EDITOR.md §3.1, to agree first), a face-picking helper, vertex editing,
+FGD parsing, prefabs, BSP "trace over" import, compile runner + leak line from `.lin`.
+
+**Requests**: none yet. The UI agent needs the editor routes agreed in TOOLS-PLAN §3.8 before building.
