@@ -438,7 +438,7 @@ function Shell() {
             {localApp?.version && <><span aria-hidden="true"> · </span>v{localApp.version}</>}
           </div>
           <div className="made-by">
-            Made by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a>
+            Made by <a href="https://nanoshrine.com" target="_blank" rel="noreferrer">nanoshrine</a>
           </div>
         </div>
       </aside>

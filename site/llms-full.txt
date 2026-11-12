@@ -5,7 +5,7 @@ Loner-Strike is a free, open-source (GPL-3.0) desktop app for Counter-Strike 1.6
 Website: https://lonerstrike.com/
 Download: https://github.com/jamesontucker/Loner-Strike/releases/latest
 Source: https://github.com/jamesontucker/Loner-Strike
-Made by: nanoshrine (https://x.com/nanoshrine)
+Made by: nanoshrine (https://nanoshrine.com)
 
 ## Who it's for
 

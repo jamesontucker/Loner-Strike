@@ -162,7 +162,7 @@ Loner-Strike stands on twenty years of community work. If you enjoy it, give som
 
 ## Credits
 
-Made by [nanoshrine](https://x.com/nanoshrine). See [CREDITS.md](CREDITS.md) for every mod and its authors.
+Made by [nanoshrine](https://nanoshrine.com). See [CREDITS.md](CREDITS.md) for every mod and its authors.
 
 Not affiliated with Valve. Counter-Strike and Condition Zero are Valve's trademarks. No game files are included; you need your own copy.
 

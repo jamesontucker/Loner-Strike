@@ -160,7 +160,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               <button className="btn" onClick={onClose}>{intro ? "Close" : "Set up later"}</button>
             </div>
             <p className="muted later">Later, you can add or remove any of it under Mods.</p>
-            <p className="made-by setup-by">by <a href="https://x.com/nanoshrine" target="_blank" rel="noreferrer">nanoshrine</a><span aria-hidden="true"> · </span><a href="https://lonerstrike.com/docs" target="_blank" rel="noreferrer">Docs</a></p>
+            <p className="made-by setup-by">by <a href="https://nanoshrine.com" target="_blank" rel="noreferrer">nanoshrine</a><span aria-hidden="true"> · </span><a href="https://lonerstrike.com/docs" target="_blank" rel="noreferrer">Docs</a></p>
           </section>
         )}
 
