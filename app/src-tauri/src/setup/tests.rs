@@ -220,8 +220,13 @@ fn plan_checks_requests() {
     let ids: Vec<&str> = plan.steps().iter().map(|s| s.id.as_str()).collect();
     assert_eq!(
         ids,
-        ["czero/metamod", "czero/amxmodx", "czero/regamedll", "czero/liblist", "czero/mode-paintball", "czero/core-plugins", "czero/core-configs", "czero/core-quake", "czero/core-bots", "czero/core-keys"]
+        ["czero/metamod", "czero/amxmodx", "czero/regamedll", "czero/liblist", "czero/mode-paintball", "czero/core-plugins", "czero/core-configs", "czero/core-quake", "czero/core-bots", "czero/core-keys", "czero/core-funmaps"]
     );
+    // a dedicated server doesn't get the fun maps
+    let mut dedicated = install.clone();
+    dedicated.dedicated = true;
+    let plan = plan_install(dedicated, &["czero".into()], &["mode-paintball".into()], &res, false).unwrap();
+    assert!(!plan.steps().iter().any(|s| s.id.ends_with("core-funmaps")));
     // a damaged record stops everything
     std::fs::create_dir_all(hl.join("czero/addons/loner-strike")).unwrap();
     std::fs::write(hl.join("czero/addons/loner-strike/record.json"), "{not json").unwrap();

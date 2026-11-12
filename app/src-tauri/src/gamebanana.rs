@@ -846,6 +846,11 @@ impl MapStore {
         Ok((json!({"name": stem, "author": "", "url": null}), src, fname))
     }
 
+    /// Where this store puts maps (cstrike's, or a dedicated server's own game folder).
+    pub fn maps_dir(&self) -> PathBuf {
+        self.cstrike.join("maps")
+    }
+
     pub fn job_list(&self) -> Vec<Job> {
         let mut jobs = self.jobs.lock().unwrap();
         // finished jobs are kept for ten minutes so the panel can show the result
@@ -923,6 +928,24 @@ impl MapStore {
         let (plan, skipped) = archive::plan(&src);
         if !plan.iter().any(|(_, d)| d.to_lowercase().ends_with(".bsp")) {
             return Err(bad("No map (.bsp) found in that download."));
+        }
+        // (a map that names a model or sprite neither the download nor the game has crashes the
+        // game or server the moment it loads: refused, with what's missing named)
+        let provided: HashSet<String> = plan.iter().map(|(_, d)| d.to_lowercase().replace('\\', "/")).collect();
+        let game_dirs: Vec<PathBuf> = ["cstrike", "valve", "czero", "cstrike_downloads", "valve_downloads"].iter().filter_map(|g| self.cstrike.parent().map(|hl| hl.join(g))).collect();
+        for (path, dest) in &plan {
+            if !dest.to_lowercase().ends_with(".bsp") {
+                continue;
+            }
+            let missing = missing_map_files(path, &provided, &game_dirs);
+            if !missing.is_empty() {
+                let shown: Vec<String> = missing.iter().take(3).cloned().collect();
+                let more = if missing.len() > 3 { format!(" and {} more", missing.len() - 3) } else { String::new() };
+                return Err(bad(&format!(
+                    "This download is missing files its map needs ({}{more}), so loading it would crash the game. It wasn't installed.",
+                    shown.join(", ")
+                )));
+            }
         }
         let stem = |d: &str| {
             let b = d.rsplit('/').next().unwrap_or(d);
@@ -1230,6 +1253,8 @@ impl MapStore {
                 for p in [
                     self.cstrike.join("maps").join(format!("{m}.nav")),
                     self.game_dir.join("maps").join(format!("{m}.nav")),
+                    self.cstrike.join("maps").join(format!("{m}.lsv")),
+                    self.game_dir.join("maps").join(format!("{m}.lsv")),
                     self.shots.join(format!("{}.jpg", m.to_lowercase())),
                 ] {
                     if p.is_file() {
@@ -1259,8 +1284,80 @@ fn inside(base: &Path, rel: &str) -> Option<PathBuf> {
     (out != base).then_some(out)
 }
 
+
+/// Whether `rel` (a/b/c) is under `base`, whatever the case of each part (Windows and the
+/// Mac don't care; a server on Linux would, but the game asks with the case it was given).
+fn exists_ci(base: &Path, rel: &str) -> bool {
+    let mut dir = base.to_path_buf();
+    for part in rel.split('/').filter(|p| !p.is_empty()) {
+        let exact = dir.join(part);
+        if exact.exists() {
+            dir = exact;
+            continue;
+        }
+        let Ok(rd) = std::fs::read_dir(&dir) else { return false };
+        match rd.flatten().find(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case(part)) {
+            Some(e) => dir = e.path(),
+            None => return false,
+        }
+    }
+    dir.exists()
+}
+
+/// The models and sprites a map's entities name (its entity lump) that neither the download
+/// (`provided`, paths under cstrike, lower case) nor the game's folders have. Brush models
+/// ("*12") are inside the map. A file that can't be read as a map names nothing.
+pub fn missing_map_files(bsp: &Path, provided: &HashSet<String>, game_dirs: &[PathBuf]) -> Vec<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let Ok(mut f) = std::fs::File::open(bsp) else { return vec![] };
+    let mut head = [0u8; 12];
+    if f.read_exact(&mut head).is_err() || i32::from_le_bytes(head[0..4].try_into().unwrap()) != 30 {
+        return vec![];
+    }
+    let ofs = u32::from_le_bytes(head[4..8].try_into().unwrap()) as u64;
+    let len = (u32::from_le_bytes(head[8..12].try_into().unwrap()) as usize).min(8 * 1024 * 1024);
+    let mut ents = vec![0u8; len];
+    if f.seek(SeekFrom::Start(ofs)).is_err() || f.read_exact(&mut ents).is_err() {
+        return vec![];
+    }
+    let text = String::from_utf8_lossy(&ents);
+    static NAMED: OnceLock<Regex> = OnceLock::new();
+    let re = NAMED.get_or_init(|| Regex::new(r#"(?i)"([^"*][^"]*\.(?:mdl|spr))""#).unwrap());
+    let mut out: Vec<String> = re
+        .captures_iter(&text)
+        .map(|c| {
+            let p = c[1].replace('\\', "/").to_lowercase();
+            p.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("/")
+        })
+        .filter(|rel| !provided.contains(rel) && !game_dirs.iter().any(|g| exists_ci(g, rel)))
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn finds_missing_map_files() {
+        let d = std::env::temp_dir().join(format!("ls-gbmiss-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("game/models")).unwrap();
+        std::fs::write(d.join("game/models/Chick.mdl"), b"x").unwrap();
+        let ents = b"{\n\"classname\" \"worldspawn\"\n}\n{\n\"model\" \"models/chick.mdl\"\n}\n{\n\"model\" \"models\\dt_plant1.mdl\"\n}\n{\n\"model\" \"*3\"\n}\n{\n\"model\" \"sprites/glow.spr\"\n}\n";
+        let mut bsp = Vec::new();
+        bsp.extend_from_slice(&30i32.to_le_bytes());
+        bsp.extend_from_slice(&12u32.to_le_bytes());
+        bsp.extend_from_slice(&(ents.len() as u32).to_le_bytes());
+        bsp.extend_from_slice(ents);
+        let p = d.join("m.bsp");
+        std::fs::write(&p, &bsp).unwrap();
+        let provided: HashSet<String> = ["sprites/glow.spr".to_string()].into_iter().collect();
+        assert_eq!(missing_map_files(&p, &provided, &[d.join("game")]), vec!["models/dt_plant1.mdl".to_string()]);
+        assert!(missing_map_files(&d.join("nope.bsp"), &provided, &[]).is_empty());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     use super::*;
 
     #[test]

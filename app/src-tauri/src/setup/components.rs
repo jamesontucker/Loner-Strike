@@ -152,44 +152,69 @@ fn apply_patches(rec: &mut Record, ctx: &Ctx, comp: &Value) -> Result<(), String
     Ok(())
 }
 
-/// Installs the component's GameBanana maps and remembers the ones that are new,
-/// so uninstalling the component removes them again.
-fn maps(rec: &mut Record, ctx: &Ctx, comp: &Value) {
+/// Installs the component's GameBanana maps and remembers the ones it put in, so uninstalling
+/// the component removes them again. A map it put in earlier that the list no longer has (one
+/// replaced because its download was missing files) comes out again, and one it put in that the
+/// player has since removed (Get maps) isn't fetched again. `base`..`base + span` is the part of
+/// the step's progress bar the downloads fill.
+pub(crate) fn maps(rec: &mut Record, ctx: &Ctx, comp: &Value, base: f64, span: f64) {
     let Some(list) = comp["maps"].as_array().filter(|l| !l.is_empty()) else { return };
     let Some(store) = ctx.store.as_ref() else { return };
     let id = comp["id"].as_str().unwrap_or_default().to_string();
     let mut ours = rec.map_mods(&id);
+    let installed = |m: i64| store.records().contains_key(&m.to_string());
+    // (0.1.2 noted a map as ours before its download had worked: the first time through, only
+    // what really came in stays noted, so a download that failed then is tried again)
+    let checked_key = "maps_checked";
+    let mut checked: Vec<String> = rec.data.extra.get(checked_key).map(strs).unwrap_or_default();
+    if !checked.contains(&id) {
+        ours.retain(|m| installed(*m));
+        checked.push(id.clone());
+        rec.data.extra.insert(checked_key.into(), Value::from(checked));
+    }
+    let listed: Vec<i64> = list.iter().filter_map(|m| m["mod"].as_i64()).collect();
+    let dropped: Vec<i64> = ours.iter().copied().filter(|m| !listed.contains(m)).collect();
+    for m in dropped {
+        if store.uninstall(m).is_ok() || !installed(m) {
+            ours.retain(|x| *x != m);
+        }
+    }
+    rec.data.maps.insert(id.clone(), Value::from(ours.clone()));
+    let maps_dir = store.maps_dir();
     let total = list.len();
     for (i, m) in list.iter().enumerate() {
         let names = strs(&m["maps"]);
-        let have = names.iter().all(|n| ctx.install.hl.join("cstrike").join("maps").join(format!("{n}.bsp")).exists());
-        if have {
+        let (Some(mod_id), Some(file_id)) = (m["mod"].as_i64(), m["file"].as_i64()) else { continue };
+        let have = names.iter().all(|n| maps_dir.join(format!("{n}.bsp")).exists());
+        // (there already, or put in by us once and removed by the player since)
+        if have || (ours.contains(&mod_id) && !installed(mod_id)) {
             continue;
         }
-        let (Some(mod_id), Some(file_id)) = (m["mod"].as_i64(), m["file"].as_i64()) else { continue };
         ctx.progress.detail(&format!("Getting the map {} ({} of {total})", names.join(", "), i + 1));
-        ctx.progress.fraction(0.8 + 0.2 * i as f64 / total as f64);
-        if !store.records().contains_key(&mod_id.to_string()) && !ours.contains(&mod_id) {
-            ours.push(mod_id);
-        }
-        rec.data.maps.insert(id.clone(), Value::from(ours.clone()));
+        ctx.progress.fraction(base + span * i as f64 / total as f64);
+        // (the player's own copy of the same download is never claimed)
+        let theirs = installed(mod_id);
         let job = store.start_install(mod_id, file_id);
         let deadline = std::time::Instant::now() + Duration::from_secs(1800);
-        loop {
+        let ok = loop {
             let j = store.job_list().into_iter().find(|j| j.id == job);
             match j {
-                Some(j) if j.state == "done" => break,
+                Some(j) if j.state == "done" => break true,
                 Some(j) if j.state == "error" => {
                     ctx.progress.note(&format!("Couldn't install the map {}: {}", names.join(", "), j.message));
-                    break;
+                    break false;
                 }
-                None => break,
+                None => break false,
                 _ if std::time::Instant::now() > deadline => {
                     ctx.progress.note(&format!("Gave up waiting for the map {}.", names.join(", ")));
-                    break;
+                    break false;
                 }
                 _ => std::thread::sleep(Duration::from_millis(500)),
             }
+        };
+        if ok && !theirs && installed(mod_id) && !ours.contains(&mod_id) {
+            ours.push(mod_id);
+            rec.data.maps.insert(id.clone(), Value::from(ours.clone()));
         }
     }
 }
@@ -222,7 +247,7 @@ pub fn install_component(rec: &mut Record, ctx: &Ctx, comp: &Value) -> Result<bo
         ctx.progress.fraction(0.6 + 0.2 * i as f64 / builds.len() as f64);
         ok = core::compile_plugin(rec, ctx, src, out, c["include"].as_str())? && ok;
     }
-    maps(rec, ctx, comp);
+    maps(rec, ctx, comp, 0.8, 0.2);
     // a mode whose plugin didn't build stays out of the menu (it would load its settings
     // without its plugin); setup says it failed, and running it again tries again
     if ok {

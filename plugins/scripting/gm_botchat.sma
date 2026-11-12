@@ -3319,6 +3319,7 @@ public task_idle_chatter()
 
 public ev_newround()
 {
+	sites_from_brain()
 	dead_chat_on()
 	for (new i = 0; i <= MaxClients; i++)
 		g_HurtCalled[i] = false
@@ -5118,6 +5119,12 @@ enum
 }
 // (a goto said with "slow", "walk", "quiet": walking, not running; the arg's bit)
 #define SPOT_WALK 0x100
+// ("rush b": straight in, no gathering; "rest b", "everyone else a": the ones not just sent
+// somewhere in the same line; a headcount, "one of you go long", "2 go a": bits 12-14)
+#define SPOT_RUSH 0x200
+#define SPOT_REST 0x400
+#define SPOT_NSHIFT 12
+new g_ReqPush[33]                           // a team call it took: 1 the push on a site, 2 rushed
 #define TASK_UTIL 8740
 #define TASK_FAKE 8780
 new bool:g_ReqWalk[33]                      // walking there ("go b slow")
@@ -5281,6 +5288,10 @@ find_spots()
 		g_SiteCount++
 	}
 	name_sites()
+	sites_from_table()
+	// (the brain publishes once its nav is in, a moment after the map starts: read it then too,
+	// so the first round already has the nav's names)
+	set_task(4.0, "task_sites_from_brain")
 	g_HaveT = spawn_middle("info_player_deathmatch", g_SpawnT)
 	g_HaveCT = spawn_middle("info_player_start", g_SpawnCT)
 }
@@ -5758,7 +5769,7 @@ bool:site_named(const c[], const letter[])
 bool:goto_target(const c[], &arg, place[], plen)
 {
 	static const VERBS[][] = { "go", "rush", "push", "come", "hit", "take", "head", "move", "run", "all", "everyone",
-		"everybody", "to", "cover", "check", "lets", "stack", "retake", "defend", "split", "execute", "exec", "walk", "sneak" }
+		"everybody", "to", "cover", "check", "lets", "stack", "retake", "defend", "split", "execute", "exec", "walk", "sneak", "rest", "others" }
 	// ("b b b", "bbb" said alone is a call too)
 	new bool:alone = phrase_is(c, "b b") || phrase_is(c, "b b b") || phrase_is(c, "a a a")
 	if (!alone && !any_in(c, VERBS, sizeof VERBS))
@@ -5897,6 +5908,24 @@ bool:info_said(id, const c[], &arg, place[], plen)
 		n = 9
 	arg |= n << 4
 	return true
+}
+
+// How many an order to teammates is for ("one of you go long", "2 rush a", "someone go b",
+// "two go mid"): the number leading the line or before "of you"; 0 when not said (all)
+order_count(const c[])
+{
+	static const NUM[][] = { "one", "two", "three", "four", "1", "2", "3", "4" }
+	static const ONE[][] = { "someone", "somebody", "anyone", "one guy", "1 guy", "one person" }
+	if (any_in(c, ONE, sizeof ONE))
+		return 1
+	for (new j = 0; j < sizeof NUM; j++)
+	{
+		new probe[16]
+		formatex(probe, charsmax(probe), "%s of you", NUM[j])
+		if (word_in(c, probe) || lead_word(c, NUM[j]))
+			return (j % 4) + 1
+	}
+	return 0
 }
 
 // Whether a bot could see a point from where it stands (to look there, not at a wall)
@@ -6640,6 +6669,14 @@ clause_intent(id, const c[], &arg, place[], plen)
 		static const SLOW[][] = { "slow", "slowly", "walk", "walking", "quiet", "quietly", "sneak", "shift", "silent" }
 		if (any_in(c, SLOW, sizeof SLOW))
 			arg |= SPOT_WALK
+		if (word_in(c, "rush"))
+			arg |= SPOT_RUSH
+		static const REST[][] = { "rest", "the rest", "everyone else", "others", "the others", "rest of you", "all else" }
+		if (any_in(c, REST, sizeof REST))
+			arg |= SPOT_REST
+		new n = order_count(c)
+		if (n)
+			arg |= n << SPOT_NSHIFT
 		return I_GOTO
 	}
 	arg = 0
@@ -6688,6 +6725,10 @@ parse_intents(id, const msg[], list[3], args[3], places[3][32], targets[3][4], n
 	replace_string(rest, charsmax(rest), "? ", "?,")
 	replace_string(rest, charsmax(rest), "! ", ",")
 	replace_string(rest, charsmax(rest), ";", ",")
+	// ("2 go a rest b": two orders)
+	replace_string(rest, charsmax(rest), " the rest ", ",the rest ")
+	replace_string(rest, charsmax(rest), " rest ", ",rest ")
+	replace_string(rest, charsmax(rest), " everyone else ", ",everyone else ")
 	for (new guard = 0; rest[0] && n < 3 && guard < 8; guard++)
 	{
 		strtok2(rest, clause, charsmax(clause), rest, charsmax(rest), ',', TRIM_FULL)
@@ -6705,7 +6746,8 @@ parse_intents(id, const msg[], list[3], args[3], places[3][32], targets[3][4], n
 		}
 		new bool:dup
 		for (new k = 0; k < n; k++)
-			if (list[k] == it)
+			// (two go orders to different places in one line - "2 go a, rest b" - are both kept)
+			if (list[k] == it && (it != I_GOTO || args[k] == arg))
 				dup = true
 		if (dup)
 			continue
@@ -7188,6 +7230,111 @@ place_learned(const place[], const Float:at[3])
 		g_SiteLetter[1 - best] = place[0] == 'a' ? 'b' : 'a'
 }
 
+// The bot brain's site letters (cvar ls_sites, "a x y b x y", from the nav's BombsiteA /
+// BombsiteB places, set once a nav loads): the real names, not the map's entity order (on 1.6
+// there's no radar place message to learn them from - dust2's came out backwards)
+// Stock 1.6 maps whose sites a learned nav can't name (no place names): which bomb site is
+// which, worked out from Condition Zero's hand-made navs and checked against each 1.6 map's
+// own bomb site positions (CZ changed some maps, so only clear matches are here): the map,
+// then a site's middle and its letter, twice. Nuke's sites sit one above the other and aren't
+// listed
+static const SITE_MAPS[][] = { "de_airstrip", "de_aztec", "de_cbble", "de_chateau", "de_dust", "de_dust2", "de_inferno",
+	"de_piranesi", "de_storm", "de_survivor", "de_train", "de_vertigo" }
+static const SITE_AT[][6] = {
+	{ 256, -288, 'a', -2400, -2720, 'b' }, { -536, -1512, 'a', -2048, 1056, 'b' }, { -2800, -1744, 'a', 1072, -1040, 'b' },
+	{ 2232, 1220, 'b', 128, 152, 'a' }, { 1952, 608, 'a', 352, -1656, 'b' }, { -1536, 2688, 'b', 1152, 2464, 'a' },
+	{ 1984, 456, 'b', 288, 2784, 'a' }, { -240, -640, 'a', -1728, 2400, 'b' }, { -1759, 2150, 'a', 1339, 1403, 'b' },
+	{ -380, -136, 'b', 2576, -408, 'a' }, { 1296, -160, 'b', 264, -1280, 'a' }, { -2280, 752, 'b', -312, 208, 'a' } }
+
+bool:sites_from_table()
+{
+	new map[32]
+	get_mapname(map, charsmax(map))
+	strtolower(map)
+	for (new m = 0; m < sizeof SITE_MAPS; m++)
+	{
+		if (!equal(map, SITE_MAPS[m]))
+			continue
+		new bool:any, placed = -1
+		for (new k = 0; k < 2; k++)
+		{
+			new Float:x = float(SITE_AT[m][k * 3]), Float:y = float(SITE_AT[m][k * 3 + 1])
+			new best = -1, Float:bestd = 600.0
+			for (new i = 0; i < g_SiteCount; i++)
+			{
+				new Float:d = floatsqroot((g_Sites[i][0] - x) * (g_Sites[i][0] - x) + (g_Sites[i][1] - y) * (g_Sites[i][1] - y))
+				if (d < bestd)
+				{
+					bestd = d
+					best = i
+				}
+			}
+			if (best >= 0)
+			{
+				g_SiteLetter[best] = SITE_AT[m][k * 3 + 2]
+				g_SiteFixed[SITE_AT[m][k * 3 + 2] - 'a'] = true
+				placed = best
+				any = true
+			}
+		}
+		// (only one of the two matched: the other site takes the other letter)
+		if (any && g_SiteCount == 2 && g_SiteLetter[0] == g_SiteLetter[1])
+			g_SiteLetter[1 - placed] = g_SiteLetter[placed] == 'a' ? 'b' : 'a'
+		return any
+	}
+	return false
+}
+
+sites_from_brain()
+{
+	if (g_SiteCount < 2)
+		return
+	// (the stock-map table first; a nav with real place names, below, has the last word)
+	sites_from_table()
+	if (!cvar_exists("ls_sites"))
+		return
+	new raw[128]
+	get_cvar_string("ls_sites", raw, charsmax(raw))
+	new rest[128], bool:any, named = -1
+	copy(rest, charsmax(rest), raw)
+	while (rest[0])
+	{
+		new letter[4], xs[12], ys[12]
+		strtok2(rest, letter, charsmax(letter), rest, charsmax(rest), ' ', TRIM_FULL)
+		strtok2(rest, xs, charsmax(xs), rest, charsmax(rest), ' ', TRIM_FULL)
+		strtok2(rest, ys, charsmax(ys), rest, charsmax(rest), ' ', TRIM_FULL)
+		if (!letter[0] || !xs[0] || !ys[0])
+			break
+		new Float:at[3]
+		at[0] = str_to_float(xs)
+		at[1] = str_to_float(ys)
+		new best = -1, Float:bestd = 600.0
+		for (new i = 0; i < g_SiteCount; i++)
+		{
+			new Float:d = floatsqroot((g_Sites[i][0] - at[0]) * (g_Sites[i][0] - at[0]) + (g_Sites[i][1] - at[1]) * (g_Sites[i][1] - at[1]))
+			if (d < bestd)
+			{
+				bestd = d
+				best = i
+			}
+		}
+		if (best >= 0)
+		{
+			g_SiteLetter[best] = tolower(letter[0])
+			if (g_SiteLetter[best] == 'a' || g_SiteLetter[best] == 'b')
+				g_SiteFixed[g_SiteLetter[best] - 'a'] = true
+			named = best
+			any = true
+		}
+	}
+	// (two sites with one letter: the one the nav didn't name takes the other)
+	if (any && g_SiteCount == 2 && g_SiteLetter[0] == g_SiteLetter[1] && named >= 0)
+		g_SiteLetter[1 - named] = g_SiteLetter[named] == 'a' ? 'b' : 'a'
+}
+
+public task_sites_from_brain()
+	sites_from_brain()
+
 site_with(letter)
 {
 	for (new i = 0; i < g_SiteCount; i++)
@@ -7582,6 +7729,7 @@ req_clear(bot)
 	g_ReqWaitLive[bot] = false
 	g_ReqWalk[bot] = false
 	g_ReqFakeTo[bot] = 0
+	g_ReqPush[bot] = 0
 	remove_task(TASK_FAKE + bot)
 	remove_task(TASK_UTIL + bot)
 	remove_task(TASK_REQ + bot)
@@ -7619,7 +7767,9 @@ req_do(bot, human, it, arg)
 		// (bc: a person's order, which the game's bot keeps through a fight; an unreachable spot it
 		// turns down, and the check below says "cant rn")
 		// (at the bomb it doesn't hold: its own brain defuses; walking when asked to)
-		case I_GOTO: server_cmd("ls_bot %d goto %.0f %.0f %.0f %d %d bc", bot, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2],
+		// (a team call for a site: the push, rushed or gathered)
+		case I_GOTO: if (g_ReqPush[bot]) server_cmd("ls_bot %d push %.0f %.0f %.0f %d bc", bot, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2],
+			g_ReqPush[bot] == 2 ? 1 : 0); else server_cmd("ls_bot %d goto %.0f %.0f %.0f %d %d bc", bot, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2],
 			g_ReqWalk[bot] ? 1 : 0, g_ReqArg[bot] == SPOT_BOMB ? 0 : match_like() ? random_num(20, 30) : random_num(8, 15))
 		case I_COME: server_cmd("ls_bot %d goto %.0f %.0f %.0f 0 0 bc", bot, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2])
 		case I_JUMP: server_cmd("ls_bot %d jump %d %.2f", bot, arg, random_float(0.65, 0.95))
@@ -8049,7 +8199,17 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 		arg = SPOT_BOMB
 	}
 	new bool:walk = it == I_GOTO && (arg & SPOT_WALK) != 0
-	arg &= ~SPOT_WALK
+	new bool:rush = it == I_GOTO && (arg & SPOT_RUSH) != 0
+	new bool:rest = it == I_GOTO && (arg & SPOT_REST) != 0
+	new count = it == I_GOTO ? (arg >> SPOT_NSHIFT) & 7 : 0
+	arg &= 0xFF
+	// a T's call to the whole team for a bomb site ("rush b", "go a", "rest b"): the team's push
+	// there in the game DLL (roles, gathering or not), not five lone runs; a headcount ("two go
+	// a") is a few breaking off: plain orders, the push stays the main body's
+	new push = 0
+	if (it == I_GOTO && !to && !count && !fakeTo && !walk && g_Fork && g_SiteCount > 0 && !g_BombPlanted && !teams_off()
+		&& t == 1 && (arg == SPOT_A || arg == SPOT_B))
+		push = rush ? 2 : 1
 	new bool:fun = fun_request(it)
 	// free for all: no teammates to ask, only the silly things, of someone named
 	if (teams_off() && !fun)
@@ -8062,8 +8222,13 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 	// one who can't see it (alive, and they're dead with alltalk off) never heard it
 	if (bot && !can_answer(bot, id))
 		return 0.0
+	// ("rest b": not the ones this line already sent somewhere)
+	if (rest && !to)
+		for (new i = 1; i <= MaxClients && nd < 32; i++)
+			if (is_user_connected(i) && is_user_bot(i) && g_ReqFor[i] == id && g_ReqAct[i] && now - g_ReqSetAt[i] < 1.5)
+				done[nd++] = i
 	if (!bot && !teams_off() && (t == 1 || t == 2))
-		bot = nearest_mate(id, done, 0)
+		bot = nearest_mate(id, done, nd)
 	if (!bot)
 		return 0.0
 	if (!teams_off() && get_user_team(bot) != t)
@@ -8091,6 +8256,9 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 	// ("go defuse": the one thing asked with the bomb down)
 	g_ReqBomb = it == I_GOTO && arg == SPOT_BOMB
 	new res = req_decide(bot, id, it, to != 0, section, charsmax(section))
+	// (the bomb carrier says it has the bomb, but the team's site still moves: it takes the bomb there)
+	if (push && res != REQ_YES && user_has_weapon(bot, CSW_C4))
+		server_cmd("ls_bot %d push %.0f %.0f %.0f 3 bc", bot, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2])
 	new bool:say = random_float(0.0, 1.0) < (to ? 0.9 : 0.65 * (0.6 + 0.4 * personality()))
 	// still typing something: it does it, but doesn't queue another line
 	if (g_WasBusy[bot])
@@ -8102,9 +8270,12 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 	{
 		req_set(bot, id, it, arg, place, team, say, !g_WasBusy[bot], 1)
 		req_extras(bot, walk, fakeTo)
+		g_ReqPush[bot] = push
 		// in freeze time it all waits for the round (it buys first): "k" now; on a map with guns
 		// on the floor, going somewhere waits until it has one
-		if (armoury_wait(bot, it))
+		if (push)
+			req_attempt(bot)
+		else if (armoury_wait(bot, it))
 		{
 			g_ReqWaitLive[bot] = true
 			set_task(1.0, "task_req_live", TASK_REQLIVE + bot)
@@ -8131,6 +8302,9 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 	{
 		// (a call to the team: every teammate hears it and decides for itself)
 		new more = (it == I_GOTO || it == I_HOLD) ? 31 : (random_float(0.0, 1.0) < 0.35 ? 1 : 0)
+		// ("one of you go long": that many, the closest; the one asked first counts)
+		if (count)
+			more = count - (res == REQ_YES ? 1 : 0)
 		// (one watches the flank, one goes for the defuse; "fall back" is for the ones close by)
 		if (it == I_GOTO && (arg == SPOT_FLANK || arg == SPOT_BOMB))
 			more = 0
@@ -8155,20 +8329,41 @@ Float:request(id, to, it, arg, const place[], bool:team, bool:typed, Float:extra
 			}
 			// (on a pub not everyone listens: a lurker or roamer often does its own thing, a
 			// rusher or objective player is happy to go)
-			if (it == I_GOTO && !match_like() && random_float(0.0, 1.0) < ignores_calls(other))
+			// (a headcount is for whoever's asked: nobody ignores it, the next one's asked instead)
+			if (it == I_GOTO && !count && !match_like() && random_float(0.0, 1.0) < ignores_calls(other))
+			{
+				// (heard the call and went its own way: it plays the other site or its own route,
+				// somewhere useful, rather than wandering)
+				// (a lurker, ninja or roamer plays the other site; a camper or AWPer that passes
+				// just carries on as it was - it drifts in with the team; the carrier only hears
+				// where the team's going)
+				new bool:own = trait(other, "style", "lurker") || trait(other, "style", "ninja") || trait(other, "style", "roamer")
+				if (push && is_user_alive(other) && (own || user_has_weapon(other, CSW_C4)))
+					server_cmd("ls_bot %d push %.0f %.0f %.0f %d bc", other, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2],
+						user_has_weapon(other, CSW_C4) ? 3 : 2)
 				continue
+			}
 			new sec2[24]
 			// (not all on the same spot: each a little to the side)
 			if (it == I_GOTO)
 				spread_spot(g_ReqTo[bot], g_ReqTo[other])
 			if (req_decide(other, id, it, false, sec2, charsmax(sec2)) != REQ_YES)
+			{
+				if (push && user_has_weapon(other, CSW_C4))
+					server_cmd("ls_bot %d push %.0f %.0f %.0f 3 bc", other, g_ReqTo[bot][0], g_ReqTo[bot][1], g_ReqTo[bot][2])
+				if (count)
+					more++
 				continue
+			}
 			new bool:sayit = !acked && !g_WasBusy[other] && random_float(0.0, 1.0) < 0.6
 			if (sayit)
 				acked = true
 			req_set(other, id, it, arg, place, team, sayit, false, 1)
 			req_extras(other, walk, fakeTo)
-			if (armoury_wait(other, it))
+			g_ReqPush[other] = push
+			if (push)
+				req_attempt(other)
+			else if (armoury_wait(other, it))
 			{
 				g_ReqWaitLive[other] = true
 				set_task(1.0, "task_req_live", TASK_REQLIVE + other)

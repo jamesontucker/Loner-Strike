@@ -105,7 +105,7 @@ new Float:g_MapStart
 new Array:g_MapPool
 
 // the mode vote
-new g_pModeVote, g_pModeRatio, g_pModeEvery
+new g_pModeVote, g_pModeRatio, g_pModeEvery, g_pModeRotate
 new g_MNomBy[MAX_NOMS], g_MNoms[MAX_NOMS], g_MNomCount        // nominated modes (mode indexes)
 new g_MVMode[VOTE_MODES + 1], g_MVCount[VOTE_MODES + 1], g_MVBot[VOTE_MODES + 1], g_MVOptions
 new bool:g_ModeFlow          // this vote can change the mode (rtv with mode voting on)
@@ -137,6 +137,8 @@ public plugin_init()
 	g_pModeVote  = register_cvar("gm_modevote", "1")
 	g_pModeRatio = register_cvar("gm_modevote_ratio", "50")
 	g_pModeEvery = register_cvar("gm_modevote_every", "0")
+	// what happens to the mode every Nth map: 0 a vote, 1 the next mode on the list, 2 a random one
+	g_pModeRotate = register_cvar("gm_moderotate", "0")
 	// the full bot count while they trickle in (0 otherwise), so the Game Mode Menu
 	// saves that and not the low live bot_quota; it sets this to 0 to end the ramp
 	g_pRampTarget = register_cvar("gm_botjoin_target", "0")
@@ -1886,13 +1888,85 @@ set_mapchooser(bool:paused)
 
 public task_end_check()
 {
-	new bool:due = g_EndDue && mode_voting() && get_pcvar_num(g_pModeEvery) > 0
+	new rotate = get_pcvar_num(g_pModeRotate)
+	new bool:due = g_EndDue && get_pcvar_num(g_pModeEvery) > 0 && (rotate ? mode_rotating() : mode_voting())
 	if (!g_EndStarted && due != g_McPaused)
 		set_mapchooser(due)
-	if (!due || g_EndStarted || g_Voting || g_Changing || !humans() || !near_end())
+	// (a rotation needs nobody there; a vote needs people to vote)
+	if (!due || g_EndStarted || g_Voting || g_Changing || (!rotate && !humans()) || !near_end())
 		return
 	g_EndStarted = true
-	begin_mode_vote(true)
+	if (rotate)
+		rotate_mode(rotate == 2)
+	else
+		begin_mode_vote(true)
+}
+
+// A rotation can run: the Game Mode Menu is there, not a Tour of Duty match or a scrim
+bool:mode_rotating()
+{
+	return !g_Career && !get_cvar_num("gm_scrim_phase") && LibraryExists("gm_modes", LibType_Library) && gm_modes_current() >= 0
+}
+
+// Every Nth map with the rotation on: the next mode on the server's list (the modes it lets
+// people vote for, in that order), or a random one of them, with a map that suits it (the
+// mode's own rotation first), from the next map on. Modes with no map that suits them are
+// skipped; with none left, the mode stays.
+rotate_mode(bool:random_pick)
+{
+	new Array:ok = ArrayCreate(1)
+	allowed_modes(ok)
+	new n = ArraySize(ok)
+	if (!n)
+	{
+		ArrayDestroy(ok)
+		return
+	}
+	new pick = -1
+	if (random_pick)
+		pick = ArrayGetCell(ok, random(n))
+	else
+	{
+		// the list's order, starting after the mode playing now (from the top if it isn't listed)
+		new Array:ids = ArrayCreate(32)
+		if (!read_vote_list(fmt("%s/votemodes.ini", g_DataDir), ids) && !read_vote_list(fmt("%s/gamemodes/votemodes.ini", g_CfgDir), ids))
+			for (new i = 0; i < sizeof DEFAULT_VOTE_MODES; i++)
+				ArrayPushString(ids, DEFAULT_VOTE_MODES[i])
+		new cur = gm_modes_current(), id[32], at = -1, total = ArraySize(ids)
+		for (new i = 0; i < total && at < 0; i++)
+		{
+			ArrayGetString(ids, i, id, charsmax(id))
+			if (find_mode_id(id) == cur)
+				at = i
+		}
+		for (new k = 1; k <= total && pick < 0; k++)
+		{
+			ArrayGetString(ids, (at + k + total) % total, id, charsmax(id))
+			new m = find_mode_id(id)
+			if (m >= 0 && ArrayFindValue(ok, m) != -1)
+				pick = m
+		}
+		ArrayDestroy(ids)
+	}
+	ArrayDestroy(ok)
+	if (pick < 0)
+		return
+	new Array:maps = ArrayCreate(32), map[32], cur[32], chosen[32]
+	gm_modes_maps(pick, maps)
+	get_mapname(cur, charsmax(cur))
+	new count = ArraySize(maps)
+	for (new tries = 0; tries < 20 && count && !chosen[0]; tries++)
+	{
+		ArrayGetString(maps, random(count), map, charsmax(map))
+		if (!equali(map, cur) || count == 1)
+			copy(chosen, charsmax(chosen), map)
+	}
+	ArrayDestroy(maps)
+	if (!chosen[0] || !gm_modes_next(pick, chosen))
+		return
+	new name[48]
+	vote_name(pick, name, charsmax(name))
+	client_print_color(0, print_team_default, "^4[Server]^1 Next: ^4%s^1 on ^4%s^1, when this map ends.", name, chosen)
 }
 
 // ---- an admin (or the app) starts one ------------------------------------------------------

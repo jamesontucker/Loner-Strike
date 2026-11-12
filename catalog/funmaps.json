@@ -1,0 +1,31 @@
+{
+ "_note": "The maps every game gets (setup's core-funmaps step): the classics the fun modes are played on and GameBanana's most downloaded maps, each pinned to one file checked to be whole (every model and sprite it names in the download or the game, textures inside the map). The map presets switch to the matching mode when one loads.",
+ "id": "funmaps",
+ "name": "Fun and popular maps",
+ "maps": [
+  {"mod": 98952, "file": 310456, "maps": ["scoutzknivez"]},
+  {"mod": 98951, "file": 294240, "maps": ["scoutzdeaglez"]},
+  {"mod": 82314, "file": 320784, "maps": ["aim_map"]},
+  {"mod": 93695, "file": 310954, "maps": ["aim_ak-colt"]},
+  {"mod": 99292, "file": 425876, "maps": ["aim_deagle"]},
+  {"mod": 94581, "file": 360306, "maps": ["aim_headshot"]},
+  {"mod": 87445, "file": 292909, "maps": ["awp_map"]},
+  {"mod": 87358, "file": 320585, "maps": ["awp_india"]},
+  {"mod": 86288, "file": 427749, "maps": ["fy_iceworld"]},
+  {"mod": 86562, "file": 616976, "maps": ["fy_pool_day"]},
+  {"mod": 86704, "file": 287523, "maps": ["fy_snow"]},
+  {"mod": 510108, "file": 1183208, "maps": ["he_glass"]},
+  {"mod": 95290, "file": 394805, "maps": ["he_dodgeball"]},
+  {"mod": 93597, "file": 309620, "maps": ["$2000$"]},
+  {"mod": 95240, "file": 282693, "maps": ["he_glass_2"]},
+  {"mod": 95318, "file": 311647, "maps": ["he_glass4"]},
+  {"mod": 97595, "file": 296784, "maps": ["cs_deathmatch"]},
+  {"mod": 92163, "file": 307023, "maps": ["cs_mansion"]},
+  {"mod": 91951, "file": 303023, "maps": ["cs_estate2"]},
+  {"mod": 85281, "file": 320703, "maps": ["de_tuscan"]},
+  {"mod": 84487, "file": 306831, "maps": ["de_mirage"]},
+  {"mod": 85382, "file": 320834, "maps": ["de_westwood"]},
+  {"mod": 85019, "file": 320930, "maps": ["de_simpsons"]},
+  {"mod": 97091, "file": 290437, "maps": ["de_rats", "cs_rats2", "de_rats3", "de_rats4_final"]}
+ ]
+}

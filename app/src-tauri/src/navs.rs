@@ -200,7 +200,7 @@ pub struct Sent {
 /// them), by "<server>/<map>" -> our file's time: not asked again until ours changes.
 static MACHINE_NEWER: Mutex<Option<HashMap<String, SystemTime>>> = Mutex::new(None);
 /// One copy into a server's folder at a time (a sync and Send to servers at once)
-static PLACING: Mutex<()> = Mutex::new(());
+pub(crate) static PLACING: Mutex<()> = Mutex::new(());
 
 /// Puts this computer's navs (newer than the server's) into the server's maps folder:
 /// all of them, or just `only`. Nothing there is ever deleted. `quiet`: from a sync,

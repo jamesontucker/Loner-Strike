@@ -144,6 +144,7 @@ export type ServerInfo = {
   pending_restart?: boolean | RestartReason[] | Partial<Record<RestartReason, unknown>>;
   listen_ip?: string;
   extra_args?: string;
+  tick_rate?: number;
   /** bots keep playing with nobody on (bot_join_after_player 0) */
   bots_when_empty?: boolean;
   /** the host picked that; otherwise it follows the visibility (on when listed) */

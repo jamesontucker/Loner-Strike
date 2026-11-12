@@ -195,6 +195,9 @@ pub struct Saved {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub restart: Option<servers::DailyRestart>,
     pub extra_args: String,
+    /// the tick rate (backups from before it: the default)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tick_rate: Option<u32>,
     pub bots_when_empty: Option<bool>,
     /// this app's own switches for it (backups from before them: the app-wide settings)
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -223,6 +226,7 @@ impl Saved {
             hltv,
             restart: e.restart.clone(),
             extra_args: e.extra_args.clone(),
+            tick_rate: e.tick_rate,
             bots_when_empty: e.bots_when_empty,
             keep_running: e.keep_running,
             notify_joins: e.notify_joins,
@@ -243,7 +247,7 @@ impl Saved {
         if ["lan", "unlisted", "listed"].contains(&self.visibility.as_str()) {
             e.visibility = self.visibility.clone();
         }
-        if servers::safe_map(&self.map) {
+        if servers::safe_start_map(&self.map) {
             e.map = self.map.clone();
         }
         if self.maxplayers > 0 {
@@ -253,6 +257,7 @@ impl Saved {
             Ok(_) => e.extra_args = self.extra_args.split_whitespace().collect::<Vec<_>>().join(" "),
             Err(why) => notes.push(format!("The extra start options weren't used: {why}")),
         }
+        e.tick_rate = self.tick_rate.filter(|t| servers::TICK_RATES.contains(t) && *t != 300);
         e.bots_when_empty = self.bots_when_empty;
         e.keep_running = self.keep_running;
         e.notify_joins = self.notify_joins;
@@ -1592,7 +1597,7 @@ fn new_entry(st: &Shared, m: &Manifest, saved: Option<&Saved>, name: &str, remot
         remote: remote.clone(),
         setup_with: None,
         listen_ip: String::new(),
-        extra_args: String::new(),
+        extra_args: String::new(), tick_rate: None,
         bots_when_empty: None,
         ls_listed: false,
         public_address: None,

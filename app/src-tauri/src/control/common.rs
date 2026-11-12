@@ -35,8 +35,10 @@ pub fn same_steamid(a: &str, b: &str) -> bool {
 }
 
 /// A command argument the panel may send: plain words only (the UI checks the same rule).
+/// ('$' for maps like $2000$: the game's console doesn't expand it, and the commands sent to a
+/// server on another machine quote every argument)
 pub fn safe_arg(a: &str) -> bool {
-    !a.is_empty() && a.len() <= 64 && a.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
+    !a.is_empty() && a.len() <= 64 && a.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-$".contains(&c))
 }
 
 /// gm_announce's free text: only characters that can't end or extend the console command.

@@ -61,6 +61,8 @@
 
 // gm_botchat (optional): bots react to a vote in chat (they don't vote; people decide)
 native botchat_say(id, const section[], other, Float:chance)
+// gamemodes.amxx (optional): the maps made for a mode, when it has no rotation of its own
+native gm_modes_rotation(const id[], Array:out)
 
 #define PLUGIN  "Server extras"
 #define VERSION "1.0"
@@ -205,7 +207,7 @@ public module_filter(const module[], LibType:type)
 
 public native_filter(const name[], index, trap)
 {
-	return (!trap && (equali(name, "geoip_", 6) || equali(name, "botchat_", 8))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
+	return (!trap && (equali(name, "geoip_", 6) || equali(name, "botchat_", 8) || equali(name, "gm_modes_", 9))) ? PLUGIN_HANDLED : PLUGIN_CONTINUE
 }
 
 public plugin_end()
@@ -305,13 +307,17 @@ read_maps(const path[], Array:into)
 	fclose(f)
 }
 
-// The rotation in use: the current mode's own, else the game's map cycle
+// The rotation in use: the current mode's own; else, for a mode played on maps made for it
+// (Deathrun, Base Builder, zombies...), those maps, so a switch to it never lands on de_dust2;
+// else the game's map cycle
 rotation(Array:into)
 {
 	new mode[32]
 	read_line(fmt("%s/current.txt", g_DataDir), mode, charsmax(mode))
 	if (mode[0] && plain_name(mode))
 		read_maps(fmt("%s/rotation_%s.txt", g_DataDir, mode), into)
+	if (!ArraySize(into) && mode[0] && plain_name(mode) && LibraryExists("gm_modes", LibType_Library))
+		gm_modes_rotation(mode, into)
 	if (!ArraySize(into))
 	{
 		new cycle[64]

@@ -53,13 +53,7 @@
     "kz_airmountain"
    ]
   },
-  {
-   "mod": 96914,
-   "file": 287023,
-   "maps": [
-    "kz_urban"
-   ]
-  }
+  {"mod": 96888, "file": 288557, "maps": ["kz_longjumps2"]}
  ],
  "dirs": [
   "addons/amxmodx/configs/kz/top15",

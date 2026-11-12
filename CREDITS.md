@@ -68,7 +68,7 @@ The Sounds page offers these packs from [GameBanana](https://gamebanana.com). Th
 | [CS:GO Radio & Bot Chatter](https://gamebanana.com/sounds/31143) | hellmonja |
 
 ## Maps
-Maps are downloaded from [GameBanana](https://gamebanana.com) and belong to their creators. The panel shows each map's author. Zombie Plague Advanced suggests zm_silent_hill, zm_halloween, zm_ice_attack3, zm_tehina and zm_deko2, by their authors.
+Maps are downloaded from [GameBanana](https://gamebanana.com) and belong to their creators. The panel shows each map's author. Zombie Plague Advanced suggests zm_silent_hill, zm_zod_labtest, zm_ice_attack3, zm_tehina and zm_deko2, by their authors.
 
 ## From your own game
 Setup's music (Half-Life's menu theme and pieces of its soundtrack) and the app's button sounds are played from your own copy of Half-Life; Loner-Strike doesn't include them. The game and its files are Valve's.

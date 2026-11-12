@@ -964,6 +964,9 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   const port = useNumber(server.port);
   const [listenIp, setListenIp] = useState(server.listen_ip ?? "");
   const [extra, setExtra] = useState(server.extra_args ?? "");
+  const [tick, setTick] = useState(server.tick_rate ?? 300);
+  // (a sys_ticrate typed in the extra start options wins over the pick)
+  const tickTyped = /(^|\s)[+-]?sys_ticrate\b/i.test(extra);
   // null: not picked, so it follows who can join (on for listed servers)
   const [botsEmpty, setBotsEmpty] = useState<boolean | null>(server.bots_when_empty_set ? !!server.bots_when_empty : null);
   const botsShown = botsEmpty ?? server.visibility === "listed";
@@ -980,7 +983,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   const portMax = server.host ? 27019 : 65000;
 
   // what was last saved, to tell whether anything changed since
-  const now = JSON.stringify([name, map, slots.text, port.text, listenIp, extra, botsEmpty, keep, joins]);
+  const now = JSON.stringify([name, map, slots.text, port.text, listenIp, extra, tick, botsEmpty, keep, joins]);
   const [base, setBase] = useState(now);
   const dirty = !ro && now !== base;
   useDirty("server-settings", dirty);
@@ -1001,7 +1004,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
       // a shared server: only what a helper changes (the owner's app drops anything else too)
       const body = sharedRole
         ? { name: name.trim(), map, maxplayers: slots.value, ...bots }
-        : { name: name.trim(), map, maxplayers: slots.value, port: portLocked ? server.port : port.value, listen_ip: listenIp, extra_args: extra, // (the per-server switches only once changed here: until then they follow the app's setting)
+        : { name: name.trim(), map, maxplayers: slots.value, port: portLocked ? server.port : port.value, listen_ip: listenIp, extra_args: extra, tick_rate: tick, // (the per-server switches only once changed here: until then they follow the app's setting)
           ...(server.host || keep === !!server.keep_running ? {} : { keep_running: keep }), ...(joins === (server.notify_joins !== false) ? {} : { notify_joins: joins }), ...bots };
       const r = await post(`/api/servers/${server.id}`, body);
       if (r.error) return toast(r.error, true);
@@ -1091,6 +1094,16 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
             </div>
             {portLocked && !ro && <p className="muted small-note" id="serverPortLocked">Stop the server to change its port</p>}
             {problem.port && <p className="err-text small-note">{problem.port}</p>}
+            <label className="field">
+              <span>Tick rate<Info text="How many times a second the server runs the game, bots' thinking included. Higher is a little smoother and costs more CPU, more so with many bots. 300 suits most servers." /></span>
+              <select disabled={ro || tickTyped} value={tick} onChange={(e) => setTick(Number(e.target.value))} aria-describedby={tickTyped ? "serverTickTyped" : undefined}>
+                <option value={100}>100</option>
+                <option value={300}>300 (recommended)</option>
+                <option value={500}>500</option>
+                <option value={1000}>1000</option>
+              </select>
+            </label>
+            {tickTyped && <p className="muted small-note" id="serverTickTyped">Set by the extra start options below</p>}
             <label className="field">
               <span>Extra start options<Info text="Added to the server's command line, like -pingboost 2, from the next start. Port, map, player slots and passwords are set above instead." /></span>
               <input className="search" disabled={ro} placeholder="Like -pingboost 2 +sys_ticrate 1000" value={extra} onChange={(e) => setExtra(e.target.value)} spellCheck={false} />
@@ -1572,7 +1585,7 @@ const CHAT_LINE = /^(\*DEAD\*\s*)?(\((?:Terrorist|Counter-Terrorist|Spectator)\)
 const RCON_LINE = /^rcon \d+ "[^"]*" (.*)$/;
 const JOIN_LINE = /\b(connected|entered the game|has joined|joined the game)\b/i;
 const LEAVE_LINE = /\b(disconnected|left the game|was kicked|dropped)\b/i;
-const MAP_LINE = /^(?:Started map "?([\w.-]+)|Changelevel to ([\w.-]+)|Mapchange to ([\w.-]+)|-+ ?([\w.-]+) ?-+$)/i;
+const MAP_LINE = /^(?:Started map "?([\w.$-]+)|Changelevel to ([\w.$-]+)|Mapchange to ([\w.$-]+)|-+ ?([\w.$-]+) ?-+$)/i;
 const KILL_LINE = /^(.{1,40}?) killed (.{1,40}?)(?: with (\w+))?\.?$/;
 /** One console line, laid out by what it is: chat (team, speaker, words), a command sent from
  *  the app, a kill, someone joining or leaving, a new map, an error, or the server's own words. */

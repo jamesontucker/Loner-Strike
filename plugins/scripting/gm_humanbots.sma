@@ -394,6 +394,18 @@ bool:unsteady(id)
 #define BS_HIDE    16
 #define BS_BOMB    (BS_DEFUSE | BS_PLANT)
 
+// The brain's pressure read (vuser1.z): above 0 the strain toward panic (hits taken,
+// teammates dropping, outnumbered, low - as this bot takes it), below 0 composure (a strong
+// player under fire tightening up), 0 none
+Float:brain_strain(id)
+{
+	if (!g_Brain)
+		return 0.0
+	new Float:v[3]
+	pev(id, pev_vuser1, v)
+	return v[2]
+}
+
 brain_state(id)
 {
 	if (!g_Brain)
@@ -1434,7 +1446,19 @@ public task_scan()
 			continue
 		}
 		// several enemies at once, or nearly dead: some panic for a moment
-		if (get_pcvar_num(g_pTilt) && get_pcvar_num(g_pMistakes) && bad_ok(id, BAD_PANIC) && g_PanicUntil[id] < now
+		// (with the brain: how much is coming at it, as this bot takes it - building with hits,
+		// teammates dropping and numbers - not just a fixed line)
+		// (the style's own nerve still scales it: a Locked-in player under the same fire panics
+		// far less often than a newbie; only bots the brain is driving - bot_ls_fight 0 keeps the
+		// plain trigger)
+		if (g_Brain && get_cvar_num("bot_ls_fight") > 0)
+		{
+			new Float:strain = brain_strain(id)
+			if (get_pcvar_num(g_pTilt) && get_pcvar_num(g_pMistakes) && bad_ok(id, BAD_PANIC) && g_PanicUntil[id] < now
+				&& strain > 0.1 && panic_factor(s) > 0.0 && random_float(0.0, 1.0) < 0.012 * floatmin(strain, 2.0) * panic_factor(s) * pers())
+				g_PanicUntil[id] = now + random_float(0.8, 1.6) * (0.8 + 0.3 * floatmin(strain, 2.0))
+		}
+		else if (get_pcvar_num(g_pTilt) && get_pcvar_num(g_pMistakes) && bad_ok(id, BAD_PANIC) && g_PanicUntil[id] < now
 			&& (seen >= 2 || get_user_health(id) < 30) && random_float(0.0, 1.0) < 0.006 * panic_factor(s) * pers())
 			g_PanicUntil[id] = now + random_float(1.0, 2.0)
 		g_TargetDist[id] = bestDist
@@ -1593,6 +1617,9 @@ new_burst(id, s)
 		len = len * 9 / 5                  // up close everyone holds the trigger longer
 	if (g_PanicUntil[id] > get_gametime())
 		len *= 2
+	// (a strong player under fire: shorter, surer bursts)
+	else if (brain_strain(id) < -0.25)
+		len = max(1, len * 2 / 3)
 	len = floatround(float(len) * habit_burst(id))
 	g_BurstLen[id] = max(len, 1)
 	g_SprayDrift[id] = random_float(-0.25, 0.25) * skill_of(id)
@@ -2019,7 +2046,7 @@ public fw_postthink_post(id)
 	g_LastFire[id] = now
 	if (++g_Burst[id] >= g_BurstLen[id] && s != STYLE_CLASSIC)
 	{
-		g_PauseUntil[id] = now + random_float(0.18, 0.4) * (g_PanicUntil[id] > now ? 0.5 : 1.0)
+		g_PauseUntil[id] = now + random_float(0.18, 0.4) * (g_PanicUntil[id] > now ? 0.5 : brain_strain(id) < -0.25 ? 1.2 : 1.0)
 		g_Burst[id] = 0
 		new_burst(id, s)
 	}

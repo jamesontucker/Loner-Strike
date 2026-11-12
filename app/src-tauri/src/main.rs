@@ -30,6 +30,7 @@ mod remote;
 mod scrim;
 mod server;
 mod navs;
+mod navpack;
 mod servercontent;
 mod servers;
 mod webstatus;
@@ -112,6 +113,8 @@ fn main() {
             setup_api::auto_update_loop(state.clone());
             // Linux servers' bans, admins and settings kept here too, once a day
             backup::auto_backup_loop(state.clone());
+            // ready-made bot navigation for the maps this computer's game has (navpack.rs)
+            navpack::start_loop();
             notify::watch(app.handle().clone(), state.clone());
             // Smarter chat's llama-server: only while it's on and a game is hosted here
             smartchat::watch(state.clone());

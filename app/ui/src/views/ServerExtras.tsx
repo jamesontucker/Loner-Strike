@@ -63,7 +63,7 @@ const VOTE_MIN = [2, 3, 4, 6];
 const BAN_MINUTES = [15, 30, 60, 180, 1440];
 const VOTE_COOLDOWN = [0, 2, 3, 5, 10];
 const EMPTY_MINUTES = [2, 5, 10, 30];
-const MAP_NAME = /^[A-Za-z0-9_.-]{1,31}$/;
+const MAP_NAME = /^[A-Za-z0-9_.$-]{1,31}$/;
 const URL_OK = /^https?:\/\/[^\s/."'`;\\<>{}|^][^\s"'`;\\<>{}|^]*$/;
 
 const mins = (m: number) => (m >= 60 && m % 60 === 0 ? `${m / 60} ${m === 60 ? "hour" : "hours"}` : `${m} min`);
@@ -212,6 +212,10 @@ function useReportDirty(dirty: boolean, onDirty: (v: boolean) => void) {
 
 // ---- map rotation -------------------------------------------------------------------
 
+// Modes played on maps made for them: without a list of their own they rotate through those
+// automatically (gamemodes.amxx's gm_modes_rotation), not the main rotation
+const OWN_MAP_MODES = new Set(["kreedz", "surf", "soccerjam", "basebuilder", "deathrun", "zombie", "zp5", "hns", "paintball"]);
+
 function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: MapInfo[]; send: (p: string, b: unknown, done?: string) => Promise<boolean>; saveSettings: SaveSettings; onDirty: (v: boolean) => void }) {
   const ask = useConfirm();
   const { run, busy } = useActions();
@@ -268,9 +272,10 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
     if (await send("/api/extras/rotation", { mode: scope, maps: list }, "Rotation saved. It counts from the next map change.")) setDraft(null);
   }, `Saving the ${scope ? `${modeName(scope)} ` : ""}rotation…`);
   const dropOwn = async () => {
-    if (!(await ask(`Remove ${modeName(scope)}'s own list? It goes back to the main rotation.`, { ok: "Remove", danger: true }))) return;
+    const back = OWN_MAP_MODES.has(scope) ? "the maps made for it" : "the main rotation";
+    if (!(await ask(`Remove ${modeName(scope)}'s own list? It goes back to ${back}.`, { ok: "Remove", danger: true }))) return;
     await run(rotKey("drop"), async () => {
-      if (await send("/api/extras/rotation", { mode: scope, maps: [] }, `${modeName(scope)} uses the main rotation again.`)) setDraft(null);
+      if (await send("/api/extras/rotation", { mode: scope, maps: [] }, `${modeName(scope)} uses ${back} again.`)) setDraft(null);
     }, `Removing ${modeName(scope)}'s own rotation…`);
   };
   const missing = list.filter((m) => maps.length > 0 && !installed.has(m.toLowerCase()));
@@ -288,7 +293,7 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
       />
       <div className="panel stack-tight">
         <label className="field rot-scope">
-          <span>Which rotation<Info text="The main rotation is used by every mode. A mode can also have its own list, which takes over while that mode is on, so surf maps only come up in Surf." /></span>
+          <span>Which rotation<Info text="The main rotation is used by modes played on everyday maps. Modes played on maps made for them, like Deathrun, Base Builder or Zombie Plague, go through those maps on their own. Any mode can also have its own list, which takes over while that mode is on." /></span>
           <select value={scope} onChange={(e) => pickScope(e.target.value)}>
             <option value="">Main rotation (every mode, {d.rotation.file})</option>
             {byName(d.modes).map((m) => (
@@ -303,8 +308,10 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
             {scope
               ? own
                 ? `While ${modeName(scope)} is on, the next map comes from this list instead of the main rotation.`
-                : `${modeName(scope)} uses the main rotation. Give it its own list for maps made for it, like ${scope === "surf" ? "surf_ski_2" : scope === "zombie" ? "zm_ maps" : "its special maps"}.`
-              : "Used by every mode without its own list. This is the game's own map cycle, so map votes from the admin menu use it too."}
+                : OWN_MAP_MODES.has(scope)
+                  ? `${modeName(scope)} goes through the maps made for it on its own: the ones that came with it and any named for it. Give it its own list to choose them yourself.`
+                  : `${modeName(scope)} uses the main rotation. Give it its own list to play other maps while it's on.`
+              : "Used by modes played on everyday maps that have no list of their own. This is the game's own map cycle, so map votes from the admin menu use it too."}
           </small>
         </label>
 
@@ -381,7 +388,7 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
               <BusyButton className="btn primary" busy={busy(rotKey("save"))} disabled={rotBusy || !dirty || missing.length > 0 || (!scope && list.length === 0)} label="Save rotation" busyLabel="Saving…" onClick={save} />
               <button className="btn" disabled={list.length < 2} onClick={shuffle}>Shuffle</button>
               {dirty && <button className="btn" onClick={() => setDraft(null)}>Undo changes</button>}
-              {scope && own && <BusyButton className="btn danger push" busy={busy(rotKey("drop"))} disabled={rotBusy} label="Use the main rotation" busyLabel="Removing…" onClick={dropOwn} />}
+              {scope && own && <BusyButton className="btn danger push" busy={busy(rotKey("drop"))} disabled={rotBusy} label={OWN_MAP_MODES.has(scope) ? "Use the maps made for it" : "Use the main rotation"} busyLabel="Removing…" onClick={dropOwn} />}
             </div>
             <p className="muted small-note">Drag maps to reorder them, or use the buttons. {list.length} {list.length === 1 ? "map" : "maps"}.</p>
           </>

@@ -106,6 +106,8 @@ pub fn shipped_version(res: &Path, id: &str) -> String {
     };
     if id == "core" {
         tree(&mut h, &res.join("plugins"));
+        // (and the fun maps list: a change to it is an update too)
+        h.update(std::fs::read(res.join("catalog").join("funmaps.json")).unwrap_or_default());
     } else if let Some(c) = components::load_catalog(res).ok().and_then(|cat| cat.into_iter().find(|c| c["id"] == id)) {
         h.update(c.to_string().as_bytes());
         if let Some(v) = c["vendor"].as_str() {
@@ -505,6 +507,10 @@ pub fn plan_install(install: Install, games: &[String], component_ids: &[String]
         steps.push(step(g, "core-quake", "Adding the Quake sounds", 0.5));
         steps.push(step(g, "core-bots", "Making the bot styles", 0.3));
         steps.push(step(g, "core-keys", "Adding the F3 and F4 menu keys", 0.1));
+        // (a dedicated server keeps to the maps its owner gives it)
+        if !install.dedicated {
+            steps.push(step(g, "core-funmaps", "Getting the fun and popular maps", 1.0));
+        }
     }
     Ok(InstallPlan { install, games, components: chosen, catalog, steps })
 }
@@ -595,6 +601,15 @@ fn install_game_with(job: &Job, plan: &InstallPlan, ctx: &Ctx, g: &str, rec: &mu
     }
     run_step(job, &format!("{g}/core-bots"), || core::bot_styles(rec, ctx, g))?;
     run_step(job, &format!("{g}/core-keys"), || core::binds(rec))?;
+    // the fun maps and the most popular ones (only what isn't there yet is fetched)
+    if has("core-funmaps") {
+        run_step(job, &format!("{g}/core-funmaps"), || {
+            if let Some(comp) = std::fs::read_to_string(ctx.res.join("catalog").join("funmaps.json")).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
+                components::maps(rec, ctx, &comp, 0.0, 1.0);
+            }
+            Ok(())
+        })?;
+    }
     rec.done("core", json!(shipped_version(ctx.res, "core")))?;
     // the Admins page's people in users.ini again (as at app start)
     crate::admins::sync_users_file(&rec.game);
@@ -701,6 +716,17 @@ fn uninstall_game(job: &Job, plan: &UninstallPlan, ctx: &Ctx, g: &str) -> Result
                 job.start(&format!("{g}/maps"));
                 let n = remove_maps(&ctx.store, &maps);
                 job.finish(&format!("{g}/maps"), Some(&format!("Removed {n} map download{}", if n == 1 { "" } else { "s" })));
+            }
+            // (a record left behind because a file couldn't be put back forgets the removed
+            // maps, or a later setup would take them as ones the player removed and skip them)
+            if has("maps") {
+                if let Ok(mut left) = open_record(&plan.install, g) {
+                    if !left.data.maps.is_empty() || left.data.extra.contains_key("maps_checked") {
+                        left.data.maps.clear();
+                        left.data.extra.remove("maps_checked");
+                        let _ = left.save();
+                    }
+                }
             }
         }
         Some(ids) => {

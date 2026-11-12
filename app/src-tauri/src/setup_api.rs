@@ -48,9 +48,14 @@ fn resources(st: &Shared) -> Result<PathBuf, String> {
 /// The map store for an install: the panel's own when it's the same game folder,
 /// so its map list refreshes too.
 /// `target` is read before spawn_blocking: the request's X-Target isn't visible there.
-fn store_for(target: Option<Arc<crate::game::Game>>, hl: &Path, game: &str) -> Arc<MapStore> {
+/// A dedicated server's folder gets the server store: its own record and its own game folder,
+/// never the player's game record (an update that removes a map must not touch the game's).
+fn store_for(target: Option<Arc<crate::game::Game>>, hl: &Path, game: &str, dedicated: bool) -> Arc<MapStore> {
     if let Some(g) = target.filter(|g| g.hl == hl) {
         return g.store.clone();
+    }
+    if dedicated {
+        return Arc::new(MapStore::new_server(hl, &hl.join(game), &crate::sys::app_dir(), Arc::new(Mutex::new(None))));
     }
     Arc::new(MapStore::new(hl, &hl.join(game), &crate::sys::app_dir(), Arc::new(Mutex::new(None))))
 }
@@ -124,7 +129,7 @@ async fn install(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Re
         }
         let plan = setup::plan_install(install, &list(&req["games"]), &list(&req["components"]), &res, req["repair"].as_bool() == Some(true))?;
         let held = held_server(&plan, &res);
-        let store = store_for(target, &plan.install.hl, &plan.games[0]);
+        let store = store_for(target, &plan.install.hl, &plan.games[0], plan.install.dedicated);
         match held {
             Some(e) => crate::servers::hold_engine_update_for(&e, || setup::start_install(plan, res, Some(store))),
             None => setup::start_install(plan, res, Some(store)),
@@ -170,7 +175,7 @@ async fn uninstall(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> 
         }
         let comps = req.get("components").filter(|c| c.is_array()).map(list);
         let plan = setup::plan_uninstall(install, &list(&req["games"]), comps, &res)?;
-        let store = store_for(target, &plan.install.hl, &plan.games[0]);
+        let store = store_for(target, &plan.install.hl, &plan.games[0], plan.install.dedicated);
         setup::start_uninstall(plan, res, Some(store))
     })
     .await;
@@ -504,7 +509,7 @@ fn update_server(res: &Path, e: &crate::servers::Entry, outdated: &[String]) -> 
     let plan = setup::plan_install(install, &[e.game.clone()], &comps, res, true)?;
     // a new bot brain: noted before the copy here changes, so if the engine side (the machine)
     // doesn't follow, the plugins for it aren't sent there and the update is offered again
-    let store = store_for(crate::servers::game_for(&e.id, || None), &plan.install.hl, &plan.games[0]);
+    let store = store_for(crate::servers::game_for(&e.id, || None), &plan.install.hl, &plan.games[0], plan.install.dedicated);
     let start = || setup::start_install(plan, res.to_path_buf(), Some(store));
     let job = if outdated.iter().any(|c| c == "foundation") { crate::servers::hold_engine_update_for(e, start)? } else { start()? };
     set_phase("installing", Some(&job));

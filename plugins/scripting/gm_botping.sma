@@ -10,14 +10,14 @@
 	engine's own message is sent first and ours only overrides the bot entries.
 
 	Each bot gets its own base ping from its name, so a regular keeps roughly the
-	same ping every time it shows up: most sit between 25 and 80 ms, some between
-	80 and 140, a few up to 160 (the one with a bad connection up to 180). The
+	same ping every time it shows up: most sit between 25 and 60 ms, some between
+	60 and 95, a few up to about 115 (the one with a bad connection up to 120). The
 	number wanders a few ms over time (a slow walk that keeps coming back, wider for the
 	higher pings, with a ms or two of flicker), and now and then a bot gets a short spike
-	(+30-80 ms for two or three seconds), like someone's connection hiccuping.
-	Nobody shows more than 180.
+	(+20-50 ms for two or three seconds), like someone's connection hiccuping.
+	Over 100 is rare; nobody shows more than 135.
 
-	Cvars: gm_botping 0/1, gm_botping_min 20, gm_botping_max 140 (the range most
+	Cvars: gm_botping 0/1, gm_botping_min 20, gm_botping_max 95 (the range most
 	base pings come from), gm_botping_spikes 0/1, gm_botping_home us (where the server is:
 	us, eu or a country code from gm_people's regions, ru, br, au; bots from there are the
 	low pings, the further away the higher, all inside min..max). A LAN party (bot style 9)
@@ -46,7 +46,7 @@ native people_get(id, const key[])
 
 #define DRIFT_MAX   8        // how far the ping wanders from its base, in ms
 #define SPIKE_ODDS  400      // a spike starts with 1 in this chance per bot per second
-#define PING_CAP    180      // the most any bot shows (a spike too)
+#define PING_CAP    135      // the most any bot shows (a spike too)
 
 new g_pOn, g_pMin, g_pMax, g_pSpikes, g_pHome
 
@@ -60,7 +60,7 @@ public plugin_init()
 	register_plugin(PLUGIN, VERSION, AUTHOR)
 	g_pOn     = register_cvar("gm_botping", "1")
 	g_pMin    = register_cvar("gm_botping_min", "20")
-	g_pMax    = register_cvar("gm_botping_max", "140")
+	g_pMax    = register_cvar("gm_botping_max", "95")
 	g_pSpikes = register_cvar("gm_botping_spikes", "1")
 	g_pHome   = register_cvar("gm_botping_home", "us")
 
@@ -149,10 +149,10 @@ base_of(id)
 	if (get_cvar_num("gm_botstyle") == 9)
 		return 3 + h % 13
 	new lo = clamp(get_pcvar_num(g_pMin), 1, 4000)
-	new hi = clamp(get_pcvar_num(g_pMax), lo + 1, PING_CAP - 20)
-	new top = min(hi + 20, PING_CAP - 5)
+	new hi = clamp(get_pcvar_num(g_pMax), lo + 1, PING_CAP - 40)
+	new top = min(hi + 20, PING_CAP - 20)
 	if (lagger(id))
-		return min(hi + 15 + (h / 100) % 26, PING_CAP - 5)   // the one with a bad connection
+		return min(hi + 10 + (h / 100) % 16, PING_CAP - 15)   // the one with a bad connection
 	new region = LibraryExists("gm_people", LibType_Library) ? people_get(id, "region") : -1
 	if (region >= 0)
 	{
@@ -173,7 +173,7 @@ base_of(id)
 		return lo + 5 + (h / 100) % max(1, mid - lo - 5)
 	if (r < 95)
 		return mid + (h / 100) % max(1, hi - mid + 1)
-	return min(hi + (h / 100) % 21, top)                // 140-160 at defaults
+	return min(hi + (h / 100) % 21, top)                // 95-115 at defaults
 }
 
 // The part of the world a gm_people region is in (us uk de se pl ru br fr nl es au fi dk):
@@ -271,7 +271,7 @@ public task_tick()
 		}
 		else if (!lan && get_pcvar_num(g_pSpikes) && random_num(1, lagger(id) ? SPIKE_ODDS / 8 : SPIKE_ODDS) == 1)
 		{
-			g_Spike[id] = random_num(30, 80)
+			g_Spike[id] = random_num(20, 50)
 			g_SpikeLeft[id] = random_num(2, 4)
 		}
 		g_Shown[id] = clamp(base + g_Drift[id] + g_Spike[id] + random_num(-1, 1), lan ? 1 : 5, PING_CAP)

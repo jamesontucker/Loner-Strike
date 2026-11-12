@@ -113,7 +113,8 @@ new const SETTINGS[][SettingData] =
 	{ "gm_botping",         "Bots show a ping", "1 0",                      "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
 	{ "gm_rtv",             "Rock the vote",    "1 0",                      "On Off",                              CAT_MATCH,  SC_GLOBAL, "" },
 	{ "gm_modevote",        "Mode voting",      "1 0",                      "On Off",                              CAT_MATCH,  SC_GLOBAL, "" },
-	{ "gm_modevote_every",  "Mode vote at map end", "0 2 3 5",              "Off|Every 2 maps|Every 3 maps|Every 5 maps", CAT_MATCH, SC_GLOBAL, "" },
+	{ "gm_modevote_every",  "Mode change at map end", "0 2 3 5",            "Off|Every 2 maps|Every 3 maps|Every 5 maps", CAT_MATCH, SC_GLOBAL, "" },
+	{ "gm_moderotate",      "How the mode changes", "0 1 2",                "Players vote|Next on the list|Random from the list", CAT_MATCH, SC_GLOBAL, "" },
 	{ "gm_welcome",         "Welcome screen",   "1 2 0",                    "Once per session|Every map|Off",      CAT_MATCH,  SC_GLOBAL, "" },
 	{ "gm_atmo_adverts",    "Server adverts",   "1 0",                      "On Off",                              CAT_MATCH,  SC_GLOBAL, "" },
 	{ "gm_atmo_spec",       "Bots sit out in spec", "1 0",                  "On Off",                              CAT_BOT,    SC_GLOBAL, "" },
@@ -388,6 +389,7 @@ public plugin_natives()
 	register_native("gm_modes_maps", "n_modes_maps")
 	register_native("gm_modes_go", "n_modes_go")
 	register_native("gm_modes_next", "n_modes_next")
+	register_native("gm_modes_rotation", "n_modes_rotation")
 	// still loads without gm_community
 	set_native_filter("native_filter")
 }
@@ -1643,7 +1645,23 @@ apply_weapons()
 		case 2: { server_cmd("amx_restrict on;amx_restrict off pistol ammo equip"); set_pcvar_string(g_pLoadout, "");       set_pcvar_num(g_pBotWeapons, 1); }
 		case 3: { server_cmd("amx_restrict on;amx_restrict off deagle ammo equip"); set_pcvar_string(g_pLoadout, "deagle"); set_pcvar_num(g_pBotWeapons, 1); }
 		case 4: { server_cmd("amx_restrict on;amx_restrict off awp ammo equip");    set_pcvar_string(g_pLoadout, "awp");    set_pcvar_num(g_pBotWeapons, 2); }
-		case 5: { server_cmd("amx_restrict on;amx_restrict off scout ammo equip");  set_pcvar_string(g_pLoadout, "scout");  set_pcvar_num(g_pBotWeapons, 2); }
+		case 5:
+		{
+			// (scoutzdeaglez hands out a deagle with the scout: kept, as its author meant)
+			new map[32]
+			get_mapname(map, charsmax(map))
+			if (equali(map, "scoutzdeaglez", 13))
+			{
+				server_cmd("amx_restrict on;amx_restrict off scout deagle ammo equip")
+				set_pcvar_string(g_pLoadout, "scout deagle")
+			}
+			else
+			{
+				server_cmd("amx_restrict on;amx_restrict off scout ammo equip")
+				set_pcvar_string(g_pLoadout, "scout")
+			}
+			set_pcvar_num(g_pBotWeapons, 2)
+		}
 		default:{ server_cmd("amx_restrict off");                                    set_pcvar_string(g_pLoadout, ""); }
 	}
 	apply_bot_weapons()
@@ -5217,6 +5235,26 @@ mode_maps(mode, Array:out)
 	ArrayDestroy(withNav)
 	ArrayDestroy(without)
 	return ArraySize(out) - before
+}
+
+// gm_modes_rotation(const id[], Array:out): for a mode played on maps made for it (Deathrun,
+// Base Builder, Kreedz, Surf, SoccerJam, the zombie modes, Hide and Seek, Paintball), the maps
+// that suit it, as its rotation when the host gave it none; 0 for a mode that plays on everyday
+// maps (the game's map cycle serves those) or an unknown one
+public n_modes_rotation(plugin, params)
+{
+	new id[32]
+	get_string(1, id, charsmax(id))
+	new mode = find_mode(id)
+	if (mode < 0)
+		return 0
+	new bool:themed
+	for (new i = 0; i < sizeof THEMED_MODES; i++)
+		if (equali(id, THEMED_MODES[i]))
+			themed = true
+	if (!themed && !needs_maps(id))
+		return 0
+	return mode_maps(mode, Array:get_param(2))
 }
 
 // gm_modes_count()

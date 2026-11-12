@@ -84,6 +84,10 @@ pub struct Entry {
     /// More start options the player added (checked by `extra_args`)
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub extra_args: String,
+    /// The server's frame rate, sys_ticrate (None: the default, 300). One of TICK_RATES;
+    /// a sys_ticrate in the extra start options or server.cfg still wins
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tick_rate: Option<u32>,
     /// Bots keep playing with nobody on (bot_join_after_player 0). None: what the
     /// visibility suggests (on for "listed"), until the host picks (see bots_when_empty)
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -644,8 +648,15 @@ pub(crate) fn free_port(taken: &[Entry]) -> u16 {
     (FIRST_PORT..FIRST_PORT + 100).find(|p| !taken.iter().any(|e| e.port == *p && e.port >= FIRST_PORT)).unwrap_or(FIRST_PORT)
 }
 
+/// A map name the app may copy, list or send knowledge for ('$' included, for maps like $2000$).
 pub(crate) fn safe_map(m: &str) -> bool {
-    !m.is_empty() && m.len() <= 31 && m.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
+    !m.is_empty() && m.len() <= 31 && m.chars().all(|c| c.is_ascii_alphanumeric() || "_.-$".contains(c))
+}
+
+/// A server's start map: no '$', since it goes on the launch line, which a Linux server's
+/// systemd unit (and the shell writing it) would expand.
+pub(crate) fn safe_start_map(m: &str) -> bool {
+    safe_map(m) && !m.contains('$')
 }
 
 // ---- SteamCMD ----------------------------------------------------------------------
@@ -903,7 +914,7 @@ pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, 
         // kept so Try again can carry on with the same details
         setup_with: Some(SetupWith { template: req.template.clone(), components: req.components.clone(), password: join_pw.clone() }),
         listen_ip: String::new(),
-        extra_args: String::new(),
+        extra_args: String::new(), tick_rate: None,
         bots_when_empty: None,
         ls_listed: false,
         public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
@@ -1659,7 +1670,7 @@ pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(S
         remote: Some(info.clone()),
         setup_with: Some(SetupWith { template: req.template.clone(), components: req.components.clone(), password: join_pw.clone() }),
         listen_ip: String::new(),
-        extra_args: String::new(),
+        extra_args: String::new(), tick_rate: None,
         bots_when_empty: None,
         ls_listed: false,
         public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
@@ -2003,7 +2014,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
         remote: None,
         setup_with: None,
         listen_ip: String::new(),
-        extra_args: String::new(),
+        extra_args: String::new(), tick_rate: None,
         bots_when_empty: None,
         ls_listed: false,
         public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
@@ -2151,7 +2162,7 @@ pub(crate) fn launch_args(e: &Entry) -> Vec<String> {
     if e.visibility != "listed" {
         a.push("-nomaster".into()); // no heartbeats to Steam's server list
     }
-    let map = if safe_map(&e.map) { e.map.clone() } else { default_map() };
+    let map = if safe_start_map(&e.map) { e.map.clone() } else { default_map() };
     a.extend([
         "+sv_lan".into(),
         if e.visibility == "lan" { "1" } else { "0" }.into(),
@@ -2167,7 +2178,7 @@ pub(crate) fn launch_args(e: &Entry) -> Vec<String> {
     // bot_join_after_player back on every map, so friends.cfg carries it, see write_bots_line)
     let extra = extra_args(&e.extra_args).unwrap_or_default();
     let cfg = sys::read_latin1(&e.dir.join(&e.game).join("server.cfg")).unwrap_or_default();
-    a.extend(netcode_args(&extra, &cfg, e.remote.is_some()));
+    a.extend(netcode_args(&extra, &cfg, e.remote.is_some(), e.tick_rate));
     a.extend(extra);
     a
 }
@@ -2186,6 +2197,9 @@ pub fn bots_when_empty(e: &Entry) -> bool {
 /// Anything the host set in the extra start options or the server's own server.cfg wins
 /// (left out here). On a Linux machine -pingboost 1 too (not under Windows or wine,
 /// where it does nothing useful).
+/// The tick rates a host picks from (sys_ticrate): 300 is the default
+pub(crate) const TICK_RATES: &[u32] = &[100, 300, 500, 1000];
+
 pub(crate) const NETCODE: &[(&str, &str)] = &[
     ("sys_ticrate", "300"),
     ("sv_maxupdaterate", "101"),
@@ -2194,12 +2208,17 @@ pub(crate) const NETCODE: &[(&str, &str)] = &[
     ("sv_minrate", "25000"),
 ];
 
-fn netcode_args(extra: &[String], server_cfg: &str, linux: bool) -> Vec<String> {
+fn netcode_args(extra: &[String], server_cfg: &str, linux: bool, tick: Option<u32>) -> Vec<String> {
     let given = |name: &str| extra.iter().any(|w| w.trim_start_matches(['+', '-']).eq_ignore_ascii_case(name));
     let mut a = Vec::new();
     for (cvar, value) in NETCODE {
         if !given(cvar) && cfg_value(server_cfg, cvar).is_none() {
-            a.extend([format!("+{cvar}"), value.to_string()]);
+            // (the tick rate the host picked, in place of the default)
+            let value = match tick.filter(|t| *cvar == "sys_ticrate" && TICK_RATES.contains(t)) {
+                Some(t) => t.to_string(),
+                None => value.to_string(),
+            };
+            a.extend([format!("+{cvar}"), value]);
         }
     }
     if linux && !given("pingboost") {
@@ -2706,7 +2725,7 @@ pub(crate) fn view(e: &Entry) -> Value {
            "imported": e.imported, "loner": loner, "dir": e.dir,
            "host": e.remote.as_ref().map(|r| r.host.clone()), "address": e.address(),
            "public_address": e.public_address, "connect": e.connect(), "pending_restart": pending.view(),
-           "listen_ip": e.listen_ip, "extra_args": e.extra_args, "password": join_password(e),
+           "listen_ip": e.listen_ip, "extra_args": e.extra_args, "tick_rate": e.tick_rate.unwrap_or(300), "password": join_password(e),
            "bots_when_empty": bots_when_empty(e), "bots_when_empty_set": e.bots_when_empty.is_some(), "keep_running": e.remote.is_none() && keeps_running(e), "notify_joins": notifies_joins(e), "notify_helpers": notifies_helpers(e), "ls_listed": e.ls_listed,
            "unreachable": e.remote.as_ref().and_then(|_| unreachable(&e.id)),
            // on another machine the daily restart is done by the app: only while it's open
@@ -2936,6 +2955,8 @@ struct Change {
     password: Option<String>,
     listen_ip: Option<String>,
     extra_args: Option<String>,
+    /// the server's tick rate (sys_ticrate): one of TICK_RATES
+    tick_rate: Option<u32>,
     /// bots keep playing with nobody on
     bots_when_empty: Option<bool>,
     /// on this computer: keep running after the app closes
@@ -2964,8 +2985,8 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
             }
         }
         if let Some(m) = &req.map {
-            if !safe_map(m) {
-                return Err("That isn't a map name.".into());
+            if !safe_start_map(m) {
+                return Err(if m.contains('$') { "A server can't start on a map with $ in its name. Pick it from the rotation once it's running.".into() } else { "That isn't a map name.".into() });
             }
             if let Some(why) = game_for(&id, || None).and_then(|g| g.cant_load(m)) {
                 return Err(why.into());
@@ -3006,11 +3027,14 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
         if let Some(t) = &extra {
             extra_args(t)?;
         }
+        if req.tick_rate.is_some_and(|t| !TICK_RATES.contains(&t)) {
+            return Err("The tick rate is 100, 300, 500 or 1000.".into());
+        }
         let password = req.password.as_ref().map(|p| p.trim().to_string());
         if password.as_ref().is_some_and(|p| !crate::sharing::password_ok(p)) {
             return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
         }
-        let restart_needed = |old: &Entry, new: &Entry| old.port != new.port || old.visibility != new.visibility || old.maxplayers != new.maxplayers || old.listen_ip != new.listen_ip || old.extra_args != new.extra_args;
+        let restart_needed = |old: &Entry, new: &Entry| old.port != new.port || old.visibility != new.visibility || old.maxplayers != new.maxplayers || old.listen_ip != new.listen_ip || old.extra_args != new.extra_args || old.tick_rate.unwrap_or(300) != new.tick_rate.unwrap_or(300);
         let name = req.name.as_ref().map(|n| n.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect::<String>());
         if name.as_ref().is_some_and(|n| n.is_empty()) {
             return Err("Give the server a name.".into());
@@ -3037,6 +3061,9 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
                 }
                 if let Some(t) = &extra {
                     e.extra_args = t.clone();
+                }
+                if let Some(t) = req.tick_rate {
+                    e.tick_rate = if t == 300 { None } else { Some(t) };
                 }
                 if let Some(k) = req.keep_running {
                     e.keep_running = Some(k);
@@ -3889,7 +3916,7 @@ mod tests {
     fn slugs_are_unique() {
         let e = |id: &str| Entry {
             id: id.into(), name: String::new(), game: "cstrike".into(), port: 27015, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), voice: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
+            bottle: None, visibility: default_visibility(), map: default_map(), maxplayers: 20, ready: true, imported: false, hltv: Default::default(), voice: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), tick_rate: None, bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
         };
         assert_eq!(slug("Friday Night Frags!", &[]), "friday-night-frags");
         assert_eq!(slug("Friday Night Frags", &[e("friday-night-frags")]), "friday-night-frags-2");
@@ -3969,7 +3996,7 @@ mod tests {
     fn listing_flags() {
         let mut e = Entry {
             id: "x".into(), name: "x".into(), game: "cstrike".into(), port: 27016, dir: PathBuf::new(), kind: String::new(),
-            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), voice: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
+            bottle: None, visibility: "lan".into(), map: "de_dust2;quit".into(), maxplayers: 99, ready: true, imported: false, hltv: Default::default(), voice: Default::default(), restart: None, remote: None, setup_with: None, listen_ip: String::new(), extra_args: String::new(), tick_rate: None, bots_when_empty: None, ls_listed: false, public_address: None, web_status: Default::default(), pending_restart: Default::default(), service_stale: false, keep_running: None, notify_joins: None, notify_helpers: None, auto_update: None,
         };
         let a = launch_args(&e).join(" ");
         assert!(a.contains("-nomaster") && a.contains("+sv_lan 1") && a.contains("+maxplayers 32") && a.contains("+map de_dust2") && !a.contains("quit"));
@@ -4001,12 +4028,16 @@ mod tests {
 
     #[test]
     fn netcode_defaults() {
-        let a = netcode_args(&[], "", false).join(" ");
+        let a = netcode_args(&[], "", false, None).join(" ");
         assert_eq!(a, "+sys_ticrate 300 +sv_maxupdaterate 101 +sv_minupdaterate 30 +sv_maxrate 100000 +sv_minrate 25000");
-        assert!(netcode_args(&[], "", true).join(" ").ends_with("-pingboost 1"), "Linux only");
+        assert!(netcode_args(&[], "", true, None).join(" ").ends_with("-pingboost 1"), "Linux only");
+        assert!(netcode_args(&[], "", false, Some(500)).join(" ").starts_with("+sys_ticrate 500 "), "the host's pick");
+        assert!(netcode_args(&[], "", false, Some(77)).join(" ").starts_with("+sys_ticrate 300 "), "not one of the choices: the default");
+        let typed: Vec<String> = ["+sys_ticrate".into(), "1000".into()].to_vec();
+        assert!(!netcode_args(&typed, "", false, Some(500)).join(" ").contains("sys_ticrate"), "typed in the extra options wins");
         // the host's own values win: extra start options and server.cfg
         let extra: Vec<String> = ["+sys_ticrate", "1000", "-pingboost", "3"].iter().map(|s| s.to_string()).collect();
-        let a = netcode_args(&extra, "sv_maxrate \"50000\"\n// sv_minrate 1\n", true).join(" ");
+        let a = netcode_args(&extra, "sv_maxrate \"50000\"\n// sv_minrate 1\n", true, None).join(" ");
         assert!(!a.contains("sys_ticrate") && !a.contains("pingboost") && !a.contains("sv_maxrate"));
         assert!(a.contains("+sv_minrate 25000"), "a commented-out line isn't a setting");
         // in the full command line, before the host's extra options

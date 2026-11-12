@@ -19,6 +19,12 @@ The first full release:
 - They look where it matters, hold angles, aim around the chest, glance back at a sound, and panic, tilt and back off like people.
 - Each bot is someone: a personality, mood and skill, and regulars who remember you.
 - Every mode is played right, from deathmatch to Gun Game's knife level, and fy_, awp_ and aim_ maps no longer stall.
+- Call plays to your whole team: "rush b" sends the team, "two go a, rest b" splits it.
+- They read flashes like people: turn away from one they see coming, then look back where it came from.
+- They notice a gun barrel, shoulder or foot past cover, and the better ones shoot through it.
+- They remember who they backed off from and decide what to do about it: hold, take another angle, go back in or go round, each in their own way.
+- Fights look more human: they spread out instead of stacking, stop to shoot by habit, reload out of sight, and fire a shotgun mid-reload.
+- They buy ammo with their Deagle and don't charge in with an empty gun.
 
 ### Voice commands
 - On a dedicated server, the bots understand voice chat the same as typed team chat, loose wording included. An optional add-on per server (about 500 MB, once per computer), installed and removed from its Bot voice commands tab. Speech is turned into text on the machine running the server; no audio is kept or sent anywhere.
@@ -30,6 +36,10 @@ The first full release:
 - Counter-Strike 1.6 no longer lists Condition Zero only maps it can't load.
 - The quick bar changes bot difficulty and style in one click.
 - Settings, Help fixes the usual problems by symptom, and the app's messages say what to do next.
+- Setup now adds 27 fun and popular maps (about 70 MB): scoutzknivez, aim_map, fy_iceworld, awp_india, he_glass, de_mirage, de_tuscan, the Rats pack and more. Remove any it added that you don't want in Maps, and they won't come back. Dedicated servers keep to the maps you give them.
+- Map downloads are checked first: one missing a model or sprite it needs, which would crash the game when it loads, isn't installed.
+- Kreedz now comes with kz_longjumps2 instead of kz_urban, and Zombie Plague with zm_zod_labtest instead of zm_halloween. Both old maps crashed on loading and are removed when you update.
+- Scoutz on scoutzdeaglez gives you the deagle the map is made for.
 - New installs start with Quake sounds off and bot chat at Normal. Your settings, plugins, admins and edited config files are kept through updates.
 
 ### Servers
@@ -38,6 +48,7 @@ The first full release:
 - Health checks a Linux machine in plain words (logins, RCON, updates, fail2ban, disk, memory) and fixes what it can. New servers start locked down.
 - Linux servers are backed up to your computer every day, and Discord hears when one goes down.
 - Shared control is safer: Moderators can't act against the owner or Admins, and can see bans.
+- Choose a server's tick rate in its advanced settings.
 
 ### Fixes
 - No bots or "Bad Rcon": the app puts back what a Steam update undid and says what's wrong. Mods has a Repair button.
@@ -47,6 +58,7 @@ The first full release:
 - Old retail or repacked copies of the game are caught at setup.
 - "Remove everything" no longer deletes the app itself on Windows.
 - Updates show what's new before you install, and once after.
+- Bot pings on the scoreboard stay believable, rarely over 100.
 
 ## 0.1.2
 

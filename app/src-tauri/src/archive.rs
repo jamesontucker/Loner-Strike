@@ -33,7 +33,7 @@ fn content_exts(dir: &str) -> Option<&'static [&'static str]> {
 
 /// Map names end up in console commands (changelevel, votes), so only plain names are installed.
 pub fn safe_map(name: &str) -> bool {
-    !name.is_empty() && name.len() <= 31 && name.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
+    !name.is_empty() && name.len() <= 31 && name.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-$".contains(&c))
 }
 
 pub fn is_archive(name: &str) -> bool {
@@ -557,6 +557,12 @@ pub fn plan_rels(rels: &[Vec<String>]) -> (Vec<(usize, String)>, Vec<String>) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn map_names_with_dollar() {
+        assert!(super::safe_map("$2000$") && super::safe_map("aim_ak-colt") && crate::maps::safe_arg("$2000$"));
+        assert!(!super::safe_map("de_dust2;quit") && !super::safe_map("a b") && !super::safe_map("x\"y"));
+    }
+
     use super::*;
 
     fn tmp(tag: &str) -> PathBuf {

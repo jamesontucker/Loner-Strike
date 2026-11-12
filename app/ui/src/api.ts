@@ -4,7 +4,7 @@ import { currentTarget, isAbort, targetSignal, useActivityStore } from "./store"
 export { currentTarget, isAbort };
 
 // Commands only take plain words; the server checks the same rule.
-export const SAFE = /^[A-Za-z0-9_.\-]{1,64}$/;
+export const SAFE = /^[A-Za-z0-9_.$\-]{1,64}$/;
 
 /** The app window on this computer (not a phone over Wi-Fi). Some things only work here. */
 export const ON_THIS_COMPUTER = ["127.0.0.1", "localhost"].includes(location.hostname);

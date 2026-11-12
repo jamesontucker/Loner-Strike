@@ -77,7 +77,8 @@ const INFO: Record<string, string> = {
   zp_surv_enabled: "Rounds where one human, the Survivor, gets a powerful gun and lots of health against all the zombies.",
   bb_build_time: "How long the builders have to put up barricades before the zombies are let out.",
   gm_modevote: "Players type rtv or rtm in chat to vote for a different mode. If it passes they pick the mode, then a map for it.",
-  gm_modevote_every: "Every few maps, the vote near the end of the map picks the mode first, then a map for it. Needs mode voting on.",
+  gm_modevote_every: "Every few maps, the mode changes near the end of the map: by a vote or by the rotation, as set below.",
+  gm_moderotate: "Players vote picks the mode, then a map for it (needs mode voting on). Next on the list and Random from the list change it with nobody needed, to a mode from Modes in the vote, with a map made for it. Rock the vote still works on top.",
   sh_maxbinds: "How many heroes with a power you trigger with a key each player can pick. The rest of their heroes work on their own.",
 };
 
@@ -142,7 +143,7 @@ const RULE_TABS: [string, string, string[]][] = [
   ["teams", "Teams", ["mp_friendlyfire", "mp_autoteambalance", "mp_limitteams"]],
   ["money", "Money & weapons", ["mp_startmoney", "mp_buytime", "mp_buy_anywhere", "mp_free_armor", "mp_auto_reload_weapons", "mp_weapons_allow_map_placed"]],
   ["players", "Players", ["mp_forcerespawn", "mp_respawn_immunitytime", "mp_falldamage", "mp_footsteps", "mp_scoreboard_showhealth", "mp_scoreboard_showmoney", "gm_welcome"]],
-  ["voting", "Voting", ["gm_rtv", "gm_modevote", "gm_modevote_every"]],
+  ["voting", "Voting", ["gm_rtv", "gm_modevote", "gm_modevote_every", "gm_moderotate"]],
 ];
 const ruleTab = (cvar: string) => RULE_TABS.find(([, , cvars]) => cvars.includes(cvar))?.[0] ?? "mode";
 
