@@ -345,6 +345,7 @@ new bool:g_FirstMap               // the first map since the server started
 new g_ProfileLoaded[48]           // bot_profile_db as this map loaded (CZ reads it before plugins)
 new g_GoMode = -1                 // the mode picked for the next map (-1: the current one)
 new g_NextMode = -1, g_NextMap[32] // a vote's mode for when this map ends (gm_pubserver), and its map
+new bool:g_NextByRotation         // ... picked by the mode rotation, not a vote
 new Float:g_MapsAt = -100.0       // when g_Maps was last read from the maps folders
 new g_pBotPlay                    // gm_botplay: how bots play together on this map (botplay.ini)
 new g_ReloadNote[96]
@@ -5311,6 +5312,7 @@ public n_modes_next(plugin, params)
 	if (!vote_target_ok(mode, map))
 		return 0
 	g_NextMode = mode == g_Cur ? -1 : mode
+	g_NextByRotation = params >= 3 && get_param(3) != 0
 	copy(g_NextMap, charsmax(g_NextMap), map)
 	if (get_cvar_pointer("amx_nextmap"))
 		set_cvar_string("amx_nextmap", map)
@@ -5334,7 +5336,7 @@ apply_next_mode()
 		// an explicit choice wins over map presets
 		write_data_line("lastmap.txt", g_NextMap)
 		write_data_line("premode.txt", "")
-		write_data_line("reloadnote.txt", fmt("Players voted for %s", g_ModeName[g_NextMode]))
+		write_data_line("reloadnote.txt", fmt(g_NextByRotation ? "The mode rotation picked %s" : "Players voted for %s", g_ModeName[g_NextMode]))
 	}
 	g_NextMode = -1
 }

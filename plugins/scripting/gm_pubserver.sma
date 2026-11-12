@@ -58,7 +58,7 @@ native gm_modes_info(mode, id[], idlen, name[], namelen)
 native gm_modes_current()
 native gm_modes_maps(mode, Array:out)
 native gm_modes_go(mode, const map[])
-native gm_modes_next(mode, const map[])
+native gm_modes_next(mode, const map[], rotation = 0)
 
 #define PLUGIN  "Pub server"
 #define VERSION "1.0"
@@ -111,6 +111,7 @@ new g_MVMode[VOTE_MODES + 1], g_MVCount[VOTE_MODES + 1], g_MVBot[VOTE_MODES + 1]
 new bool:g_ModeFlow          // this vote can change the mode (rtv with mode voting on)
 new bool:g_EndVote           // this vote runs because the map is ending
 new g_MapsSince              // maps played to the end since the last mode change
+new bool:g_RotateFailed      // the rotation found nothing to switch to on this map
 new bool:g_EndStarted        // ... and it has started
 new bool:g_McPaused          // mapchooser paused for this map
 new bool:g_Changing          // a vote's map change is on its way
@@ -209,6 +210,7 @@ public plugin_cfg()
 	new since[8]
 	get_localinfo("gm_mvmaps", since, charsmax(since))
 	g_MapsSince = str_to_num(since)
+	set_localinfo("gm_nextset", "")      // (a pick noted on an earlier visit to this map is gone)
 }
 
 public plugin_end()
@@ -1828,6 +1830,9 @@ finish_stage(best)
 		if (best < 0)
 			return client_print_color(0, print_team_default, "^4[Server]^1 Nobody voted for a map. The next one comes from the rotation.")
 		gm_modes_next(mode, g_VoteMaps[best])
+		new here[32]
+		get_mapname(here, charsmax(here))
+		set_localinfo("gm_nextset", here)
 		if (mode == cur)
 			return client_print_color(0, print_team_default, "^4[Server]^1 Next map: ^4%s^1.", g_VoteMaps[best])
 		return client_print_color(0, print_team_default, "^4[Server]^1 Next: ^4%s^1 on ^4%s^1, when this map ends.", name, g_VoteMaps[best])
@@ -1852,6 +1857,8 @@ public task_mode_go(const data[])
 	// through the Game Mode Menu: the mode's saved settings, plugins and bot personalities
 	if (!gm_modes_go(data[0], data[1]))
 		g_Changing = false
+	else
+		set_localinfo("gm_mvmaps", "0")      // a mode players just chose counts from now
 }
 
 // ---- the end of the map ----------------------------------------------------------------
@@ -1892,17 +1899,26 @@ set_mapchooser(bool:paused)
 public task_end_check()
 {
 	new rotate = get_pcvar_num(g_pModeRotate), every = get_pcvar_num(g_pModeEvery)
-	new bool:due = every > 0 && g_MapsSince >= every - 1 && (rotate ? mode_rotating() : mode_voting())
+	new bool:due = every > 0 && g_MapsSince >= every - 1 && (rotate ? (mode_rotating() && !g_RotateFailed) : mode_voting())
 	if (!g_EndStarted && due != g_McPaused)
 		set_mapchooser(due)
 	// (a rotation needs nobody there; a vote needs people to vote)
 	if (!due || g_EndStarted || g_Voting || g_Changing || (!rotate && !humans()) || !near_end())
 		return
-	g_EndStarted = true
 	if (rotate)
-		rotate_mode(rotate == 2)
-	else
-		begin_mode_vote(true)
+	{
+		// (nothing to switch to: the map ends as usual, with its map vote, and the count goes on)
+		if (!rotate_mode(rotate == 2))
+		{
+			g_RotateFailed = true
+			set_mapchooser(false)
+			return
+		}
+		g_EndStarted = true
+		return
+	}
+	g_EndStarted = true
+	begin_mode_vote(true)
 }
 
 // A rotation can run: the Game Mode Menu is there, not a Tour of Duty match or a scrim
@@ -1915,7 +1931,7 @@ bool:mode_rotating()
 // people vote for, in that order), or a random one of them, with a map that suits it (the
 // mode's own rotation first), from the next map on. Modes with no map that suits them are
 // skipped; with none left, the mode stays.
-rotate_mode(bool:random_pick)
+bool:rotate_mode(bool:random_pick)
 {
 	new Array:ok = ArrayCreate(1)
 	allowed_modes(ok)
@@ -1923,7 +1939,7 @@ rotate_mode(bool:random_pick)
 	if (!n)
 	{
 		ArrayDestroy(ok)
-		return
+		return false
 	}
 	new pick = -1
 	if (random_pick)
@@ -1931,11 +1947,26 @@ rotate_mode(bool:random_pick)
 	else
 	{
 		// the list's order, starting after the mode playing now (from the top if it isn't listed)
-		new Array:ids = ArrayCreate(32)
-		if (!read_vote_list(fmt("%s/votemodes.ini", g_DataDir), ids) && !read_vote_list(fmt("%s/gamemodes/votemodes.ini", g_CfgDir), ids))
+		new Array:raw = ArrayCreate(32), Array:ids = ArrayCreate(32), id[32]
+		if (!read_vote_list(fmt("%s/votemodes.ini", g_DataDir), raw) && !read_vote_list(fmt("%s/gamemodes/votemodes.ini", g_CfgDir), raw))
 			for (new i = 0; i < sizeof DEFAULT_VOTE_MODES; i++)
-				ArrayPushString(ids, DEFAULT_VOTE_MODES[i])
-		new cur = gm_modes_current(), id[32], at = -1, total = ArraySize(ids)
+				ArrayPushString(raw, DEFAULT_VOTE_MODES[i])
+		// (each mode once: a list naming one twice would never get past the second)
+		for (new i = 0; i < ArraySize(raw); i++)
+		{
+			ArrayGetString(raw, i, id, charsmax(id))
+			new dup = false
+			for (new k = 0; k < ArraySize(ids) && !dup; k++)
+			{
+				new other[32]
+				ArrayGetString(ids, k, other, charsmax(other))
+				dup = equali(other, id)
+			}
+			if (!dup)
+				ArrayPushString(ids, id)
+		}
+		ArrayDestroy(raw)
+		new cur = gm_modes_current(), at = -1, total = ArraySize(ids)
 		for (new i = 0; i < total && at < 0; i++)
 		{
 			ArrayGetString(ids, i, id, charsmax(id))
@@ -1953,7 +1984,7 @@ rotate_mode(bool:random_pick)
 	}
 	ArrayDestroy(ok)
 	if (pick < 0)
-		return
+		return false
 	new Array:maps = ArrayCreate(32), map[32], cur[32], chosen[32]
 	gm_modes_maps(pick, maps)
 	get_mapname(cur, charsmax(cur))
@@ -1965,11 +1996,16 @@ rotate_mode(bool:random_pick)
 			copy(chosen, charsmax(chosen), map)
 	}
 	ArrayDestroy(maps)
-	if (!chosen[0] || !gm_modes_next(pick, chosen))
-		return
+	if (!chosen[0] || !gm_modes_next(pick, chosen, 1))
+		return false
+	// (a reload of the server's settings before the map ends leaves this pick alone)
+	new cur2[32]
+	get_mapname(cur2, charsmax(cur2))
+	set_localinfo("gm_nextset", cur2)
 	new name[48]
 	vote_name(pick, name, charsmax(name))
 	client_print_color(0, print_team_default, "^4[Server]^1 Next: ^4%s^1 on ^4%s^1, when this map ends.", name, chosen)
+	return true
 }
 
 // ---- an admin (or the app) starts one ------------------------------------------------------

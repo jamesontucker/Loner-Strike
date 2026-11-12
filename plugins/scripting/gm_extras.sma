@@ -349,9 +349,15 @@ bool:recently_played(const map[], count)
 
 pick_next(bool:first)
 {
-	// on a reload, a vote's result stays
+	// on a reload, a vote's result stays (and a mode vote's or the rotation's next mode and map,
+	// which gm_pubserver notes for this map)
 	if (!first)
 	{
+		new set[32], here[32]
+		get_localinfo("gm_nextset", set, charsmax(set))
+		get_mapname(here, charsmax(here))
+		if (set[0] && equali(set, here))
+			return
 		new now[32]
 		get_pcvar_string(g_pNextmap, now, charsmax(now))
 		if (g_OurNext[0] && !equali(now, g_OurNext))
