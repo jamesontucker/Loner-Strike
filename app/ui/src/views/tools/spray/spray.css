@@ -1,0 +1,40 @@
+/* The spray maker (views/tools/spray). A plaster-and-brick wall drawn in CSS, so the
+   preview needs no game files. */
+.spray { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
+.spray > .panel:last-child { grid-column: 1 / -1; }
+@media (max-width: 900px) { .spray { grid-template-columns: minmax(0, 1fr); } }
+
+.spray-wall {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  border-radius: 2px;
+  box-shadow: var(--sunken);
+  overflow: hidden;
+  background-color: #8a7d68;
+  background-image:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 245, 220, .16), transparent 60%),
+    radial-gradient(ellipse at 80% 90%, rgba(0, 0, 0, .28), transparent 55%),
+    linear-gradient(rgba(60, 50, 38, .55) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(60, 50, 38, .55) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(60, 50, 38, .55) 2px, transparent 2px),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, .025) 0 2px, rgba(0, 0, 0, .03) 2px 4px);
+  background-size: 100% 100%, 100% 100%, 64px 32px, 64px 64px, 64px 64px, 6px 6px;
+  background-position: 0 0, 0 0, 0 0, 0 0, 32px 32px, 0 0;
+}
+.spray-wall.small { min-height: 0; width: 160px; height: 120px; flex: none; }
+.spray-wall.small .spray-img { max-width: 140px; max-height: 104px; width: auto; height: auto; }
+.spray-img { display: block; max-width: 100%; height: auto; opacity: .94; mix-blend-mode: multiply; filter: contrast(1.05); }
+.spray-empty { max-width: 32ch; text-align: center; color: #f2ecdf; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); padding: 24px; }
+.spray-busy { position: absolute; top: 10px; right: 10px; }
+.spray-caption { margin-top: 12px; flex-wrap: wrap; }
+.spray-caption .muted { min-width: 0; overflow-wrap: anywhere; }
+.spray-colour { width: 56px; height: 32px; padding: 0; border: 0; background: none; cursor: pointer; }
+.spray-game { display: inline-flex; gap: 6px; align-items: center; margin-right: 14px; }
+.spray-actions { margin-top: 14px; }
+.spray-done { margin: 12px 0 0; color: var(--ok); font-weight: 600; }
+.spray-done .muted { font-weight: 500; }
+.spray-now { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.spray-now-game { display: flex; gap: 14px; align-items: flex-start; }
+.spray-now-game p { margin: 4px 0 8px; font-size: 14px; }

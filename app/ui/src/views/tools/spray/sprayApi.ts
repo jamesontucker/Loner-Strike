@@ -27,11 +27,12 @@ export type GameSpray = {
 export type Status = { games: GameSpray[]; picked: { name: string; width: number; height: number } | null; error?: string };
 
 type Err = { error?: string };
-const unreachable = { error: "Couldn't reach the app." };
+/** A POST whose failure to arrive reads like any other error. */
+const post = <T>(path: string, body: unknown = {}) => postJson<T & Err>(path, body).catch(() => ({ error: "Couldn't reach the app." }) as T & Err);
 
 export const sprayStatus = () => getJson<Status>("/api/tools/spray");
-export const pickPicture = () => postJson<Err & { cancelled?: boolean; name?: string; width?: number; height?: number }>("/api/tools/spray/pick").catch(() => unreachable);
-export const previewSpray = (c: Choice) => postJson<Err & Partial<SprayImage>>("/api/tools/spray/preview", c).catch(() => unreachable);
+export const pickPicture = () => post<{ cancelled?: boolean; name?: string; width?: number; height?: number }>("/api/tools/spray/pick");
+export const previewSpray = (c: Choice) => post<Partial<Omit<SprayImage, "error">>>("/api/tools/spray/preview", c);
 export const installSpray = (choice: Choice, games: string[], lock: boolean) =>
-  postJson<Err & { ok?: boolean; message?: string; installed?: string[] }>("/api/tools/spray/install", { choice, games, lock }).catch(() => unreachable);
-export const restoreSpray = (game: string) => postJson<Err & { ok?: boolean; message?: string }>("/api/tools/spray/restore", { game }).catch(() => unreachable);
+  post<{ ok?: boolean; message?: string; installed?: string[] }>("/api/tools/spray/install", { choice, games, lock });
+export const restoreSpray = (game: string) => post<{ ok?: boolean; message?: string }>("/api/tools/spray/restore", { game });

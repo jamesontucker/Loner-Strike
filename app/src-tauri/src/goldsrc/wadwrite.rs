@@ -616,4 +616,23 @@ mod tests {
             }
         }
     }
+    /// Opt-in: LS_SPRAY_SAMPLE=<picture> LS_TEST_DUMP=<folder> saves the picture as each kind
+    /// of spray (PNG, as the game draws it) to look at.
+    #[test]
+    fn sample_picture() {
+        let (Ok(src), Ok(out)) = (std::env::var("LS_SPRAY_SAMPLE"), std::env::var("LS_TEST_DUMP")) else { return };
+        let img = image::open(&src).unwrap().to_rgba8();
+        let kinds = [
+            ("colour", Options::default()),
+            ("dither", Options { dither: true, ..Options::default() }),
+            ("background", Options { clear: Clear::Background, ..Options::default() }),
+            ("mono", Options { look: Look::Mono { paint: [255, 120, 24], invert: false }, ..Options::default() }),
+        ];
+        for (name, o) in kinds {
+            let s = make(&img, &o);
+            let png = super::super::png(s.width, s.height, &s.to_rgba(), true).unwrap();
+            std::fs::write(std::path::Path::new(&out).join(format!("spray-{name}.png")), png).unwrap();
+            println!("{name}: {}x{}, {} colours", s.width, s.height, s.colours_used());
+        }
+    }
 }
