@@ -38,9 +38,10 @@ The first full release:
 - Settings, Help fixes the usual problems by symptom, and the app's messages say what to do next.
 - The maps Loner-Strike installs and the stock maps (all but the two biggest, de_survivor and de_torn) come with ready-made bot navigation and map knowledge, so bots play them straight away with no learning. On the stock maps bots name places in chat, like BombsiteA, Middle or Tunnel.
 - Bots learn maps split by a wall or barrier properly (Base Builder, Deathrun): every spawn gets navigation.
+- Zombie Plague Advanced no longer crashes when a map loads on Windows and Mac servers: its settings were read back empty.
 - Setup now adds 27 fun and popular maps (about 70 MB): scoutzknivez, aim_map, fy_iceworld, awp_india, he_glass, de_mirage, de_tuscan, the Rats pack and more. Remove any it added that you don't want in Maps, and they won't come back. Dedicated servers keep to the maps you give them.
 - Map downloads are checked first: one missing a model or sprite it needs, which would crash the game when it loads, isn't installed.
-- Zombie Plague now comes with zm_zod_labtest instead of zm_halloween, which crashed on loading, and zm_tehina is removed (unless you added it yourself). Kreedz now comes with kz_beginner and kz_airmountain; kz_urban (which crashed too), kz_summercliff2 and bkz_goldbhop are removed when you update, unless you added them yourself.
+- Zombie Plague now comes with zm_zod_labtest instead of zm_halloween, which crashed on loading, and zm_tehina is removed (unless you added it yourself). Kreedz now comes with kz_beginner and kz_airmountain; kz_urban (which crashed too), kz_summercliff2 and bkz_goldbhop are removed when you update, unless you added them yourself. Base Builder no longer comes with bb_dust_iplay, which has more models than the game can load with the mode running.
 - Scoutz on scoutzdeaglez gives you the deagle the map is made for.
 - New installs start with Quake sounds off and bot chat at Normal. Your settings, plugins, admins and edited config files are kept through updates.
 
