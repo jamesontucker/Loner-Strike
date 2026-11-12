@@ -575,6 +575,12 @@ pub const TRACE_COLS: [&str; 24] = [
     "time", "id", "team", "state", "task", "enemy", "leader", "goal_x", "goal_y", "noise_x", "noise_y", "why", "why_ago", "speed",
     "view_off", "attacking", "look", "x", "y", "z", "hp", "weapon", "crouched", "pitch",
 ];
+/// Rows kept per map visit (12 bots at 2 a second for 12 hours); more are counted, not kept,
+/// so a trace file appended to for weeks can't fill the memory.
+const MAX_TRACE_ROWS: usize = 1_000_000;
+/// Notes (#why, #attack, #seen, #mark) kept per map visit.
+const MAX_TRACE_NOTES: usize = 500_000;
+
 /// The text columns (the rest are numbers).
 const TEXT_COLS: [usize; 3] = [3, 11, 16];
 
@@ -613,6 +619,7 @@ struct Segment {
     marks: Vec<Value>,
     score: usize,
     count: usize,
+    notes: usize,
 }
 
 /// Splits a per-bot row into its 24 fields when a text field (why, look) held commas: the 11
@@ -690,6 +697,12 @@ pub fn parse_trace(r: impl BufRead, rec: &Recording) -> Result<Value, String> {
             cur.map = map;
         }
         cur.last_t = t;
+        if tag.starts_with('#') {
+            cur.notes += 1;
+            if cur.notes > MAX_TRACE_NOTES {
+                return;
+            }
+        }
         match tag {
             "#why" if f.len() >= 8 => cur.why.push(json!({"t": t, "id": val(f[2]), "team": val(f[3]), "at": [val(f[4]), val(f[5]), val(f[6])], "why": f[7..].join(",")})),
             "#attack" if f.len() >= 7 => cur.attack.push(json!({"t": t, "id": val(f[2]), "team": val(f[3]), "enemy": val(f[4]), "sinceFirstSaw": val(f[5]), "range": val(f[6])})),
@@ -709,7 +722,9 @@ pub fn parse_trace(r: impl BufRead, rec: &Recording) -> Result<Value, String> {
                     }
                 }
                 cur.count += 1;
-                cur.rows.entry(id).or_default().push(Value::Array(row));
+                if cur.count <= MAX_TRACE_ROWS {
+                    cur.rows.entry(id).or_default().push(Value::Array(row));
+                }
             }
             _ => {}
         }
@@ -721,6 +736,7 @@ pub fn parse_trace(r: impl BufRead, rec: &Recording) -> Result<Value, String> {
     let bots: Vec<Value> = seg.rows.into_iter().map(|(id, rows)| json!({"id": id, "rows": rows})).collect();
     Ok(json!({
         "map": seg.map, "offset": 0.0, "matched": seg.score, "rows": seg.count,
+        "truncated": seg.count > MAX_TRACE_ROWS || seg.notes > MAX_TRACE_NOTES,
         "matches": seg.count > 0 && seg.score * 2 >= seg.count,
         "columns": TRACE_COLS, "tasks": TASKS, "bots": bots,
         "why": seg.why, "attack": seg.attack, "seen": seg.seen, "marks": seg.marks,

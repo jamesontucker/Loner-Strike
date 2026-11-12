@@ -647,6 +647,49 @@ mod tests {
         assert_eq!(v["places"][0], "Mid");
     }
 
+    #[tokio::test]
+    async fn routes_refuse_bad_requests() {
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+        let st: Shared = Arc::new(crate::server::AppState {
+            current: std::sync::RwLock::new(None),
+            hosts: std::sync::RwLock::new(vec![]),
+            lan_hosts: std::sync::RwLock::new(vec![]),
+            token: std::sync::RwLock::new(String::new()),
+            app: OnceLock::new(),
+            phone: Mutex::new(crate::app_api::Phone::default()),
+        });
+        let call = |method: &str, uri: &str| {
+            let app = routes().with_state(st.clone());
+            let req = Request::builder().method(method).uri(uri).body(Body::empty()).unwrap();
+            async move {
+                let res = app.oneshot(req).await.unwrap();
+                let status = res.status();
+                let body = axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap();
+                (status, String::from_utf8_lossy(&body).to_string())
+            }
+        };
+        for uri in ["/api/tools/map/..%2Fx/nav", "/api/tools/map/a%20b/probe?x=1&y=2&z=3", "/api/tools/recording/zzzz/trace"] {
+            let (s, b) = call("GET", uri).await;
+            assert_eq!(s, StatusCode::BAD_REQUEST, "{uri} {b}");
+            assert!(b.contains("error"), "{uri} {b}");
+        }
+        let (s, _) = call("GET", "/api/tools/map/de_dust2/probe?x=NaN&y=0&z=0").await;
+        assert_eq!(s, StatusCode::BAD_REQUEST);
+        let (s, _) = call("GET", "/api/tools/map/de_dust2/probe").await;
+        assert_eq!(s, StatusCode::BAD_REQUEST);
+        // binary routes say what's wrong with a status the page can check
+        let (s, b) = call("GET", "/api/tools/recording/0123456789abcdef").await;
+        assert_eq!(s, StatusCode::NOT_FOUND, "{b}");
+        // no game set up: a plain message, not a crash
+        let (_, b) = call("GET", "/api/tools/map/de_dust2/nav").await;
+        assert!(b.contains("error"), "{b}");
+        // the file picker only for the app's own page
+        let (s, _) = call("POST", "/api/tools/recordings/open").await;
+        assert_eq!(s, StatusCode::FORBIDDEN);
+    }
+
     /// LS_TEST_SIM: the fixed cs_rats2 nav and knowledge make a nav answer and a bundle that
     /// says the key matches (and doesn't against the unfixed nav).
     #[test]
