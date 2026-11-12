@@ -41,6 +41,11 @@ const VISIBILITY = [
 ] as const;
 const STATE = { running: "Running", stopped: "Stopped", crashed: "Stopped (crashed)", "setting-up": "Setting up", failed: "Setup didn't finish", checking: "Checking…" };
 
+/** "this computer" in the app window; on the phone, which computer that is. */
+const HERE = ON_THIS_COMPUTER ? "this computer" : "the computer running Loner-Strike";
+/** A failed setup on the phone: what's done at the computer. */
+const FAILED_ON_COMPUTER = "Trying again, rebuilding and deleting are done on the computer running Loner-Strike.";
+
 /** How long a server on this computer keeps running (the switch's name is in AppSettings). */
 const RUNS_WHILE = "A server on this computer runs while Loner-Strike is open, or after you quit if you switch on Keep running after I close Loner-Strike on its Overview tab.";
 const PUBLIC_ADDRESS_INFO =
@@ -277,7 +282,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
         </div>
       )}
 
-      {ON_THIS_COMPUTER && waiting.length > 1 && (
+      {waiting.length > 1 && (
         <div className="panel row between">
           <p className="muted">{waiting.length} servers have Loner-Strike updates waiting. Each gets them by itself once nobody's playing on it.</p>
           <BusyButton className="btn primary" busy={busy("servers:apply-updates")} label="Update all now" busyLabel="Updating…" onClick={updateAll} />
@@ -298,8 +303,8 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
               <StateTag s={s} />
             </div>
             {s.error && <p className="err-text">{s.error}</p>}
-            {ON_THIS_COMPUTER && <UpdateNote s={s} busy={busy(`${s.id}:apply-updates`)} onUpdate={() => updateNow(s)} />}
-            {s.restart_needs_app && <p className="muted small-note">The daily restart only happens while Loner-Strike is open on this computer.</p>}
+            <UpdateNote s={s} busy={busy(`${s.id}:apply-updates`)} onUpdate={() => updateNow(s)} />
+            {s.restart_needs_app && <p className="muted small-note">The daily restart only happens while Loner-Strike is open on {HERE}.</p>}
             {s.unreachable && s.state !== "setting-up" && <Unreachable s={s} onGuide={ON_THIS_COMPUTER ? openGuide : undefined} />}
             {s.state === "setting-up" ? (
               <JobProgress server={s.id} long={!!s.host} onEnd={(ok) => { toast(ok ? `${s.name} is ready` : `Setting up ${s.name} stopped. It says why below.`, !ok); onChanged(); }} />
@@ -312,7 +317,10 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
                   <BusyButton className="btn danger" busy={busy(`${s.id}:delete`)} label={s.imported ? "Remove" : "Delete"} busyLabel={s.imported ? "Removing…" : "Deleting…"} onClick={() => act(s, "delete")} />
                 </div>
               ) : (
-                <p className="muted small-note">{ON_COMPUTER_ONLY}</p>
+                <div className="row">
+                  <button className="btn" onClick={() => onOpen(s.id)}>Open</button>
+                  <span className="muted small-note">{FAILED_ON_COMPUTER}</span>
+                </div>
               )
             ) : (
               <div className="row">
@@ -752,8 +760,9 @@ export function ServerPage(props: {
                 <BusyButton className="btn danger" busy={busy("stop")} disabled={!!s.updating} label="Stop" busyLabel="Stopping…" onClick={() => act("stop")} />
               </>
             ) : s.state === "setting-up" ? null : s.state === "failed" ? (
-              // (setup didn't finish: carrying on is the way forward, not starting it)
-              <BusyButton className="btn primary" busy={busy("retry")} label="Try again" busyLabel="Trying again…" onClick={() => act("retry")} />
+              // (setup didn't finish: carrying on is the way forward, not starting it; that's
+              // done at the computer)
+              ON_THIS_COMPUTER ? <BusyButton className="btn primary" busy={busy("retry")} label="Try again" busyLabel="Trying again…" onClick={() => act("retry")} /> : <span className="muted small-note">{FAILED_ON_COMPUTER}</span>
             ) : (
               <>{modePick}<BusyButton className="btn primary" busy={busy("start")} disabled={off || !!s.updating} label="Start the server" busyLabel="Starting…" onClick={() => act("start")} /></>
             )}
@@ -956,8 +965,8 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
   const mark = useRestartNeeded((st) => st.mark);
   // a server shared with you: an Admin changes the basics, a Moderator only sees them
   const sharedRole = server.shared?.role ?? null;
-  // a phone sees the settings but changes them from the computer
-  const ro = !ON_THIS_COMPUTER || sharedRole === "moderator";
+  // (the owner changes them here or on their phone)
+  const ro = sharedRole === "moderator";
   const [name, setName] = useState(server.name);
   const [map, setMap] = useState(server.map);
   const slots = useNumber(server.maxplayers);
@@ -1004,7 +1013,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
       // a shared server: only what a helper changes (the owner's app drops anything else too)
       const body = sharedRole
         ? { name: name.trim(), map, maxplayers: slots.value, ...bots }
-        : { name: name.trim(), map, maxplayers: slots.value, port: portLocked ? server.port : port.value, listen_ip: listenIp, extra_args: extra, tick_rate: tick, // (the per-server switches only once changed here: until then they follow the app's setting)
+        : { name: name.trim(), map, maxplayers: slots.value, port: portLocked ? server.port : port.value, listen_ip: listenIp, ...(ON_THIS_COMPUTER ? { extra_args: extra } : {}), tick_rate: tick, // (the per-server switches only once changed here: until then they follow the app's setting)
           ...(server.host || keep === !!server.keep_running ? {} : { keep_running: keep }), ...(joins === (server.notify_joins !== false) ? {} : { notify_joins: joins }), ...bots };
       const r = await post(`/api/servers/${server.id}`, body);
       if (r.error) return toast(r.error, true);
@@ -1022,7 +1031,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
     <div className="server-details">
       <div className="panel">
         <h3>Settings</h3>
-        {ro && <p className="muted small-note">{sharedRole === "moderator" ? "Moderators see these; the owner or an Admin changes them." : ON_COMPUTER_ONLY}</p>}
+        {ro && <p className="muted small-note">Moderators see these; the owner or an Admin changes them.</p>}
         <label className="field">
           <span>Name</span>
           <input
@@ -1064,7 +1073,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
           <Switch on={botsShown} disabled={ro} label="Bots play on an empty server" onChange={setBotsEmpty} />
         </div>
         {!sharedRole && <div className="setting">
-          <span className="name">Tell me when someone joins<span className="note">A notification on this computer when a person joins this server, while Loner-Strike is in the background</span></span>
+          <span className="name">Tell me when someone joins<span className="note">A notification on {HERE} when a person joins this server, while Loner-Strike is in the background</span></span>
           <Switch on={joins} disabled={ro} label="Tell me when someone joins this server" onChange={setJoins} />
         </div>}
         {!sharedRole && !server.host && <div className="setting">
@@ -1087,7 +1096,7 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
               </label>
               {!server.host && (
                 <label className="field">
-                  <span>Listen address<Info text="Leave empty to answer on every network this computer is on. Set it to one of this computer's addresses to use only that network." /></span>
+                  <span>Listen address<Info text={`Leave empty to answer on every network ${HERE} is on. Set it to one of its addresses to use only that network.`} /></span>
                   <input className="search" disabled={ro} placeholder="All addresses" value={listenIp} onChange={(e) => setListenIp(e.target.value.trim())} spellCheck={false} />
                 </label>
               )}
@@ -1106,9 +1115,10 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
             {tickTyped && <p className="muted small-note" id="serverTickTyped">Set by the extra start options below</p>}
             <label className="field">
               <span>Extra start options<Info text="Added to the server's command line, like -pingboost 2, from the next start. Port, map, player slots and passwords are set above instead." /></span>
-              <input className="search" disabled={ro} placeholder="Like -pingboost 2 +sys_ticrate 1000" value={extra} onChange={(e) => setExtra(e.target.value)} spellCheck={false} />
+              <input className="search" disabled={ro || !ON_THIS_COMPUTER} placeholder={ON_THIS_COMPUTER ? "Like -pingboost 2 +sys_ticrate 1000" : "None"} value={extra} onChange={(e) => setExtra(e.target.value)} spellCheck={false} aria-describedby={ON_THIS_COMPUTER ? undefined : "serverExtraPhone"} />
+              {!ON_THIS_COMPUTER && <small id="serverExtraPhone">Change these on the computer running Loner-Strike.</small>}
             </label>
-            {ON_THIS_COMPUTER && <ConsolePassword server={server} />}
+            <ConsolePassword server={server} />
           </div>
         </details>}
         {!ro && (
@@ -1128,8 +1138,6 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
 function JoinSettings({ server, onChanged }: { server: ServerInfo; onChanged: () => void }) {
   const toast = useToast();
   const mark = useRestartNeeded((st) => st.mark);
-  // a phone sees them but changes them from the computer
-  const ro = !ON_THIS_COMPUTER;
   const [vis, setVis] = useState(server.visibility);
   const [password, setPassword] = useState(server.password ?? "");
   const [publicAddr, setPublicAddr] = useState(server.public_address ?? "");
@@ -1137,7 +1145,7 @@ function JoinSettings({ server, onChanged }: { server: ServerInfo; onChanged: ()
   const snapshot = (pa: string) => JSON.stringify([vis, password, pa, listed]);
   const now = snapshot(publicAddr);
   const [base, setBase] = useState(now);
-  const dirty = !ro && now !== base;
+  const dirty = now !== base;
   useDirty("server-join", dirty);
   const { run, busy } = useActions();
   const saving = busy(`${server.id}:save-join`);
@@ -1167,12 +1175,11 @@ function JoinSettings({ server, onChanged }: { server: ServerInfo; onChanged: ()
     <div className="panel">
       {/* (the tab's own heading already says Who can join) */}
       <h3>Join settings</h3>
-      {ro && <p className="muted small-note">{ON_COMPUTER_ONLY}</p>}
       <div className="field">
         <span>Who finds it<Info text={WHO_CAN_JOIN} /></span>
         <div className="seg" role="group" aria-label="Who can join">
           {VISIBILITY.map((v) => (
-            <button key={v.id} type="button" disabled={ro} aria-pressed={vis === v.id} onClick={() => setVis(v.id)}>{v.name}</button>
+            <button key={v.id} type="button" aria-pressed={vis === v.id} onClick={() => setVis(v.id)}>{v.name}</button>
           ))}
         </div>
         <small>{VISIBILITY.find((v) => v.id === vis)?.note}. Listed on Steam is the game's own server browser.</small>
@@ -1180,26 +1187,24 @@ function JoinSettings({ server, onChanged }: { server: ServerInfo; onChanged: ()
       <label className="field">
         <span>Join password<Info text="Players type this to get in. Leave it empty for no password. It takes effect as soon as you save, Join in this app uses it for you, and the invite below includes it." /></span>
         <div className="row">
-          <input className="search" disabled={ro} maxLength={24} placeholder="None" value={password} onChange={(e) => setPassword(e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} spellCheck={false} autoComplete="off" />
-          {!ro && <button type="button" className="btn" onClick={makePassword}>Make one</button>}
+          <input className="search" maxLength={24} placeholder="None" value={password} onChange={(e) => setPassword(e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} spellCheck={false} autoComplete="off" />
+          <button type="button" className="btn" onClick={makePassword}>Make one</button>
         </div>
         <small>Letters, numbers, - and _.</small>
       </label>
       <label className="field">
         <span>Public address<Info text={PUBLIC_ADDRESS_INFO} /></span>
-        <input className="search" disabled={ro} maxLength={253} placeholder="play.example.com" value={publicAddr} onChange={(e) => setPublicAddr(e.target.value.replace(/\s/g, "").toLowerCase())} spellCheck={false} autoComplete="off" />
+        <input className="search" maxLength={253} placeholder="play.example.com" value={publicAddr} onChange={(e) => setPublicAddr(e.target.value.replace(/\s/g, "").toLowerCase())} spellCheck={false} autoComplete="off" />
         <small>Optional.</small>
       </label>
       <div className="setting">
         <span className="name">On the Loner-Strike server list<span className="note">Shows in Find servers in Loner-Strike, so other players join with a click. It has to be reachable from the internet</span></span>
-        <Switch on={listed} disabled={ro} label="On the Loner-Strike server list" onChange={setListed} />
+        <Switch on={listed} label="On the Loner-Strike server list" onChange={setListed} />
       </div>
-      {!ro && (
-        <div className="row">
-          <BusyButton className="btn primary" busy={saving} label="Save" busyLabel={server.host ? "Saving and uploading…" : "Saving…"} onClick={save} />
-          {dirty && !saving && <span className="muted small-note">Unsaved changes</span>}
-        </div>
-      )}
+      <div className="row">
+        <BusyButton className="btn primary" busy={saving} label="Save" busyLabel={server.host ? "Saving and uploading…" : "Saving…"} onClick={save} />
+        {dirty && !saving && <span className="muted small-note">Unsaved changes</span>}
+      </div>
     </div>
   );
 }
@@ -1213,13 +1218,13 @@ function HealthTab({ server, others, installed, act, rebuild, wipeRebuild, busy,
     <div className="stack">
       <SectionHead title="Health" note="Keeping the server up to date, safe and backed up, and repairing it when something's wrong." />
       {(server.loner || !server.imported) && <Updates server={server} act={act} busy={busy} onChanged={onChanged} />}
-      {ON_THIS_COMPUTER && server.host && <SecurityPanel key={server.id} server={server} />}
+      {server.host && <SecurityPanel key={server.id} server={server} />}
       {ON_THIS_COMPUTER && <BackupPanel server={server} others={others} onChanged={onChanged} />}
       <DailyRestart target={server.id} />
       {ON_THIS_COMPUTER ? (
         <Maintenance server={server} installed={installed} act={act} rebuild={rebuild} wipeRebuild={wipeRebuild} busy={busy} />
       ) : (
-        <p className="muted small-note">Backups, repairs{server.host ? ", the machine's security check" : ""} and deleting the server are done on the computer running Loner-Strike.</p>
+        <p className="muted small-note">Backing up to a file, restoring a backup, repairs and deleting the server are done on the computer running Loner-Strike.</p>
       )}
     </div>
   );
@@ -1249,11 +1254,11 @@ function Updates({ server, act, busy, onChanged }: { server: ServerInfo; act: (a
       <h3>Updates</h3>
       {server.loner && (
         <>
-          {ON_THIS_COMPUTER ? <UpdateNote s={server} busy={busy("apply-updates")} onUpdate={() => applyUpdates(server)} /> : null}
+          <UpdateNote s={server} busy={busy("apply-updates")} onUpdate={() => applyUpdates(server)} />
           {upToDate && <p className="muted small-note">Its Loner-Strike plugins and bot brain are up to date.</p>}
           <div className="setting">
             <span className="name">Update by itself when nobody's playing<span className="note">After you update Loner-Strike, this server gets its new plugins and bot brain once it's empty (bots don't count). Off: only when you press Update now</span></span>
-            <Switch on={auto} disabled={!ON_THIS_COMPUTER || busyKey(`${server.id}:auto-update`)} label="Update by itself when nobody's playing" onChange={setAutoUpdate} />
+            <Switch on={auto} disabled={busyKey(`${server.id}:auto-update`)} label="Update by itself when nobody's playing" onChange={setAutoUpdate} />
           </div>
         </>
       )}
@@ -1264,7 +1269,7 @@ function Updates({ server, act, busy, onChanged }: { server: ServerInfo; act: (a
               <b>Update Valve's server files</b>
               <p className="muted">Gets the latest version of the server from Valve. Your mods and settings stay.{running ? " Stop the server first." : ""}</p>
             </div>
-            <BusyButton className="btn" busy={busy("update")} disabled={!ON_THIS_COMPUTER || running || !!server.updating} label="Update" busyLabel="Updating…" onClick={() => act("update")} />
+            <BusyButton className="btn" busy={busy("update")} disabled={running || !!server.updating} label="Update" busyLabel="Updating…" onClick={() => act("update")} />
           </li>
         </ul>
       )}
@@ -1289,11 +1294,24 @@ function ConsolePassword({ server }: { server: ServerInfo }) {
   const change = (password?: string) => run(`${server.id}:rcon`, async () => {
     const r = await postJson<Reply>(`/api/servers/${server.id}/rcon-password`, password ? { password } : {}).catch((): Reply => ({ error: "Couldn't reach the app." }));
     if (r.error) return toast(r.error, true);
-    setShown(r.password ?? "");
+    // (the phone never gets it back: it's shown on the computer)
+    setShown(r.password ?? null);
     setTyped("");
     toast("Console password changed");
   }, `Changing ${server.name}'s console password…`);
   const changing = busy(`${server.id}:rcon`);
+  // the phone makes a new random one; showing it or typing your own is done at the computer
+  if (!ON_THIS_COMPUTER) {
+    return (
+      <div className="field">
+        <span>Console password<Info text="The RCON password, for running the server from tools like HLSW. The app sets a random one and uses it too; a change applies straight away." /></span>
+        <div className="row">
+          <BusyButton className="btn small" busy={changing} label="Make a random one" busyLabel="Changing…" onClick={() => change()} />
+        </div>
+        <small>To see it or type your own, use the computer running Loner-Strike.</small>
+      </div>
+    );
+  }
   return (
     <div className="field">
       <span>Console password<Info text="The RCON password, for running the server from tools like HLSW. The app sets a random one and uses it too; a change applies straight away." /></span>
@@ -1528,7 +1546,7 @@ function Console({ server }: { server: ServerInfo }) {
     const c = cmd.trim();
     if (!c || server.state !== "running") return;
     const r = await post(`/api/servers/${server.id}/console/send`, { command: c });
-    if (r.error) return toast(!server.shared && (r.error === ON_COMPUTER_ONLY || r.error.includes("Couldn't reach")) ? "The console only works on this computer." : r.error, true);
+    if (r.error) return toast(r.error, true);
     setCmd("");
     setSent((l) => [...l, `] ${c}`, ...(r.reply?.trim() ? r.reply.trim().split("\n") : [])].slice(-200));
   });
@@ -1558,23 +1576,19 @@ function Console({ server }: { server: ServerInfo }) {
       </div>
       {failed && shown.length > 0 && <p className="muted small-note">Can't read the console right now. These are the last lines it showed.</p>}
       {server.shared && <p className="muted small-note">{server.shared.role === "admin" ? "Most commands work, sent one at a time. Passwords, keys, running files, admins and plugins stay with the owner." : "A Moderator's commands: say, kick, ban for up to 7 days, change the map, status. Suggestions show only those."}</p>}
-      {ON_THIS_COMPUTER ? (
-        <form className="row console-form" onSubmit={(e) => { e.preventDefault(); send(); }}>
-          <ConsoleInput serverId={server.id} running={server.state === "running"} value={cmd} onChange={setCmd} />
-          <button
-            className="btn"
-            type="submit"
-            disabled={server.state !== "running"}
-            title={server.state !== "running" ? "Start the server first" : undefined}
-            aria-describedby={server.state !== "running" ? `console-why-${server.id}` : undefined}
-          >
-            Send
-          </button>
-          {server.state !== "running" && <span id={`console-why-${server.id}`} className="muted small-note">Start the server first</span>}
-        </form>
-      ) : (
-        <p className="muted small-note">Server commands can only be sent from the computer running Loner-Strike.</p>
-      )}
+      <form className="row console-form" onSubmit={(e) => { e.preventDefault(); send(); }}>
+        <ConsoleInput serverId={server.id} running={server.state === "running"} value={cmd} onChange={setCmd} />
+        <button
+          className="btn"
+          type="submit"
+          disabled={server.state !== "running"}
+          title={server.state !== "running" ? "Start the server first" : undefined}
+          aria-describedby={server.state !== "running" ? `console-why-${server.id}` : undefined}
+        >
+          Send
+        </button>
+        {server.state !== "running" && <span id={`console-why-${server.id}`} className="muted small-note">Start the server first</span>}
+      </form>
     </div>
   );
 }

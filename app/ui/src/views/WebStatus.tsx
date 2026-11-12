@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ControlRoute } from "./ShareControl";
-import { copyText, getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions } from "../api";
+import { copyText, getJson, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { useDirty } from "../store";
@@ -116,7 +116,8 @@ export function WebStatus({ server }: { server: ServerInfo }) {
     }
   };
 
-  // a saved secret, for the eye (the app only answers on the computer)
+  // a saved secret, for the eye: the app shows them in its own window only, never on the
+  // phone (there the eye shows just what was typed)
   const secret = async (kind: string) => {
     const r = await postJson<{ value?: string | null }>(`/api/servers/${server.id}/webstatus/secret`, { kind }).catch(() => ({ value: null }));
     return r.value ?? null;
@@ -166,8 +167,6 @@ export function WebStatus({ server }: { server: ServerInfo }) {
   const tunnel = form.mode === "tunnel";
   const usesExisting = tunnel && st.existing_tunnel === "running" && !st.own_tunnel;
   const service = `http://localhost:${st.port}`;
-  // it sets up a service on the server's machine and keeps a tunnel token: from the computer only
-  const ro = !ON_THIS_COMPUTER;
   const tag = installing ? "Setting up" : turningOff ? "Turning off" : st.state === "running" ? "Running" : st.state === "not_answering" ? "Not answering" : "Off";
 
   return (
@@ -185,7 +184,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
             <span className={`live${st.state === "running" && !working ? " on" : ""}`}>{tag}</span>
           </div>
           {!saved.enabled ? (
-            <p className="muted">{ro ? "It's off." : "It's off. Fill in the settings and press Install."}</p>
+            <p className="muted">It's off. Fill in the settings and press Install.</p>
           ) : st.state === "running" ? (
             <>
               <dl className="hltv-facts">
@@ -209,7 +208,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
               <p className="muted small-note">Checked from this computer every 15 seconds.</p>
             </>
           )}
-          {saved.enabled && !ro && (
+          {saved.enabled && (
             <div className="row">
               <BusyButton className="btn danger" busy={turningOff} disabled={working} label="Turn off" busyLabel="Turning off…" onClick={turnOff} />
             </div>
@@ -218,8 +217,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
 
         <div className="panel">
           <h3>Settings</h3>
-          {ro && <p className="muted small-note">{ON_COMPUTER_ONLY}</p>}
-          <fieldset className="plain" disabled={ro}>
+          <fieldset className="plain">
           <label className="field">
             <span>Address<Info text="A name for the status page, on a domain you own. It needs its own name, separate from the one players connect to." /></span>
             <input className="search" placeholder={st.suggested_domain ?? "status.example.com"} value={form.domain} onChange={(e) => set({ domain: e.target.value })} onBlur={fillSites} spellCheck={false} autoComplete="off" />
@@ -268,7 +266,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
               <ControlRoute domain={domain} port={st.port + CONTROL_OFFSET} />
               <label className="field">
                 <span>Tunnel token<Info text="Kept on this computer and on the server, readable only by their administrators. It isn't shown again after it's saved." /></span>
-                <SecretInput placeholder={st.token_saved ? "Saved" : "Paste the token"} value={form.token} onChange={(v) => set({ token: v })} label="Tunnel token" saved={st.token_saved ? () => secret("token") : undefined} />
+                <SecretInput placeholder={st.token_saved ? "Saved" : "Paste the token"} value={form.token} onChange={(v) => set({ token: v })} label="Tunnel token" saved={st.token_saved && ON_THIS_COMPUTER ? () => secret("token") : undefined} />
               </label>
             </div>
           )}
@@ -300,7 +298,7 @@ export function WebStatus({ server }: { server: ServerInfo }) {
           <HookField label="When people come on" what="the channel people chat in" reveal={() => secret("busy")} saved={st.discord.busy} value={form.busy} drop={form.drop.busy} disabled={working} onChange={(v) => set({ busy: v })} onDrop={(d) => set({ drop: { ...form.drop, busy: d } })} />
 
           </fieldset>
-          {!ro && (
+          {!ON_THIS_COMPUTER && (st.token_saved || st.discord.live || st.discord.busy) && <p className="muted small-note">Saved tokens and links show on the computer running Loner-Strike. Here you can replace them.</p>}
           <div className="row">
             <BusyButton
               className="btn primary"
@@ -312,7 +310,6 @@ export function WebStatus({ server }: { server: ServerInfo }) {
             />
             {isDirty && !working && <span className="muted small-note">Unsaved changes</span>}
           </div>
-          )}
           {installing && <p className="muted small-note">Setting up can take a minute or two the first time, while it installs {tunnel && !usesExisting ? "cloudflared" : tunnel ? "the service" : "Caddy"}.</p>}
         </div>
       </div>
@@ -326,7 +323,7 @@ function HookField({ label, what, saved, value, drop, disabled, onChange, onDrop
     <label className="field">
       <span>{label}</span>
       <div className="row">
-        <SecretInput placeholder={drop ? "Removed when you save" : saved ? "Saved" : `Webhook URL for ${what}`} value={value} disabled={disabled || drop} onChange={onChange} label={label} saved={saved ? reveal : undefined} />
+        <SecretInput placeholder={drop ? "Removed when you save" : saved ? "Saved" : `Webhook URL for ${what}`} value={value} disabled={disabled || drop} onChange={onChange} label={label} saved={saved && ON_THIS_COMPUTER ? reveal : undefined} />
         {saved && !value && (
           <button type="button" className="btn small" disabled={disabled} onClick={() => onDrop(!drop)}>
             {drop ? "Keep" : "Remove"}

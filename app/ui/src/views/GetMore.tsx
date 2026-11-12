@@ -330,7 +330,7 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
             <p className="gb-text">{open.text}</p>
             {open.installed ? (
               <div className="banner">
-                <div>Installed.{ON_THIS_COMPUTER ? "" : " Remove it on the computer."}</div>
+                <div>Installed.{ON_THIS_COMPUTER ? "" : " To remove it, use the computer running Loner-Strike."}</div>
                 {startMap && <button className="btn primary" onClick={() => startOn(startMap)}>Start a game on {startMap}</button>}
                 {ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={busy(removeKey(section, open.id))} label="Remove" busyLabel="Removing…" onClick={() => remove(open.id, open.name)} />}
               </div>
@@ -348,7 +348,7 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
                       )}
                       {f.listed === false && <p className="muted small-note">Its contents are checked after downloading.</p>}
                     </div>
-                    {f.virus ? <span className="muted">Flagged by GameBanana's virus scan</span> : !ON_THIS_COMPUTER ? <span className="muted small-note">Install it on the computer.</span> : f.supported ? (
+                    {f.virus ? <span className="muted">Flagged by GameBanana's virus scan</span> : f.supported ? (
                       <BusyButton className="btn primary" busy={busy(key(`install:${open.id}:${f.id}`))} disabled={!!jobFor(open.id)} label={jobFor(open.id) ? jobText(jobFor(open.id)!) : server && section !== "maps" ? "Use on this server" : "Install"} busyLabel="Installing…" onClick={() => install(open.id, f.id, open.name)} />
                     ) : <span className="muted">Can't open this kind of file</span>}
                   </li>
@@ -430,7 +430,7 @@ function InstalledList({ onChanged, server, only, empty = "Nothing downloaded ye
   if (!list.length) return <p className="muted">{empty}</p>;
   return (
     <>
-    {!ON_THIS_COMPUTER && <p className="muted small-note">To remove one, use the computer.</p>}
+    {!ON_THIS_COMPUTER && <p className="muted small-note">To remove one, use the computer running Loner-Strike.</p>}
     <ul className="people installed-list">
       {list.map((it) => (
         <li key={`${it.section}:${it.mod}`}>
@@ -446,7 +446,7 @@ function InstalledList({ onChanged, server, only, empty = "Nothing downloaded ye
             </span>
           </div>
           <div className="row">
-            {server && it.server && ON_THIS_COMPUTER && (
+            {server && it.server && (
               <>
                 <select aria-label={`Who sees ${it.name}`} value={it.who ?? "all"} disabled={busy(setKey(it))} onChange={(e) => setItem(it, { who: e.target.value })}>
                   {WHO.map(([w, l]) => <option key={w} value={w}>{l}</option>)}
@@ -481,7 +481,7 @@ export function MyContent({ kinds, title, note, empty }: { kinds: string[]; titl
       {/* the heading, its filter and note together (as Get more and Maps have them), then the list */}
       <div>
         <SectionHead title={title} note={note}>
-          {ON_THIS_COMPUTER && <button className="btn" onClick={shop}>{`Get ${name}`}</button>}
+          <button className="btn" onClick={shop}>{`Get ${name}`}</button>
         </SectionHead>
         {kinds.length > 1 && (
           <div className="chips" role="group" aria-label="Show">
@@ -490,7 +490,6 @@ export function MyContent({ kinds, title, note, empty }: { kinds: string[]; titl
             ))}
           </div>
         )}
-        {!ON_THIS_COMPUTER && <p className="muted small-note">To add or remove them, use the computer.</p>}
       </div>
       <InstalledList key={kind} only={these} onChanged={() => {}} empty={empty} />
     </div>
@@ -527,12 +526,10 @@ export function ServerSkins() {
     <div className="stack">
       <div>
         <SectionHead title="Skins & models" note="Weapon skins and player models this server uses. Players download them when they join. Changes apply from the next map.">
-          {ON_THIS_COMPUTER && (
-            <span className="row">
-              <button className="btn" onClick={() => setShop("skins")}>Get weapon skins</button>
-              <button className="btn" onClick={() => setShop("players")}>Get player models</button>
-            </span>
-          )}
+          <span className="row">
+            <button className="btn" onClick={() => setShop("skins")}>Get weapon skins</button>
+            <button className="btn" onClick={() => setShop("players")}>Get player models</button>
+          </span>
         </SectionHead>
         <SlotsBar />
         <p className="muted small-note">Modes with their own models keep them: nothing changes in Paintball, Hide and Seek, Base Builder or the zombie modes, and Superhero and Warcraft 3 keep their own player models.</p>

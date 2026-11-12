@@ -565,6 +565,10 @@ fn status(e: &Entry) -> Value {
     if e.remote.is_none() && error.is_none() {
         error = cpu_too_old().map(String::from);
     }
+    // (a failed install, until the next try)
+    if e.remote.is_none() && error.is_none() && !installed() {
+        error = INSTALL_ERROR.lock().unwrap().clone();
+    }
     let mut log = if e.remote.is_none() { log_tail(e) } else { vec![] };
     if e.remote.is_some() && e.voice.enabled {
         (running, log) = remote_state(e);
@@ -587,6 +591,8 @@ fn status(e: &Entry) -> Value {
 // ---- installing and removing --------------------------------------------------------------
 
 static INSTALLING: Mutex<Option<Instant>> = Mutex::new(None);
+/// Why the last install stopped (shown until the next try)
+static INSTALL_ERROR: Mutex<Option<String>> = Mutex::new(None);
 /// How far the download is (0..1), for the page
 static PROGRESS: Mutex<f64> = Mutex::new(0.0);
 
@@ -603,7 +609,9 @@ impl crate::setup::Progress for Download {
     fn note(&self, _: &str) {}
 }
 
-fn install() -> Result<(), String> {
+/// Starts the install in the background and returns at once (the page follows it in the
+/// status), so a phone whose screen locks part way doesn't report a failure that isn't one.
+fn start_install() -> Result<(), String> {
     if let Some(why) = cpu_too_old() {
         return Err(why.into());
     }
@@ -614,6 +622,18 @@ fn install() -> Result<(), String> {
         }
         *busy = Some(Instant::now());
     }
+    *INSTALL_ERROR.lock().unwrap() = None;
+    *PROGRESS.lock().unwrap() = 0.0;
+    std::thread::spawn(|| {
+        let r = std::panic::catch_unwind(install).unwrap_or_else(|_| Err("Something went wrong installing it. Try again.".into()));
+        *INSTALL_ERROR.lock().unwrap() = r.err();
+        *INSTALLING.lock().unwrap() = None;
+    });
+    Ok(())
+}
+
+/// The download itself (start_install has marked it as going).
+fn install() -> Result<(), String> {
     let result = (|| {
         std::fs::create_dir_all(dir()).map_err(|err| format!("Couldn't make a folder for the models ({err}). Check there's free disk space and try again."))?;
         let whole = (MODEL_BYTES + INTENT_BYTES) as f64;
@@ -632,7 +652,6 @@ fn install() -> Result<(), String> {
         }
         Ok(())
     })();
-    *INSTALLING.lock().unwrap() = None;
     result
 }
 
@@ -681,9 +700,9 @@ struct SaveReq {
     enabled: bool,
 }
 
-/// Voice on or off for a server (from this computer only, not the phone).
-async fn api_save(State(st): State<Shared>, UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) || on.is_none() {
+/// Voice on or off for a server (the owner: the computer or their phone).
+async fn api_save(State(st): State<Shared>, UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     let st = st.clone();
@@ -719,20 +738,27 @@ async fn api_save(State(st): State<Shared>, UrlPath(id): UrlPath<String>, header
     .await
 }
 
-/// Install or remove the add-on on this computer.
-async fn api_addon(UrlPath(action): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) || on.is_none() {
+/// Install (started in the background) or remove the add-on on this computer: installing
+/// from the owner's phone too, removing only at the computer.
+async fn api_addon(UrlPath(action): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) || (on.is_none() && action != "install") {
         return forbidden();
     }
     blocking(move || {
         match action.as_str() {
-            "install" => install()?,
+            "install" => start_install()?,
             "uninstall" => uninstall()?,
             _ => return Err("Unknown action.".into()),
         }
         Ok(json!({"ok": true, "installed": installed()}))
     })
     .await
+}
+
+/// Tests: as if an install were going (so a request to install stops before downloading).
+#[cfg(test)]
+pub(crate) fn pretend_installing(on: bool) {
+    *INSTALLING.lock().unwrap() = on.then(Instant::now);
 }
 
 pub fn routes() -> Router<Shared> {

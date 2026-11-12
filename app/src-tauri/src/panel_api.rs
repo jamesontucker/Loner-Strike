@@ -259,8 +259,9 @@ async fn gb_install(State(st): State<Shared>, headers: HeaderMap, body: Bytes) -
     }
 }
 
-async fn gb_uninstall(State(st): State<Shared>, headers: HeaderMap, body: Bytes) -> Response {
-    if !from_panel(&headers) {
+async fn gb_uninstall(State(st): State<Shared>, headers: HeaderMap, phone: Option<axum::Extension<crate::server::OnPhone>>, body: Bytes) -> Response {
+    // removing is done at the computer, not from the owner's phone (installing works there)
+    if !from_panel(&headers) || phone.is_some() {
         return forbidden();
     }
     let req = match body_json(&body) {

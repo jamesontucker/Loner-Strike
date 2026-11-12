@@ -140,8 +140,10 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   const changeMap = (name: string) => once(key("change"), () => run("gm_map", [name]), `Changing the map to ${name}…`);
   const current = currentMap?.toLowerCase();
 
-  // teaching bots maps: this computer's own game only
-  const canTeach = ON_THIS_COMPUTER && !currentTarget();
+  // teaching bots maps: this computer's own game only (from its window or the owner's phone)
+  const canTeach = !currentTarget();
+  // copying a map file to a server: from the computer's window only
+  const canCopy = ON_THIS_COMPUTER && canTeach;
   const [picking, setPicking] = useState(false);
   const [chosen, setChosen] = useState<Set<string>>(() => new Set());
   const [relearn, setRelearn] = useState(false);
@@ -258,7 +260,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               <Info text={TEACH_INFO} />
             </span>
           )}
-          {ON_THIS_COMPUTER && getMaps && <button className="btn" onClick={getMaps}>Get maps</button>}
+          {getMaps && <button className="btn" onClick={getMaps}>Get maps</button>}
           {ON_THIS_COMPUTER && server && !shared && (
             <button className="btn" onClick={() => setCopyFrom(true)}>Copy maps from your game</button>
           )}
@@ -337,7 +339,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               ? "This server has no maps. Get some with Get maps, or check the server's game files."
               : "Loner-Strike can't find any maps in your game. Get some from Get more, or add a map file."}
           </p>
-          {getMaps && (ON_THIS_COMPUTER || !currentTarget()) && <div className="row"><button className="btn primary" onClick={getMaps}>Get maps</button></div>}
+          {getMaps && <div className="row"><button className="btn primary" onClick={getMaps}>Get maps</button></div>}
         </div>
       ) : (
         <div className="maps grid">
@@ -390,7 +392,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
                   <Info text={SEND_INFO} />
                 </span>
               )}
-              {canTeach && hasServers && (
+              {canCopy && hasServers && (
                 <button className="btn" onClick={() => { setCopyMap(picked.name); setPicked(null); }}>Copy to a server</button>
               )}
               {ON_THIS_COMPUTER && picked.source === "download" && picked.mod && (
@@ -401,7 +403,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
           </div>
         </Sheet>
       )}
-      {canTeach && copyMap && <CopyToServers map={copyMap} onClose={() => setCopyMap(null)} />}
+      {canCopy && copyMap && <CopyToServers map={copyMap} onClose={() => setCopyMap(null)} />}
       {ON_THIS_COMPUTER && server && copyFrom && <CopyFromGame server={server} name={serverName} onClose={() => setCopyFrom(false)} onDone={reload} />}
     </div>
   );

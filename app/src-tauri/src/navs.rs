@@ -862,8 +862,8 @@ struct SendReq {
     map: String,
 }
 
-async fn api_send(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<SendReq>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_send(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<SendReq>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     let Some(game) = st.local_game() else { return answer(Err("Set up the game first.".into())) };
@@ -885,8 +885,8 @@ struct LearnReq {
     relearn: bool,
 }
 
-async fn api_learn(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<LearnReq>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_learn(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<LearnReq>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     let r = tokio::task::spawn_blocking(move || {
@@ -898,8 +898,8 @@ async fn api_learn(State(st): State<Shared>, headers: HeaderMap, Json(req): Json
     answer(r)
 }
 
-async fn api_learn_stop(headers: HeaderMap) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_learn_stop(headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     let job = setup::current();
@@ -914,8 +914,8 @@ async fn api_learn_result() -> Json<Value> {
     Json(json!({"result": RESULT.lock().unwrap_or_else(|e| e.into_inner()).clone()}))
 }
 
-/// The app window's listener only (merged with the other computer-only routes).
-pub fn local_routes() -> Router<Shared> {
+/// The app window and the owner's phone (never the sharing listener).
+pub fn owner_routes() -> Router<Shared> {
     Router::new()
         .route("/api/navs/send", post(api_send))
         .route("/api/navs/learn", route_get(api_learn_result).post(api_learn))

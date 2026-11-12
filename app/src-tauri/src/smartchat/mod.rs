@@ -390,8 +390,8 @@ struct SetReq {
     model: Option<String>,
 }
 
-async fn api_set(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<SetReq>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_set(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<SetReq>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     if let Some(id) = &req.model {
@@ -420,8 +420,8 @@ struct IdReq {
     id: String,
 }
 
-async fn api_download(headers: HeaderMap, Json(req): Json<IdReq>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_download(headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<IdReq>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     let Some(m) = catalog::model(&req.id) else { return (StatusCode::OK, Json(json!({"error": "That model isn't in the list."}))) };
@@ -489,8 +489,8 @@ struct TryStart {
 }
 
 /// Opens (or keeps open) the Try it sheet's server.
-async fn api_try_start(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<TryStart>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_try_start(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<TryStart>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     let m = req.model.as_deref().and_then(catalog::model).filter(|m| runtime::has_model(m)).or_else(chosen);
@@ -509,8 +509,8 @@ async fn api_try_start(State(st): State<Shared>, headers: HeaderMap, Json(req): 
     (StatusCode::OK, Json(json!({"ok": true, "model": m.id, "status": status_json()})))
 }
 
-async fn api_try_stop(State(st): State<Shared>, headers: HeaderMap) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_try_stop(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     with_run(|r| r.trial = None);
@@ -526,8 +526,8 @@ struct TryReq {
 }
 
 /// Replies from the three sample bots to one message, with how long each took.
-async fn api_try(headers: HeaderMap, Json(req): Json<TryReq>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+async fn api_try(headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<TryReq>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     with_run(|r| {
@@ -577,15 +577,19 @@ async fn api_try(headers: HeaderMap, Json(req): Json<TryReq>) -> (StatusCode, Js
     (StatusCode::OK, Json(json!({"replies": out})))
 }
 
-/// Computer only: the Bots page's controls, and the plugin's endpoint (the game runs on
-/// this computer and asks 127.0.0.1; phones never reach these).
+/// The app window only: the plugin's endpoint (the game runs on this computer and asks
+/// 127.0.0.1; phones never reach it), and removing a model.
 pub fn local_routes() -> Router<Shared> {
+    Router::new().route("/api/botchat/reply", post(api_reply)).route("/api/smartchat/remove", post(api_remove))
+}
+
+/// The app window and the owner's phone (never the sharing listener): the settings, getting
+/// a model, and trying it.
+pub fn owner_routes() -> Router<Shared> {
     Router::new()
-        .route("/api/botchat/reply", post(api_reply))
         .route("/api/smartchat", get(api_status))
         .route("/api/smartchat/set", post(api_set))
         .route("/api/smartchat/download", post(api_download))
-        .route("/api/smartchat/remove", post(api_remove))
         .route("/api/smartchat/try/start", post(api_try_start))
         .route("/api/smartchat/try/stop", post(api_try_stop))
         .route("/api/smartchat/try", post(api_try))

@@ -959,9 +959,9 @@ struct SaveReq {
     fastdl: bool,
 }
 
-async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
-    // settings and turning it on or off: from the computer only, not the phone
-    if !from_panel(&headers) || on.is_none() {
+async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
+    // settings and turning it on or off: the owner (the computer or their phone), not helpers
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
     blocking(move || {
@@ -1037,7 +1037,8 @@ struct SecretReq {
     kind: String,
 }
 
-/// A saved secret, for the eye next to its field: on the computer only, never the phone.
+/// A saved secret, for the eye next to its field: on the computer only, never the phone (its
+/// link travels over plain Wi-Fi). The phone can still save new ones, which never come back.
 async fn api_secret(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SecretReq>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) || on.is_none() {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));

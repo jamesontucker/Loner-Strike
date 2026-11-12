@@ -143,6 +143,12 @@ struct Store {
 #[derive(Clone, Debug)]
 pub struct Helper(pub Member);
 
+/// Tests: a helper as `guard` would let one through (nothing is saved).
+#[cfg(test)]
+pub(crate) fn test_member(role: Role, server: &str) -> Member {
+    Member { id: "m-test".into(), name: "Helper".into(), role, server: server.into(), key: String::new(), steam: String::new(), added: String::new(), invited_by: "owner".into(), seen: None }
+}
+
 static STORE: Mutex<()> = Mutex::new(());
 
 fn store_path() -> PathBuf {

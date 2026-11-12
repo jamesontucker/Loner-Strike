@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getJson, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions } from "../api";
+import { getJson, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, Switch, useConfirm, useToast } from "../ui";
 
@@ -57,12 +57,27 @@ export function Voice({ server }: { server: ServerInfo }) {
   if (failed && !st) return <LoadError text={failed} onRetry={load} />;
   if (!st) return <Skeleton rows={3} />;
 
+  // the download runs in the app: this follows it until it's in or stopped (the page may
+  // close meanwhile, or a phone's screen lock; the download carries on)
   const install = () =>
     run(key("install"), async () => {
       const r = await post("/api/voice/install");
-      if (r.error) toast(r.error, true);
-      else toast("Installed. Turn it on for this server below.");
-      await load();
+      if (r.error) return toast(r.error, true);
+      let misses = 0;
+      for (;;) {
+        await new Promise((res) => setTimeout(res, 1500));
+        const now = await getJson<Status & { error?: string }>(`/api/servers/${server.id}/voice`).catch(() => null);
+        if (!now || now.installed === undefined) {
+          if (++misses >= 20) return toast("Lost track of the download. Check back in a minute.", true);
+          continue;
+        }
+        misses = 0;
+        setSt(now);
+        if (now.installing) continue;
+        if (now.installed) toast("Installed. Turn it on for this server below.");
+        else toast(now.error || "The install stopped. Try again.", true);
+        return;
+      }
     }, "Downloading the models…");
 
   const uninstall = async () => {
@@ -102,17 +117,13 @@ export function Voice({ server }: { server: ServerInfo }) {
               <b>Install</b>
               <p className="muted">Downloads the speech and understanding models ({mb(st.model_bytes)}) once, for every server on this computer.</p>
             </div>
-            {ON_THIS_COMPUTER ? (
-              <BusyButton
-                className="btn primary"
-                busy={busy(key("install")) || st.installing}
-                label="Install"
-                busyLabel={st.progress > 0 ? `Downloading ${Math.round(st.progress * 100)}%…` : "Downloading…"}
-                onClick={install}
-              />
-            ) : (
-              <p className="muted small-note">{ON_COMPUTER_ONLY}</p>
-            )}
+            <BusyButton
+              className="btn primary"
+              busy={busy(key("install")) || st.installing}
+              label="Install"
+              busyLabel={st.progress > 0 ? `Downloading ${Math.round(st.progress * 100)}%…` : "Downloading…"}
+              onClick={install}
+            />
           </div>
         ) : null}
         {!st.installed && st.error ? <p className="err-text">{st.error}</p> : null}
@@ -135,10 +146,9 @@ export function Voice({ server }: { server: ServerInfo }) {
                         ? "On, and listening"
                         : st.remote ? "On. It runs while the server does" : "On. It starts with the server"
                       : "Off"}
-                    {!ON_THIS_COMPUTER && <> {ON_COMPUTER_ONLY}</>}
                   </span>
                 </div>
-                <Switch on={st.enabled} label="Bots understand voice chat" disabled={!ON_THIS_COMPUTER || busy(key("save"))} onChange={toggle} />
+                <Switch on={st.enabled} label="Bots understand voice chat" disabled={busy(key("save"))} onChange={toggle} />
               </div>
             )}
             {st.error && <p className="err-text">{st.error}</p>}
@@ -155,6 +165,7 @@ export function Voice({ server }: { server: ServerInfo }) {
                 <Info text={`Turns voice off on every server and deletes the models (${mb(st.model_bytes)}).`} />
               </div>
             )}
+            {!ON_THIS_COMPUTER && !st.remote && <p className="muted small-note">To remove it, use the computer running Loner-Strike.</p>}
           </>
         )}
       </div>

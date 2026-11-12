@@ -711,9 +711,9 @@ struct SaveReq {
     record: bool,
 }
 
-async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
-    // settings and turning it on or off: from the computer only, not the phone
-    if !from_panel(&headers) || on.is_none() {
+async fn api_save(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<SaveReq>) -> (StatusCode, Json<Value>) {
+    // settings and turning it on or off: the owner (the computer or their phone), not helpers
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     blocking(move || {
@@ -763,8 +763,9 @@ struct ActionReq {
     name: String,
 }
 
-async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<ActionReq>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) || (action == "fetch-demo" && on.is_none()) {
+async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<ActionReq>) -> (StatusCode, Json<Value>) {
+    // (copying a demo into your game is for the computer; deleting one too, not the phone)
+    if !from_panel(&headers) || (action == "fetch-demo" && on.is_none()) || (action == "delete-demo" && phone.is_some()) {
         return forbidden();
     }
     blocking(move || {

@@ -2971,11 +2971,21 @@ struct Change {
     ls_listed: Option<bool>,
 }
 
-async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, helper: Option<axum::Extension<crate::control::Helper>>, Json(req): Json<Change>) -> (StatusCode, Json<Value>) {
-    // the app window, or an Admin helping run this server (their request only carries the
-    // settings their role changes: control::rules trimmed it)
-    if !from_panel(&headers) || (on.is_none() && helper.is_none()) {
+/// What the owner's phone doesn't change (its link travels over plain Wi-Fi): the extra
+/// start options, which can run anything on the machine. The rest of the request goes on.
+fn phone_change(req: &mut Change) {
+    req.extra_args = None;
+}
+
+async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, helper: Option<axum::Extension<crate::control::Helper>>, Json(req): Json<Change>) -> (StatusCode, Json<Value>) {
+    // the app window or the owner's phone, or an Admin helping run this server (their request
+    // only carries the settings their role changes: control::rules trimmed it)
+    if !from_panel(&headers) || (!crate::server::owner(&on, &phone) && helper.is_none()) {
         return forbidden();
+    }
+    let mut req = req;
+    if on.is_none() && phone.is_some() {
+        phone_change(&mut req);
     }
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
         let e = get(&id).ok_or("That server isn't there any more.")?;
@@ -3216,14 +3226,12 @@ async fn api_modes(UrlPath(id): UrlPath<String>, headers: HeaderMap) -> (StatusC
     answer(r)
 }
 
-async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, body: Option<Json<Value>>) -> (StatusCode, Json<Value>) {
+async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(String, String)>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, body: Option<Json<Value>>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) {
         return forbidden();
     }
     let body = body.map(|Json(b)| b).unwrap_or_default();
-    // a phone may start, stop and restart servers; changing what's installed or deleting
-    // one (which also reaches a VPS through the SSH key) is for the computer
-    if on.is_none() && !matches!(action.as_str(), "start" | "stop" | "restart" | "join") {
+    if !action_allowed(&action, on.is_some(), phone.is_some()) {
         return answer(Err("Do that from the computer running Loner-Strike.".into()));
     }
     if matches!(action.as_str(), "delete" | "rebuild" | "retry") && crate::backup::restoring_server(&id) {
@@ -3384,7 +3392,14 @@ async fn api_action(State(st): State<Shared>, UrlPath((id, action)): UrlPath<(St
     answer(r)
 }
 
-/// The console (RCON) password, for using the server from another tool. Computer only.
+/// Who may ask a server for an action. Anyone allowed this far (a helper's role was checked by
+/// control::guard) starts, stops, restarts and joins; the owner's phone also puts updates in;
+/// rebuilding, setting up again and deleting (which also reach a VPS through the SSH key)
+/// are for the computer.
+fn action_allowed(action: &str, on_computer: bool, on_phone: bool) -> bool {
+    on_computer || matches!(action, "start" | "stop" | "restart" | "join") || (on_phone && matches!(action, "apply-updates" | "update"))
+}
+
 // ---- the security check (a server on a Linux machine) ------------------------------------
 
 /// What's checked on the machine, each with whether it's right and, if not, what the app can
@@ -3440,10 +3455,10 @@ fn security_items(e: &Entry) -> Result<Value, String> {
     Ok(json!({"ok": true, "items": items, "user": get("user")}))
 }
 
-async fn api_security(UrlPath(id): UrlPath<String>, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
-    // (a GET that only reads the machine: this computer only, like the fixes; the page's
+async fn api_security(UrlPath(id): UrlPath<String>, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>) -> (StatusCode, Json<Value>) {
+    // (a GET that only reads the machine: the owner only, like the fixes; the page's
     // X-Panel header only comes with its POSTs)
-    if on.is_none() {
+    if !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     answer(tokio::task::spawn_blocking(move || get(&id).ok_or("That server isn't there any more.".to_string()).and_then(|e| security_items(&e))).await.unwrap_or_else(|_| Err("The check didn't finish.".into())))
@@ -3454,8 +3469,8 @@ struct SecurityFix {
     item: String,
 }
 
-async fn api_security_fix(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SecurityFix>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) || on.is_none() {
+async fn api_security_fix(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<SecurityFix>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     answer(
@@ -3505,6 +3520,8 @@ async fn api_security_fix(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: 
     )
 }
 
+/// The console password, shown: the app window only (never the phone, whose link travels over
+/// plain Wi-Fi: the password reaches the whole server).
 async fn api_rcon_password(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>) -> (StatusCode, Json<Value>) {
     if !from_panel(&headers) || on.is_none() {
         return forbidden();
@@ -3521,9 +3538,15 @@ struct NewRconPassword {
 
 /// A new console password: the one given, or a random one. The running server gets it
 /// straight away (over the old one), then the file the app and the plugin read it from.
-async fn api_set_rcon_password(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<NewRconPassword>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) || on.is_none() {
+/// The owner's phone only makes a random one and never sees it (whoever knows it has the
+/// whole server, and the phone's link travels over plain Wi-Fi).
+async fn api_set_rcon_password(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<NewRconPassword>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
+    }
+    let on_phone = on.is_none();
+    if on_phone && req.password.is_some() {
+        return answer(Err("Type your own console password on the computer running Loner-Strike. Here you can make a random one.".into()));
     }
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
         let e = get(&id).ok_or("That server isn't there any more.")?;
@@ -3561,7 +3584,7 @@ async fn api_set_rcon_password(UrlPath(id): UrlPath<String>, headers: HeaderMap,
             sync(&e, false)?;
             write_service(&e)?;
         }
-        Ok(json!({"ok": true, "password": pw}))
+        Ok(if on_phone { json!({"ok": true}) } else { json!({"ok": true, "password": pw}) })
     })
     .await
     .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
@@ -3591,34 +3614,63 @@ struct HintsReq {
 
 /// The running server's commands and settings, for suggestions while typing in its console,
 /// or with `value`, one setting's current value (null for a password or an unknown name).
-/// A POST so the page's request carries X-Panel; this computer only (it shows settings' values).
-async fn api_console_hints(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, req: Option<Json<HintsReq>>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) || on.is_none() {
+/// A POST so the page's request carries X-Panel; the owner only (it shows settings' values).
+/// The phone gets what its console may send (the helpers' Admin rules), as helpers do.
+async fn api_console_hints(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, req: Option<Json<HintsReq>>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
+    let on_phone = on.is_none();
     let req = req.map(|Json(r)| r).unwrap_or_default();
     let r = tokio::task::spawn_blocking(move || {
         let e = get(&id).ok_or("That server isn't there any more.")?;
         let rcon = e.rcon().ok_or("The server isn't set up yet.")?;
+        let fits = |n: &str| !on_phone || crate::control::rules::console_line(crate::control::Role::Admin, n).is_ok();
         if let Some(name) = req.value {
-            return Ok(json!({"ok": true, "value": crate::consolehints::value(&id, &rcon, name.trim())}));
+            let name = name.trim();
+            let v = if fits(name) { crate::consolehints::value(&id, &rcon, name) } else { None };
+            return Ok(json!({"ok": true, "value": v}));
         }
         let refresh = req.refresh;
-        crate::consolehints::for_server(&id, &rcon, refresh).map(|items| json!({"ok": true, "items": items}))
+        crate::consolehints::for_server(&id, &rcon, refresh).map(|items| json!({"ok": true, "items": items.into_iter().filter(|i| fits(&i.n)).collect::<Vec<_>>()}))
     })
     .await
     .unwrap_or_else(|_| Err("Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.".into()));
     answer(r)
 }
 
-/// Any console command, for the server's owner at this computer only (not phones).
-async fn api_console_cmd(UrlPath(id): UrlPath<String>, headers: HeaderMap, Json(req): Json<ConsoleCmd>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) {
+/// Whether a console line may be sent: one command (no `;` or line breaks), never the
+/// console password; from the owner's phone also only what an Admin helper may send
+/// (control::rules), since its link travels over plain Wi-Fi.
+fn console_check(cmd: &str, on_phone: bool) -> Result<(), String> {
+    let cmd = cmd.trim();
+    if cmd.is_empty() || cmd.len() > 200 || cmd.chars().any(|c| c.is_control()) {
+        return Err("That command can't be sent.".into());
+    }
+    if cmd.contains(';') {
+        return Err("One command at a time (no ;).".into());
+    }
+    // the game reads a quoted name as the command itself, in any case
+    let word = cmd.trim_start_matches(|c: char| c == '"' || c.is_whitespace()).split(|c: char| c == '"' || c.is_whitespace()).next().unwrap_or("").to_ascii_lowercase();
+    if word.starts_with("rcon_password") {
+        return Err("That command can't be sent.".into());
+    }
+    if on_phone {
+        crate::control::rules::console_line(crate::control::Role::Admin, cmd).map_err(|_| "That command can only be sent from the computer running Loner-Strike.".to_string())?;
+    }
+    Ok(())
+}
+
+/// Any console command, for the server's owner (at the computer, or on their phone within
+/// console_check's rules). Helpers have their own route on the sharing listener
+/// (control::api_helper_console).
+async fn api_console_cmd(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<ConsoleCmd>) -> (StatusCode, Json<Value>) {
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return forbidden();
     }
     let cmd = req.command.trim().to_string();
-    if cmd.is_empty() || cmd.len() > 200 || cmd.chars().any(|c| c.is_control()) || cmd.starts_with("rcon_password") {
-        return answer(Err("That command can't be sent.".into()));
+    if let Err(why) = console_check(&cmd, on.is_none()) {
+        return answer(Err(why));
     }
     let r = tokio::task::spawn_blocking(move || {
         let e = get(&id).ok_or("That server isn't there any more.")?;
@@ -3679,13 +3731,20 @@ pub fn routes() -> Router<Shared> {
         .route("/api/servers/:id/:action", post(api_action))
 }
 
-/// Only for the app window, not the phone link: a free-form console, and importing a
-/// folder (which can then be started, so it runs whatever hlds.exe is in it).
+/// The app window and the owner's phone, never the sharing listener: the console (the phone
+/// within console_check's rules; helpers have their own in control::share_routes).
+pub fn owner_routes() -> Router<Shared> {
+    Router::new()
+        .route("/api/servers/:id/console/send", post(api_console_cmd))
+        .route("/api/servers/:id/console/hints", post(api_console_hints))
+}
+
+/// Only for the app window, not the phone link: importing a folder (which can then be
+/// started, so it runs whatever hlds.exe is in it), the folder and key pickers, and making
+/// a server on another machine.
 pub fn local_routes() -> Router<Shared> {
     Router::new()
         .route("/api/servers/import", post(api_import))
-        .route("/api/servers/:id/console/send", post(api_console_cmd))
-        .route("/api/servers/:id/console/hints", post(api_console_hints))
         .route("/api/servers/pick-folder", post(api_pick_folder))
         .route("/api/servers/remote", post(api_create_remote))
         .route("/api/servers/remote/probe", post(api_probe_remote))
@@ -3878,6 +3937,56 @@ mod restart_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn console_lines_by_who_sends_them() {
+        // anyone: one command, never the console password (in any case, quoted or chained)
+        for line in ["status;rcon_password x", "RCON_PASSWORD x", "\"rcon_password\" x", "  rcon_password x", "status\nquit", "say a; quit", ""] {
+            assert!(console_check(line, false).is_err(), "computer: {line:?}");
+            assert!(console_check(line, true).is_err(), "phone: {line:?}");
+        }
+        // the computer: the rest goes
+        for line in ["status", "exec server.cfg", "meta list", "sv_downloadurl http://example.com", "say hi"] {
+            assert!(console_check(line, false).is_ok(), "computer: {line}");
+        }
+        // the phone: what an Admin helper may send, no more
+        for line in ["status", "say hi", "changelevel de_dust2", "mp_timelimit 30"] {
+            assert!(console_check(line, true).is_ok(), "phone: {line}");
+        }
+        for line in ["exec x.cfg", "meta list", "amxx plugins", "sv_downloadurl http://x", "log on", "localinfo a b", "servercfgfile x.cfg", "motd_write x", "gm_ai_url http://x", "quit", "sv_password x"] {
+            assert!(console_check(line, true).is_err(), "phone: {line}");
+        }
+    }
+
+    #[test]
+    fn the_phone_leaves_the_extra_start_options_alone() {
+        let mut req = Change { name: Some("New name".into()), extra_args: Some("+exec evil.cfg".into()), tick_rate: Some(500), ..Default::default() };
+        phone_change(&mut req);
+        assert_eq!(req.extra_args, None);
+        assert_eq!((req.name.as_deref(), req.tick_rate), (Some("New name"), Some(500)), "the rest of the request goes on");
+    }
+
+    #[test]
+    fn who_may_ask_for_what() {
+        // a helper (neither the computer nor the phone): only what their role was let through for
+        for a in ["start", "stop", "restart", "join"] {
+            assert!(action_allowed(a, false, false), "{a}");
+        }
+        for a in ["apply-updates", "update", "delete", "rebuild", "retry"] {
+            assert!(!action_allowed(a, false, false), "helper: {a}");
+        }
+        // the owner's phone: running the server and its updates, never rebuilding or deleting
+        for a in ["start", "stop", "restart", "join", "apply-updates", "update"] {
+            assert!(action_allowed(a, false, true), "phone: {a}");
+        }
+        for a in ["delete", "rebuild", "retry", "something-new"] {
+            assert!(!action_allowed(a, false, true), "phone: {a}");
+        }
+        // the app window: everything
+        for a in ["delete", "rebuild", "retry", "update", "apply-updates", "start"] {
+            assert!(action_allowed(a, true, false), "computer: {a}");
+        }
+    }
 
     #[test]
     fn manifest_written_only_on_change() {

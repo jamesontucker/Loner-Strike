@@ -81,9 +81,21 @@ async fn guard_local(State(st): State<Shared>, mut req: Request, next: Next) -> 
 #[derive(Clone, Copy)]
 pub struct OnComputer;
 
+/// Set on requests from the owner's signed-in phone (the LAN listener), only once its token
+/// checked out. Never set by the app window's guard or the sharing listener's (helpers).
+#[derive(Clone, Copy)]
+pub struct OnPhone;
+
+/// Whether a request is the owner's: the app window, or their signed-in phone. A helper
+/// (shared control) is neither. For what the phone may do as well as the computer; the
+/// handler still refuses the phone what stays on the computer (deleting, making servers...).
+pub fn owner(on: &Option<axum::Extension<OnComputer>>, phone: &Option<axum::Extension<OnPhone>>) -> bool {
+    on.is_some() || phone.is_some()
+}
+
 /// The phone listener (LAN): always needs the token, whatever the request says
 /// about itself, and only answers to the phone address.
-async fn guard_lan(State(st): State<Shared>, req: Request, next: Next) -> Response {
+async fn guard_lan(State(st): State<Shared>, mut req: Request, next: Next) -> Response {
     let host = host_of(&req);
     if !st.lan_hosts.read().unwrap().contains(&host) {
         return (StatusCode::FORBIDDEN, "forbidden").into_response();
@@ -108,9 +120,12 @@ async fn guard_lan(State(st): State<Shared>, req: Request, next: Next) -> Respon
         }
         return (StatusCode::FORBIDDEN, "Scan the QR code in Loner-Strike's Settings to connect.").into_response();
     }
+    // signed in: the owner's phone (handlers that allow it check owner())
+    req.extensions_mut().insert(OnPhone);
     let mut res = next.run(req).await;
     if query_ok {
-        let c = format!("ls_token={}; Path=/; SameSite=Strict; Max-Age=31536000", st.token.read().unwrap());
+        // (HttpOnly: the page's own scripts never need it, so nothing on the page can read it)
+        let c = format!("ls_token={}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000", st.token.read().unwrap());
         res.headers_mut().insert(header::SET_COOKIE, c.parse().unwrap());
     }
     res
@@ -310,11 +325,10 @@ pub fn router(state: Shared, listener: Listener) -> Router {
     // X-Target is applied after the computer-only routes are merged (a layer only covers
     // routes already there), and the listener's guard stays outermost
     let routes = match listener {
-        Listener::Local => routes
+        Listener::Local => owner_routes(routes)
             .merge(crate::setup_api::local_routes())
             .merge(crate::app_api::local_routes())
             .merge(crate::servers::local_routes())
-            .merge(crate::navs::local_routes())
             .merge(crate::mapcopy::local_routes())
             .merge(crate::hltv::local_routes())
             .merge(crate::prefs::local_routes())
@@ -328,7 +342,10 @@ pub fn router(state: Shared, listener: Listener) -> Router {
             .layer(middleware::from_fn(crate::diagnostics::log_errors))
             .layer(middleware::from_fn(with_target))
             .layer(middleware::from_fn_with_state(state.clone(), guard_local)),
-        Listener::Lan => routes.layer(middleware::from_fn(crate::diagnostics::log_errors)).layer(middleware::from_fn(with_target)).layer(middleware::from_fn_with_state(state.clone(), guard_lan)),
+        Listener::Lan => owner_routes(routes)
+            .layer(middleware::from_fn(crate::diagnostics::log_errors))
+            .layer(middleware::from_fn(with_target))
+            .layer(middleware::from_fn_with_state(state.clone(), guard_lan)),
         // only the shared routes (never the computer's), and the guard decides each request
         Listener::Share => routes
             .merge(crate::control::share_routes())
@@ -337,6 +354,15 @@ pub fn router(state: Shared, listener: Listener) -> Router {
             .layer(middleware::from_fn_with_state(state.clone(), crate::control::guard)),
     };
     routes.with_state(state)
+}
+
+/// Routes for the owner on the app window and on their signed-in phone, never the sharing
+/// listener (helpers): each handler checks owner() as well.
+fn owner_routes(routes: Router<Shared>) -> Router<Shared> {
+    routes
+        .merge(crate::servers::owner_routes())
+        .merge(crate::navs::owner_routes())
+        .merge(crate::smartchat::owner_routes())
 }
 
 pub async fn serve(state: Shared, listener: std::net::TcpListener) {
@@ -364,6 +390,253 @@ mod tests {
         assert_eq!(back2, changed, "a rebuilt file isn't answered with the old copy");
         assert!(gzipped("test/tiny.js", b"x").is_none(), "not worth it");
         assert!(compressible("application/javascript") && compressible("text/css") && !compressible("image/png"));
+    }
+
+    const LAN: &str = "192.168.1.5:8028";
+    const TOKEN: &str = "testtoken0123456789";
+
+    fn state() -> Shared {
+        Arc::new(AppState {
+            current: RwLock::new(None),
+            hosts: RwLock::new(vec!["127.0.0.1:8027".into()]),
+            lan_hosts: RwLock::new(vec![LAN.into()]),
+            token: RwLock::new(TOKEN.into()),
+            app: OnceLock::new(),
+            phone: Mutex::new(crate::app_api::Phone::default()),
+        })
+    }
+
+    /// Says which of the owner's markers a request got past the listener's guard.
+    async fn probe(on: Option<axum::Extension<OnComputer>>, phone: Option<axum::Extension<OnPhone>>) -> String {
+        format!("computer={} phone={} owner={}", on.is_some(), phone.is_some(), owner(&on, &phone))
+    }
+
+    async fn status_and_text(app: Router, req: Request) -> (StatusCode, String) {
+        use tower::ServiceExt;
+        let res = app.oneshot(req).await.unwrap();
+        let status = res.status();
+        let bytes = axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap();
+        (status, String::from_utf8_lossy(&bytes).to_string())
+    }
+
+    fn get(host: &str, uri: &str) -> Request {
+        Request::builder().uri(uri).header("host", host).body(axum::body::Body::empty()).unwrap()
+    }
+
+    #[test]
+    fn owner_is_the_computer_or_the_phone() {
+        assert!(owner(&Some(axum::Extension(OnComputer)), &None));
+        assert!(owner(&None, &Some(axum::Extension(OnPhone))));
+        // a helper (shared control) carries neither
+        assert!(!owner(&None, &None));
+    }
+
+    #[tokio::test]
+    async fn only_a_signed_in_phone_is_marked() {
+        let st = state();
+        let lan = || Router::new().route("/probe", axum::routing::get(probe)).layer(middleware::from_fn_with_state(st.clone(), guard_lan));
+        let local = || Router::new().route("/probe", axum::routing::get(probe)).layer(middleware::from_fn_with_state(st.clone(), guard_local));
+        // signed in: the phone, not the computer
+        let (s, t) = status_and_text(lan(), get(LAN, &format!("/probe?t={TOKEN}"))).await;
+        assert_eq!((s, t.as_str()), (StatusCode::OK, "computer=false phone=true owner=true"));
+        let mut req = get(LAN, "/probe");
+        req.headers_mut().insert(header::COOKIE, format!("ls_token={TOKEN}").parse().unwrap());
+        assert_eq!(status_and_text(lan(), req).await.1, "computer=false phone=true owner=true");
+        // no token, a wrong one, or the wrong host: never reaches the handler
+        for req in [get(LAN, "/probe"), get(LAN, "/probe?t=wrongtoken0123456789"), get("evil.example:8028", &format!("/probe?t={TOKEN}"))] {
+            assert_eq!(status_and_text(lan(), req).await.0, StatusCode::FORBIDDEN);
+        }
+        // the cookie it's given: out of the page's scripts' reach
+        let res = tower::ServiceExt::oneshot(lan(), get(LAN, &format!("/probe?t={TOKEN}"))).await.unwrap();
+        let cookie = res.headers().get(header::SET_COOKIE).unwrap().to_str().unwrap().to_string();
+        assert!(cookie.contains("HttpOnly") && cookie.contains("SameSite=Strict"), "{cookie}");
+        // the app window: the computer, never the phone
+        assert_eq!(status_and_text(local(), get("127.0.0.1:8027", "/probe")).await.1, "computer=true phone=false owner=true");
+    }
+
+    fn phone_post(uri: &str, body: &str) -> Request {
+        let sep = if uri.contains('?') { '&' } else { '?' };
+        Request::builder()
+            .method("POST")
+            .uri(format!("{uri}{sep}t={TOKEN}"))
+            .header("host", LAN)
+            .header("x-panel", "1")
+            .header("content-type", "application/json")
+            .body(axum::body::Body::from(body.to_string()))
+            .unwrap()
+    }
+
+    const HLTV_BODY: &str = r#"{"enabled": false, "port": 27021, "delay": 30, "max_spectators": 4, "record": false}"#;
+    const GONE: &str = "That server isn't there any more.";
+
+    #[tokio::test]
+    async fn the_phone_reaches_what_was_opened_to_it() {
+        let st = state();
+        // each answered by its handler (here: about a server that isn't there, or a request it
+        // turns down on its merits), never refused as the phone
+        crate::voice::pretend_installing(true);
+        let rows: &[(&str, &str, &str, &[&str])] = &[
+            ("POST", "/api/servers/nosuchserver", r#"{"name": "New name", "map": "de_dust2", "maxplayers": 12, "auto_update": false}"#, &[GONE]),
+            ("POST", "/api/servers/nosuchserver/rcon-password", "{}", &[GONE]),
+            ("GET", "/api/servers/nosuchserver/security", "", &[GONE]),
+            ("POST", "/api/servers/nosuchserver/security/fix", r#"{"item": "logs"}"#, &[GONE]),
+            ("POST", "/api/servers/nosuchserver/console/send", r#"{"command": "status"}"#, &[GONE]),
+            ("POST", "/api/servers/nosuchserver/console/hints", "{}", &[GONE]),
+            ("POST", "/api/servers/nosuchserver/hltv", HLTV_BODY, &[GONE]),
+            ("POST", "/api/servers/nosuchserver/webstatus", r#"{"enabled": false}"#, &[GONE]),
+            ("POST", "/api/servers/nosuchserver/voice", r#"{"enabled": false}"#, &[GONE]),
+            ("POST", "/api/servers/nosuchserver/update", "{}", &[GONE]),
+            ("POST", "/api/voice/install", "{}", &["It's being installed already.", "too old for voice"]),
+            ("POST", "/api/sounds/pack", r#"{"id": 999999999, "action": "install"}"#, &["Unknown pack."]),
+            ("POST", "/api/lists", r#"{"list": "nosuchlist", "members": [], "from": ""}"#, &["Unknown list."]),
+            ("POST", "/api/navs/learn", r#"{"maps": ["de_dust2"]}"#, &["Set up the game on this computer first."]),
+            ("POST", "/api/navs/learn/stop", "{}", &["Bots aren't learning maps right now."]),
+        ];
+        for (method, uri, body, expect) in rows {
+            let req = if *method == "GET" { get(LAN, &format!("{uri}?t={TOKEN}")) } else { phone_post(uri, body) };
+            let (s, t) = status_and_text(router(st.clone(), Listener::Lan), req).await;
+            assert_ne!(s, StatusCode::FORBIDDEN, "{uri}: {t}");
+            assert!(!t.contains("forbidden") && !t.contains("Do that from the computer"), "{uri}: {t}");
+            assert!(expect.iter().any(|e| t.contains(e)), "{uri}: {s} {t}");
+        }
+        crate::voice::pretend_installing(false);
+        let (s, t) = status_and_text(router(st.clone(), Listener::Lan), get(LAN, &format!("/api/smartchat?t={TOKEN}"))).await;
+        assert_eq!(s, StatusCode::OK);
+        assert!(t.contains("\"models\""), "{t}");
+    }
+
+    #[tokio::test]
+    async fn the_phone_doesnt_get_secrets_or_the_whole_console() {
+        let st = state();
+        // showing the console password and the website status secrets: refused
+        for (uri, body) in [("/api/servers/nosuchserver/rcon-password/show", "{}"), ("/api/servers/nosuchserver/webstatus/secret", r#"{"kind": "token"}"#)] {
+            let (s, t) = status_and_text(router(st.clone(), Listener::Lan), phone_post(uri, body)).await;
+            assert_eq!(s, StatusCode::FORBIDDEN, "{uri}: {t}");
+        }
+        // a console password of its own choosing: refused (a random one is made instead)
+        let (_, t) = status_and_text(router(st.clone(), Listener::Lan), phone_post("/api/servers/nosuchserver/rcon-password", r#"{"password": "known-password-1"}"#)).await;
+        assert!(t.contains("Type your own console password on the computer"), "{t}");
+        // console lines: refused before the server is looked up; a plain one goes on
+        for (line, why) in [
+            ("exec x.cfg", "only be sent from the computer"),
+            ("amxx unload x", "only be sent from the computer"),
+            ("sv_downloadurl http://example.com", "only be sent from the computer"),
+            ("status;quit", "One command at a time"),
+            ("RCON_PASSWORD x", "can't be sent"),
+        ] {
+            let body = serde_json::json!({ "command": line }).to_string();
+            let (_, t) = status_and_text(router(st.clone(), Listener::Lan), phone_post("/api/servers/nosuchserver/console/send", &body)).await;
+            assert!(t.contains(why), "{line}: {t}");
+        }
+        let (_, t) = status_and_text(router(st.clone(), Listener::Lan), phone_post("/api/servers/nosuchserver/console/send", r#"{"command": "status"}"#)).await;
+        assert!(t.contains(GONE), "{t}");
+    }
+
+    #[tokio::test]
+    async fn the_phone_still_cant_delete_or_make_servers() {
+        let st = state();
+        // deleting, rebuilding and setting up again: refused before anything is looked up
+        for action in ["delete", "rebuild", "retry"] {
+            let (s, t) = status_and_text(router(st.clone(), Listener::Lan), phone_post(&format!("/api/servers/nosuchserver/{action}"), "{}")).await;
+            assert_eq!(s, StatusCode::OK, "{action}");
+            assert!(t.contains("Do that from the computer"), "{action}: {t}");
+        }
+        // removing what's installed: refused
+        for (uri, body) in [
+            ("/api/voice/uninstall", "{}"),
+            ("/api/sounds/pack", r#"{"id": 1, "action": "remove"}"#),
+            ("/api/gb/uninstall", r#"{"mod": 1, "section": "maps"}"#),
+            ("/api/servers/nosuchserver/hltv/delete-demo", r#"{"name": "x.dem"}"#),
+        ] {
+            assert_eq!(status_and_text(router(st.clone(), Listener::Lan), phone_post(uri, body)).await.0, StatusCode::FORBIDDEN, "{uri}");
+        }
+        // computer-only paths under a server's own: on the phone listener they fall to a
+        // server's settings (for a server of that name: none) or its actions (refused), never
+        // to importing, picking or making a server
+        let body = r#"{"dir": "/tmp", "host": "203.0.113.1"}"#;
+        for (uri, expect) in [
+            ("/api/servers/remote", GONE),
+            ("/api/servers/import", GONE),
+            ("/api/servers/pick-folder", GONE),
+            ("/api/servers/pick-key", GONE),
+            ("/api/servers/remote/probe", "Do that from the computer running Loner-Strike."),
+            ("/api/servers/nosuchserver/hltv-folder", "Do that from the computer running Loner-Strike."),
+        ] {
+            let (_, t) = status_and_text(router(st.clone(), Listener::Lan), phone_post(uri, body)).await;
+            assert_eq!(t, serde_json::json!({ "error": expect }).to_string(), "{uri}");
+        }
+        // computer-only routes the phone listener doesn't serve at all
+        for uri in [
+            "/api/smartchat/remove",
+            "/api/backup/restore",
+            "/api/backup/export",
+            "/api/control/server/nosuchserver/invite",
+            "/api/app/remove-everything",
+            "/api/setup/uninstall",
+            "/api/mods/plugins/remove",
+        ] {
+            let (s, t) = status_and_text(router(st.clone(), Listener::Lan), phone_post(uri, "{}")).await;
+            assert_eq!(s, StatusCode::FORBIDDEN, "{uri}");
+            assert!(t.contains("forbidden"), "{uri}: {t}");
+        }
+    }
+
+    /// The routes the owner's phone was given, behind a layer that marks every request as a
+    /// helper's (what control::guard does once a helper's key and role check out).
+    fn as_helper(st: Shared) -> Router {
+        let m = crate::control::test_member(crate::control::Role::Admin, "nosuchserver");
+        Router::new()
+            .merge(crate::servers::routes())
+            .merge(crate::servers::owner_routes())
+            .merge(crate::hltv::routes())
+            .merge(crate::webstatus::routes())
+            .merge(crate::voice::routes())
+            .merge(crate::sounds::routes())
+            .merge(crate::lists::routes())
+            .merge(crate::navs::owner_routes())
+            .merge(crate::smartchat::owner_routes())
+            .layer(axum::Extension(crate::control::Helper(m)))
+            .with_state(st)
+    }
+
+    fn helper_req(method: &str, uri: &str, body: &str) -> Request {
+        Request::builder().method(method).uri(uri).header("x-panel", "1").header("content-type", "application/json").body(axum::body::Body::from(body.to_string())).unwrap()
+    }
+
+    #[tokio::test]
+    async fn helpers_get_none_of_the_phones_powers() {
+        let st = state();
+        for (method, uri, body) in [
+            ("GET", "/api/servers/nosuchserver/security", ""),
+            ("POST", "/api/servers/nosuchserver/security/fix", r#"{"item": "logs"}"#),
+            ("POST", "/api/servers/nosuchserver/rcon-password/show", "{}"),
+            ("POST", "/api/servers/nosuchserver/rcon-password", "{}"),
+            ("POST", "/api/servers/nosuchserver/console/send", r#"{"command": "status"}"#),
+            ("POST", "/api/servers/nosuchserver/console/hints", "{}"),
+            ("POST", "/api/servers/nosuchserver/hltv", HLTV_BODY),
+            ("POST", "/api/servers/nosuchserver/webstatus", r#"{"enabled": false}"#),
+            ("POST", "/api/servers/nosuchserver/webstatus/secret", r#"{"kind": "token"}"#),
+            ("POST", "/api/servers/nosuchserver/voice", r#"{"enabled": false}"#),
+            ("POST", "/api/voice/install", "{}"),
+            ("POST", "/api/sounds/pack", r#"{"id": 1, "action": "install"}"#),
+            ("POST", "/api/lists", r#"{"list": "bans", "members": [], "from": ""}"#),
+            ("POST", "/api/navs/learn", r#"{"maps": []}"#),
+            ("POST", "/api/navs/learn/stop", "{}"),
+            ("POST", "/api/navs/send", r#"{"map": "de_dust2"}"#),
+            ("POST", "/api/smartchat/set", "{}"),
+            ("POST", "/api/smartchat/download", r#"{"id": "x"}"#),
+        ] {
+            let (s, t) = status_and_text(as_helper(st.clone()), helper_req(method, uri, body)).await;
+            assert_eq!(s, StatusCode::FORBIDDEN, "{uri}: {t}");
+        }
+        // updates and deleting stay out of a helper's reach, as before
+        for action in ["update", "apply-updates", "delete"] {
+            let (_, t) = status_and_text(as_helper(st.clone()), helper_req("POST", &format!("/api/servers/nosuchserver/{action}"), "{}")).await;
+            assert!(t.contains("Do that from the computer"), "{action}: {t}");
+        }
+        // an Admin helper still changes the server's basics (answered by the handler)
+        let (s, t) = status_and_text(as_helper(st.clone()), helper_req("POST", "/api/servers/nosuchserver", r#"{"name": "New name"}"#)).await;
+        assert_eq!((s, t), (StatusCode::OK, serde_json::json!({ "error": GONE }).to_string()));
     }
 
     #[test]

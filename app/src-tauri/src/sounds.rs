@@ -1009,9 +1009,10 @@ struct PackReq {
     action: String,
 }
 
-async fn api_pack(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<PackReq>) -> Reply {
-    // installing and removing packs is for the computer only (not the phone)
-    if !from_panel(&headers) || on.is_none() {
+async fn api_pack(State(st): State<Shared>, headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<PackReq>) -> Reply {
+    // installing packs is for the owner (the computer or their phone); removing one only at
+    // the computer
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) || (on.is_none() && req.action != "install") {
         return forbidden();
     }
     let Some(p) = pack(req.id) else { return (StatusCode::BAD_REQUEST, Json(json!({"error": "Unknown pack."}))) };

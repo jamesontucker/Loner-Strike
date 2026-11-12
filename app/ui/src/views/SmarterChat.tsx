@@ -3,7 +3,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { getJsonAt, ON_COMPUTER_ONLY, ON_THIS_COMPUTER, postJson, useActions } from "../api";
+import { getJsonAt, ON_THIS_COMPUTER, postJson, useActions } from "../api";
 import { queryClient } from "../queries";
 import { BusyButton, Info, SectionHead, Sheet, Switch, useConfirm, useToast } from "../ui";
 
@@ -20,7 +20,6 @@ function useSmartChat(fast: boolean) {
   return useQuery({
     queryKey: KEY,
     queryFn: ({ signal }) => getJsonAt<ScInfo>("/api/smartchat", null, signal),
-    enabled: ON_THIS_COMPUTER,
     refetchInterval: fast ? 800 : 4000,
   });
 }
@@ -59,14 +58,6 @@ export function SmarterChat() {
       }
     />
   );
-  if (!ON_THIS_COMPUTER) {
-    return (
-      <section>
-        {head}
-        <p className="muted">{ON_COMPUTER_ONLY}</p>
-      </section>
-    );
-  }
   if (!d) {
     return (
       <section>
@@ -176,7 +167,8 @@ export function SmarterChat() {
                 </label>
                 <div className="row sc-actions">
                   {m.downloaded ? (
-                    <BusyButton className="btn danger small" busy={busy(`smartchat:rm:${m.id}`)} label="Remove" busyLabel="Removing…" onClick={() => remove(m)} />
+                    // (removing a model is done at the computer)
+                    ON_THIS_COMPUTER && <BusyButton className="btn danger small" busy={busy(`smartchat:rm:${m.id}`)} label="Remove" busyLabel="Removing…" onClick={() => remove(m)} />
                   ) : (
                     <BusyButton
                       className="btn small"
@@ -192,6 +184,7 @@ export function SmarterChat() {
             );
           })}
         </ul>
+        {!ON_THIS_COMPUTER && have.length > 0 && <p className="muted small-note">To remove a model, use the computer running Loner-Strike.</p>}
       </div>
       {trying && <TryIt info={d} onClose={() => setTrying(false)} />}
     </section>

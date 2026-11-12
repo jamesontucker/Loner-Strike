@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getJson, isSharedId, ON_THIS_COMPUTER, postJson, targetKey, useActions } from "../api";
+import { getJson, isSharedId, postJson, targetKey, useActions } from "../api";
 import { Info, Switch, useConfirm, useToast } from "../ui";
 
 export type ListId = "admins" | "bans" | "filter" | "welcome" | "messages";
@@ -35,11 +35,6 @@ function ShareListFor({ list, onShared }: { list: ListId; onShared?: () => void 
   const others = data.targets.filter((t) => t.id !== me);
   const nameOf = (id: string) => data.targets.find((t) => t.id === id)?.name ?? id;
   const key = `share:${list}:${me}`;
-
-  // a phone sees what's shared but changes it from the computer
-  if (!ON_THIS_COMPUTER) {
-    return on ? <p className="muted small-note share-list">Shared with {members.filter((m) => m !== me).map(nameOf).join(", ")}.</p> : null;
-  }
 
   /** Saves who shares the list. Resolves true when it was saved. */
   const set = async (next: string[], from: string, done: string, saying: string) => {

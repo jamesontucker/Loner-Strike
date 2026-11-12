@@ -262,7 +262,7 @@ export function Sounds({ target }: { target: string }) {
     <div className="stack sounds">
       <SectionHead title="Sounds" note={`Round-end music, Quake sounds and sound packs on ${where}. Players download custom sounds the first time they join.`}>
         {/* (your own game: more from GameBanana, like Maps and Skins & models) */}
-        {target === "local" && ON_THIS_COMPUTER && <button className="btn" onClick={() => useNav.getState().go("more", "sounds")}>Get sounds</button>}
+        {target === "local" && <button className="btn" onClick={() => useNav.getState().go("more", "sounds")}>Get sounds</button>}
       </SectionHead>
 
       {changed && (live ? (
@@ -431,7 +431,7 @@ export function Sounds({ target }: { target: string }) {
           title="Classic sound packs"
           note={`A few picks from GameBanana's Counter-Strike 1.6 sounds.${d.dedicated ? " Packs that replace game sounds change what you hear, so they go into your own game; music packs go onto this server." : ""} Anything replaced is backed up, and removing a pack puts it back.`}
         />
-        {!ON_THIS_COMPUTER && <p className="muted">Install and remove packs on the computer running Loner-Strike.</p>}
+        {!ON_THIS_COMPUTER && packs?.packs.some((p) => p.installed) && <p className="muted small-note">To remove a pack, use the computer running Loner-Strike.</p>}
         {!packs && packsFailed ? (
           <LoadError text="Couldn't load the sound packs." onRetry={load} />
         ) : !packs ? (
@@ -457,7 +457,7 @@ export function Sounds({ target }: { target: string }) {
                     ) : p.installed ? (
                       ON_THIS_COMPUTER && <BusyButton className="btn danger" busy={isBusy(key(`pack:${p.id}`))} label="Remove" busyLabel="Removing…" onClick={() => packAction(p, "remove")} />
                     ) : (
-                      ON_THIS_COMPUTER && <BusyButton className="btn primary" busy={isBusy(key(`pack:${p.id}`))} label="Install" busyLabel="Installing…" onClick={() => packAction(p, "install")} />
+                      <BusyButton className="btn primary" busy={isBusy(key(`pack:${p.id}`))} label="Install" busyLabel="Installing…" onClick={() => packAction(p, "install")} />
                     )}
                     <a className="btn" href={p.url} target="_blank" rel="noreferrer">Open on GameBanana</a>
                   </div>

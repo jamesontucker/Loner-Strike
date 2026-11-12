@@ -351,8 +351,9 @@ struct SetReq {
     from: String,
 }
 
-async fn api_set(headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, Json(req): Json<SetReq>) -> (StatusCode, Json<Value>) {
-    if !from_panel(&headers) || on.is_none() {
+async fn api_set(headers: HeaderMap, on: Option<axum::Extension<crate::server::OnComputer>>, phone: Option<axum::Extension<crate::server::OnPhone>>, Json(req): Json<SetReq>) -> (StatusCode, Json<Value>) {
+    // the owner (the computer or their phone): a helper's lists stay on their server
+    if !from_panel(&headers) || !crate::server::owner(&on, &phone) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
     }
     let r = tokio::task::spawn_blocking(move || -> Result<Value, String> {
