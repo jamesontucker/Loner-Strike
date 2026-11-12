@@ -117,7 +117,7 @@ impl Spray {
 
 /// Whether a spray of this size works in game.
 pub fn valid_size(w: u32, h: u32) -> bool {
-    (STEP..=MAX_SIDE).contains(&w) && (STEP..=MAX_SIDE).contains(&h) && w % STEP == 0 && h % STEP == 0 && w * h <= MAX_PIXELS
+    (STEP..=MAX_SIDE).contains(&w) && (STEP..=MAX_SIDE).contains(&h) && w.is_multiple_of(STEP) && h.is_multiple_of(STEP) && w * h <= MAX_PIXELS
 }
 
 /// The spray size for a picture of `w` x `h`: the valid size closest to its shape, as big as

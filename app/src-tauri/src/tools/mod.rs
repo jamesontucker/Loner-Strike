@@ -9,6 +9,7 @@
 pub mod cache;
 pub mod mapinfo;
 pub mod overlays;
+pub mod spray;
 pub mod replay;
 
 use crate::goldsrc::{self, bsp::Bsp, entities, mesh, wad};
@@ -279,6 +280,7 @@ pub fn local_routes() -> Router<Shared> {
         .route("/api/tools/map/:name/tex/:file", get(api_texture))
         .route("/api/tools/map/:name/entities", get(api_entities))
         .merge(overlays::routes())
+        .merge(spray::routes())
 }
 
 /// Builds everything the viewer needs for one map file, uncached (tests and the real-map
