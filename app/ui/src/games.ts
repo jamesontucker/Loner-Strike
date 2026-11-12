@@ -37,5 +37,5 @@ export const BOT_STYLE_NOTE: Record<string, string> = {
   "10": "Good aim, slow and methodical. They camp a lot and rarely talk",
   "5": "Very good and focused. They bunnyhop between fights",
   "6": "Suspiciously good: most bullets find you and they notice you from behind",
-  "7": "Everything maxed. Every bullet near you is a headshot",
+  "7": "Everything maxed. Nearly every bullet near you is a headshot",
 };

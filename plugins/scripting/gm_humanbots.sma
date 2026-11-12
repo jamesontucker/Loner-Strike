@@ -19,7 +19,7 @@
 
 	gm_botstyle      0 Classic (off), 1 Pub server, 2 Matchmaking, 3 Veterans, 4 Newbie lobby,
 	                 5 Locked In, 6 Hackers (most bullets snap to you, notice you behind them),
-	                 7 Gods (everything maxed: every bullet near you is a headshot),
+	                 7 Gods (everything maxed: nearly every bullet near you is a headshot),
 	                 8 Mixed lobby (each bot plays at its own level, newbie to Locked In,
 	                   and keeps it while it's on the server)
 	                 9 LAN party (friends of every level, most in the middle), 10 Old-timers
