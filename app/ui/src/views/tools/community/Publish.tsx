@@ -262,7 +262,7 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
         <p className="muted small-note">
           Goes in the package: the map{r.map.nav ? ", its bot nav" : ""}{r.map.lsv ? ", finished bot map knowledge" : ""}, a fresh download list (.res)
           {r.files.length ? ` and ${r.files.length} file${r.files.length === 1 ? "" : "s"} it uses (${r.files.slice(0, 4).join(", ")}${r.files.length > 4 ? "…" : ""})` : ""}.
-          {r.health ? ` Health check from ${new Date(r.health.when * 1000).toLocaleDateString()}: ${r.health.verdict}.` : ""}
+          {r.health ? ` Bot simulation from ${new Date(r.health.when * 1000).toLocaleDateString()}: ${r.health.verdict}.` : ""}
         </p>
       </section>
 

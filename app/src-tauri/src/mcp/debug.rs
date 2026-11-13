@@ -295,7 +295,7 @@ fn more_specs() -> Vec<Spec> {
         Spec { name: "creatures_list", title: "Creatures", kind: Read, schema: server_only,
             description: "Creatures alive in the running game (ls_creature list), when the brain has them." },
         Spec { name: "recording_status", title: "Recorder status", kind: Read, schema: server_only,
-            description: "Whether the bot recorder (gm_simrec) is loaded on the game or server and which recordings it has written (they show up in replay_list for the game). Map health checks always record." },
+            description: "Whether the bot recorder (gm_simrec) is loaded on the game or server and which recordings it has written (they show up in replay_list for the game). Map simulations always record." },
         Spec { name: "recording_set", title: "Recorder on/off", kind: Change,
             schema: || obj(json!({"server": server_prop(), "on": {"type": "boolean"}}), &["server", "on"]),
             description: "Pauses or resumes the bot recorder where it's loaded (amxx pause/unpause gm_simrec)." },
@@ -435,7 +435,7 @@ pub async fn run(ctx: &Ctx, name: &str, a: &Value) -> Option<Done> {
             let mut files: Vec<(String, u64)> = std::fs::read_dir(&dir).into_iter().flatten().flatten().filter_map(|e| Some((e.file_name().to_string_lossy().to_string(), e.metadata().ok()?.len()))).collect();
             files.sort();
             Ok(json!({"loaded": loaded, "files": files.iter().rev().take(30).map(|(n, l)| json!({"file": n, "size": l})).collect::<Vec<_>>(),
-                      "note": if loaded == Some(true) { "Recording while the map runs; replay_list shows the game's recordings." } else { "The recorder isn't loaded here. A map health check (health_start) records bots and keeps the recording with its trace for replay_summary / replay_trace." }}))
+                      "note": if loaded == Some(true) { "Recording while the map runs; replay_list shows the game's recordings." } else { "The recorder isn't loaded here. A map simulation (health_start) records bots and keeps the recording with its trace for replay_summary / replay_trace." }}))
         }
         .await,
         "recording_set" => async {

@@ -94,18 +94,18 @@ pub fn specs() -> Vec<Spec> {
         Spec { name: "map_doctor_copy_files", title: "Copy missing files", kind: Change,
             schema: || obj(json!({"map": map_prop(), "files": {"type": "array", "items": {"type": "string"}, "description": "Files the doctor found only in another game folder (as it lists them)"}}), &["map", "files"]),
             description: "Copies files the doctor found only in another game folder into the map's game folder (never replaces a file)." },
-        Spec { name: "health_options", title: "Health check options", kind: Read, schema: map_only,
-            description: "Whether a map health check can run for a map (and why not), the modes, servers to copy and the preset mode." },
-        Spec { name: "health_start", title: "Start a health check", kind: Change,
+        Spec { name: "health_options", title: "Map simulator options", kind: Read, schema: map_only,
+            description: "Whether the map simulator can run for a map (and why not), the modes, servers to copy and the preset mode." },
+        Spec { name: "health_start", title: "Start a map simulation", kind: Change,
             schema: || obj(json!({"map": map_prop(), "mode": {"type": "string"}, "minutes": {"type": "integer", "minimum": 1, "maximum": 15}, "bots": {"type": "integer", "minimum": 2, "maximum": 20}, "server": {"type": "string"}}), &["map"]),
-            description: "Starts a map health check: bots play the map on a hidden server for a few minutes, then a report says where they fall, get stuck or die to the map. Poll health_progress." },
-        Spec { name: "health_progress", title: "Health check progress", kind: Read, schema: none,
-            description: "The running health check: phase, what it's doing, time left." },
-        Spec { name: "health_cancel", title: "Stop the health check", kind: Change, schema: none, description: "Stops the running health check." },
-        Spec { name: "health_reports", title: "Health check reports", kind: Read, schema: none, description: "Earlier health check reports (newest first)." },
-        Spec { name: "health_report", title: "Health check report", kind: Read,
+            description: "Starts a map simulation (the map simulator, once called the health check): bots play the map on a hidden server for a few minutes, then a report says where they fall, get stuck or die to the map, where fights happen and where nobody went, and who wins rounds. Poll health_progress." },
+        Spec { name: "health_progress", title: "Map simulation progress", kind: Read, schema: none,
+            description: "The running map simulation: phase, what it's doing, time left." },
+        Spec { name: "health_cancel", title: "Stop the map simulation", kind: Change, schema: none, description: "Stops the running map simulation." },
+        Spec { name: "health_reports", title: "Map simulation reports", kind: Read, schema: none, description: "Earlier map simulation reports (newest first)." },
+        Spec { name: "health_report", title: "Map simulation report", kind: Read,
             schema: || obj(json!({"id": {"type": "string"}}), &["id"]),
-            description: "One health check report: verdict, findings in plain words, falls, stuck spots, deaths to the map, console errors." },
+            description: "One map simulation report: verdict, findings in plain words, falls, stuck spots, deaths to the map, console errors, rounds and who won them, kills by side, where fights happen, heat grids (time, deaths, kills) and the nav areas and places nobody went." },
         // the map editor
         Spec { name: "editor_state", title: "Editor: the open map", kind: Read,
             schema: || obj(json!({"limit": {"type": "integer", "minimum": 1, "maximum": 500, "description": "How many brushes/entities to list (default 100)"}}), &[]),
@@ -184,7 +184,7 @@ pub fn specs() -> Vec<Spec> {
             description: "Writes the edited nav over the map's .nav (a .bak of the original is kept the first time). Asks the person first." },
         // replay
         Spec { name: "replay_list", title: "Recordings", kind: Read, schema: none,
-            description: "Bot recordings (health checks, the sim): id, map, when, length, bots, kills." },
+            description: "Bot recordings (map simulations, the sim): id, map, when, length, bots, kills." },
         Spec { name: "replay_summary", title: "Recording summary", kind: Read,
             schema: || obj(json!({"id": {"type": "string"}}), &["id"]),
             description: "One recording in numbers: players, rounds, kills (with headshots, weapons, deaths to the world), falls with where they started and the drop, and stuck spots." },
@@ -946,7 +946,7 @@ pub fn resource_list() -> Vec<Value> {
     vec![
         json!({"uri": "loner://maps", "name": "maps", "title": "Maps", "description": "The game's maps with nav, knowledge and missing files.", "mimeType": "application/json"}),
         json!({"uri": "loner://editor/doc", "name": "editor-doc", "title": "Map editor: open map", "description": "The map open in the map editor.", "mimeType": "application/json"}),
-        json!({"uri": "loner://health/reports", "name": "health-reports", "title": "Health check reports", "description": "Earlier map health checks.", "mimeType": "application/json"}),
+        json!({"uri": "loner://health/reports", "name": "health-reports", "title": "Map simulation reports", "description": "Earlier map simulations.", "mimeType": "application/json"}),
     ]
     .into_iter()
     .chain(docs)
@@ -958,7 +958,7 @@ pub fn resource_templates() -> Vec<Value> {
         json!({"uriTemplate": "loner://map/{map}/info", "name": "map-info", "title": "Map info", "description": "One map's facts.", "mimeType": "application/json"}),
         json!({"uriTemplate": "loner://map/{map}/doctor", "name": "map-doctor", "title": "Map doctor report", "description": "The map doctor's report for a map.", "mimeType": "application/json"}),
         json!({"uriTemplate": "loner://map/{map}/nav", "name": "map-nav", "title": "Nav summary", "description": "The map's bot navigation in brief.", "mimeType": "application/json"}),
-        json!({"uriTemplate": "loner://health/{id}", "name": "health-report", "title": "Health check report", "description": "One health check report.", "mimeType": "application/json"}),
+        json!({"uriTemplate": "loner://health/{id}", "name": "health-report", "title": "Map simulation report", "description": "One map simulation report.", "mimeType": "application/json"}),
     ]
 }
 
@@ -1005,7 +1005,7 @@ pub fn prompt_list() -> Vec<Value> {
                "arguments": [{"name": "size", "description": "Floor size in units (default 1024)", "required": false},
                              {"name": "theme", "description": "A look to aim for, e.g. desert, office", "required": false}]}),
         json!({"name": "debug_bots_on_map", "title": "Debug my bots on this map",
-               "description": "Finds out why bots misbehave on a map: health check, recordings, the brain's trace and the console, then explains and suggests fixes.",
+               "description": "Finds out why bots misbehave on a map: map simulation, recordings, the brain's trace and the console, then explains and suggests fixes.",
                "arguments": [{"name": "map", "description": "Map name", "required": true}, {"name": "problem", "description": "What you see, e.g. they fall off the beams", "required": false}]}),
         json!({"name": "make_game_mode", "title": "Make a game mode",
                "description": "Builds a game mode in the Game Mode Studio from a description, checks it, compiles it and offers a playtest with the debugger.",
@@ -1079,7 +1079,7 @@ pub fn get_prompt(name: &str, args: &Map<String, Value>) -> Option<Value> {
                  1. map_doctor {map}: missing files, the .res list, whether it has a nav and if the nav fits the map.\n\
                  2. map_nav_summary and nav_problems {map}: unreachable areas, traps, broken links, ladders with no end, unnamed places.\n\
                  3. map_knowledge {map}: has the bot brain learned the map, and does its knowledge fit the nav.\n\
-                 4. health_reports: if there's a health check report for {map}, read it with health_report (falls, stuck spots, deaths to the map).\n\
+                 4. health_reports: if there's a map simulation report for {map}, read it with health_report (falls, stuck spots, deaths to the map, fights, places nobody went).\n\
                  Then give me a short list, worst first, of what stops bots playing {map} well and what to do about each. \
                  Don't change anything yet; ask me before using any tool that changes files."
             ))

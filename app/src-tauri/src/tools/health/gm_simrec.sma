@@ -9,7 +9,8 @@
 	  F,t,id,weapon,speed,duck,ground         a shot
 	  H,t,attacker,victim,damage,hitgroup      a hit
 	  K,t,killer,victim,headshot,weapon        a kill
-	  R,t,event                                round start / end
+	  R,t,event[,winner]                       round start / end (an end has who won: 1 the
+	                                           Terrorists, 2 the CTs, 0 a draw or not known)
 	  P,id,name,bot                            who someone is
 	  C,t,id,team,text                         chat (team: 1 for say_team; commas in the text become ;)
 	  E,t,id,event,detail                      something that happened: plant, planted, defuse (detail
@@ -31,6 +32,8 @@
 new g_File
 new g_Keys[33]
 new bool:g_Named[33]
+// who won the round that's ending (the win sound comes just before the Round_End log line)
+new g_Winner
 
 new const GUNS[][] = { "weapon_p228", "weapon_scout", "weapon_xm1014", "weapon_mac10", "weapon_aug",
 	"weapon_elite", "weapon_fiveseven", "weapon_ump45", "weapon_sg550", "weapon_galil", "weapon_famas",
@@ -49,6 +52,8 @@ public plugin_init()
 	register_event("DeathMsg", "ev_death", "a")
 	register_logevent("ev_round_start", 2, "1=Round_Start")
 	register_logevent("ev_round_end", 2, "1=Round_End")
+	register_event("SendAudio", "ev_win_t", "a", "2&%!MRAD_terwin")
+	register_event("SendAudio", "ev_win_ct", "a", "2&%!MRAD_ctwin")
 	// (from the log, not the say command: the bots' lines go straight to the game, past
 	// AMXX's command hooks)
 	register_logevent("ev_say", 3, "1=say")
@@ -155,10 +160,21 @@ public ev_round_start()
 		server_cmd("bot_ls_trace 1")
 }
 
+public ev_win_t()
+{
+	g_Winner = 1
+}
+
+public ev_win_ct()
+{
+	g_Winner = 2
+}
+
 public ev_round_end()
 {
 	if (g_File)
-		fprintf(g_File, "R,%.2f,end^n", get_gametime())
+		fprintf(g_File, "R,%.2f,end,%d^n", get_gametime(), g_Winner)
+	g_Winner = 0
 }
 
 // Can a see b (eye to eye, and roughly in front: within 75 degrees of where a looks)?

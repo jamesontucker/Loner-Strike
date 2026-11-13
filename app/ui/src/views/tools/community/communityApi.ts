@@ -1,5 +1,5 @@
 // Community creations' server side (tools/community.rs). Files live on GameBanana; the
-// Loner-Strike index adds modes, bot readiness, health check results and trust.
+// Loner-Strike index adds modes, bot readiness, bot simulation results and trust.
 
 import { get, post, tryGet } from "../common/api";
 
@@ -170,7 +170,7 @@ export const BADGE_LABEL: Record<Badge, { label: string; help: string }> = {
   featured: { label: "Featured", help: "Picked by the Loner-Strike team." },
   bots: { label: "Works with bots", help: "Ships with a bot nav and finished map knowledge: bots play it well from the first round." },
   nav: { label: "Bot nav", help: "Ships with a bot nav. The bots' map knowledge fills in as you play." },
-  checked: { label: "Checked with bots", help: "A Loner-Strike health check found no real problems (bots didn't fall, get stuck or hit errors)." },
+  checked: { label: "Checked with bots", help: "A Loner-Strike map simulation found no real problems (bots didn't fall, get stuck or hit errors)." },
   data: { label: "Settings only", help: "A Game Mode Studio mode: settings, rules and graphs only, nothing that runs code." },
 };
 

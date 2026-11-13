@@ -518,7 +518,7 @@ function BotFacts({ d }: { d: Details }) {
       {m.modes.length > 0 && <li>Made for: {m.modes.join(", ")}.</li>}
       {h && (
         <li>
-          Health check ({h.minutes} min, {h.bots} bots): {h.verdict === "good" ? "no real problems" : h.verdict === "warn" ? "a few things worth a look" : "real problems found"}
+          Bot simulation ({h.minutes} min, {h.bots} bots): {h.verdict === "good" ? "no real problems" : h.verdict === "warn" ? "a few things worth a look" : "real problems found"}
           {h.falls ? `, ${h.falls} falls` : ""}, stuck {h.stuckPct.toFixed(1)}% of the time{h.coveragePct != null ? `, bots used ${Math.round(h.coveragePct)}% of the map` : ""}.
         </li>
       )}

@@ -180,6 +180,9 @@ pub struct Chat {
 pub struct Round {
     pub start: f32,
     pub end: Option<f32>,
+    /// who won: 1 the Terrorists, 2 the CTs (recordings from before gm_simrec wrote it: None)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub winner: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -339,7 +342,7 @@ pub fn parse_recording(r: impl BufRead) -> Result<Recording, String> {
     let mut samples: BTreeMap<u8, Vec<Sample>> = BTreeMap::new();
     let mut names: HashMap<u8, (String, bool)> = HashMap::new();
     let mut kills_raw: Vec<(f32, u8, u8, bool, String)> = Vec::new();
-    let mut marks: Vec<(f32, bool)> = Vec::new();
+    let mut marks: Vec<(f32, bool, Option<u8>)> = Vec::new();
     each_line(r, |line| {
         let f: Vec<&str> = line.split(',').collect();
         let ok = (|| -> Option<()> {
@@ -367,7 +370,7 @@ pub fn parse_recording(r: impl BufRead) -> Result<Recording, String> {
                     rec.hits.push(Hit { t: num(f[1])?, attacker: id_of(f[2])?, victim: id_of(f[3])?, damage: num(f[4])?, hitgroup: small(f[5])? })
                 }
                 "K" if f.len() >= 6 => kills_raw.push((num(f[1])?, id_of(f[2])?, id_of(f[3])?, f[4].trim() == "1", f[5].trim().to_string())),
-                "R" if f.len() >= 3 => marks.push((num(f[1])?, f[2].trim() == "start")),
+                "R" if f.len() >= 3 => marks.push((num(f[1])?, f[2].trim() == "start", f.get(3).and_then(|w| w.trim().parse::<u8>().ok()).filter(|w| (1..=2).contains(w)))),
                 "P" if f.len() >= 4 => {
                     // (a name can't hold a comma: gm_simrec swaps them for spaces)
                     names.insert(id_of(f[1])?, (f[2].to_string(), f[3].trim() == "1"));
@@ -405,11 +408,12 @@ pub fn parse_recording(r: impl BufRead) -> Result<Recording, String> {
 
     // rounds: each start with the end after it
     marks.sort_by(|a, b| a.0.total_cmp(&b.0));
-    for (t, start) in &marks {
+    for (t, start, winner) in &marks {
         if *start {
-            rec.rounds.push(Round { start: *t, end: None });
+            rec.rounds.push(Round { start: *t, end: None, winner: None });
         } else if let Some(r) = rec.rounds.last_mut().filter(|r| r.end.is_none()) {
             r.end = Some(*t);
+            r.winner = *winner;
         }
     }
     // play time: not between a round's end and the next start (round-end pause, freeze time)

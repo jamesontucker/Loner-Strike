@@ -257,7 +257,7 @@ footer a { color: var(--dim); }
     <li><a href="#map-editor">Map editor</a> that compiles with SDHLT and <a href="#compile-playtest">playtests with bots</a>, and <a href="#map-import">opens Hammer and J.A.C.K. maps</a>.</li>
     <li><a href="#game-mode-studio">Game Mode Studio</a>: game modes from nodes and wires, <a href="#studio-debugging">debugged live</a> in the game.</li>
     <li><a href="#plugin-studio">Plugin Studio</a> for AMX Mod X, and <a href="#creature-studio">Creature Studio</a> for creatures and waves.</li>
-    <li>Map tools: <a href="#map-doctor">Map doctor</a>, <a href="#health-check">Map health check</a>, <a href="#nav-fixer">Nav fixer</a>, <a href="#callouts">Callouts</a>, <a href="#radar-maker">Radar maker</a>.</li>
+    <li>Map tools: <a href="#map-doctor">Map doctor</a>, <a href="#map-simulator">Map simulator</a>, <a href="#nav-fixer">Nav fixer</a>, <a href="#callouts">Callouts</a>, <a href="#radar-maker">Radar maker</a>.</li>
     <li>Make the game yours: <a href="#crosshair-config">Crosshair &amp; config</a>, <a href="#bot-people">Bot people</a>, <a href="#spray-maker">Spray maker</a>.</li>
     <li>Look inside: <a href="#map-viewer">Map viewer</a>, <a href="#replay">Replay</a>, <a href="#demos">Demos</a>, <a href="#textures-models">Textures &amp; models</a>.</li>
   </ul>
@@ -733,7 +733,7 @@ footer a { color: var(--dim); }
     <thead><tr><th>Group</th><th>Tools</th></tr></thead>
     <tbody>
       <tr><td><b>Create</b></td><td><a href="#map-editor">Map editor</a>, <a href="#game-mode-studio">Game Mode Studio</a>, <a href="#creature-studio">Creature Studio</a>, <a href="#plugin-studio">Plugin Studio</a></td></tr>
-      <tr><td><b>Map tools</b></td><td><a href="#map-doctor">Map doctor</a>, <a href="#health-check">Map health check</a>, <a href="#nav-fixer">Nav fixer</a>, <a href="#callouts">Callouts</a>, <a href="#radar-maker">Radar maker</a></td></tr>
+      <tr><td><b>Map tools</b></td><td><a href="#map-doctor">Map doctor</a>, <a href="#map-simulator">Map simulator</a>, <a href="#nav-fixer">Nav fixer</a>, <a href="#callouts">Callouts</a>, <a href="#radar-maker">Radar maker</a></td></tr>
       <tr><td><b>Personalize</b></td><td><a href="#crosshair-config">Crosshair &amp; config</a>, <a href="#bot-people">Bot people</a>, <a href="#spray-maker">Spray maker</a></td></tr>
       <tr><td><b>Watch &amp; inspect</b></td><td><a href="#map-viewer">Map viewer</a>, <a href="#replay">Replay</a>, <a href="#demos">Demos</a>, <a href="#textures-models">Textures &amp; models</a></td></tr>
       <tr><td><b>Share</b></td><td><a href="#community">Community</a></td></tr>
@@ -867,7 +867,7 @@ footer a { color: var(--dim); }
   <p>If the game is open, it asks before restarting it. The game's own maps can't be overwritten: give yours another name.</p>
   <h2 id="after-playtest">After a playtest</h2>
   <ul>
-    <li>Bots got stuck? Run a <a href="#health-check">health check</a>, then fix the spots in the <a href="#nav-fixer">Nav fixer</a>.</li>
+    <li>Bots got stuck? Run the <a href="#map-simulator">Map simulator</a>, then fix the spots in the <a href="#nav-fixer">Nav fixer</a>.</li>
     <li>Name the places with <a href="#callouts">Callouts</a> and make its overview with the <a href="#radar-maker">Radar maker</a>.</li>
     <li>Happy with it? <a href="#publishing">Publish it</a>.</li>
   </ul>
@@ -1080,7 +1080,7 @@ public on_spawn(id)
 <section class="topic" id="map-doctor" data-group="Map tools">
   <p class="crumb">Map tools</p>
   <h1>Map doctor</h1>
-  <p class="lead">Find what a map is missing (textures, models, sounds, its nav) and fix it.</p>
+  <p class="lead">Check a map's files without playing it: missing textures, models and sounds, the download list and the bots' nav, with fixes. To see how bots actually play a map, use the <a href="#map-simulator">Map simulator</a>.</p>
   <figure class="shot">
     <picture><source srcset="img/1.0/doctor.webp" type="image/webp"><img src="img/1.0/doctor.png" alt="Map doctor on de_dust2: every check passed, grouped by map and files, textures, download list and bots" width="1440" height="900" loading="lazy"></picture>
   </figure>
@@ -1092,18 +1092,21 @@ public on_spawn(id)
   </ol>
 </section>
 
-<section class="topic" id="health-check" data-group="Map tools">
+<section class="topic" id="map-simulator" data-group="Map tools">
+  <span id="health-check"></span>
   <p class="crumb">Map tools</p>
-  <h1>Map health check</h1>
-  <p class="lead">Bots play a map for a few minutes on a hidden server; a report says where they fall, get stuck or hit errors.</p>
+  <h1>Map simulator</h1>
+  <p class="lead">Bots play a match on a map for a few minutes on a hidden server. The report shows on the map where they fight, die, fall, get stuck and never go, who wins rounds, and any errors.</p>
   <ol>
-    <li>Under <b>Check a map</b>, pick one. It needs a bot nav, so teach bots the map first if it hasn't one.</li>
-    <li>Pick the <b>Game mode</b>, <b>How long</b> (2 to 15 minutes) and how many <b>Bots</b>.</li>
-    <li>Close the game and your servers, then <b>Run the check</b>. You can leave the page while it runs.</li>
-    <li>Read the report: <b>Looks fine</b>, <b>Worth a look</b> or <b>Problems</b>, then the numbers (stuck bots, deaths to the map, how much of the map got used, plugin errors) and where bots fell or got stuck.</li>
-    <li><b>Watch in Replay</b> to see it happen. Earlier checks stay listed.</li>
+    <li>Under <b>Simulate a match</b>, pick a map. It needs a bot nav, so teach bots the map first if it hasn't one.</li>
+    <li>Pick the <b>Game mode</b>, <b>How long</b> (2 to 15 minutes) and how many <b>Bots</b>. Longer runs give fairer round and side numbers.</li>
+    <li>Close the game and your servers, then <b>Run the simulation</b>. You can leave the page while it runs.</li>
+    <li>Read the report: <b>Looks fine</b>, <b>Worth a look</b> or <b>Problems</b>, with what to look at in plain words.</li>
+    <li><b>The map</b> shows the match from above. Switch between <b>Where bots went</b>, <b>Where they died</b>, <b>Where kills came from</b> and <b>Where nobody went</b> (nav areas no bot walked). Pins mark falls, stuck spots, deaths to the map and the busiest fights. Point at the map for the numbers there; scroll to zoom.</li>
+    <li><b>Rounds and sides</b> shows how many rounds each side won, kills by side and how long rounds last. <b>Where fights happen</b> lists the map's choke points as the bots play it, and the places nobody went.</li>
+    <li><b>Watch in Replay</b> to see it happen. Earlier simulations stay listed.</li>
   </ol>
-  <p>A good result earns a map the <b>Checked with bots</b> badge in <a href="#community">Community</a>.</p>
+  <p>Not the same as the <a href="#map-doctor">Map doctor</a>, which reads a map's files without playing it. A good simulation earns a map the <b>Checked with bots</b> badge in <a href="#community">Community</a>.</p>
 </section>
 
 <section class="topic" id="nav-fixer" data-group="Map tools">
@@ -1226,7 +1229,7 @@ public on_spawn(id)
   <h1>Replay</h1>
   <p class="lead">Watch a recorded bot match in 3D: where every bot went, why, and where it fell.</p>
   <ol>
-    <li>Pick a recording, newest first. A <a href="#health-check">health check</a> makes one, or <b>Open a recording…</b> from a file.</li>
+    <li>Pick a recording, newest first. The <a href="#map-simulator">Map simulator</a> makes one, or <b>Open a recording…</b> from a file.</li>
     <li>Play it at up to 16 times speed. The bar marks rounds, kills and falls.</li>
     <li>Click a player to pick them; double-click to <b>Follow</b>.</li>
     <li><b>Heat map</b> shows time spent, deaths or where they got stuck.</li>
@@ -1601,7 +1604,7 @@ lsctl logs        the last 100 console lines</code></pre>
   <h2 id="community-badges">Badges</h2>
   <ul>
     <li><b>Works with bots</b>: it comes with a bot nav and finished map knowledge.</li>
-    <li><b>Checked with bots</b>: it passed a <a href="#health-check">map health check</a>.</li>
+    <li><b>Checked with bots</b>: it passed a <a href="#map-simulator">map simulation</a>.</li>
     <li><b>Settings only</b>: a Game Mode Studio mode, built on your computer.</li>
     <li><b>Featured</b>: picked by the Loner-Strike team.</li>
   </ul>
@@ -1628,7 +1631,7 @@ lsctl logs        the last 100 console lines</code></pre>
   <h2 id="publish-steps">Publish a map</h2>
   <ol>
     <li>Compile the map into your game first (the editor's <b>Publish…</b> brings you here once it has).</li>
-    <li>In <b>Tools › Community</b>, open <b>Publish</b>, choose <b>A map</b> and pick it. The app checks it and says what's missing; tips like naming places or running a health check earn it badges.</li>
+    <li>In <b>Tools › Community</b>, open <b>Publish</b>, choose <b>A map</b> and pick it. The app checks it and says what's missing; tips like naming places or running the map simulator earn it badges.</li>
     <li>Fill in <b>Name</b>, <b>Made by</b> (your GameBanana name), <b>About it</b>, the modes it's made for, and up to 6 screenshots. Shots from the <a href="#map-viewer">map viewer</a> work well.</li>
     <li><b>Make the package</b>. It makes a <code>.zip</code> with the map, its nav and knowledge, a fresh download list, its overview and the files it uses.</li>
     <li><b>Open GameBanana</b> and sign in there. Add the attribute <b>Software Used: LonerStrike</b> (it's how Community finds it), upload the package unchanged, and add the screenshots. The app has copy buttons for the name, description and attribute.</li>
@@ -1697,7 +1700,7 @@ args = ["--mcp-stdio"]</code></pre>
   <p>Any agent that takes MCP servers (Windsurf and the rest) uses the same shape: a <code>command</code> of the app's path with <code>--mcp-stdio</code> as its argument. Agents that only speak HTTP can use <b>Connect over HTTP with the token instead</b>: <code>http://127.0.0.1:8029/mcp</code> with the header <code>Authorization: Bearer &lt;token&gt;</code>. The token is on the same page, and changes every launch unless you tick <b>Keep the same token across restarts</b>.</p>
   <h2 id="mcp-what">What agents can do</h2>
   <ul>
-    <li>List and read maps, run the map doctor and health check, read replays.</li>
+    <li>List and read maps, run the map doctor and map simulator, read replays.</li>
     <li>Build and change maps in the map editor, compile and playtest.</li>
     <li>Fix navs, name places, make overviews and look at demos.</li>
     <li>Work in Game Mode Studio and Plugin Studio.</li>
@@ -1849,7 +1852,7 @@ args = ["--mcp-stdio"]</code></pre>
   <ul>
     <li>Close the game if it asks, and let it restart into the playtest.</li>
     <li>Bots standing still haven't learned the map: leave <b>Teach bots the map first</b> ticked, or use <b>Teach bots this map</b> in the <a href="#map-doctor">Map doctor</a>.</li>
-    <li>Bots stuck in one place: run a <a href="#health-check">health check</a> and fix the spot in the <a href="#nav-fixer">Nav fixer</a>.</li>
+    <li>Bots stuck in one place: run the <a href="#map-simulator">Map simulator</a> and fix the spot in the <a href="#nav-fixer">Nav fixer</a>.</li>
   </ul>
   <h2 id="studio-problems" data-keywords="studio compile error playtest node" data-short="Studio problems">Game Mode Studio won't playtest <a class="anchor" href="#studio-problems" aria-label="Link to this">#</a></h2>
   <p><b>Playtest</b> waits until <b>Problems</b> is empty: click each one to go to its node. If the game starts but nothing happens, check the mode's events are wired up (a node only runs when a wire leads to it), and watch the nodes light up while you play. Menus need a person to answer them.</p>

@@ -151,7 +151,7 @@ person.
 | **The whole app** | `app_routes` (R: every route, what it's for, what an agent may do with it), `app_call` (GET = R; POST under the rules above; `target` aims "the game" routes at one of your servers) |
 | Maps | `maps_list`, `map_info`, `map_entities`, `map_nav_summary`, `map_nav_areas`, `map_knowledge`, `map_probe` (R) |
 | Map doctor | `map_doctor` (R), `map_doctor_write_res` (A), `map_doctor_copy_files` (C) |
-| Health check | `health_options`, `health_progress`, `health_reports`, `health_report` (R); `health_start`, `health_cancel` (C) |
+| Map simulator (was "health check") | `health_options`, `health_progress`, `health_reports`, `health_report` (R); `health_start`, `health_cancel` (C) |
 | Map editor | `editor_state`, `editor_list_entities`, `editor_checks`, `editor_textures` (R); `editor_add_box`, `editor_add_cylinder`, `editor_add_entity`, `editor_set_key`, `editor_command`, `editor_undo`, `editor_redo`, `editor_export_map` (C); `editor_new`, `editor_open`, `editor_import_map`, `editor_save` (A) |
 | Compile and playtest | `compile_status`, `compile_progress` (R); `compile_start`, `compile_cancel` (C; A with install); `compile_setup`, `playtest` (A) |
 | Nav fixer | `nav_open`, `nav_problems`, `nav_reach` (R); `nav_add_area`, `nav_link`, `nav_unlink`, `nav_edit`, `nav_undo`, `nav_redo` (C); `nav_save` (A) |
@@ -187,7 +187,7 @@ This is what we do ourselves, step by step, with an agent. Example: bots keep fa
 get stuck on cs_rats2.
 1. **What's known.** Call `map_doctor`, `map_nav_summary`, `nav_reach` and `map_knowledge`, then
    `health_reports` / `health_report` for earlier checks.
-2. **A health check.** `health_start {map, minutes: 5, bots: 12}` runs the bots on a hidden server. Poll
+2. **A map simulation.** `health_start {map, minutes: 5, bots: 12}` runs the bots on a hidden server. Poll
    `health_progress`, then read `health_report`. It lists falls, stuck spots and deaths to the map by
    place, plus console errors.
 3. **The recording.** `replay_list`, then `replay_summary {id}` for kills, falls with the drop, and stuck
@@ -206,7 +206,7 @@ get stuck on cs_rats2.
      `studio_debug {vars: true}` for live variables and `studio_debug {resume: true}`.
    - Plugin Studio: `plugin_try`, then follow `plugin_log {name, cursor}`.
 6. **Fix and check again.** Use the nav fixer tools, components or brain settings, then run another
-   health check.
+   map simulation.
 
 ## Connect an agent
 1. In Loner-Strike, open Settings > AI agents and turn on "Let AI agents connect". Turn on "Allow changes"

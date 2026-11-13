@@ -50,12 +50,12 @@ function RecordingList() {
           title="No recordings yet"
           text={
             <>
-              Run a map health check to make one: bots play the map and the match is recorded for you to watch here. Recordings from the gm_simrec plugin (a .csv per match) work too
+              Run the map simulator to make one: bots play the map and the match is recorded for you to watch here. Recordings from the gm_simrec plugin (a .csv per match) work too
               {list.data?.folders?.[0] ? <>: open one, or put them in <span className="mono">{list.data.folders[0]}</span></> : ""}.
             </>
           }
         >
-          <button className="btn primary" onClick={() => useNav.getState().go("tools", "health")}>Run a map health check</button>
+          <button className="btn primary" onClick={() => useNav.getState().go("tools", "health")}>Open the map simulator</button>
           {openButton}
         </Empty>
       ) : (

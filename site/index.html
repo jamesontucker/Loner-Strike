@@ -38,7 +38,7 @@
  "name": "Loner-Strike",
  "alternateName": "Loner Strike",
  "url": "https://lonerstrike.com/",
- "description": "A free desktop app for Counter-Strike 1.6 and Condition Zero on Steam. Its own build of the game's bot brain makes bots move, fight and chat like real players, each with a personality, habits and a skill level of its own. It installs classic community mods (Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf and more) patched so bots can play them, and controls your game or a dedicated server from one panel, including from your phone. It can set up an always-on server on a rented Linux machine, with admins and moderators who help run it from their own app. Version 1.0 adds two new modes (Last Stand and Battle Royale), creation tools (a map editor that compiles with SDHLT and playtests with bots, Game Mode Studio with node graphs, Plugin Studio for AMX Mod X, Creature Studio, a nav fixer, map doctor, health check, radar maker and more), a moderated Community browser for sharing maps and modes, and an MCP connector so AI coding agents can use the tools.",
+ "description": "A free desktop app for Counter-Strike 1.6 and Condition Zero on Steam. Its own build of the game's bot brain makes bots move, fight and chat like real players, each with a personality, habits and a skill level of its own. It installs classic community mods (Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf and more) patched so bots can play them, and controls your game or a dedicated server from one panel, including from your phone. It can set up an always-on server on a rented Linux machine, with admins and moderators who help run it from their own app. Version 1.0 adds two new modes (Last Stand and Battle Royale), creation tools (a map editor that compiles with SDHLT and playtests with bots, Game Mode Studio with node graphs, Plugin Studio for AMX Mod X, Creature Studio, a nav fixer, map doctor, map simulator, radar maker and more), a moderated Community browser for sharing maps and modes, and an MCP connector so AI coding agents can use the tools.",
  "softwareVersion": "1.0.0",
  "applicationCategory": "GameApplication",
  "applicationSubCategory": "Game mod manager and server control panel",
@@ -84,7 +84,7 @@
   "Map editor: brushes and entities in 3D, Hammer and J.A.C.K. import, SDHLT compiling and one-click playtests with bots",
   "Game Mode Studio: game modes from Blueprint-style node graphs, debugged live in the game",
   "Plugin Studio for AMX Mod X, and Creature Studio for creatures and waves",
-  "Map tools: map doctor, health check, nav fixer, callouts and radar maker",
+  "Map tools: map doctor, map simulator, nav fixer, callouts and radar maker",
   "Community browser for maps and Studio modes, hosted on GameBanana and moderated",
   "MCP connector for AI coding agents such as Claude Code, Codex, OpenCode and Cursor"
  ],
@@ -1065,8 +1065,8 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <div class="tool-group">
           <h4>Map tools</h4>
           <dl>
-            <dt><a href="docs#map-doctor">Map doctor</a></dt><dd>Finds missing textures, sounds and models, and fixes them</dd>
-            <dt><a href="docs#health-check">Map health check</a></dt><dd>Bots play your map, then a report says where they fell or got stuck</dd>
+            <dt><a href="docs#map-doctor">Map doctor</a></dt><dd>Checks a map's files: finds missing textures, sounds and models, and fixes them</dd>
+            <dt><a href="docs#map-simulator">Map simulator</a></dt><dd>Bots play a match on your map; the report maps where they fight, fall, get stuck and never go</dd>
             <dt><a href="docs#nav-fixer">Nav fixer</a></dt><dd>Fix where bots can walk: beams, ledges, links and drops</dd>
             <dt><a href="docs#callouts">Callouts</a></dt><dd>Name places, so bots say where they are</dd>
             <dt><a href="docs#radar-maker">Radar maker</a></dt><dd>The overview spectators and HLTV see, drawn from the map</dd>

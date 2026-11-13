@@ -1,4 +1,4 @@
-//! The map health check: bots play a map on a hidden server for a few minutes, recorded by
+//! The map simulator (was "map health check"; the routes keep the old name): bots play a map on a hidden server for a few minutes, recorded by
 //! gm_simrec, and the recording and the server's console become a plain-language report
 //! (falls, stuck spots, how much of the map they used, spawn sitters, plugin errors,
 //! crashes). It's the simulation's sweep (loner-strike-sim/sweep.sh, run-wine.sh and
@@ -37,7 +37,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const NO_GAME: &str = "Set up the game on this computer first.";
 const BAD_NAME: &str = "That isn't a map name.";
-const INTERNAL: &str = "Loner-Strike hit an internal error with the health check. Try again, and copy the diagnostics from Settings if it keeps happening.";
+const INTERNAL: &str = "Loner-Strike hit an internal error with the map simulator. Try again, and copy the diagnostics from Settings if it keeps happening.";
 
 /// Seconds between recorded samples (gm_simrec's SAMPLE).
 const SAMPLE: f32 = 0.1;
@@ -49,6 +49,10 @@ const KEEP_REPORTS: usize = 100;
 const KEEP_RECORDINGS: usize = 20;
 /// The most of the console we read (its end).
 const MAX_CONSOLE: u64 = 8 << 20;
+/// The map picture's grids: at most this many cells a side (the cell grows past 128 units).
+const HEAT_SIDE: usize = 80;
+/// Unvisited nav areas kept for the picture (the biggest first).
+const MAX_UNVISITED: usize = 4000;
 
 // ---- what modes expect ---------------------------------------------------------------------
 // (as sweepreport.py: modes where few kills are normal, deaths to the world are the game, or
@@ -94,6 +98,45 @@ pub struct Finding {
     pub text: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spot: Option<Spot>,
+}
+
+/// A place where many fights ended: deaths to enemies there, and which side died.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FightSpot {
+    /// where most of them died
+    pub at: [f32; 3],
+    pub place: String,
+    pub deaths: usize,
+    pub t_deaths: usize,
+    pub ct_deaths: usize,
+}
+
+/// Grids over the area played in, for the map picture: cell (cx, cy) covers x0 + cx*cell ..
+/// and y0 + cy*cell .., row-major.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct HeatGrid {
+    pub cell: f32,
+    pub x0: f32,
+    pub y0: f32,
+    pub w: usize,
+    pub h: usize,
+    /// seconds bots spent there (alive, in play)
+    pub time: Vec<f32>,
+    /// where bots were killed by enemies
+    pub deaths: Vec<u16>,
+    /// where the killers stood
+    pub kills: Vec<u16>,
+}
+
+/// One finished round: how long it was played (after the freeze) and who won.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RoundResult {
+    pub seconds: f32,
+    /// 1 the Terrorists, 2 the CTs, 0 not known (a draw, or a recording without it)
+    pub winner: u8,
 }
 
 /// What the console said.
@@ -142,6 +185,18 @@ pub struct Report {
     /// deaths to the map that weren't falls (hurt areas, crushers, explosions)
     pub hurt_spots: Vec<Spot>,
     pub stuck_spots: Vec<Spot>,
+    /// where fights end most (the map's choke points, as bots play it)
+    pub fight_spots: Vec<FightSpot>,
+    /// kills of enemies by each side
+    pub t_kills: usize,
+    pub ct_kills: usize,
+    /// the rounds that finished, in order
+    pub rounds: Vec<RoundResult>,
+    pub heat: Option<HeatGrid>,
+    /// nav areas nobody walked over: [x0, y0, x1, y1, z] (at most MAX_UNVISITED)
+    pub unvisited: Vec<[f32; 5]>,
+    /// named places where nobody went at all
+    pub unvisited_places: Vec<String>,
     pub knowledge: String,
     pub fatal: Vec<String>,
     pub plugin_errors: usize,
@@ -322,7 +377,7 @@ pub fn build_report(recs: &[Recording], console: &str, nav: Option<&Nav>, asked:
         for p in &players {
             let range = p.start..p.start + p.count;
             for i in range.clone() {
-                if (i - p.start) % 5 == 0 {
+                if (i - p.start) % 2 == 0 {
                     if let Some(a) = nav.and_then(|n| n.area_at([c.x[i], c.y[i], c.z[i]], 120.0)) {
                         visited.insert(a);
                     }
@@ -396,6 +451,7 @@ pub fn build_report(recs: &[Recording], console: &str, nav: Option<&Nav>, asked:
     stuck.sort_by(|a, b| b.seconds.total_cmp(&a.seconds));
     stuck.truncate(8);
     r.stuck_spots = stuck;
+    insights(&mut r, recs, nav, &visited);
     let con = read_console(console);
     r.knowledge = con.knowledge.to_string();
     r.fatal = con.fatal;
@@ -404,6 +460,144 @@ pub fn build_report(recs: &[Recording], console: &str, nav: Option<&Nav>, asked:
     r.findings = findings(&r);
     r.verdict = verdict(&r.findings);
     r
+}
+
+/// The team in player `id`'s sample nearest `t` (0 when there's none).
+fn team_at(rec: &Recording, id: u8, t: f32) -> u8 {
+    rec.sample_at(id, t).filter(|&i| (rec.cols.t[i] - t).abs() < 2.0).map(|i| rec.cols.team[i]).unwrap_or(0)
+}
+
+/// What the simulation's own analysis gets from a recording beyond the problems: rounds and
+/// who won them, kills by side, where fights end (choke points), grids of where bots spent
+/// their time, died and killed from, and the nav areas and places nobody went.
+fn insights(r: &mut Report, recs: &[Recording], nav: Option<&Nav>, visited: &HashSet<usize>) {
+    for rec in recs {
+        for rd in &rec.rounds {
+            if let Some(e) = rd.end.filter(|&e| e > rd.start) {
+                r.rounds.push(RoundResult { seconds: ((e - rd.start) * 10.0).round() / 10.0, winner: rd.winner.unwrap_or(0) });
+            }
+        }
+    }
+
+    // the grids: over everywhere anyone stood
+    let (mut lo, mut hi) = ([f32::MAX; 2], [f32::MIN; 2]);
+    for rec in recs {
+        for i in 0..rec.cols.t.len() {
+            lo = [lo[0].min(rec.cols.x[i]), lo[1].min(rec.cols.y[i])];
+            hi = [hi[0].max(rec.cols.x[i]), hi[1].max(rec.cols.y[i])];
+        }
+    }
+    let mut grid = None;
+    if lo[0] <= hi[0] {
+        let span = (hi[0] - lo[0]).max(hi[1] - lo[1]);
+        let cell = ((span / HEAT_SIDE as f32 / 32.0).ceil() * 32.0).max(128.0);
+        let (x0, y0) = ((lo[0] / cell).floor() * cell, (lo[1] / cell).floor() * cell);
+        let w = (((hi[0] - x0) / cell).floor() as usize + 1).min(HEAT_SIDE * 2);
+        let h = (((hi[1] - y0) / cell).floor() as usize + 1).min(HEAT_SIDE * 2);
+        grid = Some(HeatGrid { cell, x0, y0, w, h, time: vec![0.0; w * h], deaths: vec![0; w * h], kills: vec![0; w * h] });
+    }
+    let cell_of = |g: &HeatGrid, x: f32, y: f32| -> Option<usize> {
+        let (cx, cy) = (((x - g.x0) / g.cell).floor(), ((y - g.y0) / g.cell).floor());
+        (cx >= 0.0 && cy >= 0.0 && (cx as usize) < g.w && (cy as usize) < g.h).then(|| cy as usize * g.w + cx as usize)
+    };
+
+    let mut fights: Vec<([f32; 3], u8)> = Vec::new();
+    for rec in recs {
+        let c = &rec.cols;
+        if let Some(g) = grid.as_mut() {
+            for i in 0..c.t.len() {
+                if c.hp[i] > 0 && in_play(rec, c.t[i]) {
+                    if let Some(k) = cell_of(g, c.x[i], c.y[i]) {
+                        g.time[k] += SAMPLE;
+                    }
+                }
+            }
+        }
+        for k in rec.kills.iter().filter(|k| k.cause == "enemy" && !k.team_kill) {
+            let victim_team = team_at(rec, k.victim, k.t);
+            let killer = rec.sample_at(k.killer, k.t).filter(|&i| (c.t[i] - k.t).abs() < 1.0);
+            match killer.map(|i| c.team[i]).filter(|&t| t != 0).unwrap_or(if victim_team == 1 { 2 } else if victim_team == 2 { 1 } else { 0 }) {
+                1 => r.t_kills += 1,
+                2 => r.ct_kills += 1,
+                _ => {}
+            }
+            if let Some(g) = grid.as_mut() {
+                if let Some(at) = k.at {
+                    if let Some(x) = cell_of(g, at[0], at[1]) {
+                        g.deaths[x] = g.deaths[x].saturating_add(1);
+                    }
+                }
+                if let Some(i) = killer {
+                    if let Some(x) = cell_of(g, c.x[i], c.y[i]) {
+                        g.kills[x] = g.kills[x].saturating_add(1);
+                    }
+                }
+            }
+            if let Some(at) = k.at {
+                fights.push((at, victim_team));
+            }
+        }
+    }
+    if let Some(g) = grid.as_mut() {
+        for v in &mut g.time {
+            *v = (*v * 10.0).round() / 10.0;
+        }
+    }
+    r.heat = grid;
+
+    // where fights end, by place (or a 256-unit cell without one)
+    let mut groups: Vec<(String, FightSpot, HashMap<(i32, i32), usize>)> = Vec::new();
+    for (at, team) in fights {
+        let place = place_at(nav, at);
+        let key = if place.is_empty() { format!("{},{}", (at[0] / 256.0).floor(), (at[1] / 256.0).floor()) } else { place.clone() };
+        let i = match groups.iter().position(|g| g.0 == key) {
+            Some(i) => i,
+            None => {
+                groups.push((key, FightSpot { at, place, ..Default::default() }, HashMap::new()));
+                groups.len() - 1
+            }
+        };
+        let g = &mut groups[i];
+        g.1.deaths += 1;
+        match team {
+            1 => g.1.t_deaths += 1,
+            2 => g.1.ct_deaths += 1,
+            _ => {}
+        }
+        // the spot shown: the busiest 128-unit cell in the group
+        let cellkey = ((at[0] / 128.0).floor() as i32, (at[1] / 128.0).floor() as i32);
+        let n = g.2.entry(cellkey).or_insert(0);
+        *n += 1;
+        if *n == g.2.values().copied().max().unwrap_or(0) {
+            g.1.at = at.map(|v| v.round());
+        }
+    }
+    let mut spots: Vec<FightSpot> = groups.into_iter().map(|g| g.1).collect();
+    spots.sort_by(|a, b| b.deaths.cmp(&a.deaths));
+    spots.truncate(8);
+    r.fight_spots = spots;
+
+    // where nobody went
+    if let Some(n) = nav.filter(|n| !n.areas.is_empty() && r.seconds > 0.0) {
+        let mut un: Vec<[f32; 5]> = n
+            .areas
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !visited.contains(i))
+            .map(|(_, a)| [a.lo[0].min(a.hi[0]).round(), a.lo[1].min(a.hi[1]).round(), a.lo[0].max(a.hi[0]).round(), a.lo[1].max(a.hi[1]).round(), ((a.lo[2] + a.hi[2]) / 2.0).round()])
+            .collect();
+        un.sort_by(|a, b| ((b[2] - b[0]) * (b[3] - b[1])).total_cmp(&((a[2] - a[0]) * (a[3] - a[1]))));
+        un.truncate(MAX_UNVISITED);
+        r.unvisited = un;
+        let mut seen: BTreeMap<String, bool> = BTreeMap::new();
+        for (i, a) in n.areas.iter().enumerate() {
+            let name = n.place_name(a);
+            if !name.is_empty() {
+                *seen.entry(name.to_string()).or_insert(false) |= visited.contains(&i);
+            }
+        }
+        r.unvisited_places = seen.into_iter().filter(|(_, v)| !v).map(|(k, _)| k).collect();
+    }
 }
 
 fn verdict(f: &[Finding]) -> String {
@@ -499,6 +693,20 @@ pub fn findings(r: &Report) -> Vec<Finding> {
         if c < 20.0 {
             say(&mut warn, "warn", format!("Bots only used {c:.0}% of the map. Parts of it may be hard to reach, or not in the nav."), None);
         }
+    }
+    let (t_wins, ct_wins) = (r.rounds.iter().filter(|x| x.winner == 1).count(), r.rounds.iter().filter(|x| x.winner == 2).count());
+    let decided = t_wins + ct_wins;
+    if decided >= 8 && fights {
+        let (side, won) = if t_wins >= ct_wins { ("Terrorists", t_wins) } else { ("CTs", ct_wins) };
+        if won as f32 / decided as f32 >= 0.75 {
+            say(&mut warn, "warn", format!("The {side} won {won} of {decided} rounds. With bots on both sides, that points at the map favouring them (how far each side runs, a choke one side can't take)."), None);
+        }
+    }
+    if !r.unvisited_places.is_empty() && r.seconds >= 240.0 && r.bot_minutes >= little && !STILL_OK.contains(&mode) {
+        let n = r.unvisited_places.len();
+        let shown: Vec<&str> = r.unvisited_places.iter().take(5).map(|s| s.as_str()).collect();
+        let more = if n > 5 { format!(" and {} more", n - 5) } else { String::new() };
+        say(&mut warn, "warn", format!("Bots never went to {}{more}. {} may be hard to reach, cut off in the nav, or not worth going to.", shown.join(", "), if n == 1 { "It" } else { "They" }), None);
     }
     for c in &r.compared {
         say(&mut warn, "warn", c.clone(), None);
@@ -641,10 +849,10 @@ fn running_now() -> bool {
 /// setup is busy. None when it can.
 fn user_busy() -> Option<String> {
     if crate::sys::game_running() {
-        return Some("Close the game first. The health check runs bots on a hidden server, and doesn't while you play.".into());
+        return Some("Close the game first. The map simulator runs bots on a hidden server, and doesn't while you play.".into());
     }
     if let Some(e) = crate::servers::load().into_iter().filter(|e| e.remote.is_none()).find(|e| crate::servers::running(&e.id)) {
-        return Some(format!("Stop your server \u{201c}{}\u{201d} first. The health check doesn't run while one of your servers is running on this computer.", e.name));
+        return Some(format!("Stop your server \u{201c}{}\u{201d} first. The map simulator doesn't run while one of your servers is running on this computer.", e.name));
     }
     None
 }
@@ -798,7 +1006,7 @@ fn ensure_recorder(install: &crate::steam::Install, am: &Path, server: &str) -> 
     }
     let exe = am.join("scripting").join("amxxpc.exe");
     if !exe.is_file() {
-        return Err(format!("\u{201c}{server}\u{201d} has no AMX Mod X compiler, which the health check needs once to build its recorder. Update that server's files and try again."));
+        return Err(format!("\u{201c}{server}\u{201d} has no AMX Mod X compiler, which the map simulator needs once to build its recorder. Update that server's files and try again."));
     }
     if install.kind == "crossover" && !Path::new(crate::servers::CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
@@ -1228,7 +1436,7 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     let src = match req.server.as_deref().filter(|s| !s.is_empty()) {
         Some(id) => list.into_iter().find(|e| e.id == id).ok_or("That server isn't on this computer any more.")?,
         None => list.into_iter().next().ok_or_else(|| {
-            format!("Make a server for {} on this computer first (Servers, then New server). The health check runs bots on a hidden copy of it, with your plugins and modes.", crate::setup::game_name(gf))
+            format!("Make a server for {} on this computer first (Servers, then New server). The map simulator runs bots on a hidden copy of it, with your plugins and modes.", crate::setup::game_name(gf))
         })?,
     };
     let modes = modes_of(&src.dir.join(&src.game));
@@ -1260,7 +1468,7 @@ fn start(st: &Shared, req: StartReq) -> Result<Value, String> {
     {
         let mut cur = RUN.lock().unwrap_or_else(|e| e.into_inner());
         if cur.as_ref().is_some_and(Run::active) {
-            return Err("A health check is already running. Wait for it, or stop it first.".into());
+            return Err("A simulation is already running. Wait for it, or stop it first.".into());
         }
         *cur = Some(Run {
             id: p.id.clone(),
@@ -1344,7 +1552,7 @@ fn options(st: &Shared, map: &str) -> Result<Value, String> {
     let why = if nav.is_none() {
         Some(format!("Bots don't know {} yet: it has no nav. Teach them the map first (Maps, then Teach bots), then check it.", m.name))
     } else if first.is_none() {
-        Some(format!("Make a server for {} on this computer first (Servers, then New server). The health check runs bots on a hidden copy of it, with your plugins and modes.", crate::setup::game_name(gf)))
+        Some(format!("Make a server for {} on this computer first (Servers, then New server). The map simulator runs bots on a hidden copy of it, with your plugins and modes.", crate::setup::game_name(gf)))
     } else {
         None
     };
@@ -1408,7 +1616,7 @@ async fn api_cancel(h: HeaderMap) -> Response {
         return forbidden();
     }
     if !running_now() {
-        return Json(json!({"error": "There's no health check running."})).into_response();
+        return Json(json!({"error": "There's no simulation running."})).into_response();
     }
     STOP.store(true, Ordering::SeqCst);
     update(|r| r.detail = "Stopping".into());
@@ -1533,6 +1741,80 @@ mod tests {
         assert!(rep.fall_spots.iter().all(|s| s.place.is_empty() && s.count == 1));
         assert_eq!(rep.coverage_pct, None);
         assert_eq!(near(&rep.fall_spots[0]), "the spot at -917 318 484");
+    }
+
+    /// Two rounds (the T win, then the CT win), a T killing a CT at "Mid" from "Long", and
+    /// a named place nobody walked into.
+    const DUEL: &str = "P,1,Tee,1\nP,2,Cee,1\nR,10.00,start\n\
+S,10.00,1,1,100,100,0,0,0,0,0.0,0.0,0,1,28,30,0,100,0,99999,99999\n\
+S,10.10,1,1,110,100,0,100,0,0,0.0,0.0,0,1,28,30,0,100,1,500,99999\n\
+S,10.00,2,2,600,100,0,0,0,0,0.0,0.0,0,1,28,30,0,100,0,99999,99999\n\
+S,10.10,2,2,600,100,0,0,0,0,0.0,0.0,0,1,28,30,0,100,1,500,99999\n\
+K,10.15,1,2,1,ak47\nR,40.00,end,1\nR,50.00,start\n\
+S,50.00,1,1,100,100,0,0,0,0,0.0,0.0,0,1,28,30,0,100,0,99999,99999\n\
+R,95.50,end,2\nR,100.00,start\nR,104.00,end\n";
+
+    #[test]
+    fn rounds_sides_fights_and_places_nobody_went() {
+        let n = nav(&[("Long", [0.0, 0.0, 0.0], [300.0, 300.0, 0.0]), ("Mid", [500.0, 0.0, 0.0], [800.0, 300.0, 0.0]), ("Pit", [2000.0, 2000.0, 0.0], [2300.0, 2300.0, 0.0])]);
+        let rep = build_report(&[rec(DUEL)], "", Some(&n), &asked("classic"));
+        assert_eq!(rep.rounds, vec![RoundResult { seconds: 30.0, winner: 1 }, RoundResult { seconds: 45.5, winner: 2 }, RoundResult { seconds: 4.0, winner: 0 }]);
+        assert_eq!((rep.t_kills, rep.ct_kills), (1, 0));
+        assert_eq!(rep.fight_spots.len(), 1);
+        assert_eq!(rep.fight_spots[0].place, "Mid");
+        assert_eq!((rep.fight_spots[0].deaths, rep.fight_spots[0].ct_deaths, rep.fight_spots[0].t_deaths), (1, 1, 0));
+        let g = rep.heat.as_ref().unwrap();
+        assert_eq!(g.cell, 128.0);
+        assert_eq!(g.deaths.iter().map(|&v| v as u32).sum::<u32>(), 1);
+        assert_eq!(g.kills.iter().map(|&v| v as u32).sum::<u32>(), 1);
+        // the victim died where it stood (600, 100), the killer was at (110, 100)
+        let at = |x: f32, y: f32| (((y - g.y0) / g.cell).floor() as usize) * g.w + ((x - g.x0) / g.cell).floor() as usize;
+        assert_eq!(g.deaths[at(600.0, 100.0)], 1);
+        assert_eq!(g.kills[at(110.0, 100.0)], 1);
+        assert!(g.time.iter().sum::<f32>() > 0.0);
+        assert_eq!(rep.unvisited_places, vec!["Pit".to_string()]);
+        assert_eq!(rep.unvisited, vec![[2000.0, 2000.0, 2300.0, 2300.0, 0.0]]);
+        // a report saved before these existed still reads
+        let old: Report = serde_json::from_str(r#"{"id":"x","map":"de_dust2","verdict":"good"}"#).unwrap();
+        assert!(old.rounds.is_empty() && old.heat.is_none());
+    }
+
+    #[test]
+    fn one_sided_maps_and_places_nobody_went_are_said() {
+        let mut r = Report { mode: "classic".into(), bots_wanted: 12, minutes: 5, bots_seen: 12, bot_minutes: 50.0, seconds: 300.0, knowledge: "loaded".into(), ..Default::default() };
+        r.rounds = (0..10).map(|i| RoundResult { seconds: 60.0, winner: if i < 8 { 2 } else { 1 } }).collect();
+        r.unvisited_places = vec!["Pit".into()];
+        let f = findings(&r);
+        assert!(f.iter().any(|f| f.text.starts_with("The CTs won 8 of 10 rounds")), "{f:?}");
+        assert!(f.iter().any(|f| f.text.starts_with("Bots never went to Pit. It may")), "{f:?}");
+        r.rounds.iter_mut().take(3).for_each(|x| x.winner = 1);
+        assert!(!findings(&r).iter().any(|f| f.text.contains("rounds.")));
+    }
+
+    /// A report from a sim recording, for trying the report page with real data (the
+    /// dev harness reads reports from its temp app folder):
+    ///   LS_REPORT_REC=<gm_simrec .csv> LS_REPORT_NAV=<.nav> LS_REPORT_MAP=de_dust2
+    ///   LS_REPORT_OUT=$TMPDIR/ls-tools-dev/tools/health cargo test report_from_recording -- --ignored
+    #[test]
+    #[ignore]
+    fn report_from_recording() {
+        let var = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("set {k}"));
+        let rec = read_recording(Path::new(&var("LS_REPORT_REC"))).expect("a recording");
+        let nav = std::env::var("LS_REPORT_NAV").ok().and_then(|p| Nav::parse(&std::fs::read(p).ok()?).ok());
+        let mut rep = build_report(&[rec], "", nav.as_ref(), &Asked { map: var("LS_REPORT_MAP"), mode: "classic".into(), bots: 12, minutes: 5 });
+        rep.id = format!("{}", now_ms());
+        rep.when = now_ms() / 1000;
+        rep.mode_name = "Classic".into();
+        rep.knowledge = "loaded".into();
+        rep.findings = findings(&rep);
+        rep.verdict = verdict(&rep.findings);
+        save_report(Path::new(&var("LS_REPORT_OUT")), &rep).unwrap();
+        println!("{} rounds, T {} CT {}, {} fight spots, {} unvisited areas, places nobody went: {:?}", rep.rounds.len(),
+            rep.rounds.iter().filter(|r| r.winner == 1).count(), rep.rounds.iter().filter(|r| r.winner == 2).count(),
+            rep.fight_spots.len(), rep.unvisited.len(), rep.unvisited_places);
+        for f in &rep.findings {
+            println!("{}: {}", f.level, f.text);
+        }
     }
 
     #[test]

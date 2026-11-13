@@ -1266,7 +1266,7 @@ pub fn readiness(m: &MapFile, reports: &Path) -> Readiness {
     if !r.map.nav {
         r.warnings.push("Bots don't know this map yet (no nav that fits it). Teach them in the map doctor so it gets the \"Works with bots\" badge.".into());
     } else if !r.map.lsv {
-        r.tips.push("The bots' map knowledge isn't finished; play the map with bots for a while (or run a health check) and it fills in.".into());
+        r.tips.push("The bots' map knowledge isn't finished; play the map with bots for a while (or run the map simulator) and it fills in.".into());
     }
     if r.map.nav && !r.map.places {
         r.tips.push("Name places on the nav (Callouts) so bots say where they are.".into());
@@ -1276,8 +1276,8 @@ pub fn readiness(m: &MapFile, reports: &Path) -> Readiness {
     }
     r.health = latest_health(reports, &m.name);
     match &r.health {
-        None => r.tips.push("Run a map health check: a good result earns the \"Checked with bots\" badge.".into()),
-        Some(h) if h.verdict == "bad" => r.warnings.push("The last health check found real problems (falls, stuck bots or errors). Have a look before sharing.".into()),
+        None => r.tips.push("Run the map simulator: a good result earns the \"Checked with bots\" badge.".into()),
+        Some(h) if h.verdict == "bad" => r.warnings.push("The last map simulation found real problems (falls, stuck bots or errors). Have a look before sharing.".into()),
         _ => {}
     }
     r
@@ -1560,7 +1560,7 @@ pub fn gamebanana_form(p: &Package) -> Value {
         text.push_str(&format!("\n- Game modes: {}", m.modes.join(", ")));
     }
     if let Some(h) = &it.health {
-        text.push_str(&format!("\n- Loner-Strike health check: {} ({} bots, {} min)", h.verdict, h.bots, h.minutes));
+        text.push_str(&format!("\n- Loner-Strike map simulation: {} ({} bots, {} min)", h.verdict, h.bots, h.minutes));
     }
     text.push_str("\n\nInstall by hand: copy the folders into cstrike (or czero).");
     let category = match m.modes.first().map(|x| x.as_str()) {

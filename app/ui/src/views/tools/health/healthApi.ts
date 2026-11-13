@@ -1,5 +1,6 @@
-// The map health check's server side (tools/health.rs): bots play a map on a hidden copy of
-// one of your servers for a few minutes, then a report says what went wrong.
+// The map simulator's server side (tools/health.rs): bots play a map on a hidden copy of
+// one of your servers for a few minutes, then a report says what went wrong and how the map
+// played (rounds, sides, fights, where bots went and didn't).
 
 import { getJson } from "../../../api";
 import { post, type Err } from "../common/api";
@@ -44,6 +45,11 @@ export type Run = {
 export type Progress = { run: Run | null; active?: boolean; elapsed?: number; left?: number; fraction?: number };
 
 export type Spot = { at: Vec3; place: string; count: number; seconds: number; drop: number };
+export type FightSpot = { at: Vec3; place: string; deaths: number; tDeaths: number; ctDeaths: number };
+/** cell (cx, cy) covers x0 + cx*cell .. and y0 + cy*cell .., row-major */
+export type HeatGrid = { cell: number; x0: number; y0: number; w: number; h: number; time: number[]; deaths: number[]; kills: number[] };
+/** winner: 1 the Terrorists, 2 the CTs, 0 not known */
+export type RoundResult = { seconds: number; winner: 0 | 1 | 2 };
 export type Finding = { level: "bad" | "warn" | "good"; text: string; spot?: Spot };
 export type Report = {
   id: string;
@@ -72,6 +78,15 @@ export type Report = {
   fallSpots: Spot[];
   hurtSpots: Spot[];
   stuckSpots: Spot[];
+  /** the rest is missing from reports made before the simulator drew maps */
+  fightSpots?: FightSpot[];
+  tKills?: number;
+  ctKills?: number;
+  rounds?: RoundResult[];
+  heat?: HeatGrid | null;
+  /** nav areas nobody walked: x0, y0, x1, y1, z */
+  unvisited?: [number, number, number, number, number][];
+  unvisitedPlaces?: string[];
   knowledge: "loaded" | "rebuilt" | "none";
   fatal: string[];
   pluginErrors: number;

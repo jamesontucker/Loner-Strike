@@ -1,5 +1,6 @@
-// The map health check: pick a map, bots play it on a hidden server for a few minutes, and a
-// report says in plain words what went wrong (falls, stuck spots, errors), then the numbers.
+// The map simulator: pick a map, bots play it on a hidden server for a few minutes, and a
+// report says in plain words what went wrong (falls, stuck spots, errors), shows on the map
+// where bots went, fought, died and never went, then rounds, sides and the numbers.
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -26,6 +27,7 @@ import {
   type ReportSummary,
   type Spot,
 } from "./healthApi";
+import { SimMap } from "./SimMap";
 import "./health.css";
 
 const MINUTES = ["2", "5", "10", "15"];
@@ -81,18 +83,18 @@ export default function HealthCheck({ maps }: ToolProps) {
       {active && run ? <Running p={progress.data!} /> : <Setup maps={maps} onStarted={() => progress.refetch()} />}
       {!active && run && (run.phase === "failed" || run.phase === "stopped") && (
         <div className={`panel health-ended ${run.phase}`} role="status">
-          <strong>{run.phase === "failed" ? `The check of ${run.map} didn't finish.` : `The check of ${run.map} was stopped.`}</strong>
+          <strong>{run.phase === "failed" ? `The simulation of ${run.map} didn't finish.` : `The simulation of ${run.map} was stopped.`}</strong>
           {run.error && <p>{run.error}</p>}
         </div>
       )}
       <div className="panel">
-        <h3>Earlier checks</h3>
+        <h3>Earlier simulations</h3>
         {reports.isPending ? (
           <Skeleton rows={2} />
         ) : reports.isError || reports.data?.error ? (
-          <LoadError text={reports.data?.error ?? "Couldn't load the earlier checks."} onRetry={() => reports.refetch()} />
+          <LoadError text={reports.data?.error ?? "Couldn't load the earlier simulations."} onRetry={() => reports.refetch()} />
         ) : (reports.data?.reports ?? []).length === 0 ? (
-          <Empty plain text="None yet. Run a check above and its report shows up here, with a recording you can watch in Replay." />
+          <Empty plain text="None yet. Run a simulation above and its report shows up here, with a recording you can watch in Replay." />
         ) : (
           <ul className="health-list">
             {(reports.data?.reports ?? []).map((r) => (
@@ -157,15 +159,15 @@ function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) 
     setStarting(true);
     const r = await startHealth({ map: o.map, mode: pickedMode, minutes: Number(minutes), bots: Number(bots), server: server ?? o.server });
     setStarting(false);
-    if (r.error || !r.ok) return toast(r.error || "Couldn't start the check.", true);
+    if (r.error || !r.ok) return toast(r.error || "Couldn't start the simulation.", true);
     onStarted();
   };
 
   return (
     <div className="panel health-setup">
-      <h3>Check a map</h3>
+      <h3>Simulate a match</h3>
       <p className="muted measure">
-        Bots play the map on a hidden server for a few minutes while you do something else, then you get a report: where they fall, where they get stuck, how much of the map they use, and any errors. The game and your servers need to be closed while it runs.
+        Bots play the map on a hidden server for a few minutes while you do something else. Then you get a report with the map from above: where bots went and never went, where fights happen, where they fall or get stuck, which side wins and how long rounds last, and any errors. The game and your servers need to be closed while it runs.
       </p>
       <Rows>
         <Row name="Map" wide>
@@ -197,14 +199,14 @@ function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) 
                 </select>
               </Row>
             )}
-            <Row name="How long" note="Longer runs find rarer problems">
+            <Row name="How long" note="Longer runs find rarer problems and give fairer round and side numbers">
               <Segmented label="How long" values={MINUTES.join(" ")} labels={MINUTES.map((m) => `${m} min`).join("|")} current={minutes} onPick={setMinutes} />
             </Row>
             <Row name="Bots">
               <Segmented label="Bots" values={BOTS.join(" ")} labels={BOTS.join("|")} current={bots} onPick={setBots} />
             </Row>
             {o.servers.length > 1 && (
-              <Row name="Plugins and modes from" info="The check runs on a hidden copy of one of your servers on this computer, so the bots play with its plugins, modes and settings. Your server itself isn't touched.">
+              <Row name="Plugins and modes from" info="The simulation runs on a hidden copy of one of your servers on this computer, so the bots play with its plugins, modes and settings. Your server itself isn't touched.">
                 <select value={server ?? o.server ?? ""} onChange={(e) => setServer(e.target.value)} aria-label="Server to copy">
                   {o.servers.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -219,7 +221,7 @@ function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) 
       </Rows>
       {blocked && <p className="health-blocked">{blocked}</p>}
       <div className="row health-actions">
-        <BusyButton className="btn primary" busy={starting} disabled={!o || !!blocked} label="Run the check" busyLabel="Starting…" onClick={go} />
+        <BusyButton className="btn primary" busy={starting} disabled={!o || !!blocked} label="Run the simulation" busyLabel="Starting…" onClick={go} />
         {o && !blocked && (
           <span className="muted">
             About {duration(Number(minutes) * 60 + 60)}. {o.servers.length === 1 ? `Uses a hidden copy of your server “${o.servers[0].name}”.` : ""}
@@ -254,7 +256,7 @@ function Running({ p }: { p: Progress }) {
     <div className="panel health-running" aria-live="polite">
       <SteamProgress
         value={p.fraction ?? 0}
-        title={`Checking ${run.map} · ${run.modeName || run.mode}`}
+        title={`Simulating ${run.map} · ${run.modeName || run.mode}`}
         text={run.detail || PHASE[run.phase] || "Working"}
         foot={p.left ? `About ${duration(p.left)} left` : "Almost done"}
       />
@@ -324,7 +326,7 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
   const [replaying, setReplaying] = useState(false);
   useReportAddress("health", `health:report:${id}`);
   const reportMap = q.data?.report?.map;
-  useToolCrumbs("health", reportMap ? [{ label: reportMap, address: `health:${reportMap}`, title: `Check ${reportMap} again` }, { label: "Report" }] : [{ label: "Report" }]);
+  useToolCrumbs("health", reportMap ? [{ label: reportMap, address: `health:${reportMap}`, title: `Simulate ${reportMap} again` }, { label: "Report" }] : [{ label: "Report" }]);
   if (q.isPending) return <Skeleton rows={6} />;
   const r = q.data?.report;
   if (q.isError || !r)
@@ -374,6 +376,14 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
       </div>
 
       <div className="panel">
+        <h3>The map</h3>
+        <SimMap r={r} />
+      </div>
+
+      <RoundsPanel r={r} />
+      <FightList r={r} />
+
+      <div className="panel">
         <h3>The numbers</h3>
         <div className="health-stats">
           <Stat label="Bots that played" value={`${r.botsSeen} of ${r.botsWanted}`} />
@@ -386,7 +396,7 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
           <Stat label="Map knowledge" value={KNOWLEDGE[r.knowledge] ?? r.knowledge} help="What the bots learned about the map's cover and angles. 'Didn't fit' means the saved file is for a different version of the map or nav." />
           <Stat label="Plugin errors" value={String(r.pluginErrors)} />
         </div>
-        {r.compared.length > 0 && <p className="muted health-compared">Compared with other {r.modeName || r.mode} maps checked on this computer.</p>}
+        {r.compared.length > 0 && <p className="muted health-compared">Compared with other {r.modeName || r.mode} maps simulated on this computer.</p>}
       </div>
 
       <SpotList title="Where bots fell" spots={r.fallSpots} map={r.map} what={(s) => `${s.count} ${s.count === 1 ? "time" : "times"}${s.drop > 0 ? ` · drops of up to ${Math.round(s.drop)} units` : ""}`} />
@@ -409,6 +419,79 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
             ))}
           </ul>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Rounds and sides: who won how often, kills by side, how long rounds last. */
+function RoundsPanel({ r }: { r: Report }) {
+  const rounds = r.rounds ?? [];
+  const t = rounds.filter((x) => x.winner === 1).length;
+  const ct = rounds.filter((x) => x.winner === 2).length;
+  const decided = t + ct;
+  const tk = r.tKills ?? 0, ctk = r.ctKills ?? 0;
+  if (rounds.length === 0 && tk + ctk === 0) return null;
+  const secs = rounds.map((x) => x.seconds).sort((a, b) => a - b);
+  const mid = secs.length ? secs[Math.floor(secs.length / 2)] : 0;
+  const max = secs.length ? secs[secs.length - 1] : 0;
+  return (
+    <div className="panel">
+      <h3>Rounds and sides</h3>
+      {decided > 0 ? (
+        <div className="sim-sides" role="img" aria-label={`Terrorists won ${t} rounds, CTs won ${ct}`}>
+          <span className="sim-side t" style={{ flexGrow: Math.max(t, 0.001) }}>
+            {t > 0 && `T ${t}`}
+          </span>
+          <span className="sim-side ct" style={{ flexGrow: Math.max(ct, 0.001) }}>
+            {ct > 0 && `CT ${ct}`}
+          </span>
+        </div>
+      ) : (
+        <p className="muted">Who won each round wasn't recorded{rounds.length ? "" : ": no round finished"}. {rounds.length ? "Reports from before this version, and modes without round wins, leave it out." : ""}</p>
+      )}
+      <div className="health-stats sim-round-stats">
+        {decided > 0 && <Stat label="Rounds won" value={`T ${t} · CT ${ct}`} note={`${Math.round((100 * t) / decided)}% to the Terrorists`} help="With bots on both sides, a big lean points at the map: one side runs further, or there's a choke it can't take." />}
+        <Stat label="Kills by side" value={`T ${tk} · CT ${ctk}`} note="enemies killed" />
+        {secs.length > 0 && <Stat label="Round length" value={duration(mid)} note={`middle of ${secs.length}; ${duration(secs[0])} to ${duration(max)}`} help="From the end of the freeze time to the round's end." />}
+      </div>
+      {secs.length > 1 && (
+        <div className="sim-round-strip" aria-label="Each round's length, in order">
+          {rounds.map((x, i) => (
+            <span key={i} className={`sim-round w${x.winner}`} style={{ height: `${Math.max(6, (100 * x.seconds) / Math.max(1, max))}%` }} title={`Round ${i + 1}: ${duration(x.seconds)}${x.winner ? `, ${x.winner === 1 ? "T" : "CT"} win` : ""}`} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Where fights end most: the map's choke points, as the bots play it. */
+function FightList({ r }: { r: Report }) {
+  const spots = r.fightSpots ?? [];
+  if (spots.length === 0) return null;
+  return (
+    <div className="panel">
+      <h3>
+        Where fights happen <Info text="Where bots were killed by enemies, by place: the map's choke points, as bots play it. The split says which side lost more there." />
+      </h3>
+      <ul className="health-spots">
+        {spots.map((s, i) => (
+          <li key={i}>
+            <span className="health-spot-place">{capital(s.place || `the spot at ${s.at.map((v) => Math.round(v)).join(" ")}`)}</span>
+            <span className="muted">
+              {s.deaths} {s.deaths === 1 ? "death" : "deaths"} · {s.tDeaths} T, {s.ctDeaths} CT
+            </span>
+            <button type="button" className="btn small" onClick={() => openInViewer(r.map, { at: s.at, place: s.place, count: s.deaths, seconds: 0, drop: 0 })}>
+              Open in map viewer
+            </button>
+          </li>
+        ))}
+      </ul>
+      {(r.unvisitedPlaces ?? []).length > 0 && (
+        <p className="muted sim-never">
+          Nobody went to: {r.unvisitedPlaces!.join(", ")}.
+        </p>
       )}
     </div>
   );

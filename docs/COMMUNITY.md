@@ -14,7 +14,7 @@ only) and `app/ui/src/views/tools/community/` (Tools > Share > Community, Beta).
 |---|---|---|
 | The files | **GameBanana** | The app already browses and installs from it safely (gamebanana.rs, content.rs). Creators already have accounts there, it scans uploads for viruses, hosts pictures, comments and likes, and pays nothing to us in bandwidth. |
 | Which pages are Loner-Strike creations | A **tag** on the GameBanana page | GameBanana's search can find pages by their attributes. |
-| What GameBanana can't say | The **Loner-Strike index**, `https://dl.lonerstrike.com/community/index.json` | Modes a map supports, ships a nav and finished map knowledge, health check results, game mode plugins and their review, pulled pages, featured picks. A static file on the same download server as the nav pack. |
+| What GameBanana can't say | The **Loner-Strike index**, `https://dl.lonerstrike.com/community/index.json` | Modes a map supports, ships a nav and finished map knowledge, map simulator (health check) results, game mode plugins and their review, pulled pages, featured picks. A static file on the same download server as the nav pack. |
 | Registrations and reports from the app | `https://list.lonerstrike.com/community/submit` and `/community/report` (section 7, docs/COMMUNITY-SERVER.md) | In the server list service on the Hetzner box. When it doesn't answer, registrations wait in the app. |
 
 ### GameBanana's API (what we use and what it can't do)
@@ -113,7 +113,7 @@ reads 1 refuses 2 and says "update Loner-Strike".
 | `file`, `md5` | The file on the page this entry describes, and its MD5 as GameBanana lists it. With `file`, Try it installs that file (if it's still clean); else the newest clean one. |
 | `map` | For maps: the exact .bsp version (`bspSize`, `bspSha256`) the nav, knowledge and checks were made for, the modes it's made for, and what it ships. |
 | `mode` | For game modes: its mode id, its plugins (file, sha256 of the .amxx, where the source is), the review state (`none`, `verified`, `reviewed`), maps it's made for. For 1.0 `plugins` is always empty and `review` always `none` (only Game Mode Studio modes are shared); the fields stay for a later version. |
-| `health` | The newest Loner-Strike health check (tools/health.rs) of that map version. Not filled by the list service for now: an author's numbers can't be proven (see section 7, health from our side). |
+| `health` | The newest Loner-Strike map simulation (the map simulator, tools/health.rs) of that map version. Not filled by the list service for now: an author's numbers can't be proven (see section 7, health from our side). |
 | `screenshots` | https links on `images.gamebanana.com` or `dl.lonerstrike.com` only. |
 | `featured` | A team pick; listed first. |
 | `status` | `listed`; `hidden` (kept out of lists, still openable by link); `revoked` (never offered or installed). |
@@ -213,11 +213,11 @@ would. Request in section 8.
 
 1. **Pick a map** (not one of the game's own).
 2. **Check** (`GET /api/tools/community/publish/:map`): the map doctor's `diagnose` (damaged
-   file, missing textures and files, nav and knowledge fit) and the newest health check report
+   file, missing textures and files, nav and knowledge fit) and the newest map simulation report
    for that map. Blockers stop it (a stock map, a damaged file); warnings are shown (missing
-   files, no nav, a bad health check); tips nudge (name places, overview, run a health check).
+   files, no nav, a bad simulation); tips nudge (name places, overview, run the map simulator).
 3. **Fill in** name, author (remembered), a sentence or two, the modes it's made for (the
-   map's preset mode and the health check's mode pre-ticked) and up to 6 screenshots (PNG/JPEG,
+   map's preset mode and the simulation's mode pre-ticked) and up to 6 screenshots (PNG/JPEG,
    8 MB each, decoded on the server to be sure).
 4. **Make the package** (`POST .../publish/:map`): `<app dir>/tools/community/packages/<map>-loner-strike.zip`
    with the map, its nav and finished knowledge (only when they fit), a fresh `.res`, the
@@ -257,7 +257,7 @@ its settings and the deploy steps are in **docs/COMMUNITY-SERVER.md**. What the 
 | `POST https://list.lonerstrike.com/community/report` | `{"schema": 1, "app", "model": "Mod" \| "Spray", "id", "reason", "note"}` → 200 `{"ok": true}`, 400 bad, 413 too long, 429 too many, 503 busy, each with `{"error"}` |
 | `GET https://dl.lonerstrike.com/community/index.json` (+ `.sha256`) | the index (section 3), published from the list service's database by the team |
 
-Later, optional: run the health check on a submitted map on a team machine to fill `health`
+Later, optional: run the map simulator on a submitted map on a team machine to fill `health`
 independently of the author's numbers, and render viewer screenshots to
 `dl.lonerstrike.com/community/shots/` (already an allowed screenshot host).
 

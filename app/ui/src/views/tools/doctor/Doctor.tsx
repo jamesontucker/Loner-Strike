@@ -298,7 +298,7 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
               <button className="btn small" disabled={!r.nav.exists} onClick={() => go(`navfix:${map}`)}>Nav fixer</button>
               <button className="btn small" disabled={!r.nav.exists} onClick={() => go(`callouts:${map}`)}>Callouts</button>
               <button className="btn small" onClick={() => go(`radar:${map}`)}>Radar maker</button>
-              <button className="btn small" onClick={() => go(`health:${map}`)}>Health check</button>
+              <button className="btn small" onClick={() => go(`health:${map}`)}>Simulate a match</button>
             </div>
           </section>
         </aside>

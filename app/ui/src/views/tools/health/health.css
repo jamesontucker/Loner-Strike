@@ -1,4 +1,4 @@
-/* The map health check (views/tools/health). */
+/* The map simulator (views/tools/health). */
 /* .health-page, not .health: the app already has a .health (styles.css) */
 .health-page { display: grid; gap: 16px; }
 .health-page h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -54,3 +54,45 @@
 .health-spots .muted { flex: 1 1 200px; }
 .health-console { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
 .health-console code { overflow-wrap: anywhere; font-size: 13px; }
+
+/* the report's map (SimMap.tsx) */
+.sim-map { display: grid; gap: 10px; }
+.sim-map-bar { flex-wrap: wrap; gap: 12px; align-items: center; }
+.sim-map-pins { display: inline-flex; gap: 6px; align-items: center; color: var(--bone-dim); }
+.sim-map-pic { position: relative; aspect-ratio: 4 / 3; max-height: 70vh; width: 100%; background: #000; box-shadow: var(--sunken); border-radius: 2px; overflow: hidden; }
+.sim-map-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sim-map-blank { fill: #111; }
+.sim-heat rect { fill: #ff7a3d; }
+.sim-heat.deaths rect { fill: #ff4f5a; }
+.sim-heat.kills rect { fill: #ffd04a; }
+.sim-heat.unvisited rect { fill: rgba(199, 125, 255, .55); stroke: #d9a8ff; stroke-width: .6; }
+.sim-pin circle { fill: rgba(20, 22, 16, .82); stroke: #fff; stroke-width: 1.5; }
+.sim-pin text { text-anchor: middle; fill: #fff; font-weight: 700; pointer-events: none; }
+.sim-pin.fall circle { stroke: var(--weak); }
+.sim-pin.fall text { fill: var(--weak); }
+.sim-pin.stuck circle { stroke: var(--warn); }
+.sim-pin.stuck text { fill: var(--warn); }
+.sim-pin.hurt circle { stroke: #ff6b6b; }
+.sim-pin.hurt text { fill: #ff6b6b; }
+.sim-pin.fight circle { stroke: #fff; }
+.sim-map-readout { margin: 0; min-height: 1.4em; color: var(--bone); font-variant-numeric: tabular-nums; }
+.sim-map-legend { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; color: var(--bone-dim); font-size: 14px; }
+.sim-swatch { width: 60px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, rgba(255, 122, 61, .18), #ff7a3d); }
+.sim-swatch.deaths { background: linear-gradient(90deg, rgba(255, 79, 90, .18), #ff4f5a); }
+.sim-swatch.kills { background: linear-gradient(90deg, rgba(255, 208, 74, .18), #ffd04a); }
+.sim-swatch.unvisited { background: rgba(199, 125, 255, .55); border: 1px solid #d9a8ff; width: 18px; }
+.sim-pin-key { display: inline-flex; gap: 12px; flex-wrap: wrap; }
+.sim-pin-key-item.fall b { color: var(--weak); }
+.sim-pin-key-item.stuck b { color: var(--warn); }
+.sim-pin-key-item.hurt b { color: #ff6b6b; }
+
+.sim-sides { display: flex; gap: 2px; height: 28px; margin-bottom: 12px; border-radius: 2px; overflow: hidden; }
+.sim-side { display: flex; align-items: center; padding: 0 10px; font-weight: 700; min-width: 0; white-space: nowrap; color: #1a1c14; }
+.sim-side.t { background: var(--t); }
+.sim-side.ct { background: var(--ct); justify-content: flex-end; }
+.sim-round-stats { margin-bottom: 12px; }
+.sim-round-strip { display: flex; align-items: flex-end; gap: 2px; height: 56px; }
+.sim-round { flex: 1 1 0; min-width: 2px; max-width: 14px; border-radius: 2px 2px 0 0; background: var(--bone-faint); }
+.sim-round.w1 { background: var(--t); }
+.sim-round.w2 { background: var(--ct); }
+.sim-never { margin: 10px 0 0; }

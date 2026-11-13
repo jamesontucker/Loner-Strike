@@ -18,7 +18,7 @@ Owner of `site/` for the 1.0.0 overhaul. Release date on the site: 2026-11-14.
   - Basics: What's new in 1.0
   - Game modes: Last Stand, Battle Royale, Deathrun and Surf
   - Create: The Tools, Map editor, Compile and playtest, Hammer and J.A.C.K. maps, Game Mode Studio, Playtest and debug a mode, Plugin Studio (with loner.inc), Creature Studio
-  - Map tools: Map doctor, Map health check, Nav fixer, Callouts, Radar maker
+  - Map tools: Map doctor, Map simulator, Nav fixer, Callouts, Radar maker
   - Personalize: Crosshair & config, Bot people, Spray maker
   - Watch & inspect: Map viewer, Replay, Demos, Textures & models
   - Share: Community, Publishing, Community and your privacy
