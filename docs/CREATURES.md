@@ -13,7 +13,8 @@ Every creature is registered in one list and reached through `ILsCreature` (`cre
 
 | Method | Meaning |
 |---|---|
-| `Entity()` | the edict behind it (null once it's gone) |
+| `Entity()` | the entity, for identity (null once it's gone); for adopted ones only a pointer to compare, never call into it |
+| `Vars()` | its entvars: the safe way to read position, health etc. for any provider |
 | `Provider()` | `"ls"` (ours) or `"adopted"` (someone else's, such as MonsterMod's) |
 | `Type()`, `Category()` | the type from creatures.ini; category: infected, alien, wildlife, mechanical, boss, special |
 | `IsAlive()`, `Health()` | |
@@ -61,13 +62,22 @@ nulls), `LsCreatureOf(ent)`, `LsCreaturesExist()`, `LsCreatureSpawn(type, origin
   then removed. One placed in the map (or `persist 1`) hides until its `respawn` or the next round. Map-placed creatures reset
   every round (`FCAP_MUST_RESET`); command-spawned ones are released at round restart (`FCAP_MUST_RELEASE`).
 - **Limits.** `ls_creature_max` (48) alive creatures. A spawn is refused when fewer than 100 edicts are free.
+- **Cost.** Sight traces go only to the nearest 4 hostile players in range, plus the current target. All creatures share
+  a budget of 2 path searches per frame; the rest wait a tick. A goal with no path backs off 1, 2, 4, then 8 s before the
+  next search. The "straight at it" visibility check runs 5 times a second.
+- **Input checks.** Numbers from the file, keys and commands must be finite and are clamped (speeds ≤ 2000, radii ≤ 8192,
+  damage ≤ 10000, health ≤ 100000). Yaw is folded into ±360. Positions outside ±8192 are refused. A bad hull (min ≥ max,
+  bottom above 0, top under 30, over 256 wide) falls back to the default hull with a console warning.
+- **Round reset.** It relies on `REGAMEDLL_FIXES` (`UTIL_ResetEntities`). The `PLAY_GAMEDLL` test configs lack it, so
+  there map creatures don't reset each round and command-spawned ones aren't released.
 
 ## 2. The data file: creatures.ini
 
 Path: cvar `ls_creature_file`, default `addons/amxmodx/configs/gamemodes/creatures.ini` (shipped from
 `plugins/configs/gamemodes/creatures.ini`; the file is optional). The fork has built-in types, and the file adds new ones or
-overrides them by name. `ls_creature reload` re-reads the file, but new models and sounds wait for the next map. Comments
-start with `;`, `#` or `//`.
+overrides them by name. `ls_creature reload` re-reads the file, but new models and sounds wait for the next map. A type
+keeps its slot for the whole server run, so live creatures keep their type. New names are appended. A name the file
+dropped is disabled (no new spawns), not removed. Comments start with `;`, `#` or `//`.
 
 ```ini
 [runner]                    ; type name
@@ -95,7 +105,7 @@ hates = all                 ; all | t | ct
 respawn = 0                 ; seconds after death it comes back at home (0 = never)
 corpse_time = 8
 moves = 1                   ; 0 = a turret
-frags = 1                   ; score for the killer
+frags = 1                   ; score for the killer (only with ls_creature_frags 1: off by default, so mp_fraglimit isn't hit by creatures)
 money = 0                   ; money for the killer
 model = models/zombie.mdl models/hostage.mdl   ; candidates: the first file that exists wins
 skin = 0
@@ -160,9 +170,9 @@ models + sounds, out of the engine's 512/512). On ReHLDS, `rescount` shows the w
 
 | Command | |
 |---|---|
-| `spawn <type> <x> <y> <z> [yaw] [key=value ...]` | prints the entity index and sets cvar `ls_creature_last` |
-| `kill <entity\|all\|type>` | dies (death animation, log line) |
-| `remove <entity\|all\|type>` | gone at once |
+| `spawn <type> <x> <y> <z> [yaw] [key=value ...]` | only while a map is running; prints the entity index and sets cvar `ls_creature_last` |
+| `kill <entity\|all\|type>` | dies (death animation, log line); adopted ones are refused |
+| `remove <entity\|all\|type>` | gone at once; adopted ones are refused |
 | `target <entity\|all\|type> <entity index\|0>` | attack this player (0 = choose itself) |
 | `behave <entity\|all\|type> <idle\|wander\|patrol\|guard\|chase\|flee> [x y z]` | new behaviour (and home) |
 | `adopt <classname> [type]` | register someone else's monsters (see §5) |
@@ -170,7 +180,7 @@ models + sounds, out of the engine's 512/512). On ReHLDS, `rescount` shows the w
 
 Cvars: `ls_creature_ver` (1, for detection), `ls_creature_file`, `ls_creature_precache`, `ls_creature_max`,
 `ls_creature_budget`, `ls_creature_debug` (1 beams for mode/target, 2 path debug, 3 console lines), `ls_creature_last`,
-`ls_creature_alive`.
+`ls_creature_alive`, `ls_creature_frags` (0: kills don't add score).
 
 Waves are planned for later: `ls_wave_spawner` in gm_components drives `spawn` lines.
 
@@ -204,12 +214,17 @@ Coordinated with W2 (TOOLS-NOTES.md, "Agent Y: Creatures"):
 
 MonsterMod is a Metamod plugin with its own monster code, so its entities are not `CLsCreature`s. We don't assume they fit;
 we wrap what they expose. `ls_creature adopt monster_zombie zombie` registers every `monster_zombie` (now, and on a 1 s
-rescan while game events flow) as an `LsAdoptedCreature`:
-- alive = `deadflag == DEAD_NO && health > 0 && takedamage`
-- health from `pev`
-- hostility and category from the given type
-- `Kill()` through `TakeDamage`
-- `SetTarget` and `SetBehaviour` are hints it can't take, because its own schedules run it
+rescan while game events flow) as an `LsAdoptedCreature`. It finds them through the engine's own search, since other
+modules' entities aren't in our classname hash, and it holds the edict plus its serial number:
+- Its private data is another module's classes, so it reads only the edict's entvars and never calls a ReGameDLL virtual
+  on it.
+- alive = `deadflag == DEAD_NO && health > 0 && takedamage`; health comes from the entvars.
+- Hostility and category come from the given type.
+- `kill` and `remove` are refused with a message (use MonsterMod's own commands). `SetTarget` and `SetBehaviour` are
+  no-ops, because its own schedules run it.
+- `adopt` refuses players, `worldspawn`, our own classes, hostages, grenades and items, and the `weapon_`, `item_`,
+  `ammo_`, `func_`, `info_`, `trigger_`, `env_`, `light`, `path_`, `game_` and `multi` prefixes.
+- Not yet tested against MonsterMod: if its entities have no private data at all, they drop out of the list.
 
 So bots, the list, `ls_creature_alive` and the kit treat MonsterMod monsters like ours. Spawning them stays MonsterMod's own
 `monster` command, which the kit's `mm` backend issues and then follows with `adopt`. A fuller adapter would be a small
