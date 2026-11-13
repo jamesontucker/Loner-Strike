@@ -3,7 +3,8 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { Info, Switch } from "../../../ui";
-import { FONTS, type Doc, type ImageLayer, type Layer, type ShapeLayer, type TextLayer } from "./doc";
+import { type Doc, type ImageLayer, type Layer, type ShapeLayer, type TextLayer } from "./doc";
+import { FontPicker } from "./FontPicker";
 import { STICKERS, type Sticker } from "./stickers";
 
 /** A sticker drawn small, for its button. */
@@ -275,13 +276,7 @@ function TextFields({ l, set }: { l: TextLayer; set: (v: Partial<TextLayer>, key
     <>
       <Field name="Font">
         <span className="sc-inline sc-grow">
-          <select className="search" value={l.font} aria-label="Font" onChange={(e) => set({ font: e.target.value })}>
-            {FONTS.map(([v, label]) => (
-              <option key={v} value={v}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <FontPicker value={l.font} onPick={(font) => set({ font })} />
           <Colour label="Words color" value={l.colour} onChange={(c) => set({ colour: c }, "colour")} />
         </span>
       </Field>

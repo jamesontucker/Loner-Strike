@@ -21,6 +21,7 @@ import { AddPanel, Inspector, LayerList } from "./Panels";
 import { deleteDesign, DEFAULT_CHOICE, installSpray, listDesigns, openDesign, previewSpray, restoreSpray, saveDesign, sendDrawn, sprayStatus, type Choice, type DesignInfo, type GameSpray, type SprayImage } from "./sprayApi";
 import { Stage } from "./Stage";
 import { StartFrom } from "./StartFrom";
+import { FALLBACK, fontsReady } from "./sysfonts";
 import { TEMPLATES } from "./templates";
 import "./spray.css";
 
@@ -203,6 +204,7 @@ export function SprayMaker() {
     setPreviewing(true);
     const t = setTimeout(async () => {
       await imagesReady(doc);
+      await fontsReady(doc);
       await document.fonts?.ready;
       if (!live) return;
       if (!doc.layers.some((l) => !l.hidden) && !doc.background) {
@@ -262,6 +264,9 @@ export function SprayMaker() {
       if ("error" in r && r.error) return toast(r.error, true);
       const doc = cleanDoc((r as { doc: unknown }).doc);
       h.reset(doc);
+      // fonts it was made with that this computer doesn't have: say so once
+      const missing = await fontsReady(doc);
+      if (missing.length) toast(`${missing.map((f) => `“${f}”`).join(", ")} ${missing.length > 1 ? "aren't" : "isn't"} installed on this computer, so ${missing.length > 1 ? "those words show" : "its words show"} in ${FALLBACK}. Pick another font in Lettering, or install it.`);
       setSelected(null);
       setDesign({ id: d.id, name: (r as { name: string }).name || d.name, saved: doc });
     });
@@ -277,6 +282,7 @@ export function SprayMaker() {
     run("Installing…", async () => {
       // the drawing the preview showed is the one installed
       await imagesReady(doc);
+      await fontsReady(doc);
       const u = await sendDrawn(design.name, toPng(doc));
       if (u.error) return toast(u.error, true);
       const r = await installSpray(choice, targets, lock);

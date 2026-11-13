@@ -192,6 +192,58 @@ test("spray: Start a spray sheet (templates grid, focus, keys) and Opacity in ga
   expect(problems).toEqual([]);
 });
 
+test("spray: lettering fonts from this computer (picker, search, drawn with the file, missing on open)", async ({ page }, info) => {
+  const problems = watch(page);
+  await page.goto("/tools-dev.html?open=spray");
+  await expect(page.locator(".sc-stage svg")).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Words", exact: true }).click();
+  const button = page.getByRole("button", { name: /^Font: / });
+  await expect(button).toHaveAccessibleName("Font: Impact");
+  await button.click();
+  const list = page.getByRole("listbox", { name: "Fonts" });
+  await expect(list).toBeVisible();
+  // built-in first, then the installed ones (the test machine has some)
+  const groups = page.locator(".sc-font-group");
+  await expect(groups.first()).toHaveText("Built-in");
+  await expect(groups.nth(1)).toHaveText("On this computer", { timeout: 20_000 });
+  const options = list.getByRole("option");
+  await expect.poll(() => options.count(), { timeout: 20_000 }).toBeGreaterThan(20);
+  // search, keys: pick the first installed match with Enter
+  const fam = process.platform === "win32" ? "Arial" : "Menlo";
+  await page.getByRole("combobox", { name: "Search fonts" }).fill(fam);
+  await expect(groups).toHaveCount(1);
+  await expect(options.first()).toHaveCSS("font-family", new RegExp(fam));
+  await page.screenshot({ path: info.outputPath("spray-fonts.png") });
+  await page.keyboard.press("Enter");
+  await expect(list).toHaveCount(0);
+  await expect(button).toHaveAccessibleName(`Font: ${fam}`);
+  // the canvas has the real file: the family is in document.fonts, loaded
+  await expect.poll(() => page.evaluate((f) => [...document.fonts].some((x) => x.family.replace(/"/g, "") === f && x.status === "loaded"), fam)).toBe(true);
+  // Esc closes only the list
+  await button.click();
+  await page.keyboard.press("Escape");
+  await expect(list).toHaveCount(0);
+  await expect(button).toBeFocused();
+
+  // a design made with a font this computer doesn't have: drawn in Impact, with a note
+  const name = `p10 font ${Date.now()}`;
+  const doc = { v: 2, shape: "square", background: "", layers: [{ kind: "text", name: "Words", text: "HI", font: "Nope Sans 1987", size: 120, x: 256, y: 256, rot: 0, scale: 1, flipX: false, flipY: false, opacity: 1, hidden: false, locked: false, bold: false, italic: false, colour: "#ffffff", outline: 0, outlineColour: "#000000", shadow: false, shadowColour: "#000000" }] };
+  const saved = await page.evaluate(async ([n, d]) => (await fetch("/api/tools/spray/design/save", { method: "POST", headers: { "Content-Type": "application/json", "X-Panel": "1" }, body: JSON.stringify({ name: n, doc: d, thumb: "" }) })).json(), [name, doc] as const);
+  expect(saved.ok).toBe(true);
+  // (saved behind the page's back: load the page again so the list has it)
+  await page.reload();
+  await expect(page.locator(".sc-stage svg")).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Designs & templates…" }).click();
+  await page.getByRole("dialog", { name: "Start a spray" }).getByRole("button", { name: `Open ${name}` }).click();
+  await expect(page.getByText(/“Nope Sans 1987” isn't installed on this computer/).first()).toBeVisible();
+  await page.getByRole("option").first().click();
+  await expect(page.locator(".sc-font-missing")).toContainText("Impact");
+  await expect(page.getByRole("button", { name: /^Font: / })).toHaveAccessibleName("Font: Nope Sans 1987");
+  // clean up
+  await page.evaluate(async (id) => fetch("/api/tools/spray/design/delete", { method: "POST", headers: { "Content-Type": "application/json", "X-Panel": "1" }, body: JSON.stringify({ id }) }), saved.id);
+  expect(problems).toEqual([]);
+});
+
 test("crosshair & config: tabs, preset cards, nothing sticks out", async ({ page }, info) => {
   const problems = watch(page);
   await page.goto("/tools-dev.html?open=playercfg");

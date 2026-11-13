@@ -49,7 +49,12 @@ export function Stage({ doc, selected, onSelect, onBegin, onLive, snap, canvasRe
     const again = () => setTick((t) => t + 1);
     void document.fonts?.load('48px "Counter-Strike"').then(again, () => {});
     document.fonts?.addEventListener?.("loadingdone", again);
-    return () => document.fonts?.removeEventListener?.("loadingdone", again);
+    // an installed font loaded for the lettering (sysfonts.ts)
+    window.addEventListener("ls-font-loaded", again);
+    return () => {
+      document.fonts?.removeEventListener?.("loadingdone", again);
+      window.removeEventListener("ls-font-loaded", again);
+    };
   }, []);
 
   // design units per screen pixel (handles keep their size on screen)

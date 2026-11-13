@@ -29,6 +29,9 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+#[path = "spray_fonts.rs"]
+pub mod fonts;
+
 const NO_GAME: &str = "Set up the game on this computer first.";
 const NO_PICTURE: &str = "Choose a picture first.";
 const INTERNAL: &str = "Loner-Strike hit an internal error making the spray. Try again, and copy the diagnostics from Settings if it keeps happening.";
@@ -589,6 +592,36 @@ async fn api_design_delete(State(st): State<Shared>, h: HeaderMap, Json(q): Json
     blocking(move || delete_design(&app, &q.id)).await
 }
 
+/// The fonts installed on this computer (families and their styles) for the lettering picker.
+async fn api_fonts() -> Response {
+    blocking(|| {
+        let all = fonts::faces();
+        let list: Vec<Value> = fonts::families(&all).into_iter().map(|(family, styles)| json!({"family": family, "styles": styles})).collect();
+        Ok(json!({"fonts": list}))
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct FontQ {
+    family: String,
+}
+
+/// One installed family's regular face, as a font file the page loads into a FontFace.
+async fn api_font(Query(q): Query<FontQ>) -> Response {
+    let r = tokio::task::spawn_blocking(move || {
+        let all = fonts::faces();
+        let face = fonts::regular(&all, &q.family).ok_or_else(|| format!("{} isn't installed on this computer.", q.family))?;
+        fonts::face_bytes(face)
+    })
+    .await
+    .unwrap_or_else(|_| Err(INTERNAL.into()));
+    match r {
+        Ok(bytes) => ([(axum::http::header::CONTENT_TYPE, "font/sfnt"), (axum::http::header::CACHE_CONTROL, "private, max-age=3600")], bytes).into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, Json(json!({"error": e}))).into_response(),
+    }
+}
+
 /// The app window's listener only (merged into tools::local_routes).
 pub fn routes() -> Router<Shared> {
     Router::new()
@@ -602,6 +635,8 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/spray/design", get(api_design))
         .route("/api/tools/spray/design/save", post(api_design_save).layer(DefaultBodyLimit::max(MAX_DESIGN + 4096)))
         .route("/api/tools/spray/design/delete", post(api_design_delete))
+        .route("/api/tools/spray/fonts", get(api_fonts))
+        .route("/api/tools/spray/font", get(api_font))
 }
 
 #[cfg(test)]

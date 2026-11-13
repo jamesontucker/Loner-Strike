@@ -142,7 +142,7 @@ export function cleanDoc(raw: unknown): Doc {
     b.opacity = Math.min(1, Math.max(0, typeof seeThrough === "number" ? 1 - seeThrough : num(b.opacity, 1)));
     delete (b as { seeThrough?: unknown }).seeThrough;
     if (b.kind === "image" && typeof b.src === "string" && b.src.startsWith("data:image/")) doc.layers.push({ ...imageLayer(doc, b.src, 1, 1, b.name), ...b });
-    else if (b.kind === "text") doc.layers.push({ ...textLayer(doc), ...b, text: String(b.text ?? "") });
+    else if (b.kind === "text") doc.layers.push({ ...textLayer(doc), ...b, text: String(b.text ?? ""), font: typeof b.font === "string" && b.font.trim() && b.font.length <= 120 ? b.font : FONTS[1][0] });
     else if (b.kind === "shape") doc.layers.push({ ...shapeLayer(doc, String(b.shape)), ...b });
   }
   return doc;
@@ -210,7 +210,10 @@ function keyedImage(img: HTMLImageElement, src: string): HTMLCanvasElement {
 let scratch: HTMLCanvasElement | null = null;
 const measure = () => (scratch ??= document.createElement("canvas")).getContext("2d")!;
 
-export const fontOf = (l: TextLayer) => `${l.italic ? "italic " : ""}${l.bold ? "bold " : ""}${l.size}px ${l.font.includes(",") || l.font.includes("'") ? l.font : `"${l.font}"`}`;
+/** A font name as CSS: a built-in stack as it is, an installed family quoted with Impact after it
+ *  (what it draws in on a computer without that family). */
+export const fontCss = (font: string) => (font.includes(",") || font.includes("'") ? font : `"${font.replace(/["\\]/g, "")}", Impact, Haettenschweiler, sans-serif`);
+export const fontOf = (l: TextLayer) => `${l.italic ? "italic " : ""}${l.bold ? "bold " : ""}${l.size}px ${fontCss(l.font)}`;
 
 /** A layer's size at scale 1 (design units), before turning. */
 export function layerSize(l: Layer): { w: number; h: number } {

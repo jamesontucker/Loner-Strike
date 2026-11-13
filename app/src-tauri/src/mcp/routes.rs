@@ -385,6 +385,8 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/tools/spray/design"),
     ("POST", "/api/tools/spray/design/save"),
     ("POST", "/api/tools/spray/design/delete"),
+    ("GET", "/api/tools/spray/fonts"),
+    ("GET", "/api/tools/spray/font"),
     ("POST", "/api/tools/studio/compile"),
     ("POST", "/api/tools/studio/debug/command"),
     ("GET", "/api/tools/studio/debug/events"),
