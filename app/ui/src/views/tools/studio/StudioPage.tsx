@@ -10,6 +10,7 @@ import { Sheet, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading } from "../common";
 import { busy, errorText } from "../common/api";
 import { useToolCrumbs } from "../common/shell";
+import { ActionBar } from "../common/ActionBar";
 import { useReportAddress } from "../common/address";
 import { useToolArg } from "../../../stores/tools";
 import { useDirty, useNav } from "../../../store";
@@ -275,6 +276,26 @@ function Studio({ maps }: ToolProps) {
       else setCode(r.source);
     });
 
+  const openCode = () =>
+    run("Opening the code…", async () => {
+      const g = useStudio.getState().graph;
+      if (!g) return;
+      const r = await api.openAsCode(g);
+      if (r.error || !r.name) return toast(r.error ?? "Fix the problems on the nodes first.", true);
+      setCode(null);
+      go("tools", `plugins:${r.folder}/${r.name}`);
+    });
+
+  const removeInstalled = async () => {
+    const g = useStudio.getState().graph;
+    if (!g) return;
+    if (!(await ask(`Remove the mode \u201c${g.mode.name}\u201d from the game? The graph is kept.`, { ok: "Remove", danger: true }))) return;
+    const r = await api.uninstall(g.mode.id);
+    if (r.error) toast(r.error, true);
+    else toast("Removed from the game.");
+    void refreshList();
+  };
+
   const layout = () => {
     const g = useStudio.getState().graph;
     if (!g) return;
@@ -363,9 +384,6 @@ function Studio({ maps }: ToolProps) {
           {graph.mode.name}
           {dirty ? " •" : ""}
         </strong>
-        <button type="button" className="btn" onClick={() => void save()} disabled={!dirty}>
-          Save
-        </button>
         <span className="st-sep" />
         <button type="button" className="btn" onClick={st.undo} disabled={!history.past.length} title="Undo (⌘Z)">
           Undo
@@ -376,14 +394,7 @@ function Studio({ maps }: ToolProps) {
         <button type="button" className="btn" onClick={layout} title="Lay the nodes out left to right">
           Tidy up
         </button>
-        <button type="button" className="btn" onClick={() => void showCode()} disabled={!!working}>
-          Show code
-        </button>
         <span className="st-grow" />
-        <span className={`st-status${errors ? " bad" : ""}`}>{errors ? `${errors} problem${errors === 1 ? "" : "s"}` : "Ready"}</span>
-        <button type="button" className="btn" onClick={() => void install()} disabled={!!working || errors > 0} title="Compile and add it to the game's modes">
-          {working === "Compiling and installing…" ? <span className="spinner" /> : null} Install
-        </button>
         <select className="st-field" value={prefs.map} onChange={(e) => (setPrefs({ ...prefs, map: e.target.value }), savePrefs({ ...prefs, map: e.target.value }))} aria-label="Map">
           {(mapNames.includes(prefs.map) ? mapNames : [prefs.map, ...mapNames]).map((m) => (
             <option key={m}>{m}</option>
@@ -411,6 +422,22 @@ function Studio({ maps }: ToolProps) {
         <Canvas toast={toast} onFocusReady={(f) => (focusRef.current = f)} />
         <Inspector focus={(id) => focusRef.current(id)} />
       </div>
+      <ActionBar
+        dirty={dirty}
+        errors={errors}
+        working={working}
+        where="in your Game Mode Studio folder"
+        info="Saving keeps the graph. Install compiles it into a plugin and adds it to the game's modes (the Play page and the in-game menu list it); Playtest does that with the debugger and starts the game."
+        save={{ onClick: () => save() }}
+        undo={saved ? () => st.edit(() => saved) : null}
+        actions={[{ label: "Install", busyLabel: "Compiling and installing…", onClick: () => install(), disabled: errors > 0, title: "Compile and add it to the game's modes" }]}
+        more={[
+          { label: "Show code", onClick: () => showCode(), note: "The plugin this graph becomes" },
+          { label: "Open in Plugin Studio", onClick: () => openCode(), note: "Read only; save a copy there to make it your own" },
+          { label: "Remove from the game", danger: true, onClick: () => removeInstalled(), note: "Takes the mode out of the game; the graph stays" },
+        ]}
+        reset={false}
+      />
       {playing && (
         <DebugPanel
           focus={(id) => focusRef.current(id)}
@@ -435,16 +462,7 @@ function Studio({ maps }: ToolProps) {
                 className="btn"
                 disabled={!!working}
                 title="Opens it read only in the Plugin Studio (Save a copy there to make it your own plugin)"
-                onClick={() =>
-                  void run("Opening the code…", async () => {
-                    const g = useStudio.getState().graph;
-                    if (!g) return;
-                    const r = await api.openAsCode(g);
-                    if (r.error || !r.name) return toast(r.error ?? "Fix the problems on the nodes first.", true);
-                    setCode(null);
-                    go("tools", `plugins:${r.folder}/${r.name}`);
-                  })
-                }
+                onClick={() => void openCode()}
               >
                 Open in Plugin Studio
               </button>

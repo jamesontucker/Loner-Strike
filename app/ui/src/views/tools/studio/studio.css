@@ -42,9 +42,10 @@
 .st-cat-comp .st-node-head { background: #6a4a2f; }
 .st-cat-creature .st-node-head { background: #5e2f5e; }
 .st-vars-list { list-style: none; padding: 0; margin: 4px 0 8px; display: grid; gap: 6px; }
-.st-var { display: grid; grid-template-columns: 1fr auto; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 5px; }
-.st-var-row { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
-.st-var-row .st-field { flex: 1; min-width: 70px; }
+.st-var { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 5px; }
+.st-var-row { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; min-width: 0; }
+.st-var-row > .st-field { flex: 1 1 120px; min-width: 0; }
+.st-var-row > .st-field-num { flex: 0 0 80px; }
 .st-node-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-node-badge { width: 16px; height: 16px; border-radius: 50%; font-size: 11px; line-height: 16px; text-align: center; color: #111; }
 .st-node-badge.err { background: var(--st-bad); }
@@ -151,4 +152,5 @@
 @media (max-width: 900px) {
   .st-side { width: 220px; }
 }
-.st-var > .btn.small { align-self: start; }
+.st-var > .btn.small { justify-self: end; }
+.st-var-row > select.st-field { flex: 1 1 100%; }
