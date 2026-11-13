@@ -15,6 +15,9 @@ export default defineConfig({
   projects: [
     { name: "large", use: { viewport: { width: 1440, height: 900 } } },
     { name: "small", use: { viewport: { width: 1024, height: 680 } } },
+    // WebKit (the Mac app's engine) for the specs listed here (`--project webkit`;
+    // `npx playwright install webkit` once)
+    { name: "webkit", testMatch: ["callouts.spec.ts"], use: { browserName: "webkit", viewport: { width: 1440, height: 900 } } },
   ],
   webServer: {
     command: "node scripts/tools-dev.mjs",

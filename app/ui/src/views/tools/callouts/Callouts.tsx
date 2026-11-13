@@ -195,14 +195,17 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
     const r = await suggest(map, from);
     setSuggesting(null);
     if (r.error) return toast(r.error, true);
-    const c = r.changes ?? [];
+    // (the server works from the saved names: a name given here since then stays as it is)
+    const mine = (id: number) => edits[id] !== undefined && edits[id] !== (original[id] ?? "");
+    const c = (r.changes ?? []).filter((x) => !mine(x.id));
+    const kept = (r.changes ?? []).length - c.length;
     if (c.length) {
       const next = { ...edits };
       for (const x of c) next[x.id] = x.place;
       push(next, from === "marks" ? "names from bomb sites and spawns" : from === "usual" ? "the usual callouts" : "names from the other game's nav");
       showAreas(c.map((x) => x.id));
     }
-    toast(r.message || "Done.");
+    toast((r.message || "Done.") + (kept ? ` ${kept} area${kept === 1 ? "" : "s"} you named yourself kept ${kept === 1 ? "its name" : "their names"}.` : ""));
   };
 
   const save = async () => {
@@ -350,7 +353,7 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
           <section className="tools-panel">
             <h3>
               Places <span className="muted small-note">{counts.length}</span>
-              <Info text="Click a place to pick its areas (Shift adds) and make it the brush. Names with 🔊 have a radio voice line; any other name works in bot chat and voice commands (capitals and _ become spaces: UpperTunnel is 'upper tunnel')." />
+              <Info text="Click a place to pick its areas (Shift adds) and make it the brush. Names with 🔊 have a radio voice line; any other name works in bot chat and voice commands (capitals and _ become spaces: UpperTunnel is 'upper tunnel'). Saving adds new names to the game's place list (BotChatter.db), which it needs to keep them." />
             </h3>
             {counts.length === 0 ? (
               <Empty plain text={nav.usual ? "No places yet. Paint some, or start from a suggestion below." : "No places yet. Pick areas and name them, or paint a name on (P)."} />
