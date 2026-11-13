@@ -462,7 +462,7 @@ fn run_limited_n(mut cmd: Command, dest: &Path, budget: u64, max_entries: usize)
             });
         }
     }
-    let mut child = cmd.spawn().map_err(|e| format!("Couldn't run the unpacker ({e})."))?;
+    let mut child = spawn_retrying(&mut cmd).map_err(|e| format!("Couldn't run the unpacker ({e})."))?;
     let mut stderr = child.stderr.take();
     let reader = std::thread::spawn(move || {
         let mut s = String::new();
@@ -517,6 +517,28 @@ fn run_limited_n(mut cmd: Command, dest: &Path, budget: u64, max_entries: usize)
         return Err(too_many(entries, max_entries));
     }
     Ok((status.success(), err))
+}
+
+/// Starts a program, trying again for a moment when the system is briefly out of processes
+/// or memory (fork's EAGAIN/ENOMEM, an interrupted call): a busy machine (the game, a build,
+/// the full test suite) shouldn't fail an install that would work half a second later.
+fn spawn_retrying(cmd: &mut Command) -> std::io::Result<std::process::Child> {
+    let mut wait = Duration::from_millis(50);
+    for _ in 0..6 {
+        match cmd.spawn() {
+            Err(e) if spawn_transient(&e) => {
+                std::thread::sleep(wait);
+                wait *= 2;
+            }
+            other => return other,
+        }
+    }
+    cmd.spawn()
+}
+
+fn spawn_transient(e: &std::io::Error) -> bool {
+    use std::io::ErrorKind::*;
+    matches!(e.kind(), WouldBlock | Interrupted | OutOfMemory)
 }
 
 /// Some uploads put the real archive inside the archive.
@@ -961,6 +983,20 @@ mod tests {
         let e = run_limited_n(c, &r, MAX_UNPACKED, 200).unwrap_err();
         assert!(e.ends_with("the most is 200."), "{e}");
         let _ = std::fs::remove_dir_all(&r);
+    }
+
+    // the only ways run_limited fails with something other than its size/count messages are
+    // a program that can't be started or waited for; a briefly full process table is retried
+    #[cfg(unix)]
+    #[test]
+    fn spawn_retries_only_brief_shortages() {
+        let e = |n: i32| std::io::Error::from_raw_os_error(n);
+        assert!(spawn_transient(&e(libc::EAGAIN)) && spawn_transient(&e(libc::EINTR)) && spawn_transient(&e(libc::ENOMEM)));
+        assert!(!spawn_transient(&e(libc::ENOENT)) && !spawn_transient(&e(libc::EACCES)));
+        let mut missing = Command::new("/nonexistent/unpacker");
+        let started = std::time::Instant::now();
+        assert!(spawn_retrying(&mut missing).is_err());
+        assert!(started.elapsed() < Duration::from_millis(500), "a missing program isn't retried");
     }
 
     // [Caps] an unpacker that makes more files than its listing said is stopped while it works
