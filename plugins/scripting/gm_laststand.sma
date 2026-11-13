@@ -45,7 +45,7 @@ enum { PH_IDLE = 0, PH_PREPARE, PH_WAVE, PH_BREAK, PH_OVER };
 enum { RL_FODDER = 0, RL_FLANK, RL_RANGED, RL_TANK, RL_COUNT };
 new const ROSTER[][] = { "zombie", "babycrab", "runner", "spitter", "brute", "vortigaunt", "assassin", "soldier", "controller", "stukabat" };
 new const ROSTER_ROLE[] = { RL_FODDER, RL_FODDER, RL_FLANK, RL_RANGED, RL_TANK, RL_RANGED, RL_FLANK, RL_TANK, RL_RANGED, RL_FLANK };
-new const ROSTER_FROM[] = { 1, 2, 3, 4, 5, 7, 8, 9, 12, 14 };
+new const ROSTER_FROM[] = { 1, 4, 3, 4, 5, 8, 9, 10, 12, 14 };
 new const ROSTER_HP[] = { 100, 12, 60, 120, 450, 150, 90, 300, 200, 60 };
 /* how often within its role (baby headcrabs are a sprinkle: small, fast and hard to hit) */
 new const ROSTER_WEIGHT[] = { 4, 1, 3, 3, 3, 2, 2, 2, 2, 1 };
@@ -191,7 +191,7 @@ public plugin_init()
 	g_cRevive = register_cvar("lst_revive", "30");
 	g_cDrops = register_cvar("lst_drops", "2");
 	g_cDefenders = register_cvar("lst_defenders", "4");
-	g_cWaveMoney = register_cvar("lst_wave_money", "600");
+	g_cWaveMoney = register_cvar("lst_wave_money", "800");
 	g_cAliveMax = register_cvar("lst_alive_max", "0");
 	g_cWaitHuman = register_cvar("lst_wait_human", "1");
 	g_cOverrun = register_cvar("lst_overrun", "15");
@@ -1043,7 +1043,7 @@ stock start_wave(n)
 			send_revive(d);
 
 	/* how many: grows each wave, with the team's size and the difficulty */
-	new total = floatround((13.0 + 1.5 * float(n)) * team_count_factor() * diff_mult(false) * g_wCount);
+	new total = floatround((11.0 + 1.4 * float(n)) * team_count_factor() * diff_mult(false) * g_wCount);
 	/* a boss round: fewer grunts with the boss (it's the round's threat); a special round: a
 	   fast pack, fewer of them */
 	if (!g_bossDone)
