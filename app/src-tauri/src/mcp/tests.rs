@@ -824,6 +824,7 @@ fn what_agents_may_do_with_each_route() {
         ("POST", "/api/gb/uninstall", none.clone()), ("POST", "/api/gb/install", none.clone()), ("POST", "/api/app/launch", json!({"map": "de_dust2"})),
         ("POST", "/api/app/storage/clear", none.clone()), ("POST", "/api/tools/demos/delete", none.clone()), ("POST", "/api/tools/plugins/delete", none.clone()),
         ("POST", "/api/tools/editor/prefabs/delete", none.clone()), ("POST", "/api/tools/community/register", none.clone()), ("POST", "/api/tools/community/report", none.clone()), ("POST", "/api/tools/community/publish/de_x", none.clone()),
+        ("POST", "/api/tools/community/uninstall", none.clone()), ("POST", "/api/tools/community/update", none.clone()), ("POST", "/api/tools/community/server/abc", none.clone()), ("POST", "/api/tools/community/publish-mode/lava", none.clone()),
         ("POST", "/api/servers/abc/webstatus", none.clone()), ("POST", "/api/app/direct", none.clone()), ("POST", "/api/safety/restore", none.clone()),
         ("POST", "/api/safety/undo", json!({"from": 1, "to": 2})), ("POST", "/api/setup/install", json!({"components": ["addon-monstermod"]})),
         ("POST", "/api/setup/uninstall", json!({"components": ["addon-monstermod"]})), ("POST", "/api/cmd", json!({"cmd": "gm_player", "args": ["3", "kick"]})),
