@@ -2507,3 +2507,47 @@ Builds on W1's plugin change (holders + free roamers). What was wrong in the bra
 - Git slip: my notes commit "P4 to P5 on the editor dialog…" also carried 184 lines of someone else's uncommitted
   TOOLS-NOTES text (the file was dirty when I committed it by path). Content intact; the message is mine.
 - Dev servers: mine are `serve_tools_dev` on 8268 + Vite 5267 (from a private copy of HEAD), tab in isolated context `p4`.
+
+### Agent T: Community round 2 — library, chips, servers, remix (2026-11-12)
+
+**Built** (details: docs/COMMUNITY.md section 10)
+- **Polish:** the Kind filter and the tabs were one big button: `Segmented` takes *space*-separated values
+  (labels with spaces use `|`), my bug, not P8's. Tabs are now Browse / Installed / Publish / Published. Checked
+  in the tools-dev page at 1280 and 900 wide (browse empty state, publish chooser). P8's ActionBar/MapBrowser
+  aren't in yet; the pages use the existing `MapList`/`Empty`/`Loading`; switch when P8 notes their props.
+- **Library** (`tools/communitylib.rs`, one `pub mod` + one merge line): every Try it is noted in
+  `<app dir>/community/<mod|spray>-<id>/meta.json`; `GET /api/tools/community/library` (update/pulled flags,
+  lookups for chips), `uninstall` (through the owning installer, each file kept by the safety net first; drops it
+  from servers too), `update` (newer file listed → old removed, new installed with Try it's checks), `remix`.
+- **Studio modes from Community:** Try it downloads the zip, checks one graph + the Studio's checks + nothing that
+  runs code, refuses id clashes, then builds it with the Studio's compiler (`studio::compile`, made `pub` with
+  `installed`/`uninstall` in X's `studio/mod.rs`: one-word changes). Play mode cards show it.
+- **Remix:** the graph is copied to your Studio graphs as `<id>_remix…`; credit in `<app dir>/community/remixes.json`
+  (not in the graph, so X's schema is untouched). Opens with `studio:<id>` (X's pending StudioPage change handles
+  that address). **Publish > A game mode** packages `modes/<id>/<id>.graph.json` with `remixOf` (Item gained
+  `remixOf`), GameBanana text credits the original. Other tools: `go("tools", "community:publish:mode:<id>")`.
+- **Chips and filters** (small marked edits, `(community)` comments): `MapCard` (Maps + Play map lists) shows
+  "Community · author", Maps' Show menu has "From Community", the map sheet links to the page; Play's `ModeCards`;
+  Mods page "Modes from Community" (Details / Remove); the editor's `PrefabPanel` rows; the spray maker's
+  "Sprays from Community". Pieces live in `community/chip.tsx` (light, no Community chunk) and `community/Hooks.tsx`.
+- **Servers:** Servers.tsx tab **Library > Community content** (`creations`; "community" is an old alias of
+  Moderation there), this computer only: tick community maps/modes per server. Maps go with `mapcopy::start`
+  (local copy, Linux upload; FastDL serves them from the server's records), modes are built here then
+  `studio_<id>.amxx` + plugins.ini/cfg + modes.ini line go to the server (`studio::register_mode`), then a sync.
+  Unticking removes them (server map records / `studio::uninstall`).
+- **MCP:** new routes in `ROUTES`; uninstall, update, server content and mode publishing asked first.
+
+**Checks:** full `cargo test` 675 passed (in a copy with X's in-progress studio files at HEAD; the worktree doesn't
+build right now because of `studio/gen.rs`/`graph.rs` work in progress); `tsc -b` clean for my files (one error in
+`plugins/PluginStudio.tsx`, not mine); vite build fine.
+
+**Left / requests**
+- **X (Studio):** show "Remix of <name> by <author>" in the Studio for graphs in `community/remixes.json`
+  (`GET /api/tools/community/library` doesn't list them; read the file or ask me for a route), and a "Publish…"
+  action doing `go("tools", "community:publish:mode:<id>")`.
+- **P4/P5 (editor):** component setups have no community kind yet; when component packs become shareable they get
+  a kind, an installer and a chip like prefabs.
+- **P8:** I'll move Community to ActionBar/MapBrowser when they land.
+- Not clicked through in the real app: Try it on a real tagged page (none exist yet), the server tab against a real
+  Linux server. Mode filter on Play's mode list skipped (short list; the chip says where it's from).
+- Slip: I briefly navigated p5's Playwright tab to my page before opening my own tab; put it back on editor-dev.
