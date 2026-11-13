@@ -528,3 +528,56 @@ bots, wait for stage 4).
   The tree is right; sorry for the noise in those two commits.
 
 **Requests**: none.
+
+### Agent H (texture & model browser) — done, Beta
+
+**Built**
+- `goldsrc/mdl.rs`: GoldSrc MDL v10 reader (clean-room, from the public format notes): bones, sequences
+  (any frame's pose from the run-length animation data, motion bone kept in place, group files `<name>01.mdl`
+  via `pose_with`), textures (masked/additive/chrome/fullbright flags), skin families, body parts, meshes from
+  triangle strips/fans (flipped to three's counter-clockwise front), companion `<name>T.mdl` textures. Every
+  count/offset checked and capped (bones 256, sequences 4096, textures 512 / 64 MB of pixels, 3M corners,
+  2048 px texture sides); a bone's parent must come before it; a byte-flip fuzz test over the fixture.
+- `goldsrc/wadwrite.rs` (appended, spray code untouched): normal miptex textures (`make_texture`: Lanczos
+  resize to multiples of 16, ≤ 512, four mips each matched to one median-cut palette, `{` → index 255 + blue),
+  `read_lumps` / `put_lump` / `write_lumps` for any WAD. All spray tests still pass.
+- `tools/assets.rs` (`routes()`, merged in tools/mod.rs): `GET /api/tools/assets/wads`, `/wad/:folder/:wad`
+  (texture list), `/wad/:folder/:wad/tex/:name.png` (disk-cached via cache.rs, ETag/304), `/usage` (per map:
+  textures, embedded textures, WADs, entity models; from the texture+entity lumps only, memoised by the maps'
+  stamps), `/models`, `/model?folder&path` (LSMB: posed `positions`/`normals`, `uv`, bone-space `local`/
+  `localNormals`, `bone`/`normalBone` u16, `indices`; header: draws per mesh, textures, skins, bones,
+  sequences, bodyparts, bounds), `/model/tex?…&i`, `/model/anim?…&seq` (frames × bones × [x y z qx qy qz qw]),
+  `/model/info`. POST (X-Panel): `/export` (save dialog → PNG), `/texture/pick|preview|save` (your picture into a
+  custom WAD in cstrike/; only WADs made here are ever rewritten, old version kept in `<app>/tools/wad-backups`,
+  5 each; game WAD names refused), `/add-file` ({kind: wad|model}: dialog → parsed first → WADs and models that
+  replace a game file go through Get more's `start_local_install` (record, backup, Remove there); a brand-new
+  model is copied in as a new file, never over one, listed in `<app>/tools/imported_models.json`),
+  `/model/remove` (only those). Folders: cstrike, czero, valve, *_downloads, from a fixed list; WAD names one
+  plain part; model paths 2-6 `content::safe_part` parts under models/, resolved case-insensitively and
+  canonicalised inside the folder.
+- `content.rs` (3 one-line additions, shared file): a `textures` section (GameBanana CS 1.6 > Textures, cat 681):
+  loose `.wad` files to the top of the game folder, never the game's own WADs. It also appears as a tab in the
+  main Get more page (sections come from the server).
+- UI `views/tools/assets/`: Textures (WAD picker incl. "Every WAD" and "Inside maps", search, lazy tile grid,
+  big pixel view with size/source/special prefix, "Used by N maps" linking to the map viewer, Save as picture,
+  Make your own with live preview), Models (search + kind filter, R3F viewer with orbit camera framing, skin and
+  body-part choice, animation list with Play — CPU skinning per frame, wireframe, textures with Save, "Placed in"
+  maps, Remove for ones added here), Get more (Add a WAD / Add a model + the app's GetMore with
+  skins/players/textures). Registered in registry.tsx.
+
+**Checked on the real game** (`LS_TEST_GAME=… cargo test --release real_assets real_models -- --nocapture`):
+99 WADs, 10,907 textures decoded (2.3 s), 0 failures; 1,587 models listed, all built (2.06M triangles, 1.6 s);
+triangle facing agrees with the normals 97% (63k of 2.0M disagree: models' own odd normals); usage index of
+388 maps in 0.33 s. The 52 group files (`*01.mdl`) and T files are hidden from the list, not errors.
+`cargo test` (443) and `npm run build` green; AssetBrowser chunk 31 KB (11 KB gz), main bundle unchanged.
+
+**Not done / left**
+- Not looked at in the running app yet (no screenshots): check the model framing, a skin switch on a hostage,
+  a v_ model, Play on a player model, and a GameBanana texture install.
+- Bone controllers, blending (only blend 0), attachments, hitboxes, chrome shading not drawn; animations step
+  frame by frame (no interpolation).
+- No "remove a texture from my WAD" yet.
+
+**Requests**
+- (H) GetMore.tsx: `SECTION_NAME` / `KIND_NAMES` have no `textures` entry, so its badge shows "textures";
+  add `textures: "Texture pack"` / `textures: "Textures"`. Owner: whoever owns GetMore.tsx.
