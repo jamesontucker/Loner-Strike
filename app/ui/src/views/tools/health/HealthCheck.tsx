@@ -8,7 +8,9 @@ import { useTools } from "../../../stores/tools";
 import type { MapInfo } from "../../../types";
 import { BusyButton, Info, LoadError, Segmented, Skeleton, SteamProgress, useToast } from "../../../ui";
 import { Empty, Loading, Row, Rows } from "../common";
+import { matches, searchWords } from "../common/search";
 import type { ToolProps } from "../registry";
+import { useReportAddress } from "../common/address";
 import {
   healthOptions,
   healthProgress,
@@ -125,7 +127,8 @@ function SummaryRow({ r, onOpen }: { r: ReportSummary; onOpen: () => void }) {
 
 function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) {
   const toast = useToast();
-  const [map, setMap] = useState<string>(() => useTools.getState().map ?? "");
+  const [map, setMap] = useState<string>(() => useTools.getState().arg ?? useTools.getState().map ?? "");
+  useReportAddress("health", map ? `health:${map}` : null);
   const [filter, setFilter] = useState("");
   const [mode, setMode] = useState<string | null>(null);
   const [minutes, setMinutes] = useState("5");
@@ -134,9 +137,9 @@ function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) 
   const [starting, setStarting] = useState(false);
 
   const list = useMemo(() => {
-    const f = filter.trim().toLowerCase();
+    const w = searchWords(filter);
     return maps
-      .filter((m) => !m.hidden && (!f || m.name.toLowerCase().includes(f) || (m.title ?? "").toLowerCase().includes(f)))
+      .filter((m) => !m.hidden && matches(w, m.name, m.title))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [maps, filter]);
 

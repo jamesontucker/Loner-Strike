@@ -7,6 +7,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { MapInfo } from "../../../types";
 import { Info } from "../../../ui";
 import { COLLATOR } from "../../Maps";
+import { matches, searchWords } from "./search";
 
 // ---- setting rows, like the app's Settings page: the name (and a line of
 // help, or a "?" for more) on the left, the control on the right at its natural width. When
@@ -99,9 +100,9 @@ export function MapList({ maps, onPick, placeholder, note, filter, none }: {
   const [limit, setLimit] = useState(PAGE);
   const all = useMemo(() => maps.filter((m) => !m.other && (!filter || filter(m))), [maps, filter]);
   const shown = useMemo(() => {
-    const s = q.trim().toLowerCase();
+    const w = searchWords(q);
     return all
-      .filter((m) => !s || m.name.toLowerCase().includes(s) || (m.title ?? "").toLowerCase().includes(s))
+      .filter((m) => matches(w, m.name, m.title))
       .sort((a, b) => COLLATOR.compare(a.name, b.name));
   }, [all, q]);
   if (!all.length)

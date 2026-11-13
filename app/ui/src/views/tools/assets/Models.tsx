@@ -9,6 +9,7 @@ import { BusyButton, LoadError, Skeleton, Switch, useConfirm, useToast } from ".
 import { exportPng, getAnimation, getModel, modelTextureUrl, removeModel, useModelInfo, useModels, type ModelItem, type ModelKind } from "./assetsApi";
 import { Row, Rows } from "../common";
 import { ModelView } from "./ModelView";
+import { matches, searchWords } from "../common/search";
 
 const KINDS: [ModelKind | "all", string][] = [
   ["all", "All"],
@@ -41,7 +42,7 @@ export function Models() {
 
   const needle = q.trim().toLowerCase();
   const list = useMemo(
-    () => (models.data ?? []).filter((m) => (kind === "all" || m.kind === kind) && (!needle || m.path.toLowerCase().includes(needle))),
+    () => (models.data ?? []).filter((m) => (kind === "all" || m.kind === kind) && matches(searchWords(needle), m.path, m.name)),
     [models.data, kind, needle],
   );
   useEffect(() => setShown(PAGE), [kind, needle]);

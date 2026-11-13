@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useSetupJob, waitForSetupJob } from "../../../queries";
 import { useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
+import { useReportAddress } from "../common/address";
 import type { MapInfo } from "../../../types";
 import { Banner, BusyButton, LoadError, useToast } from "../../../ui";
 import { JobProgress } from "../../JobProgress";
@@ -18,6 +19,7 @@ import "./doctor.css";
 export default function Doctor({ maps }: ToolProps) {
   const arg = useToolArg();
   const [map, setMap] = useState<string | null>(arg);
+  useReportAddress("doctor", map ? `doctor:${map}` : null);
   useEffect(() => {
     if (arg) setMap(arg);
   }, [arg]);

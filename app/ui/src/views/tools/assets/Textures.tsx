@@ -8,6 +8,7 @@ import { useNav } from "../../../store";
 import { BusyButton, Info, LoadError, Segmented, Skeleton, useToast } from "../../../ui";
 import { Row, Rows } from "../common";
 import { exportPng, mapTextureUrl, pickPicture, previewTexture, saveTexture, useUsage, useWads, useWadTextures, wadTextureUrl, type ExportSource, type WadInfo, type WadTexture } from "./assetsApi";
+import { matches, searchWords } from "../common/search";
 
 /** "all", "maps" (textures inside maps) or "folder/name.wad" */
 type Source = string;
@@ -57,7 +58,7 @@ export function Textures() {
   }, [source, usage.data, single.data, one, all, readable]);
 
   const needle = q.trim().toLowerCase();
-  const found = needle ? items.filter((t) => t.name.toLowerCase().includes(needle)) : items;
+  const found = needle ? items.filter((t) => matches(searchWords(needle), t.name)) : items;
   useEffect(() => setShown(PAGE), [source, needle]);
 
   const loading = source === "maps" ? usage.isLoading : source === "all" ? all.some((x) => x.isLoading) : single.isLoading;

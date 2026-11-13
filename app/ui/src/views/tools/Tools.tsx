@@ -12,6 +12,8 @@ import type { MapInfo } from "../../types";
 import { lazyPage, SectionHead, Skeleton } from "../../ui";
 import type { Vec3 } from "./viewer/coords";
 import { TOOL_GROUPS, TOOLS } from "./registry";
+import { lastAddress, lastTool, parseAddress, rememberWhereYouAre } from "./common/address";
+import { ToolKeys } from "./common/Shortcuts";
 import "./tools.css";
 import "./common/common.css";
 
@@ -27,6 +29,11 @@ function openFocus(focus: string) {
   if (what === "overview") return t.setTool("");
   if (what === "map") {
     t.setTool("map");
+    // no map asked for and none open: the one looked at last time
+    if (!arg && !t.map) {
+      const last = parseAddress(lastAddress("map") ?? "map");
+      if (last.map) t.openMap(last.map);
+    }
     if (!arg) return;
     const [name, spot] = arg.split("@");
     if (name !== t.map) t.openMap(name);
@@ -37,8 +44,11 @@ function openFocus(focus: string) {
     t.setTool("replay");
     if (arg) t.openReplay(arg);
   } else if (PAGES.has(what)) {
+    // "<tool>:<map>@x,y,z": the map, and a spot to look at; no map asked for: the last one
+    const a = parseAddress(arg ? focus : (lastAddress(what) ?? what));
     t.setTool(what);
-    useTools.setState({ arg: arg || null });
+    useTools.setState({ arg: a.map || null });
+    if (a.at) t.look(a.at, a.size ?? 192);
   }
 }
 
@@ -47,6 +57,12 @@ export default function Tools({ maps }: { maps: MapInfo[] }) {
   const tool = useToolPage((s) => s.tool);
   const entry = TOOLS.find((t) => t.id === tool);
   const Page = entry && PAGES.get(entry.id);
+
+  // back where you were last time when Tools opens with nothing asked for; and remember it
+  useEffect(() => {
+    if (!useNav.getState().focus && !useToolPage.getState().tool && lastTool()) openFocus(lastTool());
+    return rememberWhereYouAre();
+  }, []);
 
   // opened on a tool from the sidebar or elsewhere in the app
   useEffect(() => {
@@ -65,7 +81,13 @@ export default function Tools({ maps }: { maps: MapInfo[] }) {
         </div>
       </>
     );
-  if (!entry || !Page) return <Overview />;
+  if (!entry || !Page)
+    return (
+      <>
+        <Overview />
+        <ToolKeys />
+      </>
+    );
   return (
     <>
       <SectionHead
@@ -79,6 +101,7 @@ export default function Tools({ maps }: { maps: MapInfo[] }) {
       <Suspense fallback={<Skeleton rows={4} />}>
         <Page maps={maps} />
       </Suspense>
+      <ToolKeys />
     </>
   );
 }

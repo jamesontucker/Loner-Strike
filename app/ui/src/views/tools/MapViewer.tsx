@@ -16,6 +16,8 @@ import type { MeshBundle } from "./viewer/bundle";
 import { fmtVec } from "./viewer/coords";
 import { canDraw3d, Scene, SceneBoundary } from "./viewer/Scene";
 import { useModelMeshes } from "./viewer/World";
+import { ViewerControl, ViewerTools } from "./common/ViewerTools";
+import { matches, searchWords } from "./common/search";
 
 const NO_3D = (
   <LoadError
@@ -37,9 +39,9 @@ function MapPicker({ maps }: { maps: MapInfo[] }) {
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(PAGE);
   const shown = useMemo(() => {
-    const s = q.trim().toLowerCase();
+    const w = searchWords(q);
     return maps
-      .filter((m) => !m.other && (!s || m.name.toLowerCase().includes(s) || (m.title ?? "").toLowerCase().includes(s)))
+      .filter((m) => !m.other && matches(w, m.name, m.title))
       .sort((a, b) => COLLATOR.compare(a.name, b.name));
   }, [maps, q]);
   const pick = (m: MapInfo) => openMap(m.name);
@@ -169,7 +171,9 @@ function Loaded({ bundle, entities, map, overlays }: { bundle: MeshBundle | null
             stopped
           ) : bundle ? (
             <SceneBoundary key={n} fallback={stopped}>
-              <Scene bundle={bundle} meshes={meshes} entities={entities} map={map} overlays={overlays} onLost={() => setLost(true)} />
+              <Scene bundle={bundle} meshes={meshes} entities={entities} map={map} overlays={overlays} onLost={() => setLost(true)}>
+                <ViewerControl />
+              </Scene>
             </SceneBoundary>
           ) : (
             <div className="tools-overlay">
@@ -183,6 +187,7 @@ function Loaded({ bundle, entities, map, overlays }: { bundle: MeshBundle | null
       <aside className="tools-side">
         {overlays.replay && <Timeline replay={overlays.replay} />}
         <Layers overlays={overlays} />
+        <ViewerTools map={map} />
         {bundle ? <Inspector entities={entities} meshes={meshes} overlays={overlays} /> : <section className="tools-panel"><Skeleton rows={4} /></section>}
       </aside>
     </div>

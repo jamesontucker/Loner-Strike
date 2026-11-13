@@ -11,6 +11,7 @@ import { entityCentre } from "../viewer/Entities";
 import type { ModelMesh } from "../viewer/World";
 import type { Overlays } from "../MapViewer";
 import { AreaPanel, BotPanel } from "./OverlayPanels";
+import { matches, searchWords } from "../common/search";
 
 /** Keys whose value names another entity's targetname. */
 const LINK_KEYS = new Set(["target", "killtarget", "master", "netname"]);
@@ -113,11 +114,12 @@ export function Inspector({ entities, meshes, overlays }: { entities: MapEntity[
 function EntityList({ entities, onPick }: { entities: MapEntity[]; onPick: (e: MapEntity) => void }) {
   const [q, setQ] = useState("");
   const groups = useMemo(() => {
-    const s = q.trim().toLowerCase();
+    const w = searchWords(q);
     const m = new Map<string, MapEntity[]>();
     for (const e of entities) {
       if (e.classname === "worldspawn") continue;
-      if (s && !e.classname.toLowerCase().includes(s) && !(e.keys.targetname ?? "").toLowerCase().includes(s)) continue;
+      // class, its names and links, the model, and any key's value ("bombtarget", "hostage")
+      if (w.length && !matches(w, e.classname, e.model, ...Object.values(e.keys))) continue;
       m.set(e.classname, [...(m.get(e.classname) ?? []), e]);
     }
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));

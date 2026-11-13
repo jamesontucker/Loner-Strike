@@ -12,6 +12,7 @@ import { JobProgress } from "../../JobProgress";
 import { Check, Loading, MapList } from "../common";
 import type { NavArea } from "../overlays";
 import type { ToolProps } from "../registry";
+import { useReportAddress } from "../common/address";
 import { useMesh, useEntities } from "../toolsApi";
 import { fmtVec } from "../viewer/coords";
 import { canDraw3d, SceneBoundary } from "../viewer/Scene";
@@ -23,6 +24,7 @@ import "./navfix.css";
 export default function NavFixer({ maps }: ToolProps) {
   const arg = useToolArg();
   const [map, setMap] = useState<string | null>(arg);
+  useReportAddress("navfix", map ? `navfix:${map}` : null);
   useEffect(() => {
     if (arg) setMap(arg);
   }, [arg]);

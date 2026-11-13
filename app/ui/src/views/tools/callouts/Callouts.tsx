@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
+import { useReportAddress } from "../common/address";
 import { Banner, BusyButton, Info, LoadError, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading, MapList } from "../common";
 import type { ToolProps } from "../registry";
@@ -16,6 +17,7 @@ import "./callouts.css";
 export default function Callouts({ maps }: ToolProps) {
   const arg = useToolArg();
   const [map, setMap] = useState<string | null>(arg);
+  useReportAddress("callouts", map ? `callouts:${map}` : null);
   useEffect(() => {
     if (arg) setMap(arg);
   }, [arg]);
