@@ -32,6 +32,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -375,11 +376,168 @@ fn inside(b: &Bounds, p: Vec3) -> bool {
 /// the sun still reaches it): brushes that touch the box are kept whole, point entities
 /// outside it are dropped, brush entities left with no brushes are dropped.
 pub fn apply_cordon(doc: &MapDocument, c: &Cordon) -> Result<MapDocument, String> {
-    let b = c.check()?;
+    apply_cordons(doc, &[*c], &CordonOptions::default()).map(|r| r.doc)
+}
+
+/// How a cordon is sealed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Seal {
+    /// a box of sky: the sun reaches in (outdoor areas)
+    #[default]
+    Sky,
+    /// a solid black box: no sun, so indoor lighting stays as it is in the full map
+    Black,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CordonOptions {
+    #[serde(default)]
+    pub seal: Seal,
+    /// lights near the boxes are compiled too (the boxes grow to take them in, with the
+    /// brushes between, so their light reaches the area as in the full map)
+    #[serde(default)]
+    pub keep_lights: bool,
+    /// put spawns in the area for a playtest when it has none (at this point when it's free,
+    /// e.g. the camera, else on a floor near the middle)
+    #[serde(default)]
+    pub spawn: bool,
+    #[serde(default)]
+    pub spawn_at: Option<[f64; 3]>,
+}
+
+/// What a cordon compile is made from, and what's worth saying about it.
+#[derive(Debug)]
+pub struct Cordoned {
+    pub doc: MapDocument,
+    /// the boxes as compiled (merged, grown for lights)
+    pub boxes: Vec<Bounds>,
+    pub warnings: Vec<Problem>,
+}
+
+const LIGHTS: [&str; 3] = ["light", "light_spot", "light_environment"];
+/// How far outside the boxes lights are still taken in.
+pub const LIGHT_REACH: f64 = 1024.0;
+const LINK_KEYS: [&str; 4] = ["target", "killtarget", "netname", "message"];
+
+fn touches_or_overlaps(a: &Bounds, b: &Bounds) -> bool {
+    a.min.x <= b.max.x && b.min.x <= a.max.x && a.min.y <= b.max.y && b.min.y <= a.max.y && a.min.z <= b.max.z && b.min.z <= a.max.z
+}
+
+/// Boxes that overlap or touch become one box round both (so seals never cut through an area).
+pub fn merge_boxes(mut v: Vec<Bounds>) -> Vec<Bounds> {
+    loop {
+        let mut merged = false;
+        'outer: for i in 0..v.len() {
+            for j in i + 1..v.len() {
+                if touches_or_overlaps(&v[i], &v[j]) {
+                    let u = v[i].union(&v[j]);
+                    v.remove(j);
+                    v[i] = u;
+                    merged = true;
+                    break 'outer;
+                }
+            }
+        }
+        if !merged {
+            return v;
+        }
+    }
+}
+
+fn in_any(boxes: &[Bounds], p: Vec3) -> bool {
+    boxes.iter().any(|b| inside(b, p))
+}
+
+fn dist_to_box(b: &Bounds, p: Vec3) -> f64 {
+    let d = |lo: f64, hi: f64, x: f64| if x < lo { lo - x } else if x > hi { x - hi } else { 0.0 };
+    let v = v3(d(b.min.x, b.max.x, p.x), d(b.min.y, b.max.y, p.y), d(b.min.z, b.max.z, p.z));
+    v.len()
+}
+
+fn in_brush(doc: &MapDocument, p: Vec3, half: Vec3) -> bool {
+    let me = Bounds { min: p - half, max: p + half };
+    doc.brushes.values().any(|b| b.entity.is_none_or(|e| !doc.entities.get(&e).is_some_and(|x| x.classname().starts_with("trigger") || x.classname().starts_with("func_buyzone") || x.classname().starts_with("func_bomb") || x.classname() == "func_ladder" || x.classname() == "func_illusionary")) && brush_bounds(b).overlaps(&me))
+}
+
+/// A free spot for a player inside `b`: `at` when it's inside and clear, else standing on the
+/// highest floor under the box's middle (or a ring round it), else the box's middle.
+pub fn spawn_spot(doc: &MapDocument, b: &Bounds, at: Option<Vec3>) -> Option<Vec3> {
+    let half = v3(16.0, 16.0, 36.0);
+    if let Some(p) = at.filter(|p| p.is_finite() && inside(b, *p)) {
+        if !in_brush(doc, p, half) {
+            return Some(p);
+        }
+    }
+    let c = b.center();
+    let mut tries = vec![(c.x, c.y)];
+    for r in [64.0, 128.0, 256.0] {
+        for k in 0..8 {
+            let a = k as f64 * std::f64::consts::FRAC_PI_4;
+            tries.push((c.x + r * a.cos(), c.y + r * a.sin()));
+        }
+    }
+    for (x, y) in tries {
+        if x - 16.0 < b.min.x || x + 16.0 > b.max.x || y - 16.0 < b.min.y || y + 16.0 > b.max.y {
+            continue;
+        }
+        // floors under this column: brush tops, highest first, with room to stand above
+        let mut tops: Vec<f64> = doc
+            .brushes
+            .values()
+            .filter(|br| br.entity.is_none())
+            .map(brush_bounds)
+            .filter(|bb| bb.min.x <= x && bb.max.x >= x && bb.min.y <= y && bb.max.y >= y && bb.max.z >= b.min.z && bb.max.z + 73.0 <= b.max.z)
+            .map(|bb| bb.max.z)
+            .collect();
+        tops.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+        for t in tops {
+            let p = v3(x.round(), y.round(), t + 37.0);
+            if !in_brush(doc, p, half) {
+                return Some(p);
+            }
+        }
+    }
+    let p = c;
+    (!in_brush(doc, p, half)).then_some(p)
+}
+
+/// Only what's inside the boxes, each sealed in its own hollow box of sky or black. Brushes
+/// touching a box are kept whole; point entities outside are dropped (lights near the boxes
+/// too, unless kept); brush entities left with no brushes are dropped; the sun is kept and
+/// moved inside. Says which target links cross the edge.
+pub fn apply_cordons(doc: &MapDocument, cs: &[Cordon], o: &CordonOptions) -> Result<Cordoned, String> {
+    if cs.is_empty() {
+        return Err("Add a cordon box first.".into());
+    }
+    if cs.len() > 32 {
+        return Err("Use at most 32 cordon boxes.".into());
+    }
+    let mut boxes: Vec<Bounds> = cs.iter().map(Cordon::check).collect::<Result<_, _>>()?;
+    boxes = merge_boxes(boxes);
+    // lights within reach: each box grows to take in the ones near it
+    if o.keep_lights {
+        for e in doc.entities.values().filter(|e| LIGHTS[..2].contains(&e.classname())) {
+            let Some(p) = origin_of(e) else { continue };
+            if in_any(&boxes, p) {
+                continue;
+            }
+            if let Some(b) = boxes.iter_mut().filter(|b| dist_to_box(b, p) <= LIGHT_REACH).min_by(|a, b| dist_to_box(a, p).partial_cmp(&dist_to_box(b, p)).unwrap_or(std::cmp::Ordering::Equal)) {
+                b.add(p - v3(16.0, 16.0, 16.0));
+                b.add(p + v3(16.0, 16.0, 16.0));
+            }
+        }
+        boxes = merge_boxes(boxes);
+    }
     let mut d = doc.clone();
-    d.brushes.retain(|_, br| brush_bounds(br).overlaps(&b));
-    let has_brush: std::collections::HashSet<EntityId> = d.brushes.values().filter_map(|br| br.entity).collect();
-    let brushy: std::collections::HashSet<EntityId> = doc.brushes.values().filter_map(|br| br.entity).collect();
+    d.editor = Default::default();
+    d.brushes.retain(|_, br| {
+        let bb = brush_bounds(br);
+        boxes.iter().any(|b| bb.overlaps(b))
+    });
+    let has_brush: HashSet<EntityId> = d.brushes.values().filter_map(|br| br.entity).collect();
+    let brushy: HashSet<EntityId> = doc.brushes.values().filter_map(|br| br.entity).collect();
     d.entities.retain(|id, e| {
         if ALWAYS_KEPT.contains(&e.classname()) {
             return true;
@@ -387,22 +545,118 @@ pub fn apply_cordon(doc: &MapDocument, c: &Cordon) -> Result<MapDocument, String
         if brushy.contains(id) {
             return has_brush.contains(id);
         }
-        origin_of(e).map_or(true, |o| inside(&b, o))
+        origin_of(e).map_or(true, |p| in_any(&boxes, p))
     });
-    let t = 16.0;
-    let (lo, hi) = (b.min, b.max);
-    let slabs = [
-        (v3(lo.x - t, lo.y - t, lo.z - t), v3(hi.x + t, hi.y + t, lo.z)),
-        (v3(lo.x - t, lo.y - t, hi.z), v3(hi.x + t, hi.y + t, hi.z + t)),
-        (v3(lo.x - t, lo.y, lo.z), v3(lo.x, hi.y, hi.z)),
-        (v3(hi.x, lo.y, lo.z), v3(hi.x + t, hi.y, hi.z)),
-        (v3(lo.x - t, lo.y - t, lo.z), v3(hi.x + t, lo.y, hi.z)),
-        (v3(lo.x - t, hi.y, lo.z), v3(hi.x + t, hi.y + t, hi.z)),
-    ];
-    for (a, z) in slabs {
-        d.insert_brush(ops::make_box(a, z, "SKY"));
+    // the sun works from anywhere: put it inside so it can't leak
+    let first = boxes[0];
+    for e in d.entities.values_mut().filter(|e| ALWAYS_KEPT.contains(&e.classname())) {
+        if origin_of(e).is_some_and(|p| !in_any(&boxes, p)) {
+            let c = first.center();
+            e.set("origin", &format!("{} {} {}", c.x.round(), c.y.round(), c.z.round()));
+        }
     }
-    Ok(d)
+
+    // links across the edge
+    let mut warnings = Vec::new();
+    let name_of = |m: &MapDocument, n: &str| m.entities.iter().filter(|(_, e)| e.get("targetname") == Some(n)).map(|(i, _)| *i).collect::<Vec<_>>();
+    for (id, e) in &d.entities {
+        for k in LINK_KEYS {
+            let Some(t) = e.get(k).filter(|t| !t.is_empty()) else { continue };
+            if (k == "message" || k == "netname") && !e.classname().starts_with("trigger") && e.classname() != "multi_manager" {
+                continue;
+            }
+            let there = name_of(doc, t);
+            if !there.is_empty() && name_of(&d, t).is_empty() {
+                warnings.push(Problem {
+                    level: "warning".into(),
+                    kind: "cordon".into(),
+                    message: format!("{} inside the cordon sets off “{t}”, which is outside it: that won't happen in this compile.", e.classname()),
+                    detail: String::new(),
+                    help: Some("Make the cordon box bigger, or add a box round the other end.".into()),
+                    brush: None,
+                    entity: Some(id.0),
+                    at: None,
+                });
+            }
+        }
+    }
+    let kept_names: HashSet<String> = d.entities.values().filter_map(|e| e.get("targetname").map(String::from)).collect();
+    for (id, e) in &doc.entities {
+        if d.entities.contains_key(id) {
+            continue;
+        }
+        let Some(t) = e.get("target").filter(|t| kept_names.contains(*t)) else { continue };
+        warnings.push(Problem {
+            level: "warning".into(),
+            kind: "cordon".into(),
+            message: format!("“{t}” inside the cordon is set off by a {} outside it: nothing will set it off in this compile.", e.classname()),
+            detail: String::new(),
+            help: Some("Make the cordon box bigger to take in what sets it off.".into()),
+            brush: None,
+            entity: Some(id.0),
+            at: origin_of(e).map(|p| [p.x, p.y, p.z]),
+        });
+        if warnings.len() > 50 {
+            break;
+        }
+    }
+
+    // spawns for a playtest
+    if o.spawn {
+        let has = |m: &MapDocument, c: &str| m.entities.values().any(|e| e.classname() == c);
+        if !has(&d, "info_player_start") || !has(&d, "info_player_deathmatch") {
+            let at = o.spawn_at.map(|a| v3(a[0], a[1], a[2]));
+            let spot = boxes.iter().find_map(|b| spawn_spot(&d, b, at).map(|p| (p, *b))).ok_or("There's no free floor in the cordon for the player to spawn on.")?;
+            let (p, b) = spot;
+            let offsets = [(0.0, 0.0), (48.0, 0.0), (0.0, 48.0), (48.0, 48.0), (-48.0, 0.0), (0.0, -48.0), (-48.0, -48.0), (48.0, -48.0)];
+            for class in ["info_player_start", "info_player_deathmatch"] {
+                if has(&d, class) {
+                    continue;
+                }
+                let mut n = 0;
+                for (dx, dy) in offsets {
+                    let q = v3(p.x + dx, p.y + dy, p.z);
+                    if n == 4 || !inside(&b, q) || in_brush(&d, q, v3(16.0, 16.0, 36.0)) {
+                        continue;
+                    }
+                    let mut e = crate::editor::doc::Entity::new(class);
+                    e.set("origin", &format!("{} {} {}", q.x.round(), q.y.round(), q.z.round()));
+                    e.set("angle", "0");
+                    d.insert_entity(e);
+                    n += 1;
+                }
+                if n == 0 {
+                    let mut e = crate::editor::doc::Entity::new(class);
+                    e.set("origin", &format!("{} {} {}", p.x.round(), p.y.round(), p.z.round()));
+                    d.insert_entity(e);
+                }
+            }
+        }
+    }
+
+    // the seals
+    let (tex, t) = match o.seal {
+        Seal::Sky => ("SKY", 16.0),
+        Seal::Black => ("BLACK", 16.0),
+    };
+    if o.seal == Seal::Black && !d.world.wad_names().iter().any(|w| w == "halflife.wad") {
+        d.world.wads.push("halflife.wad".into());
+    }
+    for b in &boxes {
+        let (lo, hi) = (b.min, b.max);
+        let slabs = [
+            (v3(lo.x - t, lo.y - t, lo.z - t), v3(hi.x + t, hi.y + t, lo.z)),
+            (v3(lo.x - t, lo.y - t, hi.z), v3(hi.x + t, hi.y + t, hi.z + t)),
+            (v3(lo.x - t, lo.y, lo.z), v3(lo.x, hi.y, hi.z)),
+            (v3(hi.x, lo.y, lo.z), v3(hi.x + t, hi.y, hi.z)),
+            (v3(lo.x - t, lo.y - t, lo.z), v3(hi.x + t, lo.y, hi.z)),
+            (v3(lo.x - t, hi.y, lo.z), v3(hi.x + t, hi.y + t, hi.z)),
+        ];
+        for (a, z) in slabs {
+            d.insert_brush(ops::make_box(a, z, tex));
+        }
+    }
+    Ok(Cordoned { doc: d, boxes, warnings })
 }
 
 /// The map's WADs as real files for the compiler, in its `wad` order, plus SDHLT's own;
@@ -990,6 +1244,12 @@ struct StartReq {
     name: Option<String>,
     #[serde(default)]
     cordon: Option<Cordon>,
+    /// several boxes compiled together (with `cordon`, all of them)
+    #[serde(default)]
+    cordons: Vec<Cordon>,
+    /// seal, lights, playtest spawn
+    #[serde(default, alias = "cordonOptions")]
+    cordon_options: CordonOptions,
     /// put the map in the game's maps folder when it compiles
     #[serde(default)]
     install: bool,
@@ -1009,6 +1269,8 @@ struct Plan {
     wad_dirs: Vec<PathBuf>,
     /// the game's maps folder, when the map goes into the game afterwards
     maps: Option<PathBuf>,
+    /// said before compiling (cordon links crossing the edge)
+    warnings: Vec<Problem>,
 }
 
 fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
@@ -1027,9 +1289,13 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
         Some(_) => return Err("Map names can only use letters, numbers, _ and - (up to 31).".into()),
         None => map_name(&doc_name),
     };
-    let doc = match &req.cordon {
-        Some(c) => apply_cordon(&doc, c)?,
-        None => doc,
+    let mut boxes = req.cordons.clone();
+    boxes.extend(req.cordon);
+    let (doc, warnings) = if boxes.is_empty() {
+        (doc, Vec::new())
+    } else {
+        let c = apply_cordons(&doc, &boxes, &req.cordon_options)?;
+        (c.doc, c.warnings)
     };
     let maps = if req.install {
         if crate::maps::is_stock_file(&format!("maps/{name}.bsp")) {
@@ -1041,7 +1307,7 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     };
     let layout = layout_for(&client, &install_from, false)?;
     let wad_dirs = crate::goldsrc::wad::search_dirs(&game.hl, game.is_czero());
-    Ok(Plan { layout, install_from, name, preset: req.preset, doc, wad_dirs, maps })
+    Ok(Plan { layout, install_from, name, preset: req.preset, doc, wad_dirs, maps, warnings })
 }
 
 /// Runs one stage, streaming its output into the job; Ok(its whole output) when it exits
@@ -1147,6 +1413,9 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
     let text = map_text(&p.doc, &wads.paths)?;
     std::fs::write(base.with_extension("map"), &text).map_err(|e| format!("Couldn't write the map for the compiler ({e})."))?;
     let idx = Index::of(&p.doc);
+    if !p.warnings.is_empty() {
+        with_job(|j| j.problems.extend(p.warnings.iter().take(MAX_PROBLEMS).cloned()));
+    }
     note(&format!("Compiling {} ({} brushes, {} entities) with SDHLT {SDHLT_VERSION}, {} preset.", p.name, p.doc.brushes.len(), p.doc.entities.len() + 1, format!("{:?}", p.preset).to_lowercase()));
 
     let stages = p.preset.stages();
@@ -1645,6 +1914,79 @@ mod tests {
     }
 
     #[test]
+    fn cordon_seals_lights_boxes_links_and_spawns() {
+        let mut d = room();
+        let mut lamp = Entity::new("light");
+        lamp.set("origin", "400 0 64");
+        d.insert_entity(lamp);
+        let mut far = Entity::new("light");
+        far.set("origin", "5000 0 64");
+        d.insert_entity(far);
+        let mut btn = Entity::new("trigger_once");
+        btn.set("target", "door1");
+        let bt = d.insert_entity(btn);
+        let mut tb = ops::make_box(v3(8.0, 8.0, 0.0), v3(24.0, 24.0, 16.0), "AAATRIGGER");
+        tb.entity = Some(bt);
+        d.insert_brush(tb);
+        let mut door = Entity::new("func_door");
+        door.set("targetname", "door1");
+        let de = d.insert_entity(door);
+        let mut db = ops::make_box(v3(1500.0, 0.0, 0.0), v3(1504.0, 64.0, 112.0), "LAB1_DOOR1");
+        db.entity = Some(de);
+        d.insert_brush(db);
+        let c = Cordon { min: [-64.0, -64.0, -8.0], max: [128.0, 128.0, 192.0] };
+
+        // black seal: BLACK slabs, halflife.wad listed once, no sun from the sky
+        let mut d2 = d.clone();
+        d2.world.wads.retain(|w| !w.contains("halflife"));
+        let out = apply_cordons(&d2, &[c], &CordonOptions { seal: Seal::Black, ..Default::default() }).unwrap();
+        assert_eq!(out.doc.brushes.values().filter(|b| b.faces[0].texture == "BLACK").count(), 6);
+        assert_eq!(out.doc.world.wad_names().iter().filter(|w| *w == "halflife.wad").count(), 1);
+        assert!(mapfile::write_map(&out.doc, &mapfile::WriteOptions::default()).is_ok());
+
+        // lights: dropped by default, kept (box grown) when asked; the far one never
+        let plain = apply_cordons(&d, &[c], &CordonOptions::default()).unwrap();
+        let lights = |m: &MapDocument| m.entities.values().filter(|e| e.classname() == "light").count();
+        assert_eq!(lights(&plain.doc), 0);
+        let kept = apply_cordons(&d, &[c], &CordonOptions { keep_lights: true, ..Default::default() }).unwrap();
+        assert_eq!(lights(&kept.doc), 1);
+        assert!(kept.boxes[0].max.x >= 400.0);
+        assert!(kept.doc.brushes.values().all(crate::editor::geom::is_valid));
+
+        // links across the edge: the trigger inside sets off a door outside
+        assert!(plain.warnings.iter().any(|w| w.kind == "cordon" && w.entity == Some(bt.0) && w.message.contains("door1")), "{:?}", plain.warnings);
+
+        // several boxes: apart they're sealed one by one, overlapping ones become one
+        let c2 = Cordon { min: [1400.0, -64.0, -8.0], max: [1600.0, 128.0, 192.0] };
+        let two = apply_cordons(&d, &[c, c2], &CordonOptions::default()).unwrap();
+        assert_eq!(two.boxes.len(), 2);
+        assert_eq!(two.doc.brushes.values().filter(|b| b.faces[0].texture == "SKY").count(), 12);
+        assert!(two.warnings.is_empty(), "the door is inside the second box: {:?}", two.warnings);
+        let c3 = Cordon { min: [100.0, -64.0, -8.0], max: [300.0, 128.0, 192.0] };
+        assert_eq!(apply_cordons(&d, &[c, c3], &CordonOptions::default()).unwrap().boxes.len(), 1);
+        assert!(apply_cordons(&d, &[], &CordonOptions::default()).is_err());
+
+        // playtest spawns: at the camera when it's free, on a floor otherwise
+        let sp = apply_cordons(&d, &[c], &CordonOptions { spawn: true, spawn_at: Some([64.0, 64.0, 100.0]), ..Default::default() }).unwrap();
+        let starts: Vec<Vec3> = sp.doc.entities.values().filter(|e| e.classname() == "info_player_start").filter_map(origin_of).collect();
+        assert!(!starts.is_empty() && starts.iter().all(|p| inside(&sp.boxes[0], *p)));
+        assert!(starts.contains(&v3(64.0, 64.0, 100.0)));
+        assert!(sp.doc.entities.values().any(|e| e.classname() == "info_player_deathmatch"));
+        let sp2 = apply_cordons(&d, &[c], &CordonOptions { spawn: true, spawn_at: Some([9999.0, 0.0, 0.0]), ..Default::default() }).unwrap();
+        let p = sp2.doc.entities.values().find(|e| e.classname() == "info_player_start").and_then(origin_of).unwrap();
+        // standing on the floor (top at z 0)
+        assert_eq!(p.z, 37.0);
+        // the sun is moved inside when it was outside
+        let mut d3 = d.clone();
+        for e in d3.entities.values_mut().filter(|e| e.classname() == "light_environment") {
+            e.set("origin", "3000 3000 3000");
+        }
+        let o3 = apply_cordons(&d3, &[c], &CordonOptions::default()).unwrap();
+        let sun = o3.doc.entities.values().find(|e| e.classname() == "light_environment").and_then(origin_of).unwrap();
+        assert!(inside(&o3.boxes[0], sun));
+    }
+
+    #[test]
     fn installing_into_the_game() {
         let dir = std::env::temp_dir().join(format!("ls-compile-install-{}", std::process::id()));
         let maps = dir.join("cstrike/maps");
@@ -1752,7 +2094,7 @@ mod tests {
         layout.work = layout.work.join(format!("test-{}", std::process::id()));
         let doc = super::super::editor::starter_map();
         let dirs = crate::goldsrc::wad::search_dirs(&hl, false);
-        let p = Plan { layout: layout.clone(), install_from: install.clone(), name: "ls_test_room".into(), preset: Preset::Fast, doc, wad_dirs: dirs, maps: None };
+        let p = Plan { layout: layout.clone(), install_from: install.clone(), name: "ls_test_room".into(), preset: Preset::Fast, doc, wad_dirs: dirs, maps: None, warnings: vec![] };
         begin("compile", "test").unwrap();
         let r = run_compile(p);
         let (log, problems) = with_job(|j| (j.log.join("\n"), j.problems.clone())).unwrap();
