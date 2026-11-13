@@ -34,81 +34,12 @@ async function showBudget(page: Page) {
   return b;
 }
 
-/** A .map's top-level blocks: the world's head, its brushes, and the other entities. */
-function splitMap(text: string) {
-  const blocks: string[] = [];
-  let depth = 0;
-  let start = -1;
-  let inStr = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (c === '"') inStr = !inStr;
-    if (inStr) continue;
-    if (c === "{") {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (c === "}") {
-      depth--;
-      if (depth === 0) blocks.push(text.slice(start, i + 1));
-    }
-  }
-  const world = blocks[0];
-  // the world's brushes: its inner { } blocks
-  const inner: string[] = [];
-  let d = 0;
-  let s0 = -1;
-  inStr = false;
-  for (let i = 1; i < world.length - 1; i++) {
-    const c = world[i];
-    if (c === '"') inStr = !inStr;
-    if (inStr) continue;
-    if (c === "{") {
-      if (d === 0) s0 = i;
-      d++;
-    } else if (c === "}") {
-      d--;
-      if (d === 0) inner.push(world.slice(s0, i + 1));
-    }
-  }
-  const head = world.slice(0, world.indexOf("{", 1) > 0 ? world.indexOf("{", 1) : world.length - 1);
-  return { head, brushes: inner, entities: blocks.slice(1) };
-}
-
 async function pasteMap(page: Page, file: string) {
   const text = fs.readFileSync(path.join(ROOT, file), "utf8");
   await api(page, "/api/tools/editor/new", {});
-  // in pieces under the app's 2 MB request limit
-  const { head, brushes, entities } = splitMap(text);
-  const parts: string[] = [];
-  let cur: string[] = [];
-  let size = 0;
-  for (const b of brushes) {
-    if (size + b.length > 700_000) {
-      parts.push(`${head}\n${cur.join("\n")}\n}`);
-      cur = [];
-      size = 0;
-    }
-    cur.push(b);
-    size += b.length;
-  }
-  parts.push(`${head}\n${cur.join("\n")}\n}`);
-  // the entities too (brush entities carry their brushes), each piece after an empty world
-  cur = [];
-  size = 0;
-  for (const e of entities) {
-    if (size + e.length > 700_000 && cur.length) {
-      parts.push(`${head}\n}\n${cur.join("\n")}`);
-      cur = [];
-      size = 0;
-    }
-    cur.push(e);
-    size += e.length;
-  }
-  if (cur.length) parts.push(`${head}\n}\n${cur.join("\n")}`);
-  for (const t of parts) {
-    const r = await api(page, "/api/tools/editor/cmd", { op: "paste", text: t, offset: [0, 0, 0] });
-    expect(r.error ?? null).toBeNull();
-  }
+  // (one request: the editor's command route takes big pastes)
+  const r = await api(page, "/api/tools/editor/cmd", { op: "paste", text, offset: [0, 0, 0] });
+  expect(r.error ?? null).toBeNull();
   await page.reload();
   const back = page.getByRole("button", { name: /^Back to/ });
   if (await back.waitFor({ timeout: 5000 }).then(() => true, () => false)) await back.click();

@@ -1205,8 +1205,12 @@ fn dialog(st: &Shared, kind: Pick, name: &str) -> Result<Option<PathBuf>, String
     use tauri_plugin_dialog::DialogExt;
     // P5: dev servers (test builds only) answer the dialog with LS_DEV_PICK, to open big maps in a browser
     #[cfg(test)]
-    if let Ok(p) = std::env::var("LS_DEV_PICK") {
-        return Ok(Some(PathBuf::from(p)));
+    {
+        // (save dialogs can answer elsewhere, so a test can import a file and save a project)
+        let save = matches!(kind, Pick::SaveProject | Pick::ExportMap);
+        if let Some(p) = save.then(|| std::env::var("LS_DEV_PICK_SAVE").ok()).flatten().or_else(|| std::env::var("LS_DEV_PICK").ok()) {
+            return Ok(Some(PathBuf::from(p)));
+        }
     }
     let app = st.app.get().cloned().ok_or(INTERNAL)?;
     let d = app.dialog().file();
@@ -1998,7 +2002,9 @@ fn routes_with(ed: Ed) -> Router<Shared> {
         .route("/api/tools/editor/textures", get(api_textures))
         .route("/api/tools/editor/wads", get(api_wads))
         .route("/api/tools/editor/tex/:file", get(api_tex))
-        .route("/api/tools/editor/cmd", post(api_cmd))
+        // P5: a paste can carry a big map's pieces (Paste takes up to 16 MB of .map text; JSON
+        // escaping adds to it): over the app's default 2 MB request limit
+        .route("/api/tools/editor/cmd", post(api_cmd).layer(axum::extract::DefaultBodyLimit::max(40 << 20)))
         .route("/api/tools/editor/undo", post(api_undo))
         .route("/api/tools/editor/redo", post(api_redo))
         .route("/api/tools/editor/new", post(api_new))
@@ -2567,6 +2573,25 @@ mod tests {
         // the entity definitions
         let f = t.get("/api/tools/editor/fgd").await;
         assert!(f["classes"].as_array().unwrap().iter().any(|c| c["name"] == "func_buyzone"));
+    }
+
+    /// P5: a big map's pieces paste in one request (over axum's default 2 MB limit).
+    #[tokio::test]
+    async fn a_big_paste_goes_through() {
+        let t = T::new();
+        t.post("/api/tools/editor/new", json!({})).await;
+        let mut d = MapDocument::new();
+        let mut h = History::default();
+        for i in 0..12_000 {
+            let x = (i % 100) as f64 * 80.0;
+            let y = (i / 100) as f64 * 80.0;
+            history::cmd_add_brush(&mut d, &mut h, crate::editor::ops::make_box(v3(x, y, 0.0), v3(x + 64.0, y + 64.0, 64.0), "CRATE1"), "Box");
+        }
+        let text = mapfile::write_map(&d, &mapfile::WriteOptions::default()).unwrap();
+        assert!(text.len() > 4 << 20, "{}", text.len());
+        let r = t.cmd(json!({"op": "paste", "text": text, "offset": [0, 0, 0]})).await;
+        assert!(r["error"].is_null(), "{r}");
+        assert!(r["created"]["brushes"].as_array().unwrap().len() >= 12_000);
     }
 
     #[tokio::test]
