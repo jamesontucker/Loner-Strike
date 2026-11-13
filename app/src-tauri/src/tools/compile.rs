@@ -243,7 +243,9 @@ pub fn cores() -> usize {
 /// passes it on to the Windows tool) a nice value of 10 set on the child before it starts; on
 /// Windows BELOW_NORMAL_PRIORITY_CLASS (plus no console window). SDHLT's own `-low` is passed too.
 pub const NICE: i32 = 10;
+#[cfg(any(windows, test))]
 pub const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
+#[cfg(windows)]
 pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[cfg(unix)]
@@ -421,9 +423,8 @@ fn inside(b: &Bounds, p: Vec3) -> bool {
     p.x >= b.min.x && p.x <= b.max.x && p.y >= b.min.y && p.y <= b.max.y && p.z >= b.min.z && p.z <= b.max.z
 }
 
-/// Only what's inside the box, sealed in a hollow box of sky (so the region can't leak and
-/// the sun still reaches it): brushes that touch the box are kept whole, point entities
-/// outside it are dropped, brush entities left with no brushes are dropped.
+/// One box with the default options (the tests' shorthand).
+#[cfg(test)]
 pub fn apply_cordon(doc: &MapDocument, c: &Cordon) -> Result<MapDocument, String> {
     apply_cordons(doc, &[*c], &CordonOptions::default()).map(|r| r.doc)
 }
@@ -460,7 +461,8 @@ pub struct CordonOptions {
 #[derive(Debug)]
 pub struct Cordoned {
     pub doc: MapDocument,
-    /// the boxes as compiled (merged, grown for lights)
+    /// the boxes as compiled (merged, grown for lights); read by the tests
+    #[cfg_attr(not(test), allow(dead_code))]
     pub boxes: Vec<Bounds>,
     pub warnings: Vec<Problem>,
 }

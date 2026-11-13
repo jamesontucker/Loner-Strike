@@ -21,6 +21,7 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
+#[cfg(test)]
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -280,6 +281,8 @@ fn find_in(dirs: &[PathBuf], rel: &str) -> Option<PathBuf> {
 }
 
 /// Sound, model and sprite files the map's entities name (relative to the game folder).
+/// The editor's asset checks use assets.rs now; kept for its test.
+#[cfg(test)]
 pub fn referenced_files(doc: &MapDocument) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for e in doc.entities.values() {

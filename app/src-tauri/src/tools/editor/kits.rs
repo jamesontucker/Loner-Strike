@@ -276,7 +276,8 @@ pub fn made_for(doc: &MapDocument) -> Vec<MadeFor> {
     v
 }
 
-/// The `ls_modes` value for these modes.
+/// The `ls_modes` value for these modes (the UI writes the key; the tests check the format).
+#[cfg(test)]
 pub fn made_for_text(list: &[MadeFor]) -> String {
     list.iter().map(|m| m.uid.as_ref().map_or_else(|| m.id.clone(), |u| format!("{u}:{}", m.id))).collect::<Vec<_>>().join(",")
 }
