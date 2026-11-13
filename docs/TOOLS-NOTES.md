@@ -1771,3 +1771,54 @@ show them hunting the creatures as mode enemies. Barricades fitted (dust2: 221 a
   `drive_c/Loner-Strike/Sim/LST` (APFS clone of W1, little real space) and compile folder `drive_c/lsw1` are still there;
   please delete them.
 - Not checked in a client: how the HUD, fence beams and creature models look; creatures on maps without nav.
+
+### Agent P6: breadcrumbs, Back, focus mode, model loop — 2026-11-12
+**Built**
+- **Model viewer (Textures & models > Models):** under the animation picker, Play/Pause, a **Loop** checkbox and a speed
+  (¼×, ½×, normal, 2×). Loop starts at the sequence's own flag from the MDL (idle and run loop, a reload or death plays
+  once) and goes back to it when you pick another animation. With Loop off it plays once, holds the last frame and Play
+  shows again (Play starts it over). `ModelView` takes optional `loop`, `speed`, `onEnded` (the editor's static preview
+  is unchanged).
+- **Breadcrumbs on every tool** (`common/shell.tsx`, in the Tools header above the title): `Back · Tools › <tool> ›
+  <map or item> › <page>`. Every part but the last is a link: Tools = the overview, the tool's name = its start page
+  (map list, browse list...) in one click, the map = that map's page when you're deeper. The "Check another map" /
+  "Other map" buttons stay; the crumb is the quick way.
+- **Back works like a browser inside Tools.** Every address is a history step (`history.state.tools`), so Alt+← / Alt+→,
+  the mouse's back/forward buttons and the header's Back button step through tools, maps and pages; Back past the first
+  Tools step leaves for the page before (the app's own history). Back in the header with no Tools step behind it goes up
+  one crumb. Not in the map editor for Alt+arrows (they nudge there); not while typing.
+  Opening an address from a crumb or Back starts the tool's page over on it (keyed remount), so tools need no code: they
+  read `useToolArg()` when they mount, as before. The app's unsaved-edits check (`useDirty` in store.ts) is asked first.
+- **Focus mode:** the Focus button in each tool's header, or **Shift+⌘+Enter / Ctrl+Shift+Enter**: the sidebar, the
+  status strip, the Tools header and banners go, the tool fills the window, a small "Exit focus" pill sits bottom-right.
+  Remembered per tool (`ls.tools.focus`), off for every tool until you turn it on. Esc doesn't leave it. The key was
+  picked because Mod+Shift+F is "Find" in the editor's Hammer preset; Shift+Mod+Enter isn't used by the editor
+  presets, the studio or the viewer (Monaco's "insert line above" keeps it while typing in Plugin Studio). Done with
+  `html[data-tools-focus]` CSS, so App.tsx is untouched. No OS fullscreen: the window is opened from Rust without the
+  Tauri JS API (Window > Enter Full Screen still works on top of focus mode). 3D views, React Flow and Monaco follow
+  their box (ResizeObserver; a resize event is sent too).
+- Pages that now say where they are (for the crumbs and Back): health check report `health:report:<id>`, Community
+  `community:publish[:map]`, `community:yours`, `community:mod:<id>` (crumb: the creation's name), radar maker
+  `radar:<map>`, Textures & models `assets:models` / `assets:get`, Plugin Studio `plugins:<folder>/<file>`.
+  Callouts and Plugin Studio report unsaved changes with `useDirty` (asked before a crumb, Back or another section).
+- `?` sheet: Alt+arrows and the focus key under "On every tool". Dev page keeps `history.state` when it rewrites the URL.
+- Tests: crumbs + Back (doctor map → start page → Back → Alt+→ → overview → Back), focus mode (viewer canvas grows,
+  remembered across reload, key and pill), focus mode on editor (with a map open), studio, plugins, navfix, assets
+  at both sizes. Full `npx playwright test`: 58 pass. `npm run build` green; start bundle 516.52 → 517.07 kB
+  (+0.5 kB: only Vite's list of chunk names; the shell is its own 7.2 kB chunk loaded with Tools).
+
+**For a tool (how to use it)**
+- Deeper pages: report them as the address, e.g. `useReportAddress("mytool", \`mytool:report:${id}\`)`, and read the
+  arg when the page mounts. Optional names: `useToolCrumbs("mytool", [{ label: map, address: \`mytool:${map}\` },
+  { label: "Report" }])` (from `common/shell`); without it the crumb is the map from the address.
+- Unsaved work: `useDirty("<tool>", dirty)` from store.ts, and crumbs/Back/sidebar ask before leaving.
+- A page sized with `calc(100vh - N)` keeps that gap in focus mode; prefer filling the box (`.tools-page` /
+  flex: 1 like the viewer). shell.css overrides `.ps-main` and `.st-page` for focus mode until then.
+
+**Requests**
+- (P4/P5, map editor) `MapEditor.tsx`: one line each would give the editor a crumb and the leave check:
+  `useToolCrumbs("editor", doc ? [{ label: doc.name }] : null)` and `useDirty("editor", !!doc?.dirty)`. Also add
+  "Shift+Mod+Enter: Focus mode" to the editor's own key lists if it shows them (it's handled before the editor's keys).
+- (X, Game Mode Studio) `StudioPage.tsx`: `useToolCrumbs("studio", graph ? [{ label: graph.name }] : null)` and
+  `useDirty("studio", dirty)`; `studio.css` `.st-page` could fill its box (`.content:has(> .st-page)` flex column +
+  `flex: 1`) instead of `calc(100vh - 150px)`; then the override in `common/shell.css` can go.
