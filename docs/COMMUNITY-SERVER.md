@@ -7,7 +7,9 @@ The app's Community browser (docs/COMMUNITY.md) talks to two places we run:
   checks them against GameBanana, keeps the moderation state in SQLite and posts cards with buttons
   to the private Discord channel 🛡️・community-reports.
 - **dl.lonerstrike.com/community/index.json** — the static index the app reads (R2), built from that
-  state and uploaded by `lsmod.py publish --upload`.
+  state, fetched every 10 minutes by the GitHub Actions workflow `community-publish.yml` and
+  uploaded with the repo's R2 secrets. The box never holds R2 keys (the bucket also holds the
+  app's updates).
 
 Nothing here is live until the steps in section 6 are run.
 
@@ -22,12 +24,13 @@ Nothing here is live until the steps in section 6 are run.
 | `services/serverlist/discord-setup.py` | One-time: registers `/community` and sets the Interactions Endpoint URL. Dry run unless `--apply`. |
 | `services/serverlist/install.sh`, `set-env.sh`, `community.env.example` | Install/update on the box; set one secret from stdin; the env file's template. |
 | `services/serverlist/lonerstrike-list.service` | The unit (now with `EnvironmentFile=` and `--community-db`). |
-| `services/serverlist/lonerstrike-community-publish.{service,timer}` | Optional: publish from the box every 5 minutes when the index changed. Installed, not enabled. |
+| `.github/workflows/community-publish.yml` | Publishes the index every 10 minutes (and by hand), from `GET /community/publish/index` with the publish token, to R2 with the repo's secrets. Runs from `main` only. |
+| `scripts/community-index-check.py` | The workflow's checks before uploading (sha256, schema, size, not too many listed creations disappearing at once). Tests: `test_publish_check.py`. |
 | `scripts/r2-community.sh` | Uploads `index.json` + `index.json.sha256` to R2 with the aws CLI, like `r2-navs.sh`. Dry run unless `--upload`. |
 | `services/serverlist/test_community.py`, `test_modbot.py`, `testdata/gamebanana/` | Offline tests with recorded GameBanana answers and forged Discord interactions. |
 
 Tests: `cd services/serverlist && python3 -m unittest test_community test_modbot test_serverlist`
-(108 tests). A live check that a real GameBanana zip can be listed by range requests:
+(113 tests: `python3 -m unittest test_community test_modbot test_serverlist test_publish_check`). A live check that a real GameBanana zip can be listed by range requests:
 `python3 -c "import community as c; print(c.package_names({'id': 1886785, 'name': 'cage.zip', 'size': 278384}))"`.
 
 ## 2. How it works
@@ -136,8 +139,8 @@ ping anyone. Clicks arrive at `POST /discord/interactions`:
 - Slash commands (guild): `/community pull|keep|block|status <page> [reason]`.
 - If the bot can't post, the same news goes to the channel's webhook as text (no buttons).
 
-**Pulls reach apps when the index is published again** (`lsmod.py publish --upload` on the Mac, or
-the optional timer on the box). Pulled pages stay in the index with `status: "revoked"` and in the
+**Pulls reach apps when the index is published again**: the workflow does it within 10 minutes
+(or `lsmod.py publish --upload` on the Mac, by hand), and apps fetch it again within 15. Pulled pages stay in the index with `status: "revoked"` and in the
 top-level `revoked` list, so apps hide them even when GameBanana still lists the tag.
 
 **The daily re-check** (a thread in the service, first run 10 minutes after start): each listed,
@@ -146,7 +149,7 @@ pulled (waiting ones turned down). The listed file's MD5 no longer on the page: 
 removed"; a new registration brings it back). Flagged by the virus scan: pulled. Network trouble
 changes nothing. **Guard**: when more than 3 entries, or 2 or more making over a quarter of them,
 would leave the list (pull, hide or turn down) in one run, nothing changes, the channel is told,
-and the publish timer doesn't publish until a person has looked (GameBanana having a bad day, or
+and the publish workflow doesn't publish until a person has looked (`lsmod.py release-hold`) (GameBanana having a bad day, or
 its API changing). A single change always goes through.
 
 **The index**: `GET /community/admin/index` builds `community/index.json` from the database —
@@ -168,15 +171,20 @@ Cloudflare's visitor header): from a Mac, open a tunnel first, `ssh -N -L 8100:1
 you@your-box`, and lsmod.py's default `--server http://127.0.0.1:8100` goes through it.
 `--admin-remote` on the service opens them through the Cloudflare tunnel too; if you ever want that,
 put a Cloudflare Access application (your own login) in front of `list.lonerstrike.com/community/admin/*`
-as well as the token. A second, publish-only token (`COMMUNITY_PUBLISH_TOKEN`) may only read the
-index and status and say what was published (the publish timer uses it).
+as well as the token.
+
+**The publish export**, `GET /community/publish/index` and `/community/publish/index.sha256`: exactly
+what `lsmod.py publish` would upload, with `X-Index-Sha256` and `X-Recheck-Held-Back: 0|1`. Only the
+publish token (`COMMUNITY_PUBLISH_TOKEN`, also the GitHub secret of the same name) opens it — not the
+admin token, and the publish token opens nothing else. It answers through the tunnel (the admin
+API stays box-only), 60 requests an hour per visitor, 10 wrong tokens lock a visitor out for an hour.
 
 `lsmod.py` (Mac: token in `~/.config/lonerstrike/community-admin.token`, chmod 600, or
 `LS_COMMUNITY_TOKEN`; it refuses plain http to anything but 127.0.0.1): `queue [--state …]`, `show`, `pull --reason`, `restore`, `hide`, `approve`,
 `reject --reason`, `block`, `unblock`, `blocked`, `reports [page]`, `feature on|off`,
-`use-file <page> <file id>`, `recheck [page]`, `status` (counts; "CHANGED, run publish" when the index differs from what was
-last published), `publish [--out DIR] [--upload] [--if-changed] [--auto]` (`--auto`: the timer's
-mode, also skipping after a held-back re-check). Pages as `mod:123`, `spray:45` or the GameBanana link.
+`use-file <page> <file id>`, `recheck [page]`, `release-hold` (after a held-back re-check you looked
+into), `status` (counts, and whether dl.lonerstrike.com has the current index yet),
+`publish [--out DIR] [--upload]` (by hand; normally the workflow publishes). Pages as `mod:123`, `spray:45` or the GameBanana link.
 
 ## 4. Configuration
 
@@ -187,16 +195,14 @@ logged):
 | Variable | |
 |---|---|
 | `COMMUNITY_ADMIN_TOKEN` | lsmod.py's token. install.sh makes one. Without it, moderation answers 503. |
-| `COMMUNITY_PUBLISH_TOKEN` | The publish timer's read-only token. install.sh makes one (and puts it in `publish.env`). |
+| `COMMUNITY_PUBLISH_TOKEN` | Opens only the publish export (the workflow's secret of the same name). install.sh makes one. |
 | `DISCORD_BOT_TOKEN` | The bot application's token (from `~/.config/loner-discord-token`). Without it: no cards, the webhook gets text. |
 | `DISCORD_APP_ID`, `DISCORD_PUBLIC_KEY` | Public; printed by `discord-setup.py`. Without the key, `/discord/interactions` answers 503. |
 | `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID`, `DISCORD_MOD_ROLES`, `DISCORD_OWNER_ID` | Filled in by the template: guild 1568421500636233748, channel 1570640821320159252, roles Moderator 1568425985504968768 + Dev 1568425984288362637, owner 310619637727363072. |
 | `COMMUNITY_MOD_WEBHOOK` | Fallback: the channel's webhook (from `~/.config/lonerstrike/community-webhook`). Only `https://discord.com/api/webhooks/…` is ever posted to. |
 
-`/etc/lonerstrike-list/publish.env` (root, 0600) is the publish timer's own file, with only what
-it needs: `LS_COMMUNITY_TOKEN` (the publish token) and `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
-`R2_ENDPOINT`, `R2_BUCKET` (fill in an R2 token for the bucket if you turn the timer on). The list
-service never sees the R2 keys, and the timer never sees the bot token or the admin token.
+No R2 keys go on the box (set-env.sh refuses `R2_*`/`AWS_*` names); install.sh removes the earlier
+box publish timer and `publish.env` if they're there.
 
 The unit allows 192 MB (`MemoryMax`): the list, the database and two package checks at 1 MB each.
 Discord signatures use `python3-cryptography` (install.sh installs it; without it a slower
@@ -282,19 +288,18 @@ Box: `you@your-box` (Ubuntu 24.04, sudo). Run from the tools checkout
    as for the nav pack). Check:
    `! curl -sI https://dl.lonerstrike.com/community/index.json` → 200, `content-type: application/json`,
    `cache-control: public, max-age=300`.
-10. **Optional — publish from the box** (pulls reach apps within ~5 minutes without the Mac; never
-    after a held-back re-check): make a separate R2 API token for the bucket (Object Read & Write)
-    and put its four values into `publish.env` (the publish token is already there), one at a time
-    from your clipboard (`pbpaste` gives what you copied; nothing is shown):
-    ```
-    ! pbpaste | ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh R2_ACCESS_KEY_ID publish'
-    ! pbpaste | ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh R2_SECRET_ACCESS_KEY publish'
-    ! pbpaste | ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh R2_ENDPOINT publish'
-    ! pbpaste | ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh R2_BUCKET publish'
-    ! ssh you@your-box 'sudo snap install aws-cli --classic && sudo systemctl enable --now lonerstrike-community-publish.timer'
-    ! ssh you@your-box 'sudo systemctl start lonerstrike-community-publish; journalctl -u lonerstrike-community-publish -n 10 --no-pager -o cat'
-    ```
-    Unverified: the snap aws CLI inside a DynamicUser unit (the unit sets HOME and PATH for it).
+10. **Publishing every 10 minutes** (GitHub Actions; the workflow file must be on `main`, since
+    scheduled workflows only run from the default branch):
+    - Add the repo secret `COMMUNITY_PUBLISH_TOKEN` straight from the box to GitHub (needs the `gh`
+      CLI signed in; the value is never shown):
+      `! ssh you@your-box 'sudo sed -n "s/^COMMUNITY_PUBLISH_TOKEN=//p" /etc/lonerstrike-list/community.env' | gh secret set COMMUNITY_PUBLISH_TOKEN -R jamesontucker/Loner-Strike`
+      (the R2 secrets the Mirror release workflow uses are already there).
+    - If Cloudflare's Bot Fight Mode or WAF rules challenge GitHub's runners, add
+      `/community/publish/` to the skip rule from step 6.
+    - Once it's on `main`: Actions > Community index > Run workflow. The log says "OK to publish …"
+      and "uploaded community/index.json", or "the same as the live one".
+    - Check: `! curl -s https://dl.lonerstrike.com/community/index.json.sha256` matches
+      `lsmod.py status`'s index sha.
 
 **Rollback**: copy the previous `services/serverlist` (main checkout) and run its install.sh; its
 unit has no `--community-db`, so the community part stops answering (404) and `community.db` stays

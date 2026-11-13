@@ -1,9 +1,0 @@
-[Unit]
-Description=Publish the Loner-Strike community index every 5 minutes when it changed
-
-[Timer]
-OnBootSec=5min
-OnUnitActiveSec=5min
-
-[Install]
-WantedBy=timers.target

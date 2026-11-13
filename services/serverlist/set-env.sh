@@ -1,13 +1,13 @@
 #!/bin/sh
-# Sets one value in /etc/lonerstrike-list/community.env (or publish.env), read from stdin so it
-# never shows up on a command line, in ps or in shell history. Keeps the file root-only (0600).
-#   ssh you@box 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_BOT_TOKEN' < ~/.config/loner-discord-token
-#   ssh you@box 'sudo /opt/lonerstrike-list/set-env.sh R2_BUCKET publish' <<< "lonerstrike"
+# Sets one value in /etc/lonerstrike-list/community.env, read from stdin so it never shows up on a
+# command line, in ps or in shell history. Keeps the file root-only (0600). (No R2 keys ever go on
+# the box: the bucket also holds the app's updates; publishing runs on GitHub Actions.)
+#   ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_BOT_TOKEN' < ~/.config/loner-discord-token
 set -eu
 [ "$(id -u)" = 0 ] || { echo "Run it with sudo."; exit 1; }
-key=${1:?Usage: set-env.sh KEY [community|publish] < value}
-file=${2:-community}
-case "$file" in community|publish) ;; *) echo "The file is community or publish."; exit 1 ;; esac
+key=${1:?Usage: set-env.sh KEY < value}
+case "$key" in R2_*|AWS_*) echo "R2 keys never go on this machine."; exit 1 ;; esac
+file=community
 # the value comes in on stdin; the Python below comes in on a here-document, which takes stdin
 # over, so the value is handed on as fd 3 first (3<&0 must come before the <<)
 exec python3 -I - "$key" "/etc/lonerstrike-list/$file.env" 3<&0 <<'PY'

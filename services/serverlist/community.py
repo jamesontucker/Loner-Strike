@@ -81,6 +81,7 @@ HEADER_SAMPLES = 16           # local headers compared with the directory, sprea
 GB_PER_VISITOR_MIN = 10       # a visitor's share of the GameBanana checks a minute
 REPORTS_PER_VISITOR_DAY = 20  # a visitor's share of the day's reports
 STATUS_PER_MIN = 60
+PUBLISH_PER_HOUR = 60         # the publish workflow asks twice every 10 minutes
 PLUGIN_REFUSAL = "Plugin modes can't be shared yet. Make it in Game Mode Studio, which builds a mode's code on each player's computer."
 # files that run code (or hide other files) never go out in a shared package
 # files that run code: named in the refusal (plugins get the Game Mode Studio message)
@@ -1300,7 +1301,7 @@ class Community:
         self.token_digest = hashlib.sha256(token.encode()).digest() if len(token) >= MIN_TOKEN else None
         if token and not self.token_digest:
             log(f"the admin token is shorter than {MIN_TOKEN} characters; moderation is off")
-        # the publish job's own token: it may read the index and status and say what it published, nothing else
+        # the publish workflow's token: it may read the published index (GET /community/publish/...), nothing else
         self.publish_digest = hashlib.sha256(publish_token.encode()).digest() if len(publish_token) >= MIN_TOKEN else None
         self.notifier = notifier or Notifier("")
         self.get = get
@@ -1313,6 +1314,8 @@ class Community:
         self.gb_limit = Window(GB_FETCHES_PER_MIN, 60)
         self.gb_share = Window(GB_PER_VISITOR_MIN, 60)
         self.status_limit = Window(STATUS_PER_MIN, 60)
+        self.publish_limit = Window(PUBLISH_PER_HOUR, 3600)
+        self.publish_fails = Window(ADMIN_FAILS_PER_HOUR, 3600)
         self.pkg_slots = threading.BoundedSemaphore(PACKAGE_CHECKS)
         self.report_ip = Window(REPORTS_PER_IP_HOUR, 3600)
         self.report_same = Window(1, 86400)
@@ -1734,8 +1737,8 @@ class Community:
                 self.store.set_meta("last_recheck", summary)
             if suspicious:
                 self.notifier.say(f"**Re-check held back:** {gone} of {len(rows)} pages would have left the list at once, which "
-                                  "is more than looks real. Nothing changed and the publish timer waits. Check GameBanana, then "
-                                  "`lsmod.py recheck` again (or publish by hand).")
+                                  "is more than looks real. Nothing changed and publishing waits. Check GameBanana, then "
+                                  "`lsmod.py release-hold` (or `lsmod.py recheck` again).")
             elif changed:
                 lines = [f"**Re-check:** {len(changed)} change(s). `lsmod.py publish --upload` to put the index out."]
                 lines += [f"- `{k}` {v}: {discord_text(w)}" for k, v, w in changed[:15]]
@@ -1797,9 +1800,8 @@ class Community:
     # -- HTTP --
 
     def _authorized(self, h, ip, path):
-        """None when the request carries the admin token (or the publish token, for what the
-        publish job may do), else (status, why)."""
-        if self.token_digest is None and self.publish_digest is None:
+        """None when the request carries the admin token, else (status, why)."""
+        if self.token_digest is None:
             return 503, "Moderation is off (no admin token set)."
         if self.admin_local and (h.client_address[0] != "127.0.0.1" or h.headers.get("CF-Connecting-IP")):
             return 403, "Moderation only answers on this machine (ssh -L 8100:127.0.0.1:8100 to the box)."
@@ -1809,12 +1811,8 @@ class Community:
         auth = h.headers.get("Authorization") or ""
         given = hashlib.sha256((auth[7:].strip() if auth[:7].lower() == "bearer " else "").encode()).digest()
         # both sides hashed first, so the comparison takes the same time whatever the length
-        admin = self.token_digest is not None and hmac.compare_digest(given, self.token_digest)
-        publisher = self.publish_digest is not None and hmac.compare_digest(given, self.publish_digest)
-        if admin or (publisher and path in (("GET", "index"), ("GET", "status"), ("POST", "published"))):
+        if hmac.compare_digest(given, self.token_digest):
             return None
-        if publisher:
-            return 403, "The publish token can only read the index and say what was published."
         self.admin_fails.allow(ip)
         return 401, "Wrong or missing admin token."
 
@@ -1839,6 +1837,8 @@ class Community:
                 if not p:
                     return reply(h, 404, {"error": "not found"})
                 return reply(h, 200, self.status(*p))
+            if parts[:1] == ["publish"] and method == "GET" and parts[1:] in (["index"], ["index.sha256"]):
+                return self.publish_export(h, visitor_key(ip), parts[1] == "index.sha256")
             if parts[:1] == ["admin"]:
                 denied = self._authorized(h, visitor_key(ip), (method, "/".join(parts[1:])))
                 if denied:
@@ -1859,6 +1859,37 @@ class Community:
             return reply(h, e.code, {"error": e.message}, cors=False)
         code, answer = mod.interaction(h.headers, body)
         return reply(h, code, answer, cors=False)
+
+    def publish_export(self, h, ip, sha_only):
+        """GET /community/publish/index(.sha256) for the publish workflow: exactly what
+        `lsmod.py publish` uploads, with X-Recheck-Held-Back (the workflow doesn't publish then).
+        Only the publish token opens it (not the admin token: a token leaked from CI can't
+        moderate), through the tunnel too, rate-limited, wrong tokens locking out for an hour."""
+        if self.publish_digest is None:
+            return reply(h, 503, {"error": "Publishing is off (no publish token set)."}, cors=False)
+        if self.publish_fails.full(ip) or not self.publish_limit.allow(ip):
+            return reply(h, 429, {"error": "Too many requests. Try again later."}, cors=False)
+        auth = h.headers.get("Authorization") or ""
+        given = hashlib.sha256((auth[7:].strip() if auth[:7].lower() == "bearer " else "").encode()).digest()
+        if not hmac.compare_digest(given, self.publish_digest):
+            self.publish_fails.allow(ip)
+            return reply(h, 401, {"error": "Wrong or missing publish token."}, cors=False)
+        data, sha = build_index(self.store)
+        held = bool((self.store.meta("last_recheck", {}) or {}).get("heldBack"))
+        headers = {"X-Index-Sha256": sha, "X-Recheck-Held-Back": "1" if held else "0"}
+        if sha_only:
+            h.send_response(200)
+            body = f"{sha}  index.json\n".encode()
+            h.send_header("Content-Type", "text/plain; charset=utf-8")
+            h.send_header("Content-Length", str(len(body)))
+            h.send_header("Cache-Control", "no-store")
+            for k, v in headers.items():
+                h.send_header(k, v)
+            h.end_headers()
+            if h.command != "HEAD":
+                h.wfile.write(body)
+            return None
+        return reply(h, 200, None, cors=False, raw=data, headers=headers)
 
     def admin(self, h, method, parts, query):
         body = {}
@@ -1913,6 +1944,13 @@ class Community:
         if parts == ["index"] and method == "GET":
             data, sha = build_index(self.store)
             return reply(h, 200, None, cors=False, raw=data, headers={"X-Index-Sha256": sha})
+        if parts == ["hold"] and method == "POST":
+            # a person looked after a held-back re-check: publishing may go on
+            if body.get("held") is not False:
+                raise Reject(400, "Send {\"held\": false} to let publishing go on.")
+            last = self.store.meta("last_recheck", {}) or {}
+            self.store.set_meta("last_recheck", dict(last, heldBack=False, released=now()))
+            return reply(h, 200, {"ok": True}, cors=False)
         if parts == ["published"] and method == "POST":
             sha = body.get("sha256")
             if not isinstance(sha, str) or not _HEX64.match(sha):

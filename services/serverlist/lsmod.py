@@ -22,16 +22,18 @@ a terminal, and the way to publish the index.
   lsmod.py feature <page> on|off
   lsmod.py use-file <page> <file id>   list another of the page's files (an older one too: only you can)
   lsmod.py recheck [<page>]            check GameBanana again now (all pages: in the background)
+  lsmod.py release-hold                after a held-back re-check you looked into: publishing goes on
   lsmod.py status                      counts, and whether the index changed since publishing
   lsmod.py publish [--out DIR] [--upload]
         writes DIR/index.json and DIR/index.json.sha256 (default ./community-index); only with
         --upload are they put on dl.lonerstrike.com (scripts/r2-community.sh, R2 keys from
-        ~/.config/lonerstrike/r2.env)
+        ~/.config/lonerstrike/r2.env). Normally the GitHub workflow "Community index" publishes
+        every 10 minutes; this is for by hand.)
 
 <page> is mod:<id>, spray:<id> or the GameBanana link. The admin API answers only on the box:
-from a Mac, open a tunnel first (ssh -N -L 8100:127.0.0.1:8100 cs@<box>) and use the default
+from a Mac, open a tunnel first (ssh -N -L 8100:127.0.0.1:8100 you@your-box) and use the default
 --server http://127.0.0.1:8100. Publishing again is needed after a pull for apps to see it (or the
-optional publish timer on the box does it every few minutes; docs/COMMUNITY-SERVER.md).
+GitHub workflow "Community index" does it every 10 minutes; docs/COMMUNITY-SERVER.md).
 """
 import argparse
 import hashlib
@@ -49,7 +51,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from community import parse_key  # noqa: E402
 
-# moderation answers only on the box itself: open a tunnel first,  ssh -N -L 8100:127.0.0.1:8100 cs@<box>
+# moderation answers only on the box itself: open a tunnel first,  ssh -N -L 8100:127.0.0.1:8100 you@your-box
 DEFAULT_SERVER = "http://127.0.0.1:8100"
 TOKEN_FILE = os.path.expanduser("~/.config/lonerstrike/community-admin.token")
 # beside this file when installed on the box, in the repo's scripts/ on a Mac
@@ -61,7 +63,7 @@ class Failed(Exception):
 
 
 def token(path):
-    # COMMUNITY_ADMIN_TOKEN: the box's own env file (the publish timer)
+    # COMMUNITY_ADMIN_TOKEN: when run on the box with its env file loaded
     t = (os.environ.get("LS_COMMUNITY_TOKEN") or os.environ.get("COMMUNITY_ADMIN_TOKEN") or "").strip()
     if t:
         return t
@@ -102,6 +104,17 @@ def call(server, tok, method, path, body=None, raw=False):
         raise Failed(msg)
     except (OSError, ValueError) as e:
         raise Failed(f"The list service didn't answer ({type(e).__name__}).")
+
+
+def live_sha():
+    """The sha256 of the index apps see now (dl.lonerstrike.com's index.json.sha256)."""
+    try:
+        req = urllib.request.Request("https://dl.lonerstrike.com/community/index.json.sha256",
+                                     headers={"User-Agent": "lsmod/1.0 (Loner-Strike moderation)", "Cache-Control": "no-cache"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.read(200).decode().split()[0]
+    except (OSError, ValueError, IndexError):
+        return ""
 
 
 def page_path(text):
@@ -207,11 +220,12 @@ def main(argv=None):
     s.add_argument("onoff", choices=("on", "off"))
     sub.add_parser("recheck").add_argument("page", nargs="?")
     sub.add_parser("status")
+    sub.add_parser("release-hold")
     s = sub.add_parser("publish")
     s.add_argument("--out", default="community-index")
     s.add_argument("--upload", action="store_true", help="really put it on dl.lonerstrike.com")
     s.add_argument("--if-changed", action="store_true", help="do nothing when it's the same as last published")
-    s.add_argument("--auto", action="store_true", help="the publish timer: --if-changed, and nothing after a held-back re-check")
+    s.add_argument("--auto", action="store_true", help="--if-changed, and nothing after a held-back re-check")
     a = p.parse_args(argv)
     try:
         srv = a.server
@@ -269,17 +283,21 @@ def main(argv=None):
                 print(f"Checked {r['checked']}, changed {r['changed']}.")
                 for c in r.get("changes", []):
                     print(f"  {c['key']}: {c['verdict']} ({c['why']})")
+        elif a.cmd == "release-hold":
+            call(srv, tok, "POST", "hold", {"held": False})
+            print("Publishing goes on (the workflow publishes within 10 minutes).")
         elif a.cmd == "status":
             r = call(srv, tok, "GET", "status")
+            live = live_sha()
             print("  ".join(f"{k} {v}" for k, v in r["counts"].items()))
             pub = r.get("published") or {}
             print(f"Index: {r['index']['bytes']} bytes, sha256 {r['index']['sha256']}")
-            print(f"Published: {pub.get('sha256', 'never')} {when(pub.get('at', 0))}"
-                  + ("  -> CHANGED, run `lsmod.py publish --upload`" if r["changedSincePublish"] else "  (up to date)"))
+            print(f"Live on dl.lonerstrike.com: {live or 'unknown'}"
+                  + ("  (up to date)" if live == r["index"]["sha256"] else "  -> differs (the publish workflow updates it within 10 minutes)"))
             lr = r.get("lastRecheck") or {}
             if lr:
                 print(f"Last re-check {when(lr.get('at', 0))}: {lr.get('checked')} checked, {lr.get('changed')} changed"
-                      + (", HELD BACK" if lr.get("heldBack") else ""))
+                      + (", HELD BACK: nothing is published until you look (then `lsmod.py release-hold`)" if lr.get("heldBack") else ""))
         elif a.cmd == "publish":
             publish(srv, tok, a.out, a.upload, a.if_changed, a.auto)
     except Failed as e:

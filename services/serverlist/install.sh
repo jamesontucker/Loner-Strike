@@ -20,9 +20,7 @@ for f in serverlist.py community.py modbot.py lsmod.py; do
   install -o root -g root -m 644 "$here/$f" "/opt/lonerstrike-list/$f"
 done
 install -o root -g root -m 755 "$here/set-env.sh" /opt/lonerstrike-list/set-env.sh
-for f in "$here/r2-community.sh" "$here/../r2-community.sh" "$here/../../scripts/r2-community.sh"; do
-  [ -f "$f" ] && { install -o root -g root -m 755 "$f" /opt/lonerstrike-list/r2-community.sh; break; }
-done
+rm -f /opt/lonerstrike-list/r2-community.sh
 install -d -o root -g root -m 700 /etc/lonerstrike-list
 umask 077
 if [ ! -f /etc/lonerstrike-list/community.env ]; then
@@ -30,15 +28,17 @@ if [ ! -f /etc/lonerstrike-list/community.env ]; then
   publish=$(python3 -c 'import secrets; print(secrets.token_urlsafe(36))')
   sed -e "s|^COMMUNITY_ADMIN_TOKEN=.*|COMMUNITY_ADMIN_TOKEN=$token|" -e "s|^COMMUNITY_PUBLISH_TOKEN=.*|COMMUNITY_PUBLISH_TOKEN=$publish|" \
     "$here/community.env.example" > /etc/lonerstrike-list/community.env
-  # the publish job's own file: its read-only token and (filled in by you) an R2 token, nothing else
-  printf 'LS_COMMUNITY_TOKEN=%s\nR2_ACCESS_KEY_ID=\nR2_SECRET_ACCESS_KEY=\nR2_ENDPOINT=\nR2_BUCKET=\n' "$publish" > /etc/lonerstrike-list/publish.env
-  echo "Made /etc/lonerstrike-list/community.env (new admin and publish tokens) and publish.env."
+  echo "Made /etc/lonerstrike-list/community.env (new admin and publish tokens)."
 fi
 chmod 600 /etc/lonerstrike-list/community.env
-[ -f /etc/lonerstrike-list/publish.env ] && chmod 600 /etc/lonerstrike-list/publish.env
-for u in lonerstrike-list.service lonerstrike-community-publish.service lonerstrike-community-publish.timer; do
-  install -o root -g root -m 644 "$here/$u" "/etc/systemd/system/$u"
-done
+# publishing runs on GitHub Actions (R2 keys never on this machine): the earlier box timer goes
+if [ -f /etc/systemd/system/lonerstrike-community-publish.timer ] || [ -f /etc/lonerstrike-list/publish.env ]; then
+  systemctl disable --now lonerstrike-community-publish.timer >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/lonerstrike-community-publish.timer /etc/systemd/system/lonerstrike-community-publish.service \
+        /etc/lonerstrike-list/publish.env
+  echo "Removed the old box publish timer and publish.env (publishing is a GitHub workflow now)."
+fi
+install -o root -g root -m 644 "$here/lonerstrike-list.service" /etc/systemd/system/lonerstrike-list.service
 systemctl daemon-reload
 systemctl enable lonerstrike-list >/dev/null 2>&1
 systemctl restart lonerstrike-list

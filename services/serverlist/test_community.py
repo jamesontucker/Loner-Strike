@@ -937,13 +937,44 @@ class Http(unittest.TestCase):
         self.assertEqual((r.status, json.loads(r.read())["state"]), (200, "listed"))
         conn.close()
 
-    def test_the_publish_token_only_publishes(self):
+    def test_the_publish_export(self):
         pub = "p" * 40
         self.c.publish_digest = hashlib.sha256(pub.encode()).digest()
-        self.assertEqual(self.call("GET", "/community/admin/index", token=pub)[0], 200)
-        self.assertEqual(self.call("GET", "/community/admin/status", token=pub)[0], 200)
-        self.assertEqual(self.call("POST", "/community/admin/item/mod/1", {"action": "pull", "reason": "x"}, token=pub)[0], 403)
-        self.assertEqual(self.call("GET", "/community/admin/queue", token=pub)[0], 403)
+        self.c.admin_local = True  # the real admin API stays on the box; the export works through the tunnel
+        cf = {"CF-Connecting-IP": "20.1.2.3"}
+        self.call("POST", "/community/submit", body(map_item()))
+        code, data, hd = self.call("GET", "/community/publish/index", token=pub, headers=cf)
+        self.assertEqual(code, 200)
+        self.assertEqual((data, hd["X-Index-Sha256"]), cm.build_index(self.c.store))
+        self.assertEqual(hd["X-Recheck-Held-Back"], "0")
+        self.assertNotIn("Access-Control-Allow-Origin", hd)
+        code, txt, hd = self.call("GET", "/community/publish/index.sha256", token=pub, headers=cf)
+        self.assertEqual(txt.decode(), f"{hashlib.sha256(data).hexdigest()}  index.json\n")
+        self.c.store.set_meta("last_recheck", {"heldBack": True})
+        self.assertEqual(self.call("GET", "/community/publish/index", token=pub, headers=cf)[2]["X-Recheck-Held-Back"], "1")
+        # the publish token opens nothing else, and the admin token doesn't open the export
+        self.assertEqual(self.call("GET", "/community/admin/index", token=pub)[0], 401)
+        self.assertEqual(self.call("POST", "/community/admin/item/mod/739197", {"action": "pull", "reason": "x"}, token=pub)[0], 401)
+        self.assertEqual(self.call("GET", "/community/publish/index", token=TOKEN, headers=cf)[0], 401)
+        self.assertEqual(self.call("GET", "/community/publish/other", token=pub, headers=cf)[0], 404)
+
+    def test_the_publish_export_locks_out_and_limits(self):
+        pub = "p" * 40
+        self.c.publish_digest = hashlib.sha256(pub.encode()).digest()
+        for _ in range(cm.ADMIN_FAILS_PER_HOUR):
+            self.assertEqual(self.call("GET", "/community/publish/index", token="nope", headers={"CF-Connecting-IP": "5.5.5.5"})[0], 401)
+        self.assertEqual(self.call("GET", "/community/publish/index", token=pub, headers={"CF-Connecting-IP": "5.5.5.5"})[0], 429)
+        self.c.publish_limit = cm.Window(1, 3600)
+        self.assertEqual(self.call("GET", "/community/publish/index", token=pub, headers={"CF-Connecting-IP": "6.6.6.6"})[0], 200)
+        self.assertEqual(self.call("GET", "/community/publish/index", token=pub, headers={"CF-Connecting-IP": "6.6.6.6"})[0], 429)
+        self.c.publish_digest = None
+        self.assertEqual(self.call("GET", "/community/publish/index", token=pub, headers={"CF-Connecting-IP": "7.7.7.7"})[0], 503)
+
+    def test_releasing_a_hold(self):
+        self.c.store.set_meta("last_recheck", {"heldBack": True, "at": 1})
+        self.assertEqual(self.call("POST", "/community/admin/hold", {}, token=TOKEN)[0], 400)
+        self.assertEqual(self.call("POST", "/community/admin/hold", {"held": False}, token=TOKEN)[0], 200)
+        self.assertFalse(self.c.store.meta("last_recheck")["heldBack"])
 
     def test_without_community_nothing_changes(self):
         self.srv.RequestHandlerClass = sl.make_handler(sl.Registry(os.path.join(tempfile.mkdtemp(), "l.json")), sl.RateLimit(3))
