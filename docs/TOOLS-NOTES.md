@@ -1822,3 +1822,28 @@ show them hunting the creatures as mode enemies. Barricades fitted (dust2: 221 a
 - (X, Game Mode Studio) `StudioPage.tsx`: `useToolCrumbs("studio", graph ? [{ label: graph.name }] : null)` and
   `useDirty("studio", dirty)`; `studio.css` `.st-page` could fill its box (`.content:has(> .st-page)` flex column +
   `flex: 1`) instead of `calc(100vh - 150px)`; then the override in `common/shell.css` can go.
+
+### Agent P5: second pass (checklist gaps) — 2026-11-12
+- **Per-pane drawing**: Textured / Flat (a soft colour per texture, lit) / Wireframe / Textured + wire, in each pane's
+  header (and View > Next drawing style); 2D panes default to wireframe like Hammer, 3D to textured; kept with the
+  layout. Wireframe brushes stay clickable (the mesh is hidden, not removed). `renderModes.ts`, a hook in `BrushMesh`.
+- **Keys of several entities** (`MultiEntityKeys.tsx` in the selection panel): every key any of them has, shared
+  values shown, different ones blank ("different"), (n/m) when only some have it; typing sets it on all, × removes
+  from all, "Add to all"; one undo step (`bulk::cmd_set_key_many`, cmd2 `set_keys`).
+- **Models in place of boxes** (`EntityModels.tsx`, View > Models on/off): a `model` key (.mdl), hostages
+  (scientist), CT/T/VIP spawns as gign/terror/vip, armoury_entity as its w_ model; loaded lazily through H's
+  `/api/tools/assets/model` (first game folder that has it, cached), body/skin/yaw honoured; the box stays for
+  clicking and as the fallback. env_sprite/env_glow: a glow in its rendercolor facing the camera (the real .spr
+  isn't decoded: there's no sprite route yet).
+- **Hammer .rmf / J.A.C.K. .jmf import** (`editor/rmf.rs`, `POST /api/tools/editor/import-other`, File menu + start
+  screen + Project panel): RMF 0.8-2.2 and JMF 121/122, layouts from the MIT sledge-formats readers. Brushes (planes
+  from face corners, outward, float noise tidied), Valve 220 axes (Quake-style before RMF 2.2), entities, spawnflags,
+  brush entities, nested groups, visgroups → visibility sets, paths → linked path_corner/path_track. Left out and
+  said: cameras, background pictures, cordon, JMF patches, hidden visgroups shown. Hardened after the coordinator's
+  review: nesting refused past 64, JMF group parents resolved in linear time with loop detection, group/visgroup
+  counts capped at 10 000, every count/string length checked before use; tests with crafted deep/huge files. A real
+  Hammer file (ReGameDLL's test map, 760 brushes, 18 groups) imports with every brush valid (opt-in `real_rmf`).
+- Outliner: double-click a row looks at it; ✎ renames (double-click used to grab both).
+- Commits: 4841af5, da0bca8 (hardening), 5a4f2a2, plus the start-screen button. Tests run on a clean export of HEAD
+  (the worktree's `cargo test` is red right now on someone's `mcp/catalog.rs`): editor::rmf 7 + 1 opt-in,
+  editor::bulk 12, workspace 3. Note: port 8157 is used by another agent's serve_editor_for_ui; I moved to 8193/5293.

@@ -170,7 +170,7 @@ agent P4; **Missing** = not done yet; **n/a** = doesn't apply to GoldSrc or to u
 | Project viewer: project + files beside it, backups, compile output (.bsp/.log/.err/.pts/.lin/.prt), installed map/.nav/.lsv/.res/overview, WADs, sounds/models/sprites/sky used; open/show/rename/delete (asked, kept in a deleted folder); missing-file warnings; recent projects | Have | P5: `ProjectPanel.tsx`, `tools/editor/workspace.rs` |
 | Prefabs and a prefab library | P4 | `PrefabPanel.tsx`, `tools/editor/prefabs.rs` |
 | Publish to the community | P4 | Publish… button |
-| RMF/JMF (Hammer/J.A.C.K. binary) import | Missing | export .map from those editors instead |
+| RMF/JMF (Hammer/J.A.C.K. binary) import | Have | P5: `editor/rmf.rs` (RMF 0.8-2.2, JMF 121/122; cameras, background pictures, patches left out and said so), File > Import or the start screen |
 | BSP decompile / trace-over reference | Missing | (TOOLS-EDITOR §1 "next steps") |
 
 ### Editing
@@ -195,7 +195,7 @@ agent P4; **Missing** = not done yet; **n/a** = doesn't apply to GoldSrc or to u
 | Decal tool / overlay tool | n/a (infodecal entity works via the entity tool) | |
 | Displacements, instances (func_instance), I/O system | n/a | Source-only |
 | Brush/face CSG "extrude face" (TrenchBroom Shift-drag a face) | Have (push/pull a face) | I |
-| Edit keyvalues of many entities at once | Missing | inspector shows one entity |
+| Edit keyvalues of many entities at once | Have | P5: `MultiEntityKeys.tsx`, `bulk::cmd_set_key_many` (one undo step) |
 
 ### Selecting
 | Feature | Status | Where |
@@ -221,7 +221,7 @@ agent P4; **Missing** = not done yet; **n/a** = doesn't apply to GoldSrc or to u
 | Cross-hair at the cursor in flat views | Have | P5 |
 | Cordon | Have/P4 | Q (compile), P4 (improvements) |
 | Lighting preview / compiled lightmap preview | Missing | (the viewer shows compiled maps lit) |
-| Textured / flat / wireframe render modes per pane | Missing | panes all draw textured |
+| Textured / flat / wireframe / textured+wire per pane | Have | P5: `renderModes.ts`, pane header; 2D panes wireframe by default |
 | Measure tool | Have | P2 |
 
 ### Entities
@@ -232,7 +232,7 @@ agent P4; **Missing** = not done yet; **n/a** = doesn't apply to GoldSrc or to u
 | Target/targetname lines in 3D, "sets off / set off by" | Have | I |
 | Entity report | Have | P2 |
 | Sound / model preview, custom FGD | P4 | |
-| Model drawn in place of the box (studio models in the view) | Missing | |
+| Model drawn in place of the box (studio models in the view) | Have | P5: `EntityModels.tsx` (model key, hostages, spawns, armoury weapons; env_sprite as a glow, not its real sprite yet) |
 
 ### Map and compile
 | Feature | Status | Where |

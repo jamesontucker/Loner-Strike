@@ -25,6 +25,7 @@ import { OutlinePanel } from "./OutlinePanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { ProjectPanel } from "./ProjectPanel";
 import { useP5 } from "./p5store";
+import { importOther } from "./commands";
 import * as api from "./editorApi";
 import type { RecentFile, Recovery } from "./editorApi";
 import { EMPTY_SEL, facesOf, useEditor, type ViewId } from "./store";
@@ -125,6 +126,10 @@ function Start({ onPick, busy, error }: { onPick: (w: Pick) => void; busy: strin
           </button>
           <button type="button" className="btn" disabled={!!busy} onClick={() => onPick("import")}>
             Import a .map
+          </button>
+          {/* P5: Hammer .rmf / J.A.C.K. .jmf */}
+          <button type="button" className="btn" disabled={!!busy} title="Brushes, entities, groups and visgroups come over" onClick={() => void importOther()}>
+            Import from Hammer / J.A.C.K.
           </button>
           <BusyLabel busy={!!busy} label={busy ?? ""} />
         </div>
