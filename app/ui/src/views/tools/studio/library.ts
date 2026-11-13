@@ -11,6 +11,8 @@ import { allVariables } from "./pins";
 import { parseGraph, type GComment, type GEdge, type GEnum, type GFunction, type GMacro, type GMember, type GNode, type GStruct, type GVariable, type Graph } from "./schema";
 
 export const LIBRARY = "loner-strike/graph-library";
+/** several items in one file (Export all) */
+export const LIBRARY_SET = "loner-strike/graph-library-set";
 export type LibKind = "function" | "macro" | "struct" | "enum";
 
 export type LibBody = { enums: GEnum[]; structs: GStruct[]; functions: GFunction[]; macros: GMacro[]; variables: GVariable[]; nodes: GNode[]; edges: GEdge[]; comments: GComment[] };

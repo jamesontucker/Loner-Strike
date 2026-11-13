@@ -13,7 +13,7 @@ export type ParamDef = {
   label: string;
   /** name: an entity's name; keys: component keys; var: one of the graph's variables;
    *  varvalue: a value of that variable's type */
-  kind: "choice" | "number" | "text" | "bool" | "name" | "keys" | "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases";
+  kind: "choice" | "number" | "text" | "bool" | "name" | "entname" | "keys" | "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases";
   default: string | number | boolean;
   choices?: [string, string][];
   min?: number;
@@ -74,6 +74,8 @@ export function typeColor(t: PinType): string {
 
 /** Entity names and creature types; component keys (the app checks the same). */
 export const NAME_CHARS = /^[A-Za-z0-9_.-]{0,32}$/;
+/** An entity's name as a map gives it (some maps' component names have spaces). */
+export const ENT_NAME_CHARS = /^[A-Za-z0-9_. -]{0,32}$/;
 export const KEYS_CHARS = /^[A-Za-z0-9 _.=:,-]*$/;
 
 export function defaultParams(def: NodeDef): Record<string, string | number | boolean> {

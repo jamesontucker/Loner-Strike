@@ -266,3 +266,5 @@
 .st-skin-a .st-comment-head{ border-radius: 3px 3px 0 0; }
 .st-skin-a .st-tab{ background: var(--panel); color: var(--bone-dim); border-radius: 0; box-shadow: var(--raised); border: 0; }
 .st-skin-a .st-tab.on{ background: #151814; color: var(--bone); box-shadow: var(--sunken), inset 0 2px 0 var(--signal); }
+.st-side-embed { margin: 8px 0; padding-top: 8px; border-top: 1px solid var(--line); }
+.st-mb-row { display: flex; gap: 6px; margin-top: 6px; }

@@ -200,13 +200,17 @@ function Studio({ maps }: ToolProps) {
     void api.debugCommand({ mode: playing, breakpoints: bpKey ? bpKey.split(" ") : [] });
   }, [bpKey, bpsOff, playing]);
 
-  const openId = async (id: string, fromAddress = false) => {
+  const openId = async (id: string, fromAddress = false, tabId = "") => {
     if (!fromAddress && dirty && !(await ask("This graph has changes that aren't saved. Open another one anyway?", { ok: "Open without saving", danger: true }))) return;
     try {
       const r = await api.openGraph(id);
       const p = parseGraph(r.graph);
       if ("error" in p) toast(p.error, true);
-      else st.open(p.graph, true);
+      else {
+        st.open(p.graph, true);
+        // an address with a tab ("studio:<id>/<tab>") opens that Function's or Macro's graph too
+        if (tabId && [...(p.graph.functions ?? []), ...(p.graph.macros ?? [])].some((x) => x.id === tabId)) useStudio.getState().openTab(tabId);
+      }
     } catch (e) {
       toast(errorText(e), true);
     }
@@ -245,7 +249,7 @@ function Studio({ maps }: ToolProps) {
       if (!tabId) st.setFuncFocus(null);
       return;
     }
-    if (/^[a-z][a-z0-9_]{1,23}$/.test(gid)) void openId(gid, true);
+    if (/^[a-z][a-z0-9_]{1,23}$/.test(gid)) void openId(gid, true, tabId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arg]);
 
@@ -400,6 +404,40 @@ function Studio({ maps }: ToolProps) {
     void refreshList();
   };
 
+  // keys anywhere on the page (the canvas has its own for the graph): never while typing
+  const keyActions = useRef({ save, playtest, errors: 0, working: false });
+  keyActions.current = { save, playtest, errors: problems.filter((p) => p.level === "error").length, working: !!working };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!useStudio.getState().graph) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, select, [contenteditable=true], .monaco-editor") || document.getElementById("root")?.hasAttribute("inert")) return;
+      const mod = e.metaKey || e.ctrlKey;
+      const k = e.key.toLowerCase();
+      const st2 = useStudio.getState();
+      if (mod && k === "s") {
+        e.preventDefault();
+        void keyActions.current.save();
+      } else if (e.key === "F5") {
+        e.preventDefault();
+        if (!keyActions.current.working && !keyActions.current.errors) void keyActions.current.playtest();
+      } else if (mod && k === "f") {
+        e.preventDefault();
+        document.querySelector<HTMLInputElement>(".st-find input")?.focus();
+      } else if (mod && k === "w" && st2.tab) {
+        e.preventDefault();
+        st2.closeTab(st2.tab);
+      } else if (e.ctrlKey && e.key === "Tab") {
+        e.preventDefault();
+        const all = ["", ...st2.tabs];
+        const i = all.indexOf(st2.tab);
+        st2.openTab(all[(i + (e.shiftKey ? all.length - 1 : 1)) % all.length]);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   if (!graph) {
     return (
       <div className="st-start tl-page">
@@ -497,6 +535,9 @@ function Studio({ maps }: ToolProps) {
             </div>
           )}
         </div>
+        <button type="button" className="btn" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" }))} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
+          ?
+        </button>
         <span className="st-grow" />
         <select className="st-field" value={prefs.map} onChange={(e) => (setPrefs({ ...prefs, map: e.target.value }), savePrefs({ ...prefs, map: e.target.value }))} aria-label="Map">
           {(mapNames.includes(prefs.map) ? mapNames : [prefs.map, ...mapNames]).map((m) => (

@@ -2,7 +2,7 @@
 // list when nothing is selected).
 
 import { useStudio } from "./store";
-import { KEYS_CHARS, NAME_CHARS, nodeDef, type ParamDef } from "./registry";
+import { ENT_NAME_CHARS, KEYS_CHARS, NAME_CHARS, nodeDef, type ParamDef } from "./registry";
 import { freshMember, removeGraphPart, removeType, removeVariable, setParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
 import { LABEL_CHARS, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { allVariables, itemTypeOk, nodeTitle, typeLabel } from "./pins";
@@ -135,7 +135,7 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
         <option value="0">No</option>
       </select>
     );
-  if (p.kind === "name") return <TextField value={String(value)} max={32} allowed={NAME_CHARS} onChange={onChange} />;
+  if (p.kind === "name" || p.kind === "entname") return <TextField value={String(value)} max={32} allowed={p.kind === "name" ? NAME_CHARS : ENT_NAME_CHARS} onChange={onChange} />;
   if (p.kind === "keys") return <TextField value={String(value)} max={p.max ?? 120} allowed={KEYS_CHARS} onChange={onChange} />;
   if (p.kind === "var") {
     const list = vars.filter((v) => !p.varType || v.type === p.varType || (p.varType === "struct" && v.type.startsWith("struct:")) || (p.varType === "array" && v.type.startsWith("array<")));
@@ -283,7 +283,7 @@ function Members({ graph, list, prefix, exec, containers = true, structs = true,
 }
 
 /** A Function, Macro, struct or enum (picked in the left panel). */
-function PartDetails({ id }: { id: string }) {
+function PartDetails({ id, embedded = false }: { id: string; embedded?: boolean }) {
   const graph = useStudio((s) => s.graph)!;
   const edit = useStudio((s) => s.edit);
   const { selectPart, openTab } = useStudio.getState();
@@ -308,9 +308,10 @@ function PartDetails({ id }: { id: string }) {
     edit((g) => (f || m ? removeGraphPart(g, id) : removeType(g, id)));
     selectPart(null);
   };
+  const Box = embedded ? "div" : "aside";
   return (
-    <aside className="st-side" aria-label="Details">
-      <p className="st-side-kicker">Details · {f ? (f.pure ? "Pure Function" : "Function") : m ? "Macro" : st ? "Struct" : "Enum"}</p>
+    <Box className={embedded ? "st-side-embed" : "st-side"} aria-label={embedded ? undefined : "Details"}>
+      <p className="st-side-kicker">{embedded ? "" : "Details · "}{f ? (f.pure ? "Pure Function" : "Function") : m ? "Macro" : st ? "Struct" : "Enum"}</p>
       {from && (
         <div className={newer ? "st-update" : "st-side-help"}>
           {newer ? (
@@ -385,7 +386,7 @@ function PartDetails({ id }: { id: string }) {
           Remove “{name}”
         </button>
       </p>
-    </aside>
+    </Box>
   );
 }
 
@@ -445,6 +446,7 @@ export function Inspector() {
             })}
           </div>
         )}
+        {["fn.entry", "fn.return", "macro.entry", "macro.exit"].includes(node.type) && node.graph && <PartDetails id={node.graph} embedded />}
         {!def.reroute && (
           <label className="st-side-check">
             <input type="checkbox" checked={!!node.breakpoint} onChange={() => edit((g) => toggleBreakpoint(g, node.id))} />
@@ -508,7 +510,7 @@ export function Inspector() {
       <ModeSettings />
       <p className="st-side-help st-keys">
         Right-click or Space: add a node · drag from a pin to empty space: nodes for that wire · double-click a wire: reroute point · C: comment · F9:
-        breakpoint · ⌘Z / ⇧⌘Z: undo / redo · ⌘C / ⌘V: copy / paste
+        breakpoint · ⌘Z / ⇧⌘Z: undo / redo · ⌘C / ⌘V: copy / paste · ?: every shortcut
       </p>
     </aside>
   );

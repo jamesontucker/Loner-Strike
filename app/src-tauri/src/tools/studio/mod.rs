@@ -392,6 +392,18 @@ pub fn uninstall(game_dir: &Path, id: &str) -> Result<(), String> {
         }
         let _ = std::fs::remove_file(p);
     }
+    // what compiling and the debugger left (made again from the graph: no backup needed)
+    let work = am.join("scripting/studio");
+    for p in [
+        am.join("scripting").join(format!("{plugin}.sma")),
+        work.join(format!("{plugin}.amxx")),
+        work.join(format!("{plugin}.hash")),
+        debug::bp_file(game_dir, id),
+        debug::cmd_file(game_dir, id),
+        debug::events_file(game_dir, id),
+    ] {
+        let _ = std::fs::remove_file(p);
+    }
     Ok(())
 }
 
@@ -1030,7 +1042,19 @@ mod tests {
         g.mode.id = "classic".into();
         assert!(register_mode(&cfg, &g, "studio_classic").unwrap_err().contains("already has a mode"));
         assert!(uninstall(&game, "classic").is_err());
+        // (what compiling and the debugger leave behind goes too)
+        let left = [
+            game.join("addons/amxmodx/scripting/studio_rifle_reward.sma"),
+            game.join("addons/amxmodx/scripting/studio/studio_rifle_reward.hash"),
+            debug::bp_file(&game, "rifle_reward"),
+            debug::cmd_file(&game, "rifle_reward"),
+        ];
+        for p in &left {
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, "x").unwrap();
+        }
         uninstall(&game, "rifle_reward").unwrap();
+        assert!(left.iter().all(|p| !p.exists()));
         let ini = std::fs::read_to_string(gm.join("modes.ini")).unwrap();
         assert!(!ini.contains("rifle_reward") && ini.contains("classic"));
         assert!(!gm.join("rifle_reward.plugins.ini").exists());

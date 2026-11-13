@@ -144,8 +144,7 @@ with amxxpc and ran with 12 bots ("helper ran" ×12, "kits given: 12").
    before reading it.
 7. The debugger shows the value the node uses: in debug builds each input is worked out once into
    a local.
-Not done yet: 8 (zone nodes with a wired zone, Create Component for traps/extractions, In Zone on
-a created zone) and 9 (the small ones).
+8 and 9: see "2026-11-13, later" below.
 Known limits: a breakpoint inside a Function pauses inside it, but the call's outputs were already
 read (they show the last values); breakpoints inside pure Functions are best avoided.
 
@@ -177,6 +176,35 @@ debug with no warnings); `npm run test:studio` 20 passed; `npm run build` green 
 
 **For S (MCP):** new routes `GET /api/tools/studio/library`, `POST /api/tools/studio/library/:id`,
 `POST /api/tools/studio/library/:id/delete`.
+
+## 2026-11-13, later: feedback round, QA 8 and 9
+**Editor:** Function Entry/Return (and Macro Entry/Exit) show the Inputs/Outputs editor in Details.
+Keys (never while typing): ⌘S, F5 Playtest, ⌘F find, ⌘W close tab, Ctrl+Tab / Ctrl+⇧Tab, ⌘D duplicate,
+F frame, Home frame all, Q straighten, Alt-click a wire to break it; they're listed in the Tools "?" sheet
+(`common/Shortcuts.tsx`, `studio` entry; the toolbar's ? button opens it). A snippet with events (or, in a
+Function, a wait) goes onto the Event Graph with a toast. Library: Export all (schema
+`loner-strike/graph-library-set`), Import takes one item or a whole set. An address with a tab
+(`studio:<mode>/<tab>`) opens that tab.
+**Leaving:** `store.ts` `confirmLeave()` (asks, forgets the left edits, waits for the sheet's history
+step) is used by App.tsx's section nav and server list and by the Tools crumbs/Back; after Leave nothing
+asks again or steps back. Going between one mode's Event Graph and its tabs (crumb, Back) doesn't ask and
+keeps the edits (`shell.tsx` `sameEdits`). Tested in Chromium and WebKit (`tests/studio-v3.spec.ts`: the
+mode crumb, the Studio crumb, the Tools crumb, the Back button, Alt+←, the browser's back; Cancel and
+Leave). The app's own sections/server list can't be driven in tools-dev (no app shell there).
+**QA 8:** Create Component's Trap and Extraction made nothing because gm_components calls them
+`ls_trigger_trap` / `ls_extraction_zone` (the choice keys stay; the plugin gets the real names); a debug
+build now says when gm_components makes nothing. Set Zone / Shrink Zone take a Centre entity input; with
+no name they keep the zone's own centre (`ls_zone_center`) instead of failing on the default "spot1"
+(new nodes default to no name). In Zone on a non-zone component: fixed on W1's side (ff51cea).
+**QA 9:** Player Hurt gives the health really taken (pre-hook keeps the health before) and doesn't run for
+blocked damage; Team Changed runs once per real change (UNASSIGNED skipped, repeats on spawn skipped);
+Creatures Alive counts live `ls_creature` entities now instead of the brain's lagging cvar; Find Component
+takes names with spaces (param kind `entname`); uninstall also removes the .sma, the work .amxx/.hash and
+the debugger's .bp/.cmd/.events. Not reproduced: "an entity in a HUD node shows empty" (the generated
+code prints `Text <entity number>`; needs a live look). test:studio was already green (20).
+**Checks:** `cargo test studio` 41 passed (amxxpc compiles with no warnings), snapshots updated;
+`npm run test:studio` 20; `npm run build` green; studio-v3 + Playtest specs pass in Chromium and WebKit.
+Not run live on a sim this round.
 
 ## Requests from QA (2026-11-12, real tests on sims QA4/QA5; full report docs/notes/QA.md)
 1. **[Critical] Drop Weapon crashes HLDS** (bots on de_dust2, both tries; "Illegal termination of worker thread

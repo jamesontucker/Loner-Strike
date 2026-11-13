@@ -41,7 +41,7 @@ export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boo
       if (p.kind === "number") return `${p.label}: ${v}`;
       if (p.kind === "bool") return `${p.label}: ${v ? "yes" : "no"}`;
       if (p.kind === "var") return vars.find((x) => x.id === v)?.name ?? "(pick a variable)";
-      if (p.kind === "name") return v ? `${p.label.replace(/^.*named$/i, "at")} ${String(v)}` : "";
+      if (p.kind === "name" || p.kind === "entname") return v ? `${p.label.replace(/^.*named$/i, "at")} ${String(v)}` : "";
       if (p.kind === "keys") return v ? String(v) : "";
       if (p.kind === "varvalue") return v === "" ? "" : `= ${typeof v === "boolean" ? (v ? "yes" : "no") : String(v)}`;
       return `“${String(v)}”`;

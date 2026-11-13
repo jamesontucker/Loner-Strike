@@ -108,13 +108,13 @@ node("score.end_round", "End Round", "Scoring", "Ends the round now with a winne
 
 # ---- component actions
 ca = dict(needs="components")
-node("comp.find", "Find Component", "Components", "The component (or any entity) with this name.", outputs=[P("out","entity","Entity")], params=[prm("name","Name","name","A")], pure=True, **ca)
+node("comp.find", "Find Component", "Components", "The component (or any entity) with this name.", outputs=[P("out","entity","Entity")], params=[prm("name","Name","entname","A")], pure=True, **ca)
 node("comp.create", "Create Component", "Components", "Makes a component at an entity (wired into At, or the one with this name), with keys like radius=160 capture_secs=8.", inputs=[X, P("at_ent","entity","At",optional=True)], outputs=[E(), P("out","entity","Component")],
      params=[prm("kind","Component","choice","ls_capture_point",choices=COMPONENTS), prm("at","At the entity named","name","spot1"), prm("keys","Keys","keys","",max=120)], **ca)
-node("comp.zone_set", "Set Zone", "Components", "Moves a shrinking zone to the entity with this name, with this radius.", inputs=[X, P("zone","entity","Zone",required=True), P("radius","number","Radius",param="radius")], outputs=[E()],
-     params=[prm("at","Centre at the entity named","name","spot1"), prm("radius","Radius","number",1500,min=50,max=20000)], **ca)
-node("comp.zone_shrink", "Shrink Zone", "Components", "Shrinks a zone to a new centre and radius over some seconds.", inputs=[X, P("zone","entity","Zone",required=True), P("radius","number","Radius",param="radius")], outputs=[E()],
-     params=[prm("at","New centre at the entity named","name","spot1"), prm("radius","Radius","number",600,min=50,max=20000), prm("secs","Over (seconds)","number",30,min=1,max=600)], **ca)
+node("comp.zone_set", "Set Zone", "Components", "Sets a shrinking zone's radius, and moves its centre to an entity wired into Centre or the one with this name (no name: it stays where it is).", inputs=[X, P("zone","entity","Zone",required=True), P("at_ent","entity","Centre",optional=True), P("radius","number","Radius",param="radius")], outputs=[E()],
+     params=[prm("at","Centre at the entity named","name",""), prm("radius","Radius","number",1500,min=50,max=20000)], **ca)
+node("comp.zone_shrink", "Shrink Zone", "Components", "Shrinks a zone over some seconds to a new radius, around an entity wired into Centre or the one with this name (no name: its centre stays).", inputs=[X, P("zone","entity","Zone",required=True), P("at_ent","entity","Centre",optional=True), P("radius","number","Radius",param="radius")], outputs=[E()],
+     params=[prm("at","New centre at the entity named","name",""), prm("radius","Radius","number",600,min=50,max=20000), prm("secs","Over (seconds)","number",30,min=1,max=600)], **ca)
 node("comp.crate_open", "Open Crate", "Components", "Opens a loot container for a player.", inputs=[X, P("container","entity","Container",required=True), P("player","player","Player",required=True)], outputs=[E()], **ca)
 node("comp.wave_start", "Start Wave", "Components", "Starts a wave (0: the next one).", inputs=[X, P("wave","number","Wave",param="wave")], outputs=[E()], params=[prm("wave","Wave","number",0,min=0,max=1000)], **ca)
 node("comp.wave_stop", "Stop Waves", "Components", "Stops the waves.", inputs=[X], outputs=[E()], **ca)
@@ -131,8 +131,8 @@ node("creature.spawn", "Spawn Creature", "Creatures", "Makes a creature of this 
 # ---- milestone 3: what whole modes (Last Stand, Battle Royale) need
 WHICH = [["all","Everyone in the game"],["alive","Everyone alive"],["dead","Everyone dead"],["t","Terrorists"],["ct","Counter-Terrorists"],["alive_t","Living Terrorists"],["alive_ct","Living Counter-Terrorists"],["bots","Bots"],["humans","People (not bots)"]]
 BY = [["class","Of this kind (classname)"],["name","With this name"]]
-node("event.player_hurt", "Player Hurt", "Events", "Runs when a player takes damage.", outputs=[E(), P("victim","player","Victim"), P("attacker","player","Attacker"), P("damage","number","Damage")], **ev)
-node("event.team_changed", "Team Changed", "Events", "Runs when a player joins a team (or changes team).", outputs=[E(), P("player","player","Player"), P("team","team","Team")], **ev)
+node("event.player_hurt", "Player Hurt", "Events", "Runs when a player takes damage, with the health it took (blocked damage doesn't count).", outputs=[E(), P("victim","player","Victim"), P("attacker","player","Attacker"), P("damage","number","Damage")], **ev)
+node("event.team_changed", "Team Changed", "Events", "Runs once when a player joins a team or changes team (Spectator is No team).", outputs=[E(), P("player","player","Player"), P("team","team","Team")], **ev)
 node("event.map_started", "Map Started", "Events", "Runs once when the map has loaded (before the first round): load map packs, set things up.", outputs=[E()], **ev)
 node("event.new_round", "New Round", "Events", "Runs when a new round is set up (freeze time starts), before Round Started.", outputs=[E()], **ev)
 node("event.chat_command", "Chat Command", "Events", "Runs when a player says /command or !command in chat (shop for /shop and !shop).", outputs=[E(), P("player","player","Player")], params=[prm("command","Command (without /)","name","shop")], **ev)

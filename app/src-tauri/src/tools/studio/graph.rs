@@ -431,6 +431,11 @@ pub fn valid_name(s: &str) -> bool {
     s.len() <= 32 && s.chars().all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c))
 }
 
+/// An entity's name as the map has it (Find Component): a name, and spaces.
+pub fn valid_ent_name(s: &str) -> bool {
+    s.len() <= 32 && s.chars().all(|c| c.is_ascii_alphanumeric() || " _-.".contains(c))
+}
+
 /// Component keys (`radius=160 capture_secs=8 name=B`): words of name characters and `=`,
 /// separated by spaces. No quotes, so no value can carry anything else.
 pub fn valid_keys(s: &str, max: usize) -> bool {
@@ -1636,6 +1641,10 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
         "name" => match v.as_str() {
             Some(s) if valid_name(s) => Ok(()),
             _ => Err(format!("{} is a name of up to 32 letters, digits, _ - or .", def.label)),
+        },
+        "entname" => match v.as_str() {
+            Some(s) if valid_ent_name(s) => Ok(()),
+            _ => Err(format!("{} is a name of up to 32 letters, digits, spaces, _ - or .", def.label)),
         },
         "keys" => match v.as_str() {
             Some(s) if valid_keys(s, def.max.unwrap_or(120.0) as usize) => Ok(()),

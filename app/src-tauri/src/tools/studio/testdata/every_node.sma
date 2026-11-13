@@ -59,6 +59,19 @@ stock g_v19 = 0 // Seen (Array of Player)
 stock Float:g_lsgDmg, bool:g_lsgDmgBlock
 stock g_lsgNoFall[33]
 stock g_lsgM93[33][LSG_CTX]
+// counted now (the brain's ls_creature_alive is only brought up to date a moment later)
+stock lsg_creatures_alive()
+{
+	new n, e = MaxClients, Float:hp
+	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
+	{
+		pev(e, pev_health, hp)
+		if (pev(e, pev_deadflag) == DEAD_NO && hp > 0.0)
+			n++
+	}
+	return n
+}
+
 stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
 
@@ -1744,6 +1757,7 @@ public plugin_init()
 	register_logevent("lsg_on_bomb_exploded", 6, "3=Target_Bombed")
 	RegisterHam(Ham_Use, "func_button", "lsg_on_player_used", 0)
 	register_touch("trigger_multiple", "player", "lsg_on_player_touched")
+	RegisterHamPlayer(Ham_TakeDamage, "lsg_hurt_before", 0)
 	RegisterHamPlayer(Ham_TakeDamage, "lsg_on_player_hurt", 1)
 	register_event("TeamInfo", "lsg_on_team_changed", "a")
 	set_task(1.0, "lsg_on_map_started")
@@ -1981,10 +1995,30 @@ public lsg_on_player_touched(ent, id)
 	return PLUGIN_CONTINUE
 }
 
+new Float:g_lsgHurtHp[33]
+
+public lsg_hurt_before(victim, inflictor, attacker, Float:damage, bits)
+{
+	#pragma unused inflictor
+	#pragma unused attacker
+	#pragma unused damage
+	#pragma unused bits
+	if (victim >= 1 && victim <= MaxClients)
+		pev(victim, pev_health, g_lsgHurtHp[victim])
+	return HAM_IGNORED
+}
+
 public lsg_on_player_hurt(victim, inflictor, attacker, Float:damage, bits)
 {
 	#pragma unused inflictor
 	#pragma unused bits
+	if (victim < 1 || victim > MaxClients)
+		return HAM_IGNORED
+	new Float:hp
+	pev(victim, pev_health, hp)
+	damage = g_lsgHurtHp[victim] - hp
+	if (damage <= 0.0)
+		return HAM_IGNORED
 	new ctx[LSG_CTX]
 	ctx[0] = victim // victim
 	ctx[1] = attacker >= 1 && attacker <= MaxClients ? attacker : 0 // attacker
@@ -1995,13 +2029,23 @@ public lsg_on_player_hurt(victim, inflictor, attacker, Float:damage, bits)
 
 public lsg_on_team_changed()
 {
+	static last[33]
 	new id = read_data(1), tn[12]
 	read_data(2, tn, charsmax(tn))
 	if (id < 1 || id > MaxClients)
 		return
+	if (tn[0] == 'U' || !tn[0])
+	{
+		last[id] = 0
+		return
+	}
+	new team = tn[0] == 'T' ? 1 : (tn[0] == 'C' ? 2 : 3)
+	if (team == last[id])
+		return
+	last[id] = team
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
-	ctx[1] = tn[0] == 'T' ? 1 : (tn[0] == 'C' ? 2 : 0) // team
+	ctx[1] = team == 3 ? 0 : team // team
 	lsg_n80(ctx)
 }
 
@@ -3145,7 +3189,7 @@ lsg_n118(ctx[])
 // Show HUD Text (lo2_hud)
 lsg_n119(ctx[])
 {
-	ls_hud(0, LsHud:1, 4.0, "%s %d", "Heroes and creatures:", floatround(((float(ls_count_role("hero"))) + (float(get_cvar_num("ls_creature_alive"))))))
+	ls_hud(0, LsHud:1, 4.0, "%s %d", "Heroes and creatures:", floatround(((float(ls_count_role("hero"))) + (float(lsg_creatures_alive())))))
 	lsg_n120(ctx)
 }
 

@@ -551,6 +551,19 @@ public lsd_poll()
 		lsd_resume()
 }
 
+// counted now (the brain's ls_creature_alive is only brought up to date a moment later)
+stock lsg_creatures_alive()
+{
+	new n, e = MaxClients, Float:hp
+	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
+	{
+		pev(e, pev_health, hp)
+		if (pev(e, pev_deadflag) == DEAD_NO && hp > 0.0)
+			n++
+	}
+	return n
+}
+
 stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
 
@@ -2268,6 +2281,7 @@ public plugin_init()
 	register_logevent("lsg_on_bomb_exploded", 6, "3=Target_Bombed")
 	RegisterHam(Ham_Use, "func_button", "lsg_on_player_used", 0)
 	register_touch("trigger_multiple", "player", "lsg_on_player_touched")
+	RegisterHamPlayer(Ham_TakeDamage, "lsg_hurt_before", 0)
 	RegisterHamPlayer(Ham_TakeDamage, "lsg_on_player_hurt", 1)
 	register_event("TeamInfo", "lsg_on_team_changed", "a")
 	set_task(1.0, "lsg_on_map_started")
@@ -2506,10 +2520,30 @@ public lsg_on_player_touched(ent, id)
 	return PLUGIN_CONTINUE
 }
 
+new Float:g_lsgHurtHp[33]
+
+public lsg_hurt_before(victim, inflictor, attacker, Float:damage, bits)
+{
+	#pragma unused inflictor
+	#pragma unused attacker
+	#pragma unused damage
+	#pragma unused bits
+	if (victim >= 1 && victim <= MaxClients)
+		pev(victim, pev_health, g_lsgHurtHp[victim])
+	return HAM_IGNORED
+}
+
 public lsg_on_player_hurt(victim, inflictor, attacker, Float:damage, bits)
 {
 	#pragma unused inflictor
 	#pragma unused bits
+	if (victim < 1 || victim > MaxClients)
+		return HAM_IGNORED
+	new Float:hp
+	pev(victim, pev_health, hp)
+	damage = g_lsgHurtHp[victim] - hp
+	if (damage <= 0.0)
+		return HAM_IGNORED
 	new ctx[LSG_CTX]
 	ctx[0] = victim // victim
 	ctx[1] = attacker >= 1 && attacker <= MaxClients ? attacker : 0 // attacker
@@ -2520,13 +2554,23 @@ public lsg_on_player_hurt(victim, inflictor, attacker, Float:damage, bits)
 
 public lsg_on_team_changed()
 {
+	static last[33]
 	new id = read_data(1), tn[12]
 	read_data(2, tn, charsmax(tn))
 	if (id < 1 || id > MaxClients)
 		return
+	if (tn[0] == 'U' || !tn[0])
+	{
+		last[id] = 0
+		return
+	}
+	new team = tn[0] == 'T' ? 1 : (tn[0] == 'C' ? 2 : 3)
+	if (team == last[id])
+		return
+	last[id] = team
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
-	ctx[1] = tn[0] == 'T' ? 1 : (tn[0] == 'C' ? 2 : 0) // team
+	ctx[1] = team == 3 ? 0 : team // team
 	lsg_n80(ctx)
 }
 
@@ -3420,10 +3464,10 @@ lsg_n50(ctx[])
 lsg_n51(ctx[])
 {
 	new lsi0 = ctx[0]
-	new Float:lsi1 = ((Float:ctx[1]) * (100.0))
+	new Float:lsi2 = ((Float:ctx[1]) * (100.0))
 	lsd_begin()
 	lsd_in_entity("Zone", lsi0)
-	lsd_in_number("Radius", lsi1)
+	lsd_in_number("Radius", lsi2)
 	if (lsd_enter(51, ctx))
 		return
 	new Float:o[3]
@@ -3433,7 +3477,7 @@ lsg_n51(ctx[])
 		lsd_error(51, "No entity has that name on this map.")
 	else
 	{
-		ls_zone_shrink(lsi0, o, lsi1, 20.0)
+		ls_zone_shrink(lsi0, o, lsi2, 20.0)
 		lsd_exit(51, "done")
 	}
 }
@@ -3452,10 +3496,10 @@ lsg_n52(ctx[])
 lsg_n53(ctx[])
 {
 	new lsi0 = ctx[0]
-	new Float:lsi1 = 900.0
+	new Float:lsi2 = 900.0
 	lsd_begin()
 	lsd_in_entity("Zone", lsi0)
-	lsd_in_number("Radius", lsi1)
+	lsd_in_number("Radius", lsi2)
 	if (lsd_enter(53, ctx))
 		return
 	new Float:o[3]
@@ -3465,7 +3509,7 @@ lsg_n53(ctx[])
 		lsd_error(53, "No entity has that name on this map.")
 	else
 	{
-		ls_zone_set(lsi0, o, lsi1)
+		ls_zone_set(lsi0, o, lsi2)
 		lsd_exit(53, "done")
 	}
 	lsg_n54(ctx)
@@ -3704,7 +3748,10 @@ lsg_n73(ctx[])
 	else
 	{
 		g_lsgOut[73] = ls_comp_create("ls_loot_container", o, "table=rifles radius=40")
-		lsd_exit(73, fmt("entity %d", g_lsgOut[73]))
+		if (g_lsgOut[73])
+			lsd_exit(73, fmt("entity %d", g_lsgOut[73]))
+		else
+			lsd_error(73, "gm_components couldn't make that component (it has no room, or the keys are wrong).")
 	}
 	lsg_n74(ctx)
 }
@@ -4461,7 +4508,7 @@ lsg_n118(ctx[])
 // Show HUD Text (lo2_hud)
 lsg_n119(ctx[])
 {
-	new Float:lsi1 = ((float(ls_count_role("hero"))) + (float(get_cvar_num("ls_creature_alive"))))
+	new Float:lsi1 = ((float(ls_count_role("hero"))) + (float(lsg_creatures_alive())))
 	lsd_begin()
 	lsd_in_number("Value", lsi1)
 	if (lsd_enter(119, ctx))
@@ -4601,7 +4648,10 @@ lsg_n127(ctx[])
 	else
 	{
 		g_lsgOut[127] = ls_comp_create("ls_loot_container", o, "table=default")
-		lsd_exit(127, fmt("entity %d", g_lsgOut[127]))
+		if (g_lsgOut[127])
+			lsd_exit(127, fmt("entity %d", g_lsgOut[127]))
+		else
+			lsd_error(127, "gm_components couldn't make that component (it has no room, or the keys are wrong).")
 	}
 	lsg_n128(ctx)
 }

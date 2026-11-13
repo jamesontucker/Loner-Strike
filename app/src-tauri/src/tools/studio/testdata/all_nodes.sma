@@ -21,6 +21,19 @@ stock g_lsgLeft[LSG_N]
 stock const g_lsgYesNo[][] = { "no", "yes" }
 stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists", "Spectators" }
 
+// counted now (the brain's ls_creature_alive is only brought up to date a moment later)
+stock lsg_creatures_alive()
+{
+	new n, e = MaxClients, Float:hp
+	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
+	{
+		pev(e, pev_health, hp)
+		if (pev(e, pev_deadflag) == DEAD_NO && hp > 0.0)
+			n++
+	}
+	return n
+}
+
 stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
 

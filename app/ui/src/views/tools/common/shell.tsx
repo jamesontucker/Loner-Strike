@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { create } from "zustand";
-import { hasUnsavedEdits, isPageEntry, useNav } from "../../../store";
+import { confirmLeave, forgetUnsavedEdits, hasUnsavedEdits, isPageEntry, useNav } from "../../../store";
 import { useToolPage } from "../../../stores/toolPage";
 import { useTools } from "../../../stores/tools";
 import { useConfirm } from "../../../ui";
@@ -115,15 +115,17 @@ let settling: { to: string; until: number } | null = null;
 /** writes the history entry for where Tools is now (set while Tools is open) */
 let kick = () => {};
 
+/** Two addresses on one open document (a Studio mode's Event Graph and its Function and Macro
+ *  tabs, "studio:<id>" and "studio:<id>/<tab>"): going between them loses no edits. */
+const sameEdits = (a: string, b: string) => a.startsWith("studio:") && a.split("/")[0] === b.split("/")[0];
+
 /** Goes to an address from a crumb or Back: asks first about unsaved edits. */
 async function leaveTo(address: string, ask: ReturnType<typeof useConfirm>) {
   if (address === here()) return;
-  if (hasUnsavedEdits()) {
-    if (!(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
-    // the question's sheet takes its history entry off as it closes; going before that lands
-    // would let the history step bring this page straight back (App.tsx waits the same way)
-    await new Promise((r) => setTimeout(r, 50));
-  }
+  if (sameEdits(address, here())) return openAddress(address, true);
+  // (the question's sheet takes its history entry off as it closes; confirmLeave waits for that
+  // and forgets the edits left behind, so that step can't bring this page straight back)
+  if (!(await confirmLeave(ask))) return;
   openAddress(address, true);
 }
 
@@ -203,7 +205,7 @@ export function useToolsShell(startFrom: (address: string | null) => void) {
       if (!isPageEntry(to) || to.section !== "tools" || !to.tools || useNav.getState().section !== "tools") return;
       const now = here();
       if (to.tools === now) return;
-      if (hasUnsavedEdits()) {
+      if (hasUnsavedEdits() && !sameEdits(to.tools, now)) {
         asking = true;
         const leave = await ask("Leave without saving your changes?", { ok: "Leave", danger: true });
         await new Promise((r) => setTimeout(r, 50));
@@ -213,6 +215,7 @@ export function useToolsShell(startFrom: (address: string | null) => void) {
           return;
         }
         history.replaceState(to, "");
+        forgetUnsavedEdits();
       }
       openAddress(to.tools, true);
     };

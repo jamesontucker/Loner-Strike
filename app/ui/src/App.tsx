@@ -4,7 +4,7 @@ import { clock, getJsonAt, isSignedOut, ON_THIS_COMPUTER, postJson, SETUP_ON_COM
 import { gameShort, gameTitle } from "./games";
 import { Icon } from "./icons";
 import { forgetLive, queryClient, reloadAppInfo, useOpenReports, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
-import { hasUnsavedEdits, isPageEntry, useNav, type Section } from "./store";
+import { confirmLeave, forgetUnsavedEdits, hasUnsavedEdits, isPageEntry, useNav, type Section } from "./store";
 import { usePlayDrafts } from "./stores/playDraft";
 import { useToolPage } from "./stores/toolPage";
 import { waitsForRestart, type AppInfo, type GameState, type Online, type ServerInfo } from "./types";
@@ -125,7 +125,7 @@ function Shell() {
   const nav = async (s: Section, focus?: string) => {
     // a dialog is open (the app behind it is inert): shortcuts and the menu wait
     if (document.getElementById("root")?.hasAttribute("inert")) return;
-    if (hasUnsavedEdits() && !(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
+    if (!(await confirmLeave(ask))) return;
     go(s, focus);
   };
 
@@ -233,6 +233,7 @@ function Shell() {
           return;
         }
         history.replaceState({ ls: 1, section: to.section, server: to.server }, "");
+        forgetUnsavedEdits();
       }
       useNav.getState().restore(to.section, to.server);
     };
@@ -427,7 +428,7 @@ function Shell() {
                   onOpen={async (id) => {
                     // the same checks as the other sections, then straight to that server's page
                     if (document.getElementById("root")?.hasAttribute("inert")) return;
-                    if (hasUnsavedEdits() && !(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
+                    if (!(await confirmLeave(ask))) return;
                     if (section !== "servers") go("servers");
                     enterServer(id);
                   }}

@@ -516,6 +516,19 @@ public lsd_poll()
 		lsd_resume()
 }
 
+// counted now (the brain's ls_creature_alive is only brought up to date a moment later)
+stock lsg_creatures_alive()
+{
+	new n, e = MaxClients, Float:hp
+	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
+	{
+		pev(e, pev_health, hp)
+		if (pev(e, pev_deadflag) == DEAD_NO && hp > 0.0)
+			n++
+	}
+	return n
+}
+
 stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
 
@@ -959,7 +972,10 @@ lsg_n7(ctx[])
 	else
 	{
 		g_lsgOut[7] = ls_comp_create("ls_capture_point", o, "radius=1 server_cmdquit")
-		lsd_exit(7, fmt("entity %d", g_lsgOut[7]))
+		if (g_lsgOut[7])
+			lsd_exit(7, fmt("entity %d", g_lsgOut[7]))
+		else
+			lsd_error(7, "gm_components couldn't make that component (it has no room, or the keys are wrong).")
 	}
 }
 

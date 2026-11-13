@@ -127,12 +127,27 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
     (sn: Snippet, at: { x: number; y: number }) => {
       const g = useStudio.getState().graph;
       if (!g) return;
-      const r = insertSnippet(g, sn, at, sizeOf, useStudio.getState().tab || undefined);
+      const tab = useStudio.getState().tab;
+      // a snippet with events (or, in a Function, a wait) can only go on the Event Graph
+      const inFn = (g.functions ?? []).some((f) => f.id === tab);
+      const eventOnly = !!tab && sn.part.nodes.some((n) => nodeDef(n.type)?.event || (inFn && ["timer.delay", "timer.retrigger", "timer.repeat", "timer.countdown", "msg.menu"].includes(n.type)));
+      let where = at;
+      if (eventOnly) {
+        // under what's on the Event Graph already
+        const ev = tabView(g, "");
+        where = ev.nodes.length ? { x: Math.min(...ev.nodes.map((n) => n.pos.x)), y: Math.max(...ev.nodes.map((n) => n.pos.y)) + 260 } : { x: 0, y: 0 };
+      }
+      const r = insertSnippet(g, sn, where, sizeOf, eventOnly ? undefined : tab || undefined);
       if (!r) return toast("That snippet is empty.", true);
       edit(() => r.graph);
+      if (eventOnly) {
+        openTab("");
+        toast(`“${sn.name}” starts with an event, so it went onto the Event Graph.`);
+      }
       select(r.ids);
+      if (eventOnly) setTimeout(() => void rf.setCenter(where.x + 300, where.y + 150, { zoom: Math.max(rf.getZoom(), 0.8), duration: 300 }), 120);
     },
-    [edit, select, sizeOf, toast],
+    [edit, select, sizeOf, toast, openTab, rf],
   );
 
   // a new tab: show its graph
@@ -411,6 +426,49 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       } else if (e.key === " " && !mod) {
         e.preventDefault();
         openPalette(mouse.current.x, mouse.current.y);
+      } else if (mod && k === "d") {
+        // duplicate: a copy next to the selection
+        e.preventDefault();
+        const g = useStudio.getState().graph;
+        const ids = useStudio.getState().selected;
+        const text = g && copy(g, ids);
+        if (!g || !text) return;
+        const sel = g.nodes.filter((n) => ids.includes(n.id));
+        const at = sel.length ? { x: Math.min(...sel.map((n) => n.pos.x)) + 40, y: Math.min(...sel.map((n) => n.pos.y)) + 40 } : rf.screenToFlowPosition(mouse.current);
+        const r = paste(g, text, at, home);
+        if (r) {
+          edit(() => r.graph);
+          select(r.ids);
+        }
+      } else if (k === "f" && !mod) {
+        // frame the selection (or everything)
+        const ids = new Set(useStudio.getState().selected);
+        const nodes = rf.getNodes().filter((n) => ids.has(n.id));
+        void rf.fitView({ nodes: nodes.length ? nodes : undefined, padding: 0.3, maxZoom: 1.5, duration: 250 });
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        void rf.fitView({ padding: 0.2, maxZoom: 1.1, duration: 250 });
+      } else if (k === "q" && !mod) {
+        // straighten: each selected node lines its first wired input up with what feeds it
+        const g = useStudio.getState().graph;
+        const ids = useStudio.getState().selected;
+        if (!g || !ids.length) return;
+        const moves = new Map<string, { x: number; y: number }>();
+        const rowOf = (node: string, pin: string, dir: "in" | "out") => {
+          const n = g.nodes.find((x) => x.id === node);
+          if (!n) return 0;
+          const p = pinsOf(g, n);
+          return Math.max(0, (dir === "in" ? p.inputs : p.outputs).findIndex((x) => x.id === pin));
+        };
+        for (const id of ids) {
+          const n = g.nodes.find((x) => x.id === id);
+          const e2 = n && g.edges.find((x) => x.to.node === id && !ids.includes(x.from.node));
+          const src = e2 && g.nodes.find((x) => x.id === e2.from.node);
+          if (!n || !e2 || !src) continue;
+          const y = src.pos.y + (rowOf(src.id, e2.from.pin, "out") - rowOf(id, e2.to.pin, "in")) * 22;
+          moves.set(id, { x: n.pos.x, y });
+        }
+        if (moves.size) edit((g2) => moveItems(g2, moves));
       } else if (k === "c" && !mod) {
         commentAround();
       } else if (e.key === "F9") {
@@ -518,6 +576,9 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
           const n = useStudio.getState().graph?.nodes.find((x) => x.id === node.id);
           const target = n && (n.type === "fn.call" || n.type === "fn.call_pure" ? n.params.func : n.type === "macro.use" ? n.params.macro : null);
           if (typeof target === "string" && target) openTab(target);
+        }}
+        onEdgeClick={(e, edge) => {
+          if (e.altKey) edit((g) => remove(g, [edge.id]));
         }}
         onEdgeDoubleClick={(e, edge) => {
           const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });

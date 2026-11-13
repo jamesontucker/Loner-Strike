@@ -2148,7 +2148,7 @@
     {
      "id": "name",
      "label": "Name",
-     "kind": "name",
+     "kind": "entname",
      "default": "A"
     }
    ],
@@ -2258,7 +2258,7 @@
    "type": "comp.zone_set",
    "title": "Set Zone",
    "category": "Components",
-   "help": "Moves a shrinking zone to the entity with this name, with this radius.",
+   "help": "Sets a shrinking zone's radius, and moves its centre to an entity wired into Centre or the one with this name (no name: it stays where it is).",
    "inputs": [
     {
      "id": "exec",
@@ -2270,6 +2270,12 @@
      "type": "entity",
      "label": "Zone",
      "required": true
+    },
+    {
+     "id": "at_ent",
+     "type": "entity",
+     "label": "Centre",
+     "optional": true
     },
     {
      "id": "radius",
@@ -2290,7 +2296,7 @@
      "id": "at",
      "label": "Centre at the entity named",
      "kind": "name",
-     "default": "spot1"
+     "default": ""
     },
     {
      "id": "radius",
@@ -2307,7 +2313,7 @@
    "type": "comp.zone_shrink",
    "title": "Shrink Zone",
    "category": "Components",
-   "help": "Shrinks a zone to a new centre and radius over some seconds.",
+   "help": "Shrinks a zone over some seconds to a new radius, around an entity wired into Centre or the one with this name (no name: its centre stays).",
    "inputs": [
     {
      "id": "exec",
@@ -2319,6 +2325,12 @@
      "type": "entity",
      "label": "Zone",
      "required": true
+    },
+    {
+     "id": "at_ent",
+     "type": "entity",
+     "label": "Centre",
+     "optional": true
     },
     {
      "id": "radius",
@@ -2339,7 +2351,7 @@
      "id": "at",
      "label": "New centre at the entity named",
      "kind": "name",
-     "default": "spot1"
+     "default": ""
     },
     {
      "id": "radius",
@@ -2682,7 +2694,7 @@
    "type": "event.player_hurt",
    "title": "Player Hurt",
    "category": "Events",
-   "help": "Runs when a player takes damage.",
+   "help": "Runs when a player takes damage, with the health it took (blocked damage doesn't count).",
    "inputs": [],
    "outputs": [
     {
@@ -2713,7 +2725,7 @@
    "type": "event.team_changed",
    "title": "Team Changed",
    "category": "Events",
-   "help": "Runs when a player joins a team (or changes team).",
+   "help": "Runs once when a player joins a team or changes team (Spectator is No team).",
    "inputs": [],
    "outputs": [
     {

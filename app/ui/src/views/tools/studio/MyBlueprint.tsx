@@ -7,7 +7,7 @@ import { useStudio } from "./store";
 import { nodeDef, typeColor } from "./registry";
 import { addEnum, addFunction, addLocal, addMacro, addStruct, addVariable, makeSnippet, type Snippet } from "./graphOps";
 import { addFromLibrary, DRAG_LIB, DRAG_PART, DRAG_SNIPPET, DRAG_VAR, type CanvasApi } from "./Canvas";
-import { extractItem, itemFile, itemId, readItem, type LibItem } from "./library";
+import { extractItem, itemFile, itemId, LIBRARY_SET, readItem, type LibItem } from "./library";
 import { deleteItem, saveItem } from "./libraryApi";
 import { LABEL_CHARS } from "./schema";
 import { Sheet } from "../../../ui";
@@ -119,14 +119,17 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
     toast(r.message);
     void api;
   };
-  const exportItem = (it: LibItem) => {
-    const blob = new Blob([JSON.stringify(itemFile(it), null, 1)], { type: "application/json" });
+  const download = (data: object, name: string) => {
+    const blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${it.id}.lib.json`;
+    a.download = name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
+  const exportItem = (it: LibItem) => download(itemFile(it), `${it.id}.lib.json`);
+  // the whole library in one file (Import takes it back, item by item)
+  const exportAll = () => download({ schema: LIBRARY_SET, version: 1, items: library.map((it) => ({ id: it.id, item: itemFile(it) })) }, "my-studio-library.lib.json");
   const importFiles = async (files: FileList | null) => {
     for (const fl of [...(files ?? [])]) {
       let v: unknown;
@@ -136,15 +139,23 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
         toast(`${fl.name} isn't a library file.`, true);
         continue;
       }
-      const it = readItem("import", v);
-      if (!it) {
-        toast(`${fl.name} isn't a Game Mode Studio library item.`, true);
-        continue;
+      // one item, or a whole library exported at once
+      const set = v && typeof v === "object" && (v as { schema?: string }).schema === LIBRARY_SET ? ((v as { items?: { id?: string; item?: unknown }[] }).items ?? []).slice(0, 500) : [{ id: fl.name.replace(/\.lib\.json$|\.json$/, ""), item: v }];
+      let n = 0;
+      for (const x of set) {
+        const it = readItem("import", x.item);
+        if (!it) {
+          toast(`${fl.name}: that isn't a Game Mode Studio library item.`, true);
+          continue;
+        }
+        const taken = useStudio.getState().library.map((l) => l.id);
+        const id = itemId(typeof x.id === "string" ? x.id : it.name, taken);
+        const r = await saveItem(id, itemFile({ ...it, itemVersion: undefined }));
+        if (r.error) toast(r.error, true);
+        else n++;
+        await useStudio.getState().reloadLibrary();
       }
-      const id = itemId(fl.name.replace(/\.lib\.json$|\.json$/, ""), useStudio.getState().library.map((x) => x.id));
-      const r = await saveItem(id, itemFile({ ...it, itemVersion: undefined }));
-      if (r.error) toast(r.error, true);
-      else toast(`Imported “${it.name}”.`);
+      if (n) toast(`Imported ${n} item${n === 1 ? "" : "s"} into your library.`);
     }
     await useStudio.getState().reloadLibrary();
   };
@@ -195,9 +206,14 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
           </div>
         );
       })}
-      <button type="button" className="btn small st-mb-save" onClick={() => file.current?.click()}>
-        Import from a file
-      </button>
+      <div className="st-mb-row">
+        <button type="button" className="btn small" onClick={() => file.current?.click()}>
+          Import
+        </button>
+        <button type="button" className="btn small" disabled={!library.length} onClick={exportAll} title="Every item in one file">
+          Export all
+        </button>
+      </div>
       <input ref={file} type="file" accept=".json,application/json" multiple hidden onChange={(e) => void importFiles(e.target.files).then(() => (e.target.value = ""))} />
     </Section>
   );

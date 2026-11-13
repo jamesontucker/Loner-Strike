@@ -120,6 +120,11 @@ fn name_text(s: &str) -> String {
     s.chars().filter(|c| c.is_ascii_alphanumeric() || "_-.".contains(*c)).take(32).collect()
 }
 
+/// An entity's name as the map has it (spaces kept) for a string literal.
+fn ent_name_text(s: &str) -> String {
+    s.chars().filter(|c| c.is_ascii_alphanumeric() || " _-.".contains(*c)).take(32).collect()
+}
+
 /// Component keys for a string literal.
 fn keys_text(s: &str) -> String {
     s.chars().filter(|c| c.is_ascii_alphanumeric() || " _-.=:,".contains(*c)).take(120).collect()
@@ -246,9 +251,11 @@ const EVENTS: &[EventKind] = &[
     EventKind {
         kind: "event.player_hurt",
         sig: "public lsg_on_player_hurt(victim, inflictor, attacker, Float:damage, bits)",
-        register: &["RegisterHamPlayer(Ham_TakeDamage, \"lsg_on_player_hurt\", 1)"],
-        prelude: "",
-        guard: "\t#pragma unused inflictor\n\t#pragma unused bits",
+        register: &["RegisterHamPlayer(Ham_TakeDamage, \"lsg_hurt_before\", 0)", "RegisterHamPlayer(Ham_TakeDamage, \"lsg_on_player_hurt\", 1)"],
+        // the health before the hit, so the event says what was really taken: nothing when the
+        // damage was blocked, less when it was scaled down or armour took some
+        prelude: "new Float:g_lsgHurtHp[33]\n\npublic lsg_hurt_before(victim, inflictor, attacker, Float:damage, bits)\n{\n\t#pragma unused inflictor\n\t#pragma unused attacker\n\t#pragma unused damage\n\t#pragma unused bits\n\tif (victim >= 1 && victim <= MaxClients)\n\t\tpev(victim, pev_health, g_lsgHurtHp[victim])\n\treturn HAM_IGNORED\n}",
+        guard: "\t#pragma unused inflictor\n\t#pragma unused bits\n\tif (victim < 1 || victim > MaxClients)\n\t\treturn HAM_IGNORED\n\tnew Float:hp\n\tpev(victim, pev_health, hp)\n\tdamage = g_lsgHurtHp[victim] - hp\n\tif (damage <= 0.0)\n\t\treturn HAM_IGNORED",
         values: &[("victim", "victim"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:damage")],
         tail: "\treturn HAM_IGNORED",
         named: None,
@@ -258,8 +265,10 @@ const EVENTS: &[EventKind] = &[
         sig: "public lsg_on_team_changed()",
         register: &["register_event(\"TeamInfo\", \"lsg_on_team_changed\", \"a\")"],
         prelude: "",
-        guard: "\tnew id = read_data(1), tn[12]\n\tread_data(2, tn, charsmax(tn))\n\tif (id < 1 || id > MaxClients)\n\t\treturn",
-        values: &[("player", "id"), ("team", "tn[0] == 'T' ? 1 : (tn[0] == 'C' ? 2 : 0)")],
+        // (the game sends TeamInfo several times per join, the first "UNASSIGNED", and again on
+        // spawns: once per real change; UNASSIGNED starts a slot over for the next player)
+        guard: "\tstatic last[33]\n\tnew id = read_data(1), tn[12]\n\tread_data(2, tn, charsmax(tn))\n\tif (id < 1 || id > MaxClients)\n\t\treturn\n\tif (tn[0] == 'U' || !tn[0])\n\t{\n\t\tlast[id] = 0\n\t\treturn\n\t}\n\tnew team = tn[0] == 'T' ? 1 : (tn[0] == 'C' ? 2 : 3)\n\tif (team == last[id])\n\t\treturn\n\tlast[id] = team",
+        values: &[("player", "id"), ("team", "team == 3 ? 0 : team")],
         tail: "",
         named: None,
     },
@@ -679,13 +688,13 @@ impl<'a> Gen<'a> {
             "player.is_role" => format!("(ls_is_role({}, {}) ? 1 : 0)", i("player", "player"), pawn_str(&name_text(self.text(n, def, "role")))),
             "game.count_role" => format!("float(ls_count_role({}))", pawn_str(&name_text(self.text(n, def, "role")))),
             "comp.in_zone" => format!("(ls_components_running() && ls_zone_inside({}, {}) ? 1 : 0)", i("zone", "entity"), i("player", "player")),
-            "creature.count" => "float(get_cvar_num(\"ls_creature_alive\"))".into(),
+            "creature.count" => "float(lsg_creatures_alive())".into(),
             "player.is_downed" => format!("(g_lsgDown[lsg_slot({})] ? 1 : 0)", i("player", "player")),
             "squad.get" => format!("float(g_lsgSquad[lsg_slot({})])", i("player", "player")),
             "squad.alive" => "float(lsg_squads_alive())".into(),
             "save.get" => format!("lsg_saved_get({}, {})", i("player", "player"), pawn_str(&name_text(self.text(n, def, "key")))),
             "clock.left" => "lsg_clock_left()".into(),
-            "comp.find" => format!("lsg_find({})", pawn_str(&name_text(self.text(n, def, "name")))),
+            "comp.find" => format!("lsg_find({})", pawn_str(&ent_name_text(self.text(n, def, "name")))),
             // graph version 3
             "logic.equal" => {
                 let t = self.v.in_type(node, "a").unwrap_or_default();
@@ -1879,12 +1888,17 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "comp.create" => {
-            let kind = pawn_str(gen.choice(n, def, "kind"));
+            // (the choices' keys are the Studio's own; two differ from gm_components' classnames)
+            let kind = pawn_str(match gen.choice(n, def, "kind") {
+                "ls_trap" => "ls_trigger_trap",
+                "ls_extraction" => "ls_extraction_zone",
+                k => k,
+            });
             let at = at_origin(gen, id, n, def);
             let keys = pawn_str(&keys_text(gen.text(n, def, "keys")));
             b.line("\tnew Float:o[3]");
             if debug {
-                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\tg_lsgOut[{i}] = ls_comp_create({kind}, o, {keys})\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map.")));
+                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\tg_lsgOut[{i}] = ls_comp_create({kind}, o, {keys})\n\t\tif (g_lsgOut[{i}])\n\t\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))\n\t\telse\n\t\t\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), err("gm_components couldn't make that component (it has no room, or the keys are wrong).")));
             } else {
                 b.line(format!("\tif (!{comps} && {at})\n\t\tg_lsgOut[{i}] = ls_comp_create({kind}, o, {keys})"));
             }
@@ -1892,12 +1906,18 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         "comp.zone_set" | "comp.zone_shrink" => {
             let z = inp("zone", "entity");
-            let at = format!("lsg_origin_of({}, o)", pawn_str(&name_text(gen.text(n, def, "at"))));
+            // the centre: an entity wired into Centre, else the one with that name, else (no name)
+            // where the zone is now
+            let at = match gen.v.data_source(id, "at_ent") {
+                Some(_) => format!("lsg_ent_origin({}, o)", gen.need(id, "at_ent", "entity")),
+                None if name_text(gen.text(n, def, "at")).is_empty() => format!("ls_zone_center({z}, o)"),
+                None => format!("lsg_origin_of({}, o)", pawn_str(&name_text(gen.text(n, def, "at")))),
+            };
             let r = inp("radius", "number");
             let call = if def.kind == "comp.zone_set" { format!("ls_zone_set({z}, o, {r})") } else { format!("ls_zone_shrink({z}, o, {r}, {})", float_lit(gen.num(n, def, "secs"))) };
             b.line("\tnew Float:o[3]");
             if debug {
-                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\t{call}\n\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), exit("done")));
+                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\t{call}\n\t{}\n\t}}", err("gm_components isn't running on this server."), err(if at.starts_with("ls_zone_center") { "That isn't a zone (wire a Shrinking zone into Zone)." } else { "No entity has that name on this map." }), exit("done")));
             } else {
                 b.line(format!("\tif (!{comps} && {at})\n\t\t{call}"));
             }
@@ -2504,7 +2524,20 @@ fn lsg_secs(v: &Option<Val>) -> String {
 const V3_HELPERS: &str = include_str!("v3_helpers.pawn");
 
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
-const HELPERS: &str = r##"stock lsg_slot(id)
+const HELPERS: &str = r##"// counted now (the brain's ls_creature_alive is only brought up to date a moment later)
+stock lsg_creatures_alive()
+{
+	new n, e = MaxClients, Float:hp
+	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
+	{
+		pev(e, pev_health, hp)
+		if (pev(e, pev_deadflag) == DEAD_NO && hp > 0.0)
+			n++
+	}
+	return n
+}
+
+stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
 
 stock bool:lsg_ok(id)
