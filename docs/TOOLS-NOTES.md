@@ -991,3 +991,4 @@ right; the message isn't mine. Tip for everyone: stage and commit in one command
   clean copy of HEAD with my commits (cargo 541 passed).
 - Ideas: re-light only (`sdHLRAD` on the last .bsp), `-estimate` time left, a "Copy the log" button, compiling while
   the game runs uses `-low` already.
+- Git slip: my notes commit a6a6838 also carried agent W2's then-uncommitted "brain interface for modes" section (the whole file was staged). Content intact; only the commit message is mine.
