@@ -731,7 +731,7 @@ pub const AREAS: &[(&str, &str)] = &[
     ("/api/setup", "setup: scan, job progress; installing or removing named add-ons asks"),
     ("/api/share", "sharing (reading only)"),
     ("/api/control", "shared control (reading only)"),
-    ("/api/tools", "Tools: maps, viewer data, editor, nav fixer, doctor, health check, replay, studios, compile, radar, demos, community, people, config"),
+    ("/api/tools", "Tools: maps, viewer data, editor, nav fixer, doctor, map simulator, replay, studios, compile, radar, demos, community, people, config"),
     ("/thumb", "map pictures"),
     ("/api/mcp", "the AI agents settings (the person's alone)"),
     ("/api/safety", "the safety net: every game file the app changed, its earlier versions, compare, put back, undo"),
