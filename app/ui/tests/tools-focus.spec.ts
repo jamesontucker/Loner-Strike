@@ -49,7 +49,8 @@ test("the one-time Focus hint sits beside the button, over nothing", async ({ pa
   for (const id of ["editor", "studio", "plugins", "creatures"]) {
     await page.goto(`/tools-dev.html?open=${id}`);
     await page.evaluate(() => localStorage.removeItem("ls.tools.focusHintSeen"));
-    await page.reload();
+    await page.waitForTimeout(300);
+    await page.goto(`/tools-dev.html?open=${id}`);
     const hint = page.locator(".tools-focus-hint");
     if (!(await hint.waitFor({ timeout: 6000 }).then(() => true, () => false))) continue;
     await page.waitForTimeout(1200);

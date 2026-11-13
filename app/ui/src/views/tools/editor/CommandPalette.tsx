@@ -112,7 +112,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           );
         })}
       </ul>
-      <p className="small-note muted">↑ ↓ to choose, Enter to run, Esc to close. Greyed out: pick something first.</p>
+      <p className="small-note muted">↑ ↓ to choose, Enter to run, Esc to close. Grayed out: pick something first.</p>
     </Sheet>
   );
 }
@@ -125,7 +125,7 @@ const FIXED: [string, string][] = [
   ["1-9 / Ctrl+1-9", "Go to / keep a camera mark (3D view)"],
   ["Tab / Enter", "Clip tool: which side stays / cut"],
   ["Shift-drag the gizmo", "Drag copies, leave the originals"],
-  ["Double-click a pane's header", "Maximise it / put it back"],
+  ["Double-click a pane's header", "Maximize it / put it back"],
   // P4: box select, prefabs and components
   ["Drag on empty space", "Box select (flat views: from anywhere but a picked brush). Right: fully inside, left: touching"],
   ["Shift / Ctrl+box", "Add to / take away from the pick"],

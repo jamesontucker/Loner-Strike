@@ -56,6 +56,23 @@ export function useDockColumns(): CSSProperties {
   return { gridTemplateColumns: `auto ${left ? `${lw}px ` : ""}minmax(0, 1fr)${right ? ` ${rw}px` : ""}` };
 }
 
+/** Folds the bottom panels to their tab strip, or opens them (remembered). */
+function FoldButton() {
+  const folded = useDock((s) => !!s.bottomFolded);
+  return (
+    <button
+      type="button"
+      className="ed-dock-more ed-dock-fold"
+      aria-expanded={!folded}
+      aria-label={folded ? "Open the bottom panels" : "Fold the bottom panels"}
+      title={folded ? "Open the bottom panels" : "Fold the bottom panels to their tabs (the views get the room)"}
+      onClick={() => useDock.getState().set({ bottomFolded: !folded })}
+    >
+      {folded ? "▴" : "▾"}
+    </button>
+  );
+}
+
 function Tabs({ area }: { area: AreaId }) {
   const a = useDock((s) => s.areas[area]);
   useEditor((s) => s.checks); // the Checks tab's count
@@ -76,14 +93,15 @@ function Tabs({ area }: { area: AreaId }) {
             aria-pressed={a.active === id}
             className={p.bad?.() ? "editor-tab-bad" : undefined}
             title="Drag to move it: along the tabs, to another side, or onto the view to float it"
-            onPointerDown={(ev) => startPanelDrag(ev, id, () => set({ areas: { ...useDock.getState().areas, [area]: { ...useDock.getState().areas[area], active: id } } }))}
-            onKeyDown={(ev) => ev.key === "Enter" && set({ areas: { ...useDock.getState().areas, [area]: { ...a, active: id } } })}
+            onPointerDown={(ev) => startPanelDrag(ev, id, () => set({ areas: { ...useDock.getState().areas, [area]: { ...useDock.getState().areas[area], active: id } }, ...(area === "bottom" ? { bottomFolded: false } : {}) }))}
+            onKeyDown={(ev) => ev.key === "Enter" && set({ areas: { ...useDock.getState().areas, [area]: { ...a, active: id } }, ...(area === "bottom" ? { bottomFolded: false } : {}) })}
           >
             {p.label?.() ?? p.title}
           </button>
         );
       })}
       <span className="push" />
+      {area === "bottom" && <FoldButton />}
       {a.active && (
         <div className="ed-dock-menu">
           <button type="button" className="ed-dock-more" aria-label="Panel options" aria-expanded={menu} title="Float, own window, move, close" onClick={() => setMenu(!menu)}>
@@ -223,16 +241,18 @@ function PanelMenu({ id, from, onDone }: { id: string; from: AreaId | "float"; o
   );
 }
 
-function Stack({ area, style }: { area: AreaId; style?: CSSProperties }) {
+function Stack({ area, style, folded }: { area: AreaId; style?: CSSProperties; folded?: boolean }) {
   const a = useDock((s) => s.areas[area]);
   if (!a.tabs.length) return null;
   const p = a.active ? panelById(a.active) : undefined;
   return (
     <div className={`ed-dock-stack ed-dock-${area}`} style={style}>
       <Tabs area={area} />
-      <div className="ed-dock-body tools-side" data-dock-body={area}>
-        {p && <PanelBoundary key={p.id} title={p.title}>{p.render()}</PanelBoundary>}
-      </div>
+      {!folded && (
+        <div className="ed-dock-body tools-side" data-dock-body={area}>
+          {p && <PanelBoundary key={p.id} title={p.title}>{p.render()}</PanelBoundary>}
+        </div>
+      )}
     </div>
   );
 }
@@ -263,14 +283,15 @@ export function DockArea({ side }: { side: "left" | "right" | "bottom" }) {
   const low = useDock((s) => s.areas.right2.tabs.length > 0);
   const split = useDock((s) => s.sizes.rightSplit);
   const bottomH = useDock((s) => s.sizes.bottom);
+  const folded = useDock((s) => !!s.bottomFolded);
   const resize = useResize(side, side === "left" ? 1 : -1);
   const box = useRef<HTMLDivElement>(null);
   if (!has) return null;
   if (side === "bottom") {
     return (
-      <div className="ed-dock-area ed-dock-bottom-area" style={{ height: bottomH }}>
-        <div className="ed-dock-edge h" onPointerDown={resize} role="separator" aria-orientation="horizontal" aria-label="Resize the bottom panels" />
-        <Stack area="bottom" />
+      <div className={`ed-dock-area ed-dock-bottom-area${folded ? " folded" : ""}`} style={folded ? undefined : { height: bottomH }}>
+        {!folded && <div className="ed-dock-edge h" onPointerDown={resize} role="separator" aria-orientation="horizontal" aria-label="Resize the bottom panels" />}
+        <Stack area="bottom" folded={folded} />
       </div>
     );
   }

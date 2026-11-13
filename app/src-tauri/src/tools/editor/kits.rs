@@ -202,7 +202,7 @@ pub fn parse(text: &str) -> Result<Kit, String> {
             || d.size.is_some_and(|s| s.iter().any(|x| !(1.0..=4096.0).contains(x)))
             || d.radius.is_some_and(|x| !(1.0..=4096.0).contains(&x))
         {
-            return Err(format!("{what}: its drawing (colour, icon, shape, size) isn't valid."));
+            return Err(format!("{what}: its draw settings (colour, icon, shape, size) aren't valid."));
         }
     }
     for c in &k.components {
@@ -513,7 +513,7 @@ pub mod tests {
             (LAST_STAND.replace("\"last_stand\"", "\"Last Stand\""), "mode id"),
             (LAST_STAND.replace("\"name\": \"wave\"", "\"name\": \"origin\""), "isn't allowed"),
             (LAST_STAND.replace("\"type\": \"area\"", "\"type\": \"blob\""), "point, area or path"),
-            (LAST_STAND.replace("#c0392b", "red"), "drawing"),
+            (LAST_STAND.replace("#c0392b", "red"), "draw settings"),
             (LAST_STAND.replace("ls_wave_spawner", "func_door"), "ls_ classname"),
             (LAST_STAND.replace("\"creature_spawn\", \"label\"", "\"lst_base\", \"label\""), "used twice"),
         ] {

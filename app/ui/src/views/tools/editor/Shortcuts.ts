@@ -21,7 +21,7 @@ export type PresetId = "loner" | "hammer" | "trenchbroom";
 export const PRESETS: { id: PresetId; label: string; tip: string }[] = [
   { id: "loner", label: "Loner-Strike", tip: "One letter per tool, Ctrl for edits" },
   { id: "hammer", label: "Hammer-style", tip: "Shift+letter tools, Ctrl+T tie, Ctrl+M transform, F9 compile, four views" },
-  { id: "trenchbroom", label: "TrenchBroom-style", tip: "Letter tools, Ctrl+I isolate, Ctrl+Space maximise" },
+  { id: "trenchbroom", label: "TrenchBroom-style", tip: "Letter tools, Ctrl+I isolate, Ctrl+Space maximize" },
 ];
 
 type Keys = Record<string, string[]>;

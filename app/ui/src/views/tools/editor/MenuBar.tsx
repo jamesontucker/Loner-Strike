@@ -1,11 +1,17 @@
-// P5: the editor's menu bar (File, Edit, View, Select, Tools, Map, Help), the layout picker,
-// and the pieces that hang off it: keys (Shortcuts.ts), the command palette, the cheat sheet,
-// the key editor and the P5 dialogs.
+// P5: the editor's one bar: the menus (File, Edit, View, Select, Map, Tools, Help) and Find a
+// command on the left, the map's name, then the layout and view pickers and the real buttons
+// (Save, Playtest, Publish) on the right; everything the old button row had is in a menu with
+// its keys (Recent files in File). Also the pieces that hang off it: keys (Shortcuts.ts), the
+// command palette, the cheat sheet, the key editor, the P5 dialogs and the first-map tour.
 
 import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../../../ui";
 import { CommandPalette, CheatSheet, KeyEditor } from "./CommandPalette";
-import { commands, fileHooks, importOther, type Command, type Menu } from "./commands";
+import { commands, fileHooks, importOther, playtestNow, publishMap, type Command, type Menu } from "./commands";
+import * as api from "./editorApi";
+import type { RecentFile } from "./editorApi";
+import { BusyLabel } from "./Panels";
+import { FirstMapTour } from "./Tour";
 import { LAYOUTS, setLayout, usePanes } from "./panes";
 import { P5Dialogs } from "./P5Dialogs";
 import { useP5 } from "./p5store";
@@ -14,13 +20,27 @@ import { selectionBounds, useEditor } from "./store";
 import "./p5.css";
 import { NAV_PRESETS, setNavPreset, useNav } from "./navigation";
 
-const MENUS: Menu[] = ["File", "Edit", "View", "Select", "Tools", "Map", "Help"];
+const MENUS: Menu[] = ["File", "Edit", "View", "Select", "Map", "Tools", "Help"];
+
+const VIEWS: { id: "3d" | "top" | "front" | "side"; label: string }[] = [
+  { id: "3d", label: "3D" },
+  { id: "top", label: "Top" },
+  { id: "front", label: "Front" },
+  { id: "side", label: "Side" },
+];
 
 export function MenuBar() {
   const [open, setOpen] = useState<Menu | null>(null);
   const bar = useRef<HTMLDivElement>(null);
   const ask = useConfirm();
   const layout = usePanes((s) => s.layout);
+  const doc = useEditor((s) => s.doc);
+  const view = useEditor((s) => s.view);
+  const fileBusy = useEditor((s) => s.fileBusy);
+  const [recent, setRecent] = useState<RecentFile[]>([]);
+  useEffect(() => {
+    if (open === "File") void api.getRecent().then((r) => !r.error && setRecent(r.files ?? []));
+  }, [open]);
   useShortcuts();
   // starting over asks first when there are unsaved changes (like the start screen's buttons)
   useEffect(() => {
@@ -31,6 +51,11 @@ export function MenuBar() {
       else await useEditor.getState().file(what);
     };
   }, [ask]);
+  const openRecent = async (f: RecentFile) => {
+    const d = useEditor.getState().doc;
+    if (d?.dirty && !(await ask(`“${d.name}” has unsaved changes. Leave them and open ${f.name}?`, { ok: "Leave them", danger: true }))) return;
+    await useEditor.getState().file(f.index);
+  };
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => !bar.current?.contains(e.target as Node) && setOpen(null);
@@ -59,12 +84,20 @@ export function MenuBar() {
             >
               {m}
             </button>
-            {open === m && <MenuList menu={m} onDone={() => setOpen(null)} />}
+            {open === m && <MenuList menu={m} onDone={() => setOpen(null)} recent={m === "File" ? recent : []} openRecent={openRecent} />}
           </div>
         ))}
         <button type="button" className="ed-menu-find" title="Find any command (Ctrl+K)" onClick={() => useP5.getState().set({ dialog: "palette", paletteText: "" })}>
-          <span aria-hidden="true">⌕</span> Find a command <kbd>{showKey(keysOf("help.palette")[0] ?? "Mod+K")}</kbd>
+          <span aria-hidden="true">⌕</span> <span className="ed-menu-find-label">Find a command</span> <kbd>{showKey(keysOf("help.palette")[0] ?? "Mod+K")}</kbd>
         </button>
+        {doc && (
+          <span className="ed-bar-name" title={doc.saved ? "Saved as a project" : "Not saved yet"}>
+            <span className="map-title">{doc.name}</span>
+            {doc.dirty && <span className="editor-dirty" aria-label="Unsaved changes" title="Unsaved changes" />}
+            <span className="tag tools-beta">Beta</span>
+          </span>
+        )}
+        <BusyLabel busy={!!fileBusy} label={fileBusy ?? ""} />
         <div className="seg ed-layouts" role="group" aria-label="Views layout">
           {LAYOUTS.map((l) => (
             <button key={l.id} type="button" aria-pressed={layout === l.id} title={`${l.tip}${keysOf(`view.layout.${l.id}`)[0] ? ` (${showKey(keysOf(`view.layout.${l.id}`)[0])})` : ""}`} onClick={() => setLayout(l.id)}>
@@ -73,14 +106,33 @@ export function MenuBar() {
             </button>
           ))}
         </div>
+        <div className="seg ed-views" role="group" aria-label="View">
+          {VIEWS.map((v) => (
+            <button key={v.id} type="button" aria-pressed={view === v.id} data-cmd={`view.${v.id}`} data-tip={`${v.label} view`} title={`${v.label} view`} onClick={() => useEditor.getState().set({ view: v.id })}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+        <span className="ed-bar-actions">
+          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.save" title="Save the project" onClick={() => void useEditor.getState().file("save")}>
+            Save
+          </button>
+          <button type="button" className="btn small primary" data-cmd="map.playtest" title="Compile it, put it in the game and play it with bots, as the Compile panel is set" onClick={() => playtestNow()}>
+            Playtest
+          </button>
+          <button type="button" className="btn small" data-cmd="map.publish" title="Make a package to share this map in Tools > Community (compile it into the game first)" onClick={() => publishMap()}>
+            Publish…
+          </button>
+        </span>
       </div>
       <NavChoice />
+      <FirstMapTour />
       <Overlays />
     </>
   );
 }
 
-function MenuList({ menu, onDone }: { menu: Menu; onDone: () => void }) {
+function MenuList({ menu, onDone, recent, openRecent }: { menu: Menu; onDone: () => void; recent: RecentFile[]; openRecent: (f: RecentFile) => void }) {
   useKeySet((s) => s.mine); // keys shown follow your changes
   const list = commands().filter((c) => c.menu === menu && !c.hidden);
   const extra: Command[] =
@@ -88,13 +140,26 @@ function MenuList({ menu, onDone }: { menu: Menu; onDone: () => void }) {
       ? [{ id: "p5.arrange", label: "Line up and spread out…", menu: "Edit", run: () => useP5.getState().set({ dialog: "transform" }), when: () => useEditor.getState().sel.brushes.length + useEditor.getState().sel.entities.length > 1 }]
       : [];
   const items = menu === "Edit" ? [...list.slice(0, list.findIndex((c) => c.id === "edit.mirrorX")), ...extra, ...list.slice(list.findIndex((c) => c.id === "edit.mirrorX"))] : list;
+  // File: the recent files (they were a list in the old button row), after Open
+  if (menu === "File" && recent.length) {
+    const at = items.findIndex((c) => c.id === "file.open") + 1;
+    const rec: Command[] = recent.slice(0, 10).map((f) => ({
+      id: `file.recent.${f.index}`,
+      label: `${f.name}${f.found ? "" : " (missing)"}`,
+      menu: "File",
+      hint: f.folder ? `In ${f.folder}` : undefined,
+      when: () => f.found,
+      run: () => openRecent(f),
+    }));
+    items.splice(at, 0, { id: "file.recent.head", label: "Recent files", menu: "File", sep: true, run: () => {}, when: () => false }, ...rec);
+  }
   return (
     <ul className="ed-menu-list" role="menu" aria-label={menu}>
       {items.map((c) => {
         const ok = !c.when || c.when();
         const k = keysOf(c.id)[0];
         return (
-          <li key={c.id} role="none" className={c.sep ? "sep" : undefined}>
+          <li key={c.id} role="none" className={[c.sep && "sep", c.id === "file.recent.head" ? "ed-menu-head" : c.id.startsWith("file.recent.") && "ed-menu-recent"].filter(Boolean).join(" ") || undefined}>
             <button
               type="button"
               role="menuitem"

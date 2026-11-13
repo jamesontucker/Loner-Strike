@@ -169,7 +169,7 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
                   className="ed-pane-mode"
                   value={modeFor(modes?.[i], views[i])}
                   aria-label={`How pane ${i + 1} draws`}
-                  title="Textured, flat colours, wireframe, or textured with the edges"
+                  title="Textured, flat colors, wireframe, or textured with the edges"
                   onChange={(e) => setPaneMode(i, e.target.value as RenderMode)}
                 >
                   {RENDER_MODES.map((m) => (
@@ -179,7 +179,7 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
                   ))}
                 </select>
                 {n > 1 && (
-                <button type="button" className="ed-pane-max" title={max === i ? "Put the panes back (Shift+Space)" : "Fill the space with this pane (Shift+Space)"} aria-label={max === i ? "Restore" : "Maximise"} onClick={() => toggleMaximise(i)}>
+                <button type="button" className="ed-pane-max" title={max === i ? "Put the panes back (Shift+Space)" : "Fill the space with this pane (Shift+Space)"} aria-label={max === i ? "Restore" : "Maximize"} onClick={() => toggleMaximise(i)}>
                   {max === i ? "▣" : "□"}
                 </button>
                 )}

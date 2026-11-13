@@ -20,6 +20,8 @@ export type DockLayout = {
   sizes: { left: number; right: number; bottom: number; rightSplit: number };
   floats: Float[];
   popped: string[];
+  /** the bottom area folded to its tab strip (the views get the room; remembered) */
+  bottomFolded?: boolean;
 };
 export type DockPresetId = "default" | "hammer" | "unreal" | "tabs";
 
@@ -73,6 +75,7 @@ function load(): DockLayout {
     // windows don't survive a reload: those panels come back as floats
     for (const id of Array.isArray(v.popped) ? v.popped : []) if (typeof id === "string" && !out.floats.some((f) => f.id === id)) out.floats.push({ id, x: 120, y: 120, w: 380, h: 520 });
     out.popped = [];
+    out.bottomFolded = v.bottomFolded === true;
     return out;
   } catch {
     return clone(DOCK_PRESETS.default.layout);
@@ -87,7 +90,7 @@ export const useDock = create<DockState>((set, get) => ({
     if (Object.keys(p).some((k) => k !== "dragging")) {
       const s = get();
       try {
-        localStorage.setItem(KEY, JSON.stringify({ areas: s.areas, sizes: s.sizes, floats: s.floats, popped: s.popped }));
+        localStorage.setItem(KEY, JSON.stringify({ areas: s.areas, sizes: s.sizes, floats: s.floats, popped: s.popped, bottomFolded: !!s.bottomFolded }));
       } catch {
         /* private window */
       }
@@ -155,7 +158,8 @@ export function showPanel(id: string) {
     return;
   }
   if (at) {
-    s.set({ areas: { ...s.areas, [at]: { ...s.areas[at], active: id } } });
+    // (a panel asked for in the folded bottom area opens it)
+    s.set({ areas: { ...s.areas, [at]: { ...s.areas[at], active: id } }, ...(at === "bottom" && s.bottomFolded ? { bottomFolded: false } : {}) });
     return;
   }
   dockTo(id, s.areas.right.tabs.length || !s.areas.left.tabs.length ? "right" : "left");

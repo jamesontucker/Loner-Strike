@@ -15,6 +15,9 @@ import { NAV_PRESETS, setNavPreset, stepSpeed } from "./navigation";
 import { applyDockPreset, DOCK_PRESETS, showPanel, type DockPresetId } from "./dockState";
 import { DOCK_PANELS } from "./dockPanels";
 import { EMPTY_SEL, selectionBounds, useEditor, type ViewId } from "./store";
+import { useNav } from "../../../store";
+import { mapNameOf } from "./ComponentPanel";
+import { startTour } from "./Tour";
 
 export type Menu = "File" | "Edit" | "View" | "Select" | "Tools" | "Map" | "Help";
 export type Command = {
@@ -70,6 +73,12 @@ export function frame(all = false) {
   const centre = min.map((x, i) => (x + max[i]) / 2) as Vec3;
   useTools.getState().look(centre, Math.max(64, ...max.map((x, i) => x - min[i])));
   frameFlat(min, max);
+}
+
+/** Tools > Community's Publish, for the map compiled from this one (P4's, moved here with the one bar). */
+export function publishMap() {
+  const d = S().doc;
+  if (d) useNav.getState().go("tools", `community:publish:${mapNameOf(d.name)}`);
 }
 
 /** Playtest from anywhere (F5, Map > Playtest, the editor bar): the Compile panel opens and starts it. */
@@ -267,7 +276,7 @@ export function commands(): Command[] {
     { id: "edit.merge", label: "Merge", menu: "Edit", when: () => selectionIds().brushes.length > 1, run: () => void S().cmd({ op: "merge", brushes: selectionIds().brushes }) },
     { id: "edit.snap", label: "Snap to grid", menu: "Edit", when: brushSel, run: () => void S().cmd({ op: "snap", brushes: selectionIds().brushes, grid: S().grid }) },
     ...[0, 1, 2].map((a): Command => ({ id: `edit.mirror${AX[a]}`, label: `Flip along ${AX[a]}`, menu: "Edit", sep: a === 0, when: hasSel, run: () => mirror(a) })),
-    ...[0, 1, 2].map((a): Command => ({ id: `edit.turn${AX[a]}`, label: `Turn 90° round ${AX[a]}`, menu: "Edit", when: hasSel, run: () => turn(a, 90) })),
+    ...[0, 1, 2].map((a): Command => ({ id: `edit.turn${AX[a]}`, label: `Turn 90° around ${AX[a]}`, menu: "Edit", when: hasSel, run: () => turn(a, 90) })),
     ...[0, 1, 2].flatMap((a): Command[] =>
       (["min", "centre", "max"] as const).map((edge) => ({
         id: `edit.align${AX[a]}${edge}`,
@@ -310,7 +319,7 @@ export function commands(): Command[] {
 
     // View
     ...LAYOUTS.map((l, i): Command => ({ id: `view.layout.${l.id}`, label: `Layout: ${l.label}`, menu: "View", hint: l.tip, run: () => setLayout(l.id), fly: true, sep: i === 0 })),
-    { id: "view.maximise", label: "Maximise the pane / put it back", menu: "View", when: () => usePanes.getState().layout !== "single", run: () => toggleMaximise(), fly: true },
+    { id: "view.maximise", label: "Maximize the pane / put it back", menu: "View", when: () => usePanes.getState().layout !== "single", run: () => toggleMaximise(), fly: true },
     ...(["3d", "top", "front", "side"] as ViewId[]).map((v, i): Command => ({ id: `view.${v}`, label: `${v === "3d" ? "3D" : v[0].toUpperCase() + v.slice(1)} view`, menu: "View", sep: i === 0, hint: "In the active pane", run: () => setView(v), fly: true })),
     { id: "view.frame", label: "Zoom to selection", menu: "View", sep: true, when: hasSel, run: () => frame(false) },
     { id: "view.frameAll", label: "Zoom to the whole map", menu: "View", run: () => frame(true) },
@@ -341,6 +350,7 @@ export function commands(): Command[] {
     { id: "map.report", label: "Entity report…", menu: "Map", run: () => S().set({ dialog: "report" }) },
     { id: "map.info", label: "Map information…", menu: "Map", hint: "Counts, textures and texture files in use", run: () => useP5.getState().set({ dialog: "info" }) },
     { id: "map.checks", label: "Check the map", menu: "Map", sep: true, run: () => openTab("checks") },
+    { id: "map.publish", label: "Publish…", menu: "Map", hint: "A package to share this map in Tools > Community (compile it into the game first)", run: publishMap },
     { id: "map.playtest", label: "Playtest", menu: "Map", hint: "Compile, put it in the game and start it with bots, as the Compile panel is set", run: playtestNow },
     { id: "map.compile", label: "Compile and play…", menu: "Map", hint: "Compile with SDHLT, show the leak line, playtest with bots", run: () => openTab("compile") },
     { id: "map.outline", label: "Outline", menu: "Map", sep: true, hint: "Everything in the map as a list", run: () => openTab("outline") },
@@ -350,6 +360,7 @@ export function commands(): Command[] {
     // Help
     { id: "help.palette", label: "Find a command…", menu: "Help", run: () => useP5.getState().set({ dialog: "palette", paletteText: "" }), fly: true },
     { id: "help.cheats", label: "Keys cheat sheet", menu: "Help", run: () => useP5.getState().set({ dialog: "cheats" }), fly: true },
+    { id: "help.tour", label: "First map tour", menu: "Help", hint: "Draw a room, hollow it, add a light and spawns, then play it: each step ticks off as you go", run: () => startTour() },
     { id: "help.keys", label: "Change keys…", menu: "Help", hint: "Hammer and TrenchBroom key sets, or your own", run: () => useP5.getState().set({ dialog: "keys" }) },
   ];
   return list;

@@ -305,3 +305,31 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .editor-vis-cols { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 .editor-vis-cols span:first-child, .editor-vis-row .editor-check { justify-self: center; }
 .editor-vis-count { text-align: right; justify-self: end; }
+/* P5: the one editor bar */
+.ed-menubar { gap: 4px 2px; }
+.ed-bar-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 120px; margin-left: 10px; overflow: hidden; }
+.ed-bar-name .map-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ed-views button { padding: 3px 9px; font-size: 12px; }
+.ed-bar-actions { display: inline-flex; gap: 4px; margin-left: 6px; }
+.ed-menu-head > button span { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.ed-menu-recent > button span { padding-left: 10px; }
+@media (max-width: 1250px) { .ed-menu-find-label { display: none; } }
+/* P5: the first-map tour: a slim strip under the bar, in the flow (never over the views) */
+.p5-tour { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12.5px; padding: 5px 10px; margin: 0; }
+.p5-tour-actions { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.p5-tour-steps { list-style: none; margin: 0; padding: 0; display: inline-flex; flex-wrap: wrap; gap: 4px 8px; }
+.p5-tour-steps li { display: inline-flex; align-items: center; gap: 4px; color: var(--bone-dim); cursor: help; }
+.p5-tour-steps li.next { color: var(--bone); font-weight: 600; }
+.p5-tour-steps li.done { color: var(--bone-dim); }
+.p5-tour-tick { display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--line); font-size: 10.5px; }
+.p5-tour-steps li.next .p5-tour-tick { border-color: var(--khaki, #c8b56a); }
+.p5-tour-steps li.done .p5-tour-tick { background: var(--khaki, #c8b56a); color: #1b1f16; border-color: transparent; }
+.p5-tour-next { flex: 1 1 260px; min-width: 0; color: var(--bone); }
+/* P5: the bottom panels folded to their tabs */
+.ed-dock-bottom-area.folded { height: auto; }
+.ed-dock-fold { margin-right: 2px; }
+/* (one row at common widths: the layout picker drops its words first, then Find's) */
+.ed-bar-name .map-title { font-size: 15px; line-height: 1.1; }
+.ed-bar-name { flex: 1 1 40px; }
+@media (max-width: 1700px) { .ed-layout-label { display: none; } }
+@media (max-width: 1450px) { .ed-menu-find-label { display: none; } }

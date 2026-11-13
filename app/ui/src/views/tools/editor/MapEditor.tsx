@@ -13,12 +13,10 @@ import { BusyLabel, deleteSelection, duplicate, hideSelection, isolateSelection,
 import { selectionIds } from "./EditorScene";
 import { Dialogs } from "./Dialogs";
 // P4: prefab library, outside changes (MCP agents), Publish
-import { mapNameOf } from "./ComponentPanel";
 import { useOutsideChanges } from "./extras";
 import { useToolCrumbs } from "../common/shell";
 import { useReportAddress } from "../common/address";
 import { useDirty } from "../../../store";
-import { useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
 // P5: menu bar + keys + palette, outliner, project files, undo history, selection size
 import { MenuBar, SelectionSize } from "./MenuBar";
@@ -26,7 +24,7 @@ import { useP5 } from "./p5store";
 import { DockArea, DockDropZones, DockFloats, useDockColumns } from "./Dock";
 import { showPanel } from "./dockState";
 import { useNav as useNavPreset } from "./navigation";
-import { importOther, playtestNow } from "./commands";
+import { importOther } from "./commands";
 import * as api from "./editorApi";
 import type { RecentFile, Recovery } from "./editorApi";
 import { EMPTY_SEL, facesOf, useEditor, type ViewId } from "./store";
@@ -37,12 +35,6 @@ import "./editor.css";
 
 type Tab = "inspect" | "outline" | "textures" | "library" | "checks" | "compile" | "project" | "history"; // P5: project, history
 
-const VIEWS: { id: ViewId; label: string; key: string }[] = [
-  { id: "3d", label: "3D", key: "Shift+1" },
-  { id: "top", label: "Top", key: "Shift+2" },
-  { id: "front", label: "Front", key: "Shift+3" },
-  { id: "side", label: "Side", key: "Shift+4" },
-];
 
 const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
 
@@ -190,8 +182,6 @@ function Start({ onPick, busy, error, open }: { onPick: (w: Pick) => void; busy:
 
 function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
   const doc = useEditor((s) => s.doc)!;
-  const view = useEditor((s) => s.view);
-  const fileBusy = useEditor((s) => s.fileBusy);
   const working = useEditor((s) => s.working);
   // P5: panels live in the dock (dockPanels.tsx); a tab request shows that panel wherever it is
   const setTab = (t: Tab) => {
@@ -213,70 +203,12 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
     if (arg === "prefabs" || arg === "components") setTab("library");
     else if (arg === "compile" || arg === "checks") setTab(arg);
   }, [arg]);
-  const [recent, setRecent] = useState<RecentFile[]>([]);
-  useEffect(() => {
-    void api.getRecent().then((r) => !r.error && setRecent(r.files ?? []));
-  }, [doc.docId, doc.saved]);
-
-  const s = useEditor.getState();
 
   return (
     <div className="tools-page editor-page">
       <MenuBar /> {/* P5 */}
-      <div className="tools-bar editor-bar">
-        <span className="map-title" title={doc.saved ? "Saved as a project" : "Not saved yet"}>
-          {doc.name}
-          {doc.dirty && <span className="editor-dirty" aria-label="Unsaved changes" title="Unsaved changes" />}
-        </span>
-        <span className="tag tools-beta">Beta</span>
-        <div className="editor-files">
-          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.new" title="Start a new map" onClick={() => void replace("new")}>New</button>
-          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.open" title="Open a map project" onClick={() => void replace("open")}>Open</button>
-          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.import" title="Import a .map file" onClick={() => void replace("import")}>Import .map</button>
-          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.save" title="Save the project" onClick={() => void s.file("save")}>Save</button>
-          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.saveAs" title="Save the project as a new file" onClick={() => void s.file("saveAs")}>Save as</button>
-          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.export" title="Write a .map file for a map compiler" onClick={() => void s.file("export")}>Export .map</button>
-          {recent.length > 0 && (
-            <select
-              className="editor-recent-select"
-              value=""
-              disabled={!!fileBusy}
-              aria-label="Open a recent file"
-              onChange={(e) => e.target.value !== "" && void replace(Number(e.target.value))}
-            >
-              <option value="">Recent…</option>
-              {recent.map((f) => (
-                <option key={f.index} value={f.index} disabled={!f.found}>
-                  {f.name}
-                  {f.found ? "" : " (missing)"}
-                </option>
-              ))}
-            </select>
-          )}
-          <button type="button" className="btn small" data-cmd="file.props" title="Sky, WADs, sun and rules" onClick={() => s.set({ dialog: "props" })}>Map properties</button>
-          {/* P5: the bar's main action: compile, put it in the game, play it (F5) */}
-          <button type="button" className="btn small primary" data-cmd="map.playtest" title="Compile it, put it in the game and play it with bots, as the Compile panel is set" onClick={() => playtestNow()}>
-            Playtest
-          </button>
-          {/* P4: Tools > Community's Publish, for the map compiled from this one */}
-          <button type="button" className="btn small" title="Make a package to share this map in Tools > Community (compile it into the game first)" onClick={() => useNav.getState().go("tools", `community:publish:${mapNameOf(doc.name)}`)}>Publish…</button>
-          <BusyLabel busy={!!fileBusy} label={fileBusy ?? ""} />
-        </div>
-        <span className="push" />
-        <button type="button" className="btn small" disabled={!doc.undo} data-cmd="edit.undo" title={doc.undo ? `Undo ${doc.undo}` : "Nothing to undo"} onClick={() => void s.undo()}>
-          Undo
-        </button>
-        <button type="button" className="btn small" disabled={!doc.redo} data-cmd="edit.redo" title={doc.redo ? `Redo ${doc.redo}` : "Nothing to redo"} onClick={() => void s.redo()}>
-          Redo
-        </button>
-        <div className="seg" role="group" aria-label="View">
-          {VIEWS.map((v) => (
-            <button key={v.id} type="button" aria-pressed={view === v.id} data-cmd={`view.${v.id}`} data-tip={`${v.label} view`} title={`${v.label} view (${v.key})`} onClick={() => s.set({ view: v.id })}>
-              {v.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* (P5: the old button row (New, Open, Import .map, Save, Save as, Export .map, Recent, Map
+          properties, Playtest, Publish, Undo, Redo, the views) is in the one bar now: MenuBar.tsx) */}
       <div className="editor-main" style={dockCols}>
         <Toolbar />
         <DockArea side="left" />
