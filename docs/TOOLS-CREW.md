@@ -95,3 +95,8 @@ the file right before appending). Shared files: one-line additions only.
 - **H: texture & model browser** (WAD textures, MDL models in 3D, GameBanana browse + import, own files).
 - Queued: crosshair & config builder, demo manager (list/play via the game's +playdemo; later parse
   .dem into the 3D replay), bot personality editor, game mode lab (surf/deathrun lab + no-code designer).
+
+## Committing (required, 2026-11-12)
+Many agents share one staging area. Never run a bare `git commit`. Always commit with paths:
+`git commit <your paths> -m "..."` (this commits only those paths, whatever else is staged) and never
+`git add` other people's files. Before committing, check `git diff --cached --stat` shows only yours.
