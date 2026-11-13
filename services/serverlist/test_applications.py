@@ -324,9 +324,9 @@ class Setup(unittest.TestCase):
 
 
 class Store(unittest.TestCase):
-    def test_migration_3(self):
+    def test_migrated_to_newest(self):
         s = cm.Store(os.path.join(tempfile.mkdtemp(), "c.db"))
-        self.assertEqual(s.db.execute("PRAGMA user_version").fetchone()[0], 3)
+        self.assertEqual(s.db.execute("PRAGMA user_version").fetchone()[0], len(cm.MIGRATIONS))
         i = s.add_application(user_id="1", role_key="playtester", state="pending", why="because")
         self.assertEqual(s.application(i)["state"], "pending")
 
