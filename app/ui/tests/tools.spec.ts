@@ -11,7 +11,7 @@ const NAV_MAP = process.env.LS_TOOLS_NAV_MAP || "cs_rats2";
 // every tool in the registry, plus the ones that take a map
 const registry = readFileSync(fileURLToPath(new URL("../src/views/tools/registry.tsx", import.meta.url)), "utf8");
 const ids = [...registry.matchAll(/^\s*\{ id: "([a-z0-9]+)"/gm)].map((m) => m[1]);
-const pages = [...new Set(["overview", ...ids, `map:${MAP}`, `doctor:${MAP}`, `navfix:${NAV_MAP}`, `callouts:${NAV_MAP}`])];
+const pages = [...new Set(["overview", ...ids, `map:${MAP}`, `doctor:${MAP}`, `navfix:${NAV_MAP}`, `callouts:${NAV_MAP}`, `radar:${MAP}`])];
 
 /** Console noise that isn't ours to fix here. */
 const IGNORED = [/status of 404/, /Download the React DevTools/, /GPU stall due to ReadPixels/, /WebGL: too many errors/];
@@ -73,7 +73,7 @@ test("the crumbs and Back step out of a map and back to the start", async ({ pag
   await page.screenshot({ path: info.outputPath("crumbs-doctor-map.png") });
   // the tool's name: its start page (the map list), in one click
   await crumbs.getByRole("button", { name: "Map doctor" }).click();
-  await expect(page.getByPlaceholder("Pick a map to check")).toBeVisible();
+  await expect(page.getByText("Pick a map to check", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/open=doctor(&|$)/);
   // Back: the map again (the browser's history, like the mouse's back button)
   await crumbs.getByRole("button", { name: "Back" }).click();
@@ -81,11 +81,11 @@ test("the crumbs and Back step out of a map and back to the start", async ({ pag
   // Forward with Alt+→, then Tools: the overview
   await page.locator("body").click({ position: { x: 5, y: 5 } });
   await page.keyboard.press("Alt+ArrowRight");
-  await expect(page.getByPlaceholder("Pick a map to check")).toBeVisible();
+  await expect(page.getByText("Pick a map to check", { exact: true })).toBeVisible();
   await crumbs.getByRole("button", { name: "Tools" }).click();
   await expect(page.locator(".tools-cards").first()).toBeVisible();
   await page.goBack();
-  await expect(page.getByPlaceholder("Pick a map to check")).toBeVisible();
+  await expect(page.getByText("Pick a map to check", { exact: true })).toBeVisible();
 });
 
 test("focus mode: the tool fills the window, the key and the pill bring the app back", async ({ page }, info) => {
@@ -234,5 +234,70 @@ test("Creature Studio: a type's form, the preview drawn as the game would, the p
   await page.screenshot({ path: info.outputPath("creatures-waves.png"), fullPage: true });
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(over).toBeLessThanOrEqual(1);
+  expect(problems).toEqual([]);
+});
+
+// P9: the four map workspaces (radar maker, callouts, map doctor, nav fixer). Nothing is saved.
+test("map workspaces: radar compare and zoom, callouts paint and undo, doctor checklist, nav fixer reach", async ({ page }, info) => {
+  const problems: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error" && !IGNORED.some((r) => r.test(m.text()))) problems.push(`console: ${m.text()}`);
+  });
+  page.on("pageerror", (e) => problems.push(`crash: ${e.message}`));
+  const open = async (address: string) => {
+    await page.goto(`/tools-dev.html?open=${encodeURIComponent(address)}`);
+    await settle(page);
+  };
+
+  // start page: the map browser, with search
+  await open("radar");
+  await expect(page.locator(".tl-actionbar")).toHaveCount(0);
+  await page.getByRole("searchbox").first().fill(MAP);
+  await page.screenshot({ path: info.outputPath("radar-start.png") });
+
+  // radar: the picture, the save bar's Install, side by side when there's an overview, zoom
+  await open(`radar:${MAP}`);
+  await expect(page.locator(".ov-pane img").first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(".tl-actionbar").getByRole("button", { name: /Install/ })).toBeVisible();
+  const split = page.getByRole("button", { name: "Side by side" });
+  if (await split.count()) {
+    await split.click();
+    await expect(page.locator(".ov-pane")).toHaveCount(2);
+  }
+  await page.keyboard.press("+");
+  await expect(page.locator(".ov-pz.zoomed").first()).toBeVisible();
+  await page.keyboard.press("0");
+  await page.screenshot({ path: info.outputPath("radar-map.png") });
+
+  // callouts: paint a name with the brush, the bar says unsaved, Undo takes it back
+  await open(`callouts:${NAV_MAP}`);
+  await page.keyboard.press("p");
+  await expect(page.getByRole("button", { name: "Paint", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByLabel("Place name").fill("TestPaint");
+  const box = (await page.locator(".co-canvas canvas").boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.5, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.locator(".tl-actionbar")).toContainText("Unsaved changes");
+  await page.screenshot({ path: info.outputPath("callouts-paint.png") });
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.locator(".tl-actionbar")).not.toContainText("Unsaved changes");
+
+  // doctor: the verdict, groups, all checks
+  await open(`doctor:${MAP}`);
+  await expect(page.locator(".doc-verdict")).toBeVisible();
+  const all = page.getByRole("button", { name: "All checks" });
+  if (await all.count()) await all.click();
+  expect(await page.locator(".doc-group").count()).toBeGreaterThanOrEqual(4);
+  await page.screenshot({ path: info.outputPath("doctor-checklist.png") });
+
+  // nav fixer: the reach check counts add up to the areas, a kind can be shown
+  await open(`navfix:${NAV_MAP}`);
+  await expect(page.locator(".navfix-reach-row").first()).toBeVisible({ timeout: 30_000 });
+  const row = page.locator(".navfix-reach-row:not([disabled])").nth(1);
+  if (await row.count()) await row.click();
+  await page.screenshot({ path: info.outputPath("navfix-reach.png") });
+
   expect(problems).toEqual([]);
 });
