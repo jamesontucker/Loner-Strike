@@ -35,6 +35,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
+pub mod prefabs;
+
 const INTERNAL: &str = "Loner-Strike hit an internal error in the map editor. Try again, and copy the diagnostics from Settings if it keeps happening.";
 const NO_DOC: &str = "No map is open in the editor. Start a new map or open one.";
 const NOT_UNDERSTOOD: &str = "That edit wasn't understood.";
@@ -339,6 +341,7 @@ fn doc_json(s: &Session) -> Value {
     }
     let mut v = s.state();
     v["world"] = json!({"wads": d.world.wads, "keys": d.world.keys});
+    v["editor"] = settings_json(d);
     v["brushes"] = Value::Array(brushes);
     v["entities"] = Value::Array(entities);
     v["groups"] = Value::Array(groups);
@@ -514,6 +517,19 @@ enum Cmd {
     Group { name: String, #[serde(default)] brushes: Vec<u64>, #[serde(default)] entities: Vec<u64> },
     Ungroup { group: u64 },
     GroupFlags { group: u64, hidden: Option<bool>, locked: Option<bool> },
+    /// a prefab from the library dropped at `point` on a surface facing `normal`
+    PlacePrefab {
+        prefab: String,
+        point: P3,
+        #[serde(default = "up")] normal: P3,
+        #[serde(default)] grid: f64,
+        /// filled in by api_cmd from the library before the session is locked
+        #[serde(skip)] loaded: Option<Box<(MapDocument, crate::editor::prefab::PrefabMeta)>>,
+    },
+}
+
+fn up() -> P3 {
+    [0.0, 0.0, 1.0]
 }
 
 fn yes() -> bool {
@@ -1020,6 +1036,16 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             tx.set_group(GroupId(group), g);
             tx.commit(h);
         }
+        Cmd::PlacePrefab { point, normal, grid, loaded, .. } => {
+            let (frag, meta) = *loaded.ok_or("That prefab isn't there any more.")?;
+            let n = v3(normal[0], normal[1], normal[2]);
+            let grid = num(grid, 0.0, 1024.0, "grid")?;
+            let off = crate::editor::prefab::placement(&crate::editor::prefab::bounds(&frag), p3(point)?, n, grid);
+            p3([off.x, off.y, off.z])?;
+            let (out, _) = history::cmd_place_prefab(d, h, &frag, off, &meta.name, &meta.wads)?;
+            created = (out.brushes.iter().map(|i| i.0).collect(), out.entities.iter().map(|i| i.0).collect());
+            note = Some(format!("Placed {}.", meta.name));
+        }
     }
     Ok(json!({"created": {"brushes": created.0, "entities": created.1}, "note": note}))
 }
@@ -1104,6 +1130,9 @@ enum Pick {
     Import,
     SaveProject,
     ExportMap,
+    ExportPrefab,
+    ImportPrefab,
+    Fgd,
 }
 
 /// The system file dialog; None when cancelled.
@@ -1116,6 +1145,9 @@ fn dialog(st: &Shared, kind: Pick, name: &str) -> Result<Option<PathBuf>, String
         Pick::Import => d.set_title("Import a .map file").add_filter("GoldSrc map source", &["map"]).blocking_pick_file(),
         Pick::SaveProject => d.set_title("Save the map project").set_file_name(format!("{name}.{PROJECT_EXT}")).add_filter("Loner-Strike map project", &[PROJECT_EXT]).blocking_save_file(),
         Pick::ExportMap => d.set_title("Export a .map file").set_file_name(format!("{name}.map")).add_filter("GoldSrc map source", &["map"]).blocking_save_file(),
+        Pick::ExportPrefab => d.set_title("Save the prefab package").set_file_name(format!("{name}.zip")).add_filter("Prefab package", &["zip"]).blocking_save_file(),
+        Pick::ImportPrefab => d.set_title("Add a prefab").add_filter("Prefab package or .map", &["zip", "rar", "7z", "map"]).blocking_pick_file(),
+        Pick::Fgd => d.set_title("Choose an entity definition file").add_filter("Entity definitions (FGD)", &["fgd"]).blocking_pick_file(),
     };
     match picked {
         None => Ok(None),
@@ -1255,12 +1287,15 @@ async fn api_cmd(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: Head
     if !crate::panel_api::from_panel(&h) {
         return forbidden();
     }
-    let cmd: Cmd = match serde_json::from_value(body) {
+    let mut cmd: Cmd = match serde_json::from_value(body) {
         Ok(c) => c,
         Err(_) => return bad(NOT_UNDERSTOOD),
     };
     let dirs = wad_dirs(&st);
     blocking(move || {
+        if let Cmd::PlacePrefab { prefab, loaded, .. } = &mut cmd {
+            *loaded = Some(Box::new(prefabs::load(&prefabs::lib_dir(&ed.dir), prefab)?));
+        }
         let mut g = ed.lock();
         let s = g.as_mut().ok_or(NO_DOC)?;
         Ok(apply(s, cmd, &dirs))
@@ -1505,12 +1540,209 @@ async fn api_copy(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Json<Co
     .await
 }
 
-/// The entity definitions for the inspector (our Counter-Strike FGD).
-async fn api_fgd() -> Response {
-    static PARSED: OnceLock<Result<Value, String>> = OnceLock::new();
-    match PARSED.get_or_init(|| fgd::parse(&fgd::shipped()).map(|c| json!({"source": "Loner-Strike entity definitions", "classes": c}))) {
-        Ok(v) => ([(header::CACHE_CONTROL, "max-age=3600")], Json(v.clone())).into_response(),
-        Err(e) => fail(e.clone()),
+/// The entity definitions for the inspector: ours (Counter-Strike plus the mode components),
+/// then the map's own FGD file on top when it has one (its classes replace ours by name).
+async fn api_fgd(Extension(ed): Extension<Ed>) -> Response {
+    static PARSED: OnceLock<Result<Vec<fgd::Class>, String>> = OnceLock::new();
+    let ours = match PARSED.get_or_init(|| fgd::parse(&fgd::shipped())) {
+        Ok(c) => c.clone(),
+        Err(e) => return fail(e.clone()),
+    };
+    let custom = ed.lock().as_ref().and_then(|s| s.doc.editor.fgd.clone());
+    blocking(move || {
+        let Some(path) = custom else {
+            return Ok(json!({"source": "Loner-Strike entity definitions", "classes": ours}));
+        };
+        let file = Path::new(&path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let own = read_text(Path::new(&path)).and_then(|t| fgd::parse(&t));
+        match own {
+            Ok(mine) => {
+                let names: HashSet<String> = mine.iter().map(|c| c.name.to_ascii_lowercase()).collect();
+                let mut all: Vec<fgd::Class> = ours.into_iter().filter(|c| !names.contains(&c.name.to_ascii_lowercase())).collect();
+                all.extend(mine);
+                all.sort_by(|a, b| a.name.cmp(&b.name));
+                Ok(json!({"source": format!("Loner-Strike entity definitions + {file}"), "custom": {"file": file, "path": path}, "classes": all}))
+            }
+            Err(e) => Ok(json!({"source": "Loner-Strike entity definitions", "custom": {"file": file, "path": path, "error": e}, "classes": ours})),
+        }
+    })
+    .await
+}
+
+fn settings_json(d: &MapDocument) -> Value {
+    let e = &d.editor;
+    json!({
+        "fgd": e.fgd.as_deref().map(|p| Path::new(p).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()),
+        "visSets": e.vis_sets.iter().map(|v| json!({"name": v.name, "brushes": v.brushes.iter().map(|b| b.0).collect::<Vec<_>>(), "entities": v.entities.iter().map(|x| x.0).collect::<Vec<_>>()})).collect::<Vec<_>>(),
+        "cordon": {"boxes": e.cordon.boxes, "on": e.cordon.on, "seal": if e.cordon.seal == "black" { "black" } else { "sky" }, "keepLights": e.cordon.keep_lights},
+    })
+}
+
+/// Where the document is (cheap): the page polls this to pick up changes made from outside
+/// (AI agents over MCP, another window).
+async fn api_state(Extension(ed): Extension<Ed>) -> Response {
+    blocking(move || {
+        let g = ed.lock();
+        let s = g.as_ref().ok_or(NO_DOC)?;
+        Ok(s.state())
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VisReq {
+    name: String,
+    #[serde(default)]
+    brushes: Vec<u64>,
+    #[serde(default)]
+    entities: Vec<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CordonReq {
+    #[serde(default)]
+    boxes: Vec<crate::editor::doc::CordonBox>,
+    #[serde(default)]
+    on: bool,
+    #[serde(default)]
+    seal: String,
+    #[serde(default)]
+    keep_lights: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SettingsReq {
+    vis_sets: Option<Vec<VisReq>>,
+    cordon: Option<CordonReq>,
+}
+
+/// The editor's settings kept in the project (visibility sets, the cordon). Not undoable;
+/// the project counts as changed.
+async fn api_settings(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Json<SettingsReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || {
+        let mut g = ed.lock();
+        let s = g.as_mut().ok_or(NO_DOC)?;
+        let mut next = s.doc.editor.clone();
+        if let Some(v) = req.vis_sets {
+            if v.len() > 200 || v.iter().any(|x| x.brushes.len() + x.entities.len() > 200_000) {
+                return Err("That's too many visibility sets.".into());
+            }
+            next.vis_sets = v
+                .into_iter()
+                .map(|x| crate::editor::doc::VisSet { name: crate::editor::prefab::clean_text(&x.name, 64), brushes: bids(&x.brushes), entities: eids(&x.entities) })
+                .filter(|x| !x.name.is_empty())
+                .collect();
+        }
+        if let Some(c) = req.cordon {
+            if c.boxes.len() > 32 {
+                return Err("Use at most 32 cordon boxes.".into());
+            }
+            for b in &c.boxes {
+                let ok = (0..3).all(|i| b.min[i].is_finite() && b.max[i].is_finite() && b.min[i].abs() <= BIG && b.max[i].abs() <= BIG && b.max[i] - b.min[i] >= 16.0);
+                if !ok {
+                    return Err("A cordon box is too small or too far out.".into());
+                }
+            }
+            next.cordon = crate::editor::doc::CordonSettings { boxes: c.boxes, on: c.on, seal: if c.seal == "black" { "black".into() } else { String::new() }, keep_lights: c.keep_lights };
+        }
+        if next != s.doc.editor {
+            s.doc.editor = next;
+            s.history.mark_unsaved();
+        }
+        let mut v = s.state();
+        v["editor"] = settings_json(&s.doc);
+        Ok(v)
+    })
+    .await
+}
+
+/// Choose the map's own FGD file (read on top of ours); kept in the project.
+async fn api_fgd_pick(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || {
+        if ed.lock().is_none() {
+            return Err(NO_DOC.into());
+        }
+        let Some(path) = dialog(&st, Pick::Fgd, "")? else { return Ok(json!({"cancelled": true})) };
+        // read it now so a broken file is said at once
+        let n = fgd::parse(&read_text(&path)?).map_err(|e| format!("That FGD file couldn't be read: {e}"))?.len();
+        let mut g = ed.lock();
+        let s = g.as_mut().ok_or(NO_DOC)?;
+        s.doc.editor.fgd = Some(path.to_string_lossy().to_string());
+        s.history.mark_unsaved();
+        let mut v = s.state();
+        v["editor"] = settings_json(&s.doc);
+        v["classes"] = json!(n);
+        Ok(v)
+    })
+    .await
+}
+
+async fn api_fgd_clear(Extension(ed): Extension<Ed>, h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || {
+        let mut g = ed.lock();
+        let s = g.as_mut().ok_or(NO_DOC)?;
+        if s.doc.editor.fgd.take().is_some() {
+            s.history.mark_unsaved();
+        }
+        let mut v = s.state();
+        v["editor"] = settings_json(&s.doc);
+        Ok(v)
+    })
+    .await
+}
+
+/// A game path an entity key names ("ambience/wind1.wav", "models/can.mdl"): relative, plain parts.
+fn game_rel(p: &str, ext: &[&str]) -> Option<String> {
+    let p = p.trim().trim_start_matches(['!', '*']).replace('\\', "/");
+    let low = p.to_ascii_lowercase();
+    let ok = !p.is_empty() && p.len() <= 200 && !p.starts_with('/') && !p.contains(':') && p.split('/').all(|x| !x.is_empty() && x != "." && x != "..") && ext.iter().any(|e| low.ends_with(e));
+    ok.then_some(p)
+}
+
+#[derive(Deserialize)]
+struct SoundQ {
+    path: String,
+}
+
+/// A sound an entity plays (ambient_generic's `message`, a button's sound), for the
+/// inspector's play button: looked for under sound/ in the game's folders.
+async fn api_sound(State(st): State<Shared>, h: HeaderMap, Query(q): Query<SoundQ>) -> Response {
+    let nf = || (StatusCode::NOT_FOUND, Json(json!({"error": "That sound isn't in the game's folders."}))).into_response();
+    let Some(rel) = game_rel(&q.path, &[".wav", ".mp3"]) else { return nf() };
+    let rel = if rel.to_ascii_lowercase().starts_with("sound/") { rel } else { format!("sound/{rel}") };
+    let dirs: Vec<PathBuf> = st.local_game().map(|g| ["cstrike", "cstrike_downloads", "czero", "valve"].iter().map(|f| g.hl.join(f)).collect()).unwrap_or_default();
+    let found = tokio::task::spawn_blocking(move || {
+        let finder = crate::mapcopy::Finder::default();
+        dirs.iter().find_map(|d| finder.find(d, &rel)).and_then(|p| std::fs::read(&p).ok().filter(|b| b.len() <= 32 << 20).map(|b| (p, b)))
+    })
+    .await
+    .ok()
+    .flatten();
+    let Some((p, data)) = found else { return nf() };
+    let ctype = if p.to_string_lossy().to_ascii_lowercase().ends_with(".mp3") { "audio/mpeg" } else { "audio/wav" };
+    let len = data.len();
+    // WebKit plays audio only from servers that answer byte ranges
+    let range = h.get(header::RANGE).and_then(|v| v.to_str().ok()).and_then(|r| crate::sounds::parse_range(r, len));
+    match range {
+        Some((a, b)) => (
+            StatusCode::PARTIAL_CONTENT,
+            [(header::CONTENT_TYPE, ctype.to_string()), (header::ACCEPT_RANGES, "bytes".into()), (header::CONTENT_RANGE, format!("bytes {a}-{b}/{len}"))],
+            data[a..=b].to_vec(),
+        )
+            .into_response(),
+        None => ([(header::CONTENT_TYPE, ctype.to_string()), (header::ACCEPT_RANGES, "bytes".into())], data).into_response(),
     }
 }
 
@@ -1620,6 +1852,12 @@ fn routes_with(ed: Ed) -> Router<Shared> {
         .route("/api/tools/editor/recovery", get(api_recovery))
         .route("/api/tools/editor/recover", post(api_recover))
         .route("/api/tools/editor/discard-recovery", post(api_discard_recovery))
+        .route("/api/tools/editor/state", get(api_state))
+        .route("/api/tools/editor/settings", post(api_settings))
+        .route("/api/tools/editor/fgd/pick", post(api_fgd_pick))
+        .route("/api/tools/editor/fgd/clear", post(api_fgd_clear))
+        .route("/api/tools/editor/sound", get(api_sound))
+        .merge(prefabs::routes())
         .layer(Extension(ed))
 }
 
@@ -1722,6 +1960,65 @@ mod tests {
         let l = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.unwrap();
         println!("editor routes on http://127.0.0.1:{port}");
         axum::serve(l, app).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn prefabs_settings_and_state_routes() {
+        let t = T::new();
+        t.post("/api/tools/editor/new", json!({})).await;
+        let st = t.get("/api/tools/editor/state").await;
+        let rev0 = st["revision"].as_u64().unwrap();
+        // the library lists the starter prefabs
+        let l = t.get("/api/tools/editor/prefabs").await;
+        assert!(l["prefabs"].as_array().unwrap().iter().any(|p| p["id"] == "builtin:stairs"));
+        let (code, png) = t.raw("GET", "/api/tools/editor/prefab/builtin~stairs/thumb.png", None, false).await;
+        assert_eq!(code, StatusCode::OK);
+        assert!(png.starts_with(&[0x89, b'P']));
+        // place one on the floor: one step, grouped, picked up by the state poll
+        let r = t.cmd(json!({"op": "place_prefab", "prefab": "builtin:stairs", "point": [100, 37, 0], "normal": [0, 0, 1], "grid": 16})).await;
+        assert!(r["error"].is_null(), "{r}");
+        assert_eq!(r["created"]["brushes"].as_array().unwrap().len(), 8);
+        assert_eq!(r["note"], "Placed Stairs.");
+        let st = t.get("/api/tools/editor/state").await;
+        assert!(st["revision"].as_u64().unwrap() > rev0);
+        assert_eq!(st["undo"], "Place prefab");
+        let doc = t.get("/api/tools/editor/doc").await;
+        assert!(doc["groups"].as_array().unwrap().iter().any(|g| g["name"] == "Stairs"));
+        assert!(t.cmd(json!({"op": "place_prefab", "prefab": "mine:nope", "point": [0, 0, 0]})).await["error"].is_string());
+        // save the placed pieces as my own prefab, then place that
+        let ids: Vec<u64> = r["created"]["brushes"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+        let saved = t.post("/api/tools/editor/prefabs/save", json!({"name": "My stairs", "tags": ["stairs"], "brushes": ids})).await;
+        assert_eq!(saved["id"], "mine:my_stairs", "{saved}");
+        assert!(t.post("/api/tools/editor/prefabs/save", json!({"name": " ", "brushes": ids})).await["error"].is_string());
+        assert!(t.post("/api/tools/editor/prefabs/save", json!({"name": "x", "brushes": ids, "thumb": "data:image/png;base64,AAAA"})).await["error"].is_string());
+        let r2 = t.cmd(json!({"op": "place_prefab", "prefab": "mine:my_stairs", "point": [-200, 0, 0]})).await;
+        assert_eq!(r2["created"]["brushes"].as_array().unwrap().len(), 8);
+        assert!(t.post("/api/tools/editor/prefabs/edit", json!({"id": "mine:my_stairs", "name": "Steps", "tags": ["a", "b"]})).await["ok"] == json!(true));
+        assert!(t.post("/api/tools/editor/prefabs/edit", json!({"id": "builtin:stairs", "name": "x"})).await["error"].is_string());
+        assert!(t.post("/api/tools/editor/prefabs/delete", json!({"id": "builtin:stairs"})).await["error"].is_string());
+        assert_eq!(t.post("/api/tools/editor/prefabs/delete", json!({"id": "mine:my_stairs"})).await["ok"], true);
+        // settings kept in the project: visibility sets and the cordon
+        let v = t.post("/api/tools/editor/settings", json!({"visSets": [{"name": "Stairs", "brushes": ids}], "cordon": {"boxes": [{"min": [0, 0, 0], "max": [256, 256, 128]}], "on": true, "seal": "black", "keepLights": true}})).await;
+        assert_eq!(v["dirty"], true);
+        assert_eq!(v["editor"]["cordon"]["seal"], "black");
+        assert!(t.post("/api/tools/editor/settings", json!({"cordon": {"boxes": [{"min": [0, 0, 0], "max": [4, 256, 128]}]}})).await["error"].is_string());
+        let doc = t.get("/api/tools/editor/doc").await;
+        assert_eq!(doc["editor"]["visSets"][0]["brushes"].as_array().unwrap().len(), 8);
+        {
+            let g = t.ed.lock();
+            let d = &g.as_ref().unwrap().doc;
+            let back = MapDocument::from_json(&d.to_json()).unwrap();
+            assert_eq!(back.editor.cordon.boxes.len(), 1);
+            assert!(back.editor.cordon.keep_lights);
+        }
+        // sounds: only plain game paths
+        assert_eq!(game_rel("ambience/wind1.wav", &[".wav"]).as_deref(), Some("ambience/wind1.wav"));
+        assert_eq!(game_rel("!ambience\\x.wav", &[".wav"]).as_deref(), Some("ambience/x.wav"));
+        assert!(game_rel("../x.wav", &[".wav"]).is_none() && game_rel("/etc/x.wav", &[".wav"]).is_none() && game_rel("c:/x.wav", &[".wav"]).is_none() && game_rel("x.exe", &[".wav"]).is_none());
+        let (code, _) = t.raw("GET", "/api/tools/editor/sound?path=..%2Fx.wav", None, false).await;
+        assert_eq!(code, StatusCode::NOT_FOUND);
+        // the FGD answers without a custom file
+        assert!(t.get("/api/tools/editor/fgd").await["classes"].as_array().unwrap().len() > 50);
     }
 
     #[tokio::test]
