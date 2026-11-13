@@ -164,14 +164,24 @@ class Applications:
             raise cm.Reject(404, "That application is gone.")
         return a
 
+    def may_grant(self, actor, rid):
+        """Only the owner, or someone who has the role themselves, may give it (or take it back):
+        a Dev or G-Man can't make someone a Moderator unless they are one."""
+        return actor["id"] == self.mod.owner or (rid is not None and rid in actor.get("roles", set()))
+
     def decide(self, action, app_id, d, actor):
         """Approve / Deny (form) / Undo on a card. Returns the interaction answer."""
         a = self._app(app_id)
+        if actor["id"] == a["user_id"] and actor["id"] != self.mod.owner:
+            raise cm.Reject(403, "You can't decide on your own application; someone else on the team will.")
         if action in ("appok", "appno", "appnom") and a["state"] != "pending":
             raise cm.Reject(409, f"Already {a['state']} by {a['decider_name'] or 'someone'}.")
         name = NAMES.get(a["role_key"], a["role_key"])
-        if action == "appok":
+        if action in ("appok", "appundo"):
             rid = self.role_id(a["role_key"])
+            if rid and not self.may_grant(actor, rid):
+                raise cm.Reject(403, f"Only someone who has the {name} role (or the owner) can give it or take it back.")
+        if action == "appok":
             if not rid:
                 self.c.store.update_application(app_id, note=f"There's no role called {name} in the server. Make it (or rename one), then press Approve again.")
                 return {"type": 7, "data": self.card(app_id)}
@@ -213,7 +223,6 @@ class Applications:
             if a["state"] == "pending":
                 raise cm.Reject(409, "Nothing to undo.")
             if a["state"] == "approved":
-                rid = self.role_id(a["role_key"])
                 code, _ = self.bot.api("DELETE", f"/guilds/{self.mod.guild}/members/{a['user_id']}/roles/{rid}",
                                        reason=f"Application #{app_id}: approval undone by {actor['name']}") if rid else (0, {})
                 if code not in (200, 204):

@@ -227,7 +227,10 @@ button ids, done-once handling, audit lines and Undo as the mod cards.
 - **Private #🛂・applications** (Moderator, Dev, G-Man and the bot): a card per application (who,
   account age, when they joined, why, links; text escaped and capped, mentions off) with
   **[Approve] [Deny]**. Only Moderator, Dev, G-Man (`DISCORD_APPLY_ROLES`) or the owner may press
-  them; anyone else gets "You can't do that." Approve gives that one role (roles are found by name,
+  them; anyone else gets "You can't do that." Nobody decides on their own application (the owner
+  excepted), and a role can only be given or taken back (Approve, Undo) by the owner or someone who
+  has that role themselves: a Dev or G-Man can't make someone a Moderator unless they are one, and
+  earned roles (Surf Legend...) need the owner or a holder. Approve gives that one role (roles are found by name,
   emoji and punctuation ignored). Deny asks for an optional reason and tells the applicant by DM if
   their DMs are open (the card says when they aren't). Every action edits the card, posts an audit
   line and gets [Undo] (Undo of an approval takes the role back).

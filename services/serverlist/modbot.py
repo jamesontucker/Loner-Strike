@@ -406,7 +406,8 @@ class Mod(cm.Notifier):
 
     def application(self, d, parsed, uid, roles, user, member):
         action, n = parsed
-        actor = {"id": uid, "name": cm.one_line(str(user.get("global_name") or user.get("username") or uid), 40)}
+        actor = {"id": uid, "name": cm.one_line(str(user.get("global_name") or user.get("username") or uid), 40),
+                 "roles": roles}
         iid = str(d.get("id") or "")
         with self.lock:
             if not iid or not self.c.store.first_time(iid):

@@ -116,14 +116,17 @@ class Deciding(unittest.TestCase):
         self.ok = card_buttons(self.bot)["Approve"]["custom_id"]
         self.no = card_buttons(self.bot)["Deny"]["custom_id"]
 
+    MAPPER = ROLE_IDS["🗺️・Map Maker"]
+
     def click(self, cid, who=None):
-        return interact(self.mod, 3, cid, who or member("111", roles=[MOD_ROLE]))
+        # a Moderator who is a Map Maker themselves (only holders, or the owner, may give a role)
+        return interact(self.mod, 3, cid, who or member("111", roles=[MOD_ROLE, self.MAPPER]))
 
     def test_only_the_team_can_decide(self):
         for who in (applicant("555"), member("222", roles=["999"])):
             self.assertEqual(self.click(self.ok, who)["data"]["content"], "You can't do that.")
         self.assertEqual(self.c.store.application(1)["state"], "pending")
-        self.assertEqual(self.click(self.ok, member("333", roles=[GMAN]))["type"], 7, "G-Man may")
+        self.assertEqual(self.click(self.ok, member("333", roles=[GMAN, self.MAPPER]))["type"], 7, "G-Man may")
 
     def test_approve_gives_the_role_once(self):
         ans = self.click(self.ok)
@@ -134,7 +137,7 @@ class Deciding(unittest.TestCase):
         self.assertIn("Approved", json.dumps(ans["data"]))
         self.assertEqual(list(buttons(ans["data"])), ["Undo"])
         self.assertTrue(any("Audit: Application #1" in (p.get("content") or "") for p in self.bot.posts))
-        again = self.click(self.ok, member("444", roles=[DEV_ROLE]))
+        again = self.click(self.ok, member("444", roles=[DEV_ROLE, self.MAPPER]))
         self.assertIn("Already approved by user111", again["data"]["content"])
         self.assertEqual(sum(1 for c in self.bot.calls if c[0] == "PUT"), 1)
 
@@ -163,7 +166,7 @@ class Deciding(unittest.TestCase):
         form = self.click(self.no)
         self.assertEqual(form["type"], 9)
         rows = [{"type": 1, "components": [{"type": 4, "custom_id": "reason", "value": reason}]}]
-        return interact(self.mod, 5, form["data"]["custom_id"], member("111", roles=[MOD_ROLE]), components=rows)
+        return interact(self.mod, 5, form["data"]["custom_id"], member("111", roles=[MOD_ROLE, self.MAPPER]), components=rows)
 
     def test_deny_tells_them_politely_and_starts_a_wait(self):
         ans = self.deny("Show us a finished map first @here")
@@ -194,9 +197,40 @@ class Deciding(unittest.TestCase):
     def test_forged_and_replayed(self):
         action, n, mac = self.ok.split(":")[1:]
         self.assertIn("isn't one of ours", self.click(f"ls1:appok:{int(n) + 1}:{mac}")["data"]["content"].lower() + "isn't one of ours")
-        d = {"type": 3, "id": "same", "guild_id": GUILD, "member": member("111", roles=[MOD_ROLE]), "data": {"custom_id": self.ok}}
+        d = {"type": 3, "id": "same", "guild_id": GUILD, "member": member("111", roles=[MOD_ROLE, self.MAPPER]), "data": {"custom_id": self.ok}}
         self.assertEqual(self.mod.interaction(*signed(d))[1]["type"], 7)
         self.assertEqual(self.mod.interaction(*signed(d))[1]["data"]["content"], "Already done.")
+
+    def test_no_one_decides_on_their_own_application(self):
+        apply(self.mod, applicant("111", roles=[MOD_ROLE]), key="playtester")
+        mine = card_buttons(self.bot)
+        tester = ROLE_IDS["Playtester"]
+        for b in ("Approve", "Deny"):
+            ans = self.click(mine[b]["custom_id"], member("111", roles=[MOD_ROLE, tester]))
+            self.assertIn("your own application", ans["data"]["content"])
+        self.assertEqual(self.c.store.application(2)["state"], "pending")
+        self.assertEqual(self.click(mine["Approve"]["custom_id"], member("444", roles=[DEV_ROLE, tester]))["type"], 7, "someone else may")
+
+    def test_only_holders_or_the_owner_may_give_a_role(self):
+        ans = self.click(self.ok, member("444", roles=[DEV_ROLE]))
+        self.assertIn("Only someone who has the Map Maker role", ans["data"]["content"])
+        self.assertFalse(any(c[0] == "PUT" for c in self.bot.calls))
+        self.assertEqual(self.click(self.ok, member(OWNER, roles=[]))["type"], 7, "the owner may")
+
+    def test_moderator_applications(self):
+        apply(self.mod, applicant("999"), key="moderator")
+        ok = card_buttons(self.bot)["Approve"]["custom_id"]
+        for who in (member("444", roles=[DEV_ROLE]), member("333", roles=[GMAN])):
+            self.assertIn("Only someone who has the Moderator role", self.click(ok, who)["data"]["content"],
+                          "a Dev or G-Man can't make a Moderator")
+        ans = self.click(ok, member("111", roles=[MOD_ROLE]))
+        self.assertEqual(ans["type"], 7, "a Moderator can")
+        self.assertEqual(self.c.store.application(2)["state"], "approved")
+        undo = buttons(ans["data"])["Undo"]["custom_id"]
+        self.assertIn("Only someone", self.click(undo, member("444", roles=[DEV_ROLE]))["data"]["content"], "Undo follows the same rule")
+        self.assertEqual(self.c.store.application(2)["state"], "approved")
+        self.click(undo, member(OWNER, roles=[]))
+        self.assertEqual(self.c.store.application(2)["state"], "pending", "the owner can undo")
 
     def test_a_moderator_application_says_what_it_gives(self):
         apply(self.mod, applicant("999"), key="moderator")

@@ -45,6 +45,8 @@ Design: docs/COMMUNITY.md (app side) and docs/COMMUNITY-SERVER.md (server side, 
   role menu -> form (why 20-1000, links <= 400) -> card in private #🛂・applications with Approve /
   Deny (optional reason, DM) / Undo; deciders DISCORD_APPLY_ROLES (Moderator, Dev, G-Man) + owner.
 - One open application per user per role, 14-day wait after a no, 5 a day. Roles found by name.
+- No deciding on your own application (owner excepted). Approve/Undo only by the owner or a holder
+  of that role (so Moderator needs a Moderator or the owner; earned roles need a holder or the owner).
 - Hierarchy refusals (Discord 50013) leave the application open with a note saying exactly how to
   fix the role order. Moderator approval gives the Moderator role only.
 - DB migration 3 (applications). Env: DISCORD_APPLY_CHANNEL_ID, DISCORD_APPLY_ROLES.
