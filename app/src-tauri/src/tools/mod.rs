@@ -25,6 +25,7 @@ pub mod demos;
 pub mod compile;
 pub mod plugins;
 pub mod community;
+pub mod communitylib;
 pub mod playercfg;
 pub mod people;
 pub mod studio;
@@ -312,6 +313,7 @@ pub fn local_routes() -> Router<Shared> {
         .merge(compile::routes())
         .merge(plugins::routes())
         .merge(community::routes())
+        .merge(communitylib::routes())
         .merge(playercfg::routes())
         .merge(people::routes())
         .merge(studio::routes())
