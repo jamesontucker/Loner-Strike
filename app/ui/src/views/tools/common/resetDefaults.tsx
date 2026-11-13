@@ -97,7 +97,7 @@ export function useResetDefaults(tool: string, opts: { match?: string[]; dirty?:
         </ul>
         <p className="muted">
           {opts.dirty ? "Changes you haven't saved are dropped too. " : ""}
-          The files as they are now are kept first: History (at the top of the page) or Undo puts them back.
+          {files.length === 1 ? "The file as it is now is" : "The files as they are now are"} kept first: History (at the top of the page) or Undo puts {files.length === 1 ? "it" : "them"} back.
         </p>
         <div className="row ask-buttons">
           <button type="button" className="btn" autoFocus onClick={() => setFiles(null)}>

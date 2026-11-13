@@ -446,7 +446,6 @@ const Card = memo(function Card({ m, i, id, view, tab, here, bits, onPick }: { m
         </span>
         <span className="tl-mb-badges">
           {m.source === "download" && <span className="tl-badge">Downloaded</span>}
-          {m.source === "added" && <span className="tl-badge">Yours</span>}
           {bits.badges.map((b, k) => (
             <span key={k} className={`tl-badge${b.tone ? ` ${b.tone}` : ""}`} title={b.title}>
               {b.text}

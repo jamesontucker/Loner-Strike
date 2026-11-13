@@ -125,7 +125,8 @@ html[data-tools-focus] .tl-actionbar { --tl-bleed: 10px; margin-bottom: -8px; }
 @media (prefers-reduced-motion: reduce) { .tl-mb-go { transition: none; } }
 
 .tl-mb-thumb { position: relative; display: block; flex: none; height: 116px; background: var(--bg); overflow: hidden; }
-.tl-mb-thumb.small { width: 64px; height: 40px; }
+.tl-mb-thumb.small { width: 60px; height: 34px; }
+.tl-mb-card.list .tl-mb-thumb { margin-left: 3px; border-radius: 2px; }
 .tl-mb-recent-card .tl-mb-thumb.small { width: auto; }
 .tl-mb-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .tl-mb-thumb.radar img { object-fit: contain; filter: sepia(.35) saturate(.85); }
