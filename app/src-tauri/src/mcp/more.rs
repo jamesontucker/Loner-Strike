@@ -101,10 +101,25 @@ pub fn specs() -> Vec<Spec> {
         Spec { name: "demos_list", title: "Demos", kind: Read,
             schema: || obj(json!({"limit": {"type": "integer", "minimum": 1, "maximum": 500}}), &[]),
             description: "Recorded demos in the game and servers (map, length, playable). Details, watching (asks), turning one into a replay: app_call /api/tools/demos/*." },
+        // Creature Studio
+        Spec { name: "creature_types", title: "Creatures: types", kind: Read, schema: none,
+            description: "The creature types the game has from creatures.ini (built-ins and the person's own): name, shown name, category, a one-line summary of how it plays, and problems. Format: resource loner://docs/creatures." },
+        Spec { name: "creature_type_read", title: "Creatures: read a type", kind: Read, schema: || obj(json!({"name": creature_name()}), &["name"]),
+            description: "One creature type with every value the game uses (hp, speeds, senses, attack, behaviour, model candidates, sounds...) and which keys the file sets." },
+        Spec { name: "creature_type_save", title: "Creatures: save a type", kind: Change,
+            schema: || obj(json!({"type": {"type": "object", "description": "name (required) and the values to set, keys as creature_type_read gives them; a new name starts from base (a type above, e.g. zombie) or the defaults"}, "remove": {"type": "boolean", "description": "Take this type's section out of the file (a built-in goes back to how the game has it)"}}), &["type"]),
+            description: "Saves one creature type into the game's creatures.ini (checked against the game's limits first; the old file is kept in History). Then creature_apply to use it in the running map." },
+        Spec { name: "creature_apply", title: "Creatures: apply to the game", kind: Change,
+            schema: || obj(json!({"spawn": creature_name(), "calm": {"type": "boolean", "description": "The spawned one stands still (behaviour idle)"}}), &[]),
+            description: "Makes the person's running game read creatures.ini again (ls_creature reload) and, with spawn, puts one of that type in front of them (or at a spawn) to try. Only types loaded with the map can be spawned." },
         Spec { name: "components_load_pack", title: "Components: load into the editor", kind: Change,
             schema: || obj(json!({"map": map_prop(), "mode": {"type": "string"}}), &["map"]),
             description: "Adds a map's component pack (the person's own, else the shipped one) to the open editor map as one undoable step." },
     ]
+}
+
+fn creature_name() -> Value {
+    json!({"type": "string", "description": "A creature type's name, e.g. zombie, runner, my_brute"})
 }
 
 fn map_only_editor() -> Value {
@@ -406,6 +421,73 @@ async fn extra(ctx: &Ctx, name: &str, a: &Value) -> Option<Done> {
             }
             Ok(v)
         }
+        "creature_types" => async {
+            let v = get(ctx, "/api/tools/creatures").await?;
+            let types: Vec<Value> = v["types"].as_array().into_iter().flatten().map(|t| json!({"name": t["name"], "display": t["display"], "category": t["category"], "builtin": t["builtin"], "inFile": t["inFile"], "summary": t["summary"]})).collect();
+            Ok(json!({"file": v["file"], "types": types, "problems": v["problems"], "limits": v["limits"]}))
+        }
+        .await,
+        "creature_type_read" => async {
+            let n = s(a, "name").ok_or_else(|| err("Say the type's name."))?;
+            let v = get(ctx, "/api/tools/creatures").await?;
+            v["types"].as_array().into_iter().flatten().find(|t| t["name"].as_str() == Some(n)).cloned().ok_or_else(|| err(format!("There's no creature type called {n} (creature_types lists them).")))
+        }
+        .await,
+        "creature_type_save" => creature_save(ctx, a).await,
+        "creature_apply" => async {
+            let reload = post(ctx, "/api/tools/creatures/reload", json!({})).await?;
+            match s(a, "spawn") {
+                Some(t) if reload["ok"] == true => {
+                    let spawned = post(ctx, "/api/tools/creatures/spawn", json!({"type": t, "calm": a["calm"].as_bool().unwrap_or(false)})).await?;
+                    Ok(json!({"reload": reload, "spawn": spawned}))
+                }
+                _ => Ok(reload),
+            }
+        }
+        .await,
         _ => return None,
     })
+}
+
+/// One type into the whole list the save route takes: merged over the type that's there, or
+/// a new one from its base (or the defaults); remove takes its section out.
+async fn creature_save(ctx: &Ctx, a: &Value) -> Done {
+    let given = a.get("type").filter(|t| t.is_object()).ok_or_else(|| err("type is an object with at least name."))?;
+    let name = given["name"].as_str().filter(|n| !n.is_empty()).ok_or_else(|| err("type.name is the type's name."))?.to_string();
+    let v = get(ctx, "/api/tools/creatures").await?;
+    let mut types: Vec<Value> = v["types"].as_array().cloned().unwrap_or_default().into_iter().filter(|t| t["skipped"] != true).collect();
+    let builtin = types.iter().any(|t| t["name"] == name && t["builtin"] == true);
+    if a["remove"].as_bool() == Some(true) {
+        if builtin {
+            let fresh = v["templates"].as_array().into_iter().flatten().find(|t| t["name"] == name).cloned().unwrap_or(json!({}));
+            for t in types.iter_mut().filter(|t| t["name"] == name) {
+                *t = fresh.clone();
+            }
+        } else {
+            types.retain(|t| t["name"] != name);
+        }
+    } else {
+        let start = match types.iter().find(|t| t["name"] == name) {
+            Some(t) => t.clone(),
+            None => {
+                let base = given["base"].as_str().unwrap_or("");
+                let mut t = types.iter().find(|t| !base.is_empty() && t["name"] == base).cloned().unwrap_or(json!({}));
+                t["name"] = json!(name);
+                t["base"] = json!(base);
+                if t.get("display").is_none() {
+                    t["display"] = json!(name);
+                }
+                types.push(t.clone());
+                t
+            }
+        };
+        let mut merged = start;
+        for (k, val) in given.as_object().into_iter().flatten() {
+            merged[k] = val.clone();
+        }
+        for t in types.iter_mut().filter(|t| t["name"] == name) {
+            *t = merged.clone();
+        }
+    }
+    post(ctx, "/api/tools/creatures/save", json!({"types": types})).await
 }
