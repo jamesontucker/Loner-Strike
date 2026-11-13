@@ -104,12 +104,25 @@ pub fn brush_planes(b: &Brush) -> Option<Vec<Plane>> {
     b.faces.iter().map(Face::plane).collect()
 }
 
+/// Snap coordinates that are a rounding error (under 1e-6) away from a 1/1024 step, which
+/// takes in every integer: plane intersections give 31.999999 for 32, moves of big brushes
+/// -3968.0000000000146 for -3968. Anything further away (a 30° turn) is left as it is.
+pub fn tidy(p: Vec3) -> Vec3 {
+    let t = |x: f64| {
+        let r = (x * 1024.0).round() / 1024.0;
+        if (x - r).abs() < 1e-6 { r + 0.0 } else { x }
+    };
+    Vec3 { x: t(p.x), y: t(p.y), z: t(p.z) }
+}
+
 /// Face polygons of a brush, one per face (empty for a face that doesn't touch the solid or
 /// whose points are in a line).
 pub fn brush_polygons(b: &Brush) -> Vec<Polygon> {
     let planes: Vec<Option<Plane>> = b.faces.iter().map(Face::plane).collect();
     let valid: Vec<Plane> = planes.iter().flatten().copied().collect();
-    let polys = planes_polygons(&valid);
+    // corners from plane intersections drift (31.999999 for 32): tidied, so bounds, meshes,
+    // clips and new faces made from them stay on clean numbers
+    let polys: Vec<Polygon> = planes_polygons(&valid).into_iter().map(|p| p.into_iter().map(tidy).collect()).collect();
     let mut it = polys.into_iter();
     planes.iter().map(|p| if p.is_some() { it.next().unwrap_or_default() } else { Vec::new() }).collect()
 }

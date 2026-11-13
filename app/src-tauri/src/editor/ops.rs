@@ -29,14 +29,9 @@ fn face_with_align(plane: &Plane, poly: Option<&[Vec3]>, texture: &str, align: T
     Face { points, texture: texture.to_string(), align }
 }
 
-/// Snap coordinates that are a rounding error away from a 1/1024 step (plane intersections
-/// give 31.999999 for 32, moves 192.00000000000006 for 192), so files stay clean.
+/// Snap coordinates that are a rounding error away from a 1/1024 step (see `geom::tidy`).
 pub fn tidy(p: Vec3) -> Vec3 {
-    let t = |x: f64| {
-        let r = (x * 1024.0).round() / 1024.0;
-        if (x - r).abs() < 1e-6 { r + 0.0 } else { x }
-    };
-    v3(t(p.x), t(p.y), t(p.z))
+    super::geom::tidy(p)
 }
 
 fn check(b: Brush) -> OpResult<Brush> {
@@ -132,8 +127,10 @@ pub fn transform_with(b: &Brush, t: &Affine, lock: bool, keep_scale: bool) -> Op
     let mirror = t.m.det() < 0.0;
     let mut out = b.clone();
     for f in &mut out.faces {
+        // (tidied: a move of a big brush gave -3968.0000000000146 for -3968, a quarter turn
+        // 1e-14 for 0; GoldSrc wants clean numbers in the file and in the planes)
         for p in &mut f.points {
-            *p = t.apply(*p);
+            *p = tidy(t.apply(*p));
         }
         if mirror {
             f.points.swap(1, 2);
@@ -421,6 +418,41 @@ pub fn brush_mesh(b: &Brush, size: impl Fn(&str) -> (f64, f64)) -> Vec<FaceMesh>
 mod tests {
     use super::*;
     use crate::editor::geom::{brush_bounds, is_valid};
+
+    #[test]
+    fn transforms_leave_clean_numbers() {
+        use crate::editor::math::Mat3;
+        // the user's case: an 8192-unit floor moved by 128 (was -3968.0000000000146)
+        let floor = make_box(v3(-4096.0, -4096.0, -512.0), v3(4096.0, 4096.0, 64.0), "CRATE");
+        let moved = translate(&floor, v3(128.0, 0.0, 0.0), true).unwrap();
+        let bb = brush_bounds(&moved);
+        assert_eq!((bb.min, bb.max), (v3(-3968.0, -4096.0, -512.0), v3(4224.0, 4096.0, 64.0)));
+        for f in &moved.faces {
+            for p in f.points {
+                assert_eq!(p, v3(p.x.round(), p.y.round(), p.z.round()), "{p:?}");
+            }
+        }
+        // a quarter turn about an odd pivot, four times: back where it started, exactly
+        let mut b = make_box(v3(-1000.0, 37.0, 5.0), v3(3000.0, 2085.0, 333.0), "CRATE");
+        let start = brush_bounds(&b);
+        for _ in 0..4 {
+            b = transform(&b, &Affine::around(Mat3::rotation(Vec3::Z, 90.0), v3(13.0, -7.0, 0.0)), true).unwrap();
+        }
+        let end = brush_bounds(&b);
+        assert_eq!((end.min, end.max), (start.min, start.max));
+        // a stretch by 1.5 and a clip through the middle: whole numbers
+        let s = transform(&floor, &Affine::around(Mat3::scale(v3(1.5, 1.0, 1.0)), v3(0.0, 0.0, 0.0)), true).unwrap();
+        assert_eq!(brush_bounds(&s).min.x, -6144.0);
+        let (front, back) = clip(&floor, &Plane::from_point_normal(v3(1000.0, 0.0, 0.0), v3(1.0, 0.0, 0.0)), "CRATE");
+        let (f, k) = (front.unwrap(), back.unwrap());
+        assert_eq!(brush_bounds(&f).max.x, 1000.0);
+        assert_eq!(brush_bounds(&k).min.x, 1000.0);
+        // and the saved .map text has no long tails
+        let mut d = crate::editor::doc::MapDocument::default();
+        d.brushes.insert(crate::editor::doc::BrushId(1), moved);
+        let text = crate::editor::mapfile::write_map(&d, &Default::default()).unwrap();
+        assert!(text.contains("-3968") && !text.contains("3968.0") && !text.contains("e-"), "{text}");
+    }
 
     fn cube() -> Brush {
         make_box(v3(0.0, 0.0, 0.0), v3(64.0, 64.0, 64.0), "CRATE")

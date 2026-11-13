@@ -167,7 +167,8 @@ test("Inspect for a brush: Transform with X/Y/Z, textures, owner, visgroups; fac
   await expect(page.getByLabel("What the brushes are made of")).toContainText("CRATE01");
   await expect(page.getByLabel("What the brushes are made of")).toContainText("World");
   // type a location: the box moves there
-  // (the click may take the box or the floor: whichever it is moves by 128 on X)
+  // (the click may take the box or the floor: whichever it is moves by exactly 128 on X, with no
+  // float drift: an 8192-unit floor once ended at -3968.0000000000146)
   void id;
   const before = (await doc(page)).brushes;
   const xField = xf.getByRole("textbox").first();
@@ -176,7 +177,7 @@ test("Inspect for a brush: Transform with X/Y/Z, textures, owner, visgroups; fac
   await xField.press("Enter");
   await expect.poll(async () => (await doc(page)).undo).toBe("Move");
   const after = (await doc(page)).brushes;
-  expect(after.some((b) => before.some((o) => o.id === b.id && Math.abs(b.min[0] - o.min[0] - 128) < 0.01)), JSON.stringify([before, after])).toBe(true);
+  expect(after.some((b) => before.some((o) => o.id === b.id && b.min[0] === o.min[0] + 128)), JSON.stringify([before, after])).toBe(true);
   await expect(xField).toHaveValue(String(x0 + 128));
   // scrub the Z letter: one undo step
   const zLetter = xf.locator(".p5-xf-axis").nth(2);

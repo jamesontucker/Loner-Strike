@@ -346,7 +346,7 @@ pub fn cmd_delete(doc: &mut MapDocument, h: &mut History, brushes: &[BrushId], e
 /// yaw with rotations about z.
 fn transform_entity(e: &mut Entity, t: &Affine, move_origin: bool) {
     if let (Some(o), true) = (e.origin(), move_origin) {
-        let n = t.apply(o);
+        let n = super::geom::tidy(t.apply(o));
         e.set("origin", &format!("{} {} {}", fmt_num(n.x), fmt_num(n.y), fmt_num(n.z)));
     }
     let yaw = (t.m.r[1].x).atan2(t.m.r[0].x).to_degrees();
