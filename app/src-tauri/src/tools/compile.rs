@@ -1502,12 +1502,16 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     };
     let mut boxes = req.cordons.clone();
     boxes.extend(req.cordon);
-    let (doc, warnings) = if boxes.is_empty() {
+    let (doc, mut warnings) = if boxes.is_empty() {
         (doc, Vec::new())
     } else {
         let c = apply_cordons(&doc, &boxes, &req.cordon_options)?;
         (c.doc, c.warnings)
     };
+    // P5: models, sprites, sounds or a sky the entities name that aren't on this computer
+    if let Some(n) = super::editor::assets::compile_note(st) {
+        warnings.push(Problem { level: "warning".into(), kind: "other".into(), message: n, ..Default::default() });
+    }
     let maps = if req.install {
         if crate::maps::is_stock_file(&format!("maps/{name}.bsp")) {
             return Err(format!("{name} is one of the game's own maps. Give your map another name."));

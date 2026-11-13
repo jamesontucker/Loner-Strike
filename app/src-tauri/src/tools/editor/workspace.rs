@@ -38,6 +38,9 @@ enum Cmd2 {
         offset: [f64; 3],
         #[serde(default = "yes")]
         rename: bool,
+        /// Shift-drag copy: its undo step is "Copy" and the move after it (same key) joins it
+        #[serde(default)]
+        merge: Option<String>,
     },
     Find {
         spec: FindSpec,
@@ -120,9 +123,11 @@ fn run2(s: &mut Session, cmd: Cmd2) -> Result<Value, String> {
     s.drag = None;
     let (d, h) = (&mut s.doc, &mut s.history);
     Ok(match cmd {
-        Cmd2::Duplicate { brushes, entities, offset, rename } => {
+        Cmd2::Duplicate { brushes, entities, offset, rename, merge } => {
             let off = Vec3 { x: offset[0], y: offset[1], z: offset[2] };
-            let out = bulk::cmd_duplicate(d, h, &bids(&brushes), &eids(&entities), off, rename)?;
+            let merge = merge.filter(|k| !k.is_empty() && k.len() <= 64);
+            let label = if merge.is_some() { "Copy" } else { "Duplicate" };
+            let out = bulk::cmd_duplicate_as(d, h, &bids(&brushes), &eids(&entities), off, rename, label, merge.as_deref())?;
             json!({"created": ids_json(&out.brushes, &out.entities)})
         }
         Cmd2::Find { spec } => {
@@ -703,7 +708,12 @@ async fn api_import_other(State(st): State<Shared>, Extension(ed): Extension<Ed>
         let im = import_other(&path, &dirs)?;
         // not a project yet: Save makes one (the original file is never written to)
         let mut state = ed.install_from(im.doc, stem(&path), None, Some(&path), &dirs);
-        state["notes"] = json!(im.notes);
+        let mut notes = im.notes;
+        // the models, sprites and sounds its entities name that aren't on this computer
+        if let Some(n) = ed.lock().as_ref().and_then(|s| super::assets::note_for(&st, s)) {
+            notes.push(n);
+        }
+        state["notes"] = json!(notes);
         Ok(state)
     })
     .await

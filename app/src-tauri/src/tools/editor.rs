@@ -516,6 +516,8 @@ enum Cmd {
         scale: Option<P3>,
         pivot: Option<P3>,
         #[serde(default = "yes")] lock: bool,
+        /// P5: joins the step before it with the same key (a Shift-drag copy's move)
+        #[serde(default)] merge: Option<String>,
     },
     MoveFace { brush: u64, face: usize, distance: f64, #[serde(default = "yes")] lock: bool, drag: Option<String> },
     Clip { brushes: Vec<u64>, points: [P3; 3], keep: KeepSide, texture: Option<String> },
@@ -823,7 +825,7 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             }
             tx.commit(h);
         }
-        Cmd::Transform { brushes, entities, translate, rotate, scale, pivot, lock } => {
+        Cmd::Transform { brushes, entities, translate, rotate, scale, pivot, lock, merge } => {
             let (bs, es) = (bids(&brushes), eids(&entities));
             if bs.is_empty() && es.is_empty() {
                 return Err("Pick something to move first.".into());
@@ -852,7 +854,7 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             } else {
                 return Err(NOT_UNDERSTOOD.into());
             };
-            history::cmd_transform(d, h, &bs, &es, &t, lock, label, None)?;
+            history::cmd_transform(d, h, &bs, &es, &t, lock, label, merge.as_deref().filter(|k| !k.is_empty() && k.len() <= 64))?;
         }
         Cmd::MoveFace { brush, face, distance, lock, drag } => {
             let id = BrushId(brush);
@@ -1480,7 +1482,15 @@ async fn open_with(st: Shared, ed: Ed, h: HeaderMap, kind: Pick) -> Response {
         let Some(path) = dialog(&st, kind, "")? else { return Ok(json!({"cancelled": true})) };
         let (doc, project) = load_file(&path)?;
         remember(&ed.dir, &path, project);
-        Ok(ed.install_from(doc, stem(&path), project.then_some(path.clone()), Some(&path), &dirs))
+        let mut state = ed.install_from(doc, stem(&path), project.then_some(path.clone()), Some(&path), &dirs);
+        // P5: an imported .map's missing models, sprites and sounds, said now
+        if !project {
+            let g = ed.lock();
+            if let Some(n) = g.as_ref().and_then(|s| assets::note_for(&st, s)) {
+                state["notes"] = json!([n]);
+            }
+        }
+        Ok(state)
     })
     .await
 }

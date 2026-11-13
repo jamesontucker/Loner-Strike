@@ -92,10 +92,12 @@ async function touching(inside: boolean) {
 }
 
 /** Copies of what's picked: `offset` grid steps over (0: in place), with new target names. */
-export async function duplicateWith(offset: Vec3) {
+/** Duplicates what's picked (and picks the copies). `merge`: a Shift-drag copy's key, so the
+ *  move that follows joins it as one "Copy" undo step. */
+export async function duplicateWith(offset: Vec3, merge?: string) {
   const ids = selectionIds();
   if (!ids.brushes.length && !ids.entities.length) return;
-  const r = await cmd2({ op: "duplicate", ...ids, offset, rename: true });
+  const r = await cmd2({ op: "duplicate", ...ids, offset, rename: true, ...(merge ? { merge } : {}) });
   if (r.created) {
     const owned = new Set(r.created.entities);
     const brushes = r.created.brushes.filter((b) => !owned.has(S().brushes.get(b)?.entity ?? -1));

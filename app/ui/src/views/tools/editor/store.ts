@@ -403,6 +403,9 @@ export const useEditor = create<EditorState>((set, get) => ({
       if (r.error) return get().notify(r.error, true);
       if ("cancelled" in r && r.cancelled) return;
       await get().load();
+      // P5: what an imported map is missing (models, sprites, sounds), said at once
+      const notes = (r as { notes?: string[] }).notes;
+      if (notes?.length) get().notify(`Imported. ${notes.join(" ")}`, true);
     } finally {
       set({ fileBusy: null });
     }

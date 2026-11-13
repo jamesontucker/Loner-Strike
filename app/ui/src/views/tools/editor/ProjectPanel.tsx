@@ -8,7 +8,7 @@ import { useAskText, useConfirm } from "../../../ui";
 import * as api from "./editorApi";
 import type { RecentFile } from "./editorApi";
 import { fileHooks } from "./commands";
-import { afterJump, copyAssets, getProject, projectAction, type ProjectFile, type ProjectInfo } from "./p5store";
+import { afterJump, copyAssets, findAssets, getProject, projectAction, type ProjectFile, type ProjectInfo } from "./p5store";
 import { useEditor } from "./store";
 
 function size(n: number | null) {
@@ -150,12 +150,33 @@ export function ProjectPanel() {
         <div className="ed-project-assets" role="group" aria-label="The map's models, sprites and sounds">
           <p className="small-note">
             {info.assets.missing > 0
-              ? `${info.assets.missing} model, sprite, sound or sky file${info.assets.missing === 1 ? " isn't" : "s aren't"} on this computer. The game stops loading a map at a missing file, so Playtest waits until ${info.assets.missing === 1 ? "it's" : "they're"} beside the project (in its models/, sprites/ or sound/ folder) or the entity is changed.`
+              ? `${info.assets.missing} model, sprite, sound or sky file${info.assets.missing === 1 ? " isn't" : "s aren't"} on this computer. A missing model or sprite stops the server loading the map, so Playtest waits for those; a missing sound just doesn't play. Find them in a folder you pick, put them beside the project, or change the entities.`
               : info.assets.toGame > 0
                 ? `${info.assets.toGame} file${info.assets.toGame === 1 ? " the map uses is" : "s the map uses are"} beside the map but not in the game yet. Playtest copies ${info.assets.toGame === 1 ? "it" : "them"} into the game's download folder.`
                 : "Every model, sprite and sound the map uses is in the game."}
           </p>
           <div className="row wrap">
+            {info.assets.missing > 0 && (
+              <button
+                type="button"
+                className="btn small primary"
+                disabled={!!busy}
+                title="Pick a folder (the map's download, another game's cstrike folder…): the missing files found there are copied into the game and next to the project"
+                onClick={async () => {
+                  setBusy("find");
+                  try {
+                    const r = await findAssets();
+                    if (r.error) notify(r.error, true);
+                    else if (!r.cancelled) notify(r.message, r.missing.length > 0);
+                    setN((x) => x + 1);
+                  } finally {
+                    setBusy(null);
+                  }
+                }}
+              >
+                {busy === "find" ? <><span className="spinner" aria-hidden="true" /> Looking…</> : "Find missing files…"}
+              </button>
+            )}
             {info.assets.toGame > 0 && (
               <button type="button" className="btn small" disabled={!!busy} onClick={() => void copy("game")} title="Into the game's download folder, where the game looks and servers send them from">
                 {busy === "copy-game" ? <><span className="spinner" aria-hidden="true" /> Copying…</> : "Copy into the game"}

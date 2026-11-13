@@ -44,6 +44,8 @@ export function ComponentPanel() {
     const r = await api.savePack(map.trim(), mode.trim());
     setBusy(null);
     if (r.error) return toast(r.error, true);
+    // P5: the file had these already: nothing written
+    if ((r as { unchanged?: boolean }).unchanged) return toast(`${r.file} already has these ${r.count} component${r.count === 1 ? "" : "s"}; nothing to save.`);
     toast(`Saved ${r.count} component${r.count === 1 ? "" : "s"} to ${r.file}. Start ${map} with gm_components on to try them.${r.skipped?.length ? ` Left out: ${r.skipped.join("; ")}.` : ""}`);
   };
   const load = async () => {

@@ -104,6 +104,13 @@ fn move_origin(e: &mut Entity, d: Vec3) {
 /// Duplicate: copies moved by `offset` (zero for "in place"), brushes of a copied entity go
 /// with its copy, groups kept off the copies. With `rename`, copies get new target names.
 pub fn cmd_duplicate(doc: &mut MapDocument, h: &mut History, brushes: &[BrushId], entities: &[EntityId], offset: Vec3, rename: bool) -> OpResult<Created> {
+    cmd_duplicate_as(doc, h, brushes, entities, offset, rename, "Duplicate", None)
+}
+
+/// The same with its own undo label and a merge key: Shift-drag copy is "Copy" and the move
+/// that follows (the same key) joins it, so one undo takes back the copy (QA round 3).
+#[allow(clippy::too_many_arguments)]
+pub fn cmd_duplicate_as(doc: &mut MapDocument, h: &mut History, brushes: &[BrushId], entities: &[EntityId], offset: Vec3, rename: bool, label: &str, merge: Option<&str>) -> OpResult<Created> {
     if brushes.is_empty() && entities.is_empty() {
         return Err("Pick something to duplicate first.".into());
     }
@@ -132,7 +139,10 @@ pub fn cmd_duplicate(doc: &mut MapDocument, h: &mut History, brushes: &[BrushId]
         bs.extend(doc.brushes_of(Some(*id)).map(|(b, _)| b));
     }
     let src = doc.clone();
-    let mut tx = Tx::new(doc, "Duplicate");
+    let mut tx = Tx::new(doc, label);
+    if let Some(k) = merge {
+        tx = tx.merge_key(k);
+    }
     let mut out = Created::default();
     let mut new_entity = HashMap::new();
     for (id, mut e) in copies {
@@ -814,6 +824,25 @@ mod tests {
             es.push(super::super::history::cmd_add_entity(&mut d, &mut h, e));
         }
         (d, bs, es)
+    }
+
+    /// QA round 3: a Shift-drag copy and its move are one undo step, "Copy".
+    #[test]
+    fn shift_drag_copy_is_one_copy_step() {
+        let (mut d, bs, _) = sample();
+        let mut h = History::default();
+        let n = d.brushes.len();
+        let out = cmd_duplicate_as(&mut d, &mut h, &bs[..1], &[], v3(0.0, 0.0, 0.0), true, "Copy", Some("copy-1")).unwrap();
+        super::super::history::cmd_transform(&mut d, &mut h, &out.brushes, &[], &crate::editor::math::Affine::translate(v3(64.0, 0.0, 0.0)), true, "Move", Some("copy-1")).unwrap();
+        assert_eq!(d.brushes.len(), n + 1);
+        assert_eq!(h.undo_label(), Some("Copy"));
+        h.undo(&mut d);
+        assert_eq!(d.brushes.len(), n, "one undo takes the copy back");
+        assert!(!h.can_undo());
+        // a plain Duplicate then a plain Move stay two steps
+        let out = cmd_duplicate(&mut d, &mut h, &bs[..1], &[], v3(0.0, 0.0, 0.0), true).unwrap();
+        super::super::history::cmd_transform(&mut d, &mut h, &out.brushes, &[], &crate::editor::math::Affine::translate(v3(64.0, 0.0, 0.0)), true, "Move", None).unwrap();
+        assert_eq!(h.undo_label(), Some("Move"));
     }
 
     #[test]

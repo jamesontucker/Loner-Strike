@@ -155,6 +155,8 @@ export const projectAction = (action: "open" | "reveal" | "rename" | "delete", p
   post<{ done?: boolean; opened?: boolean; renamed?: string; deleted?: boolean; keptIn?: string; state?: DocState | null }>(`${E}/project/action`, { action, path, name });
 /** Copies the models, sprites and sounds the map uses into the game's download folder or next to the project. */
 export const copyAssets = (to: "game" | "project") => post<AssetsInfo & { copied: string[]; message: string }>(`${E}/assets/copy`, { to });
+/** Looks for the map's missing models, sprites and sounds in a folder the player picks. */
+export const findAssets = () => post<{ cancelled?: boolean; found: number; missing: string[]; copied: string[]; message: string; assets: AssetsInfo }>(`${E}/assets/find`);
 export const importRmf = () => post<{ cancelled?: boolean; notes?: string[] }>(`${E}/import-other`);
 export const getHistory = () => get<{ undo: string[]; redo: string[]; dirty: boolean }>(`${E}/history`);
 export const jumpHistory = (steps: number) => post<{ changed: boolean; steps: number; state?: DocState }>(`${E}/history/jump`, { steps });

@@ -277,16 +277,29 @@ fn who(n: &Named) -> String {
 }
 
 /// Live checks: a missing file stops the game loading the map.
+/// A missing model or sprite stops the server loading the map ("Mod_LoadModel: … not found");
+/// a missing sound is silent and a missing sky is black, so those only warn.
+pub fn fatal(kind: &str) -> bool {
+    kind == "model" || kind == "sprite"
+}
+
+/// What a missing file does, in words.
+fn missing_text(a: &Asset) -> String {
+    let n = &a.named;
+    let folder = n.rel.split('/').next().unwrap_or("");
+    match n.kind {
+        "model" | "sprite" => format!("{} isn't on this computer ({}). The server stops loading the map at a missing {} (\"Mod_LoadModel: {} not found\"): find it (Project > Find missing files…), put it beside the project in its {folder}/ folder, or change the entity.", n.rel, who(n), n.kind, n.rel),
+        "sound" => format!("{} isn't on this computer ({}). The map loads, but nothing plays there: find it (Project > Find missing files…) or put it beside the project in its sound/ folder.", n.rel, who(n)),
+        _ => format!("The sky's pictures ({}…) aren't on this computer. The map loads with a black sky: find them (Project > Find missing files…) or pick another sky in Map properties.", n.rel.trim_end_matches(".tga")),
+    }
+}
+
 pub fn issues(assets: &[Asset], game_set_up: bool) -> Vec<Issue> {
     let mut out = Vec::new();
     for a in assets {
         let entity = a.named.users.first().copied().filter(|u| *u != 0);
         let (level, code, message) = match &a.status {
-            Status::Missing if game_set_up => (
-                Level::Error,
-                "missing-file",
-                format!("{} isn't on this computer ({}). The game stops loading a map at a missing {}: put the file beside the project (in its {}/ folder), or change the entity.", a.named.rel, who(&a.named), a.named.kind, a.named.rel.split('/').next().unwrap_or("")),
-            ),
+            Status::Missing if game_set_up => (if fatal(a.named.kind) { Level::Error } else { Level::Warning }, "missing-file", missing_text(a)),
             Status::Beside(_) | Status::Elsewhere(_) => (Level::Info, "file-not-in-game", format!("{} ({}) isn't in the game yet; Playtest copies it there.", a.named.rel, who(&a.named))),
             _ => continue,
         };
@@ -404,6 +417,128 @@ pub fn copy_to_project(assets: &[Asset], places: &Places, project_dir: &Path) ->
     Ok(done)
 }
 
+// ---- import and compile notes ---------------------------------------------------------------
+
+/// What an imported map's entities name that isn't on this computer, in one note (None when
+/// everything is found): said when the map is imported and when it's compiled.
+pub fn missing_note(assets: &[Asset]) -> Option<String> {
+    let miss: Vec<&Asset> = assets.iter().filter(|a| a.status == Status::Missing).collect();
+    if miss.is_empty() {
+        return None;
+    }
+    let fatal_ones: Vec<&str> = miss.iter().filter(|a| fatal(a.named.kind)).map(|a| a.named.rel.as_str()).collect();
+    let sounds = miss.iter().filter(|a| a.named.kind == "sound").count();
+    let sky = miss.iter().any(|a| a.named.kind == "sky");
+    let mut t = String::new();
+    if !fatal_ones.is_empty() {
+        t.push_str(&format!(
+            "The server will stop loading this map until these are found: {}{}.",
+            fatal_ones.iter().take(5).copied().collect::<Vec<_>>().join(", "),
+            if fatal_ones.len() > 5 { format!(" and {} more", fatal_ones.len() - 5) } else { String::new() }
+        ));
+    }
+    if sounds > 0 {
+        t.push_str(&format!("{}{sounds} sound{} it uses {} missing (they won't play).", if t.is_empty() { "" } else { " " }, if sounds == 1 { "" } else { "s" }, if sounds == 1 { "is" } else { "are" }));
+    }
+    if sky {
+        t.push_str(if t.is_empty() { "Its sky's pictures are missing (the sky will be black)." } else { " Its sky's pictures are missing (black sky)." });
+    }
+    t.push_str(" Project > Find missing files… looks in a folder you pick.");
+    Some(t)
+}
+
+/// The note for the open document (import, compile).
+pub(super) fn note_for(st: &Shared, s: &Session) -> Option<String> {
+    let places = Places::of(st, s);
+    places.hl.as_ref()?;
+    missing_note(&locate(named_files(&s.doc), &places))
+}
+
+/// The compile's warning for the open map (the compile itself goes on; Playtest checks again).
+pub fn compile_note(st: &Shared) -> Option<String> {
+    let g = global();
+    let lock = g.lock();
+    note_for(st, lock.as_ref()?)
+}
+
+// ---- Find missing files (a folder the player picks) ------------------------------------------
+
+/// Looks for the missing files in `folder` (and the folders above and below it a step: a
+/// download unpacked as `de_kobbl/sprites/…` or `cstrike/sprites/…`), each vetted like the rest,
+/// and copies what it finds into the game's download folder (so Playtest finds them) and next
+/// to the project when it's saved.
+pub fn find_in(assets: &[Asset], places: &Places, folder: &Path, project_dir: Option<&Path>) -> Result<Value, String> {
+    let f = Finder::default();
+    let mut roots: Vec<PathBuf> = vec![folder.to_path_buf()];
+    for sub in ["cstrike", "czero", "valve", "cstrike_downloads", "czero_downloads"] {
+        if folder.join(sub).is_dir() {
+            roots.push(folder.join(sub));
+        }
+    }
+    let mut found: Vec<(String, PathBuf)> = Vec::new();
+    let mut still: Vec<String> = Vec::new();
+    for a in assets.iter().filter(|a| a.status == Status::Missing) {
+        let hit = alternatives(&a.named.rel).iter().find_map(|rel| roots.iter().find_map(|r| f.find(r, rel).and_then(|p| vet(r, &p, rel)).map(|p| (src_rel(&p, &a.named.rel), p))));
+        match hit {
+            Some(x) => found.push(x),
+            None => still.push(a.named.rel.clone()),
+        }
+    }
+    let mut copied = Vec::new();
+    if let Some(hl) = &places.hl {
+        let to = downloads(hl, &places.game);
+        for (rel, src) in &found {
+            if copy_into(&to, rel, src)? {
+                copied.push(format!("{rel} (game)"));
+            }
+        }
+    }
+    if let Some(d) = project_dir {
+        for (rel, src) in &found {
+            if copy_into(d, rel, src)? {
+                copied.push(format!("{rel} (project)"));
+            }
+        }
+    }
+    let msg = match (found.len(), still.len()) {
+        (0, _) => format!("None of the missing files are in {}.", folder.display()),
+        (n, 0) => format!("Found all {n} missing file{} and copied {}.", if n == 1 { "" } else { "s" }, if places.hl.is_some() { "them into the game" } else { "them next to the project" }),
+        (n, m) => format!("Found {n} and copied them; {m} still missing: {}.", still.iter().take(5).cloned().collect::<Vec<_>>().join(", ")),
+    };
+    Ok(json!({"found": found.len(), "missing": still, "copied": copied, "message": msg}))
+}
+
+async fn api_find(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || {
+        // test builds (dev servers) answer with LS_DEV_PICK_FOLDER, like the other dialogs
+        #[cfg(test)]
+        let dev = std::env::var("LS_DEV_PICK_FOLDER").ok().map(PathBuf::from);
+        #[cfg(not(test))]
+        let dev: Option<PathBuf> = None;
+        let folder = match dev {
+            Some(p) => p,
+            None => {
+                use tauri_plugin_dialog::DialogExt;
+                let app = st.app.get().cloned().ok_or("The app isn't ready.")?;
+                let Some(p) = app.dialog().file().set_title("Find the map's missing files in…").blocking_pick_folder() else { return Ok(json!({"cancelled": true})) };
+                p.into_path().map_err(|_| "That folder can't be used.".to_string())?
+            }
+        };
+        if !folder.is_dir() {
+            return Err("That folder isn't there.".into());
+        }
+        let (assets, places, dir) = current(&st, &ed)?;
+        let mut v = find_in(&assets, &places, &folder, dir.as_deref())?;
+        let (assets, places, dir) = current(&st, &ed)?;
+        v["assets"] = assets_json(&assets, &places, dir.as_deref());
+        Ok(v)
+    })
+    .await
+}
+
 // ---- Playtest -------------------------------------------------------------------------
 
 /// What Playtest does with the map's files: none missing (else a plain message), the found
@@ -429,7 +564,8 @@ fn check_playtest(doc: &MapDocument, places: Places) -> Result<ForPlaytest, Stri
         return Ok(ForPlaytest { assets: Vec::new(), places });
     }
     let assets = locate(named_files(doc), &places);
-    let missing: Vec<&Asset> = assets.iter().filter(|a| a.status == Status::Missing).collect();
+    // only what stops the server loading the map stops Playtest (sounds and the sky warn in the checks)
+    let missing: Vec<&Asset> = assets.iter().filter(|a| a.status == Status::Missing && fatal(a.named.kind)).collect();
     if !missing.is_empty() {
         let mut sky = false;
         let list: Vec<String> = missing
@@ -440,7 +576,7 @@ fn check_playtest(doc: &MapDocument, places: Places) -> Result<ForPlaytest, Stri
             .collect();
         let more = missing.len().saturating_sub(list.len());
         return Err(format!(
-            "Playtest stopped: the game would stop loading this map, because it uses {} that {} on this computer: {}{}. Put {} beside the project (in its models/, sprites/ or sound/ folder) or change those entities; the Project panel lists them.",
+            "Playtest stopped: the server would stop loading this map (\"Mod_LoadModel: … not found\"), because it uses {} that {} on this computer: {}{}. Find {} with Project > Find missing files…, put them beside the project (in its models/ or sprites/ folder), or change those entities.",
             if missing.len() == 1 { "a file" } else { "files" },
             if missing.len() == 1 { "isn't" } else { "aren't" },
             list.join(", "),
@@ -521,7 +657,7 @@ async fn api_copy(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: Hea
 }
 
 pub fn routes() -> Router<Shared> {
-    Router::new().route("/api/tools/editor/assets", get(api_assets)).route("/api/tools/editor/assets/copy", post(api_copy))
+    Router::new().route("/api/tools/editor/assets", get(api_assets)).route("/api/tools/editor/assets/copy", post(api_copy)).route("/api/tools/editor/assets/find", post(api_find))
 }
 
 #[cfg(test)]
@@ -781,6 +917,43 @@ mod tests {
         assert_eq!(a["assets"][0]["status"], "beside", "{a}");
         assert_eq!(a["toGame"], 1);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// QA round 3 (High): de_kobbl's entities name sprites/de_kobbl/*.spr, which the server
+    /// needs ("Mod_LoadModel: sprites/de_kobbl/blin.spr not found"). Real files, so ignored:
+    /// LS_KOBBL=<de_kobbl .jmf> LS_KOBBL_ASSETS=<a folder with its sprites, QA1's sim>
+    /// LS_TEST_GAME=<Half-Life> cargo test kobbl_missing_and_found -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn kobbl_missing_and_found() {
+        let (Ok(jmf), Ok(with), Ok(game)) = (std::env::var("LS_KOBBL"), std::env::var("LS_KOBBL_ASSETS"), std::env::var("LS_TEST_GAME")) else { return };
+        let jmf = PathBuf::from(jmf);
+        let im = crate::tools::editor::workspace::import_other(&jmf, &[]).unwrap();
+        let hl = PathBuf::from(game);
+        let places = Places { hl: Some(hl.clone()), game: "cstrike".into(), beside: vec![jmf.parent().unwrap().to_path_buf()] };
+        let a = locate(named_files(&im.doc), &places);
+        let missing: Vec<&str> = a.iter().filter(|x| x.status == Status::Missing).map(|x| x.named.rel.as_str()).collect();
+        println!("named {} files; missing {missing:?}", a.len());
+        assert!(missing.iter().any(|m| m.eq_ignore_ascii_case("sprites/de_kobbl/blin.spr")), "{missing:?}");
+        let note = missing_note(&a).unwrap();
+        println!("note: {note}");
+        assert!(note.contains("blin.spr"));
+        let err = check_playtest(&im.doc, Places { hl: Some(hl.clone()), game: "cstrike".into(), beside: places.beside.clone() }).err().unwrap();
+        println!("playtest: {err}");
+        assert!(err.contains("blin.spr"));
+        // the sounds alone never stop Playtest
+        assert!(a.iter().filter(|x| x.status == Status::Missing).all(|x| x.named.kind == "sprite" || x.named.kind == "model" || !fatal(x.named.kind)));
+        // Find missing files in the folder that has them (copied next to a project here, not into the game)
+        let proj = std::env::temp_dir().join(format!("ls-kobbl-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&proj);
+        std::fs::create_dir_all(&proj).unwrap();
+        let r = find_in(&a, &Places { hl: None, game: "cstrike".into(), beside: vec![] }, Path::new(&with), Some(&proj)).unwrap();
+        println!("find: {r}");
+        assert!(proj.join("sprites/de_kobbl/blin.spr").is_file());
+        let after = locate(named_files(&im.doc), &Places { hl: Some(hl.clone()), game: "cstrike".into(), beside: vec![proj.clone()] });
+        assert!(after.iter().filter(|x| fatal(x.named.kind)).all(|x| x.status != Status::Missing), "every model and sprite found");
+        assert!(check_playtest(&im.doc, Places { hl: Some(hl), game: "cstrike".into(), beside: vec![proj.clone()] }).is_ok());
+        let _ = std::fs::remove_dir_all(&proj);
     }
 
     #[test]

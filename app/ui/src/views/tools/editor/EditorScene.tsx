@@ -1053,6 +1053,7 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
   const start = useRef<{ pos: THREE.Vector3; q: THREE.Quaternion; s: THREE.Vector3; centre: Vec3 } | null>(null);
   const dragging = useRef(false);
   const copying = useRef<Promise<void> | null>(null); // P5
+  const copyKey = useRef<string | null>(null); // P5: joins the copy and its move in one undo step
   const rotSnap = useP5((x) => x.rotSnap); // P5
   const mode = tool === "move" ? "translate" : tool === "rotate" ? "rotate" : tool === "scale" ? "scale" : null;
   const bounds = useMemo(() => selectionBounds(), [sel, brushes, doc]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1082,7 +1083,8 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
             const p = pivot.current!;
             dragging.current = true;
             // P5: Shift-drag copies: the copies move, the originals stay
-            copying.current = shiftHeld() ? duplicateWith([0, 0, 0]) : null;
+            copyKey.current = shiftHeld() ? `copy-${Date.now()}` : null;
+            copying.current = copyKey.current ? duplicateWith([0, 0, 0], copyKey.current) : null;
             start.current = { pos: p.position.clone(), q: p.quaternion.clone(), s: p.scale.clone(), centre };
           }}
           onObjectChange={() => {
@@ -1104,6 +1106,8 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
             dragging.current = false;
             if (copying.current) await copying.current; // P5
             copying.current = null;
+            const merge = copyKey.current ? { merge: copyKey.current } : {}; // P5: one "Copy" step with the copy
+            copyKey.current = null;
             if (!p || !st) return;
             const ids = selectionIds();
             const s = useEditor.getState();
@@ -1111,7 +1115,7 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
             if (mode === "translate") {
               const d = p.position.clone().sub(st.pos);
               const t: Vec3 = [d.x, d.y, d.z].map((x) => Math.round(x * 1000) / 1000) as Vec3;
-              if (t.some((x) => x !== 0)) body = { op: "transform", ...ids, translate: t, lock: s.textureLock };
+              if (t.some((x) => x !== 0)) body = { op: "transform", ...ids, translate: t, lock: s.textureLock, ...merge };
             } else if (mode === "rotate") {
               const q = p.quaternion.clone().multiply(st.q.clone().invert());
               const angle = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
@@ -1122,11 +1126,11 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
                 // snap the axis to x/y/z when it's one of them (it nearly always is)
                 const arr = ax.toArray().map((x) => (Math.abs(x) > 0.9999 ? Math.sign(x) : Math.abs(x) < 1e-4 ? 0 : x));
                 const deg = Math.round(((angle * 180) / Math.PI) * 1000) / 1000;
-                body = { op: "transform", ...ids, rotate: { axis: arr, degrees: deg }, pivot: st.centre, lock: s.textureLock };
+                body = { op: "transform", ...ids, rotate: { axis: arr, degrees: deg }, pivot: st.centre, lock: s.textureLock, ...merge };
               }
             } else {
               const f = [p.scale.x / st.s.x, p.scale.y / st.s.y, p.scale.z / st.s.z].map((x) => Math.round(x * 10000) / 10000);
-              if (f.some((x) => x !== 1)) body = { op: "transform", ...ids, scale: f, pivot: st.centre, lock: s.textureLock };
+              if (f.some((x) => x !== 1)) body = { op: "transform", ...ids, scale: f, pivot: st.centre, lock: s.textureLock, ...merge };
             }
             if (!body) return useEditor.setState({ preview: null });
             const r = await s.cmd(body);

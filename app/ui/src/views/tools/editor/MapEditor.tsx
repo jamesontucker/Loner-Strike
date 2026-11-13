@@ -349,7 +349,8 @@ function Status({ working }: { working: boolean }) {
         {slow ? (
           <BusyLabel busy label="Saving…" />
         ) : (
-          stats && `${stats.brushes} brushes · ${stats.entities} entities${autosaved ? ` · autosaved ${autosaved}` : ""}`
+          // P5: the map's own entities (stats.entities also counts worldspawn, for the game's limit)
+          stats && `${stats.brushes} brushes · ${stats.point_entities + stats.brush_entities} entities${autosaved ? ` · autosaved ${autosaved}` : ""}`
         )}
       </span>
     </div>
