@@ -25,3 +25,15 @@
 - Stacks and crashes without a debugger: `drive_c/Loner-Strike/Sim/crashes.log` (every crash in the bottle, full
   winedbg report), and with fork builds from ls-creatures `f351765` on, `cstrike/ls_crash*.log` and
   `cstrike/ls_watchdog.log` in the server folder.
+
+## Queued after QA round 4 (user, 2026-11-13): fun_allinone with smart bots
+The user's favorite fun map, https://gamebanana.com/mods/93446 (fun_allinone by natko, CS 1.6). Get it through Get more /
+GameBanana; never ship it. Test case for general fun-map skills, not map-specific code:
+- Glass spawn room race; the first out picks the game in a room of 6 "SECURE ACCESS" doors (func_button -> multi_manager ->
+  func_door + 56 trigger_changetarget rewiring 18 trigger_teleports).
+- Six arenas: HE only, Para (24 trigger_push), Knives, AWPs, Shotguns, Pistols (walk into one of 14 trigger_multiple ->
+  game_player_equip spots to pick a pistol; player_weaponstrip on entry).
+Brain work, all general: read the map's I/O wiring (button -> manager -> door/teleport/equip) so bots know what a button
+does; a chooser behavior for the race winner (random or by preference, maybe what humans played last); teleports whose
+destination changes (learn every destination, follow the active one); arena awareness after strip/equip (HE-only fighting
+with real grenade arcs, para floating/falling, walking to a chosen equip spot). Check against other fun/jail maps too.
