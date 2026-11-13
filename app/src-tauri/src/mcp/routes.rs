@@ -354,6 +354,8 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/tools/plugins/file"),
     ("POST", "/api/tools/plugins/file"),
     ("GET", "/api/tools/plugins/log"),
+    ("POST", "/api/tools/plugins/rename"),
+    ("POST", "/api/tools/plugins/reset"),
     ("POST", "/api/tools/plugins/try"),
     ("POST", "/api/tools/plugins/untry"),
     ("GET", "/api/tools/plugins/words"),
