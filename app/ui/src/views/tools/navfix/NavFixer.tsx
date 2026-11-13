@@ -4,9 +4,9 @@
 // map knowledge, which is made for one nav.
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDirty } from "../../../store";
-import { useTools, useToolArg, type CameraMode } from "../../../stores/tools";
+import { useTools, useToolArg } from "../../../stores/tools";
 import { Banner, BusyButton, Info, LoadError, Segmented, Skeleton, useAskText, useConfirm, useToast } from "../../../ui";
 import { JobProgress } from "../../JobProgress";
 import { Check, Loading } from "../common";
@@ -19,7 +19,8 @@ import { useMesh, useEntities } from "../toolsApi";
 import { fmtVec } from "../viewer/coords";
 import { canDraw3d, SceneBoundary } from "../viewer/Scene";
 import { useModelMeshes } from "../viewer/World";
-import { FixScene, type ColourBy, type Mode } from "./FixScene";
+import { FixScene, LINK, type ColourBy, type Mode } from "./FixScene";
+import { saveLayout, saveLinks, savedLayout, savedLinks, useFix, type Layout, type LinkShow, type ViewKind } from "./fixStore";
 import { ATTRS, DIRS, editNav, openFix, rebuildKnowledge, redoNav, reloadNav, saveNav, undoNav, REACH_FALLS, REACH_NEVER, REACH_OK, REACH_TRAP, type FixState, type Op, type Problem } from "./navfixApi";
 import "./navfix.css";
 
@@ -72,10 +73,24 @@ const KINDS: [string, string][] = [
 const kindLabel = (k: string) => KINDS.find((x) => x[0] === k)?.[1] ?? "Other";
 
 const HINTS: Record<Mode, string> = {
-  select: "Click an area to pick it · Shift-click adds more · Delete removes them",
-  draw: "Drag on the floor to draw an area · Right-drag moves the view · Scroll zooms",
+  select: "Click an area to pick it · Shift-click adds more · F looks at it · scroll zooms to the mouse",
+  draw: "Drag on the floor to draw an area · right-drag pans · Alt: no snapping · Esc stops",
   link: "Click an area, then the one it leads to · Shift-click for a one-way drop · Esc stops",
 };
+const MODE_KEY: Record<Mode, string> = { select: "V", draw: "D", link: "L" };
+const MODE_NAME: Record<Mode, string> = { select: "Select", draw: "Draw area", link: "Link" };
+
+/** The middle and size of some areas (for F and Look at). */
+function areasBox(st: FixState, ids: Iterable<number>): { at: [number, number, number]; size: number } | null {
+  let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const id of ids) {
+    const a = st.nav.areas[st.nav.index.get(id) ?? -1];
+    if (!a) continue;
+    for (const p of [a.nw, a.se]) for (let k = 0; k < 3; k++) (lo[k] = Math.min(lo[k], p[k])), (hi[k] = Math.max(hi[k], p[k]));
+  }
+  if (!Number.isFinite(lo[0])) return null;
+  return { at: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], size: Math.max(48, hi[0] - lo[0], hi[1] - lo[1]) };
+}
 
 function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
   const qc = useQueryClient();
@@ -89,8 +104,10 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
   const q = useQuery({ queryKey: key, queryFn: ({ signal }) => openFix(map, signal), retry: false, refetchOnWindowFocus: false, staleTime: Infinity, gcTime: 0, structuralSharing: false });
   const st = q.data;
 
-  const camera = useTools((s) => s.camera);
-  const setCamera = useTools((s) => s.setCamera);
+  const [layout, setLayoutState] = useState<Layout>(savedLayout);
+  const setLayout = (l: Layout) => (setLayoutState(l), saveLayout(l));
+  const [links, setLinksState] = useState<LinkShow>(savedLinks);
+  const setLinks = (l: LinkShow) => (setLinksState(l), saveLinks(l));
   const [mode, setMode] = useState<Mode>("select");
   const [colourBy, setColourBy] = useState<ColourBy>("reach");
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -101,13 +118,24 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
   const [lost, setLost] = useState(false);
   const [n, setN] = useState(0);
   const [rebuilding, setRebuilding] = useState(false);
-  const [said, setSaid] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
 
   useDirty("navfix", !!st?.dirty);
-  // (flying grabs the mouse: this tool draws and picks, so it's Orbit or Top-down)
+  useLayoutEffect(() => useFix.setState({ mode, busy: !!busy }), [mode, busy]);
+  // "look at" asked for through Tools (a link to a spot, another tool): this page's cameras
   useEffect(() => {
-    if (camera === "fly") setCamera("orbit");
-  }, [camera, setCamera]);
+    const take = (r: ReturnType<typeof useTools.getState>["lookAt"]) => {
+      if (!r) return;
+      useTools.setState({ lookAt: null });
+      useFix.getState().look(r.point, r.size);
+    };
+    take(useTools.getState().lookAt);
+    return useTools.subscribe((s) => take(s.lookAt));
+  }, []);
+  // a focus waiting for a view doesn't carry over to the next visit or map
+  useEffect(() => () => useFix.setState({ focus: null }), [map]);
+  // what was under the mouse goes with the view it was in
+  useEffect(() => useFix.setState({ hoverArea: null, hoverPoint: null, hoverView: null, mouse: null, draft: null }), [map, layout]);
 
   // areas that went (an undo, a delete) leave the selection
   useEffect(() => {
@@ -140,17 +168,21 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
   );
   const edit = useCallback((label: string, op: Op, after?: (s: FixState) => void) => act(label, () => editNav(map, op), after), [act, map]);
   const undo = () => st?.undo && act("Undoing…", () => undoNav(map));
+  const undoRef = useRef(undo);
+  undoRef.current = undo;
+  /** "Added area 812 · Undo" after a change you might not have meant */
+  const said = useCallback((text: string) => toast(text, false, { label: "Undo", run: () => void undoRef.current() }, 6000), [toast]);
   const redo = () => st?.redo && act("Redoing…", () => redoNav(map));
   const save = () =>
     act("Saving…", () => saveNav(map), (s) => {
-      setSaid(s.message ?? "Saved.");
+      setSaved(s.message ?? "Saved.");
       // the map viewer's nav layer reads the file again
       void qc.invalidateQueries({ queryKey: ["tools", "nav", map] });
       void qc.invalidateQueries({ queryKey: ["tools", "know", map] });
     });
   const startOver = async () => {
     if (st?.dirty && !(await confirm("Throw away your changes and read the nav file again?", { ok: "Start over", danger: true }))) return;
-    setSaid(null);
+    setSaved(null);
     await act("Reading the nav…", () => reloadNav(map));
   };
   const rebuild = async () => {
@@ -175,7 +207,8 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
     setShown(new Set(ids));
     setSelected(new Set());
   };
-  const del = (ids: number[]) => ids.length && edit(ids.length === 1 ? "Deleting the area…" : "Deleting the areas…", { op: "delete", ids }, () => setSelected(new Set()));
+  const del = (ids: number[]) =>
+    ids.length && edit(ids.length === 1 ? "Deleting the area…" : "Deleting the areas…", { op: "delete", ids }, () => (setSelected(new Set()), said(ids.length === 1 ? `Deleted area ${ids[0]}` : `Deleted ${ids.length} areas`)));
 
   const onPick = useCallback(
     (id: number | null, shift: boolean) => {
@@ -200,11 +233,23 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
     [mode, linkFrom, oneWay, edit],
   );
   const onDraw = useCallback(
-    (x: [number, number], y: [number, number], z: number) => edit("Adding the area…", { op: "add", x, y, z, snap: true }, (s) => s.newId != null && setSelected(new Set([s.newId]))),
-    [edit],
+    (x: [number, number], y: [number, number], z: number) =>
+      edit("Adding the area…", { op: "add", x, y, z, snap: true }, (s) => {
+        if (s.newId == null) return;
+        setSelected(new Set([s.newId]));
+        said(`Added area ${s.newId} (${Math.round(x[1] - x[0])} × ${Math.round(y[1] - y[0])}). Link it to its neighbors next.`);
+      }),
+    [edit, said],
   );
 
-  // keys: undo/redo, delete, Esc, V/D/L for the modes, O/T for the camera
+  // the views get handlers that never change and call the latest ones (their props can be a
+  // frame behind: a click straight after pressing L must already link)
+  const handlers = useRef({ onPick, onDraw });
+  handlers.current = { onPick, onDraw };
+  const pickNow = useCallback((id: number | null, shift: boolean) => handlers.current.onPick(id, shift), []);
+  const drawNow = useCallback((x: [number, number], y: [number, number], z: number) => handlers.current.onDraw(x, y, z), []);
+
+  // keys: undo/redo, delete, Esc, V/D/L for the modes, O/T/S for the view, F to look at the pick
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (isField(e.target) || document.querySelector(".sheet-backdrop")) return;
@@ -222,17 +267,28 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
       }
       if (mod || e.altKey) return;
       if (e.key === "Escape") {
-        setLinkFrom(null);
-        setSelected(new Set());
-        setShown(new Set());
+        // one step back at a time: the link's start, then the tool, then the pick
+        if (linkFrom !== null) setLinkFrom(null);
+        else if (mode !== "select") setMode("select");
+        else {
+          setSelected(new Set());
+          setShown(new Set());
+        }
+      } else if (e.code === "KeyF" && st) {
+        const box = areasBox(st, selected.size ? selected : shown.size ? shown : linkFrom !== null ? [linkFrom] : []);
+        const h = useFix.getState();
+        if (box) h.look(box.at, box.size);
+        else if (h.hoverPoint) h.look(h.hoverPoint, 128);
+        else toast("Pick an area first, then F looks at it.");
       } else if ((e.key === "Delete" || e.key === "Backspace") && selected.size && mode === "select") {
         e.preventDefault();
         void del([...selected]);
       } else if (e.code === "KeyV") setMode("select");
       else if (e.code === "KeyD") setMode("draw");
       else if (e.code === "KeyL") setMode("link");
-      else if (e.code === "KeyO") setCamera("orbit");
-      else if (e.code === "KeyT") setCamera("top");
+      else if (e.code === "KeyO") setLayout("orbit");
+      else if (e.code === "KeyT") setLayout("top");
+      else if (e.code === "KeyS") setLayout(layout === "split" ? "orbit" : "split");
     };
     window.addEventListener("keydown", on);
     return () => window.removeEventListener("keydown", on);
@@ -244,7 +300,8 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
   const showProblem = (p: Problem) => {
     setShown(new Set(p.areas));
     if (p.areas.length) setSelected(new Set(p.areas.length <= 20 ? p.areas : []));
-    useTools.getState().look(p.at, p.areas.length > 3 ? 256 : 96);
+    const box = p.areas.length ? areasBox(st!, p.areas) : null;
+    useFix.getState().look(p.at, Math.min(box?.size ?? 96, 1200));
   };
 
   const failed = mesh.error instanceof Error ? mesh.error.message : q.error instanceof Error ? q.error.message : null;
@@ -261,8 +318,8 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
         <span className="push" />
         <div className="navfix-tools" role="group" aria-label="What clicks do">
           {(["select", "draw", "link"] as Mode[]).map((m) => (
-            <button key={m} type="button" aria-pressed={mode === m} title={`${HINTS[m]} (${m === "select" ? "V" : m === "draw" ? "D" : "L"})`} onClick={() => setMode(m)}>
-              {m === "select" ? "Select" : m === "draw" ? "Draw area" : "Link"}<kbd>{m === "select" ? "V" : m === "draw" ? "D" : "L"}</kbd>
+            <button key={m} type="button" aria-pressed={mode === m} title={`${HINTS[m]} (${MODE_KEY[m]})`} onClick={() => setMode(mode === m && m !== "select" ? "select" : m)}>
+              {MODE_NAME[m]}<kbd>{MODE_KEY[m]}</kbd>
             </button>
           ))}
         </div>
@@ -278,7 +335,7 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
       ) : (
         <div className="tools-viewer">
           <div className="tools-stage">
-            <div className={`tools-canvas navfix-canvas navfix-${mode}`}>
+            <div className={`tools-canvas navfix-canvas navfix-${mode} navfix-layout-${layout}`}>
               {!ready ? (
                 <div className="tools-overlay">
                   <Loading text={mesh.data ? "Reading the nav…" : "Reading the map…"} />
@@ -289,29 +346,51 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
                 </div>
               ) : (
                 <SceneBoundary key={n} fallback={<div className="tools-overlay"><LoadError title="The 3D view stopped" text="Your computer's graphics stopped drawing the map." onRetry={() => setN((v) => v + 1)} /></div>}>
-                  <FixScene
-                    bundle={mesh.data!}
-                    meshes={meshes}
-                    map={map}
-                    nav={st!.nav}
-                    reach={st!.reach}
-                    colourBy={colourBy}
-                    mode={mode}
-                    selected={selected}
-                    linkFrom={linkFrom}
-                    shown={shown}
-                    busy={!!busy}
-                    onPick={onPick}
-                    onDraw={onDraw}
-                    onLost={() => setLost(true)}
-                  />
+                  <div className="navfix-views">
+                    {(layout === "split" ? (["top", "orbit"] as ViewKind[]) : [layout]).map((v) => (
+                      // (one view keeps its canvas when it turns between 3D and top-down)
+                      <div key={layout === "split" && v === "top" ? "two" : "one"} className="navfix-view" data-view={v}>
+                        <FixScene
+                          bundle={mesh.data!}
+                          meshes={meshes}
+                          map={map}
+                          view={v}
+                          nav={st!.nav}
+                          reach={st!.reach}
+                          colourBy={colourBy}
+                          links={links}
+                          mode={mode}
+                          oneWay={oneWay}
+                          selected={selected}
+                          linkFrom={linkFrom}
+                          shown={shown}
+                          busy={!!busy}
+                          onPick={pickNow}
+                          onDraw={drawNow}
+                          onLost={() => setLost(true)}
+                        />
+                        {layout === "split" && <span className="navfix-view-label">{v === "top" ? "Top-down" : "3D"}</span>}
+                      </div>
+                    ))}
+                  </div>
                 </SceneBoundary>
               )}
+              {ready && !lost && <ModeChip mode={mode} linkFrom={linkFrom} oneWay={oneWay} setOneWay={setOneWay} onDone={() => setMode("select")} />}
               {ready && (
                 <div className="navfix-cam">
-                  <Segmented values="orbit top" labels="Orbit|Top-down" current={camera === "fly" ? "orbit" : camera} onPick={(v) => setCamera(v as CameraMode)} label="Camera" />
+                  <Segmented
+                    options={[
+                      ["orbit", <span key="o" title="Turn round the map (O)">3D</span>],
+                      ["top", <span key="t" title="Straight down, north up (T)">Top-down</span>],
+                      ["split", <span key="s" title="Top-down and 3D side by side (S)">Split</span>],
+                    ]}
+                    current={layout}
+                    onPick={(v) => setLayout(v as Layout)}
+                    label="View"
+                  />
                 </div>
               )}
+              {ready && st && <CursorHint st={st} mode={mode} linkFrom={linkFrom} oneWay={oneWay} />}
               {busy && (
                 <div className="navfix-busy" role="status">
                   <span className="spinner" aria-hidden="true" />
@@ -326,17 +405,17 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
               <section className="tools-panel"><Skeleton rows={4} /></section>
             ) : (
               <>
-                <ReachPanel st={st} colourBy={colourBy} setColourBy={setColourBy} onShow={showReach} />
+                <ReachPanel st={st} colourBy={colourBy} setColourBy={setColourBy} links={links} setLinks={setLinks} onShow={showReach} />
                 {mode !== "select" && (
                   <section className="tools-panel navfix-mode">
-                    <h3>{mode === "link" ? "Link areas" : "Draw an area"} <Info text={mode === "link" ? "Click the area to link from, then the one it leads to. Each link carries on from the last area, so you can click along a beam. One way is for a drop bots can't climb back up (or hold Shift)." : "Drag a box on the floor where players can walk. It's laid at the height you start on and each corner is dropped to the floor. Top-down (T) makes narrow spots easiest. Then link it to its neighbours."} /></h3>
+                    <h3>{mode === "link" ? "Link areas" : "Draw an area"} <Info text={mode === "link" ? "Click the area to link from, then the one it leads to. Each link carries on from the last area, so you can click along a beam. One way is for a drop bots can't climb back up (or hold Shift)." : "Drag a box on the floor where players can walk. It's laid at the height you start on and each corner is dropped to the floor. Corners snap to an 8-unit grid and to the edges of areas next to it (the edge turns blue); hold Alt for no snapping. Top-down (T) or Split (S) makes narrow spots easiest. Then link it to its neighbors."} /></h3>
                     {mode === "link" ? (
                       <>
                         <p className="small-note">{linkFrom === null ? "Click the area to link from." : `From area ${linkFrom}: click the area it leads to.`}</p>
                         <Check checked={oneWay} onChange={setOneWay} label="One way (a drop)" title="A drop bots can't climb back up" />
                       </>
                     ) : (
-                      <p className="small-note">Drag on the floor. Right-drag moves the view.</p>
+                      <p className="small-note">Drag on the floor. Corners snap to the grid and to the edges next door (Alt: no snapping). Right-drag moves the view.</p>
                     )}
                   </section>
                 )}
@@ -352,7 +431,7 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
         <ActionBar
           dirty={st.dirty}
           working={busy}
-          where={said ?? (st.dirty ? `${st.steps} change${st.steps === 1 ? "" : "s"}${st.did ? ` · last: ${st.did}` : ""}` : st.file)}
+          where={saved ?? (st.dirty ? `${st.steps} change${st.steps === 1 ? "" : "s"}${st.did ? ` · last: ${st.did}` : ""}` : st.file)}
           info="Saving keeps the nav as it first was (a .bak file) and every save in History. Start over throws away what isn't saved and reads the file again."
           save={{ label: "Save the nav", onClick: save }}
           undo={startOver}
@@ -371,6 +450,80 @@ function Status({ mode, linkFrom, oneWay }: { mode: Mode; linkFrom: number | nul
       <span className="tools-hint">{HINTS[mode]}</span>
     </div>
   );
+}
+
+/** What clicks do now, on the view itself: easy to miss in the bar when you're looking at the map. */
+function ModeChip({ mode, linkFrom, oneWay, setOneWay, onDone }: { mode: Mode; linkFrom: number | null; oneWay: boolean; setOneWay: (v: boolean) => void; onDone: () => void }) {
+  if (mode === "select") return null;
+  return (
+    <div className={`navfix-chip navfix-chip-${mode}`} role="status" data-mode={mode}>
+      <strong>{mode === "draw" ? "Drawing areas" : "Linking"}</strong>
+      <span className="navfix-chip-text">
+        {mode === "draw"
+          ? "Drag on the floor · right-drag pans · Alt: no snapping"
+          : linkFrom === null
+            ? "Click the area to link from"
+            : `From ${linkFrom}: click the area it leads to`}
+      </span>
+      {mode === "link" && (
+        <span className="seg navfix-chip-seg" role="group" aria-label="Link direction">
+          <button type="button" aria-pressed={!oneWay} onClick={() => setOneWay(false)} title="Bots walk both ways">Both ways</button>
+          <button type="button" aria-pressed={oneWay} onClick={() => setOneWay(true)} title="A drop bots can't climb back up (or hold Shift as you click)">One way</button>
+        </span>
+      )}
+      <button type="button" className="btn small" onClick={onDone} title="Back to Select (Esc)">Done <kbd>Esc</kbd></button>
+    </div>
+  );
+}
+
+/** A short line next to the mouse while drawing or linking: the box's size and whether it
+ *  snapped, or what the next click links. */
+function CursorHint({ st, mode, linkFrom, oneWay }: { st: FixState; mode: Mode; linkFrom: number | null; oneWay: boolean }) {
+  const mouse = useFix((s) => s.mouse);
+  const view = useFix((s) => s.hoverView);
+  const area = useFix((s) => s.hoverArea);
+  const draft = useFix((s) => s.draft);
+  const shift = useShift();
+  if (mode === "select" || !mouse || !view) return null;
+  let text: string;
+  let tone = "";
+  if (mode === "draw") {
+    if (draft && (draft.w || draft.h)) {
+      text = `${Math.round(draft.w)} × ${Math.round(draft.h)}${draft.snapped ? " · lined up with the area next to it" : ""}`;
+      tone = draft.snapped ? "snap" : "";
+    } else text = "Drag to draw an area";
+  } else if (linkFrom === null) text = area !== null ? `Link from area ${area}` : "Click an area to start";
+  else if (area === null || area === linkFrom) text = area === linkFrom ? "Now click the area it leads to" : "Click the area it leads to";
+  else {
+    const a = st.nav.areas[st.nav.index.get(linkFrom) ?? -1];
+    const there = !!a?.conns.flat().includes(area);
+    const back = !!st.nav.areas[st.nav.index.get(area) ?? -1]?.conns.flat().includes(linkFrom);
+    const one = oneWay || shift;
+    text = there && (one ? !back : back) ? `${linkFrom} → ${area}: already linked` : `${linkFrom} ${one ? "→" : "↔"} ${area}${one ? " · one way (a drop)" : " · both ways"}`;
+    tone = one ? "out" : "link";
+  }
+  const host = document.querySelector(".navfix-canvas")?.getBoundingClientRect();
+  const left = mouse.x - (host?.left ?? 0) + 16;
+  const top = mouse.y - (host?.top ?? 0) + 18;
+  return (
+    <div className={`navfix-hint ${tone ? `navfix-hint-${tone}` : ""}`} style={{ left, top }} aria-hidden="true">
+      {text}
+    </div>
+  );
+}
+
+function useShift() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => setOn(e.shiftKey);
+    window.addEventListener("keydown", f);
+    window.addEventListener("keyup", f);
+    return () => {
+      window.removeEventListener("keydown", f);
+      window.removeEventListener("keyup", f);
+    };
+  }, []);
+  return on;
 }
 
 // ---- the picked areas ------------------------------------------------------------------------
@@ -436,7 +589,10 @@ function Selection({ st, ids, busy, edit, del }: { st: FixState; ids: number[]; 
       </label>
       <div className="row">
         <button className="btn small danger" disabled={busy} onClick={() => del(ids)}>{one ? "Delete area" : `Delete ${areas.length} areas`}</button>
-        <button className="btn small" onClick={() => useTools.getState().look(st.nav.centres[st.nav.index.get(areas[0].id)!], 96)}>Look at</button>
+        <button className="btn small" title="F" onClick={() => {
+          const box = areasBox(st, ids);
+          if (box) useFix.getState().look(box.at, box.size);
+        }}>Look at</button>
       </div>
     </section>
   );
@@ -487,7 +643,7 @@ function AreaFacts({ st, a, busy, edit }: { st: FixState; a: NavArea; busy: bool
           ))}
         </ul>
       ) : (
-        <p className="small-note">No links: bots can't walk on or off it. Use Link to join it to its neighbours.</p>
+        <p className="small-note">No links: bots can't walk on or off it. Use Link to join it to its neighbors.</p>
       )}
       <details className="navfix-box">
         <summary>Position and size</summary>
@@ -563,7 +719,7 @@ function Problems({ st, busy, onShow, edit, fixAll }: { st: FixState; busy: bool
 
 // ---- the reach check -------------------------------------------------------------------------
 
-function ReachPanel({ st, colourBy, setColourBy, onShow }: { st: FixState; colourBy: ColourBy; setColourBy: (c: ColourBy) => void; onShow: (r: number) => void }) {
+function ReachPanel({ st, colourBy, setColourBy, links, setLinks, onShow }: { st: FixState; colourBy: ColourBy; setColourBy: (c: ColourBy) => void; links: LinkShow; setLinks: (l: LinkShow) => void; onShow: (r: number) => void }) {
   const n = [0, 0, 0, 0];
   for (const r of st.reach) if (r >= 0 && r <= 3) n[r]++;
   const total = st.reach.length || 1;
@@ -591,9 +747,18 @@ function ReachPanel({ st, colourBy, setColourBy, onShow }: { st: FixState; colou
         ))}
       </ul>
       <div className="tools-field">
-        <span>Colours</span>
-        <Segmented label="Colours" values="reach place moves" labels="Reach|Places|Moves" current={colourBy} onPick={(v) => setColourBy(v as ColourBy)} />
+        <span>Colors</span>
+        <Segmented label="Colors" values="reach place moves" labels="Reach|Places|Moves" current={colourBy} onPick={(v) => setColourBy(v as ColourBy)} />
       </div>
+      <div className="tools-field">
+        <span>Links <Info text="Picked: the links of the area under the mouse and the picked ones, bright and drawn through walls, plus every one-way drop. All: every link on the map (busy on big maps)." /></span>
+        <Segmented label="Links" values="picked all" labels="Picked|All" current={links} onPick={(v) => setLinks(v as LinkShow)} />
+      </div>
+      <p className="navfix-legend small-note" aria-label="Link colors">
+        <span><i style={{ background: LINK.both }} />both ways</span>
+        <span><i style={{ background: LINK.out }} />one way out →</span>
+        <span><i style={{ background: LINK.into }} />drop into it</span>
+      </p>
     </section>
   );
 }
