@@ -18,7 +18,7 @@
 <link rel="alternate" type="text/plain" href="https://lonerstrike.com/llms.txt" title="Loner-Strike for AI assistants">
 <meta property="og:site_name" content="Loner-Strike">
 <meta property="og:title" content="Loner-Strike: build, play, host and share CS 1.6 and Condition Zero">
-<meta property="og:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, Last Stand and Battle Royale, a map editor and Game Mode Studio, your own servers and a community to share what you make. Free, for CS 1.6 and Condition Zero.">
+<meta property="og:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, classic mods and new modes, a map editor and Game Mode Studio, your own servers and a community to share what you make. Free, for CS 1.6 and Condition Zero.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://lonerstrike.com/">
 <meta property="og:locale" content="en_US">
@@ -29,7 +29,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:creator" content="@nanoshrine">
 <meta name="twitter:title" content="Loner-Strike: build, play, host and share CS 1.6 and Condition Zero">
-<meta name="twitter:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, Last Stand and Battle Royale, a map editor and Game Mode Studio, your own servers and a community to share what you make. Free, for CS 1.6 and Condition Zero.">
+<meta name="twitter:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, classic mods and new modes, a map editor and Game Mode Studio, your own servers and a community to share what you make. Free, for CS 1.6 and Condition Zero.">
 <meta name="twitter:image" content="https://lonerstrike.com/img/og.jpg">
 <script type="application/ld+json">
 {
@@ -72,15 +72,14 @@
   "Bots with human reaction times and aim, from a newbie lobby to bunnyhopping pros",
   "Bot personalities that chat, banter and rage, with regulars and clan tags",
   "Bots that understand team chat and voice commands",
-  "22 classic community modes patched so bots can play them",
+  "22 classic community modes patched so bots can play them, and modes made here, like Last Stand and Battle Royale",
   "27 fun and popular maps installed for you, and thousands more from GameBanana",
   "Seven ways for friends to connect: LAN, router, playit.gg, Tailscale, ZeroTier, Radmin VPN, Hamachi",
   "Admins, VIPs, bans, mutes, swear filter, chat log, stats and ranks",
   "Match mode for 5v5s and HLTV for spectators and demos",
   "Dedicated servers on your computer or a rented Linux machine",
   "Control from your phone with a QR code",
-  "Last Stand and Battle Royale, new modes with their own maps (ls_outpost, br_valley)",
-  "Map editor inspired by Unreal Engine's editor: brushes and entities in 3D, a Content Browser, live checks, Hammer and J.A.C.K. import, SDHLT compiling and F5 playtests with bots",
+   "Map editor inspired by Unreal Engine's editor: brushes and entities in 3D, a Content Browser, live checks, Hammer and J.A.C.K. import, SDHLT compiling and F5 playtests with bots",
   "Game Mode Studio: game modes from Blueprint-style node graphs, debugged live in the game",
   "Plugin Studio for AMX Mod X, and Creature Studio for creatures and waves",
   "Map tools: map doctor, map simulator, nav fixer, callouts and radar maker",
@@ -193,22 +192,6 @@
    "acceptedAnswer": {
     "@type": "Answer",
     "text": "They're new and still settling in. They save backups before they change a file, but keep your own copies of work you care about, and tell us on Discord when something's off."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Can I use maps I made in Hammer or J.A.C.K.?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Yes. The map editor opens Hammer .rmf, J.A.C.K. .jmf and .map files, and exports a .map for any GoldSrc compiler."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What can I share in Community?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Maps, prefabs, textures, sprays and Game Mode Studio modes. Hand-written plugins can't be shared, so nothing you download from Community runs code on your computer."
    }
   },
   {
@@ -405,6 +388,7 @@ html { scroll-padding-top: 72px; }
 .group h3 { font: 400 20px/1.1 var(--stencil); margin: 0 0 10px; }
 .group ul { list-style: none; margin: 0; padding: 0; }
 .group li { position: relative; padding: 0 0 10px 22px; color: var(--dim); font-size: 16px; line-height: 1.4; text-wrap: pretty; }
+.group p { margin: 0 0 12px; color: var(--dim); font-size: 16px; line-height: 1.45; }
 .group li::before { content: ""; position: absolute; left: 2px; top: 6px; width: 9px; height: 9px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
 @media (max-width: 1060px) { .feature-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .feature-groups { grid-template-columns: 1fr; } }
@@ -451,16 +435,7 @@ html { scroll-padding-top: 72px; }
   .sl-game, .sl-bots, .sl-map { display: none; }
 }
 
-/* gallery */
-.gallery { padding: 64px 0 70px; }
-.shots { list-style: none; margin: 22px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
-.shots button { display: block; width: 100%; padding: 0; border: 0; background: var(--side); box-shadow: var(--raised); border-radius: 3px; cursor: zoom-in; text-align: left; color: inherit; font: inherit; }
-.shots button:hover { outline: 2px solid var(--signal); }
-.shots .frame { aspect-ratio: 16 / 10; overflow: hidden; border-radius: 3px 3px 0 0; background: #23271c; }
-.shots .frame.tall { display: grid; place-items: center; }
-.shots img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
-.shots .frame.tall img { width: auto; height: 100%; object-fit: contain; }
-.shots span { display: block; padding: 8px 12px 10px; font-weight: 600; color: var(--dim); font-size: 16px; }
+/* the big screenshot viewer */
 .viewer { width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: rgba(20,22,16,.94); color: var(--bone); }
 .viewer::backdrop { background: rgba(20,22,16,.7); }
 .viewer figure { margin: 0; height: 100%; display: grid; grid-template-rows: 1fr auto; place-items: center; padding: 48px 72px 18px; gap: 12px; }
@@ -474,7 +449,6 @@ html { scroll-padding-top: 72px; }
 .viewer .close { top: 14px; right: 14px; width: 44px; height: 44px; }
 .viewer .count { position: absolute; top: 24px; left: 18px; color: var(--faint); font-weight: 600; font-size: 15px; }
 @media (max-width: 860px) {
-  .shots { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .viewer figure { padding: 60px 12px 90px; }
   .viewer .nav { top: auto; bottom: 18px; transform: none; }
   .viewer .prev { left: calc(50% - 58px); }
@@ -514,8 +488,8 @@ footer a { color: var(--dim); }
 
 /* The CS 1.6 crosshair on the hero and the screenshots. Mouse only; anything clickable keeps its own cursor. */
 @media (pointer: fine) {
-  .hero, .gallery { cursor: url("img/crosshair.svg") 16 16, crosshair; }
-  .hero a, .hero button, .gallery a { cursor: pointer; }
+  .hero { cursor: url("img/crosshair.svg") 16 16, crosshair; }
+  .hero a, .hero button { cursor: pointer; }
 }
 
 /* Kill feed, top right of the hero like in the game. Decorative, never takes clicks. */
@@ -641,99 +615,36 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 .tagline-2 { margin: -12px 0 24px; color: var(--faint); font-size: 18px; max-width: 40ch; }
 .feature .more { margin-top: 18px; }
 
-/* the four things it does, right under the hero: tabs to the four parts of the page */
-.verbs { background: var(--side); box-shadow: inset 0 1px 0 var(--bevel-lo), inset 0 -1px 0 var(--bevel-lo); }
-.verbs .wrap { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.verbs a { display: block; padding: 18px 20px 20px; text-decoration: none; color: var(--dim); font-size: 16px; line-height: 1.35; box-shadow: inset -1px 0 0 var(--bevel-lo), inset 1px 0 0 rgba(136,145,128,.18); }
-.verbs a:first-child { box-shadow: inset -1px 0 0 var(--bevel-lo); }
-.verbs a:last-child { box-shadow: inset 1px 0 0 rgba(136,145,128,.18); }
-.verbs b { display: block; font: 400 26px/1 var(--stencil); color: var(--bone); margin-bottom: 6px; }
-.verbs a:hover b, .verbs a:focus-visible b { color: var(--signal); }
-.verbs a:hover { background: rgba(255,255,255,.03); }
-@media (max-width: 860px) {
-  .verbs .wrap { grid-template-columns: 1fr 1fr; width: 100%; }
-  .verbs a { padding: 14px 16px 16px; box-shadow: inset 0 -1px 0 var(--bevel-lo) !important; }
-  .verbs a:nth-child(odd) { box-shadow: inset -1px 0 0 var(--bevel-lo), inset 0 -1px 0 var(--bevel-lo) !important; }
-  .verbs b { font-size: 22px; }
-}
-
-/* chapter openers: the big word, the loader's blocks under it, one line beside it */
-.chapter { padding: 88px 0 4px; }
-.chapter .wrap { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 40px; align-items: end; }
-.chapter h2 { font: 400 clamp(60px, 10vw, 120px)/.82 var(--stencil); letter-spacing: .01em; padding-bottom: 22px; position: relative; }
-.chapter h2::after { content: ""; position: absolute; left: 2px; right: 0; bottom: 0; height: 12px;
-  /* whole blocks only: "space" repeats a 12 px tile (a 9 px block and its gap) only as many times
-     as it fits, never cutting the last one, whatever the heading's width */
-  background: linear-gradient(to right, var(--signal) 0 9px, transparent 9px 12px) left center / 12px 12px space no-repeat; opacity: .9; }
-.chapter p { margin: 0 0 18px; color: var(--dim); font-size: 21px; line-height: 1.4; max-width: 50ch; }
-@media (max-width: 860px) {
-  .chapter { padding-top: 64px; }
-  .chapter .wrap { grid-template-columns: 1fr; }
-  .chapter h2 { padding-bottom: 18px; width: max-content; max-width: 100%; }
-  .chapter p { font-size: 18px; margin: 4px 0 0; }
-}
-
-/* the new modes */
+/* the modes list */
 .modes .chips { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .modes .chips li { background: var(--panel); box-shadow: var(--raised); padding: 6px 12px; border-radius: 2px; font-weight: 600; color: var(--dim); }
 .modes .chips li b { color: var(--bone); font-weight: 700; }
-.modes-sub { font: 400 24px/1.1 var(--stencil); margin-top: 44px; }
-.feature h3.two-lines span { display: block; white-space: nowrap; }
-.modes-more { margin: 18px 0 0; color: var(--dim); max-width: 70ch; }
-.mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; }
-.mode-card { background: var(--panel); box-shadow: var(--raised), 0 18px 50px rgba(0,0,0,.28); border-radius: 3px; overflow: hidden; display: flex; flex-direction: column; }
-.mode-card picture { display: block; background: #0d0f0a; aspect-ratio: 16 / 10; }
-.mode-card picture img { width: 100%; height: 100%; object-fit: cover; }
-.mode-text { padding: 18px 20px 20px; }
-.mode-text h3 { font: 400 30px/1 var(--stencil); }
-.mode-map { margin: 4px 0 10px; color: var(--signal); font-weight: 600; font-size: 16px; }
-.mode-text p { color: var(--dim); margin: 0 0 10px; }
-.mode-text ul { margin: 0; padding-left: 20px; color: var(--dim); font-size: 16px; }
-.mode-text li + li { margin-top: 3px; }
-@media (max-width: 860px) { .mode-cards { grid-template-columns: 1fr; } }
-
-/* every tool */
-.toolbox { padding: 24px 0 40px; }
-.toolbox h3 { font: 400 28px/1.1 var(--stencil); }
-.toolbox .beta { display: inline-block; vertical-align: middle; margin-left: 8px; padding: 3px 7px 2px; border-radius: 2px; background: var(--panel); box-shadow: var(--raised);
-  font: 700 12px/1 var(--text); letter-spacing: .08em; text-transform: uppercase; color: var(--signal); position: relative; top: -3px; }
-.tool-groups { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
-/* five groups: three across, then two wider ones */
-.tool-group { grid-column: span 2; }
-.tool-group:nth-child(n+4) { grid-column: span 3; }
-.tool-group { background: var(--side); box-shadow: var(--sunken); border-radius: 3px; padding: 16px 16px 6px; }
-.tool-group h4 { margin: 0 0 10px; font: 400 19px/1.1 var(--stencil); color: var(--faint); }
-.tool-group dl { margin: 0; }
-.tool-group dt { font-weight: 700; font-size: 17px; }
-.tool-group dt a { color: var(--bone); text-decoration: none; }
-.tool-group dt a:hover, .tool-group dt a:focus-visible { color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
-.tool-group dd { margin: 1px 0 12px; color: var(--dim); font-size: 15px; line-height: 1.4; }
-@media (max-width: 1060px) { .tool-groups { grid-template-columns: 1fr 1fr; } .tool-group, .tool-group:nth-child(n+4) { grid-column: auto; } .tool-group:last-child { grid-column: 1 / -1; } }
-@media (max-width: 560px) { .tool-groups { grid-template-columns: 1fr; } }
+/* modes made here: entries like the others, with a small tag and a line, linking to their docs */
+.modes .chips li.ours { padding: 0; }
+.modes .chips li.ours a { display: block; padding: 6px 12px; color: var(--dim); text-decoration: none; }
+.modes .chips li.ours a:hover, .modes .chips li.ours a:focus-visible { color: var(--bone); background: var(--panel-2); }
+.tag, .beta { display: inline-block; vertical-align: 2px; margin: 0 4px; padding: 3px 6px 2px; border-radius: 2px; background: var(--bg); box-shadow: var(--sunken);
+  font: 700 11px/1 var(--text); letter-spacing: .08em; text-transform: uppercase; color: var(--signal); }
+.feature h3 .beta { vertical-align: 6px; margin-left: 8px; }
 
 /* share */
 .share .safe { margin-top: 16px; padding: 12px 14px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; font-size: 16px; line-height: 1.45; }
 .community { padding: 8px 0 40px; }
 .community h3 { font: 400 28px/1.1 var(--stencil); }
 
-/* the screenshots: a property sheet with tabs, like the game's own Options window */
-.gallery { padding: 88px 0 70px; }
-.tour { margin-top: 22px; background: var(--panel); box-shadow: var(--raised), 0 24px 70px rgba(0,0,0,.35); border-radius: 3px; padding: 10px 12px 14px; }
-.tour-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; margin: 0 -2px; padding: 2px 2px 0; scroll-snap-type: x proximity; }
-.tour-tabs::-webkit-scrollbar { display: none; }
-.tour-tabs button { flex: none; scroll-snap-align: start; border: 0; border-radius: 3px 3px 0 0; padding: 9px 16px 8px; margin-top: 4px; background: var(--side); color: var(--dim);
-  box-shadow: inset 1px 1px 0 var(--bevel-hi), inset -1px 0 0 var(--bevel-lo); font: 600 16px/1.1 var(--text); cursor: pointer; white-space: nowrap; }
-.tour-tabs button:hover { color: var(--bone); }
-.tour-tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--signal); margin-top: 0; padding-bottom: 12px; }
-.tour-tabs button:focus-visible { outline: 2px solid var(--signal); outline-offset: -3px; }
-.tour-panel { background: var(--panel-2); box-shadow: inset 1px 0 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo); border-radius: 0 3px 3px 3px; padding: 12px; }
-.tour-panel:focus { outline: none; }
+/* screenshots in each section's app window: the picture with its caption and arrows, a strip below */
+.shots { min-width: 0; }
+.shots .tour-strip { margin-top: 6px; }
+.tour-strip[hidden] { display: none; }
+.tour-stage .tour-draft { padding: 16px 64px; }
 .tour-stage, .tour-strip button { font: inherit; color: inherit; }
-.tour-stage { display: block; width: 100%; margin: 0; padding: 0; border: 0; border-radius: 2px; background: #1d2118; box-shadow: var(--sunken); cursor: zoom-in; aspect-ratio: 16 / 10; overflow: hidden; touch-action: pan-y; }
+.tour-stage { display: block; width: 100%; margin: 0; padding: 0; border: 0; border-radius: 2px; background: #1d2118; box-shadow: var(--sunken); cursor: zoom-in; aspect-ratio: var(--shot-ratio, 16 / 10); overflow: hidden; touch-action: pan-y; }
+.tour-stage picture { display: block; width: 100%; height: 100%; }
 .tour-stage img { width: 100%; height: 100%; object-fit: contain; }
+@media (pointer: fine) { .tour-stage { cursor: zoom-in; } }
 .tour-stage:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 /* the caption over the picture's lower edge, on a dark scrim so it reads on any shot */
-.tour-view { position: relative; margin: 0 0 10px; }
+.shots-view { position: relative; margin: 0; }
 .tour-caption { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
   padding: 44px 16px 12px; border-radius: 0 0 2px 2px; pointer-events: none;
   background: linear-gradient(to top, rgba(14,16,11,.92) 0%, rgba(14,16,11,.72) 45%, rgba(14,16,11,0) 100%); }
@@ -761,10 +672,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   outline: 2px dashed rgba(196,181,80,.5); outline-offset: -10px; }
 .tour-strip .tour-draft { font-size: 11px; padding: 6px; outline-offset: -4px; }
 @media (max-width: 860px) {
-  .gallery { padding-top: 64px; }
-  .tour { padding: 8px 8px 10px; margin-left: -8px; margin-right: -8px; }
-  .tour-panel { padding: 8px; }
-  .tour-tabs button { padding: 8px 12px 7px; font-size: 15px; }
   .tour-strip button { width: 104px; }
   .tour-arrow { width: 36px; height: 46px; }
   .tour-arrow.prev { left: 6px; }
@@ -772,10 +679,8 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   .tour-caption { padding: 32px 10px 8px; gap: 10px; }
   .tour-cap { font-size: 15px; }
   .tour-count { font-size: 13px; }
-  .tour-cap { font-size: 16px; }
 }
-@media (prefers-reduced-motion: no-preference) { .tour-stage img { transition: opacity .15s; } .tour-stage.loading img { opacity: .55; } }
-@media (pointer: fine) { .gallery .tour-stage { cursor: zoom-in; } }
+
 </style>
 </head>
 <body>
@@ -786,11 +691,11 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   <div class="wrap">
     <a class="wordmark" href="#">Loner-Strike</a>
     <nav aria-label="Page">
-      <a href="#play">Play</a>
-      <a href="#build">Build</a>
+      <a href="#features">Play</a>
+      <a href="#modes">Modes</a>
+      <a href="#make">Make</a>
       <a href="#hosting">Host</a>
       <a href="#share">Share</a>
-      <a href="#gallery">Screenshots</a>
       <a href="#faq">FAQ</a>
       <a href="docs">Docs</a>
       <a class="btn primary" href="#get" data-event="Get it (top)">Get it</a>
@@ -818,7 +723,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <p class="tagline-2">Then build your own maps and modes, try them out on the bots, and share them with everyone.</p>
         <div class="ctas">
           <a class="btn primary" href="#get" data-event="Get it (hero)">Get Loner-Strike</a>
-          <a class="btn" href="#gallery">See it in action</a>
         </div>
         <p class="fine">Free, for Counter-Strike 1.6 and Condition Zero on Steam. Windows, or a Mac with CrossOver.</p>
         <div class="loader" aria-hidden="true">
@@ -828,24 +732,11 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         </div>
       </div>
       <div class="window">
-        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike: Map editor</div>
-        <picture>
-          <source srcset="img/1.0/editor.webp" type="image/webp">
-          <img src="img/1.0/editor.png" alt="The map editor with ls_outpost open: tools on the left, the map in 3D, the outline and map settings on the right, and the texture browser below" width="1440" height="900" fetchpriority="high">
-        </picture>
+        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
+        <img src="img/maps.jpg" alt="Loner-Strike's map browser during a live game: classic maps with screenshots, filters and search" width="1280" height="950" fetchpriority="high">
       </div>
     </div>
   </section>
-
-  <!-- The four things it does: each tab jumps to its part of the page -->
-  <nav class="verbs" aria-label="What it does">
-    <div class="wrap">
-      <a href="#play"><b>Play</b><span>Bots that play like people, and new modes to play with them</span></a>
-      <a href="#build"><b>Build</b><span>Maps, game modes and plugins, playtested with the bots</span></a>
-      <a href="#hosting"><b>Host</b><span>Servers on your computer or a rented Linux machine</span></a>
-      <a href="#share"><b>Share</b><span>Publish what you made, and try what others made in a click</span></a>
-    </div>
-  </nav>
 
   <section class="why" id="why">
     <div class="wrap">
@@ -855,7 +746,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <p>I still play Counter-Strike 1.6 and Condition Zero.<br>Mostly late at night, mostly against bots.</p>
         <p>The problem is the bots. They aren't very fun to play with. And the custom stuff, Zombie Plague, Warcraft 3, Gun Game, means digging through forum threads from 2009, fixing config files, and then finding out half the mods don't even notice bots exist.</p>
         <p>So I fixed it for myself. Bots that feel like the regulars on an old community server. The old mods, patched to work with them. A panel so I never have to open another .cfg file. And on the rare night a friend wants to play, they can join in a click.</p>
-        <p>Then I wanted to make things again, like we all did back then: maps, silly game modes, plugins. So now it has the tools for that too, and the bots to test them on.</p>
+        <p>Then I wanted to make maps and silly game modes again, like we all did back then, so now it has the tools for that too.</p>
         <p>It turned out pretty good, so here it is. It's free, because none of it would exist without the people who made these mods in the first place.</p>
       </div>
       <figure class="why-photo">
@@ -865,14 +756,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       </div>
     </div>
   </section>
-
-  <!-- ============ PLAY ============ -->
-  <header class="chapter" id="play">
-    <div class="wrap">
-      <h2>Play</h2>
-      <p>A server full of bots that feels like a server full of people. The classic community mods, modes of our own, and bots that play every one of them.</p>
-    </div>
-  </header>
 
   <section class="feature" id="features">
     <div class="wrap">
@@ -925,7 +808,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li><b>They move like players.</b> Quiet near enemies, peeking corners, stopping to shoot.</li>
           <li><b>They play as a team.</b> Ts take sites together; CTs hold and retake.</li>
           <li><b>They have habits.</b> Spawn hops, tilt after a bad streak, the best bunnyhop.</li>
-          <li><b>They play the mode.</b> Run and gun in Deathmatch, a team in a 5v5, hold the walls in Last Stand.</li>
+          <li><b>They play the mode.</b> Run and gun in Deathmatch, a team in a 5v5.</li>
         </ul>
         <p class="deep">The ideas come from games known for their AI: Killzone's precomputed cover, Quake III's map study, the human-likeness of Unreal Tournament 2004's BotPrize and F.E.A.R.'s squad chatter.<br><a class="btn" href="docs#how-bots-work">See how the bots work</a></p>
         </div>
@@ -951,173 +834,41 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 
   <section class="modes" id="modes">
     <div class="wrap">
-      <h2>Modes made here</h2>
-      <p class="lead">Two modes you won't find on any old server, each with a map made for it. They're built from the same pieces Game Mode Studio gives you. Bots play both, and both work on stock maps too.</p>
-      <div class="mode-cards">
-        <article class="mode-card">
-          <!-- IN-GAME SHOT WANTED: swap this map render for img/1.0/ingame-laststand.webp once it exists (see docs/notes/Site.md) -->
-          <picture>
-            <source srcset="img/1.0/render-outpost.webp" type="image/webp">
-            <img src="img/1.0/render-outpost.png" alt="ls_outpost from above: a walled desert outpost with a courtyard, the keep and the armory, and three gates to hold" width="1092" height="682" loading="lazy">
-          </picture>
-          <div class="mode-text">
-            <h3>Last Stand</h3>
-            <p class="mode-map">on ls_outpost</p>
-            <p>Everyone plays Counter-Terrorist. Hold a walled desert outpost at night against waves of zombies, runners, brutes, spitters and a boss every few waves.</p>
-            <ul>
-              <li>Board up the three gates and repair them between waves</li>
-              <li>Revive downed teammates, buy from the armory, grab the supply drops</li>
-              <li>Endless, with a best-wave record, or a set number of waves</li>
-              <li>Bots take their spots before each wave, repair the boards and buy between waves</li>
-            </ul>
-          </div>
-        </article>
-        <article class="mode-card">
-          <!-- IN-GAME SHOT WANTED: swap this map render for img/1.0/ingame-br-dropin.webp once it exists -->
-          <picture>
-            <source srcset="img/1.0/render-valley.webp" type="image/webp">
-            <img src="img/1.0/render-valley.png" alt="br_valley from above: a river valley with a town, a factory, farms, bridges and hills" width="1092" height="682" loading="lazy">
-          </picture>
-          <div class="mode-text">
-            <h3>Battle Royale</h3>
-            <p class="mode-map">on br_valley</p>
-            <p>Drop in from high over a river valley with only a knife. Loot crates and floor weapons, fight while the zone closes, and be the last one, or the last squad, standing.</p>
-            <ul>
-              <li>Solo, duos or squads of 4</li>
-              <li>A town, a factory, a bunker, radio hill and tunnels under the river</li>
-              <li>Supply drops and a six-stage zone</li>
-              <li>Bots land, loot, hunt or camp by their playstyle</li>
-            </ul>
-          </div>
-        </article>
-      </div>
-      <p class="modes-more">Open either one in <a href="#studio">Game Mode Studio</a> to make it your own, or find modes other players made in <a href="#share">Community</a>.</p>
-      <h3 class="modes-sub">And the classics</h3>
+      <h2>Classic community modes</h2>
       <p class="lead">The popular mods from the old community servers, installed and set up for you, and patched so bots can play them. Pick a mode and a map, and bots fill the server.</p>
       <ul class="chips">
         <li><b>Zombie Plague</b></li><li><b>Warcraft 3</b></li><li><b>SuperHero</b></li><li><b>Gun Game</b></li><li><b>Deathmatch</b></li>
         <li><b>Hide and Seek</b></li><li><b>Deathrun</b></li><li><b>Surf</b></li><li><b>Kreedz</b></li><li><b>Base Builder</b></li><li><b>SoccerJam</b></li>
         <li><b>Paintball</b></li><li><b>Knife Arena</b></li><li>AWP, Scoutz, Deagle and pistol-only</li><li>Roll the Dice</li><li>Round-end music</li><li>Grappling hook</li>
+        <li class="ours"><a href="docs#last-stand"><b>Last Stand</b> <span class="tag">made here</span> Hold an outpost against waves of creatures</a></li>
+        <li class="ours"><a href="docs#battle-royale"><b>Battle Royale</b> <span class="tag">made here</span> Drop in, loot up, outlast the zone</a></li>
       </ul>
     </div>
   </section>
 
-  <!-- ============ BUILD ============ -->
-  <header class="chapter" id="build">
-    <div class="wrap">
-      <h2>Build</h2>
-      <p>The tools we wished we had in 2004. Make a map, give it a mode, and playtest it with bots in one click.</p>
-    </div>
-  </header>
-
-  <section class="feature">
+  <section class="feature make" id="make">
     <div class="wrap">
       <div class="text">
-        <h3 class="two-lines"><span>Hammer's depth,</span> <span>modern editor feel</span></h3>
-        <p>Real brushes and entities, like Hammer, in a layout inspired by Unreal Engine's editor. Draw boxes, push and pull their faces, place spawns and lights, paint textures.</p>
+        <h3>Make your own <span class="beta" title="New and still settling in">Beta</span></h3>
+        <p>The tools we wished we had in 2004. Make a map, give it a mode, and playtest it with bots in one click.</p>
         <ul>
-          <li>One editor bar: every menu, Save, Playtest and Publish, with each key shown</li>
-          <li>A dockable Content Browser: models, sprites, sounds, textures and prefabs as thumbnails. Drag one in to place it, with its credits and whether you can share it</li>
-          <li>Live checks as you build: leaks, limits, missing files and spawns</li>
-          <li>Press F5 to playtest: it compiles with SDHLT, teaches the bots the map and drops you in</li>
-          <li>Opens Hammer .rmf, J.A.C.K. .jmf and .map files; exports .map</li>
+          <li><b>Map editor:</b> Hammer's depth, modern editor feel. Press F5 and you're playing it with bots</li>
+          <li><b>Game Mode Studio:</b> game modes from nodes and wires, debugged live in the game</li>
+          <li><b>Map tools:</b> a map simulator, nav fixer, callouts, a spray maker and more</li>
         </ul>
-        <p class="more"><a class="btn" href="docs#map-editor">The map editor guide</a></p>
+        <p class="more"><a class="btn" href="docs#tools">Every tool</a></p>
       </div>
-      <div class="window">
-        <div class="window-bar"><span></span><span></span><span></span>Map editor</div>
-        <picture>
-          <source srcset="img/1.0/editor-quad.webp" type="image/webp">
-          <img src="img/1.0/editor-quad.png" alt="The map editor in its four-view layout: 3D, top, front and side views of ls_outpost" width="1440" height="900" loading="lazy">
-        </picture>
-      </div>
-    </div>
-  </section>
-
-  <section class="feature flip" id="studio">
-    <div class="wrap">
-      <div class="text">
-        <h3>Game modes from nodes and wires</h3>
-        <p>Game Mode Studio is a node editor in the style of Unreal's Blueprints. When something happens, a round starts or a player dies, check things and do things. The Studio writes the plugin for you.</p>
-        <ul>
-          <li>Over 200 nodes: players, timers, rounds, buying, squads, bots, creatures</li>
-          <li>Functions, macros, variables, structs and enums</li>
-          <li>Start from Last Stand, Battle Royale or a blank mode, drop in snippets, and keep your best pieces in your own library</li>
-          <li>Playtest with bots and watch the nodes light up as they run, with breakpoints and live values</li>
-          <li>Share your mode in Community: everyone's app builds it, so nothing that runs code is downloaded</li>
-        </ul>
-        <p class="more"><a class="btn" href="docs#game-mode-studio">The Studio guide</a></p>
-      </div>
-      <div class="window">
-        <div class="window-bar"><span></span><span></span><span></span>Game Mode Studio</div>
-        <picture>
-          <source srcset="img/1.0/studio.webp" type="image/webp">
-          <img src="img/1.0/studio.png" alt="Game Mode Studio with the Last Stand template open: event nodes wired to branches, messages and loops" width="1440" height="900" loading="lazy">
-        </picture>
+      <div class="window shots" data-set="make" style="--shot-ratio: 16 / 10">
+        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike: Tools</div>
+        <figure class="shots-view">
+          <button type="button" class="tour-stage" aria-label="Open this screenshot larger"><picture><source srcset="img/1.0/editor.webp" type="image/webp"><img src="img/1.0/editor.png" alt="Brushes, entities and textures in one 3D view" width="1440" height="900" loading="lazy"></picture></button>
+          <figcaption class="tour-caption" aria-live="polite"><span class="tour-cap">Brushes, entities and textures in one 3D view</span> <span class="tour-count"></span></figcaption>
+        </figure>
       </div>
     </div>
   </section>
 
-  <section class="toolbox" id="tools">
-    <div class="wrap">
-      <h3>Every tool in the box <span class="beta" title="New and still settling in">Beta</span></h3>
-      <p class="lead">In the app under Tools, grouped the way you'd use them. Each one has its own page in the <a href="docs#tools">docs</a>.</p>
-      <div class="tool-groups">
-        <div class="tool-group">
-          <h4>Create</h4>
-          <dl>
-            <dt><a href="docs#map-editor">Map editor</a></dt><dd>Brushes, entities and textures in 3D, a Content Browser to drag models, sounds and prefabs in from, live checks and F5 playtests</dd>
-            <dt><a href="docs#game-mode-studio">Game Mode Studio</a></dt><dd>Game modes from nodes, debugged live in the game</dd>
-            <dt><a href="docs#plugin-studio">Plugin Studio</a></dt><dd>AMX Mod X plugins with suggestions and docs, tried in your game in a click</dd>
-            <dt><a href="docs#creature-studio">Creature Studio</a></dt><dd>Zombies, aliens, turrets and bosses, and the waves they come in</dd>
-          </dl>
-        </div>
-        <div class="tool-group">
-          <h4>Map tools</h4>
-          <dl>
-            <dt><a href="docs#map-doctor">Map doctor</a></dt><dd>Reads a map's files without playing it: finds missing textures, sounds, models and nav, and fixes them</dd>
-            <dt><a href="docs#map-simulator">Map simulator</a></dt><dd>Bots play a match on your map; the report shows where they fight, fall, get stuck and never go</dd>
-            <dt><a href="docs#nav-fixer">Nav fixer</a></dt><dd>Fix where bots can walk, in 3D, top-down or a split view of both</dd>
-            <dt><a href="docs#callouts">Callouts</a></dt><dd>Name places your way: bots, the radio and chat use your names</dd>
-            <dt><a href="docs#radar-maker">Radar maker</a></dt><dd>The overview spectators and HLTV see, drawn from the map</dd>
-          </dl>
-        </div>
-        <div class="tool-group">
-          <h4>Personalize</h4>
-          <dl>
-            <dt><a href="docs#crosshair-config">Crosshair &amp; config</a></dt><dd>Crosshair, keys, mouse and network, with the crosshair drawn live</dd>
-            <dt><a href="docs#bot-people">Bot people</a></dt><dd>Who the bots are, how they play and talk, and the regulars' names</dd>
-            <dt><a href="docs#spray-maker">Spray maker</a></dt><dd>Your spray from pictures, words and stickers, or start from a template</dd>
-          </dl>
-        </div>
-        <div class="tool-group">
-          <h4>Watch &amp; inspect</h4>
-          <dl>
-            <dt><a href="docs#map-viewer">Map viewer</a></dt><dd>Walk any map, with the bots' nav and what they learned</dd>
-            <dt><a href="docs#replay">Replay</a></dt><dd>Watch a bot match: where every bot went, and why</dd>
-            <dt><a href="docs#demos">Demos</a></dt><dd>Your demos and your servers' HLTV ones, in one list</dd>
-            <dt><a href="docs#textures-models">Textures &amp; models</a></dt><dd>Every texture and model in your game, and your own</dd>
-          </dl>
-        </div>
-        <div class="tool-group">
-          <h4>Share</h4>
-          <dl>
-            <dt><a href="docs#community">Community</a></dt><dd>Try what others made, and publish yours to GameBanana with its credits tracked for you</dd>
-          </dl>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ HOST ============ -->
-  <header class="chapter" id="hosting">
-    <div class="wrap">
-      <h2>Host</h2>
-      <p>Your friends don't need Loner-Strike, only the game. Host from the game you're playing, or run a real community server that stays up without you.</p>
-    </div>
-  </header>
-
-  <section class="feature flip">
+  <section class="feature flip" id="hosting">
     <div class="wrap">
       <div class="text">
         <h3>Play with friends</h3>
@@ -1129,9 +880,12 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li>A custom welcome page for people who join</li>
         </ul>
       </div>
-      <div class="window">
+      <div class="window shots" data-set="friends" style="--shot-ratio: 1280 / 950">
         <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
-        <img src="img/friends.jpg" alt="Play with friends: seven ways to connect, with step-by-step instructions" width="1280" height="950" loading="lazy">
+        <figure class="shots-view">
+          <button type="button" class="tour-stage" aria-label="Open this screenshot larger"><img src="img/friends.jpg" alt="Seven ways for friends to join" width="1280" height="950" loading="lazy"></button>
+          <figcaption class="tour-caption" aria-live="polite"><span class="tour-cap">Seven ways for friends to join</span> <span class="tour-count"></span></figcaption>
+        </figure>
       </div>
     </div>
   </section>
@@ -1162,43 +916,50 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         </ul>
         <p class="more"><a class="btn" href="docs#servers">How to set one up</a></p>
       </div>
-      <div class="pair">
-        <div class="window">
-          <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
-          <img src="img/servers.jpg" alt="A dedicated server on a rented Linux machine: settings, a live console with player chat, and Deathmatch with 27 bots" width="1280" height="950" loading="lazy">
-        </div>
+      <div class="window shots" data-set="servers" style="--shot-ratio: 1280 / 950">
+        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
+        <figure class="shots-view">
+          <button type="button" class="tour-stage" aria-label="Open this screenshot larger"><img src="img/servers.jpg" alt="Your own server on a rented machine, with a live console" width="1280" height="950" loading="lazy"></button>
+          <figcaption class="tour-caption" aria-live="polite"><span class="tour-cap">Your own server on a rented machine, with a live console</span> <span class="tour-count"></span></figcaption>
+        </figure>
       </div>
     </div>
   </section>
 
-  <!-- ============ SHARE ============ -->
-  <header class="chapter" id="share">
-    <div class="wrap">
-      <h2>Share</h2>
-      <p>Made something? Publish it from the app, and try what everyone else made in a click.</p>
-    </div>
-  </header>
-
-  <section class="feature share">
+  <section class="feature flip share" id="share">
     <div class="wrap">
       <div class="text">
-        <h3>The Community browser</h3>
-        <p>Maps, modes, prefabs and sprays made with Loner-Strike, hosted on GameBanana. Press <b>Try it</b> and play with bots.</p>
+        <h3>Share it</h3>
+        <p>Publish what you make, and try what others made in a click.</p>
         <ul>
-          <li><b>Publish from the app</b>, with every file's credits tracked for you</li>
-          <li><b>Remix anything</b>, and the original creator keeps the credit</li>
-          <li><b>Updates roll out</b> to your app and servers between maps, never mid-game</li>
-          <li><b>Bot ratings</b> on modes, so you know how well bots play them</li>
+          <li><b>Try it:</b> maps, modes, prefabs and sprays from Community, played with bots</li>
+          <li><b>Publish</b> to GameBanana from the app, with credits tracked for you</li>
+          <li><b>Remix</b> anything, with credit to the original</li>
         </ul>
         <p class="safe"><b>Nothing that runs code is shared.</b> A Studio mode travels as its graph, and each player's app builds it.</p>
         <p class="more"><a class="btn" href="docs#community">How Community works</a></p>
       </div>
-      <div class="window">
-        <div class="window-bar"><span></span><span></span><span></span>Community</div>
-        <picture>
-          <source srcset="img/1.0/community.webp" type="image/webp">
-          <img src="img/1.0/community.png" alt="The Community browser in Tools, with search, filters for maps, modes, prefabs, sprays and textures, and its tabs: Browse, Installed, Publish and Published" width="1440" height="900" loading="lazy">
-        </picture>
+      <div class="window shots" data-set="share" style="--shot-ratio: 16 / 10">
+        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike: Community</div>
+        <figure class="shots-view">
+          <button type="button" class="tour-stage" aria-label="Open this screenshot larger"><picture><source srcset="img/1.0/community.webp" type="image/webp"><img src="img/1.0/community.png" alt="Community: maps, modes, prefabs, sprays and textures made with Loner-Strike" width="1440" height="900" loading="lazy"></picture></button>
+          <figcaption class="tour-caption" aria-live="polite"><span class="tour-cap">Community: maps, modes, prefabs, sprays and textures made with Loner-Strike</span> <span class="tour-count"></span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="everything" id="everything">
+    <div class="wrap">
+      <h2>Everything in it</h2>
+      <p class="lead">Free, for Counter-Strike 1.6 and Condition Zero. Everything it changes is backed up and can be removed.</p>
+      <div class="feature-groups">
+        <div class="group"><h3>Bots</h3><p>Our own bot brain: it studies every map, sees only what you could, and talks back in chat or on your mic.</p></div>
+        <div class="group"><h3>Modes and maps</h3><p>The classic mods and modes made here, all played by bots; 27 maps installed and thousands more from GameBanana.</p></div>
+        <div class="group"><h3>Friends</h3><p>Seven ways to connect, an invite ready to send, and a server browser like Steam's old one.</p></div>
+        <div class="group"><h3>Servers</h3><p>On your computer or a rented Linux machine, with admins, bans, HLTV and daily backups.</p></div>
+        <div class="group"><h3>Make and share</h3><p>A map editor, Game Mode Studio and a dozen more tools, and Community to share what you make.</p></div>
+        <div class="group"><h3>The app</h3><p>Guided setup on Windows or a Mac, control from your phone, signed updates, open source.</p></div>
       </div>
     </div>
   </section>
@@ -1237,32 +998,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <a class="btn primary" id="dc-join" href="#" target="_blank" rel="noopener" data-event="Join Discord">Join the Discord</a>
         </div>
       </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ SCREENSHOTS: a tabbed tour, filled by the script below (TOUR) ============ -->
-  <section class="gallery" id="gallery">
-    <div class="wrap">
-      <h2>Screenshots</h2>
-      <div class="tour" id="tour">
-        <div class="tour-tabs" role="tablist" aria-label="Screenshots" id="tour-tabs"></div>
-        <div class="tour-panel" role="tabpanel" id="tour-panel" tabindex="-1">
-          <figure class="tour-view">
-            <button type="button" class="tour-stage" id="tour-stage" aria-label="Open this screenshot larger">
-              <picture><source id="tour-src" type="image/webp"><img id="tour-img" alt="" width="1440" height="900"></picture>
-            </button>
-            <!-- the caption sits on the picture's lower edge; clicks pass through it to the picture -->
-            <figcaption class="tour-caption" aria-live="polite"><span class="tour-cap" id="tour-cap"></span> <span class="tour-count" id="tour-count"></span></figcaption>
-            <button type="button" class="tour-arrow prev" id="tour-prev" aria-label="Previous screenshot"><svg viewBox="0 0 12 20" width="12" height="20" aria-hidden="true"><path d="M10 2 2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5"/></svg></button>
-            <button type="button" class="tour-arrow next" id="tour-next" aria-label="Next screenshot"><svg viewBox="0 0 12 20" width="12" height="20" aria-hidden="true"><path d="m2 2 8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.5"/></svg></button>
-          </figure>
-          <ul class="tour-strip" id="tour-strip" aria-label="Screenshots in this tab"></ul>
-        </div>
-        <noscript>
-          <p class="lead">The app's map editor, Game Mode Studio and map viewer:</p>
-          <img src="img/1.0/editor.png" alt="The map editor" width="1440" height="900" loading="lazy">
-        </noscript>
       </div>
     </div>
   </section>
@@ -1405,14 +1140,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <details>
         <summary>What does Beta mean on the tools?</summary>
         <p>They're new and still settling in. They save backups before they change a file, but keep your own copies of work you care about, and tell us on Discord when something's off.</p>
-      </details>
-      <details>
-        <summary>Can I use maps I made in Hammer or J.A.C.K.?</summary>
-        <p>Yes. The map editor opens Hammer .rmf, J.A.C.K. .jmf and .map files, and exports a .map for any GoldSrc compiler. <a href="docs#map-import">What comes over</a>.</p>
-      </details>
-      <details>
-        <summary>What can I share in Community?</summary>
-        <p>Maps, prefabs, textures, sprays and Game Mode Studio modes. Hand-written plugins can't be shared, so nothing you download from Community runs code on your computer. <a href="docs#publishing">The rules</a>.</p>
       </details>
       <details>
         <summary>Who made the mods?</summary>
@@ -1615,11 +1342,13 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     else if (/Windows/.test(ua)) p.innerHTML = "You're on Windows: take the <code>-setup.exe</code>.";
   }
 
-  // ---- screenshots: tabs ---------------------------------------------------------
+  // ---- screenshots: inline, in each section's app window ---------------------------
+  // Each section's window flips through its own shots: arrows on the picture, a thumbnail strip,
+  // the arrow keys, and a swipe on phones. A click opens the big viewer on that section's shots.
   // A shot named "x" is img/1.0/x.webp, with img/1.0/x.png for old browsers and img/1.0/thumb/x.webp
   // for the strip. app-* shots fall back to the older jpgs in img/gallery/.
   // draft: an in-game shot still to take, at img/1.0/ingame/<draft>.jpg. Put the file there and its name in
-  // INGAME, and it shows; until then it's left out. ?drafts on the page shows where each one goes.
+  // INGAME, and it shows; until then it's left out. ?drafts on the page shows each one as a marked placeholder.
   // See docs/notes/Site.md for the list and how to frame them.
   const INGAME = new Set([]);
   const shot = (name, cap, more) => Object.assign({
@@ -1627,225 +1356,187 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   }, more);
   const app = (name, cap, more) => shot(`app-${name}`, cap, Object.assign({ src: `img/gallery/${name}.jpg` }, more));
   const draft = (name, cap) => ({ draft: name, have: INGAME.has(name), src: `img/1.0/ingame/${name}.jpg`, thumb: `img/1.0/ingame/${name}.jpg`, cap });
-  const TOUR = [
-    { tab: "Play", shots: [
-      draft("bots-site", "Bots taking a site together"),
-      app("play", "Pick a preset or a mode, mid-game"),
-      app("players", "Bots with names, clan tags and their own playstyles"),
-      app("bots", "Bot skill, style and personality"),
-      app("maps", "Maps with screenshots, filters and favorites"),
-      draft("bots-chat", "Ask the team for an AWP; a bot drops one"),
-      app("radio", "And a radio, obviously"),
-    ] },
-    { tab: "Game modes", shots: [
-      draft("laststand-wave", "Last Stand: holding the west gate against a wave"),
-      shot("render-outpost", "Last Stand's ls_outpost: the courtyard, the keep and the armory"),
-      draft("laststand-revive", "Last Stand: reviving a teammate between waves"),
-      draft("br-dropin", "Battle Royale: dropping in over br_valley"),
-      shot("render-valley", "Battle Royale's br_valley: town, factory, farms and the river"),
-      draft("br-zone", "Battle Royale: the zone closing in on the last squads"),
-      draft("deathrun", "Deathrun: bots running the course while the activator waits"),
-      draft("surf", "Surf: a bot carving a ramp"),
-    ] },
-    { tab: "Map editor", shots: [
+  const SETS = {
+    make: [
       shot("editor", "Brushes, entities and textures in one 3D view"),
       shot("editor-quad", "Or four views, like Hammer"),
       shot("editor-compile", "Compile with SDHLT, then playtest with bots"),
       shot("editor-checks", "Your map is checked as you go"),
-    ] },
-    { tab: "Game Mode Studio", shots: [
-      shot("studio", "A game mode from nodes and wires: the Last Stand template"),
+      shot("studio", "Game Mode Studio: a game mode from nodes and wires"),
       shot("creatures", "Creature Studio: the creatures modes throw at you, and their waves"),
       shot("plugins", "Plugin Studio: AMX Mod X with suggestions and docs"),
-    ] },
-    { tab: "Tools", shots: [
       shot("tools", "Every tool, on one page in the app"),
-      shot("viewer-nav", "The map viewer with the bots' nav and named places"),
       shot("navfix", "Nav fixer: where bots can walk, and where they can't get back from"),
       shot("doctor", "Map doctor: what a map is missing, and the fix"),
       shot("callouts", "Callouts: name places so bots say where they are"),
+      shot("viewer-nav", "The map viewer with the bots' nav and named places"),
       shot("radar", "Radar maker: the overview, drawn from the map"),
-      shot("playercfg", "Crosshair & config, with the crosshair drawn live"),
       shot("spray", "Spray maker"),
+      shot("playercfg", "Crosshair & config, with the crosshair drawn live"),
       shot("people", "Bot people: who the bots are"),
       shot("models", "Every texture and model in your game"),
       shot("render-dust2", "Any map, lit like the game"),
-    ] },
-    { tab: "Hosting", shots: [
-      app("servers", "Your own server on a rented machine, with a live console"),
+    ],
+    friends: [
       app("friends", "Seven ways for friends to join"),
+      app("phone-server", "Run the game or a server from your phone", { tall: true }),
+    ],
+    servers: [
+      app("servers", "Your own server on a rented machine, with a live console"),
       app("server-maps", "Send your own maps to a server"),
       app("website-status", "Live player count for your website"),
-      app("phone-server", "Run the game or a server from your phone", { tall: true }),
-    ] },
-    { tab: "Community", shots: [
+    ],
+    share: [
       shot("community", "Community: maps, modes, prefabs, sprays and textures made with Loner-Strike"),
       draft("community-browse", "Trying a community map with bots"),
-    ] },
-  ];
+    ],
+  };
   const showDrafts = /[?&]drafts\b/.test(location.search);
-
-  const tabsEl = document.getElementById("tour-tabs");
-  const panel = document.getElementById("tour-panel");
-  const stage = document.getElementById("tour-stage");
-  const big = document.getElementById("tour-img");
-  const bigSrc = document.getElementById("tour-src");
-  const strip = document.getElementById("tour-strip");
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const viewer = document.getElementById("viewer");
   const vimg = document.getElementById("viewer-img");
-  const prevBtn = document.getElementById("tour-prev");
-  const nextBtn = document.getElementById("tour-next");
-  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let tab = 0, at = 0;
-  const shots = () => TOUR[tab].shots.filter((s) => !s.draft || s.have || showDrafts);
-
-  // a draft shot counts once its picture loads
-  if (showDrafts) for (const t of TOUR) for (const s of t.shots) if (s.draft && !s.have) {
-    const probe = new Image();
-    probe.onload = () => { s.have = true; if (TOUR[tab] === t) render(); };
-    probe.src = s.src;
-  }
+  let open = null; // the widget the big viewer is showing
 
   const pictureOf = (s, thumb) => {
     if (s.draft && !s.have) {
       const d = document.createElement("span");
       d.className = "tour-draft";
-      d.textContent = `In-game shot to take: ${s.cap} (img/1.0/ingame/${s.draft}.jpg)`;
+      d.textContent = thumb ? "Shot to take" : `Placeholder: in-game shot to take: ${s.cap} (img/1.0/ingame/${s.draft}.jpg)`;
       return d;
     }
     const img = document.createElement("img");
     img.alt = thumb ? "" : s.cap;
     img.loading = "lazy";
     img.src = thumb ? s.thumb : s.src;
-    if (!thumb || !s.webp) return img;
+    if (!s.webp) return img;
     const pic = document.createElement("picture");
-    pic.append(Object.assign(document.createElement("source"), { srcset: s.thumb, type: "image/webp" }), img);
-    img.src = s.src;
+    pic.append(Object.assign(document.createElement("source"), { srcset: thumb ? s.thumb : s.webp, type: "image/webp" }), img);
+    if (thumb) img.src = s.src;
     return pic;
   };
-
-  const tabs = TOUR.map((t, i) => {
+  const arrow = (dir) => {
     const b = document.createElement("button");
     b.type = "button";
-    b.id = `tour-tab-${i}`;
-    b.setAttribute("role", "tab");
-    b.setAttribute("aria-controls", "tour-panel");
-    b.textContent = t.tab;
-    b.addEventListener("click", () => pickTab(i));
-    tabsEl.append(b);
+    b.className = `tour-arrow ${dir}`;
+    b.setAttribute("aria-label", dir === "prev" ? "Previous screenshot" : "Next screenshot");
+    b.innerHTML = dir === "prev"
+      ? '<svg viewBox="0 0 12 20" width="12" height="20" aria-hidden="true"><path d="M10 2 2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>'
+      : '<svg viewBox="0 0 12 20" width="12" height="20" aria-hidden="true"><path d="m2 2 8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>';
     return b;
-  });
-  tabsEl.addEventListener("keydown", (e) => {
-    const n = { ArrowRight: tab + 1, ArrowLeft: tab - 1, Home: 0, End: TOUR.length - 1 }[e.key];
-    if (n === undefined) return;
-    e.preventDefault();
-    pickTab((n + TOUR.length) % TOUR.length);
-    tabs[tab].focus();
-  });
+  };
 
-  function render() {
-    const list = shots();
-    if (at >= list.length) at = 0;
-    const s = list[at];
-    tabs.forEach((b, i) => { b.setAttribute("aria-selected", String(i === tab)); b.tabIndex = i === tab ? 0 : -1; });
-    panel.setAttribute("aria-labelledby", tabs[tab].id);
-    // the big picture
-    stage.replaceChildren();
-    if (s.draft && !s.have) stage.append(pictureOf(s));
-    else {
-      bigSrc.srcset = s.webp || "";
-      if (s.webp) bigSrc.setAttribute("type", "image/webp"); else bigSrc.removeAttribute("type");
-      big.alt = s.cap;
-      big.removeAttribute("loading");
-      if (big.getAttribute("src") !== s.src) { stage.classList.add("loading"); big.src = s.src; }
-      stage.append(big.parentElement);
+  const widgets = [...document.querySelectorAll(".shots[data-set]")].map((root) => {
+    const all = SETS[root.dataset.set] || [];
+    const view = root.querySelector(".shots-view");
+    const stage = root.querySelector(".tour-stage");
+    const capEl = root.querySelector(".tour-cap");
+    const countEl = root.querySelector(".tour-count");
+    const prev = arrow("prev"), next = arrow("next");
+    view.append(prev, next);
+    const strip = document.createElement("ul");
+    strip.className = "tour-strip";
+    strip.setAttribute("aria-label", `${root.querySelector(".window-bar").textContent.trim()} screenshots`);
+    root.append(strip);
+    const w = { at: 0, list: () => all.filter((s) => !s.draft || s.have || showDrafts) };
+    if (showDrafts) for (const s of all) if (s.draft && !s.have) {
+      const probe = new Image();
+      probe.onload = () => { s.have = true; w.render(); };
+      probe.src = s.src;
     }
-    document.getElementById("tour-cap").textContent = s.cap;
-    document.getElementById("tour-count").textContent = `${at + 1} of ${list.length}`;
-    // the strip
-    strip.replaceChildren(...list.map((x, i) => {
-      const li = document.createElement("li");
-      const b = document.createElement("button");
-      b.type = "button";
-      b.setAttribute("aria-label", x.cap);
-      if (x.tall) b.className = "tall";
-      if (i === at) b.setAttribute("aria-current", "true");
-      b.tabIndex = i === at ? 0 : -1;
-      b.append(pictureOf(x, true));
-      b.addEventListener("click", () => pickShot(i));
-      li.append(b);
-      return li;
-    }));
-    // keep the current thumbnail in sight by scrolling the strip only, never the page
-    const cur = strip.querySelector('[aria-current="true"]');
-    if (cur) {
-      const li = cur.parentElement, l = li.offsetLeft - strip.offsetLeft, r = l + li.offsetWidth;
-      const to = l < strip.scrollLeft ? l - 4 : r > strip.scrollLeft + strip.clientWidth ? r - strip.clientWidth + 4 : null;
-      if (to !== null) strip.scrollTo({ left: to, behavior: reduceMotion ? "auto" : "smooth" });
-    }
-    for (const b of [prevBtn, nextBtn]) b.hidden = list.length < 2;
-    // the next one, ready before it's asked for
-    const nx = list[(at + 1) % list.length];
-    if (nx && !nx.draft) new Image().src = nx.webp || nx.src;
-  }
-  big.addEventListener("load", () => stage.classList.remove("loading"));
+    w.render = () => {
+      const list = w.list();
+      if (!list.length) return;
+      if (w.at >= list.length) w.at = 0;
+      const s = list[w.at];
+      stage.replaceChildren(pictureOf(s));
+      stage.classList.toggle("tall", !!s.tall);
+      capEl.textContent = s.cap;
+      countEl.textContent = list.length > 1 ? `${w.at + 1} of ${list.length}` : "";
+      prev.hidden = next.hidden = list.length < 2;
+      strip.hidden = list.length < 3;
+      strip.replaceChildren(...list.map((x, i) => {
+        const li = document.createElement("li");
+        const b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("aria-label", x.cap);
+        if (x.tall) b.className = "tall";
+        if (i === w.at) b.setAttribute("aria-current", "true");
+        b.tabIndex = i === w.at ? 0 : -1;
+        b.append(pictureOf(x, true));
+        b.addEventListener("click", () => w.go(i));
+        li.append(b);
+        return li;
+      }));
+      // keep the current thumbnail in sight by scrolling the strip only, never the page
+      const cur = strip.querySelector('[aria-current="true"]');
+      if (cur && !strip.hidden) {
+        const li = cur.parentElement, l = li.offsetLeft - strip.offsetLeft, r = l + li.offsetWidth;
+        const to = l < strip.scrollLeft ? l - 4 : r > strip.scrollLeft + strip.clientWidth ? r - strip.clientWidth + 4 : null;
+        if (to !== null) strip.scrollTo({ left: to, behavior: reduceMotion ? "auto" : "smooth" });
+      }
+      const nx = list[(w.at + 1) % list.length];
+      if (nx && !nx.draft) new Image().src = nx.webp || nx.src;
+    };
+    w.go = (i, focusStrip = true) => {
+      const n = w.list().length;
+      w.at = (i + n) % n;
+      w.render();
+      if (focusStrip && !strip.hidden) strip.querySelector('[aria-current="true"]')?.focus({ preventScroll: true });
+      if (open === w) showBig();
+    };
+    prev.addEventListener("click", () => w.go(w.at - 1, false));
+    next.addEventListener("click", () => w.go(w.at + 1, false));
+    strip.addEventListener("keydown", (e) => {
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (e.key === "Home") { e.preventDefault(); w.go(0); }
+      else if (e.key === "End") { e.preventDefault(); w.go(w.list().length - 1); }
+      else if (d) { e.preventDefault(); w.go(w.at + d); }
+    });
+    root.addEventListener("keydown", (e) => {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (d) { e.preventDefault(); w.go(w.at + d, false); }
+    });
+    let sx = null, sy = null;
+    stage.addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+    stage.addEventListener("touchend", (e) => {
+      if (sx === null) return;
+      const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+      sx = null;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        // a swipe isn't a tap: ignore the click some browsers send right after it, but only briefly
+        stage.dataset.swiped = "1";
+        setTimeout(() => delete stage.dataset.swiped, 400);
+        w.go(w.at + (dx < 0 ? 1 : -1), false);
+      }
+    });
+    stage.addEventListener("click", () => {
+      if (stage.dataset.swiped) { delete stage.dataset.swiped; return; }
+      const s = w.list()[w.at];
+      if (!s || (s.draft && !s.have)) return;
+      open = w;
+      showBig();
+      viewer.showModal();
+      window.plausible("Screenshot", { props: { image: (s.webp || s.src).split("/").pop() } });
+    });
+    w.render();
+    return w;
+  });
 
-  function pickTab(i) {
-    if (i === tab) return;
-    tab = i; at = 0; render();
-    window.plausible("Screenshots tab", { props: { tab: TOUR[i].tab } });
-  }
-  function pickShot(i, focus = true) {
-    const n = shots().length;
-    at = (i + n) % n; render();
-    if (focus) strip.querySelector('[aria-current="true"]')?.focus({ preventScroll: true });
-  }
-  strip.addEventListener("keydown", (e) => {
-    const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
-    if (e.key === "Home") { e.preventDefault(); pickShot(0); }
-    else if (e.key === "End") { e.preventDefault(); pickShot(shots().length - 1); }
-    else if (d) { e.preventDefault(); pickShot(at + d); }
-  });
-  // the arrows on the picture, and the arrow keys anywhere in the panel (the strip handles its own)
-  prevBtn.addEventListener("click", () => pickShot(at - 1, false));
-  nextBtn.addEventListener("click", () => pickShot(at + 1, false));
-  panel.addEventListener("keydown", (e) => {
-    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
-    const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
-    if (d) { e.preventDefault(); pickShot(at + d, false); }
-  });
-  // swipe the big picture on phones
-  let sx = null, sy = null;
-  stage.addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
-  stage.addEventListener("touchend", (e) => {
-    if (sx === null) return;
-    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
-    sx = null;
-    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) { stage.dataset.swiped = "1"; pickShot(at + (dx < 0 ? 1 : -1), false); }
-  });
-
-  // the big viewer, over the page, for the open tab's shots
-  const showBig = () => {
-    const list = shots().filter((s) => !s.draft || s.have);
-    const s = shots()[at];
-    if (!list.length || (s.draft && !s.have)) return;
+  // the big viewer, over the page, for one section's shots
+  function showBig() {
+    const s = open.list()[open.at];
+    if (!s || (s.draft && !s.have)) return;
     vimg.src = s.webp || s.src;
     vimg.alt = s.cap;
     document.getElementById("viewer-cap").textContent = s.cap;
-    document.getElementById("count").textContent = `${TOUR[tab].tab}: ${at + 1} / ${shots().length}`;
-  };
-  stage.addEventListener("click", () => {
-    if (stage.dataset.swiped) { delete stage.dataset.swiped; return; }
-    const s = shots()[at];
-    if (s.draft && !s.have) return;
-    showBig();
-    viewer.showModal();
-    window.plausible("Screenshot", { props: { image: (s.webp || s.src).split("/").pop() } });
-  });
-  const step = (d) => { pickShot(at + d, false); showBig(); };
+    document.getElementById("count").textContent = `${open.at + 1} / ${open.list().length}`;
+  }
+  const step = (d) => { if (open) open.go(open.at + d, false); };
   document.getElementById("prev").addEventListener("click", () => step(-1));
   document.getElementById("next").addEventListener("click", () => step(1));
   document.getElementById("close").addEventListener("click", () => viewer.close());
+  viewer.addEventListener("close", () => { open = null; });
   viewer.addEventListener("click", (e) => { if (e.target === viewer || e.target.tagName === "FIGURE") viewer.close(); });
   viewer.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft") step(-1);
@@ -1859,7 +1550,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1);
     x0 = null;
   });
-  render();
 
   // The loader fills up once, like Steam connecting in 2004
   // Only whole blocks: the count follows the bar's width (a block is 7 px plus a 3 px gap, inside

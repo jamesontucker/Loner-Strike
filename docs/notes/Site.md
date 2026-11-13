@@ -159,6 +159,18 @@ Besides row 9, the build also changes these:
 - The screenshot tour keeps its Game modes tab (captions name the modes). That tab is the proof, not a callout.
 - Pending the user's answer: the hero picture (map browser or editor) and the optional trims a, b and c.
 
+### Built (2026-11-13)
+The v2 outline is built with the user's answers.
+- The hero has the original map browser picture.
+- Only trim (b) is made: "Everything in it" has one line per group. "And in every fight" and the two server FAQ questions stay.
+- Static HTML went from about 3,000 to about 2,280 words.
+
+**Screenshots: inline, in each section's app window.** The separate tour is gone. Make your own (18 shots), Play with friends (2), Dedicated servers (3) and Share it (2, with one placeholder) each have a window you can flip through:
+- the caption sits on a scrim, with arrows on the picture, a thumbnail strip when there are 3 or more, and the arrow keys;
+- swipe works on phones, and a click opens the big viewer on that section's shots.
+
+Draft in-game shots stay out of the public page. `?drafts` shows them as dashed, clearly labeled placeholders. Shot lists are `SETS` in the script; `INGAME` turns a taken shot on. The runner-up was the single tabbed tour (one big shot plus a strip), as in commit b59bafd7.
+
 ### The open questions: both sections were original
 - **Why this exists** is original (151 words before 1.0). Recommendation: keep it whole with its DreamHack photo, and cut only the added 1.0 paragraph to one sentence. That's better than cutting it to 2–3 sentences.
 - **Pick the lobby** (the skill meters) is original, inside "How the bots play". Recommendation: keep it as it was. Play's lead picture stays the Players page with live bot chat, as it was before 1.0. The `bots-site` in-game shot can replace that picture when it exists (marked as a placeholder).
