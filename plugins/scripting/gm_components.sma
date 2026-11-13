@@ -2319,7 +2319,7 @@ stock drop_call(const Float:at[3], const keys[])
 	fwd_drop(ent, 0, ground);
 	announce(0, 120, 220, 255, 3.0, "Supply drop incoming!");
 	comp_debug("drop %d: lands at %.0f %.0f %.0f in %.0f s", ent, ground[0], ground[1], ground[2], fall);
-	hint("avoid c%d %.0f %.0f %.0f 96 30 %.0f", ent, ground[0], ground[1], ground[2], fall);
+	hint("avoid c%d %.0f %.0f %.0f 96 5 %.0f", ent, ground[0], ground[1], ground[2], fall);
 	return ent;
 }
 
@@ -3728,7 +3728,7 @@ stock hint_comp(s)
 			new owner = g_side[s];
 			if (g_pf[s][CP_FFA] > 0.0 || owner == 0 || owner > 2)
 			{
-				hint("goal all capture %.0f %.0f %.0f %d 60", o[0], o[1], o[2], ent);
+				hint("goal all capture %.0f %.0f %.0f %d 60 0 %.0f", o[0], o[1], o[2], ent, zone_reach(s));
 				hint("attract c%d %.0f %.0f %.0f %.0f 60 0 0", ent, o[0], o[1], o[2], g_r[s]);
 				fallback_goto(0, o);
 			}
@@ -3736,8 +3736,8 @@ stock hint_comp(s)
 			{
 				team_word(owner, who, charsmax(who));
 				team_word(3 - owner, other, charsmax(other));
-				hint("goal %s defend %.0f %.0f %.0f %d 40", who, o[0], o[1], o[2], ent);
-				hint("goal %s capture %.0f %.0f %.0f %d 60", other, o[0], o[1], o[2], ent);
+				hint("goal %s defend %.0f %.0f %.0f %d 40 0 %.0f", who, o[0], o[1], o[2], ent, zone_reach(s));
+				hint("goal %s capture %.0f %.0f %.0f %d 60 0 %.0f", other, o[0], o[1], o[2], ent, zone_reach(s));
 				hint("attract c%d %.0f %.0f %.0f %.0f 60 0 %d", ent, o[0], o[1], o[2], g_r[s], 3 - owner);
 				fallback_goto(3 - owner, o);
 			}
@@ -3748,11 +3748,11 @@ stock hint_comp(s)
 				g_vb[s][0], g_vb[s][1], o[2], g_pf[s][Z_TOR], floatmax(g_pf[s][Z_T0] - g_now, 0.0));
 		}
 		case K_DAMAGE:
-			hint("avoid c%d %.0f %.0f %.0f %.0f %d 0 %d", ent, o[0], o[1], o[2], zone_reach(s), min(floatround(g_pf[s][D_DMG] * 10.0), 100), g_team[s]);
+			hint("avoid c%d %.0f %.0f %.0f %.0f %d 0 %d", ent, o[0], o[1], o[2], zone_reach(s), avoid_cost(s), g_team[s]);
 		case K_TRAP:
 		{
 			if (g_state[s] == TRAP_ARMED && (g_pf[s][T_DMG] > 0.0 || ki(s, "danger", 0)))
-				hint("avoid c%d %.0f %.0f %.0f %.0f 40 0 0", ent, o[0], o[1], o[2], zone_reach(s));
+				hint("avoid c%d %.0f %.0f %.0f %.0f 6 0 0", ent, o[0], o[1], o[2], zone_reach(s));
 			else
 				hint("forget c%d", ent);
 		}
@@ -3801,13 +3801,13 @@ stock hint_comp(s)
 			}
 		}
 		case K_WAVE:
-			hint("avoid c%d %.0f %.0f %.0f %.0f 30 0 %d", ent, o[0], o[1], o[2], floatmax(g_r[s], 256.0), g_team[s] == 1 ? 2 : 1);
+			hint("avoid c%d %.0f %.0f %.0f %.0f 3 0 %d", ent, o[0], o[1], o[2], floatmax(g_r[s], 256.0), g_team[s] == 1 ? 2 : 1);
 		case K_EXTRACT:
 		{
 			team_word(g_team[s], who, charsmax(who));
 			if (g_state[s] == 1)
 			{
-				hint("goal %s extract %.0f %.0f %.0f %d 50", who, o[0], o[1], o[2], ent);
+				hint("goal %s extract %.0f %.0f %.0f %d 50 0 %.0f", who, o[0], o[1], o[2], ent, zone_reach(s));
 				fallback_goto(g_team[s], o);
 			}
 			else
@@ -3828,13 +3828,22 @@ stock hint_comp(s)
 		{
 			if (g_meeting == s)
 			{
-				hint("goal all meeting %.0f %.0f %.0f %d 90 %d", o[0], o[1], o[2], ent, floatround(g_pf[s][M_END] - g_now));
+				hint("goal all meeting %.0f %.0f %.0f %d 90 %d %.0f", o[0], o[1], o[2], ent, floatround(g_pf[s][M_END] - g_now), g_r[s]);
 				fallback_goto(0, o);
 			}
 			else
 				hint("goal_clear all %d", ent);
 		}
 	}
+}
+
+/* avoid cost for a damage zone, on the brain's scale: 1 mild .. 10 strong, -1 never walk through */
+stock avoid_cost(s)
+{
+	new Float:dps = g_pf[s][D_DMG] / g_pf[s][D_INTERVAL];
+	if (dps >= 50.0)
+		return -1;
+	return clamp(1 + floatround(dps / 5.0), 1, 10);
 }
 
 stock Float:zone_reach(s)
