@@ -3,7 +3,7 @@
 // one 3D view first (B's Orbit/Fly cameras), flat top/front/side views a key away.
 // Everything inside the root group is in GoldSrc units (plan 3.2).
 
-import { Grid, Line, MapControls, OrthographicCamera, TransformControls } from "@react-three/drei";
+import { Line, MapControls, OrthographicCamera, TransformControls } from "@react-three/drei";
 import { Canvas, events, useThree, type EventManager, type RootState, type ThreeEvent } from "@react-three/fiber";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
@@ -808,12 +808,24 @@ function Flat({ view, bounds }: { view: Exclude<ViewId, "3d">; bounds: [Vec3, Ve
   );
 }
 
-function GridFor({ view, grid }: { view: ViewId; grid: number }) {
+function GridFor({ view, grid, bounds }: { view: ViewId; grid: number; bounds: [Vec3, Vec3] }) {
   const axis = viewAxis(view);
-  // drei's grid lies flat in three's XZ (GoldSrc's floor); turn it for the side views
+  // three's grid lies flat in its XZ (GoldSrc's floor); turned for the side views
   const rot: [number, number, number] = axis === 2 ? [0, 0, 0] : axis === 1 ? [Math.PI / 2, 0, 0] : [0, 0, Math.PI / 2];
-  const g = Math.max(1, grid);
-  return <Grid rotation={rot} args={[1, 1]} cellSize={g} sectionSize={g * 8} cellColor="#3a4233" sectionColor="#57624b" cellThickness={0.6} sectionThickness={1} infiniteGrid fadeDistance={view === "3d" ? 6000 : 1e6} fadeStrength={view === "3d" ? 1.5 : 0} followCamera={false} side={THREE.DoubleSide} />;
+  const span = Math.max(2048, ...bounds[1].map((x, i) => Math.abs(x - bounds[0][i]) * 2));
+  // at most ~400 lines: a fine grid over a big map turns into a grey sheet
+  let cell = Math.max(1, grid);
+  while (span / cell > 400) cell *= 2;
+  const size = Math.ceil(span / (cell * 8)) * cell * 8;
+  const helper = useMemo(() => {
+    const g = new THREE.GridHelper(size, size / cell, "#5d6a50", "#3a4233");
+    (g.material as THREE.Material).transparent = true;
+    (g.material as THREE.Material).opacity = 0.7;
+    (g.material as THREE.Material).depthWrite = false;
+    return g;
+  }, [size, cell]);
+  useEffect(() => () => helper.dispose(), [helper]);
+  return <primitive object={helper} rotation={rot} renderOrder={-2} />;
 }
 
 // ---- the canvas -----------------------------------------------------------------------
@@ -826,7 +838,8 @@ export function EditorScene({ bounds, docId, onLost }: { bounds: [Vec3, Vec3]; d
     <Canvas
       onCreated={({ gl }) => gl.domElement.addEventListener("webglcontextlost", (e) => {
         e.preventDefault();
-        onLost();
+        // a canvas being put away (view switch, new document) drops its context on purpose
+        if (gl.domElement.isConnected) onLost();
       })}
       frameloop="demand"
       dpr={[1, 1.5]}
@@ -839,7 +852,7 @@ export function EditorScene({ bounds, docId, onLost }: { bounds: [Vec3, Vec3]; d
       <color attach="background" args={["#22271e"]} />
       <hemisphereLight args={["#ffffff", "#5a5f50", 0.95]} />
       <directionalLight position={[0.4, 1, 0.25]} intensity={1.5} />
-      <GridFor view={view} grid={grid} />
+      <GridFor view={view} grid={grid} bounds={bounds} />
       <Materials docId={docId}>
         <group rotation={ROOT_ROTATION}>
           <ToolLayer bounds={bounds} />

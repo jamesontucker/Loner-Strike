@@ -1262,6 +1262,24 @@ mod tests {
         }
     }
 
+    /// For trying the page without the app: serves only the editor routes on 127.0.0.1:8027
+    /// (what `npm run dev` proxies to), with the game from LS_TEST_GAME when set. File dialogs
+    /// need the app, so open/save/import/export answer an error here.
+    /// `LS_TEST_GAME=... cargo test serve_editor_for_ui -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore]
+    async fn serve_editor_for_ui() {
+        let t = T::new();
+        if let Ok(hl) = std::env::var("LS_TEST_GAME") {
+            let app = std::env::temp_dir().join("ls-editor-serve");
+            *t.st.current.write().unwrap() = Some(Arc::new(crate::game::Game::with_app_dir(Path::new(&hl), "cstrike", &app)));
+        }
+        let app = routes_with(t.ed.clone()).with_state(t.st.clone());
+        let l = tokio::net::TcpListener::bind("127.0.0.1:8027").await.unwrap();
+        println!("editor routes on http://127.0.0.1:8027");
+        axum::serve(l, app).await.unwrap();
+    }
+
     #[tokio::test]
     async fn new_map_doc_and_full_meshes() {
         let t = T::new();

@@ -160,7 +160,7 @@ function Editor({ replace }: { replace: (w: "new" | "open" | "import") => Promis
                   </div>
                 }
               >
-                <EditorScene key={`${doc.docId}-${lost}`} bounds={bounds} docId={doc.docId} onLost={() => setLost((n) => n + 1)} />
+                <EditorScene key={`${doc.docId}-${lost}-${view === "3d" ? "3d" : "flat"}`} bounds={bounds} docId={doc.docId} onLost={() => setLost((n) => n + 1)} />
               </SceneBoundary>
             )}
           </div>
