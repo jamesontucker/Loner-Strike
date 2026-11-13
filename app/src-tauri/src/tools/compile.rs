@@ -1048,7 +1048,9 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
 /// cleanly, Err(output) when it fails or is stopped.
 fn run_stage(layout: &Layout, stage: Stage, preset: Preset, base: &Path, extra: &[String], done: f64, total: f64) -> Result<String, String> {
     let (program, args) = layout.command_line(stage, preset, base, extra)?;
-    note(&format!("> {} {}", stage.program(), args.iter().skip_while(|a| !a.contains(stage.program())).skip(1).cloned().collect::<Vec<_>>().join(" ")));
+    // (the program's own arguments: through wine, after --bottle B --wait-children exe)
+    let own = if matches!(layout.runner, Runner::Wine { .. }) { &args[4..] } else { &args[..] };
+    note(&format!("> {} {}", stage.program(), own.join(" ")));
     let mut cmd = crate::sys::command(&program);
     cmd.args(&args).current_dir(base.parent().unwrap_or(Path::new("."))).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
     if matches!(layout.runner, Runner::Wine { .. }) {
