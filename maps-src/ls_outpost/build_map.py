@@ -1,97 +1,76 @@
 #!/usr/bin/env python3
-"""ls_outpost: a desert relay station at night, built for Last Stand.
+"""ls_outpost (v2): a walled desert outpost at night, built for Last Stand.
 
 Writes ls_outpost.map (Valve 220, what our map editor reads and writes) next to this file.
-    python3 build_map.py            # writes ls_outpost.map
-Open the .map in Tools > Map editor (Import) to edit it by hand afterwards; or change the
-layout here and run it again. Everything is in GoldSrc units, x east, y north, z up.
+    python3 build_map.py
+Open the .map in Tools > Map editor (Import) to edit it by hand, or change the tables here and
+run it again. GoldSrc units, x east, y north, z up. README.md has the layout and the reasons.
 
-Layout (docs in README.md beside this file):
-  base      the compound courtyard in the middle (-448..448 square), walls 128 high
-            station building NW (fallback room, roof = overwatch), armory SW (the only
-            buy zone), east gun platform, south rampart
-  west      "the yard": wide open ground with cover, two spawn pockets around corners
-  east      "the alley": a 128-wide twisting lane with a roofed tunnel stretch
-  south     "the walkway": raised path over the rooftops, enters the base on the wall top
-  north     the drop clearing: open sky, visible from the gate and the station roof
-Textures: only cs_dust.wad, cstrike.wad (CS 1.6) and halflife.wad (every HL install).
+The idea in one look:
+  the compound    walls 160 high (32 thick) round a 1024 x 896 courtyard. A firing step (z 112)
+                  runs inside the west, south and east walls and over the three gates
+                  (gatehouses), reached by two stairs. Keep (last stand) on the north wall,
+                  armory with Barney's counter in the NE corner, generator and mast NW.
+  the gates       west, east, south: 128 wide x 96 high, each closed by a boarded barricade
+                  you can see and shoot through (planks + one CLIP brush in the same entity)
+  the routes      west: the open field (2 storm drains, floodlight mast, supply drops by the wall)
+                  east: the alley (2 bends, red warning lamps, a crashed truck)
+                  south: the canyon road (2 bends, a burning truck, orange light)
+  the creatures   come out of storm drains (culverts) at the far end of each route
+Textures only from cs_dust.wad, cstrike.wad (CS 1.6) and halflife.wad (every HL install).
 """
 import os
 
 WADS = ["cs_dust.wad", "cstrike.wad", "halflife.wad"]
-SKY_Z = 640          # ceiling of the world (sky)
-WORLD = (-2304, -2304, 2304, 1344)   # inner bounds x0 y0 x1 y1
-WALL_H = 288         # default height of the solid "town" around the lanes
-CLIP_TOP = 400       # invisible walls above low walls reach this high
+SKY_Z = 640
+WORLD = (-2112, -2048, 2240, 1152)   # inner bounds x0 y0 x1 y1
+ROCK_H = 320                          # the canyon walls round everything
+CLIP_TOP = 400
+
+# compound
+CX0, CY0, CX1, CY1 = -544, -480, 544, 480     # outer face of the walls
+WT = 32                                        # wall thickness
+IX0, IY0, IX1, IY1 = CX0 + WT, CY0 + WT, CX1 - WT, CY1 - WT   # courtyard inner face
+WALL_H = 160                                   # wall top (parapet top)
+STEP_Z = 112                                   # firing step floor
+STEP_D = 96                                    # firing step depth
+GATE_W, GATE_H = 128, 96
 
 # ---------------------------------------------------------------------------------------
-# open ground: (name, x0, y0, x1, y1, floor texture). Everything else is filled solid.
+# open ground: (name, x0, y0, x1, y1, floor texture). Everything else is canyon rock.
 OPEN = [
-    # base
-    ("courtyard", -448, -448, 448, 448, "SandRoad"),
-    ("gate_w", -640, -96, -448, 96, "SandRoad"),
-    ("gate_e", 448, -64, 640, 64, "SandRoad"),
-    ("gate_n", -96, 448, 96, 640, "SandRoad"),
-    ("gate_s", 256, -640, 448, -448, "OUT_PAVE2"),       # on the wall top (floor at 128)
-    # north: the drop clearing
-    ("clearing", -512, 640, 512, 1216, "-1Sand"),
-    # west: the yard and its two spawn pockets
-    ("yard", -1984, -640, -640, 640, "-0Sand"),
-    ("nw_neck", -1984, 640, -1792, 896, "-2Sand"),
-    ("nw_pocket", -2240, 896, -1792, 1152, "-2Sand"),
-    ("sw_neck", -1984, -896, -1792, -640, "-2Sand"),
-    ("sw_pocket", -2240, -1152, -1792, -896, "-2Sand"),
+    ("compound", CX0, CY0, CX1, CY1, "SandRoad"),
+    # west: the field, its two storm drains and the supply-drop ground by the wall
+    ("field", -1536, -576, CX0, 576, "-0Sand"),
+    ("drain_nw", -1536, 576, -1280, 960, "TNNL_FLR1"),
+    ("drain_sw", -1536, -960, -1280, -576, "TNNL_FLR1"),
     # east: the alley
-    ("alley1", 640, -64, 896, 64, "OUT_GRVL2"),
-    ("alley2", 768, 64, 896, 640, "OUT_GRVL2"),
-    ("alley3", 896, 512, 1408, 640, "OUT_GRVL2"),
-    ("alley4", 1280, -512, 1408, 512, "OUT_GRVL2"),
-    ("alley5", 1408, -512, 1984, -384, "OUT_GRVL2"),
-    ("e_pocket", 1984, -768, 2240, -128, "-3Sand"),
-    # south: the walkway (floor raised to 128) and its spawn yard
-    ("walk3", 256, -1024, 448, -640, "OUT_PAVE2"),
-    ("walk2", -128, -1216, 448, -1024, "OUT_PAVE2"),
-    ("walk1", -128, -1600, 64, -1216, "OUT_PAVE2"),
-    ("s_stairs", -128, -1856, 64, -1600, "OUT_PAVE2"),
-    ("s_pocket", -320, -2240, 256, -1856, "-3Sand"),
-    # corner bevels: the square at each turn's inside corner is opened, then half of it is
-    # filled back with a 45-degree wedge (BEVELS below), so nobody grinds on a sharp corner
-    ("bevel_w1", 64, -1344, 192, -1216, "OUT_PAVE2"),
-    ("bevel_w2", 128, -1024, 256, -896, "OUT_PAVE2"),
-    ("bevel_a1", 640, 64, 768, 192, "OUT_GRVL2"),
-    ("bevel_a2", 896, 384, 1024, 512, "OUT_GRVL2"),
-    ("bevel_a3", 1152, 384, 1280, 512, "OUT_GRVL2"),
-    ("bevel_a4", 1408, -384, 1536, -256, "OUT_GRVL2"),
+    ("apron_e", CX1, -192, 832, 192, "OUT_PAVE1"),
+    ("alley1", 832, -80, 1216, 80, "OUT_PAVE1"),
+    ("alley2", 1056, 80, 1216, 640, "OUT_PAVE1"),
+    ("alley3", 1216, 480, 1728, 640, "OUT_PAVE1"),
+    ("drain_e", 1728, 400, 2048, 720, "TNNL_FLR1"),
+    ("bev_a1", 928, 80, 1056, 208, "OUT_PAVE1"),
+    ("bev_a2", 1216, 352, 1344, 480, "OUT_PAVE1"),
+    # south: the canyon road
+    ("apron_s", -192, -736, 192, CY0, "SandRoad"),
+    ("road1", -112, -1088, 112, -736, "SandRoad"),
+    ("road2", 112, -1088, 768, -928, "SandRoad"),
+    ("road3", 608, -1536, 768, -1088, "SandRoad"),
+    ("drain_s", 528, -1856, 848, -1536, "TNNL_FLR1"),
+    ("bev_r1", 112, -928, 240, -800, "SandRoad"),
+    ("bev_r2", 480, -1216, 608, -1088, "SandRoad"),
 ]
-
-# the wedges: (triangle counter-clockwise seen from above, floor z, top z, side, top, clip above)
+# 45-degree wedges in each turn's inside corner (triangle counter-clockwise from above)
 BEVELS = [
-    ([(64, -1344), (192, -1344), (192, -1216)], 128, 176, "SandCCrete", "OUT_ROOF1B", True),
-    ([(128, -1024), (256, -896), (128, -896)], 128, 176, "SandCCrete", "OUT_ROOF1B", True),
-    ([(640, 64), (768, 192), (640, 192)], 0, 288, "-0csSandWall", "-0Sand", False),
-    ([(896, 384), (1024, 384), (1024, 512)], 0, 288, "-0csSandWall", "-0Sand", False),
-    ([(1152, 512), (1152, 384), (1280, 384)], 0, 288, "-0csSandWall", "-0Sand", False),
-    ([(1408, -256), (1536, -384), (1536, -256)], 0, 288, "-0csSandWall", "-0Sand", False),
+    [(928, 80), (1056, 208), (928, 208)],
+    [(1216, 352), (1344, 352), (1344, 480)],
+    [(112, -800), (240, -928), (240, -800)],
+    [(480, -1088), (480, -1216), (608, -1216)],
 ]
-
-# raised floors inside open ground: (x0, y0, x1, y1, top z, top texture)
-RAISED = [
-    (256, -640, 448, -448, 128, "OUT_PAVE2"),    # south gate on the wall top
-    (256, -448, 448, -288, 128, "OUT_PAVE2"),    # rampart inside the base
-    (256, -1024, 448, -640, 128, "OUT_PAVE2"),
-    (-128, -1216, 448, -1024, 128, "OUT_PAVE2"),
-    (-128, -1600, 64, -1216, 128, "OUT_PAVE2"),
-    (64, -1344, 192, -1216, 128, "OUT_PAVE2"),
-    (128, -1024, 256, -896, 128, "OUT_PAVE2"),
-]
-
-# solid zones with their own height: (x0, y0, x1, y1, height, side tex, top tex, clip above)
-ZONES = [
-    (-640, -640, 640, -448, 176, "SandCCrete", "OUT_ROOF2B", True),   # base south wall: parapet for the wall-top gate
-    (-640, -448, 640, 640, 128, "csSandWall2", "SandTrim", True),     # base walls
-    (-640, -1856, 640, -640, 176, "SandCCrete", "OUT_ROOF1B", True),  # rooftops along the walkway
-]
-DEFAULT_SIDE, DEFAULT_TOP = "-0csSandWall", "-0Sand"
+# the storm drains' roofs (the creatures come out of the dark): x0 y0 x1 y1
+DRAINS = [(-1536, 640, -1280, 960), (-1536, -960, -1280, -640), (1792, 400, 2048, 720), (528, -1856, 848, -1600)]
+DRAIN_Z = 176
 
 # ---------------------------------------------------------------------------------------
 # brushes
@@ -120,7 +99,7 @@ def fmt(v):
 
 class Brush:
     def __init__(self, faces):
-        self.faces = faces   # list of (p0, p1, p2, tex, n)
+        self.faces = faces   # (p0, p1, p2, tex, normal, scale)
 
     def text(self):
         out = ["{"]
@@ -133,24 +112,16 @@ class Brush:
 
 
 def box(x0, y0, z0, x1, y1, z1, side, top=None, bottom=None, scale=1):
-    """an axis-aligned box; side/top/bottom textures (a dict per normal also works)"""
+    """an axis-aligned box: side / top / bottom textures"""
     assert x1 > x0 and y1 > y0 and z1 > z0, (x0, y0, z0, x1, y1, z1)
     top = top or side
     bottom = bottom or top
     faces = []
-    for n in TANG:
-        a, b = TANG[n]
-        # a point on the face
-        p = [x1 if n[0] > 0 else x0, y1 if n[1] > 0 else y0, z1 if n[2] > 0 else z0]
-        if n[0] < 0: p[0] = x0
-        if n[1] < 0: p[1] = y0
-        if n[2] < 0: p[2] = z0
-        p1 = tuple(p)
+    for n, (a, b) in TANG.items():
+        p1 = (x1 if n[0] > 0 else x0, y1 if n[1] > 0 else y0, z1 if n[2] > 0 else z0)
         p0 = tuple(p1[i] + 64 * a[i] for i in range(3))
         p2 = tuple(p1[i] + 64 * b[i] for i in range(3))
         t = top if n == (0, 0, 1) else bottom if n == (0, 0, -1) else side
-        if isinstance(t, dict):
-            t = t.get(n, t.get("side"))
         faces.append((p0, p1, p2, t, n, scale))
     return Brush(faces)
 
@@ -162,14 +133,11 @@ def prism(poly, z0, z1, side, top=None, scale=1):
     for (ax, ay), (bx, by) in zip(poly, poly[1:] + poly[:1]):
         ex, ey = bx - ax, by - ay
         ln = (ex * ex + ey * ey) ** 0.5
-        n = (ey / ln, -ex / ln, 0)
-        p1 = (ax, ay, z0)
-        faces.append(((bx, by, z0), p1, (ax, ay, z0 + 64), side, n, scale))
-    for n, z, t in (((0, 0, 1), z1, top), ((0, 0, -1), z0, top)):
+        faces.append(((bx, by, z0), (ax, ay, z0), (ax, ay, z0 + 64), side, (ey / ln, -ex / ln, 0), scale))
+    for n, z in (((0, 0, 1), z1), ((0, 0, -1), z0)):
         a, b = TANG[n]
-        x, y = poly[0]
-        p1 = (x, y, z)
-        faces.append((tuple(p1[i] + 64 * a[i] for i in range(3)), p1, tuple(p1[i] + 64 * b[i] for i in range(3)), t, n, scale))
+        p1 = (poly[0][0], poly[0][1], z)
+        faces.append((tuple(p1[i] + 64 * a[i] for i in range(3)), p1, tuple(p1[i] + 64 * b[i] for i in range(3)), top, n, scale))
     return Brush(faces)
 
 
@@ -181,8 +149,7 @@ class Ent:
 
     def text(self, i):
         out = ["// entity %d" % i, "{"]
-        for k, v in self.keys.items():
-            out.append('"%s" "%s"' % (k, v))
+        out += ['"%s" "%s"' % kv for kv in self.keys.items()]
         for bi, b in enumerate(self.brushes):
             out.append("// brush %d" % bi)
             out.append(b.text())
@@ -191,9 +158,9 @@ class Ent:
 
 
 world = Ent("worldspawn", mapversion=220, wad=";".join(WADS), skyname="night",
-            message="Outpost (Last Stand)", sounds=1, MaxRange=4096)
+            message="Outpost (Last Stand)", MaxRange=4096)
 ents = [world]
-detail = Ent("func_detail", zhlt_detaillevel=1)   # props, stairs, building: no VIS cuts
+detail = Ent("func_detail", zhlt_detaillevel=1)   # props and furniture: no VIS cuts
 ents.append(detail)
 
 
@@ -210,13 +177,20 @@ def point(classname, x, y, z, **keys):
     ents.append(e)
     return e
 
+
+def brush_ent(classname, brushes, **keys):
+    e = Ent(classname, **keys)
+    e.brushes += brushes
+    ents.append(e)
+    return e
+
 # ---------------------------------------------------------------------------------------
-# the sky box around everything
+# sky box
 x0, y0, x1, y1 = WORLD
 T = 64
 for b in [
-    (x0 - T, y0 - T, SKY_Z, x1 + T, y1 + T, SKY_Z + T),     # ceiling
-    (x0 - T, y0 - T, -128 - T, x1 + T, y1 + T, -128),       # floor (under the fill)
+    (x0 - T, y0 - T, SKY_Z, x1 + T, y1 + T, SKY_Z + T),
+    (x0 - T, y0 - T, -128 - T, x1 + T, y1 + T, -128),
     (x0 - T, y0 - T, -128, x0, y1 + T, SKY_Z),
     (x1, y0 - T, -128, x1 + T, y1 + T, SKY_Z),
     (x0, y0 - T, -128, x1, y0, SKY_Z),
@@ -225,34 +199,28 @@ for b in [
     W(box(*b, "SKY"))
 
 # ---------------------------------------------------------------------------------------
-# solid fill: the complement of OPEN, cut on a grid, merged into rectangles
+# canyon rock: the complement of OPEN, cut on a grid, merged into rectangles
 
 
 def inside(r, x, y):
     return r[0] <= x < r[2] and r[1] <= y < r[3]
 
 
-xs = sorted({x0, x1} | {r[1] for r in OPEN} | {r[3] for r in OPEN} | {z[0] for z in ZONES} | {z[2] for z in ZONES})
-ys = sorted({y0, y1} | {r[2] for r in OPEN} | {r[4] for r in OPEN} | {z[1] for z in ZONES} | {z[3] for z in ZONES})
-xs = [v for v in xs if x0 <= v <= x1]
-ys = [v for v in ys if y0 <= v <= y1]
+xs = sorted({x0, x1} | {r[1] for r in OPEN} | {r[3] for r in OPEN})
+ys = sorted({y0, y1} | {r[2] for r in OPEN} | {r[4] for r in OPEN})
 
 
 def cell_kind(cx, cy):
     for r in OPEN:
         if inside(r[1:5], cx, cy):
             return ("open", r[5])
-    for z in ZONES:
-        if inside(z, cx, cy):
-            return ("solid", z[4], z[5], z[6], z[7])
-    return ("solid", WALL_H, DEFAULT_SIDE, DEFAULT_TOP, False)
+    return ("rock",)
 
 
 rows = []
 for j in range(len(ys) - 1):
     cy = (ys[j] + ys[j + 1]) / 2
-    runs = []
-    i = 0
+    runs, i = [], 0
     while i < len(xs) - 1:
         k = cell_kind((xs[i] + xs[i + 1]) / 2, cy)
         s = i
@@ -261,266 +229,278 @@ for j in range(len(ys) - 1):
         runs.append((xs[s], xs[i + 1], k))
         i += 1
     rows.append(runs)
-
-# merge identical runs over consecutive rows
-active = {}
-done = []
+active, done = {}, []
 for j, runs in enumerate(rows):
-    keys = set(runs)
-    for key in list(active):
-        if key not in keys:
-            done.append((key, active.pop(key), j))
+    for key in [k for k in active if k not in set(runs)]:
+        done.append((key, active.pop(key), j))
     for key in runs:
-        if key not in active:
-            active[key] = j
-for key, s in active.items():
-    done.append((key, s, len(rows)))
-
+        active.setdefault(key, j)
+done += [(key, s, len(rows)) for key, s in active.items()]
 for (ax0, ax1, k), j0, j1 in done:
-    by0, by1 = ys[j0], ys[j1]
     if k[0] == "open":
-        W(box(ax0, by0, -128, ax1, by1, 0, "-0csSandWall", top=k[1]))
+        W(box(ax0, ys[j0], -128, ax1, ys[j1], 0, "-0csSandWall", top=k[1]))
     else:
-        h, side, top, clip = k[1:]
-        W(box(ax0, by0, -128, ax1, by1, h, side, top=top))
-        if clip:
-            W(box(ax0, by0, h, ax1, by1, CLIP_TOP, "CLIP"))
+        W(box(ax0, ys[j0], -128, ax1, ys[j1], ROCK_H, "-0SandRock", top="-1Sand"))
 
-# corner wedges
-for poly, z0, z1, side, top, clip in BEVELS:
-    W(prism(poly, z0, z1, side, top))
-    if clip:
-        W(prism(poly, z1, CLIP_TOP, "CLIP"))
+for poly in BEVELS:
+    W(prism(poly, 0, ROCK_H, "-0SandRock", "-1Sand"))
 
-# raised floors (walkway, wall-top gate, rampart)
-for rx0, ry0, rx1, ry1, z, tex in RAISED:
-    W(box(rx0, ry0, 0, rx1, ry1, z, "SandCCrete", top=tex))
+# storm drains: a concrete roof over the last stretch, a lintel at the mouth
+for dx0, dy0, dx1, dy1 in DRAINS:
+    W(box(dx0, dy0, DRAIN_Z, dx1, dy1, ROCK_H, "SandCCrete", bottom="TNNL_C1"))
 
 # ---------------------------------------------------------------------------------------
-# stairs: n steps of `rise` up along a direction, as detail
+# the compound walls, gates and the firing step
+WALL = "csSandWall2"
+STEP_TOP = "OUT_PAVE2"
+
+
+def wall(xa, ya, xb, yb, z0=0, z1=WALL_H, clip=True):
+    W(box(xa, ya, z0, xb, yb, z1, WALL, top="SandTrim"))
+    if clip and z1 == WALL_H:
+        W(box(xa, ya, WALL_H, xb, yb, CLIP_TOP, "CLIP"))
+
+
+g = GATE_W // 2
+# north wall (the keep and armory back onto it)
+wall(CX0, IY1, CX1, CY1)
+# south wall, gate at x -64..64
+wall(CX0, CY0, -g, IY0)
+wall(g, CY0, CX1, IY0)
+wall(-g, CY0, g, IY0, z0=GATE_H)
+# west wall, gate at y -64..64, a gap in the parapet at the ladder (y 256..320)
+LAD0, LAD1 = 256, 320
+wall(CX0, IY0, IX0, -g)
+wall(CX0, g, IX0, LAD0)
+wall(CX0, LAD0, IX0, LAD1, z1=STEP_Z, clip=False)
+wall(CX0, LAD1, IX0, IY1)
+wall(CX0, -g, IX0, g, z0=GATE_H)
+# east wall, gate at y -64..64
+wall(IX1, IY0, CX1, -g)
+wall(IX1, g, CX1, IY1)
+wall(IX1, -g, CX1, g, z0=GATE_H)
+
+
+def step(xa, ya, xb, yb, z0=0):
+    W(box(xa, ya, z0, xb, yb, STEP_Z, "SandCCrete", top=STEP_TOP))
+
+
+# firing step: west and east full length, south between them; over each gate a slab (gatehouse)
+SX0, SX1, SY0 = IX0 + STEP_D, IX1 - STEP_D, IY0 + STEP_D
+step(IX0, IY0, SX0, -g)
+step(IX0, g, SX0, IY1)
+step(IX0, -g, SX0, g, z0=GATE_H)
+step(SX1, IY0, IX1, -g)
+step(SX1, g, IX1, IY1)
+step(SX1, -g, IX1, g, z0=GATE_H)
+step(SX0, IY0, -g, SY0)
+step(g, IY0, SX1, SY0)
+step(-g, IY0, g, SY0, z0=GATE_H)
+# gate tunnels: a lamp over each inner mouth
+for (lx0, ly0, lx1, ly1) in [(SX0, -24, SX0 + 4, 24), (SX1 - 4, -24, SX1, 24), (-24, SY0, 24, SY0 + 4)]:
+    D(box(lx0, ly0, 100, lx1, ly1, 108, "~LIGHT3A"))
 
 
 def stairs(xa, ya, xb, yb, z0, z1, toward, side="SandCCrete", top="OUT_PAVE1"):
-    """steps filling the box xa..xb, ya..yb, rising from z0 to z1 toward 'n','s','e','w'"""
+    """steps filling the box, rising from z0 to z1 toward 'n', 's', 'e' or 'w'"""
     n = int(round((z1 - z0) / 16))
     length = (yb - ya) if toward in "ns" else (xb - xa)
     d = length / n
     for i in range(n):
         h = z0 + 16 * (i + 1)
-        if toward == "n":
-            b = (xa, ya + d * i, z0, xb, yb, h)
-        elif toward == "s":
-            b = (xa, ya, z0, xb, yb - d * i, h)
-        elif toward == "e":
-            b = (xa + d * i, ya, z0, xb, yb, h)
-        else:
-            b = (xa, ya, z0, xb - d * i, yb, h)
+        b = {"n": (xa, ya + d * i, z0, xb, yb, h), "s": (xa, ya, z0, xb, yb - d * i, h),
+             "e": (xa + d * i, ya, z0, xb, yb, h), "w": (xa, ya, z0, xb - d * i, yb, h)}[toward]
         D(box(*b, side, top=top))
 
 
-# south: spawn yard up to the walkway
-stairs(-128, -1856, 64, -1600, 0, 128, "n")
-# base: rampart down to the courtyard (west, along the south wall)
-stairs(0, -448, 256, -288, 0, 128, "e")
-# base: station roof stairs (south of the building, rising west)
-stairs(-448, 96, -128, 192, 0, 160, "w")
-# base: east gun platform and its stairs
-D(box(320, 96, 0, 448, 352, 96, "CSTRIKE_ME4METL", top="CSTRIKE_FE2GTNG"))
-stairs(128, 128, 320, 224, 0, 96, "e", side="CSTRIKE_ME4METL", top="CSTRIKE_FE2GTNG")
+# two stairs up to the firing step, from the courtyard's south half
+stairs(SX0, -256, SX0 + 224, -160, 0, STEP_Z, "w")
+stairs(SX1 - 224, -256, SX1, -160, 0, STEP_Z, "e")
+
+# the ladder down to the field (supply drops) and back up: creatures can't climb
+D(box(CX0 - 4, LAD0 + 8, 0, CX0, LAD1 - 8, STEP_Z, "CSTRIKE_ME4METL"))
+brush_ent("func_wall", [box(CX0 - 8, LAD0 + 8, 0, CX0 - 4, LAD1 - 8, STEP_Z, "{CSTRIKE_LE6LAD")], rendermode=4, renderamt=255)
+brush_ent("func_ladder", [box(CX0 - 24, LAD0 + 8, 0, CX0 - 8, LAD1 - 8, STEP_Z + 24, "AAATRIGGER")])
+D(box(CX0 - 6, LAD0 + 4, STEP_Z + 4, CX0, LAD0 + 8, STEP_Z + 40, "+0~LAB1_CAU"))
+D(box(CX0 - 6, LAD1 - 8, STEP_Z + 4, CX0, LAD1 - 4, STEP_Z + 40, "+0~LAB1_CAU"))
 
 # ---------------------------------------------------------------------------------------
-# the station building (NW of the courtyard): the fallback room, its roof is overwatch
-SX0, SY0, SX1, SY1, SH = -448, 192, -128, 448, 160
-WT = 16
-ext = {"side": "SandCCrete"}
-D(box(SX0, SY0, 0, SX1, SY0 + WT, SH - 16, "SandCCrete"))                    # south wall
-D(box(SX1 - WT, SY0 + WT, 0, SX1, 256, SH - 16, "SandCCrete"))                # east wall, below the door
-D(box(SX1 - WT, 384, 0, SX1, SY1, SH - 16, "SandCCrete"))                     # east wall, above the door
-D(box(SX1 - WT, 256, 112, SX1, 384, SH - 16, "SandCCrete"))                   # over the door
-D(box(SX0, SY0, SH - 16, SX1, SY1, SH, "SandCCrete", top="OUT_ROOF2B", bottom="CSTRIKE_ME1CLNG"))  # roof
-# inside: a radio console and crates
-D(box(-432, 400, 0, -304, 432, 40, "~LAB1_COMP3", top="CSTRIKE_ME4METL"))
-D(box(-432, 208, 0, -368, 272, 64, "MltryCrteSd", top="MltryCrteTp"))
-# roof parapet ledge (low, you shoot over it)
-D(box(SX0, SY0, SH, SX1, SY0 + 8, SH + 24, "SandTrim"))
-# relay mast on the roof (decor, out of the way in the corner)
-D(box(-432, 416, SH, -400, 448, SH + 224, "CSTRIKE_ME4METL"))
-D(box(-424, 420, SH + 224, -408, 444, SH + 232, "~SPOTRED"))
+# the keep: the last stand. One wide door and two windows onto the courtyard
+KX0, KX1, KY0 = -224, 224, 192
+KH = 144
+KW = 16
+K = "SandCCrete"
+# south face: door in the middle (128 x 112), a window each side (64 wide, z 48..96)
+for xa, xb in [(KX0, -176), (-112, -64), (64, 112), (176, KX1)]:
+    D(box(xa, KY0, 0, xb, KY0 + KW, KH, K))
+for xa, xb in [(-176, -112), (112, 176)]:
+    D(box(xa, KY0, 0, xb, KY0 + KW, 48, K))
+    D(box(xa, KY0, 96, xb, KY0 + KW, KH, K))
+D(box(-64, KY0, 112, 64, KY0 + KW, KH, K))                   # over the door
+D(box(KX0, KY0 + KW, 0, KX0 + KW, IY1, KH, K))               # west face
+D(box(KX1 - KW, KY0 + KW, 0, KX1, IY1, KH, K))               # east face
+W(box(KX0, KY0, KH, KX1, IY1, WALL_H, "OUT_ROOF2B", bottom="CSTRIKE_ME1CLNG"))   # roof
+W(box(KX0, KY0, WALL_H, KX1, IY1, CLIP_TOP, "CLIP"))
+# inside: radio desks along the back wall, crates to fight from
+D(box(-176, IY1 - 40, 0, -48, IY1, 40, "~LAB1_COMP3", top="CSTRIKE_ME4METL"))
+D(box(48, IY1 - 40, 0, 176, IY1, 40, "~LAB1_COMP3", top="CSTRIKE_ME4METL"))
+D(box(-176, 272, 0, -128, 320, 48, "MltryCrteSd", top="MltryCrteTp"))
+D(box(128, 272, 0, 176, 320, 48, "MltryCrteSd", top="MltryCrteTp"))
+# a sign light over the door
+D(box(-48, KY0 - 4, 116, 48, KY0, 124, "~LIGHT5A"))
 
 # ---------------------------------------------------------------------------------------
-# the armory (SW of the courtyard): the only buy zone, two doorways
-AX0, AY0, AX1, AY1, AH = -448, -448, -192, -224, 128
-D(box(AX0, AY1 - WT, 0, -384, AY1, AH, "CSTRIKE_WB6PLN2"))            # north wall, west of the door
-D(box(-256, AY1 - WT, 0, AX1, AY1, AH, "CSTRIKE_WB6PLN2"))            # north wall, east of the door
-D(box(-384, AY1 - WT, 112, -256, AY1, AH, "CSTRIKE_WB6PLN2"))         # over the north door
-D(box(AX1 - WT, AY0, 0, AX1, -400, AH, "CSTRIKE_WB6PLN2"))            # east wall, south of the door
-D(box(AX1 - WT, -304, 0, AX1, AY1 - WT, AH, "CSTRIKE_WB6PLN2"))       # east wall, north of the door
-D(box(AX1 - WT, -400, 112, AX1, -304, AH, "CSTRIKE_WB6PLN2"))         # over the east door
-D(box(AX0, AY0, AH, AX1, AY1, AH + 16, "CSTRIKE_WB6PLN2", top="OUT_ROOF3B", bottom="CSTRIKE_CE2XCNG"))
-# floor plate (thin, flush 1 unit up so it shows)
-D(box(AX0, AY0, 0, AX1 - WT, AY1 - WT, 1, "CSTRIKE_FE2SQRS"))
-# weapon racks: lockers along the west and south walls, an ammo bench
-for i, yy in enumerate(range(-432, -272, 64)):
-    D(box(AX0, yy, 1, AX0 + 24, yy + 56, 112, "C1A1_LOCKER"))
-for xx in range(-416, -256, 64):
-    D(box(xx, AY0, 1, xx + 56, AY0 + 24, 112, "C1A1_LOCKER"))
-D(box(-336, -352, 1, -272, -320, 36, "MltryCrteSd", top="MltryCrteTp"))
-# signs: caution stripes either side of both doors, a light strip over each
-for bx in (-400, -256):
-    D(box(bx, AY1, 0, bx + 16, AY1 + 4, 112, "+0~LAB1_CAU"))
-for by in (-416, -304):
-    D(box(AX1, by, 0, AX1 + 4, by + 16, 112, "+0~LAB1_CAU"))
-D(box(-384, AY1, 116, -256, AY1 + 4, 124, "~LIGHT5A"))
-D(box(AX1, -400, 116, AX1 + 4, -304, 124, "~LIGHT5A"))
-D(box(-352, -352, AH - 4, -288, -320, AH, "~LIGHT3A"))
-buy = Ent("func_buyzone", team=2)
-buy.brushes.append(box(AX0 + 24, AY0 + 24, 0, AX1 - WT, AY1 - WT, AH, "AAATRIGGER"))
-ents.append(buy)
-# the shop marker for gm_laststand (W1's find_shop: an entity named lst_shop)
-point("info_target", -320, -336, 16, targetname="lst_shop")
+# the armory (NE corner, by the east gate): Barney's counter, the only buy zone
+AX0, AX1, AY0 = KX1, SX1, 256
+AH = 128
+A = "CSTRIKE_WB6PLN2"
+D(box(AX0, AY0, 0, 264, AY0 + KW, AH, A))                    # south face, west of the door
+D(box(392, AY0, 0, AX1, AY0 + KW, AH, A))
+D(box(264, AY0, 112, 392, AY0 + KW, AH, A))
+D(box(AX0, AY0 + KW, 0, AX0 + KW, IY1, AH, A))               # west face
+D(box(AX1 - 16, AY0 + KW, STEP_Z, AX1, IY1, AH, A))          # east face above the firing step
+W(box(AX0, AY0, AH, AX1, IY1, AH + 16, "OUT_ROOF3B", bottom="CSTRIKE_CE2XCNG"))
+W(box(AX0, AY0, AH + 16, AX1, IY1, CLIP_TOP, "CLIP"))
+# the counter, lockers behind it, ammo crates
+# the counter runs wall to wall; clip over it keeps the back for Barney (you buy across it)
+D(box(AX0 + KW, 352, 0, AX1, 368, 40, "CSTRIKE_ME4METL", top="CSTRIKE_FE2SQRS"))
+D(box(AX0 + KW, 352, 40, AX1, 368, AH, "CLIP"))
+for xx in range(264, 392, 64):
+    D(box(xx, IY1 - 24, 0, xx + 56, IY1, 112, "C1A1_LOCKER"))
+D(box(AX0 + KW, 288, 0, AX0 + KW + 48, 336, 48, "MltryCrteSd", top="MltryCrteTp"))
+# caution stripes either side of the door, a light strip over it, a lamp inside
+for bx in (248, 392):
+    D(box(bx, AY0 - 4, 0, bx + 16, AY0, 112, "+0~LAB1_CAU"))
+D(box(264, AY0 - 4, 116, 392, AY0, 124, "~LIGHT5A"))
+D(box(304, 384, AH - 4, 368, 416, AH, "~LIGHT3A"))
+brush_ent("func_buyzone", [box(AX0 + KW, AY0 + KW, 0, AX1, IY1, AH, "AAATRIGGER")], team=2)
+point("info_target", 336, 396, 16, targetname="lst_shop")   # behind the counter
 
 # ---------------------------------------------------------------------------------------
-# cover
+# NW corner: the generator and the radio mast (a landmark seen from every lane)
+D(box(SX0, 320, 0, -288, IY1, 72, "OUT_GAD1", top="CSTRIKE_ME4METL"))
+D(box(-336, 216, 0, -320, 232, 448, "CSTRIKE_ME4METL"))
+D(box(-344, 208, 448, -312, 240, 456, "~SPOTRED"))
 
-
-def crate(x, y, s=64, h=None, big=False, z=0):
-    h = h or s
-    if big:
-        D(box(x, y, z, x + s, y + s, z + h, "SandCrtLrgSd", top="SandCrtLrgTp"))
-    else:
-        D(box(x, y, z, x + s, y + s, z + h, "MltryCrteSd", top="MltryCrteTp"))
-
-
-def sandbags(xa, ya, xb, yb, h=48):
-    D(box(xa, ya, 0, xb, yb, h, "OUT_SNBAG", top="OUT_SNBAGB"))
-
-
-# the yard: staggered cover, wide lanes between (128+ everywhere)
-crate(-896, -256, 128, big=True)
-crate(-896, -128, 64)
-sandbags(-1024, 240, -832, 272)
-sandbags(-1088, -320, -1056, -160)
-crate(-1280, 288, 128, big=True)
-crate(-1216, 416, 64)
-crate(-1344, -416, 128, big=True)
-crate(-1280, -480, 64)
-sandbags(-1536, -64, -1504, 128)
-crate(-1600, 160, 64)
-crate(-1664, -320, 128, big=True)
-D(box(-1408, -176, 0, -1152, -144, 160, "-1csSandWall", top="SandTrim"))      # a broken wall
-D(box(-1792, 320, 0, -1600, 352, 112, "SandCCrete", top="SandTrim"))
-crate(-1856, -544, 64)
-# a wrecked water tank on legs in the yard's middle (shoot under it, walk round it)
-D(box(-1240, -8, 0, -1224, 8, 96, "CSTRIKE_ME4METL"))
-D(box(-1240, 120, 0, -1224, 136, 96, "CSTRIKE_ME4METL"))
-D(box(-1112, -8, 0, -1096, 8, 96, "CSTRIKE_ME4METL"))
-D(box(-1112, 120, 0, -1096, 136, 96, "CSTRIKE_ME4METL"))
-D(box(-1256, -24, 96, -1080, 152, 176, "-0CSTRIKE_WE1MT", top="CSTRIKE_ME4METL"))
-
-# base: sandbag walls just inside each gate, crates for cover
-sandbags(320, -224, 352, -96)                        # east gate, south side
-crate(256, -160, 64)
-crate(0, 320, 64)                                    # north gate
-crate(96, 352, 64, h=48)
-
-# alley: barrels/crates along the walls (leave 96+ free)
-# (kept clear: 128 wide, nothing in the way)
-# clearing: a few crates and a sandbag ring around the drop spot
-crate(-448, 1088, 128, big=True)
-crate(320, 704, 64)
-crate(384, 1120, 64)
-sandbags(-128, 960, -96, 1088)
-sandbags(96, 832, 128, 960)
-
-# walkway: low railing blocks at the bends (cover from the rooftops' direction)
-D(box(-128, -1232, 128, -64, -1216, 160, "CSTRIKE_ME4METL"))
-D(box(384, -1040, 128, 448, -1024, 160, "CSTRIKE_ME4METL"))
-
-# tunnel roof on the alley's long south leg
-W(box(1280, -192, 128, 1408, 320, WALL_H, "TNNL_W4", bottom="TNNL_C1"))
-# tunnel mouth lights
-D(box(1336, 316, 112, 1352, 320, 120, "~LIGHT3A"))
-D(box(1336, -192, 112, 1352, -188, 120, "~LIGHT3A"))
-
-# lamp fixtures on the base walls (warm)
-for (lx, ly, nx, ny) in [(-448, -48, 1, 0), (448, 32, -1, 0), (-16, 448, 0, -1), (100, -448, 0, 1)]:
-    if nx:
-        D(box(lx if nx > 0 else lx - 8, ly, 104, lx + 8 if nx > 0 else lx, ly + 16, 120, "~LIGHT3A"))
-    else:
-        D(box(lx, ly if ny > 0 else ly - 8, 104, lx + 16, ly + 8 if ny > 0 else ly, 120, "~LIGHT3A"))
+# courtyard cover: sandbags facing each gate (64+ round them), a few crates
+SB, SBT = "OUT_SNBAG", "OUT_SNBAGB"
+D(box(SX0 + 64, -96, 0, SX0 + 96, 96, 48, SB, top=SBT))
+D(box(SX1 - 96, -96, 0, SX1 - 64, 96, 48, SB, top=SBT))
+D(box(-96, SY0 + 96, 0, 96, SY0 + 128, 48, SB, top=SBT))
+D(box(-288, 64, 0, -224, 128, 64, "MltryCrteSd", top="MltryCrteTp"))
 
 # ---------------------------------------------------------------------------------------
-# barricades (gm_components' ls_barricade brushes, wall to wall at each choke)
+# barricades: boards with gaps you see and shoot through + one CLIP brush across the opening
 
 
-def barricade(name, b):
-    e = Ent("ls_barricade", targetname=name, name=name, team=2, hp=1000, repair_secs=3, repair_cost=100, blocks_bots=1)
-    e.brushes.append(box(*b, "CRATE27", top="TNNL_BRD1B"))
-    ents.append(e)
+def barricade(name, ident, axis, at, lo, hi):
+    """W1's format (TOOLS-NOTES "barricades solid to everyone"): the ls_barricade entity is the CLIP brush
+    filling the opening (+ a thin top rail) - solid to everything that moves, bullets and sight pass; the
+    visible boards are separate func_illusionary brushes (never solid: the nav and bullets pass) named <ident>_boards (boards=), hidden one by one as it weakens.
+    axis 'x': the opening spans y lo..hi at x = at..at+8 (in the wall's outer face); 'y' likewise."""
+    def slab(z0, z1, a0, a1, tex, top):
+        return box(at, a0, z0, at + 8, a1, z1, tex, top=top) if axis == "x" else box(a0, at, z0, a1, at + 8, z1, tex, top=top)
+    # the frame: two posts in the wall, always there
+    D(slab(0, GATE_H, lo, lo + 12, "TNNL_BRD1", "TNNL_BRD1B"))
+    D(slab(0, GATE_H, hi - 12, hi, "TNNL_BRD1", "TNNL_BRD1B"))
+    # five boards, a little uneven, gaps you see through
+    for z0, z1 in [(6, 18), (24, 36), (44, 56), (62, 74), (80, 90)]:
+        brush_ent("func_illusionary", [slab(z0, z1, lo + 4, hi - 4, "CRATE27", "TNNL_BRD1B")], targetname=ident + "_boards")
+    brush_ent("ls_barricade", [slab(0, GATE_H, lo + 12, hi - 12, "CLIP", "CLIP"),
+                               slab(GATE_H - 4, GATE_H, lo + 12, hi - 12, "TNNL_BRD1B", "TNNL_BRD1B")],
+              targetname=name, name=name, team=2, hp=800, repair_secs=3, repair_cost=100, blocks_bots=1,
+              boards=ident + "_boards", see_through=1)
 
 
-barricade("West gate", (-560, -96, 0, -544, 96, 96))
-barricade("East gate", (544, -64, 0, 560, 64, 96))
-barricade("Wall gate", (256, -560, 128, 448, -544, 224))
+barricade("West gate", "west", "x", CX0, -g, g)
+barricade("East gate", "east", "x", CX1 - 8, -g, g)
+barricade("South gate", "south", "y", CY0, -g, g)
 
 # ---------------------------------------------------------------------------------------
-# entities: spawns, waves, drops, loot, weapons, light, sound
+# the routes: cover and landmarks
 
-# 16 CT spawns in the courtyard (between the station, armory and the gates)
-n = 0
-for sy in (-224, -128, -32, 64):
-    for sx in (-128, -32, 64, 160):
-        point("info_player_start", sx, sy, 36, angles="0 %d 0" % (90 if sy < 0 else 270))
-        n += 1
-assert n >= 12
-# T spawns in the pockets (the game needs some; zombie bots spawn here without creatures)
-for (tx, ty) in [(-2112, 960), (-2112, 1088), (-2112, -960), (-2112, -1088), (2112, -640), (2112, -256),
-                 (-192, -2112), (128, -2112)]:
+# field: the floodlight mast, a burnt-out jeep, sandbag lines, crates (all 96+ apart)
+D(box(-1104, -272, 0, -1088, -256, 352, "CSTRIKE_ME4METL"))
+D(box(-1128, -296, 352, -1064, -232, 368, "~LIGHT3A", top="CSTRIKE_ME4METL"))
+D(box(-928, -224, 0, -736, -128, 72, "OUT_DMP1A", top="OUT_DMPLID"))
+D(box(-1280, 96, 0, -1088, 128, 48, SB, top=SBT))
+D(box(-1344, -352, 0, -1216, -224, 96, "SandCrtLrgSd", top="SandCrtLrgTp"))
+D(box(-1248, 320, 0, -1184, 384, 64, "MltryCrteSd", top="MltryCrteTp"))
+D(box(-864, 416, 0, -832, 512, 48, SB, top=SBT))
+D(box(-1440, 0, 0, -1376, 64, 64, "MltryCrteSd", top="MltryCrteTp"))
+# alley: the crashed truck in the first bend's mouth (leaves 96 to pass), warning lamps
+D(box(1120, -80, 0, 1208, -8, 88, "OUT_DMP2A", top="OUT_DMPLID"))
+for lx, ly in [(1068, 300), (1300, 628), (1600, 492)]:
+    D(box(lx - 8, ly - 4, 112, lx + 8, ly + 4, 128, "~SPOTRED"))
+# road: the burning truck at the first bend, barrels
+D(box(240, -1088, 0, 432, -1024, 80, "OUT_DMP3A", top="OUT_DMPLID"))
+D(box(608, -1360, 0, 648, -1320, 48, "OUT_TNK1", top="CSTRIKE_ME4METL"))
+
+# ---------------------------------------------------------------------------------------
+# entities
+
+# 16 CT spawns in the courtyard
+for sy in (-128, -32, 64, 160):
+    for sx in (-144, -48, 48, 144):
+        point("info_player_start", sx, sy, 36, angles="0 %d 0" % (270 if sy > 0 else 90))
+# T spawns in the drains (the game needs some)
+for tx, ty in [(-1408, 864), (-1408, -864), (1952, 560), (688, -1760), (-1472, 800), (-1344, -800), (1888, 480), (608, -1696)]:
     point("info_player_deathmatch", tx, ty, 36, angles="0 0 0")
 
 wave = dict(team=1, radius=96, rate=1.2)
-point("ls_wave_spawner", -2048, 1024, 8, name="Yard north", **wave)
-point("ls_wave_spawner", -2048, -1024, 8, name="Yard south", **wave)
-point("ls_wave_spawner", 2112, -448, 8, name="Alley", **wave)
-point("ls_wave_spawner", -32, -2048, 8, name="Walkway", **wave)
+point("ls_wave_spawner", -1408, 832, 8, name="Field north drain", **wave)
+point("ls_wave_spawner", -1408, -832, 8, name="Field south drain", **wave)
+point("ls_wave_spawner", 1920, 560, 8, name="Alley drain", **wave)
+point("ls_wave_spawner", 688, -1728, 8, name="Road drain", **wave)
 
-point("ls_supply_drop", -224, 928, 8, table="drop", fall_secs=12)
-point("ls_supply_drop", 224, 1024, 8, table="drop", fall_secs=12)
-point("ls_supply_drop", 224, 288, 8, table="drop", fall_secs=12)
+# supply drops: the open field just outside the west wall, by the ladder
+point("ls_supply_drop", -736, 384, 8, table="drop", fall_secs=12)
+point("ls_supply_drop", -960, 256, 8, table="drop", fall_secs=12)
+point("ls_supply_drop", -768, 160, 8, table="drop", fall_secs=12)
 
-point("ls_loot_container", -1728, 480, 8, table="default", tier=2)
-point("ls_loot_container", 2176, -192, 8, table="default", tier=3)
-point("ls_loot_container", 352, -864, 136, table="default", tier=2)
-point("ls_loot_container", -384, 704, 8, table="default", tier=2)
-point("ls_loot_container", -1216, 64, 8, table="gear", tier=2)
+point("ls_loot_container", -1312, -128, 8, table="default", tier=2)
+point("ls_loot_container", 1136, 520, 8, table="default", tier=3)
+point("ls_loot_container", 480, -1008, 8, table="default", tier=2)
+point("ls_loot_container", 0, 352, 8, table="gear", tier=2)
 
-point("ls_weapon_spawner", -96, 384, 8, item="table:gear", tier=3, respawn_secs=45)
-point("ls_weapon_spawner", -368, 0, 8, item="table:pistols", tier=2, respawn_secs=30)
-point("ls_weapon_spawner", 384, 224, 104, item="table:snipers", tier=3, respawn_secs=60)
-point("ls_weapon_spawner", -1408, 384, 8, item="table:rifles", tier=3, respawn_secs=60)
+point("ls_weapon_spawner", -256, -32, 8, item="table:gear", tier=3, respawn_secs=45)
+point("ls_weapon_spawner", 288, 32, 8, item="table:pistols", tier=2, respawn_secs=30)
+point("ls_weapon_spawner", IX0 + 48, -320, STEP_Z + 8, item="table:snipers", tier=3, respawn_secs=60)
+point("ls_weapon_spawner", -1152, 448, 8, item="table:rifles", tier=3, respawn_secs=60)
 
-# moonlight: cold, dim; the base gets warm lamps, the lanes only a few cold ones
-point("light_environment", 0, 0, 512, pitch=-50, angles="0 210 0", _light="96 116 170 70", _diffuse_light="40 50 90 40")
-warm = "255 186 112 260"
-for (lx, ly, lz) in [(-432, -48, 112), (432, 32, 112), (-16, 432, 112), (108, -432, 112),
-                     (0, 0, 200), (-288, 320, 128), (384, 224, 200), (352, -368, 200)]:
+# the base for the overrun rule: the courtyard (an area that does nothing while off)
+point("ls_damage_zone", 0, 0, 0, targetname="lst_base", name="Base", enabled=0, show=0, dmg=0,
+      size="%d %d 256" % (CX1 - CX0, CY1 - CY0))
+
+# light: a dim cold moon; warm lamps in the base; one colour per route
+point("light_environment", 0, 0, 512, pitch=-50, angles="0 210 0", _light="96 116 170 60", _diffuse_light="40 50 90 30")
+warm = "255 186 112 240"
+for lx, ly, lz in [(SX0 + 16, 0, 96), (SX1 - 16, 0, 96), (0, SY0 + 16, 96), (0, 0, 220), (-288, -288, 200),
+                   (288, -288, 200), (0, 176, 120), (-336, 280, 140)]:
     point("light", lx, ly, lz, _light=warm)
-point("light", -288, 320, 120, _light="255 210 160 120")              # inside the station
-point("light", -320, -336, 116, _light="255 230 190 320")             # armory: bright
-point("light", -320, -200, 112, _light="255 200 80 160")              # over the armory door
-point("light", -176, -352, 112, _light="255 200 80 160")
-cold = "150 170 220 120"
-for (lx, ly, lz) in [(-1216, 64, 260), (-1700, -400, 200), (-1700, 500, 200), (832, 352, 200),
-                     (1344, 400, 200), (1344, 64, 112), (1344, -320, 112), (1700, -448, 200),
-                     (2112, -448, 200), (-2048, 1024, 160), (-2048, -1024, 160), (0, 960, 260),
-                     (-32, -2048, 200), (-32, -1408, 260), (352, -832, 260), (160, -1120, 260)]:
-    point("light", lx, ly, lz, _light=cold)
+point("light", 0, 320, 120, _light="200 255 200 140")            # keep: the radio screens
+point("light", 336, 320, 116, _light="255 240 210 320")          # armory: bright
+point("light", 328, 236, 112, _light="255 210 90 180")           # over the armory door
+point("light", -328, 224, 460, _light="255 40 30 80")            # mast beacon
+# field: white-blue floodlight
+for lx, ly, lz in [(-1096, -264, 340), (-760, 300, 200), (-1300, 300, 220), (-1300, -400, 220)]:
+    point("light", lx, ly, lz, _light="190 210 255 300" if lz > 300 else "150 170 230 110")
+# alley: red warning lamps
+for lx, ly, lz in [(1068, 300, 120), (1300, 620, 120), (1600, 500, 120), (900, 0, 160), (1140, 120, 140)]:
+    point("light", lx, ly, lz, _light="255 50 30 140")
+# road: the burning truck, orange
+for lx, ly, lz in [(336, -1040, 110), (0, -900, 180), (688, -1300, 160)]:
+    point("light", lx, ly, lz, _light="255 140 40 %d" % (320 if lz == 110 else 120))
+# drains: a faint green
+for lx, ly in [(-1408, 800), (-1408, -800), (1920, 560), (688, -1700)]:
+    point("light", lx, ly, 150, _light="90 140 70 70")
 
 point("ambient_generic", 0, 0, 300, message="ambience/des_wind2.wav", health=3, spawnflags=1, pitch=100)
-point("ambient_generic", 0, 960, 64, message="ambience/crickets.wav", health=4, spawnflags=4, pitch=100)
-point("ambient_generic", -1300, 0, 64, message="ambience/crickets.wav", health=3, spawnflags=8, pitch=90)
-point("ambient_generic", 1344, 64, 96, message="ambience/drips.wav", health=4, spawnflags=4, pitch=100)
-point("ambient_generic", -320, 400, 40, message="ambience/computalk1.wav", health=2, spawnflags=2, pitch=100)
+point("ambient_generic", -1000, 0, 64, message="ambience/crickets.wav", health=3, spawnflags=8, pitch=95)
+point("ambient_generic", 336, -1040, 64, message="ambience/burning1.wav", health=5, spawnflags=4, pitch=100)
+point("ambient_generic", 0, 360, 40, message="ambience/computalk1.wav", health=2, spawnflags=2, pitch=100)
+for lx, ly in [(-1408, 864), (-1408, -864), (1952, 560), (688, -1760)]:
+    point("ambient_generic", lx, ly, 96, message="ambience/drips.wav", health=4, spawnflags=4, pitch=100)
 
 # ---------------------------------------------------------------------------------------
 here = os.path.dirname(os.path.abspath(__file__))

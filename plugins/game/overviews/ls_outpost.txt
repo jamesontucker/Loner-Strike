@@ -3,8 +3,8 @@
 
 global
 {
-	ZOOM	1.64
-	ORIGIN	0	-512	0
+	ZOOM	2.02
+	ORIGIN	256	-448	0
 	ROTATED	1
 }
 

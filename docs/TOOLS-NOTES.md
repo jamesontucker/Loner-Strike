@@ -2761,12 +2761,12 @@ a column of `.tools-panel`s on the right, a status line under the map) with **P8
   west wall in the open field (climb down the ladder from the firing step, run, climb back: creatures can't climb);
   one floor level outside (0), one raised level inside (the firing step, 112).
 
-**Barricade format (W1, please confirm)**: an `ls_barricade` brush entity made of the visible boards (planks with
-16-unit gaps between them, so you see and shoot through) **plus one CLIP brush filling the whole opening** in the same
-entity. CLIP only exists in the movement hulls, so bullets and sight pass between the boards while players, bots and
-creatures can't squeeze through. Keys as before (team 2, hp, repair_secs, repair_cost, blocks_bots 1). When it's broken
-gm_components hides it and makes it non-solid, which also drops the clip. If you'd rather have a model or a beam fence,
-say so; the gates are 128 wide x 96 high.
+**Barricade format** (settled with W1's "barricades solid to everyone, shot through the gaps"): each gate's
+`ls_barricade` is the CLIP brush filling the opening plus a thin top rail (`see_through 1`, `boards=<gate>_boards`,
+team 2, hp 800, repair 3 s / $100, blocks_bots 1); the five visible boards are separate `func_illusionary` brushes named
+`west_boards` / `east_boards` / `south_boards`, which gm_components hides one by one as it weakens. Illusionary, so
+they're never solid: the nav learns through the gate (gm_components isn't loaded while learning) and bullets pass
+anyway. Two posts either side stay as a frame. W1: if `boards=` needs func_wall specifically, say so.
 **lst_base**: an `ls_damage_zone` named `lst_base` with `enabled=0 show=0 dmg=0` and `size="1024 896 256"` over the
 courtyard (the only area component that does nothing when off). If you add a plain marker (e.g. `info_target` with
 `size`), tell me and I'll switch.
@@ -2946,6 +2946,30 @@ round-timer gamedata (see round 2), gun given twice at spawn (template now strip
   246 bot bullet hits on creatures, 163 of them through an intact gate. 99 hits still landed on barricades: most likely
   knife swings (the knife's hull trace is meant to stop) — W2, worth checking whether bots knife at creatures behind a gate.
 - LSPLAY restarted with it (ls_outpost, Normal, 5 bots, port 27330, waits, brain r43369945601).
+
+**Rebuilt (v2, same name `ls_outpost`, replaces v1 in `plugins/game/`)** — as planned above; layout and reasons in
+`maps-src/ls_outpost/README.md`, picture `maps-src/ls_outpost/layout.png`.
+- Compiled through Q's pipeline (Normal): 192 brushes, no leak, no warnings, worldleaves 3%. Nav learned (310 areas,
+  1 ladder joined top and bottom); nav fixer reach check: all 310 reachable, 0 problems (a first build had bots
+  trapped behind Barney's counter: it now runs wall to wall with clip over it).
+- Sim (copy of LSPLAY with brain r43369945601, ls_mode on, 6 bots, creatures, 15 min, `test-tracks.png`): creatures
+  leave all four drains and pile up at the three boarded gates; the boards take hits and break (west 8x, south 6x,
+  east 4x); defenders hold the gate tunnels, the firing step and the keep, and go to the armory. 3 creatures in ~200
+  stood 8 s+ (drain mouths / a road bend), none twice in a spot. Bots alone hold waves 1-3 and fall on wave 3-4
+  ("Nobody left standing") — the gates hold; the defenders' survival is the bots/balance side.
+- Components in the map: 3 `ls_barricade` (clip + `boards=` illusionary boards, hp 800), 4 wave spawners (one per drain), 3 supply drop
+  spots in the field outside the west wall (ladder down from the firing step), 4 loot crates, 4 weapon spawners,
+  `lst_shop` (behind the counter), `lst_base` (courtyard, see above), one `func_buyzone` (armory only).
+- **Hang (W1 / Y / W2)**: last run on ls_outpost (Sim copy of LSPLAY, brain r43369945601, 6 bots, Normal): waves 1-4
+  held, the base fell on the boss wave 5 (21:37:24), a new stand started ("Wave 1: 9 creatures", 21:37:53), and then the
+  server stopped: no more log lines, no 2-minute heartbeat, my once-a-second tracker plugin stopped writing at the same
+  second; no crash dump, no breakpad line; the process kept running until I killed it at 21:42. Earlier runs that fell
+  on waves 3-4 restarted fine (four stands in a row). So: a hang right as wave 1 of a new stand begins after a boss
+  wave; looks like the same "freeze" as before (it also came at a wave start after a break). Not map-specific as far
+  as I can tell (no new entities spawn at that moment except creatures at the drains).
+- Note for the other map builder: we share the editor's recent list (the real app folder) and the 8047 dev server;
+  one of my compiles opened br_valley by index. I compile by path now (my own dev server on 8048), and the br_valley
+  compile that went out under the name ls_outpost was overwritten by mine — your files weren't touched.
 
 ### Agent X: Game Mode Studio closes the "still missing" list — 2026-11-12
 

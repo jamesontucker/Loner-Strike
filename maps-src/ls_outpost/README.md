@@ -1,42 +1,48 @@
 # ls_outpost (source)
 
-A desert relay station at night, built for Last Stand (ls_* maps start in Last Stand through
-mappresets.ini). Our own layout; textures only from cs_dust.wad, cstrike.wad (CS 1.6) and
-halflife.wad, the valve `night` sky, stock ambience sounds. Nothing to download for players
-beyond the map itself.
+A walled desert outpost at night, built for Last Stand (ls_* maps start in Last Stand through
+mappresets.ini). Version 2: rebuilt after a design review (docs/TOOLS-NOTES.md, "Map builder:
+ls_outpost design review"). Our own layout; textures only from cs_dust.wad, cstrike.wad (CS 1.6)
+and halflife.wad, Half-Life's `night` sky, stock ambience sounds. Players download nothing.
 
 | File | What |
 |---|---|
-| `build_map.py` | the generator: layout tables at the top (open ground, raised floors, wall zones), then props, components, lights, sounds |
+| `build_map.py` | the generator: open ground and the compound's measures at the top, then walls, firing step, keep, armory, barricades, props, entities, light, sound |
 | `ls_outpost.map` | its output (Valve 220); opens in Tools > Map editor (Import) |
 | `../../plugins/game/` | what ships (setup copies this tree into the game): `maps/ls_outpost.bsp/.nav/.lsv/.res`, `overviews/ls_outpost.bmp/.txt` |
 | `layout.png` | top-down picture (the radar maker's render) |
+| `test-tracks.png` | a sim run: red creatures, blue defenders, yellow a creature standing still 8 s+ with nobody near |
 
-Rebuild: `python3 build_map.py`, then compile in the map editor (Compile tab, Normal), or the same
-through the compile routes. If the geometry changes, teach the bots again (nav + .lsv) and redo
-the overview (Radar maker) and the .res (Map doctor).
+Rebuild: `python3 build_map.py`, then compile in the map editor (Compile tab, Normal). If the
+geometry changes, teach the bots again (nav + .lsv), redo the overview (Radar maker) and .res.
 
-## Layout
+## How it plays
 
-- **Base** (the courtyard, -448..448 square, walls 128 with invisible clip above, so you shoot
-  over them but nobody climbs out): 16 CT spawns in the middle.
-  - **Station** (NW): the fallback room, one 128-wide door; its roof (z 160, stairs on its south
-    side) is the overwatch over the yard and the drop clearing.
-  - **Armory** (SW): the only `func_buyzone`, two doorways (north, east), lockers, caution
-    stripes and light strips; an `info_target` named `lst_shop` marks it for gm_laststand.
-  - **Gun platform** (E, z 96, stairs) over the east gate; **rampart** (SE, z 128, stairs down
-    west) over the wall-top gate.
-- **West, the yard**: 1344 x 1280 open ground, long sightlines, staggered crates, sandbags, a
-  broken wall and a water tank on legs. Two spawn pockets round corners (NW, SW).
-- **East, the alley**: 128 wide, five turns, a roofed tunnel stretch; spawn room at the far end.
-- **South, the walkway**: from the spawn yard up stairs to z 128, over the rooftops with two
-  bends, into the base on the wall top. Low parapets (clip above).
-- **North, the drop clearing**: open sky, two supply drop spots, seen through the north gate and
-  from the station roof. No spawns there.
+- **The compound** (walls 160 high round a 1024 x 896 courtyard). 16 CT spawns in the middle.
+  - **Three gates** (west, east, south), 128 x 96, each closed by a **boarded barricade**: an
+    `ls_barricade` CLIP brush filling the opening (solid to everything that moves; gm_components lets
+    bullets and sight through) and five `func_illusionary` boards named `<gate>_boards` (`boards=`) that
+    drop off one by one as it weakens. hp 800, hold USE to repair board by board ($100). Creatures pile
+    up outside; you shoot them through the boards.
+  - **Firing step** (z 112) inside the west, south and east walls and over each gate (gatehouses),
+    two stairs up from the courtyard. From it you see down each route over the parapet. Creatures
+    can't get onto it from outside.
+  - **The keep** (north wall): the last stand. One 128-wide door and two windows onto the courtyard.
+  - **The armory** (NE, by the east gate): Barney's counter (`info_target` `lst_shop`), lockers, the
+    only `func_buyzone`. Lit bright, caution stripes and a light strip over the door.
+  - Generator and the radio mast with a red beacon (NW): a landmark from every route.
+  - `lst_base`: an `ls_damage_zone` (off, invisible, no damage) sized to the courtyard, for the
+    overrun rule.
+- **West, the field**: open ground, long sightlines from the west gate and the firing step. A white
+  floodlight mast, a burnt-out jeep, sandbags, crates. Two storm drains (NW, SW) round the corners.
+  **Supply drops** land in the field just outside the west wall: climb down the ladder from the firing
+  step (a gap in the parapet with caution stripes), grab it, climb back. Creatures can't climb.
+- **East, the alley**: from the east gate's apron, two bends, red warning lamps, a crashed truck;
+  a storm drain at the end.
+- **South, the canyon road**: from the south gate's apron, two bends, a burning truck (orange light,
+  fire sound); a storm drain at the end.
+- One floor level outside (0) and one raised level inside (the firing step). Routes 160+ wide, 45-degree
+  bevels in every turn, props 64+ from walls or flush, stairs (16 up), one ladder (only for defenders).
 
-Chokes and barricades (`ls_barricade` brushes, wall to wall, hp 1000, repair 3 s / $100): west gate
-192 wide, east gate 128, wall gate 192. Wave spawners: Yard north, Yard south, Alley, Walkway.
-Supply drops: 2 in the clearing, 1 in the courtyard. Loot crates: one per lane + clearing + yard.
-Weapon spawners: 3 in the base (gear, pistols, a sniper on the gun platform), 1 rifle in the yard.
-
-Corridors are 128+ wide, floors flat, stairs (16 up, 32+ deep) instead of ramps, no ladders.
+Components: 4 wave spawners (one per drain), 3 barricades, 3 supply drop spots, 4 loot crates (one per
+route + the keep), 4 weapon spawners (courtyard x2, a sniper rifle on the firing step, a rifle in the field).
