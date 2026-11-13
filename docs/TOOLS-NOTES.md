@@ -1892,3 +1892,86 @@ show them hunting the creatures as mode enemies. Barricades fitted (dust2: 221 a
   - (P7, safety.rs) `safety::save`/`remove` aren't used yet (warnings).
   - (owners of new routes) Add each to `mcp/routes.rs` ROUTES: one line per route; the policy follows from
     method/path, so only special cases need code.
+
+### Agent P7: one safety net for every file the app writes (History & restore, defaults, Undo) — 2026-11-12
+
+**What it is** (`app/src-tauri/src/safety.rs`, mounted with `mod safety;` in main.rs, `.merge(safety::routes())`
++ `.layer(safety::mark_saves)` on the local listener in server.rs, and `safety::use_game(g)` in `set_game`)
+- Before a file is overwritten or deleted, the file as it was is kept in `<app dir>/backups/files/<name>-<hash>/`:
+  `index.json` (full path, path from the Half-Life folder, one entry per change: time, tool, reason, size,
+  sha256, whether it existed, `original`) and `blobs/<sha256>` (each content once). Last 20 versions per file +
+  always the first-ever one (the file before Loner-Strike's tools first touched it, maybe "wasn't there");
+  2 GB cap for all of it (oldest middle versions go first); files over 300 MB are listed but not copied.
+- Restore and Undo keep the current file first, so they're undoable too. Writes are whole (temp + rename).
+- Path safety: absolute, no `..`, no symlinks (file or a folder shortcut out), never the store itself, and only
+  inside a registered game folder (`use_game`: the player's Half-Life + game folder) or a Half-Life folder
+  (`valve/`, `hl.exe`, `hlds*` next to it). Anything else (a file the player picked in a save dialog) is left alone.
+- Defaults: a file under `addons/amxmodx/configs/gamemodes/` that Loner-Strike ships = the resources copy, shaped
+  like setup does (modes.ini/addons.ini/mappresets.ini/presets.ini cut to what's installed, Studio modes kept;
+  `setup::core::shape_config`, factored out of `configs()`). Anything else: its original version (so a file a tool
+  created goes back to "not there").
+- Routes: `GET /api/safety/files?match=<path ends, * ok>&tool=<names>`, `GET /api/safety/version?id&seq`,
+  `GET /api/safety/changed` (everything differing from defaults + shipped configs changed by hand, and disk use),
+  `POST /api/safety/restore {id,seq}`, `/defaults {ids}` (ids or `shipped:<rel>`), `/undo {from,to}`, `/clear`.
+  Every other POST that kept versions answers `X-LS-Undo: <from>-<to>`.
+- Writer API: `safety::before(tool, reason, path)` (one-line hook, never fails the save), `safety::save(...)` /
+  `safety::remove(...)` (keep + write/delete, errors on unsafe paths).
+- Tests (9): round trips (incl. "wasn't there" → delete and back), undo of a multi-file save, pruning keeps the
+  original, cap, path safety (`..`, outside, symlinked file and folder, the store, folders, bad keys), two writers
+  at once (50 saves, every blob whole, numbers unique), shipped defaults incl. shaping and \r\n, the global hook.
+
+**Routed through it** (one `safety::before` line each): Bot people (people.ini, regular_names.ini, regulars.ini,
+and its own restore), Crosshair & config (userconfig.cfg), Spray maker (tempdecal.wad), `doctor::save_file`
+(map doctor .res and copied files, callouts' .nav, radar's overviews), `navfix::write_nav` + learned .lsv, Plugin
+Studio (every save, delete, try-it .amxx and plugins-studio.ini), Textures & models (custom WADs, added/removed
+models), Compile (the .bsp put in maps), Demos (rename, delete), downloads that replace a game file (content.rs,
+also used by Community and GameBanana), Settings' saved settings (`app_api::set_cfg_values`: global.cfg, mode_*.cfg,
+addon_*.cfg), its resets and add-on switch (saved.rs), the mode vote list, the Mods page's plugins.ini and removals,
+the map editor's saves into a game folder and its component files (marked hooks in editor.rs, editor/components.rs).
+MCP writes go through the same routes (`mcp/catalog.rs` oneshots the app router), so they're kept too, and get the
+header. The tools' own little backups (people/spray/userconfig "restore previous", .bak files, compile's map
+backups) are untouched; History is in addition. Not routed on purpose: runtime state (current.txt,
+plugins-gamemode.ini, start cfg, status files), users.ini/admin sync, remote-server syncs, setup itself (it has its
+own record and backups).
+
+**UI**
+- `views/tools/common/History.tsx` (+ `history.css`): `HistoryPanel`, `HistoryButton`, `ToolHistory` (tool id →
+  files via `historyFor`). One hook in Tools.tsx: a **History** button in every tool's title row (not on read-only
+  tools). Per file: tags (changed from default / not there now), versions (when, tool: reason, what changed:
+  ±lines, size, made/deleted, Original), **Compare** (line diff against now, folded), **Restore**, **Restore
+  Loner-Strike's default** / "Restore the original"; every action asks first and names the file.
+- Settings ▸ **Backups & defaults** (`views/BackupsDefaults.tsx`, lazy, one mount in AppSettings after Backup &
+  restore): changed files by area (Bot people, Settings files, Game modes, Plugins, Maps & nav, Sprays & textures),
+  Restore default / Restore all in an area, **Restore all defaults** (asks twice, names the files), backups size and
+  **Clear old backups** (keeps each file's original and newest).
+- **Undo**: `common/api.ts` `post()` sees `X-LS-Undo` and raises `ls-undoable`; `ui.tsx` ToastProvider shows
+  "Undo that save?" with Undo for 8 s (`push` takes an optional `ms` now). Undo restores every file that save
+  changed, then restarts the open tool page (`useShell` n) so it rereads from disk; `ls-files-restored` is fired too.
+- Screenshot tests: "History opens…" (also Compare, Esc, no History on the map viewer) and "a save offers Undo…"
+  (saves and undoes a name in Bot people: only with `LS_TOOLS_WRITE=1`, point `LS_TEST_GAME` at a copy).
+- Dev server: devserve.rs registers the game and serves the safety routes + header (marked lines).
+
+**Checked**: on a clean export of HEAD + my files (the shared tree didn't build: S's unfinished mcp/catalog.rs):
+`cargo test` 631 passed / 0 failed, `npm run build` green (History is its own chunk; the start chunk only gained
+the toast listener). In tools:dev on a small Half-Life copy: a Bot people save → toast → Undo put the file back;
+History and Compare shown above at both sizes; `/api/safety/changed` lists shipped files changed.
+
+**Notes**
+- My `setup/core.rs` refactor (`shape_config`) was swept into W1's commit 3047056 (it was uncommitted in the
+  shared tree). Harmless and tested (setup tests green).
+- Disk on this machine is nearly full (7 GB free): a separate target dir for the clean export ran out of room;
+  I built the export with the shared `target` instead.
+
+**Requests**
+- (X, Game Mode Studio) `tools/studio/mod.rs` isn't committed yet, so I didn't touch it. Please add
+  `crate::safety::before("Game Mode Studio", "<what>", &path);` before: the `write` closure's writes in the install
+  (`{id}.plugins.ini`, `{id}.cfg`, modes.ini), `uninstall`'s modes.ini rewrite and the three `remove_file`s, the
+  `std::fs::copy(&built, &dest)` of the .amxx, and the graph save/delete if graphs live in a game folder.
+  History already shows `tools: ["Game Mode Studio"]` for the Studio page.
+- (P4, map editor) Your own 10 project versions stay as they are (projects usually live outside game folders,
+  where safety.rs doesn't go). Two marked lines are mine: `write_atomic` in editor.rs and the component file in
+  editor/components.rs. If you'd like the editor's versions in the same History sheet, `HistoryPanel` takes any
+  path pattern; or call `safety::save` for saves into the game folder. Prefab installs only add new WADs (no hook).
+- (P6) Tools.tsx has one line from me in the title row (`<ToolHistory tool={entry.id} />`, before FocusButton).
+- (S) The safety routes are on the local listener; add them to `mcp/routes.rs` if agents should list/restore
+  versions (restore/defaults/undo/clear change files: treat as edits).
