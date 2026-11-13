@@ -530,6 +530,20 @@ class Submissions(unittest.TestCase):
         self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549, "1600 beats 1700")
         self.assertEqual(self._uids_of(c, "mod:800001"), [])
 
+    def test_the_holders_proven_date_never_weakens(self):
+        """The holder proved an old upload (1600) when it registered; that file then leaves the page, so a
+        fresh look finds only its newest (1790). A later claimant (1700) must still lose."""
+        c, rec, u = self._uid_setup(creator_at=1_790_000_000, squatter_at=1_700_000_000, creator_old_at=1_600_000_000)
+        c.submit(body(mode_item()), "1.2.3.4")
+        self.assertEqual(c.store.uid_owner(u)["file_at"], 1_600_000_000, "the earliest proven date is stored")
+        page = c.get.pages[("Mod", 739703)]
+        page["_aFiles"] = [f for f in page["_aFiles"] if f["_idRow"] != 1886000]
+        self._hide(c, "mod:739703")
+        self.assertEqual(c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")[1]["state"], "listed")
+        self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549, "the stored 1600 still beats 1700")
+        self.assertEqual(c.store.uid_owner(u)["file_at"], 1_600_000_000, "and it never went up")
+        self.assertEqual(self._uids_of(c, "mod:800001"), [])
+
     def test_a_held_submission_takes_nothing_until_approved(self):
         c, rec, u = self._uid_setup(creator_at=1_700_000_000, squatter_at=1_790_000_000)
         c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")
@@ -579,6 +593,8 @@ class Submissions(unittest.TestCase):
         self.assertEqual(cm.settle_uid(h, 2, 50, holder_listed=True), "flag", "nothing listed loses it automatically")
         self.assertEqual(cm.settle_uid(h, 2, 50, may_take=False), "flag", "a held submission never takes")
         self.assertEqual(cm.settle_uid(h, 2, 50, holder_at=40), "keep", "the holder's earliest upload counts")
+        self.assertEqual(cm.settle_uid(h, 2, 90, holder_at=300), "take", "a later fresh look never raises the stored 100")
+        self.assertEqual(cm.settle_uid(dict(h, file_at=0), 2, 90, holder_at=300), "take", "nothing stored: the fresh look is the evidence")
         self.assertEqual(cm.settle_uid(h, 2, 150), "keep")
         self.assertEqual(cm.settle_uid(h, 2, 100), "keep")
         self.assertEqual(cm.settle_uid(h, 2, 0), "keep")

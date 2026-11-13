@@ -1233,8 +1233,12 @@ class Store:
                         if holder:
                             hr = self.db.execute("SELECT state FROM entries WHERE key=?", (holder["key"],)).fetchone()
                             held = hr["state"] if hr else None
-                        verdict = settle_uid(holder, owner_id, file_at, (claim.get("holder_at") or {}).get(uid),
-                                             held == "listed", may_take)
+                        h_at = (claim.get("holder_at") or {}).get(uid) or 0
+                        verdict = settle_uid(holder, owner_id, file_at, h_at, held == "listed", may_take)
+                        if holder and h_at > 0 and (not holder["file_at"] or h_at < holder["file_at"]):
+                            # an earlier upload of the holder's proven now: kept (only ever lower)
+                            self.db.execute("UPDATE uids SET file_at=? WHERE uid=?", (h_at, uid))
+                            holder["file_at"] = h_at
                         if not may_take and verdict != "same":
                             # a held submission: noted for the moderator, settled when it's approved
                             conflicts.append(self._conflict(uid, holder["key"], row["key"],
@@ -1497,7 +1501,10 @@ def settle_uid(holder, owner_id, file_at, holder_at=None, holder_listed=False, m
         return "same"
     if holder.get("pinned"):
         return "keep"
-    a = holder_at if holder_at else (holder.get("file_at") or 0)
+    # the holder's earliest proven date: what's stored only ever goes down (a deleted or unread old
+    # file never weakens it), and a fresh look can only lower it further
+    known = [d for d in (holder_at or 0, holder.get("file_at") or 0) if d > 0]
+    a = min(known) if known else 0
     b = file_at or 0
     if a > 0 and b > 0 and b < a:
         return "take" if (may_take and not holder_listed) else "flag"
@@ -1880,9 +1887,10 @@ class Community:
         """The GameBanana date of this page's earliest upload that carries the entry's uids: the file
         being registered, or (only when another member holds one of them) an older file of the same
         page whose package declares them too."""
+        # (looked up for every uid, not only disputed ones: the earliest date proven now is stored and
+        # stays the owner's evidence even if that old file later leaves the page)
         at = item.get("fileAt") or 0
-        held = [u for u in uids if (self.store.uid_owner(u) or {}).get("owner_id") not in (None, facts["submitterId"])]
-        return self._earliest_carrying(model, gb, facts["kind"], held, at) if held else at
+        return self._earliest_carrying(model, gb, facts["kind"], uids, at) if uids else at
 
     def notify_uid_conflict(self, cid):
         c = self.store.uid_conflict(cid)
