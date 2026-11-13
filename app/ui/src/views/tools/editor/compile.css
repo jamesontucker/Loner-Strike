@@ -17,3 +17,16 @@
 .compile-log summary { cursor: pointer; font-size: 13px; color: var(--bone-dim); }
 .compile-log pre { max-height: 260px; overflow: auto; margin: 6px 0 0; padding: 6px 8px; background: var(--bg); box-shadow: var(--sunken); font: 11px/1.35 ui-monospace, Menlo, monospace; color: var(--bone-dim); white-space: pre-wrap; word-break: break-all; }
 .compile-foot { font-size: 12px; }
+/* P4: never cut off in a narrow side panel */
+.compile-panel { min-width: 0; }
+.compile-head { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bone-dim); }
+.compile-panel .editor-field { display: grid; gap: 4px; min-width: 0; }
+.compile-field-bad input { outline: 1.5px solid #ff7b6b; }
+.compile-presets { display: flex; }
+.compile-presets button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compile-playtest .editor-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.compile-inline select { max-width: 100%; width: 100%; }
+.compile-check { white-space: normal; }
+.compile-problems .editor-issue .linklike { text-align: left; overflow-wrap: anywhere; }
+.p4-cordon-line { display: grid; gap: 6px; min-width: 0; padding: 8px; border: 1px solid var(--bevel-lo, rgba(255,255,255,0.1)); border-radius: 2px; }
+.p4-cordon-line .ed-check { min-width: 0; }

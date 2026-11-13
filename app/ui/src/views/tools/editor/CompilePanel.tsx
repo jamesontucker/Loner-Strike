@@ -287,6 +287,7 @@ export function CompilePanel() {
   }
 
   const compiling = job?.kind === "compile" && job.running;
+  const nameBad = !!name.trim() && !/^[A-Za-z0-9_-]{1,31}$/.test(name.trim());
   const problems = job?.kind === "compile" ? job.problems : [];
   const errors = problems.filter((p) => p.level === "error");
   const warnings = problems.filter((p) => p.level === "warning");
@@ -296,9 +297,11 @@ export function CompilePanel() {
     <section className="tools-panel compile-panel">
       {!status.canRun && status.cantRun && <p className="small-note compile-bad">{status.cantRun}</p>}
 
-      <label className="editor-field">
+      <h4 className="compile-head">Compile</h4>
+      <label className={`editor-field${nameBad ? " compile-field-bad" : ""}`}>
         Map name
-        <input value={name} maxLength={31} spellCheck={false} placeholder={status.suggestName ?? "my_map"} disabled={running} onChange={(e) => setName(e.target.value.replace(/\s/g, "_"))} />
+        <input value={name} maxLength={31} spellCheck={false} placeholder={status.suggestName ?? "my_map"} disabled={running} aria-invalid={nameBad} onChange={(e) => setName(e.target.value.replace(/\s/g, "_"))} />
+        {nameBad && <span className="compile-bad small-note" role="alert">Letters, numbers, _ and - only (up to 31).</span>}
       </label>
 
       <div className="seg compile-presets" role="group" aria-label="Quality">
@@ -323,7 +326,7 @@ export function CompilePanel() {
       <CordonPanel disabled={running} />
 
       <div className="editor-row wrap">
-        <BusyButton className="btn" busy={starting && !playing} label="Compile" busyLabel="Starting…" disabled={running || !status.canRun} onClick={() => void onCompile()} />
+        <BusyButton className="btn primary" busy={starting && !playing} label="Compile" busyLabel="Starting…" disabled={running || !status.canRun || nameBad} onClick={() => void onCompile()} />
         {compiling && <BusyButton className="btn small" busy={stopping} label="Stop" busyLabel="Stopping…" onClick={() => void stop()} />}
       </div>
 
