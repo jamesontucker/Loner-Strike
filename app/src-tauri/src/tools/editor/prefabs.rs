@@ -201,19 +201,38 @@ fn changes(old: &PrefabMeta, new: &PrefabMeta) -> Vec<String> {
     c
 }
 
-/// The updates waiting: [{uid, id, name, changes}].
+/// The prefab a waiting update may still change: the library id it was staged for, still
+/// holding that uid, and still from the same source the update came from. Otherwise the
+/// update is dropped (the prefab was deleted, recreated, or replaced by one from elsewhere).
+fn pending_target(lib: &Path, uid: &str) -> Result<(String, PrefabMeta), String> {
+    let d = pending_dir(lib).join(uid);
+    let t: Value = std::fs::read_to_string(d.join("target.json")).ok().and_then(|x| serde_json::from_str(&x).ok()).ok_or("That update can't be checked.")?;
+    let id = t["id"].as_str().filter(|x| prefab::valid_id(x)).ok_or("That update can't be checked.")?;
+    let origin: prefab::Origin = serde_json::from_value(t["origin"].clone()).map_err(|_| "That update can't be checked.".to_string())?;
+    let (own, old) = mine(lib).into_iter().find(|(_, m)| m.uid == uid).ok_or("The prefab it updates isn't in your library any more.")?;
+    if own != id || !prefab::same_source(&old, &origin) {
+        return Err(format!("“{}” isn't the prefab this update was for any more, so it wasn't changed.", old.name));
+    }
+    Ok((own, old))
+}
+
+/// The updates waiting: [{uid, id, name, changes}]. Ones whose prefab no longer matches are dropped.
 pub fn pending(lib: &Path) -> Vec<Value> {
     let mut out = Vec::new();
-    let own = mine(lib);
     for e in std::fs::read_dir(pending_dir(lib)).into_iter().flatten().flatten().take(200) {
         let uid = e.file_name().to_string_lossy().to_string();
+        let d = e.path();
         if !crate::editor::doc::valid_uid(&uid) {
+            let _ = std::fs::remove_dir_all(&d);
             continue;
         }
-        let d = e.path();
+        let Ok((id, old)) = pending_target(lib, &uid) else {
+            let _ = std::fs::remove_dir_all(&d);
+            continue;
+        };
         let (Ok(map), Ok(js)) = (std::fs::read_to_string(d.join("prefab.map")), std::fs::read_to_string(d.join("prefab.json"))) else { continue };
-        let (Ok((_, new)), Some((id, old))) = (prefab::from_files(&map, Some(&js), "prefab"), own.iter().find(|(_, m)| m.uid == uid)) else { continue };
-        out.push(json!({"uid": uid, "id": format!("{MINE}{id}"), "name": old.name, "changes": changes(old, &new)}));
+        let Ok((_, new)) = prefab::from_files(&map, Some(&js), "prefab") else { continue };
+        out.push(json!({"uid": uid, "id": format!("{MINE}{id}"), "name": old.name, "changes": changes(&old, &new)}));
     }
     out
 }
@@ -228,18 +247,40 @@ pub fn settle(lib: &Path, uid: &str, apply: bool) -> Result<Value, String> {
         return Err("That update isn't there any more.".into());
     }
     let r = if apply {
-        let (own, old) = mine(lib).into_iter().find(|(_, m)| m.uid == uid).ok_or("The prefab it updates isn't in your library any more.")?;
-        let map = std::fs::read_to_string(d.join("prefab.map")).map_err(|_| "That update couldn't be read.".to_string())?;
-        let js = std::fs::read_to_string(d.join("prefab.json")).ok();
-        let (frag, mut meta) = prefab::from_files(&map, js.as_deref(), &own)?;
-        meta.origin = old.origin.clone();
-        let png = std::fs::read(d.join("prefab.png")).ok().filter(|b| prefab::check_png(b).is_ok());
-        save_over(lib, &own, &frag, &meta, png.as_deref()).map(|id| json!({"ok": true, "updated": id, "name": meta.name}))
+        (|| {
+            let (own, old) = pending_target(lib, uid)?;
+            let map = std::fs::read_to_string(d.join("prefab.map")).map_err(|_| "That update couldn't be read.".to_string())?;
+            let js = std::fs::read_to_string(d.join("prefab.json")).ok();
+            let (frag, mut meta) = prefab::from_files(&map, js.as_deref(), &own)?;
+            meta.origin = old.origin.clone();
+            let png = std::fs::read(d.join("prefab.png")).ok().filter(|b| prefab::check_png(b).is_ok());
+            save_over(lib, &own, &frag, &meta, png.as_deref()).map(|id| json!({"ok": true, "updated": id, "name": meta.name}))
+        })()
     } else {
         Ok(json!({"ok": true, "kept": true}))
     };
     let _ = std::fs::remove_dir_all(&d);
     r
+}
+
+/// Deletes one of the player's prefabs, and any update waiting for it.
+pub fn delete(lib: &Path, own: &str) -> Result<(), String> {
+    if !prefab::valid_id(own) {
+        return Err("That prefab isn't there any more.".into());
+    }
+    let uid = mine(lib).into_iter().find(|(i, _)| i == own).map(|(_, m)| m.uid);
+    let mut any = false;
+    for ext in ["map", "json", "png"] {
+        any |= std::fs::remove_file(lib.join(format!("{own}.{ext}"))).is_ok();
+    }
+    if let Some(u) = uid.filter(|u| crate::editor::doc::valid_uid(u)) {
+        let _ = std::fs::remove_dir_all(pending_dir(lib).join(u));
+    }
+    if any {
+        Ok(())
+    } else {
+        Err("That prefab isn't there any more.".into())
+    }
 }
 
 /// What a package (an unpacked folder) brought: prefab names and WAD files beside them.
@@ -309,6 +350,9 @@ pub fn install_dir(lib: &Path, src: &Path, author_hint: &str, origin: &prefab::O
                         if let Some(png) = &png {
                             write_file(&d.join("prefab.png"), png)?;
                         }
+                        // what it may update: this prefab, from this source (checked again on yes)
+                        let target = json!({"id": own, "origin": origin});
+                        write_file(&d.join("target.json"), target.to_string().as_bytes())?;
                         got.waiting.push(old.name.clone());
                         got.ids.push(format!("{MINE}{own}"));
                         continue;
@@ -598,13 +642,7 @@ async fn api_delete(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Json<
     blocking(move || {
         let dir = lib_dir(&ed.dir);
         let own = req.id.strip_prefix(MINE).filter(|x| prefab::valid_id(x)).ok_or("The starter prefabs can't be deleted.")?;
-        let mut any = false;
-        for ext in ["map", "json", "png"] {
-            any |= std::fs::remove_file(dir.join(format!("{own}.{ext}"))).is_ok();
-        }
-        if !any {
-            return Err("That prefab isn't there any more.".into());
-        }
+        delete(&dir, own)?; // P5: and its waiting update
         Ok(json!({"ok": true}))
     })
     .await
@@ -752,6 +790,57 @@ mod tests {
         assert_eq!(settle(&lib2, &ua, true).unwrap()["updated"], json!(format!("{MINE}{id_before}")));
         assert_eq!((in2().0, mine(&lib2).len()), (id_before.clone(), n2));
         assert!(settle(&lib2, &ua, true).is_err(), "settled already");
+        // a waiting update is tied to its prefab (library id) and its source, checked again on yes
+        let keep_map = std::fs::read(lib2.join(format!("{id_before}.map"))).unwrap();
+        let keep_json = std::fs::read_to_string(lib2.join(format!("{id_before}.json"))).unwrap();
+        let held = root.join("held");
+        let hold = || {
+            install_dir(&lib2, &un, "someone", &community).unwrap();
+            let _ = std::fs::remove_dir_all(&held);
+            std::fs::create_dir_all(&held).unwrap();
+            for f in ["prefab.map", "prefab.json", "target.json"] {
+                std::fs::copy(pending_dir(&lib2).join(&ua).join(f), held.join(f)).unwrap();
+            }
+        };
+        let put_back = || {
+            std::fs::create_dir_all(pending_dir(&lib2).join(&ua)).unwrap();
+            for f in ["prefab.map", "prefab.json", "target.json"] {
+                std::fs::copy(held.join(f), pending_dir(&lib2).join(&ua).join(f)).unwrap();
+            }
+        };
+        let write_as = |stem: &str, name: &str, origin: prefab::Origin| {
+            let mut m: PrefabMeta = serde_json::from_str(&keep_json).unwrap();
+            m.name = name.into();
+            m.origin = Some(origin);
+            std::fs::write(lib2.join(format!("{stem}.map")), &keep_map).unwrap();
+            std::fs::write(lib2.join(format!("{stem}.json")), serde_json::to_string(&m).unwrap()).unwrap();
+        };
+        // 1. the prefab is deleted (its waiting update goes with it), then one with the same uid
+        //    from a file is added: an update left behind is refused and dropped, the new one untouched
+        hold();
+        delete(&lib2, &id_before).unwrap();
+        assert!(!pending_dir(&lib2).join(&ua).exists(), "deleting drops its waiting update");
+        write_as("recreated", "Recreated", prefab::Origin::file(&root.join("elsewhere.map")));
+        put_back();
+        let e = settle(&lib2, &ua, true).unwrap_err();
+        assert!(e.contains("isn't the prefab this update was for"), "{e}");
+        assert!(!pending_dir(&lib2).join(&ua).exists());
+        assert_eq!(std::fs::read(lib2.join("recreated.map")).unwrap(), keep_map);
+        assert!(std::fs::read_to_string(lib2.join("recreated.json")).unwrap().contains("Recreated"));
+        // recreated under the same library id from another source: still refused
+        delete(&lib2, "recreated").unwrap();
+        write_as(&id_before, "Same id, other source", prefab::Origin::community("mod:501", 999));
+        put_back();
+        assert!(pending(&lib2).iter().all(|p| p["uid"] != json!(ua)), "pending() drops it");
+        assert!(!pending_dir(&lib2).join(&ua).exists());
+        put_back();
+        assert!(settle(&lib2, &ua, true).is_err());
+        assert!(std::fs::read_to_string(lib2.join(format!("{id_before}.json"))).unwrap().contains("Same id, other source"));
+        // 2. the original back (same id, same source): the held update applies
+        std::fs::write(lib2.join(format!("{id_before}.json")), &keep_json).unwrap();
+        put_back();
+        assert_eq!(pending(&lib2).len(), 1);
+        settle(&lib2, &ua, false).unwrap();
         // the same uid from another uploader, another page, or a file: a copy with a new uid, yours untouched
         for other in [prefab::Origin::community("mod:501", 78), prefab::Origin::community("mod:999", 77), prefab::Origin::file(&zip)] {
             let n = mine(&lib2).len();
