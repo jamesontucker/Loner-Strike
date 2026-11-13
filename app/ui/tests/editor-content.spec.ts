@@ -131,7 +131,13 @@ test("the entity form: Choose…, Show in Content Browser, Use selected; the con
   void cb;
   // the content drawer: Ctrl/⌘+Space, a click away closes it
   await page.locator(".ed-pane").first().hover();
-  await page.keyboard.press("ControlOrMeta+Space");
+  // Ctrl+Space as in Unreal; ⌘⇧Space on a Mac (⌘Space is Spotlight, Ctrl+Space the input source)
+  const mac = await page.evaluate(() => /Mac/.test(navigator.platform));
+  await page.locator(".ed-menubar .ed-menu-title", { hasText: /^View$/ }).click();
+  await expect(page.locator('.ed-menu-list[aria-label="View"]').getByRole("menuitem", { name: /^Content drawer/ }).locator("kbd")).toHaveText(mac ? "⌘⇧Space" : "Ctrl+Space");
+  await page.keyboard.press("Escape");
+  await page.locator(".ed-pane").first().hover();
+  await page.keyboard.press(mac ? "Meta+Shift+Space" : "Control+Space");
   const drawer = page.getByRole("dialog", { name: "Content drawer" });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole("region", { name: "Content Browser" })).toBeVisible();

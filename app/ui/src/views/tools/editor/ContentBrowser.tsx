@@ -3,7 +3,7 @@
 // Community, Mine, Favorites, Recent), search, thumbnail size; a details pane with where the
 // file came from, its credits and a permission badge (T's credits data); drag a tile onto the
 // map to place it (model → cycler_sprite, sprite → env_sprite, sound → ambient_generic, prefab
-// → the prefab); right-click for Find uses. Also the content drawer (Ctrl/⌘+Space), which shows
+// → the prefab); right-click for Find uses. Also the content drawer (Ctrl+Space; ⌘⇧Space on a Mac), which shows
 // the same browser over the bottom panels and closes on a click away.
 
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -582,7 +582,7 @@ function Details({ a, onUses }: { a: AssetItem | null; onUses: (a: AssetItem) =>
 
 // ---- the content drawer ------------------------------------------------------------------------
 
-/** Ctrl/⌘+Space: the browser slides up over the bottom panels; a click away closes it. */
+/** Ctrl+Space (⌘⇧Space on a Mac): the browser slides up over the bottom panels; a click away closes it. */
 export function ContentDrawer() {
   const open = useBrowser((s) => s.drawer);
   const box = useRef<HTMLDivElement>(null);

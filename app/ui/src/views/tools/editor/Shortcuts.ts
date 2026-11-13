@@ -88,7 +88,8 @@ const LONER: Keys = {
   "help.cheats": ["?"],
   "map.inspect": ["Alt+Enter"],
   "map.playtest": ["F5"],
-  "view.contentDrawer": ["Mod+Space"],
+  // Unreal's Ctrl+Space; on a Mac ⌘Space is Spotlight and Ctrl+Space switches the input source
+  "view.contentDrawer": [MAC ? "Mod+Shift+Space" : "Mod+Space"],
   "view.snap": ["Shift+W"],
   "edit.applyTexture": ["Shift+T"],
 };

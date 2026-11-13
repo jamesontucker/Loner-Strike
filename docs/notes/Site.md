@@ -219,3 +219,12 @@ To turn one on, add its name to `const INGAME = new Set([...])` in `index.html`,
 - Make your own names four tools: the map simulator, nav fixer, callouts and the spray maker.
 - Publishing wording: GameBanana is read-only, so it now reads "Package it in the app and upload it to GameBanana, with the credits filled in for you" on the homepage and in the docs.
 - docs.html is tightened by about 30%, from 20,020 to 13,948 words. Every id and anchor is kept. The before and after counts per topic are in the scratchpad docs2/*.json.
+
+## From P5 (2026-11-13): map editor keys and names for docs.html
+- **Content drawer**: **Ctrl+Space** on Windows and Linux (as in Unreal); **⌘⇧Space** on a Mac (⌘Space is Spotlight,
+  Ctrl+Space switches the input source). With TrenchBroom keys it's Ctrl+Shift+Space / ⌘⇧Space (Ctrl+Space maximizes
+  a pane there). Also View > Content drawer.
+- **Panels**: "Content" (Models, sprites, sounds, textures and prefabs; Content › Prefabs replaces Library › Prefabs) and
+  "Gameplay" (Components and mode kits for game modes; was "Library"): #editor-library, the Studio's Map markers
+  paragraph and the Community "Installed things show up…" paragraph still say Library.
+- **Playtest**: F5 in every key set, Map > Playtest, and the Playtest button in the editor's one bar.
