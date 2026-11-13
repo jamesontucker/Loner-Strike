@@ -98,3 +98,39 @@ Library items and snippets carry `fromMode` (a uid) when they're shared.
 - Tests: `test_a_uid_belongs_to_its_first_registrant`, `test_listed_uids_are_owned_after_the_migration`,
   `test_a_refused_submission_claims_nothing`, `test_uid_case_doesnt_matter`; Rust `library_round_trip_updates_and_chips`
   (the hijack index, same-owner move, unknown owner).
+
+## 2026-11-13: uid conflicts settled by evidence (list service), three review fixes
+- A uid conflict never blocks a listing. `settle_uid`: same member → fine; a moderator's pin wins; otherwise
+  both sides' **earliest upload carrying the uid** (older files of each page read the same way) are compared;
+  the newcomer only *takes* when its upload is provably older **and** the holder's entry isn't listed; a listed
+  holder never loses a uid automatically ("flag": moderator card). Anything unproven stays with the holder.
+- The loser is listed without the uid (kept aside as `heldBack`, given back by a moderator). Conflicts go to
+  `uid_conflicts` + a Discord card with "Give to <page>" buttons (`modbot` kind `uid`), or `lsmod.py give-uid`.
+- A held submission (blocked creator / team hold) claims and takes nothing; its uids are settled when a
+  moderator approves it. `give_uid` strips other entries whose item **or** proposal declares the uid.
+- Tests: `test_an_older_upload_never_strips_a_listed_entry`, `..._takes_from_an_unlisted_holder`,
+  `test_both_sides_dates_are_their_earliest_upload`, `test_a_held_submission_takes_nothing_until_approved`,
+  `test_a_pin_strips_a_waiting_proposal_too`, `test_unproven_dates_go_to_a_moderator`, `test_settling_rules`,
+  modbot `test_uid_conflict_card`. `community.py` committed; the only uncommitted line there is Caps' CHECK_MAX.
+
+## 2026-11-13: updates end to end (communitylib.rs)
+- **Never in use:** an update for a map that's loaded (or a Studio mode that's running) waits (`pending`) and
+  goes in at the next map change (30 s tick, started with the first community request).
+- **Previous version:** kept in `<app dir>/community/<key>/previous/` (its files from the store's record, its
+  prefabs, its graph, its record and meta) before the old one goes; a failed install puts it straight back;
+  "Go back to the previous version" restores it (or reinstalls `previousFile` from the page when nothing is kept).
+- **Complete removal, shared files counted:** the store already keeps files another download needs; on top,
+  files any other map's .res lists are put back after the old version is removed (`needed_by_others`).
+  A community mode's kit goes with it.
+- **Servers:** servers carrying it get `stale`; the tick sends it (map: off and copied again with map copy;
+  mode: built here, copied, registered) when nobody (bots don't count) is playing that map/mode there, then
+  uploads Linux servers.
+- **Visibility:** a count on Tools and Community in the sidebar (click → Installed), a once-a-session toast,
+  Installed sorted updates first, Update all, an update dialog with the creator's GameBanana update notes
+  (`GET /api/tools/community/notes/:model/:id`).
+- **Your own work never changes:** placed prefabs are copies in your maps, remixes are your own graphs (new
+  uid), Studio graphs you edited aren't touched; library prefabs follow P5's origin rule (update after a yes).
+- MCP: update-all and go-back asked first; notes is a read.
+- Tests: `busy_servers_and_maps_in_use`, `shared_files_other_maps_need_are_counted`,
+  `previous_version_kept_and_put_back`, `update_notes_from_gamebanana`, `waiting_updates_and_stale_servers_in_the_library`.
+- Not tried live: a real update on GameBanana (none exists yet); the tick against a real server.
