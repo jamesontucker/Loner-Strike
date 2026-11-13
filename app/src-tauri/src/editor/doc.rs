@@ -172,6 +172,62 @@ impl WorldSettings {
     }
 }
 
+/// A named set of things to show or hide together (the Outline's visibility sets).
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct VisSet {
+    pub name: String,
+    #[serde(default)]
+    pub brushes: Vec<BrushId>,
+    #[serde(default)]
+    pub entities: Vec<EntityId>,
+}
+
+/// A box to compile on its own (Hammer's cordon), in GoldSrc units.
+#[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct CordonBox {
+    pub min: [f64; 3],
+    pub max: [f64; 3],
+}
+
+/// How the cordon is sealed and what it keeps.
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct CordonSettings {
+    #[serde(default)]
+    pub boxes: Vec<CordonBox>,
+    /// compile only the boxes
+    #[serde(default)]
+    pub on: bool,
+    /// "sky" (default) or "black"
+    #[serde(default)]
+    pub seal: String,
+    /// lights outside the boxes are compiled too
+    #[serde(default)]
+    pub keep_lights: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct EditorSettings {
+    /// a mapper's own FGD file, read on top of ours
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fgd: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vis_sets: Vec<VisSet>,
+    #[serde(default, skip_serializing_if = "CordonSettings::is_empty")]
+    pub cordon: CordonSettings,
+}
+
+impl CordonSettings {
+    pub fn is_empty(&self) -> bool {
+        self == &CordonSettings::default()
+    }
+}
+
+impl EditorSettings {
+    pub fn is_empty(&self) -> bool {
+        self == &EditorSettings::default()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MapDocument {
     pub version: u32,
@@ -184,6 +240,10 @@ pub struct MapDocument {
     #[serde(default)]
     pub materials: BTreeMap<String, Material>,
     next_id: u64,
+    /// The editor's own settings kept with the project (not in the .map): visibility sets,
+    /// cordon boxes, a custom FGD. Not part of undo.
+    #[serde(default, skip_serializing_if = "EditorSettings::is_empty")]
+    pub editor: EditorSettings,
     /// Bumped on every change, so the view can tell when to redraw. Not saved.
     #[serde(skip)]
     pub revision: u64,
@@ -205,6 +265,7 @@ impl MapDocument {
             groups: BTreeMap::new(),
             materials: BTreeMap::new(),
             next_id: 1,
+            editor: EditorSettings::default(),
             revision: 0,
         }
     }

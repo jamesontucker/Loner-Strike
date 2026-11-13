@@ -11,6 +11,7 @@ pub mod history;
 pub mod mapfile;
 pub mod math;
 pub mod ops;
+pub mod prefab;
 pub mod shapes;
 pub mod texture;
 pub mod vertex;

@@ -742,6 +742,53 @@ pub fn cmd_paste(doc: &mut MapDocument, h: &mut History, frag: &MapDocument, off
     Ok(out)
 }
 
+/// Place a prefab: its pieces moved by `offset`, kept together in a group named after it
+/// (one click picks the lot; Ungroup frees them), its WADs added to the map's list. One step.
+pub fn cmd_place_prefab(doc: &mut MapDocument, h: &mut History, frag: &MapDocument, offset: Vec3, name: &str, wads: &[String]) -> OpResult<(Created, GroupId)> {
+    if frag.brushes.is_empty() && frag.entities.is_empty() {
+        return Err("That prefab is empty.".into());
+    }
+    if frag.brushes.len() > 50_000 || frag.entities.len() > 10_000 {
+        return Err("That prefab is too big to place.".into());
+    }
+    for m in frag.materials.values() {
+        if doc.material(&m.name).is_none() {
+            doc.add_material(m.clone());
+        }
+    }
+    let brushes: Vec<BrushId> = frag.brushes.keys().copied().collect();
+    let entities: Vec<EntityId> = frag.entities.keys().copied().collect();
+    let mut tx = Tx::new(doc, "Place prefab");
+    let mut out = Created::default();
+    copy_into(&mut tx, frag, &brushes, &entities, &Affine::translate(offset), true, &mut out)?;
+    let gid = tx.add_group(Group { name: if name.trim().is_empty() { "Prefab".into() } else { name.trim().chars().take(64).collect() }, ..Default::default() });
+    for id in &out.brushes {
+        let b = get_brush(tx.doc(), *id)?;
+        // brushes of a placed entity stay with it (the entity carries the group)
+        if b.entity.is_none_or(|e| !out.entities.contains(&e)) {
+            tx.set_brush(*id, Brush { group: Some(gid), ..b });
+        }
+    }
+    for id in &out.entities {
+        if let Some(mut e) = tx.doc().entities.get(id).cloned() {
+            e.group = Some(gid);
+            tx.set_entity(*id, e);
+        }
+    }
+    let have = tx.doc().world.wad_names();
+    let missing: Vec<String> = wads.iter().filter(|w| {
+        let base = w.rsplit(['\\', '/']).next().unwrap_or(w).to_ascii_lowercase();
+        !base.is_empty() && !have.contains(&base)
+    }).cloned().collect();
+    if !missing.is_empty() {
+        let mut w = tx.doc().world.clone();
+        w.wads.extend(missing);
+        tx.set_world(w);
+    }
+    tx.commit(h);
+    Ok((out, gid))
+}
+
 /// Swap one texture for another on every face of the map (names match without case).
 pub fn cmd_replace_texture(doc: &mut MapDocument, h: &mut History, from: &str, to: &str) -> usize {
     let mut tx = Tx::new(doc, "Replace texture");
