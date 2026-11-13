@@ -2,28 +2,35 @@
 //! edits it), the node registry shared with the editor (`app/ui/src/views/tools/studio/nodes.json`,
 //! read here at build time), and the checks a graph must pass before it's turned into Pawn.
 //!
-//! A graph file, version 1:
+//! A graph file, version 2 (version 1 files, without variables, still open):
 //! ```json
-//! { "schema": "loner-strike/graph", "version": 1,
+//! { "schema": "loner-strike/graph", "version": 2,
 //!   "mode": { "id": "teamdm", "name": "Team DM", "description": "" },
+//!   "variables": [{ "id": "v1", "name": "Kills", "type": "number", "scope": "player", "default": 0 }],
 //!   "nodes": [{ "id": "n1", "type": "event.player_killed", "pos": {"x":0,"y":0}, "params": {}, "breakpoint": false }],
 //!   "edges": [{ "id": "e1", "from": {"node":"n1","pin":"then"}, "to": {"node":"n2","pin":"exec"} }],
 //!   "comments": [{ "id": "c1", "text": "", "pos": {"x":0,"y":0}, "size": {"w":300,"h":200} }] }
 //! ```
 //! Wires go from an output pin to an input pin. A flow ("exec") output has at most one wire;
 //! a data input has at most one wire; flow inputs and data outputs can have many.
+//!
+//! Pin types: exec, player, entity, team, number, bool, text; `any` (a reroute, or a Value that
+//! takes anything) and `var` (the type of the variable the node is set to).
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::OnceLock;
 
 pub const SCHEMA: &str = "loner-strike/graph";
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 /// Limits that keep a graph (and the plugin made from it) sane.
 pub const MAX_NODES: usize = 400;
 pub const MAX_EDGES: usize = 1200;
 pub const MAX_COMMENTS: usize = 100;
+pub const MAX_VARIABLES: usize = 64;
+/// Numbers a graph may hold (settings, variable defaults).
+pub const NUMBER_LIMIT: f64 = 100_000.0;
 
 // ---- the node registry ---------------------------------------------------------------------
 
@@ -43,6 +50,12 @@ pub struct NodeDef {
     pub event: bool,
     #[serde(default)]
     pub reroute: bool,
+    /// no flow pins: worked out where its output is used
+    #[serde(default)]
+    pub pure: bool,
+    /// "components" (gm_components) or "creatures" (the bot brain's ls_creature)
+    #[serde(default)]
+    pub needs: Option<String>,
     pub inputs: Vec<PinDef>,
     pub outputs: Vec<PinDef>,
     pub params: Vec<ParamDef>,
@@ -57,6 +70,9 @@ pub struct PinDef {
     pub label: String,
     #[serde(default)]
     pub required: bool,
+    /// may be left unwired (it then means "nobody" / "everyone" / nothing)
+    #[serde(default)]
+    pub optional: bool,
     /// an unconnected input takes this param's value instead
     #[serde(default)]
     pub param: Option<String>,
@@ -66,7 +82,8 @@ pub struct PinDef {
 pub struct ParamDef {
     pub id: String,
     pub label: String,
-    /// choice | number | text
+    /// choice | number | text | bool | name (an entity's name) | keys (component keys) |
+    /// var (one of the graph's variables) | varvalue (a value of that variable's type)
     pub kind: String,
     pub default: Value,
     #[serde(default)]
@@ -75,6 +92,9 @@ pub struct ParamDef {
     pub min: Option<f64>,
     #[serde(default)]
     pub max: Option<f64>,
+    /// a `var` param that only takes variables of this type
+    #[serde(default, rename = "varType")]
+    pub var_type: Option<String>,
 }
 
 const NODES_JSON: &str = include_str!("../../../../ui/src/views/tools/studio/nodes.json");
@@ -100,6 +120,9 @@ impl NodeDef {
     pub fn param(&self, id: &str) -> Option<&ParamDef> {
         self.params.iter().find(|p| p.id == id)
     }
+    pub fn has_exec_in(&self) -> bool {
+        self.inputs.iter().any(|i| i.ty == "exec")
+    }
 }
 
 // ---- the graph -----------------------------------------------------------------------------
@@ -109,6 +132,8 @@ pub struct Graph {
     pub schema: String,
     pub version: u32,
     pub mode: ModeInfo,
+    #[serde(default)]
+    pub variables: Vec<Variable>,
     #[serde(default)]
     pub nodes: Vec<Node>,
     #[serde(default)]
@@ -123,6 +148,21 @@ pub struct ModeInfo {
     pub name: String,
     #[serde(default)]
     pub description: String,
+}
+
+/// A value the mode keeps: one for the whole mode, or one per player. Kept for the map (per
+/// player: reset when the player joins).
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Variable {
+    pub id: String,
+    pub name: String,
+    /// number | bool | text
+    #[serde(rename = "type")]
+    pub ty: String,
+    /// mode | player
+    pub scope: String,
+    #[serde(default)]
+    pub default: Value,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Default)]
@@ -181,16 +221,19 @@ pub fn parse(text: &str) -> Result<Graph, String> {
     from_value(v)
 }
 
+/// A graph from JSON. Version 1 files (no variables) are read as version 2.
 pub fn from_value(v: Value) -> Result<Graph, String> {
     if v.get("schema").and_then(Value::as_str) != Some(SCHEMA) {
         return Err("That isn't a Game Mode Studio graph.".into());
     }
     match v.get("version").and_then(Value::as_u64) {
-        Some(n) if n as u32 == VERSION => {}
-        Some(n) if n as u32 > VERSION => return Err(format!("That graph was made by a newer Loner-Strike (graph version {n}). Update the app to open it.")),
+        Some(n) if (1..=VERSION as u64).contains(&n) => {}
+        Some(n) if n > VERSION as u64 => return Err(format!("That graph was made by a newer Loner-Strike (graph version {n}). Update the app to open it.")),
         _ => return Err("That graph's version isn't one this app knows.".into()),
     }
-    serde_json::from_value(v).map_err(|e| format!("That graph file is damaged ({e})."))
+    let mut g: Graph = serde_json::from_value(v).map_err(|e| format!("That graph file is damaged ({e})."))?;
+    g.version = VERSION;
+    Ok(g)
 }
 
 // ---- checks --------------------------------------------------------------------------------
@@ -229,7 +272,8 @@ pub fn has_errors(p: &[Problem]) -> bool {
     p.iter().any(|p| p.level == "error")
 }
 
-/// Node, edge and comment ids: short and plain, so they're safe in generated code and logs.
+/// Node, edge, comment and variable ids: short and plain, so they're safe in generated code
+/// and logs.
 pub fn valid_id(id: &str) -> bool {
     (1..=24).contains(&id.len()) && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
@@ -252,10 +296,31 @@ pub fn valid_label(s: &str, max: usize) -> bool {
     s.chars().count() <= max && s.chars().all(label_char)
 }
 
+/// An entity's name (targetname), a creature type: plain ASCII letters, digits, `_ - .`.
+pub fn valid_name(s: &str) -> bool {
+    s.len() <= 32 && s.chars().all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c))
+}
+
+/// Component keys (`radius=160 capture_secs=8 name=B`): words of name characters and `=`,
+/// separated by spaces. No quotes, so no value can carry anything else.
+pub fn valid_keys(s: &str, max: usize) -> bool {
+    s.len() <= max && s.chars().all(|c| c.is_ascii_alphanumeric() || " _-.=:,".contains(c))
+}
+
 /// A comment box's note: never put into generated code, but held to the same characters
 /// (plus new lines).
 pub fn valid_note(s: &str) -> bool {
     s.chars().count() <= 2000 && s.chars().all(|c| c == '\n' || label_char(c))
+}
+
+/// Does a value fit a variable of this type?
+pub fn value_fits(ty: &str, v: &Value) -> bool {
+    match ty {
+        "number" => v.as_f64().is_some_and(|n| n.is_finite() && n.abs() <= NUMBER_LIMIT),
+        "bool" => v.is_boolean(),
+        "text" => v.as_str().is_some_and(|s| valid_label(s, 60)),
+        _ => false,
+    }
 }
 
 /// The graph as the checks and the generator see it: lookups by id, wires by pin.
@@ -263,6 +328,7 @@ pub struct View<'a> {
     pub g: &'a Graph,
     pub defs: HashMap<&'a str, &'static NodeDef>,
     pub nodes: HashMap<&'a str, &'a Node>,
+    pub vars: HashMap<&'a str, &'a Variable>,
     /// output pin -> wires leaving it
     pub out_edges: HashMap<(String, String), Vec<&'a Edge>>,
     /// input pin -> wires arriving
@@ -272,12 +338,15 @@ pub struct View<'a> {
 impl<'a> View<'a> {
     pub fn new(g: &'a Graph) -> View<'a> {
         let reg = registry();
-        let mut v = View { g, defs: HashMap::new(), nodes: HashMap::new(), out_edges: HashMap::new(), in_edges: HashMap::new() };
+        let mut v = View { g, defs: HashMap::new(), nodes: HashMap::new(), vars: HashMap::new(), out_edges: HashMap::new(), in_edges: HashMap::new() };
         for n in &g.nodes {
             v.nodes.entry(n.id.as_str()).or_insert(n);
             if let Some(d) = reg.get(&n.kind) {
                 v.defs.entry(n.id.as_str()).or_insert(d);
             }
+        }
+        for x in &g.variables {
+            v.vars.entry(x.id.as_str()).or_insert(x);
         }
         for e in &g.edges {
             v.out_edges.entry((e.from.node.clone(), e.from.pin.clone())).or_default().push(e);
@@ -296,14 +365,29 @@ impl<'a> View<'a> {
         self.in_edges.get(&(node.to_string(), pin.to_string())).map_or(&[], |v| v.as_slice())
     }
 
-    /// The pin type an output really carries: a reroute carries what comes into it.
+    /// The variable a node is set to (its `var` param).
+    pub fn var_of(&self, node: &str) -> Option<&'a Variable> {
+        let id = self.nodes.get(node)?.params.get("var")?.as_str()?;
+        self.vars.get(id).copied()
+    }
+
+    /// A pin's declared type with `var` resolved ("any" when the node has no variable yet).
+    fn resolve(&self, node: &str, ty: &str) -> String {
+        if ty == "var" {
+            self.var_of(node).map(|v| v.ty.clone()).unwrap_or_else(|| "any".into())
+        } else {
+            ty.to_string()
+        }
+    }
+
+    /// The type an output really carries: a reroute carries what comes into it.
     pub fn out_type(&self, node: &str, pin: &str) -> Option<String> {
         let mut seen = HashSet::new();
         let (mut node, mut pin) = (node.to_string(), pin.to_string());
         loop {
             let def = self.defs.get(node.as_str())?;
             if !def.reroute {
-                return def.output(&pin).map(|p| p.ty.clone());
+                return def.output(&pin).map(|p| self.resolve(&node, &p.ty));
             }
             if !seen.insert(node.clone()) {
                 return None;
@@ -312,6 +396,12 @@ impl<'a> View<'a> {
             node = e.from.node.clone();
             pin = e.from.pin.clone();
         }
+    }
+
+    /// The type an input wants (`var` resolved).
+    pub fn in_type(&self, node: &str, pin: &str) -> Option<String> {
+        let def = self.defs.get(node)?;
+        def.input(pin).map(|p| self.resolve(node, &p.ty))
     }
 
     /// Where a flow wire from this output really goes (through reroutes): the node and pin.
@@ -353,23 +443,45 @@ impl<'a> View<'a> {
         self.defs.get(node).map(|d| d.outputs.iter().filter(|p| p.ty == "exec").map(|p| p.id.as_str()).collect()).unwrap_or_default()
     }
 
-    /// The events (node ids) from which each node is reached by flow wires.
-    pub fn reached_from(&self) -> BTreeMap<&'a str, BTreeSet<&'a str>> {
-        let mut out: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    /// The event outputs a data input depends on (directly, or through pure nodes).
+    pub fn event_values(&self, node: &str, pin: &str) -> Vec<(&'a str, &'a str)> {
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        let mut stack: Vec<(String, String)> = vec![(node.to_string(), pin.to_string())];
+        while let Some((n, p)) = stack.pop() {
+            let Some((src, spin)) = self.data_source(&n, &p) else { continue };
+            let Some(def) = self.defs.get(src) else { continue };
+            if def.event {
+                out.push((src, spin));
+            } else if def.pure && seen.insert(src) {
+                for ip in def.inputs.iter().filter(|i| i.ty != "exec") {
+                    stack.push((src.to_string(), ip.id.clone()));
+                }
+            }
+        }
+        out
+    }
+
+    /// The events (node ids) from which each node is reached by flow wires, and whether a
+    /// timer (Delay, Repeat, Countdown) lies on the way.
+    pub fn reached_from(&self) -> BTreeMap<&'a str, BTreeMap<&'a str, bool>> {
+        let mut out: BTreeMap<&str, BTreeMap<&str, bool>> = BTreeMap::new();
         for n in &self.g.nodes {
             if !self.defs.get(n.id.as_str()).is_some_and(|d| d.event) {
                 continue;
             }
-            let mut stack = vec![n.id.as_str()];
+            let mut stack = vec![(n.id.as_str(), false)];
             let mut seen = HashSet::new();
-            while let Some(cur) = stack.pop() {
-                if !seen.insert(cur) {
+            while let Some((cur, timed)) = stack.pop() {
+                if !seen.insert((cur, timed)) {
                     continue;
                 }
-                out.entry(cur).or_default().insert(n.id.as_str());
+                let e = out.entry(cur).or_default().entry(n.id.as_str()).or_insert(false);
+                *e |= timed;
+                let kind = self.defs.get(cur).map(|d| d.kind.as_str()).unwrap_or("");
                 for p in self.exec_outs(cur) {
                     if let Some((t, _)) = self.exec_target(cur, p) {
-                        stack.push(t);
+                        stack.push((t, timed || deferred(kind, p)));
                     }
                 }
             }
@@ -378,8 +490,18 @@ impl<'a> View<'a> {
     }
 }
 
-fn compatible(from: &str, to: &str) -> bool {
-    from == to || from == "any" || to == "any"
+/// Does this flow output run later (from a timer), not straight away?
+pub fn deferred(kind: &str, pin: &str) -> bool {
+    match kind {
+        "timer.delay" => true,
+        "timer.repeat" => pin == "tick",
+        "timer.countdown" => pin == "done",
+        _ => false,
+    }
+}
+
+pub fn compatible(from: &str, to: &str) -> bool {
+    from == to || from == "any" || to == "any" || (from == "player" && to == "entity")
 }
 
 /// Every problem with a graph: errors stop a compile, warnings are shown on the nodes.
@@ -399,12 +521,30 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
     if !valid_label(&g.mode.description, 60) {
         p.push(Problem::err(None, "The mode's description can be up to 60 letters, digits, spaces or plain punctuation (no * / \\ \" ^)."));
     }
-    if g.nodes.len() > MAX_NODES || g.edges.len() > MAX_EDGES || g.comments.len() > MAX_COMMENTS {
-        p.push(Problem::err(None, format!("That graph is too big (at most {MAX_NODES} nodes, {MAX_EDGES} wires and {MAX_COMMENTS} comments).")));
+    if g.nodes.len() > MAX_NODES || g.edges.len() > MAX_EDGES || g.comments.len() > MAX_COMMENTS || g.variables.len() > MAX_VARIABLES {
+        p.push(Problem::err(None, format!("That graph is too big (at most {MAX_NODES} nodes, {MAX_EDGES} wires, {MAX_COMMENTS} comments and {MAX_VARIABLES} variables).")));
         return p;
     }
 
+    // variables
+    let mut vids = HashSet::new();
+    for x in &g.variables {
+        if !valid_id(&x.id) || !vids.insert(x.id.as_str()) {
+            p.push(Problem::err(None, "A variable has a bad or repeated id."));
+            continue;
+        }
+        if x.name.trim().is_empty() || !valid_label(&x.name, 30) {
+            p.push(Problem::err(None, "Give each variable a name (up to 30 letters, digits, spaces or plain punctuation)."));
+        }
+        if !["number", "bool", "text"].contains(&x.ty.as_str()) || !["mode", "player"].contains(&x.scope.as_str()) {
+            p.push(Problem::err(None, format!("The variable \u{201c}{}\u{201d} has a type or scope this app doesn't know.", x.name.chars().take(30).collect::<String>())));
+        } else if !x.default.is_null() && !value_fits(&x.ty, &x.default) {
+            p.push(Problem::err(None, format!("The variable \u{201c}{}\u{201d} starts with a value that doesn't fit its type.", x.name.chars().take(30).collect::<String>())));
+        }
+    }
+
     // nodes and their params
+    let v = View::new(g);
     let mut ids = HashSet::new();
     for n in &g.nodes {
         if !valid_id(&n.id) {
@@ -421,14 +561,28 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         };
         for k in n.params.keys() {
             if def.param(k).is_none() {
-                p.push(Problem::warn(Some(&n.id), format!("\u{201c}{k}\u{201d} isn't a setting of {}; it's ignored.", def.title)));
+                p.push(Problem::warn(Some(&n.id), format!("\u{201c}{}\u{201d} isn't a setting of {}; it's ignored.", k.chars().take(30).collect::<String>(), def.title)));
             }
         }
         for prm in &def.params {
-            if let Some(v) = n.params.get(&prm.id) {
-                if let Err(why) = check_param(prm, v) {
-                    p.push(Problem::err(Some(&n.id), why).pin(&prm.id));
+            let val = n.params.get(&prm.id);
+            let res = match prm.kind.as_str() {
+                "var" => {
+                    let chosen = val.and_then(Value::as_str).and_then(|id| v.vars.get(id));
+                    match chosen {
+                        None => Err(format!("Pick a variable for {} (add one under This mode).", def.title)),
+                        Some(x) if prm.var_type.as_deref().is_some_and(|t| t != x.ty) => Err(format!("{} needs a {} variable.", def.title, prm.var_type.as_deref().unwrap_or(""))),
+                        _ => Ok(()),
+                    }
                 }
+                "varvalue" => match (val, v.var_of(&n.id)) {
+                    (Some(x), Some(var)) if !(x.is_string() && x.as_str() == Some("")) && !value_fits(&var.ty, x) => Err(format!("{} doesn't fit the variable \u{201c}{}\u{201d}.", prm.label, var.name)),
+                    _ => Ok(()),
+                },
+                _ => val.map_or(Ok(()), |x| check_param(prm, x)),
+            };
+            if let Err(why) = res {
+                p.push(Problem::err(Some(&n.id), why).pin(&prm.id));
             }
         }
     }
@@ -445,8 +599,6 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         }
     }
 
-    let v = View::new(g);
-
     // wires
     let mut eids = HashSet::new();
     for e in &g.edges {
@@ -458,41 +610,40 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
             p.push(Problem::err(None, "A wire goes to a node that isn't there.").edge(&e.id));
             continue;
         };
-        let Some(fp) = fd.output(&e.from.pin) else {
-            p.push(Problem::err(Some(&e.from.node), format!("{} has no output \u{201c}{}\u{201d}.", fd.title, e.from.pin)).edge(&e.id));
+        if fd.output(&e.from.pin).is_none() {
+            p.push(Problem::err(Some(&e.from.node), format!("{} has no output \u{201c}{}\u{201d}.", fd.title, e.from.pin.chars().take(30).collect::<String>())).edge(&e.id));
             continue;
-        };
+        }
         let Some(tp) = td.input(&e.to.pin) else {
-            p.push(Problem::err(Some(&e.to.node), format!("{} has no input \u{201c}{}\u{201d}.", td.title, e.to.pin)).edge(&e.id));
+            p.push(Problem::err(Some(&e.to.node), format!("{} has no input \u{201c}{}\u{201d}.", td.title, e.to.pin.chars().take(30).collect::<String>())).edge(&e.id));
             continue;
         };
         if e.from.node == e.to.node {
             p.push(Problem::err(Some(&e.to.node), "A wire can't go back into the same node.").edge(&e.id));
             continue;
         }
-        let from_ty = if fp.ty == "any" { v.out_type(&e.from.node, &e.from.pin).unwrap_or_else(|| "any".into()) } else { fp.ty.clone() };
-        let to_ty = if tp.ty == "any" { "any".to_string() } else { tp.ty.clone() };
+        let from_ty = v.out_type(&e.from.node, &e.from.pin).unwrap_or_else(|| "any".into());
+        let to_ty = if td.reroute { "any".to_string() } else { v.in_type(&e.to.node, &e.to.pin).unwrap_or_else(|| "any".into()) };
         if !compatible(&from_ty, &to_ty) {
             p.push(Problem::err(Some(&e.to.node), format!("{} can't go into {} (a {} wire into a {} pin).", type_label(&from_ty), pin_label(td, tp), type_label(&from_ty), type_label(&to_ty))).pin(&tp.id).edge(&e.id));
         }
     }
     // one wire per flow output and per data input
     for ((node, pin), es) in &v.out_edges {
-        let ty = v.out_type(node, pin);
-        if es.len() > 1 && ty.as_deref() == Some("exec") {
+        if es.len() > 1 && v.out_type(node, pin).as_deref() == Some("exec") {
             p.push(Problem::err(Some(node), "A flow output can only go to one place. Add the steps one after another instead.").pin(pin));
         }
     }
     for ((node, pin), es) in &v.in_edges {
         let Some(def) = v.defs.get(node.as_str()) else { continue };
         // (a reroute takes one wire in, whatever it carries)
-        let data_in = def.input(pin).is_some_and(|ip| ip.ty != "exec" && ip.ty != "any");
+        let data_in = def.input(pin).is_some_and(|ip| ip.ty != "exec" && ip.ty != "any") || def.input(pin).is_some_and(|ip| ip.ty == "any" && !def.reroute);
         if es.len() > 1 && (data_in || def.reroute) {
             p.push(Problem::err(Some(node), "Only one wire can go into this pin.").pin(pin));
         }
     }
 
-    // required inputs, reroutes that carry nothing
+    // required inputs, reroutes that carry nothing, per-player variables
     for n in &g.nodes {
         let Some(def) = v.defs.get(n.id.as_str()) else { continue };
         if def.reroute {
@@ -510,38 +661,44 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
                 p.push(Problem::err(Some(&n.id), format!("{} needs something wired into {}.", def.title, pin_label(def, ip))).pin(&ip.id));
             }
         }
+        if let (Some(var), Some(_)) = (v.var_of(&n.id), def.input("player")) {
+            let wired = !v.ins(&n.id, "player").is_empty();
+            if var.scope == "player" && !wired {
+                p.push(Problem::err(Some(&n.id), format!("\u{201c}{}\u{201d} is kept per player: wire in whose.", var.name)).pin("player"));
+            } else if var.scope == "mode" && wired {
+                p.push(Problem::warn(Some(&n.id), format!("\u{201c}{}\u{201d} is one for the whole mode: the Player wired in is ignored.", var.name)).pin("player"));
+            }
+        }
     }
 
-    // flow: loops, nodes nothing reaches, data used outside its event
+    // flow: loops (flow and data), nodes nothing reaches, values used outside their event
     if !g.nodes.iter().any(|n| v.defs.get(n.id.as_str()).is_some_and(|d| d.event)) && !g.nodes.is_empty() {
         p.push(Problem::warn(None, "Nothing starts this graph yet: add an event, like Round Started."));
     }
     if let Some(node) = find_cycle(&v) {
-        p.push(Problem::err(Some(node), "The flow loops back to here. Loops aren't possible yet: the flow has to end."));
+        p.push(Problem::err(Some(node), "The flow loops back to here. Loops aren't possible yet: the flow has to end (a Repeat does the same job)."));
+    }
+    if let Some(node) = find_data_cycle(&v) {
+        p.push(Problem::err(Some(node), "This value depends on itself."));
     }
     let reached = v.reached_from();
     for n in &g.nodes {
         let Some(def) = v.defs.get(n.id.as_str()) else { continue };
-        if def.event || def.reroute {
+        if def.event || def.reroute || def.pure {
             continue;
         }
-        let has_exec_in = def.inputs.iter().any(|i| i.ty == "exec");
-        if has_exec_in && !reached.contains_key(n.id.as_str()) {
+        if def.has_exec_in() && !reached.contains_key(n.id.as_str()) {
             p.push(Problem::warn(Some(&n.id), "Nothing runs this node: wire an event's flow into it."));
         }
-        let events = reached.get(n.id.as_str());
-        for ip in &def.inputs {
-            if ip.ty == "exec" {
-                continue;
-            }
-            let Some((src, spin)) = v.data_source(&n.id, &ip.id) else { continue };
-            let Some(sdef) = v.defs.get(src) else { continue };
-            if sdef.event {
-                if let Some(evs) = events {
-                    if evs.len() != 1 || !evs.contains(src) {
-                        let label = sdef.output(spin).map(|o| o.label.clone()).unwrap_or_default();
-                        p.push(Problem::err(Some(&n.id), format!("{label} is only known while {} runs, but this node also runs from another event.", sdef.title)).pin(&ip.id));
-                    }
+        let Some(events) = reached.get(n.id.as_str()) else { continue };
+        for ip in def.inputs.iter().filter(|i| i.ty != "exec") {
+            for (src, spin) in v.event_values(&n.id, &ip.id) {
+                let Some(sdef) = v.defs.get(src) else { continue };
+                let label = sdef.output(spin).map(|o| o.label.clone()).unwrap_or_default();
+                if events.len() != 1 || !events.contains_key(src) {
+                    p.push(Problem::err(Some(&n.id), format!("{label} is only known while {} runs, but this node also runs from another event.", sdef.title)).pin(&ip.id));
+                } else if events[src] && sdef.output(spin).is_some_and(|o| o.ty == "text") {
+                    p.push(Problem::err(Some(&n.id), format!("{label} (text) doesn't last through a Delay, Repeat or Countdown: keep it in a variable first.")).pin(&ip.id));
                 }
             }
         }
@@ -552,7 +709,6 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
 /// The first node found on a flow loop.
 fn find_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
     // 0 unseen, 1 on the stack, 2 done
-    let mut state: HashMap<&str, u8> = HashMap::new();
     fn visit<'a>(v: &View<'a>, n: &'a str, state: &mut HashMap<&'a str, u8>) -> Option<&'a str> {
         match state.get(n) {
             Some(1) => return Some(n),
@@ -570,7 +726,40 @@ fn find_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
         state.insert(n, 2);
         None
     }
+    let mut state: HashMap<&str, u8> = HashMap::new();
     for n in &v.g.nodes {
+        if let Some(hit) = visit(v, n.id.as_str(), &mut state) {
+            return Some(hit);
+        }
+    }
+    None
+}
+
+/// The first pure node whose value depends on itself.
+fn find_data_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
+    fn visit<'a>(v: &View<'a>, n: &'a str, state: &mut HashMap<&'a str, u8>) -> Option<&'a str> {
+        match state.get(n) {
+            Some(1) => return Some(n),
+            Some(2) => return None,
+            _ => {}
+        }
+        state.insert(n, 1);
+        if let Some(def) = v.defs.get(n) {
+            for ip in def.inputs.iter().filter(|i| i.ty != "exec") {
+                if let Some((src, _)) = v.data_source(n, &ip.id) {
+                    if v.defs.get(src).is_some_and(|d| d.pure) {
+                        if let Some(hit) = visit(v, src, state) {
+                            return Some(hit);
+                        }
+                    }
+                }
+            }
+        }
+        state.insert(n, 2);
+        None
+    }
+    let mut state: HashMap<&str, u8> = HashMap::new();
+    for n in v.g.nodes.iter().filter(|n| v.defs.get(n.id.as_str()).is_some_and(|d| d.pure)) {
         if let Some(hit) = visit(v, n.id.as_str(), &mut state) {
             return Some(hit);
         }
@@ -582,7 +771,11 @@ fn type_label(ty: &str) -> &str {
     match ty {
         "exec" => "Flow",
         "player" => "Player",
+        "entity" => "Entity",
         "team" => "Team",
+        "number" => "Number",
+        "bool" => "Yes/No",
+        "text" => "Text",
         "any" => "Anything",
         _ => ty,
     }
@@ -596,24 +789,38 @@ fn pin_label(def: &NodeDef, pin: &PinDef) -> String {
     }
 }
 
-/// A param value against its definition.
+/// A param value against its definition (`var` and `varvalue` need the graph: see validate).
 pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
+    let range = || match (def.min, def.max) {
+        (Some(a), Some(b)) => format!(" from {a} to {b}"),
+        _ => String::new(),
+    };
     match def.kind.as_str() {
         "choice" => match v.as_str() {
             Some(s) if def.choices.iter().any(|(k, _)| k == s) => Ok(()),
             _ => Err(format!("Pick one of the choices for {}.", def.label)),
         },
         "number" => match v.as_f64() {
-            Some(n) if n.is_finite() && def.min.map_or(true, |m| n >= m) && def.max.map_or(true, |m| n <= m) => Ok(()),
-            _ => Err(format!("{} needs a number{}.", def.label, match (def.min, def.max) {
-                (Some(a), Some(b)) => format!(" from {a} to {b}"),
-                _ => String::new(),
-            })),
+            Some(n) if n.is_finite() && n.abs() <= NUMBER_LIMIT && def.min.map_or(true, |m| n >= m) && def.max.map_or(true, |m| n <= m) => Ok(()),
+            _ => Err(format!("{} needs a number{}.", def.label, range())),
+        },
+        "bool" => match v {
+            Value::Bool(_) => Ok(()),
+            _ => Err(format!("{} is yes or no.", def.label)),
         },
         "text" => match v.as_str() {
             Some(s) if valid_label(s, def.max.unwrap_or(100.0) as usize) => Ok(()),
             _ => Err(format!("{} can be up to {} letters, digits, spaces or plain punctuation (no * / \\ \" ^).", def.label, def.max.unwrap_or(100.0))),
         },
+        "name" => match v.as_str() {
+            Some(s) if valid_name(s) => Ok(()),
+            _ => Err(format!("{} is a name of up to 32 letters, digits, _ - or .", def.label)),
+        },
+        "keys" => match v.as_str() {
+            Some(s) if valid_keys(s, def.max.unwrap_or(120.0) as usize) => Ok(()),
+            _ => Err(format!("{} are words like radius=160 (letters, digits, _ - . = : and spaces; no quotes).", def.label)),
+        },
+        "var" | "varvalue" => Ok(()),
         _ => Err(format!("{} has a setting this app doesn't know.", def.label)),
     }
 }
@@ -629,7 +836,7 @@ mod tests {
     use serde_json::json;
 
     pub fn graph(nodes: Value, edges: Value) -> Graph {
-        from_value(json!({"schema": SCHEMA, "version": 1, "mode": {"id": "testmode", "name": "Test"}, "nodes": nodes, "edges": edges})).unwrap()
+        from_value(json!({"schema": SCHEMA, "version": 2, "mode": {"id": "testmode", "name": "Test"}, "nodes": nodes, "edges": edges})).unwrap()
     }
 
     fn e(id: &str, a: &str, ap: &str, b: &str, bp: &str) -> Value {
@@ -640,21 +847,29 @@ mod tests {
         p.iter().map(|p| format!("{}:{}:{}", p.level, p.node.clone().unwrap_or_default(), p.message)).collect()
     }
 
+    const TYPES: [&str; 9] = ["exec", "player", "entity", "team", "number", "bool", "text", "any", "var"];
+
     #[test]
     fn registry_is_complete() {
         let r = registry();
-        assert_eq!(r.version, 1);
-        for kind in ["event.round_started", "event.player_killed", "cond.is_team", "player.give_weapon", "score.end_round", "msg.broadcast", "flow.reroute"] {
+        assert_eq!(r.version, 2);
+        for kind in ["event.round_started", "event.player_killed", "cond.is_team", "player.give_weapon", "score.end_round", "msg.broadcast", "flow.reroute", "timer.delay", "var.set", "comp.on_capture", "creature.spawn"] {
             assert!(r.get(kind).is_some(), "{kind}");
         }
+        let mut seen = HashSet::new();
         for n in &r.nodes {
+            assert!(seen.insert(n.kind.as_str()), "{} twice", n.kind);
+            assert!(!(n.pure && n.event), "{}", n.kind);
+            assert_eq!(n.pure, !n.event && !n.reroute && !n.has_exec_in(), "{}: pure means no flow in", n.kind);
             for prm in &n.params {
-                assert!(check_param(prm, &prm.default).is_ok(), "{} {} default", n.kind, prm.id);
+                if !["var", "varvalue"].contains(&prm.kind.as_str()) {
+                    assert!(check_param(prm, &prm.default).is_ok(), "{} {} default", n.kind, prm.id);
+                }
             }
             for pin in n.inputs.iter().chain(&n.outputs) {
-                assert!(["exec", "player", "team", "any"].contains(&pin.ty.as_str()), "{} {}", n.kind, pin.id);
+                assert!(TYPES.contains(&pin.ty.as_str()), "{} {}", n.kind, pin.id);
                 if let Some(pp) = &pin.param {
-                    assert!(n.param(pp).is_some());
+                    assert!(n.param(pp).is_some(), "{} {}", n.kind, pin.id);
                 }
             }
         }
@@ -665,9 +880,9 @@ mod tests {
         assert!(parse("nope").is_err());
         assert!(parse(r#"{"schema":"other","version":1}"#).unwrap_err().contains("isn't a Game Mode Studio graph"));
         assert!(parse(r#"{"schema":"loner-strike/graph","version":9,"mode":{"id":"a","name":"b"}}"#).unwrap_err().contains("newer"));
+        // a version 1 file opens as version 2
         let g = parse(r#"{"schema":"loner-strike/graph","version":1,"mode":{"id":"abc","name":"ABC"}}"#).unwrap();
-        assert!(g.nodes.is_empty());
-        // round trip keeps everything
+        assert!(g.nodes.is_empty() && g.version == 2 && g.variables.is_empty());
         let t = include_str!("../../../../ui/src/views/tools/studio/templates/team-dm.graph.json");
         let g = parse(t).unwrap();
         let back = parse(&serde_json::to_string(&g).unwrap()).unwrap();
@@ -693,19 +908,25 @@ mod tests {
 
     #[test]
     fn wrong_types_refused() {
-        // a player into Is Team's flow input, a flow into its Player input
         let g = graph(
             json!([{"id":"k","type":"event.player_killed"},{"id":"c","type":"cond.is_team"}]),
             json!([e("e1","k","victim","c","exec"), e("e2","k","then","c","player")]),
         );
         let p = validate(&g);
         assert!(p.iter().filter(|p| p.message.contains("can't go into")).count() == 2, "{:?}", msgs(&p));
-        // player into a team pin
         let g = graph(
             json!([{"id":"k","type":"event.player_killed"},{"id":"c","type":"cond.is_team"}]),
             json!([e("e1","k","then","c","exec"), e("e2","k","victim","c","player"), e("e3","k","attacker","c","team")]),
         );
         assert!(msgs(&validate(&g)).iter().any(|m| m.contains("Player can't go into Team")));
+        // a player is an entity; an entity isn't a player; a number isn't a yes/no
+        let g = graph(
+            json!([{"id":"k","type":"event.player_killed"},{"id":"o","type":"comp.crate_open"},{"id":"b","type":"flow.branch"},{"id":"h","type":"player.get_health"}]),
+            json!([e("e1","k","then","o","exec"), e("e2","k","victim","o","container"), e("e3","k","attacker","o","player"), e("e4","o","then","b","exec"), e("e5","k","victim","h","player"), e("e6","h","out","b","cond")]),
+        );
+        let m = msgs(&validate(&g));
+        assert!(!m.iter().any(|m| m.contains("Player can't go into Container")), "{m:?}");
+        assert!(m.iter().any(|m| m.contains("Number can't go into Condition")), "{m:?}");
     }
 
     #[test]
@@ -721,10 +942,19 @@ mod tests {
 
     #[test]
     fn params_checked() {
-        let g = graph(json!([{"id":"x","type":"score.end_round","params":{"winner":"bots"}}, {"id":"m","type":"msg.broadcast","params":{"text":"a\"b","seconds":99}}]), json!([]));
+        let g = graph(json!([
+            {"id":"x","type":"score.end_round","params":{"winner":"bots"}},
+            {"id":"m","type":"msg.broadcast","params":{"text":"a\"b","seconds":99}},
+            {"id":"t","type":"player.teleport","params":{"name":"a b"}},
+            {"id":"c","type":"comp.create","params":{"keys":"name=\"x\""}},
+            {"id":"b","type":"flow.branch","params":{"cond":"yes"}}
+        ]), json!([]));
         let p = validate(&g);
         assert!(p.iter().any(|p| p.node.as_deref() == Some("x") && p.pin.as_deref() == Some("winner")));
         assert_eq!(p.iter().filter(|p| p.node.as_deref() == Some("m") && p.level == "error").count(), 2);
+        for n in ["t", "c", "b"] {
+            assert!(p.iter().any(|p| p.node.as_deref() == Some(n) && p.level == "error"), "{n} {:?}", msgs(&p));
+        }
     }
 
     #[test]
@@ -752,17 +982,66 @@ mod tests {
         assert!(m.iter().any(|m| m.starts_with("warning:lone:") && m.contains("Nothing runs")));
         let g = graph(json!([{"id":"a","type":"msg.broadcast"}]), json!([]));
         assert!(msgs(&validate(&g)).iter().any(|m| m.contains("Nothing starts this graph")));
+        // a value that depends on itself
+        let g = graph(
+            json!([{"id":"a","type":"math.op"},{"id":"b","type":"math.op"}]),
+            json!([e("e1","a","out","b","a"), e("e2","b","out","a","a")]),
+        );
+        assert!(msgs(&validate(&g)).iter().any(|m| m.contains("depends on itself")));
     }
 
     #[test]
     fn data_outside_its_event() {
-        // the victim of Player Killed used by a node Round Started also runs
         let g = graph(
             json!([{"id":"k","type":"event.player_killed"},{"id":"r","type":"event.round_started"},{"id":"m","type":"msg.broadcast"},{"id":"g","type":"player.give_weapon"}]),
             json!([e("e1","k","then","m","exec"), e("e2","r","then","m","exec"), e("e3","m","then","g","exec"), e("e4","k","victim","g","player")]),
         );
         let m = msgs(&validate(&g));
         assert!(m.iter().any(|m| m.starts_with("error:g:") && m.contains("Victim is only known while Player Killed runs")), "{m:?}");
+        // also through a pure node
+        let g = graph(
+            json!([{"id":"k","type":"event.player_killed"},{"id":"r","type":"event.round_started"},{"id":"h","type":"player.get_health"},{"id":"s","type":"player.set_health"}]),
+            json!([e("e1","r","then","s","exec"), e("e2","k","victim","h","player"), e("e3","h","out","s","amount"), e("e4","k","victim","s","player")]),
+        );
+        assert!(msgs(&validate(&g)).iter().any(|m| m.contains("only known while Player Killed")));
+    }
+
+    #[test]
+    fn text_doesnt_cross_timers() {
+        let g = graph(
+            json!([{"id":"k","type":"creature.on_killed"},{"id":"d","type":"timer.delay"},{"id":"h","type":"msg.hud"}]),
+            json!([e("e1","k","then","d","exec"), e("e2","d","then","h","exec"), e("e3","k","kind","h","value")]),
+        );
+        assert!(msgs(&validate(&g)).iter().any(|m| m.contains("doesn't last through a Delay")));
+        // a player does
+        let g = graph(
+            json!([{"id":"k","type":"event.player_killed"},{"id":"d","type":"timer.delay"},{"id":"h","type":"msg.hud"}]),
+            json!([e("e1","k","then","d","exec"), e("e2","d","then","h","exec"), e("e3","k","victim","h","player")]),
+        );
+        assert!(validate(&g).is_empty(), "{:?}", msgs(&validate(&g)));
+    }
+
+    #[test]
+    fn variables_checked() {
+        let mut g = graph(
+            json!([{"id":"r","type":"event.player_spawned"},{"id":"s","type":"var.set","params":{"var":"kills","value":"x"}},{"id":"a","type":"var.add","params":{"var":"name"}},{"id":"q","type":"var.get"}]),
+            json!([e("e1","r","then","s","exec"), e("e2","s","then","a","exec")]),
+        );
+        g.variables = vec![
+            Variable { id: "kills".into(), name: "Kills".into(), ty: "number".into(), scope: "player".into(), default: json!(0) },
+            Variable { id: "name".into(), name: "Last name".into(), ty: "text".into(), scope: "mode".into(), default: json!("") },
+            Variable { id: "bad".into(), name: "Bad /*".into(), ty: "number".into(), scope: "mode".into(), default: json!("x") },
+        ];
+        let m = msgs(&validate(&g));
+        assert!(m.iter().any(|m| m.starts_with("error:s:") && m.contains("doesn't fit")), "{m:?}");
+        assert!(m.iter().any(|m| m.starts_with("error:s:") && m.contains("wire in whose")), "{m:?}");
+        assert!(m.iter().any(|m| m.starts_with("error:a:") && m.contains("needs a number variable")), "{m:?}");
+        assert!(m.iter().any(|m| m.starts_with("error:q:") && m.contains("Pick a variable")), "{m:?}");
+        assert!(m.iter().any(|m| m.contains("Give each variable a name")), "{m:?}");
+        assert!(m.iter().any(|m| m.contains("doesn't fit its type")), "{m:?}");
+        // the Value pin takes the variable's type
+        let v = View::new(&g);
+        assert_eq!(v.in_type("s", "value").as_deref(), Some("number"));
     }
 
     #[test]
@@ -776,7 +1055,6 @@ mod tests {
         let v = View::new(&g);
         assert_eq!(v.exec_target("k", "then"), Some(("g", "exec")));
         assert_eq!(v.data_source("g", "player"), Some(("k", "attacker")));
-        // a flow through a reroute into a player pin is still refused
         let g = graph(
             json!([{"id":"k","type":"event.player_killed"},{"id":"x","type":"flow.reroute"},{"id":"g","type":"player.give_weapon"}]),
             json!([e("e1","k","then","x","in"), e("e2","x","out","g","player")]),

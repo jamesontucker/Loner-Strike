@@ -1,6 +1,6 @@
 {
   "schema": "loner-strike/graph",
-  "version": 1,
+  "version": 2,
   "mode": { "id": "all_nodes", "name": "All Nodes", "description": "Every milestone 1 node" },
   "nodes": [
     { "id": "r", "type": "event.round_started", "pos": { "x": 0, "y": 0 } },

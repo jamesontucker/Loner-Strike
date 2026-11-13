@@ -1,0 +1,2331 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 2,
+ "mode": {
+  "id": "every_node",
+  "name": "Every Node",
+  "description": "Every node in the registry"
+ },
+ "variables": [
+  {
+   "id": "kills",
+   "name": "Kills",
+   "type": "number",
+   "scope": "player",
+   "default": 0
+  },
+  {
+   "id": "round",
+   "name": "Round",
+   "type": "number",
+   "scope": "mode",
+   "default": 1
+  },
+  {
+   "id": "flag",
+   "name": "Flag",
+   "type": "bool",
+   "scope": "mode",
+   "default": false
+  },
+  {
+   "id": "last",
+   "name": "Last thing",
+   "type": "text",
+   "scope": "mode",
+   "default": "none"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "rs_get",
+   "type": "var.get",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {
+    "var": "round"
+   }
+  },
+  {
+   "id": "rs_add1",
+   "type": "math.op",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {
+    "op": "add",
+    "b": 1
+   }
+  },
+  {
+   "id": "rs_set",
+   "type": "var.set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "round"
+   }
+  },
+  {
+   "id": "rs_cd",
+   "type": "timer.countdown",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "secs": 5,
+    "text": "Go in",
+    "slot": "top"
+   }
+  },
+  {
+   "id": "rs_msg",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "text": "Go!",
+    "seconds": 2
+   }
+  },
+  {
+   "id": "rs_rep",
+   "type": "timer.repeat",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "every": 10,
+    "times": 3
+   }
+  },
+  {
+   "id": "rs_alive",
+   "type": "game.count_alive",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "team": "none"
+   }
+  },
+  {
+   "id": "rs_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "text": "Alive:",
+    "slot": "right",
+    "seconds": 5
+   }
+  },
+  {
+   "id": "rs_delay",
+   "type": "timer.delay",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "secs": 5
+   }
+  },
+  {
+   "id": "rs_wave",
+   "type": "comp.wave_start",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "wave": 0
+   }
+  },
+  {
+   "id": "rs_wstop",
+   "type": "comp.wave_stop",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "rs_reset",
+   "type": "comp.reset",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 0,
+    "y": 220
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_re",
+   "type": "flow.reroute",
+   "pos": {
+    "x": 260,
+    "y": 220
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 520,
+    "y": 220
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_add",
+   "type": "var.add",
+   "pos": {
+    "x": 780,
+    "y": 220
+   },
+   "params": {
+    "var": "kills",
+    "amount": 2
+   }
+  },
+  {
+   "id": "pk_rand",
+   "type": "math.random",
+   "pos": {
+    "x": 780,
+    "y": 220
+   },
+   "params": {
+    "min": 1,
+    "max": 3,
+    "frac": false
+   }
+  },
+  {
+   "id": "pk_add2",
+   "type": "var.add",
+   "pos": {
+    "x": 780,
+    "y": 220
+   },
+   "params": {
+    "var": "kills"
+   }
+  },
+  {
+   "id": "pk_team",
+   "type": "cond.is_team",
+   "pos": {
+    "x": 1040,
+    "y": 220
+   },
+   "params": {
+    "team": "ct"
+   }
+  },
+  {
+   "id": "pk_give",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1300,
+    "y": 220
+   },
+   "params": {
+    "weapon": "m4a1",
+    "ammo": 60
+   }
+  },
+  {
+   "id": "pk_hp",
+   "type": "player.get_health",
+   "pos": {
+    "x": 1300,
+    "y": 220
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_hp10",
+   "type": "math.op",
+   "pos": {
+    "x": 1560,
+    "y": 220
+   },
+   "params": {
+    "op": "add",
+    "b": 10
+   }
+  },
+  {
+   "id": "pk_seth",
+   "type": "player.set_health",
+   "pos": {
+    "x": 1560,
+    "y": 220
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_name",
+   "type": "player.get_name",
+   "pos": {
+    "x": 1300,
+    "y": 220
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1560,
+    "y": 220
+   },
+   "params": {
+    "text": "You got",
+    "slot": "center"
+   }
+  },
+  {
+   "id": "ps",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 0,
+    "y": 440
+   },
+   "params": {}
+  },
+  {
+   "id": "ps_strip",
+   "type": "player.strip",
+   "pos": {
+    "x": 260,
+    "y": 440
+   },
+   "params": {
+    "knife": true
+   }
+  },
+  {
+   "id": "ps_arm",
+   "type": "player.set_armor",
+   "pos": {
+    "x": 520,
+    "y": 440
+   },
+   "params": {
+    "amount": 50
+   }
+  },
+  {
+   "id": "ps_spd",
+   "type": "player.set_speed",
+   "pos": {
+    "x": 780,
+    "y": 440
+   },
+   "params": {
+    "speed": 300
+   }
+  },
+  {
+   "id": "ps_team",
+   "type": "player.set_team",
+   "pos": {
+    "x": 1040,
+    "y": 440
+   },
+   "params": {
+    "team": "t"
+   }
+  },
+  {
+   "id": "ps_tp",
+   "type": "player.teleport",
+   "pos": {
+    "x": 1300,
+    "y": 440
+   },
+   "params": {
+    "name": "spawn_a"
+   }
+  },
+  {
+   "id": "ps_set",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 440
+   },
+   "params": {
+    "var": "kills",
+    "value": 0
+   }
+  },
+  {
+   "id": "pj",
+   "type": "event.player_joined",
+   "pos": {
+    "x": 0,
+    "y": 660
+   },
+   "params": {}
+  },
+  {
+   "id": "pj_bot",
+   "type": "player.is_bot",
+   "pos": {
+    "x": 260,
+    "y": 660
+   },
+   "params": {}
+  },
+  {
+   "id": "pj_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 520,
+    "y": 660
+   },
+   "params": {
+    "text": "Bot:",
+    "slot": "left"
+   }
+  },
+  {
+   "id": "pj_alive",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 520,
+    "y": 660
+   },
+   "params": {}
+  },
+  {
+   "id": "pj_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 780,
+    "y": 660
+   },
+   "params": {}
+  },
+  {
+   "id": "pl",
+   "type": "event.player_left",
+   "pos": {
+    "x": 1040,
+    "y": 660
+   },
+   "params": {}
+  },
+  {
+   "id": "pl_set",
+   "type": "var.set",
+   "pos": {
+    "x": 1300,
+    "y": 660
+   },
+   "params": {
+    "var": "last",
+    "value": "someone left"
+   }
+  },
+  {
+   "id": "bp",
+   "type": "event.bomb_planted",
+   "pos": {
+    "x": 0,
+    "y": 880
+   },
+   "params": {}
+  },
+  {
+   "id": "bp_team",
+   "type": "player.get_team",
+   "pos": {
+    "x": 260,
+    "y": 880
+   },
+   "params": {}
+  },
+  {
+   "id": "bp_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 520,
+    "y": 880
+   },
+   "params": {
+    "text": "Planted by",
+    "slot": "center"
+   }
+  },
+  {
+   "id": "bd",
+   "type": "event.bomb_defused",
+   "pos": {
+    "x": 780,
+    "y": 880
+   },
+   "params": {}
+  },
+  {
+   "id": "bd_end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 1040,
+    "y": 880
+   },
+   "params": {
+    "winner": "ct"
+   }
+  },
+  {
+   "id": "bx",
+   "type": "event.bomb_exploded",
+   "pos": {
+    "x": 1300,
+    "y": 880
+   },
+   "params": {}
+  },
+  {
+   "id": "bx_end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 1560,
+    "y": 880
+   },
+   "params": {
+    "winner": "t"
+   }
+  },
+  {
+   "id": "re",
+   "type": "event.round_ended",
+   "pos": {
+    "x": 0,
+    "y": 1100
+   },
+   "params": {}
+  },
+  {
+   "id": "re_cnt",
+   "type": "game.count_alive",
+   "pos": {
+    "x": 260,
+    "y": 1100
+   },
+   "params": {}
+  },
+  {
+   "id": "re_cmp",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 1100
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   }
+  },
+  {
+   "id": "re_flag",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 1100
+   },
+   "params": {
+    "var": "flag"
+   }
+  },
+  {
+   "id": "re_not",
+   "type": "logic.not",
+   "pos": {
+    "x": 780,
+    "y": 1100
+   },
+   "params": {}
+  },
+  {
+   "id": "re_and",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1040,
+    "y": 1100
+   },
+   "params": {
+    "op": "and"
+   }
+  },
+  {
+   "id": "re_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 1100
+   },
+   "params": {}
+  },
+  {
+   "id": "re_set",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 1100
+   },
+   "params": {
+    "var": "flag",
+    "value": true
+   }
+  },
+  {
+   "id": "re_stop",
+   "type": "timer.stop_all",
+   "pos": {
+    "x": 1560,
+    "y": 1100
+   },
+   "params": {}
+  },
+  {
+   "id": "pu",
+   "type": "event.player_used",
+   "pos": {
+    "x": 0,
+    "y": 1320
+   },
+   "params": {
+    "name": "door_button"
+   }
+  },
+  {
+   "id": "pu_door",
+   "type": "comp.door",
+   "pos": {
+    "x": 260,
+    "y": 1320
+   },
+   "params": {
+    "do": "open"
+   }
+  },
+  {
+   "id": "pu_find",
+   "type": "comp.find",
+   "pos": {
+    "x": 260,
+    "y": 1320
+   },
+   "params": {
+    "name": "trap1"
+   }
+  },
+  {
+   "id": "pu_trap",
+   "type": "comp.trap_fire",
+   "pos": {
+    "x": 520,
+    "y": 1320
+   },
+   "params": {}
+  },
+  {
+   "id": "pt",
+   "type": "event.player_touched",
+   "pos": {
+    "x": 1040,
+    "y": 1320
+   },
+   "params": {
+    "name": ""
+   }
+  },
+  {
+   "id": "pt_crate",
+   "type": "comp.crate_open",
+   "pos": {
+    "x": 1300,
+    "y": 1320
+   },
+   "params": {}
+  },
+  {
+   "id": "cc",
+   "type": "comp.on_capture",
+   "pos": {
+    "x": 0,
+    "y": 1540
+   },
+   "params": {}
+  },
+  {
+   "id": "cc_lock",
+   "type": "comp.capture_lock",
+   "pos": {
+    "x": 260,
+    "y": 1540
+   },
+   "params": {
+    "secs": 20
+   }
+  },
+  {
+   "id": "cc_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 520,
+    "y": 1540
+   },
+   "params": {
+    "text": "Taken by",
+    "slot": "top"
+   }
+  },
+  {
+   "id": "cl",
+   "type": "comp.on_capture_lost",
+   "pos": {
+    "x": 1040,
+    "y": 1540
+   },
+   "params": {}
+  },
+  {
+   "id": "cl_find",
+   "type": "comp.find",
+   "pos": {
+    "x": 1300,
+    "y": 1540
+   },
+   "params": {
+    "name": "ex1"
+   }
+  },
+  {
+   "id": "cl_ex",
+   "type": "comp.extract_open",
+   "pos": {
+    "x": 1300,
+    "y": 1540
+   },
+   "params": {
+    "open": true
+   }
+  },
+  {
+   "id": "zs",
+   "type": "comp.on_zone_stage",
+   "pos": {
+    "x": 0,
+    "y": 1760
+   },
+   "params": {}
+  },
+  {
+   "id": "zs_r",
+   "type": "math.op",
+   "pos": {
+    "x": 260,
+    "y": 1760
+   },
+   "params": {
+    "op": "mul",
+    "b": 100
+   }
+  },
+  {
+   "id": "zs_shrink",
+   "type": "comp.zone_shrink",
+   "pos": {
+    "x": 520,
+    "y": 1760
+   },
+   "params": {
+    "at": "mid",
+    "secs": 20
+   }
+  },
+  {
+   "id": "zt",
+   "type": "comp.on_zone_tick",
+   "pos": {
+    "x": 1040,
+    "y": 1760
+   },
+   "params": {}
+  },
+  {
+   "id": "zt_set",
+   "type": "comp.zone_set",
+   "pos": {
+    "x": 1300,
+    "y": 1760
+   },
+   "params": {
+    "at": "mid",
+    "radius": 900
+   }
+  },
+  {
+   "id": "zt_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1560,
+    "y": 1760
+   },
+   "params": {
+    "text": "Ouch",
+    "slot": "center"
+   }
+  },
+  {
+   "id": "ex",
+   "type": "comp.on_extract",
+   "pos": {
+    "x": 0,
+    "y": 1980
+   },
+   "params": {}
+  },
+  {
+   "id": "ex_add",
+   "type": "var.add",
+   "pos": {
+    "x": 260,
+    "y": 1980
+   },
+   "params": {
+    "var": "kills",
+    "amount": 5
+   }
+  },
+  {
+   "id": "ws",
+   "type": "comp.on_wave_start",
+   "pos": {
+    "x": 780,
+    "y": 1980
+   },
+   "params": {}
+  },
+  {
+   "id": "ws_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1040,
+    "y": 1980
+   },
+   "params": {
+    "text": "Wave",
+    "slot": "top"
+   }
+  },
+  {
+   "id": "wp",
+   "type": "comp.on_wave_spawn",
+   "pos": {
+    "x": 1300,
+    "y": 1980
+   },
+   "params": {}
+  },
+  {
+   "id": "wp_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1560,
+    "y": 1980
+   },
+   "params": {
+    "text": "In:",
+    "slot": "right"
+   }
+  },
+  {
+   "id": "wc",
+   "type": "comp.on_wave_cleared",
+   "pos": {
+    "x": 0,
+    "y": 2200
+   },
+   "params": {}
+  },
+  {
+   "id": "wc_next",
+   "type": "math.op",
+   "pos": {
+    "x": 260,
+    "y": 2200
+   },
+   "params": {
+    "op": "add",
+    "b": 1
+   }
+  },
+  {
+   "id": "wc_start",
+   "type": "comp.wave_start",
+   "pos": {
+    "x": 520,
+    "y": 2200
+   },
+   "params": {}
+  },
+  {
+   "id": "lo",
+   "type": "comp.on_loot",
+   "pos": {
+    "x": 1040,
+    "y": 2200
+   },
+   "params": {}
+  },
+  {
+   "id": "lo_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1300,
+    "y": 2200
+   },
+   "params": {
+    "text": "Looted",
+    "slot": "left"
+   }
+  },
+  {
+   "id": "ck",
+   "type": "comp.on_checkpoint",
+   "pos": {
+    "x": 0,
+    "y": 2420
+   },
+   "params": {}
+  },
+  {
+   "id": "ck_set",
+   "type": "var.set",
+   "pos": {
+    "x": 260,
+    "y": 2420
+   },
+   "params": {
+    "var": "round"
+   }
+  },
+  {
+   "id": "bb",
+   "type": "comp.on_barricade_broken",
+   "pos": {
+    "x": 780,
+    "y": 2420
+   },
+   "params": {}
+  },
+  {
+   "id": "bb_msg",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 1040,
+    "y": 2420
+   },
+   "params": {
+    "text": "The barricade is down!"
+   }
+  },
+  {
+   "id": "me",
+   "type": "comp.on_meeting_end",
+   "pos": {
+    "x": 1300,
+    "y": 2420
+   },
+   "params": {}
+  },
+  {
+   "id": "me_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1560,
+    "y": 2420
+   },
+   "params": {
+    "text": "Out:",
+    "slot": "center"
+   }
+  },
+  {
+   "id": "ck2",
+   "type": "creature.on_killed",
+   "pos": {
+    "x": 0,
+    "y": 2640
+   },
+   "params": {}
+  },
+  {
+   "id": "ck2_set",
+   "type": "var.set",
+   "pos": {
+    "x": 260,
+    "y": 2640
+   },
+   "params": {
+    "var": "last"
+   }
+  },
+  {
+   "id": "ck2_make",
+   "type": "comp.create",
+   "pos": {
+    "x": 520,
+    "y": 2640
+   },
+   "params": {
+    "kind": "ls_loot_container",
+    "at": "crate_spot",
+    "keys": "table=rifles radius=40"
+   }
+  },
+  {
+   "id": "ck2_spawn",
+   "type": "creature.spawn",
+   "pos": {
+    "x": 780,
+    "y": 2640
+   },
+   "params": {
+    "kind": "zombie",
+    "at": "spot1"
+   }
+  },
+  {
+   "id": "ck2_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1040,
+    "y": 2640
+   },
+   "params": {
+    "text": "New one:",
+    "slot": "right"
+   }
+  },
+  {
+   "id": "ck2_last",
+   "type": "var.get",
+   "pos": {
+    "x": 1040,
+    "y": 2640
+   },
+   "params": {
+    "var": "last"
+   }
+  },
+  {
+   "id": "ck2_hud2",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1300,
+    "y": 2640
+   },
+   "params": {
+    "text": "Killed:",
+    "slot": "left"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "rs_get",
+    "pin": "out"
+   },
+   "to": {
+    "node": "rs_add1",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "rs_add1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "rs_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "rs_alive",
+    "pin": "out"
+   },
+   "to": {
+    "node": "rs_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "rs_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_cd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "rs_cd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_rep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "rs_rep",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_delay",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "rs_cd",
+    "pin": "done"
+   },
+   "to": {
+    "node": "rs_msg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "rs_rep",
+    "pin": "tick"
+   },
+   "to": {
+    "node": "rs_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "rs_delay",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_wave",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "rs_wave",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_wstop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "rs_wstop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_reset",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "pk",
+    "pin": "headshot"
+   },
+   "to": {
+    "node": "pk_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pk_add",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pk_add2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "pk_rand",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_add2",
+    "pin": "amount"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pk_team",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pk_give",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pk_hp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "pk_hp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_hp10",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pk_seth",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "pk_hp10",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_seth",
+    "pin": "amount"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "pk_name",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pk_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "pk_name",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_re",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "pk_re",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "pk_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "pk_add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "pk_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "pk_add2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "pk_add",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_team",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "pk_team",
+    "pin": "true"
+   },
+   "to": {
+    "node": "pk_give",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "pk_give",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_seth",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "pk_team",
+    "pin": "false"
+   },
+   "to": {
+    "node": "pk_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ps_strip",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ps_arm",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ps_spd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ps_team",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ps_tp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ps_set",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "ps",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ps_strip",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "ps_strip",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ps_arm",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "ps_arm",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ps_spd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "ps_spd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ps_team",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "ps_team",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ps_tp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "ps_tp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ps_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "pj",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pj_bot",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "pj",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pj_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "pj_bot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pj_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "pj",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pj_alive",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "pj_alive",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pj_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "pj",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pj_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "pj_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pj_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "pl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pl_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "bp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "bp_team",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "bp_team",
+    "pin": "out"
+   },
+   "to": {
+    "node": "bp_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "bp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "bp_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "bd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "bd_end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "bx",
+    "pin": "then"
+   },
+   "to": {
+    "node": "bx_end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "re",
+    "pin": "winner"
+   },
+   "to": {
+    "node": "re_cnt",
+    "pin": "team"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "re_cnt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "re_cmp",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "re_flag",
+    "pin": "out"
+   },
+   "to": {
+    "node": "re_not",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "re_cmp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "re_and",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "re_not",
+    "pin": "out"
+   },
+   "to": {
+    "node": "re_and",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "re_and",
+    "pin": "out"
+   },
+   "to": {
+    "node": "re_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "re",
+    "pin": "then"
+   },
+   "to": {
+    "node": "re_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "re_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "re_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "re_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "re_stop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "pu",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "pu_door",
+    "pin": "door"
+   }
+  },
+  {
+   "id": "w69",
+   "from": {
+    "node": "pu_find",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pu_trap",
+    "pin": "trap"
+   }
+  },
+  {
+   "id": "w70",
+   "from": {
+    "node": "pu",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pu_door",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w71",
+   "from": {
+    "node": "pu_door",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pu_trap",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w72",
+   "from": {
+    "node": "pt",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "pt_crate",
+    "pin": "container"
+   }
+  },
+  {
+   "id": "w73",
+   "from": {
+    "node": "pt",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pt_crate",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w74",
+   "from": {
+    "node": "pt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pt_crate",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w75",
+   "from": {
+    "node": "cc",
+    "pin": "point"
+   },
+   "to": {
+    "node": "cc_lock",
+    "pin": "point"
+   }
+  },
+  {
+   "id": "w76",
+   "from": {
+    "node": "cc",
+    "pin": "team"
+   },
+   "to": {
+    "node": "cc_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w77",
+   "from": {
+    "node": "cc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cc_lock",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w78",
+   "from": {
+    "node": "cc_lock",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cc_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w79",
+   "from": {
+    "node": "cl_find",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cl_ex",
+    "pin": "point"
+   }
+  },
+  {
+   "id": "w80",
+   "from": {
+    "node": "cl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cl_ex",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w81",
+   "from": {
+    "node": "zs",
+    "pin": "stage"
+   },
+   "to": {
+    "node": "zs_r",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w82",
+   "from": {
+    "node": "zs",
+    "pin": "zone"
+   },
+   "to": {
+    "node": "zs_shrink",
+    "pin": "zone"
+   }
+  },
+  {
+   "id": "w83",
+   "from": {
+    "node": "zs_r",
+    "pin": "out"
+   },
+   "to": {
+    "node": "zs_shrink",
+    "pin": "radius"
+   }
+  },
+  {
+   "id": "w84",
+   "from": {
+    "node": "zs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zs_shrink",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w85",
+   "from": {
+    "node": "zt",
+    "pin": "zone"
+   },
+   "to": {
+    "node": "zt_set",
+    "pin": "zone"
+   }
+  },
+  {
+   "id": "w86",
+   "from": {
+    "node": "zt",
+    "pin": "player"
+   },
+   "to": {
+    "node": "zt_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w87",
+   "from": {
+    "node": "zt",
+    "pin": "damage"
+   },
+   "to": {
+    "node": "zt_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w88",
+   "from": {
+    "node": "zt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zt_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w89",
+   "from": {
+    "node": "zt_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zt_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w90",
+   "from": {
+    "node": "ex",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ex_add",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w91",
+   "from": {
+    "node": "ex",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ex_add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w92",
+   "from": {
+    "node": "ws",
+    "pin": "wave"
+   },
+   "to": {
+    "node": "ws_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w93",
+   "from": {
+    "node": "ws",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ws_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w94",
+   "from": {
+    "node": "wp",
+    "pin": "spawned"
+   },
+   "to": {
+    "node": "wp_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w95",
+   "from": {
+    "node": "wp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wp_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w96",
+   "from": {
+    "node": "wc",
+    "pin": "wave"
+   },
+   "to": {
+    "node": "wc_next",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w97",
+   "from": {
+    "node": "wc_next",
+    "pin": "out"
+   },
+   "to": {
+    "node": "wc_start",
+    "pin": "wave"
+   }
+  },
+  {
+   "id": "w98",
+   "from": {
+    "node": "wc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wc_start",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w99",
+   "from": {
+    "node": "lo",
+    "pin": "player"
+   },
+   "to": {
+    "node": "lo_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w100",
+   "from": {
+    "node": "lo",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lo_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w101",
+   "from": {
+    "node": "ck",
+    "pin": "order"
+   },
+   "to": {
+    "node": "ck_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w102",
+   "from": {
+    "node": "ck",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w103",
+   "from": {
+    "node": "bb",
+    "pin": "then"
+   },
+   "to": {
+    "node": "bb_msg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w104",
+   "from": {
+    "node": "me",
+    "pin": "ejected"
+   },
+   "to": {
+    "node": "me_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w105",
+   "from": {
+    "node": "me",
+    "pin": "then"
+   },
+   "to": {
+    "node": "me_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w106",
+   "from": {
+    "node": "ck2",
+    "pin": "kind"
+   },
+   "to": {
+    "node": "ck2_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w107",
+   "from": {
+    "node": "ck2_spawn",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ck2_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w108",
+   "from": {
+    "node": "ck2_last",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ck2_hud2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w109",
+   "from": {
+    "node": "ck2",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ck2_hud2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w110",
+   "from": {
+    "node": "ck2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck2_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w111",
+   "from": {
+    "node": "ck2_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck2_make",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w112",
+   "from": {
+    "node": "ck2_make",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck2_spawn",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w113",
+   "from": {
+    "node": "ck2_spawn",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck2_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w114",
+   "from": {
+    "node": "ck2_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck2_hud2",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": []
+}

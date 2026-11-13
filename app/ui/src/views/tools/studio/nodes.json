@@ -1,114 +1,2602 @@
 {
-  "version": 1,
-  "pinTypes": {
-    "exec": { "label": "Flow", "color": "#f2f2f2" },
-    "player": { "label": "Player", "color": "#5ab0ff" },
-    "team": { "label": "Team", "color": "#ffb347" },
-    "any": { "label": "Anything", "color": "#9a9a9a" }
+ "version": 2,
+ "pinTypes": {
+  "exec": {
+   "label": "Flow",
+   "color": "#f2f2f2"
   },
-  "categories": ["Events", "Conditions", "Player", "Scoring", "Messages", "Flow"],
-  "nodes": [
+  "player": {
+   "label": "Player",
+   "color": "#5ab0ff"
+  },
+  "entity": {
+   "label": "Entity",
+   "color": "#4dd0c8"
+  },
+  "team": {
+   "label": "Team",
+   "color": "#ffb347"
+  },
+  "number": {
+   "label": "Number",
+   "color": "#9be36a"
+  },
+  "bool": {
+   "label": "Yes/No",
+   "color": "#ff6b8a"
+  },
+  "text": {
+   "label": "Text",
+   "color": "#e0a3ff"
+  },
+  "any": {
+   "label": "Anything",
+   "color": "#9a9a9a"
+  },
+  "var": {
+   "label": "Variable",
+   "color": "#cccccc"
+  }
+ },
+ "categories": [
+  "Events",
+  "Conditions",
+  "Numbers",
+  "Variables",
+  "Timers",
+  "Players",
+  "Messages",
+  "Scoring",
+  "Components",
+  "Creatures",
+  "Flow"
+ ],
+ "nodes": [
+  {
+   "type": "event.round_started",
+   "title": "Round Started",
+   "category": "Events",
+   "help": "Runs when a round begins: freeze time is over and everyone can move.",
+   "inputs": [],
+   "outputs": [
     {
-      "type": "event.round_started",
-      "title": "Round Started",
-      "category": "Events",
-      "help": "Runs when a round begins: freeze time is over and everyone can move.",
-      "event": true,
-      "inputs": [],
-      "outputs": [{ "id": "then", "type": "exec", "label": "" }],
-      "params": []
-    },
-    {
-      "type": "event.player_killed",
-      "title": "Player Killed",
-      "category": "Events",
-      "help": "Runs when a player dies. Attacker is nobody when the world killed them (a fall, the bomb).",
-      "event": true,
-      "inputs": [],
-      "outputs": [
-        { "id": "then", "type": "exec", "label": "" },
-        { "id": "victim", "type": "player", "label": "Victim" },
-        { "id": "attacker", "type": "player", "label": "Attacker" }
-      ],
-      "params": []
-    },
-    {
-      "type": "cond.is_team",
-      "title": "Is Team",
-      "category": "Conditions",
-      "help": "Checks which team a player is on. Nobody (an empty attacker) is on no team, so that goes to False.",
-      "inputs": [
-        { "id": "exec", "type": "exec", "label": "" },
-        { "id": "player", "type": "player", "label": "Player", "required": true },
-        { "id": "team", "type": "team", "label": "Team", "param": "team" }
-      ],
-      "outputs": [
-        { "id": "true", "type": "exec", "label": "True" },
-        { "id": "false", "type": "exec", "label": "False" }
-      ],
-      "params": [
-        { "id": "team", "label": "Team", "kind": "choice", "default": "t", "choices": [["t", "Terrorists"], ["ct", "Counter-Terrorists"]] }
-      ]
-    },
-    {
-      "type": "player.give_weapon",
-      "title": "Give Weapon",
-      "category": "Player",
-      "help": "Gives a living player a weapon and spare bullets. Does nothing for a dead player, or one who already has that weapon (the debugger marks that).",
-      "inputs": [
-        { "id": "exec", "type": "exec", "label": "" },
-        { "id": "player", "type": "player", "label": "Player", "required": true }
-      ],
-      "outputs": [{ "id": "then", "type": "exec", "label": "" }],
-      "params": [
-        {
-          "id": "weapon",
-          "label": "Weapon",
-          "kind": "choice",
-          "default": "ak47",
-          "choices": [
-            ["ak47", "AK-47"], ["m4a1", "M4A1"], ["awp", "AWP"], ["scout", "Scout"], ["famas", "FAMAS"], ["galil", "Galil"],
-            ["aug", "AUG"], ["sg552", "SG 552"], ["mp5navy", "MP5"], ["p90", "P90"], ["ump45", "UMP 45"], ["mac10", "MAC-10"],
-            ["tmp", "TMP"], ["m3", "M3 shotgun"], ["xm1014", "XM1014 shotgun"], ["m249", "M249"], ["deagle", "Desert Eagle"],
-            ["usp", "USP"], ["glock18", "Glock"], ["p228", "P228"], ["fiveseven", "Five-SeveN"], ["elite", "Dual Elites"],
-            ["hegrenade", "HE grenade"], ["flashbang", "Flashbang"], ["smokegrenade", "Smoke grenade"]
-          ]
-        },
-        { "id": "ammo", "label": "Spare bullets", "kind": "number", "default": 90, "min": 0, "max": 250 }
-      ]
-    },
-    {
-      "type": "score.end_round",
-      "title": "End Round",
-      "category": "Scoring",
-      "help": "Ends the round now with a winner, or as a draw. The next round starts after the usual short wait.",
-      "inputs": [{ "id": "exec", "type": "exec", "label": "" }],
-      "outputs": [],
-      "params": [
-        { "id": "winner", "label": "Winner", "kind": "choice", "default": "draw", "choices": [["t", "Terrorists"], ["ct", "Counter-Terrorists"], ["draw", "Draw"]] }
-      ]
-    },
-    {
-      "type": "msg.broadcast",
-      "title": "Show Message",
-      "category": "Messages",
-      "help": "Shows a big message in the middle of everyone's screen.",
-      "inputs": [{ "id": "exec", "type": "exec", "label": "" }],
-      "outputs": [{ "id": "then", "type": "exec", "label": "" }],
-      "params": [
-        { "id": "text", "label": "Text", "kind": "text", "default": "Hello!", "max": 100 },
-        { "id": "seconds", "label": "Seconds", "kind": "number", "default": 3, "min": 1, "max": 20 }
-      ]
-    },
-    {
-      "type": "flow.reroute",
-      "title": "Reroute",
-      "category": "Flow",
-      "help": "A bend in a wire, to keep the graph tidy. Passes on whatever comes in.",
-      "reroute": true,
-      "inputs": [{ "id": "in", "type": "any", "label": "" }],
-      "outputs": [{ "id": "out", "type": "any", "label": "" }],
-      "params": []
+     "id": "then",
+     "type": "exec",
+     "label": ""
     }
-  ]
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.round_ended",
+   "title": "Round Ended",
+   "category": "Events",
+   "help": "Runs when a round ends. Winner is no team for a draw.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "winner",
+     "type": "team",
+     "label": "Winner"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.player_killed",
+   "title": "Player Killed",
+   "category": "Events",
+   "help": "Runs when a player dies. Attacker is nobody when the world killed them (a fall, the bomb).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "victim",
+     "type": "player",
+     "label": "Victim"
+    },
+    {
+     "id": "attacker",
+     "type": "player",
+     "label": "Attacker"
+    },
+    {
+     "id": "headshot",
+     "type": "bool",
+     "label": "Headshot"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.player_spawned",
+   "title": "Player Spawned",
+   "category": "Events",
+   "help": "Runs when a player comes alive (each round, or a respawn).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.player_joined",
+   "title": "Player Joined",
+   "category": "Events",
+   "help": "Runs when a player (or bot) has joined the server.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.player_left",
+   "title": "Player Left",
+   "category": "Events",
+   "help": "Runs when a player leaves the server.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.bomb_planted",
+   "title": "Bomb Planted",
+   "category": "Events",
+   "help": "Runs when the bomb is planted.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Planter"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.bomb_defused",
+   "title": "Bomb Defused",
+   "category": "Events",
+   "help": "Runs when the bomb is defused.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Defuser"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.bomb_exploded",
+   "title": "Bomb Exploded",
+   "category": "Events",
+   "help": "Runs when the bomb goes off.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.player_used",
+   "title": "Player Used",
+   "category": "Events",
+   "help": "Runs when a player presses a button (func_button) with this name. Leave the name empty for any button.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "entity",
+     "type": "entity",
+     "label": "Button"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Button name",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "event": true
+  },
+  {
+   "type": "event.player_touched",
+   "title": "Player Touched",
+   "category": "Events",
+   "help": "Runs when a player walks into a trigger (trigger_multiple) with this name, at most once a second each. Empty name: any.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "entity",
+     "type": "entity",
+     "label": "Trigger"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Trigger name",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "event": true
+  },
+  {
+   "type": "comp.on_capture",
+   "title": "Point Captured",
+   "category": "Components",
+   "help": "A capture point was taken.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "point",
+     "type": "entity",
+     "label": "Point"
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team"
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Capturer"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_capture_lost",
+   "title": "Point Lost",
+   "category": "Components",
+   "help": "A team lost a capture point.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "point",
+     "type": "entity",
+     "label": "Point"
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_zone_stage",
+   "title": "Zone Stage",
+   "category": "Components",
+   "help": "A shrinking zone started a new stage.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "zone",
+     "type": "entity",
+     "label": "Zone"
+    },
+    {
+     "id": "stage",
+     "type": "number",
+     "label": "Stage"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_zone_tick",
+   "title": "Zone Hurt Player",
+   "category": "Components",
+   "help": "A player outside the zone took damage.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "zone",
+     "type": "entity",
+     "label": "Zone"
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "damage",
+     "type": "number",
+     "label": "Damage"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_extract",
+   "title": "Player Extracted",
+   "category": "Components",
+   "help": "A player got out at an extraction point.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "point",
+     "type": "entity",
+     "label": "Point"
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_wave_start",
+   "title": "Wave Started",
+   "category": "Components",
+   "help": "A wave of enemies started.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "wave",
+     "type": "number",
+     "label": "Wave"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_wave_spawn",
+   "title": "Wave Spawned One",
+   "category": "Components",
+   "help": "One enemy of a wave came in.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "spawned",
+     "type": "entity",
+     "label": "Spawned"
+    },
+    {
+     "id": "wave",
+     "type": "number",
+     "label": "Wave"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_wave_cleared",
+   "title": "Wave Cleared",
+   "category": "Components",
+   "help": "Every enemy of a wave is dead.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "wave",
+     "type": "number",
+     "label": "Wave"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_loot",
+   "title": "Crate Opened",
+   "category": "Components",
+   "help": "A player opened a loot container.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "container",
+     "type": "entity",
+     "label": "Container"
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_checkpoint",
+   "title": "Checkpoint Reached",
+   "category": "Components",
+   "help": "A player reached a checkpoint.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "point",
+     "type": "entity",
+     "label": "Checkpoint"
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "order",
+     "type": "number",
+     "label": "Order"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_barricade_broken",
+   "title": "Barricade Broken",
+   "category": "Components",
+   "help": "A barricade was broken.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "barricade",
+     "type": "entity",
+     "label": "Barricade"
+    },
+    {
+     "id": "attacker",
+     "type": "player",
+     "label": "Attacker"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_meeting_end",
+   "title": "Meeting Ended",
+   "category": "Components",
+   "help": "A meeting ended; Ejected is nobody when no one was voted out.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "meeting",
+     "type": "entity",
+     "label": "Meeting"
+    },
+    {
+     "id": "ejected",
+     "type": "player",
+     "label": "Ejected"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "creature.on_killed",
+   "title": "Creature Killed",
+   "category": "Creatures",
+   "help": "A creature died. Needs the Loner-Strike bot brain with creatures.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature"
+    },
+    {
+     "id": "killer",
+     "type": "player",
+     "label": "Killer"
+    },
+    {
+     "id": "kind",
+     "type": "text",
+     "label": "Type"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "creatures"
+  },
+  {
+   "type": "cond.is_team",
+   "title": "Is Team",
+   "category": "Conditions",
+   "help": "Checks which team a player is on. Nobody (an empty attacker) is on no team, so that goes to False.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team",
+     "param": "team"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "true",
+     "type": "exec",
+     "label": "True"
+    },
+    {
+     "id": "false",
+     "type": "exec",
+     "label": "False"
+    }
+   ],
+   "params": [
+    {
+     "id": "team",
+     "label": "Team",
+     "kind": "choice",
+     "default": "t",
+     "choices": [
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "flow.branch",
+   "title": "Branch",
+   "category": "Conditions",
+   "help": "Goes to True or False.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "cond",
+     "type": "bool",
+     "label": "Condition",
+     "param": "cond"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "true",
+     "type": "exec",
+     "label": "True"
+    },
+    {
+     "id": "false",
+     "type": "exec",
+     "label": "False"
+    }
+   ],
+   "params": [
+    {
+     "id": "cond",
+     "label": "Condition",
+     "kind": "bool",
+     "default": true
+    }
+   ]
+  },
+  {
+   "type": "math.compare",
+   "title": "Compare",
+   "category": "Conditions",
+   "help": "Compares two numbers.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "A",
+     "param": "a"
+    },
+    {
+     "id": "b",
+     "type": "number",
+     "label": "B",
+     "param": "b"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "A",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "op",
+     "label": "Is",
+     "kind": "choice",
+     "default": "gt",
+     "choices": [
+      [
+       "gt",
+       "greater than"
+      ],
+      [
+       "ge",
+       "at least"
+      ],
+      [
+       "lt",
+       "less than"
+      ],
+      [
+       "le",
+       "at most"
+      ],
+      [
+       "eq",
+       "equal to"
+      ],
+      [
+       "ne",
+       "not equal to"
+      ]
+     ]
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "logic.and_or",
+   "title": "And / Or",
+   "category": "Conditions",
+   "help": "Both (And), or either one (Or).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "bool",
+     "label": "A",
+     "param": "a"
+    },
+    {
+     "id": "b",
+     "type": "bool",
+     "label": "B",
+     "param": "b"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "A",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "op",
+     "label": "Needs",
+     "kind": "choice",
+     "default": "and",
+     "choices": [
+      [
+       "and",
+       "both (And)"
+      ],
+      [
+       "or",
+       "either (Or)"
+      ]
+     ]
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "logic.not",
+   "title": "Not",
+   "category": "Conditions",
+   "help": "True becomes False and False becomes True.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "bool",
+     "label": "In",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Result"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "math.op",
+   "title": "Math",
+   "category": "Numbers",
+   "help": "Adds, takes away, multiplies, divides, or picks the smaller or bigger number.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "A",
+     "param": "a"
+    },
+    {
+     "id": "b",
+     "type": "number",
+     "label": "B",
+     "param": "b"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "A",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "op",
+     "label": "Do",
+     "kind": "choice",
+     "default": "add",
+     "choices": [
+      [
+       "add",
+       "A + B"
+      ],
+      [
+       "sub",
+       "A - B"
+      ],
+      [
+       "mul",
+       "A × B"
+      ],
+      [
+       "div",
+       "A ÷ B"
+      ],
+      [
+       "min",
+       "smaller"
+      ],
+      [
+       "max",
+       "bigger"
+      ]
+     ]
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "kind": "number",
+     "default": 1,
+     "min": -100000,
+     "max": 100000
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "math.random",
+   "title": "Random Number",
+   "category": "Numbers",
+   "help": "A random number from Min to Max (whole numbers unless Fractions is on).",
+   "inputs": [
+    {
+     "id": "min",
+     "type": "number",
+     "label": "Min",
+     "param": "min"
+    },
+    {
+     "id": "max",
+     "type": "number",
+     "label": "Max",
+     "param": "max"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Number"
+    }
+   ],
+   "params": [
+    {
+     "id": "min",
+     "label": "Min",
+     "kind": "number",
+     "default": 1,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "max",
+     "label": "Max",
+     "kind": "number",
+     "default": 10,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "frac",
+     "label": "Fractions",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "player.get_health",
+   "title": "Health Of",
+   "category": "Players",
+   "help": "A player's health (0 if dead or nobody).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Health"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.get_team",
+   "title": "Team Of",
+   "category": "Players",
+   "help": "Which team a player is on.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "team",
+     "label": "Team"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.is_alive",
+   "title": "Is Alive",
+   "category": "Players",
+   "help": "Is the player alive?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Alive"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.is_bot",
+   "title": "Is Bot",
+   "category": "Players",
+   "help": "Is the player a bot?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Bot"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.get_name",
+   "title": "Name Of",
+   "category": "Players",
+   "help": "A player's name, as text.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Name"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "game.count_alive",
+   "title": "Count Alive",
+   "category": "Players",
+   "help": "How many players of a team are alive (or everyone).",
+   "inputs": [
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team",
+     "param": "team"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Alive"
+    }
+   ],
+   "params": [
+    {
+     "id": "team",
+     "label": "Team",
+     "kind": "choice",
+     "default": "none",
+     "choices": [
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "none",
+       "Everyone"
+      ]
+     ]
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "var.get",
+   "title": "Get Variable",
+   "category": "Variables",
+   "help": "Reads one of this mode's variables (a per-player one needs a Player).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "var",
+     "label": "Value"
+    }
+   ],
+   "params": [
+    {
+     "id": "var",
+     "label": "Variable",
+     "kind": "var",
+     "default": ""
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "var.set",
+   "title": "Set Variable",
+   "category": "Variables",
+   "help": "Sets one of this mode's variables.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "value",
+     "type": "var",
+     "label": "Value",
+     "param": "value"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "var",
+     "label": "Variable",
+     "kind": "var",
+     "default": ""
+    },
+    {
+     "id": "value",
+     "label": "Value",
+     "kind": "varvalue",
+     "default": ""
+    }
+   ]
+  },
+  {
+   "type": "var.add",
+   "title": "Add To Variable",
+   "category": "Variables",
+   "help": "Adds to a number variable (a negative amount takes away).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "amount",
+     "type": "number",
+     "label": "Amount",
+     "param": "amount"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "var",
+     "label": "Variable",
+     "kind": "var",
+     "default": "",
+     "varType": "number"
+    },
+    {
+     "id": "amount",
+     "label": "Amount",
+     "kind": "number",
+     "default": 1,
+     "min": -100000,
+     "max": 100000
+    }
+   ]
+  },
+  {
+   "type": "timer.delay",
+   "title": "Delay",
+   "category": "Timers",
+   "help": "Waits, then carries on. Paused with the world while debugging.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 3,
+     "min": 0.1,
+     "max": 3600
+    }
+   ]
+  },
+  {
+   "type": "timer.repeat",
+   "title": "Repeat",
+   "category": "Timers",
+   "help": "Runs Each every few seconds, a number of times (0: until the round ends). Then runs at once.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "every",
+     "type": "number",
+     "label": "Every (s)",
+     "param": "every"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "tick",
+     "type": "exec",
+     "label": "Each"
+    }
+   ],
+   "params": [
+    {
+     "id": "every",
+     "label": "Every (seconds)",
+     "kind": "number",
+     "default": 5,
+     "min": 0.1,
+     "max": 3600
+    },
+    {
+     "id": "times",
+     "label": "Times (0 = until the round ends)",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 10000
+    }
+   ]
+  },
+  {
+   "type": "timer.countdown",
+   "title": "Countdown",
+   "category": "Timers",
+   "help": "Counts down on everyone's screen, then runs Done.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "done",
+     "type": "exec",
+     "label": "Done"
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 10,
+     "min": 1,
+     "max": 600
+    },
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Starting in",
+     "max": 60
+    },
+    {
+     "id": "slot",
+     "label": "Where",
+     "kind": "choice",
+     "default": "top",
+     "choices": [
+      [
+       "top",
+       "Top middle"
+      ],
+      [
+       "left",
+       "Left"
+      ],
+      [
+       "right",
+       "Right"
+      ],
+      [
+       "center",
+       "Middle"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "timer.stop_all",
+   "title": "Stop Timers",
+   "category": "Timers",
+   "help": "Stops every Delay, Repeat and Countdown of this mode.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "player.give_weapon",
+   "title": "Give Weapon",
+   "category": "Players",
+   "help": "Gives a living player a weapon and spare bullets. Does nothing for a dead player, or one who already has that weapon (the debugger marks that).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "weapon",
+     "label": "Weapon",
+     "kind": "choice",
+     "default": "ak47",
+     "choices": [
+      [
+       "ak47",
+       "AK-47"
+      ],
+      [
+       "m4a1",
+       "M4A1"
+      ],
+      [
+       "awp",
+       "AWP"
+      ],
+      [
+       "scout",
+       "Scout"
+      ],
+      [
+       "famas",
+       "FAMAS"
+      ],
+      [
+       "galil",
+       "Galil"
+      ],
+      [
+       "aug",
+       "AUG"
+      ],
+      [
+       "sg552",
+       "SG 552"
+      ],
+      [
+       "mp5navy",
+       "MP5"
+      ],
+      [
+       "p90",
+       "P90"
+      ],
+      [
+       "ump45",
+       "UMP 45"
+      ],
+      [
+       "mac10",
+       "MAC-10"
+      ],
+      [
+       "tmp",
+       "TMP"
+      ],
+      [
+       "m3",
+       "M3 shotgun"
+      ],
+      [
+       "xm1014",
+       "XM1014 shotgun"
+      ],
+      [
+       "m249",
+       "M249"
+      ],
+      [
+       "deagle",
+       "Desert Eagle"
+      ],
+      [
+       "usp",
+       "USP"
+      ],
+      [
+       "glock18",
+       "Glock"
+      ],
+      [
+       "p228",
+       "P228"
+      ],
+      [
+       "fiveseven",
+       "Five-SeveN"
+      ],
+      [
+       "elite",
+       "Dual Elites"
+      ],
+      [
+       "hegrenade",
+       "HE grenade"
+      ],
+      [
+       "flashbang",
+       "Flashbang"
+      ],
+      [
+       "smokegrenade",
+       "Smoke grenade"
+      ]
+     ]
+    },
+    {
+     "id": "ammo",
+     "label": "Spare bullets",
+     "kind": "number",
+     "default": 90,
+     "min": 0,
+     "max": 250
+    }
+   ]
+  },
+  {
+   "type": "player.strip",
+   "title": "Strip Weapons",
+   "category": "Players",
+   "help": "Takes a player's weapons away (keeping the knife if you like).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "knife",
+     "label": "Keep the knife",
+     "kind": "bool",
+     "default": true
+    }
+   ]
+  },
+  {
+   "type": "player.set_health",
+   "title": "Set Health",
+   "category": "Players",
+   "help": "Sets a living player's health.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "amount",
+     "type": "number",
+     "label": "Health",
+     "param": "amount"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "amount",
+     "label": "Health",
+     "kind": "number",
+     "default": 100,
+     "min": 1,
+     "max": 10000
+    }
+   ]
+  },
+  {
+   "type": "player.set_armor",
+   "title": "Set Armor",
+   "category": "Players",
+   "help": "Sets a living player's armor (with a helmet).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "amount",
+     "type": "number",
+     "label": "Armor",
+     "param": "amount"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "amount",
+     "label": "Armor",
+     "kind": "number",
+     "default": 100,
+     "min": 0,
+     "max": 1000
+    }
+   ]
+  },
+  {
+   "type": "player.set_team",
+   "title": "Set Team",
+   "category": "Players",
+   "help": "Moves a player to a team (it shows from their next spawn).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team",
+     "param": "team"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "team",
+     "label": "Team",
+     "kind": "choice",
+     "default": "ct",
+     "choices": [
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "player.set_speed",
+   "title": "Set Speed",
+   "category": "Players",
+   "help": "Sets how fast a player runs (250 is normal) until they switch weapons.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "speed",
+     "type": "number",
+     "label": "Speed",
+     "param": "speed"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "speed",
+     "label": "Speed",
+     "kind": "number",
+     "default": 320,
+     "min": 50,
+     "max": 2000
+    }
+   ]
+  },
+  {
+   "type": "player.teleport",
+   "title": "Teleport",
+   "category": "Players",
+   "help": "Moves a living player to the entity with this name (an info_target, say).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "To the entity named",
+     "kind": "name",
+     "default": "spot1"
+    }
+   ]
+  },
+  {
+   "type": "msg.broadcast",
+   "title": "Show Message",
+   "category": "Messages",
+   "help": "Shows a big message in the middle of everyone's screen.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Hello!",
+     "max": 100
+    },
+    {
+     "id": "seconds",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 3,
+     "min": 1,
+     "max": 20
+    }
+   ]
+  },
+  {
+   "type": "msg.hud",
+   "title": "Show HUD Text",
+   "category": "Messages",
+   "help": "Shows text in a HUD slot, to one player or everyone (no Player). A Value wired in goes after the text.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "value",
+     "type": "any",
+     "label": "Value",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Score:",
+     "max": 100
+    },
+    {
+     "id": "slot",
+     "label": "Where",
+     "kind": "choice",
+     "default": "left",
+     "choices": [
+      [
+       "top",
+       "Top middle"
+      ],
+      [
+       "left",
+       "Left"
+      ],
+      [
+       "right",
+       "Right"
+      ],
+      [
+       "center",
+       "Middle"
+      ]
+     ]
+    },
+    {
+     "id": "seconds",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 4,
+     "min": 0.5,
+     "max": 60
+    }
+   ]
+  },
+  {
+   "type": "score.end_round",
+   "title": "End Round",
+   "category": "Scoring",
+   "help": "Ends the round now with a winner, or as a draw. The next round starts after the usual short wait.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [],
+   "params": [
+    {
+     "id": "winner",
+     "label": "Winner",
+     "kind": "choice",
+     "default": "draw",
+     "choices": [
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "draw",
+       "Draw"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "comp.find",
+   "title": "Find Component",
+   "category": "Components",
+   "help": "The component (or any entity) with this name.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Entity"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Name",
+     "kind": "name",
+     "default": "A"
+    }
+   ],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.create",
+   "title": "Create Component",
+   "category": "Components",
+   "help": "Makes a component at the entity with this name, with keys like radius=160 capture_secs=8.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Component"
+    }
+   ],
+   "params": [
+    {
+     "id": "kind",
+     "label": "Component",
+     "kind": "choice",
+     "default": "ls_capture_point",
+     "choices": [
+      [
+       "ls_capture_point",
+       "Capture point"
+      ],
+      [
+       "ls_zone_shrinker",
+       "Shrinking zone"
+      ],
+      [
+       "ls_damage_zone",
+       "Damage zone"
+      ],
+      [
+       "ls_loot_container",
+       "Loot container"
+      ],
+      [
+       "ls_weapon_spawner",
+       "Weapon spawner"
+      ],
+      [
+       "ls_supply_drop",
+       "Supply drop"
+      ],
+      [
+       "ls_wave_spawner",
+       "Wave spawner"
+      ],
+      [
+       "ls_extraction",
+       "Extraction point"
+      ],
+      [
+       "ls_checkpoint",
+       "Checkpoint"
+      ],
+      [
+       "ls_trap",
+       "Trap"
+      ],
+      [
+       "ls_respawn_point",
+       "Respawn point"
+      ]
+     ]
+    },
+    {
+     "id": "at",
+     "label": "At the entity named",
+     "kind": "name",
+     "default": "spot1"
+    },
+    {
+     "id": "keys",
+     "label": "Keys",
+     "kind": "keys",
+     "default": "",
+     "max": 120
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "comp.zone_set",
+   "title": "Set Zone",
+   "category": "Components",
+   "help": "Moves a shrinking zone to the entity with this name, with this radius.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "zone",
+     "type": "entity",
+     "label": "Zone",
+     "required": true
+    },
+    {
+     "id": "radius",
+     "type": "number",
+     "label": "Radius",
+     "param": "radius"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "at",
+     "label": "Centre at the entity named",
+     "kind": "name",
+     "default": "spot1"
+    },
+    {
+     "id": "radius",
+     "label": "Radius",
+     "kind": "number",
+     "default": 1500,
+     "min": 50,
+     "max": 20000
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "comp.zone_shrink",
+   "title": "Shrink Zone",
+   "category": "Components",
+   "help": "Shrinks a zone to a new centre and radius over some seconds.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "zone",
+     "type": "entity",
+     "label": "Zone",
+     "required": true
+    },
+    {
+     "id": "radius",
+     "type": "number",
+     "label": "Radius",
+     "param": "radius"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "at",
+     "label": "New centre at the entity named",
+     "kind": "name",
+     "default": "spot1"
+    },
+    {
+     "id": "radius",
+     "label": "Radius",
+     "kind": "number",
+     "default": 600,
+     "min": 50,
+     "max": 20000
+    },
+    {
+     "id": "secs",
+     "label": "Over (seconds)",
+     "kind": "number",
+     "default": 30,
+     "min": 1,
+     "max": 600
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "comp.crate_open",
+   "title": "Open Crate",
+   "category": "Components",
+   "help": "Opens a loot container for a player.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "container",
+     "type": "entity",
+     "label": "Container",
+     "required": true
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "comp.wave_start",
+   "title": "Start Wave",
+   "category": "Components",
+   "help": "Starts a wave (0: the next one).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "wave",
+     "type": "number",
+     "label": "Wave",
+     "param": "wave"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "wave",
+     "label": "Wave",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 1000
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "comp.wave_stop",
+   "title": "Stop Waves",
+   "category": "Components",
+   "help": "Stops the waves.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "comp.extract_open",
+   "title": "Open Extraction",
+   "category": "Components",
+   "help": "Opens or closes an extraction point.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "point",
+     "type": "entity",
+     "label": "Point",
+     "required": true
+    },
+    {
+     "id": "open",
+     "type": "bool",
+     "label": "Open",
+     "param": "open"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "open",
+     "label": "Open",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "comp.door",
+   "title": "Door",
+   "category": "Components",
+   "help": "Opens or closes a timed door.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "door",
+     "type": "entity",
+     "label": "Door",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "do",
+     "label": "Do",
+     "kind": "choice",
+     "default": "open",
+     "choices": [
+      [
+       "open",
+       "Open"
+      ],
+      [
+       "close",
+       "Close"
+      ]
+     ]
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "comp.trap_fire",
+   "title": "Fire Trap",
+   "category": "Components",
+   "help": "Sets off a trap.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "trap",
+     "type": "entity",
+     "label": "Trap",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "comp.capture_lock",
+   "title": "Lock Point",
+   "category": "Components",
+   "help": "Locks a capture point for some seconds.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "point",
+     "type": "entity",
+     "label": "Point",
+     "required": true
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 30,
+     "min": 1,
+     "max": 3600
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "comp.reset",
+   "title": "Reset Components",
+   "category": "Components",
+   "help": "Puts every component back as it was at the start of the map.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "creature.spawn",
+   "title": "Spawn Creature",
+   "category": "Creatures",
+   "help": "Makes a creature of this type at the entity with this name. Needs the Loner-Strike bot brain with creatures (the debugger says so if not).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Creature"
+    }
+   ],
+   "params": [
+    {
+     "id": "kind",
+     "label": "Type",
+     "kind": "name",
+     "default": "zombie"
+    },
+    {
+     "id": "at",
+     "label": "At the entity named",
+     "kind": "name",
+     "default": "spot1"
+    }
+   ],
+   "needs": "creatures"
+  },
+  {
+   "type": "flow.reroute",
+   "title": "Reroute",
+   "category": "Flow",
+   "help": "A bend in a wire, to keep the graph tidy. Passes on whatever comes in.",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "any",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "any",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "reroute": true
+  }
+ ]
 }

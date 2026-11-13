@@ -1,19 +1,211 @@
 {
-  "schema": "loner-strike/graph",
-  "version": 1,
-  "mode": { "id": "evil", "name": "x */ public plugin_init() { server_cmd(\"quit\") } /*", "description": "a\"); server_cmd(\"quit\"); //" },
-  "nodes": [
-    { "id": "r", "type": "event.round_started", "pos": { "x": 0, "y": 0 } },
-    { "id": "m", "type": "msg.broadcast", "pos": { "x": 300, "y": 0 }, "params": { "text": "hi^\"); server_cmd(\"quit\"); //\n#include <evil>", "seconds": 99999 } },
-    { "id": "g", "type": "player.give_weapon", "pos": { "x": 600, "y": 0 }, "params": { "weapon": "ak47\"); server_cmd(\"quit", "ammo": -5 } },
-    { "id": "e", "type": "score.end_round", "pos": { "x": 900, "y": 0 }, "params": { "winner": "ct; quit" } },
-    { "id": "k", "type": "event.player_killed", "pos": { "x": 0, "y": 200 } }
-  ],
-  "edges": [
-    { "id": "w1", "from": { "node": "r", "pin": "then" }, "to": { "node": "m", "pin": "exec" } },
-    { "id": "w2", "from": { "node": "k", "pin": "then" }, "to": { "node": "g", "pin": "exec" } },
-    { "id": "w3", "from": { "node": "k", "pin": "attacker" }, "to": { "node": "g", "pin": "player" } },
-    { "id": "w4", "from": { "node": "g", "pin": "then" }, "to": { "node": "e", "pin": "exec" } }
-  ],
-  "comments": [{ "id": "c1", "text": "*/ #include <evil> /*", "pos": { "x": 0, "y": 0 }, "size": { "w": 100, "h": 100 } }]
+ "schema": "loner-strike/graph",
+ "version": 2,
+ "mode": {
+  "id": "evil",
+  "name": "x */ public plugin_init() { server_cmd(\"quit\") } /*",
+  "description": "a\"); server_cmd(\"quit\"); //"
+ },
+ "nodes": [
+  {
+   "id": "r",
+   "type": "event.round_started",
+   "pos": {
+    "x": 0,
+    "y": 0
+   }
+  },
+  {
+   "id": "m",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 300,
+    "y": 0
+   },
+   "params": {
+    "text": "hi^\"); server_cmd(\"quit\"); //\n#include <evil>",
+    "seconds": 99999
+   }
+  },
+  {
+   "id": "g",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 600,
+    "y": 0
+   },
+   "params": {
+    "weapon": "ak47\"); server_cmd(\"quit",
+    "ammo": -5
+   }
+  },
+  {
+   "id": "e",
+   "type": "score.end_round",
+   "pos": {
+    "x": 900,
+    "y": 0
+   },
+   "params": {
+    "winner": "ct; quit"
+   }
+  },
+  {
+   "id": "k",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 0,
+    "y": 200
+   }
+  },
+  {
+   "id": "t",
+   "type": "player.teleport",
+   "pos": {
+    "x": 0,
+    "y": 400
+   },
+   "params": {
+    "name": "a\"); server_cmd(\"quit"
+   }
+  },
+  {
+   "id": "s",
+   "type": "var.set",
+   "pos": {
+    "x": 300,
+    "y": 400
+   },
+   "params": {
+    "var": "v1",
+    "value": "y\"); server_cmd(\"quit\"); //"
+   }
+  },
+  {
+   "id": "c",
+   "type": "comp.create",
+   "pos": {
+    "x": 600,
+    "y": 400
+   },
+   "params": {
+    "kind": "ls_trap\"); server_cmd(\"quit",
+    "at": "x\");",
+    "keys": "radius=1\"); server_cmd(\"quit"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "r",
+    "pin": "then"
+   },
+   "to": {
+    "node": "m",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "k",
+    "pin": "then"
+   },
+   "to": {
+    "node": "g",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "k",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "g",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "g",
+    "pin": "then"
+   },
+   "to": {
+    "node": "e",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "k",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "t",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "m",
+    "pin": "then"
+   },
+   "to": {
+    "node": "t",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "t",
+    "pin": "then"
+   },
+   "to": {
+    "node": "s",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "s",
+    "pin": "then"
+   },
+   "to": {
+    "node": "c",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "c1",
+   "text": "*/ #include <evil> /*",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "size": {
+    "w": 100,
+    "h": 100
+   }
+  }
+ ],
+ "variables": [
+  {
+   "id": "v1",
+   "name": "evil_var */ server_cmd(\"quit\") /*",
+   "type": "text",
+   "scope": "mode",
+   "default": "x\"); server_cmd(\"quit\"); //"
+  }
+ ]
 }

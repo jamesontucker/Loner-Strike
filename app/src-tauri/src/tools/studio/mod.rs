@@ -617,7 +617,8 @@ mod tests {
         write_includes(&inc).unwrap();
         let all = include_str!("testdata/all_nodes.graph.json");
         let evil = include_str!("testdata/malicious.graph.json");
-        for (name, text) in [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil)] {
+        let every = include_str!("testdata/every_node.graph.json");
+        for (name, text) in [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every)] {
             for debug in [false, true] {
                 let g = graph::parse(text).unwrap();
                 let out = gen::generate(&g, debug);

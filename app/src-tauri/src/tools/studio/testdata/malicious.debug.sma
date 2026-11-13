@@ -1,5 +1,5 @@
 /*
-	x  public plugin_init()  server_cmd(quit)   - made with Loner-Strike's Game Mode Studio (graph version 1).
+	x  public plugin_init()  server_cmd(quit)   - made with Loner-Strike's Game Mode Studio (graph version 2).
 	Generated from evil.graph.json: change the graph and compile it again; edits here are lost.
 	This is a debug build (Playtest): it reports every node to the Studio.
 */
@@ -7,14 +7,29 @@
 #include <amxmodx>
 #include <cstrike>
 #include <fakemeta>
+#include <engine>
+#include <hamsandwich>
 #include <loner>
 
 #define LSG_MODE "evil"
 #define LSG_CTX 4
+#define LSG_TXT 2
+#define LSG_N 8
+#define LSG_TASK 7310000
+stock g_lsgTxt[LSG_TXT][64]
+stock g_lsgOut[LSG_N]
+stock g_lsgLeft[LSG_N]
+stock const g_lsgYesNo[][] = { "no", "yes" }
+stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists", "Spectators" }
 
-#define LSD_N 5
-new const g_lsdIds[LSD_N][] = { "r", "m", "g", "e", "k" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false }
+// The mode's variables
+stock g_v0[64] = "x); server_cmd(quit); " // evil_var  server_cmd(quit)  (text)
+
+#define LSD_N 8
+new const g_lsdIds[LSD_N][] = { "r", "m", "g", "e", "k", "t", "s", "c" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false }
+// The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
+// Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
 new const g_lsdTeams[][] = { "none", "T", "CT", "spectator" }
 #define LSD_TASK 9475100
@@ -194,9 +209,50 @@ stock lsd_in_player(const name[], id)
 	lsd_in_raw(name, pl)
 }
 
-stock lsd_in_team(const name[], CsTeams:team)
+stock lsd_in_number(const name[], Float:v)
 {
-	new t = _:team
+	new q[24]
+	formatex(q, charsmax(q), "%.2f", v)
+	lsd_in_raw(name, q)
+}
+
+stock lsd_in_bool(const name[], v)
+{
+	lsd_in_raw(name, g_lsdBool[v ? 1 : 0])
+}
+
+stock lsd_in_text(const name[], const v[])
+{
+	new esc[140], q[144]
+	lsd_esc(v, esc, charsmax(esc))
+	formatex(q, charsmax(q), "^"%s^"", esc)
+	lsd_in_raw(name, q)
+}
+
+stock lsd_in_entity(const name[], ent)
+{
+	if (ent >= 1 && ent <= MaxClients)
+	{
+		lsd_in_player(name, ent)
+		return
+	}
+	new q[200], cls[32], tn[32], ecls[72], etn[72]
+	if (ent > 0 && pev_valid(ent))
+	{
+		pev(ent, pev_classname, cls, charsmax(cls))
+		pev(ent, pev_targetname, tn, charsmax(tn))
+		lsd_esc(cls, ecls, charsmax(ecls))
+		lsd_esc(tn, etn, charsmax(etn))
+		formatex(q, charsmax(q), "{^"ent^":%d,^"class^":^"%s^",^"name^":^"%s^"}", ent, ecls, etn)
+	}
+	else
+		copy(q, charsmax(q), "null")
+	lsd_in_raw(name, q)
+}
+
+stock lsd_in_team(const name[], team)
+{
+	new t = team
 	if (t < 0 || t > 3)
 		t = 0
 	new q[16]
@@ -322,6 +378,30 @@ stock lsd_vars()
 		lsd_pl(id, pl, charsmax(pl))
 		lsd_emitf("^"e^":^"var_player^",^"p^":%s", pl)
 	}
+	lsd_graph_vars()
+}
+
+stock lsd_var_number(const v[], p, Float:value)
+{
+	lsd_emitf("^"e^":^"var_value^",^"v^":^"%s^",^"p^":%d,^"value^":%.2f", v, p, value)
+}
+
+stock lsd_var_bool(const v[], p, value)
+{
+	lsd_emitf("^"e^":^"var_value^",^"v^":^"%s^",^"p^":%d,^"value^":%s", v, p, g_lsdBool[value ? 1 : 0])
+}
+
+stock lsd_var_text(const v[], p, const value[])
+{
+	new esc[140]
+	lsd_esc(value, esc, charsmax(esc))
+	lsd_emitf("^"e^":^"var_value^",^"v^":^"%s^",^"p^":%d,^"value^":^"%s^"", v, p, esc)
+}
+
+// a timer that fires while the world is paused waits until it isn't
+stock bool:lsd_hold_timer()
+{
+	return g_lsdPaused >= 0
 }
 
 stock lsd_set_bps(const list[])
@@ -386,12 +466,115 @@ public lsd_poll()
 		lsd_resume()
 }
 
+lsd_graph_vars()
+{
+	lsd_var_text("v1", 0, g_v0)
+}
+
+stock lsg_slot(id)
+	return id >= 1 && id <= MaxClients ? id : 0
+
+stock Float:lsg_div(Float:a, Float:b)
+	return b == 0.0 ? 0.0 : a / b
+
+stock Float:lsg_min(Float:a, Float:b)
+	return a < b ? a : b
+
+stock Float:lsg_max(Float:a, Float:b)
+	return a > b ? a : b
+
+stock Float:lsg_random(Float:a, Float:b, frac)
+{
+	if (a > b)
+	{
+		new Float:t = a
+		a = b
+		b = t
+	}
+	return frac ? random_float(a, b) : float(random_num(floatround(a), floatround(b)))
+}
+
+stock Float:lsg_health(id)
+	return ls_alive(id) ? float(get_user_health(id)) : 0.0
+
+stock lsg_team(id)
+	return id >= 1 && id <= MaxClients && is_user_connected(id) ? (_:cs_get_user_team(id)) : 0
+
+stock lsg_is_bot(id)
+	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0
+
+stock lsg_name(id)
+{
+	new name[32]
+	if (id >= 1 && id <= MaxClients && is_user_connected(id))
+		get_user_name(id, name, charsmax(name))
+	else
+		copy(name, charsmax(name), "nobody")
+	return name
+}
+
+stock lsg_find(const name[])
+	return name[0] ? max(find_ent_by_tname(-1, name), 0) : 0
+
+stock bool:lsg_named(ent, const name[])
+{
+	new tn[32]
+	pev(ent, pev_targetname, tn, charsmax(tn))
+	return bool:equal(tn, name)
+}
+
+stock bool:lsg_origin_of(const name[], Float:o[3])
+{
+	new ent = lsg_find(name)
+	if (ent <= 0)
+		return false
+	pev(ent, pev_origin, o)
+	return true
+}
+
+stock bool:lsg_teleport(id, const name[])
+{
+	new Float:o[3]
+	if (!ls_alive(id) || !lsg_origin_of(name, o))
+		return false
+	ls_teleport(id, o)
+	return true
+}
+
+stock lsg_log_player()
+{
+	new who[96], name[32], uid
+	read_logargv(0, who, charsmax(who))
+	parse_loguser(who, name, charsmax(name), uid)
+	return find_player("k", uid)
+}
+
+stock lsg_creature(const kind[], const at[])
+{
+	new Float:o[3]
+	if (!get_cvar_pointer("ls_creature_ver") || !lsg_origin_of(at, o))
+		return 0
+	new ent = create_entity("ls_creature")
+	if (ent <= 0)
+		return 0
+	DispatchKeyValue(ent, "type", kind)
+	entity_set_origin(ent, o)
+	DispatchSpawn(ent)
+	return is_valid_ent(ent) && !(entity_get_int(ent, EV_INT_flags) & FL_KILLME) ? ent : 0
+}
+
 public plugin_init()
 {
 	ls_register_mode(LSG_MODE, "x  public plugin_init()  server_cmd(quit", "1.0", "Game Mode Studio")
 	lsd_init()
 	register_logevent("lsg_on_round_started", 2, "1=Round_Start")
 	register_event("DeathMsg", "lsg_on_player_killed", "a")
+}
+
+stock lsg_stop_timers()
+{
+	for (new i = 0; i < LSG_N; i++)
+		remove_task(LSG_TASK + i)
 }
 
 public lsg_on_round_started()
@@ -405,6 +588,7 @@ public lsg_on_player_killed()
 	new ctx[LSG_CTX]
 	ctx[0] = read_data(2) // victim
 	ctx[1] = read_data(1) // attacker
+	ctx[2] = read_data(3) ? 1 : 0 // headshot
 	lsg_n4(ctx)
 }
 
@@ -426,6 +610,7 @@ lsg_n1(const ctx[])
 		return
 	ls_announce(0, 20.0, "%s", "hi); server_cmd(quit); #include <evil>")
 	lsd_exit(1, "shown")
+	lsg_n5(ctx)
 }
 
 // Give Weapon (g)
@@ -462,6 +647,52 @@ lsg_n4(const ctx[])
 	lsg_n2(ctx)
 }
 
+// Teleport (t)
+lsg_n5(const ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[0])
+	if (lsd_enter(5, ctx))
+		return
+	if (!ls_alive(ctx[0]))
+		lsd_error(5, "Not moved: that player isn't alive.")
+	else if (!lsg_teleport(ctx[0], "aserver_cmdquit"))
+		lsd_error(5, "Not moved: no entity has that name on this map.")
+	else
+		lsd_exit(5, "teleported")
+	lsg_n6(ctx)
+}
+
+// Set Variable (s)
+lsg_n6(const ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", "y); server_cmd(quit); ")
+	if (lsd_enter(6, ctx))
+		return
+	copy(g_v0, 63, "y); server_cmd(quit); ")
+	lsd_exit(6, "set")
+	lsg_n7(ctx)
+}
+
+// Create Component (c)
+lsg_n7(const ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(7, ctx))
+		return
+	new Float:o[3]
+	if (!ls_components_running())
+		lsd_error(7, "gm_components isn't running on this server.")
+	else if (!lsg_origin_of("x", o))
+		lsd_error(7, "No entity has that name on this map.")
+	else
+	{
+		g_lsgOut[7] = ls_comp_create("ls_capture_point", o, "radius=1 server_cmdquit")
+		lsd_exit(7, fmt("entity %d", g_lsgOut[7]))
+	}
+}
+
 lsd_call(n, const ctx[])
 {
 	switch (n)
@@ -471,5 +702,8 @@ lsd_call(n, const ctx[])
 		case 2: lsg_n2(ctx)
 		case 3: lsg_n3(ctx)
 		case 4: lsg_n4(ctx)
+		case 5: lsg_n5(ctx)
+		case 6: lsg_n6(ctx)
+		case 7: lsg_n7(ctx)
 	}
 }

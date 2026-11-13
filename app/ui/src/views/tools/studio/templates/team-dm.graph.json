@@ -1,6 +1,6 @@
 {
   "schema": "loner-strike/graph",
-  "version": 1,
+  "version": 2,
   "mode": { "id": "rifle_reward", "name": "Rifle Reward", "description": "Every kill earns the killer a rifle" },
   "nodes": [
     { "id": "start", "type": "event.round_started", "pos": { "x": 0, "y": -200 }, "params": {} },
