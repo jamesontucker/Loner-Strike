@@ -39,3 +39,21 @@ ls_outpost.map), shipped files in plugins/game/.
   reachable, 0 problems, the ladder still joined. Overview and .res redone; outputs in plugins/game.
 - Bots (6, Normal, creatures, 7 min): waves 1-4 held; 62 of 1276 CT shots were fired from the firing step, by 5 of
   the 6 bots.
+
+## 2026-11-13 — ls_outpost: 32 spawns (made for 4-16 players, safe at 32)
+- **CT spawns 16 → 32**: the 16 in the middle of the courtyard stay; 8 more round the courtyard's edges (clear of the
+  stairs, sandbags, the crate and both weapon spawners) and 8 in the keep (clear of its crates, desks and the loot crate
+  at 0 352). Every spawn is 64+ from the next (the generator asserts it). Last Stand with creatures puts every player
+  on CT (`assign_teams`: want = 32), so this is what 32 players need.
+- **T spawns 8 → 32**, 8 per drain (4 x 2, inset 48 from the walls): used only when Last Stand runs without creatures
+  (zombie bots are the Terrorists, `lst_defenders` stay CT).
+- The base for the hold logic (`find_base`: the middle of the CT spawns) moves from (0, 16) to about (0, 70), still on
+  the open courtyard floor; `lst_base` is unchanged.
+- Compiled (SDHLT Normal through CrossOver, my `compile.sh`, the same commands as tools/compile.rs): no leak, no
+  warnings. Nav re-learned with the game's learner (brain r43507381531): **365 areas**, map knowledge built (.lsv).
+- **New checker `maps-src/ls_lab/mapcheck.py`** (for any Last Stand map, on the compiled .bsp + .nav): spawns not stuck,
+  on a floor, not overlapping, on the nav; every area reachable from the CT spawns and back (no traps); raised pockets
+  with 2+ ways out; ladders joined; items/markers on the walk; every wave spawner reaches a gate, and none reaches a CT
+  spawn or `lst_base` with every barricade standing. ls_outpost: **all pass** (32 + 32 spawns OK, 365 of 365 areas
+  reachable, 0 traps, the firing step 8 ways out incl. the ladder, every spawner reaches all 3 gates, no way past them).
+- .res and overview unchanged (no new files, no geometry change). Outputs in plugins/game/maps.

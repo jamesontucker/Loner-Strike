@@ -486,13 +486,33 @@ D(box(608, -1360, 0, 648, -1320, 48, "OUT_TNK1", top="CSTRIKE_ME4METL"))
 # ---------------------------------------------------------------------------------------
 # entities
 
-# 16 CT spawns in the courtyard
-for sy in (-128, -32, 64, 160):
-    for sx in (-144, -48, 48, 144):
-        point("info_player_start", sx, sy, 36, angles="0 %d 0" % (270 if sy > 0 else 90))
-# T spawns in the drains (the game needs some)
-for tx, ty in [(-1408, 864), (-1408, -864), (1952, 560), (688, -1760), (-1472, 800), (-1344, -800), (1888, 480), (608, -1696)]:
-    point("info_player_deathmatch", tx, ty, 36, angles="0 0 0")
+# 32 CT spawns (the map plays best with 4-16, and stays safe with 32): 16 in the middle of the
+# courtyard, 8 round its edges (clear of the stairs, sandbags, crates and weapon spawners), 8 in
+# the keep (clear of its crates, desks and the loot crate at 0 352). Each is 64+ from the next.
+CT_SPAWNS = [(sx, sy, 270 if sy > 0 else 90) for sy in (-128, -32, 64, 160) for sx in (-144, -48, 48, 144)]
+CT_SPAWNS += [(-240, -128, 90), (240, -128, 90), (240, -32, 180), (-160, -224, 90), (160, -224, 90), (-320, -128, 90),
+              (-260, 160, 0), (260, 160, 180)]
+CT_SPAWNS += [(-96, 248, 270), (0, 248, 270), (96, 248, 270), (-96, 352, 270), (96, 352, 270), (-176, 368, 270),
+              (176, 368, 270), (-176, 232, 270)]
+assert len(CT_SPAWNS) == 32
+for i, (ax, ay, _) in enumerate(CT_SPAWNS):
+    for bx, by, _ in CT_SPAWNS[i + 1:]:
+        assert max(abs(ax - bx), abs(ay - by)) >= 64, ((ax, ay), (bx, by))
+for sx, sy, yaw in CT_SPAWNS:
+    point("info_player_start", sx, sy, 36, angles="0 %d 0" % yaw)
+# T spawns in the drains: only used when Last Stand runs without creatures (zombie bots are the
+# Terrorists then); 8 per drain, 4 x 2, inset 48 from its walls, so 32 players always fit
+for (dx0, dy0, dx1, dy1), far in [((-1536, 576, -1280, 960), 1), ((-1536, -960, -1280, -576), -1),
+                                  ((1728, 400, 2048, 720), 0), ((528, -1856, 848, -1536), -1)]:
+    for c in range(4):
+        for r in range(2):
+            if far == 0:          # the east drain runs east-west: two rows across it
+                tx = dx1 - 48 - 64 * r
+                ty = dy0 + 48 + (dy1 - dy0 - 96) * c / 3
+            else:
+                tx = dx0 + 48 + (dx1 - dx0 - 96) * c / 3
+                ty = (dy1 - 48 - 64 * r) if far > 0 else (dy0 + 48 + 64 * r)
+            point("info_player_deathmatch", tx, ty, 36, angles="0 %d 0" % (180 if far == 0 else 270 if far > 0 else 90))
 
 wave = dict(team=1, radius=96, rate=1.2)
 point("ls_wave_spawner", -1408, 832, 8, name="Field north drain", **wave)

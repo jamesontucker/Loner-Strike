@@ -18,7 +18,9 @@ geometry changes, teach the bots again (nav + .lsv), redo the overview (Radar ma
 
 ## How it plays
 
-- **The compound** (walls 160 high round a 1024 x 896 courtyard). 16 CT spawns in the middle.
+- **The compound** (walls 160 high round a 1024 x 896 courtyard). 32 CT spawns: 24 in the courtyard, 8 in the keep.
+  Made for 4-16 players and safe up to 32 (every spawn has room, none overlap). 32 T spawns in the drains, used
+  only when Last Stand runs without creatures (zombie bots are the Terrorists then).
   - **Three gates** (west, east, south), 128 x 96, each closed by a **boarded barricade**: an
     `ls_barricade` CLIP brush filling the opening (solid to everything that moves; gm_components lets
     bullets and sight through) and four `func_illusionary` boards (16-unit gaps) named `<gate>_boards` (`boards=`) that
