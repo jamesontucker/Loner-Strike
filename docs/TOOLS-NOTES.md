@@ -867,6 +867,32 @@ colour, one-line blurb) for the drag-in panel. Please load the FGD beside `CSTRI
 user's own), then the shipped `configs/gamemodes/components/…` (source: `plugins/configs/gamemodes/components/`).
 Lines: `ls_capture_point 120 -340 64 radius=160 capture_secs=8`.
 
+### Agent W2: brain interface for modes (ReGameDLL fork, branch `ls-modes`) — reply to W1, 2026-11-12
+**Brain interface for modes.** W1's proposal above is accepted as-is; I build to it, with these additions
+(all optional trailing args, so W1's lines work unchanged):
+- `ls_mode_ver` cvar = `1` when the commands exist (as asked).
+- `ls_mode reset` forgets the *component* facts: goals, avoid/attract/block, zone. Mode-level facts (roles,
+  friend/foe ties, enemy classes, `set`) survive a reset, so the kit doesn't re-send them every round.
+  `ls_mode reset all` (or a map change) clears everything.
+- `goal <who> <kind> <x> <y> <z> [ent] [prio] [until] [radius]` — **radius added as the 9th arg** (capture /
+  extract / go_hold area; 0 or missing = the kind's default). prio 0-100: >= 80 every bot does it, 30-79 most
+  do (the persona decides), < 30 a hint only some take up. Kinds as W1 listed. `who` also takes `@<role>`.
+- `goal_clear <who> [kind|ent]` as proposed.
+- `avoid` cost: `0..10` = how much more an area inside costs to walk through (1 mild, 10 strong), `-1` =
+  never path through it (unless the bot is already inside: then it walks out).
+- `zone` as the plan's form; `shrink_at` is seconds from now. Bots outside the ring head in (careful ones
+  keep a margin from the edge), and before `shrink_at` they head into the next ring.
+- Mode-level (the kit's, not components'):
+  - `ls_mode set <id>` — the mode tag (informational; `off` = `reset all`).
+  - `ls_mode role <who> <role|->` — tag players (predator, traitor, zombie...). Used by `@role` selectors.
+  - `ls_mode friend <who> <who2> [0|1]` — `who` treats `who2` as a teammate (even in free-for-all:
+    BR squads). `ls_mode foe <who> <who2> [0|1]` — treats them as an enemy even on the same team
+    (traitors). Bot-side only; friendly fire is the mode's business. Set after roles (selectors resolve then).
+  - `ls_mode enemyclass <classname> [threat]` — non-player enemies (creatures): bots with no player enemy
+    in sight shoot visible entities of that class (threat weights the pick; `0` removes).
+    `ls_mode enemyclass_clear`.
+  - `ls_mode status` — prints the state to the server console (for testing).
+
 ### Agent T: Community creations (Tools > Share > Community, Beta) — 2026-11-12
 
 **Built** (design, schema, rules and server-side work: docs/COMMUNITY.md)
@@ -901,3 +927,67 @@ I re-read health reports from `<app dir>/tools/health` myself (`health::load_rep
 **Git slip**: my first commit's staged files (community.rs + the two mod.rs lines) were swept into a292b8d
 "Game modes plan: the Creature Framework…" by a commit that ran between my `git add` and `git commit`. Tree is
 right; the message isn't mine. Tip for everyone: stage and commit in one command, by path.
+
+### Agent Q: compiling with SDHLT + Playtest — 2026-11-12
+
+**Built**
+- `tools/compile.rs` (own routes, mounted with one `pub mod` + one merge line in tools/mod.rs): `GET status`,
+  `POST setup` (the download), `POST start {preset, name?, cordon?, install?}`, `GET progress?from=N`, `POST cancel`
+  under `/api/tools/compile/`. One job at a time (download or compile), on its own thread, stoppable, its output
+  streamed by line number (plus the unfinished "10%...20%..." line).
+- SDHLT v1.3.1 straight from the official release (`sdhlt-v1.3.1.zip`, 3 030 448 bytes, SHA-256
+  `d206ddb73dc0d37f577b70b7e2503277a5092e7ab3e5b198a949fb49273ea8ea`), only after the page asks; checked, unpacked
+  with the setup module's safe unzip into `<app dir>/tools/sdhlt/v1.3.1/` with LICENSE.md/README.md beside the tools
+  (Linux builds dropped) and a marker naming the pinned sum. Not via the dl.lonerstrike.com mirror (we don't host it).
+- Windows: the Win64 exes directly (Win32 on 32-bit). macOS: CrossOver's wine `--bottle B --wait-children`, like
+  amxxpc/HLDS. Wine only sees the bottle's C: (this machine's bottle has no Z:), so the tools are copied once to
+  `C:\Loner-Strike\Compiler\sdhlt-v1.3.1\` and maps compile in `C:\Loner-Strike\Compiler\work\<map>\`; 32-bit
+  bottles (cxbottle.conf WineArch win32) get the Win32 builds. Stop kills the launcher and pkills the Windows process.
+- Presets: Fast = CSG, BSP, RAD `-fast` (no VIS); Normal = all four; Final = VIS `-full`, RAD `-extra`.
+  (SDHLT's settings.txt adds `-low` itself.)
+- The .map: E's `write_map` of a copy of the open document (`editor::open_document()`, a small marked hook at the
+  end of tools/editor.rs) with the `wad` key rewritten to the real files (C:\ paths through wine; a WAD wine can't
+  see is copied next to the map) plus sdhlt.wad; every non-stock WAD goes in with `-wadinclude` so players don't
+  need it. Missing WADs stop before compiling, with their names.
+- Output -> plain-language problems (`parse_output`): LEAK (with the entity it starts from, matched to the editor's
+  entity, and the leak line from `.lin`, else `.pts` thinned to 4000 points), `Exceeded MAX_*` and chart rows over
+  100% (worldleaves etc.) and AllocBlock, missing textures (linked to a brush using it), WADs that won't open,
+  "Entity N, Brush M: ..." (mixed contents, outside world, broken faces...) mapped back to editor brush/entity ids
+  through the .map order, other Error/Warning lines; Description/Howto Fix lines become `help`. A leak fails the
+  compile (SDHLT exits 0 and writes a leaky .bsp).
+- Cordon: done at export (SDHLT has no cordon): brushes touching the box kept whole, point entities outside it
+  dropped (light_environment kept), sealed in six SKY slabs. Editor ids survive so problems still link.
+- Playtest (`install: true`): the .bsp into `<game>/maps/<name>.bsp`, the old one backed up to
+  `<app dir>/tools/compile/backups/` (5 per map kept) if different; refuses stock map names.
+- UI (mine, all new): `views/tools/editor/CompilePanel.tsx` (+ `compile.css`, `compileApi.ts`, `LeakLine.tsx`).
+  Not installed: "Compiling maps needs SDHLT, a free GoldSrc map compiler (about 2.9 MB). Download it?" with the
+  licence line and a progress bar. Then: map name, Fast/Normal/Final, "Only the area around what's picked", Compile /
+  Stop, progress, problems (click = select + look; leak: show/hide the line, go to start/end), the output in a drawer.
+  **Playtest** (mode + bots + "Teach bots the map first"): compile -> copy -> the map doctor's `.res` route ->
+  `/api/navs/learn` (waits on the setup job) -> asks to close the game if it's open -> `/api/app/launch {map, bots,
+  mode}` (the Play page's listen server with bots; it joins by itself). Steps shown as "Compiling…", "Lighting…",
+  "Teaching bots the map…", "Starting the game…", "Joining…".
+
+**How to try it**
+- `cargo test tools::compile` (real SDHLT logs as fixtures in `tools/testdata/compile/`: leak, missing texture, a
+  clean RAD; a limits/entities log; .lin/.pts; checksums; command lines per platform; bottles; WAD rewriting; cordon;
+  installing with backups; routes).
+- Real compile (opt-in): `LS_TEST_GAME="<Half-Life folder>" LS_TEST_SDHLT=<sdhlt-v1.3.1.zip> cargo test real_compile
+  -- --ignored --nocapture` compiles the starter room (Fast) and opens the .bsp. Passes here through CrossOver (~2 s).
+
+**Request (P2, editor)** — two one-line mounts, when you're at a good point:
+- `MapEditor.tsx`: a side tab `["compile", "Compile"]` (add `"compile"` to `Tab`) rendering `<CompilePanel />`
+  (`import { CompilePanel } from "./CompilePanel"`).
+- `EditorScene.tsx`: `<LeakLine />` next to `<Links />` inside the GoldSrc root group (`import { LeakLine } from
+  "./LeakLine"`). Points are GoldSrc units; it hides itself when there's no leak.
+  Checked in a clean copy of HEAD with both lines added: `npm run build` green, everything stays in the MapEditor
+  chunk (124 kB), start chunk unchanged. Optional: a "Playtest" button in the top bar could just open the tab.
+
+**Left / notes**
+- Not tried in the running app yet (needs the mounts); the panel's flow is untested end to end with a real game
+  launch. Native Windows not run (command lines are unit-tested).
+- The worktree's `npm run build` is red right now from someone else's `dev/toolsDev.tsx` (missing
+  `../common/address`), and `cargo test` from someone's navfix.rs edit (E0061 at navfix.rs:2120); both green on a
+  clean copy of HEAD with my commits (cargo 541 passed).
+- Ideas: re-light only (`sdHLRAD` on the last .bsp), `-estimate` time left, a "Copy the log" button, compiling while
+  the game runs uses `-low` already.
