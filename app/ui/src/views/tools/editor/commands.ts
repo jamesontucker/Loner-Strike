@@ -9,7 +9,8 @@ import { selectionIds } from "./EditorScene";
 import { copySelection, paste } from "./MapEditor";
 import { deleteSelection, duplicate, hideSelection, isolateSelection, showAll, TOOLS } from "./Panels";
 import { frameFlat, LAYOUTS, setLayout, toggleMaximise, usePanes } from "./panes";
-import { cmd2, useP5, type Ids, type SideTab } from "./p5store";
+import { cmd2, importRmf, useP5, type Ids, type SideTab } from "./p5store";
+import { modeFor, setPaneMode, type RenderMode } from "./renderModes";
 import { EMPTY_SEL, selectionBounds, useEditor, type ViewId } from "./store";
 
 export type Menu = "File" | "Edit" | "View" | "Select" | "Tools" | "Map" | "Help";
@@ -150,7 +151,31 @@ function setView(v: ViewId) {
 }
 
 /** File actions that replace the open map ask first when there are unsaved changes (set by the menu bar). */
-export const fileHooks: { replace: (what: "new" | "open" | "import") => void } = { replace: (w) => void S().file(w) };
+export const fileHooks: { replace: (what: "new" | "open" | "import" | "other") => void } = { replace: (w) => void (w === "other" ? importOther() : S().file(w)) };
+
+/** Hammer/J.A.C.K. import (tools/editor/workspace.rs); what didn't come over is said. */
+export async function importOther() {
+  const s = S();
+  if (s.fileBusy) return;
+  s.set({ fileBusy: "Importing…" });
+  try {
+    const r = await importRmf();
+    if (r.error) return s.notify(r.error, true);
+    if (r.cancelled) return;
+    await S().load();
+    const notes = r.notes ?? [];
+    S().notify(notes.length ? `Imported. ${notes.join(" ")}` : "Imported. Save it to make a project.");
+  } finally {
+    useEditor.setState({ fileBusy: null });
+  }
+}
+
+function cyclePaneMode() {
+  const p = usePanes.getState();
+  const order: RenderMode[] = ["textured", "flat", "wire", "texwire"];
+  const cur = modeFor(p.modes?.[p.active], p.views[p.active]);
+  setPaneMode(p.active, order[(order.indexOf(cur) + 1) % order.length]);
+}
 
 const AX = ["X", "Y", "Z"];
 
@@ -163,6 +188,7 @@ export function commands(): Command[] {
     { id: "file.new", label: "New map", menu: "File", run: () => fileHooks.replace("new") },
     { id: "file.open", label: "Open a project…", menu: "File", run: () => fileHooks.replace("open") },
     { id: "file.import", label: "Import a .map…", menu: "File", run: () => fileHooks.replace("import") },
+    { id: "file.importOther", label: "Import a Hammer .rmf or J.A.C.K. .jmf…", menu: "File", hint: "Brushes, entities, groups and visgroups come over", run: () => fileHooks.replace("other") },
     { id: "file.save", label: "Save", menu: "File", sep: true, run: () => void S().file("save"), fly: true },
     { id: "file.saveAs", label: "Save as…", menu: "File", run: () => void S().file("saveAs"), fly: true },
     { id: "file.export", label: "Export a .map…", menu: "File", hint: "For any GoldSrc compiler", run: () => void S().file("export") },
@@ -262,6 +288,8 @@ export function commands(): Command[] {
     { id: "view.gridSettings", label: "Grid and snapping…", menu: "View", hint: "Grid size, turn steps, snap to corners and edges", run: () => useP5.getState().set({ dialog: "grid" }) },
     { id: "view.texLock", label: "Texture lock on / off", menu: "View", run: () => S().set({ textureLock: !S().textureLock }) },
     { id: "view.geoSnap", label: "Snap to corners and edges on / off", menu: "View", run: () => useP5.getState().set({ geoSnap: !useP5.getState().geoSnap }) },
+    { id: "view.models", label: "Models in place of entity boxes on / off", menu: "View", hint: "Hostages, spawns, weapons, cyclers drawn as their models", run: () => useP5.getState().set({ showModels: !useP5.getState().showModels }), fly: true },
+    { id: "view.paneMode", label: "Next drawing style for the active pane", menu: "View", hint: "Textured, flat, wireframe, textured + wire", run: () => cyclePaneMode(), fly: true },
 
     // Tools
     ...TOOLS.map((t, i): Command => ({ id: `tool.${t.id}`, label: `${t.label} tool`, menu: "Tools", hint: t.tip, sep: i === 0 ? false : t.id === "vertex" || t.id === "box", run: () => S().set({ tool: t.id }) })),

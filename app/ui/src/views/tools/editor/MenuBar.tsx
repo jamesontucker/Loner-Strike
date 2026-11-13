@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../../../ui";
 import { CommandPalette, CheatSheet, KeyEditor } from "./CommandPalette";
-import { commands, fileHooks, type Command, type Menu } from "./commands";
+import { commands, fileHooks, importOther, type Command, type Menu } from "./commands";
 import { LAYOUTS, setLayout, usePanes } from "./panes";
 import { P5Dialogs } from "./P5Dialogs";
 import { useP5 } from "./p5store";
@@ -26,7 +26,8 @@ export function MenuBar() {
     fileHooks.replace = async (what) => {
       const d = useEditor.getState().doc;
       if (d?.dirty && !(await ask(`“${d.name}” has unsaved changes. Leave them and ${what === "new" ? "start a new map" : "open another"}?`, { ok: "Leave them", danger: true }))) return;
-      await useEditor.getState().file(what);
+      if (what === "other") await importOther();
+      else await useEditor.getState().file(what);
     };
   }, [ask]);
   useEffect(() => {
@@ -146,8 +147,8 @@ export function SelectionSize() {
   const n = sel.brushes.length + sel.entities.length;
   if (!n) return null;
   const b = selectionBounds();
-  if (!b) return <span className="ed-selsize"> · {n} picked</span>;
-  const size = b[1].map((x, i) => Math.round((x - b[0][i]) * 100) / 100);
+  const size = b ? b[1].map((x, i) => Math.round((x - b[0][i]) * 100) / 100) : null;
+  if (!size || size.every((x) => x === 0)) return <span className="ed-selsize"> · {n} picked</span>;
   return (
     <span className="ed-selsize mono" title="Width (x) × depth (y) × height (z) of what's picked">
       {" · "}

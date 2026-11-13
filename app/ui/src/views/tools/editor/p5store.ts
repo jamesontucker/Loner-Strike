@@ -22,6 +22,8 @@ type P5State = {
   rotSnap: number;
   /** snap new points to corners/edges of brushes near the mouse */
   geoSnap: boolean;
+  /** studio models drawn in place of entity boxes */
+  showModels: boolean;
   set: (p: Partial<Omit<P5State, "set">>) => void;
 };
 
@@ -49,7 +51,9 @@ export const useP5 = create<P5State>((set) => ({
   showGrid: num("ls.editor.showGrid", 1) !== 0,
   rotSnap: num("ls.editor.rotSnap", 15),
   geoSnap: num("ls.editor.geoSnap", 0) !== 0,
+  showModels: num("ls.editor.showModels", 1) !== 0,
   set: (p) => {
+    if (p.showModels != null) keep("ls.editor.showModels", p.showModels ? "1" : "0");
     if (p.showGrid != null) keep("ls.editor.showGrid", p.showGrid ? "1" : "0");
     if (p.rotSnap != null) keep("ls.editor.rotSnap", String(p.rotSnap));
     if (p.geoSnap != null) keep("ls.editor.geoSnap", p.geoSnap ? "1" : "0");
@@ -141,6 +145,7 @@ export type Cmd2Result = Err & {
 export const getProject = () => get<{ files: ProjectFile[]; project: ProjectInfo }>(`${E}/project`);
 export const projectAction = (action: "open" | "reveal" | "rename" | "delete", path: string, name = "") =>
   post<{ done?: boolean; opened?: boolean; renamed?: string; deleted?: boolean; keptIn?: string; state?: DocState | null }>(`${E}/project/action`, { action, path, name });
+export const importRmf = () => post<{ cancelled?: boolean; notes?: string[] }>(`${E}/import-other`);
 export const getHistory = () => get<{ undo: string[]; redo: string[]; dirty: boolean }>(`${E}/history`);
 export const jumpHistory = (steps: number) => post<{ changed: boolean; steps: number; state?: DocState }>(`${E}/history/jump`, { steps });
 

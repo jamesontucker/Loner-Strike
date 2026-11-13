@@ -4,6 +4,7 @@
 import { useRef, type MutableRefObject } from "react";
 import "./p5.css";
 import { paneCount, toggleMaximise, usePanes, type LayoutId, type Split } from "./panes";
+import { modeFor, RENDER_MODES, setPaneMode, type RenderMode } from "./renderModes";
 import type { ViewId } from "./store";
 
 export const VIEW_LABELS: Record<ViewId, string> = { "3d": "3D", top: "Top", front: "Front", side: "Side" };
@@ -47,6 +48,7 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
   const split = usePanes((s) => s.splits[s.layout]);
   const active = usePanes((s) => s.active);
   const max = usePanes((s) => s.max);
+  const modes = usePanes((s) => s.modes);
   const wrap = useRef<HTMLDivElement>(null);
   const rects = paneRects(layout, split);
   const n = paneCount(layout);
@@ -106,6 +108,19 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
                   {(Object.keys(VIEW_LABELS) as ViewId[]).map((v) => (
                     <option key={v} value={v}>
                       {VIEW_LABELS[v]}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="ed-pane-mode"
+                  value={modeFor(modes?.[i], views[i])}
+                  aria-label={`How pane ${i + 1} draws`}
+                  title="Textured, flat colours, wireframe, or textured with the edges"
+                  onChange={(e) => setPaneMode(i, e.target.value as RenderMode)}
+                >
+                  {RENDER_MODES.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
                     </option>
                   ))}
                 </select>

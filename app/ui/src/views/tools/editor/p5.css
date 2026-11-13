@@ -152,3 +152,16 @@
 .ed-palette-list button:disabled { opacity: 0.45; }
 .ed-outline .editor-tree-head { font-size: 13px; }
 .ed-dialog .row, .ed-keyedit .row, .ed-cheats .row { gap: 6px; align-items: center; }
+.ed-pane-mode { max-width: 92px; }
+
+/* keys of several entities */
+.ed-multikeys { margin: 6px 0 10px; }
+.ed-multikeys h4 { margin: 4px 0 2px; }
+.ed-multikeys-grid { display: grid; gap: 3px; margin: 4px 0; }
+.ed-multikeys-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto; gap: 4px; align-items: center; font-size: 13px; }
+.ed-multikeys-key { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--bone-dim); }
+.ed-multikeys input { min-width: 0; font-size: 13px; padding: 2px 5px; }
+.ed-multikeys input::placeholder { font-style: italic; }
+.ed-ol-rename-btn { display: none; border: 0; background: none; color: var(--bone-dim); padding: 0 3px; font-size: 12px; cursor: pointer; flex: none; }
+.ed-ol-row:hover .ed-ol-rename-btn { display: inline-block; }
+.ed-ol-rename-btn:hover { color: var(--signal); }

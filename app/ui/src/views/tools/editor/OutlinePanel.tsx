@@ -193,6 +193,11 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
       text
     );
 
+  const renameBtn = (key: string, title: string) => (
+    <button type="button" className="ed-ol-rename-btn" title={title} aria-label={title} onClick={(ev) => (ev.stopPropagation(), setRenaming(key))} onDoubleClick={(ev) => ev.stopPropagation()}>
+      ✎
+    </button>
+  );
   const pageOf = (key: string) => more[key] ?? PAGE;
   const showMore = (key: string, total: number) =>
     total > pageOf(key) ? (
@@ -230,9 +235,8 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
             <span className="ed-ol-twist" />
           )}
           <span className={`ed-ol-kind ${kids ? "solid" : "point"}`} aria-hidden="true" />
-          <span className="ed-ol-text" onDoubleClick={(ev) => (ev.stopPropagation(), setRenaming(key))} title="Double-click the name to rename (sets its targetname)">
-            {label(key, <>{e.classname}{name && <span className="muted"> “{name}”</span>}</>, { kind: "entity", e }, name ?? "")}
-          </span>
+          <span className="ed-ol-text">{label(key, <>{e.classname}{name && <span className="muted"> “{name}”</span>}</>, { kind: "entity", e }, name ?? "")}</span>
+          {renameBtn(key, "Rename (sets its targetname)")}
           {toggles({ ids, isHidden, isLocked })}
         </div>
         {kids && isOpen && e.brushes.map((id) => {
@@ -304,9 +308,10 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
             {isOpen ? "▾" : "▸"}
           </button>
           <span className="ed-ol-kind group" aria-hidden="true" />
-          <span className="ed-ol-text" onDoubleClick={(ev) => (ev.stopPropagation(), setRenaming(key))} title="Double-click the name to rename. Drop things here to put them in the group.">
+          <span className="ed-ol-text" title="Drop things here to put them in the group">
             {label(key, <>{g.name} <span className="muted small-note">{all}</span></>, { kind: "group", g }, g.name)}
           </span>
+          {renameBtn(key, "Rename the group")}
           <button type="button" className="btn small ed-ol-ungroup" title="Ungroup (the things stay)" onClick={(ev) => (ev.stopPropagation(), void s.cmd({ op: "ungroup", group: g.id }))}>
             Ungroup
           </button>
@@ -401,7 +406,7 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
           null,
         )}
       </div>
-      <p className="small-note muted">Click to pick (Ctrl/Shift adds). Double-click to look at it, double-click a name to rename. Drag onto a group to put it in.</p>
+      <p className="small-note muted">Click to pick (Ctrl/Shift adds). Double-click to look at it; ✎ renames. Drag onto a group to put it in.</p>
     </section>
   );
 }

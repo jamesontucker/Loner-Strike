@@ -14,6 +14,7 @@ import { EMPTY_SEL, facesOf, keyOf, originOf, selectionBounds, useEditor, type S
 import { useFgd } from "./fgd";
 import { FaceSheet, RecentTextures } from "./FaceSheet";
 import { EntityForm } from "./EntityForm";
+import { MultiEntityKeys } from "./MultiEntityKeys"; // P5
 
 // ---- toolbar --------------------------------------------------------------------------
 
@@ -286,6 +287,7 @@ function SelectionPanel() {
         {sel.entities.length ? `${sel.entities.length} entit${sel.entities.length === 1 ? "y" : "ies"}` : ""}
       </h3>
       {size && <p className="small-note muted">Size {fmt(size as Vec3)} · centre {fmt(centre!)}</p>}
+      <MultiEntityKeys /> {/* P5: keys of several entities at once */}
       {n > 0 && (
         <>
           <div className="editor-row">

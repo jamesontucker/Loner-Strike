@@ -25,6 +25,8 @@ import { paneCount, PaneCtx, usePaneActive, usePanes, usePaneView } from "./pane
 import { useP5 } from "./p5store";
 import { duplicateWith } from "./commands";
 import { shiftHeld, snapToGeometry } from "./snapGeo";
+import { edgeLook, flatMaterial, usePaneMode } from "./renderModes";
+import { EntityModelMesh, SpriteGlow, useEntityModel } from "./EntityModels";
 import { Bookmarks, MeasureLine, sameP, SelectRect, TexHandles, useVisibleBrush, VertexHandles } from "./SceneExtras";
 
 // ---- small helpers ---------------------------------------------------------------------
@@ -131,18 +133,19 @@ function isPicked(b: BrushGeo, sel: { brushes: number[]; entities: number[] }) {
 // ---- brushes --------------------------------------------------------------------------
 
 function BrushMesh({ b, mats, picked, hideSky, version, dim }: { b: BrushGeo; mats: MapMaterials; picked: boolean; hideSky: boolean; version: number; dim?: boolean }) {
-  const materials = useMemo(() => b.textures.map((t) => mats.get(drawOf(t))), [b, mats, version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mode = usePaneMode(); // P5: textured / flat / wire / textured + wire, per pane
+  const materials = useMemo(() => (mode === "flat" ? b.textures.map(flatMaterial) : b.textures.map((t) => mats.get(drawOf(t)))), [b, mats, version, mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const edges = useMemo(() => new THREE.EdgesGeometry(b.geometry, 20), [b]);
+  const look = edgeLook(mode, picked, b.entity != null);
   useEffect(() => () => edges.dispose(), [edges]);
   const skyOnly = hideSky && b.textures.every(isSkyTex);
-  const tied = b.entity != null;
   return (
     <group>
-      {!skyOnly && <mesh geometry={b.geometry} material={materials} userData={{ kind: "brush", id: b.id }} />}
+      {!skyOnly && <mesh geometry={b.geometry} material={materials} userData={{ kind: "brush", id: b.id }} visible={mode !== "wire"} />}
       {skyOnly && <mesh geometry={b.geometry} userData={{ kind: "brush", id: b.id, sky: true }} visible={false} />}
       {dim && !skyOnly && <mesh geometry={b.geometry} material={DIM_MATERIAL} renderOrder={2} raycast={() => null} />}
       <lineSegments geometry={edges} renderOrder={picked ? 3 : 1}>
-        <lineBasicMaterial color={picked ? "#ffd84a" : tied ? "#62c6d6" : "#10130d"} transparent opacity={picked ? 0.95 : 0.35} depthTest={!picked} />
+        <lineBasicMaterial color={look.color} transparent opacity={look.opacity} depthTest={!picked && mode !== "wire"} />
       </lineSegments>
     </group>
   );
@@ -234,15 +237,18 @@ function EntityBox({ e, picked }: { e: DocEntity; picked: boolean }) {
   const [sx, sy, sz] = look.size;
   const outline = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(sx, sy, sz)), [sx, sy, sz]);
   useEffect(() => () => outline.dispose(), [outline]);
+  const model = useEntityModel(e); // P5: the studio model in place of the box (View > Models)
   if (!o) return null;
   const len = Math.max(look.size[0], 24);
   const dir: Vec3 = yaw == null ? [0, 0, 0] : [Math.cos((yaw * Math.PI) / 180) * len, Math.sin((yaw * Math.PI) / 180) * len, 0];
   return (
     <group position={o}>
-      <mesh userData={{ kind: "entity", id: e.id }}>
+      <mesh userData={{ kind: "entity", id: e.id }} visible={!model}>
         <boxGeometry args={look.size} />
         <meshLambertMaterial color={look.colour} transparent opacity={0.85} />
       </mesh>
+      {model && <EntityModelMesh got={model} yaw={yaw ?? 0} body={Number(keyOf(e.keys, "body") ?? 0) || 0} skin={Number(keyOf(e.keys, "skin") ?? 0) || 0} />}
+      <SpriteGlow e={e} />
       <lineSegments geometry={outline} renderOrder={picked ? 3 : 1}>
         <lineBasicMaterial color={picked ? "#ffd84a" : "#11140e"} depthTest={!picked} />
       </lineSegments>

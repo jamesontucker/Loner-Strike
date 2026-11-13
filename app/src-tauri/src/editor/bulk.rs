@@ -662,6 +662,48 @@ impl Tidy for f64 {
     }
 }
 
+// ---- many entities' keys -----------------------------------------------------------------
+
+/// Sets (or, with an empty value, removes) one key on every listed entity, as one undo step.
+pub fn cmd_set_key_many(doc: &mut MapDocument, h: &mut History, entities: &[EntityId], key: &str, value: &str) -> OpResult<usize> {
+    let key = key.trim();
+    if entities.is_empty() {
+        return Err("Pick some entities first.".into());
+    }
+    if key.is_empty() || key.len() > 63 || key.contains(['"', '\n', '\r']) || key.contains(char::is_whitespace) {
+        return Err("A key is 1 to 63 characters, without spaces or quotes.".into());
+    }
+    if value.len() > 1023 || value.contains(['"', '\n', '\r']) {
+        return Err("A value is at most 1023 characters, without quotes or line breaks.".into());
+    }
+    if key == "classname" && value.trim().is_empty() {
+        return Err("Every entity needs a classname.".into());
+    }
+    let mut changed = Vec::new();
+    for id in entities {
+        let mut e = doc.entities.get(id).cloned().ok_or("That entity no longer exists.")?;
+        let before = e.get(key).map(str::to_string);
+        if value.is_empty() {
+            e.remove(key);
+        } else {
+            e.set(key, value);
+        }
+        if e.get(key).map(str::to_string) != before {
+            changed.push((*id, e));
+        }
+    }
+    if changed.is_empty() {
+        return Ok(0);
+    }
+    let n = changed.len();
+    let mut tx = Tx::new(doc, &format!("Set {key} on {n}"));
+    for (id, e) in changed {
+        tx.set_entity(id, e);
+    }
+    tx.commit(h);
+    Ok(n)
+}
+
 // ---- groups (outliner) ----------------------------------------------------------------
 
 pub fn cmd_rename_group(doc: &mut MapDocument, h: &mut History, id: GroupId, name: &str) -> OpResult<()> {
@@ -956,5 +998,22 @@ mod tests {
         assert_eq!(d.brushes[&bs[2]].group, None);
         h.undo(&mut d);
         assert_eq!(d.brushes[&bs[2]].group, Some(g));
+    }
+
+    #[test]
+    fn set_a_key_on_many() {
+        let (mut d, _, es) = sample();
+        let mut h = History::default();
+        assert_eq!(cmd_set_key_many(&mut d, &mut h, &[es[0], es[1], es[2]], "rendermode", "4").unwrap(), 3);
+        assert!(es[..3].iter().all(|e| d.entities[e].get("rendermode") == Some("4")));
+        // the same again changes nothing and makes no step
+        assert_eq!(cmd_set_key_many(&mut d, &mut h, &[es[0], es[1]], "rendermode", "4").unwrap(), 0);
+        // empty removes; one undo puts all of them back
+        assert_eq!(cmd_set_key_many(&mut d, &mut h, &[es[0], es[1], es[2]], "rendermode", "").unwrap(), 3);
+        h.undo(&mut d);
+        assert!(es[..3].iter().all(|e| d.entities[e].get("rendermode") == Some("4")));
+        assert!(cmd_set_key_many(&mut d, &mut h, &[es[0]], "bad key", "1").is_err());
+        assert!(cmd_set_key_many(&mut d, &mut h, &[es[0]], "classname", "").is_err());
+        assert!(cmd_set_key_many(&mut d, &mut h, &[es[0]], "message", "a \"quote\"").is_err());
     }
 }

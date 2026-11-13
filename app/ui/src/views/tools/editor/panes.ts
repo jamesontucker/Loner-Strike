@@ -26,6 +26,8 @@ type PaneState = {
   layout: LayoutId;
   /** what each pane slot shows */
   views: ViewId[];
+  /** each pane's render mode (null: by its view; see renderModes.ts) */
+  modes: (import("./renderModes").RenderMode | null)[];
   /** splitter places, per layout */
   splits: Record<LayoutId, Split>;
   /** the pane you last clicked or hovered with a key press */
@@ -49,8 +51,10 @@ const DEFAULT_SPLITS: Record<LayoutId, Split> = {
   two: { x: 0.5, y: 0.5, y2: 0.667 },
 };
 
-function load(): Pick<PaneState, "layout" | "views" | "splits"> {
-  const d = { layout: "single" as LayoutId, views: [...DEFAULT_VIEWS], splits: { ...DEFAULT_SPLITS } };
+const MODES = ["textured", "flat", "wire", "texwire"];
+
+function load(): Pick<PaneState, "layout" | "views" | "splits" | "modes"> {
+  const d = { layout: "single" as LayoutId, views: [...DEFAULT_VIEWS], splits: { ...DEFAULT_SPLITS }, modes: [null, null, null, null] as PaneState["modes"] };
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? "null");
     if (!v || typeof v !== "object") return d;
@@ -63,7 +67,8 @@ function load(): Pick<PaneState, "layout" | "views" | "splits"> {
       const f = DEFAULT_SPLITS[l.id];
       splits[l.id] = { x: clamp(o?.x, f.x), y: clamp(o?.y, f.y), y2: clamp(o?.y2, f.y2) };
     }
-    return { layout, views, splits };
+    const modes = Array.isArray(v.modes) && v.modes.length === 4 ? (v.modes.map((m: unknown) => (MODES.includes(m as string) ? m : null)) as PaneState["modes"]) : d.modes;
+    return { layout, views, splits, modes };
   } catch {
     return d;
   }
@@ -78,9 +83,9 @@ export const usePanes = create<PaneState>((set, get) => ({
   set: (p) => {
     set(p);
     const s = get();
-    if ("layout" in p || "views" in p || "splits" in p) {
+    if ("layout" in p || "views" in p || "splits" in p || "modes" in p) {
       try {
-        localStorage.setItem(KEY, JSON.stringify({ layout: s.layout, views: s.views, splits: s.splits }));
+        localStorage.setItem(KEY, JSON.stringify({ layout: s.layout, views: s.views, splits: s.splits, modes: s.modes }));
       } catch {
         /* private window */
       }

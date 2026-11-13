@@ -83,6 +83,13 @@ enum Cmd2 {
         group: u64,
         name: String,
     },
+    /// one key on many entities (empty value: remove it)
+    SetKeys {
+        entities: Vec<u64>,
+        key: String,
+        #[serde(default)]
+        value: String,
+    },
     /// into a group (null: out of every group); groups can go inside groups too
     MoveToGroup {
         group: Option<u64>,
@@ -140,6 +147,10 @@ fn run2(s: &mut Session, cmd: Cmd2) -> Result<Value, String> {
         }
         Cmd2::Distribute { brushes, entities, axis, lock } => {
             let n = bulk::cmd_distribute(d, h, &bids(&brushes), &eids(&entities), axis, lock)?;
+            json!({"moved": n})
+        }
+        Cmd2::SetKeys { entities, key, value } => {
+            let n = bulk::cmd_set_key_many(d, h, &eids(&entities), &key, &value)?;
             json!({"moved": n})
         }
         Cmd2::RenameGroup { group, name } => {
