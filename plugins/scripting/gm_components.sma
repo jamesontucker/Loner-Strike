@@ -424,9 +424,9 @@ public plugin_init()
 	g_msgRadar = get_user_msgid("Radar");
 	g_sync = CreateHudSyncObj();
 
-	RegisterHam(Ham_Spawn, "player", "ham_player_spawn", 1);
-	RegisterHam(Ham_Killed, "player", "ham_player_killed", 1);
-	RegisterHam(Ham_CS_Player_ResetMaxSpeed, "player", "ham_maxspeed", 1);
+	RegisterHamPlayer(Ham_Spawn, "ham_player_spawn", 1);
+	RegisterHamPlayer(Ham_Killed, "ham_player_killed", 1);
+	RegisterHamPlayer(Ham_CS_Player_ResetMaxSpeed, "ham_maxspeed", 1);
 	RegisterHam(Ham_Use, "info_target", "ham_use");
 	RegisterHam(Ham_TakeDamage, "info_target", "ham_takedamage");
 	RegisterHam(Ham_TakeDamage, "func_breakable", "ham_takedamage");
@@ -956,7 +956,9 @@ stock comp_init(s)
 			set_model(ent, m, g_kind[s] == K_CRATE ? DEFAULT_CRATE : DEFAULT_BOX);
 			engfunc(EngFunc_SetSize, ent, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 24.0});
 			set_pev(ent, pev_movetype, MOVETYPE_NONE);
-			set_pev(ent, pev_solid, g_kind[s] == K_CRATE ? SOLID_NOT : SOLID_BBOX);
+			/* crates turn solid once nobody stands in them (solid_when_clear) */
+			set_pev(ent, pev_solid, SOLID_NOT);
+			g_aux[s] = g_kind[s] == K_LOOT ? 1 : 0;
 			if (g_kind[s] == K_LOOT)
 			{
 				o[2] = g_floor[s] + 1.0;
@@ -1048,6 +1050,51 @@ stock Float:default_radius(kind)
 }
 
 /* links that need the whole map: doors, trains, barricades over map brushes, shrinker -> zone */
+/* g_aux[s] = 1 means "solid as soon as nobody overlaps it" (crates, barricades coming back) */
+stock solid_when_clear(s, solid)
+{
+	if (!g_aux[s])
+		return;
+	new ent = g_ent[s];
+	new Float:mn[3], Float:mx[3];
+	pev(ent, pev_absmin, mn);
+	pev(ent, pev_absmax, mx);
+	if (box_occupied(mn, mx))
+		return;
+	g_aux[s] = 0;
+	set_pev(ent, pev_solid, solid);
+	/* relink where it is (a brush's origin isn't its middle) */
+	new Float:o[3];
+	pev(ent, pev_origin, o);
+	engfunc(EngFunc_SetOrigin, ent, o);
+}
+
+/* is any living player or creature overlapping this box (with a little room) */
+stock bool:box_occupied(const Float:mn[3], const Float:mx[3])
+{
+	new Float:o[3];
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p))
+			continue;
+		pev(p, pev_origin, o);
+		if (o[0] + 18.0 > mn[0] && o[0] - 18.0 < mx[0] && o[1] + 18.0 > mn[1] && o[1] - 18.0 < mx[1] && o[2] + 38.0 > mn[2] && o[2] - 38.0 < mx[2])
+			return true;
+	}
+	new e = 0;
+	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
+	{
+		if (pev(e, pev_deadflag) != DEAD_NO)
+			continue;
+		new Float:cmn[3], Float:cmx[3];
+		pev(e, pev_absmin, cmn);
+		pev(e, pev_absmax, cmx);
+		if (cmx[0] > mn[0] && cmn[0] < mx[0] && cmx[1] > mn[1] && cmn[1] < mx[1] && cmx[2] > mn[2] && cmn[2] < mx[2])
+			return true;
+	}
+	return false;
+}
+
 stock comp_link(s)
 {
 	if (g_linked[s])
@@ -1558,6 +1605,15 @@ public tick()
 			case K_LOOT: tick_loot(s);
 			case K_CRATE: tick_crate(s, sec);
 			case K_DROP: tick_drop_marker(s);
+			case K_BARRICADE:
+			{
+				if (g_state[s] == 0)
+				{
+					new m[4];
+					pev(g_ent[s], pev_model, m, charsmax(m));
+					solid_when_clear(s, m[0] == '*' ? SOLID_BSP : SOLID_BBOX);
+				}
+			}
 			case K_EXTRACT: tick_extract(s);
 			case K_CHECKPOINT: tick_checkpoint(s);
 			case K_PLATFORM: tick_platform(s);
@@ -2260,6 +2316,7 @@ stock loot_look(s, bool:full)
 
 stock tick_loot(s)
 {
+	solid_when_clear(s, SOLID_BBOX);
 	if (g_state[s] == 1)
 	{
 		if (g_pf[s][W_RESPAWN] > 0.0 && g_now >= g_pf[s][W_BACKAT])
@@ -2398,8 +2455,10 @@ stock tick_crate(s, bool:sec)
 			set_pev(ent, pev_velocity, Float:{0.0, 0.0, 0.0});
 			set_pev(ent, pev_movetype, MOVETYPE_NONE);
 			engfunc(EngFunc_SetOrigin, ent, g_org[s]);
-			set_pev(ent, pev_solid, SOLID_BBOX);
 			engfunc(EngFunc_SetSize, ent, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 24.0});
+			/* never solid around someone standing there: it turns solid once the spot is clear */
+			set_pev(ent, pev_solid, SOLID_NOT);
+			g_aux[s] = 1;
 			g_state[s] = CRATE_FULL;
 			tier_glow(ent, 5);
 			smoke(g_org[s]);
@@ -2409,7 +2468,10 @@ stock tick_crate(s, bool:sec)
 		}
 	}
 	else if (g_state[s] == CRATE_FULL)
+	{
 		bots_open(s);
+		solid_when_clear(s, SOLID_BBOX);
+	}
 	if (sec && g_state[s] != CRATE_EMPTY && ki(s, "beacon", 1))
 	{
 		new Float:a[3], Float:b[3];
@@ -2433,7 +2495,10 @@ stock barricade_stand(s, bool:up)
 	{
 		g_state[s] = 0;
 		set_pev(ent, pev_effects, pev(ent, pev_effects) & ~EF_NODRAW);
-		set_pev(ent, pev_solid, model[0] == '*' ? SOLID_BSP : SOLID_BBOX);
+		/* solid now only if nobody is inside it; otherwise once they've stepped out */
+		g_aux[s] = 1;
+		set_pev(ent, pev_solid, SOLID_NOT);
+		solid_when_clear(s, model[0] == '*' ? SOLID_BSP : SOLID_BBOX);
 		set_pev(ent, pev_takedamage, DAMAGE_YES);
 		set_pev(ent, pev_health, g_val[s] > 0.0 ? g_val[s] : 1.0);
 		render(ent, kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
@@ -3857,8 +3922,10 @@ stock hint_comp(s)
 			{
 				if (ki(s, "blocks_bots", 1))
 					hint("block %d -1", ent);
-				if (g_team[s])
-					hint("goal %s defend %.0f %.0f %.0f %d 40", who, o[0], o[1], o[2], ent);
+				/* a goal for every bot of the team piles them all on one spot: only when asked
+				   (a mode usually spreads its own defenders) */
+				if (g_team[s] && ki(s, "defend_goal", 0))
+					hint("goal %s defend %.0f %.0f %.0f %d 30 0 300", who, o[0], o[1], o[2], ent);
 			}
 			else
 			{
