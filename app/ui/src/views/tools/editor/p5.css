@@ -297,3 +297,11 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .p5-chips button { padding: 2px 8px; font-size: 12px; }
 .p5-kit-missing { padding: 4px 8px; border-left: 3px solid #e0a040; background: rgba(224, 160, 64, 0.08); }
 .p5-prefab-update { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; font-size: 12px; }
+/* P5: Visgroups (the outliner's top) */
+.editor-vis-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.editor-vis-head strong { font-size: 13px; }
+.editor-vis-hidden { margin-left: auto; }
+.editor-vis .editor-vis-cols, .editor-vis .editor-vis-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 48px 26px; align-items: center; gap: 4px; }
+.editor-vis-cols { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.editor-vis-cols span:first-child, .editor-vis-row .editor-check { justify-self: center; }
+.editor-vis-count { text-align: right; justify-self: end; }

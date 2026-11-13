@@ -53,7 +53,7 @@ export function Toolbar() {
   return (
     <nav className="editor-tools" aria-label="Editing tools">
       {TOOLS.map((t) => (
-        <button key={t.id} type="button" className="editor-tool" aria-pressed={tool === t.id} title={`${t.label} (${t.key}): ${t.tip}`} onClick={() => useEditor.getState().set({ tool: t.id })}>
+        <button key={t.id} type="button" className="editor-tool" aria-pressed={tool === t.id} data-cmd={`tool.${t.id}`} data-tip={`${t.label}: ${t.tip}`} title={`${t.label} (${t.key}): ${t.tip}`} onClick={() => useEditor.getState().set({ tool: t.id })}>
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor">
             {ICONS[t.id]}
           </svg>
@@ -298,37 +298,38 @@ function SelectionPanel() {
               Wall thickness
               <input type="number" min={1} max={256} value={thickness} onChange={(e) => s.set({ thickness: Math.max(1, Math.min(256, Number(e.target.value) || 8)) })} />
             </label>
-            <button type="button" className="btn small" title="Make it a room: walls of this thickness around an empty middle (H)" onClick={() => void s.cmd({ op: "hollow", brushes: ids.brushes, thickness })}>
+            <button type="button" className="btn small" data-cmd="edit.hollow" data-tip="Make it a room: walls of this thickness around an empty middle" title="Make it a room: walls of this thickness around an empty middle" onClick={() => void s.cmd({ op: "hollow", brushes: ids.brushes, thickness })}>
               Hollow
             </button>
           </div>
           <div className="editor-row wrap">
-            <button type="button" className="btn small" disabled={n < 2} title="One brush around all the picked ones" onClick={() => void s.cmd({ op: "merge", brushes: ids.brushes })}>
+            <button type="button" className="btn small" disabled={n < 2} data-cmd="edit.merge" title="One brush around all the picked ones" onClick={() => void s.cmd({ op: "merge", brushes: ids.brushes })}>
               Merge
             </button>
             <button
               type="button"
               className="btn small"
               disabled={n !== 1}
+              data-cmd="edit.carve"
               title="Cut this brush's shape out of every brush it overlaps (makes many pieces)"
               onClick={() => void s.cmd({ op: "carve", cutter: ids.brushes[0], targets: [...useEditor.getState().brushes.keys()] })}
             >
               Carve
             </button>
-            <button type="button" className="btn small" title={`Put every corner on the ${grid}-unit grid`} onClick={() => void s.cmd({ op: "snap", brushes: ids.brushes, grid })}>
+            <button type="button" className="btn small" data-cmd="edit.snap" title={`Put every corner on the ${grid}-unit grid`} onClick={() => void s.cmd({ op: "snap", brushes: ids.brushes, grid })}>
               Snap to grid
             </button>
-            <button type="button" className="btn small" title="A copy, one grid step over (Ctrl+D)" onClick={() => duplicate()}>
+            <button type="button" className="btn small" data-cmd="edit.duplicate" data-tip="A copy, one grid step over" title="A copy, one grid step over" onClick={() => duplicate()}>
               Duplicate
             </button>
-            <button type="button" className="btn small" title="Several copies, each moved and turned from the last (Ctrl+Shift+V)" onClick={() => s.set({ dialog: "paste" })}>
+            <button type="button" className="btn small" data-cmd="edit.pasteSpecial" data-tip="Several copies, each moved and turned from the last" title="Several copies, each moved and turned from the last" onClick={() => s.set({ dialog: "paste" })}>
               Paste special…
             </button>
           </div>
           <div className="editor-row wrap">
             <span className="muted editor-row-label">Flip</span>
             {["X", "Y", "Z"].map((a, i) => (
-              <button key={a} type="button" className="btn small" title={`Mirror along ${a}`} onClick={() => mirror(i)}>
+              <button key={a} type="button" className="btn small" data-cmd={`edit.mirror${a}`} title={`Mirror along ${a}`} onClick={() => mirror(i)}>
                 {a}
               </button>
             ))}
@@ -362,6 +363,7 @@ function SelectionPanel() {
               <button
                 type="button"
                 className="btn small"
+                data-cmd="edit.tie"
                 title="Turn these brushes into a door, trigger, buy zone..."
                 onClick={async () => {
                   const r = await s.cmd({ op: "tie", brushes: ids.brushes, classname: tie });
@@ -378,6 +380,8 @@ function SelectionPanel() {
         <button
           type="button"
           className="btn small"
+          data-cmd="edit.group"
+          title="Keep these together: a click picks the lot"
           onClick={async () => {
             const name = `Group ${(useEditor.getState().doc?.groups.length ?? 0) + 1}`;
             await s.cmd({ op: "group", name, brushes: sel.brushes, entities: sel.entities });
@@ -386,17 +390,17 @@ function SelectionPanel() {
           Group
         </button>
         {centre && size && (
-          <button type="button" className="btn small" onClick={() => useTools.getState().look(centre, Math.max(...size))}>
+          <button type="button" className="btn small" data-cmd="view.frame" title="Bring it into the middle of the view" onClick={() => useTools.getState().look(centre, Math.max(...size))}>
             Look at
           </button>
         )}
-        <button type="button" className="btn small" title="Hide what's picked for now (H). U shows everything again." onClick={() => hideSelection()}>
+        <button type="button" className="btn small" data-cmd="sel.hide" data-tip="Hide what's picked for now (Show everything brings it back)" title="Hide what's picked for now" onClick={() => hideSelection()}>
           Hide
         </button>
-        <button type="button" className="btn small" title="Hide everything else (Shift+H)" onClick={() => isolateSelection()}>
+        <button type="button" className="btn small" data-cmd="sel.isolate" data-tip="Hide everything else" title="Hide everything else" onClick={() => isolateSelection()}>
           Isolate
         </button>
-        <button type="button" className="btn small danger" onClick={() => deleteSelection()}>
+        <button type="button" className="btn small danger" data-cmd="edit.delete" title="Delete what's picked" onClick={() => deleteSelection()}>
           Delete
         </button>
       </div>
@@ -621,7 +625,7 @@ export function Outline() {
   );
 }
 
-/** Hidden things and simple visibility groups (named sets kept with this map on this computer). */
+/** Hidden things and visgroups (named groups to hide and show, kept in the project). */
 export function Visibility() { // P5: exported for the outliner
   const hidden = useEditor((s) => s.hidden);
   const docName = useEditor((s) => s.doc?.name ?? "");
@@ -655,36 +659,47 @@ export function Visibility() { // P5: exported for the outliner
     for (const e of g.entities) hide ? entities.add(e) : entities.delete(e);
     s.set({ hidden: { brushes, entities } });
   };
+  // P5: called Visgroups (Hammer's word: .rmf imports bring theirs in), with a header and labelled columns
   return (
-    <div className="editor-vis">
-      <div className="editor-row wrap">
-        <span className="muted">{n ? `${n} hidden` : "Nothing hidden"}</span>
-        <button type="button" className="btn small" disabled={!n} title="Show everything (U)" onClick={() => showAll()}>
+    <div className="editor-vis" role="group" aria-label="Visgroups">
+      <div className="editor-vis-head">
+        <strong>Visgroups</strong>
+        {groups.length > 0 && <span className="muted">{groups.length}</span>}
+        <span className="muted editor-vis-hidden">{n ? `${n} hidden` : "Nothing hidden"}</span>
+        <button type="button" className="btn small" disabled={!n} data-cmd="sel.showAll" title="Show everything" onClick={() => showAll()}>
           Show all
         </button>
         <button
           type="button"
           className="btn small"
           disabled={!has}
-          title="A named set of what's picked that you can hide and show in one click"
+          title={has ? "A named group of what's picked that you can hide and show in one click" : "Pick some brushes or entities first"}
           onClick={() => {
             const ids = selectionIds();
-            save([...groups, { name: `Set ${groups.length + 1}`, brushes: ids.brushes, entities: ids.entities }]);
+            save([...groups, { name: `Visgroup ${groups.length + 1}`, brushes: ids.brushes, entities: ids.entities }]);
           }}
         >
-          New visibility set
+          New visgroup
         </button>
       </div>
+      {groups.length > 0 && (
+        <div className="editor-vis-cols muted" aria-hidden="true">
+          <span>Shown</span>
+          <span>Name</span>
+          <span>Things</span>
+          <span />
+        </div>
+      )}
       {groups.map((g, i) => (
-        <div key={i} className="editor-tree-row">
-          <label className="editor-check" title={isHidden(g) ? "Hidden: tick to show" : "Shown: untick to hide"}>
-            <input type="checkbox" checked={!isHidden(g)} onChange={() => toggle(g)} />
+        <div key={i} className="editor-tree-row editor-vis-row">
+          <label className="editor-check" title={isHidden(g) ? `“${g.name}” is hidden: tick to show it` : `“${g.name}” is shown: untick to hide it`}>
+            <input type="checkbox" checked={!isHidden(g)} aria-label={`Show visgroup ${g.name}`} onChange={() => toggle(g)} />
           </label>
-          <input className="editor-vis-name" value={g.name} aria-label="Set name" onChange={(e) => save(groups.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-          <button type="button" className="linklike" title="Pick what's in it" onClick={() => s.select({ brushes: g.brushes, entities: g.entities, face: null })}>
+          <input className="editor-vis-name" value={g.name} aria-label="Visgroup name" title="The visgroup's name (click to rename)" onChange={(e) => save(groups.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+          <button type="button" className="linklike editor-vis-count" title={`Pick the ${g.brushes.length + g.entities.length} things in it`} onClick={() => s.select({ brushes: g.brushes, entities: g.entities, face: null })}>
             {g.brushes.length + g.entities.length}
           </button>
-          <button type="button" className="btn small icon" aria-label={`Remove ${g.name}`} title="Remove the set (not what's in it)" onClick={() => save(groups.filter((_, j) => j !== i))}>
+          <button type="button" className="btn small icon" aria-label={`Remove visgroup ${g.name}`} title="Remove the visgroup (not what's in it)" onClick={() => save(groups.filter((_, j) => j !== i))}>
             ×
           </button>
         </div>

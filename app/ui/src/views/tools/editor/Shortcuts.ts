@@ -287,8 +287,38 @@ export function runCommand(id: string): boolean {
 
 let wasdTold = false;
 
+/** The keys of a command in the current key set, as shown (" (⌘H)"), or "". */
+export function keyHint(id: string): string {
+  const k = keysOf(id).slice(0, 2).map(showKey);
+  return k.length ? ` (${k.join(" or ")})` : "";
+}
+
+/** P5: every button with `data-cmd="<command id>"` shows that command's keys (from the key set
+ *  in use, your own keys included) at the end of its tooltip; `data-tip` is the tooltip
+ *  without them (else its title is used). Set when the pointer or the focus comes to it. */
+function useKeyTitles() {
+  useEffect(() => {
+    const show = (e: Event) => {
+      const el = (e.target as HTMLElement | null)?.closest?.<HTMLElement>("[data-cmd]");
+      if (!el) return;
+      const added = el.dataset.keyAdded ?? "";
+      const base = el.dataset.tip ?? (added && el.title.endsWith(added) ? el.title.slice(0, -added.length) : el.title);
+      const suffix = keyHint(el.dataset.cmd!);
+      el.title = `${base}${suffix}`;
+      el.dataset.keyAdded = suffix;
+    };
+    document.addEventListener("pointerover", show, true);
+    document.addEventListener("focusin", show, true);
+    return () => {
+      document.removeEventListener("pointerover", show, true);
+      document.removeEventListener("focusin", show, true);
+    };
+  }, []);
+}
+
 /** Mounted once by the menu bar: keys to commands. */
 export function useShortcuts() {
+  useKeyTitles();
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       // the camera's keys while looking round (navigation presets)

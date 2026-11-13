@@ -170,24 +170,24 @@ export const jumpHistory = (steps: number) => post<{ changed: boolean; steps: nu
 export async function cmd2(body: Record<string, unknown>, opts: { quiet?: boolean } = {}): Promise<Cmd2Result> {
   const s = useEditor.getState();
   s.set({ working: s.working + 1 });
-  let r: Cmd2Result;
+  // (until the view has caught up: the status bar's "Working…" covers it all)
   try {
-    r = await post<Cmd2Result>(`${E}/cmd2`, body);
+    const r = await post<Cmd2Result>(`${E}/cmd2`, body);
+    const d = useEditor.getState().doc;
+    if (r.state && d) useEditor.setState({ doc: { ...d, ...r.state } });
+    if (r.error) {
+      if (!opts.quiet) s.notify(r.error, true);
+      return r;
+    }
+    if (r.changed) await useEditor.getState().syncMeshes();
+    if (r.changed || r.docChanged) {
+      await useEditor.getState().refreshDoc();
+      useEditor.getState().refreshChecks();
+    }
+    return r;
   } finally {
     useEditor.setState((x) => ({ working: x.working - 1 }));
   }
-  const d = useEditor.getState().doc;
-  if (r.state && d) useEditor.setState({ doc: { ...d, ...r.state } });
-  if (r.error) {
-    if (!opts.quiet) s.notify(r.error, true);
-    return r;
-  }
-  if (r.changed) await useEditor.getState().syncMeshes();
-  if (r.changed || r.docChanged) {
-    await useEditor.getState().refreshDoc();
-    useEditor.getState().refreshChecks();
-  }
-  return r;
 }
 
 /** After an undo/redo-like jump or a file opened from the project list. */

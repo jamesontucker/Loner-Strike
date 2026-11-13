@@ -1,7 +1,7 @@
 // P4's editor helpers: the prefab library's page state, what the 3D view(s) can be asked from
 // outside the canvas (what's under a point for drag and drop, the camera, a framed picture
 // for a prefab thumbnail, the box in view for the cordon), the settings kept in the project
-// (visibility sets, the cordon), and picking up changes made from outside (MCP agents).
+// (visgroups, the cordon), and picking up changes made from outside (MCP agents).
 
 import { kitPlacement } from "./kits"; // P5
 import type { RootState } from "@react-three/fiber";

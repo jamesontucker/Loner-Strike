@@ -336,47 +336,60 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   cmd: async (body, opts = {}) => {
-    set((s) => ({ working: s.working + 1 }));
-    let r: CmdResult;
+    // P5: "working" lasts until the view and the outliner have caught up (on a big map the
+    // meshes take longer than the command), so the status bar's "Working…" covers it all
+    // (each step of a drag is quick and the drag shows itself: not counted)
+    const counts = !(body as { drag?: unknown }).drag;
+    if (counts) set((s) => ({ working: s.working + 1 }));
     try {
-      r = await api.sendCmd(body);
-    } finally {
-      set((s) => ({ working: s.working - 1 }));
-    }
-    if (r.state) mergeState(r.state);
-    if (r.error) {
-      if (!opts.quiet) get().notify(r.error, true);
-      set({ preview: null });
+      const r: CmdResult = await api.sendCmd(body);
+      if (r.state) mergeState(r.state);
+      if (r.error) {
+        if (!opts.quiet) get().notify(r.error, true);
+        set({ preview: null });
+        return r;
+      }
+      if (r.note && body.op !== "group") get().notify(r.note);
+      if (r.changed) await get().syncMeshes();
+      if (opts.doc !== false) {
+        await get().refreshDoc();
+        get().refreshChecks();
+      }
       return r;
+    } finally {
+      if (counts) set((s) => ({ working: s.working - 1 }));
     }
-    if (r.note && body.op !== "group") get().notify(r.note);
-    if (r.changed) await get().syncMeshes();
-    if (opts.doc !== false) {
-      await get().refreshDoc();
-      get().refreshChecks();
-    }
-    return r;
   },
 
   undo: async () => {
-    const r = await api.undo();
-    if (r.error) return get().notify(r.error, true);
-    if (r.state) mergeState(r.state);
-    if (!r.changed) return;
-    await get().syncMeshes();
-    await get().refreshDoc();
-    get().refreshChecks();
-    if (r.label) get().notify(`Undid ${r.label.toLowerCase()}`);
+    set((s) => ({ working: s.working + 1 })); // P5
+    try {
+      const r = await api.undo();
+      if (r.error) return get().notify(r.error, true);
+      if (r.state) mergeState(r.state);
+      if (!r.changed) return;
+      await get().syncMeshes();
+      await get().refreshDoc();
+      get().refreshChecks();
+      if (r.label) get().notify(`Undid ${r.label.toLowerCase()}`);
+    } finally {
+      set((s) => ({ working: s.working - 1 }));
+    }
   },
   redo: async () => {
-    const r = await api.redo();
-    if (r.error) return get().notify(r.error, true);
-    if (r.state) mergeState(r.state);
-    if (!r.changed) return;
-    await get().syncMeshes();
-    await get().refreshDoc();
-    get().refreshChecks();
-    if (r.label) get().notify(`Redid ${r.label.toLowerCase()}`);
+    set((s) => ({ working: s.working + 1 })); // P5
+    try {
+      const r = await api.redo();
+      if (r.error) return get().notify(r.error, true);
+      if (r.state) mergeState(r.state);
+      if (!r.changed) return;
+      await get().syncMeshes();
+      await get().refreshDoc();
+      get().refreshChecks();
+      if (r.label) get().notify(`Redid ${r.label.toLowerCase()}`);
+    } finally {
+      set((s) => ({ working: s.working - 1 }));
+    }
   },
 
   file: async (what) => {

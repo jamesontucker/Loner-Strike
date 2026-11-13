@@ -230,12 +230,12 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
         </span>
         <span className="tag tools-beta">Beta</span>
         <div className="editor-files">
-          <button type="button" className="btn small" disabled={!!fileBusy} onClick={() => void replace("new")}>New</button>
-          <button type="button" className="btn small" disabled={!!fileBusy} onClick={() => void replace("open")}>Open</button>
-          <button type="button" className="btn small" disabled={!!fileBusy} onClick={() => void replace("import")}>Import .map</button>
-          <button type="button" className="btn small" disabled={!!fileBusy} title="Save the project (Ctrl+S)" onClick={() => void s.file("save")}>Save</button>
-          <button type="button" className="btn small" disabled={!!fileBusy} onClick={() => void s.file("saveAs")}>Save as</button>
-          <button type="button" className="btn small" disabled={!!fileBusy} title="Write a .map file for a map compiler" onClick={() => void s.file("export")}>Export .map</button>
+          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.new" title="Start a new map" onClick={() => void replace("new")}>New</button>
+          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.open" title="Open a map project" onClick={() => void replace("open")}>Open</button>
+          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.import" title="Import a .map file" onClick={() => void replace("import")}>Import .map</button>
+          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.save" title="Save the project" onClick={() => void s.file("save")}>Save</button>
+          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.saveAs" title="Save the project as a new file" onClick={() => void s.file("saveAs")}>Save as</button>
+          <button type="button" className="btn small" disabled={!!fileBusy} data-cmd="file.export" title="Write a .map file for a map compiler" onClick={() => void s.file("export")}>Export .map</button>
           {recent.length > 0 && (
             <select
               className="editor-recent-select"
@@ -253,9 +253,9 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
               ))}
             </select>
           )}
-          <button type="button" className="btn small" title="Sky, WADs, sun and rules" onClick={() => s.set({ dialog: "props" })}>Map properties</button>
+          <button type="button" className="btn small" data-cmd="file.props" title="Sky, WADs, sun and rules" onClick={() => s.set({ dialog: "props" })}>Map properties</button>
           {/* P5: the bar's main action: compile, put it in the game, play it (F5) */}
-          <button type="button" className="btn small primary" title="Compile it, put it in the game and play it with bots, as the Compile panel is set (F5)" onClick={() => playtestNow()}>
+          <button type="button" className="btn small primary" data-cmd="map.playtest" title="Compile it, put it in the game and play it with bots, as the Compile panel is set" onClick={() => playtestNow()}>
             Playtest
           </button>
           {/* P4: Tools > Community's Publish, for the map compiled from this one */}
@@ -263,15 +263,15 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
           <BusyLabel busy={!!fileBusy} label={fileBusy ?? ""} />
         </div>
         <span className="push" />
-        <button type="button" className="btn small" disabled={!doc.undo} title={doc.undo ? `Undo ${doc.undo} (Ctrl+Z)` : "Nothing to undo"} onClick={() => void s.undo()}>
+        <button type="button" className="btn small" disabled={!doc.undo} data-cmd="edit.undo" title={doc.undo ? `Undo ${doc.undo}` : "Nothing to undo"} onClick={() => void s.undo()}>
           Undo
         </button>
-        <button type="button" className="btn small" disabled={!doc.redo} title={doc.redo ? `Redo ${doc.redo} (Ctrl+Shift+Z)` : "Nothing to redo"} onClick={() => void s.redo()}>
+        <button type="button" className="btn small" disabled={!doc.redo} data-cmd="edit.redo" title={doc.redo ? `Redo ${doc.redo}` : "Nothing to redo"} onClick={() => void s.redo()}>
           Redo
         </button>
         <div className="seg" role="group" aria-label="View">
           {VIEWS.map((v) => (
-            <button key={v.id} type="button" aria-pressed={view === v.id} title={`${v.label} view (${v.key})`} onClick={() => s.set({ view: v.id })}>
+            <button key={v.id} type="button" aria-pressed={view === v.id} data-cmd={`view.${v.id}`} data-tip={`${v.label} view`} title={`${v.label} view (${v.key})`} onClick={() => s.set({ view: v.id })}>
               {v.label}
             </button>
           ))}
@@ -321,11 +321,11 @@ function Status({ working }: { working: boolean }) {
   const view = useEditor((s) => s.view);
   const stats = useEditor((s) => s.doc?.stats);
   const t = TOOLS.find((x) => x.id === tool);
-  // show "Saving…" only for commands that take a moment
+  // show "Working…" only for edits that take a moment (P5: over 300 ms, with a spinner)
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     if (!working) return setSlow(false);
-    const id = setTimeout(() => setSlow(true), 200);
+    const id = setTimeout(() => setSlow(true), 300);
     return () => clearTimeout(id);
   }, [working]);
   const autosaved = useEditor((s) => s.autosavedAt);
@@ -351,7 +351,7 @@ function Status({ working }: { working: boolean }) {
       </span>
       <span>
         {slow ? (
-          <BusyLabel busy label="Saving…" />
+          <span role="status" aria-live="polite"><BusyLabel busy label="Working…" /></span>
         ) : (
           // P5: the map's own entities (stats.entities also counts worldspawn, for the game's limit)
           stats && `${stats.brushes} brushes · ${stats.point_entities + stats.brush_entities} entities${autosaved ? ` · autosaved ${autosaved}` : ""}`
