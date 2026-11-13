@@ -38,7 +38,6 @@ enum { PH_IDLE = 0, PH_PREPARE, PH_WAVE, PH_BREAK, PH_OVER };
 new const TYPES[][] = { "zombie", "runner", "brute", "spitter", "boss" };
 new const TYPE_HP[] = { 100, 60, 450, 120, 3000 };
 new const TYPE_MONEY[] = { 100, 100, 250, 150, 1000 };
-new const CREATURE_PRECACHE[] = "zombie runner brute spitter boss";
 
 new g_cWaves, g_cDiff, g_cPrepare, g_cBreak, g_cRevive, g_cDrops, g_cCreatures, g_cDefenders, g_cWaveMoney, g_cWaitHuman, g_cOverrun, g_cLastChance, g_cLives, g_cBaseRadius, g_cBuyAnywhere, g_cShopScale;
 
@@ -103,15 +102,11 @@ public plugin_precache()
 	load_waves();
 	if (g_hasCreatureDll && get_pcvar_num(g_cCreatures))
 	{
-		/* the built-in types, plus whatever waves.ini names */
+		/* only the types this map's stand will use (each type loads its model and sounds) */
 		new list[256];
-		copy(list, charsmax(list), CREATURE_PRECACHE);
-		for (new r = 0; r < g_nrows; r++)
-			for (new m = 0; m < g_wMixN[r]; m++)
-				add_word(list, charsmax(list), g_wMixType[r][m]);
-		if (g_wBoss[0])
-			add_word(list, charsmax(list), g_wBoss);
+		precache_types(list, charsmax(list));
 		set_cvar_string("ls_creature_precache", list);
+		log_amx("Last Stand: creature types for this map: %s", list);
 	}
 }
 
@@ -128,7 +123,7 @@ public plugin_init()
 	g_cDefenders = register_cvar("lst_defenders", "4");
 	g_cWaveMoney = register_cvar("lst_wave_money", "1000");
 	g_cWaitHuman = register_cvar("lst_wait_human", "1");
-	g_cOverrun = register_cvar("lst_overrun", "10");
+	g_cOverrun = register_cvar("lst_overrun", "15");
 	g_cLastChance = register_cvar("lst_last_chance", "30");
 	g_cLives = register_cvar("lst_lives", "5");
 	g_cBaseRadius = register_cvar("lst_base_radius", "450");
@@ -441,14 +436,14 @@ stock Float:time_scale()
 }
 
 /* the base: a component named lst_base (a map's inner room), else lst_base_radius round the base */
-stock bool:in_base(e)
+stock bool:in_base(e, Float:margin = 0.0)
 {
 	new Float:o[3];
 	pev(e, pev_origin, o);
 	new b = ls_comp_by_name("lst_base");
 	if (b)
 	{
-		if (1 <= e <= MaxClients)
+		if ((1 <= e <= MaxClients) && margin <= 0.0)
 			return ls_comp_inside(b, e);
 		new Float:bo[3], sz[32];
 		pev(b, pev_origin, bo);
@@ -456,14 +451,14 @@ stock bool:in_base(e)
 		{
 			new a[3][12];
 			parse(sz, a[0], 11, a[1], 11, a[2], 11);
-			return floatabs(o[0] - bo[0]) <= str_to_float(a[0]) * 0.5 && floatabs(o[1] - bo[1]) <= str_to_float(a[1]) * 0.5
-				&& o[2] > bo[2] - 64.0 && o[2] < bo[2] + str_to_float(a[2]) + 64.0;
+			return floatabs(o[0] - bo[0]) <= str_to_float(a[0]) * 0.5 + margin && floatabs(o[1] - bo[1]) <= str_to_float(a[1]) * 0.5 + margin
+				&& o[2] > bo[2] - 64.0 - margin && o[2] < bo[2] + str_to_float(a[2]) + 64.0 + margin;
 		}
-		new Float:r = ls_comp_getf(b, "radius", 300.0);
-		return floatsqroot((o[0] - bo[0]) * (o[0] - bo[0]) + (o[1] - bo[1]) * (o[1] - bo[1])) <= r && floatabs(o[2] - bo[2]) < 160.0;
+		new Float:r = ls_comp_getf(b, "radius", 300.0) + margin;
+		return floatsqroot((o[0] - bo[0]) * (o[0] - bo[0]) + (o[1] - bo[1]) * (o[1] - bo[1])) <= r && floatabs(o[2] - bo[2]) < 160.0 + margin;
 	}
-	new Float:r = get_pcvar_float(g_cBaseRadius);
-	return floatsqroot((o[0] - g_base[0]) * (o[0] - g_base[0]) + (o[1] - g_base[1]) * (o[1] - g_base[1])) <= r && floatabs(o[2] - g_base[2]) < 200.0;
+	new Float:r = get_pcvar_float(g_cBaseRadius) + margin;
+	return floatsqroot((o[0] - g_base[0]) * (o[0] - g_base[0]) + (o[1] - g_base[1]) * (o[1] - g_base[1])) <= r && floatabs(o[2] - g_base[2]) < 200.0 + margin;
 }
 
 /* sets why when the stand is lost this second */
@@ -474,22 +469,27 @@ stock lose_checks(why[], len)
 	new limit = floatround(get_pcvar_float(g_cOverrun) * time_scale());
 	if (get_pcvar_num(g_cOverrun) > 0)
 	{
+		/* genuinely abandoned: two or more enemies (or the boss) inside the base, and no
+		   defender in it or fighting close outside it (350 u round it) */
 		new enemies = 0, inside = 0;
 		if (g_creatures)
 		{
-			new e = -1;
-			while ((e = find_ent_by_class(e, "ls_creature")) > 0 && !enemies)
+			new e = -1, type[16];
+			while ((e = find_ent_by_class(e, "ls_creature")) > 0 && enemies < 2)
 				if (pev(e, pev_deadflag) == DEAD_NO && in_base(e))
-					enemies++;
+				{
+					pev(e, pev_netname, type, charsmax(type));
+					enemies += equal(type, g_wBoss) ? 2 : 1;
+				}
 		}
 		else
-			for (new p = 1; p <= MaxClients && !enemies; p++)
+			for (new p = 1; p <= MaxClients && enemies < 2; p++)
 				if (is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_T && in_base(p))
 					enemies++;
 		for (new p = 1; p <= MaxClients && !inside; p++)
-			if (is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_CT && in_base(p))
+			if (is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_CT && in_base(p, 350.0))
 				inside++;
-		if (enemies && !inside)
+		if (enemies >= 2 && !inside)
 		{
 			g_overrun++;
 			if (g_overrun >= limit)
@@ -1721,6 +1721,35 @@ stock load_waves()
 	fclose(f);
 	if (found)
 		log_amx("Last Stand: waves from waves.ini (%d rows, boss %s every %d).", g_nrows, g_wBoss, g_wBossEvery);
+}
+
+/* the types waves 1..lst_waves use (every wave when endless), from waves.ini or the built-in mix */
+stock precache_types(list[], len)
+{
+	list[0] = EOS;
+	new p = get_cvar_pointer("lst_waves");
+	new n = p ? get_pcvar_num(p) : 10;
+	if (n <= 0)
+		n = 1000;
+	if (g_nrows)
+	{
+		for (new r = 0; r < g_nrows; r++)
+			if (g_wRowFrom[r] <= n)
+				for (new m = 0; m < g_wMixN[r]; m++)
+					if (g_wMixW[r][m] > 0)
+						add_word(list, len, g_wMixType[r][m]);
+	}
+	else
+	{
+		add_word(list, len, "zombie");
+		if (n >= 2) add_word(list, len, "runner");
+		if (n >= 3) add_word(list, len, "brute");
+		if (n >= 4) add_word(list, len, "spitter");
+	}
+	if (g_wBoss[0] && g_wBossEvery > 0 && g_wBossEvery <= n)
+		add_word(list, len, g_wBoss);
+	if (!list[0])
+		copy(list, len, "zombie");
 }
 
 stock add_word(list[], len, const word[])

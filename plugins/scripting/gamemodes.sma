@@ -140,7 +140,7 @@ new const SETTINGS[][SettingData] =
 	{ "br_start",              "Start with",          "knife knife+glock18",       "Knife|Knife and a pistol",              CAT_MATCH, SC_MODE, "" },
 	{ "br_drop",               "Loot-up time",        "10 20 40",                  "10s|20s|40s",                           CAT_MATCH, SC_MODE, "" },
 	{ "br_zone_start",         "Zone starts after",   "20 40 90",                  "20s|40s|90s",                           CAT_MATCH, SC_MODE, "" },
-	{ "lst_overrun",           "Base overrun after",  "5 10 20 0",                 "5s|10s|20s|Never",                      CAT_MATCH, SC_MODE, "" },
+	{ "lst_overrun",           "Base overrun after",  "10 15 25 0",                "10s|15s|25s|Never",                      CAT_MATCH, SC_MODE, "" },
 	{ "lst_last_chance",       "Bots' last chance",   "15 30 60 0",                "15s|30s|60s|Bots carry on alone",       CAT_MATCH, SC_MODE, "" },
 	{ "lst_lives",             "Nightmare lives",     "3 5 10",                    "3|5|10",                                CAT_MATCH, SC_MODE, "" },
 	{ "lst_shopkeeper",        "Shopkeeper",          "barney gman none",          "Barney|G-Man|Nobody (next map)",        CAT_MATCH, SC_MODE, "" },
