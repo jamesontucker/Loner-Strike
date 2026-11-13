@@ -80,6 +80,10 @@ native ls_marker_find(const kind[], start = 0);
 /** A marker's key (size, radius, angle, any other); false if it has none. */
 native bool:ls_marker_get(ent, const key[], out[], len);
 
+/** A big announcement on the shared toast line (one at a time per player, queued; the same text
+    again, or replace 1, shows at once in place: a countdown). id 0: everyone. */
+native ls_toast(id, Float:secs, const text[], r = 255, g = 200, b = 60, replace = 0);
+
 /** How many components of a kind there are ("" counts all). */
 native ls_comp_count(const classname[] = "");
 

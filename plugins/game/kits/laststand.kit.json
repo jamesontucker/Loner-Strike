@@ -1,7 +1,11 @@
 {
   "schema": "loner-strike/mode-kit",
   "version": 1,
-  "mode": { "id": "laststand", "name": "Last Stand", "description": "Hold the base against waves of creatures" },
+  "mode": {
+    "id": "laststand",
+    "name": "Last Stand",
+    "description": "Hold the base against waves of creatures"
+  },
   "source": "hand",
   "markers": [
     {
@@ -9,27 +13,78 @@
       "label": "Base",
       "description": "The room the team holds. Enemies inside it with no defender near overrun it. Without one, the base is a circle round the CT spawns (lst_base_radius).",
       "type": "area",
-      "required": { "min": 0, "max": 1 },
+      "required": {
+        "min": 0,
+        "max": 1
+      },
       "keys": [],
-      "draw": { "colour": "#2e86de", "icon": "flag", "shape": "box", "size": [1024, 1024, 256] }
+      "draw": {
+        "colour": "#2e86de",
+        "icon": "flag",
+        "shape": "box",
+        "size": [
+          1024,
+          1024,
+          256
+        ]
+      }
     },
     {
       "id": "lst_shop",
       "label": "Armory",
       "description": "Where players press USE for repair kits, armour, grenades and ammo; the shopkeeper stands here. A func_buyzone named lst_shop works too. Without one, the armory is the base.",
       "type": "point",
-      "required": { "min": 0, "max": 1 },
+      "required": {
+        "min": 0,
+        "max": 1
+      },
       "keys": [],
-      "draw": { "colour": "#f39c12", "icon": "star", "shape": "diamond" }
+      "draw": {
+        "colour": "#f39c12",
+        "icon": "star",
+        "shape": "diamond"
+      }
     }
   ],
   "components": [
-    { "classname": "ls_wave_spawner", "min": 1, "max": 16, "note": "Where creatures come in, out of sight of the base. Without one, waves start at the T spawn." },
-    { "classname": "ls_barricade", "min": 0, "max": 12, "note": "Gates: a CLIP brush (or marker with size) and boards=<name> of its func_illusionary boards." },
-    { "classname": "ls_supply_drop", "min": 0, "max": 8, "note": "Open ground near the base where supply crates land every few waves." },
-    { "classname": "ls_weapon_spawner", "min": 0, "max": 16, "note": "Optional guns lying in or near the base." }
+    {
+      "classname": "ls_wave_spawner",
+      "min": 1,
+      "max": 16,
+      "note": "Where creatures come in, out of sight of the base. Without one, waves start at the T spawn."
+    },
+    {
+      "classname": "ls_barricade",
+      "min": 0,
+      "max": 12,
+      "note": "Gates: a CLIP brush (or size) with boards=<its boards' name> and label=<gate name> for the gates list."
+    },
+    {
+      "classname": "ls_supply_drop",
+      "min": 0,
+      "max": 8,
+      "note": "Open ground near the base where supply crates land every few waves."
+    },
+    {
+      "classname": "ls_weapon_spawner",
+      "min": 0,
+      "max": 16,
+      "note": "Optional guns lying in or near the base."
+    }
   ],
-  "creatures": [ "zombie", "runner", "brute", "spitter", "boss" ],
-  "map": { "size": "medium", "players": { "min": 1, "max": 16 } },
+  "creatures": [
+    "zombie",
+    "runner",
+    "brute",
+    "spitter",
+    "boss"
+  ],
+  "map": {
+    "size": "medium",
+    "players": {
+      "min": 1,
+      "max": 16
+    }
+  },
   "notes": "One base the CTs defend, two to four ways in. Put gates (barricades) on the ways in: bullets pass the gaps between boards, creatures and players don't. Spawners far enough out that a wave takes 10-20 s to arrive. A nav mesh is needed (the bots and creatures walk it). Every CT spawn should be inside the base."
 }

@@ -52,6 +52,10 @@ new bool:g_creatures;
 new bool:g_hasCreatureDll;
 new g_failSpawns;
 new Float:g_base[3];
+new g_gatePct[2048];
+new Float:g_gateUpAt[2048];
+new g_rightShown[33][480];
+new Float:g_rightAt[33];
 new g_planned;
 new g_spawned;
 new bool:g_bossDone;
@@ -150,6 +154,7 @@ public plugin_init()
 	register_clcmd("say /shop", "cmd_shop");
 	register_clcmd("say_team /shop", "cmd_shop");
 	register_clcmd("lst_shop", "cmd_shop");
+	register_srvcmd("lst_gates", "cmd_gates");
 	register_forward(FM_PlayerPreThink, "fm_prethink");
 	register_forward(FM_SetModel, "fm_setmodel_post", 1);
 
@@ -181,6 +186,17 @@ public plugin_cfg()
 	if (!ls_components_running())
 		log_amx("Last Stand needs gm_components.amxx; add it to laststand.plugins.ini before gm_laststand.amxx.");
 	log_amx("Last Stand on %s: enemies are %s (best wave here: %d)", g_mapname, g_creatures ? "creatures" : "zombie bots", g_record);
+}
+
+/* server: the gates list as players see it (for tests) */
+public cmd_gates()
+{
+	new t[400], a[8];
+	read_argv(1, a, charsmax(a));
+	gates_text(t, charsmax(t), equal(a, "all") != 0);
+	replace_all(t, charsmax(t), "^n", " | ");
+	log_amx("Last Stand gates:%s", t);
+	return PLUGIN_HANDLED;
 }
 
 public cmd_help(id)
@@ -236,6 +252,7 @@ public round_setup()
 				cs_set_user_money(p, start);
 	}
 	g_botGunsBought = 0;
+	arrayset(g_gatePct, 0, sizeof g_gatePct);
 	ls_comp_bots_hint("set laststand");
 	if (g_creatures)
 		ls_comp_bots_hint("enemyclass ls_creature 1");
@@ -251,7 +268,7 @@ public round_setup()
 	find_shop();
 	keeper_spawn();
 	round_clock(floatround(get_pcvar_float(g_cPrepare)));
-	ls_announce(0, 5.0, "Last Stand: hold the base! First wave in %d seconds", get_pcvar_num(g_cPrepare));
+	toast(0, 5.0, false, "Last Stand: hold the base! First wave in %d seconds", get_pcvar_num(g_cPrepare));
 	bots_to_shop(get_pcvar_num(g_cPrepare));
 	if (g_record > 0)
 		ls_chat(0, "Best on %s so far: wave %d.", g_mapname, g_record);
@@ -529,7 +546,7 @@ stock lose_checks(why[], len)
 				copy(why, len, "The base was overrun");
 				return;
 			}
-			ls_announce(0, 1.1, "Base being overrun! %d", limit - g_overrun);
+			toast(0, 1.1, true, "Base being overrun! %d", limit - g_overrun);
 		}
 		else
 			g_overrun = 0;
@@ -550,7 +567,7 @@ stock lose_checks(why[], len)
 		if (g_lastChanceEnd <= 0.0)
 		{
 			g_lastChanceEnd = now + float(chance);
-			ls_announce(0, 3.0, "Every player is down! The bots have %d seconds to hold or revive you", chance);
+			toast(0, 3.0, false, "Every player is down! The bots have %d seconds to hold or revive you", chance);
 		}
 		else if (now >= g_lastChanceEnd)
 		{
@@ -643,7 +660,7 @@ stock start_wave(n)
 	log_amx("Wave %d: %d %s against %d defenders", n, g_planned, g_creatures ? "creatures" : "zombie bots", defenders());
 	if (!g_bossDone)
 	{
-		ls_announce(0, 4.0, "Wave %d: a boss is coming!", n);
+		toast(0, 4.0, false, "Wave %d: a boss is coming!", n);
 		shake_all();
 	}
 }
@@ -799,7 +816,7 @@ public ls_on_wave_cleared(wave)
 	if (waves > 0 && g_wave >= waves)
 	{
 		g_phase = PH_OVER;
-		ls_announce(0, 8.0, "You held out all %d waves!", waves);
+		toast(0, 8.0, false, "You held out all %d waves!", waves);
 		log_amx("The stand was won: all %d waves held", waves);
 		g_lostLast = false;
 		server_cmd("endround CT");
@@ -832,10 +849,31 @@ public ls_on_wave_cleared(wave)
 			ExecuteHamB(Ham_CS_RoundRespawn, p);
 		}
 	}
+	/* the economy, for tuning: money after the wave's bonus (people and bots apart) */
+	new hs = 0, hn = 0, bs = 0, bn = 0, bmin = 99999, bmax = 0;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || cs_get_user_team(p) != CS_TEAM_CT)
+			continue;
+		new m = cs_get_user_money(p);
+		if (is_user_bot(p))
+		{
+			bs += m;
+			bn++;
+			bmin = min(bmin, m);
+			bmax = max(bmax, m);
+		}
+		else
+		{
+			hs += m;
+			hn++;
+		}
+	}
+	log_amx("Last Stand money after wave %d: people avg %d (%d), bots avg %d (%d-%d, %d), guns bought by bots so far %d", g_wave, hn ? hs / hn : 0, hn, bn ? bs / bn : 0, bn ? bmin : 0, bmax, bn, g_botGunsBought);
 	new drops = get_pcvar_num(g_cDrops);
 	if (drops > 0 && g_wave % drops == 0)
 		supply_drop();
-	ls_announce(0, 4.0, "Wave %d held! Next wave in %d seconds - restock at the armory", g_wave, brk);
+	toast(0, 4.0, false, "Wave %d held! Next wave in %d seconds - restock at the armory", g_wave, brk);
 }
 
 stock supply_drop()
@@ -917,7 +955,7 @@ public tick()
 			g_record = g_wave - 1;
 			record_save();
 		}
-		ls_announce(0, 8.0, "The base fell on wave %d", g_wave);
+		toast(0, 8.0, false, "The base fell on wave %d", g_wave);
 		log_amx("The base fell on wave %d (%s)", g_wave, why);
 		g_lostLast = true;
 		ls_chat(0, "Best on %s: wave %d.", g_mapname, g_record);
@@ -1211,26 +1249,29 @@ stock hud()
 		else
 			len += formatex(team[len], charsmax(team) - len, "%s  out^n", name);
 	}
+	new gates[200];
+	gates_text(gates, charsmax(gates));
 	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_connected(p) || is_user_bot(p))
 			continue;
-		ls_hud(p, LS_HUD_TOP, 1.1, "%s", top);
+		/* in the armory, how to buy, under the wave line (the centre is the game's own
+		   centre text and the toasts': nothing of ours sits there for long) */
+		if (g_inShop[p])
+			ls_hud(p, LS_HUD_TOP, 1.1, "%s^nArmory  -  B: weapons   USE at the counter: supplies", top);
+		else
+			ls_hud(p, LS_HUD_TOP, 1.1, "%s", top);
 		/* the team and the nearest barricade on the right: menus open on the left, the
 		   radar is top left and chat bottom left, so nothing here ever sits under them */
-		new right[480], bartxt[48];
-		new bar = nearest_barricade(p);
-		if (bar)
+		new right[480];
+		formatex(right, charsmax(right), "%s%s", team, gates);
+		/* sent only when it changes (and now and then, so it never fades) */
+		if (!equal(right, g_rightShown[p]) || now - g_rightAt[p] > 8.0)
 		{
-			new mx = floatround(ls_comp_getf(bar, "hp", 500.0));
-			new hp = ls_barricade_hp(bar);
-			if (hp > 0)
-				formatex(bartxt, charsmax(bartxt), "^nBarricade %d%%", 100 * hp / max(mx, 1));
-			else
-				copy(bartxt, charsmax(bartxt), "^nBarricade DOWN");
+			copy(g_rightShown[p], charsmax(g_rightShown[]), right);
+			g_rightAt[p] = now;
+			ls_hud(p, LS_HUD_RIGHT, 10.0, "%s", right);
 		}
-		formatex(right, charsmax(right), "%s%s", team, bartxt);
-		ls_hud(p, LS_HUD_RIGHT, 1.1, "%s", right);
 	}
 }
 
@@ -1239,6 +1280,127 @@ stock hud_wait()
 	for (new p = 1; p <= MaxClients; p++)
 		if (is_user_connected(p) && !is_user_bot(p))
 			ls_hud(p, LS_HUD_TOP, 1.1, "Last Stand starts when a player joins the Counter-Terrorists");
+}
+
+/* Every gate on the map in one block under the team list: "Gates" then one per line, "West gate
+   100%", "East gate 40% !", "South gate broken", "North gate rebuilding 60%"; more than 6: the 3
+   weakest and "and N more". Names: the barricade's label or name key, else its targetname made
+   readable, else the compass point from the base ("N gate", numbered when two share one) */
+stock gate_name(b, out[], len)
+{
+	if (ls_comp_get(b, "label", out, len) && out[0])
+		return;
+	/* (a map pack's "Barricade1" is no name) */
+	if (ls_comp_get(b, "name", out, len) && out[0] && !(equali(out, "barricade", 9) && (!out[9] || isdigit(out[9]))))
+		return;
+	new tn[32];
+	pev(b, pev_targetname, tn, charsmax(tn));
+	if (tn[0])
+	{
+		replace_all(tn, charsmax(tn), "_", " ");
+		replace_all(tn, charsmax(tn), "-", " ");
+		trim(tn);
+		if ('a' <= tn[0] <= 'z')
+			tn[0] -= 32;
+		copy(out, len, tn);
+		return;
+	}
+	out[0] = EOS;
+}
+
+stock gate_centre(b, Float:c[3])
+{
+	new Float:mn[3], Float:mx[3];
+	pev(b, pev_absmin, mn);
+	pev(b, pev_absmax, mx);
+	for (new i = 0; i < 3; i++)
+		c[i] = (mn[i] + mx[i]) * 0.5;
+}
+
+stock gate_compass(b, out[], len)
+{
+	static const DIRS[][] = { "E", "NE", "N", "NW", "W", "SW", "S", "SE" };
+	new Float:c[3];
+	gate_centre(b, c);
+	new Float:a = floatatan2(c[1] - g_base[1], c[0] - g_base[0], degrees);
+	if (a < 0.0)
+		a += 360.0;
+	copy(out, len, DIRS[floatround(a / 45.0) % 8]);
+}
+
+stock gates_text(out[], len, bool:all = false)
+{
+	new ents[16], names[16][28], pct[16], n = 0;
+	for (new b = ls_comp_find("ls_barricade"); b && n < sizeof ents; b = ls_comp_find("ls_barricade", b))
+	{
+		ents[n] = b;
+		gate_name(b, names[n], charsmax(names[]));
+		new mx = floatround(ls_comp_getf(b, "hp", 500.0));
+		pct[n] = clamp(100 * ls_barricade_hp(b) / max(mx, 1), 0, 100);
+		n++;
+	}
+	out[0] = EOS;
+	if (!n)
+		return;
+	for (new i = 0; i < n; i++)
+	{
+		if (names[i][0])
+			continue;
+		new dir[4];
+		gate_compass(ents[i], dir, charsmax(dir));
+		formatex(names[i], charsmax(names[]), "%s gate", dir);
+	}
+	for (new i = 0; i < n; i++)
+	{
+		new k = 1;
+		for (new j = i + 1; j < n; j++)
+			if (equal(names[i], names[j]))
+			{
+				k++;
+				format(names[j], charsmax(names[]), "%s %d", names[j], k);
+			}
+	}
+	/* rebuilding: health went up in the last 3 s */
+	new Float:now = get_gametime();
+	for (new i = 0; i < n; i++)
+	{
+		new e = ents[i];
+		if (e >= sizeof g_gatePct)
+			continue;
+		/* (stored + 1: 0 is "not seen yet") */
+		if (g_gatePct[e] && pct[i] + 1 > g_gatePct[e])
+			g_gateUpAt[e] = now;
+		g_gatePct[e] = pct[i] + 1;
+	}
+	new order[16], shown = n;
+	for (new i = 0; i < n; i++)
+		order[i] = i;
+	if (n > 6 && !all)
+	{
+		for (new i = 0; i < n; i++)
+			for (new j = i + 1; j < n; j++)
+				if (pct[order[j]] < pct[order[i]])
+				{
+					new t = order[i];
+					order[i] = order[j];
+					order[j] = t;
+				}
+		shown = 3;
+	}
+	copy(out, len, "^n^nGates");
+	for (new k = 0; k < shown; k++)
+	{
+		new i = order[k], e = ents[i], st[24];
+		if (pct[i] <= 0)
+			copy(st, charsmax(st), "broken");
+		else if (e < sizeof g_gatePct && pct[i] < 100 && now - g_gateUpAt[e] < 3.0)
+			formatex(st, charsmax(st), "rebuilding %d%%", pct[i]);
+		else
+			formatex(st, charsmax(st), "%d%%%s", pct[i], pct[i] < 50 ? " !" : "");
+		format(out, len, "%s^n%s  %s", out, names[i], st);
+	}
+	if (shown < n)
+		format(out, len, "%s^nand %d more", out, n - shown);
 }
 
 stock nearest_barricade(p)
@@ -1480,7 +1642,7 @@ public ham_creature_killed(ent, killer, gib)
 	{
 		new name[32];
 		get_user_name(killer, name, charsmax(name));
-		ls_announce(0, 4.0, "%s brought the boss down!", name);
+		toast(0, 4.0, false, "%s brought the boss down!", name);
 	}
 	return HAM_IGNORED;
 }
@@ -1596,7 +1758,7 @@ stock shop_why_not(id, i, out[], len)
 			if (cs_get_user_armor(id, t) >= 100 && t == CS_ARMOR_VESTHELM)
 				copy(out, len, "you have full armour");
 		}
-		case 2: if (cs_get_user_bpammo(id, CSW_HEGRENADE) >= 3) copy(out, len, "you have 3 already");
+		case 2: if (g_hePack[id] >= 3) copy(out, len, "you have 3 already");
 		case 4: if (get_user_health(id) >= 100) copy(out, len, "you're at full health");
 	}
 	if (!out[0] && cs_get_user_money(id) < shop_price(i))
@@ -1707,11 +1869,15 @@ stock bool:shop_buy(id, i, bool:tell)
 		case 1: cs_set_user_armor(id, 100, CS_ARMOR_VESTHELM);
 		case 2:
 		{
+			/* the game carries one HE at a time (the client shows and throws only one), so the
+			   pack is one in hand and two more: each throw brings out the next, and it says how
+			   many are left */
 			if (!user_has_weapon(id, CSW_HEGRENADE))
 				ls_give_item(id, "he");
-			cs_set_user_bpammo(id, CSW_HEGRENADE, 3);
-			/* and a promise of 3: if anything caps the count at 1, each throw hands the next one */
+			cs_set_user_bpammo(id, CSW_HEGRENADE, 1);
 			g_hePack[id] = 3;
+			if (!is_user_bot(id))
+				client_print(id, print_center, "3 HE grenades: throw one and the next comes out");
 		}
 		case 3: ls_give_item(id, "ammo");
 		case 4: set_user_health(id, min(get_user_health(id) + 50, 100));
@@ -1736,6 +1902,13 @@ public fm_setmodel_post(ent, const model[])
 	g_hePack[id]--;
 	if (g_hePack[id] > 0)
 		set_task(0.3, "task_he_next", TASK_REV + 100 + id);
+	if (!is_user_bot(id))
+	{
+		if (g_hePack[id] > 0)
+			client_print(id, print_center, "HE grenades: %d more", g_hePack[id]);
+		else
+			client_print(id, print_center, "That was your last HE grenade");
+	}
 	return FMRES_IGNORED;
 }
 
@@ -1746,8 +1919,8 @@ public task_he_next(tid)
 		return;
 	if (!user_has_weapon(id, CSW_HEGRENADE))
 		ls_give_item(id, "he");
-	if (cs_get_user_bpammo(id, CSW_HEGRENADE) < g_hePack[id])
-		cs_set_user_bpammo(id, CSW_HEGRENADE, g_hePack[id]);
+	else if (cs_get_user_bpammo(id, CSW_HEGRENADE) < 1)
+		cs_set_user_bpammo(id, CSW_HEGRENADE, 1);
 }
 
 /* USE at the armory opens the shop; a hint when close */
@@ -1874,7 +2047,25 @@ stock leave_shop(p)
 		show_menu(p, 0, "^n", 1);
 	/* the buy menu (VGUI on the Steam client): the game's own "close" */
 	client_cmd(p, "slot10");
-	ls_hud_clear(p, LS_HUD_CENTER);
+}
+
+public task_keeper_greet(tid)
+{
+	new p = tid - TASK_REV - 200;
+	if (!is_user_connected(p) || !g_inShop[p] || !g_keeper || !is_valid_ent(g_keeper))
+		return;
+	if (g_keeperKind == 2)
+		client_print_color(p, print_team_default, "^4G-Man:^1 Weapons... on the B menu. Supplies... from me.");
+	else if (g_keeperKind == 1)
+		client_print_color(p, print_team_default, "^4Barney:^1 Guns are on the B menu, supplies from me.");
+}
+
+/* big announcements go on gm_components' toast line: one at a time, never two on top of each other */
+stock toast(id, Float:secs, bool:replace, const fmt[], any:...)
+{
+	new msg[128];
+	vformat(msg, charsmax(msg), fmt, 5);
+	ls_toast(id, secs, msg, 255, 200, 60, replace ? 1 : 0);
 }
 
 stock shop_hint()
@@ -1888,20 +2079,15 @@ stock shop_hint()
 		{
 			/* walking in: a short hint (and the shopkeeper's line the first 3 visits) */
 			g_shopVisits[p]++;
-			client_print(p, print_center, "Armory: B for weapons - E at the counter for supplies");
+			/* once, on walking in: the game's centre text; the shopkeeper says it in chat a
+			   moment later (the first 3 visits), not on the same frame */
+			client_print(p, print_center, "Armory: B for weapons - USE at the counter for supplies");
 			if (g_shopVisits[p] <= 3 && g_keeper && is_valid_ent(g_keeper))
-			{
-				if (g_keeperKind == 2)
-					client_print_color(p, print_team_default, "^4G-Man:^1 Weapons... on the B menu. Supplies... from me.");
-				else if (g_keeperKind == 1)
-					client_print_color(p, print_team_default, "^4Barney:^1 Guns are on the B menu, supplies from me.");
-			}
+				set_task(1.5, "task_keeper_greet", TASK_REV + 200 + p);
 		}
 		else if (!in && g_inShop[p])
 			leave_shop(p);
 		g_inShop[p] = in;
-		if (in)
-			ls_hud(p, LS_HUD_CENTER, 1.1, "Armory  -  B: weapons   USE: supplies");
 	}
 }
 

@@ -264,6 +264,13 @@ new g_modeId[32];
 /* Mode map kits: an ls_marker (kind, mode, targetname, size, radius, ...) becomes the component
    its kind names, or stays a named spot the mode's plugin finds (ls_marker_find) */
 #define PEND_MARKER 99
+#define TOAST_Q 4
+new g_tqText[33][TOAST_Q][128];
+new g_tqRgb[33][TOAST_Q];
+new Float:g_tqSecs[33][TOAST_Q];
+new g_tqN[33];
+new Float:g_tqUntil[33];
+new g_tqShown[33][128];
 new Trie:g_mkKeys[MAX_ENTS];
 new g_nmarkers;
 new g_sprBeam, g_sprSmoke, g_mdlGibs;
@@ -349,6 +356,7 @@ public plugin_natives()
 	register_native("ls_comp_find", "n_find");
 	register_native("ls_comp_by_name", "n_by_name");
 	register_native("ls_marker_find", "n_marker_find");
+	register_native("ls_toast", "n_toast");
 	register_native("ls_marker_get", "n_marker_get");
 	register_native("ls_comp_count", "n_count");
 	register_native("ls_comp_get", "n_get");
@@ -1851,6 +1859,9 @@ public tick()
 		lap_hud();
 	}
 	hud_flush();
+	for (new p = 1; p <= MaxClients; p++)
+		if (g_tqN[p])
+			toast_tick(p);
 }
 
 /* ---- capture point ---- */
@@ -4121,6 +4132,9 @@ public menu_class(id, menu, item)
 
 public client_disconnected(id)
 {
+	g_tqN[id] = 0;
+	g_tqShown[id][0] = EOS;
+	g_tqUntil[id] = 0.0;
 	g_act[id] = 0;
 	g_xslot[id] = 0;
 	g_class[id] = 0;
@@ -4525,8 +4539,84 @@ stock announce(id, r, g, b, Float:secs, const text[])
 {
 	if (!get_pcvar_num(g_cHud))
 		return;
-	set_dhudmessage(r, g, b, -1.0, 0.22, 0, 0.0, secs, 0.2, 0.5);
+	toast_add(id, r, g, b, secs, text, false);
+}
+
+/* ---- the toast line: every big announcement (this plugin's and the modes', ls_toast) goes
+   through one queue per player and shows one at a time at one spot, so two never overlap ---- */
+
+stock toast_add(id, r, g, b, Float:secs, const text[], bool:replace)
+{
+	if (!id)
+	{
+		for (new p = 1; p <= MaxClients; p++)
+			if (is_user_connected(p) && !is_user_bot(p))
+				toast_add(p, r, g, b, secs, text, replace);
+		return;
+	}
+	if (id < 1 || id > 32)
+		return;
+	/* the same text again (a countdown's repeat) or a replace: shown now, in place */
+	if (replace || equal(g_tqShown[id], text))
+	{
+		toast_show(id, (r << 16) | (g << 8) | b, secs, text);
+		return;
+	}
+	for (new i = 0; i < g_tqN[id]; i++)
+		if (equal(g_tqText[id][i], text))
+			return;
+	if (g_tqN[id] >= TOAST_Q)
+	{
+		/* full: the oldest waiting one goes */
+		for (new i = 1; i < TOAST_Q; i++)
+		{
+			copy(g_tqText[id][i - 1], 127, g_tqText[id][i]);
+			g_tqRgb[id][i - 1] = g_tqRgb[id][i];
+			g_tqSecs[id][i - 1] = g_tqSecs[id][i];
+		}
+		g_tqN[id]--;
+	}
+	new n = g_tqN[id]++;
+	copy(g_tqText[id][n], 127, text);
+	g_tqRgb[id][n] = (r << 16) | (g << 8) | b;
+	g_tqSecs[id][n] = secs;
+	toast_tick(id);
+}
+
+stock toast_show(id, rgb, Float:secs, const text[])
+{
+	set_dhudmessage((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, -1.0, 0.22, 0, 0.0, secs, 0.1, 0.3);
 	show_dhudmessage(id, "%s", text);
+	copy(g_tqShown[id], 127, text);
+	g_tqUntil[id] = get_gametime() + secs + 0.4;
+}
+
+stock toast_tick(id)
+{
+	if (!g_tqN[id] || get_gametime() < g_tqUntil[id])
+		return;
+	if (!is_user_connected(id))
+	{
+		g_tqN[id] = 0;
+		return;
+	}
+	toast_show(id, g_tqRgb[id][0], g_tqSecs[id][0], g_tqText[id][0]);
+	for (new i = 1; i < g_tqN[id]; i++)
+	{
+		copy(g_tqText[id][i - 1], 127, g_tqText[id][i]);
+		g_tqRgb[id][i - 1] = g_tqRgb[id][i];
+		g_tqSecs[id][i - 1] = g_tqSecs[id][i];
+	}
+	g_tqN[id]--;
+}
+
+/* native ls_toast(id, Float:secs, const text[], r = 255, g = 200, b = 60, replace = 0) */
+public n_toast(plugin, params)
+{
+	new text[128];
+	get_string(3, text, charsmax(text));
+	toast_add(get_param(1), get_param(4), get_param(5), get_param(6), get_param_f(2), text, get_param(7) != 0);
+	return 1;
 }
 
 stock bar_time(id, secs)

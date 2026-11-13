@@ -211,6 +211,7 @@
 @SolidClass base(LsName, LsTarget, LsTeam) color(180 120 60) = ls_barricade : "A wall that can be shot or hit down and repaired (hold USE). Bots defend behind it and go round it while it stands."
 [
 	hp(integer) : "Health" : 500 : ""
+	label(string) : "Gate name" : : "Shown in Last Stand's gates list ('West gate'). Empty: the Name, else a compass point from the base."
 	team(choices) : "Defended by" : 2 : "This team repairs it and can't damage it." = [ 0 : "Nobody" 1 : "Terrorists" 2 : "Counter-Terrorists" ]
 	repair_secs(float) : "Seconds per repair" : 3 : "Each repair adds a quarter of its health."
 	repair_cost(integer) : "Repair cost" : 0 : "Money per repair."

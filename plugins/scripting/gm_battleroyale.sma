@@ -124,6 +124,14 @@ public plugin_end()
 		server_cmd("ls_mode nobuy 0");
 }
 
+/* big announcements on gm_components' toast line: one at a time, never on top of each other */
+stock toast(id, Float:secs, const fmt[], any:...)
+{
+	new msg[128];
+	vformat(msg, charsmax(msg), fmt, 4);
+	ls_toast(id, secs, msg);
+}
+
 public cmd_nobuy(id)
 {
 	return PLUGIN_HANDLED;
@@ -258,7 +266,7 @@ stock start_drop()
 	ls_comp_bots_hint("phase loot");
 	new drop = floatround(get_pcvar_float(g_cDrop) * floatclamp(0.6 + g_pace * 0.4, 0.7, 1.1));
 	g_phaseEnd = get_gametime() + float(drop);
-	ls_announce(0, 5.0, "Battle Royale: loot up! Fighting starts in %d seconds", drop);
+	toast(0, 5.0, "Battle Royale: loot up! Fighting starts in %d seconds", drop);
 	log_amx("Battle Royale on %s: game starts, %d players, pace %.2f, loot-up %d s", g_mapname, alive_count(), g_pace, drop);
 	if (get_pcvar_num(g_cSquad) > 1)
 		ls_chat(0, "Squads of %d: your squad mates are on your side (say /br for help).", get_pcvar_num(g_cSquad));
@@ -269,7 +277,20 @@ stock start_play()
 	g_phase = PH_PLAY;
 	g_playAt = get_gametime();
 	ls_comp_bots_hint("phase fight");
-	ls_announce(0, 3.0, "Fight! %d left", alive_sides());
+	/* how close people are when the fighting starts (the peace phase should keep them apart) */
+	new close = 0, near = 0;
+	for (new a = 1; a <= MaxClients; a++)
+		for (new b = a + 1; b <= MaxClients; b++)
+			if (is_user_alive(a) && is_user_alive(b))
+			{
+				new Float:d = entity_range(a, b);
+				if (d < 100.0)
+					close++;
+				else if (d < 350.0)
+					near++;
+			}
+	log_amx("Battle Royale: fight starts, %d pairs within 100 u, %d more within 350 u", close, near);
+	toast(0, 3.0, "Fight! %d left", alive_sides());
 	/* supply drops spread over the game */
 	g_ndrops = min(get_pcvar_num(g_cDrops), sizeof g_dropAt);
 	for (new i = 0; i < g_ndrops; i++)
@@ -466,7 +487,8 @@ stock unstick_bots()
 			g_releaseAt[p] = 0.0;
 			server_cmd("ls_bot %d release", p);
 		}
-		if (g_falling[p] || g_unstuckTries[p] >= 3)
+		/* (campers stand still on purpose) */
+		if (g_falling[p] || g_unstuckTries[p] >= 3 || g_trait[p] == TR_CAMPER)
 			continue;
 		pev(p, pev_origin, o);
 		if (g_startPos[p][0] == 0.0 && g_startPos[p][1] == 0.0)
@@ -534,16 +556,16 @@ stock bool:check_winner()
 	g_phase = PH_OVER;
 	if (sides == 0 || !last)
 	{
-		ls_announce(0, 6.0, "Nobody survived");
+		toast(0, 6.0, "Nobody survived");
 		server_cmd("endround");
 		return true;
 	}
 	new name[32];
 	get_user_name(last, name, charsmax(name));
 	if (get_pcvar_num(g_cSquad) > 1)
-		ls_announce(0, 8.0, "%s's squad wins!", name);
+		toast(0, 8.0, "%s's squad wins!", name);
 	else
-		ls_announce(0, 8.0, "%s wins! (%d kills)", name, g_kills[last]);
+		toast(0, 8.0, "%s wins! (%d kills)", name, g_kills[last]);
 	log_amx("Battle Royale on %s won by %s (%d kills) after %d s of fighting", g_mapname, name, g_kills[last], floatround(get_gametime() - g_playAt));
 	server_cmd(cs_get_user_team(last) == CS_TEAM_T ? "endround T" : "endround CT");
 	return true;
@@ -741,7 +763,7 @@ stock drop_in(id)
 	g_falling[id] = true;
 	g_fallAt[id] = get_gametime();
 	if (!is_user_bot(id))
-		ls_hud(id, LS_HUD_CENTER, 4.0, "Pick your landing! (steer as you fall)");
+		toast(id, 4.0, "Pick your landing! (steer as you fall)");
 }
 
 /* landed (or hurt by someone close to the ground): normal gravity again */
