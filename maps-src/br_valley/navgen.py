@@ -475,7 +475,12 @@ def check(h, nodes, grid, seeded, landings, canopy_landings, ladders, ledges, la
               % (name, len(k), len(k) * STEP * STEP / 1e6, sum(1 for n in k if n in there)))
 
     # traps: anything you can't get back from (drop-in landings included)
-    trapped = [n for n in nodes if n not in back]
+    # (a sample whose own hull is stuck in a wall, with no floor under its middle, is a rounding artefact at a
+    # ramp's edge against a wall, not a place: left out)
+    def real(n):
+        t = h.trace((n.i * STEP, n.j * STEP, n.z + 20 + HALF), (n.i * STEP, n.j * STEP, n.z - 40 + HALF))
+        return not t["startsolid"] and t["frac"] < 1.0
+    trapped = [n for n in nodes if n not in back and real(n)]
     comp = {}
     for n in trapped:
         if n in comp:
@@ -632,6 +637,54 @@ def check(h, nodes, grid, seeded, landings, canopy_landings, ladders, ledges, la
         print("guns: drop-in spot to the nearest gun, walking: median %d, worst %d units (%.1f s at 250/s); %d over 10 s"
               % (runs[len(runs) // 2], runs[-1], runs[-1] / 250.0, far))
     if far:
+        ok = False
+    # bots below ground: every crate and gun below is reachable on foot (stairs and ramps, no ladders, no drop over
+    # 200) from a stair trench's top, within a 25-second walk (6250 units) of the nearest one
+    walk_rev = {n: [] for n in nodes}
+    for n in nodes:
+        for m in n.to:
+            if m is not None:
+                walk_rev[m].append(n)
+    portals = []
+    for c in layers["connectors"]:
+        if c["kind"] == "stairs" and c["name"].startswith("trench:"):
+            x, y, z = c["top"]
+            n = found(x, y, z, r=40, dz=40)
+            if n:
+                portals.append(n)
+    # distances from the portals going down: search forward over walk edges
+    dist2 = {}
+    pq = []
+    for n in portals:
+        dist2[n] = 0.0
+        heapq.heappush(pq, (0.0, id(n), n))
+    while pq:
+        d, _, n = heapq.heappop(pq)
+        if d > dist2.get(n, 1e9):
+            continue
+        for m in n.to:
+            if m is None:
+                continue
+            c = d + math.hypot(STEP, m.z - n.z)
+            if c < dist2.get(m, 1e9):
+                dist2[m] = c
+                heapq.heappush(pq, (c, id(m), m))
+    far_below, worst = 0, 0.0
+    below = [kv for kv in h.ents if kv.get("classname") in ("ls_loot_container", "ls_weapon_spawner") and "origin" in kv
+             and float(kv["origin"].split()[2]) < layers["slab_top"] - 40]
+    for kv in below:
+        x, y, z = (float(v) for v in kv["origin"].split())
+        n = found(x, y, z - 8, r=48, dz=40)
+        d = dist2.get(n, 1e9) if n else 1e9
+        back_ok = n is not None and n in back
+        worst = max(worst, d if d < 1e8 else 0)
+        if d > 6250 or not back_ok:
+            far_below += 1
+            print("  BELOW: the %s at %d %d %d is %s from the nearest stair trench on foot" % (kv["classname"], x, y, z,
+                  "%d units" % d if d < 1e8 else "not reachable"))
+    print("below ground: %d crates and guns, %d stair trenches; walk from the nearest trench: worst %d units (%.1f s); %d too far"
+          % (len(below), len(portals), worst, worst / 250.0, far_below))
+    if far_below or len(portals) < 6:
         ok = False
     sd = 0
     for (x, y, z) in layers["supply_drops"]:

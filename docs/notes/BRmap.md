@@ -331,3 +331,88 @@ gm_battleroyale + gm_components built from HEAD 965fb0c, gm_simrec, a probe coun
   (`shots/conn/*.jpg`), 16 views of the three layers (`shots/tour/*.jpg`), contact sheets (`sheets/conn_*.png`,
   `sheets/tour_*.png`), the radar top-down (`overview.png`; also maps-src/br_valley/layout.png).
 - My sim copy BRV3 and my dev servers (8369, Vite 5369) are stopped and removed.
+
+## 2026-11-13 — br_valley v4: the review's fixes (docs/notes/BRmapReview.md), terrain, bot-friendly ways down
+
+### What changed, by the review's items
+- **Brush budget first (S7):** stair steps are shown and solid to bullets but not to movement (`zhlt_noclip`), one
+  CLIP ramp over each flight is what you walk on; tree foliage likewise, with one CLIP prism round each tree; the
+  CLIP helpers sit in the detail entity (in the world they split visleaves: worldleaves went 66 -> 82 %). Trench
+  rails in 512 pieces. Clipnodes 92 -> 75 % before anything new was added.
+- **M1/M2 textures by what's below:** ceilings, the river bed's and bank chamfers' undersides, hatch collars and shafts
+  take the room's look; the factory stands on the boiler house (utility), not a cave; the rock between places is
+  faced as the nearest place.
+- **M3 silo:** eight-sided, corrugated, a cap ring, a caged ladder on its east face, a switchback stair scaffold on its
+  west face and a bridge onto its railed top (S5: a perch you can fight your way onto).
+- **M4 the aqueduct is now the old rail viaduct:** piers every ~320 with stepped corbels, a 48-thick deck with the old
+  rails, parapets; it goes on east and then south along the lookout's flank down to the lookout mesa (S4: the north's
+  high line radio hill -> river -> lookout), with stone stairs down to the east bank half way (three ways off it).
+- **M5 hatches in structures:** brick kiosks (town), pump houses (river banks, the pumping station), timber head-frames
+  (mine side), tin sheds; the door on the ladder's side.
+- **M6 trees:** tiered pines (three tapering tiers, the trunk showing under the lowest), ~70 of them.
+- **S1 the level below:** 18 named places instead of 36 equal rooms (see the README): fort caves, west mine, north caves,
+  deep chamber and its stope a level down, lumber caves, ridge caves (cut corners, rock pillars, hanging rock, a raised
+  shelf), the sewer (a water channel between ledges), the cistern hall (256 high, columns, a water channel), the town
+  vault, the boiler house, the tank vault, the boathouse cellar, the pumping works, the quarry workings, the bunker
+  (hall, guard room, generator room, the armoury a level down). Each has its own walls, floor, lamp colour and sound.
+- **S2 wayfinding:** daylight (a bright spot light) down every hatch shaft and every trench, an EXIT sign at each foot.
+- **S3 loot:** below, tier 3 and SMGs; tier 5 and rifles only in the three vaults (town vault, deep stope, armoury), each
+  behind one grate-floored way in (you hear it); tier 4 at six contested places on the surface (the hall's ground
+  floor, the factory floor, the gas station shop, the quarry shed, the sawmill, the boathouse); radio tower 5 -> 4.
+- **S4/S5 high:** the viaduct (above); the town's roofs reach the river (a walkway from the store's roof to the middle
+  bridge, stairs at the bank); a water tank and chimney stacks on the roofs to duck behind; the radio tower's west way
+  up is a ladder to a caged landing half way and a second ladder.
+- **S6:** a roofed housing over each concrete trench's top, a 384-high timber head-frame over the mine adit.
+- **S8/S9/S10/S11/S12:** one sloped rail per side on stairs; the store roof's gap as wide as the walkway (992, 96); a
+  river pumping station east of the river (two pump houses, a water tower, pipe runs) over the pumping works; the deep
+  chamber's vault is under the hill's flank; the quarry's rock piles are rocks.
+- **The user's terrain ask:** six ridges between the places and three sunken lanes (the gas station - docks track, the
+  west track, the north road), 14 foxholes and berms spread over gentle open ground (dug in), drop-in spots next to
+  the high layer's ways up (the hall's fire ladder, the factory's north ladder, the viaduct's stairs, the silo stairs).
+- **Bot-friendly ways down (W1):** the six stair trenches are the main ways down; every place below is reachable from
+  one on foot. `navgen.py --check` now walks (stairs and ramps, no ladders) from every trench top to every crate and gun
+  below: worst 4222 units (16.9 s), none over 25 s.
+- **Validator additions:** cover off steep ground, bushes clear of canopies, rocks 40+ apart (each of those had left a
+  slot you couldn't climb out of); a post's footing isn't "buried"; a sample whose hull is stuck in a wall at a ramp's
+  edge isn't a place; the reach-below test above.
+
+### Compile, nav, area (shipped build; compiled at 6 threads, nice 19, VIS and RAD without -full/-extra after the
+### coordinator stopped a 14-thread -full VIS that overloaded the Mac)
+- No leak. **Limits: clipnodes 25275/32767 (77.1 %), AllocBlock 54/64 (84.4 %), worldleaves 6426/8192 (78.4 %),
+  planes 42.4 %, marksurfaces 41.4 %, visdata 0.86 MB (10.3 %), lightdata 2.4 MB.** One warning: a lamp entity
+  touches 52 leaves (the simpler vis check; harmless).
+- Nav: 5010 areas (the brain's cap is 6000). All checks pass: 0 traps, 55 high/underground pockets each with 2+ ways
+  out, 28/28 ladders joined, 87 connectors on the walk, drop-in spot to a gun median 433 / worst 1625 units (6.5 s),
+  below ground 31 crates/guns all within 16.9 s of a stair trench, 8/8 supply drops openable.
+- **Walkable area: below 16.8 M, surface 44.5 M, high 8.4 M = 69.6 M, 1.35x the flat footprint** (v3: 35.9 / 44.1 /
+  6.9 = 1.69x). The drop below is the review's trade (fewer, distinct places instead of 36 equal rooms); high grew 22 %.
+
+### Tested (my sim copy BRV4 of BRPLAY, port 27364, brain r43395720981, gm_battleroyale + gm_components from HEAD
+### with W1's loot-up (6b9fb3d5), my gun probe; one sim at a time)
+- **20 bots, Battle Royale solo, 40 min, 6 complete games** (on the build just before the shipped one: the shipped one
+  differs only in the rock's wall textures, the vaults' lights and 2 of 5010 nav areas): **drop-in deaths 0**; **zone
+  deaths 0 / 1 / 1 / 1 / 2 / 2** of 19; **armed when fighting started 9 / 7 / 8 / 8 / 10 / 12 of 20** (v3 without W1's
+  change: 2-4); **supply drops opened 0 of 1, 1 of 2, 0 of 1, 0 of 2, 2 of 2, 0 of 2**; games **4.1 / 5.3 / 3.9 / 4.9 /
+  5.0 / 4.9 min** (29 s loot-up + 203-292 s of fighting: shorter than v3's 6-10 min now that most bots are armed);
+  **bots in each layer per game: below 1 / 3 / 4 / 1 / 5 / 1, surface 20, high 20 / 20 / 18 / 19 / 18 / 19** (time:
+  below 0-14 %, high 5-18 %). W1's log: 0-1 below at the fight start, 0-4 went below during a game.
+- **Live check, 5 bots below** (one team, no fights, each ordered to a crate in a different place below, the shipped
+  bsp/nav; the brain's person-style `ls_bot <id> goto x y z 0 0 bc` every 20 s): run 1 (plugin-style goto) the
+  cisterns bot got there in 236 s, the others never went below; run 2 (person orders) the boiler-house bot was below
+  in 17 s and at its crate in 20 s, the fort-caves bot went down on its own while hunting (the fort caves, then the
+  deep chamber), 3 never went below. The brain's trace shows the orders taking (MoveTo to the crate) and then giving
+  way to Hunt within ~20-40 s, the bot wandering off (one into the river bed). The map side holds: every crate below is
+  on the nav and within a 17 s walk of a stair trench (navgen --check); the order not lasting is the brain's (W1/W2).
+- Screenshots (scratch folder, not in the repo): 173 views of both ends of every connector, cameras placed where a
+  player can stand with a clear view (`shots4/conn/*.jpg`); 44 views of the layers incl. 12 at ground level looking
+  across the map (`shots4/tour/*.jpg`, retakes in `shots4/retake/`); contact sheets `sheets4/*.png`; the radar
+  `overview4.png` (also maps-src/br_valley/layout.png).
+
+## Next map (after br_valley passes its next review): br_port, a coastal port town (user's pick)
+An old harbour town on a hill above the port; docks, warehouses and container yards (cheap cover mazes); a cargo ship
+at the quay you can board (decks, hold); a lighthouse on a cliff; water as scenery and crossings, not a place to
+fight. Three layers: below (sewers, smugglers' tunnels, warehouse basements, the ship's hold), the surface, high
+(cranes, container stacks, rooftops, the lighthouse, the ship's bridge); terrain height (the hill town over the port)
+so it feels larger. From the start: a purpose for every element, distinct zones, 2+ ways out everywhere, guns near
+drop spots, loot by risk per layer, the validator (build_map + navgen --check), brush-cheap construction (CLIP ramps
+over non-clipping steps, CLIP boxes round non-clipping foliage, nav under 6000 areas). Not started (disk).

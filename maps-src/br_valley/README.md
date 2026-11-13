@@ -29,13 +29,15 @@ background), and redo the overview (Radar maker; it writes the .res too).
 - a prop (crate, car, container, hay, logs, sandbags, fence, cart, rock, tree, bush) floats (most of its footprint
   over air) or is buried (the ground up most of a box's side, or a rock/bush that barely shows);
 - a drop-in spot or supply drop would land on something over it (a roof, a tower, a canopy);
-- a drop-in spot has no gun on the ground within a 10-second run (it adds a pistol near any that has none).
+- a drop-in spot has no gun on the ground within a 10-second run (it adds a pistol near any that has none);
+- (v4) rocks within 40 of each other, cover on steep ground, bushes under a canopy (each leaves a slot you can't climb out of).
 It prints the loot per layer (crates, tiers, guns). `navgen.py --check` then checks the compiled map on the real
 collision hulls: places you can't get back from without a fall over 200 (traps; every spot a drop-in can land on is
 tried too), high or underground pockets with fewer than 2 ways out (each ladder is one way; walking or dropping ways
 count apart when they go different ways or are 128+ apart), ladders not joined at both ends, connector ends off the
-walk, a drop-in spot more than a 10-second walk from a gun, a supply drop with no ground beside it (bots open crates
-from within 80). It prints the walkable area per layer.
+walk, a drop-in spot more than a 10-second walk from a gun, a crate or gun below ground more than a 25-second walk
+(stairs and ramps only, no ladders) from the nearest stair trench, a supply drop with no ground beside it (bots open
+crates from within 80). It prints the walkable area per layer.
 
 ## Size
 
@@ -47,59 +49,77 @@ bunker) 41 s, west to east on the main road 37 s, radio hill to the gas station 
 river and cliffs). The size comes from routing, height (tunnels, roofs, towers, mesas), woods that
 break sightlines, and the zone.
 
-## Layout (north up; the river runs north-south east of the middle)
+## Layout (north up; the river runs north-south east of the middle; v4)
 
-- **Town** (middle west, z 64): six buildings on two streets; the town hall has three floors and a
-  roof (the highest roof in the valley, a sniper rifle on top), two more with roofs you can reach,
-  cars and crates in the streets. A ladder hatch and a stair trench lead to the sewer under it.
-- **Factory** (south west): a 830 x 700 hall with a catwalk, an office block with a roof, containers,
-  a chimney with a ladder (sniper perch). Stair trench and a ladder hatch to the tunnels.
-- **Farm** (north west): a barn with a hay loft, a two-floor farmhouse, a silo, fences.
-- **Radio hill** (north middle, z 448): the high point; a lattice tower with a ladder to a platform
-  (best crate on the map), a hut.
-- **Docks** (west bank): a boathouse with a roof, three piers over the river, stairs down to the bed.
-- **Gas station** (south middle): a canopy over the road, a shop with a roof, a stair trench down.
-- **Quarry** (east, z -128, a pit): rock piles, a shed with a roof, a stair trench to the tunnel north
-  of the bunker.
-- **Bunker** (south east, z 160): thick concrete, two rooms, a roof with a parapet and stairs, sandbags;
-  the bunker complex underneath (two halls, the best loot) through its stair trench.
-- **Lumber camp** (north east): an open sawmill, log piles, a cabin, a watchtower with a ladder.
-- **Mesas**: the old fort (west, z 352) and the lookout (east, z 320): cliffs all round, one ramp each.
-- Five cabins at odd spots between the places; ~120 trees in groves of different sizes plus loose ones
-  (irregular foliage from head height up, so they block sight; at least 40 of open ground between
-  canopies), ~25 boulders in formations (tilted tops, some tall standing stones), ~40 bushes.
-- **Upper deck**: plank walkways with railings link the rooftops and upper floors off the street: in
-  the town house A's roof to the hall's 3rd floor, the hall's 2nd floor to the store's roof, and a
-  catwalk over the main street to the roof across; at the factory the hall's roof to the office's roof.
-- **River**: a channel 512-1024 wide, 160 deep with cliff banks, bending in an S down the valley (corners
-  cut at 45 degrees, boulders against the banks); three bridges (north, middle, south road), two fords
-  (ramps), stairs out of the bed by every bridge and three more places, and the tunnel under it.
-- **Roads**: curves through the places that follow the ground (thin overlays the bots and players
-  walk straight through, in 512-unit pieces so VIS still culls them): the main road through the
-  town's main street to the middle bridge, the north road past the radio hill, the south road past the
-  gas station, and dirt tracks between.
-- **Landmarks**: West Peak (z ~550, between the fort and the town), the east ridge between the quarry and
-  the bunker, the radio hill (448) and its tower, the two mesas.
-- **Below** (z -512, 192 high, v3): a second level under almost the whole valley, 36 rooms in a 6 x 6 grid
-  with solid ribs and two doorways each way between them: natural caves in the west and the north (under the
-  hills: rock, mud, timber, yellow lamps), the quarry's workings, the army bunker in the south-east (blue lamps),
-  utility basements under the factory and the gas station (orange), the town's cisterns in the middle (green).
-  The older tunnels run through them: the town sewer, south to the gas station, west to the factory, the river
-  tunnel to the bunker, the mine gallery from the farm under radio hill and the river to the lumber camp, the
-  storm drain and the east drain. Ways up: 6 stair trenches and 11 ladder hatches, each under a lit portal.
-- **High routes** (v3): the town's rooftop quarter (five walkways, a fire ladder, drop gaps), the factory's roofs
-  and the fuel-line bridge down to the gas station's roof, the aqueduct from radio hill over the river, the barn's
-  roof deck, the farmhouse roof, the silo and chimney perches (two ladders each), the radio tower (two ladders),
-  the watchtower and sawmill roof, the bunker roof, the mesas (each with a second way down).
+**The surface.** Ridges between the places (you crest one to see the next place; no sightline runs across the
+valley), sunken lanes along three tracks, foxholes and earth berms in the open between places.
+- **Town** (middle west, z 64): six buildings on two streets, a door at street level on each. The town hall has
+  three floors and a roof (a sniper rifle, a fire ladder down the back). Cars, crates and sandbags in the streets.
+  Ways down: the sewer trench in the south-east corner, brick kiosks over hatches in the main street, by house A,
+  south of the town (the cisterns) and north of it (the storm drain).
+- **Factory** (south west): an 830 x 700 hall (a catwalk with stairs and a ladder up through a roof hatch, a ladder
+  outside), an office with a roof, containers, a chimney with ladders up two sides. The yard's stair trench goes
+  down to the boiler house below.
+- **Gas station** (south middle): a canopy over the road, a shop with a roof (the fuel-line bridge lands on it), a
+  stair trench down to the tank vault, a tin shed over a hatch.
+- **Farm** (north west): the barn (hay loft, a roof deck by a ladder from the loft or the hoist's ladder outside),
+  the farmhouse (roof by its stairs, a ladder down the back), an eight-sided silo (a caged ladder on its east face,
+  a switchback stair scaffold on its west, a railed top with a sniper rifle), fences, and the mine's adit: a stair
+  trench under a 384-high timber head-frame.
+- **Radio hill** (north middle, z 448): a lattice tower (a ladder on its east side; on the west a ladder to a caged
+  landing half way, then another), a hut; the old rail viaduct leaves its east cliff.
+- **Docks** (west bank): the boathouse (roof by its stairs, drop gaps), piers over the river, steps up from the bed,
+  a shed over the hatch to the boathouse cellar.
+- **Pumping station** (east of the river): two pump houses over hatches into the works below, a water tower,
+  pipe runs to hide behind.
+- **Quarry** (east, z -128, a pit): rock piles, a shed with a roof, a stair trench down to the workings.
+- **Bunker** (south east, z 160): two rooms, a roof (outside stairs, a ladder on the north wall), sandbags, a stair
+  trench under a roofed housing down to the bunker below.
+- **Lumber camp** (north east): the sawmill (roof at 176), log piles, a cabin, the open watchtower (a ladder, and
+  stairs down to the sawmill's roof), a head-frame over the hatch into the lumber caves.
+- **Mesas**: the old fort (west, z 352: its ramp on the east, the north gate's steps onto West Peak's flank) and the
+  lookout (east, z 320: its ramp on the east, the viaduct's south leg arriving on its north edge).
+- Five cabins between the places; ~70 tiered pines in groves (the lowest tier from head height up blocks sight;
+  you bump into a box round each), boulders 40+ apart (no slots between them), bushes.
+- **River**: a channel 512-1024 wide, 160 deep with cliff banks, bending in an S (corners cut at 45 degrees);
+  three bridges, two fords, stone steps out of the bed by the bridges and in two more places, each flight climbing
+  straight onto its bank.
+- **Roads**: curves through the places that follow the ground (thin overlays): the main road through the town to
+  the middle bridge, the north road past the radio hill, the south road past the gas station, dirt tracks between.
 
-Mode data in the BSP (gm_components): 28 respawn points spread by farthest-point picking and the same
-28 spots as drop-in landing spots (`ls_marker kind=br_drop`, all on the ground), 32 game spawns, 100 loot
-crates and 49 floor weapons weighted by layer (the surface tiers 1-2, pistols and SMGs; high places 3-4 and the
-sniper rifles; below 3-5 and rifles, 5 in three vaults), a gun within a 10-second run of every drop-in spot,
-8 supply drop spots on open, dry ground (moved off the river, trenches and structures), the safe zone
-(radius 5100, covers everything) and a six-stage shrinker (60/50, 50/45, 45/40, 40/30, 30/25, 25/25 s).
-The zone entity sits at z 1536 on purpose: the shrinker picks random centres by testing open air 64
-units above the zone's height, which would fail inside hills if it sat on the ground.
+**High routes.** The town's rooftop quarter (five walkways, a fire ladder, drop gaps, a water tank and chimney
+stacks to duck behind) and a walkway from the store's roof east to the middle bridge with stairs down at the bank;
+the factory's roofs, the office roof and the fuel-line bridge down to the gas station's roof; the **old rail
+viaduct**: from radio hill (z 448) east over the river and the north bridge (a branch of stone stairs down to the
+east bank half way), then south along the lookout's flank down to the lookout mesa (z 320) - piers every ~320
+with stepped corbels, a 48-thick deck with the old rails on it; the silo, chimney, radio tower, watchtower, barn,
+farmhouse and bunker roofs, each with two ways off.
+
+**Below** (z -512, some halls lower): named places, each with its own look, light colour and sound, joined by the
+older tunnels; every one reachable on foot from a stair trench (the main ways down; the ladder hatches are extra),
+within a 17-second walk of the nearest:
+the fort caves (under the fort and West Peak), the west mine (the farm adit; timber props), the north caves, the
+deep chamber under radio hill's flank and its stope a level down (a vault), the lumber caves, the ridge caves
+(caves: rock, mud, cut corners, rock pillars and hanging rock, a raised shelf; yellow lamps, drips); the town's
+sewer (a water channel between ledges) and the cistern hall (256 high, columns, a water channel; green); the town
+vault under the hall (a grate-floored passage you hear); the boiler house under the factory and the tank vault
+under the gas station (boilers, tanks, pipes; orange); the boathouse cellar and the pumping works (pumps, pipes;
+blue); the quarry workings (white); the bunker: a hall, the guard room, the generator room and the armoury a level
+down (a vault, a grate passage; blue). Ways up: 6 stair trenches under housings or a head-frame, 14 hatches under
+kiosks, pump houses, sheds or head-frames; daylight falls down every shaft and an EXIT sign hangs at each foot.
+
+Mode data in the BSP (gm_components): 28 respawn points spread by farthest-point picking; drop-in landing spots
+(`ls_marker kind=br_drop`, all on the ground): the same 28 plus four by the high layer's ways up; 32 game spawns;
+78 crates and 40 floor weapons weighted by risk: the surface tiers 1-2 with tier 4 at six contested places (the
+hall's ground floor, the factory floor, the gas station shop, the quarry shed, the sawmill, the boathouse), pistols
+and SMGs; high places 3-4 and the sniper rifles; below tier 3 and SMGs, tier 5 and rifles only in the three vaults;
+a gun within a 10-second run of every drop-in spot; 8 supply drop spots on open, dry ground; the safe zone
+(radius 5100) and a six-stage shrinker (60/50, 50/45, 45/40, 40/30, 30/25, 25/25 s). The zone entity sits at z
+1536 on purpose: the shrinker picks random centres by testing open air 64 units above the zone's height.
+
+**Brush budget.** Stair steps are shown and solid to bullets but not to movement (`zhlt_noclip`), with one CLIP
+ramp over each flight to walk on; tree foliage likewise, with one CLIP prism round each tree; CLIP helpers in the
+detail entity (not the world: they'd split visleaves). Clipnodes 77 %.
 
 ## Play it
 

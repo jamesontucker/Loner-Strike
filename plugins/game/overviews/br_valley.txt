@@ -4,12 +4,12 @@
 global
 {
 	ZOOM	0.79
-	ORIGIN	0	0	-512
+	ORIGIN	0	0	-704
 	ROTATED	1
 }
 
 layer
 {
 	IMAGE	"overviews/br_valley.bmp"
-	HEIGHT	-512
+	HEIGHT	-704
 }
