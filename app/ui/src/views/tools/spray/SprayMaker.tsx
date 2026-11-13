@@ -1,13 +1,27 @@
-// The spray maker: any picture becomes your spray in Counter-Strike 1.6 and Condition Zero.
-// Choose a picture, see it on a wall the way the game draws it, install.
+// The spray composer: make your spray for Counter-Strike 1.6 and Condition Zero from layers
+// (your pictures, words, stickers), each moved, turned, scaled, flipped and coloured, then see
+// it as the game will draw it (its real size and colours, on a wall) and install it.
+//
+// The page draws the design itself and hands the drawing to the server (tools/spray.rs
+// /use), which turns it into the game's tempdecal.wad exactly as it does a picture: the same
+// preview, the same install, backups and "put back". Designs are kept as JSON in the app's
+// folder (sprays/designs) and open again for changing.
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { BusyButton, LoadError, Segmented, Skeleton, Switch, useToast } from "../../../ui";
-import { Check, Empty, Row, Rows } from "../common";
-import { DEFAULT_CHOICE, installSpray, pickPicture, previewSpray, restoreSpray, sprayStatus, type Choice, type GameSpray, type SprayImage } from "./sprayApi";
-import "./spray.css";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDirty } from "../../../store";
+import { BusyButton, Info, LoadError, Segmented, Sheet, Skeleton, Switch, useConfirm, useToast } from "../../../ui";
+import { Check, Empty } from "../common";
+import { ActionBar } from "../common/ActionBar";
+import { errorText, useBusy } from "../common/api";
 import { CommunitySprays } from "../community/Hooks";
+import { blankDoc, cleanDoc, fitSize, imageLayer, imagesReady, layerSize, newId, readPicture, shapeLayer, SHAPES, SIZE_PIXELS, textLayer, toPng, type Doc, type ImageLayer, type Layer, type Shape } from "./doc";
+import { useHistory } from "./history";
+import { AddPanel, Inspector, LayerList } from "./Panels";
+import { deleteDesign, DEFAULT_CHOICE, installSpray, listDesigns, openDesign, previewSpray, restoreSpray, saveDesign, sendDrawn, sprayStatus, type Choice, type DesignInfo, type GameSpray, type SprayImage } from "./sprayApi";
+import { Stage } from "./Stage";
+import { TEMPLATES } from "./templates";
+import "./spray.css";
 
 const SIZE_NOTE: Record<Choice["size"], string> = {
   small: "About the size of the game's own sprays",
@@ -15,74 +29,254 @@ const SIZE_NOTE: Record<Choice["size"], string> = {
   large: "The biggest the game allows",
 };
 
+/** Walls to see the spray on: one drawn here, two from the game's own textures (when there). */
+const WALLS: { id: string; label: string; tex?: string }[] = [
+  { id: "plaster", label: "Plaster" },
+  { id: "sand", label: "Sandstone", tex: "/api/tools/assets/wad/cstrike/cs_dust.wad/tex/csSandWall2.png" },
+  { id: "crate", label: "Crate", tex: "/api/tools/assets/wad/cstrike/cs_dust.wad/tex/SandCrtLrgSd.png" },
+];
+
+const same = (a: Doc, b: Doc) => JSON.stringify(strip(a)) === JSON.stringify(strip(b));
+/** the doc without layer ids (they're new on every open) */
+const strip = (d: Doc) => ({ ...d, layers: d.layers.map(({ id: _id, ...l }) => l) });
+
 export function SprayMaker() {
   const toast = useToast();
+  const ask = useConfirm();
   const qc = useQueryClient();
   const status = useQuery({ queryKey: ["tools", "spray"], queryFn: sprayStatus });
-  const [choice, setChoice] = useState<Choice>(DEFAULT_CHOICE);
+  const designs = useQuery({ queryKey: ["tools", "spray", "designs"], queryFn: listDesigns });
+  const first = useMemo(() => TEMPLATES[1].make(), []);
+  const h = useHistory(first);
+  const doc = h.doc;
+  const [selected, setSelected] = useState<string | null>(null);
+  const [snap, setSnap] = useState(true);
+  const [design, setDesign] = useState<{ id: string | null; name: string; saved: Doc | null }>({ id: null, name: "My spray", saved: first });
+  const [choice, setChoice] = useState<Choice>({ ...DEFAULT_CHOICE, clear: "alpha" });
   const [preview, setPreview] = useState<SprayImage | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
-  const [picking, setPicking] = useState(false);
-  const [installing, setInstalling] = useState(false);
-  const [restoring, setRestoring] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [wall, setWall] = useState("sand");
+  const [badWalls, setBadWalls] = useState<string[]>([]);
+  const [wallW, setWallW] = useState<Record<string, number>>({});
+  const [zoom, setZoom] = useState(3);
   const [lock, setLock] = useState(true);
   const [skip, setSkip] = useState<string[]>([]);
+  const [done, setDone] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const [restoring, setRestoring] = useState<string | null>(null);
+  const { working, run } = useBusy();
+  const file = useRef<HTMLInputElement>(null);
+  const replacing = useRef<string | null>(null);
+  const stageCanvas = useRef<HTMLCanvasElement>(null);
 
-  const picked = status.data?.picked ?? null;
   const games = status.data?.games ?? [];
-  const set = (c: Partial<Choice>) => {
-    setChoice((old) => ({ ...old, ...c }));
-    setDone(null);
+  const targets = games.filter((g) => !skip.includes(g.game)).map((g) => g.game);
+  const dirty = design.saved ? !same(doc, design.saved) : doc.layers.length > 0;
+  useDirty("tools:spray", dirty);
+  const sel = doc.layers.find((l) => l.id === selected) ?? null;
+
+  // ---- changes -------------------------------------------------------------------------
+  const change = useCallback((id: string, v: Partial<Layer>, key?: string) => h.commit((d) => ({ ...d, layers: d.layers.map((l) => (l.id === id ? ({ ...l, ...v } as Layer) : l)) }), key ? `${id}:${key}` : undefined), [h]);
+  const add = (l: Layer) => {
+    h.commit((d) => ({ ...d, layers: [...d.layers, l] }));
+    setSelected(l.id);
+  };
+  const remove = useCallback((id: string) => {
+    h.commit((d) => ({ ...d, layers: d.layers.filter((l) => l.id !== id) }));
+    setSelected(null);
+  }, [h]);
+  const duplicate = useCallback((id: string) => {
+    const nid = newId();
+    h.commit((d) => {
+      const i = d.layers.findIndex((l) => l.id === id);
+      if (i < 0) return d;
+      const copy = { ...d.layers[i], id: nid, x: d.layers[i].x + 16, y: d.layers[i].y + 16, locked: false } as Layer;
+      return { ...d, layers: [...d.layers.slice(0, i + 1), copy, ...d.layers.slice(i + 1)] };
+    });
+    setSelected(nid);
+  }, [h]);
+  const moveLayer = useCallback((id: string, by: number) => h.commit((d) => {
+    const i = d.layers.findIndex((l) => l.id === id);
+    const j = i + by;
+    if (i < 0 || j < 0 || j >= d.layers.length) return d;
+    const layers = [...d.layers];
+    [layers[i], layers[j]] = [layers[j], layers[i]];
+    return { ...d, layers };
+  }), [h]);
+  const setDoc = (v: Partial<Doc>, key?: string) =>
+    h.commit((d) => {
+      if (v.shape && v.shape !== d.shape) {
+        // keep each layer in the same place relative to the canvas
+        const a = SHAPES[d.shape];
+        const b = SHAPES[v.shape];
+        const k = Math.min(b.w / a.w, b.h / a.h);
+        return { ...d, ...v, layers: d.layers.map((l) => ({ ...l, x: (l.x / a.w) * b.w, y: (l.y / a.h) * b.h, scale: l.scale * k })) };
+      }
+      return { ...d, ...v };
+    }, key);
+  const centre = () => sel && change(sel.id, { x: SHAPES[doc.shape].w / 2, y: SHAPES[doc.shape].h / 2 });
+  const fill = () => {
+    if (!sel) return;
+    const { w, h: lh } = layerSize(sel);
+    const s = SHAPES[doc.shape];
+    change(sel.id, { x: s.w / 2, y: s.h / 2, rot: 0, scale: Math.min(s.w / w, s.h / lh) });
   };
 
-  // the preview follows the choices (a short wait so dragging the colour picker doesn't flood)
+  const addPictures = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const into = replacing.current;
+    replacing.current = null;
+    for (const f of [...files].slice(0, into ? 1 : 8)) {
+      try {
+        const p = await readPicture(f);
+        if (into) {
+          const old = doc.layers.find((l) => l.id === into) as ImageLayer | undefined;
+          if (old) {
+            const k = Math.sqrt((old.w * old.h) / (p.w * p.h));
+            change(into, { src: p.src, w: p.w * k, h: p.h * k, name: p.name.slice(0, 40) } as Partial<ImageLayer>);
+          }
+        } else add(imageLayer(doc, p.src, p.w, p.h, p.name));
+      } catch (e) {
+        toast(errorText(e, "Couldn't open that picture."), true);
+      }
+    }
+  };
+  const pickPictures = (replace: string | null = null) => {
+    replacing.current = replace;
+    if (file.current) {
+      file.current.value = "";
+      file.current.multiple = !replace;
+      file.current.click();
+    }
+  };
+
+  // ---- keys ----------------------------------------------------------------------------
   useEffect(() => {
-    if (!picked) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.closest("input, textarea, select, [contenteditable=true]") || t.closest(".sheet, [role=dialog]"))) return;
+      if (!document.querySelector(".sc-page")) return;
+      const mod = e.metaKey || e.ctrlKey;
+      const k = e.key.toLowerCase();
+      if (mod && k === "z") {
+        e.preventDefault();
+        if (e.shiftKey) h.redo();
+        else h.undo();
+      } else if (mod && k === "y") {
+        e.preventDefault();
+        h.redo();
+      } else if (mod && k === "d" && sel) {
+        e.preventDefault();
+        duplicate(sel.id);
+      } else if (!mod && (e.key === "Delete" || e.key === "Backspace") && sel) {
+        e.preventDefault();
+        remove(sel.id);
+      } else if (!mod && e.key === "Escape" && sel) {
+        setSelected(null);
+      } else if (!mod && (e.key === "[" || e.key === "]") && sel) {
+        moveLayer(sel.id, e.key === "]" ? 1 : -1);
+      } else if (!mod && sel && !sel.locked && e.key.startsWith("Arrow")) {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+        change(sel.id, { x: sel.x + dx, y: sel.y + dy }, "nudge");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [h, sel, duplicate, remove, moveLayer, change]);
+
+  // ---- the game's look: the drawing handed to the server, its preview back ---------------
+  useEffect(() => {
     let live = true;
     setPreviewing(true);
     const t = setTimeout(async () => {
-      const r = await previewSpray(choice);
+      await imagesReady(doc);
+      await document.fonts?.ready;
+      if (!live) return;
+      if (!doc.layers.some((l) => !l.hidden) && !doc.background) {
+        setPreviewing(false);
+        setPreview(null);
+        setPreviewError(null);
+        return;
+      }
+      const u = await sendDrawn(design.name, toPng(doc));
+      if (!live) return;
+      const r = u.error ? u : await previewSpray(choice);
       if (!live) return;
       setPreviewing(false);
-      if (r.error || !r.png) {
+      if (r.error || !("png" in r) || !r.png) {
         setPreviewError(r.error || "Couldn't make the spray.");
         setPreview(null);
       } else {
         setPreviewError(null);
         setPreview(r as SprayImage);
       }
-    }, 120);
+    }, 300);
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [choice, picked?.name, picked?.width, picked?.height]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [doc, choice, design.name]);
 
-  const pick = async () => {
-    setPicking(true);
-    const r = await pickPicture();
-    setPicking(false);
-    if (r.cancelled) return;
-    if (r.error) return toast(r.error, true);
+  const setC = (c: Partial<Choice>) => {
+    setChoice((old) => ({ ...old, ...c }));
     setDone(null);
-    await qc.invalidateQueries({ queryKey: ["tools", "spray"] });
   };
 
-  const targets = games.filter((g) => !skip.includes(g.game)).map((g) => g.game);
-
-  const install = async () => {
-    setInstalling(true);
-    const r = await installSpray(choice, targets, lock);
-    setInstalling(false);
-    if (r.error || !r.ok) return toast(r.error || "Couldn't install the spray.", true);
-    const msg = r.message || "Spray installed. Press T in game to spray it.";
-    setDone(msg);
-    toast(msg);
-    qc.invalidateQueries({ queryKey: ["tools", "spray"] });
+  // ---- saving, opening, installing -----------------------------------------------------
+  const thumb = () => toPng(doc, 128 / Math.max(SHAPES[doc.shape].w, SHAPES[doc.shape].h));
+  const save = (asNew = false) =>
+    run("Saving…", async () => {
+      await imagesReady(doc);
+      const r = await saveDesign(asNew ? null : design.id, design.name, strip(doc), thumb());
+      if (r.error || !r.id) return toast(r.error || "Couldn't save the design.", true);
+      setDesign({ id: r.id, name: r.name ?? design.name, saved: doc });
+      qc.invalidateQueries({ queryKey: ["tools", "spray", "designs"] });
+      toast(`Saved “${r.name ?? design.name}”.`);
+    });
+  const leaveOk = async () => !dirty || (await ask("Drop the changes to this design you haven't saved?", { ok: "Drop them" }));
+  const startFrom = async (d: Doc, name: string) => {
+    if (!(await leaveOk())) return;
+    h.reset(d);
+    setSelected(null);
+    setDesign({ id: null, name, saved: d });
+    setDone(null);
   };
-
+  const open = async (d: DesignInfo) => {
+    if (!(await leaveOk())) return;
+    setOpening(false);
+    await run("Opening…", async () => {
+      const r = await openDesign(d.id).catch((e) => ({ error: errorText(e) }) as { error: string });
+      if ("error" in r && r.error) return toast(r.error, true);
+      const doc = cleanDoc((r as { doc: unknown }).doc);
+      h.reset(doc);
+      setSelected(null);
+      setDesign({ id: d.id, name: (r as { name: string }).name || d.name, saved: doc });
+    });
+  };
+  const removeDesign = async (d: DesignInfo) => {
+    if (!(await ask(`Delete the design “${d.name}”? It can't be brought back. A spray you installed from it stays.`, { ok: "Delete", danger: true }))) return;
+    const r = await deleteDesign(d.id);
+    if (r.error) return toast(r.error, true);
+    if (design.id === d.id) setDesign((x) => ({ ...x, id: null, saved: null }));
+    qc.invalidateQueries({ queryKey: ["tools", "spray", "designs"] });
+  };
+  const install = () =>
+    run("Installing…", async () => {
+      // the drawing the preview showed is the one installed
+      await imagesReady(doc);
+      const u = await sendDrawn(design.name, toPng(doc));
+      if (u.error) return toast(u.error, true);
+      const r = await installSpray(choice, targets, lock);
+      if (r.error || !r.ok) return toast(r.error || "Couldn't install the spray.", true);
+      const msg = r.message || "Spray installed. Press T in game to spray it.";
+      setDone(msg);
+      toast(msg);
+      qc.invalidateQueries({ queryKey: ["tools", "spray"] });
+    });
   const restore = async (g: GameSpray) => {
     setRestoring(g.game);
     const r = await restoreSpray(g.game);
@@ -97,112 +291,161 @@ export function SprayMaker() {
   if (status.isError) return <LoadError text="Couldn't load the spray maker." onRetry={() => status.refetch()} />;
   if (status.data?.error) return <LoadError text={status.data.error} onRetry={() => status.refetch()} />;
   if (games.length === 0)
-    return (
-      <Empty title="No game found" text="Couldn't find Counter-Strike 1.6 or Condition Zero on this computer. Set up the game first, then come back to make a spray." />
-    );
+    return <Empty title="No game found" text="Couldn't find Counter-Strike 1.6 or Condition Zero on this computer. Set up the game first, then come back to make a spray." />;
+
+  const [gw, gh] = fitSize(SHAPES[doc.shape].w, SHAPES[doc.shape].h, SIZE_PIXELS[choice.size]);
+  const wallTex = WALLS.find((w) => w.id === wall && !badWalls.includes(w.id))?.tex;
+  const savedList = designs.data?.designs ?? [];
 
   return (
-    <div className="tl-page spray-page">
-    <div className="spray">
-      <div className="panel spray-stage">
-        <div className="spray-wall" aria-label={preview ? "Your spray on a wall, as it looks in game" : undefined}>
-          {preview ? (
-            <img className="spray-img" src={preview.png} width={preview.width * 2} height={preview.height * 2} alt="Your spray as it looks in game" />
-          ) : (
-            <div className="spray-empty">
-              <p>{picked ? (previewError ?? "Making your spray…") : "Choose a picture to see it here, sprayed on a wall."}</p>
-            </div>
-          )}
-          {previewing && preview && <span className="spinner spray-busy" aria-label="Updating the preview" />}
+    <div className="tl-page sc-page">
+      <input ref={file} type="file" accept="image/png,image/jpeg,image/gif,image/bmp,image/webp" hidden onChange={(e) => void addPictures(e.target.files)} />
+
+      <div className="toolbar sc-bar">
+        <label className="sc-name">
+          <span className="sr-only">Design name</span>
+          <input className="search" value={design.name} maxLength={60} aria-label="Design name" onChange={(e) => setDesign((d) => ({ ...d, name: e.target.value }))} />
+        </label>
+        <div className="sc-bar-group" role="group" aria-label="Undo">
+          <button type="button" className="btn small" disabled={!h.canUndo} onClick={h.undo} title="Undo (Mod+Z)">
+            Undo
+          </button>
+          <button type="button" className="btn small" disabled={!h.canRedo} onClick={h.redo} title="Redo (Shift+Mod+Z)">
+            Redo
+          </button>
         </div>
-        <div className="row between spray-caption">
-          <span className="muted">
-            {picked ? (
-              <>
-                {picked.name}
-                {preview && ` · ${preview.width}×${preview.height} in game · ${preview.colour ? `${preview.colours} colours` : "one colour"}`}
-              </>
-            ) : (
-              "PNG, JPEG, BMP, TGA or WebP. A picture with a see-through background works best."
-            )}
-          </span>
-          <BusyButton className={picked ? "btn" : "btn primary"} busy={picking} label={picked ? "Choose another picture" : "Choose a picture"} busyLabel="Choosing…" onClick={pick} />
+        <label className="sc-snap" title="Snap to the middle, the edges and other layers while dragging (hold Alt to ignore)">
+          <Switch on={snap} onChange={setSnap} label="Snap" />
+          Snap
+        </label>
+        <span className="push" />
+        <button type="button" className="btn small" onClick={() => setOpening(true)}>
+          Designs & templates…
+        </button>
+      </div>
+
+      <div className="sc-grid">
+        <div className="sc-left">
+          <AddPanel onPicture={() => pickPictures()} onWords={() => add(textLayer(doc))} onSticker={(id) => add(shapeLayer(doc, id))} />
+          <LayerList doc={doc} selected={selected} onSelect={setSelected} onChange={(id, v) => change(id, v)} onMove={moveLayer} onDuplicate={duplicate} onDelete={remove} />
+        </div>
+
+        <div className="sc-centre">
+          <div className="panel sc-stage-panel">
+            <Stage doc={doc} selected={selected} onSelect={setSelected} onBegin={h.begin} onLive={h.live} snap={snap} canvasRef={stageCanvas} />
+            <p className="muted sc-hint">
+              Drag to move, a corner to resize, the dot to turn. Shift keeps a straight line; Alt turns snapping off. In game it's {gw}×{gh} pixels.
+            </p>
+          </div>
+        </div>
+
+        <div className="sc-right">
+          <Inspector doc={doc} layer={sel} onChange={(v, key) => sel && change(sel.id, v, key)} onDoc={setDoc} onReplacePicture={() => sel && pickPictures(sel.id)} onCentre={centre} onFit={fill} />
         </div>
       </div>
 
-      <div className="panel spray-options">
-        <h3>Your spray</h3>
-        <Rows>
-          <Row name="Size" note={SIZE_NOTE[choice.size]}>
-            <Segmented label="Size" values="small medium large" labels="Small|Medium|Large" current={choice.size} onPick={(v) => set({ size: v as Choice["size"] })} />
-          </Row>
-          <Row name="Colours" info="Full colour keeps the picture's own colours (up to 255). One colour paints it in a single colour, like the game's own sprays: dark parts are painted, light parts are left clear.">
-            <Segmented label="Colours" values="colour mono" labels="Full colour|One colour" current={choice.look} onPick={(v) => set({ look: v as Choice["look"] })} />
-          </Row>
-          {choice.look === "mono" && (
-            <>
-              <Row name="Paint colour">
-                <input className="spray-colour" type="color" value={choice.paint} aria-label="Paint colour" onChange={(e) => set({ paint: e.target.value })} />
-              </Row>
-              <Row name="Paint the light parts" note="For a light picture on a dark background">
-                <Switch on={choice.invert} onChange={(v) => set({ invert: v })} label="Paint the light parts" />
-              </Row>
-            </>
-          )}
-          <Row
-            name="See-through"
-            info="Which parts of the picture the wall shows through. 'The picture's own' uses its transparency (PNG, WebP). 'Plain background' removes the colour in the top-left corner, for a logo on white. Space around a picture that isn't the spray's shape is always see-through."
-          >
-            <Segmented label="See-through" values="alpha background none" labels="The picture's own|Plain background|None" current={choice.clear} onPick={(v) => set({ clear: v as Choice["clear"] })} />
-          </Row>
-          {choice.look === "colour" && (
-            <Row name="Smooth photo colours" note="Mixes colours with fine dots. Good for photos, not for logos">
-              <Switch on={choice.dither} onChange={(v) => set({ dither: v })} label="Smooth photo colours" />
-            </Row>
-          )}
-          {games.length > 1 && (
-            <Row name="Install for">
-              <div className="tl-checks">
-                {games.map((g) => (
-                  <Check
-                    key={g.game}
-                    label={g.label}
-                    checked={!skip.includes(g.game)}
-                    onChange={(on) => {
-                      setSkip((s) => (on ? s.filter((x) => x !== g.game) : [...s, g.game]));
-                      setDone(null);
-                    }}
-                  />
-                ))}
+      <section className="panel sc-game" aria-label="In game">
+        <div className="sc-game-head">
+          <h3>In game</h3>
+          <Info text="This is the spray as the game will draw it: shrunk to the size the game takes, with its colours cut to the game's 255 (or one colour), on a wall at the wall's own scale. What's see-through in your design shows the wall." />
+          <span className="push" />
+          <Segmented label="Wall" options={WALLS.filter((w) => !badWalls.includes(w.id)).map((w) => [w.id, w.label] as const)} current={wallTex || wall === "plaster" ? wall : "plaster"} onPick={setWall} />
+          <Segmented label="Zoom" values="1 2 3" labels="1×|2×|3×" current={String(zoom)} onPick={(v) => setZoom(Number(v))} />
+        </div>
+        <div className="sc-game-body">
+          <div className="sc-views">
+            <figure className="sc-view">
+              <div className={`spray-wall sc-wall${wallTex ? " tex" : ""}`} style={wallTex ? { backgroundImage: `url(${wallTex})`, backgroundSize: `${(wallW[wall] ?? 128) * zoom}px auto` } : undefined}>
+                {wallTex && <img src={wallTex} alt="" hidden onLoad={(e) => { const w = e.currentTarget.naturalWidth; setWallW((m) => ({ ...m, [wall]: w })); }} onError={() => setBadWalls((b) => [...b, wall])} />}
+                {preview ? (
+                  <img className="spray-img sc-pixel" src={preview.png} width={preview.width * zoom} height={preview.height * zoom} alt="Your spray on a wall, as it looks in game" />
+                ) : (
+                  <p className="spray-empty">{previewError ?? (previewing ? "Making your spray…" : "Add something to see it here.")}</p>
+                )}
+                {previewing && preview && <span className="spinner spray-busy" aria-label="Updating the preview" />}
               </div>
-            </Row>
-          )}
-          <Row name="Keep it from being replaced" note="Picking a spray in the game's Options would replace yours. This makes the file read-only, like players usually do">
-            <Switch on={lock} onChange={setLock} label="Keep it from being replaced" />
-          </Row>
-        </Rows>
-        <div className="row spray-actions">
-          <BusyButton className="btn primary" busy={installing} disabled={!preview || targets.length === 0} label="Install spray" busyLabel="Installing…" onClick={install} />
-          {!picked ? <span className="muted">Choose a picture first.</span> : targets.length === 0 ? <span className="muted">Tick a game to install it for.</span> : null}
-        </div>
-        {done && (
-          <p className="spray-done" role="status">
-            {done} <span className="muted">If the game is open, it shows from the next server you join.</span>
-          </p>
-        )}
-      </div>
+              <figcaption className="muted">
+                {preview ? `${preview.width}×${preview.height} in game · ${preview.colour ? `${preview.colours} colours` : "one colour"}` : " "}
+              </figcaption>
+            </figure>
+            <figure className="sc-view small">
+              <div className="sc-actual">{preview && <img className="sc-pixel" src={preview.png} width={preview.width} height={preview.height} alt="Your spray at its real size" />}</div>
+              <figcaption className="muted">Real size</figcaption>
+            </figure>
+          </div>
 
-      <div className="panel">
-        <h3>Spray now</h3>
+          <div className="sc-options">
+            <div className="sc-field">
+              <span className="sc-field-name">Size</span>
+              <div className="sc-field-control">
+                <Segmented label="Size" values="small medium large" labels="Small|Medium|Large" current={choice.size} onPick={(v) => setC({ size: v as Choice["size"] })} />
+                <small className="muted">{SIZE_NOTE[choice.size]}</small>
+              </div>
+            </div>
+            <div className="sc-field">
+              <span className="sc-field-name">
+                Colours
+                <Info text="Full colour keeps your design's colours (up to 255). One colour paints it in a single colour, like the game's own sprays: dark parts are painted, light parts are left clear." />
+              </span>
+              <div className="sc-field-control">
+                <Segmented label="Colours" values="colour mono" labels="Full colour|One colour" current={choice.look} onPick={(v) => setC({ look: v as Choice["look"] })} />
+              </div>
+            </div>
+            {choice.look === "mono" ? (
+              <div className="sc-field">
+                <span className="sc-field-name">Paint</span>
+                <div className="sc-field-control sc-inline">
+                  <input className="sc-colour" type="color" value={choice.paint} aria-label="Paint colour" onChange={(e) => setC({ paint: e.target.value })} />
+                  <label className="sc-inline">
+                    <Switch on={choice.invert} onChange={(v) => setC({ invert: v })} label="Paint the light parts" /> Paint the light parts
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div className="sc-field">
+                <span className="sc-field-name">Smooth colours</span>
+                <div className="sc-field-control sc-inline">
+                  <Switch on={choice.dither} onChange={(v) => setC({ dither: v })} label="Smooth photo colours" />
+                  <small className="muted">Fine dots; good for photos, not for logos</small>
+                </div>
+              </div>
+            )}
+            {games.length > 1 && (
+              <div className="sc-field">
+                <span className="sc-field-name">Install for</span>
+                <div className="sc-field-control tl-checks">
+                  {games.map((g) => (
+                    <Check key={g.game} label={g.label} checked={!skip.includes(g.game)} onChange={(on) => (setSkip((s) => (on ? s.filter((x) => x !== g.game) : [...s, g.game])), setDone(null))} />
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="sc-field">
+              <span className="sc-field-name">
+                Keep it
+                <Info text="Picking a spray in the game's Options would replace yours. This makes the file read-only, like players usually do." />
+              </span>
+              <div className="sc-field-control sc-inline">
+                <Switch on={lock} onChange={setLock} label="Keep it from being replaced" />
+                <small className="muted">From being replaced by the game's Options</small>
+              </div>
+            </div>
+            {done && (
+              <p className="spray-done" role="status">
+                {done} <span className="muted">If the game is open, it shows from the next server you join.</span>
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="panel sc-now" aria-label="Your spray now">
+        <h3>Your spray now</h3>
         <div className="spray-now">
           {games.map((g) => (
             <div className="spray-now-game" key={g.game}>
               <div className="spray-wall small">
-                {g.current && !g.current.error ? (
-                  <img className="spray-img" src={(g.current as SprayImage).png} alt={`Your spray in ${g.label}`} />
-                ) : (
-                  <span className="muted">{g.current?.error ? "Can't read it" : "None yet"}</span>
-                )}
+                {g.current && !g.current.error ? <img className="spray-img" src={(g.current as SprayImage).png} alt={`Your spray in ${g.label}`} /> : <span className="muted">{g.current?.error ? "Can't read it" : "None yet"}</span>}
               </div>
               <div>
                 <strong>{g.label}</strong>
@@ -212,9 +455,74 @@ export function SprayMaker() {
             </div>
           ))}
         </div>
-      </div>
-      <CommunitySprays />{/* (community: sprays installed from Tools > Community) */}
-    </div>
+      </section>
+      <CommunitySprays />
+
+      {opening && (
+        <Sheet label="Designs and templates" onClose={() => setOpening(false)} className="sheet sc-open">
+          <h2>Start from</h2>
+          <h3>Templates</h3>
+          <div className="sc-cards">
+            {TEMPLATES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className="sc-card"
+                onClick={() => {
+                  setOpening(false);
+                  void startFrom(t.make(), t.id === "blank" ? "My spray" : t.label);
+                }}
+              >
+                <img src={toPng(t.make(), 0.25)} alt="" className="sc-card-pic" />
+                <strong>{t.label}</strong>
+                <small className="muted">{t.note}</small>
+              </button>
+            ))}
+          </div>
+          <h3>Your designs</h3>
+          {designs.isPending ? (
+            <Skeleton rows={2} />
+          ) : savedList.length === 0 ? (
+            <p className="muted">None saved yet. Save brings your design back here to change later.</p>
+          ) : (
+            <div className="sc-cards">
+              {savedList.map((d) => (
+                <div key={d.id} className={`sc-card saved${design.id === d.id ? " on" : ""}`}>
+                  <button type="button" className="sc-card-open" onClick={() => void open(d)} aria-label={`Open ${d.name}`}>
+                    {d.thumb ? <img src={d.thumb} alt="" className="sc-card-pic" /> : <span className="sc-card-pic" />}
+                    <strong>{d.name}</strong>
+                    <small className="muted">{d.updated ? new Date(d.updated * 1000).toLocaleDateString(undefined, { dateStyle: "medium" }) : ""}</small>
+                  </button>
+                  <button type="button" className="btn small ghost sc-card-del" aria-label={`Delete ${d.name}`} title="Delete" onClick={() => void removeDesign(d)}>
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="row">
+            <span className="push" />
+            <button className="btn" onClick={() => setOpening(false)}>
+              Close
+            </button>
+          </div>
+        </Sheet>
+      )}
+
+      <ActionBar
+        dirty={dirty}
+        working={working}
+        where={design.id ? `Design “${design.name}”` : "A new design"}
+        info="Save keeps the design in Loner-Strike's folder, to open and change later (Designs & templates). Install makes the spray from it and puts it in the game (tempdecal.wad); the spray you had is kept first, to put back."
+        status={done && !dirty && !working ? <span className="tl-ab-state saved">✓ Installed</span> : undefined}
+        actions={[{ label: "Save design", busyLabel: "Saving…", onClick: () => save(), disabled: !dirty && !!design.id }]}
+        more={[
+          { label: "Save as a new design", busyLabel: "Saving…", onClick: () => save(true), hidden: !design.id },
+          { label: "Add a picture…", onClick: () => pickPictures() },
+          { label: "Start a blank design", onClick: () => void startFrom(blankDoc(doc.shape as Shape), "My spray") },
+        ]}
+        save={{ label: "Install spray", busyLabel: "Installing…", onClick: install, disabled: !preview || targets.length === 0, title: !preview ? "Add something first" : targets.length === 0 ? "Tick a game to install it for" : undefined }}
+      />
     </div>
   );
 }

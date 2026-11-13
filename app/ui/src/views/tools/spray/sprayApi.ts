@@ -34,3 +34,12 @@ export const previewSpray = (c: Choice) => post<Partial<Omit<SprayImage, "error"
 export const installSpray = (choice: Choice, games: string[], lock: boolean) =>
   post<{ ok?: boolean; message?: string; installed?: string[] }>("/api/tools/spray/install", { choice, games, lock });
 export const restoreSpray = (game: string) => post<{ ok?: boolean; message?: string }>("/api/tools/spray/restore", { game });
+
+// the composer: the drawn spray handed over as a PNG, and saved designs (sprays/designs)
+export const sendDrawn = (name: string, png: string) => post<{ name?: string; width?: number; height?: number }>("/api/tools/spray/use", { name, png });
+export type DesignInfo = { id: string; name: string; updated: number; thumb: string | null };
+export const listDesigns = () => getJson<{ designs: DesignInfo[]; error?: string }>("/api/tools/spray/designs");
+export const openDesign = (id: string) => getJson<{ id: string; name: string; doc: unknown; error?: string }>(`/api/tools/spray/design?${new URLSearchParams({ id })}`);
+export const saveDesign = (id: string | null, name: string, doc: unknown, thumb: string) =>
+  post<{ ok?: boolean; id?: string; name?: string }>("/api/tools/spray/design/save", id ? { id, name, doc, thumb } : { name, doc, thumb });
+export const deleteDesign = (id: string) => post<{ ok?: boolean }>("/api/tools/spray/design/delete", { id });

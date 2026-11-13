@@ -50,6 +50,7 @@ export const SHORTCUTS: Record<string, Keys> = {
     ["Shift+Mod+Z / Ctrl+Y", "Redo"],
     ["Esc", "Clear the pick and the highlighted problem"],
   ],
+  spray: [["Drag / corner / dot", "Move, resize, turn (Shift: straight line, Alt: no snapping)"], ["Arrows", "Nudge the picked layer (Shift: 10)"], ["Mod+D", "Duplicate"], ["Delete", "Delete the picked layer"], ["[ / ]", "Move it down / up the layers"], ["Mod+Z", "Undo"], ["Shift+Mod+Z / Ctrl+Y", "Redo"], ["Esc", "Pick nothing"]],
   radar: [
     ["1 / 2 / 3", "The new picture / side by side / the installed one"],
     ["+ / − / 0", "Zoom in, out, fit (scroll and drag work too)"],
