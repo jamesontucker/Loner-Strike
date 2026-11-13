@@ -57,6 +57,8 @@ const MAX_NAMES: usize = 64;
 const PATH_RATE: f32 = 10.0;
 
 const NO_GAME: &str = "Set up the game on this computer first.";
+/// The one-line cfg the game runs to start a demo.
+const PLAY_CFG: &str = "ls_playdemo.cfg";
 const GONE: &str = "That demo isn't there any more.";
 
 // ---- reading ------------------------------------------------------------------------------
@@ -321,9 +323,11 @@ pub fn safe_name(name: &str) -> bool {
     name.len() <= 128 && name.len() > 4 && name.to_lowercase().ends_with(".dem") && !name.contains(['/', '\\', ':', '\0']) && !name.starts_with('.') && !name.chars().any(|c| c.is_control())
 }
 
-/// A name the game's command line takes (`+playdemo <name>`): letters, digits, `_ - .`.
+/// A name the game can be told to play: nothing that would end its quotes or the command
+/// (`"`, `;`). The name never goes on the command line itself: the engine cuts `+` commands at
+/// any `-` there (Quake's Cmd_StuffCmds), so "+playdemo my-demo" plays "my". It goes in a cfg.
 pub fn playable_name(name: &str) -> bool {
-    safe_name(name) && name.chars().all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c))
+    safe_name(name) && !name.contains(['"', ';', '\'', '\n', '\r'])
 }
 
 /// One folder demos are in.
@@ -479,15 +483,30 @@ fn delete(places: &[Place], at: &str, name: &str) -> Result<Value, String> {
 }
 
 /// What to type in the game's console to watch a demo.
+fn demo_stem(name: &str) -> &str {
+    name.strip_suffix(".dem").or_else(|| name.strip_suffix(".DEM")).unwrap_or(name)
+}
+
+/// What to type in the game's console to watch a demo (quoted when the name has a space).
 fn console_hint(name: &str) -> String {
-    let stem = name.strip_suffix(".dem").or_else(|| name.strip_suffix(".DEM")).unwrap_or(name);
-    format!("playdemo {stem}")
+    let stem = demo_stem(name);
+    if stem.contains(' ') {
+        format!("playdemo \"{stem}\"")
+    } else {
+        format!("playdemo {stem}")
+    }
 }
 
 fn play(places: &[Place], game: &crate::game::Game, at: &str, name: &str) -> Result<Value, String> {
     let (p, path) = find(places, at, name).ok_or(GONE)?;
     if !playable_name(name) {
-        return Err("The game can't be started with a demo named like this. Rename it to letters, numbers, - and _ first.".into());
+        return Err("The game can't be told to play a demo with \" or ; in its name. Rename it first.".into());
+    }
+    // the game needs the demo's map, or it stops with "couldn't open"
+    if let Ok(h) = header_of(&path) {
+        if !h.map.is_empty() && crate::maps::safe_arg(&h.map) && super::mapinfo::locate(game, &h.map).is_none() {
+            return Err(format!("This demo was recorded on {}, which isn't in your game. Get that map first (Maps or Get more), then watch it.", h.map));
+        }
     }
     // a server's demo goes into the player's game folder first (the game plays from there)
     let mut copied = false;
@@ -509,13 +528,22 @@ fn play(places: &[Place], game: &crate::game::Game, at: &str, name: &str) -> Res
         }
     }
     let hint = console_hint(name);
+    let command = format!("playdemo \"{}\"", demo_stem(name));
     if crate::sys::game_running() {
+        // Steam doesn't pass a new launch to a game that's open. When it's hosting a map,
+        // its own server's console runs in the same game, so it can be told there.
+        if !game.dedicated && game.rcon.send(&command).is_ok() {
+            return Ok(json!({"ok": true, "copied": copied, "message": "Switched the game to your demo."}));
+        }
         return Ok(json!({"ok": false, "gameOpen": true, "copied": copied, "command": hint,
             "message": format!("The game is open already. Open its console (the ~ key) and type: {hint}")}));
     }
+    // started through a cfg, so names with - survive (see playable_name); -novid so the intro
+    // video doesn't run over the demo
+    let dir = game.hl.join(&p.game);
+    crate::sys::write_atomic(&dir.join(PLAY_CFG), format!("// Written by Loner-Strike to watch a demo\r\n{command}\r\n").as_bytes()).map_err(|e| format!("Couldn't prepare the game ({e})."))?;
     let appid = if p.game == "czero" { "80" } else { "10" };
-    let stem = hint.trim_start_matches("playdemo ").to_string();
-    crate::steam::launch(&game.hl, appid, &["-condebug".into(), "+playdemo".into(), stem])?;
+    crate::steam::launch(&game.hl, appid, &["-condebug".into(), "-novid".into(), "+exec".into(), PLAY_CFG.into()])?;
     Ok(json!({"ok": true, "copied": copied, "message": "Starting the game with your demo…"}))
 }
 
@@ -858,8 +886,10 @@ mod tests {
     fn names_are_checked() {
         assert!(safe_name("my demo.dem") && safe_name("hltv-2611061830-de_dust2.dem") && safe_name("A.DEM"));
         assert!(!safe_name("../x.dem") && !safe_name("a/b.dem") && !safe_name(".dem") && !safe_name("x.txt") && !safe_name("a\u{7}.dem"));
-        assert!(playable_name("my_demo-1.dem") && !playable_name("my demo.dem") && !playable_name("ç.dem"));
+        assert!(playable_name("my_demo-1.dem") && playable_name("TopFrag-DUST2only.dem") && playable_name("my demo.dem"));
+        assert!(!playable_name("a\";quit.dem") && !playable_name("a;quit.dem") && !playable_name("../x.dem"));
         assert_eq!(console_hint("abc.dem"), "playdemo abc");
+        assert_eq!(console_hint("my demo.dem"), "playdemo \"my demo\"");
     }
 
     #[test]

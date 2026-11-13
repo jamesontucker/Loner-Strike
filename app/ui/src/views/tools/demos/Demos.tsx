@@ -210,7 +210,7 @@ function Details({ demo, gameOpen, onGone }: { demo: Demo; gameOpen: boolean; on
         <BusyButton className="btn" busy={busy === "rename"} disabled={off} label="Rename" busyLabel="Renaming…" onClick={rename} />
         <BusyButton className="btn danger" busy={busy === "delete"} disabled={off} label="Delete" busyLabel="Deleting…" onClick={remove} />
       </div>
-      {!demo.playable && !demo.error && <p className="muted small-note">The game can only be started with a demo whose name is letters, numbers, - and _. Rename it to watch it from here.</p>}
+      {!demo.playable && !demo.error && <p className="muted small-note">The game can't be told to play a demo with " or ; in its name. Rename it to watch it from here.</p>}
     </div>
   );
 }
