@@ -1,0 +1,76 @@
+/* The Plugin Studio (views/tools/plugins). */
+.ps { display: flex; flex-direction: column; gap: 10px; }
+.ps-note { margin: 0; padding: 8px 12px; border-radius: 3px; background: var(--side); color: var(--bone-dim); box-shadow: var(--sunken); }
+.ps-note.warn { color: var(--warn); }
+.ps-main { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 12px; height: max(560px, calc(100vh - 220px)); }
+@media (max-width: 820px) { .ps-main { grid-template-columns: minmax(0, 1fr); height: auto; } .ps-files { max-height: 260px; } .ps-editor-col { height: 680px; } }
+
+/* files */
+.ps-files { display: flex; flex-direction: column; gap: 6px; padding: 10px; overflow: auto; min-height: 0; }
+.ps-files-head { display: flex; gap: 6px; flex-wrap: wrap; }
+.ps-folder { display: flex; flex-direction: column; gap: 2px; }
+.ps-folder-head { all: unset; cursor: pointer; display: flex; align-items: baseline; gap: 4px; padding: 4px 2px; font-weight: 700; color: var(--bone); white-space: nowrap; }
+.ps-folder-head:hover { color: var(--signal); }
+.ps-folder-head:focus-visible, .ps-file:focus-visible, .ps-file-del:focus-visible, .ps-problem:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+.ps-caret { width: 12px; color: var(--bone-faint); }
+.ps-folder-empty { margin: 2px 0 6px 16px; font-size: 13px; }
+.ps-filter { margin: 2px 0 4px 16px; padding: 3px 6px; font: inherit; font-size: 13px; width: calc(100% - 16px); }
+.ps-file-list { list-style: none; margin: 0; padding: 0 0 0 12px; }
+.ps-file-list li { display: flex; align-items: center; border-radius: 2px; }
+.ps-file-list li.on { background: var(--panel-2); }
+.ps-file { all: unset; cursor: pointer; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 3px 6px; font-size: 14px; color: var(--bone-dim); }
+.ps-file:hover, .ps-file-list li.on .ps-file { color: var(--signal); }
+.ps-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-file-del { all: unset; cursor: pointer; padding: 2px 6px; font-size: 11px; color: var(--bone-faint); opacity: 0; }
+.ps-file-list li:hover .ps-file-del, .ps-file-del:focus-visible { opacity: 1; }
+.ps-file-del:hover { color: var(--weak); }
+.ps-dirty { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--signal); flex: none; margin-left: 6px; }
+.ps-live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; box-shadow: 0 0 6px var(--ok); }
+.ps-new { padding: 8px; border-radius: 3px; background: var(--side); box-shadow: var(--sunken); }
+.ps-new .field { margin-bottom: 8px; }
+.ps-new input, .ps-new select { font: inherit; padding: 4px 6px; width: 100%; }
+.ps-new .row { display: flex; gap: 6px; }
+
+/* editor */
+.ps-editor-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.ps-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.ps-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ps-title .tag { font-size: 12px; }
+.ps-trying { color: var(--ok); }
+.ps-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ps-actions .btn { white-space: nowrap; }
+.ps-editor-wrap { position: relative; flex: 1 1 60%; min-height: 240px; border-radius: 3px; box-shadow: var(--sunken); overflow: hidden; background: #2b3126; }
+.ps-editor { position: absolute; inset: 0; }
+.ps-empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 24px; color: var(--bone-dim); background: #2b3126; pointer-events: none; }
+.ps-empty > * { pointer-events: auto; max-width: 46ch; }
+.ps-opening { position: absolute; top: 10px; right: 14px; }
+
+/* problems, log, output */
+.ps-bottom { flex: 0 1 34%; min-height: 150px; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; overflow: hidden; }
+.ps-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ps-result { margin-left: auto; font-size: 14px; color: var(--bone-dim); }
+.ps-result.ok { color: var(--ok); }
+.ps-result.warn { color: var(--warn); }
+.ps-result.bad { color: var(--weak); }
+.ps-tab-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.ps-tab-body > p { margin: 4px 2px; }
+.ps-good { color: var(--ok); }
+.ps-problems { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ps-problem { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 4px 6px; border-radius: 2px; cursor: pointer; }
+.ps-problem:disabled { cursor: default; }
+.ps-problem:not(:disabled):hover { background: var(--panel-2); }
+.ps-problem-where { font-variant-numeric: tabular-nums; color: var(--bone-dim); white-space: nowrap; }
+.ps-problem-kind { font-weight: 700; font-size: 13px; white-space: nowrap; }
+.ps-problems li.bad .ps-problem-kind { color: var(--weak); }
+.ps-problems li.warn .ps-problem-kind { color: var(--warn); }
+.ps-problem-raw { font-size: 13px; }
+.ps-problem-foot { padding: 4px 6px; font-size: 14px; }
+.ps-output, .ps-log { margin: 0; font: 13px/1.45 Menlo, Consolas, monospace; color: var(--bone-dim); white-space: pre-wrap; word-break: break-word; }
+.ps-log-wrap { display: flex; flex-direction: column; gap: 4px; height: 100%; }
+.ps-log-note { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.ps-log { flex: 1 1 auto; overflow: auto; padding: 6px 8px; border-radius: 2px; background: var(--side); box-shadow: var(--sunken); min-height: 60px; }
+.ps-log .bad { color: var(--weak); }
+.ps-log-at { color: var(--bone-faint); }
+
+/* the app's own .main (the page shell) would turn Monaco's suggestion rows into columns */
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row > .contents > .main { flex-direction: row; min-height: 0; }

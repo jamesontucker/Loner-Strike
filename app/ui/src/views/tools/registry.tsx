@@ -25,4 +25,5 @@ export const TOOLS: ToolEntry[] = [
   { id: "editor", label: "Map editor", group: "Make", icon: "mods", blurb: "Build your own maps with brushes, like Hammer, in one 3D view.", beta: true, load: () => import("./editor/MapEditor") },
   { id: "spray", label: "Spray maker", group: "Make", icon: "fun", blurb: "Turn a picture into your in-game spray.", load: () => import("./spray/SprayMaker") },
   { id: "community", label: "Community", group: "Share", icon: "friends", blurb: "Find maps, modes and more made with Loner-Strike and try them in a click; publish your own.", beta: true, load: () => import("./community/Community") },
+  { id: "plugins", label: "Plugin Studio", group: "Make", icon: "addons", blurb: "Write AMX Mod X plugins with suggestions and docs, then try them in your game in a click.", beta: true, load: () => import("./plugins/PluginStudio") },
 ];
