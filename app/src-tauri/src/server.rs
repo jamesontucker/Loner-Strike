@@ -60,6 +60,8 @@ impl AppState {
             g.sharing.retarget(&g.data, g.port);
             // admins/VIPs whose time ran out leave users.ini
             crate::admins::sync(g);
+            // backups: this game's folder may be kept and written (safety.rs)
+            crate::safety::use_game(g);
         }
         *self.current.write().unwrap() = g;
     }
@@ -341,6 +343,9 @@ pub fn router(state: Shared, listener: Listener) -> Router {
             .merge(crate::smartchat::local_routes())
             .merge(crate::control::local_routes())
             .merge(crate::mcp::local_routes())
+            .merge(crate::safety::routes())
+            // a POST that kept a backup says so (X-LS-Undo), for the page's "Undo"
+            .layer(middleware::from_fn(crate::safety::mark_saves))
             .layer(middleware::from_fn(crate::diagnostics::log_errors))
             .layer(middleware::from_fn(with_target))
             .layer(middleware::from_fn_with_state(state.clone(), guard_local)),

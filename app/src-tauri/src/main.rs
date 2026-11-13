@@ -44,6 +44,7 @@ mod setup_api;
 mod sharing;
 mod smartchat;
 mod saved;
+mod safety;
 mod sounds;
 mod steam;
 mod sys;
