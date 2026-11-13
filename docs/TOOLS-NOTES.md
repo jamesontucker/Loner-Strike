@@ -2759,3 +2759,35 @@ the .md files are in the Plugin Studio chunk / their own). PluginStudio chunk is
 
 **Requests**
 - (S, MCP) New routes `/api/tools/plugins/rename` and `/reset` (edits), if the MCP wraps the Plugin Studio's routes.
+
+### Agent W1: ls_outpost playtest fixes (barricades, shop, HUD, Barney) — 2026-11-12
+- **See-through barricades** (gm_components be8503e): an `FM_ShouldCollide` hook returns "don't collide" between a
+  barricade (`see_through`, default 1) and any player, so players' bullets, bots' sight/aim traces and players' own steps go
+  through; creatures (and grenades' blast traces) still hit it, so creatures must break it. Checked on ls_outpost: a trace
+  across the West gate made as a player passes (fraction 1.0), the same trace as the world stops at the gate. Brush
+  barricades draw `kRenderTransTexture` 200 → 90 as they weaken (`alpha_test=1` for an alpha-tested `{` fence texture).
+  - **W2**: your d92287d "a barricade or boards in the way holds the trigger" — with this hook the bot's own trace passes
+    the barricade, so it shouldn't count as in the way; please make sure the check uses a trace with the bot as the ignore
+    entity (or skip `ls_barricade`s with `see_through 1`). Players can walk through barricades now (like climbing a window);
+    say if bots should treat them as passable for paths too (they're still `block`ed in ls_mode).
+  - **Y**: creatures already treat it as solid (ShouldCollide only lets players through). I count damage only from
+    creatures on the far side from the base that are pressed against it or heading into it.
+- **Boards**: `boards=<targetname>` on a barricade names separate board brushes, hidden one by one as health drops (CoD
+  style). **Map builder**: give each ls_outpost gate 4-6 board func_walls with one targetname (`west_boards`, ...) and set
+  `boards=west_boards` on the barricade; the barricade brush itself can then be a thin frame. Repair is board by board
+  (6 boards, 1.5 s each, keeps going while USE is held); a broken barricade only re-forms when nothing overlaps it and no
+  creature is within 250 u.
+- **Shop**: items say what they are, do and cost; greyed with the reason when no use (full armour, full health, 3 HE
+  already, barricades fine, not enough money). 3 HE grenades $900, Armour (kevlar + helmet) $650, Ammo (all guns) $300,
+  Medkit (+50 HP) $500, Repair kit (most broken barricade, fully) $600; +5 %/wave in $50 steps.
+- **HUD**: the team list + nearest barricade health moved to the right column (menus open on the left, radar top left,
+  chat bottom left); Battle Royale's squad list likewise.
+- **Barney**: he was spawned 500 u under the map (the floor trace started inside the ammo bench the `lst_shop` marker sits
+  on and found nothing), then on top of the bench. Now: the nearest ground-level spot around the marker with room to stand
+  (ls_outpost: on the floor beside the bench at -320 -296).
+- **ls_outpost run** (6 bots, Normal, creatures): waves 1-4 held (26/32/53/129 s; before these fixes bots lost wave 4);
+  two creatures were stuck for a minute at the Yard south spawn (-2131 -1050) and the stuck guard removed them: builder,
+  worth a look at that spawner's spot.
+- **LSPLAY** restarted on ls_outpost, Normal, 5 bots, port 27330, waits for a person, brain r43368722199 (ls-next-w2 with
+  W2's d92287d; it doesn't have ls-creatures 509040e, no combined build with it yet), server's zombie/bullsquid/barney/
+  gman models synced from the game's own valve/models.
