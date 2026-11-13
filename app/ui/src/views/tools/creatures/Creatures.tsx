@@ -11,7 +11,7 @@ import { ActionBar } from "../common/ActionBar";
 import { errorText, useBusy } from "../common/api";
 import { matches, searchWords } from "../common/search";
 import { useToolCrumbs } from "../common/shell";
-import { applyLive, checkTypes, creatureStatus, liveStatus, lookModel, saveTypes, spawnOne, type Checked, type Creature, type Status, type TypeRow } from "./creaturesApi";
+import { applyLive, checkTypes, creatureStatus, liveStatus, lookModel, saveTypes, spawnOne, type Checked, type Creature, type Placed, type Status, type TypeRow } from "./creaturesApi";
 import { TypeForm } from "./TypeForm";
 import { WavesTab } from "./WavesTab";
 import { CATEGORY_WORDS, KIND_WORDS, TEMPLATE_WORDS } from "./words";
@@ -42,6 +42,8 @@ export default function Creatures() {
   const [q, setQ] = useState("");
   const [checked, setChecked] = useState<Checked | null>(null);
   const [calm, setCalm] = useState(true);
+  /** a "Placed by mappers" entry shown instead of a type (its id) */
+  const [placedId, setPlacedId] = useState<string | null>(null);
 
   const reset = (st: Status) => {
     const list = st.types.filter((t) => !t.skipped).map(plain);
@@ -53,10 +55,14 @@ export default function Creatures() {
   }, [status.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const t = types?.[Math.min(sel, (types?.length ?? 1) - 1)] ?? null;
+  const placed = status.data?.placed?.find((x) => x.id === placedId) ?? null;
+  // a placed turret plays as its type (the user's edits included)
+  const placedType = placed?.type ? (types?.find((x) => x.name === placed.type) ?? null) : null;
+  const shown = placed ? { model: placedType?.model ?? placed.model, anim: placedType?.anim ?? [], ranged: placedType?.attack === "ranged" } : t ? { model: t.model, anim: t.anim, ranged: t.attack === "ranged" } : null;
   const look = useQuery({
-    queryKey: ["tools", "creatures", "look", t?.model, t?.anim.join(","), t?.attack === "ranged"],
-    queryFn: ({ signal }) => lookModel(t!.model, t!.anim, t!.attack === "ranged", signal),
-    enabled: !!t?.model.trim(),
+    queryKey: ["tools", "creatures", "look", shown?.model, shown?.anim.join(","), shown?.ranged],
+    queryFn: ({ signal }) => lookModel(shown!.model, shown!.anim, shown!.ranged, signal),
+    enabled: !!shown?.model.trim(),
     staleTime: 30_000,
   });
   // problems, a summary and the model/sound report, from the server (its rules are the game's)
@@ -75,7 +81,7 @@ export default function Creatures() {
 
   const dirty = !!types && !!saved && JSON.stringify(types) !== JSON.stringify(saved);
   useDirty("creatures", dirty);
-  useToolCrumbs("creatures", tab === "waves" ? [{ label: "Waves" }] : t ? [{ label: t.display || t.name }] : null);
+  useToolCrumbs("creatures", tab === "waves" ? [{ label: "Waves" }] : placed ? [{ label: placed.title }] : t ? [{ label: t.display || t.name }] : null);
 
   const filtered = useMemo(() => {
     const w = searchWords(q);
@@ -174,7 +180,11 @@ export default function Creatures() {
   const canSpawn = !!t && !!live.data?.creatures && !dirty && savedNames.includes(t.name);
   const spawnWhy = !live.data?.creatures ? liveText : dirty ? "Save and apply first." : !t || !savedNames.includes(t.name) ? "Save it first." : liveType && !liveType.precached ? "This map didn't load this type: it may refuse." : "";
 
-  const report = checked?.models ?? look.data?.report;
+  const report = placed ? look.data?.report : (checked?.models ?? look.data?.report);
+  const pick = (i: number) => {
+    setPlacedId(null);
+    setSel(i);
+  };
   const first = report?.candidates[report.picked ?? 0];
 
   return (
@@ -196,7 +206,7 @@ export default function Creatures() {
                 const row = rowOf(x.name);
                 return (
                   <li key={x.name + i}>
-                    <button type="button" role="option" aria-selected={i === sel} className={`cs-item${i === sel ? " on" : ""}`} onClick={() => setSel(i)}>
+                    <button type="button" role="option" aria-selected={!placed && i === sel} className={`cs-item${!placed && i === sel ? " on" : ""}`} onClick={() => pick(i)}>
                       <span className="cs-item-name">
                         <strong>{x.display || x.name}</strong>
                         <span className="muted">
@@ -229,10 +239,32 @@ export default function Creatures() {
             <p className="cs-note">
               {types.length} of {st.limits.maxTypes} types <Info text={`The game always has the ${builtinNames.length} built-in types; change them or make your own from them, ${st.limits.maxTypes} in all. A mode spawns a type by its name.`} />
             </p>
+            {(st.placed?.length ?? 0) > 0 && (
+              <div className="cs-placed" role="group" aria-label="Placed by mappers">
+                <h4>
+                  Placed by mappers <Info text="Hazards and defenses a map puts in place, added in the map editor (Gameplay or an entity) rather than spawned in waves. Flyers join here when the game has them." />
+                </h4>
+                <ul role="listbox" aria-label="Placed by mappers">
+                  {st.placed!.map((x) => (
+                    <li key={x.id}>
+                      <button type="button" role="option" aria-selected={placedId === x.id} className={`cs-item${placedId === x.id ? " on" : ""}`} onClick={() => setPlacedId(x.id)}>
+                        <span className="cs-item-name">
+                          <strong>{x.title}</strong>
+                          <span className="muted">{x.type ? `${x.entity} · ${x.type}` : x.entity}</span>
+                        </span>
+                        <span className="cs-tag">map</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </aside>
 
-          <section className="panel cs-main" aria-label="Edit the type">
-            {t ? (
+          <section className="panel cs-main" aria-label={placed ? "Placed by mappers" : "Edit the type"}>
+            {placed ? (
+              <PlacedView p={placed} onEditType={placedType ? () => pick(types.indexOf(placedType)) : undefined} />
+            ) : t ? (
               <>
                 <h3>{t.display || t.name}</h3>
                 <p className="cs-summary">{summary(t.name)}</p>
@@ -254,9 +286,13 @@ export default function Creatures() {
           </section>
 
           <aside className="panel cs-side" aria-label="Preview">
-            {t && look.data?.model ? (
+            {(placed || t) && look.data?.model ? (
               <Suspense fallback={<p className="muted"><span className="spinner" aria-hidden="true" /> Loading the 3D view…</p>}>
-                <CreaturePreview look={look.data} skin={t.skin} glow={t.glow} fallbackGlow={t.fallback_glow} scale={t.scale} />
+                {placed ? (
+                  <CreaturePreview key={placed.id} look={look.data} skin={placedType?.skin ?? 0} glow={placedType?.glow ?? [0, 0, 0]} fallbackGlow={placedType?.fallback_glow ?? [0, 0, 0]} scale={placedType?.scale ?? 1} />
+                ) : (
+                  <CreaturePreview look={look.data} skin={t!.skin} glow={t!.glow} fallbackGlow={t!.fallback_glow} scale={t!.scale} />
+                )}
               </Suspense>
             ) : look.isFetching ? (
               <p className="muted"><span className="spinner" aria-hidden="true" /> Looking for the model…</p>
@@ -268,7 +304,7 @@ export default function Creatures() {
                 <span className={`cs-kind ${first.kind}`}>{KIND_WORDS[first.kind]}</span> {first.path.replace(/^models\//, "")}
               </p>
             )}
-            <div className="cs-try">
+            {!placed && <div className="cs-try">
               <h4>Try it in your game</h4>
               <p className="cs-note">{liveText}</p>
               <BusyButton className="btn" busy={working === "Spawning…"} disabled={!!working || !canSpawn} label="Spawn one in front of me" busyLabel="Spawning…" onClick={spawn} />
@@ -276,7 +312,7 @@ export default function Creatures() {
                 <input type="checkbox" checked={calm} onChange={(e) => setCalm(e.target.checked)} /> Standing still
               </label>
               {spawnWhy && spawnWhy !== liveText && <p className="cs-note">{spawnWhy}</p>}
-            </div>
+            </div>}
           </aside>
         </div>
       )}
@@ -305,5 +341,47 @@ export default function Creatures() {
         </ActionBar>
       )}
     </div>
+  );
+}
+
+/** A placed creature: what it does, where to add it, and its map settings (from the FGD). */
+function PlacedView({ p, onEditType }: { p: Placed; onEditType?: () => void }) {
+  return (
+    <>
+      <h3>{p.title}</h3>
+      <p className="cs-summary">{p.about}</p>
+      <p className="banner cs-placed-how">
+        <strong>Added in the map editor, not in waves.</strong> {p.how}
+      </p>
+      {onEditType && (
+        <p className="cs-note">
+          It plays as the <strong>{p.type}</strong> type: its health, attack, model and sounds are the type's.{" "}
+          <button type="button" className="btn small" onClick={onEditType}>
+            Edit the type
+          </button>
+        </p>
+      )}
+      <h4 className="cs-placed-keys-title">Settings on the entity ({p.entity})</h4>
+      <div className="cs-fields">
+        {p.keys.map((k) => {
+          const def = k.choices?.find((c) => c.value === (k.default ?? ""))?.label ?? (k.default || "the type's own");
+          return (
+            <div key={k.name} className="cs-field">
+              <span className="cs-label">
+                <span className="cs-label-name">{k.label || k.name}</span>
+                <span className="cs-label-note mono">{k.name}</span>
+              </span>
+              <span className="cs-ctl">
+                <span>
+                  Default: <strong>{def}</strong>
+                  {k.choices && k.choices.length > 0 && <span className="muted"> ({k.choices.map((c) => c.label).join(", ")})</span>}
+                </span>
+                {k.help && <span className="cs-label-note">{k.help}</span>}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }

@@ -53,7 +53,11 @@ export type Creature = {
 export type TypeRow = Creature & { builtin: boolean; inFile: boolean; set: string[]; skipped: boolean; summary: string };
 export type Problem = { at: string; field: string; text: string; error: boolean };
 export type Limits = { ranges: { key: string; min: number; max: number }[]; categories: string[]; behaviours: string[]; attacks: string[]; targets: string[]; maxTypes: number; maxDisplay: number; maxName: number };
-export type Status = { game: string; file: string; exists: boolean; types: TypeRow[]; templates: Creature[]; problems: Problem[]; limits: Limits };
+/** A map setting of a placed creature (lonerstrike.fgd's key). */
+export type PlacedKey = { name: string; type: string; label: string; default?: string; help?: string; choices?: { value: string; label: string }[] };
+/** A creature a mapper places in the map editor (ls_barnacle; turrets as ls_creature) instead of a mode's waves. */
+export type Placed = { id: string; entity: string; type: string; title: string; model: string; about: string; how: string; keys: PlacedKey[] };
+export type Status = { game: string; file: string; exists: boolean; types: TypeRow[]; templates: Creature[]; problems: Problem[]; limits: Limits; placed?: Placed[] };
 
 export type Candidate = { path: string; found: boolean; folder?: string; kind: "game" | "hl" | "custom" | "missing" | "bad"; note: string };
 export type ModelReport = { candidates: Candidate[]; picked: number | null; standIn: boolean };

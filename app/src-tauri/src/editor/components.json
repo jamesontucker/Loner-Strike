@@ -266,6 +266,18 @@
         60
       ],
       "needs_nav": true
+    },
+    {
+      "class": "ls_barnacle",
+      "group": "Creatures",
+      "title": "Barnacle",
+      "blurb": "A ceiling hazard: its tongue hauls up anyone who walks into it. Place it right under a ceiling.",
+      "visual": "point",
+      "colour": [
+        200,
+        120,
+        60
+      ]
     }
   ]
 }

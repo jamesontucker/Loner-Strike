@@ -299,7 +299,7 @@ export function EntityForm({ e }: { e: DocEntity }) {
     () => markerDef(e, fgd?.get(e.classname)) ?? creatureDef(fgd?.get(e.classname), creatures),
     [e, fgd, kits, creatures], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const creatureModel = e.classname === "ls_creature" ? creatures.find((c) => c.name === (keyOf(e.keys, "type") ?? "zombie"))?.model : undefined;
+  const creatureModel = e.classname === "ls_creature" ? creatures.find((c) => c.name === (keyOf(e.keys, "type") ?? "zombie"))?.model : e.classname === "ls_barnacle" ? "models/barnacle.mdl" : undefined;
   const name = keyOf(e.keys, "targetname");
   const firedBy = name ? (doc?.entities ?? []).filter((x) => keyOf(x.keys, "target") === name || keyOf(x.keys, "killtarget") === name) : [];
   const target = keyOf(e.keys, "target");
@@ -362,7 +362,7 @@ export function EntityForm({ e }: { e: DocEntity }) {
           <span className="editor-def-label">Its model</span>
           <div className="editor-key-value">
             <span className="mono small-note">{creatureModel}</span>
-            <AssetPreview value={creatureModel} fgdType="studio" />
+            <AssetPreview value={creatureModel.trim().split(/\s+/)[0] ?? ""} fgdType="studio" />
           </div>
         </div>
       )}

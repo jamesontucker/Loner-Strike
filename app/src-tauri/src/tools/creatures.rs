@@ -1873,7 +1873,45 @@ pub fn status(f: &Files) -> Result<Value, String> {
         "templates": builtins(),
         "problems": problems,
         "limits": limits(),
+        "placed": placed(),
     }))
+}
+
+/// Creatures a mapper places in the map editor instead of a mode spawning them in waves: the
+/// `ls_barnacle` entity and the types that don't move (turrets, placed as `ls_creature`), with
+/// their map settings from lonerstrike.fgd. Flyers join here when the brain has them.
+pub fn placed() -> Vec<Value> {
+    let classes = crate::editor::fgd::parse(&crate::editor::fgd::shipped()).unwrap_or_default();
+    let keys_of = |class: &str, skip: &[&str]| -> Vec<Value> {
+        classes
+            .iter()
+            .find(|c| c.name == class)
+            .map(|c| c.keys.iter().filter(|k| !skip.contains(&k.name.as_str())).map(|k| json!(k)).collect())
+            .unwrap_or_default()
+    };
+    let mut out = vec![json!({
+        "id": "ls_barnacle",
+        "entity": "ls_barnacle",
+        "type": "",
+        "title": "Barnacle",
+        "model": "models/barnacle.mdl",
+        "about": "Hangs under a ceiling with its tongue down to the floor. A player who walks into the tongue is hauled up and bitten until someone shoots it. It comes back every round.",
+        "how": "Map editor: Gameplay > Components > Creatures > Barnacle, or an ls_barnacle entity. Place it right under the ceiling.",
+        "keys": keys_of("ls_barnacle", &[]),
+    })];
+    for t in builtins().into_iter().filter(|t| !t.moves) {
+        out.push(json!({
+            "id": format!("ls_creature:{}", t.name),
+            "entity": "ls_creature",
+            "type": t.name,
+            "title": t.display,
+            "model": t.model,
+            "about": summary(&t),
+            "how": format!("Map editor: Gameplay > Components > Creatures > Creature with Type \"{}\", or an ls_creature entity with type {}. Empty settings use the type's own (edit the type above).", t.display, t.name),
+            "keys": keys_of("ls_creature", &["type", "behaviour", "path", "radius", "speed"]),
+        }));
+    }
+    out
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -2259,6 +2297,18 @@ pub fn routes() -> Router<Shared> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn placed_lists_the_barnacle_and_turrets_with_their_map_keys() {
+        let p = super::placed();
+        let barnacle = p.iter().find(|x| x["entity"] == "ls_barnacle").expect("barnacle");
+        let keys: Vec<&str> = barnacle["keys"].as_array().unwrap().iter().map(|k| k["name"].as_str().unwrap()).collect();
+        for k in ["health", "damage", "length", "speed", "hates"] {
+            assert!(keys.contains(&k), "barnacle key {k}");
+        }
+        assert!(p.iter().any(|x| x["type"] == "miniturret"));
+        assert!(p.iter().filter(|x| x["entity"] == "ls_creature").all(|x| !x["keys"].as_array().unwrap().is_empty()));
+    }
+
     use super::*;
 
     /// The example creatures.ini in docs/CREATURES.md §2 (the brain's own documentation).

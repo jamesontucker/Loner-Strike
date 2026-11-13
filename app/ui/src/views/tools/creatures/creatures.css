@@ -125,3 +125,9 @@
 .cs-ctl > .cs-chips, .cs-ctl > .cs-model, .cs-ctl > .cs-problems { justify-self: stretch; }
 .cs-chips .cs-pop { left: auto; right: 0; }
 .cs-pop.up { top: auto; bottom: calc(100% + 4px); }
+
+/* "Placed by mappers": hazards added in the map editor, not in waves */
+.cs-placed { display: grid; gap: 4px; border-top: 1px solid var(--bevel-lo); padding-top: 8px; }
+.cs-placed h4 { font-size: 13px; color: var(--bone-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+.cs-placed-how { display: block; margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+.cs-placed-keys-title { margin: 14px 0 2px; }

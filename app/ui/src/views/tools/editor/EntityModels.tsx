@@ -10,17 +10,33 @@ import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { getModel, modelTextureUrl, type ModelBundle } from "../assets/assetsApi";
 import type { DocEntity } from "./editorApi";
+import { loadCreatures, useKits, type Creature } from "./kits";
 import { useP5 } from "./p5store";
 import { keyOf } from "./store";
 
 const FOLDERS = ["cstrike", "cstrike_downloads", "czero", "valve"];
 const ARMOURY = ["mp5", "tmp", "p90", "mac10", "ak47", "sg552", "m4a1", "aug", "scout", "g3sg1", "awp", "m3", "xm1014", "m249", "flashbang", "hegrenade", "kevlar", "assault", "smokegrenade"];
 
-/** The model file a point entity shows in the game (null: none we can draw). */
-export function modelOf(e: DocEntity): string | null {
+/** ls_creature's model when the creature types aren't loaded yet (the brain's built-in types). */
+const CREATURE_MODELS: Record<string, string> = {
+  zombie: "models/zombie.mdl", runner: "models/houndeye.mdl", hound: "models/houndeye.mdl", brute: "models/agrunt.mdl",
+  spitter: "models/bullsquid.mdl", turret: "models/sentry.mdl", boss: "models/garg.mdl", headcrab: "models/headcrab.mdl",
+  vortigaunt: "models/islave.mdl", babygarg: "models/garg.mdl", snark: "models/w_squeak.mdl", babycrab: "models/baby_headcrab.mdl",
+  miniturret: "models/miniturret.mdl models/sentry.mdl", assassin: "models/hassassin.mdl", soldier: "models/hgrunt.mdl", gonarch: "models/big_mom.mdl",
+};
+
+/** The model file(s) a point entity shows in the game (null: none we can draw). Several paths,
+ *  space-separated, are tried in order (a creature type's stand-ins). */
+export function modelOf(e: DocEntity, creatures: Creature[] = []): string | null {
   const m = keyOf(e.keys, "model")?.trim().replace(/\\/g, "/");
   if (m && /\.mdl$/i.test(m) && !m.includes("..")) return m.replace(/^\/+/, "");
   switch (e.classname) {
+    case "ls_barnacle":
+      return "models/barnacle.mdl";
+    case "ls_creature": {
+      const type = keyOf(e.keys, "type")?.trim() || "zombie";
+      return creatures.find((c) => c.name === type)?.model?.trim() || CREATURE_MODELS[type] || null;
+    }
     case "hostage_entity":
     case "monster_scientist":
       return "models/scientist.mdl";
@@ -41,18 +57,20 @@ export function modelOf(e: DocEntity): string | null {
 type Got = { item: { folder: string; path: string }; bundle: ModelBundle } | null;
 const cache = new Map<string, Promise<Got>>();
 
-/** A model from the first game folder that has it (null when none do); one request per path. */
-function loadModel(path: string): Promise<Got> {
-  const key = path.toLowerCase();
+/** The first of the paths found in a game folder (null when none are); one request per list. */
+function loadModel(paths: string): Promise<Got> {
+  const key = paths.toLowerCase();
   let p = cache.get(key);
   if (!p) {
     p = (async () => {
-      for (const folder of FOLDERS) {
-        try {
-          const item = { folder, path };
-          return { item, bundle: await getModel(item) };
-        } catch {
-          /* the next folder */
+      for (const path of paths.split(/\s+/).filter((x) => /\.mdl$/i.test(x) && !x.includes(".."))) {
+        for (const folder of FOLDERS) {
+          try {
+            const item = { folder, path };
+            return { item, bundle: await getModel(item) };
+          } catch {
+            /* the next folder */
+          }
         }
       }
       return null;
@@ -65,7 +83,12 @@ function loadModel(path: string): Promise<Got> {
 /** The model for an entity once it's loaded (null meanwhile, when off, or not found). */
 export function useEntityModel(e: DocEntity): Got {
   const on = useP5((s) => s.showModels);
-  const path = on ? modelOf(e) : null;
+  const creatures = useKits((k) => k.creatures);
+  const isCreature = e.classname === "ls_creature";
+  useEffect(() => {
+    if (on && isCreature && !useKits.getState().creatures.length) void loadCreatures();
+  }, [on, isCreature]);
+  const path = on ? modelOf(e, creatures) : null;
   const [got, setGot] = useState<Got>(null);
   useEffect(() => {
     if (!path) return setGot(null);
