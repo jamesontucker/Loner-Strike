@@ -1632,6 +1632,12 @@ pub fn routes() -> Router<Shared> {
     routes_with(global())
 }
 
+// ---- hook for tools/compile.rs (agent Q): the open document, copied for compiling ----
+/// A copy of the open document and its name; None when no map is open.
+pub fn open_document() -> Option<(MapDocument, String)> {
+    global().lock().as_ref().map(|s| (s.doc.clone(), s.name.clone()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
