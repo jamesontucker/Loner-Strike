@@ -337,6 +337,8 @@ function CopyRow({ label, value, long }: { label: string; value: string; long?: 
 function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () => void }) {
   const toast = useToast();
   const [url, setUrl] = useState("");
+  // (terms: registering is where the right to share matters most, so it's a required tick)
+  const [agree, setAgree] = useState(false);
   const { working, run } = useBusy();
   const [result, setResult] = useState<{ state: MineState; error?: string | null; copy: string } | null>(null);
   const [studio, setStudio] = useState(false);
@@ -380,7 +382,11 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
           <strong>Paste the page's link</strong> once GameBanana has checked the file:
           <form className="row cm-register" onSubmit={(e) => { e.preventDefault(); send(); }}>
             <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://gamebanana.com/mods/…" aria-label="GameBanana link" />
-            <BusyButton type="submit" className="btn primary" busy={working !== null} busyLabel={working ?? "Checking…"} label="Add to Community" disabled={!url.trim()} />
+            <label className="check-row small-note" style={{ flexBasis: "100%", fontWeight: 400 }}>
+              <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} required />
+              I have the right to share this, and I accept the <a href="https://lonerstrike.com/terms" target="_blank" rel="noreferrer">Terms</a>.
+            </label>
+            <BusyButton type="submit" className="btn primary" busy={working !== null} busyLabel={working ?? "Checking…"} label="Add to Community" disabled={!url.trim() || !agree} />
           </form>
         </li>
       </ol>

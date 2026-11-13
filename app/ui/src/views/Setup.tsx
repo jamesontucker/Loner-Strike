@@ -160,6 +160,8 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               <button className="btn" onClick={onClose}>{intro ? "Close" : "Set up later"}</button>
             </div>
             <p className="muted later">Later, you can add or remove any of it under Mods.</p>
+            {/* (terms: shown where people start using the app, so setting it up is agreeing) */}
+            <p className="muted later">By using Loner-Strike you agree to the <a href="https://lonerstrike.com/terms" target="_blank" rel="noreferrer">Terms</a> and <a href="https://lonerstrike.com/privacy" target="_blank" rel="noreferrer">Privacy</a> page.</p>
             <p className="made-by setup-by">by <a href="https://nanoshrine.com" target="_blank" rel="noreferrer">nanoshrine</a><span aria-hidden="true"> · </span><a href="https://lonerstrike.com/docs" target="_blank" rel="noreferrer">Docs</a></p>
           </section>
         )}

@@ -535,7 +535,9 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           <a href="https://lonerstrike.com" target="_blank" rel="noreferrer">lonerstrike.com</a>,{" "}
           <a href="https://discord.gg/K9eBHVVwZE" target="_blank" rel="noreferrer">our Discord</a>, and{" "}
           <a href="https://github.com/jamesontucker/Loner-Strike" target="_blank" rel="noreferrer">source and credits on GitHub</a>. Made by{" "}
-          <a href="https://nanoshrine.com" target="_blank" rel="noreferrer">nanoshrine</a>.
+          <a href="https://nanoshrine.com" target="_blank" rel="noreferrer">nanoshrine</a>.{" "}
+          <a href="https://lonerstrike.com/terms" target="_blank" rel="noreferrer">Terms</a> ·{" "}
+          <a href="https://lonerstrike.com/privacy" target="_blank" rel="noreferrer">Privacy</a>
         </p>
       </section>
     </div>
