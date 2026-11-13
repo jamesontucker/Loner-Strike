@@ -860,8 +860,9 @@ async fn api_file(State(st): State<Shared>, headers: HeaderMap, Query(q): Query<
     let Some(g) = st.game() else { return not_found() };
     let Some(path) = pool_dir(&g.dir, &pool, off).and_then(|d| find_in(&d, &name)) else { return not_found() };
     let Some(kind) = sound_kind(&name) else { return not_found() };
-    let data = match tokio::task::spawn_blocking(move || std::fs::read(path)).await {
-        Ok(Ok(d)) if d.len() as u64 <= 4 * MAX_TRACK => d,
+    // [Caps] size checked before reading
+    let data = match tokio::task::spawn_blocking(move || crate::caps::read_file(&path, "sound", 4 * MAX_TRACK)).await {
+        Ok(Ok(d)) => d,
         _ => return not_found(),
     };
     let ctype = if kind == "mp3" { "audio/mpeg" } else { "audio/wav" };

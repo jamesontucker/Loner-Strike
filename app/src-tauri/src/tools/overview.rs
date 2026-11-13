@@ -1158,7 +1158,7 @@ fn scene_of(m: &MapFile) -> Result<Arc<Scene>, Fail> {
     let ents = entities::parse(&bsp.entities);
     let wads = m.wads(&Finder::default(), &entities::wad_list(&ents));
     // a nav for another version of the map would leave out the wrong floors
-    let nav = nav_path.and_then(|p| std::fs::read(p).ok()).and_then(|b| nav::Nav::parse(&b).ok()).filter(|n| n.bsp_size == 0 || n.bsp_size as u64 == stamp.size);
+    let nav = nav_path.and_then(|p| crate::caps::read_file(&p, "nav", nav::MAX_NAV).ok()).and_then(|b| nav::Nav::parse(&b).ok()).filter(|n| n.bsp_size == 0 || n.bsp_size as u64 == stamp.size); // [Caps]
     let scene = Arc::new(Scene::build(bsp, &wads, nav.as_ref()));
     let mut list = memo.lock().unwrap_or_else(|e| e.into_inner());
     list.push(Memo { bsp: m.bsp.clone(), stamp, nav_stamp, scene: scene.clone(), at: Instant::now() });
@@ -1250,7 +1250,9 @@ fn current_rgb(m: &MapFile) -> Result<Vec<u8>, Fail> {
     let image = parse_txt(&text).and_then(|p| p.image).ok_or_else(|| Fail::new(StatusCode::UNPROCESSABLE_ENTITY, "The overview file can't be read by the game."))?;
     let path = installed_image(m, &image).ok_or_else(|| Fail::new(StatusCode::NOT_FOUND, "The overview's picture isn't on this computer."))?;
     let bytes = goldsrc::read_capped(&path, "picture", 32 << 20)?;
-    let img = image::load_from_memory(&bytes).map_err(|_| Fail::new(StatusCode::UNPROCESSABLE_ENTITY, "The overview's picture can't be read."))?;
+    // [Caps] by pixels too (the game's overviews are 1024x768)
+    let fmt = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("tga")).then_some(image::ImageFormat::Tga);
+    let img = crate::caps::decode_picture(&bytes, fmt, crate::caps::MAX_PICTURE_SIDE).map_err(|e| Fail::new(StatusCode::UNPROCESSABLE_ENTITY, if e.contains("too big") { e.replacen("That picture", "The overview's picture", 1) } else { "The overview's picture can't be read.".to_string() }))?;
     let img = if img.width() != WIDTH || img.height() != HEIGHT { img.resize_exact(WIDTH, HEIGHT, image::imageops::FilterType::Triangle) } else { img };
     Ok(img.to_rgb8().into_raw())
 }

@@ -282,6 +282,16 @@ fn with_session<T>(r: &RemoteInfo, f: impl Fn(&Session) -> Result<T, ssh2::Error
     unreachable!()
 }
 
+/// [Caps] What one command may print (a `find` of a big server folder is a few MB).
+const MAX_OUTPUT: u64 = 32 << 20;
+/// [Caps] The biggest file read whole from the machine: a long HLTV demo (a full match is
+/// 50-150 MB; demos.rs scans up to 1 GB).
+pub const MAX_READ: u64 = 1 << 30;
+
+fn too_big_read() -> ssh2::Error {
+    ssh2::Error::new(ssh2::ErrorCode::Session(-7), "That file on the server is over 1 GB, too big to copy here")
+}
+
 /// Runs a shell command; its exit code and output (stderr folded in).
 pub fn exec(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
     with_session(r, |s| {
@@ -290,7 +300,7 @@ pub fn exec(r: &RemoteInfo, cmd: &str) -> Result<(i32, String), String> {
         ch.exec(&format!("{cmd} 2>&1"))?;
         // console text is Latin-1 (accented player names): bytes, not UTF-8
         let mut out = Vec::new();
-        let _ = ch.read_to_end(&mut out);
+        let _ = (&mut ch).take(MAX_OUTPUT).read_to_end(&mut out); // [Caps]
         ch.wait_close()?;
         Ok((ch.exit_status()?, crate::rcon::latin1(&out)))
     })
@@ -313,7 +323,7 @@ pub fn exec_quick_for(r: &RemoteInfo, cmd: &str, secs: u32) -> Result<(i32, Stri
         // from here the command has run: never again on a retry (a kick or a ban twice)
         started.set(true);
         let mut out = Vec::new();
-        let _ = ch.read_to_end(&mut out);
+        let _ = (&mut ch).take(MAX_OUTPUT).read_to_end(&mut out); // [Caps]
         ch.wait_close()?;
         Ok((ch.exit_status()?, crate::rcon::latin1(&out)))
     })
@@ -331,7 +341,10 @@ pub fn read_file_opt(r: &RemoteInfo, path: &str) -> Result<Option<Vec<u8>>, Stri
             Err(e) => return Err(e),
         };
         let mut v = Vec::new();
-        f.read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        (&mut f).take(MAX_READ + 1).read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        if v.len() as u64 > MAX_READ {
+            return Err(too_big_read()); // [Caps]
+        }
         Ok(Some(v))
     })
 }
@@ -497,7 +510,10 @@ pub fn read_file(r: &RemoteInfo, path: &str) -> Result<Vec<u8>, String> {
         let mut f = sftp.open(Path::new(path))?;
         let mut v = Vec::new();
         // a read cut off part way is an error, not a shorter file
-        f.read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        (&mut f).take(MAX_READ + 1).read_to_end(&mut v).map_err(|e| ssh2::Error::new(ssh2::ErrorCode::Session(-7), Box::leak(e.to_string().into_boxed_str())))?;
+        if v.len() as u64 > MAX_READ {
+            return Err(too_big_read()); // [Caps]
+        }
         Ok(v)
     })
 }

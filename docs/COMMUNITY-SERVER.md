@@ -87,7 +87,7 @@ request ends up in the listing: a stranger can at most make an entry match the p
      stored or deflated, not encrypted; a damaged stream is a clean 422). Maps, modes and prefabs
      need one, of the page's kind; a lone `.wad`/picture (sprays, textures) needs none.
 5. **Format checks of every file** (formats.py; see "Format checks" below): the page's file is
-   downloaded (range requests to GameBanana's file hosts, at most 128 MB, otherwise "too big to
+   downloaded (range requests to GameBanana's file hosts, at most 256 MB, otherwise "too big to
    check") to a temporary file, its MD5 must be the one the page lists, and every file in it is
    streamed to its own temporary file and checked: maps, textures, models, sprites, sounds,
    pictures, nav and knowledge files, text. The checking runs in a **child process**

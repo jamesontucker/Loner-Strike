@@ -424,10 +424,8 @@ pub fn read(g: &Game, f: Folder, name: &str) -> Result<Value, String> {
             None => return Err("That file isn't there any more.".into()),
         },
         Some(path) => {
-            let bytes = std::fs::read(&path).map_err(|e| format!("Couldn't read it ({e})."))?;
-            if bytes.len() > MAX_SOURCE {
-                return Err("That file is too big to open here (over 2 MB).".into());
-            }
+            // [Caps] size checked before reading
+            let bytes = crate::caps::read_file(&path, "file", MAX_SOURCE as u64).map_err(|e| if e.contains("too big") { format!("{e} Open it in another editor.") } else { e })?;
             let (text, encoding) = decode(&bytes);
             json!({"name": name, "folder": f.id(), "text": text, "encoding": encoding})
         }
@@ -518,7 +516,7 @@ pub fn rename(g: &Game, f: Folder, from: &str, to: &str) -> Result<Value, String
         return Err(format!("There's already a file called {to}. Pick another name."));
     }
     keep_mine(g);
-    let bytes = std::fs::read(&src).map_err(|e| format!("Couldn't read it ({e})."))?;
+    let bytes = crate::caps::read_file(&src, "file", MAX_SOURCE as u64 * 4)?; // [Caps]
     crate::safety::before("Plugin Studio", &format!("Renamed {from} to {to}"), &dest);
     write_quiet(&dest, &bytes)?;
     if !from.eq_ignore_ascii_case(to) || src.file_name() != dest.file_name() {

@@ -152,7 +152,7 @@ pub fn install_dir(lib: &Path, src: &Path, author_hint: &str) -> Result<Installe
             Ok(s) => s,
             Err(e) => e.into_bytes().iter().map(|b| *b as char).collect(),
         };
-        let js = std::fs::read_to_string(p.with_extension("json")).ok();
+        let js = crate::caps::read_text(&p.with_extension("json"), "prefab info", 1 << 20).ok(); // [Caps]
         match prefab::from_files(&text, js.as_deref(), &stem) {
             Ok((frag, mut meta)) => {
                 if meta.author.is_empty() {
@@ -161,7 +161,7 @@ pub fn install_dir(lib: &Path, src: &Path, author_hint: &str) -> Result<Installe
                 if meta.created == 0 {
                     meta.created = now_secs();
                 }
-                let png = std::fs::read(p.with_extension("png")).ok().filter(|b| prefab::check_png(b).is_ok());
+                let png = crate::caps::read_file(&p.with_extension("png"), "picture", 1 << 20).ok().filter(|b| prefab::check_png(b).is_ok()); // [Caps]
                 let id = save(lib, &frag, &meta, png.as_deref())?;
                 got.prefabs.push(meta.name.clone());
                 got.ids.push(id);
@@ -188,7 +188,8 @@ pub fn install_wads(wads: &[PathBuf], game_dir: &Path) -> Vec<String> {
         if dest.exists() {
             continue;
         }
-        let ok = std::fs::read(w).map(|b| b.len() <= 256 << 20 && b.starts_with(b"WAD3")).unwrap_or(false);
+        // [Caps] size checked before reading; only the header is needed
+        let ok = std::fs::metadata(w).is_ok_and(|m| m.len() <= crate::goldsrc::MAX_WAD) && std::fs::File::open(w).and_then(|f| { use std::io::Read; let mut h = [0u8; 4]; f.take(4).read_exact(&mut h).map(|_| h) }).is_ok_and(|h| &h == b"WAD3");
         if ok && std::fs::copy(w, &dest).is_ok() {
             added.push(name.to_string());
         }

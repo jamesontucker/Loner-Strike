@@ -444,7 +444,8 @@ pub fn copy_files(m: &MapFile, asked: &[String]) -> Result<Value, String> {
         if let Some(d) = dest.parent() {
             std::fs::create_dir_all(d).map_err(|e| format!("Couldn't make a folder for {rel} ({e})."))?;
         }
-        let bytes = std::fs::read(&src).map_err(|e| format!("Couldn't read {rel} ({e})."))?;
+        // [Caps] a map's own files (the biggest WAD in the game is 38 MB; the parsers stop at 256 MB)
+        let bytes = crate::caps::read_file(&src, &rel, crate::goldsrc::MAX_WAD).map_err(|e| format!("Couldn't copy {rel}: {e}"))?;
         save_file(&dest, &bytes).map_err(|e| format!("Couldn't save {rel} ({e})."))?;
         copied.push(rel);
     }

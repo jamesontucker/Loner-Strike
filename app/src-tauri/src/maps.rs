@@ -480,19 +480,19 @@ pub enum Shrink {
     Fit(u32),
 }
 
+/// [Caps] Biggest picture file convert reads (the biggest overview in the game is 2.3 MB).
+const MAX_PICTURE_FILE: u64 = 64 << 20;
+
 /// TGA/BMP/JPEG -> PNG, or JPEG when `out` ends in .jpg.
 pub fn convert(src: &Path, out: &Path, shrink: Shrink) -> Result<(), String> {
-    let data = std::fs::read(src).map_err(|e| e.to_string())?;
+    // [Caps] the file and its pixels are capped before decoding (game pictures are 1024 or less)
+    let data = crate::caps::read_file(src, "picture", MAX_PICTURE_FILE)?;
     let fmt = match src.extension().map(|e| e.to_string_lossy().to_lowercase()).as_deref() {
         Some("tga") => Some(image::ImageFormat::Tga), // TGA has no magic number to guess from
         Some("bmp") => Some(image::ImageFormat::Bmp),
         _ => None,
     };
-    let mut img = match fmt {
-        Some(f) => image::load_from_memory_with_format(&data, f),
-        None => image::load_from_memory(&data),
-    }
-    .map_err(|e| e.to_string())?;
+    let mut img = crate::caps::decode_picture(&data, fmt, crate::caps::MAX_PICTURE_SIDE)?;
     if let Shrink::Fit(_) = shrink {
         let mut rgba = img.to_rgba8();
         // the green, give or take what a saved picture does to it

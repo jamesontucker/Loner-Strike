@@ -1165,7 +1165,7 @@ fn run(p: Plan) -> Result<Option<String>, String> {
             _ => format!("The check ended early: {}{why}", early.unwrap_or_default()),
         });
     }
-    let nav = std::fs::read(&p.nav).ok().and_then(|b| Nav::parse(&b).ok());
+    let nav = crate::caps::read_file(&p.nav, "nav", crate::goldsrc::nav::MAX_NAV).ok().and_then(|b| Nav::parse(&b).ok()); // [Caps]
     let only: Vec<Recording> = parsed.iter().map(|(_, r)| r.clone()).collect();
     let mut rep = build_report(&only, &console, nav.as_ref(), &p.asked);
     rep.id = p.id.clone();

@@ -21,8 +21,20 @@ pub fn run() {
     let mut bridge = Bridge::default();
     let stdin = std::io::stdin();
     let mut out = std::io::stdout();
-    for line in stdin.lock().lines() {
-        let Ok(line) = line else { break };
+    let mut input = stdin.lock();
+    loop {
+        // [Caps] one message per line, at most MAX_LINE (the app takes 2 MB a request)
+        let line = match read_line_capped(&mut input, MAX_LINE) {
+            Line::End => break,
+            Line::TooLong => {
+                let e = json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32600, "message": format!("That message is over {} MB, the most the app takes.", MAX_LINE >> 20)}});
+                if writeln!(out, "{e}").and_then(|_| out.flush()).is_err() {
+                    break;
+                }
+                continue;
+            }
+            Line::Text(t) => t,
+        };
         let line = line.trim();
         if line.is_empty() {
             continue;
@@ -33,6 +45,42 @@ pub fn run() {
             if writeln!(out, "{a}").and_then(|_| out.flush()).is_err() {
                 break;
             }
+        }
+    }
+}
+
+/// [Caps] The longest message line taken from the agent (the app refuses bodies over 2 MB).
+pub const MAX_LINE: usize = 4 << 20;
+/// [Caps] The biggest answer read from the app (tool output is trimmed to ~48 KB there,
+/// pictures to 4 MB; this only stops a runaway answer).
+pub const MAX_ANSWER: u64 = 64 << 20;
+
+pub enum Line {
+    Text(String),
+    TooLong,
+    End,
+}
+
+/// One line (without its newline) of at most `max` bytes. A longer one is read past and
+/// dropped in pieces, never held whole.
+pub fn read_line_capped(r: &mut impl BufRead, max: usize) -> Line {
+    let mut buf = Vec::new();
+    match r.by_ref().take(max as u64 + 1).read_until(b'\n', &mut buf) {
+        Ok(0) | Err(_) => return Line::End,
+        Ok(_) => {}
+    }
+    if buf.ends_with(b"\n") || buf.len() <= max {
+        while buf.last().is_some_and(|c| *c == b'\n' || *c == b'\r') {
+            buf.pop();
+        }
+        return Line::Text(String::from_utf8_lossy(&buf).into_owned());
+    }
+    loop {
+        buf.clear();
+        match r.by_ref().take(64 << 10).read_until(b'\n', &mut buf) {
+            Ok(0) | Err(_) => return Line::TooLong,
+            Ok(_) if buf.ends_with(b"\n") => return Line::TooLong,
+            Ok(_) => {}
         }
     }
 }
@@ -154,7 +202,10 @@ fn send(port: u16, token: &str, session: Option<&str>, body: &str) -> Result<Htt
     req.push_str(body);
     s.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
     let mut raw = vec![];
-    s.read_to_end(&mut raw).map_err(|e| e.to_string())?;
+    (&mut s).take(MAX_ANSWER + 1).read_to_end(&mut raw).map_err(|e| e.to_string())?;
+    if raw.len() as u64 > MAX_ANSWER {
+        return Err(format!("the app's answer was over {} MB", MAX_ANSWER >> 20)); // [Caps]
+    }
     parse_response(&raw)
 }
 

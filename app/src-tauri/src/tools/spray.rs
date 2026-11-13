@@ -44,7 +44,6 @@ pub const GAMES: [(&str, &str); 2] = [("cstrike", "Counter-Strike 1.6"), ("czero
 const MAX_USE: usize = 8 << 20;
 const MAX_DESIGN: usize = 24 << 20;
 /// Saved compositions kept at most.
-const MAX_DESIGNS: usize = 200;
 
 /// The picture the player chose (its file name and pixels).
 struct Picked {
@@ -337,14 +336,15 @@ pub fn designs(app: &Path) -> Value {
 
 pub fn open_design(app: &Path, id: &str) -> Result<Value, String> {
     let p = design_path(app, id)?;
-    let bytes = std::fs::read(&p).map_err(|_| "That design isn't there any more.".to_string())?;
+    // [Caps] never bigger than save_design lets through
+    let bytes = crate::caps::read_file(&p, "design", MAX_DESIGN as u64 + 4096).map_err(|e| if e.contains("too big") { e } else { "That design isn't there any more.".to_string() })?;
     let mut d: Value = serde_json::from_slice(&bytes).map_err(|_| "That design's file is damaged.".to_string())?;
     d["id"] = json!(id);
     Ok(d)
 }
 
-/// Bytes the designs folder may hold in all.
-const MAX_DESIGNS_BYTES: u64 = 256 << 20;
+/// Bytes the designs folder may hold in all. [Caps] (user: no count limit, 512 MB in all)
+const MAX_DESIGNS_BYTES: u64 = 512 << 20;
 
 fn designs_bytes(dir: &Path, except: Option<&Path>) -> (usize, u64) {
     let mut n = 0;
@@ -361,7 +361,7 @@ fn designs_bytes(dir: &Path, except: Option<&Path>) -> (usize, u64) {
 
 /// Saves a composition and returns its id. An id from the page is only taken to update a
 /// design that's already there; a new design always gets an id from here, within the caps
-/// (MAX_DESIGNS designs, MAX_DESIGN bytes each with its pictures, MAX_DESIGNS_BYTES in all).
+/// (MAX_DESIGN bytes each with its pictures, MAX_DESIGNS_BYTES in all; any number of designs).
 pub fn save_design(app: &Path, id: Option<&str>, name: &str, doc: Value, thumb: Option<&str>) -> Result<Value, String> {
     if !doc.is_object() {
         return Err("Nothing to save.".into());
@@ -394,10 +394,7 @@ pub fn save_design(app: &Path, id: Option<&str>, name: &str, doc: Value, thumb: 
     if body.len() > MAX_DESIGN {
         return Err(format!("This design is too big to save ({} MB). Use smaller pictures.", body.len() >> 20));
     }
-    let (count, bytes) = designs_bytes(&dir, Some(&p));
-    if !p.is_file() && count >= MAX_DESIGNS {
-        return Err(format!("You have {MAX_DESIGNS} designs saved. Delete some first."));
-    }
+    let (_, bytes) = designs_bytes(&dir, Some(&p));
     if bytes + body.len() as u64 > MAX_DESIGNS_BYTES {
         return Err(format!("Your saved designs take up {} MB, the most kept. Delete some first.", MAX_DESIGNS_BYTES >> 20));
     }
@@ -764,13 +761,15 @@ mod tests {
         assert_eq!(designs(&app)["designs"].as_array().unwrap().len(), 1);
         delete_design(&app, &id).unwrap();
         assert!(open_design(&app, &id).is_err());
-        // the count cap: new designs refused at MAX_DESIGNS, updates still fine
+        // [Caps] no count cap: hundreds of small designs are fine
         let mut last = String::new();
-        for _ in 0..MAX_DESIGNS {
+        for _ in 0..300 {
             last = save_design(&app, None, "n", json!({}), None).unwrap()["id"].as_str().unwrap().to_string();
         }
-        assert!(save_design(&app, None, "one more", json!({}), None).unwrap_err().contains("Delete some"));
         save_design(&app, Some(&last), "updated", json!({}), None).unwrap();
+        // the total cap: a (sparse) design file filling MAX_DESIGNS_BYTES leaves no room for a new one
+        std::fs::File::create(designs_dir(&app).join("filler.json")).unwrap().set_len(MAX_DESIGNS_BYTES).unwrap();
+        assert!(save_design(&app, None, "one more", json!({}), None).unwrap_err().contains("512 MB"));
         std::fs::remove_dir_all(&root).ok();
     }
 }

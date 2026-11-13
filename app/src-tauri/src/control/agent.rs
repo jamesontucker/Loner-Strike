@@ -283,7 +283,8 @@ pub fn reachable(url: &str, tunnel: bool) -> Result<String, String> {
         502..=504 | 530 => return Err(format!("the front couldn't reach shared control on the server (HTTP {status})")),
         _ => {}
     }
-    let v: Value = r.json().map_err(|_| format!("it answered with something else (HTTP {status})"))?;
+    // [Caps] a ping answer is a few bytes
+    let v: Value = crate::caps::read_up_to(r, "answer", 64 << 10).ok().and_then(|b| serde_json::from_slice(&b).ok()).ok_or_else(|| format!("it answered with something else (HTTP {status})"))?;
     v["version"].as_str().map(String::from).ok_or_else(|| format!("it answered with something else (HTTP {status})"))
 }
 

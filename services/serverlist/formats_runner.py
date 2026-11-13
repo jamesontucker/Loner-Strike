@@ -16,6 +16,9 @@ import time
 import zipfile
 
 ENTRY_MAX = 256 << 20     # biggest single file inside a package
+# [Caps] everything in one package together, unpacked (zip bombs: many entries that each stay
+# under ENTRY_MAX). A 128 MB map pack unpacks to a few hundred MB; 1 GB matches the app's cap.
+TOTAL_MAX = 1 << 30
 CPU_SECONDS = 120
 ADDRESS_SPACE = 256 << 20
 
@@ -52,6 +55,9 @@ def run(path, name, seconds):
             one(name, fh, os.path.getsize(path))
     else:
         with tempfile.TemporaryDirectory(prefix="ls-part-") as tmp, zipfile.ZipFile(path) as z:
+            said = sum(i.file_size for i in z.infolist())  # [Caps]
+            if said > TOTAL_MAX:
+                raise Refused(f"The package unpacks to {said >> 20} MB; the most is {TOTAL_MAX >> 20} MB.")
             for i in z.infolist():
                 if i.is_dir():
                     continue

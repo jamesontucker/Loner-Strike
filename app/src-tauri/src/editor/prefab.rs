@@ -580,7 +580,8 @@ pub fn check_png(bytes: &[u8]) -> Result<(), String> {
     if bytes.len() > 1024 * 1024 || !bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
         return Err("The thumbnail isn't a PNG picture under 1 MB.".into());
     }
-    let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Png).map_err(|_| "The thumbnail couldn't be read.".to_string())?;
+    // [Caps] the size from the header is checked before any pixels are decoded
+    let img = crate::caps::decode_picture(bytes, Some(image::ImageFormat::Png), 1024).map_err(|e| if e.contains("too big") { e.replacen("That picture", "The thumbnail", 1) } else { "The thumbnail couldn't be read.".to_string() })?;
     if img.width() > 1024 || img.height() > 1024 {
         return Err("The thumbnail is too big.".into());
     }

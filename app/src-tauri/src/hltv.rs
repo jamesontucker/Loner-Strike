@@ -837,7 +837,7 @@ async fn api_demo(UrlPath((id, name)): UrlPath<(String, String)>) -> Response {
             return crate::remote::read_file(r, &path).ok().map(|d| (name, d));
         }
         let path = find_demo(&e, &name)?;
-        std::fs::read(path).ok().map(|d| (name, d))
+        crate::caps::read_file(&path, "demo", crate::remote::MAX_READ).ok().map(|d| (name, d)) // [Caps]
     })
     .await
     .ok()

@@ -405,7 +405,8 @@ pub fn remix(dir: &Path, graphs: &Path, game_dir: Option<&Path>, it: &Installed)
         return Err("Only Game Mode Studio modes can be remixed.".into());
     }
     let src = dir.join(it.key()).join(format!("{}.graph.json", it.mode));
-    let text = std::fs::read_to_string(&src).map_err(|_| "This mode's graph isn't in the library any more. Install it again.".to_string())?;
+    // [Caps] the same 2 MB a graph may be when it's installed
+    let text = crate::caps::read_text(&src, "mode's graph", 2 << 20).map_err(|e| if e.contains("too big") { e } else { "This mode's graph isn't in the library any more. Install it again.".to_string() })?;
     let mut raw: Value = serde_json::from_str(&text).map_err(|_| "This mode's graph couldn't be read.".to_string())?;
     let g0 = super::studio::graph::parse(&text)?;
     let modes = game_dir.map(|d| crate::extras::parse_modes(&crate::sys::read_latin1(&d.join("addons/amxmodx/configs/gamemodes/modes.ini")).unwrap_or_default())).unwrap_or_default();
@@ -466,7 +467,7 @@ pub fn pick_changes<'a>(lib: &'a [Installed], old: &ServerPick, new: &ServerPick
 /// plugins.ini/cfg and its modes.ini line in the server's folder.
 fn mode_to_server(st: &Shared, it: &Installed, server_game: &Path) -> Result<(), String> {
     let gp = lib_dir().join(it.key()).join(format!("{}.graph.json", it.mode));
-    let g = super::studio::graph::parse(&std::fs::read_to_string(&gp).map_err(|_| format!("{}'s graph isn't in the library any more. Install it again.", it.name))?)?;
+    let g = super::studio::graph::parse(&crate::caps::read_text(&gp, "mode's graph", 2 << 20).map_err(|e| if e.contains("too big") { e } else { format!("{}'s graph isn't in the library any more. Install it again.", it.name) })?)?; // [Caps]
     let r = super::studio::compile(st, g.clone(), false)?;
     if r["ok"] != json!(true) {
         return Err(format!("{} couldn't be built on this computer.", it.name));

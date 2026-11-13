@@ -17,6 +17,31 @@ pub const ARCHIVES: &[&str] = &[".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".
 const SKY_SIDES: &[&str] = &["up", "dn", "lf", "rt", "ft", "bk"];
 const TOO_BIG: &str = "That download unpacks to more than 3 GB.";
 const HAS_LINKS: &str = "That download contains links to other files, so it wasn't unpacked.";
+// [Caps] zip bombs that stay under the byte budget: millions of tiny files, or a small
+// download that unpacks to gigabytes. Real map/model/sound packs have a few thousand files
+// at most and pack 1.5-10x (a WAD of flat colours ~50x); see docs/notes/Caps.md.
+pub const MAX_ENTRIES: usize = 65_536;
+pub const MAX_RATIO: u64 = 200;
+const RATIO_FROM: u64 = 256 << 20;
+
+/// [Caps] Refuses archives with too many files, or that unpack far bigger than they are.
+pub fn bomb_check(entries: usize, unpacked: u64, packed: u64) -> Result<(), String> {
+    if entries > MAX_ENTRIES {
+        return Err(format!("That download has too many files in it: {entries} — the most is {MAX_ENTRIES}."));
+    }
+    if unpacked > RATIO_FROM && unpacked / packed.max(1) > MAX_RATIO {
+        return Err(format!(
+            "That download unpacks to {} from a {} file — far more than real game content packs to, so it wasn't unpacked.",
+            crate::caps::size(unpacked),
+            crate::caps::size(packed)
+        ));
+    }
+    Ok(())
+}
+
+fn packed_len(archive: &Path) -> u64 {
+    std::fs::metadata(archive).map(|m| m.len()).unwrap_or(0)
+}
 
 /// Where each kind of file belongs inside cstrike/, and which extensions are allowed there.
 fn content_exts(dir: &str) -> Option<&'static [&'static str]> {
@@ -164,6 +189,7 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
         if total > budget {
             return Err(TOO_BIG.into());
         }
+        bomb_check(list_out.lines().count(), total, packed_len(archive))?; // [Caps]
         let mut c = sys::command(tar.as_ref().unwrap());
         c.arg("-xf").arg(archive).arg("-C").arg(dest);
         let (ok, err) = run_limited(c, dest, budget)?;
@@ -180,6 +206,7 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
         match seven_zip_listing(&sz, archive) {
             Some((_, true)) => return Err(HAS_LINKS.into()),
             Some((size, false)) if size > budget => return Err(TOO_BIG.into()),
+            Some((size, false)) if bomb_check(0, size, packed_len(archive)).is_err() => return bomb_check(0, size, packed_len(archive)), // [Caps]
             Some(_) => {
                 clear_dir(dest);
                 let mut c = sys::command(&sz);
@@ -206,6 +233,7 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
             if size > budget {
                 return Err(TOO_BIG.into());
             }
+            bomb_check(entries.len(), size, packed_len(archive))?; // [Caps]
             clear_dir(dest);
             let mut c = sys::command(unar);
             c.args(["-q", "-f", "-D", "-o"]).arg(dest).arg(archive);
@@ -320,6 +348,7 @@ fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String>
     if listed > budget {
         return Err(TOO_BIG.into());
     }
+    bomb_check(z.len(), listed, packed_len(archive))?; // [Caps]
     let mut written: u64 = 0; // the sizes in a zip's index can lie, so count while writing too
     let mut buf = vec![0u8; 1024 * 1024];
     for i in 0..z.len() {
@@ -686,6 +715,40 @@ mod tests {
         assert!(e.unwrap_err().contains("links"));
         assert!(std::fs::symlink_metadata(dest.join("maps/de_a.txt")).map(|m| !m.file_type().is_symlink()).unwrap_or(true));
         let _ = std::fs::remove_dir_all(&r);
+    }
+
+    // [Caps]
+    #[test]
+    fn zip_with_too_many_files_is_refused() {
+        use std::io::Write;
+        let r = tmp("zipmany-");
+        let archive = r.join("many.zip");
+        {
+            let mut z = zip::ZipWriter::new(std::fs::File::create(&archive).unwrap());
+            let o = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            for i in 0..=MAX_ENTRIES {
+                z.start_file(format!("f{i}"), o).unwrap();
+                z.write_all(b"x").unwrap();
+            }
+            z.finish().unwrap();
+        }
+        let dest = r.join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+        assert_eq!(extract(&archive, &dest, MAX_UNPACKED).unwrap_err(), "That download has too many files in it: 65537 — the most is 65536.");
+        assert_eq!(std::fs::read_dir(&dest).unwrap().count(), 0, "nothing unpacked");
+        let _ = std::fs::remove_dir_all(&r);
+    }
+
+    // [Caps]
+    #[test]
+    fn bomb_ratio_only_stops_bombs() {
+        // a 1 MB zip that says 2.9 GB: refused, with both sizes
+        let e = bomb_check(3, 2900 << 20, 1 << 20).unwrap_err();
+        assert!(e.starts_with("That download unpacks to 2900 MB from a 1.0 MB file"), "{e}");
+        // real packs: a 1.4 GB map pack of 3 GB; a WAD of flat colours (50x) under 256 MB; a big model pack
+        assert!(bomb_check(4000, 3 << 30, 1400 << 20).is_ok());
+        assert!(bomb_check(1, 200 << 20, 4 << 20).is_ok());
+        assert!(bomb_check(MAX_ENTRIES, 900 << 20, 300 << 20).is_ok());
     }
 
     #[test]

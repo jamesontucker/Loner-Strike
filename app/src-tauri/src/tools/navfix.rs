@@ -1542,7 +1542,7 @@ fn start_rebuild(client: crate::steam::Install, m: MapFile, nav_path: PathBuf) -
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }
     let brain = brain_dll(&m)?;
-    let n = Nav::parse(&std::fs::read(&nav_path).map_err(|e| format!("The saved nav couldn't be read ({e})."))?).map_err(|e| e.to_string())?;
+    let n = Nav::parse(&crate::caps::read_file(&nav_path, "saved nav", crate::goldsrc::nav::MAX_NAV)?).map_err(|e| e.to_string())?; // [Caps]
     let root = crate::servers::root_for(&client)?;
     let first = !root.join(".base/hlds.exe").is_file();
     let secs = rebuild_seconds(n.areas.len());
@@ -1689,7 +1689,7 @@ fn study(job: &crate::setup::Job, client: &crate::steam::Install, dir: &std::pat
     crate::sys::stop_child(child, Duration::from_secs(3));
     let finish = || -> Result<(), String> {
         result.map_err(|why| format!("The knowledge couldn't be built: {why}"))?;
-        let b = std::fs::read(&lsv_out).map_err(|_| "The knowledge couldn't be built: the hidden server didn't save it.".to_string())?;
+        let b = crate::caps::read_file(&lsv_out, "knowledge file", crate::goldsrc::lsv::MAX_LSV).map_err(|e| if e.contains("too big") { e } else { "The knowledge couldn't be built: the hidden server didn't save it.".to_string() })?; // [Caps]
         let k = lsv::Lsv::parse(&b).map_err(|e| format!("The knowledge came out damaged ({e})."))?;
         if k.head.key != lsv::nav_key(n) || k.head.stage < 4 {
             return Err("The knowledge that came out isn't for this nav. Try again.".into());

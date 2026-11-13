@@ -97,7 +97,8 @@ fn get_json_waiting(path: &str, params: &[(&str, String)], waits: &[Duration]) -
         if !status.is_success() && !busy {
             return Err(StoreError::Net);
         }
-        let parsed = if busy { None } else { r.text().ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) };
+        // [Caps] an API page is tens of KB (the community service caps the same answers at 4 MB)
+        let parsed = if busy { None } else { crate::caps::read_up_to(r, "answer", 4 << 20).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) };
         if let Some(v) = parsed {
             return Ok(v);
         }
@@ -646,7 +647,7 @@ impl MapStore {
             .timeout(Duration::from_secs(10))
             .send()
             .ok()?;
-        let v: Value = serde_json::from_str(&r.text().ok()?).ok()?;
+        let v: Value = serde_json::from_slice(&crate::caps::read_up_to(r, "answer", 4 << 20).ok()?).ok()?; // [Caps]
         Some(v.get(0)?.as_array()?.iter().filter_map(|x| x.as_str().map(String::from)).collect())
     }
 

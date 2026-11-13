@@ -107,6 +107,8 @@ impl Rcon {
     }
 
     fn send_udp(&self, command: &str) -> Result<String, RconError> {
+        const MAX_REPLY: usize = 4 << 20; // [Caps]
+        const MAX_REPLY_TIME: Duration = Duration::from_secs(20); // [Caps]
         let sock = UdpSocket::bind(local_end(&self.addr)).map_err(|_| RconError::Offline)?;
         sock.set_read_timeout(Some(Duration::from_millis(1500))).ok();
         sock.connect(&self.addr).map_err(|_| RconError::Offline)?;
@@ -130,7 +132,14 @@ impl Rcon {
         // follows right away, so a short quiet spell ends it. Only a split answer still
         // missing parts is waited for longer. (The lock is held all the while.)
         let mut got = Packets::default();
+        // [Caps] a server that never stops sending can't hold the lock or fill memory: the
+        // longest real answer (cvarlist, a full status) is well under 1 MB
+        let (started, mut total) = (std::time::Instant::now(), 0usize);
         while let Ok(n) = sock.recv(&mut buf) {
+            total += n;
+            if total > MAX_REPLY || started.elapsed() > MAX_REPLY_TIME {
+                break;
+            }
             got.add(&buf[..n]);
             let wait = if got.missing_parts() { MISSING_PART_WAIT } else { QUIET_WAIT };
             sock.set_read_timeout(Some(wait)).ok();

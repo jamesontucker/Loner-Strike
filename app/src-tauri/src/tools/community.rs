@@ -84,6 +84,10 @@ const SEARCH_PAGES: i64 = 6;
 const MAX_SHOTS: usize = 6;
 const MAX_SHOT: usize = 8 << 20;
 const MAX_PACKAGE: u64 = 1 << 30;
+/// [Caps] The finished zip: the community list checks every file in packages up to 256 MB
+/// (services/serverlist/community.py CHECK_MAX), so a bigger one could never be listed.
+/// GameBanana itself takes about 1.4 GB in Mods (200 MB for WIPs).
+pub const MAX_PACKAGE_ZIP: u64 = 256 << 20;
 /// Hosts screenshots in the index may come from
 const SHOT_HOSTS: [&str; 2] = ["images.gamebanana.com", "dl.lonerstrike.com"];
 const NO_GAME: &str = "Set up the game on this computer first.";
@@ -1298,6 +1302,18 @@ pub struct Package {
     pub warnings: Vec<String>,
 }
 
+/// [Caps] The publish request: its screenshots as base64, plus the text.
+pub const PUBLISH_BODY: usize = MAX_SHOTS * (MAX_SHOT * 4 / 3 + 64) + (64 << 10);
+
+/// [Caps]
+pub(crate) fn package_too_big(zipped: u64) -> String {
+    format!(
+        "The package is {} — the most is {} (the community list checks every file in packages up to that size). Leave some files out, or share it on GameBanana only.",
+        crate::caps::size(zipped),
+        crate::caps::size(MAX_PACKAGE_ZIP)
+    )
+}
+
 /// A screenshot from the page: PNG or JPEG, not too big.
 pub fn decode_shot(s: &Shot) -> Result<(Vec<u8>, &'static str), String> {
     use base64::Engine;
@@ -1311,8 +1327,8 @@ pub fn decode_shot(s: &Shot) -> Result<(Vec<u8>, &'static str), String> {
         Ok(image::ImageFormat::Jpeg) => "jpg",
         _ => return Err("Screenshots have to be PNG or JPEG pictures.".into()),
     };
-    // a picture that says it's one but isn't is refused too
-    image::load_from_memory(&b).map_err(|_| "A screenshot is damaged.".to_string())?;
+    // a picture that says it's one but isn't is refused too; [Caps] by pixels as well
+    crate::caps::decode_picture(&b, None, crate::caps::MAX_PICTURE_SIDE).map_err(|e| if e.contains("too big") { e.replacen("That picture", "A screenshot", 1) } else { "A screenshot is damaged.".to_string() })?;
     Ok((b, ext))
 }
 
@@ -1462,6 +1478,12 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
             std::fs::write(shot_dir.join(&n), b).map_err(|e| format!("Couldn't save the screenshots ({e})."))?;
             shot_names.push(n);
         }
+    }
+    // [Caps] checked before it's read back whole for its MD5
+    let zipped = std::fs::metadata(&zip_path).map(|x| x.len()).unwrap_or(0);
+    if zipped > MAX_PACKAGE_ZIP {
+        let _ = std::fs::remove_file(&zip_path);
+        return Err(package_too_big(zipped));
     }
     let bytes = std::fs::read(&zip_path).map_err(|e| e.to_string())?;
     let pkg = Package {
@@ -2058,7 +2080,8 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/community/browse", get(api_browse))
         .route("/api/tools/community/item/:model/:id", get(api_item))
         .route("/api/tools/community/try", post(api_try))
-        .route("/api/tools/community/publish/:map", get(api_ready).post(api_publish))
+        // [Caps] up to MAX_SHOTS screenshots of MAX_SHOT each, as base64 (axum's 2 MB default refused real ones)
+        .route("/api/tools/community/publish/:map", get(api_ready).post(api_publish).layer(axum::extract::DefaultBodyLimit::max(PUBLISH_BODY)))
         .route("/api/tools/community/publish-mode/:id", get(api_mode_ready).post(api_mode_publish))
         .route("/api/tools/community/register", post(api_register))
         .route("/api/tools/community/mine", get(api_mine))
