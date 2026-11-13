@@ -207,7 +207,10 @@ def main(argv):
     for path in files(paths):
         rel = os.path.relpath(path, ROOT)
         if not rel.endswith((".sma", ".rs")) and rel.startswith(("plugins", "mods")):
-            continue  # only plugin source text there
+            # only plugin source text there. Bot chat (plugins/configs/gamemodes/botchat*.ini) is
+            # left out on purpose: bots with region=uk/au keep UK spelling and phrasing
+            # ("favourite", "cheers mate") so a match feels international. Everyone else is US.
+            continue
         try:
             src = open(path, encoding="utf-8").read()
         except UnicodeDecodeError:
