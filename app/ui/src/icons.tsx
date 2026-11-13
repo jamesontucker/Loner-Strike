@@ -47,6 +47,8 @@ const P: Record<string, string> = {
   // a wrench: tools for looking inside (and later fixing) maps
   tools: '<path d="M4.5 19.5l7.8-7.8"/><path d="M12.3 11.7a4.5 4.5 0 0 1 5.9-6.6l-2.7 2.7.3 2.4 2.4.3 2.7-2.7a4.5 4.5 0 0 1-6.6 5.9"/>',
   kreedz: '<path d="M3 21l6-10 4 5 3-4 5 9z"/><path d="M14 6l2-3 2 3"/>',
+  // a closing circle round a parachute-ish drop marker: the zone
+  br: '<circle cx="12" cy="12" r="9" stroke-dasharray="3 2"/><circle cx="12" cy="12" r="4.5"/><path d="M12 9.5v5M9.5 12h5"/>',
   // a wall of three blocks with a shield in front: hold the line
   laststand: '<path d="M3 20h18M4 20v-5h5v5M15 20v-5h5v5M9.5 15v-4h5v4"/><path d="M12 3.5l4 1.6v3c0 2.6-1.7 4.4-4 5.4-2.3-1-4-2.8-4-5.4v-3z"/>',
 };
