@@ -165,7 +165,7 @@ All under `/community/admin/`, `Authorization: Bearer <COMMUNITY_ADMIN_TOKEN>` (
 compared as SHA-256 digests with `hmac.compare_digest`; 10 wrong tokens from one visitor lock it out
 for an hour; no CORS headers). **They answer only on the box itself** (requests from 127.0.0.1 without
 Cloudflare's visitor header): from a Mac, open a tunnel first, `ssh -N -L 8100:127.0.0.1:8100
-cs@178.156.241.180`, and lsmod.py's default `--server http://127.0.0.1:8100` goes through it.
+you@your-box`, and lsmod.py's default `--server http://127.0.0.1:8100` goes through it.
 `--admin-remote` on the service opens them through the Cloudflare tunnel too; if you ever want that,
 put a Cloudflare Access application (your own login) in front of `list.lonerstrike.com/community/admin/*`
 as well as the token. A second, publish-only token (`COMMUNITY_PUBLISH_TOKEN`) may only read the
@@ -224,31 +224,31 @@ rows already hidden, pulled or turned down counted as the team's).
 
 ## 6. Go-live steps (for you to run; nothing here has been run)
 
-Box: `cs@178.156.241.180` (Ubuntu 24.04, sudo). Run from the tools checkout
+Box: `you@your-box` (Ubuntu 24.04, sudo). Run from the tools checkout
 (`cd ~/loner-strike-tools`, or the main checkout once merged).
 
 1. **Tests**: `! cd services/serverlist && python3 -m unittest test_community test_modbot test_serverlist`
 2. **Copy and install** (keeps the list running; adds the community part; makes the env file with
    a fresh admin token):
    ```
-   ! scp -r services/serverlist scripts/r2-community.sh cs@178.156.241.180:/tmp/ls-new/
-   ! ssh cs@178.156.241.180 'sudo sh /tmp/ls-new/serverlist/install.sh'
+   ! scp -r services/serverlist scripts/r2-community.sh you@your-box:/tmp/ls-new/
+   ! ssh you@your-box 'sudo sh /tmp/ls-new/serverlist/install.sh'
    ```
 3. **Secrets into the env file** (from your Mac's files over stdin; never shown, never on a command line):
    ```
-   ! ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_BOT_TOKEN' < ~/.config/loner-discord-token
-   ! ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh COMMUNITY_MOD_WEBHOOK' < ~/.config/lonerstrike/community-webhook
+   ! ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_BOT_TOKEN' < ~/.config/loner-discord-token
+   ! ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh COMMUNITY_MOD_WEBHOOK' < ~/.config/lonerstrike/community-webhook
    ```
 4. **The admin token to your Mac** (straight into the file, not the screen):
    ```
-   ! (umask 077; ssh cs@178.156.241.180 'sudo sed -n "s/^COMMUNITY_ADMIN_TOKEN=//p" /etc/lonerstrike-list/community.env' > ~/.config/lonerstrike/community-admin.token)
+   ! (umask 077; ssh you@your-box 'sudo sed -n "s/^COMMUNITY_ADMIN_TOKEN=//p" /etc/lonerstrike-list/community.env' > ~/.config/lonerstrike/community-admin.token)
    ```
 5. **The app's id and public key** (public values):
    ```
    ! python3 services/serverlist/discord-setup.py
-   ! echo <DISCORD_PUBLIC_KEY it printed> | ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_PUBLIC_KEY'
-   ! echo <DISCORD_APP_ID it printed> | ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_APP_ID'
-   ! ssh cs@178.156.241.180 'sudo systemctl restart lonerstrike-list && sleep 2 && journalctl -u lonerstrike-list -n 5 --no-pager -o cat'
+   ! echo <DISCORD_PUBLIC_KEY it printed> | ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_PUBLIC_KEY'
+   ! echo <DISCORD_APP_ID it printed> | ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_APP_ID'
+   ! ssh you@your-box 'sudo systemctl restart lonerstrike-list && sleep 2 && journalctl -u lonerstrike-list -n 5 --no-pager -o cat'
    ```
 6. **Cloudflare**: no new tunnel route is needed — `list.lonerstrike.com` already sends every path to
    `http://localhost:8100`, so `/community/*` and `/discord/interactions` arrive. Check:
@@ -272,7 +272,7 @@ Box: `cs@178.156.241.180` (Ubuntu 24.04, sudo). Run from the tools checkout
    lack Manage Messages (the service checks roles itself either way).
 8. **Check it**. Moderation answers only on the box, so open the admin tunnel first (it stays in the
    background; `! pkill -f "8100:127.0.0.1:8100"` closes it):
-   `! ssh -f -N -L 8100:127.0.0.1:8100 cs@178.156.241.180`
+   `! ssh -f -N -L 8100:127.0.0.1:8100 you@your-box`
    then `! python3 services/serverlist/lsmod.py status` (counts, index sha) and in Discord
    `/community status mod:1` (answers "unknown", ephemeral). The first real registration from the
    app posts a card with [Pull].
@@ -287,12 +287,12 @@ Box: `cs@178.156.241.180` (Ubuntu 24.04, sudo). Run from the tools checkout
     and put its four values into `publish.env` (the publish token is already there), one at a time
     from your clipboard (`pbpaste` gives what you copied; nothing is shown):
     ```
-    ! pbpaste | ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh R2_ACCESS_KEY_ID publish'
-    ! pbpaste | ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh R2_SECRET_ACCESS_KEY publish'
-    ! pbpaste | ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh R2_ENDPOINT publish'
-    ! pbpaste | ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh R2_BUCKET publish'
-    ! ssh cs@178.156.241.180 'sudo snap install aws-cli --classic && sudo systemctl enable --now lonerstrike-community-publish.timer'
-    ! ssh cs@178.156.241.180 'sudo systemctl start lonerstrike-community-publish; journalctl -u lonerstrike-community-publish -n 10 --no-pager -o cat'
+    ! pbpaste | ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh R2_ACCESS_KEY_ID publish'
+    ! pbpaste | ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh R2_SECRET_ACCESS_KEY publish'
+    ! pbpaste | ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh R2_ENDPOINT publish'
+    ! pbpaste | ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh R2_BUCKET publish'
+    ! ssh you@your-box 'sudo snap install aws-cli --classic && sudo systemctl enable --now lonerstrike-community-publish.timer'
+    ! ssh you@your-box 'sudo systemctl start lonerstrike-community-publish; journalctl -u lonerstrike-community-publish -n 10 --no-pager -o cat'
     ```
     Unverified: the snap aws CLI inside a DynamicUser unit (the unit sets HOME and PATH for it).
 
