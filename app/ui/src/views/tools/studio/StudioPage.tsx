@@ -15,7 +15,9 @@ import { useReportAddress } from "../common/address";
 import { useToolArg } from "../../../stores/tools";
 import { useDirty, useNav } from "../../../store";
 import { useStudio, activeBreakpoints } from "./store";
-import { Canvas } from "./Canvas";
+import { Canvas, type CanvasApi } from "./Canvas";
+import { builtInSnippets, mySnippets } from "./snippets";
+import type { Snippet } from "./graphOps";
 import { Inspector } from "./Inspector";
 import { DebugPanel } from "./DebugPanel";
 import { applyLayout, autoLayout } from "./layout";
@@ -80,6 +82,13 @@ function Studio({ maps }: ToolProps) {
   const [code, setCode] = useState<string | null>(null);
   const [prefs, setPrefs] = useState(loadPrefs);
   const focusRef = useRef<(id: string) => void>(() => {});
+  const canvasApi = useRef<CanvasApi | null>(null);
+  const [mine, setMine] = useState<Snippet[]>([]);
+  const reloadSnippets = useCallback(() => {
+    mySnippets().then(setMine, () => setMine([]));
+  }, []);
+  useEffect(() => reloadSnippets(), [reloadSnippets]);
+  const snippets = [...builtInSnippets, ...mine];
   const dirty = !!graph && graph !== saved;
   useToolCrumbs("studio", graph ? [{ label: graph.mode.name || graph.mode.id }] : null);
   useDirty("studio", dirty);
@@ -245,26 +254,55 @@ function Studio({ maps }: ToolProps) {
       void refreshList();
     });
 
+  // Playtest, step by step: each step says what it's doing and for how long (the first compile
+  // and starting the game under CrossOver can take a while); Cancel stops before the next step
+  const cancelled = useRef(false);
   const playtest = () =>
     run("Starting the Playtest…", async () => {
+      cancelled.current = false;
       const g = useStudio.getState().graph;
-      if (!g || !(await save())) return;
+      if (!g) return;
+      setStep("Saving");
+      if (!(await save()) || cancelled.current) return;
+      setStep("Compiling (the first time under CrossOver takes longer)");
       const r = await api.playtest(g, activeBreakpoints(g, useStudio.getState().bpsOff));
-      if (!showCompile(r)) return;
+      if (r.output) st.setOutput(r.output);
+      if (!showCompile(r) || cancelled.current) return;
+      setStep("Checking the game");
       const state = await api.gameState();
-      let restart = false;
+      if (cancelled.current) return;
       if (state.game_open) {
-        if (!(await ask(`The game is open. Close it and start “${g.mode.name}” on ${prefs.map} with ${prefs.bots} bots?`, { ok: "Restart and playtest" }))) return;
-        restart = true;
-      }
-      const l = await api.launchGame({ map: prefs.map, bots: prefs.bots, mode: g.mode.id, restart });
-      if (l.error) {
-        toast(l.error, true);
-        return;
+        // the open game switches to the mode with a map change: much quicker than a restart
+        if (await ask(`The game is open. Switch it to \u201c${g.mode.name}\u201d on ${prefs.map} now? (A map change; the bots stay as they are.)`, { ok: "Switch the open game" })) {
+          setStep("Switching the open game");
+          const sw = await api.switchOpenGame(g.mode.id, prefs.map);
+          if (!sw.error) {
+            st.startPlaying(g.mode.id);
+            toast(`Switching to ${prefs.map}. Nodes light up as they run.`);
+            return;
+          }
+          if (!(await ask(`${sw.error} Close the game and start it again in this mode?`, { ok: "Restart and playtest" }))) return;
+        } else return;
+        setStep("Restarting the game");
+        const l = await api.launchGame({ map: prefs.map, bots: prefs.bots, mode: g.mode.id, restart: true });
+        if (l.error) return void toast(l.error, true);
+      } else {
+        setStep("Starting the game");
+        const l = await api.launchGame({ map: prefs.map, bots: prefs.bots, mode: g.mode.id });
+        if (l.error) return void toast(l.error, true);
       }
       st.startPlaying(g.mode.id);
       toast(`Starting the game on ${prefs.map}. Nodes light up as they run.`);
-    });
+    }).finally(() => setStep(null));
+
+  const [step, setStepState] = useState<{ label: string; at: number } | null>(null);
+  const setStep = (label: string | null) => setStepState(label ? { label, at: Date.now() } : null);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!step) return;
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [step]);
 
   const showCode = () =>
     run("Making the code…", async () => {
@@ -414,12 +452,38 @@ function Studio({ maps }: ToolProps) {
             savePrefs({ ...prefs, bots: n });
           }}
         />
-        <button type="button" className="btn primary" onClick={() => void playtest()} disabled={!!working || errors > 0}>
-          {working === "Starting the Playtest…" ? <span className="spinner" /> : null} {working === "Starting the Playtest…" ? "Starting…" : "Playtest"}
-        </button>
+        {step ? (
+          <>
+            <span className="st-step" role="status" aria-live="polite">
+              <span className="spinner" /> {step.label}… {Math.floor((Date.now() - step.at) / 1000)} s
+            </span>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                cancelled.current = true;
+                setStep(null);
+              }}
+              title="Stop after this step"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button type="button" className="btn primary st-playtest" data-testid="studio-playtest" onClick={() => void playtest()} disabled={!!working || errors > 0} title={errors > 0 ? "Fix the problems first (Results, below)" : "Compile with the debugger, then start the game in this mode with bots"}>
+            Playtest
+          </button>
+        )}
       </div>
       <div className="st-main">
-        <Canvas toast={toast} onFocusReady={(f) => (focusRef.current = f)} />
+        <Canvas
+          toast={toast}
+          snippets={snippets}
+          onApi={(a) => {
+            focusRef.current = a.focus;
+            canvasApi.current = a;
+          }}
+        />
         <Inspector focus={(id) => focusRef.current(id)} />
       </div>
       <ActionBar

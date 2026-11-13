@@ -1,6 +1,7 @@
 // The Playtest panel: is the game talking to us, where the world is paused (with that node's
 // inputs and the live values), Resume, Disable all breakpoints, and the recent events.
 
+import { useEffect, useState } from "react";
 import { useStudio } from "./store";
 import { nodeDef } from "./registry";
 import { describe } from "./debugState";
@@ -10,14 +11,30 @@ export function DebugPanel({ onResume, onBpsOff, onRefresh, onStop, focus }: { o
   const graph = useStudio((s) => s.graph);
   const d = useStudio((s) => s.debug);
   const bpsOff = useStudio((s) => s.bpsOff);
+  const since = useStudio((s) => s.playingSince);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (d.seen > 0) return;
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [d.seen]);
+  const waited = Math.floor((Date.now() - since) / 1000);
   const title = (id: string) => nodeDef(graph?.nodes.find((n) => n.id === id)?.type ?? "")?.title ?? id;
   const connected = d.seen > 0;
   return (
     <section className="st-debug" aria-label="Playtest">
       <div className="st-debug-bar">
         <span className={`st-dot${connected ? " on" : ""}${d.paused ? " paused" : ""}`} />
-        <strong>{d.paused ? "Paused" : connected ? `Playing${d.map ? ` on ${d.map}` : ""}` : "Waiting for the game…"}</strong>
-        {!connected && <span className="st-muted">The game is starting the mode; this connects when the map has loaded.</span>}
+        <strong>{d.paused ? "Paused" : connected ? `Playing${d.map ? ` on ${d.map}` : ""}` : `Waiting for the game… ${waited} s`}</strong>
+        {!connected && (
+          <span className="st-muted">
+            {waited < 20
+              ? "Starting the game and loading the map; this connects when the mode is running."
+              : waited < 90
+                ? "Still starting: the first start (Steam, CrossOver, the map) can take a minute."
+                : "Nothing yet: check the game's window (an error, or the main menu?). Stop debugging to give up."}
+          </span>
+        )}
         <span className="st-grow" />
         <label className="st-side-check st-inline">
           <input type="checkbox" checked={bpsOff} onChange={(e) => onBpsOff(e.target.checked)} />

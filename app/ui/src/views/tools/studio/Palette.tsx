@@ -12,12 +12,14 @@ export type PaletteAt = {
   flow: { x: number; y: number };
   /** dropped from a wire: its type and which way it points */
   wire?: { type: PinType; dir: "in" | "out"; node: string; pin: string };
+  /** only this category (the left panel's + buttons) */
+  only?: string;
 };
 
 export function Palette({ at, onPick, onComment, onClose }: { at: PaletteAt; onPick: (def: NodeDef) => void; onComment?: () => void; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [cur, setCur] = useState(0);
-  const list = useMemo(() => searchNodes(q, at.wire && { type: at.wire.type, dir: at.wire.dir }), [q, at.wire]);
+  const list = useMemo(() => searchNodes(q, at.wire && { type: at.wire.type, dir: at.wire.dir }).filter((d) => !at.only || d.category === at.only), [q, at.wire, at.only]);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => setCur(0), [q]);
   useEffect(() => {

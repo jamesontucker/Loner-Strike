@@ -1,6 +1,6 @@
 /* Game Mode Studio (st- prefix). Loaded with the Studio's own chunk. */
 
-.st-page { --st-exec: #f2f2f2; --st-bad: #ff5b4f; --st-warn: #ffb347; --st-run: #ffe066; --st-node: #22262b; --st-node-2: #2b3036;
+.st-page { --st-grid: #1c2126; --st-grid-major: #2a3139; --st-exec: #f2f2f2; --st-bad: #ff5b4f; --st-warn: #ffb347; --st-run: #ffe066; --st-node: #22262b; --st-node-2: #2b3036;
   display: flex; flex-direction: column; flex: 1 1 auto; min-height: 480px; gap: 8px; }
 /* the Studio fills the page's height, like the map viewer: the page stops scrolling */
 .content:has(> .st-page) { display: flex; flex-direction: column; padding-bottom: 16px; }
@@ -86,7 +86,8 @@
 .st-comment-head { padding: 5px 10px; background: color-mix(in srgb, var(--st-comment) 65%, transparent); color: #eef; font-weight: 600; font-size: 13px; border-radius: 6px 6px 0 0; cursor: move; white-space: pre-wrap; }
 .st-comment-edit { width: 100%; min-height: 48px; font: inherit; background: #111; color: #eee; border: 1px solid var(--signal); }
 
-.st-edge-exec.lit path, .react-flow__edge.lit .react-flow__edge-path { stroke: var(--st-run) !important; filter: drop-shadow(0 0 3px var(--st-run)); }
+/* (no filters on wires or nodes: a filter makes WebKit draw that layer as a bitmap, blurry when zoomed) */
+.st-edge-exec.lit path, .react-flow__edge.lit .react-flow__edge-path { stroke: var(--st-run) !important; stroke-width: 4px !important; }
 .react-flow__edge.selected .react-flow__edge-path { stroke: var(--signal) !important; }
 
 /* node search */
@@ -154,3 +155,9 @@
 }
 .st-var > .btn.small { justify-self: end; }
 .st-var-row > select.st-field { flex: 1 1 100%; }
+
+.st-step { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; color: var(--bone, #ddd); }
+/* comment boxes: only the title bar (and the resize handles) take the mouse; inside, the canvas pans and box-selects as anywhere */
+.react-flow__node-comment { pointer-events: none !important; }
+.react-flow__node-comment .st-comment { pointer-events: none; }
+.react-flow__node-comment .st-comment-head, .react-flow__node-comment .react-flow__resize-control { pointer-events: all; }

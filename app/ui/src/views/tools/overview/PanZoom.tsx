@@ -8,6 +8,12 @@ export type View = { s: number; x: number; y: number };
 export const FIT: View = { s: 1, x: 0, y: 0 };
 const MIN = 1, MAX = 12;
 
+/** An offset on whole device pixels: no half-pixel blur (Windows at 125/150 %, Retina). */
+const px = (v: number) => {
+  const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  return Math.round(v * dpr) / dpr;
+};
+
 export function zoomBy(v: View, f: number, px: number, py: number): View {
   const s = Math.min(MAX, Math.max(MIN, v.s * f));
   if (s === 1) return FIT;
@@ -61,7 +67,7 @@ export function PanZoom({ view, onView, children, label }: { view: View; onView:
       onPointerCancel={up}
       onDoubleClick={() => onView(FIT)}
     >
-      <div className="ov-pz-in" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})` }}>
+      <div className="ov-pz-in" style={{ transform: `translate(${px(view.x)}px, ${px(view.y)}px) scale(${view.s})` }}>
         {children}
       </div>
     </div>

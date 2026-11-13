@@ -18,9 +18,20 @@ type Studio = {
   selected: string[];
   /** a Playtest is going in this mode: the debug link is read */
   playing: string | null;
+  /** when it started (Date.now()), for "waiting for the game" */
+  playingSince: number;
   debug: DebugState;
   /** "Disable all breakpoints": the marks stay, the game ignores them */
   bpsOff: boolean;
+  /** the variable shown in Details (picked in the left panel) */
+  selectedVar: string | null;
+  /** the Function looked at (its name joins the crumbs) */
+  funcFocus: string | null;
+  /** the compiler's last words (Results panel) */
+  output: string | null;
+  selectVar: (id: string | null) => void;
+  setFuncFocus: (id: string | null) => void;
+  setOutput: (o: string | null) => void;
   open: (g: Graph, saved: boolean) => void;
   close: () => void;
   /** an edit that can be undone */
@@ -51,9 +62,16 @@ export const useStudio = create<Studio>((set, get) => ({
   problems: [],
   selected: [],
   playing: null,
+  playingSince: 0,
   debug: emptyDebug(),
   bpsOff: false,
-  open: (g, saved) => set({ graph: g, saved: saved ? g : null, history: emptyHistory(), problems: [], selected: [], playing: null, debug: emptyDebug() }),
+  selectedVar: null,
+  funcFocus: null,
+  output: null,
+  selectVar: (selectedVar) => set(selectedVar ? { selectedVar, selected: [] } : { selectedVar }),
+  setFuncFocus: (funcFocus) => set({ funcFocus }),
+  setOutput: (output) => set({ output }),
+  open: (g, saved) => set({ selectedVar: null, funcFocus: null, output: null, graph: g, saved: saved ? g : null, history: emptyHistory(), problems: [], selected: [], playing: null, debug: emptyDebug() }),
   close: () => set({ graph: null, saved: null, history: emptyHistory(), problems: [], selected: [], playing: null, debug: emptyDebug() }),
   edit: (f) => {
     const g = get().graph;
@@ -81,8 +99,8 @@ export const useStudio = create<Studio>((set, get) => ({
   },
   markSaved: () => set({ saved: get().graph }),
   setProblems: (problems) => set({ problems }),
-  select: (selected) => set({ selected }),
-  startPlaying: (mode) => set({ playing: mode, debug: emptyDebug() }),
+  select: (selected) => set(selected.length ? { selected, selectedVar: null } : { selected }),
+  startPlaying: (mode) => set({ playing: mode, playingSince: Date.now(), debug: emptyDebug() }),
   stopPlaying: () => set({ playing: null }),
   events: (ev) => set({ debug: applyEvents(get().debug, ev, isEventNode(get().graph)) }),
   setBpsOff: (bpsOff) => set({ bpsOff }),

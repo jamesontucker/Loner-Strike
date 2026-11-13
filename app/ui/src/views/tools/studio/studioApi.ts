@@ -7,7 +7,7 @@ const S = "/api/tools/studio";
 
 export type Problem = { level: "error" | "warning"; node?: string; pin?: string; edge?: string; message: string };
 export type GraphInfo = { id: string; name: string; description?: string; nodes?: number; modified: number; installed: boolean; damaged?: boolean };
-export type CompileResult = { ok?: boolean; problems?: Problem[]; output?: string; plugin?: string; error?: string };
+export type CompileResult = { ok?: boolean; problems?: Problem[]; output?: string; plugin?: string; error?: string; cached?: boolean; secs?: number };
 
 export const studioStatus = () => tryGet<{ game?: boolean; compiler?: boolean; graphsDir?: string }>(`${S}/status`);
 export const listGraphs = () => get<{ graphs: GraphInfo[] }>(`${S}/graphs`);
@@ -19,6 +19,7 @@ export const generate = (g: Graph, debug = false) => post<{ problems?: Problem[]
 export const openAsCode = (g: Graph) => post<{ ok?: boolean; folder?: string; name?: string; problems?: Problem[] }>(`${S}/source`, { graph: g });
 export const compile = (g: Graph, debug = false) => post<CompileResult>(`${S}/compile`, { graph: g, debug });
 export const playtest = (g: Graph, breakpoints: string[]) => post<CompileResult>(`${S}/playtest`, { graph: g, breakpoints });
+export const switchOpenGame = (mode: string, map: string) => post<{ ok?: boolean }>(`${S}/switch`, { mode, map });
 export const uninstall = (id: string) => post<{ ok?: boolean }>(`${S}/uninstall/${encodeURIComponent(id)}`);
 
 export type DebugEvent = { s: number; t: number; e: string; node?: string; inputs?: Record<string, unknown>; result?: string; message?: string; [k: string]: unknown };

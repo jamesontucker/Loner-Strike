@@ -20,6 +20,7 @@ import "@xyflow/react/dist/style.css";
 import { useStudio } from "./store";
 import { NODE_TYPES } from "./Nodes";
 import { Palette, type PaletteAt } from "./Palette";
+import { insertSnippet, type Snippet } from "./graphOps";
 import { addComment, addNode, canConnect, connect, copy, insertReroute, inType, moveItems, outType, paste, remove, toggleBreakpoint } from "./graphOps";
 import { firstPin, nodeDef, PIN_TYPES, type NodeDef, type PinType } from "./registry";
 import { pathPairs } from "./debugState";
@@ -35,7 +36,43 @@ function realEnds(g: Graph, e: Graph["edges"][number]): [string, string] {
   return [src, dst];
 }
 
-export function Canvas({ toast, onFocusReady }: { toast: (text: string, error?: boolean) => void; onFocusReady?: (focus: (id: string) => void) => void }) {
+const IS_WEBKIT = typeof navigator !== "undefined" && /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
+
+/** Crisp text and borders at any zoom, on WebKit (macOS) and Chromium (Windows WebView2) alike:
+ *  once a pan or zoom settles, the view's offset goes to whole device pixels (no half-pixel
+ *  blur, no 1 px jitter between pans), and on WebKit the view is drawn again at its new scale
+ *  (WebKit can keep a zoomed layer's old, lower-resolution bitmap). */
+function settleViewport(rf: ReturnType<typeof useReactFlow>, box: HTMLDivElement | null, vp: { x: number; y: number; zoom: number }) {
+  const dpr = window.devicePixelRatio || 1;
+  const x = Math.round(vp.x * dpr) / dpr;
+  const y = Math.round(vp.y * dpr) / dpr;
+  if (x !== vp.x || y !== vp.y) void rf.setViewport({ x, y, zoom: vp.zoom });
+  if (!IS_WEBKIT || !box) return;
+  const el = box.querySelector<HTMLElement>(".react-flow__viewport");
+  if (!el) return;
+  requestAnimationFrame(() => {
+    el.style.display = "none";
+    void el.offsetHeight;
+    el.style.display = "";
+  });
+}
+
+/** What the panels around the canvas can ask of it. */
+export type CanvasApi = {
+  focus: (id: string) => void;
+  /** the node search at the middle of the view, maybe only one category */
+  search: (category?: string) => void;
+  /** a node added at the middle of the view */
+  addAtCenter: (type: string, params?: Record<string, string | number | boolean>) => void;
+  /** a snippet dropped in at the middle of the view */
+  snippetAtCenter: (s: Snippet) => void;
+};
+
+/** Things dragged from the left panel onto the canvas. */
+export const DRAG_VAR = "application/x-studio-variable";
+export const DRAG_SNIPPET = "application/x-studio-snippet";
+
+export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error?: boolean) => void; onApi?: (api: CanvasApi) => void; snippets: Snippet[] }) {
   const graph = useStudio((s) => s.graph)!;
   const selected = useStudio((s) => s.selected);
   const problems = useStudio((s) => s.problems);
@@ -52,14 +89,66 @@ export function Canvas({ toast, onFocusReady }: { toast: (text: string, error?: 
   const riders = useRef(new Map<string, { comment: string; dx: number; dy: number }>());
   const connecting = useRef(false);
 
+  // a variable dropped on the canvas: Get or Set?
+  const [varDrop, setVarDrop] = useState<{ left: number; top: number; flow: { x: number; y: number }; id: string } | null>(null);
+
+  const center = useCallback(() => {
+    const box = wrap.current?.getBoundingClientRect();
+    return box ? rf.screenToFlowPosition({ x: box.left + box.width / 2, y: box.top + box.height / 2 }) : { x: 0, y: 0 };
+  }, [rf]);
+  const sizeOf = useCallback((id: string) => {
+    const n = rf.getNode(id);
+    return { w: n?.measured?.width ?? 230, h: n?.measured?.height ?? 110 };
+  }, [rf]);
+  const dropSnippet = useCallback(
+    (sn: Snippet, at: { x: number; y: number }) => {
+      const g = useStudio.getState().graph;
+      if (!g) return;
+      const r = insertSnippet(g, sn, at, sizeOf);
+      if (!r) return toast("That snippet is empty.", true);
+      edit(() => r.graph);
+      select(r.ids);
+    },
+    [edit, select, sizeOf, toast],
+  );
+
+  // (development: tests set the zoom; see scripts and the crispness checks)
   useEffect(() => {
-    onFocusReady?.((id) => {
-      const n = graph.nodes.find((x) => x.id === id);
-      if (!n) return;
-      select([id]);
-      void rf.setCenter(n.pos.x + 110, n.pos.y + 50, { zoom: Math.max(rf.getZoom(), 1), duration: 300 });
+    if (!import.meta.env.DEV) return;
+    (window as unknown as { __studioZoom?: (z: number) => void }).__studioZoom = (z) => {
+      const n = rf.getNodes().find((x) => x.type === "logic");
+      if (n) void rf.setCenter(n.position.x + 110, n.position.y + 50, { zoom: z });
+    };
+  }, [rf]);
+
+  useEffect(() => {
+    onApi?.({
+      focus: (id) => {
+        const n = useStudio.getState().graph?.nodes.find((x) => x.id === id);
+        if (!n) return;
+        select([id]);
+        void rf.setCenter(n.pos.x + 110, n.pos.y + 50, { zoom: Math.max(rf.getZoom(), 1), duration: 300 });
+      },
+      search: (category) => {
+        const box = wrap.current?.getBoundingClientRect();
+        if (!box) return;
+        const left = Math.max(box.width / 2 - 160, 8);
+        const top = Math.max(box.height / 2 - 180, 8);
+        setPalette({ left, top, flow: center(), only: category });
+      },
+      addAtCenter: (type, params) => {
+        const c = center();
+        edit((g) => {
+          const r = addNode(g, type, { x: c.x - 110, y: c.y - 40 });
+          return params ? { ...r.graph, nodes: r.graph.nodes.map((n) => (n.id === r.id ? { ...n, params: { ...n.params, ...params } } : n)) } : r.graph;
+        });
+      },
+      snippetAtCenter: (sn) => {
+        const c = center();
+        dropSnippet(sn, { x: c.x - 200, y: c.y - 120 });
+      },
     });
-  }, [graph, onFocusReady, rf, select]);
+  }, [onApi, rf, select, center, edit, dropSnippet]);
 
   const sel = useMemo(() => new Set(selected), [selected]);
   const nodes: Node[] = useMemo(
@@ -89,7 +178,7 @@ export function Canvas({ toast, onFocusReady }: { toast: (text: string, error?: 
           selected: selEdges.includes(e.id),
           animated: lit,
           className: `${exec ? "st-edge-exec" : "st-edge-data"}${lit ? " lit" : ""}`,
-          style: { stroke: color, strokeWidth: exec ? 3 : 2, strokeDasharray: exec ? undefined : "6 4" },
+          style: { stroke: color, strokeWidth: exec ? 3 : 2 },
           markerEnd: exec ? { type: MarkerType.ArrowClosed, color, width: 14, height: 14 } : undefined,
         };
       }),
@@ -285,6 +374,26 @@ export function Canvas({ toast, onFocusReady }: { toast: (text: string, error?: 
       onMouseMove={(e) => {
         mouse.current = { x: e.clientX, y: e.clientY };
       }}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes(DRAG_VAR) || e.dataTransfer.types.includes(DRAG_SNIPPET)) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }
+      }}
+      onDrop={(e) => {
+        const flow = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+        const v = e.dataTransfer.getData(DRAG_VAR);
+        const sn = e.dataTransfer.getData(DRAG_SNIPPET);
+        if (!v && !sn) return;
+        e.preventDefault();
+        if (sn) {
+          const found = snippets.find((x) => x.id === sn);
+          if (found) dropSnippet(found, flow);
+          return;
+        }
+        const box = wrap.current?.getBoundingClientRect();
+        if (box) setVarDrop({ left: e.clientX - box.left, top: e.clientY - box.top, flow, id: v });
+      }}
     >
       <ReactFlow
         nodes={nodes}
@@ -332,6 +441,7 @@ export function Canvas({ toast, onFocusReady }: { toast: (text: string, error?: 
           const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
           edit((g) => insertReroute(g, edge.id, { x: p.x - 8, y: p.y - 8 }));
         }}
+        onMoveEnd={(_, vp) => settleViewport(rf, wrap.current, vp)}
         deleteKeyCode={null}
         selectionKeyCode="Shift"
         multiSelectionKeyCode={["Meta", "Control"]}
@@ -342,11 +452,36 @@ export function Canvas({ toast, onFocusReady }: { toast: (text: string, error?: 
         fitViewOptions={{ padding: 0.2, maxZoom: 1.1 }}
         proOptions={{ hideAttribution: false }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
+        <Background id="minor" variant={BackgroundVariant.Lines} gap={16} lineWidth={1} color="var(--st-grid)" />
+        <Background id="major" variant={BackgroundVariant.Lines} gap={128} lineWidth={1} color="var(--st-grid-major)" />
         <Controls showInteractive={false} />
         <MiniMap pannable zoomable className="st-minimap" />
       </ReactFlow>
       {palette && <Palette at={palette} onPick={pick} onComment={commentAround} onClose={() => setPalette(null)} />}
+      {varDrop && (
+        <div className="st-vardrop" style={{ left: varDrop.left, top: varDrop.top }} role="menu">
+          {(["get", "set"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              className="st-palette-item"
+              onClick={() => {
+                const d = varDrop;
+                setVarDrop(null);
+                edit((g) => {
+                  const r = addNode(g, k === "get" ? "var.get" : "var.set", { x: d.flow.x - 20, y: d.flow.y - 20 });
+                  return { ...r.graph, nodes: r.graph.nodes.map((n) => (n.id === r.id ? { ...n, params: { ...n.params, var: d.id } } : n)) };
+                });
+              }}
+            >
+              <span className="st-palette-title">{k === "get" ? "Get" : "Set"} {graph.variables.find((x) => x.id === varDrop.id)?.name ?? ""}</span>
+            </button>
+          ))}
+          <button type="button" className="st-palette-item" onClick={() => setVarDrop(null)}>
+            <span className="st-palette-help">Cancel</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
