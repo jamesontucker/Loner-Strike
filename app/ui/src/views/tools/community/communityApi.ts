@@ -88,7 +88,7 @@ export const browse = (kind: string, q: string, sort: string, refresh = false, s
 export const details = (model: Model, id: number, signal?: AbortSignal) => get<Details>(`${base}/item/${model.toLowerCase()}/${id}`, signal);
 
 export const tryIt = (model: Model, id: number, confirmed: boolean, file?: number) =>
-  post<{ ok: boolean; job: string; section: string; map: string | null }>(`${base}/try`, { model, id, confirmed, ...(file ? { file } : {}) });
+  post<{ ok: boolean; job: string; section: string; map: string | null; kind?: "prefab"; prefabs?: string[]; wads?: string[] }>(`${base}/try`, { model, id, confirmed, ...(file ? { file } : {}) });
 
 export const readiness = (map: string, signal?: AbortSignal) =>
   get<{ ready: Readiness; suggestedModes: string[]; tag: string }>(`${base}/publish/${encodeURIComponent(map)}`, signal);

@@ -118,11 +118,16 @@ impl Kind {
         }
     }
 
+    /// Try it works for this kind (prefabs go to the map editor's library, not an installer section).
+    pub fn can_install(self) -> bool {
+        self.installer().is_some() || self == Kind::Prefab
+    }
+
     /// Why there's no one-click install for this kind yet.
     fn no_installer(self) -> &'static str {
         match self {
             Kind::Mode => "Game modes install with the Game Mode Studio, which is still coming. Open the page to read about it.",
-            Kind::Prefab => "Prefabs go into the map editor's prefab library, which is still coming. Download it from the page for now.",
+            Kind::Prefab => "Prefabs go into the map editor's prefab library.",
             _ => "The app can't install this kind of file. Open the page to get it.",
         }
     }
@@ -660,7 +665,7 @@ pub fn entry(hit: Option<&Hit>, it: Option<&Item>, revoked: bool, have: &HashSet
         "have": map.is_some_and(|m| have.contains(&m.name.to_ascii_lowercase())),
         "badges": badges(it, kind),
         "trust": tr,
-        "canTry": tr.allowed && kind.installer().is_some(),
+        "canTry": tr.allowed && kind.can_install(),
         "url": model.url(id),
     }))
 }
@@ -809,15 +814,14 @@ async fn api_item(State(st): State<Shared>, UrlPath((model, id)): UrlPath<(Strin
                 })
                 .collect();
             let have = game.as_deref().map(maps_here).unwrap_or_default();
-            let installer = kind.installer();
             Ok(json!({
                 "model": model, "id": id, "kind": kind, "name": one_line(&s(&page["_sName"]), 80),
                 "author": one_line(&s(&page["_aSubmitter"]["_sName"]), 40), "category": cat,
                 "text": crate::gamebanana::plain(&s(&page["_sText"]), 1500),
                 "images": images, "files": files_of(&page), "url": model.url(id), "tagged": tagged,
                 "likes": page["_nLikeCount"].as_i64().unwrap_or(0), "downloads": page["_nDownloadCount"].as_i64().unwrap_or(0),
-                "item": it, "trust": tr, "canTry": tr.allowed && installer.is_some() && tagged,
-                "why": if !tagged { Some("This page doesn't carry the Loner-Strike tag any more.") } else if installer.is_none() { Some(kind.no_installer()) } else { None },
+                "item": it, "trust": tr, "canTry": tr.allowed && kind.can_install() && tagged,
+                "why": if !tagged { Some("This page doesn't carry the Loner-Strike tag any more.") } else if !kind.can_install() { Some(kind.no_installer()) } else { None },
                 "have": it.as_ref().and_then(|i| i.map.as_ref()).is_some_and(|m| have.contains(&m.name.to_ascii_lowercase())),
             }))
         })
@@ -873,6 +877,20 @@ async fn api_try(State(st): State<Shared>, h: HeaderMap, Json(req): Json<TryReq>
             if tr.confirm.is_some() && !req.confirmed {
                 return Err(fail("Confirm first."));
             }
+            if kind == Kind::Prefab {
+                // prefabs go into the map editor's library (small: installed here, no job)
+                // (a prefab can be a bare .map file)
+                let mut files = files_of(&page);
+                for f in files.iter_mut().filter(|f| s(&f["file"]).to_lowercase().ends_with(".map")) {
+                    f["supported"] = json!(true);
+                }
+                let file = pick_file(&files, req.file, it.as_ref().map(|i| i.file).unwrap_or(0)).map_err(fail)?;
+                let md5 = files.iter().find(|f| f["id"].as_i64() == Some(file)).map(|f| s(&f["md5"])).unwrap_or_default();
+                let fname = files.iter().find(|f| f["id"].as_i64() == Some(file)).map(|f| s(&f["file"])).unwrap_or_default();
+                let author = s(&page["_aSubmitter"]["_sName"]);
+                let v = try_prefab(file, &fname, &md5, &author, Some(&game.dir)).map_err(|e| fail(&e))?;
+                return Ok(json!({"ok": true, "kind": "prefab", "prefabs": v["prefabs"], "wads": v["wads"]}));
+            }
             let section = kind.installer().ok_or_else(|| fail(kind.no_installer()))?;
             let file = pick_file(&files_of(&page), req.file, it.as_ref().map(|i| i.file).unwrap_or(0)).map_err(fail)?;
             let job = game.store.start_section_install(section, req.id, file).map_err(|e| fail(&e.message()))?;
@@ -880,6 +898,54 @@ async fn api_try(State(st): State<Shared>, h: HeaderMap, Json(req): Json<TryReq>
         })
         .await,
     )
+}
+
+/// Downloads a prefab file from GameBanana (checked against the page's MD5), unpacks it and
+/// hands it to the map editor's prefab library (`tools::editor::prefabs::install_download`).
+fn try_prefab(file: i64, fname: &str, md5: &str, author: &str, game_dir: Option<&Path>) -> Result<Value, String> {
+    const HOSTS: &[&str] = &["gamebanana.com", "files.gamebanana.com"];
+    let r = crate::sys::http()
+        .get(format!("https://gamebanana.com/dl/{file}"))
+        .header("User-Agent", USER_AGENT)
+        .timeout(Duration::from_secs(300))
+        .send()
+        .map_err(|_| "Couldn't reach GameBanana. Check your internet connection.".to_string())?;
+    let host = r.url().host_str().unwrap_or("").to_lowercase();
+    if !HOSTS.iter().any(|h| host == *h || host.ends_with(&format!(".{h}"))) {
+        return Err(format!("The download was redirected somewhere unexpected ({host})."));
+    }
+    if !r.status().is_success() {
+        return Err("GameBanana didn't send the file. Try again in a minute.".into());
+    }
+    let limit: u64 = 128 << 20;
+    let mut bytes = Vec::new();
+    r.take(limit + 1).read_to_end(&mut bytes).map_err(|_| "The download was cut off. Try again.".to_string())?;
+    if bytes.len() as u64 > limit {
+        return Err("That prefab download is over 128 MB.".into());
+    }
+    if md5.len() == 32 && md5_hex(&bytes) != md5 {
+        return Err("The download doesn't match the file GameBanana lists. Try again.".into());
+    }
+    let work = dir().join("work");
+    let tmp = crate::sys::make_temp_dir(&work, "prefab-").map_err(|e| e.to_string())?;
+    let res = (|| {
+        let low = fname.to_lowercase();
+        let ext = if crate::archive::is_archive(&low) { crate::archive::ext_of(&low).to_string() } else if low.ends_with(".map") { ".map".into() } else { return Err("That file isn't a prefab the editor can read (a .map or an archive of them).".to_string()) };
+        let src = tmp.join("x");
+        std::fs::create_dir_all(&src).map_err(|e| e.to_string())?;
+        if ext == ".map" {
+            let base = Path::new(&fname.replace('\\', "/")).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "prefab.map".into());
+            std::fs::write(src.join(base), &bytes).map_err(|e| e.to_string())?;
+        } else {
+            let a = tmp.join(format!("download{ext}"));
+            std::fs::write(&a, &bytes).map_err(|e| e.to_string())?;
+            crate::archive::extract(&a, &src, 512 << 20)?;
+            crate::archive::extract_nested(&src)?;
+        }
+        super::editor::prefabs::install_download(&src, author, game_dir)
+    })();
+    let _ = std::fs::remove_dir_all(&tmp);
+    res
 }
 
 // ---- publishing ------------------------------------------------------------------------------
@@ -1705,7 +1771,7 @@ mod tests {
         let unknown = all.iter().find(|v| v["id"] == 202).unwrap();
         assert_eq!((unknown["canTry"].clone(), unknown["listed"].clone()), (json!(false), json!(false)));
         let fence = all.iter().find(|v| v["id"] == 201).unwrap();
-        assert_eq!(fence["canTry"], false, "prefabs have no installer yet");
+        assert_eq!(fence["canTry"], true, "prefabs install into the editor's library");
         // filters
         assert_eq!(merge(&idx, &hits, &have, Some(Kind::Mode), "", "new").len(), 3);
         assert_eq!(merge(&idx, &hits, &have, None, "lava", "new").len(), 1);

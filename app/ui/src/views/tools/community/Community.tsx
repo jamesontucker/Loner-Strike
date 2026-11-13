@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getJson } from "../../../api";
 import { useToolArg } from "../../../stores/tools";
+import { useNav } from "../../../store";
 import type { GbJob } from "../../../types";
 import { Banner, BusyButton, LoadError, Segmented, useToast } from "../../../ui";
 import { errorText } from "../common/api";
@@ -175,7 +176,7 @@ function Card({ e, onOpen }: { e: Entry; onOpen: () => void }) {
 
 // ---- one creation ----------------------------------------------------------------------------
 
-type Stage = { state: "idle" } | { state: "asking" } | { state: "installing"; job: string; got?: number; size?: number; message?: string } | { state: "done"; map: string | null } | { state: "failed"; message: string };
+type Stage = { state: "idle" } | { state: "asking" } | { state: "installing"; job: string; got?: number; size?: number; message?: string } | { state: "done"; map: string | null; prefabs?: string[] } | { state: "failed"; message: string };
 
 function CreationPage({ model, id, onBack }: { model: Model; id: number; onBack: () => void }) {
   const q = useQuery({ queryKey: ["tools", "community", "item", model, id], queryFn: ({ signal }) => details(model, id, signal), retry: false });
@@ -229,6 +230,11 @@ function Creation({ d }: { d: Details }) {
     if (d.trust.confirm && !confirmed) return setStage({ state: "asking" });
     setStage({ state: "installing", job: "" });
     const r = await tryIt(d.model, d.id, confirmed);
+    if (!r.error && r.kind === "prefab") {
+      // prefabs go straight into the map editor's library (no install job)
+      setStage({ state: "done", map: null, prefabs: r.prefabs ?? [] });
+      return;
+    }
     if (r.error || !r.job) {
       setStage({ state: "failed", message: r.error || "Couldn't start the install." });
       return;
@@ -300,6 +306,13 @@ function Creation({ d }: { d: Details }) {
               {wanted.length > playable.length && modes.data && (
                 <p className="muted small-note">Made for {wanted.filter((w) => !playable.some((p) => p.id === w)).join(", ")} too; add {wanted.length - playable.length === 1 ? "that mode" : "those modes"} in Mods to play {wanted.length - playable.length === 1 ? "it" : "them"}.</p>
               )}
+            </div>
+          ) : stage.state === "done" && stage.prefabs ? (
+            <div className="stack-tight">
+              <p className="cm-ok">Added to your prefab library: {stage.prefabs.join(", ")}.</p>
+              <div className="row">
+                <button className="btn primary" onClick={() => useNav.getState().go("tools", "editor:prefabs")}>Open the map editor</button>
+              </div>
             </div>
           ) : done ? (
             <p className="cm-ok">Installed.{d.kind === "spray" ? " Pick it in Get more > Sprays to use it." : ""}</p>
