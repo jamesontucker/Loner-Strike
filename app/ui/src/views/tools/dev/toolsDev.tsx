@@ -53,7 +53,8 @@ function Shell() {
     return subscribeAddress(() => {
       const u = new URL(location.href);
       u.searchParams.set("open", currentAddress() || "overview");
-      history.replaceState(null, "", u);
+      // (keeping the entry: Tools keeps its Back steps in it)
+      history.replaceState(history.state, "", u);
     });
   }, [go]);
 

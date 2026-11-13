@@ -2,6 +2,7 @@
 //
 //   ?          this sheet
 //   /          the page's search box (Ctrl/⌘+F too, when the page has one)
+//   Alt+← →    back and forward, Shift+Mod+Enter focus mode (common/shell.tsx)
 //
 // The lists below are what each tool's own key handlers do; keep them in step when a tool
 // gains a key. "Mod" shows as ⌘ on a Mac and Ctrl elsewhere.
@@ -23,6 +24,8 @@ const EVERYWHERE: Keys = [
   ["?", "This list of keys"],
   ["/", "Search (the page's search box)"],
   ["Esc", "Close this list, let go of the mouse, clear what's picked"],
+  ["Alt+← / Alt+→", "Back / forward (the mouse's back and forward buttons too; not in the map editor, where Alt+arrows nudge)"],
+  ["Shift+Mod+Enter", "Focus mode: the tool fills the window (again to come back)"],
 ];
 
 const VIEW_3D: Keys = [

@@ -1,0 +1,31 @@
+/* The Tools shell (common/shell.tsx): the trail above each tool's title, Back, Focus mode. */
+.tools-head { gap: 4px; }
+.tools-head .section-title { gap: 10px; }
+.tools-crumbs { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.tools-crumbs ol { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 0; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.tools-crumbs li { display: inline-flex; align-items: center; min-width: 0; color: var(--bone-faint); }
+.tools-crumbs li svg { flex: none; margin: 0 3px; opacity: .7; }
+.tools-crumb { max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 4px; border: 0; border-radius: 2px; background: none; color: var(--bone-faint); font: inherit; font-weight: 600; }
+button.tools-crumb { cursor: pointer; color: var(--signal); }
+button.tools-crumb:hover { text-decoration: underline; }
+.tools-crumb.here { color: var(--bone); }
+.tools-back { flex: none; display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px 2px 4px; border: 0; border-radius: 2px; background: var(--panel); box-shadow: var(--raised); color: var(--bone); font: inherit; font-weight: 600; cursor: pointer; }
+.tools-back:hover { background: var(--panel-2); }
+.tools-focus-btn { display: inline-flex; align-items: center; gap: 5px; }
+
+/* Focus mode: only the tool, the whole window */
+html[data-tools-focus] .shell { grid-template-columns: minmax(0, 1fr); }
+html[data-tools-focus] .shell > .sidebar,
+html[data-tools-focus] .shell > .tabbar,
+html[data-tools-focus] .main > :not(.content),
+html[data-tools-focus] .content > :not(.tools-start ~ *),
+html[data-tools-focus] .content > .tools-head { display: none; }
+html[data-tools-focus] .content { padding: 8px 10px; max-width: none !important; }
+/* pages sized against the window rather than their box get the room the app's frame had */
+html[data-tools-focus] .ps-main { height: max(480px, calc(100vh - 70px)); }
+html[data-tools-focus] .st-page,
+html[data-tools-focus] .st-page.playing { height: calc(100vh - 16px); }
+.tools-focus-pill { position: fixed; right: 12px; bottom: 12px; z-index: 60; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 0; border-radius: 999px; background: var(--panel-2); box-shadow: var(--raised), 0 4px 14px rgba(0, 0, 0, .45); color: var(--bone); font-size: 13px; font-weight: 600; cursor: pointer; opacity: .6; transition: opacity .15s; }
+.tools-focus-pill:hover, .tools-focus-pill:focus-visible { opacity: 1; }
+.tools-focus-pill kbd { font: 600 11px/1 var(--text); padding: 2px 5px; border-radius: 2px; background: var(--panel); color: var(--bone-faint); }
+@media (prefers-reduced-motion: reduce) { .tools-focus-pill { transition: none; } }
