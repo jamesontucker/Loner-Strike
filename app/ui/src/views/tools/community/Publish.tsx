@@ -1,0 +1,255 @@
+// Publish: package a map you made for GameBanana, then register its page so it shows up in
+// Community with its badges. Uploading happens on GameBanana's site (it has no upload API);
+// the app prepares everything to paste and checks the page afterwards.
+//
+// Other tools hand over a map with go("tools", "community:publish:<map>").
+
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { copyText } from "../../../api";
+import type { MapInfo } from "../../../types";
+import { BusyButton, LoadError, useToast } from "../../../ui";
+import { errorText, useBusy } from "../common/api";
+import { Loading, MapList } from "../common";
+import { publish, readiness, register, reveal, sizeText, startModes, type Form, type Package, type Shot } from "./communityApi";
+
+const MAX_SHOTS = 6;
+const MAX_SHOT = 8 << 20;
+
+export default function Publish({ maps, map, onMap, onDone }: { maps: MapInfo[]; map?: string; onMap: (m: string | undefined) => void; onDone: () => void }) {
+  if (!map)
+    return (
+      <div className="stack-tight">
+        <p className="muted measure">
+          Share a map you made. Loner-Strike checks it, packs it with its bot nav, map knowledge, download list and overview, and tells you exactly what to put on GameBanana. Once it's up, paste the link and it shows up here for everyone.
+        </p>
+        <MapList maps={maps} onPick={onMap} placeholder="Pick a map to publish" filter={(m) => m.source !== "stock"} none="Only maps you made or added can be published; the game's own maps can't." note={(m) => (m.nav ? null : "no bot nav yet")} />
+      </div>
+    );
+  return <PublishMap map={map} onBack={() => onMap(undefined)} onDone={onDone} />;
+}
+
+function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const q = useQuery({ queryKey: ["tools", "community", "ready", map], queryFn: ({ signal }) => readiness(map, signal), retry: false });
+  const modes = useQuery({ queryKey: ["tools", "community", "modes"], queryFn: () => startModes(), staleTime: 60_000 });
+  const [title, setTitle] = useState("");
+  const [summary, setSummary] = useState("");
+  const [author, setAuthor] = useState(() => {
+    try {
+      return localStorage.getItem("ls.community.author") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [picked, setPicked] = useState<string[]>([]);
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
+  const { working, run } = useBusy();
+
+  useEffect(() => {
+    if (!q.data) return;
+    setTitle((t) => t || q.data.ready.title);
+    setPicked((p) => (p.length ? p : q.data.suggestedModes));
+  }, [q.data]);
+
+  const head = (
+    <div className="tl-head">
+      <div className="tl-head-title">
+        <h3>Publish {map}</h3>
+      </div>
+      <div className="tl-head-actions">
+        <button className="btn" onClick={onBack}>Pick another map</button>
+        <BusyButton className="btn" busy={q.isFetching} label="Check again" busyLabel="Checking…" onClick={() => q.refetch()} />
+      </div>
+    </div>
+  );
+  if (q.isPending) return <div className="panel">{head}<Loading text={`Checking ${map}…`} /></div>;
+  if (q.isError) return <div className="panel">{head}<LoadError text={errorText(q.error, "Couldn't check that map.")} onRetry={() => q.refetch()} /></div>;
+  const r = q.data.ready;
+  if (done) return <div className="panel">{head}<Upload pkg={done.pkg} form={done.form} onDone={onDone} /></div>;
+
+  const addShots = async (files: FileList | null) => {
+    if (!files) return;
+    const room = MAX_SHOTS - shots.length;
+    const list = Array.from(files).slice(0, Math.max(0, room));
+    const read: Shot[] = [];
+    for (const f of list) {
+      if (!/^image\/(png|jpeg)$/.test(f.type)) {
+        toast(`${f.name} isn't a PNG or JPEG picture.`, true);
+        continue;
+      }
+      if (f.size > MAX_SHOT) {
+        toast(`${f.name} is over 8 MB.`, true);
+        continue;
+      }
+      const data = await new Promise<string>((ok, bad) => {
+        const fr = new FileReader();
+        fr.onload = () => ok(String(fr.result));
+        fr.onerror = () => bad(fr.error);
+        fr.readAsDataURL(f);
+      }).catch(() => "");
+      if (data) read.push({ name: f.name, data });
+    }
+    if (files.length > room) toast(`At most ${MAX_SHOTS} screenshots.`, true);
+    setShots((s) => [...s, ...read]);
+  };
+
+  const build = () =>
+    run("Packing…", async () => {
+      try {
+        localStorage.setItem("ls.community.author", author.trim());
+      } catch {
+        /* remembered next time, maybe */
+      }
+      const res = await publish(map, { title, summary, author, modes: picked, screenshots: shots });
+      if (res.error) return toast(res.error, true);
+      setDone({ pkg: res.package, form: res.form });
+    });
+
+  const allModes = modes.data?.modes ?? [];
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const blocked = r.blockers.length > 0;
+
+  return (
+    <div className="panel">
+      {head}
+      <section className="cm-ready">
+        {r.blockers.map((b) => <p key={b} className="cm-line bad">{b}</p>)}
+        {r.warnings.map((w) => <p key={w} className="cm-line warn">{w}</p>)}
+        {!blocked && r.warnings.length === 0 && <p className="cm-line ok">Ready to share.</p>}
+        {r.tips.map((t) => <p key={t} className="cm-line tip">{t}</p>)}
+        <p className="muted small-note">
+          Goes in the package: the map{r.map.nav ? ", its bot nav" : ""}{r.map.lsv ? ", finished bot map knowledge" : ""}, a fresh download list (.res)
+          {r.files.length ? ` and ${r.files.length} file${r.files.length === 1 ? "" : "s"} it uses (${r.files.slice(0, 4).join(", ")}${r.files.length > 4 ? "…" : ""})` : ""}.
+          {r.health ? ` Health check from ${new Date(r.health.when * 1000).toLocaleDateString()}: ${r.health.verdict}.` : ""}
+        </p>
+      </section>
+
+      {!blocked && (
+        <form className="cm-form" onSubmit={(e) => { e.preventDefault(); build(); }}>
+          <label className="cm-field">
+            <span>Name</span>
+            <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="What players will see" />
+          </label>
+          <label className="cm-field">
+            <span>Made by</span>
+            <input value={author} maxLength={40} onChange={(e) => setAuthor(e.target.value)} placeholder="Your GameBanana name" />
+          </label>
+          <label className="cm-field cm-wide">
+            <span>About it</span>
+            <textarea value={summary} maxLength={400} rows={3} onChange={(e) => setSummary(e.target.value)} placeholder="One or two sentences: what it is and what makes it fun" />
+          </label>
+          <fieldset className="cm-field cm-wide">
+            <legend>Game modes it's made for</legend>
+            {allModes.length ? (
+              <div className="cm-modes">
+                {allModes.map((m) => (
+                  <label key={m.id} className="check-row">
+                    <input type="checkbox" checked={picked.includes(m.id)} onChange={() => toggle(m.id)} /> {m.name}
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="muted small-note">{modes.isPending ? "Loading modes…" : "No modes found in your game; it'll be listed for the usual mode."}</p>
+            )}
+          </fieldset>
+          <div className="cm-field cm-wide">
+            <span>Screenshots ({shots.length}/{MAX_SHOTS})</span>
+            <div className="cm-shots">
+              {shots.map((s, i) => (
+                <figure key={i}>
+                  <img src={s.data} alt={s.name} />
+                  <button type="button" className="btn small" onClick={() => setShots(shots.filter((_, j) => j !== i))} aria-label={`Remove ${s.name}`}>Remove</button>
+                </figure>
+              ))}
+              {shots.length < MAX_SHOTS && (
+                <label className="btn cm-add">
+                  Add pictures
+                  <input type="file" accept="image/png,image/jpeg" multiple hidden onChange={(e) => { addShots(e.target.files); e.target.value = ""; }} />
+                </label>
+              )}
+            </div>
+            <p className="muted small-note">PNG or JPEG, up to 8 MB each. Shots from the map viewer work well. They're saved next to the package for GameBanana's picture upload.</p>
+          </div>
+          <div className="cm-wide row">
+            <BusyButton type="submit" className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={!title.trim() || !author.trim()} />
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function CopyRow({ label, value, long }: { label: string; value: string; long?: boolean }) {
+  const toast = useToast();
+  return (
+    <div className="cm-copy">
+      <span className="muted small-note">{label}</span>
+      {long ? <textarea readOnly rows={6} value={value} /> : <input readOnly value={value} />}
+      <button type="button" className="btn small" onClick={async () => toast((await copyText(value)) ? "Copied." : "Couldn't copy.", false)}>Copy</button>
+    </div>
+  );
+}
+
+function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () => void }) {
+  const toast = useToast();
+  const [url, setUrl] = useState("");
+  const { working, run } = useBusy();
+  const [result, setResult] = useState<{ state: "sent" | "waiting"; copy: string } | null>(null);
+
+  const show = async () => {
+    const r = await reveal(pkg.file);
+    if (r.error) toast(r.error, true);
+  };
+  const send = () =>
+    run("Checking the page…", async () => {
+      const r = await register(url.trim(), pkg.file);
+      if (r.error) return toast(r.error, true);
+      setResult({ state: r.state, copy: r.copy });
+    });
+
+  return (
+    <div className="cm-upload stack-tight">
+      <p className="cm-line ok">Package made: <code>{pkg.file}</code> ({sizeText(pkg.size)}, {pkg.contents.length} files{pkg.screenshots.length ? `, ${pkg.screenshots.length} screenshots beside it` : ""}).</p>
+      {pkg.warnings.map((w) => <p key={w} className="cm-line warn">{w}</p>)}
+      <ol className="cm-steps">
+        <li>
+          <strong>Find the package.</strong> <button className="btn small" onClick={show}>Show it in the folder</button>
+        </li>
+        <li>
+          <strong>Open GameBanana's submit page</strong> (sign in there), choose {form.game} &gt; {form.category}.{" "}
+          <a className="btn small primary" href={form.submitUrl} target="_blank" rel="noreferrer">Open GameBanana</a>
+          <div className="cm-copies">
+            <CopyRow label="Name" value={form.title} />
+            <CopyRow label="Description" value={form.text} long />
+            <CopyRow label={`Attribute: ${form.tag.title}`} value={form.tag.value} />
+          </div>
+          <p className="muted small-note">
+            Add the attribute <code>{form.tag.title}: {form.tag.value}</code> (it's how Community finds it), upload <code>{form.file}</code> unchanged, and add the screenshots.
+          </p>
+        </li>
+        <li>
+          <strong>Paste the page's link</strong> once GameBanana has checked the file:
+          <form className="row cm-register" onSubmit={(e) => { e.preventDefault(); send(); }}>
+            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://gamebanana.com/mods/…" aria-label="GameBanana link" />
+            <BusyButton type="submit" className="btn primary" busy={working !== null} busyLabel={working ?? "Checking…"} label="Add to Community" disabled={!url.trim()} />
+          </form>
+        </li>
+      </ol>
+      {result && (
+        <div className="cm-result" role="status">
+          {result.state === "sent" ? (
+            <p className="cm-line ok">Sent. It shows up in Community once the Loner-Strike list is updated.</p>
+          ) : (
+            <>
+              <p className="cm-line warn">The page checks out, but the Loner-Strike list isn't taking new entries from the app yet. It's kept here and sent automatically later; you can also post this in the Loner-Strike Discord:</p>
+              <CopyRow label="Entry" value={result.copy} long />
+            </>
+          )}
+          <button className="btn" onClick={onDone}>See what you've published</button>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,89 @@
+/* Community creations (views/tools/community). */
+.cm-tabs { display: flex; }
+.cm-toolbar { flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.cm-toolbar .search { flex: 1 1 220px; min-width: 0; }
+.cm-sort { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+.cm-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.cm-card { width: 100%; height: 100%; display: grid; grid-template-rows: auto 1fr; padding: 0; border: 0; border-radius: 3px; overflow: hidden; background: var(--panel); box-shadow: var(--raised); color: var(--bone); text-align: left; cursor: pointer; }
+.cm-card:hover { background: var(--panel-2); }
+.cm-card:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.cm-thumb { display: block; aspect-ratio: 16 / 9; background: var(--bg); overflow: hidden; }
+.cm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cm-noimg { display: grid; place-items: center; width: 100%; height: 100%; color: var(--bone-faint); font-weight: 700; }
+.cm-card-body { display: grid; gap: 4px; align-content: start; padding: 10px 12px 12px; min-width: 0; }
+.cm-card-title { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cm-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.cm-badge, .cm-trust { font-size: 11px; padding: 0 6px; white-space: nowrap; }
+.cm-badge-bots, .cm-badge-checked { background: var(--ok); color: var(--signal-ink); }
+.cm-badge-featured { background: var(--signal); color: var(--signal-ink); }
+.cm-trust-verified { background: var(--warn); color: var(--signal-ink); }
+.cm-trust-unreviewed { background: var(--weak); color: var(--signal-ink); }
+
+.cm-detail { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; margin-top: 10px; }
+@media (max-width: 900px) { .cm-detail { grid-template-columns: minmax(0, 1fr); } }
+.cm-media { display: grid; gap: 8px; align-content: start; }
+.cm-shot { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 2px; background: var(--bg); box-shadow: var(--sunken); }
+.cm-thumbs { display: flex; gap: 6px; flex-wrap: wrap; }
+.cm-thumbs button { padding: 0; border: 2px solid transparent; border-radius: 2px; background: none; cursor: pointer; width: 72px; aspect-ratio: 16 / 9; overflow: hidden; }
+.cm-thumbs button[aria-pressed="true"] { border-color: var(--signal); }
+.cm-thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cm-info { min-width: 0; }
+.cm-summary { margin: 0; font-size: 15px; }
+.cm-trustline { margin: 0; padding: 8px 10px; border-left: 3px solid var(--ok); background: var(--bg); font-size: 14px; }
+.cm-trustline.warn { border-color: var(--warn); }
+.cm-trustline.bad { border-color: var(--weak); }
+.cm-facts { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: 14px; }
+.cm-try { display: grid; gap: 8px; padding: 10px 0; }
+.cm-try > .btn.primary { justify-self: start; }
+.cm-confirm { padding: 10px 12px; background: var(--bg); border-left: 3px solid var(--warn); display: grid; gap: 8px; }
+.cm-confirm p { margin: 0; }
+.cm-progress { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+.cm-progress .spinner { margin: 0; }
+.cm-play { flex-wrap: wrap; }
+.cm-ok { color: var(--ok); font-weight: 600; margin: 0; }
+.cm-warn { color: var(--warn); }
+.cm-bad { color: var(--weak); font-weight: 600; margin: 0; }
+.cm-more summary { cursor: pointer; color: var(--bone-dim); font-size: 14px; }
+.cm-text { white-space: pre-line; font-size: 14px; color: var(--bone-dim); overflow-wrap: anywhere; }
+.cm-files { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
+.cm-files li { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; font-size: 14px; }
+.cm-files code { overflow-wrap: anywhere; }
+
+/* publish */
+.cm-ready { display: grid; gap: 4px; margin: 10px 0; }
+.cm-line { margin: 0; padding-left: 22px; position: relative; overflow-wrap: anywhere; }
+.cm-line::before { position: absolute; left: 0; top: 0; width: 16px; text-align: center; font-weight: 800; }
+.cm-line.ok::before { content: "✓"; color: var(--ok); }
+.cm-line.warn::before { content: "!"; color: var(--warn); }
+.cm-line.bad::before { content: "✕"; color: var(--weak); }
+.cm-line.tip::before { content: "·"; color: var(--bone-faint); }
+.cm-line.tip { color: var(--bone-dim); font-size: 14px; }
+.cm-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; margin-top: 8px; }
+@media (max-width: 700px) { .cm-form { grid-template-columns: minmax(0, 1fr); } }
+.cm-field { display: grid; gap: 4px; min-width: 0; border: 0; padding: 0; margin: 0; }
+.cm-field > span, .cm-field > legend { font-weight: 600; font-size: 14px; padding: 0; }
+.cm-field input, .cm-field textarea { width: 100%; min-width: 0; }
+.cm-wide { grid-column: 1 / -1; }
+.cm-modes { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.cm-modes .check-row { white-space: nowrap; font-weight: 400; }
+.cm-shots { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.cm-shots figure { margin: 0; display: grid; gap: 4px; justify-items: start; }
+.cm-shots img { width: 140px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 2px; box-shadow: var(--sunken); }
+.cm-add { cursor: pointer; }
+.cm-steps { margin: 0; padding-left: 20px; display: grid; gap: 14px; }
+.cm-steps li { overflow-wrap: anywhere; }
+.cm-copies { display: grid; gap: 6px; margin: 8px 0; }
+.cm-copy { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+@media (max-width: 700px) { .cm-copy { grid-template-columns: minmax(0, 1fr) auto; } .cm-copy > span { grid-column: 1 / -1; } }
+.cm-copy input, .cm-copy textarea { width: 100%; min-width: 0; font-size: 13px; }
+.cm-register { margin-top: 6px; flex-wrap: wrap; }
+.cm-register input { flex: 1 1 260px; min-width: 0; }
+.cm-result { display: grid; gap: 8px; justify-items: start; }
+
+/* yours */
+.cm-mine { list-style: none; margin: 0; padding: 0; display: grid; }
+.cm-mine li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid rgba(0, 0, 0, .18); }
+.cm-mine li:first-child { border-top: 0; }
+.cm-mine li > div { min-width: 0; overflow-wrap: anywhere; }
