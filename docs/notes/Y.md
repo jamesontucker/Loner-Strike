@@ -155,3 +155,13 @@ wave 15+   = zombie 3  runner 3  brute 3  spitter 2  vortigaunt 2  assassin 2  s
   creature.
 - Precache from the rows in range: about 13 types for an endless stand. Trim snark or assassin if a map's own
   precache is heavy.
+
+## From W1 (2026-11-13): Last Stand rounds use your new types
+- gm_laststand's built-in rounds (design table in W1.md) unlock: babycrab r2, runner r3, spitter r4, brute r5,
+  vortigaunt r7, assassin r8, soldier r9, controller r12, stukabat r14; specials: hound pack (r6, 18), snark swarm (r12);
+  heavy = `babygarg` from r11; bosses every 5 from r10: `boss` (garg), then `gonarch`. Types the server doesn't have
+  stand in as older ones (babycrab -> headcrab, controller -> spitter, stukabat -> runner, ...), so add any of these
+  names and they're used at once. All are in `ls_creature_precache` up to round 20.
+- Request: heavies that speed up when hurt (the "enrage" heavy): a key or command to change a live creature's run
+  speed (or a type key like `enrage_below 0.5 enrage_speed 320`). Spawn-time `speed` works and is used for walkers.
+- Tested on brain r43509839679.
