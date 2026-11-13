@@ -2198,6 +2198,10 @@
        "Capture point"
       ],
       [
+       "ls_safe_zone",
+       "Safe zone"
+      ],
+      [
        "ls_zone_shrinker",
        "Shrinking zone"
       ],
@@ -2259,7 +2263,7 @@
    "type": "comp.zone_set",
    "title": "Set Zone",
    "category": "Components",
-   "help": "Sets a shrinking zone's radius, and moves its centre to an entity wired into Centre or the one with this name (no name: it stays where it is).",
+   "help": "Sets a safe zone's radius (wire the Safe zone, or the Shrinking zone that drives it), and moves its centre to an entity wired into Centre or the one with this name (no name: it stays where it is).",
    "inputs": [
     {
      "id": "exec",
@@ -2314,7 +2318,7 @@
    "type": "comp.zone_shrink",
    "title": "Shrink Zone",
    "category": "Components",
-   "help": "Shrinks a zone over some seconds to a new radius, around an entity wired into Centre or the one with this name (no name: its centre stays).",
+   "help": "Shrinks a safe zone (or a Shrinking zone's) over some seconds to a new radius, around an entity wired into Centre or the one with this name (no name: its centre stays).",
    "inputs": [
     {
      "id": "exec",
@@ -6891,6 +6895,41 @@
      "id": "marker",
      "label": "Marker",
      "kind": "marker",
+     "default": ""
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "marker.get",
+   "title": "Marker Key",
+   "category": "Map markers",
+   "help": "A key the map set on a marker (the kit's default when the map left it out), as text and as a number.",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Marker",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Text"
+    },
+    {
+     "id": "num",
+     "type": "number",
+     "label": "Number"
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Key",
+     "kind": "name",
      "default": ""
     }
    ],

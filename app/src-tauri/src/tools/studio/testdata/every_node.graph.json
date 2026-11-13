@@ -4329,14 +4329,76 @@
    "graph": "fc"
   },
   {
-   "id": "fc_pr",
-   "type": "debug.print",
+   "id": "mk_fe",
+   "type": "marker.for_each",
    "pos": {
     "x": 1300,
     "y": 6820
    },
    "params": {
+    "marker": "spot"
+   },
+   "graph": "fc"
+  },
+  {
+   "id": "fc_pr",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": 6820
+   },
+   "params": {
     "text": "tick",
+    "chat": false
+   },
+   "graph": "fc"
+  },
+  {
+   "id": "mk_get",
+   "type": "marker.get",
+   "pos": {
+    "x": 1820,
+    "y": 6820
+   },
+   "params": {
+    "key": "wave"
+   },
+   "graph": "fc"
+  },
+  {
+   "id": "mk_cnt",
+   "type": "marker.count",
+   "pos": {
+    "x": 1820,
+    "y": 6820
+   },
+   "params": {
+    "marker": "spot"
+   },
+   "graph": "fc"
+  },
+  {
+   "id": "mk_find",
+   "type": "marker.find",
+   "pos": {
+    "x": 1820,
+    "y": 6820
+   },
+   "params": {
+    "marker": "route",
+    "n": 2
+   },
+   "graph": "fc"
+  },
+  {
+   "id": "mk_pr",
+   "type": "debug.print",
+   "pos": {
+    "x": 2080,
+    "y": 6820
+   },
+   "params": {
+    "text": "Route spot:",
     "chat": false
    },
    "graph": "fc"
@@ -4386,61 +4448,6 @@
    },
    "params": {},
    "graph": "ma"
-  },
-  {
-   "id": "mk_ev",
-   "type": "event.map_started",
-   "pos": {
-    "x": 0,
-    "y": 7260
-   },
-   "params": {}
-  },
-  {
-   "id": "mk_fe",
-   "type": "marker.for_each",
-   "pos": {
-    "x": 260,
-    "y": 7260
-   },
-   "params": {
-    "marker": "spot"
-   }
-  },
-  {
-   "id": "mk_cnt",
-   "type": "marker.count",
-   "pos": {
-    "x": 260,
-    "y": 7260
-   },
-   "params": {
-    "marker": "spot"
-   }
-  },
-  {
-   "id": "mk_find",
-   "type": "marker.find",
-   "pos": {
-    "x": 520,
-    "y": 7260
-   },
-   "params": {
-    "marker": "route",
-    "n": 2
-   }
-  },
-  {
-   "id": "mk_pr",
-   "type": "debug.print",
-   "pos": {
-    "x": 780,
-    "y": 7260
-   },
-   "params": {
-    "text": "Route spot:",
-    "chat": false
-   }
   }
  ],
  "edges": [
@@ -10270,81 +10277,37 @@
     "pin": "then"
    },
    "to": {
-    "node": "fc_pr",
+    "node": "mk_fe",
     "pin": "exec"
    }
   },
   {
    "id": "w531",
    "from": {
-    "node": "ma_e",
-    "pin": "go"
+    "node": "mk_fe",
+    "pin": "then"
    },
    "to": {
-    "node": "ma_pr",
+    "node": "fc_pr",
     "pin": "exec"
    }
   },
   {
    "id": "w532",
    "from": {
-    "node": "ma_e",
-    "pin": "v"
+    "node": "mk_fe",
+    "pin": "entity"
    },
    "to": {
-    "node": "ma_pr",
-    "pin": "value"
+    "node": "mk_get",
+    "pin": "in"
    }
   },
   {
    "id": "w533",
    "from": {
-    "node": "ma_e",
-    "pin": "v"
-   },
-   "to": {
-    "node": "ma_m",
-    "pin": "a"
-   }
-  },
-  {
-   "id": "w534",
-   "from": {
-    "node": "ma_pr",
-    "pin": "then"
-   },
-   "to": {
-    "node": "ma_x",
-    "pin": "done"
-   }
-  },
-  {
-   "id": "w535",
-   "from": {
-    "node": "ma_m",
-    "pin": "out"
-   },
-   "to": {
-    "node": "ma_x",
-    "pin": "r"
-   }
-  },
-  {
-   "id": "w536",
-   "from": {
-    "node": "mk_ev",
-    "pin": "then"
-   },
-   "to": {
-    "node": "mk_fe",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w537",
-   "from": {
-    "node": "mk_cnt",
-    "pin": "out"
+    "node": "mk_get",
+    "pin": "num"
    },
    "to": {
     "node": "mk_find",
@@ -10352,7 +10315,7 @@
    }
   },
   {
-   "id": "w538",
+   "id": "w534",
    "from": {
     "node": "mk_fe",
     "pin": "each"
@@ -10363,7 +10326,7 @@
    }
   },
   {
-   "id": "w539",
+   "id": "w535",
    "from": {
     "node": "mk_find",
     "pin": "pos"
@@ -10371,6 +10334,72 @@
    "to": {
     "node": "mk_pr",
     "pin": "value"
+   }
+  },
+  {
+   "id": "w536",
+   "from": {
+    "node": "mk_cnt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fc_pr",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w537",
+   "from": {
+    "node": "ma_e",
+    "pin": "go"
+   },
+   "to": {
+    "node": "ma_pr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w538",
+   "from": {
+    "node": "ma_e",
+    "pin": "v"
+   },
+   "to": {
+    "node": "ma_pr",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w539",
+   "from": {
+    "node": "ma_e",
+    "pin": "v"
+   },
+   "to": {
+    "node": "ma_m",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w540",
+   "from": {
+    "node": "ma_pr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ma_x",
+    "pin": "done"
+   }
+  },
+  {
+   "id": "w541",
+   "from": {
+    "node": "ma_m",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ma_x",
+    "pin": "r"
    }
   }
  ],

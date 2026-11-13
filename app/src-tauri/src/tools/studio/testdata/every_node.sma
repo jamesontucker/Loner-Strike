@@ -15,7 +15,7 @@
 #define LSG_MODE "every_node"
 #define LSG_CTX 24
 #define LSG_TXT 2
-#define LSG_N 251
+#define LSG_N 250
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -59,6 +59,26 @@ stock g_v19 = 0 // Seen (Array of Player)
 stock Float:g_lsgDmg, bool:g_lsgDmgBlock
 stock g_lsgNoFall[33]
 stock g_lsgM93[33][LSG_CTX]
+// the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
+stock lsg_zone_of(ent)
+{
+	new k[24], name[32], tn[32], z
+	if (ent <= 0 || !ls_comp_kind(ent, k, charsmax(k)))
+		return 0
+	if (equal(k, "ls_safe_zone"))
+		return ent
+	if (!equal(k, "ls_zone_shrinker"))
+		return 0
+	ls_comp_get(ent, "zone", name, charsmax(name))
+	while ((z = ls_comp_find("ls_safe_zone", z)) > 0)
+	{
+		pev(z, pev_targetname, tn, charsmax(tn))
+		if (!name[0] || equal(tn, name))
+			return z
+	}
+	return 0
+}
+
 // counted now (the brain's ls_creature_alive is only brought up to date a moment later)
 stock lsg_creatures_alive()
 {
@@ -2199,7 +2219,6 @@ public lsg_on_map_started()
 {
 	new ctx[LSG_CTX]
 	lsg_n122(ctx)
-	lsg_n247(ctx)
 }
 
 public lsg_on_new_round()
@@ -2750,9 +2769,9 @@ lsg_n50(ctx[])
 // Shrink Zone (zs_shrink)
 lsg_n51(ctx[])
 {
-	new Float:o[3]
-	if (!!ls_components_running() && lsg_origin_of("mid", o))
-		ls_zone_shrink(ctx[0], o, ((Float:ctx[1]) * (100.0)), 20.0)
+	new Float:o[3], zz = !ls_components_running() ? 0 : lsg_zone_of(ctx[0])
+	if (zz && lsg_origin_of("mid", o))
+		ls_zone_shrink(zz, o, ((Float:ctx[1]) * (100.0)), 20.0)
 }
 
 // Zone Hurt Player (zt)
@@ -2764,9 +2783,9 @@ lsg_n52(ctx[])
 // Set Zone (zt_set)
 lsg_n53(ctx[])
 {
-	new Float:o[3]
-	if (!!ls_components_running() && lsg_origin_of("mid", o))
-		ls_zone_set(ctx[0], o, 900.0)
+	new Float:o[3], zz = !ls_components_running() ? 0 : lsg_zone_of(ctx[0])
+	if (zz && lsg_origin_of("mid", o))
+		ls_zone_set(zz, o, 900.0)
 	lsg_n54(ctx)
 }
 
@@ -4180,7 +4199,7 @@ lsg_n212(ctx[])
 lsg_n213(ctx[])
 {
 	lsg_tclear(g_v17)
-	lsg_n250(ctx)
+	lsg_n249(ctx)
 }
 
 // Print String (d_pr7)
@@ -4531,23 +4550,8 @@ stock lsg_n245(ctx[])
 	lsg_n246(ctx)
 }
 
-// Print String (fc_pr)
-stock lsg_n246(ctx[])
-{
-	new t[192]
-	formatex(t, charsmax(t), "%s", "tick")
-	server_print("[%s] %s", LSG_MODE, t)
-	#pragma unused ctx
-}
-
-// Map Started (mk_ev)
-lsg_n247(ctx[])
-{
-	lsg_n248(ctx)
-}
-
 // For Each Marker (mk_fe)
-lsg_n248(ctx[])
+stock lsg_n246(ctx[])
 {
 	new c[LSG_CTX], count
 	for (new m = 0; m < g_lsgMkN; m++)
@@ -4559,22 +4563,33 @@ lsg_n248(ctx[])
 			c[j] = ctx[j]
 		c[22] = g_lsgMkEnt[m]
 		c[23] = _:float(count)
-		lsg_n249(c)
+		lsg_n248(c)
+		if (g_lsgFD2)
+			return
 	}
 	#pragma unused count
+	lsg_n247(ctx)
 }
 
-// Print String (mk_pr)
-lsg_n249(ctx[])
+// Print String (fc_pr)
+stock lsg_n247(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Route spot:", lsg_vtext(lsg_vent(lsg_mk_get(1, floatround(float(lsg_mk_count(0)))))))
+	formatex(t, charsmax(t), "%s %d", "tick", floatround(float(lsg_mk_count(0))))
 	server_print("[%s] %s", LSG_MODE, t)
 	#pragma unused ctx
 }
 
+// Print String (mk_pr)
+stock lsg_n248(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Route spot:", lsg_vtext(lsg_vent(lsg_mk_get(1, floatround(str_to_float(lsg_mk_key(ctx[22], "wave")))))))
+	server_print("[%s] %s", LSG_MODE, t)
+}
+
 // Print String (d_mac)
-lsg_n250(ctx[])
+lsg_n249(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "In the macro:", floatround(3.0))

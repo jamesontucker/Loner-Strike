@@ -16,7 +16,7 @@
 #define LSG_MODE "every_node"
 #define LSG_CTX 24
 #define LSG_TXT 2
-#define LSG_N 251
+#define LSG_N 250
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -60,9 +60,9 @@ stock g_v19 = 0 // Seen (Array of Player)
 stock Float:g_lsgDmg, bool:g_lsgDmgBlock
 stock g_lsgNoFall[33]
 stock g_lsgM93[33][LSG_CTX]
-#define LSD_N 251
-new const g_lsdIds[LSD_N][] = { "rs", "rs_set", "rs_cd", "rs_msg", "rs_rep", "rs_hud", "rs_delay", "rs_wave", "rs_wstop", "rs_reset", "pk", "pk_br", "pk_add", "pk_add2", "pk_team", "pk_give", "pk_seth", "pk_hud", "ps", "ps_strip", "ps_arm", "ps_spd", "ps_team", "ps_tp", "ps_set", "pj", "pj_hud", "pj_br", "pl", "pl_set", "bp", "bp_hud", "bd", "bd_end", "bx", "bx_end", "re", "re_br", "re_set", "re_stop", "pu", "pu_door", "pu_trap", "pt", "pt_crate", "cc", "cc_lock", "cc_hud", "cl", "cl_ex", "zs", "zs_shrink", "zt", "zt_set", "zt_hud", "ex", "ex_add", "ws", "ws_hud", "wp", "wp_hud", "wc", "wc_start", "lo", "lo_hud", "ck", "ck_set", "bb", "bb_msg", "me", "me_hud", "ck2", "ck2_set", "ck2_make", "ck2_spawn", "ck2_hud", "ck2_hud2", "hurt", "hurt_tadd", "hurt_glow", "tc", "tc_model", "nr", "nr_cvar", "nr_each", "nr_resp", "nr_pick", "nr_ents", "nr_use", "nr_set", "nr_stop", "nr_hud", "cmd", "cmd_menu", "cmd_arm", "cmd_money", "cmd_grav", "cmd_bar", "cmd_chat", "fn", "fn_frag", "fn_snd", "fn_role", "pk2", "pk2_call", "pk2_pick", "pk2_bot", "pk2_hold", "pk2_follow", "pk2_free", "pk2_drop", "pk2_fr", "pk2_kill", "lo2", "lo2_br", "lo2_pick", "lo2_br2", "lo2_resp", "lo2_drop", "lo2_hud", "lo2_br3", "lo2_end", "ms", "ms_pack", "ms_pick", "ms_start", "ms_stop", "ms_make", "ms_drop", "ms_each", "ms_tp", "ah", "ah_br", "ah_block", "ah_scale", "ah_set", "dk", "dk_down", "rv", "rv_hud", "to", "to_add", "to_set", "to_hud", "to_br", "sq", "sq_nf", "sq_set", "sq_ff", "sq_hud", "sq_buy", "sq_allow", "sq_up", "sq_goto", "ck3", "ck3_set", "ck3_add", "ck3_p", "ck3_r", "ck3_hud", "tu", "tu_end", "a0", "a_seq", "a_for", "a_add", "a_sort", "a_shuf", "a_ins", "a_rmi", "a_aset", "a_arem", "a_fe", "a_br", "a_pr", "a_pr2", "a_clr", "b_set", "b_wh", "b_add", "b_sw", "b_pr1", "b_sn", "b_pr2", "b_pr3", "c_each", "c_setp", "c_pos", "c_vel", "c_pr", "c_sl", "c_sf", "c_sf2", "c_push", "c_pr2", "c_sw", "c_pr3", "c_pr4", "d_each", "d_madd", "d_call", "d_pr", "d_pr2", "d_tadd", "d_vadd", "d_rem", "d_pr3", "d_mclr", "d_pr4", "d_pr5", "d_tbf", "d_tset", "d_pr6", "d_tclr", "d_pr7", "e0", "e_once", "e_n", "e_gate", "e_ff", "e_iv", "e_rt", "e_pr", "e_pr2", "e_seq", "f0", "f_brk", "f_br", "f_pr", "f_pr2", "f_pr3", "f_pr4", "f_setc", "f_sw", "f_pr5", "f_sp", "f_pr6", "fa_e", "fa_set", "fa_push", "fa_br", "fa_r1", "fa_r2", "fb_e", "fb_r", "fc_e", "fc_pr", "mk_ev", "mk_fe", "mk_pr", "d_mac" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 250
+new const g_lsdIds[LSD_N][] = { "rs", "rs_set", "rs_cd", "rs_msg", "rs_rep", "rs_hud", "rs_delay", "rs_wave", "rs_wstop", "rs_reset", "pk", "pk_br", "pk_add", "pk_add2", "pk_team", "pk_give", "pk_seth", "pk_hud", "ps", "ps_strip", "ps_arm", "ps_spd", "ps_team", "ps_tp", "ps_set", "pj", "pj_hud", "pj_br", "pl", "pl_set", "bp", "bp_hud", "bd", "bd_end", "bx", "bx_end", "re", "re_br", "re_set", "re_stop", "pu", "pu_door", "pu_trap", "pt", "pt_crate", "cc", "cc_lock", "cc_hud", "cl", "cl_ex", "zs", "zs_shrink", "zt", "zt_set", "zt_hud", "ex", "ex_add", "ws", "ws_hud", "wp", "wp_hud", "wc", "wc_start", "lo", "lo_hud", "ck", "ck_set", "bb", "bb_msg", "me", "me_hud", "ck2", "ck2_set", "ck2_make", "ck2_spawn", "ck2_hud", "ck2_hud2", "hurt", "hurt_tadd", "hurt_glow", "tc", "tc_model", "nr", "nr_cvar", "nr_each", "nr_resp", "nr_pick", "nr_ents", "nr_use", "nr_set", "nr_stop", "nr_hud", "cmd", "cmd_menu", "cmd_arm", "cmd_money", "cmd_grav", "cmd_bar", "cmd_chat", "fn", "fn_frag", "fn_snd", "fn_role", "pk2", "pk2_call", "pk2_pick", "pk2_bot", "pk2_hold", "pk2_follow", "pk2_free", "pk2_drop", "pk2_fr", "pk2_kill", "lo2", "lo2_br", "lo2_pick", "lo2_br2", "lo2_resp", "lo2_drop", "lo2_hud", "lo2_br3", "lo2_end", "ms", "ms_pack", "ms_pick", "ms_start", "ms_stop", "ms_make", "ms_drop", "ms_each", "ms_tp", "ah", "ah_br", "ah_block", "ah_scale", "ah_set", "dk", "dk_down", "rv", "rv_hud", "to", "to_add", "to_set", "to_hud", "to_br", "sq", "sq_nf", "sq_set", "sq_ff", "sq_hud", "sq_buy", "sq_allow", "sq_up", "sq_goto", "ck3", "ck3_set", "ck3_add", "ck3_p", "ck3_r", "ck3_hud", "tu", "tu_end", "a0", "a_seq", "a_for", "a_add", "a_sort", "a_shuf", "a_ins", "a_rmi", "a_aset", "a_arem", "a_fe", "a_br", "a_pr", "a_pr2", "a_clr", "b_set", "b_wh", "b_add", "b_sw", "b_pr1", "b_sn", "b_pr2", "b_pr3", "c_each", "c_setp", "c_pos", "c_vel", "c_pr", "c_sl", "c_sf", "c_sf2", "c_push", "c_pr2", "c_sw", "c_pr3", "c_pr4", "d_each", "d_madd", "d_call", "d_pr", "d_pr2", "d_tadd", "d_vadd", "d_rem", "d_pr3", "d_mclr", "d_pr4", "d_pr5", "d_tbf", "d_tset", "d_pr6", "d_tclr", "d_pr7", "e0", "e_once", "e_n", "e_gate", "e_ff", "e_iv", "e_rt", "e_pr", "e_pr2", "e_seq", "f0", "f_brk", "f_br", "f_pr", "f_pr2", "f_pr3", "f_pr4", "f_setc", "f_sw", "f_pr5", "f_sp", "f_pr6", "fa_e", "fa_set", "fa_push", "fa_br", "fa_r1", "fa_r2", "fb_e", "fb_r", "fc_e", "mk_fe", "fc_pr", "mk_pr", "d_mac" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -300,6 +300,17 @@ stock lsd_in_team(const name[], team)
 	new q[16]
 	formatex(q, charsmax(q), "^"%s^"", g_lsdTeams[t])
 	lsd_in_raw(name, q)
+}
+
+// a loop's result: how many rounds; when some are waiting at a breakpoint, it says so
+stock lsd_times(n)
+{
+	new t[64]
+	if (g_lsdPaused >= 0)
+		formatex(t, charsmax(t), "%d rounds (some still wait at a breakpoint)", n)
+	else
+		formatex(t, charsmax(t), "%d times", n)
+	return t
 }
 
 stock lsd_defer(n, const ctx[])
@@ -549,6 +560,26 @@ public lsd_poll()
 	lsd_emitf("^"e^":^"commands^",^"resume^":%s", g_lsdBool[resume ? 1 : 0])
 	if (resume)
 		lsd_resume()
+}
+
+// the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
+stock lsg_zone_of(ent)
+{
+	new k[24], name[32], tn[32], z
+	if (ent <= 0 || !ls_comp_kind(ent, k, charsmax(k)))
+		return 0
+	if (equal(k, "ls_safe_zone"))
+		return ent
+	if (!equal(k, "ls_zone_shrinker"))
+		return 0
+	ls_comp_get(ent, "zone", name, charsmax(name))
+	while ((z = ls_comp_find("ls_safe_zone", z)) > 0)
+	{
+		pev(z, pev_targetname, tn, charsmax(tn))
+		if (!name[0] || equal(tn, name))
+			return z
+	}
+	return 0
 }
 
 // counted now (the brain's ls_creature_alive is only brought up to date a moment later)
@@ -2724,7 +2755,6 @@ public lsg_on_map_started()
 {
 	new ctx[LSG_CTX]
 	lsg_n122(ctx)
-	lsg_n247(ctx)
 }
 
 public lsg_on_new_round()
@@ -3617,14 +3647,16 @@ lsg_n51(ctx[])
 	lsd_in_number("Radius", lsi2)
 	if (lsd_enter(51, ctx))
 		return
-	new Float:o[3]
+	new Float:o[3], zz = !ls_components_running() ? 0 : lsg_zone_of(lsi0)
 	if (!ls_components_running())
 		lsd_error(51, "gm_components isn't running on this server.")
+	else if (!zz)
+		lsd_error(51, "That isn't a zone: wire a Safe zone or a Shrinking zone into Zone.")
 	else if (!lsg_origin_of("mid", o))
 		lsd_error(51, "No entity has that name on this map.")
 	else
 	{
-		ls_zone_shrink(lsi0, o, lsi2, 20.0)
+		ls_zone_shrink(zz, o, lsi2, 20.0)
 		lsd_exit(51, "done")
 	}
 }
@@ -3649,14 +3681,16 @@ lsg_n53(ctx[])
 	lsd_in_number("Radius", lsi2)
 	if (lsd_enter(53, ctx))
 		return
-	new Float:o[3]
+	new Float:o[3], zz = !ls_components_running() ? 0 : lsg_zone_of(lsi0)
 	if (!ls_components_running())
 		lsd_error(53, "gm_components isn't running on this server.")
+	else if (!zz)
+		lsd_error(53, "That isn't a zone: wire a Safe zone or a Shrinking zone into Zone.")
 	else if (!lsg_origin_of("mid", o))
 		lsd_error(53, "No entity has that name on this map.")
 	else
 	{
-		ls_zone_set(lsi0, o, lsi2)
+		ls_zone_set(zz, o, lsi2)
 		lsd_exit(53, "done")
 	}
 	lsg_n54(ctx)
@@ -4055,7 +4089,7 @@ lsg_n84(ctx[])
 		c[4] = p
 		lsg_n85(c)
 	}
-	lsd_exit(84, fmt("%d times", count))
+	lsd_exit(84, lsd_times(count))
 	lsg_n86(ctx)
 }
 
@@ -4115,7 +4149,7 @@ lsg_n87(ctx[])
 		c[6] = p
 		lsg_n88(c)
 	}
-	lsd_exit(87, fmt("%d times", count))
+	lsd_exit(87, lsd_times(count))
 	lsg_n90(ctx)
 }
 
@@ -4841,7 +4875,7 @@ lsg_n129(ctx[])
 		c[12] = p
 		lsg_n130(c)
 	}
-	lsd_exit(129, fmt("%d times", count))
+	lsd_exit(129, lsd_times(count))
 }
 
 // Teleport (ms_tp)
@@ -5321,7 +5355,7 @@ lsg_n164(ctx[])
 		c[13] = _:float(k)
 		lsg_n165(c)
 	}
-	lsd_exit(164, fmt("%d times", n))
+	lsd_exit(164, lsd_times(n))
 	lsg_n166(ctx)
 }
 
@@ -5455,7 +5489,7 @@ lsg_n172(ctx[])
 		if (g_lsgLeft[172])
 			break
 	}
-	lsd_exit(172, fmt("%d times", n))
+	lsd_exit(172, lsd_times(n))
 	lsg_n175(ctx)
 }
 
@@ -5556,7 +5590,7 @@ lsg_n178(ctx[])
 			c[j] = ctx[j]
 		lsg_n179(c)
 	}
-	lsd_exit(178, fmt("%d times", n))
+	lsd_exit(178, lsd_times(n))
 	lsg_n180(ctx)
 }
 
@@ -5686,7 +5720,7 @@ lsg_n185(ctx[])
 		c[16] = p
 		lsg_n186(c)
 	}
-	lsd_exit(185, fmt("%d times", count))
+	lsd_exit(185, lsd_times(count))
 	lsg_n190(ctx)
 }
 
@@ -5903,7 +5937,7 @@ lsg_n198(ctx[])
 		c[17] = p
 		lsg_n199(c)
 	}
-	lsd_exit(198, fmt("%d times", count))
+	lsd_exit(198, lsd_times(count))
 	lsg_n203(ctx)
 }
 
@@ -6157,7 +6191,7 @@ lsg_n213(ctx[])
 		return
 	lsg_tclear(lsi0)
 	lsd_exit(213, "cleared")
-	lsg_n250(ctx)
+	lsg_n249(ctx)
 }
 
 // Print String (d_pr7)
@@ -6415,7 +6449,7 @@ lsg_n226(ctx[])
 		if (g_lsgLeft[226])
 			break
 	}
-	lsd_exit(226, fmt("%d times", n))
+	lsd_exit(226, lsd_times(n))
 	lsg_n229(ctx)
 }
 
@@ -6714,35 +6748,11 @@ stock lsg_n245(ctx[])
 	lsg_n246(ctx)
 }
 
-// Print String (fc_pr)
+// For Each Marker (mk_fe)
 stock lsg_n246(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(246, ctx))
-		return
-	new t[192]
-	formatex(t, charsmax(t), "%s", "tick")
-	server_print("[%s] %s", LSG_MODE, t)
-	new esc[200]
-	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(246, esc)
-}
-
-// Map Started (mk_ev)
-lsg_n247(ctx[])
-{
-	lsd_begin()
-	if (lsd_enter(247, ctx))
-		return
-	lsd_exit(247, "ran")
-	lsg_n248(ctx)
-}
-
-// For Each Marker (mk_fe)
-lsg_n248(ctx[])
-{
-	lsd_begin()
-	if (lsd_enter(248, ctx))
 		return
 	new c[LSG_CTX], count
 	for (new m = 0; m < g_lsgMkN; m++)
@@ -6754,41 +6764,60 @@ lsg_n248(ctx[])
 			c[j] = ctx[j]
 		c[22] = g_lsgMkEnt[m]
 		c[23] = _:float(count)
-		lsg_n249(c)
+		lsg_n248(c)
+		if (g_lsgFD2)
+			return
 	}
-	lsd_exit(248, fmt("%d times", count))
+	lsd_exit(246, lsd_times(count))
+	lsg_n247(ctx)
+}
+
+// Print String (fc_pr)
+stock lsg_n247(ctx[])
+{
+	new Float:lsi0 = float(lsg_mk_count(0))
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(247, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "tick", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(247, esc)
 }
 
 // Print String (mk_pr)
-lsg_n249(ctx[])
+stock lsg_n248(ctx[])
 {
-	new lsi0 = lsg_vent(lsg_mk_get(1, floatround(float(lsg_mk_count(0)))))
+	new lsi0 = lsg_vent(lsg_mk_get(1, floatround(str_to_float(lsg_mk_key(ctx[22], "wave")))))
 	lsd_begin()
 	lsd_in_text("Value", lsg_vtext(lsi0))
-	if (lsd_enter(249, ctx))
+	if (lsd_enter(248, ctx))
 		return
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "Route spot:", lsg_vtext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(249, esc)
+	lsd_exit(248, esc)
 }
 
 // Print String (d_mac)
-lsg_n250(ctx[])
+lsg_n249(ctx[])
 {
 	new Float:lsi0 = 3.0
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
-	if (lsd_enter(250, ctx))
+	if (lsd_enter(249, ctx))
 		return
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "In the macro:", floatround(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(250, esc)
+	lsd_exit(249, esc)
 	lsg_n214(ctx)
 }
 
@@ -7049,6 +7078,5 @@ lsd_call(n, const data[])
 		case 247: lsg_n247(ctx)
 		case 248: lsg_n248(ctx)
 		case 249: lsg_n249(ctx)
-		case 250: lsg_n250(ctx)
 	}
 }

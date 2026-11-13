@@ -37,7 +37,7 @@
     "y": 200
    },
    "params": {
-    "text": "spawn [0] entity [1] at [2]"
+    "text": "spawn [0] entity [1] at [2] wave [3]"
    }
   },
   {
@@ -162,6 +162,40 @@
    },
    "params": {
     "text": "MK 99th found:",
+    "chat": false
+   }
+  },
+  {
+   "id": "kw",
+   "type": "marker.get",
+   "pos": {
+    "x": 0,
+    "y": 200
+   },
+   "params": {
+    "key": "wave"
+   }
+  },
+  {
+   "id": "ks",
+   "type": "marker.get",
+   "pos": {
+    "x": 0,
+    "y": 320
+   },
+   "params": {
+    "key": "side"
+   }
+  },
+  {
+   "id": "prs",
+   "type": "debug.print",
+   "pos": {
+    "x": 860,
+    "y": 0
+   },
+   "params": {
+    "text": "MK side:",
     "chat": false
    }
   }
@@ -329,6 +363,61 @@
    },
    "to": {
     "node": "pz",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "fe",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "kw",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "kw",
+    "pin": "num"
+   },
+   "to": {
+    "node": "fmt",
+    "pin": "a3"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "pr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prs",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "fe",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ks",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "ks",
+    "pin": "text"
+   },
+   "to": {
+    "node": "prs",
     "pin": "value"
    }
   }

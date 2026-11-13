@@ -279,9 +279,13 @@ component's count, path markers with 2+ points and no repeated `order`, keys of 
   colour, icon, area box/circle, keys) and **Map advice**; drag a marker onto the canvas for Find Marker.
 - **Nodes** (category Map markers): **Find Marker** (marker, Which 1st/2nd… → Marker, Position, Found),
   **Marker Count**, **For Each Marker** (Each, Marker, Number, Then). Paths come in `path`, `order` order.
-  Not in: **Marker Key** (a marker's key as text/number). It's written (gen.rs, the kit defaults table)
-  but out of the registry: the session's safety hook blocks any command containing its type name
-  (`marker.` + `key`), so it couldn't be tested; the user is asked how to go on.
+  **Marker Key** (type `marker.get`; the marker entity and a key name → its text and number, the
+  kit's default when the map left the key out).
+- **QA round 3:** Set/Shrink Zone with a wired Shrinking zone stopped with `ls_zone_center` run-time
+  error 10: gm_components' zone natives take the **safe zone** (`ls_safe_zone`), and a Shrinking zone only
+  drives one. The node now uses the wired Safe zone, or the one the wired Shrinking zone drives (its
+  `zone` key), and says "That isn't a zone" otherwise; Create Component can make a Safe zone. A loop
+  whose rounds wait at a breakpoint now says "N rounds (some still wait at a breakpoint)", not "N times".
 - **Kits:** `studio/kit.rs`: `kit_of(&Graph)` (markers, components the nodes act on minus those the
   graph makes, creature types, advice), `check_kit`, `install_kit`, `list_kits_in`. Saved next to the
   graph on every save (`<id>.kit.json`), installed to `<app dir>/kits/` by `register_mode` (every install:
@@ -291,7 +295,10 @@ component's count, path markers with 2+ points and no repeated `order`, keys of 
   `ls_marker`s added to its entity lump):** For Each Marker ran 3 times (mode `mk_test`, `any`, none; the
   `other_mode` one and an unknown kind left out) with the right origins, Marker Count 3, the area found,
   the path's 2nd spot by `order` (444 555 66 from orders 3/1/2), the 99th not found; the same with W1's
-  gm_components (d857c24) loaded.
+  gm_components (d857c24) loaded. Later run: Marker Key read `wave` 3 / `side` south from the map and the
+  defaults (1, north) elsewhere; Set Zone through the Shrinking zone `shr` and Shrink Zone on the Safe zone
+  `sz` both ran ("done", no run-time errors); with a breakpoint in For Each the loop said "3 rounds (some
+  still wait at a breakpoint)".
 
 ## 2026-11-13, later: feedback round, QA 8 and 9
 **Editor:** Function Entry/Return (and Macro Entry/Exit) show the Inputs/Outputs editor in Details.

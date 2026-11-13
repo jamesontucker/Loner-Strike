@@ -13,7 +13,7 @@ TEAM2 = [["t", "Terrorists"], ["ct", "Counter-Terrorists"]]
 TEAM3 = TEAM2 + [["none", "No team"]]
 WEAPONS = [["ak47","AK-47"],["m4a1","M4A1"],["awp","AWP"],["scout","Scout"],["famas","FAMAS"],["galil","Galil"],["aug","AUG"],["sg552","SG 552"],["mp5navy","MP5"],["p90","P90"],["ump45","UMP 45"],["mac10","MAC-10"],["tmp","TMP"],["m3","M3 shotgun"],["xm1014","XM1014 shotgun"],["m249","M249"],["deagle","Desert Eagle"],["usp","USP"],["glock18","Glock"],["p228","P228"],["fiveseven","Five-SeveN"],["elite","Dual Elites"],["hegrenade","HE grenade"],["flashbang","Flashbang"],["smokegrenade","Smoke grenade"]]
 SLOTS = [["top","Top middle"],["left","Left"],["right","Right"],["center","Middle"]]
-COMPONENTS = [["ls_capture_point","Capture point"],["ls_zone_shrinker","Shrinking zone"],["ls_damage_zone","Damage zone"],["ls_loot_container","Loot container"],["ls_weapon_spawner","Weapon spawner"],["ls_supply_drop","Supply drop"],["ls_wave_spawner","Wave spawner"],["ls_extraction","Extraction point"],["ls_checkpoint","Checkpoint"],["ls_trap","Trap"],["ls_respawn_point","Respawn point"]]
+COMPONENTS = [["ls_capture_point","Capture point"],["ls_safe_zone","Safe zone"],["ls_zone_shrinker","Shrinking zone"],["ls_damage_zone","Damage zone"],["ls_loot_container","Loot container"],["ls_weapon_spawner","Weapon spawner"],["ls_supply_drop","Supply drop"],["ls_wave_spawner","Wave spawner"],["ls_extraction","Extraction point"],["ls_checkpoint","Checkpoint"],["ls_trap","Trap"],["ls_respawn_point","Respawn point"]]
 
 nodes = []
 def node(type, title, cat, help, inputs=(), outputs=(), params=(), **k):
@@ -111,9 +111,9 @@ ca = dict(needs="components")
 node("comp.find", "Find Component", "Components", "The component (or any entity) with this name.", outputs=[P("out","entity","Entity")], params=[prm("name","Name","entname","A")], pure=True, **ca)
 node("comp.create", "Create Component", "Components", "Makes a component at an entity (wired into At, or the one with this name), with keys like radius=160 capture_secs=8.", inputs=[X, P("at_ent","entity","At",optional=True)], outputs=[E(), P("out","entity","Component")],
      params=[prm("kind","Component","choice","ls_capture_point",choices=COMPONENTS), prm("at","At the entity named","name","spot1"), prm("keys","Keys","keys","",max=120)], **ca)
-node("comp.zone_set", "Set Zone", "Components", "Sets a shrinking zone's radius, and moves its centre to an entity wired into Centre or the one with this name (no name: it stays where it is).", inputs=[X, P("zone","entity","Zone",required=True), P("at_ent","entity","Centre",optional=True), P("radius","number","Radius",param="radius")], outputs=[E()],
+node("comp.zone_set", "Set Zone", "Components", "Sets a safe zone's radius (wire the Safe zone, or the Shrinking zone that drives it), and moves its centre to an entity wired into Centre or the one with this name (no name: it stays where it is).", inputs=[X, P("zone","entity","Zone",required=True), P("at_ent","entity","Centre",optional=True), P("radius","number","Radius",param="radius")], outputs=[E()],
      params=[prm("at","Centre at the entity named","name",""), prm("radius","Radius","number",1500,min=50,max=20000)], **ca)
-node("comp.zone_shrink", "Shrink Zone", "Components", "Shrinks a zone over some seconds to a new radius, around an entity wired into Centre or the one with this name (no name: its centre stays).", inputs=[X, P("zone","entity","Zone",required=True), P("at_ent","entity","Centre",optional=True), P("radius","number","Radius",param="radius")], outputs=[E()],
+node("comp.zone_shrink", "Shrink Zone", "Components", "Shrinks a safe zone (or a Shrinking zone's) over some seconds to a new radius, around an entity wired into Centre or the one with this name (no name: its centre stays).", inputs=[X, P("zone","entity","Zone",required=True), P("at_ent","entity","Centre",optional=True), P("radius","number","Radius",param="radius")], outputs=[E()],
      params=[prm("at","New centre at the entity named","name",""), prm("radius","Radius","number",600,min=50,max=20000), prm("secs","Over (seconds)","number",30,min=1,max=600)], **ca)
 node("comp.crate_open", "Open Crate", "Components", "Opens a loot container for a player.", inputs=[X, P("container","entity","Container",required=True), P("player","player","Player",required=True)], outputs=[E()], **ca)
 node("comp.wave_start", "Start Wave", "Components", "Starts a wave (0: the next one).", inputs=[X, P("wave","number","Wave",param="wave")], outputs=[E()], params=[prm("wave","Wave","number",0,min=0,max=1000)], **ca)
@@ -299,6 +299,8 @@ node("marker.find", "Find Marker", "Map markers", "The map's marker of this kind
      inputs=[P("n","number","Which",param="n")], outputs=[P("out","entity","Marker"), P("pos","vector","Position"), P("found","bool","Found")],
      params=[MK, prm("n","Which (1st, 2nd...)","number",1,min=1,max=128)], pure=True)
 node("marker.count", "Marker Count", "Map markers", "How many markers of this kind the map has.", outputs=[P("out","number","Count")], params=[MK], pure=True)
+node("marker.get", "Marker Key", "Map markers", "A key the map set on a marker (the kit's default when the map left it out), as text and as a number.",
+     inputs=[P("in","entity","Marker",required=True)], outputs=[P("text","text","Text"), P("num","number","Number")], params=[prm("key","Key","name","")], pure=True)
 node("marker.for_each", "For Each Marker", "Map markers", "Runs Each once for every marker of this kind (a path's spots in order), then Then.",
      inputs=[X], outputs=[E("each","Each"), P("entity","entity","Marker"), P("index","number","Number (from 1)"), E("then","Then")], params=[MK])
 

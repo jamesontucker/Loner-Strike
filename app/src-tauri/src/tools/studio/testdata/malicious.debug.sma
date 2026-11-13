@@ -267,6 +267,17 @@ stock lsd_in_team(const name[], team)
 	lsd_in_raw(name, q)
 }
 
+// a loop's result: how many rounds; when some are waiting at a breakpoint, it says so
+stock lsd_times(n)
+{
+	new t[64]
+	if (g_lsdPaused >= 0)
+		formatex(t, charsmax(t), "%d rounds (some still wait at a breakpoint)", n)
+	else
+		formatex(t, charsmax(t), "%d times", n)
+	return t
+}
+
 stock lsd_defer(n, const ctx[])
 {
 	if (g_lsdQn >= LSD_Q)
@@ -514,6 +525,26 @@ public lsd_poll()
 	lsd_emitf("^"e^":^"commands^",^"resume^":%s", g_lsdBool[resume ? 1 : 0])
 	if (resume)
 		lsd_resume()
+}
+
+// the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
+stock lsg_zone_of(ent)
+{
+	new k[24], name[32], tn[32], z
+	if (ent <= 0 || !ls_comp_kind(ent, k, charsmax(k)))
+		return 0
+	if (equal(k, "ls_safe_zone"))
+		return ent
+	if (!equal(k, "ls_zone_shrinker"))
+		return 0
+	ls_comp_get(ent, "zone", name, charsmax(name))
+	while ((z = ls_comp_find("ls_safe_zone", z)) > 0)
+	{
+		pev(z, pev_targetname, tn, charsmax(tn))
+		if (!name[0] || equal(tn, name))
+			return z
+	}
+	return 0
 }
 
 // counted now (the brain's ls_creature_alive is only brought up to date a moment later)

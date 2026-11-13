@@ -703,7 +703,7 @@ impl<'a> Gen<'a> {
                     _ => get,
                 }
             }
-            "marker.key" => {
+            "marker.get" => {
                 let key = pawn_str(&name_text(self.text(n, def, "key")));
                 if pin == "num" { format!("str_to_float(lsg_mk_key({}, {key}))", i("in", "entity")) } else { format!("lsg_mk_key({}, {key})", i("in", "entity")) }
             }
@@ -1099,7 +1099,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     // registration
     let kinds: Vec<&EventKind> = EVENTS.iter().filter(|k| has(k.kind)).collect();
     let need = needs(checked);
-    let uses_markers = has("marker.for_each") || ["marker.find", "marker.count", "marker.key"].iter().any(|k| pure_used(&gen, k));
+    let uses_markers = has("marker.for_each") || ["marker.find", "marker.count", "marker.get"].iter().any(|k| pure_used(&gen, k));
     if uses_markers {
         o.line(markers_block(g));
     }
@@ -1630,7 +1630,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             b.line("\t}");
             if debug {
-                b.line(format!("\tlsd_exit({i}, fmt(\"%d times\", count))"));
+                b.line(format!("\tlsd_exit({i}, lsd_times(count))"));
             } else {
                 b.line("\t#pragma unused count");
             }
@@ -1655,7 +1655,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             b.line("\t}");
             if debug {
-                b.line(format!("\tlsd_exit({i}, fmt(\"%d times\", count))"));
+                b.line(format!("\tlsd_exit({i}, lsd_times(count))"));
             } else {
                 b.line("\t#pragma unused count");
             }
@@ -1956,7 +1956,9 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "comp.zone_set" | "comp.zone_shrink" => {
-            let z = inp("zone", "entity");
+            // the safe zone: the one wired in, or the one a wired Shrinking zone drives
+            let zin = inp("zone", "entity");
+            let z = "zz";
             // the centre: an entity wired into Centre, else the one with that name, else (no name)
             // where the zone is now
             let at = match gen.v.data_source(id, "at_ent") {
@@ -1966,11 +1968,11 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             };
             let r = inp("radius", "number");
             let call = if def.kind == "comp.zone_set" { format!("ls_zone_set({z}, o, {r})") } else { format!("ls_zone_shrink({z}, o, {r}, {})", float_lit(gen.num(n, def, "secs"))) };
-            b.line("\tnew Float:o[3]");
+            b.line(format!("\tnew Float:o[3], zz = {comps} ? 0 : lsg_zone_of({zin})"));
             if debug {
-                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\t{call}\n\t{}\n\t}}", err("gm_components isn't running on this server."), err(if at.starts_with("ls_zone_center") { "That isn't a zone (wire a Shrinking zone into Zone)." } else { "No entity has that name on this map." }), exit("done")));
+                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!zz)\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\t{call}\n\t{}\n\t}}", err("gm_components isn't running on this server."), err("That isn't a zone: wire a Safe zone or a Shrinking zone into Zone."), err("No entity has that name on this map."), exit("done")));
             } else {
-                b.line(format!("\tif (!{comps} && {at})\n\t\t{call}"));
+                b.line(format!("\tif (zz && {at})\n\t\t{call}"));
             }
             then_line(&mut b, "then");
         }
@@ -2136,7 +2138,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             b.line("\t}");
             if debug {
-                b.line(format!("\tlsd_exit({i}, fmt(\"%d times\", n))"));
+                b.line(format!("\tlsd_exit({i}, lsd_times(n))"));
             } else {
                 b.line("\t#pragma unused n");
             }
@@ -2744,7 +2746,27 @@ fn lsg_secs(v: &Option<Val>) -> String {
 const V3_HELPERS: &str = include_str!("v3_helpers.pawn");
 
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
-const HELPERS: &str = r##"// counted now (the brain's ls_creature_alive is only brought up to date a moment later)
+const HELPERS: &str = r##"// the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
+stock lsg_zone_of(ent)
+{
+	new k[24], name[32], tn[32], z
+	if (ent <= 0 || !ls_comp_kind(ent, k, charsmax(k)))
+		return 0
+	if (equal(k, "ls_safe_zone"))
+		return ent
+	if (!equal(k, "ls_zone_shrinker"))
+		return 0
+	ls_comp_get(ent, "zone", name, charsmax(name))
+	while ((z = ls_comp_find("ls_safe_zone", z)) > 0)
+	{
+		pev(z, pev_targetname, tn, charsmax(tn))
+		if (!name[0] || equal(tn, name))
+			return z
+	}
+	return 0
+}
+
+// counted now (the brain's ls_creature_alive is only brought up to date a moment later)
 stock lsg_creatures_alive()
 {
 	new n, e = MaxClients, Float:hp

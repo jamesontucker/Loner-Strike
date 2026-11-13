@@ -551,7 +551,14 @@ G("fb_t", "text.from", "fb", {"of": "number"}, 1); W("fb_m", "out", "fb_t", "a")
 G("fb_r", "fn.return", "fb", {}, 2); W("fb_e", "then", "fb_r", "exec"); W("fb_m", "out", "fb_r", "y"); W("fb_t", "out", "fb_r", "t")
 # Function Tick (fc)
 G("fc_e", "fn.entry", "fc", {}, 4)
-G("fc_pr", "debug.print", "fc", {"text": "tick", "chat": False}, 5); W("fc_e", "then", "fc_pr", "exec")
+# map markers (inside Function Tick): For Each Marker, Marker Key, Marker Count, Find Marker
+G("mk_fe", "marker.for_each", "fc", {"marker": "spot"}, 5); W("fc_e", "then", "mk_fe", "exec")
+G("fc_pr", "debug.print", "fc", {"text": "tick", "chat": False}, 6); W("mk_fe", "then", "fc_pr", "exec")
+G("mk_get", "marker.get", "fc", {"key": "wave"}, 7); W("mk_fe", "entity", "mk_get", "in")
+G("mk_cnt", "marker.count", "fc", {"marker": "spot"}, 7)
+G("mk_find", "marker.find", "fc", {"marker": "route", "n": 2}, 7); W("mk_get", "num", "mk_find", "n")
+G("mk_pr", "debug.print", "fc", {"text": "Route spot:", "chat": False}, 8); W("mk_fe", "each", "mk_pr", "exec"); W("mk_find", "pos", "mk_pr", "value")
+W("mk_cnt", "out", "fc_pr", "value")
 nl()
 # Macro Twice (ma)
 G("ma_e", "macro.entry", "ma", {}, 0)
@@ -561,11 +568,6 @@ G("ma_x", "macro.exit", "ma", {}, 2); W("ma_pr", "then", "ma_x", "done"); W("ma_
 
 # map markers: For Each Marker, Find Marker, Marker Count
 nl()
-N("mk_ev", "event.map_started")
-N("mk_fe", "marker.for_each", {"marker": "spot"}, 1); W("mk_ev", "then", "mk_fe", "exec")
-N("mk_cnt", "marker.count", {"marker": "spot"}, 1)
-N("mk_find", "marker.find", {"marker": "route", "n": 2}, 2); W("mk_cnt", "out", "mk_find", "n")
-N("mk_pr", "debug.print", {"text": "Route spot:", "chat": False}, 3); W("mk_fe", "each", "mk_pr", "exec"); W("mk_find", "pos", "mk_pr", "value")
 markers = [
     {"id": "spot", "label": "Spot", "description": "A spot", "type": "point", "min": 1, "keys": [{"name": "wave", "type": "number", "default": 2, "help": "Wave"}]},
     {"id": "route", "label": "Route", "description": "", "type": "path", "min": 0},

@@ -237,6 +237,17 @@ stock lsd_in_team(const name[], team)
 	lsd_in_raw(name, q)
 }
 
+// a loop's result: how many rounds; when some are waiting at a breakpoint, it says so
+stock lsd_times(n)
+{
+	new t[64]
+	if (g_lsdPaused >= 0)
+		formatex(t, charsmax(t), "%d rounds (some still wait at a breakpoint)", n)
+	else
+		formatex(t, charsmax(t), "%d times", n)
+	return t
+}
+
 stock lsd_defer(n, const ctx[])
 {
 	if (g_lsdQn >= LSD_Q)

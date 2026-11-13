@@ -15,7 +15,7 @@
 #define LSG_MODE "mk_test"
 #define LSG_CTX 6
 #define LSG_TXT 2
-#define LSG_N 8
+#define LSG_N 9
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -33,6 +33,26 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_TMPA 32
 #define LSG_O 1
 #define LSG_OT 1
+
+// the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
+stock lsg_zone_of(ent)
+{
+	new k[24], name[32], tn[32], z
+	if (ent <= 0 || !ls_comp_kind(ent, k, charsmax(k)))
+		return 0
+	if (equal(k, "ls_safe_zone"))
+		return ent
+	if (!equal(k, "ls_zone_shrinker"))
+		return 0
+	ls_comp_get(ent, "zone", name, charsmax(name))
+	while ((z = ls_comp_find("ls_safe_zone", z)) > 0)
+	{
+		pev(z, pev_targetname, tn, charsmax(tn))
+		if (!name[0] || equal(tn, name))
+			return z
+	}
+	return 0
+}
 
 // counted now (the brain's ls_creature_alive is only brought up to date a moment later)
 stock lsg_creatures_alive()
@@ -1419,8 +1439,9 @@ lsg_n1(ctx[])
 lsg_n2(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "MK", fmt("spawn %s entity %s at %s", lsg_ntext(Float:ctx[5]), lsg_etext(ctx[4]), lsg_vtext(lsg_vent(ctx[4]))))
+	formatex(t, charsmax(t), "%s %s", "MK", fmt("spawn %s entity %s at %s wave %s", lsg_ntext(Float:ctx[5]), lsg_etext(ctx[4]), lsg_vtext(lsg_vent(ctx[4])), lsg_ntext(str_to_float(lsg_mk_key(ctx[4], "wave")))))
 	server_print("[%s] %s", LSG_MODE, t)
+	lsg_n8(ctx)
 }
 
 // Round Started (rs)
@@ -1463,5 +1484,13 @@ lsg_n7(ctx[])
 	formatex(t, charsmax(t), "%s %s", "MK 99th found:", g_lsgYesNo[((lsg_mk_get(0, floatround(99.0)) > 0 ? 1 : 0)) ? 1 : 0])
 	server_print("[%s] %s", LSG_MODE, t)
 	#pragma unused ctx
+}
+
+// Print String (prs)
+lsg_n8(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "MK side:", lsg_mk_key(ctx[4], "side"))
+	server_print("[%s] %s", LSG_MODE, t)
 }
 
