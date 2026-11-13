@@ -1100,3 +1100,20 @@ note (feature complete, long gap after), the user decides whether that goes into
    the UI can change without breaking published modes.
 5. **Live variable inspection** while frozen at a breakpoint: current round and game phase, alive counts, timers,
    objective/component state, and per player: health, team/role, current weapon (plus any graph variables).
+
+## Addendum (user, 2026-11-12): the Creature Framework and Creature Studio
+- **One framework, providers behind it:** a common creature interface (spawn, think, take damage, set target,
+  set behaviour, is alive; categories and behaviour profiles) with providers: **ls_creature** (native, first-class:
+  hostage-AI-derived CCreatureImprov + bot nav + the brain's senses) and **MonsterMod Redo** (optional catalog add-on,
+  GPL-2.0 under the HL SDK terms) through an **adapter** — don't assume its entities fit the interface; wrap what
+  it exposes. Bots treat both alike (shoot / avoid / hunt via the enemy-class hooks).
+- **References, not code:** the original HL SDK monster AI (schedules, conditions, navigation, combat), original
+  MonsterMod (compatibility), Sven Co-op (co-op NPC design). Read for behaviour; write our own.
+- **Categories:** infected (headcrab-like, zombies, carriers), hostile aliens (ranged, melee, bosses), wildlife
+  (passive, territorial, predators), mechanical (turrets, drones, robots, security), bosses (multi-phase),
+  special (flying, teleporting, support, summoning). One framework + behaviour profiles; a turret is a creature
+  that doesn't move.
+- **Creature Studio (Tools > Make):** type, health, speed, aggression, detection radius, attack type/damage,
+  behaviour (chase/patrol/guard/flee), target selection, respawn; spawn groups and waves placed through the editor's
+  component library; later custom behaviours via Game Mode Studio nodes.
+- **NodeMod** (Node.js in GoldSrc via Metamod): research only; scripting stays AMX Mod X + loner.inc.
