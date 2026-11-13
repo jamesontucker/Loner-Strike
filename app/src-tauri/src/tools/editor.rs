@@ -10,9 +10,12 @@
 //! internal-error message, and the session lock survives it).
 
 use crate::editor::checks;
+use crate::editor::fgd;
+use crate::editor::shapes;
+use crate::editor::vertex;
 use crate::editor::doc::{Brush, BrushId, Entity, EntityId, GroupId, MapDocument, Material, WorldSettings};
 use crate::editor::geom::brush_bounds;
-use crate::editor::history::{self, History, Keep, Tx};
+use crate::editor::history::{self, FixIt, History, Keep, Tx};
 use crate::editor::mapfile;
 use crate::editor::math::{v3, Affine, Bounds, Mat3, Plane, Vec3, BIG};
 use crate::editor::ops;
@@ -156,6 +159,8 @@ impl Session {
 /// The open document (one per app run) and a few caches.
 pub struct Editor {
     session: Mutex<Option<Session>>,
+    /// Where autosaves, backups and the recent list live.
+    dir: PathBuf,
     next_id: AtomicU64,
     /// Texture pictures and lists, by WAD stamp.
     pngs: Mutex<HashMap<String, Arc<Vec<u8>>>>,
@@ -163,8 +168,8 @@ pub struct Editor {
 }
 
 impl Editor {
-    fn new() -> Editor {
-        Editor { session: Mutex::new(None), next_id: AtomicU64::new(1), pngs: Mutex::default(), lists: Mutex::default() }
+    fn with_dir(dir: PathBuf) -> Editor {
+        Editor { session: Mutex::new(None), dir, next_id: AtomicU64::new(1), pngs: Mutex::default(), lists: Mutex::default() }
     }
     fn lock(&self) -> MutexGuard<'_, Option<Session>> {
         self.session.lock().unwrap_or_else(|e| e.into_inner())
@@ -184,7 +189,7 @@ type Ed = Arc<Editor>;
 
 fn global() -> Ed {
     static ED: OnceLock<Ed> = OnceLock::new();
-    ED.get_or_init(|| Arc::new(Editor::new())).clone()
+    ED.get_or_init(|| Arc::new(Editor::with_dir(crate::sys::app_dir().join("editor")))).clone()
 }
 
 /// The folders WADs are looked for in (none when the game isn't set up).
@@ -345,7 +350,8 @@ fn doc_json(s: &Session) -> Value {
 /// The brush meshes changed since `since` (all of them when `since` is missing, too old, or for
 /// another document), as an LSMB bundle: header `brushes[{id, entity, faces[{face, texture,
 /// normal, start, count}]}]` (start/count in vertices: one polygon per face, drawn as a fan)
-/// and `removed[]`; sections `pos` (f32 x3, GoldSrc units) and `uv` (f32 x2, divided by the
+/// and `removed[]`; each face's `align` is `[u axis x3, u offset, v axis x3, v offset,
+/// rotation, u scale, v scale]` (Valve 220); sections `pos` (f32 x3, GoldSrc units) and `uv` (f32 x2, divided by the
 /// texture size).
 fn meshes_bundle(s: &Session, doc_id: Option<u64>, since: Option<u64>) -> Vec<u8> {
     let full = since.is_none();
@@ -361,12 +367,14 @@ fn meshes_bundle(s: &Session, doc_id: Option<u64>, since: Option<u64>) -> Vec<u8
         let faces: Vec<Value> = ops::brush_mesh(b, |t| s.doc.texture_size(t))
             .into_iter()
             .map(|f| {
+                let a = &b.faces[f.face].align;
                 let start = pos.len() / 3;
                 for (p, (u, v)) in f.vertices.iter().zip(&f.uvs) {
                     pos.extend([p.x as f32, p.y as f32, p.z as f32]);
                     uv.extend([*u as f32, *v as f32]);
                 }
-                json!({"face": f.face, "texture": f.texture, "normal": vec_json(f.normal), "start": start, "count": f.vertices.len()})
+                json!({"face": f.face, "texture": f.texture, "normal": vec_json(f.normal), "start": start, "count": f.vertices.len(),
+                    "align": [a.u_axis.x, a.u_axis.y, a.u_axis.z, a.u_offset, a.v_axis.x, a.v_axis.y, a.v_axis.z, a.v_offset, a.rotation, a.scale_u, a.scale_v]})
             })
             .collect();
         list.push(json!({"id": id.0, "entity": b.entity.map(|e| e.0), "group": b.group.map(|g| g.0), "faces": faces}));
@@ -436,6 +444,32 @@ struct Rotate {
 enum Cmd {
     AddBox { min: P3, max: P3, texture: String },
     AddCylinder { base: P3, radius: f64, height: f64, sides: usize, texture: String, #[serde(default)] grid: f64 },
+    /// wedge, spike, sphere or arch, filling the box `min`..`max`
+    AddShape {
+        shape: String,
+        min: P3,
+        max: P3,
+        #[serde(default = "twelve")] sides: usize,
+        texture: String,
+        #[serde(default)] grid: f64,
+        #[serde(default = "half_turn")] arc: f64,
+        #[serde(default)] start: f64,
+        #[serde(default = "sixteen")] wall: f64,
+    },
+    MoveVertices { picks: Vec<(u64, P3)>, delta: P3, drag: Option<String> },
+    /// paste special: copies, each moved, turned (degrees about x, y, z) and stretched from the last
+    Array {
+        #[serde(default)] brushes: Vec<u64>,
+        #[serde(default)] entities: Vec<u64>,
+        copies: usize,
+        #[serde(default)] offset: P3,
+        #[serde(default)] rotate: P3,
+        scale: Option<P3>,
+        pivot: Option<P3>,
+        #[serde(default = "yes")] lock: bool,
+    },
+    Paste { text: String, #[serde(default)] offset: P3 },
+    Fix { fixes: Vec<FixReq>, with: Option<String> },
     Delete { #[serde(default)] brushes: Vec<u64>, #[serde(default)] entities: Vec<u64> },
     Duplicate { #[serde(default)] brushes: Vec<u64>, #[serde(default)] entities: Vec<u64>, offset: P3 },
     Transform {
@@ -461,6 +495,16 @@ enum Cmd {
         #[serde(default)] v: f64,
         #[serde(default)] degrees: f64,
         drag: Option<String>,
+        /// "set": the face sheet's numbers, each only when given
+        ou: Option<f64>,
+        ov: Option<f64>,
+        su: Option<f64>,
+        sv: Option<f64>,
+        rot: Option<f64>,
+        /// "justify": left, right, top, bottom, center, fit
+        mode: Option<String>,
+        /// treat the faces as one surface (justify, fit, centre, scale and turn round their middle)
+        #[serde(default)] one: bool,
     },
     SetKey { entity: u64, key: String, value: String },
     AddEntity { classname: String, origin: P3, #[serde(default)] keys: Vec<(String, String)> },
@@ -474,6 +518,23 @@ enum Cmd {
 
 fn yes() -> bool {
     true
+}
+fn twelve() -> usize {
+    12
+}
+fn half_turn() -> f64 {
+    180.0
+}
+fn sixteen() -> f64 {
+    16.0
+}
+
+#[derive(Deserialize)]
+struct FixReq {
+    fix: String,
+    brush: Option<u64>,
+    entity: Option<u64>,
+    texture: Option<String>,
 }
 
 fn bids(v: &[u64]) -> Vec<BrushId> {
@@ -530,7 +591,7 @@ fn centre_of(d: &MapDocument, brushes: &[BrushId], entities: &[EntityId]) -> Vec
 fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
     // a drag continues only while the same drag sends steps
     let drag_key = match &cmd {
-        Cmd::MoveFace { drag: Some(k), .. } => Some(k.clone()),
+        Cmd::MoveFace { drag: Some(k), .. } | Cmd::MoveVertices { drag: Some(k), .. } => Some(k.clone()),
         _ => None,
     };
     if s.drag.as_ref().map(|d| Some(&d.key) != drag_key.as_ref()).unwrap_or(false) {
@@ -553,6 +614,129 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
         Cmd::AddCylinder { base, radius, height, sides, texture, grid } => {
             let c = ops::make_cylinder(p3(base)?, num(radius, 1.0, BIG, "radius")?, num(height, 1.0, BIG, "height")?, sides, num(grid, 0.0, 1024.0, "grid")?, &texture_name(&texture)?)?;
             created.0.push(history::cmd_add_brush(d, h, c, "Add cylinder").0);
+        }
+        Cmd::AddShape { shape, min, max, sides, texture, grid, arc, start, wall } => {
+            let (a, b) = (p3(min)?, p3(max)?);
+            let tex = texture_name(&texture)?;
+            let grid = num(grid, 0.0, 1024.0, "grid")?;
+            let (lo, hi) = (a.min(b), a.max(b));
+            let made: Vec<Brush> = match shape.as_str() {
+                "wedge" => vec![shapes::make_wedge(a, b, &tex)?],
+                "spike" => vec![shapes::make_spike(a, b, sides, grid, &tex)?],
+                "sphere" => vec![shapes::make_sphere(a, b, sides, &tex)?],
+                "arch" => {
+                    let c = (lo + hi) * 0.5;
+                    let arch = shapes::Arch {
+                        centre: v3(c.x, c.y, lo.z),
+                        radius_x: (hi.x - lo.x) / 2.0,
+                        radius_y: (hi.y - lo.y) / 2.0,
+                        wall: num(wall, 1.0, BIG, "wall thickness")?,
+                        height: hi.z - lo.z,
+                        arc: num(arc, 1.0, 360.0, "arc")?,
+                        start: num(start, -360.0, 360.0, "start angle")?,
+                        sides,
+                    };
+                    shapes::make_arch(&arch, grid, &tex)?
+                }
+                _ => return Err(NOT_UNDERSTOOD.into()),
+            };
+            let label = match shape.as_str() {
+                "wedge" => "Add wedge",
+                "spike" => "Add spike",
+                "sphere" => "Add sphere",
+                _ => "Add arch",
+            };
+            let mut tx = Tx::new(d, label);
+            for b in made {
+                created.0.push(tx.add_brush(b).0);
+            }
+            tx.commit(h);
+        }
+        Cmd::MoveVertices { picks, delta, drag } => {
+            if picks.is_empty() {
+                return Err("Pick some corners first.".into());
+            }
+            if picks.len() > 4096 {
+                return Err("That's too many corners at once.".into());
+            }
+            let delta = p3(delta)?;
+            let mut by_brush: BTreeMap<BrushId, Vec<Vec3>> = BTreeMap::new();
+            for (b, p) in &picks {
+                by_brush.entry(BrushId(*b)).or_default().push(p3(*p)?);
+            }
+            // a drag moves from where it started, so corners are found on the brush as it was
+            let same_drag = matches!((&s.drag, &drag), (Some(dr), Some(k)) if &dr.key == k);
+            if !same_drag {
+                s.drag = drag.as_ref().map(|k| Drag { key: k.clone(), brushes: BTreeMap::new() });
+            }
+            let mut base: BTreeMap<BrushId, Brush> = s.drag.as_ref().map(|dr| dr.brushes.clone()).unwrap_or_default();
+            for id in by_brush.keys() {
+                if !base.contains_key(id) {
+                    base.insert(*id, d.brushes.get(id).cloned().ok_or("That brush no longer exists.")?);
+                }
+            }
+            if let Some(dr) = &mut s.drag {
+                dr.brushes = base.clone();
+            }
+            let mut tx = Tx::new(d, "Move corners");
+            if let Some(k) = &drag {
+                tx = tx.merge_key(k);
+            }
+            for (id, pts) in &by_brush {
+                tx.set_brush(*id, vertex::move_vertices(&base[id], pts, delta)?);
+            }
+            tx.commit(h);
+        }
+        Cmd::Array { brushes, entities, copies, offset, rotate, scale, pivot, lock } => {
+            let (bs, es) = (bids(&brushes), eids(&entities));
+            if !bs.is_empty() {
+                need_brushes(d, &bs)?;
+            }
+            let pivot = match pivot {
+                Some(p) => p3(p)?,
+                None => centre_of(d, &bs, &es),
+            };
+            let off = p3(offset)?;
+            let r = p3(rotate)?;
+            for x in [r.x, r.y, r.z] {
+                num(x, -360.0, 360.0, "angle")?;
+            }
+            let mut m = Mat3::IDENTITY;
+            if let Some(sc) = scale {
+                let f = p3(sc)?;
+                if [f.x, f.y, f.z].iter().any(|x| *x < 0.01 || *x > 100.0) {
+                    return Err("That stretch is out of range.".into());
+                }
+                m = Mat3::scale(f);
+            }
+            for (axis, deg) in [(Vec3::X, r.x), (Vec3::Y, r.y), (Vec3::Z, r.z)] {
+                if deg != 0.0 {
+                    m = Mat3::rotation(axis, deg).mul(&m);
+                }
+            }
+            let step = Affine::around(m, pivot).then(&Affine::translate(off));
+            let out = history::cmd_array(d, h, &bs, &es, copies, &step, lock)?;
+            created = (out.brushes.iter().map(|i| i.0).collect(), out.entities.iter().map(|i| i.0).collect());
+        }
+        Cmd::Paste { text, offset } => {
+            if text.len() > 16 * 1024 * 1024 {
+                return Err("That's too much to paste at once.".into());
+            }
+            let frag = mapfile::read_map(&text).map_err(|_| "The clipboard doesn't hold map pieces. Copy some brushes or entities first.".to_string())?;
+            let out = history::cmd_paste(d, h, &frag, p3(offset)?)?;
+            created = (out.brushes.iter().map(|i| i.0).collect(), out.entities.iter().map(|i| i.0).collect());
+        }
+        Cmd::Fix { fixes, with } => {
+            if fixes.is_empty() || fixes.len() > 10_000 {
+                return Err("Pick a problem to fix.".into());
+            }
+            let with = match with {
+                Some(t) => Some(texture_name(&t)?),
+                None => None,
+            };
+            let list: Vec<FixIt> = fixes.into_iter().map(|f| FixIt { fix: f.fix, brush: f.brush.map(BrushId), entity: f.entity.map(EntityId), texture: f.texture }).collect();
+            let n = history::cmd_fix(d, h, &list, with.as_deref())?;
+            note = Some(if n == 1 { "Fixed.".into() } else { format!("Fixed {n} problems.") });
         }
         Cmd::Delete { brushes, entities } => {
             if brushes.is_empty() && entities.is_empty() {
@@ -704,14 +888,35 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             let f: Vec<(BrushId, Option<usize>)> = faces.iter().map(|(b, f)| (BrushId(*b), *f)).collect();
             history::cmd_set_texture(d, h, &f, &texture_name(&texture)?)?;
         }
-        Cmd::Align { faces, action, u, v, degrees, drag } => {
+        Cmd::Align { faces, action, u, v, degrees, drag, ou, ov, su, sv, rot, mode, one } => {
             if faces.is_empty() {
                 return Err("Pick a face first.".into());
+            }
+            if faces.len() > 20_000 {
+                return Err("That's too many faces at once.".into());
             }
             let f: Vec<(BrushId, usize)> = faces.iter().map(|(b, i)| (BrushId(*b), *i)).collect();
             let (u, v) = (num(u, -65536.0, 65536.0, "value")?, num(v, -65536.0, 65536.0, "value")?);
             let deg = num(degrees, -3600.0, 3600.0, "angle")?;
-            let anchor = |poly: &[Vec3]| crate::editor::geom::polygon_center(poly);
+            let opt = |x: Option<f64>, lo: f64, hi: f64| -> Result<Option<f64>, String> { x.map(|x| num(x, lo, hi, "value")).transpose() };
+            let (ou, ov, rot) = (opt(ou, -65536.0, 65536.0)?, opt(ov, -65536.0, 65536.0)?, opt(rot, -3600.0, 3600.0)?);
+            let (su, sv) = (opt(su, -1024.0, 1024.0)?, opt(sv, -1024.0, 1024.0)?);
+            if su.is_some_and(|x| x.abs() < 0.01) || sv.is_some_and(|x| x.abs() < 0.01) {
+                return Err("A texture scale can't be 0.".into());
+            }
+            // treated as one: every face works from all the faces' corners
+            let all: Vec<Vec3> = if one {
+                let mut pts = Vec::new();
+                for (id, i) in &f {
+                    let b = d.brushes.get(id).ok_or("That brush no longer exists.")?;
+                    pts.extend(crate::editor::geom::brush_polygons(b).get(*i).cloned().unwrap_or_default());
+                }
+                pts
+            } else {
+                Vec::new()
+            };
+            let pts = |poly: &[Vec3]| -> Vec<Vec3> { if one { all.clone() } else { poly.to_vec() } };
+            let anchor = |poly: &[Vec3]| crate::editor::geom::polygon_center(&pts(poly));
             let drag = drag.as_deref();
             match action.as_str() {
                 "shift" => history::cmd_align(d, h, &f, drag, |a, _, _, _| texture::shift(a, u, v))?,
@@ -724,9 +929,14 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
                 "rotate" => history::cmd_align(d, h, &f, drag, |a, p, _, n| texture::rotate(a, n, deg, anchor(p)))?,
                 "fit" => {
                     let (ru, rv) = (if u > 0.0 { u } else { 1.0 }, if v > 0.0 { v } else { 1.0 });
-                    history::cmd_align(d, h, &f, drag, |a, p, (w, ht), _| texture::fit(a, p, w, ht, ru, rv))?
+                    history::cmd_align(d, h, &f, drag, |a, p, (w, ht), _| texture::fit(a, &pts(p), w, ht, ru, rv))?
                 }
-                "center" => history::cmd_align(d, h, &f, drag, |a, p, (w, ht), _| texture::center(a, p, w, ht))?,
+                "center" => history::cmd_align(d, h, &f, drag, |a, p, (w, ht), _| texture::center(a, &pts(p), w, ht))?,
+                "justify" => {
+                    let how = mode.as_deref().and_then(texture::Justify::parse).ok_or(NOT_UNDERSTOOD)?;
+                    history::cmd_align(d, h, &f, drag, |a, p, (w, ht), _| texture::justify(a, &pts(p), w, ht, how))?
+                }
+                "set" => history::cmd_align(d, h, &f, drag, |a, _, _, n| texture::set_values(a, n, ou, ov, su, sv, rot))?,
                 "world" => history::cmd_align(d, h, &f, drag, |a, _, _, n| texture::align_to_world(a, n))?,
                 "face" => history::cmd_align(d, h, &f, drag, |a, _, _, n| texture::align_to_face(a, n))?,
                 _ => return Err(NOT_UNDERSTOOD.into()),
@@ -872,7 +1082,10 @@ fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
     })
 }
 
-fn save_project(s: &mut Session, path: &Path) -> Result<(), String> {
+fn save_project(s: &mut Session, path: &Path, backups: Option<&Path>) -> Result<(), String> {
+    if let (Some(dir), true) = (backups, path.exists()) {
+        backup(dir, path);
+    }
     write_atomic(path, &s.doc.to_json())?;
     s.project = Some(path.to_path_buf());
     s.name = stem(path);
@@ -908,6 +1121,94 @@ fn dialog(st: &Shared, kind: Pick, name: &str) -> Result<Option<PathBuf>, String
         None => Ok(None),
         Some(p) => p.into_path().map(Some).map_err(|_| "That file can't be used.".to_string()),
     }
+}
+
+
+// ---- autosave, backups, recent files -----------------------------------------------------
+
+const AUTOSAVE: &str = "autosave.lsmap";
+const AUTOSAVE_META: &str = "autosave.json";
+const RECENT: &str = "recent.json";
+const MAX_RECENT: usize = 10;
+const KEEP_BACKUPS: usize = 10;
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// Copies a project about to be saved over into the backups folder (the last few per name).
+fn backup(dir: &Path, path: &Path) {
+    if std::fs::create_dir_all(dir).is_err() {
+        return;
+    }
+    let name = stem(path);
+    let _ = std::fs::copy(path, dir.join(format!("{name}-{}.{PROJECT_EXT}", now_secs())));
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let prefix = format!("{name}-");
+    let mut mine: Vec<PathBuf> = rd
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with(&prefix) && n[prefix.len()..].trim_end_matches(".lsmap").bytes().all(|c| c.is_ascii_digit())))
+        .collect();
+    mine.sort();
+    while mine.len() > KEEP_BACKUPS {
+        let _ = std::fs::remove_file(mine.remove(0));
+    }
+}
+
+#[derive(serde::Serialize, Deserialize, Clone, Debug, PartialEq)]
+struct Recent {
+    path: PathBuf,
+    project: bool,
+}
+
+fn recent_list(dir: &Path) -> Vec<Recent> {
+    std::fs::read_to_string(dir.join(RECENT)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+}
+
+/// Puts a file at the top of the recent list.
+fn remember(dir: &Path, path: &Path, project: bool) {
+    let mut list = recent_list(dir);
+    list.retain(|r| r.path != path);
+    list.insert(0, Recent { path: path.to_path_buf(), project });
+    list.truncate(MAX_RECENT);
+    if std::fs::create_dir_all(dir).is_ok() {
+        if let Ok(t) = serde_json::to_string_pretty(&list) {
+            let _ = std::fs::write(dir.join(RECENT), t);
+        }
+    }
+}
+
+fn recent_json(dir: &Path) -> Value {
+    let files: Vec<Value> = recent_list(dir)
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let folder = r.path.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            json!({"index": i, "name": r.path.file_name().map(|n| n.to_string_lossy().to_string()), "folder": folder, "project": r.project, "found": r.path.is_file()})
+        })
+        .collect();
+    json!({"files": files})
+}
+
+/// Writes the open document to the autosave file when it has unsaved changes.
+fn autosave(dir: &Path, s: &Session) -> Result<bool, String> {
+    if !s.history.is_dirty() {
+        return Ok(false);
+    }
+    std::fs::create_dir_all(dir).map_err(|_| "Couldn't make the autosave folder.".to_string())?;
+    write_atomic(&dir.join(AUTOSAVE), &s.doc.to_json())?;
+    let meta = json!({"name": s.name, "project": s.project, "time": now_secs(), "brushes": s.doc.brushes.len(), "entities": s.doc.entities.len()});
+    std::fs::write(dir.join(AUTOSAVE_META), meta.to_string()).map_err(|_| "Couldn't write the autosave.".to_string())?;
+    Ok(true)
+}
+
+fn recovery_json(dir: &Path) -> Value {
+    if !dir.join(AUTOSAVE).is_file() {
+        return json!({"found": false});
+    }
+    let meta: Value = std::fs::read_to_string(dir.join(AUTOSAVE_META)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(json!({}));
+    json!({"found": true, "name": meta["name"], "time": meta["time"], "brushes": meta["brushes"], "entities": meta["entities"], "project": meta["project"].is_string()})
 }
 
 // ---- routes ---------------------------------------------------------------------------
@@ -1012,6 +1313,7 @@ async fn open_with(st: Shared, ed: Ed, h: HeaderMap, kind: Pick) -> Response {
     blocking(move || {
         let Some(path) = dialog(&st, kind, "")? else { return Ok(json!({"cancelled": true})) };
         let (doc, project) = load_file(&path)?;
+        remember(&ed.dir, &path, project);
         Ok(ed.install(doc, stem(&path), project.then_some(path), &dirs))
     })
     .await
@@ -1043,7 +1345,10 @@ async fn api_save(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: Hea
         };
         let mut g = ed.lock();
         let s = g.as_mut().ok_or(NO_DOC)?;
-        save_project(s, &path)?;
+        save_project(s, &path, Some(&ed.dir.join("backups")))?;
+        let _ = std::fs::remove_file(ed.dir.join(AUTOSAVE));
+        let _ = std::fs::remove_file(ed.dir.join(AUTOSAVE_META));
+        remember(&ed.dir, &path, true);
         Ok(json!({"saved": true, "file": path.file_name().map(|n| n.to_string_lossy().to_string()), "state": s.state()}))
     })
     .await
@@ -1172,6 +1477,129 @@ async fn api_tex(State(st): State<Shared>, Extension(ed): Extension<Ed>, UrlPath
     }
 }
 
+
+/// The clipboard text for a selection: a small .map (paste it into this map or another, or
+/// into J.A.C.K./TrenchBroom).
+#[derive(Deserialize)]
+struct CopyReq {
+    #[serde(default)]
+    brushes: Vec<u64>,
+    #[serde(default)]
+    entities: Vec<u64>,
+}
+
+async fn api_copy(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Json<CopyReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || {
+        let g = ed.lock();
+        let s = g.as_ref().ok_or(NO_DOC)?;
+        if req.brushes.is_empty() && req.entities.is_empty() {
+            return Err("Pick something to copy first.".into());
+        }
+        let frag = history::fragment(&s.doc, &bids(&req.brushes), &eids(&req.entities));
+        let text = mapfile::write_map(&frag, &mapfile::WriteOptions::default())?;
+        Ok(json!({"text": text, "brushes": frag.brushes.len(), "entities": frag.entities.len()}))
+    })
+    .await
+}
+
+/// The entity definitions for the inspector (our Counter-Strike FGD).
+async fn api_fgd() -> Response {
+    static PARSED: OnceLock<Result<Value, String>> = OnceLock::new();
+    match PARSED.get_or_init(|| fgd::parse(fgd::CSTRIKE_FGD).map(|c| json!({"source": "Loner-Strike Counter-Strike definitions", "classes": c}))) {
+        Ok(v) => ([(header::CACHE_CONTROL, "max-age=3600")], Json(v.clone())).into_response(),
+        Err(e) => fail(e.clone()),
+    }
+}
+
+async fn api_recent(Extension(ed): Extension<Ed>) -> Response {
+    blocking(move || Ok(recent_json(&ed.dir))).await
+}
+
+#[derive(Deserialize)]
+struct IndexReq {
+    index: usize,
+}
+
+async fn api_open_recent(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Json<IndexReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let dirs = wad_dirs(&st);
+    blocking(move || {
+        let r = recent_list(&ed.dir).get(req.index).cloned().ok_or("That file isn't in the recent list any more.")?;
+        if !r.path.is_file() {
+            return Err("That file isn't there any more. It may have been moved or deleted.".into());
+        }
+        let (doc, project) = load_file(&r.path)?;
+        remember(&ed.dir, &r.path, project);
+        Ok(ed.install(doc, stem(&r.path), project.then_some(r.path), &dirs))
+    })
+    .await
+}
+
+async fn api_autosave(Extension(ed): Extension<Ed>, h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || {
+        let g = ed.lock();
+        let s = g.as_ref().ok_or(NO_DOC)?;
+        Ok(json!({"saved": autosave(&ed.dir, s)?}))
+    })
+    .await
+}
+
+async fn api_recovery(Extension(ed): Extension<Ed>) -> Response {
+    blocking(move || Ok(recovery_json(&ed.dir))).await
+}
+
+/// Opens the autosave as the document (with unsaved changes; Save goes to its project, if
+/// it had one).
+async fn api_recover(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let dirs = wad_dirs(&st);
+    blocking(move || {
+        let path = ed.dir.join(AUTOSAVE);
+        if !path.is_file() {
+            return Err("There's nothing to recover.".into());
+        }
+        let doc = MapDocument::from_json(&read_text(&path)?)?;
+        let meta: Value = std::fs::read_to_string(ed.dir.join(AUTOSAVE_META)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(json!({}));
+        let name = meta["name"].as_str().filter(|n| !n.is_empty()).unwrap_or("Recovered").to_string();
+        let project = meta["project"].as_str().map(PathBuf::from).filter(|p| p.extension().is_some_and(|e| e == PROJECT_EXT));
+        let mut st = ed.install(doc, name, project, &dirs);
+        // it isn't saved anywhere yet: mark it changed so Save (and the next autosave) keep it
+        let mut g = ed.lock();
+        if let Some(s) = g.as_mut() {
+            s.history.mark_unsaved();
+            st = s.state();
+        }
+        Ok(st)
+    })
+    .await
+}
+
+async fn api_discard_recovery(Extension(ed): Extension<Ed>, h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || {
+        let _ = std::fs::remove_file(ed.dir.join(AUTOSAVE));
+        let _ = std::fs::remove_file(ed.dir.join(AUTOSAVE_META));
+        Ok(json!({"discarded": true}))
+    })
+    .await
+}
+
+// SDHLT hook (the compile task): `POST /api/tools/editor/compile` (run-map presets Fast/Final,
+// an optional cordon box), `GET /compile/:id` progress, and `GET pointfile` (the .lin leak
+// line as points, which the page already draws when its store's `pointfile` is set).
+
 fn routes_with(ed: Ed) -> Router<Shared> {
     Router::new()
         .route("/api/tools/editor/doc", get(api_doc))
@@ -1188,6 +1616,14 @@ fn routes_with(ed: Ed) -> Router<Shared> {
         .route("/api/tools/editor/import-map", post(api_import))
         .route("/api/tools/editor/save", post(api_save))
         .route("/api/tools/editor/export-map", post(api_export))
+        .route("/api/tools/editor/copy", post(api_copy))
+        .route("/api/tools/editor/fgd", get(api_fgd))
+        .route("/api/tools/editor/recent", get(api_recent))
+        .route("/api/tools/editor/open-recent", post(api_open_recent))
+        .route("/api/tools/editor/autosave", post(api_autosave))
+        .route("/api/tools/editor/recovery", get(api_recovery))
+        .route("/api/tools/editor/recover", post(api_recover))
+        .route("/api/tools/editor/discard-recovery", post(api_discard_recovery))
         .layer(Extension(ed))
 }
 
@@ -1216,6 +1652,8 @@ mod tests {
         })
     }
 
+    static NEXT_T: AtomicU64 = AtomicU64::new(0);
+
     struct T {
         st: Shared,
         ed: Ed,
@@ -1223,7 +1661,9 @@ mod tests {
 
     impl T {
         fn new() -> T {
-            T { st: state(), ed: Arc::new(Editor::new()) }
+            let dir = std::env::temp_dir().join(format!("ls-editor-t-{}-{}", std::process::id(), NEXT_T.fetch_add(1, Ordering::Relaxed)));
+            let _ = std::fs::remove_dir_all(&dir);
+            T { st: state(), ed: Arc::new(Editor::with_dir(dir)) }
         }
         async fn raw(&self, method: &str, uri: &str, body: Option<Value>, panel: bool) -> (StatusCode, Vec<u8>) {
             let mut req = Request::builder().method(method).uri(uri).header("host", "127.0.0.1:8027");
@@ -1471,7 +1911,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("ls-editor-files-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let ed = Editor::new();
+        let ed = Editor::with_dir(dir.join("ed"));
         ed.install(starter_map(), "Untitled".into(), None, &[]);
         let mut g = ed.lock();
         let s = g.as_mut().unwrap();
@@ -1479,7 +1919,10 @@ mod tests {
         assert!(s.history.is_dirty());
 
         let proj = dir.join("room.lsmap");
-        save_project(s, &proj).unwrap();
+        save_project(s, &proj, Some(&dir.join("backups"))).unwrap();
+        // saving again keeps the old file as a backup
+        save_project(s, &proj, Some(&dir.join("backups"))).unwrap();
+        assert_eq!(std::fs::read_dir(dir.join("backups")).unwrap().count(), 1);
         assert!(!s.history.is_dirty());
         assert_eq!(s.name, "room");
         let (back, is_project) = load_file(&proj).unwrap();
@@ -1537,5 +1980,112 @@ mod tests {
         assert!(missing.iter().any(|m| m.to_ascii_lowercase().contains("out_wall5")), "{missing:?}");
         assert!(!missing.iter().any(|m| m.to_ascii_lowercase().contains("crete3_flr04")), "{missing:?}");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn shapes_vertices_arrays_and_paste() {
+        let t = T::new();
+        t.post("/api/tools/editor/new", json!({})).await;
+        for (shape, n) in [("wedge", 1), ("spike", 1), ("sphere", 1), ("arch", 8)] {
+            let r = t.cmd(json!({"op": "add_shape", "shape": shape, "min": [0, 0, 0], "max": [128, 128, 64], "sides": 8, "texture": "ROCK", "grid": 1})).await;
+            assert_eq!(r["created"]["brushes"].as_array().map(|a| a.len()), Some(n), "{shape}: {r}");
+        }
+        assert!(t.cmd(json!({"op": "add_shape", "shape": "blob", "min": [0, 0, 0], "max": [8, 8, 8], "texture": "ROCK"})).await["error"].is_string());
+
+        // a vertex drag in two steps: one undo step, from where it started
+        let r = t.cmd(json!({"op": "add_box", "min": [0, 0, 0], "max": [64, 64, 64], "texture": "CRATE01"})).await;
+        let b = r["created"]["brushes"][0].as_u64().unwrap();
+        for dz in [8, 16] {
+            let r = t.cmd(json!({"op": "move_vertices", "picks": [[b, [64, 64, 64]]], "delta": [0, 0, dz], "drag": "v1"})).await;
+            assert!(r["error"].is_null(), "{r}");
+        }
+        let doc = t.get("/api/tools/editor/doc").await;
+        let bb = doc["brushes"].as_array().unwrap().iter().find(|x| x["id"] == b).unwrap().clone();
+        assert_eq!(bb["max"][2], 80.0);
+        assert_eq!(doc["undo"], "Move corners");
+        t.post("/api/tools/editor/undo", json!({})).await;
+        let doc = t.get("/api/tools/editor/doc").await;
+        assert_eq!(doc["brushes"].as_array().unwrap().iter().find(|x| x["id"] == b).unwrap()["max"][2], 64.0);
+        let r = t.cmd(json!({"op": "move_vertices", "picks": [[b, [64, 64, 64]]], "delta": [-48, -48, -48]})).await;
+        assert!(r["error"].as_str().unwrap().contains("convex"), "{r}");
+
+        // meshes carry each face's alignment
+        let (h, _) = t.meshes(doc["docId"].as_u64().unwrap(), None).await;
+        assert_eq!(h["brushes"][0]["faces"][0]["align"].as_array().unwrap().len(), 11);
+
+        // paste special: 3 copies stepping 64 along x
+        let r = t.cmd(json!({"op": "array", "brushes": [b], "copies": 3, "offset": [64, 0, 0]})).await;
+        assert_eq!(r["created"]["brushes"].as_array().unwrap().len(), 3, "{r}");
+        t.post("/api/tools/editor/undo", json!({})).await;
+
+        // copy as .map text, paste it back moved up
+        let c = t.post("/api/tools/editor/copy", json!({"brushes": [b]})).await;
+        let text = c["text"].as_str().unwrap().to_string();
+        assert!(text.contains("worldspawn") && text.contains("CRATE01"));
+        let r = t.cmd(json!({"op": "paste", "text": text, "offset": [0, 0, 128]})).await;
+        assert_eq!(r["created"]["brushes"].as_array().unwrap().len(), 1, "{r}");
+        assert!(t.cmd(json!({"op": "paste", "text": "hello", "offset": [0, 0, 0]})).await["error"].is_string());
+
+        // face sheet: justify and direct values, treated as one
+        let r = t.cmd(json!({"op": "align", "faces": [[b, 0], [b, 1]], "action": "justify", "mode": "left", "one": true})).await;
+        assert!(r["error"].is_null(), "{r}");
+        let r = t.cmd(json!({"op": "align", "faces": [[b, 0]], "action": "set", "su": 0.5, "rot": 45})).await;
+        assert!(r["error"].is_null(), "{r}");
+        assert!(t.cmd(json!({"op": "align", "faces": [[b, 0]], "action": "set", "su": 0})).await["error"].is_string());
+
+        // check fixes: the starter map has no problems with a fix... add a dangling target
+        let r = t.cmd(json!({"op": "add_entity", "classname": "trigger_relay", "origin": [0, 0, 64], "keys": [["target", "ghost"]]})).await;
+        let e = r["created"]["entities"][0].as_u64().unwrap();
+        let c = t.get("/api/tools/editor/checks").await;
+        let i = c["issues"].as_array().unwrap().iter().find(|i| i["code"] == "dangling-target").unwrap().clone();
+        assert_eq!(i["fix"], "clear-target");
+        let r = t.cmd(json!({"op": "fix", "fixes": [{"fix": "clear-target", "entity": e}]})).await;
+        assert_eq!(r["note"], "Fixed.");
+
+        // the entity definitions
+        let f = t.get("/api/tools/editor/fgd").await;
+        assert!(f["classes"].as_array().unwrap().iter().any(|c| c["name"] == "func_buyzone"));
+    }
+
+    #[tokio::test]
+    async fn autosave_recovery_and_recent() {
+        let t = T::new();
+        assert_eq!(t.get("/api/tools/editor/recovery").await["found"], false);
+        assert_eq!(t.get("/api/tools/editor/recent").await["files"], json!([]));
+        t.post("/api/tools/editor/new", json!({})).await;
+        // nothing changed: nothing written
+        assert_eq!(t.post("/api/tools/editor/autosave", json!({})).await["saved"], false);
+        t.cmd(json!({"op": "add_box", "min": [0, 0, 0], "max": [64, 64, 64], "texture": "CRATE01"})).await;
+        assert_eq!(t.post("/api/tools/editor/autosave", json!({})).await["saved"], true);
+        let r = t.get("/api/tools/editor/recovery").await;
+        assert_eq!(r["found"], true);
+        assert_eq!(r["brushes"], 7);
+
+        // the app "crashed": a fresh editor on the same folder recovers it
+        let t2 = T { st: t.st.clone(), ed: Arc::new(Editor::with_dir(t.ed.dir.clone())) };
+        let st = t2.post("/api/tools/editor/recover", json!({})).await;
+        assert_eq!(st["dirty"], true, "{st}");
+        assert_eq!(t2.get("/api/tools/editor/doc").await["brushes"].as_array().unwrap().len(), 7);
+        t2.post("/api/tools/editor/discard-recovery", json!({})).await;
+        assert_eq!(t2.get("/api/tools/editor/recovery").await["found"], false);
+        assert!(t2.post("/api/tools/editor/recover", json!({})).await["error"].is_string());
+
+        // recent files: newest first, no duplicates, missing ones say so
+        let f1 = t.ed.dir.join("a.lsmap");
+        std::fs::create_dir_all(&t.ed.dir).unwrap();
+        std::fs::write(&f1, starter_map().to_json()).unwrap();
+        remember(&t.ed.dir, &f1, true);
+        remember(&t.ed.dir, &t.ed.dir.join("gone.map"), false);
+        remember(&t.ed.dir, &f1, true);
+        let r = t.get("/api/tools/editor/recent").await;
+        let files = r["files"].as_array().unwrap();
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0]["name"], "a.lsmap");
+        assert_eq!(files[1]["found"], false);
+        let st = t.post("/api/tools/editor/open-recent", json!({"index": 0})).await;
+        assert_eq!(st["name"], "a");
+        assert!(t.post("/api/tools/editor/open-recent", json!({"index": 1})).await["error"].is_string());
+        assert!(t.post("/api/tools/editor/open-recent", json!({"index": 9})).await["error"].is_string());
+        let _ = std::fs::remove_dir_all(&t.ed.dir);
     }
 }

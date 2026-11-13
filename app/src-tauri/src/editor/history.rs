@@ -294,6 +294,10 @@ impl History {
     pub fn mark_saved(&mut self) {
         self.saved_serial = self.undo.last().map_or(0, |c| c.serial);
     }
+    /// Counts as changed until the next save (a recovered autosave isn't saved anywhere).
+    pub fn mark_unsaved(&mut self) {
+        self.saved_serial = u64::MAX;
+    }
     pub fn is_dirty(&self) -> bool {
         self.undo.last().map_or(0, |c| c.serial) != self.saved_serial
     }
