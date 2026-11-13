@@ -15,4 +15,5 @@ export const TOOLS: ToolEntry[] = [
   { id: "spray", label: "Spray maker", blurb: "Turn a picture into your in-game spray.", load: () => import("./spray/SprayMaker") },
   { id: "doctor", label: "Map doctor", blurb: "Find what a map is missing (textures, models, sounds, the download list, the bots' nav) and fix it.", beta: true, load: () => import("./doctor/Doctor") },
   { id: "health", label: "Map health check", blurb: "Bots play a map in the background for a few minutes, then a report says where they fall, get stuck or hit errors.", beta: true, load: () => import("./health/HealthCheck") },
+  { id: "callouts", label: "Callouts", blurb: "Name places on a map's bot nav, so bots say where they are and understand where you mean.", beta: true, load: () => import("./callouts/Callouts") },
 ];

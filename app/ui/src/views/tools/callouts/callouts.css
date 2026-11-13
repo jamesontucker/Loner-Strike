@@ -1,0 +1,30 @@
+/* The callout editor (views/tools/callouts). */
+.co-head { align-items: flex-start; flex-wrap: wrap; }
+.co-title { margin: 0; }
+.co-body { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; }
+@media (max-width: 1000px) { .co-body { grid-template-columns: minmax(0, 1fr); } }
+.co-map { min-width: 0; }
+.co-canvas { position: relative; width: 100%; user-select: none; }
+.co-canvas canvas { display: block; border-radius: 2px; box-shadow: var(--sunken); touch-action: none; }
+.co-tip { position: absolute; pointer-events: none; background: rgba(20, 22, 16, .92); color: var(--bone); padding: 4px 8px; border-radius: 2px; font-size: 13px; white-space: nowrap; }
+.co-zoom { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }
+.co-floors { margin-top: 10px; gap: 12px; }
+.co-range { display: inline-flex; gap: 6px; align-items: center; }
+.co-range input { width: 140px; }
+.co-help { margin: 8px 0 0; }
+.co-side h3 { margin-top: 0; }
+.co-name { display: grid; gap: 8px; margin-top: 8px; }
+.co-name .search { max-width: none; }
+.co-bad { color: var(--weak); }
+.co-places { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 360px; overflow: auto; }
+.co-places li { display: flex; gap: 6px; align-items: center; }
+.co-place { flex: 1; min-width: 0; display: flex; gap: 8px; align-items: center; border: 0; border-radius: 2px; padding: 4px 8px; background: var(--panel); color: var(--bone); box-shadow: var(--raised); font: inherit; cursor: pointer; text-align: left; }
+.co-place:hover, .co-place:focus-visible { background: var(--panel-2); }
+.co-place-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-place .push { margin-left: auto; }
+.co-swatch { flex: none; width: 12px; height: 12px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .4); }
+.co-voice { font-size: 12px; }
+.co-suggest { margin-top: 12px; }
+.co-save { margin-top: 10px; }
+.co-saved { color: var(--ok); font-weight: 600; }
+.co .linkish { border: 0; background: none; padding: 0; color: var(--signal); font: inherit; text-decoration: underline; cursor: pointer; }
