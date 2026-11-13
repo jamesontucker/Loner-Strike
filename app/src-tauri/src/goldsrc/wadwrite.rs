@@ -1,5 +1,6 @@
 //! Spray decals: any picture turned into the `tempdecal.wad` Counter-Strike 1.6 and
-//! Condition Zero send to the server as the player's spray.
+//! Condition Zero send to the server as the player's spray. (The end of the file also writes
+//! normal textures into WADs of any size for the texture browser; sprays don't use that.)
 //!
 //! What the game expects (checked against the tempdecal.wad the game itself writes, and the
 //! community's spray guides):
@@ -445,6 +446,293 @@ pub fn read_wad(bytes: &[u8]) -> Result<Spray> {
     let raw = lump.bytes(pal_at + 2, 768)?;
     let palette = raw.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
     Ok(Spray { width: w, height: h, pixels, palette })
+}
+
+// ---- normal textures (the texture browser's "add to a WAD") ------------------------------
+//
+// Everything below is separate from the spray code above: sprays keep their own writer.
+// A normal texture is a miptex lump (type 0x43) with four mip levels made from the picture
+// itself (each level scaled down, then matched to the same 256-colour palette), any number
+// of them in one WAD. Names starting with `{` are see-through where the index is 255 (and
+// palette colour 255 is pure blue, as the compilers expect).
+
+/// WAD3 lump type of a normal texture.
+pub const TYPE_MIPTEX: u8 = 0x43;
+/// The biggest texture side we make (the engine draws up to 512 on world textures).
+pub const MAX_TEXTURE_SIDE: u32 = 512;
+/// The most lumps a WAD we write or rewrite may hold.
+pub const MAX_LUMPS: usize = 4096;
+/// The biggest lump we copy when rewriting a WAD.
+const MAX_LUMP: usize = 32 << 20;
+
+/// One lump of a WAD, raw.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Lump {
+    pub name: String,
+    pub kind: u8,
+    pub data: Vec<u8>,
+}
+
+/// A texture name the game and the compilers take: 1-15 characters, letters, digits and
+/// `_ - { ! + ~`, a prefix character only first (`+0`/`-0` animated and random tiles keep
+/// theirs).
+pub fn valid_texture_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 15
+        && name.bytes().all(|c| c.is_ascii_alphanumeric() || b"_-{!+~".contains(&c))
+        && name.bytes().skip(1).all(|c| c != b'{' && c != b'!')
+}
+
+/// The size a picture becomes as a texture: the longer side at most `max_side`, never
+/// bigger than the picture (unless it's under 16), both sides multiples of 16.
+pub fn texture_size(w: u32, h: u32, max_side: u32) -> (u32, u32) {
+    let max_side = max_side.clamp(STEP, MAX_TEXTURE_SIDE);
+    let (w, h) = (w.max(1) as f64, h.max(1) as f64);
+    let scale = (max_side as f64 / w.max(h)).min(1.0);
+    let side = |v: f64| ((((v * scale) / STEP as f64).round() as u32) * STEP).clamp(STEP, max_side);
+    (side(w), side(h))
+}
+
+/// A texture ready to write: its name, size, the four mip levels (palette indices) and the
+/// palette.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MipTexture {
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub mips: [Vec<u8>; 4],
+    pub palette: Vec<[u8; 3]>,
+}
+
+/// Turns a picture into a texture called `name` (checked with `valid_texture_name`).
+pub fn make_texture(src: &RgbaImage, name: &str, max_side: u32) -> Result<MipTexture> {
+    if !valid_texture_name(name) {
+        return Err(Error::NotFormat { what: "texture", detail: format!("\"{name}\" isn't a name textures can have") });
+    }
+    let clear = name.starts_with('{');
+    let (w, h) = texture_size(src.width(), src.height(), max_side);
+    let mut pre = src.clone();
+    for p in pre.pixels_mut() {
+        if !clear {
+            // no see-through: clear parts become black, like the game would draw them
+            let a = p.0[3] as u32;
+            for c in 0..3 {
+                p.0[c] = ((p.0[c] as u32 * a + 127) / 255) as u8;
+            }
+            p.0[3] = 255;
+        }
+    }
+    let levels: Vec<RgbaImage> = (0..4)
+        .map(|k| image::imageops::resize(&pre, (w >> k).max(1), (h >> k).max(1), if k == 0 { image::imageops::FilterType::Lanczos3 } else { image::imageops::FilterType::Triangle }))
+        .collect();
+    let solid = |p: &image::Rgba<u8>| !clear || p.0[3] >= 128;
+    let mut counts: HashMap<[u8; 3], u32> = HashMap::new();
+    for p in levels[0].pixels().filter(|p| solid(p)) {
+        *counts.entry([p.0[0], p.0[1], p.0[2]]).or_default() += 1;
+    }
+    let mut palette = quantise(&counts.into_iter().collect::<Vec<_>>(), if clear { 255 } else { 256 });
+    if palette.is_empty() {
+        palette.push([0, 0, 0]);
+    }
+    let used = palette.len();
+    palette.resize(256, [0, 0, 0]);
+    if clear {
+        palette[255] = KEY_BLUE;
+    }
+    let mut cache: HashMap<[u8; 3], u8> = HashMap::new();
+    let mips = std::array::from_fn(|k| {
+        levels[k]
+            .pixels()
+            .map(|p| if !solid(p) { 255 } else { *cache.entry([p.0[0], p.0[1], p.0[2]]).or_insert_with(|| nearest_index(&palette[..used], [p.0[0], p.0[1], p.0[2]])) })
+            .collect()
+    });
+    Ok(MipTexture { name: name.to_string(), width: w, height: h, mips, palette })
+}
+
+/// The texture as a miptex lump.
+pub fn miptex_lump(t: &MipTexture) -> Lump {
+    let mut data = Vec::new();
+    let mut name = [0u8; 16];
+    let n = t.name.len().min(15);
+    name[..n].copy_from_slice(&t.name.as_bytes()[..n]);
+    data.extend(name);
+    data.extend(t.width.to_le_bytes());
+    data.extend(t.height.to_le_bytes());
+    let mut at = 40u32;
+    for m in &t.mips {
+        data.extend(at.to_le_bytes());
+        at += m.len() as u32;
+    }
+    for m in &t.mips {
+        data.extend(m);
+    }
+    data.extend(256u16.to_le_bytes());
+    for c in t.palette.iter().take(256) {
+        data.extend(c);
+    }
+    while data.len() % 4 != 0 {
+        data.push(0);
+    }
+    Lump { name: t.name.clone(), kind: TYPE_MIPTEX, data }
+}
+
+/// Every lump of a WAD3 file, raw (to add a texture to one and write it back).
+pub fn read_lumps(bytes: &[u8]) -> Result<Vec<Lump>> {
+    let what = "texture file";
+    let r = Le::new(bytes, what);
+    if r.bytes(0, 4)? != b"WAD3" {
+        return Err(Error::NotFormat { what, detail: "not a WAD3 file".into() });
+    }
+    let (count, dir) = (r.i32(4)?, r.u32(8)? as usize);
+    if count < 0 || count as usize > MAX_LUMPS {
+        return Err(Error::damaged(what, format!("it says it has {count} textures")));
+    }
+    let mut out = Vec::with_capacity(count as usize);
+    for i in 0..count as usize {
+        let e = dir + i * 32;
+        let (at, disk) = (r.u32(e)? as usize, r.u32(e + 4)? as usize);
+        if r.u8(e + 13)? != 0 {
+            return Err(Error::NotFormat { what, detail: "it has compressed parts".into() });
+        }
+        if disk > MAX_LUMP {
+            return Err(Error::damaged(what, "a texture in it is too big"));
+        }
+        out.push(Lump { name: cname(r.bytes(e + 16, 16)?), kind: r.u8(e + 12)?, data: r.bytes(at, disk)?.to_vec() });
+    }
+    Ok(out)
+}
+
+/// Adds `lump` to `lumps`, replacing one of the same name (any case).
+pub fn put_lump(lumps: &mut Vec<Lump>, lump: Lump) -> Result<()> {
+    if let Some(l) = lumps.iter_mut().find(|l| l.name.eq_ignore_ascii_case(&lump.name)) {
+        *l = lump;
+    } else if lumps.len() >= MAX_LUMPS {
+        return Err(Error::NotFormat { what: "texture file", detail: format!("it already has {MAX_LUMPS} textures") });
+    } else {
+        lumps.push(lump);
+    }
+    Ok(())
+}
+
+/// A WAD3 file of these lumps.
+pub fn write_lumps(lumps: &[Lump]) -> Vec<u8> {
+    let mut out = b"WAD3".to_vec();
+    out.extend((lumps.len() as i32).to_le_bytes());
+    out.extend(0u32.to_le_bytes());
+    let mut dir = Vec::with_capacity(lumps.len() * 32);
+    for l in lumps {
+        let at = out.len() as u32;
+        out.extend(&l.data);
+        while out.len() % 4 != 0 {
+            out.push(0);
+        }
+        dir.extend(at.to_le_bytes());
+        dir.extend((l.data.len() as u32).to_le_bytes());
+        dir.extend((l.data.len() as u32).to_le_bytes());
+        dir.extend([l.kind, 0, 0, 0]);
+        let mut name = [0u8; 16];
+        let n = l.name.len().min(15);
+        name[..n].copy_from_slice(&l.name.as_bytes()[..n]);
+        dir.extend(name);
+    }
+    let dir_at = out.len() as u32;
+    out[8..12].copy_from_slice(&dir_at.to_le_bytes());
+    out.extend(dir);
+    out
+}
+
+#[cfg(test)]
+mod texture_tests {
+    use super::*;
+
+    fn picture(w: u32, h: u32, f: impl Fn(u32, u32) -> [u8; 4]) -> RgbaImage {
+        RgbaImage::from_fn(w, h, |x, y| image::Rgba(f(x, y)))
+    }
+
+    #[test]
+    fn names_and_sizes() {
+        for ok in ["brick", "{fence", "!water1", "+0button", "-0floor", "a_b-c~d", "fifteen_chars15"] {
+            assert!(valid_texture_name(ok), "{ok}");
+        }
+        for bad in ["", "sixteen_chars_16", "a b", "a/b", "a{b", "x!", "é", "a.b"] {
+            assert!(!valid_texture_name(bad), "{bad}");
+        }
+        assert_eq!(texture_size(1000, 500, 256), (256, 128));
+        assert_eq!(texture_size(100, 50, 512), (96, 48));
+        assert_eq!(texture_size(5, 5, 512), (16, 16));
+        assert_eq!(texture_size(4000, 30, 512), (512, 16));
+        assert_eq!(texture_size(64, 64, 9999), (64, 64));
+    }
+
+    #[test]
+    fn texture_round_trip() {
+        let img = picture(100, 60, |x, y| [(x * 2) as u8, (y * 4) as u8, 50, 255]);
+        let t = make_texture(&img, "mybrick", 512).unwrap();
+        assert_eq!((t.width, t.height), (96, 64));
+        assert_eq!(t.mips[1].len(), 48 * 32);
+        assert_eq!(t.mips[3].len(), 12 * 8);
+        let lump = miptex_lump(&t);
+        assert_eq!(lump.data.len() % 4, 0);
+        let rgba = crate::goldsrc::wad::decode_miptex(&lump.data, "").unwrap();
+        assert_eq!((rgba.width, rgba.height), (96, 64));
+        // a pixel comes back close to the picture
+        let p = &rgba.pixels[(10 * 96 + 40) * 4..][..4];
+        let want = img.get_pixel(40 * 100 / 96, 10 * 60 / 64).0;
+        for c in 0..3 {
+            assert!((p[c] as i32 - want[c] as i32).abs() < 24, "{p:?} vs {want:?}");
+        }
+        // into a WAD with another texture, then replaced
+        let mut lumps = vec![Lump { name: "other".into(), kind: TYPE_MIPTEX, data: miptex_lump(&make_texture(&img, "other", 64).unwrap()).data }];
+        put_lump(&mut lumps, lump.clone()).unwrap();
+        let bytes = write_lumps(&lumps);
+        let back = read_lumps(&bytes).unwrap();
+        assert_eq!(back, lumps);
+        let small = make_texture(&img, "MYBRICK", 32).unwrap();
+        let mut again = back.clone();
+        put_lump(&mut again, miptex_lump(&small)).unwrap();
+        assert_eq!(again.len(), 2);
+        assert_eq!(again[1].name, "MYBRICK");
+        // and the map viewer's reader finds them
+        let d = std::env::temp_dir().join(format!("ls-wadtex-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("mine.wad"), write_lumps(&again)).unwrap();
+        let w = crate::goldsrc::wad::Wad::open(&d.join("mine.wad")).unwrap();
+        let rec = w.read_miptex("mybrick").unwrap().unwrap();
+        assert_eq!(crate::goldsrc::wad::decode_miptex(&rec, "").unwrap().width, 32);
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn see_through_textures() {
+        let img = picture(32, 32, |x, _| if x < 16 { [200, 0, 0, 0] } else { [10, 200, 10, 255] });
+        let t = make_texture(&img, "{grille", 512).unwrap();
+        assert_eq!(t.palette[255], KEY_BLUE);
+        let rgba = crate::goldsrc::wad::decode_miptex(&miptex_lump(&t).data, "").unwrap();
+        assert_eq!(rgba.pixels[3], 0, "left half is see-through");
+        assert_eq!(rgba.pixels[(31 * 4) + 3], 255);
+        // without `{` the clear half is black, not see-through
+        let t = make_texture(&img, "grille", 512).unwrap();
+        let rgba = crate::goldsrc::wad::decode_miptex(&miptex_lump(&t).data, "").unwrap();
+        assert_eq!(&rgba.pixels[0..4], &[0, 0, 0, 255]);
+        assert!(make_texture(&img, "bad name", 512).is_err());
+    }
+
+    #[test]
+    fn damaged_wads_are_errors() {
+        let bytes = write_lumps(&[Lump { name: "a".into(), kind: TYPE_MIPTEX, data: vec![1, 2, 3, 4] }]);
+        for n in [0, 4, 11, 12, bytes.len() - 1] {
+            assert!(read_lumps(&bytes[..n]).is_err(), "{n}");
+        }
+        let mut b = bytes.clone();
+        b[4..8].copy_from_slice(&(-1i32).to_le_bytes());
+        assert!(read_lumps(&b).is_err());
+        let mut b = bytes.clone();
+        let dir = b.len() - 32;
+        b[dir + 13] = 1;
+        assert!(read_lumps(&b).is_err());
+        // the spray reader still takes the game's single-lump files only through its own path
+        assert!(read_lumps(b"WAD2\0\0\0\0\0\0\0\0").is_err());
+    }
 }
 
 #[cfg(test)]
