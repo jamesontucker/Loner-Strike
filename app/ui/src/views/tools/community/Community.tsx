@@ -29,6 +29,7 @@ import Publish from "./Publish";
 import Yours from "./Yours";
 import InstalledList, { InstalledActions } from "./Installed";
 import "./community.css";
+import { BOT_NOTE, BOT_RATING_INFO } from "../../../games";
 import { DiscordButton } from "../../DiscordButton";
 
 type Tab = "browse" | "installed" | "publish" | "yours";
@@ -109,6 +110,8 @@ export default function Community({ maps }: ToolProps) {
 
 function BrowseList({ onOpen, kind, setKind }: { onOpen: (e: Entry) => void; kind: string; setKind: (k: string) => void }) {
   const [sort, setSort] = useState("new");
+  // bot support (game modes): any, or at least so good
+  const [botsAt, setBotsAt] = useState("any");
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   useEffect(() => {
@@ -147,6 +150,18 @@ function BrowseList({ onOpen, kind, setKind }: { onOpen: (e: Entry) => void; kin
             <option value="name">Name</option>
           </select>
         </label>
+        {(kind === "all" || kind === "mode") && (
+          <label className="cm-sort">
+            <span className="muted small-note">Bots</span>
+            <select value={botsAt} onChange={(e) => setBotsAt(e.target.value)} aria-label="Bot support">
+              <option value="any">Any</option>
+              <option value="great">{BOT_NOTE.great}</option>
+              <option value="ok">{BOT_NOTE.ok} or better</option>
+              <option value="weak">{BOT_NOTE.weak}</option>
+              <option value="none">{BOT_NOTE.none}</option>
+            </select>
+          </label>
+        )}
         <BusyButton className="btn" busy={list.isFetching} label="Refresh" busyLabel="Loading…" onClick={again} />
       </div>
       {list.data && <SourceNote data={list.data} />}
@@ -165,7 +180,7 @@ function BrowseList({ onOpen, kind, setKind }: { onOpen: (e: Entry) => void; kin
         />
       ) : (
         <ul className="cm-grid" aria-label="Creations">
-          {list.data.items.map((e) => (
+          {list.data.items.filter((e) => botsAt === "any" || (e.kind === "mode" && (botsAt === "ok" ? e.bots === "great" || e.bots === "ok" : e.bots === botsAt))).map((e) => (
             <li key={e.key}>
               <Card e={e} onOpen={() => onOpen(e)} />
             </li>
@@ -211,6 +226,7 @@ function Card({ e, onOpen }: { e: Entry; onOpen: () => void }) {
           {e.have ? " · in your game" : ""}
         </span>
         {e.modes.length > 0 && <span className="muted small-note">Modes: {e.modes.join(", ")}</span>}
+        {e.kind === "mode" && e.bots && <span className={`bots-note ${e.bots}`} title={BOT_RATING_INFO}>{BOT_NOTE[e.bots]}</span>}
         <Badges list={e.badges} trust={e.trust} />
       </span>
     </button>

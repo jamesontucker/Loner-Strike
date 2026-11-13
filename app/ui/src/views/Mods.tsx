@@ -9,7 +9,7 @@ import type { AppInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, SteamProgress, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
 import { BOT_NOTE, BOT_RATING, BOT_RATING_INFO } from "../games";
-import { CommunityModes } from "./tools/community/Hooks";
+import { CommunityModes, OwnModes } from "./tools/community/Hooks";
 
 
 // Part of Loner-Strike's own plugin: always there once the basics are installed
@@ -246,6 +246,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup, 
       )}
 
       {setUp && <CommunityModes />}{/* (community) */}
+      {setUp && <OwnModes />}{/* (origin: made by me / remixed) */}
       {setUp && <OwnPlugins />}
 
       {/* the basics put in again where they are (a Steam update, a file check or an antivirus can undo

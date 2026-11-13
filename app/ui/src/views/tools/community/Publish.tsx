@@ -14,6 +14,7 @@ import { BusyButton, LoadError, useToast } from "../../../ui";
 import { errorText, useBusy } from "../common/api";
 import { Empty, Loading, MapList } from "../common";
 import { Segmented } from "../../../ui";
+import { BOT_NOTE, BOT_RATING_INFO } from "../../../games";
 import { modeReadiness, publish, publishMode, readiness, register, reveal, sizeText, startModes, studioGraphs, type Form, type MineState, type Package, type Shot } from "./communityApi";
 
 const MAX_SHOTS = 6;
@@ -85,12 +86,14 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
     }
   });
   const [maps, setMaps] = useState("");
+  const [bots, setBots] = useState("");
   const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
   const { working, run } = useBusy();
   useEffect(() => {
     if (!q.data) return;
     setTitle((t) => t || q.data.name);
     setSummary((s) => s || q.data.description);
+    setBots((b) => b || q.data.botsSuggested || "");
   }, [q.data]);
   const head = (
     <div className="tl-head">
@@ -115,7 +118,7 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
       } catch {
         /* remembered next time, maybe */
       }
-      const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: [] });
+      const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: [], bots });
       if (res.error) return toast(res.error, true);
       setDone({ pkg: res.package, form: res.form });
     });
@@ -143,6 +146,14 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
           <label className="cm-field cm-wide">
             <span>About it</span>
             <textarea value={summary} maxLength={400} rows={3} onChange={(e) => setSummary(e.target.value)} placeholder="How it plays, in a sentence or two" />
+          </label>
+          <label className="cm-field">
+            <span>How well bots play it</span>
+            <select value={bots} onChange={(e) => setBots(e.target.value)}>
+              <option value="">Not saying</option>
+              {(["great", "ok", "weak", "none"] as const).map((r) => <option key={r} value={r}>{BOT_NOTE[r]}</option>)}
+            </select>
+            <span className="muted small-note">{BOT_RATING_INFO}{r.botsSuggested ? " The Studio suggested this from the graph." : ""}</span>
           </label>
           <label className="cm-field cm-wide">
             <span>Maps it's made for (optional)</span>

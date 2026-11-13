@@ -8,7 +8,7 @@ import { getJson, ON_THIS_COMPUTER, currentTarget } from "../../../api";
 import { useNav } from "../../../store";
 import { useToast } from "../../../ui";
 import { post } from "../common/api";
-import { CommunityLink } from "./chip";
+import { CommunityLink, originText, useOrigins } from "./chip";
 
 type Row = { key: string; kind: string; name: string; author: string; url: string; mode: string; update: number | null; pulled: boolean };
 
@@ -72,6 +72,32 @@ export function CommunityModes() {
       ) : (
         <p className="muted small-note">None yet. Other players' Game Mode Studio modes install in a click and are built on this computer: nothing that runs code is downloaded.</p>
       )}
+    </section>
+  );
+}
+
+/** Mods page: your own Game Mode Studio modes and your remixes (made by me / remixed). */
+export function OwnModes() {
+  const origins = useOrigins();
+  if (currentTarget() || !ON_THIS_COMPUTER || !origins) return null;
+  const rows = Object.entries(origins.modes).filter(([, o]) => o.kind === "mine" || o.kind === "remix");
+  if (!rows.length) return null;
+  return (
+    <section>
+      <div className="section-head">
+        <div className="section-title"><h3>Your Game Mode Studio modes</h3></div>
+        <p>Modes you made, and remixes of community modes (credited to who made the original).</p>
+      </div>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+        {rows.map(([id, o]) => (
+          <li key={id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 12px" }}>
+            <strong>{id}</strong>
+            <span className="tag" style={{ fontSize: 11, padding: "0 6px" }}>{originText(o)}</span>
+            <span style={{ flex: 1 }} />
+            <button className="btn small" onClick={() => useNav.getState().go("tools", `studio:${id}`)}>Open in Studio</button>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

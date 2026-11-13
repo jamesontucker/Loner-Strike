@@ -97,3 +97,45 @@ export function CountBadge({ n, title }: { n: number; title: string }) {
     </span>
   );
 }
+
+// ---- origins (My library): made by me / from the community / remixed ----
+
+export type Origin = { kind: "mine" | "community" | "remix" | "file"; author?: string; url?: string; name?: string; of?: string };
+export type Origins = { maps: Record<string, Origin>; modes: Record<string, Origin>; prefabs: Record<string, Origin> };
+
+/** Where each map, mode and prefab in the library came from (nothing on a phone). */
+export function useOrigins(): Origins | undefined {
+  const q = useQuery({
+    queryKey: ["tools", "community", "origins"],
+    queryFn: () => getJson<Origins>("/api/tools/community/origins"),
+    enabled: ON_THIS_COMPUTER,
+    staleTime: 60_000,
+    retry: false,
+  });
+  return q.data && !(q.data as { error?: string }).error ? q.data : undefined;
+}
+
+/** The words for an origin: "Made by me", "Community · jam", "Remix of Lava", "From a file". */
+export function originText(o?: Origin | null): string {
+  if (!o) return "";
+  switch (o.kind) {
+    case "mine":
+      return "Made by me";
+    case "community":
+      return `Community${o.author ? ` · ${o.author}` : ""}`;
+    case "remix":
+      return `Remix of ${o.of || "a community mode"}${o.author ? ` by ${o.author}` : ""}`;
+    case "file":
+      return "From a file";
+  }
+}
+
+/** A small origin tag (not a link: safe inside a card's button). */
+export function OriginTag({ o }: { o?: Origin | null }) {
+  if (!o) return null;
+  return (
+    <span className="tag cm-chip" style={STYLE} title={o.kind === "community" ? `From Community: ${o.name ?? ""}${o.author ? ` by ${o.author}` : ""}` : originText(o)}>
+      {originText(o)}
+    </span>
+  );
+}

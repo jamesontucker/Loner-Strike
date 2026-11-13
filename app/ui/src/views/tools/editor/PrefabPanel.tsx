@@ -17,7 +17,7 @@ import { PREFAB_MIME } from "./P4Scene";
 import { selectionBounds, useEditor } from "./store";
 import "./p4.css";
 import "./p5.css";
-import { CommunityChip, CommunityLink, communityPrefab, useCommunity } from "../community/chip";
+import { CommunityChip, CommunityLink, communityPrefab, OriginTag, useCommunity, useOrigins } from "../community/chip";
 
 const AUTHOR_KEY = "ls.editor.prefabAuthor";
 
@@ -63,7 +63,10 @@ export function PrefabPanel() {
   }, [load, rev]);
 
   const shown = useMemo(() => (list ?? []).filter((p) => matches(p, q)), [list, q]);
-  const mine = shown.filter((p) => !p.builtin);
+  // (origin: Yours can be narrowed to what you made, what came from Community, or what you added from a file)
+  const origins = useOrigins();
+  const [from, setFrom] = useState("all");
+  const mine = shown.filter((p) => !p.builtin && (from === "all" || (origins?.prefabs[p.id]?.kind ?? "mine") === from));
   const starters = shown.filter((p) => p.builtin);
   const hasSel = sel.brushes.length + sel.entities.length > 0;
   const bump = () => useP4.getState().set({ prefabRev: useP4.getState().prefabRev + 1 });
@@ -154,7 +157,15 @@ export function PrefabPanel() {
       )}
       {list && (
         <>
-          <h4 className="p4-head">Yours{mine.length ? ` (${mine.length})` : ""}</h4>
+          <h4 className="p4-head">
+            Yours{mine.length ? ` (${mine.length})` : ""}
+            <select className="p4-from" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Show prefabs from" style={{ marginLeft: 8, fontSize: 12 }}>
+              <option value="all">All</option>
+              <option value="mine">Made by me</option>
+              <option value="community">From Community</option>
+              <option value="file">From a file</option>
+            </select>
+          </h4>
           {mine.length === 0 && <p className="small-note muted">{q ? "None of yours match." : "Pick some brushes and entities, then Save what's picked. Prefabs from Tools > Community land here too."}</p>}
           <ul className="p4-rows">
             {mine.map((p) => (
@@ -182,6 +193,7 @@ function Row({ p, rev, onShare, onEdit, onDelete }: { p: Prefab; rev: number; on
   const img = useRef<HTMLImageElement>(null);
   const meta = `${sizeText(p)}${p.tags.length ? ` · ${p.tags.join(", ")}` : ""}${p.author && !p.builtin ? ` · ${p.author}` : ""}`;
   const cm = communityPrefab(useCommunity(), p.id); // (community chip)
+  const origin = useOrigins()?.prefabs[p.id]; // (origin: made by me / from a file)
   return (
     <li
       className="p4-row"
@@ -200,7 +212,7 @@ function Row({ p, rev, onShare, onEdit, onDelete }: { p: Prefab; rev: number; on
       <span className="p4-row-text">
         <span className="p4-row-name ed-ellipsis">{p.name}</span>
         <span className="p4-row-meta ed-ellipsis muted">{meta}</span>
-        {cm && <CommunityChip chip={cm} />}
+        {cm ? <CommunityChip chip={cm} /> : !p.builtin && origin && <OriginTag o={origin} />}
       </span>
       <span className="p4-row-actions">
         <button type="button" className="btn small" title="Then click on the map (R turns it)" onClick={() => useP4.getState().set({ placing: { id: p.id, name: p.name, size: p.size }, turn: 0 })}>

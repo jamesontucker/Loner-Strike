@@ -36,6 +36,8 @@ export type Entry = {
   /** the map is already in your game */
   have: boolean;
   badges: Badge[];
+  /** game modes: how well bots play it (the app's own scale), "" not said */
+  bots: "" | "great" | "ok" | "weak" | "none";
   trust: Trust;
   canTry: boolean;
   url: string;
@@ -149,9 +151,9 @@ export type UpdateNote = { title: string; version: string; date: number; text: s
 export const updateNotes = (model: Model, id: number, signal?: AbortSignal) => get<{ notes: UpdateNote[] }>(`${base}/notes/${model.toLowerCase()}/${id}`, signal);
 export const remix = (key: string) => post<{ ok: boolean; id: string; name: string }>(`${base}/remix`, { key });
 
-export type ModeReady = { id: string; name: string; description: string; nodes: number; blockers: string[]; remixOf: Credit | null };
+export type ModeReady = { id: string; name: string; description: string; nodes: number; blockers: string[]; remixOf: Credit | null; botsSuggested: string };
 export const modeReadiness = (id: string, signal?: AbortSignal) => get<ModeReady>(`${base}/publish-mode/${encodeURIComponent(id)}`, signal);
-export const publishMode = (id: string, body: { title: string; summary: string; author: string; maps: string[]; screenshots: Shot[] }) =>
+export const publishMode = (id: string, body: { title: string; summary: string; author: string; maps: string[]; screenshots: Shot[]; bots: string }) =>
   post<{ package: Package; form: Form }>(`${base}/publish-mode/${encodeURIComponent(id)}`, body);
 export type StudioGraph = { id: string; name: string; description?: string; nodes?: number; damaged?: boolean; installed?: boolean };
 export const studioGraphs = () => tryGet<{ graphs: StudioGraph[] }>("/api/tools/studio/graphs");

@@ -8,6 +8,7 @@ import { useNav } from "../../../store";
 import { BusyButton, LoadError, Segmented, useToast } from "../../../ui";
 import { errorText, useBusy } from "../common/api";
 import { Empty, Loading } from "../common";
+import { useOrigins } from "./chip";
 import { KIND_LABEL, ago, goBack, library, remix, uninstall, update, updateAll, updateNotes, type Details, type Installed, type Model } from "./communityApi";
 
 const keyOf = (model: Model, id: number) => `${model === "Spray" ? "spray" : "mod"}-${id}`;
@@ -136,6 +137,10 @@ function UpdateNotes({ model, id }: { model: Model; id: number }) {
 export default function InstalledList({ onOpen, onBrowse }: { onOpen: (model: Model, id: number) => void; onBrowse: () => void }) {
   const q = useQuery({ queryKey: ["tools", "community", "library"], queryFn: ({ signal }) => library(signal), retry: false });
   const [kind, setKind] = useState("all");
+  // (origin: the Studio modes you made from these)
+  const origins = useOrigins();
+  const remixedFrom = (it: Installed) =>
+    Object.entries(origins?.modes ?? {}).filter(([, o]) => o.kind === "remix" && o.url === it.url).map(([id]) => id).join(", ");
   // updates first, then the newest installs
   const items = useMemo(
     () => (q.data?.items ?? []).filter((i) => kind === "all" || i.kind === kind).sort((a, b) => Number(!!b.update) - Number(!!a.update) || b.installed - a.installed),
@@ -185,6 +190,7 @@ export default function InstalledList({ onOpen, onBrowse }: { onOpen: (model: Mo
                 </span>
                 <span className="small-note">{where(it)}</span>
                 {it.update && <span className="tag cm-badge cm-badge-update">Update available</span>}
+                {remixedFrom(it) && <span className="tag cm-chip">You remixed this: {remixedFrom(it)}</span>}
               </div>
               <InstalledActions it={it} />
             </li>
