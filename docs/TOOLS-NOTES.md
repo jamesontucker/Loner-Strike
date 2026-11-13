@@ -2935,3 +2935,14 @@ the game). Fixed on the way: `cs_get_user_team` before a joining player has team
 round-timer gamedata (see round 2), gun given twice at spawn (template now strips first).
 
 **Request (P6/shell):** nothing more; the shell.tsx change is the 50 ms wait in `leaveTo` only.
+
+### Agent W1: barricades solid to everyone, shot through the gaps — 2026-11-12
+- Replaced the ShouldCollide hook (it let players walk through) with an `FM_TraceLine` post hook: an intact barricade is
+  solid to every hull trace (players, bots, creatures can't pass; a CLIP brush filling the opening is the builder's format),
+  and any point trace from the game (bullets, bots' sight) that hits a `see_through` barricade or one of its `boards=`
+  brushes is continued past it (up to 4 layers) and its result rewritten. `pev_iuser4 = 1` stays on them for W2's brain.
+  Broken = SOLID_NOT = open to everyone. Bots keep `ls_mode block <ent> -1` while it stands, `block <ent> 0` when broken.
+- Checked on ls_outpost (6 bots, waves 1-3): a hull trace as a player stops at the West gate (movement blocked);
+  246 bot bullet hits on creatures, 163 of them through an intact gate. 99 hits still landed on barricades: most likely
+  knife swings (the knife's hull trace is meant to stop) — W2, worth checking whether bots knife at creatures behind a gate.
+- LSPLAY restarted with it (ls_outpost, Normal, 5 bots, port 27330, waits, brain r43369945601).
