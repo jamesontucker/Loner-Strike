@@ -176,7 +176,7 @@ Hurts players inside (fire, poison, shock, radiation, plain) every `interval`; r
 - Bots: `avoid` with cost from damage per second.
 
 ### ls_timed_door
-Runs `func_door`/`func_door_rotating`s named `door`: opens at `open_at`, closes at `close_at`, closes
+Runs `func_door`/`func_door_rotating`s named `door` (or `door=*12`, a brush model, for maps whose doors have no name): opens at `open_at`, closes at `close_at`, closes
 again `open_secs` after opening, can't be used by players before `locked_until`; with `lockable` a
 player of `team` holds USE by it for `lock_time` to lock it for `lock_secs`. Its doors are given the
 game's "toggle" flag so they stay where they're put.
@@ -298,6 +298,7 @@ On a dedicated server (CrossOver HLDS clone, de_dust2, 10 bots, the shipped pack
 from a test plugin through the natives): capture with contest and ticks, zone shrink with crossing
 and damage ticks, weapon spawner pickups, crates opened by bots, supply drop announce/land/open with
 items, barricade broken by damage, extraction (BarTime, action none), a class with weapons/HP/speed,
-waves respawning dead T bots and clearing, round resets. Not yet in game: doors, traps, meetings,
-platforms, checkpoints, the beams' look and the radar trick on a real client, and `ls_mode` with W2's
-brain.
+waves respawning dead T bots and clearing, round resets; on cs_assault: a timed door found by brush
+model opening and closing on time, a trap fired with victims, checkpoints and a lap, a meeting called,
+voted on and a bot voted out. Not yet: platforms, the beams' and HUD's look on a real client, the radar
+trick, and `ls_mode` with W2's brain.

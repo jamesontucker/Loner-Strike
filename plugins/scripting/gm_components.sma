@@ -1039,7 +1039,10 @@ stock comp_link(s)
 			ks(s, "door", name, charsmax(name), g_tname[s]);
 			g_ndoors[s] = 0;
 			new e = 0;
-			while (name[0] && g_ndoors[s] < MAX_DOORS && (e = engfunc(EngFunc_FindEntityByString, e, "targetname", name)) > 0)
+			/* by name, or by brush model (*12) for maps whose doors have no name */
+			new field[12];
+			copy(field, charsmax(field), name[0] == '*' ? "model" : "targetname");
+			while (name[0] && g_ndoors[s] < MAX_DOORS && (e = engfunc(EngFunc_FindEntityByString, e, field, name)) > 0)
 			{
 				new cls[32];
 				pev(e, pev_classname, cls, charsmax(cls));
@@ -1060,7 +1063,7 @@ stock comp_link(s)
 		case K_PLATFORM:
 		{
 			ks(s, "platform", name, charsmax(name));
-			g_aux[s] = name[0] ? engfunc(EngFunc_FindEntityByString, 0, "targetname", name) : 0;
+			g_aux[s] = name[0] ? engfunc(EngFunc_FindEntityByString, 0, name[0] == '*' ? "model" : "targetname", name) : 0;
 			if (g_aux[s] <= 0)
 			{
 				g_aux[s] = 0;

@@ -186,7 +186,7 @@
 
 @PointClass base(LsName, LsTarget, LsTeam) size(-8 -8 -8, 8 8 8) color(200 200 80) = ls_timed_door : "Opens, closes and locks func_doors on a timetable. Players may lock it for a while. Bots go round a locked door."
 [
-	door(target_destination) : "Door" : : "The Name of the func_door / func_door_rotating (all doors with that name)."
+	door(target_destination) : "Door" : : "The Name of the func_door / func_door_rotating (all doors with that name), or its brush model (*12) in a map pack."
 	open_at(float) : "Opens after" : -1 : "Seconds after the round starts (-1 = never by itself)."
 	close_at(float) : "Closes after" : -1 : "Seconds after the round starts (-1 = never by itself)."
 	open_secs(float) : "Closes again after" : 0 : "Seconds after it opens (0 = stays open)."
@@ -236,6 +236,6 @@
 
 @PointClass base(LsName) size(-8 -8 -8, 8 8 8) color(120 200 255) = ls_moving_platform : "Tells bots about a func_train / func_plat (they wait for it and ride it) and reports when it stops and starts."
 [
-	platform(target_destination) : "Train or platform" : : "Its Name."
+	platform(target_destination) : "Train or platform" : : "Its Name, or its brush model (*12) in a map pack."
 	auto(float) : "Sets off after" : -1 : "Seconds after the round starts (-1 = never by itself)."
 ]
