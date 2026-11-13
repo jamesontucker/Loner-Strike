@@ -673,7 +673,7 @@ const TOOLS_FOLD = "ls.toolsOpen";
 
 /**
  * Tools in the sidebar: its own group after Hosting. The group heading (with the Beta tag)
- * folds it; under it Overview (the cards page), then the tools grouped Look / Fix / Make
+ * folds it; under it Overview (the cards page), then the tools grouped Create / Map tools / Personalize / Watch & inspect / Share
  * (views/tools/registry.tsx), each straight to its page. Opening a tool unfolds it.
  */
 function ToolsNav({ section, onOpen }: { section: Section; onOpen: (focus: string) => void }) {

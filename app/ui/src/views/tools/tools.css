@@ -3,7 +3,8 @@
 .tools-beta { font-size: 11px; padding: 0 6px; letter-spacing: .03em; text-transform: uppercase; vertical-align: 1px; margin-right: 4px; }
 /* the Tools overview: a card per tool, its blurb on up to two lines */
 .tools-cards-group { margin-bottom: 18px; }
-.tools-cards-head { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--bone-faint); letter-spacing: .04em; text-transform: uppercase; }
+.tools-cards-head { margin: 0 0 2px; font-size: 13px; font-weight: 700; color: var(--bone-faint); letter-spacing: .04em; text-transform: uppercase; }
+.tools-cards-blurb { margin: 0 0 10px; font-size: 13px; color: var(--bone-dim, var(--bone-faint)); }
 .tools-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
 .tools-card { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; row-gap: 4px; align-content: start; min-width: 0; padding: 12px 14px; border: 0; border-radius: 3px; background: var(--panel); box-shadow: var(--raised); color: var(--bone); text-align: left; cursor: pointer; }
 .tools-card:hover { background: var(--panel-2); }

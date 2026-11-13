@@ -10,7 +10,7 @@ import { useToolPage } from "../../stores/toolPage";
 import type { MapInfo } from "../../types";
 import { Icon } from "../../icons";
 import { lazyPage, SectionHead, Skeleton } from "../../ui";
-import { TOOL_GROUPS, TOOLS } from "./registry";
+import { TOOL_GROUPS, TOOL_GROUP_BLURBS, TOOLS } from "./registry";
 import { lastTool, rememberWhereYouAre } from "./common/address";
 import { Breadcrumbs, FocusButton, FocusPill, openAddress, useShell, useToolsShell } from "./common/shell";
 import { ToolKeys } from "./common/Shortcuts";
@@ -93,13 +93,14 @@ function Overview() {
         title="Tools"
         note={
           <>
-            <span className="tag tools-beta">Beta</span> New in 1.0: look inside maps, fix them for the bots, and make your own.
+            <span className="tag tools-beta">Beta</span> New in 1.0: make your own maps and modes, get any map ready for bots, and make the game yours.
           </>
         }
       />
       {TOOL_GROUPS.map((g) => (
         <section key={g} className="tools-cards-group">
           <h3 className="tools-cards-head">{g}</h3>
+          <p className="tools-cards-blurb">{TOOL_GROUP_BLURBS[g]}</p>
           <div className="tools-cards">
             {TOOLS.filter((t) => t.group === g).map((t) => (
               <button key={t.id} className="tools-card" title={t.blurb} onClick={() => go("tools", t.id)}>

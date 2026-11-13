@@ -1909,7 +1909,7 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 /* ---- Tools in the sidebar (the pages' own styles are in views/tools/tools.css, loaded with them) ---- */
 /* Tools is in beta for 1.0: a small tag in the sidebar and on the page */
 .nav-beta { margin-left: auto; font-size: 11px; padding: 0 6px; letter-spacing: .03em; text-transform: uppercase; }
-/* Tools in the sidebar: like Servers, the tools grouped Look / Fix / Make (App.tsx ToolsNav) */
+/* Tools in the sidebar: like Servers, the tools grouped Create / Map tools / Personalize / Watch & inspect / Share (App.tsx ToolsNav) */
 .nav-group-fold { display: flex; align-items: center; gap: 8px; width: calc(100% - 20px); padding: 0; border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 600; color: var(--bone-faint); text-align: left; cursor: pointer; }
 .nav-group-fold:hover { color: var(--bone-dim); }
 .nav-group-fold .nav-beta { margin-left: 0; }
