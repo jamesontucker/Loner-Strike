@@ -117,6 +117,13 @@ public plugin_init()
 	set_task(1.0, "tick", TASK_TICK, _, _, "b");
 }
 
+/* the next mode may sell things: the brain's "nothing to buy" goes with this one */
+public plugin_end()
+{
+	if (cvar_exists("ls_mode_ver"))
+		server_cmd("ls_mode nobuy 0");
+}
+
 public cmd_nobuy(id)
 {
 	return PLUGIN_HANDLED;
@@ -171,6 +178,9 @@ public game_setup()
 	ls_comp_bots_hint("set br");
 	ls_comp_bots_hint("goal_clear all 0");
 	ls_comp_bots_hint("friend all all 0");
+	ls_comp_bots_hint("phase off");
+	/* nothing to buy here: bots don't wait in the buy state */
+	ls_comp_bots_hint("nobuy 1");
 	make_squads();
 	pick_traits();
 	if (get_pcvar_num(g_cWaitHuman) && !humans())
@@ -243,9 +253,9 @@ stock start_drop()
 		for (new p = 1; p <= MaxClients; p++)
 			if (is_user_alive(p))
 				drop_in(p);
-	/* while nobody can be hurt, bots loot instead of chasing each other (else they start the
-	   fight in knife range: half a 20-bot lobby went in the first 15 s on br_valley) */
-	ls_comp_bots_hint("friend all all 1");
+	/* while nobody can be hurt, bots loot and keep apart instead of chasing each other (else
+	   they start the fight in knife range: half a 20-bot lobby went in the first 15 s on br_valley) */
+	ls_comp_bots_hint("phase loot");
 	new drop = floatround(get_pcvar_float(g_cDrop) * floatclamp(0.6 + g_pace * 0.4, 0.7, 1.1));
 	g_phaseEnd = get_gametime() + float(drop);
 	ls_announce(0, 5.0, "Battle Royale: loot up! Fighting starts in %d seconds", drop);
@@ -258,8 +268,7 @@ stock start_play()
 {
 	g_phase = PH_PLAY;
 	g_playAt = get_gametime();
-	ls_comp_bots_hint("friend all all 0");
-	squad_friends();
+	ls_comp_bots_hint("phase fight");
 	ls_announce(0, 3.0, "Fight! %d left", alive_sides());
 	/* supply drops spread over the game */
 	g_ndrops = min(get_pcvar_num(g_cDrops), sizeof g_dropAt);
