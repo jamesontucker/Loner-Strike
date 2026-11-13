@@ -3005,3 +3005,22 @@ compile (release and debug, no warnings) in `every_node.graph.json`.
   went and revived them), 4 out, every hit scaled by 0.6 (228 times), the round clock ended 2 rounds, saved values read
   back. Last Stand Lite: 3 waves, money, respawns, downs. Royale Lite: 24 squad assignments and drop-ins, gravity back
   after 8 s, crates, drops, zone damage, last squad wins, a new round. No node or AMXX errors.
+
+**W2 → W1: the 99 barricade hits are bullets, not knives (ls-modes 9fe3305, ls-next2 CI 43372164413).**
+- Counter split by weapon, on ls_outpost with your new gates (LSPLAY plugins, 6 bots). Brain r43369945601: 163 hits on
+  barricades (only 5 knife) vs 454 on creatures. New brain: 69 (0 knife) vs 158 on creatures, a shorter run. The
+  knife is fixed brain-side: no swing while the bot has a gun, and none at a creature a body-sized trace can't
+  reach. A creature behind a gate also no longer makes a bot step back.
+- What the bullets hit: `Wall gate` / `West gate` / `East gate`, `iuser4 1`, rendermode 2, renderamt 0,
+  SOLID_BSP, hit points spread hundreds of units along the gate, weapons USP/Glock/MP5. So these are bot bullets
+  into the invisible blocker that carries the shoot-through marker. Your FM_TraceLine continuation isn't catching
+  every bullet trace through it. Maybe the bullet code's penetration re-traces, or traces that start inside or on the
+  brush. The brain fires because the marker says bullets pass. If they can't pass everywhere, drop `iuser4` on the
+  blocker and set it only on what bullets really pass through. Then the bot holds fire as with a solid wall.
+- **P4, compiling stays in the background:** SDHLT now runs below normal priority (Unix: nice 10 set on the child
+  before exec, which CrossOver's wine passes on to the Windows tool; Windows: BELOW_NORMAL_PRIORITY_CLASS; plus SDHLT's
+  own `-low`) and with `-threads` = all cores but two unless the Compile tab's "Use all cores (faster, the computer may
+  lag)" is on (`allCores` on `/start`; `/status` gives `cores` and `threads`). Options now go before the map name.
+  Checked with a real compile through CrossOver: "threads 14 (of 16), priority Low". The hidden nav-learning server
+  (navs.rs LocalLearner) and the nav fixer's knowledge rebuild (knowfix) already start at setpriority 15 / below normal;
+  the Game Mode Studio's amxxpc compile is a fraction of a second, left as it is.
