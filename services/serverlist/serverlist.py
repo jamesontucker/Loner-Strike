@@ -11,6 +11,7 @@
 # Listens on 127.0.0.1 only; a Cloudflare Tunnel (or Caddy) in front gives it HTTPS.
 #   GET  /servers    {"servers": [...], "updated": <unix time>}, anyone may read it
 #   POST /register   {"address": "host[:port]"}: checks the server now and lists it
+#   /community/...   community creations (community.py), only with --community-db
 # Nothing else is served. No visitor addresses are kept or logged beyond a short
 # in-memory count for the rate limit.
 import argparse
@@ -282,7 +283,7 @@ class RateLimit:
             return True
 
 
-def make_handler(registry, limit, asker=check):
+def make_handler(registry, limit, asker=check, community=None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "list"
         sys_version = ""
@@ -311,7 +312,18 @@ def make_handler(registry, limit, asker=check):
                 return (self.headers.get("CF-Connecting-IP") or peer).strip()
             return peer
 
+        def _community(self, method):
+            if community and self.path.startswith("/community/"):
+                community.handle(self, method, self._visitor())
+                return True
+            if community and self.path.split("?", 1)[0] == "/discord/interactions" and method == "POST":
+                community.interactions(self)
+                return True
+            return False
+
         def do_GET(self):
+            if self._community("GET"):
+                return
             if self.path.split("?", 1)[0] == "/servers":
                 now = time.time()
                 self._send(200, {"servers": registry.public(now), "updated": int(now)}, "public, max-age=30")
@@ -321,6 +333,8 @@ def make_handler(registry, limit, asker=check):
         do_HEAD = do_GET
 
         def do_POST(self):
+            if self._community("POST"):
+                return
             if self.path.split("?", 1)[0] != "/register":
                 return self._send(404, {"error": "not found"})
             if not limit.allow(self._visitor(), time.time()):
@@ -360,10 +374,32 @@ def main():
     p = argparse.ArgumentParser(description="Loner-Strike server list")
     p.add_argument("--listen", type=int, default=8100, help="port on 127.0.0.1")
     p.add_argument("--state", required=True, help="file that keeps the list between restarts")
+    p.add_argument("--community-db", default="", help="turns on community creations: their SQLite database")
+    p.add_argument("--recheck-hours", type=float, default=24, help="how often every community page is checked again")
+    p.add_argument("--admin-local", action="store_true", help="moderation only from this machine, not through the tunnel")
     a = p.parse_args()
     registry = Registry(a.state)
     threading.Thread(target=registry.poll, daemon=True).start()
-    server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(registry, RateLimit(MAX_REGISTER)))
+    community = None
+    if a.community_db:
+        import community as cm
+        # secrets come from the service's env file (EnvironmentFile=, root-only, 0600), never on
+        # the command line; taken out of the environment once read
+        token = os.environ.pop("COMMUNITY_ADMIN_TOKEN", "").strip()
+        webhook = os.environ.pop("COMMUNITY_MOD_WEBHOOK", "").strip()
+        community = cm.Community(cm.Store(a.community_db), token=token, notifier=cm.Notifier(webhook),
+                                 admin_local=a.admin_local)
+        # the private mod channel's cards and buttons, through the bot application
+        bot_token = os.environ.pop("DISCORD_BOT_TOKEN", "").strip()
+        channel = os.environ.get("DISCORD_CHANNEL_ID", "").strip()
+        if bot_token and channel:
+            import modbot
+            modbot.Mod(community, modbot.Bot(bot_token, channel), os.environ.get("DISCORD_PUBLIC_KEY", "").strip(),
+                       os.environ.get("DISCORD_GUILD_ID", "").strip(), os.environ.get("DISCORD_MOD_ROLES", "").split(","),
+                       os.environ.get("DISCORD_OWNER_ID", "").strip(), webhook=webhook)
+        if a.recheck_hours > 0:
+            threading.Thread(target=community.recheck_loop, args=(a.recheck_hours,), daemon=True).start()
+    server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(registry, RateLimit(MAX_REGISTER), community=community))
     server.daemon_threads = True
     server.serve_forever()
 

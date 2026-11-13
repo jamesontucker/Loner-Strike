@@ -1,12 +1,15 @@
 [Unit]
-Description=Loner-Strike server list
+Description=Loner-Strike server list and community creations
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 DynamicUser=yes
 StateDirectory=lonerstrike-list
-ExecStart=/usr/bin/python3 /opt/lonerstrike-list/serverlist.py --listen 8100 --state %S/lonerstrike-list/list.json
+# community secrets and Discord ids (root-only, 0600; read by systemd before it drops to the
+# service's user). Optional: without it the community part still answers, without moderation.
+EnvironmentFile=-/etc/lonerstrike-list/community.env
+ExecStart=/usr/bin/python3 /opt/lonerstrike-list/serverlist.py --listen 8100 --state %S/lonerstrike-list/list.json --community-db %S/lonerstrike-list/community.db
 Restart=always
 RestartSec=5
 NoNewPrivileges=yes

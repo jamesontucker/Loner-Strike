@@ -1,0 +1,22 @@
+# Optional: publishes the community index from the box when it changed (pulls reach apps within
+# minutes without anyone at the Mac). Needs the aws CLI (snap install aws-cli --classic) and an R2
+# token in /etc/lonerstrike-list/r2.env (R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT,
+# R2_BUCKET; root-only, 0600). Turned on with: systemctl enable --now lonerstrike-community-publish.timer
+[Unit]
+Description=Publish the Loner-Strike community index when it changed
+After=lonerstrike-list.service
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+StateDirectory=lonerstrike-community-publish
+EnvironmentFile=/etc/lonerstrike-list/community.env
+EnvironmentFile=/etc/lonerstrike-list/r2.env
+ExecStart=/usr/bin/python3 /opt/lonerstrike-list/lsmod.py --server http://127.0.0.1:8100 publish --out %S/lonerstrike-community-publish --upload --if-changed
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=256M

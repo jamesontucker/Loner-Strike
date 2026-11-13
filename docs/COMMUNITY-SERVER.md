@@ -1,0 +1,235 @@
+# Community creations: the server side
+
+The app's Community browser (docs/COMMUNITY.md) talks to two places we run:
+
+- **list.lonerstrike.com** — the existing server list service on the Hetzner box (Python, standard
+  library, systemd, behind the Cloudflare tunnel). It now also takes registrations and reports,
+  checks them against GameBanana, keeps the moderation state in SQLite and posts cards with buttons
+  to the private Discord channel 🛡️・community-reports.
+- **dl.lonerstrike.com/community/index.json** — the static index the app reads (R2), built from that
+  state and uploaded by `lsmod.py publish --upload`.
+
+Nothing here is live until the steps in section 6 are run.
+
+## 1. Files
+
+| File | What |
+|---|---|
+| `services/serverlist/serverlist.py` | The list service. `--community-db` turns the community part on; routes `/community/*` and `/discord/interactions` to it. |
+| `services/serverlist/community.py` | Registrations, checks, reports, moderation, re-check, index builder, admin API. |
+| `services/serverlist/modbot.py` | Discord cards and buttons (bot posts, Ed25519-checked interactions, Undo, slash commands). |
+| `services/serverlist/lsmod.py` | Moderation and publishing from a terminal (Mac, or on the box against 127.0.0.1). |
+| `services/serverlist/discord-setup.py` | One-time: registers `/community` and sets the Interactions Endpoint URL. Dry run unless `--apply`. |
+| `services/serverlist/install.sh`, `set-env.sh`, `community.env.example` | Install/update on the box; set one secret from stdin; the env file's template. |
+| `services/serverlist/lonerstrike-list.service` | The unit (now with `EnvironmentFile=` and `--community-db`). |
+| `services/serverlist/lonerstrike-community-publish.{service,timer}` | Optional: publish from the box every 5 minutes when the index changed. Installed, not enabled. |
+| `scripts/r2-community.sh` | Uploads `index.json` + `index.json.sha256` to R2 with the aws CLI, like `r2-navs.sh`. Dry run unless `--upload`. |
+| `services/serverlist/test_community.py`, `test_modbot.py`, `testdata/gamebanana/` | Offline tests with recorded GameBanana answers and forged Discord interactions. |
+
+Tests: `cd services/serverlist && python3 -m unittest test_community test_modbot test_serverlist`
+(73 tests). A live check that a real GameBanana zip can be listed by range requests:
+`python3 -c "import community as c; print(c.package_names({'id': 1886785, 'name': 'cage.zip', 'size': 278384}))"`.
+
+## 2. How it works
+
+**A registration** (`POST /community/submit`, sent by the app after Publish, body
+`{"schema": 1, "app": "<version>", "item": {...}}` exactly as community.rs `send()` builds it):
+
+1. Rate limit per visitor (10/hour; Cloudflare's `CF-Connecting-IP` only when the request comes from
+   the tunnel on 127.0.0.1, like `/register`), body at most 64 KB.
+2. The item is checked field by field and retyped to the app's schema (ids, MD5, names `safe_arg`,
+   mode ids, health numbers in range, text to one line with caps). Fields only the server may set
+   (author, screenshots, featured, status, review, dates) are ignored. A mode with plugins is refused:
+   "Plugin modes can't be shared yet. Make it in Game Mode Studio…".
+3. A retry of the same file (the app retries "waiting" entries) answers at once without asking
+   GameBanana again. A pulled page answers 409; a file the team turned down answers 409 with the reason.
+4. The page is fetched from `https://gamebanana.com/apiv11/<Mod|Spray>/<id>/ProfilePage` (the only
+   host; ids from validated integers; no redirects; 4 MB cap; 30 fetches/minute in all). It must:
+   exist and not be trashed/private/withheld/flagged; be Counter-Strike 1.6 (4254); carry
+   `Software Used: LonerStrike`; be in the category for its kind (Maps 5474, Prefabs 451, Textures
+   681, AMXX 3521 for Studio modes, Sprays); list the item's file id with the same MD5, scanned clean,
+   1 byte to 1 GB.
+5. **The package's contents**: the zip's directory is read with HTTP range requests (usually two, a
+   few KB) from `gamebanana.com/dl/<file>`, following redirects only to `files.gamebanana.com` /
+   `filecacheN.gamebanana.com`, at most 4 MB read. Refused: anything that runs code (`.amxx .amx .sma
+   .inc .dll .so .dylib .exe .bat .cmd .sh .ps1 .py .js .jar .lua …`), archives inside the archive,
+   `addons/metamod/`, `dlls/`. A lone `.bsp/.wad/.bmp/.tga/.png/.jpg` is fine; any other non-zip is
+   refused ("upload the zip the app made"). The app's Publish uses the same list.
+6. Rate limit per GameBanana member (10/day).
+7. **Listed at once**, with the GameBanana submitter as author and the page's own pictures. A card
+   goes to the mod channel (title, kind, page id, thumbnail, link, **[Pull]**). If the team blocked
+   that member, it waits instead (`pending`, card with **[Approve] [Reject]**). An update to a listed
+   page replaces it at once (or waits, for a blocked creator, while the old one stays listed).
+
+Answers: `200 {"ok": true, "key": "mod:123", "state": "listed" | "pending" | "hidden"}`; refusals
+`400/409/413/422 {"error": "<what to fix>"}`; `429` rate limit; `502` GameBanana didn't answer;
+`503` busy. The app treats a 4xx other than 429 as final and shows the reason; 429/5xx stay
+"waiting" and are retried.
+
+**Where a registration stands** (`GET /community/submission/<mod|spray>/<id>`, public, CORS `*`):
+`{"key", "state": "unknown|pending|listed|hidden|rejected|pulled", "updated", "md5"?, "waiting"?, "reason"?}`.
+
+**A report** (`POST /community/report`, the app's Report button, body
+`{"schema": 1, "app": "<version>", "model": "Mod"|"Spray", "id": 123, "reason":
+"broken|malware|stolen|offensive|not-loner-strike|other", "note": "<up to 500 characters>"}`):
+5 per visitor per hour, one per visitor per page per day (more are thanked and dropped), 300 a day in
+all. Kept 90 days with the reason, the note and a **reporter hash** (HMAC of the address with a salt
+that lives only in memory: the same reporter reads the same until a restart; no address is stored).
+Any GameBanana page can be reported, listed or not. The channel gets a card (reason, escaped note,
+reporter hash, reports this week, **[Pull] [Keep] [Block creator]**), at most one per page per half hour.
+
+**The mod channel.** Cards are posted by the bot application ("Loner-Strike Setup") with
+`allowed_mentions: {parse: []}` and outside text escaped and capped, so a page name or note can't
+ping anyone. Clicks arrive at `POST /discord/interactions`:
+- Discord's Ed25519 signature over timestamp + body is checked with the app's public key
+  (`cryptography` when installed, else the RFC 8032 verifier in modbot.py); timestamps older than
+  5 minutes are refused; PING is answered.
+- Only our guild, and only members with the Moderator or Dev role or the owner; anyone else gets an
+  ephemeral "You can't do that."
+- Button ids are opaque and signed (`ls1:<action>:<card>:<hmac>`, keyed from the bot token), so a
+  forged id can't name another card or action. Each interaction id is done once (Discord may
+  resend); a second click on a done card says who already did it.
+- Pull and Reject ask for a reason in a small form (needed to reject). Approve doesn't re-check the
+  page (buttons must answer in 3 seconds; the checks passed when it came in). Block creator blocks
+  that GameBanana member's next submissions.
+- The card is edited ("Pulled by @name · reason") with **[Undo]**, and an audit line is posted.
+  Undo puts the entry back exactly as it was, unless it changed since (then: use lsmod.py).
+- Slash commands (guild): `/community pull|keep|block|status <page> [reason]`.
+- If the bot can't post, the same news goes to the channel's webhook as text (no buttons).
+
+**Pulls reach apps when the index is published again** (`lsmod.py publish --upload` on the Mac, or
+the optional timer on the box). Pulled pages stay in the index with `status: "revoked"` and in the
+top-level `revoked` list, so apps hide them even when GameBanana still lists the tag.
+
+**The daily re-check** (a thread in the service, first run 10 minutes after start): each listed,
+hidden and waiting page is fetched again (2 s apart). Gone, untagged, moved out of CS 1.6 or flagged:
+pulled (waiting ones turned down). The listed file's MD5 no longer on the page: hidden ("replaced or
+removed"; a new registration brings it back). Flagged by the virus scan: pulled. Network trouble
+changes nothing. If more than a quarter of 8+ pages look gone at once, nothing is pulled and the
+channel is told (GameBanana having a bad day, or its API changing).
+
+**The index**: `GET /community/admin/index` builds `community/index.json` from the database —
+exactly community.rs's `Index`/`Item` (camelCase, every field typed as the app reads it; checked
+by compiling the app's structs and `parse_index` against a generated index: all entries kept).
+`schema: 1`, `updated` = last moderation change (same database, same bytes), `revoked`, an empty
+`verifiedAuthors`, items featured first, newest first, at most 5000 and 8 MB. Modes always carry
+`plugins: []`, `review: "none"` (the fields stay for later). A `index.json.sha256` is written beside
+it; the app doesn't check it yet (request in COMMUNITY.md section 8 — a signature would be the real
+fix).
+
+## 3. Admin API and lsmod.py
+
+All under `/community/admin/`, `Authorization: Bearer <COMMUNITY_ADMIN_TOKEN>` (32+ characters;
+compared as SHA-256 digests with `hmac.compare_digest`; 10 wrong tokens from one visitor lock it out
+for an hour; no CORS headers). `--admin-local` on the service makes them answer only on the box.
+
+`lsmod.py` (Mac: token in `~/.config/lonerstrike/community-admin.token`, chmod 600, or
+`LS_COMMUNITY_TOKEN`): `queue [--state …]`, `show`, `pull --reason`, `restore`, `hide`, `approve`,
+`reject --reason`, `block`, `unblock`, `blocked`, `reports [page]`, `feature on|off`,
+`recheck [page]`, `status` (counts; "CHANGED, run publish" when the index differs from what was
+last published), `publish [--out DIR] [--upload] [--if-changed]`. Pages as `mod:123`, `spray:45` or
+the GameBanana link. On the box: `python3 /opt/lonerstrike-list/lsmod.py --server http://127.0.0.1:8100 …`
+with the token in `LS_COMMUNITY_TOKEN`.
+
+## 4. Configuration
+
+`/etc/lonerstrike-list/community.env` (root, 0600, read by systemd before it drops to the
+service's dynamic user; secrets are removed from the process environment once read; none are
+logged):
+
+| Variable | |
+|---|---|
+| `COMMUNITY_ADMIN_TOKEN` | lsmod.py's token. install.sh makes one. Without it, moderation answers 503. |
+| `DISCORD_BOT_TOKEN` | The bot application's token (from `~/.config/loner-discord-token`). Without it: no cards, the webhook gets text. |
+| `DISCORD_APP_ID`, `DISCORD_PUBLIC_KEY` | Public; printed by `discord-setup.py`. Without the key, `/discord/interactions` answers 503. |
+| `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID`, `DISCORD_MOD_ROLES`, `DISCORD_OWNER_ID` | Filled in by the template: guild 1568421500636233748, channel 1570640821320159252, roles Moderator 1568425985504968768 + Dev 1568425984288362637, owner 310619637727363072. |
+| `COMMUNITY_MOD_WEBHOOK` | Fallback: the channel's webhook (from `~/.config/lonerstrike/community-webhook`). Only `https://discord.com/api/webhooks/…` is ever posted to. |
+
+The database is `/var/lib/lonerstrike-list/community.db` (systemd StateDirectory). Migrations run
+at start (`PRAGMA user_version`; version 1 creates everything).
+
+## 5. Security notes
+
+- Outbound requests: only `gamebanana.com` (API) and its file hosts (range requests), `discord.com`
+  (bot channel calls and the webhook). Exact host match, https only, no proxies from the
+  environment, redirects followed only for downloads and only to GameBanana's file hosts.
+- Inbound bodies capped (64 KB submit/admin, 4 KB report); JSON shape and types checked; text
+  stripped of control/direction characters.
+- No visitor addresses stored or logged; logs say what happened to which page, never tokens or
+  webhook addresses.
+- Not covered: DNS for gamebanana.com resolving somewhere private (the host is fixed, so this would
+  need DNS compromise); the app not verifying the index's checksum/signature.
+
+## 6. Go-live steps (for you to run; nothing here has been run)
+
+Box: `cs@178.156.241.180` (Ubuntu 24.04, sudo). Run from the tools checkout
+(`cd ~/loner-strike-tools`, or the main checkout once merged).
+
+1. **Tests**: `! cd services/serverlist && python3 -m unittest test_community test_modbot test_serverlist`
+2. **Copy and install** (keeps the list running; adds the community part; makes the env file with
+   a fresh admin token):
+   ```
+   ! scp -r services/serverlist scripts/r2-community.sh cs@178.156.241.180:/tmp/ls-new/
+   ! ssh cs@178.156.241.180 'sudo sh /tmp/ls-new/serverlist/install.sh'
+   ```
+3. **Secrets into the env file** (from your Mac's files over stdin; never shown, never on a command line):
+   ```
+   ! ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_BOT_TOKEN' < ~/.config/loner-discord-token
+   ! ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh COMMUNITY_MOD_WEBHOOK' < ~/.config/lonerstrike/community-webhook
+   ```
+4. **The admin token to your Mac** (straight into the file, not the screen):
+   ```
+   ! ssh cs@178.156.241.180 'sudo sed -n "s/^COMMUNITY_ADMIN_TOKEN=//p" /etc/lonerstrike-list/community.env' > ~/.config/lonerstrike/community-admin.token && chmod 600 ~/.config/lonerstrike/community-admin.token
+   ```
+5. **The app's id and public key** (public values):
+   ```
+   ! python3 services/serverlist/discord-setup.py
+   ! echo <DISCORD_PUBLIC_KEY it printed> | ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_PUBLIC_KEY'
+   ! echo <DISCORD_APP_ID it printed> | ssh cs@178.156.241.180 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_APP_ID'
+   ! ssh cs@178.156.241.180 'sudo systemctl restart lonerstrike-list && sleep 2 && journalctl -u lonerstrike-list -n 5 --no-pager -o cat'
+   ```
+6. **Cloudflare**: no new tunnel route is needed — `list.lonerstrike.com` already sends every path to
+   `http://localhost:8100`, so `/community/*` and `/discord/interactions` arrive. Check:
+   `! curl -s https://list.lonerstrike.com/community/health` → `{"ok": true}`. If the zone has Bot
+   Fight Mode, a WAF challenge or rate limiting rules, add a skip rule for
+   `http.host eq "list.lonerstrike.com" and (starts_with(http.request.uri.path, "/discord/interactions") or starts_with(http.request.uri.path, "/community/"))`
+   — Discord and the app can't solve challenges.
+7. **Discord buttons and the slash command** (Discord PINGs the endpoint while saving it; step 5
+   must be done first):
+   ```
+   ! python3 services/serverlist/discord-setup.py --apply
+   ```
+   (Or by hand: developer portal → the app → General Information → Interactions Endpoint URL =
+   `https://list.lonerstrike.com/discord/interactions`.) Then in the channel's server: Server
+   Settings → Integrations → Loner-Strike Setup → `/community`: allow Moderator and Dev if they
+   lack Manage Messages (the service checks roles itself either way).
+8. **Check it**: `! python3 services/serverlist/lsmod.py status` (counts, index sha) and in Discord
+   `/community status mod:1` (answers "unknown", ephemeral). The first real registration from the
+   app posts a card with [Pull].
+9. **The first index**: `! python3 services/serverlist/lsmod.py publish` (writes
+   `community-index/index.json` + `.sha256`, uploads nothing), look at it, then
+   `! python3 services/serverlist/lsmod.py publish --upload` (aws CLI + `~/.config/lonerstrike/r2.env`,
+   as for the nav pack). Check:
+   `! curl -sI https://dl.lonerstrike.com/community/index.json` → 200, `content-type: application/json`,
+   `cache-control: public, max-age=300`.
+10. **Optional — publish from the box** (pulls reach apps within ~5 minutes without the Mac): make a
+    separate R2 API token for the bucket (Object Read & Write), put `R2_ACCESS_KEY_ID`,
+    `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`, `R2_BUCKET` in `/etc/lonerstrike-list/r2.env` (0600), then
+    ```
+    ! ssh cs@178.156.241.180 'sudo snap install aws-cli --classic && sudo systemctl enable --now lonerstrike-community-publish.timer'
+    ! ssh cs@178.156.241.180 'sudo systemctl start lonerstrike-community-publish; journalctl -u lonerstrike-community-publish -n 10 --no-pager -o cat'
+    ```
+    Unverified: the snap aws CLI under a DynamicUser unit; if it complains about HOME, add
+    `Environment=HOME=%S/lonerstrike-community-publish` to the service.
+
+**Rollback**: copy the previous `services/serverlist` (main checkout) and run its install.sh; its
+unit has no `--community-db`, so the community part stops answering (404) and `community.db` stays
+where it is. In Discord, clear the Interactions Endpoint URL.
+
+## 7. Open items
+
+- The tag search finding `Software Used: LonerStrike` is unverified until the first real upload.
+- Only `.zip` packages (and lone .bsp/.wad/images) can be looked inside; a creator re-packing as
+  `.rar` is refused with a clear message.
+- The re-check doesn't read package contents again (a different file means a new MD5, which hides it).
+- The app doesn't verify `index.json.sha256` (or a signature) yet.

@@ -1,0 +1,258 @@
+{
+ "_idRow": 739703,
+ "_nStatus": "0",
+ "_bIsPrivate": false,
+ "_bAccessorIsSubmitter": false,
+ "_bIsTrashed": false,
+ "_bIsWithheld": false,
+ "_sName": "Cage",
+ "_sCommentsMode": "open",
+ "_tsDateModified": 1794514450,
+ "_tsDateAdded": 1794514450,
+ "_sProfileUrl": "https://gamebanana.com/mods/739703",
+ "_aPreviewMedia": {
+  "_aImages": [
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/mods",
+    "_sFile": "6af61df3914c9.jpg",
+    "_sFile220": "220-90_6af61df3914c9.jpg",
+    "_hFile220": 165,
+    "_wFile220": 220,
+    "_sFile530": "530-90_6af61df3914c9.jpg",
+    "_hFile530": 398,
+    "_wFile530": 530,
+    "_sFile100": "100-90_6af61df3914c9.jpg",
+    "_hFile100": 75,
+    "_wFile100": 100
+   },
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/mods",
+    "_sFile": "6af61df49f9e3.jpg",
+    "_sFile100": "100-90_6af61df49f9e3.jpg",
+    "_hFile100": 75,
+    "_wFile100": 100
+   },
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/mods",
+    "_sFile": "6af61df4a7f38.jpg",
+    "_sFile100": "100-90_6af61df4a7f38.jpg",
+    "_hFile100": 75,
+    "_wFile100": 100
+   },
+   {
+    "_sType": "screenshot",
+    "_sBaseUrl": "https://images.gamebanana.com/img/ss/mods",
+    "_sFile": "6af61df4b3171.jpg",
+    "_sFile100": "100-90_6af61df4b3171.jpg",
+    "_hFile100": 75,
+    "_wFile100": 100
+   }
+  ]
+ },
+ "_nUpdatesCount": 0,
+ "_bHasUpdates": false,
+ "_nAllTodosCount": 0,
+ "_bHasTodos": false,
+ "_nPostCount": 0,
+ "_aTags": [
+  {
+   "_sTitle": "Software Used",
+   "_sValue": "LonerStrike"
+  }
+ ],
+ "_bCreatedBySubmitter": true,
+ "_bIsPorted": false,
+ "_nThanksCount": 0,
+ "_sInitialVisibility": "show",
+ "_sDownloadUrl": "https://gamebanana.com/mods/download/739703",
+ "_nDownloadCount": 5,
+ "_aFiles": [
+  {
+   "_idRow": 1886785,
+   "_sFile": "cage.zip",
+   "_nFilesize": 278384,
+   "_tsDateAdded": 1794514423,
+   "_nDownloadCount": 5,
+   "_sDownloadUrl": "https://gamebanana.com/dl/1886785",
+   "_sMd5Checksum": "77f263451516f3d9be3934e329640472",
+   "_sAnalysisState": "done",
+   "_sAnalysisResult": "ok",
+   "_sAnalysisResultVerbose": "File passed preliminary analysis",
+   "_sAvState": "done",
+   "_sAvResult": "clean",
+   "_bIsArchived": false,
+   "_bHasContents": true
+  }
+ ],
+ "_nSubscriberCount": 0,
+ "_aContributingStudios": [],
+ "_sLicense": "<a rel=\"license\" href=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\"><img alt=\"Creative Commons License\" style=\"border-width:0\" src=\"https://i.creativecommons.org/l/by-nc-nd/4.0/88x31.png\" /></a><br />This work is licensed under a <a rel=\"license\" href=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\">Creative Commons Attribution-NonCommercial-NoDerivs 4.0 Unported License</a>.",
+ "_bGenerateTableOfContents": false,
+ "_bIsObsolete": false,
+ "_nLikeCount": 0,
+ "_nViewCount": 18,
+ "_sVersion": "1.0",
+ "_bAcceptsDonations": false,
+ "_bShowRipePromo": true,
+ "_aSubmitter": {
+  "_idRow": 3608549,
+  "_sName": "RedSMURF",
+  "_sUserTitle": "Bananite",
+  "_sHonoraryTitle": "",
+  "_tsJoinDate": 1721839903,
+  "_sAvatarUrl": "https://images.gamebanana.com/img/av/696193e697a3d.jpg",
+  "_sSigUrl": "",
+  "_sProfileUrl": "https://gamebanana.com/members/3608549",
+  "_sPointsUrl": "https://gamebanana.com/members/logs/pointslog/3608549",
+  "_sMedalsUrl": "https://gamebanana.com/members/stats/medals/3608549",
+  "_bIsOnline": false,
+  "_sLocation": "<a href=\"https://gamebanana.com\">Home</a> > <a href=\"https://gamebanana.com/games/4254\"><img src=\"https://images.gamebanana.com/img/ico/games/5ea788a63f636.png\"/><span>Counter-Strike 1.6</span></a> > <a href=\"https://gamebanana.com/mods/games/4254\">Mods</a> > <a href=\"https://gamebanana.com/mods/cats/3517\">Resources</a> > <a href=\"https://gamebanana.com/mods/cats/3521\">AMXX Plugins & Mods</a> > <a href=\"https://gamebanana.com/mods/739703\">Cage</a>",
+  "_sOnlineTitle": "",
+  "_sOfflineTitle": "",
+  "_nPoints": 2632,
+  "_nPointsRank": 39887,
+  "_aNormalMedals": [
+   [
+    "m_age_1.png",
+    "One month a member",
+    "normal",
+    2622809
+   ],
+   [
+    "m_age_2.png",
+    "6 months a member",
+    "normal",
+    2761715
+   ],
+   [
+    "m_age_3.png",
+    "1 year a member",
+    "normal",
+    3544222
+   ],
+   [
+    "mods1.png",
+    "Submitted 5 Mods",
+    "normal",
+    4167047
+   ],
+   [
+    "returns_1.png",
+    "Returned 100 times",
+    "normal",
+    4914890
+   ],
+   [
+    "mods2.png",
+    "Submitted 10 Mods",
+    "normal",
+    5024466
+   ],
+   [
+    "m_pr_1.png",
+    "Reached 1,000 Points",
+    "normal",
+    5040033
+   ],
+   [
+    "thanks_recvd_1.png",
+    "Received thanks 5 times",
+    "normal",
+    5119879
+   ],
+   [
+    "m_age_4.png",
+    "2 years a member",
+    "normal",
+    5161148
+   ],
+   [
+    "m_pr_2.png",
+    "Reached 2,500 Points",
+    "normal",
+    5728533
+   ]
+  ],
+  "_aRareMedals": [
+   [
+    "mods3.png",
+    "Submitted 15 Mods",
+    "rare",
+    5166991
+   ],
+   [
+    "mods4.png",
+    "Submitted 20 Mods",
+    "rare",
+    5379173
+   ]
+  ],
+  "_aLegendaryMedals": [],
+  "_bHasRipe": false,
+  "_nBuddyCount": 15,
+  "_nSubscriberCount": 10,
+  "_aDonationMethods": [
+   {
+    "_sTitle": "Ko-fi Profile",
+    "_sValue": "https://ko-fi.com/redsmurf1616",
+    "_sInputType": "text",
+    "_sInputPlaceholder": "Ko-fi Profile URL...",
+    "_sIconClasses": "MiscIcon KofiIcon",
+    "_aValidator": {
+     "_regexValidPattern": "^https?\\:\\/\\/(www\\.)?ko\\-fi\\.com\\/.+$",
+     "_sWarningMessage": "URL looks incorrect - it should look like: https://ko-fi.com/USERNAME"
+    },
+    "_sValueTemplate": "<a target=\"_blank\" href=\"%VALUE%\">Ko-fi Profile</a>",
+    "_bIsUrl": true,
+    "_sFormattedValue": "<a target=\"_blank\" href=\"https://ko-fi.com/redsmurf1616\">Ko-fi Profile</a>"
+   }
+  ],
+  "_bAccessorIsBuddy": false,
+  "_bBuddyRequestExistsWithAccessor": false,
+  "_bAccessorIsSubscribed": false,
+  "_aDefaultLicenseChecklist": [
+   "yes",
+   "ask",
+   "ask",
+   "ask",
+   "ask",
+   "ask",
+   "no",
+   "ask"
+  ],
+  "_sDefaultLicense": ""
+ },
+ "_bFollowLinks": true,
+ "_aGame": {
+  "_idRow": 4254,
+  "_sName": "Counter-Strike 1.6",
+  "_sAbbreviation": "CS1.6",
+  "_sProfileUrl": "https://gamebanana.com/games/4254",
+  "_sIconUrl": "https://images.gamebanana.com/img/ico/games/5ea788a63f636.png",
+  "_sBannerUrl": "https://images.gamebanana.com/img/ico/games/5ea788a63f636.png",
+  "_nSubscriberCount": 6273,
+  "_bHasSubmissionQueue": false,
+  "_bAccessorIsSubscribed": false
+ },
+ "_aCategory": {
+  "_idRow": 3521,
+  "_sName": "AMXX Plugins & Mods",
+  "_sModelName": "ModCategory",
+  "_sProfileUrl": "https://gamebanana.com/mods/cats/3521",
+  "_sIconUrl": "",
+  "_bIsObsolete": false
+ },
+ "_aSuperCategory": {
+  "_idRow": 3517,
+  "_sName": "Resources",
+  "_sModelName": "ModCategory",
+  "_sProfileUrl": "https://gamebanana.com/mods/cats/3517",
+  "_sIconUrl": "https://images.gamebanana.com/img/ico/ModCategory/609850d64bd70.gif"
+ },
+ "_aEmbeddedMedia": [
+  "https://www.youtube.com/watch?v=LacunMfMo48"
+ ]
+}
