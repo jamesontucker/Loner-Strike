@@ -52,6 +52,7 @@ a { color: var(--signal); }
   <li><b>Discord.</b> After the page loads, it asks discord.com for the Discord invite and how many people are online, so Discord sees that request under its own <a href="https://discord.com/privacy">privacy policy</a>.</li>
   <li><b>Radio.</b> The optional radio player streams from the station you pick (Bassdrive, Kniteforce, TechnoBase.FM, HardBase.FM, SomaFM, SceneSat, Rainwave, 0nlineradio or Radio Bob) when you press play, and while it plays asks the station what's on every 20 seconds, so those stations see your IP address like any listener.</li>
   <li><b>Fonts and images</b> are served from this site itself, not from Google or anyone else.</li>
+  <li><b>Do Not Track.</b> We don't track you across sites, so a browser's "Do Not Track" signal changes nothing here.</li>
 </ul>
 
 <h2>Paying</h2>
@@ -64,15 +65,18 @@ a { color: var(--signal); }
   <li>browse and download maps and other content from GameBanana, when you use those pages;</li>
   <li>connect to services you choose to use for playing with friends, such as playit.gg, Tailscale, your router (UPnP) or Valve's server downloader;</li>
   <li>connect over SSH to Linux servers you rent, when you add one;</li>
-  <li>download the speech models for voice commands, when you install them;</li>
+  <li>download the speech models for voice commands, when you install them, and the chat models for Smarter chat, if you turn it on (both from Hugging Face; the models then run on your computer);</li>
   <li>download ready-made bot navigation for maps, and other optional files, from our download server (dl.lonerstrike.com);</li>
   <li>ask our server list (list.lonerstrike.com) for servers when you open Find servers, and tell it about a server you choose to list there (its address; the list then asks the server itself for its name, map and player count);</li>
   <li>download the SDHLT map compiler from GitHub, the first time you compile a map;</li>
   <li>use Community, described below.</li>
 </ul>
 <p>Voice commands are optional and off until you turn them on for a server. Players' team voice is turned into text on the machine running that server, to give the bots their orders. No audio is kept or sent anywhere; the lines it heard are written to that server's own log.</p>
-<p>Each of those services has its own privacy policy. Your settings, admin lists, server passwords, SSH keys and the list of players who joined your games stay on your computer, and on the servers you run. If you run a server, what it logs is yours to look after (see the <a href="terms.html">terms</a>).</p>
+<p>Our own servers (dl.lonerstrike.com, list.lonerstrike.com and status.lonerstrike.com) sit behind Cloudflare, so Cloudflare also handles the app's downloads and list requests and sees your IP address, as it does for this website. Each of those services has its own privacy policy. Your settings, admin lists, server passwords, SSH keys and the list of players who joined your games stay on your computer, and on the servers you run. If you run a server, what it logs is yours to look after (see the <a href="terms.html">terms</a>).</p>
 <p>The optional connector for AI agents only listens on your own computer. Loner-Strike sends nothing to any AI service; the agent you connect is a program you run, under its own terms.</p>
+
+<h2>Our game server</h2>
+<p>We run a public Counter-Strike server, play.lonerstrike.com, hosted by Hetzner. Like any game server, it sees and logs players' IP addresses, Steam IDs, names and chat, and, if voice commands are on, the text it heard from team voice (never the audio). We use those logs to deal with cheating, abuse and problems, and don't share them.</p>
 
 <h2>Community</h2>
 <p>Community lists maps and modes people made with Loner-Strike. The files are hosted by <a href="https://gamebanana.com">GameBanana</a>, under its own privacy policy, and the app never signs in there for you.</p>
@@ -85,7 +89,7 @@ a { color: var(--signal); }
 <p>More detail is in the <a href="docs#community-privacy">docs</a>.</p>
 
 <h2>What our community server keeps</h2>
-<p>The Community and server list service runs on our own server and keeps a small database. Here's everything in it that's about a person:</p>
+<p>The Community and server list service runs on our own server, hosted by <a href="https://www.hetzner.com/legal/privacy-policy">Hetzner</a>, and keeps a small database. Here's everything in it that's about a person:</p>
 <ul>
   <li><b>Creators.</b> For each listing, the GameBanana member number and name of who registered it. We use them to show who made it and to tell whose new version is whose.</li>
   <li><b>Credits.</b> The names, roles and GameBanana links of the people credited for the assets a creation uses, and any permission note the creator recorded. These come from the package and from public GameBanana pages.</li>
@@ -94,7 +98,7 @@ a { color: var(--signal); }
   <li><b>Creations that leave the list.</b> A creation that's pulled, turned down or hidden is deleted 2 years later, together with its creator details, credits and permanent-id records. Ownership records for a creation that's gone are deleted with it.</li>
   <li><b>Reports</b>, as described above, for 90 days.</li>
   <li><b>Role applications.</b> When you apply for a role on our Discord, we keep your Discord user id and name, the role, what you wrote (why, and any links), the date you joined our Discord, and the decision: who made it, when, and any reason. We delete an application 180 days after it's decided, or 180 days after it was sent if it never was.</li>
-  <!-- DRAFT: the 180-day deletion of applications isn't in the code yet. Implement it before this goes live, or change this line. See docs/notes/Legal.md. -->
+  <li><b>Discord.</b> Moderation cards, reports and applications also appear in our private Discord moderation channels, which we clean up from time to time.</li>
   <li><b>Backups.</b> The database is backed up once a day on the same server, and each backup is kept for 14 days. So something we delete can stay in a backup for up to 14 more days.</li>
 </ul>
 <p>The public Community list (the index the app downloads) is published every few minutes by a small program on Cloudflare (a Worker), which copies it from our server to the download server. It carries only what the list shows anyway: creations, the GameBanana names and member numbers of their makers, and credits. Reports, applications, moderation records and anything about people who browse never go through it.</p>

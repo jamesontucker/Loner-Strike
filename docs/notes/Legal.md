@@ -3,16 +3,15 @@
 2026-11-13. Drafts of `site/terms.html` and `site/privacy.html` for the user and a lawyer to review.
 Nothing goes live until the user uploads the site. None of this is legal advice.
 
-**Before going live, two things must be fixed:**
-1. **DMCA agent.** terms.html shows `[DMCA agent: to be registered with the US Copyright Office]`.
-   Register one (steps below) and replace the placeholder.
-2. **Application deletion.** privacy.html says role applications are deleted 180 days after a
-   decision (or after sending, if never decided). **The code doesn't do this yet** (there's an HTML
-   comment beside the line). `community.py` keeps `applications` rows forever. If adopted, add to the
-   store's housekeeping (next to the 90-day `DELETE FROM reports`):
-   `DELETE FROM applications WHERE (decided_at > 0 AND decided_at < now-180d) OR (decided_at = 0 AND at < now-180d)`,
-   plus a test in `test_applications.py`. Keep in mind the 14-day cooldown and per-day limits read
-   old rows; 180 days is well past both. Otherwise change the privacy line.
+**Status (later on 2026-11-13).** Both earlier must-fix items are done: the DMCA agent is registered
+(DMCA-1070465) and in terms.html, and the list service deletes role applications after 180 days. A
+review (docs/notes/LegalReview.md) was applied in a scaled-back form, at the user's wish (a small side
+project; cover what's common, keep it short): the public game server and what it logs, Hetzner as host,
+Cloudflare in front of the app's downloads and lists, Hugging Face model downloads, the Discord moderation
+channels (cleaned up from time to time, no automatic deletion promised), the stale DRAFT comment removed,
+a wider Civil Code 1668 carve-out, the cap "in total" and "paid us through Polar", softer repeat-infringer
+wording, and a Do Not Track line. Not done on purpose: GDPR section, CCPA detail, 1789.3 notice, takedown
+notifications, the app-side assent work, and the Polar "not a purchase" framing (the user's call).
 
 ## What changed, and why
 
