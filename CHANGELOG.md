@@ -19,7 +19,7 @@ The first full release:
 - They look where it matters, hold angles, aim around the chest, glance back at a sound, and panic, tilt and back off like people.
 - Each bot is someone: a personality, mood and skill, and regulars who remember you.
 - Every mode is played right, from deathmatch to Gun Game's knife level, and fy_, awp_ and aim_ maps no longer stall.
-- Surf: bots surf. They walk off the start, strafe into each ramp they reach and keep their speed in the air, instead of standing still. (Whole routes through a course are still to come.)
+- Surf: bots really surf. They learn each surf map while it's played, working out where riding the ramps can take them, then pick a line somewhere new or toward an enemy and follow it, steering back onto it when they drift. On a course they stay on runs about twice as long as before.
 - Call plays to your whole team: "rush b" sends the team, "two go a, rest b" splits it.
 - They read flashes like people: turn away from one they see coming, then look back where it came from.
 - They notice a gun barrel, shoulder or foot past cover, and the better ones shoot through it.

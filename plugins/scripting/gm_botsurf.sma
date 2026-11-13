@@ -29,7 +29,7 @@
 #define RAMP_MAX_UP 0.7
 #define PROBE       20.0
 
-new g_pOn, g_pLog, g_pDebug
+new g_pOn, g_pLog, g_pDebug, g_pBrainSurf
 new Float:g_DebugAt
 new Float:g_RampTime[33], Float:g_TopSpeed[33], Float:g_Last[33]
 new Float:g_RampSum, Float:g_TopAll
@@ -42,6 +42,8 @@ public plugin_init()
 	g_pLog = register_cvar("gm_botsurf_log", "0")
 	g_pDebug = register_cvar("gm_botsurf_debug", "0")
 	register_forward(FM_CmdStart, "fw_CmdStart")
+	// (the bot brain steers surf itself when it has bot_ls_surf on: this stands aside)
+	g_pBrainSurf = get_cvar_pointer("bot_ls_surf")
 	set_task(30.0, "report", 0, _, _, "b")
 }
 
@@ -218,7 +220,7 @@ bool:find_ramp(id, const Float:o[3], Float:n[3])
 
 public fw_CmdStart(id, uc, seed)
 {
-	if (!get_pcvar_num(g_pOn) || !is_user_bot(id))
+	if (!get_pcvar_num(g_pOn) || !is_user_bot(id) || (g_pBrainSurf && get_pcvar_num(g_pBrainSurf) > 0))
 		return FMRES_IGNORED
 	// (dead: the last life's timers and walk-off are forgotten, not carried into the next)
 	if (!is_user_alive(id))
