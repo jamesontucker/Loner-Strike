@@ -40,7 +40,7 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 
 ## New in 1.0: game modes
 
-- Last Stand (map ls_outpost): co-op; everyone plays Counter-Terrorist and holds a walled desert outpost against waves of creatures (zombies, runners, brutes, spitters, a boss every few waves). Barricades to repair, revives, an armory shop and supply drops. 5, 10, 15 or endless waves. Bots defend alongside you. Also set up on de_dust2, de_inferno, de_nuke, de_aztec and cs_office.
+- Last Stand (map ls_outpost, best for 4 to 16 players, playable up to 32): co-op; everyone plays Counter-Terrorist and holds a walled desert outpost against waves of creatures (zombies, runners, brutes, spitters, a boss every few waves). Barricades to repair, revives, an armory shop and supply drops. Endless by default, or 5, 10 or 15 waves. Bots defend alongside you. Also set up on de_dust2, de_inferno, de_nuke, de_aztec and cs_office.
 - Battle Royale (map br_valley): drop in from high over a river valley with only a knife, loot crates and floor weapons, and be the last one or last squad standing while a six-stage zone closes. Solo, duos or squads of 4. Bots land, loot, hunt or camp by playstyle. Also set up on de_aztec, cs_italy, de_dust2, de_inferno and de_train.
 - Bots run deathrun courses (and a bot activator springs the traps) and surf.
 
