@@ -2073,11 +2073,19 @@ class Community:
         lines.append(f"Pull: `lsmod.py pull {key} --reason \"...\"` then `lsmod.py publish --upload`  ·  All reports: `lsmod.py reports {key}`")
         self.notifier.card("report", key, "\n".join(lines), report_id=rid)
 
-    def block(self, submitter_id, name, by, reason):
-        """That GameBanana member's next submissions wait for a moderator."""
+    def block(self, submitter_id, name, by, reason, pull=False):
+        """That GameBanana member's next submissions wait for a moderator; with `pull` (the
+        repeat-infringer rule, docs/notes/T.md) their listings are pulled too. Returns what was pulled."""
         if not isinstance(submitter_id, int) or submitter_id <= 0:
             raise Reject(400, "A GameBanana member id, please.")
         self.store.set_blocked(submitter_id, one_line(name or "", 40), one_line(by, 40), one_line(reason or "", MAX_REASON), True)
+        pulled = []
+        if pull:
+            for row in self.store.rows(("listed", "hidden", "pending")):
+                if row["submitter_id"] == submitter_id:
+                    self.moderate(row["key"], "pull", {"reason": one_line(reason or "", MAX_REASON) or "Removed: the creator's listings were taken down."})
+                    pulled.append(row["key"])
+        return pulled
 
     def unblock(self, submitter_id, by):
         if isinstance(submitter_id, int) and submitter_id > 0:
@@ -2477,7 +2485,8 @@ class Community:
                 if body.get("block") is False:
                     self.unblock(sid, "lsmod")
                 else:
-                    self.block(sid, (row or {}).get("submitter", ""), "lsmod", body.get("reason") if isinstance(body.get("reason"), str) else "")
+                    self.block(sid, (row or {}).get("submitter", ""), "lsmod", body.get("reason") if isinstance(body.get("reason"), str) else "",
+                               pull=body.get("pull") is True)
             return reply(h, 200, {"blocked": self.store.blocked()}, cors=False)
         if parts == ["give-uid"] and method == "POST":
             uid = norm_uid(body.get("uid"))

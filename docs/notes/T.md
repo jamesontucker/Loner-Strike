@@ -182,3 +182,8 @@ Library items and snippets carry `fromMode` (a uid) when they're shared.
   (`community_files_in`, wired in browser.rs), `credits_for_entities` for prefab packages (P5 to call it in
   `prefabs::package`), every community install keeps its creation's credits. Note: P5's commit 0dff8735 carried my
   browser.rs lines before credits.rs had the function; d4b35435 completes it.
+
+## Repeat-infringer rule (internal, 2026-11-13)
+When a creator gets repeated copyright notices that we uphold, a moderator blocks them and pulls all their
+listings: `lsmod.py block <page> --pull --reason "Repeated copyright notices."` (the reason shows on each pulled
+listing). New submissions from a blocked creator wait for a moderator; we keep the notices themselves by email.

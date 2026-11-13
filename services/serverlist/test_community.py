@@ -264,6 +264,15 @@ class Validation(unittest.TestCase):
         row.update(kind="map", state="listed", submitter_id=1, submitter="x", item=json.dumps(dict(it, author="x")))
         self.assertEqual(cm.index_item(row)["credits"][0]["page"], "https://gamebanana.com/mods/227562")
 
+    def test_block_with_pull(self):
+        c, _ = make()
+        c.submit(body(map_item()), "1.2.3.4")
+        sid = MAP["_aSubmitter"]["_idRow"]
+        pulled = c.block(sid, "x", "test", "Repeated copyright notices.", pull=True)
+        self.assertEqual(pulled, ["mod:739197"])
+        self.assertEqual((c.store.get("mod:739197")["state"], c.store.get("mod:739197")["reason"]), ("pulled", "Repeated copyright notices."))
+        self.assertEqual(c.block(999999, "y", "test", ""), [], "a plain block pulls nothing")
+
     def test_bot_rating(self):
         self.assertEqual(cm.clean_item(dict(mode_item(), bots="ok"))["bots"], "ok")
         self.assertNotIn("bots", cm.clean_item(dict(map_item(), bots="ok")), "only modes carry it")

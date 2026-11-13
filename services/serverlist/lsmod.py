@@ -209,6 +209,7 @@ def main(argv=None):
     s = sub.add_parser("block")
     s.add_argument("page")
     s.add_argument("--reason", default="")
+    s.add_argument("--pull", action="store_true", help="also pull every listing of that creator (repeat infringement)")
     sub.add_parser("unblock").add_argument("page")
     sub.add_parser("blocked")
     sub.add_parser("reports").add_argument("page", nargs="?")
@@ -259,7 +260,7 @@ def main(argv=None):
             body = None
             if a.cmd != "blocked":
                 page_path(a.page)
-                body = {"page": a.page, "block": a.cmd == "block", "reason": getattr(a, "reason", "")}
+                body = {"page": a.page, "block": a.cmd == "block", "reason": getattr(a, "reason", ""), "pull": bool(getattr(a, "pull", False))}
             r = call(srv, tok, "POST" if body else "GET", "blocked", body)
             if not r["blocked"]:
                 print("Nobody is blocked.")
