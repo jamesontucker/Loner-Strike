@@ -47,21 +47,21 @@ test.describe("spray composer", () => {
     const stage = page.locator(".sc-stage svg");
     await expect(stage).toBeVisible({ timeout: 20_000 });
 
-    // starts from the name-tag template: two layers, and the game's look comes back
+    // starts from the graffiti template: three layers, and the game's look comes back
     const layers = page.getByRole("listbox", { name: "Layers, top first" }).getByRole("option");
-    await expect(layers).toHaveCount(2);
+    await expect(layers).toHaveCount(3);
     await expect(page.locator(".sc-wall img.spray-img")).toBeVisible({ timeout: 15_000 });
     await expect(page.locator(".sc-facts")).toContainText("96×96 in game");
 
     // add a sticker and words, pick the words by clicking the canvas
     await page.getByRole("button", { name: "Add a star sticker" }).click();
     await page.getByRole("button", { name: "Words", exact: true }).click();
-    await expect(layers).toHaveCount(4);
+    await expect(layers).toHaveCount(5);
     await expect(page.getByRole("region", { name: "Words settings" })).toBeVisible();
 
     // a picture from a file
     await page.locator('.sc-page input[type="file"]').setInputFiles(await pngFile(page));
-    await expect(layers).toHaveCount(5);
+    await expect(layers).toHaveCount(6);
     await expect(page.getByRole("region", { name: "Picture settings" })).toBeVisible();
 
     // opacity: 100% shows the layer fully (the default), and the sticker picker is a grid
@@ -69,9 +69,11 @@ test.describe("spray composer", () => {
     await expect(page.getByText("See-through", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Add a heart sticker" }).click();
     const picker = page.getByRole("group", { name: "Sticker shape" });
-    const tops = await picker.getByRole("button").evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().top))).size);
-    const count = await picker.getByRole("button").count();
-    expect(count / tops, "stickers per row").toBeGreaterThanOrEqual(6);
+    const firstRow = await picker.getByRole("button").evaluateAll((els) => {
+      const tops = els.map((e) => Math.round(e.getBoundingClientRect().top));
+      return tops.filter((t) => t === tops[0]).length;
+    });
+    expect(firstRow, "stickers per row").toBeGreaterThanOrEqual(6);
     await expect(page.getByRole("group", { name: "Place" })).toBeInViewport();
     await page.keyboard.press("Delete");
     await page.locator(".sc-layer").filter({ hasText: "red-square" }).click();
@@ -101,15 +103,15 @@ test.describe("spray composer", () => {
 
     // hide, lock, duplicate, delete
     await page.keyboard.press("ControlOrMeta+d");
-    await expect(layers).toHaveCount(6);
+    await expect(layers).toHaveCount(7);
     await page.keyboard.press("Delete");
-    await expect(layers).toHaveCount(5);
+    await expect(layers).toHaveCount(6);
     await page.getByRole("button", { name: /^Hide / }).first().click();
     await expect(page.locator(".sc-layer.hidden")).toHaveCount(1);
 
-    // one colour: the game's look follows
-    await page.getByRole("group", { name: "Colours" }).getByRole("button", { name: "One colour" }).click();
-    await expect(page.locator(".sc-facts")).toContainText("one colour", { timeout: 10_000 });
+    // one color: the game's look follows
+    await page.getByRole("group", { name: "Colors" }).getByRole("button", { name: "One color" }).click();
+    await expect(page.locator(".sc-facts")).toContainText("one color", { timeout: 10_000 });
     await fits(page);
     await page.screenshot({ path: info.outputPath("spray-composer.png"), fullPage: true });
 
@@ -119,14 +121,14 @@ test.describe("spray composer", () => {
     await page.getByRole("region", { name: "Save" }).getByRole("button", { name: "Save design" }).click();
     await expect(page.getByText(`Saved “${name}”.`)).toBeVisible();
     await page.getByRole("button", { name: "Designs & templates…" }).click();
-    const sheet = page.getByRole("dialog", { name: "Designs and templates" });
+    const sheet = page.getByRole("dialog", { name: "Start a spray" });
     await expect(sheet.getByRole("button", { name: `Open ${name}` })).toBeVisible();
     await page.screenshot({ path: info.outputPath("spray-designs.png") });
-    await sheet.getByRole("button", { name: "Name tag" }).click();
-    await expect(layers).toHaveCount(2);
+    await sheet.getByRole("button", { name: /^Graffiti tag/ }).click();
+    await expect(layers).toHaveCount(3);
     await page.getByRole("button", { name: "Designs & templates…" }).click();
     await sheet.getByRole("button", { name: `Open ${name}` }).click();
-    await expect(layers).toHaveCount(5);
+    await expect(layers).toHaveCount(6);
     await expect(page.getByLabel("Design name")).toHaveValue(name);
     // and delete it again
     await page.getByRole("button", { name: "Designs & templates…" }).click();
@@ -135,6 +137,59 @@ test.describe("spray composer", () => {
     await expect(sheet.getByRole("button", { name: `Open ${name}` })).toHaveCount(0);
     expect(problems).toEqual([]);
   });
+});
+
+test("spray: Start a spray sheet (templates grid, focus, keys) and Opacity in game", async ({ page }, info) => {
+  const problems = watch(page);
+  await page.goto("/tools-dev.html?open=spray");
+  await expect(page.locator(".sc-stage svg")).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Designs & templates…" }).click();
+  const sheet = page.getByRole("dialog", { name: "Start a spray" });
+  await expect(sheet).toBeVisible();
+  // the header, a title in it, a Close in the footer
+  await expect(sheet.locator(".ed-dlg-head h2")).toHaveText("Start a spray");
+  await expect(sheet.locator(".ed-dlg-foot").getByRole("button", { name: "Close" })).toBeVisible();
+  const grid = sheet.getByRole("list").last();
+  const cards = grid.getByRole("listitem");
+  const n = await cards.count();
+  expect(n).toBeGreaterThanOrEqual(12);
+  // focus starts on a card (the open design or the first template), not on the ×
+  await expect(sheet.locator("[data-card]:focus")).toHaveCount(1);
+  // every card the same size; full rows (no card alone on the last one)
+  const boxes = await cards.evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => [Math.round(r.width), Math.round(r.height), Math.round(r.top)]));
+  expect(new Set(boxes.map((b) => b[0])).size, "card widths").toBe(1);
+  expect(new Set(boxes.map((b) => b[1])).size, "card heights").toBe(1);
+  const rows = new Map<number, number>();
+  for (const b of boxes) rows.set(b[2], (rows.get(b[2]) ?? 0) + 1);
+  const perRow = [...rows.values()];
+  expect(perRow[perRow.length - 1], "last row is full").toBe(perRow[0]);
+  // every template has its picture
+  const pics = await grid.locator("img").evaluateAll((els) => els.map((e) => (e as HTMLImageElement).naturalWidth));
+  expect(pics.every((w) => w > 0)).toBe(true);
+  // arrow keys move between cards
+  await grid.locator("[data-card]").first().focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(grid.locator("[data-card]").nth(1)).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(grid.locator("[data-card]").nth(1 + perRow[0])).toBeFocused();
+  await fits(page);
+  await page.screenshot({ path: info.outputPath("spray-start.png") });
+  // Esc closes it and focus goes back to the button
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Designs & templates…" })).toBeFocused();
+
+  // Opacity says what happens in game, for each color mode
+  await page.getByRole("option").first().click();
+  const slider = page.getByRole("slider", { name: "Opacity" });
+  await slider.fill("0.5");
+  await expect(page.locator(".sc-opacity-note")).toContainText("solid where nothing is under it");
+  await page.getByRole("group", { name: "Colors" }).getByRole("button", { name: "One color" }).click();
+  await expect(page.locator(".sc-opacity-note")).toContainText("see-through");
+  // the in-game preview is drawn plainly (no blending into the wall)
+  await expect(page.locator(".sc-wall img.spray-img")).toBeVisible({ timeout: 15_000 });
+  expect(await page.locator(".sc-wall img.spray-img").evaluate((e) => getComputedStyle(e).mixBlendMode + " " + getComputedStyle(e).opacity)).toBe("normal 1");
+  expect(problems).toEqual([]);
 });
 
 test("crosshair & config: tabs, preset cards, nothing sticks out", async ({ page }, info) => {

@@ -10,7 +10,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDirty } from "../../../store";
-import { BusyButton, Info, LoadError, Segmented, Sheet, Skeleton, Switch, useConfirm, useToast } from "../../../ui";
+import { BusyButton, Info, LoadError, Segmented, Skeleton, Switch, useConfirm, useToast } from "../../../ui";
 import { Check, Empty } from "../common";
 import { ActionBar } from "../common/ActionBar";
 import { errorText, useBusy } from "../common/api";
@@ -20,6 +20,7 @@ import { useHistory } from "./history";
 import { AddPanel, Inspector, LayerList } from "./Panels";
 import { deleteDesign, DEFAULT_CHOICE, installSpray, listDesigns, openDesign, previewSpray, restoreSpray, saveDesign, sendDrawn, sprayStatus, type Choice, type DesignInfo, type GameSpray, type SprayImage } from "./sprayApi";
 import { Stage } from "./Stage";
+import { StartFrom } from "./StartFrom";
 import { TEMPLATES } from "./templates";
 import "./spray.css";
 
@@ -54,7 +55,7 @@ export function SprayMaker() {
   const qc = useQueryClient();
   const status = useQuery({ queryKey: ["tools", "spray"], queryFn: sprayStatus });
   const designs = useQuery({ queryKey: ["tools", "spray", "designs"], queryFn: listDesigns });
-  const first = useMemo(() => TEMPLATES[1].make(), []);
+  const first = useMemo(() => (TEMPLATES.find((t) => t.id === "graffiti") ?? TEMPLATES[0]).make(), []);
   const h = useHistory(first);
   const doc = h.doc;
   const [selected, setSelected] = useState<string | null>(null);
@@ -316,7 +317,8 @@ export function SprayMaker() {
         </label>
         <span className="muted sc-bar-note">{design.id ? (dirty ? "Changed since saved" : "Saved") : "Not saved yet"}</span>
         <span className="push" />
-        <button type="button" className="btn" onClick={() => setOpening(true)}>
+        {/* focused first: WebKit doesn't focus a clicked button, and the sheet gives focus back to it */}
+        <button type="button" className="btn" onClick={(e) => (e.currentTarget.focus(), setOpening(true))}>
           Designs & templates…
         </button>
       </div>
@@ -340,8 +342,8 @@ export function SprayMaker() {
               </span>
               <Segmented label="Shape" options={(Object.keys(SHAPES) as Shape[]).map((k) => [k, SHAPES[k].label] as const)} current={doc.shape} onPick={(v) => setDoc({ shape: v as Shape })} />
               <span className="sc-bar-group">
-                <Segmented label="Background" values=",colour" labels="No background|Colour" current={doc.background ? "colour" : ""} onPick={(v) => setDoc({ background: v ? "#202020" : "" })} />
-                {doc.background && <input type="color" className="sc-colour" value={doc.background} aria-label="Background colour" title="Background colour" onChange={(e) => setDoc({ background: e.target.value }, "bg")} />}
+                <Segmented label="Background" values=",colour" labels="No background|Color" current={doc.background ? "colour" : ""} onPick={(v) => setDoc({ background: v ? "#202020" : "" })} />
+                {doc.background && <input type="color" className="sc-colour" value={doc.background} aria-label="Background color" title="Background color" onChange={(e) => setDoc({ background: e.target.value }, "bg")} />}
               </span>
               <button type="button" className="btn small sc-snap" aria-pressed={snap} onClick={() => setSnap(!snap)} title="Snap to the middle, the edges and other layers while dragging (hold Alt to ignore)">
                 <BarIcon d="M4 4v6a8 8 0 0 0 16 0V4h-5v6a3 3 0 0 1-6 0V4zM4 7h5M15 7h5" />
@@ -356,18 +358,18 @@ export function SprayMaker() {
         </div>
 
         <div className="sc-right">
-          <Inspector layer={sel} onChange={(v, key) => sel && change(sel.id, v, key)} onReplacePicture={() => sel && pickPictures(sel.id)} onCentre={centre} onFit={fill} />
+          <Inspector layer={sel} look={choice.look} onChange={(v, key) => sel && change(sel.id, v, key)} onReplacePicture={() => sel && pickPictures(sel.id)} onCentre={centre} onFit={fill} />
         </div>
       </div>
 
       <section className="panel sc-game" aria-label="In game">
         <div className="sc-game-head">
           <h3>In game</h3>
-          <Info text="The spray as the game will draw it: shrunk to the size the game takes, its colours cut to the game's 255 (or one colour), on a wall at the wall's own scale. Where your design has nothing, the wall shows." />
+          <Info text="The spray as the game will draw it: shrunk to the size the game takes, its colors cut to the game's 255 (or one color), on a wall at the wall's own scale. Where your design has nothing, the wall shows." />
           {preview && (
             <span className="sc-facts">
               <span className="tag">{preview.width}×{preview.height} in game</span>
-              <span className="tag">{preview.colour ? `${preview.colours} colours` : "one colour"}</span>
+              <span className="tag">{preview.colour ? `${preview.colours} colors` : "one color"}</span>
             </span>
           )}
         </div>
@@ -405,18 +407,18 @@ export function SprayMaker() {
             </div>
             <div className="sc-field">
               <span className="sc-field-name">
-                Colours
-                <Info text="Full colour keeps your design's colours (up to 255). One colour paints it in a single colour, like the game's own sprays: dark parts are painted, light parts are left clear." />
+                Colors
+                <Info text="Full color keeps your design's colors (up to 255); in game each pixel is solid or clear, never see-through. One color paints it in a single color, like the game's own sprays, and here see-through is real: how dark a part is sets how thick the paint is (black is solid, gray lets the wall show through, white is clear)." />
               </span>
               <div className="sc-field-control">
-                <Segmented label="Colours" values="colour mono" labels="Full colour|One colour" current={choice.look} onPick={(v) => setC({ look: v as Choice["look"] })} />
+                <Segmented label="Colors" values="colour mono" labels="Full color|One color" current={choice.look} onPick={(v) => setC({ look: v as Choice["look"] })} />
               </div>
             </div>
             {choice.look === "mono" ? (
               <div className="sc-field">
                 <span className="sc-field-name">Paint</span>
                 <div className="sc-field-control sc-inline">
-                  <input className="sc-colour" type="color" value={choice.paint} aria-label="Paint colour" onChange={(e) => setC({ paint: e.target.value })} />
+                  <input className="sc-colour" type="color" value={choice.paint} aria-label="Paint color" onChange={(e) => setC({ paint: e.target.value })} />
                   <label className="sc-inline">
                     <Switch on={choice.invert} onChange={(v) => setC({ invert: v })} label="Paint the light parts" /> Paint the light parts
                   </label>
@@ -424,9 +426,9 @@ export function SprayMaker() {
               </div>
             ) : (
               <div className="sc-field">
-                <span className="sc-field-name">Smooth colours</span>
+                <span className="sc-field-name">Smooth colors</span>
                 <div className="sc-field-control sc-inline">
-                  <Switch on={choice.dither} onChange={(v) => setC({ dither: v })} label="Smooth photo colours" />
+                  <Switch on={choice.dither} onChange={(v) => setC({ dither: v })} label="Smooth photo colors" />
                   <small className="muted">Fine dots; good for photos, not for logos</small>
                 </div>
               </div>
@@ -480,54 +482,18 @@ export function SprayMaker() {
       <CommunitySprays />
 
       {opening && (
-        <Sheet label="Designs and templates" onClose={() => setOpening(false)} className="sheet sc-open">
-          <h2>Start from</h2>
-          <h3>Templates</h3>
-          <div className="sc-cards">
-            {TEMPLATES.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className="sc-card"
-                onClick={() => {
-                  setOpening(false);
-                  void startFrom(t.make(), t.id === "blank" ? "My spray" : t.label);
-                }}
-              >
-                <img src={toPng(t.make(), 0.25)} alt="" className="sc-card-pic" />
-                <strong>{t.label}</strong>
-                <small className="muted">{t.note}</small>
-              </button>
-            ))}
-          </div>
-          <h3>Your designs</h3>
-          {designs.isPending ? (
-            <Skeleton rows={2} />
-          ) : savedList.length === 0 ? (
-            <p className="muted">None saved yet. Save brings your design back here to change later.</p>
-          ) : (
-            <div className="sc-cards">
-              {savedList.map((d) => (
-                <div key={d.id} className={`sc-card saved${design.id === d.id ? " on" : ""}`}>
-                  <button type="button" className="sc-card-open" onClick={() => void open(d)} aria-label={`Open ${d.name}`}>
-                    {d.thumb ? <img src={d.thumb} alt="" className="sc-card-pic" /> : <span className="sc-card-pic" />}
-                    <strong>{d.name}</strong>
-                    <small className="muted">{d.updated ? new Date(d.updated * 1000).toLocaleDateString(undefined, { dateStyle: "medium" }) : ""}</small>
-                  </button>
-                  <button type="button" className="btn small ghost sc-card-del" aria-label={`Delete ${d.name}`} title="Delete" onClick={() => void removeDesign(d)}>
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="row">
-            <span className="push" />
-            <button className="btn" onClick={() => setOpening(false)}>
-              Close
-            </button>
-          </div>
-        </Sheet>
+        <StartFrom
+          designs={savedList}
+          loading={designs.isPending}
+          openId={design.id}
+          onClose={() => setOpening(false)}
+          onTemplate={(t) => {
+            setOpening(false);
+            void startFrom(t.make(), t.id === "blank" ? "My spray" : t.label);
+          }}
+          onOpen={(d) => void open(d)}
+          onDelete={(d) => void removeDesign(d)}
+        />
       )}
 
       <ActionBar

@@ -321,7 +321,7 @@ function drawLayer(g: CanvasRenderingContext2D, l: Layer, redraw?: () => void) {
       g.stroke(path);
     } else {
       g.fillStyle = l.colour;
-      g.fill(path, "evenodd");
+      g.fill(path, st.fill ?? "evenodd");
     }
   }
   g.restore();

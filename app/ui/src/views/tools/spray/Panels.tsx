@@ -25,7 +25,7 @@ export function StickerIcon({ s, size = 34 }: { s: Sticker; size?: number }) {
       g.stroke(s.path());
     } else {
       g.fillStyle = s.colour ?? "#fff";
-      g.fill(s.path(), "evenodd");
+      g.fill(s.path(), s.fill ?? "evenodd");
     }
   }, [s, size]);
   return <canvas ref={ref} width={size * 2} height={size * 2} style={{ width: size, height: size }} aria-hidden="true" />;
@@ -188,8 +188,17 @@ function IconButton({ d, label, pressed, onClick }: { d: string; label: string; 
   );
 }
 
-export function Inspector({ layer, onChange, onReplacePicture, onCentre, onFit }: {
+/** What Opacity does in the game, for each color mode (checked in CS 1.6 and Condition Zero). */
+export const OPACITY_INFO = {
+  colour:
+    "In a full-color spray every pixel is either solid or clear: the game has no see-through for them. Below 100%, the layer still blends with the layers under it, but where nothing is under it, 50% or more comes out solid and under 50% disappears.",
+  mono: "One-color sprays are really see-through in game: the wall shows through as much as you let it. Lower opacity means a fainter coat of paint.",
+} as const;
+
+export function Inspector({ layer, look = "colour", onChange, onReplacePicture, onCentre, onFit }: {
   layer: Layer | null;
+  /** the spray's color mode: Opacity works differently in each */
+  look?: "colour" | "mono";
   /** `key`: changes with the same key close together are one undo step */
   onChange: (v: Partial<Layer>, key?: string) => void;
   onReplacePicture: () => void;
@@ -200,7 +209,7 @@ export function Inspector({ layer, onChange, onReplacePicture, onCentre, onFit }
     return (
       <section className="panel sc-inspector" aria-label="Nothing picked">
         <h3>Nothing picked</h3>
-        <p className="muted sc-hint">Click a layer on the canvas or in the list to change it: its size, turn, opacity and colours show here.</p>
+        <p className="muted sc-hint">Click a layer on the canvas or in the list to change it: its size, turn, opacity and colors show here.</p>
         <ul className="sc-tips">
           <li>Add a picture, words or a sticker from the left, or start from a template (Designs & templates).</li>
           <li>The canvas bar sets the spray's shape and background.</li>
@@ -233,15 +242,20 @@ export function Inspector({ layer, onChange, onReplacePicture, onCentre, onFit }
         <Field name="Turn">
           <Slider label="Turn" value={layer.rot} min={-180} max={180} step={1} unit="°" onChange={(v) => set({ rot: v }, "rot")} />
         </Field>
-        <Field name="Opacity" info="100% shows the layer fully; lower lets what's under it show through; 0% hides it.">
+        <Field name="Opacity" info={OPACITY_INFO[look]}>
           <Slider label="Opacity" value={layer.opacity} min={0} max={1} step={0.01} scale={100} unit="%" onChange={(v) => set({ opacity: v }, "opacity")} />
+          {layer.opacity < 1 && (
+            <small className="muted sc-opacity-note" data-look={look}>
+              {look === "mono" ? "In game: see-through, as shown." : "In game: solid where nothing is under it (50% or more), gone under 50%."}
+            </small>
+          )}
         </Field>
         <Field name="Arrange">
           <span className="sc-inline">
             <IconButton d={FLIP_X} label="Flip left–right" pressed={layer.flipX} onClick={() => set({ flipX: !layer.flipX })} />
             <IconButton d={FLIP_Y} label="Flip upside down" pressed={layer.flipY} onClick={() => set({ flipY: !layer.flipY })} />
             <span className="sc-sep" aria-hidden="true" />
-            <IconButton d={CENTRE} label="Centre on the canvas" onClick={onCentre} />
+            <IconButton d={CENTRE} label="Center on the canvas" onClick={onCentre} />
             <IconButton d={FILL} label="Fill the canvas" onClick={onFit} />
           </span>
         </Field>
@@ -268,7 +282,7 @@ function TextFields({ l, set }: { l: TextLayer; set: (v: Partial<TextLayer>, key
               </option>
             ))}
           </select>
-          <Colour label="Words colour" value={l.colour} onChange={(c) => set({ colour: c }, "colour")} />
+          <Colour label="Words color" value={l.colour} onChange={(c) => set({ colour: c }, "colour")} />
         </span>
       </Field>
       <Field name="Style">
@@ -284,13 +298,13 @@ function TextFields({ l, set }: { l: TextLayer; set: (v: Partial<TextLayer>, key
       <Field name="Outline">
         <span className="sc-inline sc-grow">
           <Slider label="Outline" value={l.outline} min={0} max={24} step={1} onChange={(v) => set({ outline: v }, "outline")} />
-          <Colour label="Outline colour" value={l.outlineColour} onChange={(c) => set({ outlineColour: c }, "ocolour")} />
+          <Colour label="Outline color" value={l.outlineColour} onChange={(c) => set({ outlineColour: c }, "ocolour")} />
         </span>
       </Field>
       <Field name="Shadow">
         <span className="sc-inline">
           <Switch on={l.shadow} onChange={(v) => set({ shadow: v })} label="Shadow" />
-          {l.shadow && <Colour label="Shadow colour" value={l.shadowColour} onChange={(c) => set({ shadowColour: c }, "scolour")} />}
+          {l.shadow && <Colour label="Shadow color" value={l.shadowColour} onChange={(c) => set({ shadowColour: c }, "scolour")} />}
         </span>
       </Field>
     </>
@@ -310,13 +324,13 @@ function ShapeFields({ l, set }: { l: ShapeLayer; set: (v: Partial<ShapeLayer>, 
           ))}
         </div>
       </Field>
-      <Field name="Colour">
-        <Colour label="Sticker colour" value={l.colour} onChange={(c) => set({ colour: c }, "colour")} />
+      <Field name="Color">
+        <Colour label="Sticker color" value={l.colour} onChange={(c) => set({ colour: c }, "colour")} />
       </Field>
       <Field name="Outline">
         <span className="sc-inline sc-grow">
           <Slider label="Outline" value={l.outline} min={0} max={24} step={1} onChange={(v) => set({ outline: v }, "outline")} />
-          <Colour label="Outline colour" value={l.outlineColour} onChange={(c) => set({ outlineColour: c }, "ocolour")} />
+          <Colour label="Outline color" value={l.outlineColour} onChange={(c) => set({ outlineColour: c }, "ocolour")} />
         </span>
       </Field>
       <Field name="Width" info="Stretch the sticker before its size: make a circle an oval, a banner longer.">
@@ -337,13 +351,13 @@ function ImageFields({ l, set, onReplace }: { l: ImageLayer; set: (v: Partial<Im
           Replace…
         </button>
       </Field>
-      <Field name="Clear its background" info="Makes the colour in the picture's top-left corner, and colours close to it, transparent. For a logo on a plain background.">
+      <Field name="Clear its background" info="Makes the color in the picture's top-left corner, and colors close to it, transparent. For a logo on a plain background.">
         <Switch on={l.keyOut} onChange={(v) => set({ keyOut: v })} label="Clear its background" />
       </Field>
-      <Field name="Colour it">
+      <Field name="Color it">
         <span className="sc-inline sc-grow">
-          <Slider label="Colour it" value={l.tintAmount} min={0} max={1} step={0.01} scale={100} unit="%" onChange={(v) => set({ tintAmount: v }, "tint")} />
-          <Colour label="Colour" value={l.tint} onChange={(c) => set({ tint: c }, "tintc")} />
+          <Slider label="Color it" value={l.tintAmount} min={0} max={1} step={0.01} scale={100} unit="%" onChange={(v) => set({ tintAmount: v }, "tint")} />
+          <Colour label="Color" value={l.tint} onChange={(c) => set({ tint: c }, "tintc")} />
         </span>
       </Field>
     </>
