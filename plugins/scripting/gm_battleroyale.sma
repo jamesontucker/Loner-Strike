@@ -960,7 +960,8 @@ stock loot_goal_on_landing(p)
 	new Float:po[3], line[128];
 	pev(p, pev_origin, po);
 	new left = max(floatround(g_phaseEnd - get_gametime()), 0) + 20;
-	if (!has_gun(p))
+	/* (a bot meant for below ground heads straight down: there are guns down there too) */
+	if (!has_gun(p) && !(g_layer[p] == LAYER_BELOW && g_lootTarget[p]))
 	{
 		new best = 0, Float:bd = 1600.0, Float:o[3];
 		for (new e = ls_comp_find("ls_weapon_spawner"); e; e = ls_comp_find("ls_weapon_spawner", e))
