@@ -104,3 +104,9 @@ Many agents share one staging area. Never run a bare `git commit`. Always commit
 - Never use broad `pkill -f <pattern>` / `killall`: other agents run the same kinds of servers. Stop only processes you started, by PID (record it when you start one) or by a pattern that includes your own unique port/folder.
 - Notes: from now on, write your progress notes in your OWN file `docs/notes/<your agent name>.md` (e.g. docs/notes/P5.md), not in the shared TOOLS-NOTES.md — several agents committing one shared file keeps sweeping others' text into commits. Cross-agent requests go in the recipient's file under "Requests from <you>". TOOLS-NOTES.md stays as the history.
 - Disk (2026-11-13, the disk filled up twice): build only in the shared `app/src-tauri/target` — no private `--target-dir`, no extra clean copies of the repo with their own builds. If you truly need a clean-copy build, use `cargo clean --target-dir <it>` and delete the copy as soon as you're done, in the same session. Downloaded test corpora go in one folder you delete when finished. Check `df -h /` before big builds/downloads; under 10 GB free, stop and tell the coordinator.
+
+## Keep the user's Mac usable (2026-11-13)
+- Map compiles (sdHLCSG/BSP/VIS/RAD): at most `-threads 6`, always under `nice -n 15`, and `-full` VIS only for the final
+  shipping compile. A 14-thread full VIS pushed the load to 58 with swap full and killed a window on the user's desktop.
+- At most 2 of your own sim servers at a time, and only one while you're also compiling. `cargo` builds: `-j 6`.
+- Check `uptime` before a heavy step; if the load average is over 20, wait.
