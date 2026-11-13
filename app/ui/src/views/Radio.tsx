@@ -49,6 +49,7 @@ const STATIONS: Station[] = [
   { name: "Radio Paradise Mellow Mix", desc: "Mellow rock, folk and world music, mixed by hand", stream: "https://stream.radioparadise.com/mellow-192", site: "https://radioparadise.com/", credit: "Radio Paradise: Mellow Mix", chill: true },
   { name: "Rainwave OC ReMix", desc: "Fan remixes of video game music", stream: "https://relay.rainwave.cc/ocremix.mp3", site: "https://rainwave.cc/ocremix/", credit: "Rainwave: OC ReMix", rainwave: true, chill: true, now: "https://rainwave.cc/api4/info?sid=2" },
   { name: "Rainwave Chiptune", desc: "Chiptunes from old consoles and computers", stream: "https://relay.rainwave.cc/chiptune.mp3", site: "https://rainwave.cc/chiptune/", credit: "Rainwave: Chiptune", rainwave: true, chill: true, now: "https://rainwave.cc/api4/info?sid=4" },
+  { name: "Rainwave Chill", desc: "Calm video game music", stream: "https://relay.rainwave.cc/chill.mp3", site: "https://rainwave.cc/chill/", credit: "Rainwave: Chill", rainwave: true, chill: true, now: "https://rainwave.cc/api4/info?sid=6" },
 ];
 
 /** Nightride FM: its /meta is a live event stream that opens with what's on every station. Read
