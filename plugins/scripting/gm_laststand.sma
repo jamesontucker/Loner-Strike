@@ -43,6 +43,7 @@ new g_cWaves, g_cDiff, g_cPrepare, g_cBreak, g_cRevive, g_cDrops, g_cCreatures, 
 
 new Float:g_gunNext[33];
 new g_botGunsBought;
+new g_botRifles;
 new bool:g_lostLast;
 const PRIMARY_BITS = (1<<CSW_SCOUT)|(1<<CSW_XM1014)|(1<<CSW_MAC10)|(1<<CSW_AUG)|(1<<CSW_UMP45)|(1<<CSW_SG550)|(1<<CSW_GALIL)|(1<<CSW_FAMAS)|(1<<CSW_AWP)|(1<<CSW_MP5NAVY)|(1<<CSW_M249)|(1<<CSW_M3)|(1<<CSW_M4A1)|(1<<CSW_TMP)|(1<<CSW_G3SG1)|(1<<CSW_SG552)|(1<<CSW_AK47)|(1<<CSW_P90);
 new g_phase;
@@ -252,6 +253,7 @@ public round_setup()
 				cs_set_user_money(p, start);
 	}
 	g_botGunsBought = 0;
+	g_botRifles = 0;
 	arrayset(g_gatePct, 0, sizeof g_gatePct);
 	ls_comp_bots_hint("set laststand");
 	if (g_creatures)
@@ -657,7 +659,7 @@ stock start_wave(n)
 	assign_defenders();
 	g_kills = 0;
 	g_waveAt = get_gametime();
-	log_amx("Wave %d: %d %s against %d defenders", n, g_planned, g_creatures ? "creatures" : "zombie bots", defenders());
+	log_amx("Wave %d: %d %s against %d defenders (creature health x%.2f%s)", n, g_planned, g_creatures ? "creatures" : "zombie bots", defenders(), hp_mult(), g_bossDone ? "" : ", boss wave");
 	if (!g_bossDone)
 	{
 		toast(0, 4.0, false, "Wave %d: a boss is coming!", n);
@@ -869,7 +871,7 @@ public ls_on_wave_cleared(wave)
 			hn++;
 		}
 	}
-	log_amx("Last Stand money after wave %d: people avg %d (%d), bots avg %d (%d-%d, %d), guns bought by bots so far %d", g_wave, hn ? hs / hn : 0, hn, bn ? bs / bn : 0, bn ? bmin : 0, bmax, bn, g_botGunsBought);
+	log_amx("Last Stand money after wave %d: people avg %d (%d), bots avg %d (%d-%d, %d), guns bought by bots so far %d (%d rifles)", g_wave, hn ? hs / hn : 0, hn, bn ? bs / bn : 0, bn ? bmin : 0, bmax, bn, g_botGunsBought, g_botRifles);
 	new drops = get_pcvar_num(g_cDrops);
 	if (drops > 0 && g_wave % drops == 0)
 		supply_drop();
@@ -1450,6 +1452,20 @@ stock beacons()
  * Down and revive
  * ========================================================================= */
 
+public ls_on_barricade_broken(ent, attacker)
+{
+	new name[28];
+	gate_name(ent, name, charsmax(name));
+	new what[32] = "?";
+	if (attacker > 0 && pev_valid(attacker))
+	{
+		pev(attacker, pev_classname, what, charsmax(what));
+		if (equal(what, "ls_creature"))
+			pev(attacker, pev_netname, what, charsmax(what));
+	}
+	log_amx("Last Stand: %s broken in wave %d (by %s)", name[0] ? name : "a gate", g_wave, what);
+}
+
 public ham_player_killed(victim, killer, gib)
 {
 	g_hePack[victim] = 0;
@@ -1459,6 +1475,19 @@ public ham_player_killed(victim, killer, gib)
 		return HAM_IGNORED;
 	if (!is_user_connected(victim) || cs_get_user_team(victim) != CS_TEAM_CT || get_pcvar_num(g_cRevive) <= 0)
 		return HAM_IGNORED;
+	/* for tuning: what got them and where they stood */
+	if (g_phase == PH_WAVE)
+	{
+		new what[32] = "?", Float:o[3];
+		if (killer > 0 && pev_valid(killer))
+		{
+			pev(killer, pev_classname, what, charsmax(what));
+			if (equal(what, "ls_creature"))
+				pev(killer, pev_netname, what, charsmax(what));
+		}
+		pev(victim, pev_origin, o);
+		log_amx("Last Stand: defender %d down in wave %d by %s at %.0f %.0f %.0f (%s the base)", victim, g_wave, what, o[0], o[1], o[2], in_base(victim) ? "in" : "outside");
+	}
 	g_down[victim] = true;
 	g_downAt[victim] = get_gametime();
 	pev(victim, pev_origin, g_downOrg[victim]);
@@ -1945,28 +1974,19 @@ stock bots_to_shop(secs)
 	ls_comp_bots_hint(line);
 }
 
+/* best first; prices as the game's. 0-2 are rifles */
+new const g_botGuns[][] = { "weapon_m4a1", "weapon_aug", "weapon_famas", "weapon_p90", "weapon_ump45", "weapon_mp5navy" };
+new const g_botGunCost[] = { 3100, 3500, 2250, 2350, 1700, 1500 };
+new const g_botGunAmmo[][] = { "556Nato", "556Nato", "556Nato", "57mm", "45ACP", "9mm" };
+#define RIFLE_LAST 2
+
 stock bots_shop_tick()
 {
 	if (g_phase != PH_BREAK && g_phase != PH_PREPARE)
 		return;
-	for (new p = 1; p <= MaxClients; p++)
-	{
-		if (!is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT || !at_shop(p))
-			continue;
-		if (get_gametime() < g_useNext[p])
-			continue;
-		g_useNext[p] = get_gametime() + 20.0;
-		new CsArmorType:t;
-		if (cs_get_user_armor(p, t) < 60)
-			shop_buy(p, 1, false);
-		shop_buy(p, 3, false);
-		if (random_num(0, 2) == 0)
-			shop_buy(p, 2, false);
-		if (random_num(0, 3) == 0)
-			shop_buy(p, 0, false);
-	}
-	/* guns: the whole stand is one round and CS bots only buy at round start, so between waves
-	   a bot in the base, at the armory or in a buy zone gets the best gun it can pay for */
+	/* guns first: the whole stand is one round and CS bots only buy at round start, so between
+	   waves a bot in the base, at the armory or in a buy zone buys here. A rifle comes before
+	   everything else (QA: buying SMGs, armour and grenades kept them at $200-2500, never a rifle) */
 	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT)
@@ -1978,17 +1998,37 @@ stock bots_shop_tick()
 		g_gunNext[p] = get_gametime() + 5.0;
 		bot_buy_guns(p);
 	}
+	/* the armory: armour, ammo, sometimes grenades or a repair kit - once it has a rifle, or with
+	   the rifle's money kept */
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT || !at_shop(p))
+			continue;
+		if (get_gametime() < g_useNext[p])
+			continue;
+		g_useNext[p] = get_gametime() + 20.0;
+		new bool:rifle = bot_gun_rank(p) <= RIFLE_LAST;
+		new keep = rifle ? 0 : g_botGunCost[0];
+		new CsArmorType:t;
+		if (cs_get_user_armor(p, t) < 60 && cs_get_user_money(p) - shop_price(1) >= keep)
+			shop_buy(p, 1, false);
+		if (cs_get_user_money(p) - shop_price(3) >= keep)
+			shop_buy(p, 3, false);
+		if (random_num(0, 2) == 0 && cs_get_user_money(p) - shop_price(2) >= keep)
+			shop_buy(p, 2, false);
+		if (random_num(0, 3) == 0 && cs_get_user_money(p) - shop_price(0) >= keep)
+			shop_buy(p, 0, false);
+	}
 }
 
-/* best first; prices as the game's */
-new const g_botGuns[][] = { "weapon_m4a1", "weapon_aug", "weapon_p90", "weapon_famas", "weapon_ump45", "weapon_mp5navy" };
-new const g_botGunCost[] = { 3100, 3500, 2350, 2250, 1700, 1500 };
-
-stock bot_buy_guns(p)
+/* the bot's best primary as an index in g_botGuns (0 best; a floor AK, sniper or machine gun
+   counts as 0; sizeof g_botGuns = none of them) */
+stock bot_gun_rank(p, primary[] = "", len = 0)
 {
-	new weapons[32], n, have = sizeof g_botGuns, primary[32];
+	new weapons[32], n, have = sizeof g_botGuns;
 	get_user_weapons(p, weapons, n);
-	primary[0] = 0;
+	if (len)
+		primary[0] = EOS;
 	for (new i = 0; i < n; i++)
 	{
 		new name[32];
@@ -1996,30 +2036,41 @@ stock bot_buy_guns(p)
 		for (new g = 0; g < sizeof g_botGuns; g++)
 			if (g < have && equal(name, g_botGuns[g]))
 				have = g;
-		/* a sniper rifle, a machine gun or an AK/Galil from the floor counts as good enough */
 		if (equal(name, "weapon_ak47") || equal(name, "weapon_sg552") || equal(name, "weapon_m249") || equal(name, "weapon_awp")
 			|| equal(name, "weapon_g3sg1") || equal(name, "weapon_sg550") || equal(name, "weapon_galil"))
 			have = 0;
-		if ((1 << weapons[i]) & PRIMARY_BITS)
-			copy(primary, charsmax(primary), name);
+		if (len && ((1 << weapons[i]) & PRIMARY_BITS))
+			copy(primary, len, name);
 	}
+	return have;
+}
+
+stock bot_buy_guns(p)
+{
+	new primary[32];
+	new have = bot_gun_rank(p, primary, charsmax(primary));
 	new money = cs_get_user_money(p);
-	if (have > 0)
-		for (new g = 0; g < have; g++)
-		{
-			/* keep a little back for armour and a repair kit */
-			if (money - g_botGunCost[g] < 400)
-				continue;
-			if (primary[0])
-				engclient_cmd(p, "drop", primary);
-			give_item(p, g_botGuns[g]);
-			ExecuteHamB(Ham_GiveAmmo, p, 90, g == 2 ? "57mm" : (g == 4 ? "45ACP" : (g == 5 ? "9mm" : "556Nato")), 200);
-			money -= g_botGunCost[g];
-			cs_set_user_money(p, money);
-			g_botGunsBought++;
-			break;
-		}
-	if (!user_has_weapon(p, CSW_DEAGLE) && money - 650 >= 400)
+	/* with no primary: the best it can pay for. With an SMG: only a rifle (it saves for one).
+	   $100 kept for a board repair */
+	new last = have >= sizeof g_botGuns ? sizeof g_botGuns - 1 : min(have - 1, RIFLE_LAST);
+	for (new g = 0; g <= last; g++)
+	{
+		if (money - g_botGunCost[g] < 100)
+			continue;
+		if (primary[0])
+			engclient_cmd(p, "drop", primary);
+		give_item(p, g_botGuns[g]);
+		ExecuteHamB(Ham_GiveAmmo, p, 90, g_botGunAmmo[g], 200);
+		money -= g_botGunCost[g];
+		cs_set_user_money(p, money);
+		g_botGunsBought++;
+		if (g <= RIFLE_LAST)
+			g_botRifles++;
+		have = g;
+		break;
+	}
+	/* a Deagle once the rifle's there and money's left over */
+	if (have <= RIFLE_LAST && !user_has_weapon(p, CSW_DEAGLE) && money - 650 >= 400)
 	{
 		new pistols[][] = { "weapon_usp", "weapon_glock18", "weapon_p228", "weapon_fiveseven", "weapon_elite" };
 		for (new i = 0; i < sizeof pistols; i++)

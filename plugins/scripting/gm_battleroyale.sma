@@ -474,10 +474,12 @@ public tick()
    moved 8 s into the game walks to a nearby crate (or respawn point), then is let go */
 stock unstick_bots()
 {
-	if (g_phase != PH_DROP && g_phase != PH_PLAY)
+	/* (only once the fighting is on: during the loot-up a bot opening a crate stands still on
+	   purpose, and the brain's nobuy has taken care of the buy state since) */
+	if (g_phase != PH_PLAY)
 		return;
 	new Float:now = get_gametime(), Float:o[3];
-	new Float:since = g_phase == PH_DROP ? now - (g_phaseEnd - get_pcvar_float(g_cDrop) * floatclamp(0.6 + g_pace * 0.4, 0.7, 1.1)) : 99.0;
+	new Float:since = now - g_playAt;
 	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_alive(p) || !is_user_bot(p))
@@ -502,7 +504,7 @@ stock unstick_bots()
 			g_unstuckTries[p] = 3;
 			continue;
 		}
-		if (since < 8.0 + 8.0 * float(g_unstuckTries[p]))
+		if (since < 12.0 + 8.0 * float(g_unstuckTries[p]))
 			continue;
 		new Float:to[3];
 		if (!nearby_target(o, to))
@@ -575,7 +577,15 @@ stock supply_drop()
 {
 	new markers[16], n = 0;
 	for (new e = ls_comp_find("ls_supply_drop"); e && n < sizeof markers; e = ls_comp_find("ls_supply_drop", e))
+	{
+		/* not one in water (a crate in the river can't be reached or opened) */
+		new Float:w[3];
+		pev(e, pev_origin, w);
+		w[2] += 16.0;
+		if (engfunc(EngFunc_PointContents, w) == CONTENTS_WATER)
+			continue;
 		markers[n++] = e;
+	}
 	/* prefer spots inside the next circle */
 	new Float:c[3], Float:r, closing;
 	ls_zone_next(0, c, r, closing);

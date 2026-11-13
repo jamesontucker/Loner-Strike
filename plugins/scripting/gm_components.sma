@@ -264,6 +264,7 @@ new g_modeId[32];
 /* Mode map kits: an ls_marker (kind, mode, targetname, size, radius, ...) becomes the component
    its kind names, or stays a named spot the mode's plugin finds (ls_marker_find) */
 #define PEND_MARKER 99
+new g_gateBlocks;
 #define TOAST_Q 4
 new g_tqText[33][TOAST_Q][128];
 new g_tqRgb[33][TOAST_Q];
@@ -454,6 +455,7 @@ public plugin_init()
 
 	RegisterHamPlayer(Ham_Spawn, "ham_player_spawn", 1);
 	RegisterHamPlayer(Ham_Killed, "ham_player_killed", 1);
+	RegisterHamPlayer(Ham_TakeDamage, "ham_player_hurt");
 	RegisterHamPlayer(Ham_CS_Player_ResetMaxSpeed, "ham_maxspeed", 1);
 	RegisterHam(Ham_Use, "info_target", "ham_use");
 	RegisterHam(Ham_TakeDamage, "info_target", "ham_takedamage");
@@ -1113,10 +1115,14 @@ stock solid_when_clear(s, solid)
 	new Float:mn[3], Float:mx[3];
 	pev(ent, pev_absmin, mn);
 	pev(ent, pev_absmax, mx);
+	/* a barricade coming back: a player standing in it is moved out (it doesn't wait for them:
+	   a repairing bot leaning into the gate kept it open ~20 s into the next wave) */
+	if (g_kind[s] == K_BARRICADE)
+		push_out_players(mn, mx);
 	if (box_occupied(mn, mx))
 		return;
-	/* a barricade only re-forms with no creature close by (on either side) */
-	if (g_kind[s] == K_BARRICADE && creature_near(mn, mx, 250.0))
+	/* ...and only a creature actually in the gap holds it open */
+	if (g_kind[s] == K_BARRICADE && creature_near(mn, mx, 24.0))
 		return;
 	g_aux[s] = 0;
 	set_pev(ent, pev_solid, solid);
@@ -1147,6 +1153,36 @@ stock bool:creature_near(const Float:mn[3], const Float:mx[3], Float:r)
 }
 
 /* is any living player or creature overlapping this box (with a little room) */
+/* players overlapping the box go out of its thin side (x or y), to whichever side their middle is
+   on, if there's room there (else the other side) */
+stock push_out_players(const Float:mn[3], const Float:mx[3])
+{
+	new Float:o[3], Float:to[3];
+	new axis = (mx[0] - mn[0]) < (mx[1] - mn[1]) ? 0 : 1;
+	new Float:mid = (mn[axis] + mx[axis]) * 0.5;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p))
+			continue;
+		pev(p, pev_origin, o);
+		if (!(o[0] + 16.0 > mn[0] && o[0] - 16.0 < mx[0] && o[1] + 16.0 > mn[1] && o[1] - 16.0 < mx[1] && o[2] + 36.0 > mn[2] && o[2] - 36.0 < mx[2]))
+			continue;
+		for (new t = 0; t < 2; t++)
+		{
+			new bool:low = (o[axis] < mid) != (t == 1);
+			to = o;
+			to[axis] = low ? mn[axis] - 17.0 : mx[axis] + 17.0;
+			new hull = (pev(p, pev_flags) & FL_DUCKING) ? HULL_HEAD : HULL_HUMAN;
+			engfunc(EngFunc_TraceHull, to, to, DONT_IGNORE_MONSTERS, hull, p, 0);
+			if (!get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid))
+			{
+				engfunc(EngFunc_SetOrigin, p, to);
+				break;
+			}
+		}
+	}
+}
+
 stock bool:box_occupied(const Float:mn[3], const Float:mx[3])
 {
 	new Float:o[3];
@@ -1155,7 +1191,7 @@ stock bool:box_occupied(const Float:mn[3], const Float:mx[3])
 		if (!is_user_alive(p))
 			continue;
 		pev(p, pev_origin, o);
-		if (o[0] + 18.0 > mn[0] && o[0] - 18.0 < mx[0] && o[1] + 18.0 > mn[1] && o[1] - 18.0 < mx[1] && o[2] + 38.0 > mn[2] && o[2] - 38.0 < mx[2])
+		if (o[0] + 16.0 > mn[0] && o[0] - 16.0 < mx[0] && o[1] + 16.0 > mn[1] && o[1] - 16.0 < mx[1] && o[2] + 36.0 > mn[2] && o[2] - 36.0 < mx[2])
 			return true;
 	}
 	new e = 0;
@@ -2718,6 +2754,10 @@ stock tick_crate(s, bool:sec)
 	}
 	else if (g_state[s] == CRATE_FULL)
 	{
+		/* nobody's opened it yet: the nearest bots are sent again every 15 s for 2 min (a fight
+		   or a 45-s goal running out left most of a big map's drops shut) */
+		if (sec && g_now - g_pf[s][W_FALL] < 120.0 && floatround(g_now - g_pf[s][W_FALL]) % 15 == 0)
+			bots_to_crate(s);
 		bots_open(s);
 		solid_when_clear(s, SOLID_BBOX);
 	}
@@ -2734,7 +2774,7 @@ stock tick_crate(s, bool:sec)
 /* a landed supply crate: the two nearest bots go for it (others come anyway: it's attract-ed) */
 stock bots_to_crate(s)
 {
-	new near[2], Float:nd[2] = { 2500.0, 2500.0 }, Float:o[3];
+	new near[2], Float:nd[2] = { 4500.0, 4500.0 }, Float:o[3];
 	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_alive(p) || !is_user_bot(p))
@@ -2753,7 +2793,7 @@ stock bots_to_crate(s)
 	}
 	for (new i = 0; i < 2; i++)
 		if (near[i])
-			hint("goal %d loot %.0f %.0f %.0f %d 60 45 48", near[i], g_org[s][0], g_org[s][1], g_org[s][2], g_ent[s]);
+			hint("goal %d loot %.0f %.0f %.0f %d 70 30 48", near[i], g_org[s][0], g_org[s][1], g_org[s][2], g_ent[s]);
 }
 
 /* ---- barricade ---- */
@@ -2848,7 +2888,7 @@ new g_tsSeen, g_tsPassed, g_tsEnded, g_tsSkipped, g_tsBullets;
 
 public cmd_tracestats()
 {
-	server_print("barricade traces: seen %d (bullet-length %d), passed %d, ended inside %d, skipped (depth/not see-through) %d", g_tsSeen, g_tsBullets, g_tsPassed, g_tsEnded, g_tsSkipped);
+	server_print("barricade traces: seen %d (bullet-length %d), passed %d, ended inside %d, skipped (depth/not see-through) %d; creature hits stopped by a gate %d", g_tsSeen, g_tsBullets, g_tsPassed, g_tsEnded, g_tsSkipped, g_gateBlocks);
 	return PLUGIN_HANDLED;
 }
 
@@ -3864,6 +3904,68 @@ stock use_hints()
 /* =========================================================================
  * Players: spawns, classes, protection
  * ========================================================================= */
+
+/* A creature's melee is a reach check, not a trace: through an intact gate it still landed (QA:
+   14 deaths 20-50 u behind solid gates). Its hit is refused when a standing barricade lies on the
+   line from the creature to the player. (Spit is a projectile and the gate stops it itself.) */
+public ham_player_hurt(victim, inflictor, attacker, Float:dmg, bits)
+{
+	if (!attacker || attacker != inflictor || attacker <= MaxClients || !pev_valid(attacker))
+		return HAM_IGNORED;
+	new cls[16];
+	pev(attacker, pev_classname, cls, charsmax(cls));
+	if (!equal(cls, "ls_creature"))
+		return HAM_IGNORED;
+	new Float:a[3], Float:b[3];
+	pev(attacker, pev_origin, a);
+	pev(victim, pev_origin, b);
+	/* (the creature's middle: its origin can be at its feet) */
+	new Float:amn[3], Float:amx[3];
+	pev(attacker, pev_absmin, amn);
+	pev(attacker, pev_absmax, amx);
+	a[2] = (amn[2] + amx[2]) * 0.5;
+	for (new s = 0; s < g_nslots; s++)
+	{
+		if (!g_ent[s] || g_kind[s] != K_BARRICADE || g_state[s] != 0 || pev(g_ent[s], pev_solid) == SOLID_NOT)
+			continue;
+		new Float:mn[3], Float:mx[3];
+		pev(g_ent[s], pev_absmin, mn);
+		pev(g_ent[s], pev_absmax, mx);
+		if (segment_hits_box(a, b, mn, mx))
+		{
+			g_gateBlocks++;
+			return HAM_SUPERCEDE;
+		}
+	}
+	return HAM_IGNORED;
+}
+
+stock bool:segment_hits_box(const Float:a[3], const Float:b[3], const Float:mn[3], const Float:mx[3])
+{
+	new Float:t0 = 0.0, Float:t1 = 1.0;
+	for (new i = 0; i < 3; i++)
+	{
+		new Float:d = b[i] - a[i];
+		if (floatabs(d) < 0.001)
+		{
+			if (a[i] < mn[i] || a[i] > mx[i])
+				return false;
+			continue;
+		}
+		new Float:u = (mn[i] - a[i]) / d, Float:v = (mx[i] - a[i]) / d;
+		if (u > v)
+		{
+			new Float:t = u;
+			u = v;
+			v = t;
+		}
+		t0 = floatmax(t0, u);
+		t1 = floatmin(t1, v);
+		if (t0 > t1)
+			return false;
+	}
+	return true;
+}
 
 public ham_player_spawn(id)
 {
@@ -5090,6 +5192,9 @@ stock fwd3f(fw, a, b, Float:c)
 
 stock fwd_drop(ent, stage, const Float:o[3])
 {
+	/* logged, for tests: called / landed / opened */
+	static const STAGE[][] = { "called", "landed", "opened" };
+	log_amx("Supply drop %d %s at %.0f %.0f %.0f", ent, STAGE[clamp(stage, 0, 2)], o[0], o[1], o[2]);
 	new ret, Float:v[3];
 	vcopy(o, v);
 	ExecuteForward(g_fwDrop, ret, ent, stage, PrepareArray(_:v, 3));
@@ -5586,6 +5691,22 @@ stock start_or_stop(ent, bool:start, activator)
  * Natives
  * ========================================================================= */
 
+/* a zone native's component: a safe zone, or a shrinker (its zone; Studio wires either) */
+stock zone_arg(n)
+{
+	new s = arg_slot(n);
+	if (s < 0)
+		return -1;
+	if (g_kind[s] == K_SHRINKER && g_aux[s] >= 0 && g_aux[s] < MAX_COMP && g_ent[g_aux[s]] && g_kind[g_aux[s]] == K_ZONE)
+		return g_aux[s];
+	if (g_kind[s] != K_ZONE)
+	{
+		log_error(AMX_ERR_NATIVE, "Entity %d is %s, not a safe zone or its shrinker", get_param(n), KIND_NAME[g_kind[s]]);
+		return -1;
+	}
+	return s;
+}
+
 stock arg_slot(n, kind = K_NONE)
 {
 	new ent = get_param(n);
@@ -5912,7 +6033,7 @@ public n_cp_lock(plugin, params)
 
 public n_zone_set(plugin, params)
 {
-	new s = arg_slot(1, K_ZONE);
+	new s = zone_arg(1);
 	if (s < 0)
 		return 0;
 	new Float:c[3];
@@ -5924,7 +6045,7 @@ public n_zone_set(plugin, params)
 
 public n_zone_shrink(plugin, params)
 {
-	new s = arg_slot(1, K_ZONE);
+	new s = zone_arg(1);
 	if (s < 0)
 		return 0;
 	new Float:c[3];
@@ -5936,7 +6057,7 @@ public n_zone_shrink(plugin, params)
 
 public Float:n_zone_radius(plugin, params)
 {
-	new s = arg_slot(1, K_ZONE);
+	new s = zone_arg(1);
 	if (s < 0)
 		return 0.0;
 	g_now = get_gametime();
@@ -5945,7 +6066,7 @@ public Float:n_zone_radius(plugin, params)
 
 public n_zone_center(plugin, params)
 {
-	new s = arg_slot(1, K_ZONE);
+	new s = zone_arg(1);
 	if (s < 0)
 		return 0;
 	set_array_f(2, g_va[s], 3);
@@ -5978,7 +6099,7 @@ public n_zone_inside(plugin, params)
 
 public n_zone_damage(plugin, params)
 {
-	new s = arg_slot(1, K_ZONE);
+	new s = zone_arg(1);
 	if (s < 0)
 		return 0;
 	g_pf[s][Z_DMG] = get_param_f(2);
@@ -6383,7 +6504,7 @@ public Float:n_zone_next(plugin, params)
 	new ent = get_param(1);
 	new z = -1;
 	if (ent)
-		z = arg_slot(1, K_ZONE);
+		z = zone_arg(1);
 	else
 		for (new k = 0; k < g_nslots && z < 0; k++)
 			if (g_ent[k] && g_kind[k] == K_ZONE)
