@@ -297,3 +297,63 @@ adds every `.map` it finds to the player's library (`<app dir>/editor/prefabs/`,
 beside it when there; a bare GameBanana `.map` or a zip of them works too, centred on install).
 WADs in the package go into the game folder only when no file of that name is there. The page then
 offers "Open the map editor" (`go("tools", "editor:prefabs")`).
+
+## 10. The community library: installed creations in their usual places
+
+Code: `app/src-tauri/src/tools/communitylib.rs`; UI `views/tools/community/{Installed,chip,Hooks,ServerContent}.tsx`.
+
+**What's kept.** Every Try it is noted in `<app dir>/community/<mod|spray>-<id>/meta.json`: kind,
+page, file and MD5 installed, name, author (GameBanana's), the game folder, and where it went
+(map names, prefab ids, a Studio mode's id). A Studio mode's graph is kept beside it. The files
+themselves stay where they always go, installed by the installer that owns them:
+
+| Kind | Installed by | Shows up in |
+|---|---|---|
+| map | gamebanana.rs job (`maps` section; noted when the job ends) | Maps page and Play map lists (Community tag on the card, "From Community" in Show, a chip with a link on the map's sheet) |
+| Game Mode Studio mode | downloaded zip (`modes/<id>/<id>.graph.json`, checked: one graph, the Studio's checks, nothing that runs code), built here with the Studio's own compiler (`studio::compile`), refused when the id clashes with a mode you have, your own Studio graph or another community mode | Play mode cards (Community line), Mods page "Modes from Community" (Details / Remove), Game Mode Menu |
+| prefab | `editor::prefabs::install_download` | the editor's prefab library (chip on the row) |
+| spray, textures | gamebanana.rs/content.rs job (`sprays`/`textures` sections, replaced files backed up) | the spray maker's "Sprays from Community" |
+
+Component setups have no community kind yet; when the editor's component packs become shareable
+they get a kind and a row here like prefabs.
+
+**Routes** (app window only; MCP: library and remix are Read/Change, the rest asked first):
+`GET /api/tools/community/library` (items with `update` and `pulled`, plus lookups by map name,
+mode id, prefab id and page for the chips), `POST .../uninstall {key}`, `.../update {key}`,
+`.../remix {key}`, `GET|POST .../server/:id`, `GET|POST .../publish-mode/:id`.
+
+**Removing** goes back through the installer that put it in (its records say which files are
+its; replaced files come back), and the safety net (History & restore) keeps a copy of each file
+first. A Studio mode is taken out of modes.ini with its plugin and files (`studio::uninstall`,
+only modes the Studio made). Servers carrying it drop it too.
+
+**Updates.** A newer file is "available" when the index lists a newer file id for the page (or,
+for a page the index doesn't list, when the page itself has a newer clean file). Update removes
+the installed version first (the installer never writes over existing files), then installs the
+new one through exactly the same checks as Try it. A page the team pulled since shows a note.
+
+**Remix** (Studio modes): copies the community graph into your Game Mode Studio graphs as
+`<id>_remix` (`_remix2`, … never over your copies or an installed mode), named "<name> remix",
+and notes the credit in `<app dir>/community/remixes.json` (your graph id → original page, name
+and author). It opens in the Studio (`studio:<id>`). Publishing it (Publish > A game mode) puts
+`remixOf` in the index entry and "A remix of X by Y" in the package's README and the GameBanana
+description. The credit lives beside the graph rather than in it, so the Studio's graph format
+didn't change.
+
+**Publishing a Studio mode** (Publish > A game mode): the graph must pass the Studio's checks;
+the package is `modes/<id>/<id>.graph.json`, README.txt and loner-strike.json (kind `mode`,
+`plugins: []`, maps it's made for, `remixOf`), uploaded to Resources > AMXX Plugins & Mods with
+the tag. Registering works as for maps. Other tools can open it with
+`go("tools", "community:publish:mode:<id>")`.
+
+**Servers** (a server's Library > Community content tab, this computer only): tick the community
+maps and Studio modes a server carries; the choice is kept in `<app dir>/community/servers/<id>.json`.
+- Maps are copied with the app's map copy job (`mapcopy::start`: the map and its files, recorded in
+  the server's map records under the GameBanana id; Linux servers are uploaded with the usual SSH
+  sync). FastDL serves the server's game folder and lists what its records hold, so players
+  download them with nothing more to do.
+- Modes are built on this computer first (the Studio's compiler, so a server only ever gets what
+  the graph makes), then `studio_<id>.amxx`, `<id>.plugins.ini`/`.cfg` and the modes.ini line go
+  into the server's folder (`studio::register_mode`), then a Linux server is synced.
+- Unticking takes them off: maps through the server's map records (FastDL stops offering them),
+  modes with `studio::uninstall` on the server's folder, then a sync.
