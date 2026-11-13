@@ -54,6 +54,10 @@ fn server_prop() -> Value {
     json!({"type": "string", "description": "A server id from servers_list, or \"game\" for the game the player hosts from Play"})
 }
 
+/// How the editor says nothing is open (tools/editor.rs NO_DOC): the one doc error that's
+/// safe to go ahead on.
+const EDITOR_EMPTY: &str = "No map is open in the editor";
+
 const EDITOR_OPS: &[&str] = &[
     "add_box", "add_cylinder", "delete", "duplicate", "transform", "move_face", "clip", "hollow", "carve", "merge", "snap",
     "set_texture", "align", "set_key", "add_entity", "tie", "to_world", "set_world", "group", "ungroup", "group_flags",
@@ -468,11 +472,15 @@ async fn run(ctx: &Ctx, name: &str, a: &Value) -> Done {
             Ok(json!({"entities": list}))
         }
         "editor_new" | "editor_open" | "editor_import_map" => {
-            if let Ok(doc) = get(ctx, "/api/tools/editor/doc").await {
-                if doc["state"]["dirty"] == true {
+            // (unsaved changes, or no way to tell: ask; only nothing open at all goes ahead)
+            match get(ctx, "/api/tools/editor/doc").await {
+                Ok(doc) if doc["state"]["dirty"] == false => {}
+                Ok(doc) => {
                     let what = doc["state"]["name"].as_str().unwrap_or("the open map").to_string();
                     ask(ctx, format!("An AI agent wants to close \"{what}\" in the map editor. It has changes that aren't saved, and they'd be lost. Allow it?")).await?;
                 }
+                Err(Fail::Error(e)) if e.starts_with(EDITOR_EMPTY) => {}
+                Err(_) => ask(ctx, "An AI agent wants to close the map open in the map editor. Loner-Strike couldn't tell whether it has unsaved changes, which would be lost. Allow it?".into()).await?,
             }
             let path = match name {
                 "editor_new" => "/api/tools/editor/new",
@@ -608,9 +616,10 @@ async fn run(ctx: &Ctx, name: &str, a: &Value) -> Done {
         }
         "server_stop" => {
             let id = own_server(ctx, a).await?;
-            let people = people_on(ctx, Some(&id)).await;
-            if people > 0 {
-                ask(ctx, format!("An AI agent wants to stop the server \"{id}\". {} on it right now. Allow it?", plural(people))).await?;
+            match people_on(ctx, Some(&id)).await {
+                Some(0) => {}
+                Some(n) => ask(ctx, format!("An AI agent wants to stop the server \"{id}\". {} on it right now. Allow it?", plural(n))).await?,
+                None => ask(ctx, format!("An AI agent wants to stop the server \"{id}\". Loner-Strike couldn't tell who's on it. Allow it?")).await?,
             }
             post(ctx, &format!("/api/servers/{id}/stop"), json!({})).await
         }
@@ -633,10 +642,11 @@ async fn run(ctx: &Ctx, name: &str, a: &Value) -> Done {
                 (None, None) => return Err(err("Say a map, a mode or both.")),
             };
             let people = people_on(ctx, t.as_deref()).await;
-            if people > 0 {
+            if people != Some(0) {
                 let where_ = t.as_deref().map(|id| format!("the server \"{id}\"")).unwrap_or_else(|| "your game".into());
                 let to = [mode.as_deref().map(|m| format!("mode {m}")), map.as_deref().map(|m| format!("map {m}"))].into_iter().flatten().collect::<Vec<_>>().join(", ");
-                ask(ctx, format!("An AI agent wants to change {where_} to {to}. {} playing. Allow it?", plural(people))).await?;
+                let who = people.map(|n| format!("{} playing.", plural(n))).unwrap_or_else(|| "Loner-Strike couldn't tell who's playing.".into());
+                ask(ctx, format!("An AI agent wants to change {where_} to {to}. {who} Allow it?")).await?;
             }
             call(ctx, Method::POST, "/api/cmd", t.as_deref(), Some(json!({"cmd": cmd, "args": args}))).await
         }
@@ -804,11 +814,12 @@ fn state_view(v: &Value) -> Value {
            "players": players.iter().map(|p| json!({"name": p["name"], "bot": p["bot"].as_i64() == Some(1), "team": p["team"], "frags": p["frags"]})).collect::<Vec<_>>()})
 }
 
-/// People (not bots) on a game right now; 0 when it isn't up.
-async fn people_on(ctx: &Ctx, target: Option<&str>) -> usize {
+/// People (not bots) on a game right now; None when that can't be told (the game didn't
+/// answer, or answered without a player list), which callers treat as "maybe someone".
+async fn people_on(ctx: &Ctx, target: Option<&str>) -> Option<usize> {
     match call(ctx, Method::GET, "/api/state", target, None).await {
-        Ok(v) if v["online"] == true => v["players"].as_array().into_iter().flatten().filter(|p| p["bot"].as_i64() != Some(1)).count(),
-        _ => 0,
+        Ok(v) if v["online"] == true => v["players"].as_array().map(|l| l.iter().filter(|p| p["bot"].as_i64() != Some(1)).count()),
+        _ => None,
     }
 }
 

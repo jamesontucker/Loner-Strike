@@ -541,3 +541,101 @@ fn setup_commands() {
     assert_eq!(short(&json!({"map": "de_dust2", "x": [1, 2]})), "map: de_dust2, x: [1,2]");
     assert!(short(&json!({"t": "y".repeat(500)})).chars().count() <= 120);
 }
+
+/// Serves the connector on 127.0.0.1:8029 with the real game and app routes, without the app
+/// window (for trying it with curl, the stdio bridge or an agent; see docs/MCP.md):
+/// `LONER_MCP_TOKEN=<16+ chars> [LONER_MCP_CHANGES=1] cargo test serve_mcp_for_try -- --ignored --nocapture`.
+/// Questions for the person are answered "Don't allow" (there's no window to ask in).
+#[test]
+#[ignore]
+fn serve_mcp_for_try() {
+    let settings = crate::app_api::load_settings();
+    let game = crate::servers::game_for("local", || crate::app_api::pick_game(&settings));
+    let st: Shared = Arc::new(crate::server::AppState {
+        current: RwLock::new(None),
+        hosts: RwLock::new(vec![HOST.into()]),
+        lan_hosts: RwLock::new(vec![]),
+        token: RwLock::new("testtoken0123456789".into()),
+        app: OnceLock::new(),
+        phone: Mutex::new(crate::app_api::Phone::default()),
+    });
+    st.set_game(game);
+    let m = mcp();
+    let _ = m.st.set(st.clone());
+    if let Ok(t) = std::env::var("LONER_MCP_TOKEN") {
+        *m.token.write().unwrap() = t;
+    }
+    m.enabled.store(true, Ordering::Relaxed);
+    m.changes.store(std::env::var("LONER_MCP_CHANGES").is_ok_and(|v| v == "1"), Ordering::Relaxed);
+    switch(true);
+    let v = view();
+    println!("{}\nchanges: {}\n{}", v["url"], v["changes"], v["command"]);
+    let mut shown = 0;
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let new: Vec<Value> = m.log.rows().into_iter().filter(|r| r["n"].as_u64().unwrap_or(0) > shown).collect();
+        for r in new {
+            shown = r["n"].as_u64().unwrap_or(0);
+            println!("{r}");
+        }
+    }
+}
+
+/// When who's playing, or whether the editor has unsaved work, can't be told, the person is
+/// asked (never taken as "nobody" / "nothing to lose").
+#[tokio::test]
+async fn unknown_means_ask() {
+    let with = |app: Router, allow: bool| -> T {
+        let asked: Arc<Mutex<Vec<String>>> = Arc::default();
+        let a = asked.clone();
+        T {
+            ctx: Ctx { app, host: HOST.into(), changes: true, confirm: Arc::new(move |t| { a.lock().unwrap().push(t); allow }), log: Arc::new(Log::default()) },
+            calls: Arc::default(),
+            asked,
+            sessions: rpc::Sessions::default(),
+        }
+    };
+    let servers = || get(|| async { Json(json!({"servers": [{"id": "mine", "host": null}]})) });
+    let stops: Calls = Arc::default();
+    let s2 = stops.clone();
+    let stop = post(move |Path((id, action)): Path<(String, String)>| {
+        let s2 = s2.clone();
+        async move {
+            s2.lock().unwrap().push(format!("{id}/{action}"));
+            Json(json!({"ok": true}))
+        }
+    });
+    let states: [Router; 3] = [
+        // the game didn't take the console password: people may well be on
+        Router::new().route("/api/state", get(|| async { Json(json!({"online": false, "reason": "The game didn't accept Loner-Strike's console password."})) })),
+        Router::new().route("/api/state", get(|| async { (StatusCode::INTERNAL_SERVER_ERROR, "boom") })),
+        Router::new().route("/api/state", get(|| async { Json(json!({"online": true})) })),
+    ];
+    for state in states {
+        let app = state.clone().route("/api/servers", servers()).route("/api/servers/:id/:action", stop.clone()).route("/api/cmd", post(|| async { Json(json!({"ok": true})) }));
+        let no = with(app.clone(), false);
+        let r = call_tool(&no, "server_stop", json!({"server": "mine"})).await;
+        assert_eq!(r["isError"], true, "{}", text(&r));
+        assert!(no.asked.lock().unwrap()[0].contains("couldn't tell who's on"));
+        let r = call_tool(&no, "server_change_map", json!({"server": "mine", "map": "de_dust2"})).await;
+        assert_eq!(r["isError"], true);
+        assert!(no.asked.lock().unwrap()[1].contains("couldn't tell who's playing"));
+        assert!(stops.lock().unwrap().is_empty(), "nothing stopped without a yes");
+        let yes = with(app, true);
+        assert_eq!(call_tool(&yes, "server_stop", json!({"server": "mine"})).await["isError"], false);
+        assert_eq!(stops.lock().unwrap().pop().as_deref(), Some("mine/stop"));
+    }
+
+    // the editor: a doc that can't be read is asked about; nothing open goes ahead
+    let new = || post(|| async { Json(json!({"state": {"name": "Untitled"}})) });
+    let broken = Router::new().route("/api/tools/editor/doc", get(|| async { Json(json!({"error": "Loner-Strike hit an internal error."})) })).route("/api/tools/editor/new", new());
+    let t = with(broken.clone(), false);
+    assert_eq!(call_tool(&t, "editor_new", json!({})).await["isError"], true);
+    assert!(t.asked.lock().unwrap()[0].contains("couldn't tell whether it has unsaved changes"));
+    let t = with(Router::new().route("/api/tools/editor/new", new()), false);
+    assert_eq!(call_tool(&t, "editor_new", json!({})).await["isError"], true, "no doc route answer at all: asked too");
+    let empty = Router::new().route("/api/tools/editor/doc", get(|| async { Json(json!({"error": "No map is open in the editor. Start a new map or open one."})) })).route("/api/tools/editor/new", new());
+    let t = with(empty, false);
+    assert_eq!(call_tool(&t, "editor_new", json!({})).await["isError"], false);
+    assert!(t.asked.lock().unwrap().is_empty());
+}
