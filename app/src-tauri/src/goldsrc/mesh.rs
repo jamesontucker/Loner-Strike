@@ -219,7 +219,7 @@ pub fn build(bsp: &Bsp, ents: &[Entity], map: &str) -> super::Result<Built> {
         "bounds": {"mins": world.mins, "maxs": world.maxs},
         "vertexCount": pos.len() / 3, "indexCount": idx.len(), "triangleCount": tri_face.len(),
         "draws": draws_json, "models": models_json, "textures": textures_json,
-        "lightmap": {"width": atlas.width, "height": atlas.height},
+        "lightmap": {"width": atlas.width, "height": atlas.height, "maps": atlas.maps, "planes": atlas.planes},
         "flagBits": flag_names,
     });
     let sections = vec![

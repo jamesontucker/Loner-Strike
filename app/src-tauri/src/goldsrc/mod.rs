@@ -7,15 +7,20 @@
 
 pub mod bsp;
 pub mod entities;
+pub mod hull;
 pub mod lightmap;
+pub mod lsv;
+pub mod mdl;
 pub mod mesh;
+pub mod nav;
 pub mod wad;
+pub mod wadwrite;
 
 use std::fmt;
 
 /// Bumped whenever a parser or the bundle changes what it produces: cached results made by
 /// an older version are rebuilt.
-pub const PARSER_VERSION: u32 = 1;
+pub const PARSER_VERSION: u32 = 2; // 2: lightmap style planes
 
 /// The biggest map file we read (the biggest stock map is ~30 MB).
 pub const MAX_BSP: u64 = 64 << 20;
@@ -164,8 +169,3 @@ mod tests {
         assert_eq!(cname(b"abc"), "abc");
     }
 }
-pub mod hull;
-pub mod nav;
-pub mod lsv;
-pub mod wadwrite;
-pub mod mdl;

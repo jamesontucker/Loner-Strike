@@ -127,7 +127,7 @@ fn mesh_file(m: &MapFile, want: usize, seen: Option<&str>) -> Done<Option<Cached
         let bsp = Bsp::open(&m.bsp, false)?;
         let ents = entities::parse(&bsp.entities);
         let built = mesh::build(&bsp, &ents, &m.name)?;
-        let png = goldsrc::png(built.atlas.width, built.atlas.height, &built.atlas.rgb, false)?;
+        let png = goldsrc::png(built.atlas.width, built.atlas.full_height(), &built.atlas.rgb, false)?;
         Ok(vec![built.bundle, png])
     })?;
     let kind = if want == 0 { "application/octet-stream" } else { "image/png" };
@@ -320,7 +320,7 @@ pub fn check_map(m: &MapFile) -> Result<(usize, (u32, u32), usize, Vec<String>),
     }
     // LS_TEST_DUMP=<folder>: also save each map's lightmap atlas there, to look at
     if let Ok(dir) = std::env::var("LS_TEST_DUMP") {
-        let png = goldsrc::png(built.atlas.width, built.atlas.height, &built.atlas.rgb, false).map_err(|e| e.to_string())?;
+        let png = goldsrc::png(built.atlas.width, built.atlas.full_height(), &built.atlas.rgb, false).map_err(|e| e.to_string())?;
         std::fs::write(std::path::Path::new(&dir).join(format!("{}-lightmap.png", m.name)), png).ok();
     }
     Ok((built.triangles, (built.atlas.width, built.atlas.height), found, missing))
