@@ -257,14 +257,15 @@ pub fn register_mode(cfg: &Path, g: &Graph, plugin: &str) -> Result<(), String> 
 }
 
 /// Is a Studio mode installed in this game (its line, its plugin list naming our plugin)?
-fn installed(game_dir: &Path, id: &str) -> bool {
+// (pub: the community library builds and removes community Studio modes with these)
+pub fn installed(game_dir: &Path, id: &str) -> bool {
     let gm = game_dir.join("addons/amxmodx/configs/gamemodes");
     let listed = crate::extras::parse_modes(&crate::sys::read_latin1(&gm.join("modes.ini")).unwrap_or_default()).iter().any(|(m, _)| m == id);
     listed && crate::sys::read_latin1(&gm.join(format!("{id}.plugins.ini"))).is_ok_and(|t| t.contains(&format!("{}.amxx", gen::plugin_name(id))))
 }
 
 /// Removes a Studio mode from the game (never one it didn't make).
-fn uninstall(game_dir: &Path, id: &str) -> Result<(), String> {
+pub fn uninstall(game_dir: &Path, id: &str) -> Result<(), String> {
     if !installed(game_dir, id) {
         return Err("That mode isn't installed (or wasn't made in the Studio).".into());
     }
@@ -287,7 +288,7 @@ fn uninstall(game_dir: &Path, id: &str) -> Result<(), String> {
 
 /// Checks, generates, compiles and installs. `{ok, problems, output, plugin}`; ok is false
 /// (with problems on the nodes) when the graph or the compiler said no.
-fn compile(st: &Shared, g: Graph, debug: bool) -> Result<Value, String> {
+pub fn compile(st: &Shared, g: Graph, debug: bool) -> Result<Value, String> {
     let mut problems = graph::validate(&g);
     if graph::has_errors(&problems) {
         return Ok(json!({"ok": false, "problems": problems}));

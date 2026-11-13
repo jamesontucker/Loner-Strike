@@ -135,7 +135,8 @@ impl Kind {
 
     /// Try it works for this kind (prefabs go to the map editor's library, not an installer section).
     pub fn can_install(self) -> bool {
-        self.installer().is_some() || self == Kind::Prefab
+        // (modes: Game Mode Studio graphs, built on this computer by the Studio's compiler)
+        self.installer().is_some() || self == Kind::Prefab || self == Kind::Mode
     }
 
     /// Why there's no one-click install for this kind yet.
@@ -291,6 +292,8 @@ pub struct Item {
     pub added: u64,
     pub updated: u64,
     pub status: Status,
+    /// a remix: the creation it was made from (Game Mode Studio modes)
+    pub remix_of: Option<super::communitylib::Credit>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -381,6 +384,10 @@ pub fn parse_index(bytes: &[u8]) -> Result<Index, String> {
             m.maps.retain(|x| crate::maps::safe_arg(x));
         }
         it.name = one_line(&it.name, 80);
+        if let Some(r) = &mut it.remix_of {
+            r.name = one_line(&r.name, 80);
+            r.author = one_line(&r.author, 40);
+        }
         it.author = one_line(&it.author, 40);
         it.summary = one_line(&it.summary, 400);
         it.md5 = if it.md5.len() == 32 && it.md5.bytes().all(|c| c.is_ascii_hexdigit()) { it.md5.to_ascii_lowercase() } else { String::new() };
@@ -442,6 +449,11 @@ fn http_get(url: &str, limit: u64) -> Result<Vec<u8>, String> {
 }
 
 static INDEX: Mutex<Option<(Instant, Index, Source)>> = Mutex::new(None);
+
+/// The index as last read (downloaded at most every 15 minutes), for the library's update checks.
+pub fn index_cached() -> Index {
+    index(false).0
+}
 
 fn index(refresh: bool) -> (Index, Source) {
     let mut g = INDEX.lock().unwrap_or_else(|e| e.into_inner());
@@ -875,6 +887,7 @@ async fn api_item(State(st): State<Shared>, UrlPath((model, id)): UrlPath<(Strin
                 "item": it, "trust": tr, "canTry": tr.allowed && kind.can_install() && tagged,
                 "why": if !tagged { Some("This page doesn't carry the Loner-Strike tag any more.") } else if !kind.can_install() { Some(kind.no_installer()) } else { None },
                 "have": it.as_ref().and_then(|i| i.map.as_ref()).is_some_and(|m| have.contains(&m.name.to_ascii_lowercase())),
+                "installed": installed_json(model, id, &idx, &page),
             }))
         })
         .await,
@@ -909,55 +922,102 @@ async fn api_try(State(st): State<Shared>, h: HeaderMap, Json(req): Json<TryReq>
     let Some(model) = Model::parse(&req.model).filter(|_| req.id > 0) else {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "That isn't a GameBanana page."}))).into_response();
     };
-    let Some(game) = st.local_game() else { return json_answer(Err(Fail::new(StatusCode::CONFLICT, NO_GAME))) };
-    json_answer(
-        blocking(move || {
-            let fail = |m: &str| Fail::new(StatusCode::OK, m);
-            let (idx, _) = index(false);
-            let it = idx.items.iter().find(|i| i.model == model && i.gb == req.id).cloned();
-            let page = profile(model, req.id).map_err(|e| fail(&e))?;
-            if !has_tag(&page["_aTags"]) {
-                return Err(fail("This page doesn't carry the Loner-Strike tag, so it isn't installed from here. Use Get more instead."));
-            }
-            let cat = s(&page["_aCategory"]["_sName"]);
-            let root = s(&page["_aSuperCategory"]["_sName"]);
-            let kind = it.as_ref().map(|i| i.kind).unwrap_or_else(|| kind_of(model.path(), if root.is_empty() { &cat } else { &root }, &cat));
-            let tr = trust(kind, it.as_ref(), idx.revoked.iter().any(|r| *r == key(model, req.id)));
-            if it.as_ref().and_then(|i| i.mode.as_ref()).is_some_and(|m| !m.plugins.is_empty()) {
-                return Err(fail(PLUGIN_REFUSAL));
-            }
-            if !tr.allowed {
-                return Err(fail(&tr.note));
-            }
-            if tr.confirm.is_some() && !req.confirmed {
-                return Err(fail("Confirm first."));
-            }
-            if kind == Kind::Prefab {
-                // prefabs go into the map editor's library (small: installed here, no job)
-                // (a prefab can be a bare .map file)
-                let mut files = files_of(&page);
-                for f in files.iter_mut().filter(|f| s(&f["file"]).to_lowercase().ends_with(".map")) {
-                    f["supported"] = json!(true);
-                }
-                let file = pick_file(&files, req.file, it.as_ref().map(|i| i.file).unwrap_or(0)).map_err(fail)?;
-                let md5 = files.iter().find(|f| f["id"].as_i64() == Some(file)).map(|f| s(&f["md5"])).unwrap_or_default();
-                let fname = files.iter().find(|f| f["id"].as_i64() == Some(file)).map(|f| s(&f["file"])).unwrap_or_default();
-                let author = s(&page["_aSubmitter"]["_sName"]);
-                let v = try_prefab(file, &fname, &md5, &author, Some(&game.dir)).map_err(|e| fail(&e))?;
-                return Ok(json!({"ok": true, "kind": "prefab", "prefabs": v["prefabs"], "wads": v["wads"]}));
-            }
-            let section = kind.installer().ok_or_else(|| fail(kind.no_installer()))?;
-            let file = pick_file(&files_of(&page), req.file, it.as_ref().map(|i| i.file).unwrap_or(0)).map_err(fail)?;
-            let job = game.store.start_section_install(section, req.id, file).map_err(|e| fail(&e.message()))?;
-            Ok(json!({"ok": true, "job": job, "section": section, "map": it.and_then(|i| i.map).map(|m| m.name)}))
-        })
-        .await,
-    )
+    if st.local_game().is_none() {
+        return json_answer(Err(Fail::new(StatusCode::CONFLICT, NO_GAME)));
+    }
+    json_answer(blocking(move || start_try(&st, model, req.id, req.file, req.confirmed).map_err(|e| Fail::new(StatusCode::OK, e))).await)
 }
 
-/// Downloads a prefab file from GameBanana (checked against the page's MD5), unpacks it and
-/// hands it to the map editor's prefab library (`tools::editor::prefabs::install_download`).
-fn try_prefab(file: i64, fname: &str, md5: &str, author: &str, game_dir: Option<&Path>) -> Result<Value, String> {
+/// The library entry for a page, and whether a newer file is out (from the index, else the page).
+fn installed_json(model: Model, id: i64, idx: &Index, page: &Value) -> Value {
+    let Some(it) = super::communitylib::load(&super::communitylib::lib_dir(), model, id) else { return Value::Null };
+    let from_page = files_of(page).iter().filter(|f| f["clean"] == json!(true) && f["supported"] == json!(true)).filter_map(|f| f["id"].as_i64()).max().filter(|f| *f > it.file);
+    let listed = idx.items.iter().any(|e| e.model == model && e.gb == id);
+    let update = super::communitylib::newer(&it, idx).or(if listed { None } else { from_page });
+    json!({"key": it.key(), "file": it.file, "installed": it.installed, "maps": it.maps, "mode": it.mode, "prefabs": it.prefabs, "update": update})
+}
+
+/// Try it (and Update): the page read again, the trust rules, the file picked, then the
+/// installer for its kind. Every install is noted in the community library.
+pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirmed: bool) -> Result<Value, String> {
+    let game = st.local_game().ok_or(NO_GAME)?;
+    let (idx, _) = index(false);
+    let it = idx.items.iter().find(|i| i.model == model && i.gb == id).cloned();
+    let page = profile(model, id)?;
+    if !has_tag(&page["_aTags"]) {
+        return Err("This page doesn't carry the Loner-Strike tag, so it isn't installed from here. Use Get more instead.".into());
+    }
+    let cat = s(&page["_aCategory"]["_sName"]);
+    let root = s(&page["_aSuperCategory"]["_sName"]);
+    let kind = it.as_ref().map(|i| i.kind).unwrap_or_else(|| kind_of(model.path(), if root.is_empty() { &cat } else { &root }, &cat));
+    let tr = trust(kind, it.as_ref(), idx.revoked.iter().any(|r| *r == key(model, id)));
+    if it.as_ref().and_then(|i| i.mode.as_ref()).is_some_and(|m| !m.plugins.is_empty()) {
+        return Err(PLUGIN_REFUSAL.into());
+    }
+    if !tr.allowed {
+        return Err(tr.note);
+    }
+    if tr.confirm.is_some() && !confirmed {
+        return Err("Confirm first.".into());
+    }
+    let author = one_line(&s(&page["_aSubmitter"]["_sName"]), 40);
+    let name = it.as_ref().map(|i| i.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| one_line(&s(&page["_sName"]), 80));
+    let listed = it.as_ref().map(|i| i.file).unwrap_or(0);
+    let mut files = files_of(&page);
+    let mut note = super::communitylib::Installed {
+        kind,
+        model,
+        gb: id,
+        name,
+        author: author.clone(),
+        game: game.dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+        ..Default::default()
+    };
+    if kind == Kind::Prefab || kind == Kind::Mode {
+        // small downloads installed here, no job: prefabs into the editor's library, modes built
+        // by the Studio (a prefab can be a bare .map file, a mode is a zip with its graph)
+        if kind == Kind::Prefab {
+            for f in files.iter_mut().filter(|f| s(&f["file"]).to_lowercase().ends_with(".map")) {
+                f["supported"] = json!(true);
+            }
+        }
+        let file = pick_file(&files, asked, listed)?;
+        let f = files.iter().find(|f| f["id"].as_i64() == Some(file)).cloned().unwrap_or_default();
+        note.file = file;
+        note.md5 = s(&f["md5"]);
+        let (tmp, src) = fetch_unpacked(file, &s(&f["file"]), &note.md5, if kind == Kind::Prefab { 128 << 20 } else { 64 << 20 }, kind == Kind::Prefab)?;
+        let r = (|| {
+            if kind == Kind::Mode {
+                let names: Vec<String> = crate::archive::walk(&src).iter().filter_map(|p| p.strip_prefix(&src).ok().map(|r| r.to_string_lossy().replace('\\', "/"))).collect();
+                if let Some(why) = package_refusal(&Item { kind, ..Default::default() }, &names) {
+                    return Err(why);
+                }
+                return super::communitylib::install_mode(st, &src, note.clone());
+            }
+            let v = super::editor::prefabs::install_download(&src, &author, Some(&game.dir))?;
+            note.prefabs = v["ids"].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect();
+            note.installed = now();
+            super::communitylib::save(&super::communitylib::lib_dir(), &note)?;
+            Ok(json!({"ok": true, "kind": "prefab", "prefabs": v["prefabs"], "wads": v["wads"]}))
+        })();
+        let _ = std::fs::remove_dir_all(&tmp);
+        return r;
+    }
+    let section = kind.installer().ok_or_else(|| kind.no_installer().to_string())?;
+    let file = pick_file(&files, asked, listed)?;
+    note.file = file;
+    note.md5 = files.iter().find(|f| f["id"].as_i64() == Some(file)).map(|f| s(&f["md5"])).unwrap_or_default();
+    note.section = section.into();
+    note.maps = it.as_ref().and_then(|i| i.map.as_ref()).map(|m| vec![m.name.clone()]).unwrap_or_default();
+    let job = game.store.start_section_install(section, id, file).map_err(|e| e.message())?;
+    super::communitylib::note_after_job(game.store.clone(), job.clone(), note);
+    Ok(json!({"ok": true, "job": job, "section": section, "map": it.and_then(|i| i.map).map(|m| m.name)}))
+}
+
+/// Downloads a file from GameBanana (its own hosts only, checked against the page's MD5) and
+/// unpacks it into a fresh work folder: (the work folder to delete afterwards, the unpacked files).
+/// `bare_map`: a single .map file is taken as it is (prefabs).
+fn fetch_unpacked(file: i64, fname: &str, md5: &str, limit: u64, bare_map: bool) -> Result<(PathBuf, PathBuf), String> {
     const HOSTS: &[&str] = &["gamebanana.com", "files.gamebanana.com"];
     let r = crate::sys::http()
         .get(format!("https://gamebanana.com/dl/{file}"))
@@ -972,35 +1032,39 @@ fn try_prefab(file: i64, fname: &str, md5: &str, author: &str, game_dir: Option<
     if !r.status().is_success() {
         return Err("GameBanana didn't send the file. Try again in a minute.".into());
     }
-    let limit: u64 = 128 << 20;
     let mut bytes = Vec::new();
     r.take(limit + 1).read_to_end(&mut bytes).map_err(|_| "The download was cut off. Try again.".to_string())?;
     if bytes.len() as u64 > limit {
-        return Err("That prefab download is over 128 MB.".into());
+        return Err(format!("That download is over {} MB.", limit >> 20));
     }
     if md5.len() == 32 && md5_hex(&bytes) != md5 {
         return Err("The download doesn't match the file GameBanana lists. Try again.".into());
     }
-    let work = dir().join("work");
-    let tmp = crate::sys::make_temp_dir(&work, "prefab-").map_err(|e| e.to_string())?;
+    let tmp = crate::sys::make_temp_dir(&dir().join("work"), "dl-").map_err(|e| e.to_string())?;
     let res = (|| {
         let low = fname.to_lowercase();
-        let ext = if crate::archive::is_archive(&low) { crate::archive::ext_of(&low).to_string() } else if low.ends_with(".map") { ".map".into() } else { return Err("That file isn't a prefab the editor can read (a .map or an archive of them).".to_string()) };
         let src = tmp.join("x");
         std::fs::create_dir_all(&src).map_err(|e| e.to_string())?;
-        if ext == ".map" {
+        if bare_map && low.ends_with(".map") {
             let base = Path::new(&fname.replace('\\', "/")).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "prefab.map".into());
             std::fs::write(src.join(base), &bytes).map_err(|e| e.to_string())?;
-        } else {
-            let a = tmp.join(format!("download{ext}"));
+        } else if crate::archive::is_archive(&low) {
+            let a = tmp.join(format!("download{}", crate::archive::ext_of(&low)));
             std::fs::write(&a, &bytes).map_err(|e| e.to_string())?;
             crate::archive::extract(&a, &src, 512 << 20)?;
             crate::archive::extract_nested(&src)?;
+        } else {
+            return Err("That file isn't something the app can install here (it wants a zip).".to_string());
         }
-        super::editor::prefabs::install_download(&src, author, game_dir)
+        Ok(src)
     })();
-    let _ = std::fs::remove_dir_all(&tmp);
-    res
+    match res {
+        Ok(src) => Ok((tmp, src)),
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&tmp);
+            Err(e)
+        }
+    }
 }
 
 // ---- publishing ------------------------------------------------------------------------------
@@ -1138,6 +1202,8 @@ pub struct PublishReq {
     pub author: String,
     pub modes: Vec<String>,
     pub screenshots: Vec<Shot>,
+    /// a game mode: maps it's made for
+    pub maps: Vec<String>,
 }
 
 /// The finished package.
@@ -1331,6 +1397,19 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
 /// What to type into GameBanana's submit form.
 pub fn gamebanana_form(p: &Package) -> Value {
     let it = &p.item;
+    if it.kind == Kind::Mode {
+        let mut text = format!("{}\n\nA Game Mode Studio mode made with Loner-Strike (lonerstrike.com): open Tools > Community in the app and click Try it; the app builds it on your computer and you can play it with bots in one click. Nothing in the download runs code by itself: it's the mode's graph.\n", it.summary);
+        if let Some(r) = &it.remix_of {
+            text.push_str(&format!("\n- A remix of {} by {} (https://gamebanana.com/{}/{})", r.name, r.author, if r.model == Model::Spray { "sprays" } else { "mods" }, r.gb));
+        }
+        if let Some(m) = it.mode.as_ref().filter(|m| !m.maps.is_empty()) {
+            text.push_str(&format!("\n- Made for: {}", m.maps.join(", ")));
+        }
+        return json!({
+            "submitUrl": "https://gamebanana.com/mods/add", "game": "Counter-Strike 1.6", "category": "Resources > AMXX Plugins & Mods",
+            "title": it.name, "text": text, "tag": {"title": TAG_TITLE, "value": TAG_VALUE}, "file": p.file, "md5": p.md5,
+        });
+    }
     let m = it.map.clone().unwrap_or_default();
     let mut text = format!("{}\n\nMade with Loner-Strike (lonerstrike.com): open Tools > Community in the app and click Try it to play it with bots in one click.\n", it.summary);
     if m.nav {
@@ -1370,6 +1449,113 @@ pub fn gamebanana_form(p: &Package) -> Value {
         "file": p.file,
         "md5": p.md5,
     })
+}
+
+/// A Game Mode Studio mode, ready to share? The graph must pass the Studio's checks; a remix
+/// carries its credit.
+pub fn mode_readiness(graphs: &Path, lib: &Path, id: &str) -> Result<Value, String> {
+    let g = read_studio_graph(graphs, id)?;
+    let problems = super::studio::graph::validate(&g);
+    let blockers: Vec<String> = problems.iter().filter(|p| p.level == "error").map(|p| p.message.clone()).take(5).collect();
+    let credit = super::communitylib::credits(lib).get(id).cloned();
+    Ok(json!({"id": g.mode.id, "name": g.mode.name, "description": g.mode.description, "nodes": g.nodes.len(), "blockers": blockers, "remixOf": credit}))
+}
+
+fn read_studio_graph(graphs: &Path, id: &str) -> Result<super::studio::graph::Graph, String> {
+    if !super::studio::graph::valid_mode_id(id) {
+        return Err("That isn't one of your Game Mode Studio modes.".into());
+    }
+    let p = graphs.join(format!("{id}.graph.json"));
+    if std::fs::metadata(&p).map(|m| m.len()).unwrap_or(u64::MAX) > 2 << 20 {
+        return Err("That isn't one of your Game Mode Studio modes.".into());
+    }
+    super::studio::graph::parse(&std::fs::read_to_string(&p).map_err(|_| "That isn't one of your Game Mode Studio modes.".to_string())?)
+}
+
+/// Builds the upload package for a Studio mode: `modes/<id>/<id>.graph.json` (only the graph:
+/// each player's app builds the code), README.txt and loner-strike.json; screenshots beside it.
+pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq, out_dir: &Path) -> Result<Package, String> {
+    let g = read_studio_graph(graphs, id)?;
+    if super::studio::graph::has_errors(&super::studio::graph::validate(&g)) {
+        return Err("The graph has problems. Fix them in Game Mode Studio first.".into());
+    }
+    let title = one_line(&req.title, 80);
+    if title.is_empty() {
+        return Err("Give it a name.".into());
+    }
+    let author = one_line(&req.author, 40);
+    if author.is_empty() {
+        return Err("Say who made it (your GameBanana name).".into());
+    }
+    if req.screenshots.len() > MAX_SHOTS {
+        return Err(format!("At most {MAX_SHOTS} screenshots."));
+    }
+    let shots = req.screenshots.iter().map(decode_shot).collect::<Result<Vec<_>, _>>()?;
+    let maps: Vec<String> = req.maps.iter().map(|m| m.trim().to_string()).filter(|m| crate::maps::safe_arg(m) && m.len() <= 31).take(24).collect();
+    let item = Item {
+        kind: Kind::Mode,
+        name: title,
+        author,
+        summary: one_line(&req.summary, 400),
+        mode: Some(ModeMeta { id: g.mode.id.clone(), plugins: vec![], review: Review::None, maps }),
+        remix_of: super::communitylib::credits(lib).get(id).cloned(),
+        added: now(),
+        updated: now(),
+        ..Default::default()
+    };
+    let graph_text = serde_json::to_string_pretty(&g).map_err(|e| e.to_string())?;
+    let mut readme = format!("{}\r\nby {}\r\n\r\n{}\r\n\r\nA Game Mode Studio mode made with Loner-Strike (lonerstrike.com).\r\nWith Loner-Strike: find it under Tools > Community and click Try it; the app builds it on your computer.\r\n", item.name, item.author, item.summary);
+    if let Some(r) = &item.remix_of {
+        readme.push_str(&format!("A remix of {} by {}.\r\n", r.name, r.author));
+    }
+    let manifest = json!({"schema": SCHEMA, "app": env!("CARGO_PKG_VERSION"), "item": item});
+    let entries: Vec<(String, Vec<u8>)> = vec![
+        (format!("modes/{id}/{id}.graph.json"), graph_text.into_bytes()),
+        ("README.txt".into(), readme.into_bytes()),
+        ("loner-strike.json".into(), serde_json::to_vec_pretty(&manifest).unwrap_or_default()),
+    ];
+    let contents: Vec<String> = entries.iter().map(|e| e.0.clone()).collect();
+    if let Some(why) = package_refusal(&item, &contents) {
+        return Err(why);
+    }
+    std::fs::create_dir_all(out_dir).map_err(|e| format!("Couldn't make the packages folder ({e})."))?;
+    let stem = format!("{id}-mode-loner-strike");
+    let zip_path = out_dir.join(format!("{stem}.zip"));
+    let mut buf = std::io::Cursor::new(Vec::new());
+    {
+        let mut z = zip::ZipWriter::new(&mut buf);
+        let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        for (name, body) in &entries {
+            z.start_file(name.as_str(), opts).map_err(|e| e.to_string())?;
+            z.write_all(body).map_err(|e| e.to_string())?;
+        }
+        z.finish().map_err(|e| e.to_string())?;
+    }
+    let bytes = buf.into_inner();
+    crate::sys::write_atomic(&zip_path, &bytes).map_err(|e| format!("Couldn't save the package ({e})."))?;
+    let shot_dir = out_dir.join(format!("{stem}-screenshots"));
+    let _ = std::fs::remove_dir_all(&shot_dir);
+    let mut shot_names = Vec::new();
+    if !shots.is_empty() {
+        std::fs::create_dir_all(&shot_dir).map_err(|e| format!("Couldn't save the screenshots ({e})."))?;
+        for (i, (b, ext)) in shots.iter().enumerate() {
+            let n = format!("{id}-{}.{ext}", i + 1);
+            std::fs::write(shot_dir.join(&n), b).map_err(|e| format!("Couldn't save the screenshots ({e})."))?;
+            shot_names.push(n);
+        }
+    }
+    let pkg = Package {
+        file: format!("{stem}.zip"),
+        size: bytes.len() as u64,
+        md5: md5_hex(&bytes),
+        sha256: Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect(),
+        contents,
+        screenshots: shot_names,
+        item,
+        warnings: vec![],
+    };
+    let _ = std::fs::write(out_dir.join(format!("{stem}.json")), serde_json::to_vec_pretty(&pkg).unwrap_or_default());
+    Ok(pkg)
 }
 
 // ---- registering ------------------------------------------------------------------------------
@@ -1656,6 +1842,23 @@ async fn api_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(name): UrlP
     json_answer(r)
 }
 
+async fn api_mode_ready(UrlPath(id): UrlPath<String>) -> Response {
+    json_answer(blocking(move || mode_readiness(&super::studio::graphs_dir(), &super::communitylib::lib_dir(), &id).map_err(|e| Fail::new(StatusCode::OK, e))).await)
+}
+
+async fn api_mode_publish(h: HeaderMap, UrlPath(id): UrlPath<String>, Json(req): Json<PublishReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    json_answer(
+        blocking(move || {
+            let pkg = build_mode_package(&super::studio::graphs_dir(), &super::communitylib::lib_dir(), &id, &req, &packages_dir()).map_err(|e| Fail::new(StatusCode::OK, e))?;
+            Ok(json!({"package": pkg, "form": gamebanana_form(&pkg)}))
+        })
+        .await,
+    )
+}
+
 #[derive(Deserialize)]
 struct RevealReq {
     file: String,
@@ -1741,6 +1944,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/community/item/:model/:id", get(api_item))
         .route("/api/tools/community/try", post(api_try))
         .route("/api/tools/community/publish/:map", get(api_ready).post(api_publish))
+        .route("/api/tools/community/publish-mode/:id", get(api_mode_ready).post(api_mode_publish))
         .route("/api/tools/community/register", post(api_register))
         .route("/api/tools/community/mine", get(api_mine))
         .route("/api/tools/community/reveal", post(api_reveal))
@@ -2122,7 +2326,7 @@ mod tests {
         assert!(files.iter().any(|f| f.starts_with("gfx/env/desert")));
 
         let out = root.join("packages");
-        let req = PublishReq { title: "De Lonely".into(), summary: "Quiet".into(), author: "jam".into(), modes: vec!["Classic".into(), "bad mode!".into()], screenshots: vec![Shot { name: "a".into(), data: png() }] };
+        let req = PublishReq { title: "De Lonely".into(), summary: "Quiet".into(), author: "jam".into(), modes: vec!["Classic".into(), "bad mode!".into()], screenshots: vec![Shot { name: "a".into(), data: png() }], ..Default::default() };
         let pkg = build_package(&m, &r, &req, &out).unwrap();
         assert_eq!(pkg.file, "de_lonely-loner-strike.zip");
         assert_eq!(pkg.item.map.as_ref().unwrap().modes, ["classic"]);
@@ -2168,6 +2372,42 @@ mod tests {
         assert_eq!((it.gb, it.file, it.author.as_str()), (555, 77, "jamGB"));
         page["_aFiles"][0]["_sMd5Checksum"] = json!("00");
         assert!(check_page(&page, Model::Mod, 555, &pkg).is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn builds_a_mode_package_with_credit() {
+        let root = tmp("modepkg");
+        let graphs = root.join("graphs");
+        let lib = root.join("lib");
+        std::fs::create_dir_all(&graphs).unwrap();
+        let Ok(good) = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tools/studio/testdata/every_node.graph.json")) else { return };
+        let mut g: Value = serde_json::from_str(&good).unwrap();
+        g["mode"]["id"] = json!("lava_remix");
+        std::fs::write(graphs.join("lava_remix.graph.json"), g.to_string()).unwrap();
+        std::fs::create_dir_all(&lib).unwrap();
+        std::fs::write(lib.join("remixes.json"), r#"{"lava_remix": {"model": "Mod", "gb": 102, "name": "Floor is lava", "author": "jam"}}"#).unwrap();
+        let ready = mode_readiness(&graphs, &lib, "lava_remix").unwrap();
+        assert_eq!(ready["remixOf"]["author"], "jam");
+        assert!(mode_readiness(&graphs, &lib, "../x").is_err());
+        let out = root.join("p");
+        let req = PublishReq { title: "Lava, mine".into(), author: "me".into(), maps: vec!["de_dust2".into(), "bad;map".into()], ..Default::default() };
+        let pkg = build_mode_package(&graphs, &lib, "lava_remix", &req, &out).unwrap();
+        assert_eq!(pkg.contents[0], "modes/lava_remix/lava_remix.graph.json");
+        assert_eq!(pkg.item.kind, Kind::Mode);
+        assert_eq!(pkg.item.remix_of.as_ref().unwrap().gb, 102);
+        assert_eq!(pkg.item.mode.as_ref().unwrap().maps, ["de_dust2"]);
+        assert!(package_refusal(&pkg.item, &pkg.contents).is_none());
+        let bytes = std::fs::read(out.join(&pkg.file)).unwrap();
+        assert_eq!(md5_hex(&bytes), pkg.md5);
+        let form = gamebanana_form(&pkg);
+        assert_eq!(form["category"], "Resources > AMXX Plugins & Mods");
+        assert!(form["text"].as_str().unwrap().contains("A remix of Floor is lava by jam"));
+        // the graph unpacks and checks as the installer reads it
+        let un = root.join("un");
+        std::fs::create_dir_all(&un).unwrap();
+        crate::archive::extract(&out.join(&pkg.file), &un, 16 << 20).unwrap();
+        assert_eq!(super::super::communitylib::mode_graph(&un).unwrap().mode.id, "lava_remix");
         let _ = std::fs::remove_dir_all(&root);
     }
 
