@@ -11,6 +11,9 @@ import { deleteSelection, duplicate, hideSelection, isolateSelection, showAll, T
 import { frameFlat, LAYOUTS, setLayout, toggleMaximise, usePanes } from "./panes";
 import { cmd2, importRmf, useP5, type Ids, type SideTab } from "./p5store";
 import { modeFor, setPaneMode, type RenderMode } from "./renderModes";
+import { NAV_PRESETS, setNavPreset, stepSpeed } from "./navigation";
+import { applyDockPreset, DOCK_PRESETS, showPanel, type DockPresetId } from "./dockState";
+import { DOCK_PANELS } from "./dockPanels";
 import { EMPTY_SEL, selectionBounds, useEditor, type ViewId } from "./store";
 
 export type Menu = "File" | "Edit" | "View" | "Select" | "Tools" | "Map" | "Help";
@@ -71,6 +74,7 @@ export function frame(all = false) {
 
 export function openTab(tab: SideTab) {
   useP5.getState().set({ tab });
+  showPanel(tab);
 }
 
 async function similar(by: Record<string, unknown>) {
@@ -204,6 +208,19 @@ export function commands(): Command[] {
     { id: "edit.paste", label: "Paste", menu: "Edit", run: () => void paste() },
     { id: "edit.pasteSpecial", label: "Paste special…", menu: "Edit", hint: "Copies in a row, ring or spiral", when: hasSel, run: () => S().set({ dialog: "paste" }) },
     { id: "edit.duplicate", label: "Duplicate", menu: "Edit", hint: "A copy one grid step over, with new target names", when: hasSel, run: () => void duplicateWith([S().grid, S().grid, 0]) },
+    {
+      id: "edit.applyTexture",
+      label: "Apply the current texture",
+      menu: "Edit",
+      hint: "To the picked faces, or every face of the picked brushes",
+      when: () => hasSel() || !!S().sel.face,
+      run: () => {
+        const s = S();
+        const faces = s.sel.faces?.length ? s.sel.faces : s.sel.face ? [s.sel.face] : [];
+        if (faces.length) void s.cmd({ op: "set_texture", faces: faces.map((f) => [f.brush, f.face]), texture: s.texture });
+        else void s.cmd({ op: "set_texture", faces: selectionIds().brushes.map((b) => [b, null]), texture: s.texture });
+      },
+    },
     { id: "edit.duplicateHere", label: "Duplicate in place", menu: "Edit", hint: "A copy right on top (move it next)", when: hasSel, run: () => void duplicateWith([0, 0, 0]) },
     { id: "edit.duplicateSame", label: "Duplicate (keep names)", menu: "Edit", hidden: true, hint: "A copy with the same target names", when: hasSel, run: () => void duplicate() },
     { id: "edit.delete", label: "Delete", menu: "Edit", when: hasSel, run: () => deleteSelection() },
@@ -270,6 +287,9 @@ export function commands(): Command[] {
     { id: "sel.hide", label: "Hide", menu: "Select", sep: true, when: hasSel, run: () => hideSelection() },
     { id: "sel.isolate", label: "Hide everything else", menu: "Select", when: hasSel, run: () => isolateSelection() },
     { id: "sel.showAll", label: "Show everything", menu: "Select", run: () => showAll() },
+    { id: "sel.hideEntities", label: "Hide all point entities", menu: "Select", hint: "Spawns, lights, sounds…", run: () => hideKind("point") },
+    { id: "sel.hideTriggers", label: "Hide triggers and zones", menu: "Select", hint: "trigger_*, buy zones, bomb sites, rescue zones", run: () => hideKind("trigger") },
+    { id: "sel.hideWorld", label: "Hide world brushes", menu: "Select", run: () => hideKind("world") },
     { id: "sel.lock", label: "Lock", menu: "Select", hint: "Can't be picked until unlocked", when: hasSel, run: () => lockSelection(true) },
     { id: "sel.unlockAll", label: "Unlock everything", menu: "Select", when: () => useP5.getState().locked.brushes.size + useP5.getState().locked.entities.size > 0, run: () => lockSelection(false) },
     { id: "sel.groups", label: "Clicks pick whole groups", menu: "Select", sep: true, run: () => S().set({ selectMode: "groups" }) },
@@ -287,9 +307,18 @@ export function commands(): Command[] {
     { id: "view.gridShow", label: "Show / hide the grid", menu: "View", run: () => useP5.getState().set({ showGrid: !useP5.getState().showGrid }), fly: true },
     { id: "view.gridSettings", label: "Grid and snapping…", menu: "View", hint: "Grid size, turn steps, snap to corners and edges", run: () => useP5.getState().set({ dialog: "grid" }) },
     { id: "view.texLock", label: "Texture lock on / off", menu: "View", run: () => S().set({ textureLock: !S().textureLock }) },
+    { id: "view.snap", label: "Snap to grid on / off", menu: "View", hint: "Alt still flips it while held", run: () => S().set({ snapOff: !S().snapOff }), fly: true },
     { id: "view.geoSnap", label: "Snap to corners and edges on / off", menu: "View", run: () => useP5.getState().set({ geoSnap: !useP5.getState().geoSnap }) },
+    ...NAV_PRESETS.map((n, i): Command => ({ id: `view.nav.${n.id}`, label: `Move like ${n.label}`, menu: "View", sep: i === 0, hint: n.tip, run: () => setNavPreset(n.id), fly: true })),
+    { id: "view.speedUp", label: "Camera faster", menu: "View", hidden: true, run: () => stepSpeed(1), fly: true },
+    { id: "view.speedDown", label: "Camera slower", menu: "View", hidden: true, run: () => stepSpeed(-1), fly: true },
     { id: "view.models", label: "Models in place of entity boxes on / off", menu: "View", hint: "Hostages, spawns, weapons, cyclers drawn as their models", run: () => useP5.getState().set({ showModels: !useP5.getState().showModels }), fly: true },
     { id: "view.paneMode", label: "Next drawing style for the active pane", menu: "View", hint: "Textured, flat, wireframe, textured + wire", run: () => cyclePaneMode(), fly: true },
+
+    // View > Panels and layouts
+    ...DOCK_PANELS.map((p, i): Command => ({ id: `panel.${p.id}`, label: `Panel: ${p.title}`, menu: "View", sep: i === 0, hint: "Show it (wherever it's docked or floating)", run: () => showPanel(p.id) })),
+    ...(Object.keys(DOCK_PRESETS) as DockPresetId[]).map((id, i): Command => ({ id: `dock.${id}`, label: `Panel layout: ${DOCK_PRESETS[id].label}`, menu: "View", sep: i === 0, hint: DOCK_PRESETS[id].tip, run: () => applyDockPreset(id) })),
+    { id: "dock.reset", label: "Reset the panel layout", menu: "View", run: () => applyDockPreset("default") },
 
     // Tools
     ...TOOLS.map((t, i): Command => ({ id: `tool.${t.id}`, label: `${t.label} tool`, menu: "Tools", hint: t.tip, sep: i === 0 ? false : t.id === "vertex" || t.id === "box", run: () => S().set({ tool: t.id }) })),
@@ -297,6 +326,7 @@ export function commands(): Command[] {
     // Map
     { id: "map.props", label: "Map properties…", menu: "Map", run: () => S().set({ dialog: "props" }) },
     { id: "map.report", label: "Entity report…", menu: "Map", run: () => S().set({ dialog: "report" }) },
+    { id: "map.info", label: "Map information…", menu: "Map", hint: "Counts, textures and texture files in use", run: () => useP5.getState().set({ dialog: "info" }) },
     { id: "map.checks", label: "Check the map", menu: "Map", sep: true, run: () => openTab("checks") },
     { id: "map.compile", label: "Compile and play…", menu: "Map", hint: "Compile with SDHLT, show the leak line, playtest with bots", run: () => openTab("compile") },
     { id: "map.outline", label: "Outline", menu: "Map", sep: true, hint: "Everything in the map as a list", run: () => openTab("outline") },
@@ -327,6 +357,19 @@ function ungroupTarget(): number | null {
     return cur;
   });
   return top[0] ?? null;
+}
+
+/** Hide a whole kind of thing (on top of what's hidden already). */
+function hideKind(kind: "point" | "trigger" | "world") {
+  const s = S();
+  const brushes = new Set(s.hidden.brushes);
+  const entities = new Set(s.hidden.entities);
+  for (const e of s.doc?.entities ?? []) {
+    if (kind === "point" && !e.brushes.length) entities.add(e.id);
+    if (kind === "trigger" && e.brushes.length && /^trigger_|^func_(buyzone|bomb_target|hostage_rescue|vip_safetyzone|escapezone)$/.test(e.classname)) entities.add(e.id);
+  }
+  if (kind === "world") for (const b of s.doc?.brushes ?? []) if (b.entity == null) brushes.add(b.id);
+  s.set({ hidden: { brushes, entities } });
 }
 
 function stepGrid(d: number) {

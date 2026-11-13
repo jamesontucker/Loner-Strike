@@ -12,6 +12,8 @@ import { useTools } from "../../../stores/tools";
 import { commands, type Command } from "./commands";
 import { useP5 } from "./p5store";
 import { useEditor } from "./store";
+import { NAV_KEYS, useNav } from "./navigation";
+import { navWantsKey } from "./NavCamera";
 
 export const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -84,6 +86,9 @@ const LONER: Keys = {
   "tool.measure": ["M"],
   "help.palette": ["Mod+K", "Mod+Shift+P"],
   "help.cheats": ["?"],
+  "map.inspect": ["Alt+Enter"],
+  "view.snap": ["Shift+W"],
+  "edit.applyTexture": ["Shift+T"],
 };
 
 /** Hammer 3.5-style (changes from ours). */
@@ -198,12 +203,13 @@ export const useKeySet = create<KeyState>((set, get) => ({
 
 /** The keys a command has now. */
 export function keysOf(id: string, st: Pick<KeyState, "preset" | "mine"> = useKeySet.getState()): string[] {
-  return st.mine[id] ?? BASES[st.preset][id] ?? [];
+  // your own keys, then the navigation preset's (F focuses in Unreal), then the key set's
+  return st.mine[id] ?? NAV_KEYS[useNav.getState().preset][id] ?? BASES[st.preset][id] ?? [];
 }
 
 /** Every key in use and its command. */
 function keyMap(st: Pick<KeyState, "preset" | "mine"> = useKeySet.getState()): Map<string, string> {
-  const ids = new Set([...Object.keys(BASES[st.preset]), ...Object.keys(st.mine)]);
+  const ids = new Set([...Object.keys(BASES[st.preset]), ...Object.keys(st.mine), ...Object.keys(NAV_KEYS[useNav.getState().preset])]);
   const m = new Map<string, string>();
   for (const id of ids) for (const k of keysOf(id, st)) if (!m.has(norm(k))) m.set(norm(k), id);
   return m;
@@ -282,6 +288,8 @@ export function runCommand(id: string): boolean {
 export function useShortcuts() {
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      // the camera's keys while looking round (navigation presets)
+      if (navWantsKey(e)) return;
       const held = keyName(e);
       if (e.repeat && held && keyMap().has(held) && !isField(e.target)) {
         // a held key runs its command once (the grid keys may step on)

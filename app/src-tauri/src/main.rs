@@ -144,7 +144,24 @@ fn main() {
                 w = f64::min(w, size.width - 40.0);
                 h = f64::min(h, size.height - 60.0);
             }
+            // P5: the map editor's "Open in its own window" panels: window.open("") from the
+            // app's page gets a real window sharing the page (so it can draw the panel into it);
+            // anything else asked of window.open is refused here (outside links go through
+            // /api/app/open-url to the browser).
+            let handle = app.handle().clone();
+            let next_panel = std::sync::atomic::AtomicU32::new(1);
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+                .on_new_window(move |url, features| {
+                    if url.as_str() != "about:blank" {
+                        return tauri::webview::NewWindowResponse::Deny;
+                    }
+                    let label = format!("panel-{}", next_panel.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+                    let Ok(blank) = "about:blank".parse() else { return tauri::webview::NewWindowResponse::Deny };
+                    match WebviewWindowBuilder::new(&handle, label, WebviewUrl::External(blank)).window_features(features).title("Loner-Strike").min_inner_size(260.0, 200.0).build() {
+                        Ok(window) => tauri::webview::NewWindowResponse::Create { window },
+                        Err(_) => tauri::webview::NewWindowResponse::Deny,
+                    }
+                })
                 .title("Loner-Strike")
                 .inner_size(w, h)
                 .min_inner_size(820.0, 600.0) // the sidebar scrolls when it doesn't fit

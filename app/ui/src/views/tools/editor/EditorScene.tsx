@@ -27,6 +27,8 @@ import { duplicateWith } from "./commands";
 import { shiftHeld, snapToGeometry } from "./snapGeo";
 import { edgeLook, flatMaterial, usePaneMode } from "./renderModes";
 import { EntityModelMesh, SpriteGlow, useEntityModel } from "./EntityModels";
+import { useNav } from "./navigation";
+import { NavCamera } from "./NavCamera";
 import { Bookmarks, MeasureLine, sameP, SelectRect, TexHandles, useVisibleBrush, VertexHandles } from "./SceneExtras";
 
 // ---- small helpers ---------------------------------------------------------------------
@@ -104,7 +106,7 @@ function pickBrush(id: number, additive: boolean) {
   const ent0 = b?.entity != null ? s.doc?.entities.find((e) => e.id === b.entity) : null;
   const g = s.selectMode === "groups" ? topGroup(ent0?.group ?? b?.group ?? null) : null;
   if (g != null) return pickGroup(g, additive);
-  const ent = b?.entity ?? null;
+  const ent = s.selectMode === "solids" ? null : b?.entity ?? null; // P5: "Pick brushes" takes the brush itself
   const cur = s.sel;
   if (ent != null) {
     const has = cur.entities.includes(ent);
@@ -710,7 +712,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
           if (axis !== 2 && s.shape !== "wedge") return s.notify("Draw this shape in the 3D or top view: it stands upright.", true);
           const min = a.map((x, i) => Math.min(x, end[i]));
           const max = a.map((x, i) => Math.max(x, end[i]));
-          const r = await s.cmd({ op: "add_shape", shape: s.shape, min, max, sides: s.sides, texture: s.texture, grid: s.alt ? 0 : 1, arc: s.archArc, wall: s.archWall });
+          const r = await s.cmd({ op: "add_shape", shape: s.shape, min, max, sides: s.sides, texture: s.texture, grid: s.alt ? 0 : 1, arc: s.archArc, wall: s.archWall, start: useP5.getState().archStart });
           if (r.created) s.select({ brushes: r.created.brushes, entities: [], face: null });
         } else {
           const u = [0, 1, 2].filter((i) => i !== axis);
@@ -1176,7 +1178,7 @@ function Flat({ view, bounds }: { view: Exclude<ViewId, "3d">; bounds: [Vec3, Ve
   );
 }
 
-function GridFor({ view, grid, bounds }: { view: ViewId; grid: number; bounds: [Vec3, Vec3] }) {
+function GridFor({ view, grid, bounds, major }: { view: ViewId; grid: number; bounds: [Vec3, Vec3]; major?: boolean }) {
   const axis = viewAxis(view);
   // three's grid lies flat in its XZ (GoldSrc's floor); turned for the side views
   const rot: [number, number, number] = axis === 2 ? [0, 0, 0] : axis === 1 ? [Math.PI / 2, 0, 0] : [0, 0, Math.PI / 2];
@@ -1186,14 +1188,14 @@ function GridFor({ view, grid, bounds }: { view: ViewId; grid: number; bounds: [
   while (span / cell > 400) cell *= 2;
   const size = Math.ceil(span / (cell * 8)) * cell * 8;
   const helper = useMemo(() => {
-    const g = new THREE.GridHelper(size, size / cell, "#5d6a50", "#3a4233");
+    const g = new THREE.GridHelper(size, size / cell, major ? "#8a9a74" : "#5d6a50", major ? "#56634a" : "#3a4233");
     (g.material as THREE.Material).transparent = true;
-    (g.material as THREE.Material).opacity = 0.7;
+    (g.material as THREE.Material).opacity = major ? 0.8 : 0.7;
     (g.material as THREE.Material).depthWrite = false;
     return g;
-  }, [size, cell]);
+  }, [size, cell, major]);
   useEffect(() => () => helper.dispose(), [helper]);
-  return <primitive object={helper} rotation={rot} renderOrder={-2} />;
+  return <primitive object={helper} rotation={rot} renderOrder={major ? -1 : -2} />;
 }
 
 // ---- the canvas -----------------------------------------------------------------------
@@ -1250,6 +1252,7 @@ export function EditorScene({ bounds, docId, onLost }: { bounds: [Vec3, Vec3]; d
 function PaneScene({ view, bounds }: { view: ViewId; bounds: [Vec3, Vec3] }) {
   const grid = useEditor((s) => s.grid);
   const showGrid = useP5((s) => s.showGrid);
+  const gridMajor = useP5((s) => s.gridMajor);
   const pivot = useRef<THREE.Group | null>(null);
   return (
     <>
@@ -1257,6 +1260,7 @@ function PaneScene({ view, bounds }: { view: ViewId; bounds: [Vec3, Vec3] }) {
       <hemisphereLight args={["#ffffff", "#5a5f50", 0.95]} />
       <directionalLight position={[0.4, 1, 0.25]} intensity={1.5} />
       {showGrid && <GridFor view={view} grid={grid} bounds={bounds} />}
+      {showGrid && gridMajor && view !== "3d" && grid < 64 && <GridFor view={view} grid={64} bounds={bounds} major />}
       {view !== "3d" && <Crosshair view={view} />}
       <group rotation={ROOT_ROTATION}>
         <ToolLayer bounds={bounds} />
@@ -1280,10 +1284,11 @@ function PaneScene({ view, bounds }: { view: ViewId; bounds: [Vec3, Vec3] }) {
 function Persp({ bounds }: { bounds: [Vec3, Vec3] }) {
   const ref = useRef<THREE.PerspectiveCamera>(null);
   const cam = useThree((s) => s.camera);
+  const nav = useNav((s) => s.preset); // P5: Unreal / Blender / Hammer navigation
   return (
     <>
       <PerspectiveCamera ref={ref} makeDefault fov={70} near={2} far={40000} position={[0, 512, 512]} />
-      {ref.current && cam === ref.current && <Cameras bounds={bounds} />}
+      {ref.current && cam === ref.current && (nav === "blender" ? <Cameras bounds={bounds} /> : <NavCamera key={nav} bounds={bounds} preset={nav} />)}
     </>
   );
 }

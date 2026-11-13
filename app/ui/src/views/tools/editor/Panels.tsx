@@ -15,6 +15,7 @@ import { useFgd } from "./fgd";
 import { FaceSheet, RecentTextures } from "./FaceSheet";
 import { EntityForm } from "./EntityForm";
 import { MultiEntityKeys } from "./MultiEntityKeys"; // P5
+import { ArchStart } from "./P5Dialogs"; // P5
 
 // ---- toolbar --------------------------------------------------------------------------
 
@@ -133,17 +134,17 @@ export function ToolOptions() {
           ))}
         </select>
       </label>
-      <span className={`editor-snap${s.alt ? " off" : ""}`} title="Hold Alt to place freely">
-        {s.alt ? "Snap off (Alt)" : "Snap on"}
+      <span className={`editor-snap${s.alt !== !!s.snapOff ? " off" : ""}`} title="Click to turn grid snapping on or off. Hold Alt to flip it for a moment." role="button" tabIndex={0} onClick={() => s.set({ snapOff: !s.snapOff })} style={{ cursor: "pointer" }}>
+        {s.alt !== !!s.snapOff ? (s.alt ? "Snap off (Alt)" : "Snap off") : "Snap on"}
       </span>
       <label className="editor-check" title="Textures stay put on the surface when you move, turn or stretch a brush">
         <input type="checkbox" checked={s.textureLock} onChange={(e) => s.set({ textureLock: e.target.checked })} /> Texture lock
       </label>
       {picking && (
         <div className="seg" role="group" aria-label="What a click picks">
-          {(["groups", "objects"] as const).map((k) => (
-            <button key={k} type="button" aria-pressed={s.selectMode === k} title={k === "groups" ? "Clicking something in a group picks the whole group" : "Clicking picks just that brush or entity, even in a group"} onClick={() => s.set({ selectMode: k })}>
-              {k === "groups" ? "Pick groups" : "Pick objects"}
+          {(["groups", "objects", "solids"] as const).map((k) => (
+            <button key={k} type="button" aria-pressed={s.selectMode === k} title={k === "groups" ? "Clicking something in a group picks the whole group" : k === "objects" ? "Clicking picks just that brush or entity, even in a group" : "Clicking picks single brushes, even inside a brush entity (Hammer's “Solids”)"} onClick={() => s.set({ selectMode: k })}>
+              {k === "groups" ? "Pick groups" : k === "objects" ? "Pick objects" : "Pick brushes"}
             </button>
           ))}
         </div>
@@ -181,6 +182,7 @@ export function ToolOptions() {
             Wall
             <input type="number" min={1} max={1024} step={s.grid} value={s.archWall} onChange={(e) => s.set({ archWall: num(e.target.value, 1, 1024, 16) })} />
           </label>
+          <ArchStart /> {/* P5 */}
         </>
       )}
       {s.tool === "texture" && (

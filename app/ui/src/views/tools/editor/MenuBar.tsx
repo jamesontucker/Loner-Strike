@@ -12,6 +12,7 @@ import { useP5 } from "./p5store";
 import { keysOf, showKey, useKeySet, useShortcuts } from "./Shortcuts";
 import { selectionBounds, useEditor } from "./store";
 import "./p5.css";
+import { NAV_PRESETS, setNavPreset, useNav } from "./navigation";
 
 const MENUS: Menu[] = ["File", "Edit", "View", "Select", "Tools", "Map", "Help"];
 
@@ -73,6 +74,7 @@ export function MenuBar() {
           ))}
         </div>
       </div>
+      <NavChoice />
       <Overlays />
     </>
   );
@@ -154,5 +156,26 @@ export function SelectionSize() {
       {" · "}
       {n} picked · {size.join(" × ")}
     </span>
+  );
+}
+
+/** First open: how should the 3D view move? (View > Move like… changes it later.) */
+function NavChoice() {
+  const chosen = useNav((s) => s.chosen);
+  const preset = useNav((s) => s.preset);
+  if (chosen) return null;
+  return (
+    <div className="banner ed-nav-choice" role="status">
+      <span>How should the 3D view move?</span>
+      <div className="seg" role="group" aria-label="Camera navigation">
+        {NAV_PRESETS.map((n) => (
+          <button key={n.id} type="button" aria-pressed={preset === n.id} title={n.tip} onClick={() => setNavPreset(n.id)}>
+            {n.label}
+            {n.id === "unreal" ? " (hold right mouse + WASD)" : n.id === "blender" ? " (drag to orbit)" : " (Z to look)"}
+          </button>
+        ))}
+      </div>
+      <span className="muted small-note">Change it any time in View. The keys sheet (?) lists the moves.</span>
+    </div>
   );
 }

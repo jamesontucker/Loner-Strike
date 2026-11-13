@@ -8,7 +8,7 @@ import type { DocState } from "./editorApi";
 import { useEditor } from "./store";
 
 export type SideTab = "inspect" | "outline" | "textures" | "checks" | "compile" | "history" | "project" | (string & {});
-export type P5Dialog = "palette" | "cheats" | "keys" | "find" | "transform" | "goto" | "grid" | "replaceWith" | null;
+export type P5Dialog = "palette" | "cheats" | "keys" | "find" | "transform" | "goto" | "grid" | "replaceWith" | "info" | null;
 
 type P5State = {
   tab: SideTab;
@@ -24,6 +24,10 @@ type P5State = {
   geoSnap: boolean;
   /** studio models drawn in place of entity boxes */
   showModels: boolean;
+  /** the arch tool's start angle (degrees) */
+  archStart: number;
+  /** brighter grid lines every 64 and 1024 units (Hammer's highlight lines) */
+  gridMajor: boolean;
   set: (p: Partial<Omit<P5State, "set">>) => void;
 };
 
@@ -52,7 +56,10 @@ export const useP5 = create<P5State>((set) => ({
   rotSnap: num("ls.editor.rotSnap", 15),
   geoSnap: num("ls.editor.geoSnap", 0) !== 0,
   showModels: num("ls.editor.showModels", 1) !== 0,
+  archStart: 0,
+  gridMajor: num("ls.editor.gridMajor", 1) !== 0,
   set: (p) => {
+    if (p.gridMajor != null) keep("ls.editor.gridMajor", p.gridMajor ? "1" : "0");
     if (p.showModels != null) keep("ls.editor.showModels", p.showModels ? "1" : "0");
     if (p.showGrid != null) keep("ls.editor.showGrid", p.showGrid ? "1" : "0");
     if (p.rotSnap != null) keep("ls.editor.rotSnap", String(p.rotSnap));

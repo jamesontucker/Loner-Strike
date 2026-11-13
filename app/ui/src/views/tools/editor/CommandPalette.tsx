@@ -8,6 +8,7 @@ import { Sheet } from "../../../ui";
 import { commands, frame, selectIds, type Command, type Menu } from "./commands";
 import { setLayout } from "./panes";
 import { useP5 } from "./p5store";
+import { NAV_HELP, NAV_PRESETS, useNav } from "./navigation";
 import { clashes, keyName, keysOf, norm, PRESETS, showKey, useKeySet, type PresetId } from "./Shortcuts";
 import { keyOf, originOf, useEditor } from "./store";
 
@@ -137,6 +138,7 @@ const FIXED: [string, string][] = [
 
 export function CheatSheet({ onClose }: { onClose: () => void }) {
   const st = useKeySet();
+  const nav = useNav((s) => s.preset);
   const all = commands();
   const preset = PRESETS.find((p) => p.id === st.preset);
   return (
@@ -174,6 +176,19 @@ export function CheatSheet({ onClose }: { onClose: () => void }) {
             </section>
           );
         })}
+        <section>
+          <h3>Camera · moves like {NAV_PRESETS.find((n) => n.id === nav)?.label}</h3>
+          <dl>
+            {NAV_HELP[nav].map(([k, what]) => (
+              <div key={k}>
+                <dt>
+                  <kbd>{k}</kbd>
+                </dt>
+                <dd>{what}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
         <section>
           <h3>Always</h3>
           <dl>

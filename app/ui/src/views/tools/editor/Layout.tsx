@@ -5,6 +5,30 @@ import { useRef, type MutableRefObject } from "react";
 import "./p5.css";
 import { paneCount, toggleMaximise, usePanes, type LayoutId, type Split } from "./panes";
 import { modeFor, RENDER_MODES, setPaneMode, type RenderMode } from "./renderModes";
+import { useEffect, useState } from "react";
+import { SPEEDS, useNav } from "./navigation";
+
+/** The camera speed note ("Speed 4 · 512 u/s") shown a moment after it changes, and while looking round. */
+function NavHud() {
+  const until = useNav((s) => s.hudUntil);
+  const speed = useNav((s) => s.speed);
+  const looking = useNav((s) => s.looking);
+  const preset = useNav((s) => s.preset);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const left = until - performance.now();
+    if (left <= 0) return;
+    const id = setTimeout(() => tick((n) => n + 1), left + 20);
+    return () => clearTimeout(id);
+  }, [until]);
+  if (preset === "blender" || (!looking && performance.now() > until)) return null;
+  return (
+    <div className="ed-nav-hud" aria-live="polite">
+      Speed {speed + 1} <span className="muted">· {SPEEDS[speed]} u/s</span>
+      {looking && <span className="muted"> · {preset === "hammer" ? "Z or Esc to stop" : "scroll: speed"}</span>}
+    </div>
+  );
+}
 import type { ViewId } from "./store";
 
 export const VIEW_LABELS: Record<ViewId, string> = { "3d": "3D", top: "Top", front: "Front", side: "Side" };
@@ -94,6 +118,7 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
             onPointerEnter={() => usePanes.setState({ hover: i })}
             onPointerLeave={() => usePanes.getState().hover === i && usePanes.setState({ hover: null })}
           >
+            {shown && views[i] === "3d" && <NavHud />}
             {n > 1 && shown && (
               <div className="ed-pane-head" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={() => toggleMaximise(i)}>
                 <select

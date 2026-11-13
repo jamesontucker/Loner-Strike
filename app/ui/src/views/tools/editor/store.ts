@@ -120,7 +120,9 @@ type EditorState = {
   archWall: number;
   thickness: number;
   /** click a grouped thing: the whole group (Hammer's default), or just it */
-  selectMode: "groups" | "objects";
+  selectMode: "groups" | "objects" | "solids"; // P5: solids = single brushes, even inside brush entities (Hammer)
+  /** P5: grid snapping turned off until turned on again (Alt still flips it while held) */
+  snapOff?: boolean;
   /** hidden for now (this page only; groups have their own saved Hide) */
   hidden: { brushes: Set<number>; entities: Set<number> };
   /** picked corners for the vertex tool */
@@ -222,7 +224,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   archArc: 180,
   archWall: 16,
   thickness: 8,
-  selectMode: savedStr("ls.editor.selectMode", "groups") === "objects" ? "objects" : "groups",
+  selectMode: ((m) => (m === "objects" || m === "solids" ? m : "groups"))(savedStr("ls.editor.selectMode", "groups")),
   hidden: { brushes: new Set(), entities: new Set() },
   verts: [],
   recentTex: savedList("ls.editor.recentTex"),
@@ -415,7 +417,8 @@ function mergeState(st: DocState) {
 
 /** Grid snapping (off while Alt is held). */
 export function snap(v: number, grid = useEditor.getState().grid) {
-  return useEditor.getState().alt || grid <= 0 ? Math.round(v * 100) / 100 : Math.round(v / grid) * grid;
+  const st = useEditor.getState();
+  return st.alt !== !!st.snapOff || grid <= 0 ? Math.round(v * 100) / 100 : Math.round(v / grid) * grid; // P5: snapOff toggle, Alt flips it
 }
 
 /** The selection's bounds from what's drawn (brushes) and the doc (point entities). */

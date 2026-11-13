@@ -20,6 +20,7 @@ export function P5Dialogs() {
   if (dialog === "goto") return <GoTo onClose={close} />;
   if (dialog === "grid") return <GridSettings onClose={close} />;
   if (dialog === "replaceWith") return <ReplaceWith onClose={close} />;
+  if (dialog === "info") return <MapInfo onClose={close} />;
   return null;
 }
 
@@ -393,6 +394,7 @@ const TURNS = [0, 1, 5, 7.5, 11.25, 15, 22.5, 30, 45, 90];
 function GridSettings({ onClose }: { onClose: () => void }) {
   const grid = useEditor((s) => s.grid);
   const lock = useEditor((s) => s.textureLock);
+  const snapOff = useEditor((s) => s.snapOff);
   const p = useP5();
   const s = useEditor.getState();
   return (
@@ -421,6 +423,12 @@ function GridSettings({ onClose }: { onClose: () => void }) {
               </option>
             ))}
           </select>
+        </label>
+        <label className="editor-check" title="Brighter lines every 64 units in the flat views (Hammer's highlight lines)">
+          <input type="checkbox" checked={p.gridMajor} onChange={(e) => p.set({ gridMajor: e.target.checked })} /> Brighter lines every 64 units (flat views)
+        </label>
+        <label className="editor-check" title="Off: things move freely (Alt flips it while held)">
+          <input type="checkbox" checked={!snapOff} onChange={(e) => s.set({ snapOff: !e.target.checked })} /> Snap to the grid
         </label>
         <label className="editor-check" title="New points (boxes, clip points, entities, measuring) land on a corner or edge of a brush when you're close to one">
           <input type="checkbox" checked={p.geoSnap} onChange={(e) => p.set({ geoSnap: e.target.checked })} /> Snap to brush corners and edges
@@ -573,6 +581,69 @@ function ReplaceWith({ onClose }: { onClose: () => void }) {
           Close
         </button>
         <BusyButton busy={busy} className="btn small primary" label="Replace" busyLabel="Replacing…" disabled={!n || (mode === "prefab" ? !pick : !cls)} onClick={() => void (mode === "entity" ? toEntity() : toPrefab())} />
+      </div>
+    </Sheet>
+  );
+}
+
+/** The arch tool's start angle, next to its other options. */
+export function ArchStart() {
+  const v = useP5((s) => s.archStart);
+  return (
+    <label title="Where the arch starts, in degrees round from east (x)">
+      Start°
+      <input type="number" min={-360} max={360} step={15} value={v} onChange={(e) => useP5.getState().set({ archStart: Math.max(-360, Math.min(360, Number(e.target.value) || 0)) })} />
+    </label>
+  );
+}
+
+/** Hammer's Map information: counts, textures and texture files in use. */
+function MapInfo({ onClose }: { onClose: () => void }) {
+  const doc = useEditor((s) => s.doc);
+  const meshes = useEditor((s) => s.brushes);
+  if (!doc) return null;
+  const tex = new Map<string, number>();
+  let faces = 0;
+  for (const b of meshes.values()) for (const f of b.faces) {
+    faces++;
+    tex.set(f.texture, (tex.get(f.texture) ?? 0) + 1);
+  }
+  const ents = doc.entities;
+  const solid = ents.filter((e) => e.brushes.length).length;
+  const classes = new Map<string, number>();
+  for (const e of ents) classes.set(e.classname, (classes.get(e.classname) ?? 0) + 1);
+  const world = doc.brushes.filter((b) => b.entity == null).length;
+  const [lo, hi] = doc.bounds;
+  const rows: [string, string | number][] = [
+    ["Brushes", `${doc.brushes.length} (${world} world, ${doc.brushes.length - world} in brush entities)`],
+    ["Faces", faces],
+    ["Entities", `${ents.length} (${ents.length - solid} point, ${solid} brush)`],
+    ["Kinds of entity", classes.size],
+    ["Textures used", tex.size],
+    ["Texture files", doc.world.wads.join(", ") || "none"],
+    ["Groups", doc.groups.length],
+    ["Size", hi.map((x, i) => Math.round(x - lo[i])).join(" × ")],
+  ];
+  return (
+    <Sheet label="Map information" onClose={onClose} className="sheet ed-dialog">
+      <h2>Map information</h2>
+      <dl className="ed-info">
+        {rows.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <h4>Most used textures</h4>
+      <p className="small-note mono">{[...tex.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t, n]) => `${t} ${n}`).join(" · ")}</p>
+      <h4>Entities by kind</h4>
+      <p className="small-note mono">{[...classes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 16).map(([c, n]) => `${c} ${n}`).join(" · ")}</p>
+      <div className="row">
+        <span className="push" />
+        <button type="button" className="btn small primary" onClick={onClose}>
+          Done
+        </button>
       </div>
     </Sheet>
   );

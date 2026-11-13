@@ -9,22 +9,22 @@ import { useTools } from "../../../stores/tools";
 import type { ToolProps } from "../registry";
 import { canDraw3d, SceneBoundary } from "../viewer/Scene";
 import { EditorScene } from "./EditorScene";
-import { BusyLabel, ChecksPanel, deleteSelection, duplicate, hideSelection, Inspector, isolateSelection, showAll, Visibility, TextureBrowser, Toolbar, ToolOptions, TOOLS } from "./Panels";
+import { BusyLabel, deleteSelection, duplicate, hideSelection, isolateSelection, showAll, Toolbar, ToolOptions, TOOLS } from "./Panels";
 import { selectionIds } from "./EditorScene";
 import { Dialogs } from "./Dialogs";
-import { CompilePanel } from "./CompilePanel";
 // P4: prefab library, outside changes (MCP agents), Publish
-import { LibraryPanel } from "./LibraryPanel";
 import { mapNameOf } from "./ComponentPanel";
 import { useOutsideChanges } from "./extras";
+import { useToolCrumbs } from "../common/shell";
+import { useDirty } from "../../../store";
 import { useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
 // P5: menu bar + keys + palette, outliner, project files, undo history, selection size
 import { MenuBar, SelectionSize } from "./MenuBar";
-import { OutlinePanel } from "./OutlinePanel";
-import { HistoryPanel } from "./HistoryPanel";
-import { ProjectPanel } from "./ProjectPanel";
 import { useP5 } from "./p5store";
+import { DockArea, DockDropZones, DockFloats, useDockColumns } from "./Dock";
+import { showPanel } from "./dockState";
+import { useNav as useNavPreset } from "./navigation";
 import { importOther } from "./commands";
 import * as api from "./editorApi";
 import type { RecentFile, Recovery } from "./editorApi";
@@ -47,6 +47,9 @@ const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.isCont
 
 export default function MapEditor(_: ToolProps) {
   const doc = useEditor((s) => s.doc);
+  // P4 (P6's request): the open map's name in the breadcrumb, and a check before leaving with unsaved changes
+  useToolCrumbs("editor", doc ? [{ label: doc.name }] : null);
+  useDirty("editor", !!doc?.dirty);
   const loadError = useEditor((s) => s.loadError);
   const fileBusy = useEditor((s) => s.fileBusy);
   const toast = useToast();
@@ -163,10 +166,12 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
   const view = useEditor((s) => s.view);
   const fileBusy = useEditor((s) => s.fileBusy);
   const working = useEditor((s) => s.working);
-  const checks = useEditor((s) => s.checks);
-  // P5: the side tab lives in p5store so menus and the palette can open one
-  const tab = useP5((x) => x.tab) as Tab;
-  const setTab = (t: Tab) => useP5.getState().set({ tab: t });
+  // P5: panels live in the dock (dockPanels.tsx); a tab request shows that panel wherever it is
+  const setTab = (t: Tab) => {
+    useP5.getState().set({ tab: t });
+    showPanel(t);
+  };
+  const dockCols = useDockColumns(); // P5
   const [lost, setLost] = useState(0);
   const has3d = useMemo(() => canDraw3d(), []);
   // the camera frames the map once per document, not after every edit
@@ -186,8 +191,6 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
     void api.getRecent().then((r) => !r.error && setRecent(r.files ?? []));
   }, [doc.docId, doc.saved]);
 
-  const problems = checks?.issues.filter((i) => i.level === "error").length ?? 0;
-  const warnings = checks?.issues.filter((i) => i.level === "warning").length ?? 0;
   const s = useEditor.getState();
 
   return (
@@ -243,8 +246,9 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
           ))}
         </div>
       </div>
-      <div className="editor-main">
+      <div className="editor-main" style={dockCols}>
         <Toolbar />
+        <DockArea side="left" />
         <div className="tools-stage">
           <ToolOptions />
           <div className="tools-canvas">
@@ -266,38 +270,14 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
               </SceneBoundary>
             )}
           </div>
+          <DockArea side="bottom" />
           <Status working={working > 0} />
         </div>
-        <aside className="tools-side editor-side">
-          <div className="seg editor-tabs" role="tablist" aria-label="Panels">
-            {(
-              [
-                ["inspect", "Inspect"],
-                ["outline", "Outline"],
-                ["textures", "Textures"],
-                ["library", "Library"],
-                ["checks", problems ? `Checks (${problems})` : warnings ? `Checks (${warnings})` : "Checks"],
-                ["compile", "Compile"],
-                ["project", "Project"], // P5
-                ["history", "History"], // P5
-              ] as [Tab, string][]
-            ).map(([id, label]) => (
-              <button key={id} type="button" role="tab" aria-pressed={tab === id} aria-selected={tab === id} className={id === "checks" && problems ? "editor-tab-bad" : undefined} onClick={() => setTab(id)}>
-                {label}
-              </button>
-            ))}
-          </div>
-          {tab === "inspect" && <Inspector />}
-          {tab === "outline" && <OutlinePanel extra={<Visibility />} />} {/* P5: the outliner (P2's Outline kept in Panels.tsx) */}
-          {tab === "textures" && <TextureBrowser />}
-          {tab === "library" && <LibraryPanel start={arg === "components" ? "components" : arg === "prefabs" ? "prefabs" : undefined} />}
-          {tab === "checks" && <ChecksPanel />}
-          {tab === "compile" && <CompilePanel />}
-          {tab === "project" && <ProjectPanel />}
-          {tab === "history" && <HistoryPanel />}
-        </aside>
+        <DockArea side="right" /> {/* P5: dockable panels (dockPanels.tsx lists them) */}
       </div>
       <Dialogs />
+      <DockFloats />
+      <DockDropZones />
     </div>
   );
 }
@@ -318,7 +298,17 @@ function Status({ working }: { working: boolean }) {
     return () => clearTimeout(id);
   }, [working]);
   const autosaved = useEditor((s) => s.autosavedAt);
-  const camHint = view !== "3d" ? "Drag on empty space to box-pick. Right-drag to pan, scroll to zoom." : camera === "fly" ? "Fly: WASD to move, Esc lets go of the mouse. F: orbit." : "Drag to turn, right-drag to pan, scroll to zoom. F: fly.";
+  const navPreset = useNavPreset((n) => n.preset); // P5: the hint follows the navigation preset
+  const camHint =
+    view !== "3d"
+      ? "Drag on empty space to box-pick. Right-drag to pan, scroll to zoom."
+      : navPreset === "unreal"
+        ? "Hold right mouse to look, WASD/QE to fly, scroll for speed. Alt+drag orbits, middle-drag pans. F: focus."
+        : navPreset === "hammer"
+          ? "Z: mouse-look (WASD). Drag to look, right-drag to move, middle-drag to pan."
+          : camera === "fly"
+            ? "Fly: WASD to move, Esc lets go of the mouse. F: orbit."
+            : "Drag to turn, right-drag to pan, scroll to zoom. F: fly.";
   return (
     <div className="tools-status">
       <span className="mono">
