@@ -336,6 +336,9 @@ pub struct Item {
     /// the creation's permanent id (a Studio mode's uid), "" for older entries: installs,
     /// updates and remixes match by it
     pub uid: String,
+    /// the GameBanana member the list service registered it to (who owns its uid there), 0 unknown:
+    /// a uid only links two entries of the same owner
+    pub owner_id: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -1023,6 +1026,8 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
         author: author.clone(),
         game: game.dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
         uid: it.as_ref().map(|i| i.uid.clone()).unwrap_or_default(),
+        // (who uploaded it: an update by uid has to come from the same member)
+        owner_id: page["_aSubmitter"]["_idRow"].as_i64().filter(|i| *i > 0).unwrap_or(0),
         ..Default::default()
     };
     if kind == Kind::Prefab || kind == Kind::Mode {

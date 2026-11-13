@@ -77,6 +77,8 @@ pub struct Installed {
     pub remix_of: Option<Credit>,
     /// its permanent id (a Studio mode's uid), "" for older installs: updates and remixes match by it
     pub uid: String,
+    /// the GameBanana member who uploaded the installed file (0: unknown, from an older install)
+    pub owner_id: i64,
 }
 
 impl Installed {
@@ -152,14 +154,18 @@ pub fn newer(it: &Installed, idx: &Index) -> Option<i64> {
     None
 }
 
-/// The index entry for an installed creation: by its permanent id when both have one, else by page.
+/// The index entry for an installed creation: its own page, else (moved to another page) an entry
+/// with the same permanent id *and the same owner*. uids are public, so a uid alone links nothing:
+/// anyone could declare one, and their package would show as someone else's update. The list service
+/// also refuses a uid registered by another member; this check holds even without it.
 pub fn listed_entry<'a>(it: &Installed, idx: &'a Index) -> Option<&'a super::community::Item> {
-    if !it.uid.is_empty() {
-        if let Some(e) = idx.items.iter().find(|e| e.uid == it.uid && e.status != super::community::Status::Revoked) {
-            return Some(e);
-        }
+    if let Some(e) = idx.items.iter().find(|e| e.model == it.model && e.gb == it.gb) {
+        return Some(e);
     }
-    idx.items.iter().find(|e| e.model == it.model && e.gb == it.gb)
+    if it.uid.is_empty() || it.owner_id <= 0 {
+        return None;
+    }
+    idx.items.iter().find(|e| e.uid == it.uid && e.owner_id == it.owner_id && e.status != super::community::Status::Revoked)
 }
 
 /// Whether a library entry was pulled by the Loner-Strike team since it was installed.
@@ -779,7 +785,16 @@ mod tests {
         let idx2: Index = parse_index(br#"{"schema": 1, "items": [{"kind": "mode", "gb": 500, "file": 2, "name": "Lava", "uid": "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b", "mode": {"id": "lava"}}]}"#).unwrap();
         let mut moved = all[2].clone();
         moved.uid = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b".into();
-        assert_eq!(newer(&moved, &idx2), Some(2));
+        moved.owner_id = 42;
+        assert_eq!(newer(&moved, &idx2), None, "a uid alone links nothing: the other page has no owner we know");
+        let idx3: Index = parse_index(br#"{"schema": 1, "items": [{"kind": "mode", "gb": 500, "file": 2, "name": "Lava", "uid": "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b", "ownerId": 42, "mode": {"id": "lava"}}]}"#).unwrap();
+        assert_eq!(newer(&moved, &idx3), Some(2), "same uid, same owner: it moved pages");
+        // the hijack: someone else's page declaring the same uid is never an update
+        let idx4: Index = parse_index(br#"{"schema": 1, "items": [{"kind": "mode", "gb": 666, "file": 9, "name": "Lava 2.0", "uid": "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b", "ownerId": 666, "mode": {"id": "lava"}}]}"#).unwrap();
+        assert_eq!(newer(&moved, &idx4), None, "another owner's entry with our uid isn't our update");
+        let mut unknown = moved.clone();
+        unknown.owner_id = 0;
+        assert_eq!(newer(&unknown, &idx3), None, "an install without an owner only follows its own page");
         assert_eq!(newer(&all[2], &idx2), None, "without a uid only the page counts");
         // an older file listed never counts as an update
         let mut it = all[1].clone();

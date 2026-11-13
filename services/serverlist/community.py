@@ -85,7 +85,7 @@ HEADER_SAMPLES = 16           # local headers compared with the directory, sprea
 GB_PER_VISITOR_MIN = 10       # a visitor's share of the GameBanana checks a minute
 REPORTS_PER_VISITOR_DAY = 20  # a visitor's share of the day's reports
 STATUS_PER_MIN = 60
-CHECK_MAX = 256 << 20         # [Caps] biggest package whose files are checked one by one (bigger: "too big to check"); the biggest real CS 1.6 item found is a 132.7 MB mappack
+CHECK_MAX = 128 << 20         # biggest package whose files are checked one by one (bigger: "too big to check")
 CHECK_ENTRY_MAX = 256 << 20   # biggest single file inside it
 CHECK_SECONDS = 180           # the whole check (download and files) must finish in this
 CHECK_BLOCK = 4 << 20         # download piece size
@@ -130,7 +130,8 @@ class Reject(Exception):
 _HEX32 = re.compile(r"^[0-9a-f]{32}$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _MODE_ID = re.compile(r"^[A-Za-z0-9_]{1,32}$")
-# a mode's (or kit's, or library item's) permanent id, beside its short game id
+# a mode's (or kit's, or library item's) permanent id, beside its short game id (entries that already
+# had one when the uids table came in are its owners from the start: migration 4 backfills them)
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _SAFE_ARG = re.compile(r"^[A-Za-z0-9_.$-]{1,64}$")
 
@@ -1113,6 +1114,27 @@ MIGRATIONS = [
     );
     CREATE INDEX applications_user ON applications(user_id, role_key)
     """,
+    # 4: who owns a permanent id (uid): the GameBanana member who first registered it. Updates in the
+    # app match by uid only within one owner, so nobody can pass their package off as someone
+    # else's new version; a moderator moves a uid when a creator changes accounts.
+    """
+    CREATE TABLE uids (
+        uid TEXT PRIMARY KEY,
+        owner_id INTEGER NOT NULL,
+        owner TEXT NOT NULL DEFAULT '',
+        key TEXT NOT NULL DEFAULT '',
+        at INTEGER NOT NULL,
+        by TEXT NOT NULL DEFAULT ''
+    );
+    INSERT OR IGNORE INTO uids (uid, owner_id, owner, key, at, by)
+        SELECT lower(trim(json_extract(item, '$.uid'))), submitter_id, submitter, key, added, 'backfill' FROM entries
+        WHERE json_valid(item) AND submitter_id > 0 AND lower(trim(COALESCE(json_extract(item, '$.uid'), ''))) GLOB '[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'
+        ORDER BY added, key;
+    INSERT OR IGNORE INTO uids (uid, owner_id, owner, key, at, by)
+        SELECT lower(trim(json_extract(item, '$.mode.uid'))), submitter_id, submitter, key, added, 'backfill' FROM entries
+        WHERE json_valid(item) AND submitter_id > 0 AND lower(trim(COALESCE(json_extract(item, '$.mode.uid'), ''))) GLOB '[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'
+        ORDER BY added, key
+    """,
 ]
 
 # Every way an entry's state changes, and who may do it (a creator's registration never undoes a
@@ -1172,12 +1194,23 @@ class Store:
         with self.lock:
             return self.db.execute("SELECT COUNT(*) FROM entries WHERE state=?", (state,)).fetchone()[0]
 
-    def put(self, row, action, detail=""):
-        """Writes a whole entry and a log line in one go."""
+    def put(self, row, action, detail="", claim=None):
+        """Writes a whole entry and a log line in one go. `claim` (uids, owner id, owner name): those
+        uids go to that member in the same transaction, and nothing is written (Reject 409) when
+        another member owns one of them."""
         cols = list(row)
         with self.lock:
             self.db.execute("BEGIN")
             try:
+                if claim:
+                    uids, owner_id, owner = claim
+                    for uid in uids:
+                        r = self.db.execute("SELECT owner_id FROM uids WHERE uid=?", (uid,)).fetchone()
+                        if r and r["owner_id"] != owner_id:
+                            raise Reject(409, UID_TAKEN)
+                        if not r:
+                            self.db.execute("INSERT INTO uids (uid, owner_id, owner, key, at, by) VALUES (?,?,?,?,?,?)",
+                                            (uid, owner_id, owner, row["key"], now(), "registration"))
                 self.db.execute(f"INSERT OR REPLACE INTO entries ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                                 tuple(row[c] for c in cols))
                 self.db.execute("INSERT INTO log (key, at, action, detail) VALUES (?,?,?,?)", (row["key"], now(), action, detail[:500]))
@@ -1242,6 +1275,23 @@ class Store:
     def blocked(self):
         with self.lock:
             return [dict(r) for r in self.db.execute("SELECT * FROM blocked ORDER BY at DESC")]
+
+    # -- who owns a uid --
+
+    def uid_owner(self, uid):
+        with self.lock:
+            r = self.db.execute("SELECT * FROM uids WHERE uid=?", (uid,)).fetchone()
+            return dict(r) if r else None
+
+    def set_uid_owner(self, uid, owner_id, owner, by):
+        """A moderator moves a uid to another member (a creator who changed accounts)."""
+        with self.lock:
+            self.db.execute("BEGIN")
+            self.db.execute("INSERT OR REPLACE INTO uids (uid, owner_id, owner, key, at, by) VALUES (?,?,?,COALESCE((SELECT key FROM uids WHERE uid=?), ''),?,?)",
+                            (uid, owner_id, owner, uid, now(), by))
+            self.db.execute("INSERT INTO log (key, at, action, detail) VALUES (?,?,?,?)",
+                            (f"uid:{uid}", now(), "uid-owner", f"to member {owner_id} {owner} by {by}"[:500]))
+            self.db.execute("COMMIT")
 
     # -- Discord cards --
 
@@ -1336,6 +1386,27 @@ def row_hash(row):
 
 # ---- the index ------------------------------------------------------------------------------
 
+UID_TAKEN = ("This creation's permanent id (uid) belongs to another GameBanana member's creation. "
+             "If it's a copy, remix it in the Game Mode Studio (that gives it an id of its own), "
+             "or ask a moderator if you moved accounts.")
+
+
+def norm_uid(u):
+    """A uid as stored and compared: stripped, lower case, a UUID; "" for anything else."""
+    u = u.strip().lower() if isinstance(u, str) else ""
+    return u if _UUID.match(u) else ""
+
+
+def item_uids(it):
+    """The permanent ids an entry declares (its own, its mode's), normalised, without repeats."""
+    out = []
+    for u in (it.get("uid"), (it.get("mode") or {}).get("uid")):
+        u = norm_uid(u)
+        if u and u not in out:
+            out.append(u)
+    return out
+
+
 def index_item(row):
     """One index entry in exactly the app's schema (community.rs Item): every field with the
     type the app's reader wants (a wrong type or an unknown enum value would make it drop the
@@ -1354,6 +1425,8 @@ def index_item(row):
         out["health"] = it["health"]
     if it.get("uid"):
         out["uid"] = it["uid"]
+    # the GameBanana member the entry is registered to: the app matches updates by uid only within one owner
+    out["ownerId"] = int(row["submitter_id"] or 0)
     if it.get("remixOf"):
         out["remixOf"] = it["remixOf"]
     out.update(screenshots=list(it.get("screenshots") or [])[:MAX_SHOTS], tags=list(it.get("tags") or []),
@@ -1584,6 +1657,15 @@ class Community:
                 raise Reject(409, f"The Loner-Strike team turned this file down: {row['reason'] or 'no reason given'}. Upload a new version to try again.")
             # creators the team blocked wait for a moderator, and so does a new file for a page the
             # team hid or turned down; everyone else is listed at once
+            # a permanent id belongs to the member who first registered it: someone else's package
+            # declaring it would otherwise show as that creation's "update" in every app
+            # (checked now for a clear answer; claimed only when the entry is written, in the same
+            # transaction, so a submission refused below never keeps a claim)
+            uids = item_uids(item)
+            for uid in uids:
+                owner = self.store.uid_owner(uid)
+                if owner and owner["owner_id"] != facts["submitterId"]:
+                    raise Reject(409, UID_TAKEN)
             team_hold = bool(row) and row["hidden_by"] == "team"
             blocked = self.store.is_blocked(facts["submitterId"])
             look = blocked or team_hold
@@ -1607,7 +1689,10 @@ class Community:
             # new, listed, or out of the list only by the re-check (and passing every check now)
             row.update(item=data, proposed=None, rejected_md5="", state="listed", hidden_by="", reason="", check_note="")
             action = "list"
-        self.store.put(row, action, f"md5 {item['md5']} file {item['file']} app {app}")
+        try:
+            self.store.put(row, action, f"md5 {item['md5']} file {item['file']} app {app}", claim=(uids, facts["submitterId"], facts["author"]))
+        except Reject as e:
+            return e.code, {"error": e.message}
         log(f"registration {key} {row['state']} ({'new' if fresh else 'update'})")
         self.notify_new(key, item, look, not fresh and was in ("listed", "hidden"), fresh,
                         why="blocked creator" if look and blocked else f"{was} by the team" if look else "")
@@ -2090,6 +2175,14 @@ class Community:
                 else:
                     self.block(sid, (row or {}).get("submitter", ""), "lsmod", body.get("reason") if isinstance(body.get("reason"), str) else "")
             return reply(h, 200, {"blocked": self.store.blocked()}, cors=False)
+        if parts == ["uid"] and method == "POST":
+            uid = norm_uid(body.get("uid"))
+            member = body.get("member")
+            if not uid or isinstance(member, bool) or not isinstance(member, int) or member <= 0:
+                raise Reject(400, "Send {\"uid\": \"<uuid>\", \"member\": <GameBanana member id>}.")
+            name = one_line(body.get("name") if isinstance(body.get("name"), str) else "", 40)
+            self.store.set_uid_owner(uid, member, name, "lsmod")
+            return reply(h, 200, {"ok": True, "uid": uid, "owner": self.store.uid_owner(uid)}, cors=False)
         if parts == ["recheck"] and method == "POST":
             key = body.get("key")
             if key:

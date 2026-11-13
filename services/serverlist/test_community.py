@@ -12,6 +12,7 @@ import hashlib
 import io
 import json
 import os
+import sqlite3
 import struct
 import subprocess
 import sys
@@ -460,6 +461,75 @@ class Submissions(unittest.TestCase):
         self.assertEqual(c.status("Mod", 739197)["state"], "listed")
         self.assertEqual(c.status("Mod", 1)["state"], "unknown")
         self.assertEqual(c.submit(body(mode_item()), "1.2.3.4")[1]["state"], "listed", "a Game Mode Studio (settings only) mode")
+
+    def test_a_uid_belongs_to_its_first_registrant(self):
+        """The update hijack: a stranger's package declaring someone else's uid is refused, so no app
+        sees it as that creation's new version; the owner's own update passes; a moderator can move it."""
+        u = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"
+        mode = {"kind": "mode", "name": "Cage", "uid": u, "mode": {"id": "cage", "uid": u, "maps": [], "plugins": []}}
+        files = FakeFiles()
+        files.files[1886785] = zip_of(["modes/cage/cage.graph.json"], {"loner-strike.json": manifest(mode)})
+        files.files[2100000] = zip_of(["modes/cage/cage.graph.json"], {"loner-strike.json": manifest(dict(mode, name="Cage 2.0 (not really)"))})
+        thief = copy.deepcopy(MODE)
+        thief["_idRow"] = 800001
+        thief["_aSubmitter"] = dict(thief["_aSubmitter"], _idRow=999, _sName="Thief")
+        thief["_aFiles"] = [dict(thief["_aFiles"][0], _idRow=2100000)]
+        gb = FakeGB()
+        gb.pages[("Mod", 800001)] = thief
+        c, _ = make(gb=gb, files=files)
+        self.assertEqual(c.submit(body(mode_item()), "1.2.3.4")[1]["state"], "listed")
+        idx = json.loads(cm.build_index(c.store)[0])["items"]
+        self.assertEqual((idx[0]["uid"], idx[0]["ownerId"]), (u, 3608549), "the index says whose uid it is")
+        code, ans = c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")
+        self.assertEqual(code, 409)
+        self.assertIn("belongs to another GameBanana member", ans["error"])
+        self.assertIsNone(c.store.get("mod:800001"), "not listed under the stolen id")
+        self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549)
+        # a moderator moves the uid (the creator changed accounts): then that member's page may use it
+        c.store.set_uid_owner(u, 999, "Thief", "test")
+        self.assertEqual(c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")[0], 200)
+
+    def test_listed_uids_are_owned_after_the_migration(self):
+        """Entries listed before the uids table came in own their uids from the start."""
+        u = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"
+        tmp = tempfile.mkdtemp()
+        path = os.path.join(tmp, "c.db")
+        db = sqlite3.connect(path)
+        for sql in cm.MIGRATIONS[:3]:
+            for stmt in [x for x in sql.split(";") if x.strip()]:
+                db.execute(stmt)
+        db.execute("PRAGMA user_version=3")
+        row = cm.new_row("Mod", 739703, 5)
+        row.update(kind="mode", state="listed", submitter_id=3608549, submitter="RedSMURF",
+                   item=json.dumps({"kind": "mode", "uid": u.upper(), "mode": {"id": "cage", "uid": u}}))
+        db.execute(f"INSERT INTO entries ({','.join(row)}) VALUES ({','.join('?' * len(row))})", tuple(row.values()))
+        db.commit()
+        db.close()
+        store = cm.Store(path)
+        self.assertEqual((store.uid_owner(u)["owner_id"], store.uid_owner(u)["by"]), (3608549, "backfill"))
+
+    def test_a_refused_submission_claims_nothing(self):
+        u = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"
+        files = FakeFiles()
+        files.files[1886785] = zip_of(["modes/cage/cage.graph.json"], {"loner-strike.json": manifest(
+            {"kind": "mode", "name": "Cage", "uid": u, "mode": {"id": "cage", "uid": u, "maps": [], "plugins": []}})})
+        c, _ = make(files=files)
+        block(c, MODE)
+        cm.MAX_PENDING, keep = 0, cm.MAX_PENDING
+        try:
+            code, _ans = c.submit(body(mode_item()), "1.2.3.4")
+        finally:
+            cm.MAX_PENDING = keep
+        self.assertEqual(code, 503, "refused after the uid check (too many waiting)")
+        self.assertIsNone(c.store.uid_owner(u), "and it didn't keep the uid")
+
+    def test_uid_case_doesnt_matter(self):
+        u = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"
+        self.assertEqual(cm.item_uids({"uid": " " + u.upper() + " ", "mode": {"uid": u}}), [u])
+        self.assertEqual(cm.item_uids({"uid": "nope", "mode": {"uid": 5}}), [])
+        c, _ = make()
+        c.store.set_uid_owner(cm.norm_uid(u.upper()), 1, "x", "test")
+        self.assertEqual(c.store.uid_owner(u)["owner_id"], 1)
 
     def test_sprays_are_listed_too_but_blocked_creators_wait(self):
         c, rec = make()

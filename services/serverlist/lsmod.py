@@ -218,6 +218,10 @@ def main(argv=None):
     s = sub.add_parser("feature")
     s.add_argument("page")
     s.add_argument("onoff", choices=("on", "off"))
+    s = sub.add_parser("uid-owner", help="move a creation's permanent id (uid) to another GameBanana member")
+    s.add_argument("uid")
+    s.add_argument("member", type=int)
+    s.add_argument("--name", default="")
     sub.add_parser("recheck").add_argument("page", nargs="?")
     sub.add_parser("status")
     sub.add_parser("release-hold")
@@ -258,6 +262,9 @@ def main(argv=None):
                 print("Nobody is blocked.")
             for b in r["blocked"]:
                 print(f"{b['name'] or '?'} (GameBanana member {b['submitter_id']})  since {when(b['at'])} by {b['by']}  {b['reason']}")
+        elif a.cmd == "uid-owner":
+            r = call(srv, tok, "POST", "uid", {"uid": a.uid, "member": a.member, "name": a.name})
+            print(f"{r['uid']} now belongs to GameBanana member {a.member}. Updates to it from that member count from now on.")
         elif a.cmd == "reports":
             q = ""
             if a.page:
