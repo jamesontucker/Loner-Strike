@@ -213,6 +213,11 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
         }
         tar_err = Some(err);
     }
+    // tar's listing showed links: refused here, before another unpacker that may not see them
+    // (7-Zip's listing doesn't show a zip's Unix links as links) gets a go at it
+    if readable && links {
+        return Err(HAS_LINKS.into());
+    }
     // Windows 10's tar.exe (libarchive 3.5) can list but not unpack RAR files that use
     // filters ("Parsing filters is unsupported"), which many older maps do: 7-Zip can.
     #[cfg(windows)]
@@ -224,14 +229,13 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
                 bomb_check(entries, size, packed_len(archive))?; // [Caps]
                 clear_dir(dest);
                 let mut c = sys::command(&sz);
-                // without -snl/-spf 7-Zip creates no links and keeps every path inside dest
-                c.args(["x", "-y", "-bso0", "-bsp0"]).arg(format!("-o{}", dest.display())).arg(archive);
+                c.args(seven_zip_x_args(dest)).arg(archive);
                 let (ok, err) = run_limited(c, dest, budget)?;
                 strip_links(dest);
                 if ok {
                     return Ok(());
                 }
-                tar_err = Some(format!("7-Zip: {}", err.trim()));
+                tar_err = Some(seven_zip_error(&err));
             }
             None => {}
         }
@@ -257,9 +261,6 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
                 return Ok(());
             }
         }
-    }
-    if readable && links {
-        return Err(HAS_LINKS.into());
     }
     let why_src = tar_err.unwrap_or(list_err);
     let why = why_src.trim().lines().last().unwrap_or("unknown error").to_string();
@@ -303,8 +304,9 @@ fn tar_path() -> Option<PathBuf> {
     sys::find_tool("bsdtar").or_else(|| p.is_file().then_some(p))
 }
 
-/// 7-Zip for Windows: the user's own install first, then the copy the Windows build
-/// ships next to the app (bundle resource 7zip/, see tauri.windows.conf.json).
+/// 7-Zip for Windows: the copy the Windows build ships next to the app first (bundle
+/// resource 7zip/, see tauri.windows.conf.json; a known, current version), then the user's
+/// own install (dev builds have no bundled copy; an old install may not take -bso0).
 #[cfg(windows)]
 fn seven_zip() -> Option<PathBuf> {
     let installed = ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"]
@@ -312,7 +314,31 @@ fn seven_zip() -> Option<PathBuf> {
         .filter_map(std::env::var_os)
         .map(|d| PathBuf::from(d).join("7-Zip").join("7z.exe"));
     let bundled = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("7zip").join("7z.exe")));
-    installed.chain(bundled).find(|p| p.is_file())
+    bundled.into_iter().chain(installed).find(|p| p.is_file())
+}
+
+/// `7z x` arguments (before the archive). 7-Zip does make symbolic and hard links on
+/// extraction unless told not to (seen with 26.05: "Cannot create symbolic link" under Wine),
+/// so -snl- -snh- skip link entries; -sns- writes no NTFS alternate streams (they'd be
+/// invisible to the size watcher) and turns a ':' in a name into '_'. Without -spf it keeps
+/// every path inside dest: "..", drive letters and \\server\share are dropped, CON/AUX/NUL
+/// get a leading '_'. The output folder goes in as an OsString so no character is lost.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn seven_zip_x_args(dest: &Path) -> Vec<std::ffi::OsString> {
+    let mut out = std::ffi::OsString::from("-o");
+    out.push(dest.as_os_str());
+    let mut v: Vec<std::ffi::OsString> = ["x", "-y", "-bso0", "-bsp0", "-snl-", "-snh-", "-sns-"].iter().map(Into::into).collect();
+    v.push(out);
+    v
+}
+
+/// The line worth showing from 7-Zip's stderr: its last ERROR line ("Open ERROR: Cannot
+/// open the file as [7z] archive", "ERROR: Data Error : maps\x.bsp"), else its last line.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn seven_zip_error(stderr: &str) -> String {
+    let lines: Vec<&str> = stderr.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let line = lines.iter().rev().find(|l| l.contains("ERROR")).or(lines.last()).copied().unwrap_or("unknown error");
+    format!("7-Zip: {line}")
 }
 
 /// (total unpacked size, has links, entries) from `7z l -slt`, or None if 7-Zip can't read it.
@@ -329,18 +355,25 @@ fn seven_zip_listing(sz: &Path, archive: &Path) -> Option<(u64, bool, usize)> {
 
 /// The `7z l -slt` text: entries follow the "----------" line (the lines before it describe
 /// the archive); each entry starts with "Path = ". [Caps] the entry count is for bomb_check.
+/// Links: tar/RAR5 entries say "Symbolic Link = /target" (or Hard/Copy Link), but a zip's
+/// Unix link only shows in its mode ("Attributes =  lrwxrwxrwx"; tar's "Mode = lrwx...").
 #[cfg_attr(not(windows), allow(dead_code))]
 fn read_7z_listing(out: &str) -> Option<(u64, bool, usize)> {
     let entries = out.split_once("\n----------")?.1;
     let (mut total, mut links, mut count) = (0u64, false, 0usize);
+    let unix_link = |v: &str| {
+        v.split(' ').any(|t| t.len() == 10 && t.starts_with('l') && t[1..].bytes().all(|b| b"rwxsStT-".contains(&b)))
+    };
     for line in entries.lines() {
         let line = line.trim_end_matches('\r');
         if let Some(n) = line.strip_prefix("Size = ") {
             total = total.saturating_add(n.trim().parse::<u64>().unwrap_or(0));
         } else if line.starts_with("Path = ") {
             count += 1;
-        } else if let Some(v) = line.strip_prefix("Symbolic Link = ").or_else(|| line.strip_prefix("Hard Link = ")) {
+        } else if let Some(v) = ["Symbolic Link = ", "Hard Link = ", "Copy Link = "].iter().find_map(|k| line.strip_prefix(k)) {
             links = links || !v.trim().is_empty();
+        } else if let Some(v) = line.strip_prefix("Attributes = ").or_else(|| line.strip_prefix("Mode = ")) {
+            links = links || unix_link(v);
         }
     }
     Some((total, links, count))
@@ -475,8 +508,13 @@ fn run_limited_n(mut cmd: Command, dest: &Path, budget: u64, max_entries: usize)
         libc::kill(-(child.id() as libc::pid_t), libc::SIGKILL);
     }
     let err = reader.join().unwrap_or_default();
-    if tree_size(dest) > budget {
+    // an unpacker done between two looks is checked once more, for files as well as size
+    let (size, entries) = tree_stats(dest, max_entries);
+    if size > budget {
         return Err(TOO_BIG.into());
+    }
+    if entries > max_entries {
+        return Err(too_many(entries, max_entries));
     }
     Ok((status.success(), err))
 }
@@ -491,7 +529,11 @@ pub fn extract_nested(root: &Path) -> Result<(), String> {
             if size >= MAX_UNPACKED {
                 return Err(TOO_BIG.into());
             }
-            let _ = extract(&path, &inner, MAX_UNPACKED - size);
+            // an inner archive that can't be unpacked (or is refused) is left out as before,
+            // but never half of it: a stopped unpacker's files are removed too
+            if extract(&path, &inner, MAX_UNPACKED - size).is_err() {
+                let _ = std::fs::remove_dir_all(&inner);
+            }
         }
     }
     Ok(())
@@ -544,10 +586,14 @@ pub fn rel_parts(root: &Path, path: &Path) -> Vec<String> {
 }
 
 /// A path from an archive listing ("dir\\x/y.bsp") as parts, dropping "", "." and anything with "..".
+/// A leading drive ("C:\\maps\\x.bsp") is dropped, as 7-Zip and tar do when they unpack.
 pub fn listed_parts(rel: &str) -> Vec<String> {
-    let parts: Vec<String> = rel.split(['/', '\\']).filter(|s| !s.is_empty() && *s != ".").map(String::from).collect();
+    let mut parts: Vec<String> = rel.split(['/', '\\']).filter(|s| !s.is_empty() && *s != ".").map(String::from).collect();
     if parts.iter().any(|p| p == "..") {
         return vec![];
+    }
+    if parts.first().is_some_and(|d| d.len() == 2 && d.ends_with(':') && d.as_bytes()[0].is_ascii_alphabetic()) {
+        parts.remove(0);
     }
     parts
 }
@@ -567,6 +613,11 @@ pub fn plan_rels(rels: &[Vec<String>]) -> (Vec<(usize, String)>, Vec<String>) {
             continue;
         }
         let rel = parts.join("/");
+        // ':' is a drive ("C:x.wad") or an NTFS stream ("x.bsp:s") on Windows, never a game file
+        if parts.iter().any(|p| p.contains(':')) {
+            skipped.push(rel);
+            continue;
+        }
         let low: Vec<String> = parts.iter().map(|p| p.to_lowercase()).collect();
         let name = low.last().unwrap().clone();
         let ext = ext_of(&name).to_string();
@@ -785,6 +836,131 @@ mod tests {
         assert_eq!(bomb_check(n, size, 900).unwrap_err(), "That download has too many files in it: 65537 — the most is 65536.");
         let link = "--\nPath = a\n\n----------\nPath = maps/x.txt\nSize = 3\nSymbolic Link = /etc/passwd\n";
         assert_eq!(read_7z_listing(link), Some((3, true, 1)));
+    }
+
+    // Real `7z l -slt` output from the bundled 7-Zip 26.05 (x64), run under CrossOver, with
+    // Windows line endings. Names are printed in the OEM code page ("ü" is byte 0x81, which
+    // run_output's lossy decoding turns into U+FFFD); only the ASCII keys are read.
+    fn crlf(s: &str) -> String {
+        s.replace('\n', "\r\n")
+    }
+
+    const SZ_7Z: &str = "\n7-Zip 26.05 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-10-21\n\nScanning the drive for archives:\n1 file, 262 bytes (1 KiB)\n\nListing archive: C:\\Users\\Jo Smith\\Downloads\\my pack \u{FFFD}.7z\n\n--\nPath = C:\\Users\\Jo Smith\\Downloads\\my pack \u{FFFD}.7z\nType = 7z\nPhysical Size = 262\nHeaders Size = 251\nMethod = LZMA2:12\nSolid = +\nBlocks = 1\n\n----------\nPath = maps\nSize = 0\nPacked Size = 0\nModified = 2026-11-13 01:15:33.2128504\nAttributes = D\nCRC = \nEncrypted = -\nMethod = \nBlock = \n\nPath = sound\\my folder\nSize = 0\nPacked Size = 0\nModified = 2026-11-13 01:15:33.2127187\nAttributes = D\nCRC = \nEncrypted = -\nMethod = \nBlock = \n\nPath = maps\\de_test.bsp\nSize = 3\nPacked Size = 11\nModified = 2026-11-13 01:15:33.2126648\nAttributes = A\nCRC = E0059D55\nEncrypted = -\nMethod = LZMA2:12\nBlock = 0\n\nPath = maps\\__.txt\nSize = 1\nPacked Size = \nModified = 2026-11-13 01:15:33.2128959\nAttributes = A\nCRC = 8CDC1683\nEncrypted = -\nMethod = LZMA2:12\nBlock = 0\n\nPath = sound\\my folder\\h\u{FFFD} llo \u{FFFD}.wav\nSize = 3\nPacked Size = \nModified = 2026-11-13 01:15:33.2127990\nAttributes = A\nCRC = 6B7F2928\nEncrypted = -\nMethod = LZMA2:12\nBlock = 0\n\n";
+
+    const SZ_RAR: &str = "\n7-Zip 26.05 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-10-21\n\nScanning the drive for archives:\n1 file, 2565319 bytes (2506 KiB)\n\nListing archive: C:\\Users\\Jo Smith\\AppData\\Local\\Temp\\download.rar\n\n--\nPath = C:\\Users\\Jo Smith\\AppData\\Local\\Temp\\download.rar\nType = Rar\nPhysical Size = 2565319\nSolid = -\nBlocks = 9\nMultivolume = -\nVolumes = 1\n\n----------\nPath = My Map v3\\sound\\loadermusic.wav\nFolder = -\nSize = 2377772\nPacked Size = 1674447\nModified = 2006-08-17 18:32:12.0000000\nCreated = \nAccessed = \nAttributes = A\nEncrypted = -\nSolid = -\nCommented = -\nSplit Before = -\nSplit After = -\nCRC = 8EF63135\nHost OS = Win32\nMethod = m3:22\nVersion = 29\nVolume Index = \n\nPath = My Map v3\\README.txt\nFolder = -\nSize = 221\nPacked Size = 178\nModified = 2009-04-03 10:40:56.5120000\nCreated = \nAccessed = \nAttributes = A\nEncrypted = -\nSolid = -\nCommented = -\nSplit Before = -\nSplit After = -\nCRC = CDDD0BE0\nHost OS = Win32\nMethod = m3:22\nVersion = 29\nVolume Index = \n\n";
+
+    // a zip made by Info-ZIP on Unix, and one with a trailing-garbage warning in the header block
+    const SZ_ZIP: &str = "\n7-Zip 26.05 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-10-21\n\nScanning the drive for archives:\n1 file, 965 bytes (1 KiB)\n\nListing archive: C:\\dl\\tail.zip\n\nWARNINGS:\nThere are data after the end of archive\n\n--\nPath = C:\\dl\\tail.zip\nType = zip\nWARNINGS:\nThere are data after the end of archive\nPhysical Size = 951\nTail Size = 14\n\n----------\nPath = maps\nFolder = +\nSize = 0\nPacked Size = 0\nModified = 2026-11-13 01:15:33.2128504\nCreated = \nAccessed = \nAttributes = D\nEncrypted = -\nComment = \nCRC = \nMethod = Store\nCharacteristics = NTFS\nHost OS = FAT\nVersion = 20\nVolume Index = 0\nOffset = 0\n\nPath = maps\\de_a.bsp\nFolder = -\nSize = 3\nPacked Size = 3\nModified = 2026-11-13 01:18:48\nCreated = \nAccessed = \nAttributes = V 01800000 0rw-------\nEncrypted = -\nComment = \nCRC = E0059D55\nMethod = Store\nCharacteristics = \nHost OS = Unix\nVersion = 20\nVolume Index = 0\nOffset = 54\n\n";
+
+    #[test]
+    fn seven_zip_listing_real_samples() {
+        // the archive's own block (before "----------") is never counted, even with spaces and
+        // OEM-mangled names in its path; directories are entries too, like tar's and lsar's lists
+        assert_eq!(read_7z_listing(&crlf(SZ_7Z)), Some((7, false, 5)));
+        assert_eq!(read_7z_listing(&crlf(SZ_RAR)), Some((2377772 + 221, false, 2)));
+        assert_eq!(read_7z_listing(&crlf(SZ_ZIP)), Some((3, false, 2)), "warnings and \"V 01800000 0rw-------\" aren't links");
+        assert_eq!(read_7z_listing(SZ_7Z), Some((7, false, 5)), "plain \\n too");
+        // no separator: 7-Zip couldn't read it
+        assert_eq!(read_7z_listing("\r\n7-Zip 26.05\r\n\r\nOpen ERROR: Cannot open the file as archive\r\n"), None);
+    }
+
+    #[test]
+    fn seven_zip_listing_sees_every_kind_of_link() {
+        let head = "--\r\nPath = C:\\x.bin\r\nType = zip\r\n\r\n----------\r\n";
+        // real: a zip with a Unix link has no "Symbolic Link" line, only its mode
+        let zip_link = format!("{head}Path = maps\\de_a.txt\r\nFolder = -\r\nSize = 11\r\nAttributes =  lrwxrwxrwx\r\nHost OS = Unix\r\n\r\n");
+        assert_eq!(read_7z_listing(&zip_link), Some((11, true, 1)));
+        // real: tar
+        let tar_link = format!("{head}Path = evil\r\nSize = 4\r\nMode = lrwxr-xr-x\r\nSymbolic Link = /etc\r\nHard Link = \r\n\r\n");
+        assert!(read_7z_listing(&tar_link).unwrap().1);
+        let tar_mode_only = format!("{head}Path = evil\r\nMode = lrwxr-xr-x\r\n\r\n");
+        assert!(read_7z_listing(&tar_mode_only).unwrap().1);
+        for k in ["Hard Link = maps\\a.bsp", "Copy Link = maps\\a.bsp", "Symbolic Link = ..\\..\\Windows"] {
+            assert!(read_7z_listing(&format!("{head}Path = b\r\nSize = 0\r\n{k}\r\n\r\n")).unwrap().1, "{k}");
+        }
+        // empty link fields (every tar entry has them) and plain modes are not links
+        let plain = format!("{head}Path = a\r\nMode = -rw-r--r--\r\nSymbolic Link = \r\nHard Link = \r\nAttributes = A -rw-r--r--\r\n\r\nPath = d\r\nMode = drwxr-xr-x\r\n\r\n");
+        assert_eq!(read_7z_listing(&plain), Some((0, false, 2)));
+        // a link-looking name or comment isn't a mode
+        let name = format!("{head}Path = lrwxrwxrwx\r\nComment = lrwxrwxrwx\r\n\r\n");
+        assert!(!read_7z_listing(&name).unwrap().1);
+    }
+
+    #[test]
+    fn seven_zip_extract_arguments() {
+        let dest = Path::new("C:\\Users\\Jo Smith\\AppData\\Local\\loner strike\\tmp\\dl-ü 日本\\x");
+        let a: Vec<String> = seven_zip_x_args(dest).iter().map(|s| s.to_string_lossy().to_string()).collect();
+        assert_eq!(a[..7], ["x", "-y", "-bso0", "-bsp0", "-snl-", "-snh-", "-sns-"]);
+        // one argument, no space after -o (Command quotes it as a whole on Windows)
+        assert_eq!(a[7], format!("-o{}", dest.to_str().unwrap()));
+        assert_eq!(a.len(), 8, "the archive goes last, added by the caller");
+        assert!(!a.iter().any(|s| s == "-spf" || s == "-snl" || s == "-snld"));
+    }
+
+    #[test]
+    fn seven_zip_error_lines() {
+        // real stderr from 7z x on a broken .7z and on a damaged one
+        let open = "ERROR: C:\\dl\\bad.7z\r\nC:\\dl\\bad.7z\r\nOpen ERROR: Cannot open the file as [7z] archive\r\n\r\n\r\n";
+        assert_eq!(seven_zip_error(open), "7-Zip: Open ERROR: Cannot open the file as [7z] archive");
+        assert_eq!(seven_zip_error("ERROR: Data Error : maps\\de_x.bsp\r\n"), "7-Zip: ERROR: Data Error : maps\\de_x.bsp");
+        assert_eq!(seven_zip_error("something odd\n"), "7-Zip: something odd");
+        assert_eq!(seven_zip_error(""), "7-Zip: unknown error");
+    }
+
+    // what 7-Zip and bsdtar leave on disk is planned from its parts; listing paths (GameBanana's
+    // preview) can hold anything, and neither may put a file outside cstrike/'s content folders
+    #[test]
+    fn traversal_rules() {
+        for bad in ["../x.bsp", "maps/../../x.bsp", "maps\\..\\..\\x.bsp", "..\\x.bsp", "a/./../b.bsp"] {
+            assert!(listed_parts(bad).is_empty(), "{bad}");
+        }
+        assert_eq!(listed_parts("./maps//de_a.bsp"), ["maps", "de_a.bsp"]);
+        let rels: Vec<Vec<String>> = [
+            "C:\\maps\\de_drive.bsp",
+            "\\\\server\\share\\maps\\de_unc.bsp",
+            "/abs/models/player/x/x.mdl",
+            "maps/de_ads.bsp:evil",
+            "sound/x.wav::$DATA",
+            "maps/CON.bsp",
+            "C:evil.wad",
+        ]
+        .iter()
+        .map(|r| listed_parts(r))
+        .collect();
+        let (plan, skipped) = plan_rels(&rels);
+        let dests: Vec<&str> = plan.iter().map(|(_, d)| d.as_str()).collect();
+        assert!(dests.contains(&"maps/de_drive.bsp") && dests.contains(&"maps/de_unc.bsp") && dests.contains(&"models/player/x/x.mdl"), "{dests:?}");
+        assert!(skipped.iter().any(|s| s == "C:evil.wad"), "{skipped:?}");
+        for d in &dests {
+            assert!(!d.contains(':'), "{d}");
+            assert!(!d.starts_with('/') && !d.starts_with('\\') && !d.split('/').any(|p| p == ".."), "{d}");
+        }
+        // a stream name isn't a map extension, so it's left out rather than installed
+        assert!(skipped.iter().any(|s| s.ends_with("de_ads.bsp:evil")) && skipped.iter().any(|s| s.ends_with("x.wav::$DATA")), "{skipped:?}");
+    }
+
+    // an inner archive that fails leaves nothing behind
+    #[test]
+    fn nested_failure_leaves_nothing() {
+        let r = tmp("nested-fail-");
+        put(&r, "maps/de_a.bsp", b"bsp");
+        put(&r, "extra/broken.rar", b"Rar!\x1a\x07\x00 not really");
+        extract_nested(&r).unwrap();
+        let left: Vec<String> = std::fs::read_dir(&r).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+        assert!(!left.iter().any(|n| n.starts_with("nested-")), "{left:?}");
+        let _ = std::fs::remove_dir_all(&r);
+    }
+
+    // an unpacker that makes too many files and is done before the first look is still caught
+    #[cfg(unix)]
+    #[test]
+    fn quick_unpacker_counted_at_the_end() {
+        let r = tmp("count-quick-");
+        let mut c = Command::new("/bin/sh");
+        c.arg("-c").arg("i=0; while [ $i -lt 300 ]; do : > f$i; i=$((i+1)); done").current_dir(&r);
+        let e = run_limited_n(c, &r, MAX_UNPACKED, 200).unwrap_err();
+        assert!(e.ends_with("the most is 200."), "{e}");
+        let _ = std::fs::remove_dir_all(&r);
     }
 
     // [Caps] an unpacker that makes more files than its listing said is stopped while it works
