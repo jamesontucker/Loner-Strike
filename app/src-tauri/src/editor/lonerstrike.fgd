@@ -216,6 +216,9 @@
 	repair_cost(integer) : "Repair cost" : 0 : "Money per repair."
 	blocks_bots(choices) : "Bots go round it" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
 	friendly_damage(choices) : "Own team can damage it" : 0 : "" = [ 0 : "No" 1 : "Yes" ]
+	fit(choices) : "Span the corridor" : "" : "Map packs: stretch the barricade along this axis until it meets the walls (up to 400 units each way). Without a model it's drawn as a beam fence." = [ "" : "No" "x" : "Along x (east-west)" "y" : "Along y (north-south)" ]
+	size(string) : "Box size (x y z)" : "64 16 80" : "Map packs: the barricade's box when it isn't a brush."
+	model(studio) : "Model" : : "Map packs: a model to show instead of the beam fence."
 	adopt(string) : "Take over" : : "Map packs: the Name or *model of an existing func_wall/func_breakable to turn into this barricade."
 ]
 

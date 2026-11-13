@@ -257,6 +257,7 @@ new g_sprBeam, g_sprSmoke, g_mdlGibs;
 new g_msgBarTime, g_msgBarTime2, g_msgStatusIcon, g_msgFade, g_msgRoundTime, g_msgRadar;
 new g_sync;
 
+new g_cWaveAnnounce;
 new g_cHud, g_cBeams, g_cBots, g_cFallback, g_cSpawns, g_cSpawnFar, g_cRadar, g_cRoundReset, g_cDebug;
 
 /* forwards */
@@ -413,6 +414,7 @@ public plugin_init()
 	g_cRadar = register_cvar("ls_comp_radar", "0");
 	g_cRoundReset = register_cvar("ls_comp_round_reset", "1");
 	g_cDebug = register_cvar("ls_comp_debug", "0");
+	g_cWaveAnnounce = register_cvar("ls_comp_wave_announce", "1");
 
 	g_msgBarTime = get_user_msgid("BarTime");
 	g_msgBarTime2 = get_user_msgid("BarTime2");
@@ -971,17 +973,37 @@ stock comp_init(s)
 			}
 			else
 			{
+				/* with a model: that model; without one: an invisible box drawn as a beam fence */
 				new m[64];
-				ks(s, "model", m, charsmax(m), DEFAULT_CRATE);
-				if (!usable_model(m))
-					copy(m, charsmax(m), DEFAULT_CRATE);
-				set_model(ent, m, DEFAULT_CRATE);
+				if (ks(s, "model", m, charsmax(m)))
+					set_model(ent, usable_model(m) ? m : DEFAULT_CRATE, DEFAULT_CRATE);
 				new Float:size[3];
 				if (!kvec(s, "size", size) || size[0] <= 0.0)
 				{
 					size[0] = 64.0;
 					size[1] = 16.0;
-					size[2] = 64.0;
+					size[2] = 80.0;
+				}
+				/* fit=x / fit=y: span the corridor along that axis, wall to wall */
+				new fit[4];
+				ks(s, "fit", fit, charsmax(fit));
+				if (fit[0] == 'x' || fit[0] == 'y')
+				{
+					new ax = fit[0] == 'x' ? 0 : 1;
+					new Float:a[3], Float:b[3], Float:hit[3], Float:dd[2];
+					vcopy(o, a);
+					a[2] = g_floor[s] + 40.0;
+					for (new sg = 0; sg < 2; sg++)
+					{
+						vcopy(a, b);
+						b[ax] += sg ? 400.0 : -400.0;
+						engfunc(EngFunc_TraceLine, a, b, IGNORE_MONSTERS, ent, 0);
+						get_tr2(0, TR_vecEndPos, hit);
+						dd[sg] = floatabs(hit[ax] - a[ax]);
+					}
+					size[ax] = floatmax(dd[0] + dd[1] - 2.0, 32.0);
+					o[ax] = a[ax] + (dd[1] - dd[0]) * 0.5;
+					comp_debug("barricade %d fitted: %.0f wide", ent, size[ax]);
 				}
 				new Float:mn[3], Float:mx[3];
 				mn[0] = -size[0] * 0.5; mn[1] = -size[1] * 0.5; mn[2] = 0.0;
@@ -2523,7 +2545,8 @@ stock wave_start(n)
 	fwd1(g_fwWaveStart, g_wave);
 	new msg[48];
 	formatex(msg, charsmax(msg), "Wave %d", g_wave);
-	announce(0, 255, 80, 60, 3.0, msg);
+	if (get_pcvar_num(g_cWaveAnnounce))
+		announce(0, 255, 80, 60, 3.0, msg);
 	comp_debug("wave %d started", g_wave);
 }
 
@@ -2599,7 +2622,8 @@ stock tick_waves()
 				fire_targets(s, 0);
 		new msg[48];
 		formatex(msg, charsmax(msg), "Wave %d cleared", g_wave);
-		announce(0, 120, 255, 120, 3.0, msg);
+		if (get_pcvar_num(g_cWaveAnnounce))
+			announce(0, 120, 255, 120, 3.0, msg);
 		comp_debug("wave %d cleared", g_wave);
 		if (g_waveAuto && g_wave < maxwaves)
 		{
@@ -4088,6 +4112,56 @@ stock ring(id, const Float:c[3], Float:z, Float:r, segs, cr, cg, cb, bright)
 	}
 }
 
+stock bool:g_ent_has_model(s)
+{
+	new m[4];
+	pev(g_ent[s], pev_model, m, charsmax(m));
+	return m[0] != EOS;
+}
+
+/* a point barricade with no model: rails at four heights and posts at the ends, green to red by health */
+stock fence(id, s)
+{
+	if (g_beamLeft[id] < 6)
+		return;
+	g_beamLeft[id] -= 6;
+	new Float:f = floatclamp(g_val[s] / g_pf[s][B_MAX], 0.0, 1.0);
+	new r = floatround(255.0 * (1.0 - f)), g = floatround(60.0 + 195.0 * f);
+	new Float:a[3], Float:b[3];
+	new bool:alongx = (g_maxs[s][0] - g_mins[s][0]) >= (g_maxs[s][1] - g_mins[s][1]);
+	new Float:mid = alongx ? (g_mins[s][1] + g_maxs[s][1]) * 0.5 : (g_mins[s][0] + g_maxs[s][0]) * 0.5;
+	for (new i = 0; i < 4; i++)
+	{
+		new Float:z = g_mins[s][2] + 8.0 + (g_maxs[s][2] - g_mins[s][2] - 12.0) * float(i) / 3.0;
+		if (alongx)
+		{
+			a[0] = g_mins[s][0]; a[1] = mid; b[0] = g_maxs[s][0]; b[1] = mid;
+		}
+		else
+		{
+			a[0] = mid; a[1] = g_mins[s][1]; b[0] = mid; b[1] = g_maxs[s][1];
+		}
+		a[2] = z;
+		b[2] = z;
+		beam(id, a, b, r, g, 40, 12, 12, 150);
+	}
+	for (new e = 0; e < 2; e++)
+	{
+		if (alongx)
+		{
+			a[0] = e ? g_maxs[s][0] : g_mins[s][0]; a[1] = mid;
+		}
+		else
+		{
+			a[0] = mid; a[1] = e ? g_maxs[s][1] : g_mins[s][1];
+		}
+		vcopy(a, b);
+		a[2] = g_mins[s][2];
+		b[2] = g_maxs[s][2];
+		beam(id, a, b, r, g, 40, 12, 20, 180);
+	}
+}
+
 stock box_outline(id, s, cr, cg, cb)
 {
 	if (g_beamLeft[id] < 4)
@@ -4169,6 +4243,12 @@ stock visuals()
 			if (!g_ent[s] || !g_on[s])
 				continue;
 			new k = g_kind[s];
+			if (k == K_BARRICADE && g_state[s] == 0 && !g_ent_has_model(s))
+			{
+				if (get_distance_f(g_porg[p], g_org[s]) < 1200.0)
+					fence(p, s);
+				continue;
+			}
 			if (k != K_CAPTURE && k != K_EXTRACT && k != K_CHECKPOINT && k != K_MEETING && k != K_DAMAGE)
 				continue;
 			if (k == K_CHECKPOINT && ki(s, "order", 1) != g_cpLast[p] + 1)

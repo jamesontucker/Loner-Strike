@@ -12,7 +12,7 @@ calls `ls_on_*` forwards in every plugin.
 | `app/src-tauri/src/editor/lonerstrike.fgd` | definitions for the map editor (and Hammer / J.A.C.K. / TrenchBroom) |
 | `app/src-tauri/src/editor/components.json` | the editor's drag-in library: group, title, how to draw it |
 | `plugins/configs/gamemodes/loot.ini` | loot tables |
-| `plugins/configs/gamemodes/components/<map>.ini` | map packs that ship (de_dust2 to start with) |
+| `plugins/configs/gamemodes/components/<map>.<mode>.ini` | map packs that ship (Last Stand's for five stock maps) |
 
 ## Getting components into a map
 
@@ -64,7 +64,7 @@ loaded up front.
   (`ls_bot goto` when the brain lacks `ls_mode`), `ls_comp_spawns 1` (use respawn points),
   `ls_comp_spawn_far 0` (pick the point furthest from others: battle royale), `ls_comp_radar 0`
   (radar dot trick, unverified), `ls_comp_round_reset 1`, `ls_comp_debug 0` (log events and every
-  `ls_mode` line).
+  `ls_mode` line), `ls_comp_wave_announce 1` (the "Wave N" / "cleared" banners; a mode with its own sets 0).
 
 ## What players see (stock client only)
 
@@ -204,8 +204,9 @@ Hill). Ring in the owner's colour, BarTime while taking.
 - Bots: `goal capture` for whoever doesn't hold it, `goal defend` for the holders, `attract`.
 
 ### ls_barricade
-A wall (a brush in the map; in a pack, a box of `size` with `model`, or `adopt=` an existing
-`func_wall`/`func_breakable` by name or `*model`) with `hp`; shots and grenades break it (its own team
+A wall (a brush in the map; in a pack, a box of `size`, stretched wall to wall with `fit=x|y`, drawn
+as a beam fence that goes from green to red with health, or shown with `model`; or `adopt=` an
+existing `func_wall`/`func_breakable` by name or `*model`) with `hp`; shots and grenades break it (its own team
 can't, unless `friendly_damage`), it tints as it weakens, breaks with wood gibs. Its team holds USE
 on it for `repair_secs` to add a quarter (`repair_cost` money each).
 - Forwards: `ls_on_barricade_damaged(ent, attacker, hp)` (each quarter lost), `ls_on_barricade_broken(ent, attacker)`,
@@ -294,7 +295,7 @@ with `ls_capture_point x y z ffa=1 radius=160` in the map's pack.
 
 ## Tested
 
-On a dedicated server (CrossOver HLDS clone, de_dust2, 10 bots, the shipped pack plus components made
+On a dedicated server (CrossOver HLDS clone, de_dust2, 10 bots, a test pack plus components made
 from a test plugin through the natives): capture with contest and ticks, zone shrink with crossing
 and damage ticks, weapon spawner pickups, crates opened by bots, supply drop announce/land/open with
 items, barricade broken by damage, extraction (BarTime, action none), a class with weapons/HP/speed,
