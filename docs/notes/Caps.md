@@ -36,6 +36,7 @@ Sources: gamebanana.com/questions/44998, gamebanana.com/questions/64498, gameban
 | Where | Input | Was | Risk | Now |
 |---|---|---|---|---|
 | archive.rs `extract_zip`, bsdtar, unar, 7-Zip paths | any archive (GameBanana, sounds, picked files, prefab/community packages) | 3 GB total only; **no entry count, no ratio** | inode/CPU exhaustion (millions of tiny files); a 1 MB download filling 3 GB | `bomb_check`: ≤ 65,536 files; > 200:1 refused once over 256 MB unpacked (archive.rs `MAX_ENTRIES`, `MAX_RATIO`) |
+| archive.rs `run_limited` (bsdtar, unar, 7-Zip unpacking) | files made while unpacking | size polled every 0.5 s; **no count** (a lying listing) | inode exhaustion | files counted in the same poll; the unpacker is stopped past 65,536 (review fix: the 7-Zip listing now counts its `Path = ` entries too, it passed 0 before) |
 | maps.rs `convert` | game/GameBanana TGA/BMP/JPEG shots and overviews | **no file cap, no pixel cap** | memory (decompression bomb) | 64 MB file, 8192×8192, 300 MB decode |
 | tools/community.rs `decode_shot` | Publish screenshots | 8 MB base64; **no pixel cap** | memory | 8192×8192 via `decode_picture` |
 | tools/community.rs publish route | Publish request with screenshots | **axum's 2 MB default** — real screenshots (up to 6 × 8 MB, the page's own limit) were refused with a bare 413 | broken feature | `DefaultBodyLimit` = `PUBLISH_BODY` (6 × base64 8 MB + 64 KB ≈ 64 MB) |

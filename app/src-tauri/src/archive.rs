@@ -27,7 +27,7 @@ const RATIO_FROM: u64 = 256 << 20;
 /// [Caps] Refuses archives with too many files, or that unpack far bigger than they are.
 pub fn bomb_check(entries: usize, unpacked: u64, packed: u64) -> Result<(), String> {
     if entries > MAX_ENTRIES {
-        return Err(format!("That download has too many files in it: {entries} — the most is {MAX_ENTRIES}."));
+        return Err(too_many(entries, MAX_ENTRIES));
     }
     if unpacked > RATIO_FROM && unpacked / packed.max(1) > MAX_RATIO {
         return Err(format!(
@@ -37,6 +37,10 @@ pub fn bomb_check(entries: usize, unpacked: u64, packed: u64) -> Result<(), Stri
         ));
     }
     Ok(())
+}
+
+fn too_many(entries: usize, max: usize) -> String {
+    format!("That download has too many files in it: {entries} — the most is {max}.")
 }
 
 fn packed_len(archive: &Path) -> u64 {
@@ -103,11 +107,21 @@ pub fn walk(root: &Path) -> Vec<PathBuf> {
 
 /// Total size of the files under root, not following links.
 pub fn tree_size(root: &Path) -> u64 {
-    let mut total = 0;
+    tree_stats(root, usize::MAX).0
+}
+
+/// (total size, entries) under root, not following links; stops counting a little past
+/// `stop` entries ([Caps]: a tree of millions of files isn't walked in full every poll).
+fn tree_stats(root: &Path, stop: usize) -> (u64, usize) {
+    let (mut total, mut count) = (0u64, 0usize);
     let mut stack = vec![root.to_path_buf()];
     while let Some(d) = stack.pop() {
         let Ok(rd) = std::fs::read_dir(&d) else { continue };
         for e in rd.flatten() {
+            count += 1;
+            if count > stop {
+                return (total, count);
+            }
             // unpackers rename and remove temporary files as they go
             let Ok(m) = std::fs::symlink_metadata(e.path()) else { continue };
             if m.is_dir() {
@@ -117,7 +131,7 @@ pub fn tree_size(root: &Path) -> u64 {
             }
         }
     }
-    total
+    (total, count)
 }
 
 /// Removes symbolic links an archive brought along, so nothing points outside the download.
@@ -204,10 +218,10 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
     #[cfg(windows)]
     if let Some(sz) = seven_zip() {
         match seven_zip_listing(&sz, archive) {
-            Some((_, true)) => return Err(HAS_LINKS.into()),
-            Some((size, false)) if size > budget => return Err(TOO_BIG.into()),
-            Some((size, false)) if bomb_check(0, size, packed_len(archive)).is_err() => return bomb_check(0, size, packed_len(archive)), // [Caps]
-            Some(_) => {
+            Some((_, true, _)) => return Err(HAS_LINKS.into()),
+            Some((size, false, _)) if size > budget => return Err(TOO_BIG.into()),
+            Some((size, false, entries)) => {
+                bomb_check(entries, size, packed_len(archive))?; // [Caps]
                 clear_dir(dest);
                 let mut c = sys::command(&sz);
                 // without -snl/-spf 7-Zip creates no links and keeps every path inside dest
@@ -301,27 +315,35 @@ fn seven_zip() -> Option<PathBuf> {
     installed.chain(bundled).find(|p| p.is_file())
 }
 
-/// (total unpacked size, has links) from `7z l -slt`, or None if 7-Zip can't read it.
+/// (total unpacked size, has links, entries) from `7z l -slt`, or None if 7-Zip can't read it.
 #[cfg(windows)]
-fn seven_zip_listing(sz: &Path, archive: &Path) -> Option<(u64, bool)> {
+fn seven_zip_listing(sz: &Path, archive: &Path) -> Option<(u64, bool, usize)> {
     let mut c = sys::command(sz);
     c.args(["l", "-slt"]).arg(archive);
     let (ok, out, _) = sys::run_output(c, Duration::from_secs(300))?;
     if !ok {
         return None;
     }
-    // entries follow the "----------" line; the lines before it describe the archive
+    read_7z_listing(&out)
+}
+
+/// The `7z l -slt` text: entries follow the "----------" line (the lines before it describe
+/// the archive); each entry starts with "Path = ". [Caps] the entry count is for bomb_check.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn read_7z_listing(out: &str) -> Option<(u64, bool, usize)> {
     let entries = out.split_once("\n----------")?.1;
-    let (mut total, mut links) = (0u64, false);
+    let (mut total, mut links, mut count) = (0u64, false, 0usize);
     for line in entries.lines() {
         let line = line.trim_end_matches('\r');
         if let Some(n) = line.strip_prefix("Size = ") {
-            total += n.trim().parse::<u64>().unwrap_or(0);
+            total = total.saturating_add(n.trim().parse::<u64>().unwrap_or(0));
+        } else if line.starts_with("Path = ") {
+            count += 1;
         } else if let Some(v) = line.strip_prefix("Symbolic Link = ").or_else(|| line.strip_prefix("Hard Link = ")) {
             links = links || !v.trim().is_empty();
         }
     }
-    Some((total, links))
+    Some((total, links, count))
 }
 
 fn lsar_entries(lsar: &Path, archive: &Path) -> Option<Vec<serde_json::Value>> {
@@ -386,7 +408,13 @@ fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String>
 /// The listing checked beforehand can lie about sizes, so the folder is watched
 /// while the unpacker works; on Unix no single file may exceed the budget either.
 /// Returns (succeeded, stderr).
-pub fn run_limited(mut cmd: Command, dest: &Path, budget: u64) -> Result<(bool, String), String> {
+pub fn run_limited(cmd: Command, dest: &Path, budget: u64) -> Result<(bool, String), String> {
+    run_limited_n(cmd, dest, budget, MAX_ENTRIES)
+}
+
+/// run_limited with a file-count limit too ([Caps]: the listing checked first can lie about
+/// how many files there are, so they're counted while the unpacker works).
+fn run_limited_n(mut cmd: Command, dest: &Path, budget: u64, max_entries: usize) -> Result<(bool, String), String> {
     cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
     #[cfg(unix)]
     {
@@ -423,10 +451,16 @@ pub fn run_limited(mut cmd: Command, dest: &Path, budget: u64) -> Result<(bool, 
             Ok(Some(s)) => break s,
             Ok(None) => {
                 std::thread::sleep(Duration::from_millis(500));
-                if tree_size(dest) > budget {
+                let (size, entries) = tree_stats(dest, max_entries);
+                if size > budget {
                     kill(&mut child);
                     let _ = reader.join();
                     return Err(TOO_BIG.into());
+                }
+                if entries > max_entries {
+                    kill(&mut child);
+                    let _ = reader.join();
+                    return Err(too_many(entries, max_entries));
                 }
             }
             Err(e) => {
@@ -736,6 +770,36 @@ mod tests {
         std::fs::create_dir_all(&dest).unwrap();
         assert_eq!(extract(&archive, &dest, MAX_UNPACKED).unwrap_err(), "That download has too many files in it: 65537 — the most is 65536.");
         assert_eq!(std::fs::read_dir(&dest).unwrap().count(), 0, "nothing unpacked");
+        let _ = std::fs::remove_dir_all(&r);
+    }
+
+    // [Caps] the 7-Zip listing (Windows' unpacker for RAR/7z) gives the real file count
+    #[test]
+    fn seven_zip_listing_counts_entries() {
+        let mut out = String::from("7-Zip 23.01\n\nListing archive: x.7z\n\n--\nPath = x.7z\nType = 7z\nPhysical Size = 900\n\n----------\n");
+        for i in 0..=MAX_ENTRIES {
+            out.push_str(&format!("Path = f{i}\r\nSize = 1\r\nAttributes = A\r\n\r\n"));
+        }
+        let (size, links, n) = read_7z_listing(&out).unwrap();
+        assert_eq!((size, links, n), (MAX_ENTRIES as u64 + 1, false, MAX_ENTRIES + 1), "the archive's own Path line (before the separator) isn't counted");
+        assert_eq!(bomb_check(n, size, 900).unwrap_err(), "That download has too many files in it: 65537 — the most is 65536.");
+        let link = "--\nPath = a\n\n----------\nPath = maps/x.txt\nSize = 3\nSymbolic Link = /etc/passwd\n";
+        assert_eq!(read_7z_listing(link), Some((3, true, 1)));
+    }
+
+    // [Caps] an unpacker that makes more files than its listing said is stopped while it works
+    #[cfg(unix)]
+    #[test]
+    fn unpacker_stopped_at_the_file_count() {
+        let r = tmp("count-");
+        let dest = r.join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+        let mut c = Command::new("/bin/sh");
+        c.arg("-c").arg("i=0; while [ $i -lt 5000 ]; do : > f$i; i=$((i+1)); done; sleep 30").current_dir(&dest);
+        let started = std::time::Instant::now();
+        let e = run_limited_n(c, &dest, MAX_UNPACKED, 200).unwrap_err();
+        assert!(e.starts_with("That download has too many files in it:") && e.ends_with("the most is 200."), "{e}");
+        assert!(started.elapsed() < Duration::from_secs(20), "stopped while it works, not at the end");
         let _ = std::fs::remove_dir_all(&r);
     }
 
