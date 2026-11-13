@@ -19,6 +19,12 @@
   Focus string `spray` could open it too. It needs nothing else (no three.js); its CSS comes with it
   (`spray/spray.css`). Owner: agent B.
 
+- (F, health check) `viewer/Cameras.tsx` LookAt: a `lookAt` request made before the viewer mounts is
+  skipped (`done = useRef(req?.n ?? 0)` marks it as already done). The health check's "Open in map viewer"
+  does `setTool("map"); openMap(map); look(spot, 192)`, so on a fresh viewer it opens the map but not the spot.
+  Please honour a pending request once the map is ready (e.g. start `done` at 0 and run it after the
+  first fit), or take a focus string like `map:<name>@x,y,z`. Owner: agent B.
+
 ## Progress
 
 ### Agent A (Rust core: goldsrc readers + map routes) — M1/M2 server side done
@@ -389,3 +395,69 @@ timeline of #why notes, bot view cones as meshes, Replay heat by round.
   app's existing CrossOver/Wine path (as it runs HLDS). Stream output to the editor; translate common errors (leak,
   limits, missing textures) into plain words.
 - Separate task after the editor UI. Fallback if not ready: .map export + direct BSP edits.
+
+### Agent F: map health check — 2026-11-12
+
+**Built**
+- `tools/health.rs` (`routes()`, mounted in tools/mod.rs): the sim's sweep (sweep.sh + run-wine.sh +
+  sweepreport.py) ported to Rust.
+  - **Hidden server:** a copy of one of the player's own ready servers on this computer, for the game being
+    played (so the run has our engine, bot brain, plugins and modes), kept in `<servers folder>/.health-check`
+    and synced before each run (only files that changed by size/time; leaves out steamapps, maps, logs,
+    simrec, demos, panel_rcon.txt, status.json). A marker names the server it came from; a copy of another
+    server is cleared first. The map's .bsp + .nav (+ .lsv) come from the player's game (next to the map or
+    in the other game's maps folder), plus models/sprites the map names. `gm_simrec.sma` (copied from the sim,
+    in `tools/health/`) is compiled there once with the server's amxxpc (rebuilt when the source changes) and
+    added to its plugins.ini.
+  - **Run:** run-wine.sh's settings (current.txt, plugins-gamemode.ini from `<mode>.plugins.ini`,
+    lastmap.txt, friends.cfg with `bot_join_after_player 0` and no limits, global.cfg `bot_quota`, a
+    `health.cfg` exec'd at start); started like the nav learner (CrossOver/Windows, low priority, tied to the
+    app) with `+ip 127.0.0.1 -nomaster -insecure +sv_lan 1`, a random RCON password (also in
+    panel_rcon.txt) and `bot_quota` nudged over RCON 6 times. The minutes count from the first RCON answer.
+    Every 10 s it checks the game (`sys::game_running`) and the player's local servers (`servers::running`)
+    and stops itself if either started. Stop = RCON quit, then `stop_child`, then (Mac) `pkill` of the hidden
+    hlds.exe. Afterwards the map, recordings, trace and password go (`tidy`), whatever happened.
+  - **Report** (`build_report`, unit tested): over every recording the run left (the map loads twice at
+    start), with agent C's `replay::parse_recording`: kills a bot-minute, stuck % (C's stuck spans: < 20 u/s
+    for 8 s, no enemy, in play — sweepreport used 5 u/s), standing still with no enemy %, map used % (nav
+    areas walked, every 5th sample), spawn sitters (alive 30 s into a round, never 300 units from the start),
+    deaths to the world, falls (C's fall detection) and other map deaths, all grouped into spots by nav place
+    name (else a 256/128-unit cell) with the place under or near the spot; console: crash lines, plugin
+    errors grouped by plugin, map knowledge loaded/rebuilt/none. Findings in plain words, worst first ("Bots
+    fall a lot near Shelf — 8 times in 1 minute.", "Bots get stuck near Sink: 4 min 51 s in all, 6 times.",
+    "basebuilder.amxx had 500 errors…", "Only 3 of 12 bots joined…"), sweepreport's hard flags and mode
+    exceptions (surf/deathrun/kreedz falls, hns/basebuilder standing still, few-kill modes), and its soft
+    flags against the newest report of each other map of the same mode checked here (median + 3 MADs).
+    Checked against sweepreport.py on the rats2_v5 W1-1 run: same 12/12 bots, 63 deaths / 14 to the world,
+    4 of 77 spawn sitters, 1.16 kills a bot-minute, map used 42.3 % (sweepreport 43.4 %).
+  - Saved: reports as JSON in `<app dir>/tools/health/<id>.json` (100 kept); the run's biggest recording as
+    `<app dir>/tools/recordings/health-<id>_<map>_<n>.csv` + `trace_health-<id>.csv` (20 runs kept), so
+    Replay lists it with its trace.
+  - Routes (local listener, POSTs need X-Panel, errors `{error}` 200): `GET /api/tools/health/options?map=`
+    (servers to copy, modes, the map's preset mode, has nav, why it can't run, busy), `POST .../start`
+    `{map, mode, minutes 1-15, bots 2-20, server?}`, `GET .../progress` (`{run{phase, detail, ...}, active,
+    elapsed, left, fraction}`), `POST .../cancel`, `GET .../reports`, `GET .../report/:id`.
+- `views/tools/health/` (registered in registry.tsx, Beta): choose a map (search + list), mode (the map's
+  preset mode picked), 2/5/10/15 min, 6/12/20 bots, which server's plugins (only when there are several); why
+  it can't run in plain words (no nav: teach the bots first; no server: make one; game/server running). Run
+  shows the Steam-style progress bar with what it's doing and time left, and Stop; you can leave the page.
+  The report: verdict, the findings as big sentences with "Open in map viewer" per spot, the numbers as tiles
+  with "?" help, then where bots fell / got stuck / the map killed them (place names, times, Open in map
+  viewer), console errors, and "Watch in Replay". Earlier checks are listed below the form.
+
+**How to try it**
+- `cd app/src-tauri && cargo test tools::health` (snippet of the rats2_v5 W1-1 recording around three falls in
+  `tools/health/testdata/`, synthetic navs for places, console lines from the sweeps, presets, cfg edits, the
+  copy filter and sync, report save/prune). The whole run against sweepreport's numbers:
+  `LS_TEST_SIM=/Users/jameson/loner-strike-sim cargo test real_sweep -- --nocapture`.
+- In the app: make sure a server exists on this computer (Servers > New server) and the game is closed, then
+  Tools > Map health check > pick cs_rats2 (copy `navpack/fixes/cs_rats2.{nav,lsv}` in first for the fixed
+  nav), 2 min, Run. The first run copies the server and compiles the recorder (slower).
+
+**Left / not tried**
+- Not run end to end in the real app yet (the whole flow is built against how the sim and the nav learner
+  work; first thing to check: the recorder compiles under CrossOver and the bots join).
+- First copy of a big server on Windows is a full copy (APFS clones on a Mac); no hard links.
+- No "check all maps" batch and no second-run confirmation like the sweep's (one map at a time for now).
+- "Open in map viewer" needs the LookAt request above to land on the spot.
+
