@@ -146,6 +146,21 @@ pub fn specs() -> Vec<Spec> {
             description: "Saves the editor project. The first time (or with as) the person picks the file in a dialog; saving over the project it came from asks them first." },
         Spec { name: "editor_export_map", title: "Editor: export .map", kind: Change, schema: none,
             description: "Exports the open map as a Valve 220 .map for the compilers; the person picks where in a save dialog." },
+        // compiling (SDHLT) and playtest
+        Spec { name: "compile_status", title: "Compiler: status", kind: Read, schema: none,
+            description: "Whether the map compiler (SDHLT) is downloaded and ready, and whether a compile is running." },
+        Spec { name: "compile_setup", title: "Compiler: download", kind: Risky, schema: none,
+            description: "Downloads SDHLT, the free GoldSrc map compiler (about 2.9 MB, checked against a pinned SHA-256). Asks the person first." },
+        Spec { name: "compile_start", title: "Compile the open map", kind: Change,
+            schema: || obj(json!({"preset": {"type": "string", "enum": ["fast", "normal", "final"], "description": "fast: no VIS, quick light (to try things); normal; final: full VIS, extra light"}, "name": {"type": "string", "description": "The .bsp's name (default: the document's)"}, "install": {"type": "boolean", "description": "Put the .bsp in the game's maps folder when it's done (the old one is backed up; asks the person first)"}}), &[]),
+            description: "Compiles the map open in the editor with SDHLT (CSG, BSP, VIS, RAD). Poll compile_progress: it lists problems in plain words (leaks with where they start, limits, missing textures) linked to editor brush and entity ids." },
+        Spec { name: "compile_progress", title: "Compiler: progress", kind: Read,
+            schema: || obj(json!({"from": {"type": "integer", "minimum": 0, "description": "Output line to start from (the last answer's next line)"}}), &[]),
+            description: "The running or last compile: step, done or failed, problems, and the output from a line on." },
+        Spec { name: "compile_cancel", title: "Compiler: stop", kind: Change, schema: none, description: "Stops the running compile or download." },
+        Spec { name: "playtest", title: "Playtest a map", kind: Risky,
+            schema: || obj(json!({"map": map_prop(), "bots": {"type": "integer", "minimum": 0, "maximum": 31}, "mode": {"type": "string", "description": "Game mode id"}}), &["map"]),
+            description: "Starts the game on the person's computer on a map (with bots, in a mode), like Play does; they join by themselves. Asks the person first, and closes a game that's already open only if they say yes." },
         // the nav fixer
         Spec { name: "nav_open", title: "Nav fixer: open", kind: Read, schema: map_only,
             description: "Opens (or returns) the nav fixer session for a map: area count, unsaved changes, undo/redo, problems with suggested fixes, knowledge status." },
@@ -557,6 +572,49 @@ async fn run(ctx: &Ctx, name: &str, a: &Value) -> Done {
         }
         "editor_export_map" => post(ctx, "/api/tools/editor/export-map", json!({})).await,
 
+        "compile_status" => get(ctx, "/api/tools/compile/status").await,
+        "compile_setup" => {
+            ask(ctx, "An AI agent wants to download SDHLT, the free map compiler (about 2.9 MB, from its official release). Allow it?".into()).await?;
+            post(ctx, "/api/tools/compile/setup", json!({})).await
+        }
+        "compile_start" => {
+            let mut b = pick(a, &["preset", "name"]);
+            if let Some(n) = s(a, "name") {
+                if !crate::maps::safe_arg(n) {
+                    return Err(err("That isn't a map name."));
+                }
+            }
+            if a.get("install").and_then(Value::as_bool) == Some(true) {
+                let doc = get(ctx, "/api/tools/editor/doc").await?;
+                let name = s(a, "name").or(doc["state"]["name"].as_str()).unwrap_or("the map").to_string();
+                ask(ctx, format!("An AI agent wants to compile the editor's map and put it in your game's maps folder as {name}.bsp. A map already there with that name is backed up first. Allow it?")).await?;
+                b.insert("install".into(), json!(true));
+            }
+            post(ctx, "/api/tools/compile/start", Value::Object(b)).await
+        }
+        "compile_progress" => {
+            let from = a.get("from").and_then(Value::as_u64).unwrap_or(0);
+            get(ctx, &format!("/api/tools/compile/progress?from={from}")).await
+        }
+        "compile_cancel" => post(ctx, "/api/tools/compile/cancel", json!({})).await,
+        "playtest" => {
+            let m = map_arg(a)?;
+            let mode = s(a, "mode").map(String::from);
+            if mode.as_deref().is_some_and(|x| !crate::maps::safe_arg(x)) {
+                return Err(err("That isn't a mode id."));
+            }
+            let bots = a.get("bots").and_then(Value::as_u64).map(|n| n.min(31));
+            ask(ctx, format!("An AI agent wants to start Counter-Strike on {m}{}{}. If the game is open it's closed first. Allow it?",
+                mode.as_deref().map(|x| format!(" in {x}")).unwrap_or_default(), bots.map(|n| format!(" with {n} bots")).unwrap_or_default())).await?;
+            let mut b = json!({"map": m, "restart": true});
+            if let Some(n) = bots {
+                b["bots"] = json!(n);
+            }
+            if let Some(x) = mode {
+                b["mode"] = json!(x);
+            }
+            post(ctx, "/api/app/launch", b).await
+        }
         "nav_open" | "nav_problems" => {
             let v = get(ctx, &format!("/api/tools/navfix/{}", map_arg(a)?)).await?;
             Ok(if name == "nav_open" { nav_session(&v) } else { json!({"problems": v["problems"]}) })

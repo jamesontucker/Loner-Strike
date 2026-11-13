@@ -639,3 +639,37 @@ async fn unknown_means_ask() {
     assert_eq!(call_tool(&t, "editor_new", json!({})).await["isError"], false);
     assert!(t.asked.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn compiling_and_playtest() {
+    let calls: Calls = Arc::default();
+    let c = calls.clone();
+    let note = move |b: String| {
+        c.lock().unwrap().push(b);
+        Json(json!({"ok": true}))
+    };
+    let (n1, n2, n3) = (note.clone(), note.clone(), note.clone());
+    let app = Router::new()
+        .route("/api/tools/editor/doc", get(|| async { Json(json!({"state": {"name": "arena", "dirty": false}})) }))
+        .route("/api/tools/compile/start", post(move |b: String| { let n = n1.clone(); async move { n(format!("start {b}")) } }))
+        .route("/api/tools/compile/setup", post(move |b: String| { let n = n2.clone(); async move { n(format!("setup {b}")) } }))
+        .route("/api/app/launch", post(move |b: String| { let n = n3.clone(); async move { n(format!("launch {b}")) } }));
+    let make = |allow: bool| {
+        let asked: Arc<Mutex<Vec<String>>> = Arc::default();
+        let a = asked.clone();
+        T { ctx: Ctx { app: app.clone(), host: HOST.into(), changes: true, confirm: Arc::new(move |t| { a.lock().unwrap().push(t); allow }), log: Arc::new(Log::default()) }, calls: Arc::default(), asked, sessions: rpc::Sessions::default() }
+    };
+    let no = make(false);
+    // compiling to the work folder doesn't ask; installing into the game, downloading and starting the game do
+    assert_eq!(call_tool(&no, "compile_start", json!({"preset": "fast"})).await["isError"], false);
+    for (tool, args) in [("compile_start", json!({"install": true})), ("compile_setup", json!({})), ("playtest", json!({"map": "arena", "bots": 4}))] {
+        assert_eq!(call_tool(&no, tool, args).await["isError"], true, "{tool}");
+    }
+    assert_eq!(no.asked.lock().unwrap().len(), 3);
+    assert!(no.asked.lock().unwrap()[0].contains("arena.bsp"));
+    assert_eq!(calls.lock().unwrap().as_slice(), [r#"start {"preset":"fast"}"#]);
+    let yes = make(true);
+    assert_eq!(call_tool(&yes, "playtest", json!({"map": "arena", "bots": 4, "mode": "gungame"})).await["isError"], false);
+    assert!(calls.lock().unwrap().last().unwrap().contains(r#""map":"arena""#));
+    assert_eq!(call_tool(&yes, "compile_start", json!({"name": "../x"})).await["isError"], true);
+}
