@@ -20,6 +20,9 @@ export type CompileStatus = {
   cantRun: string | null;
   suggestName: string | null;
   busy: boolean;
+  /** this computer's cores, and how many the compiler uses unless "all cores" is on */
+  cores?: number;
+  threads?: number;
   error?: string;
 };
 
@@ -65,7 +68,7 @@ const post = <T,>(path: string, body: unknown = {}) => postJsonAt<T>(path, body,
 export const getStatus = () => get<CompileStatus>(`${C}/status`);
 export const setUpCompiler = () => post<{ ok?: boolean; error?: string; installed?: boolean }>(`${C}/setup`);
 export type CordonOptions = { seal: "sky" | "black"; keepLights: boolean; spawn: boolean; spawnAt?: Vec3 };
-export const startCompile = (b: { preset: Preset; name?: string; cordon?: Cordon; cordons?: Cordon[]; cordonOptions?: CordonOptions; install?: boolean }) => post<{ ok?: boolean; error?: string; map?: string }>(`${C}/start`, b);
+export const startCompile = (b: { preset: Preset; name?: string; cordon?: Cordon; cordons?: Cordon[]; cordonOptions?: CordonOptions; install?: boolean; allCores?: boolean }) => post<{ ok?: boolean; error?: string; map?: string }>(`${C}/start`, b);
 export const getProgress = (from?: number) => get<Progress & { error?: string }>(`${C}/progress${from != null ? `?from=${from}` : ""}`);
 export const cancelCompile = () => post<{ ok?: boolean; error?: string }>(`${C}/cancel`);
 

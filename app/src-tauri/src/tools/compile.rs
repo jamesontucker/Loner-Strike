@@ -219,6 +219,49 @@ pub struct Layout {
     /// compiles happen in work/<map>/
     pub work: PathBuf,
     pub x64: bool,
+    /// how many threads each tool may use (`-threads N`); None: the tool's own choice (all cores)
+    pub threads: Option<usize>,
+}
+
+/// How many threads the compiler gets: all cores when asked, else all but two (so the
+/// computer stays usable while it lights the map), at least one.
+pub fn compile_threads(cores: usize, all_cores: bool) -> usize {
+    let cores = cores.max(1);
+    if all_cores {
+        cores
+    } else {
+        cores.saturating_sub(2).max(1)
+    }
+}
+
+/// This computer's cores.
+pub fn cores() -> usize {
+    std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4)
+}
+
+/// The compiler runs below normal priority: on Unix (macOS through CrossOver's wine, which
+/// passes it on to the Windows tool) a nice value of 10 set on the child before it starts; on
+/// Windows BELOW_NORMAL_PRIORITY_CLASS (plus no console window). SDHLT's own `-low` is passed too.
+pub const NICE: i32 = 10;
+pub const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+#[cfg(unix)]
+fn low_priority(cmd: &mut std::process::Command) {
+    use std::os::unix::process::CommandExt;
+    // SAFETY: setpriority only changes the new process's own scheduling, between fork and exec
+    unsafe {
+        cmd.pre_exec(|| {
+            libc::setpriority(libc::PRIO_PROCESS, 0, NICE);
+            Ok(())
+        });
+    }
+}
+
+#[cfg(windows)]
+fn low_priority(cmd: &mut std::process::Command) {
+    use std::os::windows::process::CommandExt;
+    cmd.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS);
 }
 
 /// .../Bottles/<bottle>/drive_c/rest -> C:\rest
@@ -257,9 +300,15 @@ impl Layout {
                 wine.clone()
             }
         };
-        args.push(self.arg_path(map)?);
+        // below normal priority inside the tool too, and a thread cap
+        args.push("-low".into());
+        if let Some(n) = self.threads {
+            args.extend(["-threads".to_string(), n.max(1).to_string()]);
+        }
         args.extend(preset.flags(stage).iter().map(|s| s.to_string()));
         args.extend(extra.iter().cloned());
+        // the map comes last (SDHLT reads its options first)
+        args.push(self.arg_path(map)?);
         Ok((program, args))
     }
 }
@@ -292,9 +341,9 @@ pub fn layout_for(client: &crate::steam::Install, install: &Path, copy: bool) ->
         if copy {
             mirror_tools(&install.join("tools"), &tools)?;
         }
-        Ok(Layout { runner: Runner::Wine { wine, bottle: client.bottle.clone().unwrap_or_else(|| "Steam".into()) }, tools, work: base.join("work"), x64: bottle_is_64(&bottle_dir) })
+        Ok(Layout { runner: Runner::Wine { wine, bottle: client.bottle.clone().unwrap_or_else(|| "Steam".into()) }, tools, work: base.join("work"), x64: bottle_is_64(&bottle_dir), threads: None })
     } else if cfg!(windows) {
-        Ok(Layout { runner: Runner::Native, tools: install.join("tools"), work: compile_dir().join("work"), x64: std::env::consts::ARCH != "x86" })
+        Ok(Layout { runner: Runner::Native, tools: install.join("tools"), work: compile_dir().join("work"), x64: std::env::consts::ARCH != "x86", threads: None })
     } else {
         Err("Compiling maps works on Windows, and on a Mac with CrossOver.".into())
     }
@@ -1254,6 +1303,9 @@ struct StartReq {
     /// put the map in the game's maps folder when it compiles
     #[serde(default)]
     install: bool,
+    /// let the compiler use every core (faster; the computer may lag)
+    #[serde(default, alias = "allCores")]
+    all_cores: bool,
 }
 
 fn normal() -> Preset {
@@ -1306,7 +1358,8 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     } else {
         None
     };
-    let layout = layout_for(&client, &install_from, false)?;
+    let mut layout = layout_for(&client, &install_from, false)?;
+    layout.threads = Some(compile_threads(cores(), req.all_cores));
     let wad_dirs = crate::goldsrc::wad::search_dirs(&game.hl, game.is_czero());
     Ok(Plan { layout, install_from, name, preset: req.preset, doc, wad_dirs, maps, warnings })
 }
@@ -1316,9 +1369,13 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
 fn run_stage(layout: &Layout, stage: Stage, preset: Preset, base: &Path, extra: &[String], done: f64, total: f64) -> Result<String, String> {
     let (program, args) = layout.command_line(stage, preset, base, extra)?;
     // (the program's own arguments: through wine, after --bottle B --wait-children exe)
-    let own = if matches!(layout.runner, Runner::Wine { .. }) { &args[4..] } else { &args[..] };
+    let own = match args.iter().position(|a| a.to_ascii_lowercase().ends_with(".exe")) {
+        Some(i) if matches!(layout.runner, Runner::Wine { .. }) => &args[i + 1..],
+        _ => &args[..],
+    };
     note(&format!("> {} {}", stage.program(), own.join(" ")));
     let mut cmd = crate::sys::command(&program);
+    low_priority(&mut cmd);
     cmd.args(&args).current_dir(base.parent().unwrap_or(Path::new("."))).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
     if matches!(layout.runner, Runner::Wine { .. }) {
         cmd.env("WINEDEBUG", "-all");
@@ -1528,6 +1585,8 @@ fn status(st: &Shared) -> Value {
         "canRun": can_run.is_ok(),
         "cantRun": can_run.err(),
         "suggestName": suggest,
+        "cores": cores(),
+        "threads": compile_threads(cores(), false),
         "busy": running(),
     })
 }
@@ -1631,7 +1690,7 @@ mod tests {
     }
 
     fn native(tools: &str) -> Layout {
-        Layout { runner: Runner::Native, tools: PathBuf::from(tools), work: PathBuf::from("/w"), x64: true }
+        Layout { runner: Runner::Native, tools: PathBuf::from(tools), work: PathBuf::from("/w"), x64: true, threads: None }
     }
 
     fn wine() -> Layout {
@@ -1641,6 +1700,7 @@ mod tests {
             tools: PathBuf::from(format!("{b}/Loner-Strike/Compiler/sdhlt-v1.3.1/tools")),
             work: PathBuf::from(format!("{b}/Loner-Strike/Compiler/work")),
             x64: true,
+            threads: None,
         }
     }
 
@@ -1800,37 +1860,69 @@ mod tests {
 
     #[test]
     fn command_lines() {
-        // Windows: the x64 exe directly, the map path as is
+        // Windows: the x64 exe directly; -low and the options first, the map path last
         let w = native("C:\\Users\\a\\AppData\\Roaming\\Loner-Strike\\tools\\sdhlt\\v1.3.1\\tools");
         let map = Path::new("C:\\work\\room\\room");
         let (prog, args) = w.command_line(Stage::Csg, Preset::Normal, map, &wadinclude_args(&["mine.wad".into()])).unwrap();
         assert!(prog.to_string_lossy().ends_with("sdHLCSG_x64.exe"));
         assert!(prog.to_string_lossy().contains("Win64"));
-        assert_eq!(args, vec!["C:\\work\\room\\room", "-wadinclude", "mine.wad"]);
+        assert_eq!(args, vec!["-low", "-wadinclude", "mine.wad", "C:\\work\\room\\room"]);
         let (_, args) = w.command_line(Stage::Rad, Preset::Fast, map, &[]).unwrap();
-        assert_eq!(args, vec!["C:\\work\\room\\room", "-fast"]);
+        assert_eq!(args, vec!["-low", "-fast", "C:\\work\\room\\room"]);
         let (_, args) = w.command_line(Stage::Rad, Preset::Final, map, &[]).unwrap();
-        assert_eq!(args[1], "-extra");
+        assert!(args.contains(&"-extra".to_string()));
         let (_, args) = w.command_line(Stage::Vis, Preset::Final, map, &[]).unwrap();
-        assert_eq!(args[1], "-full");
+        assert!(args.contains(&"-full".to_string()));
         let (_, args) = w.command_line(Stage::Vis, Preset::Normal, map, &[]).unwrap();
-        assert_eq!(args.len(), 1);
+        assert_eq!(args, vec!["-low", "C:\\work\\room\\room"]);
+        // a thread cap
+        let mut wt = w.clone();
+        wt.threads = Some(6);
+        let (_, args) = wt.command_line(Stage::Rad, Preset::Normal, map, &[]).unwrap();
+        assert_eq!(args, vec!["-low", "-threads", "6", "C:\\work\\room\\room"]);
         let mut w32 = w.clone();
         w32.x64 = false;
         assert!(w32.exe(Stage::Bsp).ends_with("Win32/sdHLBSP.exe") || w32.exe(Stage::Bsp).to_string_lossy().ends_with("sdHLBSP.exe"));
 
-        // macOS: CrossOver's wine with the bottle, everything as C:\ paths
-        let m = wine();
+        // macOS: CrossOver's wine with the bottle, everything as C:\ paths, the cap after the exe
+        let mut m = wine();
+        m.threads = Some(8);
         let base = m.work.join("room").join("room");
         let (prog, args) = m.command_line(Stage::Bsp, Preset::Normal, &base, &[]).unwrap();
         assert_eq!(prog, PathBuf::from(crate::servers::CROSSOVER_WINE));
-        assert_eq!(args, vec!["--bottle", "Steam", "--wait-children", "C:\\Loner-Strike\\Compiler\\sdhlt-v1.3.1\\tools\\Win64\\sdHLBSP_x64.exe", "C:\\Loner-Strike\\Compiler\\work\\room\\room"]);
+        assert_eq!(
+            args,
+            vec!["--bottle", "Steam", "--wait-children", "C:\\Loner-Strike\\Compiler\\sdhlt-v1.3.1\\tools\\Win64\\sdHLBSP_x64.exe", "-low", "-threads", "8", "C:\\Loner-Strike\\Compiler\\work\\room\\room"]
+        );
         // a path outside the bottle can't be given to wine
         assert!(m.arg_path(Path::new("/Users/x/elsewhere/a.wad")).is_err());
 
         // the presets' stages
         assert_eq!(Preset::Fast.stages(), vec![Stage::Csg, Stage::Bsp, Stage::Rad]);
         assert_eq!(Preset::Final.stages().len(), 4);
+    }
+
+    #[test]
+    fn threads_and_priority() {
+        // all but two cores by default, at least one; all of them when asked
+        assert_eq!(compile_threads(12, false), 10);
+        assert_eq!(compile_threads(12, true), 12);
+        assert_eq!(compile_threads(2, false), 1);
+        assert_eq!(compile_threads(1, false), 1);
+        assert_eq!(compile_threads(0, true), 1);
+        assert!(cores() >= 1);
+        assert_eq!(BELOW_NORMAL_PRIORITY_CLASS, 0x4000);
+        assert!(NICE > 0);
+        // the child really starts below normal priority (Unix: its nice value)
+        #[cfg(unix)]
+        {
+            let mut c = std::process::Command::new("/bin/sh");
+            c.args(["-c", "ps -o nice= -p $$"]).stdout(std::process::Stdio::piped());
+            low_priority(&mut c);
+            let out = c.output().unwrap();
+            let n: i32 = String::from_utf8_lossy(&out.stdout).trim().parse().unwrap();
+            assert!(n >= NICE, "nice {n}");
+        }
     }
 
     #[test]
@@ -2093,6 +2185,7 @@ mod tests {
         let client = crate::steam::Install { hl: hl.clone(), kind: if crossover { "crossover".into() } else { "windows".into() }, bottle, games: vec!["cstrike".into()], dedicated: false };
         let mut layout = layout_for(&client, &install, true).unwrap();
         layout.work = layout.work.join(format!("test-{}", std::process::id()));
+        layout.threads = Some(compile_threads(cores(), false));
         let doc = super::super::editor::starter_map();
         let dirs = crate::goldsrc::wad::search_dirs(&hl, false);
         let p = Plan { layout: layout.clone(), install_from: install.clone(), name: "ls_test_room".into(), preset: Preset::Fast, doc, wad_dirs: dirs, maps: None, warnings: vec![] };

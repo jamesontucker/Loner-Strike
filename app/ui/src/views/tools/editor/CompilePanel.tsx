@@ -80,6 +80,8 @@ export function CompilePanel() {
   const [mode, setMode] = useState<string>(() => pref<string>("ls.compile.mode", "classic"));
   const [bots, setBots] = useState<number>(() => pref<number>("ls.compile.bots", 8));
   const [teach, setTeach] = useState<boolean>(() => pref<boolean>("ls.compile.teach", true));
+  // the compiler leaves two cores free (and runs below normal priority) unless asked
+  const [allCores, setAllCores] = useState<boolean>(() => pref<boolean>("ls.compile.allCores", false));
   const following = useRef(false);
   const logBox = useRef<HTMLPreElement>(null);
   const leak = api.useLeak();
@@ -172,6 +174,7 @@ export function CompilePanel() {
       preset,
       name: n || undefined,
       install,
+      allCores,
       ...(cordoned ? { cordons: cd.boxes, cordonOptions: { seal: cd.seal, keepLights: cd.keepLights, spawn: install, ...(cam ? { spawnAt: cam } : {}) } } : {}),
     });
     setStarting(false);
@@ -324,6 +327,24 @@ export function CompilePanel() {
       <p className="small-note muted">{PRESETS.find((p) => p.id === preset)?.hint}</p>
 
       <CordonPanel disabled={running} />
+
+      <label className="editor-check compile-check" title="Off: the compiler leaves two cores free and runs at low priority, so the computer (and a running game) stays smooth.">
+        <input
+          type="checkbox"
+          checked={allCores}
+          disabled={running}
+          onChange={(e) => {
+            setAllCores(e.target.checked);
+            keep("ls.compile.allCores", e.target.checked);
+          }}
+        />
+        Use all cores (faster, the computer may lag)
+      </label>
+      {status.cores != null && (
+        <p className="small-note muted">
+          {allCores ? `Uses all ${status.cores} cores` : `Uses ${status.threads ?? Math.max(1, status.cores - 2)} of ${status.cores} cores`}, at low priority.
+        </p>
+      )}
 
       <div className="editor-row wrap">
         <BusyButton className="btn primary" busy={starting && !playing} label="Compile" busyLabel="Starting…" disabled={running || !status.canRun || nameBad} onClick={() => void onCompile()} />
