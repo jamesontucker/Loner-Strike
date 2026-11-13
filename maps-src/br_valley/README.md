@@ -12,15 +12,30 @@ beyond the map itself.
 | `preview.png` | the generator's own quick top-down (heights, roads, river, tunnels in purple, spawns white, crates yellow, floor weapons orange, drop spots blue) |
 | `layout.png` | the radar maker's render of the compiled map (`layout-v1.png`: before the organic pass) |
 | `test-tracks.png` | where the bots went (grey) and died (red: shot, purple: the zone) in the last sim run |
-| `navgen.py` | makes the bots' nav from the .bsp in ~20 s (the game's own learner takes hours on a map this big); then the nav fixer's reach check |
+| `navgen.py` | makes the bots' nav from the .bsp in ~40 s (the game's own learner takes hours on a map this big); with `--check br_valley.layers.json` it also runs the map's checks on the compiled hulls (below) |
+| `br_valley.layers.json` | written by `build_map.py` for `navgen.py --check`: the connectors (every stair, ladder, ramp, walkway), the ground the layers are measured from, tree canopies, supply drops |
 | `../../plugins/game/` | what ships (setup copies this tree into the game): `maps/br_valley.bsp/.nav/.lsv/.res`, `overviews/br_valley.bmp/.txt` |
 
-Rebuild: `python3 build_map.py` (it stops, writing nothing, if two things overlap — every brush is
-tagged with what it belongs to: a building, a bridge, stairs, a rock... — or if the ground rises
-into a structure, e.g. stairs through a bank; `ALLOW_OVERLAP=1` writes the map anyway), then compile in the map editor (Compile tab, Normal or Final), or
-the same through the compile routes. If the geometry changes: `python3 navgen.py <game>/cstrike/maps/br_valley.bsp
-<game>/cstrike/maps/br_valley.nav`, check reach in the nav fixer, load the map once so the bots build their
-knowledge (.lsv, ~10 min in the background), and redo the overview (Radar maker) and the .res (Map doctor).
+Rebuild: `python3 build_map.py`, then compile in the map editor (Compile tab, Normal or Final), or the same through
+the compile routes; then `python3 navgen.py <game>/cstrike/maps/br_valley.bsp <game>/cstrike/maps/br_valley.nav
+--check br_valley.layers.json`, load the map once so the bots build their knowledge (.lsv, ~5-10 min in the
+background), and redo the overview (Radar maker; it writes the .res too).
+
+**The placement validator.** `build_map.py` stops, writing nothing, if (`ALLOW_OVERLAP=1` writes the map anyway):
+- two things overlap (every brush is tagged with what it belongs to: a building, a bridge, stairs, a rock...);
+- the ground rises into a structure (stairs through a bank; for stairs only each step's own tread counts);
+- a stair, ladder, ramp or walkway doesn't meet a floor at its top or bottom with room to stand, or the floor
+  doesn't go on past the end (straight on, or to the left or right): stairs into a wall, into the air, to nowhere;
+- a prop (crate, car, container, hay, logs, sandbags, fence, cart, rock, tree, bush) floats (most of its footprint
+  over air) or is buried (the ground up most of a box's side, or a rock/bush that barely shows);
+- a drop-in spot or supply drop would land on something over it (a roof, a tower, a canopy);
+- a drop-in spot has no gun on the ground within a 10-second run (it adds a pistol near any that has none).
+It prints the loot per layer (crates, tiers, guns). `navgen.py --check` then checks the compiled map on the real
+collision hulls: places you can't get back from without a fall over 200 (traps; every spot a drop-in can land on is
+tried too), high or underground pockets with fewer than 2 ways out (each ladder is one way; walking or dropping ways
+count apart when they go different ways or are 128+ apart), ladders not joined at both ends, connector ends off the
+walk, a drop-in spot more than a 10-second walk from a gun, a supply drop with no ground beside it (bots open crates
+from within 80). It prints the walkable area per layer.
 
 ## Size
 
@@ -65,13 +80,23 @@ break sightlines, and the zone.
   gas station, and dirt tracks between.
 - **Landmarks**: West Peak (z ~550, between the fort and the town), the east ridge between the quarry and
   the bunker, the radio hill (448) and its tower, the two mesas.
-- **Tunnels** (z -512, 192 wide): the town sewer, south to the gas station, west to the factory, and
-  a long tunnel east under the river to the bunker complex and north to the quarry: a fourth way
-  over the river, out of the zone's sight. Lit every ~380 units.
+- **Below** (z -512, 192 high, v3): a second level under almost the whole valley, 36 rooms in a 6 x 6 grid
+  with solid ribs and two doorways each way between them: natural caves in the west and the north (under the
+  hills: rock, mud, timber, yellow lamps), the quarry's workings, the army bunker in the south-east (blue lamps),
+  utility basements under the factory and the gas station (orange), the town's cisterns in the middle (green).
+  The older tunnels run through them: the town sewer, south to the gas station, west to the factory, the river
+  tunnel to the bunker, the mine gallery from the farm under radio hill and the river to the lumber camp, the
+  storm drain and the east drain. Ways up: 6 stair trenches and 11 ladder hatches, each under a lit portal.
+- **High routes** (v3): the town's rooftop quarter (five walkways, a fire ladder, drop gaps), the factory's roofs
+  and the fuel-line bridge down to the gas station's roof, the aqueduct from radio hill over the river, the barn's
+  roof deck, the farmhouse roof, the silo and chimney perches (two ladders each), the radio tower (two ladders),
+  the watchtower and sawmill roof, the bunker roof, the mesas (each with a second way down).
 
-Mode data in the BSP (gm_components): 28 respawn points spread by farthest-point picking, 32 game
-spawns, ~50 loot crates (tier 1 in the open and cabins, 2-3 in most places, 4-5 in the town hall,
-bunker, radio tower and fort), ~27 floor weapons, 8 supply drop spots in open ground, the safe zone
+Mode data in the BSP (gm_components): 28 respawn points spread by farthest-point picking and the same
+28 spots as drop-in landing spots (`ls_marker kind=br_drop`, all on the ground), 32 game spawns, 100 loot
+crates and 49 floor weapons weighted by layer (the surface tiers 1-2, pistols and SMGs; high places 3-4 and the
+sniper rifles; below 3-5 and rifles, 5 in three vaults), a gun within a 10-second run of every drop-in spot,
+8 supply drop spots on open, dry ground (moved off the river, trenches and structures), the safe zone
 (radius 5100, covers everything) and a six-stage shrinker (60/50, 50/45, 45/40, 40/30, 30/25, 25/25 s).
 The zone entity sits at z 1536 on purpose: the shrinker picks random centres by testing open air 64
 units above the zone's height, which would fail inside hills if it sat on the ground.

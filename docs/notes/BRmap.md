@@ -164,3 +164,170 @@ found the two drop-in slots above: between canopies on a slope, and between a ba
 `maps-src/br_valley/layout-v1.png` is v1 for comparison. My test server Sim/BRMAP and my dev server (8077) are
 stopped and removed.
 
+
+## 2026-11-13 — br_valley v3: three layers (the user's feedback on v2)
+
+### The plan
+The valley can't get wider than +/-4096, so it gets its room from height and depth: a second level under almost
+all of it, and high routes over the places, so that the three layers together give much more to explore than a flat
+map in the same footprint. Every high or low place has at least two ways out; every way down to the surface is a
+stair, a ladder or a drop of at most 176 (a fall of 200 costs 14 hp; nothing designed is over 176).
+
+Top-down, north up, one character per 256 units (the playable 7168 square). Left: the surface and the high routes;
+right: the level below.
+
+```
+ surface + high                  below (z -512, 192 high)
+................~~~.........                                
+.ffffff.........~~~.cc......     cccccccc cccccccc cccccccc 
+.ffffff.v...RR..~~~....LLLL.     cccccccE cccccccc cccccccc 
+.fffvff.....RR..~~~....LLLL.     cccEcccc cccccccc cccccccc 
+.fffvff...........~~...LLLL.     cccEcccc cccccccc cccccccc 
+.fffvff..........v~~v..LvLL.     cccE============E==E===Ecc 
+.fffvff.cc.......~~.........     cccEcccc cccccccc cccccccc 
+........cc.......~~.........     cccccccc c=cccccc ccccccc= 
+............v.....~~..MM....     cccccccc c=Eccccc ccccccc= 
+..cc...TTTTTTTT...~~..MM....               =              = 
+..cc...TTTTTTTT..~~.........     ccccssss s=ssssss sssswww= 
+.......TTTTTTTT..~~.........     ccccssss s=ssssss sssswww= 
+.......vTTTTvTv..~~~.v.QQQQ.     ccccssE====E=Esss ssEswww= 
+.......TTTTTTTv..~~~...QQvQ.     ccccssss =sssEsss sssswwE= 
+.......TTTTTTTv..~~~...QQvQ.     ccccssss =sssEsss sssswwE= 
+.......TTTTTTTv..~~~.v.QQvQ.     ccccssss =sssEsss ssEswwE= 
+.MM..............~~~........     ccccssss =sssssss ssssww=w 
+.MM..........DDD.~~~..c.....     ccccssss =sssssss ssssww=w 
+.MM...cc.....DDD..~~..c.....              =              =  
+......cc.....DDD.~~.........     ccccssss =sssssss ssssbb=b 
+.FvFFFF..........~~.........     cEccssss =sssssss ssssbb=b 
+.FvFFvF..GGG....~~..........     cE==E===================bb 
+.FvFFFF..GGG....~~..........     cEccssss=ssssssss ssssb=bb 
+.FFFFFF..vvvv..~~......vBBB.     c=ccuuuuEEEEuuuuu uuuuE=bb 
+.FFFFFF..GGG...~~....v.vBBB.     c=ccuuuu uuuuuuuu uuEuE==b 
+.FFFFFF..GGG...~~......vBBB.     c=ccuuuu uuuuuuuu uuuuE==b 
+.FFFFFF........~~~.....vBBB.     ccccuuuu uuuuuuuu uuuuEbbb 
+................~~~~........                                
+```
+Left: `T` town, `F` factory, `f` farm, `R` radio hill, `G` gas station, `B` bunker, `L` lumber camp, `Q` quarry,
+`D` docks, `M` mesas (the fort, the lookout), `c` cabins, `~` river, `^` the high crossings (the aqueduct in the
+north, the fuel-line bridge in the south), `v` the ways down (stair trenches and ladder hatches). The rooftops, towers
+and catwalks are inside the places (see the list below).
+Right: rooms by what they are: `c` natural caves and the old mine (the west and the north, under the hills),
+`w` the quarry's workings, `b` the army bunker (south-east), `u` utility basements (under the factory and the gas
+station), `s` the town's cisterns (the middle); `=` the older tunnels running through them (sewer, storm drains, the
+mine gallery, the river tunnels), `E` the ways up. Between rooms: solid ribs with two doorways each way.
+
+**Connections between the layers**
+- Surface to below: 6 stair trenches (town, gas station, factory, farm/mine adit, bunker, quarry) and 11 ladder
+  hatches; every one has a portal (posts and a lintel, timber for the mine and caves, steel elsewhere) with a lamp
+  under it, and a light at its foot, so a way down reads as one from across the field.
+- Surface to high: building stairs (every reachable roof), outside ladders (the hall's fire ladder, the farmhouse,
+  the barn's hay hoist, the bunker, the factory hall), tower ladders (radio tower and silo two each, chimney two, the
+  watchtower one plus stairs), the mesas' ramps and second stairs, the aqueduct's stone stairs, and drops of at most
+  176 off every low roof through a gap in its parapet.
+- High to high: the town's walkways (house A's roof to the hall's 3rd floor, the hall's 2nd floor to the store's roof,
+  over the main street, house D's roof to house A's 2nd floor, house E to house F), the factory hall's roof to the
+  office roof, the office roof down the fuel-line bridge to the gas station's roof, the watchtower to the sawmill roof.
+
+**Loot by layer** (riskier is better): the surface (open, many ways to run) tiers 1-2 and pistols/SMGs; high places
+(you're seen, the ways off are few and slow) tiers 3-4 and the sniper rifles; below (dark, close, the zone can catch
+you far from a way up) tiers 3-5 and rifles, the best in three vaults (under the town hall, the deep chamber under
+radio hill, the bunker's core). Every drop-in spot has a gun on the ground within a short run (see the checks).
+
+### Why each thing is there (what it's for, in and out, loot)
+- **Town** (the middle west). For: close fights in streets and a rooftop quarter over them. In/out on the ground: six
+  buildings, every one with a door at street level. Up: each reachable roof has its stairs inside, the hall a fire
+  ladder from the street behind it; the low roofs (house D, F, the store) have gaps in their parapets to drop 160 to
+  the street. Across: five walkways (see above) so the roofs are one place with 15 ways down. Down: the sewer stair
+  trench in the south-east corner, hatches by house A and in the main street. Loot: street level tier 2; upper floors
+  and roofs 3-4, a sniper on the hall's roof; the town vault (tier 5) is in the room under the hall. Cars, crates and
+  sandbags in the streets: cover across the main street.
+- **Factory** (south-west). For: a big hall to fight through, its roof as a perch over the south. The hall has three
+  ground doors; inside, the catwalk's stairs and, at its far end, a ladder up through the roof hatch (the catwalk is a
+  way to the roof, not a dead end); outside, a ladder on the north wall. The roof joins the office roof by a plank
+  walkway; the office has stairs; from the office roof the fuel-line bridge runs down to the gas station's roof. The
+  chimney (ladders up two sides) is the sniper perch. Down: the yard's stair trench and a hatch. Containers: yard cover.
+- **Gas station** (south middle): the canopy and pumps are cover on the road; the shop's roof is where the fuel-line
+  bridge lands (stairs inside, a drop gap on the south). Down: the long stair trench behind it.
+- **Farm** (north-west). The barn: hay bales for cover, the loft by its stairs, the roof deck by a ladder up through a
+  hatch from the loft or the hay hoist's ladder outside. The farmhouse: stairs to the roof, a ladder down the back.
+  The silo: ladders up both sides to a railed top with a sniper rifle. The mine's adit (a stair trench, timber portal)
+  in the yard leads to the west caves and the mine gallery.
+- **Radio hill** (north middle, z 448): the highest ground; the tower (ladders on two sides, tier 5 crate) and the
+  hut. The aqueduct leaves the hill's east cliff for the far bank (two ways off it: the hill and its stone stairs).
+- **Docks** (west bank): piers with crates over the river (cover along the water), the boathouse (roof by its stairs,
+  drop gaps north and east), steps from the river bed up onto the bank.
+- **River**: three bridges, two fords, stone steps out of the bed by the bridges and in two more places, each flight
+  climbing straight onto the bank it stands against. Under it run the old river tunnel (south) and the mine gallery
+  (north), and the pump-house hatches on both banks.
+- **Quarry** (east, a pit at -128): rock piles for cover, the shed (roof by stairs), the stair trench down to the
+  quarry's workings. (v2's gantry, a post and a beam that did nothing, is gone.)
+- **Bunker** (south-east): two rooms, the roof by the outside stairs or the north wall's ladder; the stair trench to
+  the bunker below (its core: tier 5).
+- **Lumber camp** (north-east): log piles and the sawmill for cover; the watchtower beside the sawmill (a ladder, and
+  stairs down to the sawmill's roof, a 176 drop to the yard all round; no roof on the tower any more, so nobody lands
+  on top of it); a hatch into the east caves.
+- **Mesas**: the fort (old walls, a crate, a rifle; the ramp on the east, the north gate's steps onto West Peak's
+  flank) and the lookout (sandbags, a sniper; the ramp on the east, the cliff stairs on the north).
+- **Cabins**: five huts at odd spots between places, each with a crate (tier 1-2): somewhere to land and arm up.
+- **Below**: 36 rooms in a 6 x 6 grid with doorways (two each way) and the older tunnels through them; caves (rock,
+  mud, warm yellow lamps), the quarry's workings (white lamps), the bunker (concrete, blue lamps), the utility
+  basements (orange), the cisterns (concrete, green lamps). Rock pillars or concrete pillars, lumps in the cave walls,
+  barriers in the bunker and basements: cover. Every room has a crate (3, 4 in caves and the bunker, 5 in the vaults),
+  every other room a gun (rifles in the caves and the bunker, SMGs elsewhere).
+
+### The placement validator, extended (build_map.py before writing; navgen.py --check on the compiled map)
+See maps-src/br_valley/README.md for the full list. New in v3: every stair, ladder, ramp and walkway is registered
+as a connector with its two ends; both ends must meet a floor with room to stand and the floor must go on past the
+end (straight on, left or right); props must not float or be buried; drop-in spots and supply drops must land on
+their own ground; every drop-in spot needs a gun within a 10-second run. On the compiled map (the real hulls):
+traps (incl. every spot a drop-in can land on, every 64 units), high/underground pockets with fewer than 2 ways
+out, ladders joined at both ends, connector ends on the walk, the walk from each drop-in spot to a gun, ground
+beside every supply drop. Found and fixed on the way: stairs out of the river bed that rose along the bank and
+ended over the channel (now each climbs straight onto its bank; stone steps so they read against the rock); the
+fort's south wall, sandbags and crate hanging off the mesa's east edge;
+tree trunks and foliage buried in hillsides (trees placed at the corner's lowest ground); the factory catwalk that
+led nowhere (now a ladder from its end up through a roof hatch); the watchtower roof only a drop-in could reach
+(gone; the tower is open with stairs to the sawmill roof); the barn, farmhouse and silo roofs with no way off; the
+silo in a 32-unit gap by a fence; a chimney ladder facing a 32-unit slot; a rock lump blocking the mine gallery's
+mouth (the west mine had one way out); bushes on slopes too steep to step off and bushes under tree canopies (both
+traps); a cliff on the quarry pit's north rim (the terrain is now bounded by its fixed pads: at most 112 a cell from
+any pad, bank or rim); the quarry trench whose top ran onto that slope; a street crate in the west sewer hatch's way
+out; an aqueduct pier in the river bed at the foot of a flight of bed steps; bed steps at the north end that led
+onto a strip by the map's edge (removed).
+
+### Compile, nav, area (Final; the shipped build)
+- SDHLT through CrossOver (the compile routes' commands, `-low`, niced), 2 min. **No leak.** Limits: clipnodes
+  30106/32767 (**91.9 %**, the tightest), AllocBlock 56/64 (87.5 %), worldleaves 5398/8192 (65.9 %), planes 44.7 %,
+  marksurfaces 37.7 %, visdata 0.7 MB (8.5 %), lightdata 2.5 MB; 5.6 MB .bsp. Warnings: one func_illusionary (lamps)
+  touches 79 leaves (the engine's simpler vis check; harmless), an ambiguous-leaf sliver in hulls 1/3 at -1590 -3140
+  (the nav walks there). **There is little room left for more brushes (clipnodes); more geometry means fewer trees.**
+- Nav (navgen.py, rectangles up to 32 samples now): 138 996 samples, **5431 areas** (the brain builds its map
+  knowledge only for navs of up to 6000 areas; the first v3 nav had 6312 and the bots played without it), all
+  checks pass: 0 traps, 49 high/underground pockets all with 2+ ways out, 25 of 25 ladders joined, 73 connectors on
+  the walk, drop-in spot to a gun median 546 / worst 1625 units of walking (6.5 s), 8 of 8 supply drops openable.
+- **Walkable area per layer** (nav samples x 625): **under 35.9 M sq units, surface 44.1 M, high 6.9 M; 86.9 M in
+  all = 1.69x the 51.4 M of the flat footprint** (v2: under 5.2 M, high 6.7 M, about 1.1x). The 2-3x target isn't
+  reached: the underground is already a full second level under almost the whole map, and the compile limits
+  (clipnodes 92 %, AllocBlock 88 %) leave little room for a third deck or more high routes; 2x would need ~16 M more,
+  e.g. a second underground level under part of the map in place of some of the surface cover.
+
+### Tested (my sim copy BRV3 of BRPLAY, port 27364, 20 bots, Battle Royale solo, `br_dropin 1`, brain r43395720981,
+gm_battleroyale + gm_components built from HEAD 965fb0c, gm_simrec, a probe counting players who own a gun)
+- **Run 1** (the first v3 nav, 6312 areas: the brain made no map knowledge, see above), 40 min, 4 complete games:
+  7.8 / 10.1 / 8.1 / 3.0 min (17 s loot-up + 451 / 586 / 468 / 166 s of fighting); drop-in deaths 0; deaths to the
+  world (the zone) 5 / 6 / 5 / 2 of 19; supply drops opened 1/3, 0/3, 2/3, 0/1; armed when fighting started 6, 3,
+  1, 3 of 20; bots that were in each layer per game: below 1-2, surface 20, high 11-14 (time 1-11 % below, 4-8 %
+  high).
+- **Run 2** (the shipped nav, 5431 areas; the brain built its knowledge in the first minutes: 6.8 MB .lsv),
+  35 min, 3 complete games: **8.2 / 5.8 / 9.8 min** (17 s + 475 / 333 / 571 s); **drop-in deaths 0**; **zone deaths
+  5 / 3 / 4** of 19; **supply drops opened 1 of 3, 2 of 2, 1 of 3**; **armed when fighting started 2, 4, 3 of 20**;
+  **bots in each layer: below 0 / 1 / 0, surface 20, high 12 / 13 / 14** (time 0-1 % below, 2-12 % high).
+- What that says: the map holds (no landing deaths, no one stuck, games in the 6-10 min target), bots use the high
+  layer (most land on or climb to a roof or tower at some point), but they hardly go below and rarely pick up a gun
+  in the loot-up. Both are bot behaviour, not geometry (every room below is on the nav and reachable; every drop-in
+  spot has a gun within a 6.5 s walk): requests for W1/W2 in docs/notes/W1.md. With people the layers should fill
+  differently; a person can see a portal and go down.
+- Screenshots (not in the repo; scratch folder of this session): 150 views, both ends of every connector
+  (`shots/conn/*.jpg`), 16 views of the three layers (`shots/tour/*.jpg`), contact sheets (`sheets/conn_*.png`,
+  `sheets/tour_*.png`), the radar top-down (`overview.png`; also maps-src/br_valley/layout.png).
+- My sim copy BRV3 and my dev servers (8369, Vite 5369) are stopped and removed.
