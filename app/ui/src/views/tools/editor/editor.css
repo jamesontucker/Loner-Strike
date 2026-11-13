@@ -162,3 +162,4 @@
 .tools-panel .linklike.small-note { font-size: 13px; color: var(--bone-dim); }
 .editor-nudges { gap: 4px; }
 .editor-nudges .btn { padding-left: 6px; padding-right: 6px; }
+.editor-facesheet .editor-row .muted { font-size: 13px; }

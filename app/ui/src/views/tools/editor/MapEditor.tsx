@@ -12,6 +12,7 @@ import { EditorScene } from "./EditorScene";
 import { BusyLabel, ChecksPanel, deleteSelection, duplicate, hideSelection, Inspector, isolateSelection, Outline, showAll, TextureBrowser, Toolbar, ToolOptions, TOOLS } from "./Panels";
 import { selectionIds } from "./EditorScene";
 import { Dialogs } from "./Dialogs";
+import { CompilePanel } from "./CompilePanel";
 import * as api from "./editorApi";
 import type { RecentFile, Recovery } from "./editorApi";
 import { EMPTY_SEL, facesOf, useEditor, type ViewId } from "./store";
@@ -20,7 +21,7 @@ import { EMPTY_SEL, facesOf, useEditor, type ViewId } from "./store";
 const AUTOSAVE_MS = 3 * 60 * 1000;
 import "./editor.css";
 
-type Tab = "inspect" | "outline" | "textures" | "checks";
+type Tab = "inspect" | "outline" | "textures" | "checks" | "compile";
 
 const VIEWS: { id: ViewId; label: string; key: string }[] = [
   { id: "3d", label: "3D", key: "Shift+1" },
@@ -246,6 +247,7 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
                 ["outline", "Outline"],
                 ["textures", "Textures"],
                 ["checks", problems ? `Checks (${problems})` : warnings ? `Checks (${warnings})` : "Checks"],
+                ["compile", "Compile"],
               ] as [Tab, string][]
             ).map(([id, label]) => (
               <button key={id} type="button" role="tab" aria-pressed={tab === id} aria-selected={tab === id} className={id === "checks" && problems ? "editor-tab-bad" : undefined} onClick={() => setTab(id)}>
@@ -257,6 +259,7 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
           {tab === "outline" && <Outline />}
           {tab === "textures" && <TextureBrowser />}
           {tab === "checks" && <ChecksPanel />}
+          {tab === "compile" && <CompilePanel />}
         </aside>
       </div>
       <Dialogs />

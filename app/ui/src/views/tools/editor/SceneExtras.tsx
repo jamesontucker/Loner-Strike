@@ -1,5 +1,5 @@
 // Smaller pieces of the editor's 3D view: vertex handles, texture drag handles, the measure
-// line, the box-select rectangle, the leak line (pointfile hook) and camera bookmarks.
+// line, the box-select rectangle and camera bookmarks.
 // Everything except Bookmarks sits inside the root group, in GoldSrc units.
 
 import { Html, Line } from "@react-three/drei";
@@ -131,13 +131,6 @@ export function SelectRect({ a, b, axis }: { a: Vec3; b: Vec3; axis: number }) {
   };
   const pts = [at(a[u], a[v]), at(b[u], a[v]), at(b[u], b[v]), at(a[u], b[v]), at(a[u], a[v])];
   return <Line points={pts} color="#ffd84a" lineWidth={1.5} dashed dashSize={8} gapSize={6} depthTest={false} renderOrder={10} />;
-}
-
-/** The leak line from a compile (SDHLT hook: shown when the store's `pointfile` is set). */
-export function Pointfile() {
-  const pts = useEditor((s) => s.pointfile);
-  if (!pts || pts.length < 2) return null;
-  return <Line points={pts} color="#ff2a2a" lineWidth={3} depthTest={false} renderOrder={11} />;
 }
 
 /** Whether a brush is drawn (not hidden here or in a hidden group). */

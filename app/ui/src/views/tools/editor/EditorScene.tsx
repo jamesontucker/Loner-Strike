@@ -15,7 +15,8 @@ import { pointerEvents } from "../viewer/Scene";
 import type { Draw } from "../viewer/bundle";
 import { texUrl, type DocEntity } from "./editorApi";
 import { facesOf, groupMembers, keyOf, originOf, selectionBounds, snap, topGroup, useEditor, type BrushGeo, type FaceRef, type ViewId } from "./store";
-import { Bookmarks, MeasureLine, Pointfile, sameP, SelectRect, TexHandles, useVisibleBrush, VertexHandles } from "./SceneExtras";
+import { LeakLine } from "./LeakLine";
+import { Bookmarks, MeasureLine, sameP, SelectRect, TexHandles, useVisibleBrush, VertexHandles } from "./SceneExtras";
 
 // ---- small helpers ---------------------------------------------------------------------
 
@@ -928,7 +929,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
       {tool === "vertex" && <VertexHandles ids={selectionIds().brushes} />}
       <TexHandles />
       <MeasureLine />
-      <Pointfile />
+      <LeakLine />
       {clip.map((p, i) => (
         <mesh key={i} position={p}>
           <sphereGeometry args={[4, 12, 8]} />

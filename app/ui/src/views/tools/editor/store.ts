@@ -138,8 +138,6 @@ type EditorState = {
   dialog: Dialog;
   /** the last copy, for when the system clipboard can't be read */
   clip: string | null;
-  /** leak line after a compile (SDHLT hook: set from the pointfile route when it lands) */
-  pointfile: Vec3[] | null;
   /** when the last autosave went out (for the status bar) */
   autosavedAt: string | null;
   entityClass: string;
@@ -234,7 +232,6 @@ export const useEditor = create<EditorState>((set, get) => ({
   bookmark: null,
   dialog: null,
   clip: null,
-  pointfile: null,
   autosavedAt: null,
   entityClass: "info_player_start",
   textureLock: true,
@@ -270,7 +267,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       return;
     }
     for (const b of get().brushes.values()) b.geometry.dispose();
-    set({ doc: d, loadError: null, brushes: new Map(), meshRev: null, meshDoc: null, sel: EMPTY_SEL, preview: null, checks: null, verts: [], measure: null, hidden: { brushes: new Set(), entities: new Set() }, pointfile: null });
+    set({ doc: d, loadError: null, brushes: new Map(), meshRev: null, meshDoc: null, sel: EMPTY_SEL, preview: null, checks: null, verts: [], measure: null, hidden: { brushes: new Set(), entities: new Set() } });
     await get().syncMeshes();
     get().refreshChecks();
   },

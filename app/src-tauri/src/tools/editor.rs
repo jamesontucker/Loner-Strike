@@ -1508,7 +1508,7 @@ async fn api_copy(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Json<Co
 /// The entity definitions for the inspector (our Counter-Strike FGD).
 async fn api_fgd() -> Response {
     static PARSED: OnceLock<Result<Value, String>> = OnceLock::new();
-    match PARSED.get_or_init(|| fgd::parse(fgd::CSTRIKE_FGD).map(|c| json!({"source": "Loner-Strike Counter-Strike definitions", "classes": c}))) {
+    match PARSED.get_or_init(|| fgd::parse(&fgd::shipped()).map(|c| json!({"source": "Loner-Strike entity definitions", "classes": c}))) {
         Ok(v) => ([(header::CACHE_CONTROL, "max-age=3600")], Json(v.clone())).into_response(),
         Err(e) => fail(e.clone()),
     }
@@ -1595,10 +1595,6 @@ async fn api_discard_recovery(Extension(ed): Extension<Ed>, h: HeaderMap) -> Res
     })
     .await
 }
-
-// SDHLT hook (the compile task): `POST /api/tools/editor/compile` (run-map presets Fast/Final,
-// an optional cordon box), `GET /compile/:id` progress, and `GET pointfile` (the .lin leak
-// line as points, which the page already draws when its store's `pointfile` is set).
 
 fn routes_with(ed: Ed) -> Router<Shared> {
     Router::new()

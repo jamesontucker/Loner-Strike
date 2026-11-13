@@ -9,6 +9,19 @@ use std::collections::HashMap;
 
 /// Our Counter-Strike 1.6 entity definitions.
 pub const CSTRIKE_FGD: &str = include_str!("cstrike.fgd");
+/// More definition files read after ours (they can use our base classes), e.g. the game mode
+/// components: add `include_str!("lonerstrike.fgd")` here when it lands.
+pub const EXTRA_FGDS: &[&str] = &[];
+
+/// Every definition the editor ships, as one FGD text.
+pub fn shipped() -> String {
+    let mut t = CSTRIKE_FGD.to_string();
+    for x in EXTRA_FGDS {
+        t.push('\n');
+        t.push_str(x);
+    }
+    t
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Choice {
@@ -389,7 +402,7 @@ mod tests {
 
     #[test]
     fn our_counter_strike_definitions_read() {
-        let c = parse(CSTRIKE_FGD).unwrap();
+        let c = parse(&shipped()).unwrap();
         assert!(c.len() > 50, "{}", c.len());
         let find = |n: &str| c.iter().find(|x| x.name == n).unwrap_or_else(|| panic!("{n}"));
         let spawn = find("info_player_start");
