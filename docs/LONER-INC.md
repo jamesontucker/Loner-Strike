@@ -25,7 +25,7 @@ The short version:
 public plugin_init()
 {
 	ls_register_mode("deagleduel", "Deagle Duel", "1.0", "me")
-	RegisterHam(Ham_Spawn, "player", "on_spawn", 1)
+	RegisterHamPlayer(Ham_Spawn, "on_spawn", 1)
 	register_logevent("on_round_start", 2, "1=Round_Start")
 }
 

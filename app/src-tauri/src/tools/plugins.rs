@@ -122,45 +122,264 @@ pub fn resolve(dir: &Path, name: &str) -> Result<PathBuf, String> {
     Ok(p)
 }
 
-/// Loner-Strike's own plugins in the game folder are put back by setup: open them, but
-/// save changes as a copy in My plugins.
-fn read_only(f: Folder, name: &str) -> Option<&'static str> {
-    match f {
-        Folder::Include => Some("Include files are the game's own. Save a copy in My plugins to change one."),
-        Folder::Game if crate::setup::core::OUR_PLUGINS.iter().any(|p| stem(name).eq_ignore_ascii_case(p)) => {
-            Some("This is one of Loner-Strike's own plugins; setup puts it back as it was. Save a copy in My plugins to change it.")
+// ---- what the Studio never writes ------------------------------------------------------
+
+/// AMX Mod X's own plugins (its base package).
+pub const AMXX_BASE: &[&str] = &[
+    "admin", "admin_sql", "adminchat", "admincmd", "adminhelp", "adminslots", "adminvote", "antiflood", "cmdmenu", "imessage", "mapchooser", "mapsmenu", "menufront", "multilingual",
+    "nextmap", "pausecfg", "plmenu", "pluginmenu", "restmenu", "scrollmsg", "statscfg", "telemenu", "timeleft", "csstats", "miscstats", "stats_logging", "statsx", "statsx_shell",
+];
+
+/// Whose plugin a name is, when it isn't the player's to change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Owner {
+    /// one of Loner-Strike's own (setup builds it from the app's copy)
+    Ours,
+    /// made by the Game Mode Studio from a graph (`studio_*`)
+    GameModeStudio,
+    /// comes with AMX Mod X
+    AmxModX,
+    /// part of a mode or add-on Loner-Strike installs (the catalog's plugins)
+    Mod,
+}
+
+static RESOURCES: OnceLock<PathBuf> = OnceLock::new();
+
+/// Where the app's own files are (its plugin sources and catalog), remembered from a request.
+fn remember_resources(st: &Shared) {
+    if RESOURCES.get().is_none() {
+        if let Ok(r) = crate::setup_api::resources_for(st) {
+            let _ = RESOURCES.set(r);
         }
-        Folder::Game if name.to_ascii_lowercase().ends_with(".inc") => Some("Save include files in My plugins."),
-        // (the Game Mode Studio's "Open as code": made from a graph, so changes belong in the graph)
-        Folder::Game if stem(name).starts_with("studio_") => Some("Made by the Game Mode Studio from a graph: change the graph and compile it again. Save a copy in My plugins to make it a plugin of your own."),
+    }
+}
+
+fn resources() -> Option<PathBuf> {
+    RESOURCES.get().cloned().or_else(|| crate::setup::resource_root(None).ok())
+}
+
+/// Every plugin the catalog's modes and add-ons build ("compile": src and out), lower case.
+pub fn catalog_stems(res: &Path) -> Arc<std::collections::HashSet<String>> {
+    static CACHE: OnceLock<Mutex<Option<(PathBuf, Arc<std::collections::HashSet<String>>)>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some((p, set)) = cache.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if p == res {
+            return set.clone();
+        }
+    }
+    fn walk(v: &Value, out: &mut std::collections::HashSet<String>) {
+        match v {
+            Value::Object(m) => {
+                if let Some(list) = m.get("compile").and_then(|c| c.as_array()) {
+                    for c in list {
+                        for key in ["src", "out"] {
+                            if let Some(s) = c[key].as_str() {
+                                let base = diag::base_name(s);
+                                out.insert(stem(base).to_ascii_lowercase());
+                            }
+                        }
+                    }
+                }
+                m.values().for_each(|x| walk(x, out));
+            }
+            Value::Array(a) => a.iter().for_each(|x| walk(x, out)),
+            _ => {}
+        }
+    }
+    let mut set = std::collections::HashSet::new();
+    let cat = res.join("catalog");
+    let mut files = vec![cat.join("components.json")];
+    files.extend(std::fs::read_dir(cat.join("parts")).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "json")));
+    for f in files {
+        if let Some(v) = std::fs::read(&f).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) {
+            walk(&v, &mut set);
+        }
+    }
+    let set = Arc::new(set);
+    *cache.lock().unwrap_or_else(|e| e.into_inner()) = Some((res.to_path_buf(), set.clone()));
+    set
+}
+
+/// Whose plugin this is, by its name, if it isn't the player's.
+pub fn owner_of(stem: &str) -> Option<Owner> {
+    let s = stem.to_ascii_lowercase();
+    if crate::setup::core::OUR_PLUGINS.iter().any(|p| *p == s) {
+        Some(Owner::Ours)
+    } else if s.starts_with("studio_") {
+        Some(Owner::GameModeStudio)
+    } else if AMXX_BASE.contains(&s.as_str()) {
+        Some(Owner::AmxModX)
+    } else if resources().is_some_and(|r| catalog_stems(&r).contains(&s)) {
+        Some(Owner::Mod)
+    } else {
+        None
+    }
+}
+
+/// A compiled plugin in the game that neither the Studio nor the Mods page put there.
+fn installed_by_someone_else(g: &Game, stem: &str) -> bool {
+    amxx_dir(g).join("plugins").join(format!("{stem}.amxx")).exists() && !trying(g).iter().any(|n| n.eq_ignore_ascii_case(stem)) && !crate::plugins::load(g).iter().any(|n| n.eq_ignore_ascii_case(stem))
+}
+
+fn owner_words(o: Owner) -> &'static str {
+    match o {
+        Owner::Ours => "This is one of Loner-Strike's own plugins, so it's read only here (setup builds it from Loner-Strike's copy). Save a copy in My plugins to make your own version.",
+        Owner::GameModeStudio => "Made by the Game Mode Studio from a graph: change the graph and compile it again. Save a copy in My plugins to make it a plugin of your own.",
+        Owner::AmxModX => "This plugin comes with AMX Mod X, so it's read only here. Save a copy in My plugins to make your own version.",
+        Owner::Mod => "This plugin is part of a mode or add-on Loner-Strike installs, so it's read only here. Save a copy in My plugins to make your own version.",
+    }
+}
+
+/// Why the Studio won't change this file, or None when it's the player's to change.
+pub fn protection(g: &Game, f: Folder, name: &str) -> Option<String> {
+    match f {
+        Folder::Mine => None,
+        Folder::Include if APP_INCS.iter().any(|(n, _)| *n == name) => Some("This include comes with Loner-Strike, so it's read only. Save a copy in My plugins to experiment with it.".into()),
+        Folder::Include => Some("Include files are the game's own, so they're read only. Save a copy in My plugins to change one.".into()),
+        Folder::Game if name.to_ascii_lowercase().ends_with(".inc") => Some("Save include files in My plugins.".into()),
+        Folder::Game => match owner_of(stem(name)) {
+            Some(o) => Some(owner_words(o).into()),
+            None if installed_by_someone_else(g, stem(name)) => Some("A plugin with this name is installed in your game, and neither the Plugin Studio nor the Mods page put it there, so it's read only here. Save a copy in My plugins to make your own version.".into()),
+            None => None,
+        },
+    }
+}
+
+// ---- Loner-Strike's versions (reset) ----------------------------------------------------
+
+/// Loner-Strike's own copy of a file, if it ships one: our plugins' sources, and its includes.
+pub fn shipped_copy(f: Folder, name: &str) -> Option<Vec<u8>> {
+    match f {
+        Folder::Game if owner_of(stem(name)) == Some(Owner::Ours) && name.to_ascii_lowercase().ends_with(".sma") => {
+            let s = crate::setup::core::OUR_PLUGINS.iter().find(|p| p.eq_ignore_ascii_case(stem(name)))?;
+            std::fs::read(resources()?.join("plugins").join("scripting").join(format!("{s}.sma"))).ok()
+        }
+        Folder::Include => APP_INCS.iter().find(|(n, _)| *n == name).map(|(_, t)| t.as_bytes().to_vec()),
         _ => None,
     }
+}
+
+fn same_text(a: &[u8], b: &[u8]) -> bool {
+    let norm = |x: &[u8]| -> Vec<u8> { x.iter().copied().filter(|&c| c != b'\r').collect() };
+    norm(a) == norm(b)
+}
+
+/// Whether the file on disk differs from Loner-Strike's copy: None when there's no copy (or no
+/// file on disk to put back).
+pub fn differs_from_shipped(g: &Game, f: Folder, name: &str) -> Option<bool> {
+    let want = shipped_copy(f, name)?;
+    let path = file_path(g, f, name).ok()?;
+    let now = std::fs::read(&path).ok()?;
+    Some(!same_text(&now, &want))
+}
+
+/// Puts Loner-Strike's version of a file back (kept first by the safety net). For one of our
+/// plugins the compiled plugin is rebuilt from it too, like setup does.
+pub fn reset(g: &Game, f: Folder, name: &str) -> Result<Value, String> {
+    let want = shipped_copy(f, name).ok_or("Loner-Strike doesn't ship a version of this file to go back to.")?;
+    let path = file_path(g, f, name)?;
+    if !path.is_file() {
+        return Err("That file isn't in your game, so there's nothing to reset: Loner-Strike's own copy is used.".into());
+    }
+    crate::safety::before("Plugin Studio", &format!("Reset {name} to Loner-Strike's version"), &path);
+    write_quiet(&path, &want)?;
+    if f != Folder::Game {
+        return Ok(json!({"ok": true, "message": format!("{name} is back to Loner-Strike's version.")}));
+    }
+    // rebuild the compiled plugin from it
+    let built = compiler(g).and_then(|(exe, install)| {
+        let inc = studio_include(g)?;
+        let out = studio_dir(g).join("build").join(format!("{}.amxx", stem(name)));
+        run_compiler(&exe, &install, &path, &out, &inc)
+    });
+    let message = match built {
+        Ok(c) if c.ok => {
+            let dest = amxx_dir(g).join("plugins").join(format!("{}.amxx", stem(name)));
+            let bytes = std::fs::read(&c.amxx).map_err(|e| format!("Couldn't read the compiled plugin ({e})."))?;
+            crate::safety::before("Plugin Studio", &format!("Rebuilt {} from Loner-Strike's version", stem(name)), &dest);
+            write_quiet(&dest, &bytes)?;
+            format!("{name} is back to Loner-Strike's version, and {}.amxx was rebuilt from it. It loads with the next map.", stem(name))
+        }
+        Ok(_) => format!("{name} is back to Loner-Strike's version, but it didn't compile here, so the plugin in your game wasn't rebuilt. Repair on the Mods page builds it."),
+        Err(e) => format!("{name} is back to Loner-Strike's version. The plugin in your game wasn't rebuilt ({e}) Repair on the Mods page builds it."),
+    };
+    Ok(json!({"ok": true, "message": message}))
 }
 
 fn modified(meta: &std::fs::Metadata) -> u64 {
     meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0)
 }
 
-fn list(g: &Game, f: Folder) -> Vec<Value> {
-    let dir = folder_dir(g, f);
-    let mut files: Vec<Value> = std::fs::read_dir(&dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|e| {
+// ---- include files ---------------------------------------------------------------------
+
+/// A folder or file name that's plain enough to show and look up.
+fn plain_part(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 64 && !s.starts_with('.') && s.chars().all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c))
+}
+
+/// Every include file on the install: (name shown, path, size, modified). `include/*.inc` as
+/// "x.inc"; its subfolders and the mods' `scripting/*_include` folders as "folder/x.inc".
+/// No links, two folders deep at most.
+pub fn include_files(g: &Game) -> Vec<(String, PathBuf, u64, u64)> {
+    fn walk(dir: &Path, prefix: &str, depth: usize, out: &mut Vec<(String, PathBuf, u64, u64)>) {
+        let mut list: Vec<_> = std::fs::read_dir(dir).into_iter().flatten().flatten().collect();
+        list.sort_by_key(|e| e.file_name());
+        for e in list {
             let name = e.file_name().to_string_lossy().to_string();
-            let meta = e.metadata().ok()?;
-            let wanted = match f {
-                Folder::Include => name.to_ascii_lowercase().ends_with(".inc"),
-                _ => true,
-            };
-            (wanted && meta.is_file() && safe_file(&name)).then(|| json!({"name": name, "size": meta.len(), "modified": modified(&meta), "readOnly": read_only(f, &name).is_some()}))
-        })
-        .collect();
+            let Ok(meta) = std::fs::symlink_metadata(e.path()) else { continue };
+            if !plain_part(&name) || meta.file_type().is_symlink() {
+                continue;
+            }
+            let shown = if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") };
+            if meta.is_dir() && depth < 2 {
+                walk(&e.path(), &shown, depth + 1, out);
+            } else if meta.is_file() && name.to_ascii_lowercase().ends_with(".inc") && meta.len() < 4 << 20 {
+                out.push((shown, e.path(), meta.len(), modified(&meta)));
+            }
+        }
+    }
+    let scripting = amxx_dir(g).join("scripting");
+    let mut out = Vec::new();
+    walk(&scripting.join("include"), "", 0, &mut out);
+    let mut mods: Vec<_> = std::fs::read_dir(&scripting).into_iter().flatten().flatten().filter(|e| e.file_name().to_string_lossy().ends_with("_include")).collect();
+    mods.sort_by_key(|e| e.file_name());
+    for d in mods {
+        let name = d.file_name().to_string_lossy().to_string();
+        if plain_part(&name) && std::fs::symlink_metadata(d.path()).is_ok_and(|m| m.is_dir()) {
+            walk(&d.path(), &name, 1, &mut out);
+        }
+    }
+    out
+}
+
+/// The path of a file the Studio shows: in My plugins or the game's folder by name, an include
+/// only if it's one of the include files found (so a name never becomes a path of its own).
+fn file_path(g: &Game, f: Folder, name: &str) -> Result<PathBuf, String> {
+    match f {
+        Folder::Include => include_files(g).into_iter().find(|(n, ..)| n == name).map(|(_, p, ..)| p).ok_or_else(|| "That include file isn't there.".to_string()),
+        _ => resolve(&folder_dir(g, f), name),
+    }
+}
+
+fn list(g: &Game, f: Folder) -> Vec<Value> {
+    let mut files: Vec<Value> = if f == Folder::Include {
+        include_files(g).into_iter().map(|(name, _, size, m)| json!({"name": name, "size": size, "modified": m, "readOnly": true, "changed": differs_from_shipped(g, f, &name) == Some(true)})).collect()
+    } else {
+        std::fs::read_dir(folder_dir(g, f))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                let meta = std::fs::symlink_metadata(e.path()).ok()?;
+                (meta.is_file() && safe_file(&name)).then(|| json!({"name": name, "size": meta.len(), "modified": modified(&meta), "readOnly": protection(g, f, &name).is_some(), "changed": differs_from_shipped(g, f, &name) == Some(true)}))
+            })
+            .collect()
+    };
     if f == Folder::Include {
         for (inc, text) in APP_INCS {
             if !files.iter().any(|v| v["name"] == *inc) {
-                files.push(json!({"name": inc, "size": text.len(), "modified": 0, "readOnly": true}));
+                files.push(json!({"name": inc, "size": text.len(), "modified": 0, "readOnly": true, "changed": false}));
             }
         }
     }
@@ -176,29 +395,61 @@ fn decode(bytes: &[u8]) -> (String, &'static str) {
     }
 }
 
-pub fn read(g: &Game, f: Folder, name: &str) -> Result<Value, String> {
-    let path = resolve(&folder_dir(g, f), name)?;
-    if !path.is_file() {
-        if let Some((_, text)) = APP_INCS.iter().find(|(inc, _)| f == Folder::Include && *inc == name) {
-            return Ok(json!({"name": name, "folder": f.id(), "text": text, "encoding": "utf8", "readOnly": read_only(f, name)}));
-        }
-        return Err("That file isn't there any more.".into());
-    }
-    let bytes = std::fs::read(&path).map_err(|e| format!("Couldn't read it ({e})."))?;
-    if bytes.len() > MAX_SOURCE {
-        return Err("That file is too big to open here (over 2 MB).".into());
-    }
-    let (text, encoding) = decode(&bytes);
-    Ok(json!({"name": name, "folder": f.id(), "text": text, "encoding": encoding, "readOnly": read_only(f, name)}))
+/// The file's facts for the page: why it's read only, whether Loner-Strike's version can be put
+/// back, and the path the safety net knows it by (for History).
+fn facts(g: &Game, f: Folder, name: &str) -> Value {
+    let differs = differs_from_shipped(g, f, name);
+    let history = match f {
+        // (the safety net shows My plugins from the plugin-studio folder: keep_mine)
+        Folder::Mine => format!("my-plugins/{name}"),
+        Folder::Game => format!("addons/amxmodx/scripting/{name}"),
+        Folder::Include => format!("addons/amxmodx/scripting/include/{name}"),
+    };
+    let hint = match (f, owner_of(stem(name))) {
+        (Folder::Game, Some(Owner::Mod)) | (Folder::Game, Some(Owner::AmxModX)) => Some("To put it back as it came, use Repair on the Mods page."),
+        (Folder::Game, Some(Owner::GameModeStudio)) => Some("To rebuild it, open its graph in the Game Mode Studio and compile it."),
+        _ => None,
+    };
+    json!({"readOnly": protection(g, f, name), "reset": differs.map(|d| json!({"differs": d})), "resetHint": hint, "history": history})
 }
 
-/// Writes next to the file as <name>.part, then renames it over the file.
+pub fn read(g: &Game, f: Folder, name: &str) -> Result<Value, String> {
+    let path = match f {
+        Folder::Include => file_path(g, f, name).ok(),
+        _ => Some(resolve(&folder_dir(g, f), name)?),
+    };
+    let mut v = match path.filter(|p| p.is_file()) {
+        None => match APP_INCS.iter().find(|(inc, _)| f == Folder::Include && *inc == name) {
+            Some((_, text)) => json!({"name": name, "folder": f.id(), "text": text, "encoding": "utf8"}),
+            None => return Err("That file isn't there any more.".into()),
+        },
+        Some(path) => {
+            let bytes = std::fs::read(&path).map_err(|e| format!("Couldn't read it ({e})."))?;
+            if bytes.len() > MAX_SOURCE {
+                return Err("That file is too big to open here (over 2 MB).".into());
+            }
+            let (text, encoding) = decode(&bytes);
+            json!({"name": name, "folder": f.id(), "text": text, "encoding": encoding})
+        }
+    };
+    if let (Value::Object(m), Value::Object(extra)) = (&mut v, facts(g, f, name)) {
+        m.extend(extra);
+    }
+    Ok(v)
+}
+
+/// Writes next to the file as <name>.part, then renames it over the file (kept first).
 fn write_part(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    crate::safety::before("Plugin Studio", &format!("Saved {}", path.file_name().unwrap_or_default().to_string_lossy()), path);
+    write_quiet(path, bytes)
+}
+
+/// write_part without keeping a copy (the caller kept one, or it's the app's own scratch file).
+fn write_quiet(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if let Some(d) = path.parent() {
         std::fs::create_dir_all(d).map_err(|e| format!("Couldn't make the folder ({e})."))?;
     }
     let part = path.with_file_name(format!("{}.part", path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));
-    crate::safety::before("Plugin Studio", &format!("Saved {}", path.file_name().unwrap_or_default().to_string_lossy()), path);
     std::fs::write(&part, bytes).map_err(|e| format!("Couldn't save it ({e})."))?;
     std::fs::rename(&part, path).map_err(|e| {
         let _ = std::fs::remove_file(&part);
@@ -206,9 +457,16 @@ fn write_part(path: &Path, bytes: &[u8]) -> Result<(), String> {
     })
 }
 
+/// My plugins live in the app's folder: the safety net keeps their versions too.
+fn keep_mine(g: &Game) {
+    let dir = folder_dir(g, Folder::Mine);
+    let _ = std::fs::create_dir_all(&dir);
+    crate::safety::store().allow_root(&studio_dir(g));
+}
+
 pub fn save(g: &Game, f: Folder, name: &str, text: &str, encoding: &str, create: bool) -> Result<Value, String> {
-    if let Some(why) = read_only(f, name) {
-        return Err(why.into());
+    if let Some(why) = protection(g, f, name) {
+        return Err(why);
     }
     if text.len() > MAX_SOURCE {
         return Err("That's too big to save (over 2 MB).".into());
@@ -219,6 +477,9 @@ pub fn save(g: &Game, f: Folder, name: &str, text: &str, encoding: &str, create:
     }
     if f == Folder::Game && !amxx_dir(g).join("scripting").is_dir() {
         return Err("AMX Mod X isn't installed in your game yet. Install the basics first.".into());
+    }
+    if f == Folder::Mine {
+        keep_mine(g);
     }
     let bytes: Vec<u8> = if encoding == "latin1" && text.chars().all(|c| (c as u32) < 256) { text.chars().map(|c| c as u8).collect() } else { text.as_bytes().to_vec() };
     write_part(&path, &bytes)?;
@@ -231,9 +492,42 @@ pub fn delete(g: &Game, f: Folder, name: &str) -> Result<Value, String> {
         return Err("Only files in My plugins can be deleted here.".into());
     }
     let path = resolve(&folder_dir(g, f), name)?;
+    if !path.is_file() {
+        return Err("That file isn't there any more.".into());
+    }
+    keep_mine(g);
     crate::safety::before("Plugin Studio", &format!("Deleted {name}"), &path);
     std::fs::remove_file(&path).map_err(|e| format!("Couldn't delete it ({e})."))?;
     Ok(json!({"ok": true}))
+}
+
+/// Renames a file in My plugins (the only folder the Studio renames in).
+pub fn rename(g: &Game, f: Folder, from: &str, to: &str) -> Result<Value, String> {
+    if f != Folder::Mine {
+        return Err("Only files in My plugins can be renamed here.".into());
+    }
+    let dir = folder_dir(g, f);
+    let (src, dest) = (resolve(&dir, from)?, resolve(&dir, to)?);
+    if !src.is_file() {
+        return Err("That file isn't there any more.".into());
+    }
+    if from.rsplit('.').next().map(str::to_ascii_lowercase) != to.rsplit('.').next().map(str::to_ascii_lowercase) {
+        return Err("Keep the same ending (.sma or .inc).".into());
+    }
+    if dest.exists() && !from.eq_ignore_ascii_case(to) {
+        return Err(format!("There's already a file called {to}. Pick another name."));
+    }
+    keep_mine(g);
+    let bytes = std::fs::read(&src).map_err(|e| format!("Couldn't read it ({e})."))?;
+    crate::safety::before("Plugin Studio", &format!("Renamed {from} to {to}"), &dest);
+    write_quiet(&dest, &bytes)?;
+    if !from.eq_ignore_ascii_case(to) || src.file_name() != dest.file_name() {
+        if src.canonicalize().ok() != dest.canonicalize().ok() {
+            crate::safety::before("Plugin Studio", &format!("Renamed {from} to {to}"), &src);
+            std::fs::remove_file(&src).map_err(|e| format!("Couldn't remove the old name ({e})."))?;
+        }
+    }
+    Ok(json!({"ok": true, "name": to}))
 }
 
 // ---- the word list (include files) ----------------------------------------------------
@@ -243,37 +537,40 @@ struct ApiCache {
     value: Arc<Value>,
 }
 
-/// Every include in the game's include folder (and loner.inc), read once per change.
+/// Every include on the install (and the app's own), read once per change.
 pub fn api(g: &Game) -> Value {
     static CACHE: OnceLock<Mutex<Option<ApiCache>>> = OnceLock::new();
-    let dir = folder_dir(g, Folder::Include);
-    let mut files: Vec<(String, PathBuf, u64, u64)> = std::fs::read_dir(&dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|e| {
-            let name = e.file_name().to_string_lossy().to_string();
-            let meta = e.metadata().ok()?;
-            (meta.is_file() && name.to_ascii_lowercase().ends_with(".inc") && meta.len() < 4 << 20).then(|| (name, e.path(), meta.len(), modified(&meta)))
-        })
-        .collect();
-    // amxmodx.inc and its friends first, so their definitions win over a mod's copy
-    files.sort_by_key(|(n, ..)| (!matches!(n.as_str(), "amxmodx.inc" | "amxconst.inc" | "core.inc" | "float.inc" | "string.inc"), n.to_lowercase()));
-    let key = format!("{}|{}", dir.display(), files.iter().map(|(n, _, s, m)| format!("{n}:{s}:{m}")).collect::<Vec<_>>().join(","));
+    let mut files = include_files(g);
+    // amxmodx.inc and its friends first, then the rest of include/, then the mods' folders, so
+    // the AMX Mod X definitions win over a mod's copy
+    files.sort_by_key(|(n, ..)| (!matches!(n.as_str(), "amxmodx.inc" | "amxconst.inc" | "core.inc" | "float.inc" | "string.inc"), n.contains('/'), n.to_lowercase()));
+    let key = files.iter().map(|(n, p, s, m)| format!("{}:{n}:{s}:{m}", p.display())).collect::<Vec<_>>().join(",");
     let cache = CACHE.get_or_init(Default::default);
     if let Some(c) = cache.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
         if c.key == key {
             return (*c.value).clone();
         }
     }
-    let mut texts: Vec<(String, String)> = files.iter().filter_map(|(n, p, ..)| std::fs::read(p).ok().map(|b| (n.clone(), decode(&b).0))).collect();
+    let mut unread = Vec::new();
+    let mut texts: Vec<(String, String)> = Vec::new();
+    for (n, p, ..) in &files {
+        match std::fs::read(p) {
+            Ok(b) => texts.push((n.clone(), decode(&b).0)),
+            Err(_) => unread.push(n.clone()),
+        }
+    }
     for (inc, text) in APP_INCS {
-        if !texts.iter().any(|(n, _)| n == inc) {
+        if !texts.iter().any(|(n, _)| diag::base_name(n) == *inc) {
             texts.push((inc.to_string(), text.to_string()));
         }
     }
+    // files with nothing in them the reader could use (all commented out, or only #includes)
+    let empty: Vec<&str> = texts.iter().filter(|(n, t)| inc::parse(t, n).is_empty()).map(|(n, _)| n.as_str()).collect();
     let symbols = inc::parse_all(&texts);
-    let value = Arc::new(json!({"includes": texts.iter().map(|(n, _)| n.trim_end_matches(".inc")).collect::<Vec<_>>(), "symbols": symbols}));
+    let mut includes: Vec<String> = texts.iter().map(|(n, _)| diag::base_name(n).trim_end_matches(".inc").to_string()).collect();
+    includes.sort_by_key(|n| n.to_lowercase());
+    includes.dedup();
+    let value = Arc::new(json!({"includes": includes, "files": texts.len(), "unread": unread, "empty": empty, "symbols": symbols}));
     *cache.lock().unwrap_or_else(|e| e.into_inner()) = Some(ApiCache { key, value: value.clone() });
     (*value).clone()
 }
@@ -367,7 +664,7 @@ fn studio_include(g: &Game) -> Result<PathBuf, String> {
     for (inc, text) in APP_INCS {
         let file = dir.join(inc);
         if std::fs::read_to_string(&file).ok().as_deref() != Some(*text) {
-            write_part(&file, text.as_bytes())?;
+            write_quiet(&file, text.as_bytes())?;
         }
     }
     Ok(dir)
@@ -420,10 +717,13 @@ fn set_trying(g: &Game, names: &[String]) -> Result<(), String> {
 
 /// The player's own game on this computer, or why plugins can't be tried in it.
 fn own_game(st: &Shared) -> Result<Arc<Game>, String> {
+    remember_resources(st);
     let g = st.local_game().ok_or(NO_GAME)?;
     if g.remote.is_some() || g.dedicated {
         return Err("The Plugin Studio only tries plugins in your own game on this computer.".into());
     }
+    // (so History can list and restore My plugins' versions from the start)
+    keep_mine(&g);
     Ok(g)
 }
 
@@ -445,23 +745,38 @@ pub fn install_trial(g: &Game, name: &str, amxx: &Path) -> Result<(), String> {
     if !am.join("configs").is_dir() {
         return Err("AMX Mod X isn't installed in your game yet. Install the basics (Mods page) first.".into());
     }
+    trial_allowed(g, &stem)?;
     let mut names = trying(g);
     let dest = am.join("plugins").join(format!("{stem}.amxx"));
-    let ours = crate::setup::core::OUR_PLUGINS.iter().any(|p| p.eq_ignore_ascii_case(&stem));
-    if ours || (dest.exists() && !names.contains(&stem)) {
-        return Err(format!("Your game already has a plugin called {stem}.amxx that the Plugin Studio didn't put there. Save yours under another name to try it."));
-    }
     let bytes = std::fs::read(amxx).map_err(|e| format!("Couldn't read the compiled plugin ({e})."))?;
     write_part(&dest, &bytes)?;
-    if !names.contains(&stem) {
+    if !names.iter().any(|n| n.eq_ignore_ascii_case(&stem)) {
         names.push(stem);
     }
     set_trying(g, &names)
 }
 
+/// Whether a plugin by this name may go in the game: never over one that isn't the Studio's.
+pub fn trial_allowed(g: &Game, stem: &str) -> Result<(), String> {
+    let dest = amxx_dir(g).join("plugins").join(format!("{stem}.amxx"));
+    if let Some(o) = owner_of(stem) {
+        let whose = match o {
+            Owner::Ours => "one of Loner-Strike's own plugins",
+            Owner::GameModeStudio => "a name the Game Mode Studio uses",
+            Owner::AmxModX => "one of AMX Mod X's own plugins",
+            Owner::Mod => "a plugin of a mode or add-on Loner-Strike installs",
+        };
+        return Err(format!("{stem} is {whose}, so the Plugin Studio won't put a plugin by that name in your game. Save yours under another name to try it."));
+    }
+    if dest.exists() && !trying(g).iter().any(|n| n.eq_ignore_ascii_case(stem)) {
+        return Err(format!("Your game already has a plugin called {stem}.amxx that the Plugin Studio didn't put there. Save yours under another name to try it."));
+    }
+    Ok(())
+}
+
 pub fn remove_trial(g: &Game, stem: &str) -> Result<(), String> {
     let mut names = trying(g);
-    if !names.iter().any(|n| n == stem) {
+    if !names.iter().any(|n| n == stem) || owner_of(stem).is_some() {
         return Err("That plugin isn't one you're trying.".into());
     }
     names.retain(|n| n != stem);
@@ -661,6 +976,35 @@ async fn api_delete(State(st): State<Shared>, h: HeaderMap, Json(r): Json<FileRe
     blocking(move || delete(&g, folder_of(&r.folder)?, &r.name)).await
 }
 
+async fn api_reset(State(st): State<Shared>, h: HeaderMap, Json(r): Json<FileReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let g = match own_game(&st) {
+        Ok(g) => g,
+        Err(e) => return answer(Err(e)),
+    };
+    blocking(move || reset(&g, folder_of(&r.folder)?, &r.name)).await
+}
+
+#[derive(Deserialize)]
+struct RenameReq {
+    folder: String,
+    name: String,
+    to: String,
+}
+
+async fn api_rename(State(st): State<Shared>, h: HeaderMap, Json(r): Json<RenameReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let g = match own_game(&st) {
+        Ok(g) => g,
+        Err(e) => return answer(Err(e)),
+    };
+    blocking(move || rename(&g, folder_of(&r.folder)?, &r.name, &r.to)).await
+}
+
 async fn api_words(State(st): State<Shared>) -> Response {
     let g = match own_game(&st) {
         Ok(g) => g,
@@ -694,6 +1038,7 @@ async fn api_try(State(st): State<Shared>, h: HeaderMap, Json(r): Json<FileReq>)
     };
     blocking(move || {
         let t0 = Instant::now();
+        trial_allowed(&g, stem(&r.name))?;
         let built = compile(&g, folder_of(&r.folder)?, &r.name)?;
         let mut v = built.json(t0.elapsed().as_millis());
         if !built.ok {
@@ -764,6 +1109,8 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/plugins", get(api_overview))
         .route("/api/tools/plugins/file", get(api_read).post(api_save))
         .route("/api/tools/plugins/delete", post(api_delete))
+        .route("/api/tools/plugins/rename", post(api_rename))
+        .route("/api/tools/plugins/reset", post(api_reset))
         .route("/api/tools/plugins/words", get(api_words))
         .route("/api/tools/plugins/compile", post(api_compile))
         .route("/api/tools/plugins/try", post(api_try))
@@ -922,6 +1269,217 @@ mod tests {
         assert_eq!(find("ls_hud").params.last().unwrap().name, "...");
     }
 
+    /// Every plugin Loner-Strike (or AMX Mod X, a mode or add-on, the Game Mode Studio) ships is read
+    /// only in every folder it shows in, and nothing (save, try it, rename, delete) writes over it.
+    #[test]
+    fn shipped_plugins_are_read_only_everywhere() {
+        let (root, g) = game("protect");
+        let am = amxx_dir(&g);
+        let res = crate::setup::repo_root();
+        // some of every kind, in the game folder with their compiled plugins
+        let mut names: Vec<String> = crate::setup::core::OUR_PLUGINS.iter().map(|s| s.to_string()).collect();
+        names.extend(["admin", "restmenu", "statsx", "hidenseek", "gungame", "amx_gore_ultimate", "studio_mymode"].map(String::from));
+        for n in &names {
+            std::fs::write(folder_dir(&g, Folder::Game).join(format!("{n}.sma")), "// theirs\n").unwrap();
+            std::fs::write(am.join("plugins").join(format!("{n}.amxx")), b"theirs").unwrap();
+        }
+        // a mod's plugin the catalog doesn't name (copied in by a mode's files) and the player's own
+        std::fs::write(folder_dir(&g, Folder::Game).join("zombie_plague40.sma"), "// theirs\n").unwrap();
+        std::fs::write(am.join("plugins/zombie_plague40.amxx"), b"theirs").unwrap();
+        std::fs::write(folder_dir(&g, Folder::Game).join("mine_in_game.sma"), "// mine\n").unwrap();
+        std::fs::write(folder_dir(&g, Folder::Include).join("loner.inc"), "// old copy\n").unwrap();
+        names.push("zombie_plague40".into());
+        assert!(catalog_stems(&res).contains("hidenseek") && catalog_stems(&res).contains("sh_batman"));
+
+        let listed = list(&g, Folder::Game);
+        for n in &names {
+            let file = format!("{n}.sma");
+            let row = listed.iter().find(|v| v["name"] == file.as_str()).unwrap_or_else(|| panic!("{file} not listed"));
+            assert_eq!(row["readOnly"], true, "{file} listed as writable");
+            assert!(read(&g, Folder::Game, &file).unwrap()["readOnly"].is_string(), "{file} opened writable");
+            assert!(save(&g, Folder::Game, &file, "// changed\n", "utf8", false).is_err(), "{file} saved over");
+            assert!(delete(&g, Folder::Game, &file).is_err());
+            assert!(rename(&g, Folder::Game, &file, "other.sma").is_err());
+            // a copy in My plugins is fine, but it can't go in the game under that name
+            save(&g, Folder::Mine, &file, "// my copy\n", "utf8", false).unwrap();
+            assert!(trial_allowed(&g, n).is_err(), "{n} could be tried over");
+            assert!(install_trial(&g, &file, &root.join("nothing.amxx")).is_err());
+            assert_eq!(std::fs::read_to_string(folder_dir(&g, Folder::Game).join(&file)).unwrap(), "// theirs\n");
+            assert_eq!(std::fs::read(am.join("plugins").join(format!("{n}.amxx"))).unwrap(), b"theirs");
+            // case doesn't get round it
+            assert!(trial_allowed(&g, &n.to_uppercase()).is_err());
+        }
+        // and taking a plugin out never removes one of those
+        std::fs::create_dir_all(&g.data).unwrap();
+        std::fs::write(trying_path(&g), r#"["gamemodes","admin"]"#).unwrap();
+        assert!(remove_trial(&g, "gamemodes").is_err() && remove_trial(&g, "admin").is_err());
+        assert!(am.join("plugins/gamemodes.amxx").exists() && am.join("plugins/admin.amxx").exists());
+        std::fs::remove_file(trying_path(&g)).unwrap();
+        // includes: all read only, the app's own too (in the game folder or not)
+        for inc in ["loner.inc", "ls_components.inc"] {
+            assert!(list(&g, Folder::Include).iter().any(|v| v["name"] == inc && v["readOnly"] == true));
+            assert!(read(&g, Folder::Include, inc).unwrap()["readOnly"].is_string());
+            assert!(save(&g, Folder::Include, inc, "x", "utf8", false).is_err());
+            assert!(save(&g, Folder::Game, inc, "x", "utf8", true).is_err());
+            assert!(delete(&g, Folder::Include, inc).is_err());
+        }
+        // the player's own file in the game folder stays theirs
+        assert!(protection(&g, Folder::Game, "mine_in_game.sma").is_none());
+        save(&g, Folder::Game, "mine_in_game.sma", "// changed\n", "utf8", false).unwrap();
+        // a new file with a shipped name can't be made in the game folder either
+        assert!(save(&g, Folder::Game, "gm_battleroyale.sma", "x", "utf8", true).is_err() || folder_dir(&g, Folder::Game).join("gm_battleroyale.sma").exists());
+        std::fs::remove_file(folder_dir(&g, Folder::Game).join("gm_battleroyale.sma")).unwrap();
+        assert!(save(&g, Folder::Game, "gm_battleroyale.sma", "x", "utf8", true).is_err());
+        assert!(save(&g, Folder::Game, "studio_other.sma", "x", "utf8", true).is_err());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// The same through the routes (what the page and AI agents use).
+    #[tokio::test]
+    async fn routes_refuse_shipped_plugins() {
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+        let (root, g) = game("protect-routes");
+        let am = amxx_dir(&g);
+        std::fs::write(folder_dir(&g, Folder::Game).join("gamemodes.sma"), "// ours\n").unwrap();
+        std::fs::write(am.join("plugins/gamemodes.amxx"), b"ours").unwrap();
+        let g = Arc::new(g);
+        let st: Shared = Arc::new(crate::server::AppState {
+            current: std::sync::RwLock::new(Some(g.clone())),
+            hosts: std::sync::RwLock::new(vec!["127.0.0.1:8027".into()]),
+            lan_hosts: std::sync::RwLock::new(vec![]),
+            token: std::sync::RwLock::new("testtoken0123456789".into()),
+            app: OnceLock::new(),
+            phone: Mutex::new(crate::app_api::Phone::default()),
+        });
+        let post = |uri: &str, body: Value| {
+            let st = st.clone();
+            let req = Request::builder().method("POST").uri(uri).header("host", "127.0.0.1:8027").header("x-panel", "1").header("content-type", "application/json").body(Body::from(body.to_string())).unwrap();
+            async move {
+                let res = routes().with_state(st).oneshot(req).await.unwrap();
+                serde_json::from_slice::<Value>(&axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap()).unwrap()
+            }
+        };
+        let r = post("/api/tools/plugins/file", json!({"folder": "game", "name": "gamemodes.sma", "text": "// mine"})).await;
+        assert!(r["error"].as_str().unwrap().contains("Loner-Strike's own"), "{r}");
+        let r = post("/api/tools/plugins/delete", json!({"folder": "game", "name": "gamemodes.sma"})).await;
+        assert!(r["error"].is_string());
+        let r = post("/api/tools/plugins/rename", json!({"folder": "game", "name": "gamemodes.sma", "to": "x.sma"})).await;
+        assert!(r["error"].is_string());
+        post("/api/tools/plugins/file", json!({"folder": "mine", "name": "gamemodes.sma", "text": "// mine", "create": true})).await;
+        let r = post("/api/tools/plugins/try", json!({"folder": "mine", "name": "gamemodes.sma"})).await;
+        assert!(r["error"].as_str().unwrap().contains("Loner-Strike's own"), "{r}");
+        let r = post("/api/tools/plugins/rename", json!({"folder": "mine", "name": "gamemodes.sma", "to": "../x.sma"})).await;
+        assert!(r["error"].is_string());
+        let r = post("/api/tools/plugins/untry", json!({"name": "gamemodes"})).await;
+        assert!(r["error"].is_string());
+        assert_eq!(std::fs::read_to_string(folder_dir(&g, Folder::Game).join("gamemodes.sma")).unwrap(), "// ours\n");
+        assert_eq!(std::fs::read(am.join("plugins/gamemodes.amxx")).unwrap(), b"ours");
+        // without the app's header nothing changes at all
+        let req = Request::builder().method("POST").uri("/api/tools/plugins/file").header("host", "127.0.0.1:8027").header("content-type", "application/json").body(Body::from(json!({"folder": "mine", "name": "a.sma", "text": "x"}).to_string())).unwrap();
+        assert_eq!(routes().with_state(st.clone()).oneshot(req).await.unwrap().status(), StatusCode::FORBIDDEN);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// My plugins live outside the game folder, but the safety net keeps their versions too.
+    #[test]
+    fn my_plugins_are_kept_by_the_safety_net() {
+        let (root, g) = game("kept");
+        save(&g, Folder::Mine, "keepme.sma", "// one\n", "utf8", true).unwrap();
+        let path = folder_dir(&g, Folder::Mine).join("keepme.sma");
+        assert!(crate::safety::before("Plugin Studio", "test", &path).is_some(), "My plugins aren't kept");
+        assert_eq!(read(&g, Folder::Mine, "keepme.sma").unwrap()["history"], "my-plugins/keepme.sma");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn rename_in_my_plugins() {
+        let (root, g) = game("rename");
+        save(&g, Folder::Mine, "a.sma", "// a\n", "utf8", true).unwrap();
+        save(&g, Folder::Mine, "b.sma", "// b\n", "utf8", true).unwrap();
+        assert!(rename(&g, Folder::Mine, "a.sma", "b.sma").unwrap_err().contains("already"));
+        assert!(rename(&g, Folder::Mine, "a.sma", "a.inc").is_err());
+        assert!(rename(&g, Folder::Mine, "a.sma", "../a.sma").is_err());
+        assert!(rename(&g, Folder::Mine, "nothere.sma", "c.sma").is_err());
+        rename(&g, Folder::Mine, "a.sma", "c.sma").unwrap();
+        assert_eq!(read(&g, Folder::Mine, "c.sma").unwrap()["text"], "// a\n");
+        assert!(read(&g, Folder::Mine, "a.sma").is_err());
+        assert_eq!(read(&g, Folder::Mine, "b.sma").unwrap()["text"], "// b\n");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// Loner-Strike's version back: for our plugins changed by hand and for an old copy of an
+    /// include; never for the player's files, mods or Studio plugins.
+    #[test]
+    fn reset_to_loner_strikes_version() {
+        let (root, g) = game("reset");
+        let shipped = std::fs::read(crate::setup::repo_root().join("plugins/scripting/gm_vip.sma")).unwrap();
+        let game_vip = folder_dir(&g, Folder::Game).join("gm_vip.sma");
+        std::fs::write(&game_vip, &shipped).unwrap();
+        assert_eq!(differs_from_shipped(&g, Folder::Game, "gm_vip.sma"), Some(false));
+        // the same with Windows line ends is the same
+        std::fs::write(&game_vip, String::from_utf8_lossy(&shipped).replace('\n', "\r\n")).unwrap();
+        assert_eq!(differs_from_shipped(&g, Folder::Game, "gm_vip.sma"), Some(false));
+        std::fs::write(&game_vip, "// edited by hand\n").unwrap();
+        assert_eq!(differs_from_shipped(&g, Folder::Game, "gm_vip.sma"), Some(true));
+        assert!(list(&g, Folder::Game).iter().any(|v| v["name"] == "gm_vip.sma" && v["changed"] == true));
+        let v = read(&g, Folder::Game, "gm_vip.sma").unwrap();
+        assert_eq!(v["reset"]["differs"], true);
+        assert_eq!(v["history"], "addons/amxmodx/scripting/gm_vip.sma");
+        // (no compiler here: the source comes back, and it says the plugin wasn't rebuilt)
+        let r = reset(&g, Folder::Game, "gm_vip.sma").unwrap();
+        assert!(r["message"].as_str().unwrap().contains("back to Loner-Strike's version"), "{r}");
+        assert_eq!(std::fs::read(&game_vip).unwrap(), shipped);
+        assert_eq!(differs_from_shipped(&g, Folder::Game, "gm_vip.sma"), Some(false));
+        // an old loner.inc in the game's include folder
+        std::fs::write(folder_dir(&g, Folder::Include).join("loner.inc"), "// old\n").unwrap();
+        assert_eq!(read(&g, Folder::Include, "loner.inc").unwrap()["reset"]["differs"], true);
+        reset(&g, Folder::Include, "loner.inc").unwrap();
+        assert_eq!(std::fs::read_to_string(folder_dir(&g, Folder::Include).join("loner.inc")).unwrap(), LONER_INC);
+        // no reset for what Loner-Strike doesn't ship, or isn't there
+        save(&g, Folder::Mine, "mine.sma", "x", "utf8", true).unwrap();
+        std::fs::write(folder_dir(&g, Folder::Game).join("admin.sma"), "x").unwrap();
+        std::fs::write(folder_dir(&g, Folder::Game).join("studio_x.sma"), "x").unwrap();
+        for (f, n) in [(Folder::Mine, "mine.sma"), (Folder::Game, "admin.sma"), (Folder::Game, "studio_x.sma"), (Folder::Game, "gm_people.sma"), (Folder::Include, "ls_components.inc")] {
+            assert!(reset(&g, f, n).is_err(), "{n}");
+            assert!(read(&g, f, n).map(|v| v["reset"].is_null()).unwrap_or(true), "{n}");
+        }
+        assert!(read(&g, Folder::Game, "admin.sma").unwrap()["resetHint"].as_str().unwrap().contains("Repair"));
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// Every include folder on the install: include/ and its subfolders, and the mods' *_include.
+    #[test]
+    fn include_files_from_every_folder() {
+        let (root, g) = game("incs");
+        let s = amxx_dir(&g).join("scripting");
+        std::fs::create_dir_all(s.join("include/sub")).unwrap();
+        std::fs::create_dir_all(s.join("zp5_include")).unwrap();
+        std::fs::create_dir_all(s.join("notinc")).unwrap();
+        std::fs::write(s.join("include/amxmodx.inc"), "native get_user_name(index, name[], len);\n").unwrap();
+        std::fs::write(s.join("include/sub/deep.inc"), "native deep_one();\n").unwrap();
+        std::fs::write(s.join("zp5_include/zp50_core.inc"), "/** Zombie? */\nnative zp_core_is_zombie(id);\n").unwrap();
+        std::fs::write(s.join("notinc/x.inc"), "native nope();\n").unwrap();
+        std::fs::write(s.join("zp5_include/empty.inc"), "/* nothing */\n").unwrap();
+        let names: Vec<String> = include_files(&g).into_iter().map(|(n, ..)| n).collect();
+        assert_eq!(names, ["amxmodx.inc", "sub/deep.inc", "zp5_include/empty.inc", "zp5_include/zp50_core.inc"]);
+        let v = api(&g);
+        let syms = v["symbols"].as_array().unwrap();
+        let z = syms.iter().find(|s| s["name"] == "zp_core_is_zombie").unwrap();
+        assert_eq!((z["file"].as_str(), z["doc"].as_str()), (Some("zp5_include/zp50_core.inc"), Some("Zombie?")));
+        assert!(syms.iter().any(|s| s["name"] == "deep_one") && !syms.iter().any(|s| s["name"] == "nope"));
+        assert!(v["includes"].as_array().unwrap().iter().any(|n| n == "zp50_core"));
+        assert_eq!(v["empty"], json!(["zp5_include/empty.inc"]));
+        // they open by the name shown, and only those
+        assert!(read(&g, Folder::Include, "zp5_include/zp50_core.inc").unwrap()["text"].as_str().unwrap().contains("zp_core_is_zombie"));
+        for bad in ["../include/amxmodx.inc", "notinc/x.inc", "zp5_include/../../x.inc", "/etc/passwd"] {
+            assert!(read(&g, Folder::Include, bad).is_err(), "{bad}");
+        }
+        assert!(list(&g, Folder::Include).iter().any(|v| v["name"] == "zp5_include/zp50_core.inc"));
+        std::fs::remove_dir_all(&root).ok();
+    }
+
     /// The real include files: `LS_TEST_GAME=<Half-Life folder> cargo test real_includes -- --nocapture`
     #[test]
     fn real_includes() {
@@ -930,7 +1488,8 @@ mod tests {
         let v = api(&g);
         let syms = v["symbols"].as_array().unwrap();
         let find = |n: &str| syms.iter().find(|s| s["name"] == n).unwrap_or_else(|| panic!("no {n}")).clone();
-        println!("{} includes, {} symbols", v["includes"].as_array().unwrap().len(), syms.len());
+        println!("{} include files ({} names), {} symbols; unread {}, nothing usable in {}", v["files"], v["includes"].as_array().unwrap().len(), syms.len(), v["unread"], v["empty"]);
+        assert_eq!(v["unread"], json!([]));
         assert!(syms.len() > 2000);
         // LS_TEST_DUMP=<folder>: the word list as JSON, to look at
         if let Ok(dir) = std::env::var("LS_TEST_DUMP") {
@@ -979,7 +1538,9 @@ mod tests {
         let tmp = std::env::temp_dir().join(format!("ls-studio-compile-{}", std::process::id()));
         let inc = tmp.join("include");
         std::fs::create_dir_all(&inc).unwrap();
-        std::fs::write(inc.join("loner.inc"), LONER_INC).unwrap();
+        for (n, text) in APP_INCS {
+            std::fs::write(inc.join(n), text).unwrap();
+        }
         let example = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/scripting/examples/ls_example_mode.sma");
         let src = tmp.join("ls_example_mode.sma");
         std::fs::copy(&example, &src).unwrap();

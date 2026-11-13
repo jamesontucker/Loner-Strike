@@ -958,3 +958,43 @@ native after_stock(id)
         assert_eq!(param_name("len = sizeof name"), "len");
     }
 }
+
+#[cfg(test)]
+mod coverage {
+    /// Every include on the install, file by file: declarations that look like natives, forwards
+    /// and stocks against what the reader found. `LS_TEST_GAME=<Half-Life> cargo test include_coverage -- --nocapture`
+    #[test]
+    fn include_coverage() {
+        let Ok(hl) = std::env::var("LS_TEST_GAME") else { return };
+        let root = std::path::Path::new(&hl).join("cstrike/addons/amxmodx/scripting");
+        let mut files = Vec::new();
+        fn walk(d: &std::path::Path, out: &mut Vec<std::path::PathBuf>, depth: usize) {
+            for e in std::fs::read_dir(d).into_iter().flatten().flatten() {
+                let p = e.path();
+                if p.is_dir() && depth < 3 {
+                    walk(&p, out, depth + 1);
+                } else if p.extension().is_some_and(|x| x == "inc") {
+                    out.push(p);
+                }
+            }
+        }
+        walk(&root, &mut files, 0);
+        files.sort();
+        let (mut want_all, mut got_all) = (0, 0);
+        for f in &files {
+            let text: String = std::fs::read(f).unwrap().iter().map(|&b| b as char).collect();
+            let syms = super::parse(&text, "x.inc");
+            let re = regex::Regex::new(r"(?m)^\s*(native|forward|stock|static stock)\s+[A-Za-z_@:]+\s*\(").unwrap();
+            let want = re.find_iter(&text).count();
+            let got = syms.iter().filter(|s| matches!(s.kind, "native" | "forward" | "stock")).count();
+            want_all += want;
+            got_all += got;
+            if got < want || syms.is_empty() {
+                let names: std::collections::HashSet<_> = syms.iter().map(|s| s.name.clone()).collect();
+                let missing: Vec<String> = re.find_iter(&text).map(|m| m.as_str().trim_end_matches('(').rsplit([' ', ':']).next().unwrap_or("").trim().to_string()).filter(|n| !names.contains(n)).take(8).collect();
+                println!("{}: {} of {} ({} symbols) missing {:?}", f.strip_prefix(&root).unwrap().display(), got, want, syms.len(), missing);
+            }
+        }
+        println!("{} files, {got_all} of {want_all} function declarations read", files.len());
+    }
+}
