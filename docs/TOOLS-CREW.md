@@ -101,3 +101,4 @@ Many agents share one staging area. Never run a bare `git commit`. Always commit
 `git commit <your paths> -m "..."` (this commits only those paths, whatever else is staged) and never
 `git add` other people's files. Before committing, check `git diff --cached --stat` shows only yours.
 - Never swap, stash, overwrite or restore files on disk to separate your changes from someone else's uncommitted work in a shared file, not even for a moment. If you can't commit only your lines, stage just your hunks with a separate index (GIT_INDEX_FILE=… git apply --cached / git update-index), or leave a note in TOOLS-NOTES for the file's owner to commit them.
+- Never use broad `pkill -f <pattern>` / `killall`: other agents run the same kinds of servers. Stop only processes you started, by PID (record it when you start one) or by a pattern that includes your own unique port/folder.
