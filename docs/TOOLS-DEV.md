@@ -99,3 +99,12 @@ Use `views/tools/common/api.ts`, not your own fetch wrappers:
   work on every page; `/` focuses the page's first visible `input[type=search]`.
 - Search: filter lists with `matches(searchWords(q), ...fields)` from `common/search.ts`, so every
   search box behaves the same way.
+
+## Crumbs, Back and focus mode (common/shell.tsx)
+
+- The Tools header shows `Back · Tools › <tool> › <map> › <page>` from the address. A page deeper than its map reports
+  that as its address (`health:report:<id>`) and reads it on mount; `useToolCrumbs(tool, [...])` names the crumbs.
+- Every address is a history step: crumbs, Back, Alt+←/→ and the mouse's buttons reopen it "exactly" (the tool's page
+  starts over on it). Report unsaved work with `useDirty` (store.ts) so they ask first.
+- Focus mode (Shift+Mod+Enter, per tool) hides everything but the tool via `html[data-tools-focus]`; size pages by
+  their box, not `100vh`, so they fill it.
