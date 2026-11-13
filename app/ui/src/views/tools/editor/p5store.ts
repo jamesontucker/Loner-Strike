@@ -132,7 +132,8 @@ export type ProjectFile = {
   canRename: boolean;
   canDelete: boolean;
 };
-export type ProjectInfo = { name: string; map: string; project: string | null; folder: string | null; game: boolean };
+export type AssetsInfo = { missing: number; toGame: number; game: boolean; saved: boolean; assets: { path: string; kind: string; status: "game" | "beside" | "elsewhere" | "missing"; stock?: boolean; who: string; inProject: boolean }[] };
+export type ProjectInfo = { name: string; map: string; project: string | null; folder: string | null; game: boolean; assets?: AssetsInfo };
 export type Ids = { brushes: number[]; entities: number[] };
 export type Found = Ids & { count: number };
 export type FindSpec = { field: "texture" | "classname" | "key" | "value"; find: string; replace?: string; key?: string | null; whole?: boolean; case?: boolean; brushes?: number[] | null; entities?: number[] | null };
@@ -152,6 +153,8 @@ export type Cmd2Result = Err & {
 export const getProject = () => get<{ files: ProjectFile[]; project: ProjectInfo }>(`${E}/project`);
 export const projectAction = (action: "open" | "reveal" | "rename" | "delete", path: string, name = "") =>
   post<{ done?: boolean; opened?: boolean; renamed?: string; deleted?: boolean; keptIn?: string; state?: DocState | null }>(`${E}/project/action`, { action, path, name });
+/** Copies the models, sprites and sounds the map uses into the game's download folder or next to the project. */
+export const copyAssets = (to: "game" | "project") => post<AssetsInfo & { copied: string[]; message: string }>(`${E}/assets/copy`, { to });
 export const importRmf = () => post<{ cancelled?: boolean; notes?: string[] }>(`${E}/import-other`);
 export const getHistory = () => get<{ undo: string[]; redo: string[]; dirty: boolean }>(`${E}/history`);
 export const jumpHistory = (steps: number) => post<{ changed: boolean; steps: number; state?: DocState }>(`${E}/history/jump`, { steps });

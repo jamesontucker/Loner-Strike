@@ -399,9 +399,19 @@ fn collect(st: &Shared, ed: &Ed) -> Result<(Vec<FileRow>, Value), String> {
             if missing == 0 { "All six sides found".to_string() } else { format!("{missing} of 6 sides missing") },
         ));
     }
-    for rel in referenced_files(&s.doc).into_iter().take(500) {
-        let f = find_in(&dirs, &rel);
-        rows.push(row("Sounds, models and sky", rel, f, Kind::Game, true, ""));
+    // models, sprites and sounds: found where the game looks, beside the map, or missing
+    let places = super::assets::Places::of(st, s);
+    let named: Vec<_> = super::assets::named_files(&s.doc).into_iter().filter(|n| n.kind != "sky").take(500).collect();
+    for a in super::assets::locate(named, &places) {
+        use super::assets::Status;
+        let (path, note) = match &a.status {
+            Status::Game { stock: true } => (find_in(&dirs, &a.named.rel), "Comes with the game"),
+            Status::Game { stock: false } => (find_in(&dirs, &a.named.rel), "In the game"),
+            Status::Beside(p) => (Some(p.clone()), "Beside the map, not in the game yet: Playtest copies it there"),
+            Status::Elsewhere(p) => (Some(p.clone()), "In another game's folder: Playtest copies it into this one"),
+            Status::Missing => (None, "Not on this computer: the game can't load the map without it"),
+        };
+        rows.push(row("Sounds, models and sky", a.named.rel.clone(), path, Kind::Game, true, note));
     }
     let meta = json!({
         "name": s.name,
@@ -409,6 +419,7 @@ fn collect(st: &Shared, ed: &Ed) -> Result<(Vec<FileRow>, Value), String> {
         "project": s.project.as_ref().map(|p| p.to_string_lossy().to_string()),
         "folder": s.project.as_ref().and_then(|p| p.parent()).map(|p| p.to_string_lossy().to_string()),
         "game": game.is_some(),
+        "assets": super::assets::assets_json(&super::assets::locate(super::assets::named_files(&s.doc), &places), &places, s.project.as_deref().and_then(Path::parent)), // P5
     });
     Ok((rows, meta))
 }

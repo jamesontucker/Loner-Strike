@@ -1478,9 +1478,13 @@ struct Plan {
     warnings: Vec<Problem>,
     /// the folder the map came from: WADs beside it are found first
     folder: Option<PathBuf>,
+    /// P5: Playtest: the models, sprites and sounds the map names, copied into the game after
+    assets: Option<super::editor::assets::ForPlaytest>,
 }
 
 fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
+    // P5: Playtest: a missing model/sprite/sound stops the game loading the map, so say so first
+    let assets = if req.install { Some(super::editor::assets::for_playtest(st)?) } else { None };
     let install_from = install_dir();
     if !is_installed(&install_from) {
         return Err(NEEDS_SDHLT.into());
@@ -1516,7 +1520,7 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     layout.threads = Some(compile_threads(cores(), req.all_cores));
     let wad_dirs = crate::goldsrc::wad::search_dirs(&game.hl, game.is_czero());
     let folder = super::editor::open_document_folder();
-    Ok(Plan { layout, install_from, name, preset: req.preset, doc, wad_dirs, maps, warnings, folder })
+    Ok(Plan { layout, install_from, name, preset: req.preset, doc, wad_dirs, maps, warnings, folder, assets })
 }
 
 /// Runs one stage, streaming its output into the job; Ok(its whole output) when it exits
@@ -1704,6 +1708,10 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
             note(&format!("The map that was there is backed up as {}.", b.display()));
         }
         note(&format!("Copied to {}.", maps.join(format!("{}.bsp", p.name)).display()));
+        // P5: the map's own models, sprites and sounds into the game's download folder, and its .res
+        for n in p.assets.as_ref().map(|a| a.install(&p.name)).unwrap_or_default() {
+            note(&n);
+        }
         result["installed"] = json!(true);
         result["backup"] = json!(backup.map(|b| b.to_string_lossy().to_string()));
         result["hasNav"] = json!(maps.join(format!("{}.nav", p.name)).is_file());
@@ -2484,7 +2492,7 @@ mod tests {
         layout.threads = Some(compile_threads(cores(), false));
         let doc = super::super::editor::starter_map();
         let dirs = crate::goldsrc::wad::search_dirs(&hl, false);
-        let p = Plan { layout: layout.clone(), install_from: install.clone(), name: "ls_test_room".into(), preset: Preset::Fast, doc, wad_dirs: dirs, maps: None, warnings: vec![], folder: None };
+        let p = Plan { layout: layout.clone(), install_from: install.clone(), name: "ls_test_room".into(), preset: Preset::Fast, doc, wad_dirs: dirs, maps: None, warnings: vec![], folder: None, assets: None };
         begin("compile", "test").unwrap();
         let r = run_compile(p);
         let (log, problems) = with_job(|j| (j.log.join("\n"), j.problems.clone())).unwrap();

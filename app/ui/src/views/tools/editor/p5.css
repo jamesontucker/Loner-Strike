@@ -279,3 +279,6 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 /* P5: the prefab name-clash choice in Save as a prefab */
 .p5-clash { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .p5-clash .seg button { padding: 2px 8px; font-size: 12px; }
+/* P5: the map's models, sprites and sounds (Project panel) */
+.ed-project-assets { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 3px; background: rgba(255, 216, 74, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 216, 74, 0.18); }
+.ed-project-assets p { margin: 0; }

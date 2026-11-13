@@ -37,6 +37,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 pub mod components;
 pub mod prefabs;
+pub mod assets; // P5: the models, sprites, sounds and sky the map names
 pub mod workspace; // P5: project files, undo history, find/replace, duplicate with new names
 
 const INTERNAL: &str = "Loner-Strike hit an internal error in the map editor. Try again, and copy the diagnostics from Settings if it keeps happening.";
@@ -194,6 +195,8 @@ impl Editor {
         let mut s = Session::new(id, doc, name, project);
         if let Some(dir) = source.and_then(Path::parent) {
             s.folder = Some(dir.to_path_buf());
+            // P5: kept with the project, so its models/sprites/sounds are still found after Save
+            s.doc.editor.source = Some(dir.to_string_lossy().to_string());
         }
         s.learn_textures(dirs);
         s.track();
@@ -403,7 +406,7 @@ fn meshes_bundle(s: &Session, doc_id: Option<u64>, since: Option<u64>) -> Vec<u8
     goldsrc::mesh::write_bundle(header, &[Section::f32("pos", 3, &pos), Section::f32("uv", 2, &uv)])
 }
 
-fn checks_json(s: &mut Session, dirs: &[PathBuf]) -> Value {
+fn checks_json(s: &mut Session, dirs: &[PathBuf], places: Option<&assets::Places>) -> Value {
     let known: Option<HashSet<String>> = s.wads(dirs).map(|set| {
         let mut k = HashSet::new();
         for w in set.wads.iter().filter_map(|(_, w)| w.as_ref().ok()) {
@@ -411,7 +414,11 @@ fn checks_json(s: &mut Session, dirs: &[PathBuf]) -> Value {
         }
         k
     });
-    let issues = checks::run(&s.doc, known.as_ref());
+    let mut issues = checks::run(&s.doc, known.as_ref());
+    // P5: models, sprites, sounds and the sky the entities name
+    if let Some(p) = places {
+        issues.extend(assets::issues(&assets::locate(assets::named_files(&s.doc), p), p.hl.is_some()));
+    }
     json!({"docId": s.id, "revision": s.doc.revision, "issues": issues, "stats": checks::stats(&s.doc), "texturesChecked": known.is_some()})
 }
 
@@ -1320,7 +1327,8 @@ async fn api_checks(State(st): State<Shared>, Extension(ed): Extension<Ed>) -> R
     blocking(move || {
         let mut g = ed.lock();
         let s = g.as_mut().ok_or(NO_DOC)?;
-        Ok(checks_json(s, &dirs))
+        let places = assets::Places::of(&st, s); // P5
+        Ok(checks_json(s, &dirs, Some(&places)))
     })
     .await
 }
@@ -1906,6 +1914,7 @@ fn routes_with(ed: Ed) -> Router<Shared> {
         .merge(prefabs::routes())
         .merge(components::routes())
         .merge(workspace::routes()) // P5
+        .merge(assets::routes()) // P5
         .layer(Extension(ed))
 }
 
