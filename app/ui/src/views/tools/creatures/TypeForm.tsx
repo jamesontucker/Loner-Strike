@@ -268,6 +268,48 @@ export function TypeForm({ t, isNew, builtin, limits, problems, checked, look, o
         </>
       ))}
 
+      {sec("Tiers and enrage", t.enrage_below > 0 ? `enraged below ${Math.round(t.enrage_below * 100)}%` : "never enraged", ["enrage_below", "enrage_speed", "enrage_damage", "enrage_anim", "tier2_skin", "tier2_body", "tier2_hp", "tier3_skin", "tier3_body", "tier3_hp"], (
+        <>
+          <Field name="Enraged when hurt" note={t.enrage_below > 0 ? `Below ${Math.round(t.enrage_below * 100)}% health: a deep roar, a pulsing red glow, faster and harder` : "Never (heavies are, at 40%)"} problems={p("enrage_below")}>
+            <Num value={Math.round(t.enrage_below * 100)} onChange={(v) => set("enrage_below", v / 100)} min={0} max={95} unit="%" label="Enraged when hurt" />
+          </Field>
+          {t.enrage_below > 0 && (
+            <>
+              <Field name="Enraged speed" note="Times its speeds" problems={p("enrage_speed")}>
+                {n("enrage_speed", "Enraged speed", { step: 0.05, unit: "×" })}
+              </Field>
+              <Field name="Enraged damage" note="Times its damage" problems={p("enrage_damage")}>
+                {n("enrage_damage", "Enraged damage", { step: 0.05, unit: "×" })}
+              </Field>
+              <Field name="Enraged quickness" note="Times its attack rate and how fast it animates" problems={p("enrage_anim")}>
+                {n("enrage_anim", "Enraged quickness", { step: 0.05, unit: "×" })}
+              </Field>
+            </>
+          )}
+          <p className="cs-note">
+            Modes spawn tougher tiers (tier 2: a yellow glow; tier 3: a red-orange glow, a little bigger), the same look on every type. Pick a tier above the preview to see it. A skin or body here only matters where the model has more than one.
+          </p>
+          {([2, 3] as const).map((tier) => (
+            <Field key={tier} name={`Tier ${tier}`} note={`Skin and body (-1: its own), health times (1: the mode decides)`} problems={p(`tier${tier}_skin`, `tier${tier}_body`, `tier${tier}_hp`)}>
+              <span className="cs-inline">
+                <label className="cs-inline">
+                  Skin
+                  <input className="search cs-numbox" type="number" min={-1} max={255} value={t[`tier${tier}_skin`]} aria-label={`Tier ${tier} skin`} onChange={(e) => set(`tier${tier}_skin`, Number(e.target.value))} />
+                </label>
+                <label className="cs-inline">
+                  Body
+                  <input className="search cs-numbox" type="number" min={-1} max={255} value={t[`tier${tier}_body`]} aria-label={`Tier ${tier} body`} onChange={(e) => set(`tier${tier}_body`, Number(e.target.value))} />
+                </label>
+                <label className="cs-inline">
+                  Health ×
+                  <input className="search cs-numbox" type="number" min={0.1} max={20} step={0.1} value={t[`tier${tier}_hp`]} aria-label={`Tier ${tier} health times`} onChange={(e) => set(`tier${tier}_hp`, Number(e.target.value))} />
+                </label>
+              </span>
+            </Field>
+          ))}
+        </>
+      ))}
+
       {sec("Sounds", `${t.snd.filter((s) => s.trim()).length} of 7 events have sounds`, SND_KEYS, <SoundTable snd={t.snd} reports={checked?.sounds} onChange={(snd) => onChange({ ...t, snd })} />)}
 
       {sec("Rewards", `$${t.money}, ${t.frags} score`, ["money", "frags"], (

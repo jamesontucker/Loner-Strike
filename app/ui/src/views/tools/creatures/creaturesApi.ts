@@ -48,6 +48,25 @@ export type Creature = {
   anim: string[];
   /** idle, alert, attack, hit, miss, pain, die: "a.wav b.wav | c.wav" */
   snd: string[];
+  /** enraged below this part of its health (0 = never) */
+  enrage_below: number;
+  enrage_speed: number;
+  enrage_damage: number;
+  enrage_anim: number;
+  /** tiers 2 and 3: skin / body where the model has one (-1 = its own), health times */
+  tier2_skin: number;
+  tier2_body: number;
+  tier2_hp: number;
+  tier3_skin: number;
+  tier3_body: number;
+  tier3_hp: number;
+};
+
+/** How a tier or enraged creature looks, the same on every type (creature.cpp ApplyLook). */
+export const LOOKS = {
+  tier2: { color: [255, 200, 0] as Vec3, amount: 10, scale: 1 },
+  tier3: { color: [255, 70, 10] as Vec3, amount: 14, scale: 1.08 },
+  enraged: { color: [255, 0, 0] as Vec3, amount: 20, scale: 1 },
 };
 
 export type TypeRow = Creature & { builtin: boolean; inFile: boolean; set: string[]; skipped: boolean; summary: string };

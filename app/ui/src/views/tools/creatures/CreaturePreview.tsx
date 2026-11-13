@@ -13,7 +13,7 @@ const MOVES = ["Idle", "Walk", "Run", "Attack", "Flinch", "Die"];
 /** the brain's renderamt for a glow shell (creature.cpp Setup) */
 const SHELL_AMOUNT = 12;
 
-export default function CreaturePreview({ look, skin, glow, fallbackGlow, scale }: { look: ModelLook; skin: number; glow: Vec3; fallbackGlow: Vec3; scale: number }) {
+export default function CreaturePreview({ look, skin, glow, fallbackGlow, scale, shellOver, animScale = 1 }: { look: ModelLook; skin: number; glow: Vec3; fallbackGlow: Vec3; scale: number; shellOver?: { color: Vec3; amount: number } | null; animScale?: number }) {
   const item = look.model!;
   const [bundle, setBundle] = useState<ModelBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +48,8 @@ export default function CreaturePreview({ look, skin, glow, fallbackGlow, scale 
   if (error) return <p className="muted">{error}</p>;
   const on = (c: Vec3) => c.some((v) => v > 0);
   const color = on(glow) ? glow : look.report.standIn && on(fallbackGlow) ? fallbackGlow : null;
-  const shell = color ? { color, amount: SHELL_AMOUNT } : null;
+  // (a tier's or enraged look over the type's own tint)
+  const shell = shellOver ?? (color ? { color, amount: SHELL_AMOUNT } : null);
   const seqName = seq != null ? look.sequences?.[seq]?.name : null;
   const once = move >= 3;
   // no run of its own: the game plays the walk faster (ResolveAnims)
@@ -67,7 +68,7 @@ export default function CreaturePreview({ look, skin, glow, fallbackGlow, scale 
             playing={!!anim}
             wire={false}
             loop={!once}
-            speed={runIsWalk ? 2 : 1}
+            speed={(runIsWalk ? 2 : 1) * animScale}
             scale={scale}
             shell={shell}
             onEnded={() => once && move !== 5 && setMove(1)}

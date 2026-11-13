@@ -153,6 +153,16 @@ snd_hit =
 snd_miss =
 snd_pain =
 snd_die =
+enrage_below = 0.4          ; enraged below this part of its health (0 = never; brute, babygarg, boss, gonarch: 0.4)
+enrage_speed = 1.35         ; enraged: times its speeds
+enrage_damage = 1.3         ;          times its damage
+enrage_anim = 1.25          ;          times its attack rate and animation speed
+tier2_skin = -1             ; tiers (spawn key tier=2|3): skin / body where the model has one (-1 = its own)
+tier2_body = -1
+tier2_hp = 1                ; health times for the tier (1 = the mode scales health itself)
+tier3_skin = -1
+tier3_body = -1
+tier3_hp = 1
 ls = model=models/player/zombie_source/zombie_source.mdl anims=walk run attack1 die   ; the plan's backend form also works
 mm = monster_zombie         ; ignored by the fork (the kit's MonsterMod mapping)
 bot = zombie_classic        ; ignored by the fork (the kit's bot-zombie fallback)
@@ -188,7 +198,13 @@ Otherwise the spawn is refused with a message. The fork counts its own precaches
 models + sounds, out of the engine's 512/512). On ReHLDS, `rescount` shows the whole picture.
 
 **Map entity** `ls_creature` (point). Keys: `type`, `behaviour`, `path` (first `path_corner` of a patrol), `radius`,
-`respawn`, `health`, `speed`, `damage`, `aggression`, `detect`, `hates`, `persist`, `angles`. The same keys work after
+`respawn`, `health`, `speed`, `damage`, `aggression`, `detect`, `hates`, `persist`, `tier`, `angles`.
+
+**Tiers and enrage: the look.** The same on every type, with no extra models or precache: tier 2 a yellow glow shell
+(255 200 0), tier 3 a red-orange shell (255 70 10) and 8 % bigger (the hull stays), enraged a bright red shell that
+pulses, a deep roar (its alert sound at pitch 72) and quicker animation. A type's `tierN_skin` / `tierN_body` add a skin
+or body where the model has one. A tier is set at spawn (`tier=2`); enrage happens once a life, when hurt below
+`enrage_below`. The same keys work after
 `spawn` on the command line and through `DispatchKeyValue`.
 
 **Server command** `ls_creature`:
@@ -206,6 +222,14 @@ models + sounds, out of the engine's 512/512). On ReHLDS, `rescount` shows the w
 Cvars: `ls_creature_ver` (1, for detection), `ls_creature_file`, `ls_creature_precache`, `ls_creature_max`,
 `ls_creature_budget`, `ls_creature_debug` (1 beams for mode/target, 2 path debug, 3 console lines), `ls_creature_last`,
 `ls_creature_alive`, `ls_creature_frags` (0: kills don't add score).
+
+**Adaptive live cap.** `ls_creature_adaptive 1` (default): every second the server's frame rate is measured against
+`sys_ticrate`. Under `ls_creature_fps_low` (0.6 of it, or an fps when > 1) for 2 seconds, the live cap drops to a little
+under what's alive (by at least 4, never under 12); at `ls_creature_fps_ok` (0.85) or better for 10 seconds it creeps
+back up by 4, never past `ls_creature_max`. Spawns past it wait (wave spawners retry), nobody is removed, difficulty
+is untouched. `ls_creature_cap_now` shows it; changes are logged. `ls_perf N` writes a line every N seconds: fps (avg,
+worst second, worst frame), the cap now, creature and bot think time a frame, edicts, and how many entities each living
+player would be sent (the engine sends at most 256 a frame).
 
 Waves are planned for later: `ls_wave_spawner` in gm_components drives `spawn` lines.
 

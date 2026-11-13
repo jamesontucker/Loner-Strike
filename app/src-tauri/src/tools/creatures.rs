@@ -48,6 +48,7 @@ pub const KEYS: &[&str] = &[
     "attack_rate", "attack_delay", "spread", "flee_hp", "behaviour", "radius", "target", "hates", "respawn", "corpse_time", "moves", "frags", "money",
     "model", "skin", "body", "scale", "hull_min", "hull_max", "glow", "fallback_glow", "blood", "anim_idle", "anim_walk", "anim_run", "anim_attack",
     "anim_flinch", "anim_die", "snd_idle", "snd_alert", "snd_attack", "snd_hit", "snd_miss", "snd_pain", "snd_die",
+    "enrage_below", "enrage_speed", "enrage_damage", "enrage_anim", "tier2_skin", "tier2_body", "tier2_hp", "tier3_skin", "tier3_body", "tier3_hp",
 ];
 
 /// Numbers and the range the fork keeps them in (LsSetTypeKey).
@@ -73,6 +74,16 @@ pub const RANGES: &[(&str, f32, f32)] = &[
     ("skin", 0.0, 255.0),
     ("body", 0.0, 255.0),
     ("scale", 0.1, 4.0),
+    ("enrage_below", 0.0, 0.95),
+    ("enrage_speed", 1.0, 3.0),
+    ("enrage_damage", 1.0, 5.0),
+    ("enrage_anim", 1.0, 3.0),
+    ("tier2_skin", -1.0, 255.0),
+    ("tier3_skin", -1.0, 255.0),
+    ("tier2_body", -1.0, 255.0),
+    ("tier3_body", -1.0, 255.0),
+    ("tier2_hp", 0.1, 20.0),
+    ("tier3_hp", 0.1, 20.0),
 ];
 
 /// Text sizes in the fork's LsCreatureType (one less than the array: the terminator).
@@ -129,6 +140,20 @@ pub struct Creature {
     pub blood: String,
     pub anim: [String; 6],
     pub snd: [String; 7],
+    /// enraged below this part of its health (0 = never): faster, harder, quicker swings, a roar
+    /// and a pulsing red shell
+    pub enrage_below: f32,
+    pub enrage_speed: f32,
+    pub enrage_damage: f32,
+    pub enrage_anim: f32,
+    /// tiers 2 and 3 (a mode spawns `tier=2|3`): the same shell on every type; a skin / body
+    /// where the model has one (-1 = its own) and health times (1 = the mode decides)
+    pub tier2_skin: i32,
+    pub tier2_body: i32,
+    pub tier2_hp: f32,
+    pub tier3_skin: i32,
+    pub tier3_body: i32,
+    pub tier3_hp: f32,
 }
 
 impl Default for Creature {
@@ -186,6 +211,16 @@ pub fn defaults(name: &str) -> Creature {
             "zombie/zo_pain1.wav zombie/zo_pain2.wav | player/pl_pain2.wav player/pl_pain4.wav".into(),
             "zombie/zo_pain2.wav | player/die1.wav player/die3.wav".into(),
         ],
+        enrage_below: 0.0,
+        enrage_speed: 1.35,
+        enrage_damage: 1.3,
+        enrage_anim: 1.25,
+        tier2_skin: -1,
+        tier2_body: -1,
+        tier2_hp: 1.0,
+        tier3_skin: -1,
+        tier3_body: -1,
+        tier3_hp: 1.0,
     }
 }
 
@@ -212,6 +247,7 @@ pub fn builtins() -> Vec<Creature> {
     out.push(t);
 
     let mut t = defaults("brute");
+    t.enrage_below = 0.4; // a heavy: enraged below 40%
     t.display = "Brute".into();
     (t.hp, t.speed, t.walk_speed, t.damage, t.attack_range, t.attack_rate, t.attack_delay) = (450.0, 170.0, 70.0, 40.0, 72.0, 0.7, 0.6);
     t.category = "alien".into();
@@ -287,6 +323,7 @@ pub fn builtins() -> Vec<Creature> {
     out.push(t);
 
     let mut t = defaults("boss");
+    t.enrage_below = 0.4; // a heavy: enraged below 40%
     t.display = "Abomination".into();
     t.category = "boss".into();
     (t.hp, t.speed, t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.detect_radius) = (3000.0, 200.0, 60.0, 80.0, 0.6, 0.7, 2000.0);
@@ -343,6 +380,7 @@ pub fn builtins() -> Vec<Creature> {
     out.push(t);
 
     let mut t = defaults("babygarg");
+    t.enrage_below = 0.4; // a heavy: enraged below 40%
     t.display = "Baby gargantua".into();
     t.category = "boss".into();
     (t.hp, t.speed, t.walk_speed, t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.detect_radius) = (900.0, 210.0, 80.0, 35.0, 72.0, 0.8, 0.5, 1600.0);
@@ -444,6 +482,7 @@ pub fn builtins() -> Vec<Creature> {
     out.push(t);
 
     let mut t = defaults("gonarch");
+    t.enrage_below = 0.4; // a heavy: enraged below 40%
     t.display = "Gonarch".into();
     t.category = "boss".into();
     (t.hp, t.speed, t.walk_speed, t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.detect_radius) = (3500.0, 190.0, 90.0, 50.0, 96.0, 0.7, 0.6, 2000.0);
@@ -620,6 +659,16 @@ fn set_key(t: &mut Creature, key: &str, value: &str) {
         "hull_max" => t.hull_max = vector(value, t.hull_max),
         "glow" => t.glow = color(value, t.glow),
         "fallback_glow" => t.fallback_glow = color(value, t.fallback_glow),
+        "enrage_below" => t.enrage_below = n(t.enrage_below, "enrage_below"),
+        "enrage_speed" => t.enrage_speed = n(t.enrage_speed, "enrage_speed"),
+        "enrage_damage" => t.enrage_damage = n(t.enrage_damage, "enrage_damage"),
+        "enrage_anim" => t.enrage_anim = n(t.enrage_anim, "enrage_anim"),
+        "tier2_skin" => t.tier2_skin = atoi(value).clamp(-1, 255),
+        "tier3_skin" => t.tier3_skin = atoi(value).clamp(-1, 255),
+        "tier2_body" => t.tier2_body = atoi(value).clamp(-1, 255),
+        "tier3_body" => t.tier3_body = atoi(value).clamp(-1, 255),
+        "tier2_hp" => t.tier2_hp = n(t.tier2_hp, "tier2_hp"),
+        "tier3_hp" => t.tier3_hp = n(t.tier3_hp, "tier3_hp"),
         "blood" => {
             let v = value.to_ascii_lowercase();
             t.blood = if v == "yellow" { "yellow" } else if v == "none" { "none" } else { "red" }.into();
@@ -734,6 +783,16 @@ impl Creature {
             "glow" => fmt_vec(self.glow),
             "fallback_glow" => fmt_vec(self.fallback_glow),
             "blood" => self.blood.clone(),
+            "enrage_below" => fmt_num(self.enrage_below),
+            "enrage_speed" => fmt_num(self.enrage_speed),
+            "enrage_damage" => fmt_num(self.enrage_damage),
+            "enrage_anim" => fmt_num(self.enrage_anim),
+            "tier2_skin" => self.tier2_skin.to_string(),
+            "tier3_skin" => self.tier3_skin.to_string(),
+            "tier2_body" => self.tier2_body.to_string(),
+            "tier3_body" => self.tier3_body.to_string(),
+            "tier2_hp" => fmt_num(self.tier2_hp),
+            "tier3_hp" => fmt_num(self.tier3_hp),
             k => {
                 if let Some(i) = ANIMS.iter().position(|a| *a == k) {
                     self.anim[i].clone()
@@ -1050,11 +1109,14 @@ pub fn check(types: &[Creature]) -> Vec<Problem> {
             out.push(problem(at, "display", "No line breaks in the shown name.", true));
         }
         // numbers: the game clamps, so out of range is a mistake to fix here
-        let nums: [(&str, f32); 21] = [
+        let nums: [(&str, f32); 31] = [
             ("hp", t.hp), ("speed", t.speed), ("walk_speed", t.walk_speed), ("aggression", t.aggression), ("detect_radius", t.detect_radius),
             ("detect_fov", t.detect_fov), ("hearing", t.hearing), ("damage", t.damage), ("attack_range", t.attack_range), ("attack_rate", t.attack_rate),
             ("attack_delay", t.attack_delay), ("spread", t.spread), ("flee_hp", t.flee_hp), ("radius", t.radius), ("respawn", t.respawn),
             ("corpse_time", t.corpse_time), ("frags", t.frags as f32), ("money", t.money as f32), ("skin", t.skin as f32), ("body", t.body as f32), ("scale", t.scale),
+            ("enrage_below", t.enrage_below), ("enrage_speed", t.enrage_speed), ("enrage_damage", t.enrage_damage), ("enrage_anim", t.enrage_anim),
+            ("tier2_skin", t.tier2_skin as f32), ("tier3_skin", t.tier3_skin as f32), ("tier2_body", t.tier2_body as f32), ("tier3_body", t.tier3_body as f32),
+            ("tier2_hp", t.tier2_hp), ("tier3_hp", t.tier3_hp),
         ];
         for (k, v) in nums {
             let (lo, hi) = range(k);

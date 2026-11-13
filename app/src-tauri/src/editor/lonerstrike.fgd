@@ -287,6 +287,7 @@
 	detect(float) : "Sight range" : : "Empty: the type's."
 	hates(choices) : "Attacks" : "" : "" = [ "" : "The type's own" "all" : "Everyone" "t" : "Terrorists" "ct" : "Counter-Terrorists" ]
 	persist(choices) : "Body stays" : 0 : "Hidden until it comes back instead of removed." = [ 0 : "No" 1 : "Yes" ]
+	tier(choices) : "Tier" : 1 : "A tougher variant: tier 2 glows yellow, tier 3 red-orange and is a little bigger (the type may give it more health)." = [ 1 : "1 (normal)" 2 : "2" 3 : "3" ]
 	angles(string) : "Facing (pitch yaw roll)" : "0 0 0" : ""
 ]
 

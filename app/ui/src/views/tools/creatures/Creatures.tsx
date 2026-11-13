@@ -11,7 +11,7 @@ import { ActionBar } from "../common/ActionBar";
 import { errorText, useBusy } from "../common/api";
 import { matches, searchWords } from "../common/search";
 import { useToolCrumbs } from "../common/shell";
-import { applyLive, checkTypes, creatureStatus, liveStatus, lookModel, saveTypes, spawnOne, type Checked, type Creature, type Placed, type Status, type TypeRow } from "./creaturesApi";
+import { applyLive, checkTypes, creatureStatus, LOOKS, liveStatus, lookModel, saveTypes, spawnOne, type Checked, type Creature, type Placed, type Status, type TypeRow } from "./creaturesApi";
 import { TypeForm } from "./TypeForm";
 import { WavesTab } from "./WavesTab";
 import { CATEGORY_WORDS, KIND_WORDS, TEMPLATE_WORDS } from "./words";
@@ -44,6 +44,8 @@ export default function Creatures() {
   const [calm, setCalm] = useState(true);
   /** a "Placed by mappers" entry shown instead of a type (its id) */
   const [placedId, setPlacedId] = useState<string | null>(null);
+  /** the preview as tier 1, 2, 3 or enraged */
+  const [as, setAs] = useState<"1" | "2" | "3" | "rage">("1");
 
   const reset = (st: Status) => {
     const list = st.types.filter((t) => !t.skipped).map(plain);
@@ -291,7 +293,18 @@ export default function Creatures() {
                 {placed ? (
                   <CreaturePreview key={placed.id} look={look.data} skin={placedType?.skin ?? 0} glow={placedType?.glow ?? [0, 0, 0]} fallbackGlow={placedType?.fallback_glow ?? [0, 0, 0]} scale={placedType?.scale ?? 1} />
                 ) : (
-                  <CreaturePreview look={look.data} skin={t!.skin} glow={t!.glow} fallbackGlow={t!.fallback_glow} scale={t!.scale} />
+                  <>
+                    <CreaturePreview
+                      look={look.data}
+                      skin={as === "2" && t!.tier2_skin >= 0 ? t!.tier2_skin : as === "3" && t!.tier3_skin >= 0 ? t!.tier3_skin : t!.skin}
+                      glow={t!.glow}
+                      fallbackGlow={t!.fallback_glow}
+                      scale={t!.scale * (as === "3" ? LOOKS.tier3.scale : 1)}
+                      shellOver={as === "2" ? LOOKS.tier2 : as === "3" ? LOOKS.tier3 : as === "rage" ? LOOKS.enraged : null}
+                      animScale={as === "rage" ? t!.enrage_anim : 1}
+                    />
+                    <Segmented label="Show it as" values="1 2 3 rage" labels={`Tier 1|Tier 2|Tier 3|${t!.enrage_below > 0 ? "Enraged" : "Enraged (off)"}`} current={as} onPick={(v) => setAs(v as typeof as)} />
+                  </>
                 )}
               </Suspense>
             ) : look.isFetching ? (
