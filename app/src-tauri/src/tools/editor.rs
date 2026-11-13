@@ -1711,7 +1711,7 @@ mod tests {
     /// For trying the page without the app: serves only the editor routes on 127.0.0.1:8027
     /// (what `npm run dev` proxies to), with the game from LS_TEST_GAME when set. File dialogs
     /// need the app, so open/save/import/export answer an error here.
-    /// `LS_TEST_GAME=... cargo test serve_editor_for_ui -- --ignored --nocapture`
+    /// `LS_TEST_GAME=... [LS_EDITOR_PORT=8127] cargo test serve_editor_for_ui -- --ignored --nocapture`
     #[tokio::test]
     #[ignore]
     async fn serve_editor_for_ui() {
@@ -1721,8 +1721,10 @@ mod tests {
             *t.st.current.write().unwrap() = Some(Arc::new(crate::game::Game::with_app_dir(Path::new(&hl), "cstrike", &app)));
         }
         let app = routes_with(t.ed.clone()).with_state(t.st.clone());
-        let l = tokio::net::TcpListener::bind("127.0.0.1:8027").await.unwrap();
-        println!("editor routes on http://127.0.0.1:8027");
+        // LS_EDITOR_PORT picks another port when 8027 is taken (point a dev server's /api there)
+        let port = std::env::var("LS_EDITOR_PORT").ok().and_then(|p| p.parse::<u16>().ok()).unwrap_or(8027);
+        let l = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.unwrap();
+        println!("editor routes on http://127.0.0.1:{port}");
         axum::serve(l, app).await.unwrap();
     }
 

@@ -8,7 +8,10 @@ import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
 import { getGameWads, getTextures, texUrl, type DocEntity, type Issue, type WadTextures } from "./editorApi";
 import { selectionIds } from "./EditorScene";
-import { EMPTY_SEL, keyOf, originOf, selectionBounds, useEditor, type ToolId } from "./store";
+import { EMPTY_SEL, facesOf, keyOf, originOf, selectionBounds, useEditor, type ShapeKind, type ToolId } from "./store";
+import { useFgd } from "./fgd";
+import { FaceSheet, RecentTextures } from "./FaceSheet";
+import { EntityForm } from "./EntityForm";
 
 // ---- toolbar --------------------------------------------------------------------------
 
@@ -17,11 +20,13 @@ export const TOOLS: { id: ToolId; label: string; key: string; tip: string }[] = 
   { id: "move", label: "Move", key: "W", tip: "Drag the arrows to move what's picked." },
   { id: "rotate", label: "Rotate", key: "E", tip: "Drag the rings to turn what's picked (15° steps)." },
   { id: "scale", label: "Scale", key: "R", tip: "Drag the handles to stretch what's picked." },
+  { id: "vertex", label: "Vertex", key: "V", tip: "Drag a corner of a picked brush (Shift-click picks several, arrows nudge them). Brushes stay convex." },
   { id: "box", label: "Box", key: "B", tip: "Drag on the floor (or on top of a brush) to draw a box." },
-  { id: "cylinder", label: "Cylinder", key: "C", tip: "Drag to draw a cylinder standing up." },
+  { id: "shape", label: "Shape", key: "C", tip: "Drag to draw a cylinder, wedge, spike, sphere or arch (pick which above the view)." },
   { id: "clip", label: "Clip", key: "X", tip: "Click two points to place a cut through what's picked. Tab: which side stays. Enter: cut." },
   { id: "entity", label: "Entity", key: "N", tip: "Click a surface to place an entity there." },
-  { id: "texture", label: "Texture", key: "T", tip: "Click a face to paint the chosen texture (Shift: the whole brush, Alt: pick up the face's texture)." },
+  { id: "texture", label: "Texture", key: "T", tip: "Click a face to pick it (Shift adds more), drag it to slide the texture, drag the handles to turn or stretch it. Alt-click picks up a texture." },
+  { id: "measure", label: "Measure", key: "M", tip: "Drag between two points to measure the distance." },
 ];
 
 const ICONS: Record<ToolId, ReactNode> = {
@@ -30,7 +35,9 @@ const ICONS: Record<ToolId, ReactNode> = {
   rotate: <path d="M12 4a8 8 0 1 1-7.4 5h2.2A6 6 0 1 0 12 6v3L7.5 5 12 1z" />,
   scale: <path d="M3 3h8v2H6.4l5 5-1.4 1.4-5-5V11H3zm18 18h-8v-2h4.6l-5-5 1.4-1.4 5 5V13h2z" />,
   box: <path d="M12 2l9 5v10l-9 5-9-5V7zm0 2.3L5.4 8 12 11.7 18.6 8zM5 9.7v6.1l6 3.4v-6.1zm14 0l-6 3.4v6.1l6-3.4z" />,
-  cylinder: <path d="M12 2c4.4 0 8 1.3 8 3v14c0 1.7-3.6 3-8 3s-8-1.3-8-3V5c0-1.7 3.6-3 8-3zm0 2C8.1 4 6 5 6 5s2.1 1 6 1 6-1 6-1-2.1-1-6-1zM6 7.3V19c.4.4 2.6 1 6 1s5.6-.6 6-1V7.3C16.5 7.8 14.4 8 12 8s-4.5-.2-6-.7z" />,
+  vertex: <path d="M4 4h4v4H4zm12 0h4v4h-4zM4 16h4v4H4zm12 0h4v4h-4zM8 5.5h8v1H8zm0 12h8v1H8zM5.5 8h1v8h-1zm12 0h1v8h-1z" />,
+  measure: <path d="M2 16.5 16.5 2 22 7.5 7.5 22zm3 0L7.5 19l1.4-1.4-1.2-1.2 1-1 1.2 1.2 1.4-1.4-2.4-2.4 1-1 2.4 2.4 1.4-1.4-1.2-1.2 1-1 1.2 1.2 1.4-1.4-2.4-2.4 1-1 2.4 2.4 1.4-1.4L16.5 5z" />,
+  shape: <path d="M12 2c4.4 0 8 1.3 8 3v14c0 1.7-3.6 3-8 3s-8-1.3-8-3V5c0-1.7 3.6-3 8-3zm0 2C8.1 4 6 5 6 5s2.1 1 6 1 6-1 6-1-2.1-1-6-1zM6 7.3V19c.4.4 2.6 1 6 1s5.6-.6 6-1V7.3C16.5 7.8 14.4 8 12 8s-4.5-.2-6-.7z" />,
   clip: <path d="M9.6 7.6A3 3 0 1 0 8 9.4L10.6 12 8 14.6a3 3 0 1 0 1.6 1.8L12 14l7 7h3L9.6 7.6zM6 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm0 10a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm8.4-7.6L19 3h3l-6.2 8.8z" />,
   entity: <path d="M12 2a6 6 0 0 1 6 6c0 4.5-6 12-6 12S6 12.5 6 8a6 6 0 0 1 6-6zm0 3.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" />,
   texture: <path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8zM5 5v4h4V5zm10 10v4h4v-4z" />,
@@ -89,15 +96,33 @@ export const BRUSH_CLASSES = [
   ["trigger_teleport", "Teleport"],
 ] as const;
 
+const SHAPES: { id: ShapeKind; label: string }[] = [
+  { id: "cylinder", label: "Cylinder" },
+  { id: "wedge", label: "Wedge" },
+  { id: "spike", label: "Spike" },
+  { id: "sphere", label: "Sphere" },
+  { id: "arch", label: "Arch" },
+];
+
+const num = (v: string, lo: number, hi: number, fallback: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : fallback;
+};
+
 /** What the current tool can be set to, above the 3D view. */
 export function ToolOptions() {
   const s = useEditor();
+  const fgd = useFgd();
   const clip = s.clipInfo;
+  const picking = s.tool === "select" || s.tool === "move" || s.tool === "rotate" || s.tool === "scale";
+  const points = fgd ? [...fgd.values()].filter((c) => c.kind === "point").map((c) => c.name) : ENTITY_CLASSES.filter(([c]) => !c.startsWith("func_")).map(([c]) => c);
+  const m = s.measure;
+  const len = m ? Math.hypot(m.b[0] - m.a[0], m.b[1] - m.a[1], m.b[2] - m.a[2]) : 0;
   return (
     <div className="editor-options">
       <label>
         Grid
-        <select value={s.grid} onChange={(e) => s.set({ grid: Number(e.target.value) })}>
+        <select value={s.grid} onChange={(e) => s.set({ grid: Number(e.target.value) })} title="Grid size ([ and ] change it)">
           {GRIDS.map((g) => (
             <option key={g} value={g}>
               {g}
@@ -111,19 +136,60 @@ export function ToolOptions() {
       <label className="editor-check" title="Textures stay put on the surface when you move, turn or stretch a brush">
         <input type="checkbox" checked={s.textureLock} onChange={(e) => s.set({ textureLock: e.target.checked })} /> Texture lock
       </label>
-      {(s.tool === "box" || s.tool === "cylinder") && (
+      {picking && (
+        <div className="seg" role="group" aria-label="What a click picks">
+          {(["groups", "objects"] as const).map((k) => (
+            <button key={k} type="button" aria-pressed={s.selectMode === k} title={k === "groups" ? "Clicking something in a group picks the whole group" : "Clicking picks just that brush or entity, even in a group"} onClick={() => s.set({ selectMode: k })}>
+              {k === "groups" ? "Pick groups" : "Pick objects"}
+            </button>
+          ))}
+        </div>
+      )}
+      {s.tool === "vertex" && <span className="muted">{s.verts.length ? `${s.verts.length} corner${s.verts.length === 1 ? "" : "s"} picked. Arrows nudge, Page Up/Down move up and down.` : "Pick a brush, then click or drag its corners."}</span>}
+      {s.tool === "shape" && (
+        <div className="seg" role="group" aria-label="Shape">
+          {SHAPES.map((x) => (
+            <button key={x.id} type="button" aria-pressed={s.shape === x.id} onClick={() => s.set({ shape: x.id })}>
+              {x.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {(s.tool === "box" || s.tool === "shape") && (
         <label>
           Height
-          <input type="number" min={1} max={4096} step={s.grid} value={s.boxHeight} onChange={(e) => s.set({ boxHeight: Math.max(1, Math.min(4096, Number(e.target.value) || 1)) })} />
+          <input type="number" min={1} max={4096} step={s.grid} value={s.boxHeight} onChange={(e) => s.set({ boxHeight: num(e.target.value, 1, 4096, 128) })} />
         </label>
       )}
-      {s.tool === "cylinder" && (
-        <label>
-          Sides
-          <input type="number" min={3} max={64} value={s.sides} onChange={(e) => s.set({ sides: Math.max(3, Math.min(64, Math.round(Number(e.target.value) || 3))) })} />
+      {s.tool === "shape" && s.shape !== "wedge" && (
+        <label title={s.shape === "sphere" ? "Facets round the middle (4-32)" : s.shape === "arch" ? "How many pieces (3-64)" : "Sides (3-64)"}>
+          {s.shape === "arch" ? "Pieces" : "Sides"}
+          <input type="number" min={s.shape === "sphere" ? 4 : 3} max={s.shape === "sphere" ? 32 : 64} value={s.sides} onChange={(e) => s.set({ sides: Math.round(num(e.target.value, s.shape === "sphere" ? 4 : 3, s.shape === "sphere" ? 32 : 64, 12)) })} />
         </label>
       )}
-      {(s.tool === "box" || s.tool === "cylinder" || s.tool === "texture" || s.tool === "clip") && (
+      {s.tool === "shape" && s.shape === "arch" && (
+        <>
+          <label title="How far round the arch goes">
+            Arc°
+            <input type="number" min={1} max={360} value={s.archArc} onChange={(e) => s.set({ archArc: num(e.target.value, 1, 360, 180) })} />
+          </label>
+          <label title="How thick the arch's wall is">
+            Wall
+            <input type="number" min={1} max={1024} step={s.grid} value={s.archWall} onChange={(e) => s.set({ archWall: num(e.target.value, 1, 1024, 16) })} />
+          </label>
+        </>
+      )}
+      {s.tool === "texture" && (
+        <div className="seg" role="group" aria-label="What a click does">
+          <button type="button" aria-pressed={s.texClick === "pick"} title="Click picks faces to line up in the face sheet" onClick={() => s.set({ texClick: "pick" })}>
+            Click picks
+          </button>
+          <button type="button" aria-pressed={s.texClick === "paint"} title="Click paints the current texture (Shift: the whole brush)" onClick={() => s.set({ texClick: "paint" })}>
+            Click paints
+          </button>
+        </div>
+      )}
+      {(s.tool === "box" || s.tool === "shape" || s.tool === "texture" || s.tool === "clip") && (
         <span className="editor-current-tex" title="The texture new brushes and painted faces get (pick one in Textures)">
           <img src={texUrl(s.texture)} alt="" onError={(e) => (e.currentTarget.style.visibility = "hidden")} onLoad={(e) => (e.currentTarget.style.visibility = "visible")} />
           {s.texture}
@@ -132,22 +198,29 @@ export function ToolOptions() {
       {s.tool === "entity" && (
         <label>
           Place
-          <select value={s.entityClass} onChange={(e) => s.set({ entityClass: e.target.value })}>
-            {ENTITY_CLASSES.filter(([c]) => !c.startsWith("func_")).map(([c, l]) => (
+          <input className="editor-class-input" list="editor-point-classes" value={s.entityClass} onChange={(e) => s.set({ entityClass: e.target.value.trim() })} aria-label="Entity to place" spellCheck={false} />
+          <datalist id="editor-point-classes">
+            {points.map((c) => (
               <option key={c} value={c}>
-                {l} ({c})
+                {fgd?.get(c)?.description ?? ENTITY_CLASSES.find(([x]) => x === c)?.[1]}
               </option>
             ))}
-          </select>
+          </datalist>
         </label>
+      )}
+      {s.tool === "entity" && fgd?.get(s.entityClass) && <span className="muted editor-option-note">{fgd.get(s.entityClass)!.description}</span>}
+      {s.tool === "measure" && (
+        <span className="mono">
+          {m ? `${Math.round(len * 100) / 100} units  (x ${Math.round(m.b[0] - m.a[0])}, y ${Math.round(m.b[1] - m.a[1])}, z ${Math.round(m.b[2] - m.a[2])})` : "Drag from one point to another."}
+        </span>
       )}
       {s.tool === "clip" && (
         <>
           <span className="muted">{clip?.points ? (clip.points >= 2 ? "Cut placed." : "Click the second point.") : "Click the first point."}</span>
-          <div className="seg" role="group" aria-label="Which side stays">
+          <div className="seg" role="group" aria-label="Which side stays (Tab)">
             {(["both", "back", "front"] as const).map((k) => (
-              <button key={k} type="button" aria-pressed={clip?.keep === k} onClick={() => s.setClipKeep?.(k)}>
-                {k === "both" ? "Keep both" : k === "back" ? "Keep side A" : "Keep side B"}
+              <button key={k} type="button" aria-pressed={clip?.keep === k} title="Tab switches" onClick={() => s.setClipKeep?.(k)}>
+                {k === "both" ? "Keep both" : k === "back" ? "Keep behind" : "Keep in front"}
               </button>
             ))}
           </div>
@@ -174,8 +247,8 @@ const fmt = (v: Vec3) => v.map((x) => Math.round(x)).join(" ");
 export function Inspector() {
   const sel = useEditor((s) => s.sel);
   const ent = useSelectedEntity();
-  if (sel.face && !sel.brushes.length && !sel.entities.length) return <FacePanel />;
-  if (ent) return <EntityPanel e={ent} />;
+  if (sel.face && !sel.brushes.length && !sel.entities.length) return <FaceSheet />;
+  if (ent) return <EntityForm e={ent} />;
   if (sel.brushes.length || sel.entities.length) return <SelectionPanel />;
   return <MapPanel />;
 }
@@ -185,12 +258,18 @@ function SelectionPanel() {
   const thickness = useEditor((s) => s.thickness);
   const grid = useEditor((s) => s.grid);
   const [tie, setTie] = useState("func_wall");
+  const fgd = useFgd();
   const bounds = selectionBounds();
   const ids = selectionIds();
   const s = useEditor.getState();
   const size = bounds ? bounds[1].map((x, i) => x - bounds[0][i]) : null;
   const centre = bounds ? (bounds[0].map((x, i) => (x + bounds[1][i]) / 2) as Vec3) : null;
   const n = ids.brushes.length;
+  const turn90 = (axis: number, degrees: number) => {
+    const ax: Vec3 = [0, 0, 0];
+    ax[axis] = 1;
+    void s.cmd({ op: "transform", ...ids, rotate: { axis: ax, degrees }, pivot: centre, lock: s.textureLock });
+  };
   const mirror = (axis: number) => {
     const f: Vec3 = [1, 1, 1];
     f[axis] = -1;
@@ -234,11 +313,22 @@ function SelectionPanel() {
             <button type="button" className="btn small" title="A copy, one grid step over (Ctrl+D)" onClick={() => duplicate()}>
               Duplicate
             </button>
+            <button type="button" className="btn small" title="Several copies, each moved and turned from the last (Ctrl+Shift+V)" onClick={() => s.set({ dialog: "paste" })}>
+              Paste special…
+            </button>
           </div>
           <div className="editor-row wrap">
-            <span className="muted">Mirror</span>
+            <span className="muted editor-row-label">Flip</span>
             {["X", "Y", "Z"].map((a, i) => (
-              <button key={a} type="button" className="btn small" onClick={() => mirror(i)}>
+              <button key={a} type="button" className="btn small" title={`Mirror along ${a}`} onClick={() => mirror(i)}>
+                {a}
+              </button>
+            ))}
+          </div>
+          <div className="editor-row wrap">
+            <span className="muted editor-row-label">Turn 90°</span>
+            {["X", "Y", "Z"].map((a, i) => (
+              <button key={a} type="button" className="btn small" title={`Turn 90° round ${a} (Shift: the other way)`} onClick={(ev) => turn90(i, ev.shiftKey ? -90 : 90)}>
                 {a}
               </button>
             ))}
@@ -251,6 +341,15 @@ function SelectionPanel() {
                     {l}
                   </option>
                 ))}
+                {fgd && (
+                  <optgroup label="Every brush entity">
+                    {[...fgd.values()].filter((c) => c.kind === "solid" && c.name !== "worldspawn").map((c) => (
+                      <option key={c.name} value={c.name} title={c.description}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
               <button
                 type="button"
@@ -283,12 +382,46 @@ function SelectionPanel() {
             Look at
           </button>
         )}
+        <button type="button" className="btn small" title="Hide what's picked for now (H). U shows everything again." onClick={() => hideSelection()}>
+          Hide
+        </button>
+        <button type="button" className="btn small" title="Hide everything else (Shift+H)" onClick={() => isolateSelection()}>
+          Isolate
+        </button>
         <button type="button" className="btn small danger" onClick={() => deleteSelection()}>
           Delete
         </button>
       </div>
     </section>
   );
+}
+
+/** Hide the selection (this page only, not saved). */
+export function hideSelection() {
+  const s = useEditor.getState();
+  const ids = selectionIds();
+  if (!ids.brushes.length && !ids.entities.length) return;
+  const brushes = new Set(s.hidden.brushes);
+  const entities = new Set(s.hidden.entities);
+  ids.brushes.forEach((b) => brushes.add(b));
+  ids.entities.forEach((e) => entities.add(e));
+  s.set({ hidden: { brushes, entities }, sel: EMPTY_SEL });
+}
+
+/** Hide everything but the selection. */
+export function isolateSelection() {
+  const s = useEditor.getState();
+  const ids = selectionIds();
+  if (!ids.brushes.length && !ids.entities.length) return;
+  const keepB = new Set(ids.brushes);
+  const keepE = new Set(ids.entities);
+  const brushes = new Set([...s.brushes.keys()].filter((b) => !keepB.has(b)));
+  const entities = new Set((s.doc?.entities ?? []).filter((e) => !keepE.has(e.id)).map((e) => e.id));
+  s.set({ hidden: { brushes, entities } });
+}
+
+export function showAll() {
+  useEditor.getState().set({ hidden: { brushes: new Set(), entities: new Set() } });
 }
 
 export function deleteSelection() {
@@ -310,271 +443,6 @@ export async function duplicate() {
     const brushes = r.created.brushes.filter((b) => !owned.size || !owned.has(useEditor.getState().brushes.get(b)?.entity ?? -1));
     s.select({ brushes, entities: r.created.entities, face: null });
   }
-}
-
-// ---- entity inspector ----------------------------------------------------------------
-
-const KEY_HELP: Record<string, string> = {
-  targetname: "This entity's name, so others can set it off.",
-  target: "The name of what this sets off.",
-  killtarget: "The name of what this removes.",
-  angle: "Which way it faces (0 = east, 90 = north).",
-  _light: "Colour and brightness (red green blue brightness).",
-  rendercolor: "Tint colour (red green blue).",
-  renderamt: "How see-through (0-255).",
-  rendermode: "0 normal, 1 colour, 2 texture, 4 solid, 5 additive.",
-  spawnflags: "Options as a number (each tick adds up).",
-  message: "Text or sound file.",
-  wait: "Seconds before it can be set off again.",
-  speed: "How fast it moves.",
-  health: "How much damage it takes before breaking (0 = unbreakable).",
-  pitch: "How steep the sun shines (negative = from above).",
-};
-
-function names(ents: DocEntity[]): string[] {
-  return [...new Set(ents.map((e) => keyOf(e.keys, "targetname")).filter((x): x is string => !!x))].sort();
-}
-
-function rgbToHex(v: string): string {
-  const n = v.trim().split(/\s+/).map(Number);
-  if (n.length < 3 || !n.slice(0, 3).every(Number.isFinite)) return "#ffffff";
-  return "#" + n.slice(0, 3).map((x) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0")).join("");
-}
-
-function hexToRgb(h: string): string {
-  const n = parseInt(h.slice(1), 16);
-  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
-}
-
-/** A compass dial for "angle": drag or click to point it. */
-function AngleDial({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const r = 18;
-  const a = (value * Math.PI) / 180;
-  const set = (e: React.PointerEvent<SVGSVGElement>) => {
-    const b = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - (b.left + b.width / 2);
-    const y = -(e.clientY - (b.top + b.height / 2));
-    let deg = Math.round((Math.atan2(y, x) * 180) / Math.PI);
-    if (!e.altKey) deg = Math.round(deg / 15) * 15;
-    onChange((deg + 360) % 360);
-  };
-  return (
-    <svg className="editor-dial" viewBox="-22 -22 44 44" width="44" height="44" onPointerDown={set} role="slider" aria-valuenow={value} aria-label="Facing">
-      <circle r={r} />
-      <line x1={0} y1={0} x2={Math.cos(a) * r} y2={-Math.sin(a) * r} />
-      <text x={r - 2} y={3} fontSize="6">E</text>
-      <text x={-2} y={-r + 7} fontSize="6">N</text>
-    </svg>
-  );
-}
-
-function KeyField({ e, k, v, all }: { e: DocEntity; k: string; v: string; all: string[] }) {
-  const [text, setText] = useState(v);
-  useEffect(() => setText(v), [v]);
-  const s = useEditor.getState();
-  const commit = (value: string) => {
-    if (value === v) return;
-    void s.cmd({ op: "set_key", entity: e.id, key: k, value });
-  };
-  const list = k === "target" || k === "killtarget" || k === "master" ? `editor-names-${e.id}` : undefined;
-  return (
-    <div className="editor-key">
-      <span className="editor-key-name" title={KEY_HELP[k] ?? k}>
-        {k}
-      </span>
-      <div className="editor-key-value">
-        {(k === "_light" || k === "rendercolor") && (
-          <input
-            type="color"
-            value={rgbToHex(text)}
-            onChange={(ev) => {
-              const rest = text.trim().split(/\s+/).slice(3).join(" ");
-              const nv = `${hexToRgb(ev.target.value)}${rest ? " " + rest : ""}`;
-              setText(nv);
-            }}
-            onBlur={() => commit(text)}
-            aria-label={`${k} colour`}
-          />
-        )}
-        {k === "angle" && <AngleDial value={Number(text) || 0} onChange={(deg) => { setText(String(deg)); commit(String(deg)); }} />}
-        <input
-          value={text}
-          list={list}
-          onChange={(ev) => setText(ev.target.value)}
-          onBlur={() => commit(text)}
-          onKeyDown={(ev) => {
-            if (ev.key === "Enter") commit(text);
-            if (ev.key === "Escape") setText(v);
-          }}
-          aria-label={k}
-          disabled={k === "classname"}
-        />
-        {list && (
-          <datalist id={list}>
-            {all.map((n) => (
-              <option key={n} value={n} />
-            ))}
-          </datalist>
-        )}
-        {k !== "classname" && (
-          <button type="button" className="btn small icon" title="Remove this key" aria-label={`Remove ${k}`} onClick={() => void s.cmd({ op: "set_key", entity: e.id, key: k, value: "" })}>
-            ×
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function EntityPanel({ e }: { e: DocEntity }) {
-  const doc = useEditor((s) => s.doc);
-  const [nk, setNk] = useState("");
-  const [nv, setNv] = useState("");
-  const all = useMemo(() => names(doc?.entities ?? []), [doc]);
-  const s = useEditor.getState();
-  const name = keyOf(e.keys, "targetname");
-  const firedBy = name ? (doc?.entities ?? []).filter((x) => keyOf(x.keys, "target") === name || keyOf(x.keys, "killtarget") === name) : [];
-  const target = keyOf(e.keys, "target");
-  const targets = target ? (doc?.entities ?? []).filter((x) => keyOf(x.keys, "targetname") === target) : [];
-  const o = originOf(e.keys);
-  const b = selectionBounds();
-  const add = () => {
-    const k = nk.trim();
-    if (!k || !nv.trim()) return;
-    void s.cmd({ op: "set_key", entity: e.id, key: k, value: nv.trim() }).then((r) => {
-      if (!r.error) {
-        setNk("");
-        setNv("");
-      }
-    });
-  };
-  return (
-    <section className="tools-panel">
-      <h3>{e.classname}</h3>
-      <p className="small-note muted">{e.brushes.length ? `Brush entity with ${e.brushes.length} brush${e.brushes.length === 1 ? "" : "es"}` : o ? `At ${fmt(o)}` : "No origin"}</p>
-      <div className="editor-keys">
-        {e.keys.map(([k, v]) => (
-          <KeyField key={k} e={e} k={k} v={v} all={all} />
-        ))}
-      </div>
-      <div className="editor-key add">
-        <input placeholder="New key" value={nk} onChange={(ev) => setNk(ev.target.value)} aria-label="New key" list="editor-common-keys" />
-        <div className="editor-key-value">
-          <input placeholder="Value" value={nv} onChange={(ev) => setNv(ev.target.value)} onKeyDown={(ev) => ev.key === "Enter" && add()} aria-label="New value" />
-          <button type="button" className="btn small" onClick={add} disabled={!nk.trim() || !nv.trim()}>
-            Add
-          </button>
-        </div>
-        <datalist id="editor-common-keys">
-          {Object.keys(KEY_HELP).map((k) => (
-            <option key={k} value={k} />
-          ))}
-        </datalist>
-      </div>
-      {(targets.length > 0 || firedBy.length > 0) && (
-        <div className="editor-links">
-          {targets.map((t) => (
-            <button key={t.id} type="button" className="linklike" onClick={() => s.select({ brushes: [], entities: [t.id], face: null })}>
-              Sets off {t.classname} “{target}”
-            </button>
-          ))}
-          {firedBy.map((t) => (
-            <button key={t.id} type="button" className="linklike" onClick={() => s.select({ brushes: [], entities: [t.id], face: null })}>
-              Set off by {t.classname}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="editor-row wrap">
-        {b && (
-          <button type="button" className="btn small" onClick={() => useTools.getState().look(b[0].map((x, i) => (x + b[1][i]) / 2) as Vec3, Math.max(64, ...b[1].map((x, i) => x - b[0][i])))}>
-            Look at
-          </button>
-        )}
-        {e.brushes.length > 0 && (
-          <button type="button" className="btn small" title="Make its brushes plain world brushes again" onClick={() => void s.cmd({ op: "to_world", entity: e.id }).then((r) => !r.error && s.select({ brushes: e.brushes, entities: [], face: null }))}>
-            Move to world
-          </button>
-        )}
-        <button type="button" className="btn small" onClick={() => void duplicate()}>
-          Duplicate
-        </button>
-        <button type="button" className="btn small danger" onClick={() => deleteSelection()}>
-          Delete
-        </button>
-      </div>
-    </section>
-  );
-}
-
-// ---- face (texture) panel ------------------------------------------------------------
-
-function FacePanel() {
-  const face = useEditor((s) => s.sel.face)!;
-  const brushes = useEditor((s) => s.brushes);
-  const texture = useEditor((s) => s.texture);
-  const grid = useEditor((s) => s.grid);
-  const [scale, setScale] = useState<[number, number]>([1, 1]);
-  const [fit, setFit] = useState<[number, number]>([1, 1]);
-  const f = brushes.get(face.brush)?.faces.find((x) => x.face === face.face);
-  const s = useEditor.getState();
-  const faces = [[face.brush, face.face]];
-  const align = (action: string, extra: Record<string, unknown> = {}) => void s.cmd({ op: "align", faces, action, ...extra });
-  return (
-    <section className="tools-panel">
-      <h3>Face</h3>
-      <div className="editor-face-tex">
-        {f && <img src={texUrl(f.texture)} alt="" onError={(e) => (e.currentTarget.style.visibility = "hidden")} />}
-        <span className="mono">{f?.texture ?? "?"}</span>
-      </div>
-      <div className="editor-row wrap">
-        <button type="button" className="btn small" disabled={!f || f.texture === texture} onClick={() => void s.cmd({ op: "set_texture", faces: [[face.brush, face.face]], texture })}>
-          Paint “{texture}”
-        </button>
-        <button type="button" className="btn small" onClick={() => f && s.set({ texture: f.texture })}>
-          Use this texture
-        </button>
-      </div>
-      <h4>Shift</h4>
-      <div className="editor-row wrap">
-        <button type="button" className="btn small" onClick={() => align("shift", { u: -grid, v: 0 })}>← {grid}</button>
-        <button type="button" className="btn small" onClick={() => align("shift", { u: grid, v: 0 })}>{grid} →</button>
-        <button type="button" className="btn small" onClick={() => align("shift", { u: 0, v: -grid })}>↑ {grid}</button>
-        <button type="button" className="btn small" onClick={() => align("shift", { u: 0, v: grid })}>↓ {grid}</button>
-      </div>
-      <h4>Turn</h4>
-      <div className="editor-row wrap">
-        {[-90, -15, 15, 90].map((d) => (
-          <button key={d} type="button" className="btn small" onClick={() => align("rotate", { degrees: d })}>
-            {d > 0 ? `+${d}°` : `${d}°`}
-          </button>
-        ))}
-      </div>
-      <h4>Scale</h4>
-      <div className="editor-row">
-        <input type="number" step={0.05} value={scale[0]} onChange={(e) => setScale([Number(e.target.value), scale[1]])} aria-label="Scale across" />
-        <input type="number" step={0.05} value={scale[1]} onChange={(e) => setScale([scale[0], Number(e.target.value)])} aria-label="Scale down" />
-        <button type="button" className="btn small" onClick={() => align("scale", { u: scale[0], v: scale[1] })}>
-          Set
-        </button>
-      </div>
-      <h4>
-        Fit <Info text="Stretch the texture so it repeats this many times across the face." />
-      </h4>
-      <div className="editor-row">
-        <input type="number" min={0.1} step={1} value={fit[0]} onChange={(e) => setFit([Number(e.target.value), fit[1]])} aria-label="Repeats across" />
-        <input type="number" min={0.1} step={1} value={fit[1]} onChange={(e) => setFit([fit[0], Number(e.target.value)])} aria-label="Repeats down" />
-        <button type="button" className="btn small" onClick={() => align("fit", { u: fit[0], v: fit[1] })}>
-          Fit
-        </button>
-      </div>
-      <div className="editor-row wrap">
-        <button type="button" className="btn small" onClick={() => align("center")}>Centre</button>
-        <button type="button" className="btn small" title="Line up with the world grid, like a floor" onClick={() => align("world")}>Align to world</button>
-        <button type="button" className="btn small" title="Line up with this face's own edges" onClick={() => align("face")}>Align to face</button>
-      </div>
-    </section>
-  );
 }
 
 // ---- map settings --------------------------------------------------------------------
@@ -601,6 +469,14 @@ function MapPanel() {
       <p className="small-note muted">
         {doc.stats.brushes} brushes, {doc.stats.entities} entities, {doc.stats.textures} textures. Pick something to change it.
       </p>
+      <div className="editor-row wrap">
+        <button type="button" className="btn small" onClick={() => s.set({ dialog: "props" })}>
+          Map properties…
+        </button>
+        <button type="button" className="btn small" onClick={() => s.set({ dialog: "report" })}>
+          Entity report…
+        </button>
+      </div>
       <label className="editor-field">
         Sky
         <input defaultValue={sky} key={sky} placeholder="desert" onBlur={(e) => e.target.value.trim() !== sky && setKey("skyname", e.target.value.trim())} />
@@ -659,6 +535,7 @@ export function Outline() {
   return (
     <section className="tools-panel editor-outline">
       <input type="search" placeholder="Find an entity or name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find" />
+      <Visibility />
       {doc.groups.length > 0 && (
         <>
           <button type="button" className="editor-tree-head" aria-expanded={open.groups} onClick={() => toggle("groups")}>
@@ -736,6 +613,82 @@ export function Outline() {
   );
 }
 
+/** Hidden things and simple visibility groups (named sets kept with this map on this computer). */
+function Visibility() {
+  const hidden = useEditor((s) => s.hidden);
+  const docName = useEditor((s) => s.doc?.name ?? "");
+  const sel = useEditor((s) => s.sel);
+  const key = `ls.editor.vis.${docName}`;
+  const [groups, setGroups] = useState<VisGroup[]>(() => readVis(key));
+  useEffect(() => setGroups(readVis(key)), [key]);
+  const save = (g: VisGroup[]) => {
+    setGroups(g);
+    try {
+      localStorage.setItem(key, JSON.stringify(g));
+    } catch {
+      /* private window */
+    }
+  };
+  const s = useEditor.getState();
+  const n = hidden.brushes.size + hidden.entities.size;
+  const has = sel.brushes.length + sel.entities.length > 0;
+  const isHidden = (g: VisGroup) => g.brushes.every((b) => hidden.brushes.has(b)) && g.entities.every((e) => hidden.entities.has(e));
+  const toggle = (g: VisGroup) => {
+    const brushes = new Set(hidden.brushes);
+    const entities = new Set(hidden.entities);
+    const hide = !isHidden(g);
+    for (const b of g.brushes) hide ? brushes.add(b) : brushes.delete(b);
+    for (const e of g.entities) hide ? entities.add(e) : entities.delete(e);
+    s.set({ hidden: { brushes, entities } });
+  };
+  return (
+    <div className="editor-vis">
+      <div className="editor-row wrap">
+        <span className="muted">{n ? `${n} hidden` : "Nothing hidden"}</span>
+        <button type="button" className="btn small" disabled={!n} title="Show everything (U)" onClick={() => showAll()}>
+          Show all
+        </button>
+        <button
+          type="button"
+          className="btn small"
+          disabled={!has}
+          title="A named set of what's picked that you can hide and show in one click"
+          onClick={() => {
+            const ids = selectionIds();
+            save([...groups, { name: `Set ${groups.length + 1}`, brushes: ids.brushes, entities: ids.entities }]);
+          }}
+        >
+          New visibility set
+        </button>
+      </div>
+      {groups.map((g, i) => (
+        <div key={i} className="editor-tree-row">
+          <label className="editor-check" title={isHidden(g) ? "Hidden: tick to show" : "Shown: untick to hide"}>
+            <input type="checkbox" checked={!isHidden(g)} onChange={() => toggle(g)} />
+          </label>
+          <input className="editor-vis-name" value={g.name} aria-label="Set name" onChange={(e) => save(groups.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+          <button type="button" className="linklike" title="Pick what's in it" onClick={() => s.select({ brushes: g.brushes, entities: g.entities, face: null })}>
+            {g.brushes.length + g.entities.length}
+          </button>
+          <button type="button" className="btn small icon" aria-label={`Remove ${g.name}`} title="Remove the set (not what's in it)" onClick={() => save(groups.filter((_, j) => j !== i))}>
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type VisGroup = { name: string; brushes: number[]; entities: number[] };
+function readVis(key: string): VisGroup[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return Array.isArray(v) ? v.filter((x) => x && typeof x.name === "string" && Array.isArray(x.brushes) && Array.isArray(x.entities)) : [];
+  } catch {
+    return [];
+  }
+}
+
 // ---- texture browser -----------------------------------------------------------------
 
 export function TextureBrowser() {
@@ -745,6 +698,7 @@ export function TextureBrowser() {
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [more, setMore] = useState(200);
+  const [wad, setWad] = useState("");
   useEffect(() => {
     let live = true;
     setList(null);
@@ -763,18 +717,32 @@ export function TextureBrowser() {
   }, [docWads]);
   const s = useEditor.getState();
   const query = q.trim().toLowerCase();
-  const all = useMemo(() => (list ?? []).flatMap((w) => w.textures.map((t) => ({ ...t, wad: w.name }))).filter((t) => !query || t.name.includes(query)), [list, query]);
+  const all = useMemo(
+    () => (list ?? []).filter((w) => !wad || w.name === wad).flatMap((w) => w.textures.map((t) => ({ ...t, wad: w.name }))).filter((t) => !query || t.name.includes(query)),
+    [list, query, wad],
+  );
   const paint = (name: string) => {
     s.set({ texture: name });
     const ids = selectionIds().brushes;
-    const face = s.sel.face;
-    if (face) void s.cmd({ op: "set_texture", faces: [[face.brush, face.face]], texture: name });
+    const faces = facesOf(s.sel);
+    if (faces.length) void s.cmd({ op: "set_texture", faces: faces.map((f) => [f.brush, f.face]), texture: name });
     else if (ids.length) void s.cmd({ op: "set_texture", faces: ids.map((b) => [b, null]), texture: name });
   };
   return (
     <section className="tools-panel editor-textures">
-      <input type="search" placeholder="Find a texture" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a texture" />
-      <p className="small-note muted">Click to choose. Double-click to paint what's picked.</p>
+      <div className="editor-row">
+        <input type="search" placeholder="Find a texture" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a texture" />
+        <select value={wad} onChange={(e) => setWad(e.target.value)} aria-label="Which WAD" title="Show one texture file">
+          <option value="">All WADs</option>
+          {(list ?? []).filter((w) => w.found).map((w) => (
+            <option key={w.name} value={w.name}>
+              {w.name} ({w.textures.length})
+            </option>
+          ))}
+        </select>
+      </div>
+      <RecentTextures onPick={(t) => s.set({ texture: t })} onPaint={paint} />
+      <p className="small-note muted">Click to choose. Double-click to paint what's picked. {all.length} texture{all.length === 1 ? "" : "s"}.</p>
       {err && <p className="small-note">{err}</p>}
       {!list && !err && (
         <p className="small-note muted">
@@ -810,6 +778,8 @@ const LEVEL_LABEL: Record<Issue["level"], string> = { error: "Problem", warning:
 
 export function ChecksPanel() {
   const checks = useEditor((s) => s.checks);
+  const texture = useEditor((s) => s.texture);
+  const [busy, setBusy] = useState<string | null>(null);
   const s = useEditor.getState();
   if (!checks) {
     return (
@@ -833,25 +803,69 @@ export function ChecksPanel() {
       if (o) useTools.getState().look(o, 64);
     }
   };
+  const fix = async (list: Issue[], key: string) => {
+    const first = list[0]?.fix;
+    if (!first) return;
+    if (first.startsWith("place:")) {
+      s.set({ tool: "entity", entityClass: first.slice(6) });
+      s.notify("Click a floor in the view to place it.");
+      return;
+    }
+    setBusy(key);
+    try {
+      await s.cmd({ op: "fix", fixes: list.map((i) => ({ fix: i.fix, brush: i.brush, entity: i.entity, texture: i.texture })), with: first === "replace-texture" ? texture : undefined });
+    } finally {
+      setBusy(null);
+    }
+  };
+  // fixes that can be done all at once, by kind
+  const kinds = new Map<string, Issue[]>();
+  for (const i of checks.issues) if (i.fix && !i.fix.startsWith("place:")) kinds.set(i.code, [...(kinds.get(i.code) ?? []), i]);
+  const many = [...kinds.entries()].filter(([, l]) => l.length > 1);
   return (
     <section className="tools-panel editor-checks">
       {checks.issues.length === 0 ? (
         <p className="small-note">No problems found. (Leaks are found when the map is compiled.)</p>
       ) : (
-        <ul>
-          {checks.issues.map((i, n) => (
-            <li key={n} className={`editor-issue ${i.level}`}>
-              <button type="button" className="linklike" disabled={i.brush == null && i.entity == null} onClick={() => go(i)}>
-                <strong>{LEVEL_LABEL[i.level]}:</strong> {i.message}
-              </button>
-            </li>
+        <>
+          {many.map(([code, l]) => (
+            <BusyButton key={code} busy={busy === `all-${code}`} className="btn small" label={`Fix all ${l.length}: ${FIX_LABEL[l[0].fix!] ?? "Fix"}`} busyLabel="Fixing…" onClick={() => void fix(l, `all-${code}`)} />
           ))}
-        </ul>
+          <ul>
+            {checks.issues.map((i, n) => (
+              <li key={n} className={`editor-issue ${i.level}`}>
+                <button type="button" className="linklike" disabled={i.brush == null && i.entity == null} onClick={() => go(i)}>
+                  <strong>{LEVEL_LABEL[i.level]}:</strong> {i.message}
+                </button>
+                {i.fix && (
+                  <BusyButton
+                    busy={busy === `one-${n}`}
+                    className="btn small editor-fix"
+                    label={i.fix === "replace-texture" ? `Replace with ${texture}` : FIX_LABEL[i.fix] ?? "Fix"}
+                    busyLabel="Fixing…"
+                    onClick={() => void fix([i], `one-${n}`)}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {!checks.texturesChecked && <p className="small-note muted">Textures aren't checked until the game is set up on this computer.</p>}
     </section>
   );
 }
+
+const FIX_LABEL: Record<string, string> = {
+  "delete-brush": "Delete the brush",
+  "to-world": "Make its brushes world brushes",
+  "delete-entity": "Delete it",
+  "clear-target": "Clear the target",
+  "add-wads": "Add halflife.wad and cstrike.wad",
+  "replace-texture": "Replace with the current texture",
+  "place:info_player_start": "Place a CT spawn",
+  "place:info_player_deathmatch": "Place a T spawn",
+};
 
 export function BusyLabel({ busy, label }: { busy: boolean; label: string }) {
   return busy ? (

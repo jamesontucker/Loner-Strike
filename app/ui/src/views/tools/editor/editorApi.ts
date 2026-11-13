@@ -22,13 +22,43 @@ export type Doc = DocState & {
   stats: Stats;
 };
 
-export type Issue = { level: "info" | "warning" | "error"; code: string; message: string; brush?: number; entity?: number };
+export type Issue = { level: "info" | "warning" | "error"; code: string; message: string; brush?: number; entity?: number; texture?: string; fix?: string };
 export type Checks = { docId: number; revision: number; issues: Issue[]; stats: Stats; texturesChecked: boolean };
 
 export type WadTextures = { name: string; found: boolean; error?: string; textures: { name: string; width: number; height: number }[] };
 
 /** One face of a brush as drawn: a polygon (fan) in the bundle's vertex arrays. */
-export type MeshFace = { face: number; texture: string; normal: Vec3; start: number; count: number };
+export type MeshFace = {
+  face: number;
+  texture: string;
+  normal: Vec3;
+  start: number;
+  count: number;
+  /** Valve 220: [u axis x3, u offset, v axis x3, v offset, rotation, u scale, v scale] */
+  align?: number[];
+};
+
+/** A face's alignment, unpacked. */
+export type Align = { u: Vec3; v: Vec3; ou: number; ov: number; rot: number; su: number; sv: number };
+export function alignOf(f: MeshFace | undefined): Align | null {
+  const a = f?.align;
+  if (!a || a.length < 11) return null;
+  return { u: [a[0], a[1], a[2]], ou: a[3], v: [a[4], a[5], a[6]], ov: a[7], rot: a[8], su: a[9], sv: a[10] };
+}
+
+/** Entity definitions (tools/editor.rs /fgd, from our Counter-Strike FGD). */
+export type FgdKey = {
+  name: string;
+  type: string;
+  label: string;
+  default?: string;
+  help?: string;
+  choices?: { value: string; label: string }[];
+  flags?: { bit: number; label: string; on: boolean }[];
+};
+export type FgdClass = { name: string; kind: "point" | "solid"; description: string; size?: number[]; color?: number[]; keys: FgdKey[] };
+export type RecentFile = { index: number; name: string; folder: string; project: boolean; found: boolean };
+export type Recovery = { found: boolean; name?: string; time?: number; brushes?: number; entities?: number; project?: boolean };
 export type MeshBrush = { id: number; entity: number | null; group: number | null; faces: MeshFace[] };
 export type MeshUpdate = { docId: number; revision: number; full: boolean; removed: number[]; brushes: MeshBrush[]; pos: Float32Array; uv: Float32Array };
 
@@ -41,6 +71,7 @@ export type CmdResult = {
   label?: string | null;
   state?: DocState;
 };
+
 
 type Err = { error?: string };
 
@@ -77,6 +108,14 @@ export const newMap = () => post<DocState>(`${E}/new`);
 export const openProject = () => post<DocState & { cancelled?: boolean }>(`${E}/open`);
 export const importMap = () => post<DocState & { cancelled?: boolean }>(`${E}/import-map`);
 export const saveProject = (as = false) => post<{ cancelled?: boolean; saved?: boolean; file?: string; state?: DocState }>(`${E}/save`, { as });
+export const copySelection = (brushes: number[], entities: number[]) => post<{ text: string; brushes: number; entities: number }>(`${E}/copy`, { brushes, entities });
+export const getFgd = () => getJson<{ classes: FgdClass[]; source: string }>(`${E}/fgd`);
+export const getRecent = () => getJson<{ files: RecentFile[] }>(`${E}/recent`);
+export const openRecent = (index: number) => post<DocState>(`${E}/open-recent`, { index });
+export const autosave = () => post<{ saved: boolean }>(`${E}/autosave`);
+export const getRecovery = () => getJson<Recovery>(`${E}/recovery`);
+export const recover = () => post<DocState>(`${E}/recover`);
+export const discardRecovery = () => post<{ discarded: boolean }>(`${E}/discard-recovery`);
 export const exportMap = () => post<{ cancelled?: boolean; exported?: boolean; file?: string }>(`${E}/export-map`);
 
 /** The brush meshes that changed since a revision (all of them without one). */

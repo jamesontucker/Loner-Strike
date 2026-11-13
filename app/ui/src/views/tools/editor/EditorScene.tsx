@@ -14,7 +14,8 @@ import { MapMaterials } from "../viewer/materials";
 import { pointerEvents } from "../viewer/Scene";
 import type { Draw } from "../viewer/bundle";
 import { texUrl, type DocEntity } from "./editorApi";
-import { keyOf, originOf, selectionBounds, snap, useEditor, type BrushGeo, type ViewId } from "./store";
+import { facesOf, groupMembers, keyOf, originOf, selectionBounds, snap, topGroup, useEditor, type BrushGeo, type FaceRef, type ViewId } from "./store";
+import { Bookmarks, MeasureLine, Pointfile, sameP, SelectRect, TexHandles, useVisibleBrush, VertexHandles } from "./SceneExtras";
 
 // ---- small helpers ---------------------------------------------------------------------
 
@@ -56,6 +57,11 @@ function alongLine(ray: { o: Vec3; d: Vec3 }, p0: Vec3, n: Vec3): number | null 
 }
 
 const snapVec = (p: Vec3): Vec3 => [snap(p[0]), snap(p[1]), snap(p[2])];
+const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm2 = (a: Vec3): Vec3 => {
+  const l = Math.hypot(a[0], a[1], a[2]) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+};
 
 /** Selection as the commands want it: brushes (with those of picked brush entities) and entities. */
 export function selectionIds() {
@@ -65,10 +71,24 @@ export function selectionIds() {
   return { brushes: [...brushes], entities: s.sel.entities };
 }
 
-/** What a click picks: a brush, or the brush entity it belongs to (like Hammer). */
+/** Adds or toggles a whole group (Pick groups mode). */
+function pickGroup(g: number, additive: boolean) {
+  const s = useEditor.getState();
+  const m = groupMembers(g);
+  const cur = s.sel;
+  const all = m.brushes.every((b) => cur.brushes.includes(b)) && m.entities.every((e) => cur.entities.includes(e));
+  if (!additive) return s.select({ brushes: m.brushes, entities: m.entities, face: null });
+  if (all) return s.select({ brushes: cur.brushes.filter((b) => !m.brushes.includes(b)), entities: cur.entities.filter((e) => !m.entities.includes(e)), face: null });
+  s.select({ brushes: [...new Set([...cur.brushes, ...m.brushes])], entities: [...new Set([...cur.entities, ...m.entities])], face: null });
+}
+
+/** What a click picks: a brush, or the brush entity it belongs to (like Hammer), or its group. */
 function pickBrush(id: number, additive: boolean) {
   const s = useEditor.getState();
   const b = s.brushes.get(id);
+  const ent0 = b?.entity != null ? s.doc?.entities.find((e) => e.id === b.entity) : null;
+  const g = s.selectMode === "groups" ? topGroup(ent0?.group ?? b?.group ?? null) : null;
+  if (g != null) return pickGroup(g, additive);
   const ent = b?.entity ?? null;
   const cur = s.sel;
   if (ent != null) {
@@ -84,6 +104,8 @@ function pickBrush(id: number, additive: boolean) {
 
 function pickEntity(id: number, additive: boolean) {
   const s = useEditor.getState();
+  const g = s.selectMode === "groups" ? topGroup(s.doc?.entities.find((e) => e.id === id)?.group ?? null) : null;
+  if (g != null) return pickGroup(g, additive);
   const cur = s.sel;
   const has = cur.entities.includes(id);
   s.select({ brushes: additive ? cur.brushes : [], entities: additive ? (has ? cur.entities.filter((x) => x !== id) : [...cur.entities, id]) : [id], face: null });
@@ -120,7 +142,7 @@ function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
   const camera = useTools((s) => s.camera);
   const view = useEditor((s) => s.view);
   const hideSky = !(view === "3d" && camera === "fly");
-  const hidden = useMemo(() => new Set((groups ?? []).filter((g) => g.hidden).map((g) => g.id)), [groups]);
+  const visible = useVisibleBrush();
   const moving = useRef<THREE.Group>(null);
   useEffect(() => {
     const g = moving.current;
@@ -128,7 +150,8 @@ function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
     g.matrix.copy(preview ?? new THREE.Matrix4());
     g.matrixWorldNeedsUpdate = true;
   }, [preview]);
-  const list = [...brushes.values()].filter((b) => b.group == null || !hidden.has(b.group));
+  void groups;
+  const list = [...brushes.values()].filter(visible);
   return (
     <>
       <group>
@@ -147,13 +170,20 @@ function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
   );
 }
 
-/** The face picked with the texture tool, outlined. */
+/** The faces picked with the texture tool, outlined (the sheet's face brighter). */
 function FaceOutline() {
-  const face = useEditor((s) => s.sel.face);
+  const sel = useEditor((s) => s.sel);
   const brushes = useEditor((s) => s.brushes);
-  const pts = face ? brushes.get(face.brush)?.polys.get(face.face) : null;
-  if (!pts || pts.length < 3) return null;
-  return <Line points={[...pts, pts[0]]} color="#ff8f3a" lineWidth={3} depthTest={false} renderOrder={5} />;
+  const faces = facesOf(sel).slice(0, 400);
+  return (
+    <>
+      {faces.map((f, i) => {
+        const pts = brushes.get(f.brush)?.polys.get(f.face);
+        if (!pts || pts.length < 3) return null;
+        return <Line key={`${f.brush}-${f.face}`} points={[...pts, pts[0]]} color={i === 0 ? "#ff8f3a" : "#e0b060"} lineWidth={i === 0 ? 3 : 2} depthTest={false} renderOrder={5} />;
+      })}
+    </>
+  );
 }
 
 // ---- entities -------------------------------------------------------------------------
@@ -214,11 +244,12 @@ function Entities() {
   const ents = useEditor((s) => s.doc?.entities);
   const sel = useEditor((s) => s.sel.entities);
   const groups = useEditor((s) => s.doc?.groups);
+  const hiddenHere = useEditor((s) => s.hidden.entities);
   const hidden = useMemo(() => new Set((groups ?? []).filter((g) => g.hidden).map((g) => g.id)), [groups]);
   return (
     <>
       {pointEntities(ents)
-        .filter((e) => !sel.includes(e.id) && (e.group == null || !hidden.has(e.group)))
+        .filter((e) => !sel.includes(e.id) && !hiddenHere.has(e.id) && (e.group == null || !hidden.has(e.group)))
         .map((e) => (
           <EntityBox key={e.id} e={e} picked={false} />
         ))}
@@ -297,6 +328,16 @@ type Hit = { kind: "brush" | "entity" | "plane"; id: number; face: number | null
 
 /** The nearest thing under the mouse that a tool cares about: a brush or an entity, else
  *  the working plane (so a ceiling above the plane still gets picked from below). */
+type Handle = { kind: string; id: number; face?: number; p?: Vec3 };
+/** A handle under the mouse (vertex corners, texture knobs): they're drawn on top, so they win. */
+function handleOf(e: ThreeEvent<PointerEvent>): Handle | null {
+  for (const i of e.intersections) {
+    const ud = i.object.userData as Handle;
+    if (ud.kind === "vert" || ud.kind?.startsWith("tex-")) return ud;
+  }
+  return null;
+}
+
 function hitOf(e: ThreeEvent<PointerEvent>): Hit | null {
   let plane: Hit | null = null;
   for (const i of e.intersections) {
@@ -353,12 +394,54 @@ function faceDragger(brush: number, face: number) {
   };
 }
 
+/** Sends the latest value of a drag, one request at a time (vertex moves, texture drags). */
+function pump<T>(send: (v: T, drag: string) => Promise<{ error?: string }>, same: (a: T, b: T) => boolean, zero: T) {
+  const drag = `drag-${Date.now()}-${++dragCounter}`;
+  let sent = zero;
+  let want = zero;
+  let busy = false;
+  let done: (() => void) | null = null;
+  let error: string | null = null;
+  const run = async () => {
+    if (busy) return;
+    busy = true;
+    while (!same(want, sent)) {
+      const v = want;
+      const r = await send(v, drag);
+      sent = v;
+      error = r.error ?? null;
+      if (r.error) useTools.getState().setHover(r.error);
+    }
+    busy = false;
+    done?.();
+  };
+  return {
+    to(v: T) {
+      want = v;
+      void run();
+    },
+    async finish() {
+      if (busy) await new Promise<void>((res) => (done = res));
+      return { moved: !same(sent, zero), error };
+    },
+  };
+}
+
+/** A point on the plane through `p0` with normal `n`, under the mouse. */
+function onAnyPlane(ray: { o: Vec3; d: Vec3 }, p0: Vec3, n: Vec3): Vec3 | null {
+  const den = dot(ray.d, n);
+  if (Math.abs(den) < 1e-6) return null;
+  const t = dot(sub(p0, ray.o), n) / den;
+  return add(ray.o, mul(ray.d, t));
+}
+
 function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
   const state = useThree();
   const tool = useEditor((s) => s.tool);
   const view = useEditor((s) => s.view);
   const axis = viewAxis(view);
   const [box, setBox] = useState<{ a: Vec3; b: Vec3 } | null>(null);
+  const [rect, setRect] = useState<{ a: Vec3; b: Vec3 } | null>(null);
   const [clip, setClip] = useState<Vec3[]>([]);
   const clipRef = useRef<Vec3[]>([]);
   clipRef.current = clip;
@@ -370,6 +453,9 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
   useEffect(() => {
     setClip([]);
     setBox(null);
+    setRect(null);
+    if (tool !== "measure") useEditor.setState({ measure: null });
+    if (tool !== "vertex") useEditor.setState({ verts: [] });
   }, [tool, view]);
 
   // clip: Tab picks which side stays, Enter cuts, Esc forgets the points
@@ -425,7 +511,141 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     const ev = e.nativeEvent;
     const start = { x: ev.clientX, y: ev.clientY };
 
-    if (tool === "box" || tool === "cylinder") {
+    const handle = handleOf(e);
+
+    if (tool === "vertex" && handle?.kind === "vert" && handle.p) {
+      // click picks a corner (Shift adds); dragging moves the picked corners with snapping
+      const p = handle.p;
+      const has = s.verts.some((v) => v.brush === handle.id && sameP(v.p, p));
+      let picks = s.verts;
+      if (additive) picks = has ? s.verts.filter((v) => !(v.brush === handle.id && sameP(v.p, p))) : [...s.verts, { brush: handle.id, p }];
+      else if (!has) picks = [{ brush: handle.id, p }];
+      s.set({ verts: picks });
+      if (additive && has) return;
+      controlsOff(true);
+      const n: Vec3 = view === "3d" ? [0, 0, 1] : (([0, 1, 2].map((i) => (i === axis ? 1 : 0)) as unknown) as Vec3);
+      const startAt = onAnyPlane(rayAt(ev, live.current), p, n);
+      const sender = pump<Vec3>(
+        (d, drag) => useEditor.getState().cmd({ op: "move_vertices", picks: picks.map((v) => [v.brush, v.p]), delta: d, drag }, { doc: false, quiet: true }),
+        (a, b) => sameP(a, b),
+        [0, 0, 0],
+      );
+      let last: Vec3 = [0, 0, 0];
+      const move = (m: PointerEvent) => {
+        if (!startAt) return;
+        const q = onAnyPlane(rayAt(m, live.current), p, n);
+        if (!q) return;
+        // the dragged corner lands on the grid
+        const target = snapVec(add(p, sub(q, startAt)));
+        for (let i = 0; i < 3; i++) if (n[i]) target[i] = p[i];
+        last = sub(target, p);
+        useTools.getState().setHover(`Corner to ${target.map((x) => Math.round(x * 100) / 100).join(" ")}`);
+        sender.to(last);
+      };
+      const up = async () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        controlsOff(false);
+        const r = await sender.finish();
+        useTools.getState().setHover(null);
+        if (r.moved && !r.error) {
+          useEditor.setState({ verts: picks.map((v) => ({ brush: v.brush, p: add(v.p, last) })) });
+          await useEditor.getState().refreshDoc();
+          useEditor.getState().refreshChecks();
+        } else if (r.error) useEditor.getState().notify(r.error, true);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+      return;
+    }
+
+    if (handle?.kind?.startsWith("tex-") && handle.face != null) {
+      // texture handles: the arrow ends stretch, the ring turns (round the face's middle)
+      const b = s.brushes.get(handle.id);
+      const f = b?.faces.find((x) => x.face === handle.face);
+      const poly = b?.polys.get(handle.face);
+      const al = f?.align;
+      if (!b || !f || !poly || !al) return;
+      controlsOff(true);
+      const c = mul(poly.reduce((acc, q) => add(acc, q), [0, 0, 0] as Vec3), 1 / poly.length);
+      const n = f.normal;
+      const start = onAnyPlane(rayAt(ev, live.current), c, n);
+      const faces = facesOf(s.sel).map((x) => [x.brush, x.face]);
+      const one = s.treatAsOne;
+      const u: Vec3 = [al[0], al[1], al[2]];
+      const vax: Vec3 = [al[4], al[5], al[6]];
+      const [su0, sv0] = [al[9], al[10]];
+      const kind = handle.kind;
+      let sentRot = 0;
+      const sender = pump<number>(
+        (x, drag) => {
+          // turning is relative: send what's new since the last step; scale is a plain number
+          const body = kind === "tex-rot" ? { op: "align", faces, action: "rotate", degrees: x - sentRot, drag, one } : { op: "align", faces, action: "set", ...(kind === "tex-su" ? { su: x } : { sv: x }), drag, one };
+          if (kind === "tex-rot") sentRot = x;
+          return useEditor.getState().cmd(body, { doc: false, quiet: true });
+        },
+        (a, b2) => Math.abs(a - b2) < 1e-6,
+        kind === "tex-rot" ? 0 : kind === "tex-su" ? su0 : sv0,
+      );
+      const move = (m: PointerEvent) => {
+        if (!start) return;
+        const q = onAnyPlane(rayAt(m, live.current), c, n);
+        if (!q) return;
+        const d0 = sub(start, c);
+        const d1 = sub(q, c);
+        if (kind === "tex-rot") {
+          let ang = (Math.atan2(dot(n, cross(d0, d1)), dot(d0, d1)) * 180) / Math.PI;
+          if (!useEditor.getState().alt) ang = Math.round(ang / 15) * 15;
+          useTools.getState().setHover(`Turn ${Math.round(ang)}°`);
+          sender.to(ang);
+        } else {
+          const axisV = kind === "tex-su" ? u : vax;
+          const a0 = dot(d0, axisV) / (Math.hypot(...axisV) || 1);
+          const a1 = dot(d1, axisV) / (Math.hypot(...axisV) || 1);
+          if (Math.abs(a0) < 1) return;
+          let k = (kind === "tex-su" ? su0 : sv0) * (a1 / a0);
+          k = useEditor.getState().alt ? Math.round(k * 1000) / 1000 : Math.round(k * 20) / 20;
+          if (Math.abs(k) < 0.05) k = k < 0 ? -0.05 : 0.05;
+          useTools.getState().setHover(`Scale ${k}`);
+          sender.to(k);
+        }
+      };
+      const up = async () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        controlsOff(false);
+        await sender.finish();
+        useTools.getState().setHover(null);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+      return;
+    }
+
+    if (tool === "measure") {
+      const first = hit ? hit.point : onPlane(rayAt(ev, live.current), axis, 0);
+      if (!first) return;
+      const a = snapVec(first);
+      controlsOff(true);
+      useEditor.setState({ measure: { a, b: a } });
+      const move = (m: PointerEvent) => {
+        const ray = rayAt(m, live.current);
+        // along the view's plane through the first point (or onto what's under the mouse)
+        const q = onAnyPlane(ray, a, view === "3d" ? (Math.abs(ray.d[2]) > 0.3 ? [0, 0, 1] : norm2([ray.d[0], ray.d[1], 0])) : (([0, 1, 2].map((i) => (i === axis ? 1 : 0)) as unknown) as Vec3));
+        if (q) useEditor.setState({ measure: { a, b: snapVec(q) } });
+        state.invalidate();
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        controlsOff(false);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+      return;
+    }
+
+    if (tool === "box" || tool === "shape") {
       // footprint on the working plane: on top of the face clicked, or at 0
       let at = 0;
       if (hit && hit.kind === "brush" && Math.abs(hit.normal[axis]) > 0.99) at = hit.point[axis];
@@ -460,6 +680,12 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
         if (size.filter((x) => x >= 1).length < 3) return;
         if (tool === "box") {
           const r = await s.cmd({ op: "add_box", min: a, max: end, texture: s.texture });
+          if (r.created) s.select({ brushes: r.created.brushes, entities: [], face: null });
+        } else if (s.shape !== "cylinder") {
+          if (axis !== 2 && s.shape !== "wedge") return s.notify("Draw this shape in the 3D or top view: it stands upright.", true);
+          const min = a.map((x, i) => Math.min(x, end[i]));
+          const max = a.map((x, i) => Math.max(x, end[i]));
+          const r = await s.cmd({ op: "add_shape", shape: s.shape, min, max, sides: s.sides, texture: s.texture, grid: s.alt ? 0 : 1, arc: s.archArc, wall: s.archWall });
           if (r.created) s.select({ brushes: r.created.brushes, entities: [], face: null });
         } else {
           const u = [0, 1, 2].filter((i) => i !== axis);
@@ -500,23 +726,143 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     }
 
     if (tool === "texture") {
-      if (!hit || hit.kind !== "brush" || hit.face == null) return;
+      if (!hit || hit.kind !== "brush" || hit.face == null) {
+        if (!additive && hit?.kind === "plane") s.select({ brushes: [], entities: [], face: null, faces: [] });
+        return;
+      }
       const b = s.brushes.get(hit.id);
+      const ref: FaceRef = { brush: hit.id, face: hit.face };
       if (ev.altKey) {
         // the eyedropper: take this face's texture
         const t = b?.faces.find((f) => f.face === hit.face)?.texture;
         if (t) s.set({ texture: t });
-        s.select({ brushes: [], entities: [], face: { brush: hit.id, face: hit.face } });
+        s.select({ brushes: [], entities: [], face: ref, faces: [ref] });
         return;
       }
-      void s.cmd({ op: "set_texture", faces: [[hit.id, e.shiftKey ? null : hit.face]], texture: s.texture });
-      s.select({ brushes: [], entities: [], face: { brush: hit.id, face: hit.face } });
+      const cur = facesOf(s.sel);
+      const picked = cur.some((f) => f.brush === ref.brush && f.face === ref.face);
+      if (s.texClick === "paint") {
+        void s.cmd({ op: "set_texture", faces: [[hit.id, e.shiftKey ? null : hit.face]], texture: s.texture });
+        s.select({ brushes: [], entities: [], face: ref, faces: [ref] });
+        return;
+      }
+      if (additive) {
+        const faces = picked ? cur.filter((f) => !(f.brush === ref.brush && f.face === ref.face)) : [...cur, ref];
+        s.select({ brushes: [], entities: [], face: faces[0] ?? null, faces });
+        return;
+      }
+      if (!picked) s.select({ brushes: [], entities: [], face: ref, faces: [ref] });
+      // dragging a picked face slides its texture (all picked faces), snapped to the grid
+      const f = b?.faces.find((x) => x.face === hit.face);
+      const al = f?.align;
+      if (!f || !al) return;
+      controlsOff(true);
+      const faces = (picked ? cur : [ref]).map((x) => [x.brush, x.face]);
+      const p0 = hit.point;
+      const n = f.normal;
+      const u: Vec3 = [al[0], al[1], al[2]];
+      const vax: Vec3 = [al[4], al[5], al[6]];
+      const [su, sv] = [al[9] || 1, al[10] || 1];
+      let sentUV: [number, number] = [0, 0];
+      const sender = pump<[number, number]>(
+        (uv, drag) => {
+          const step = { op: "align", faces, action: "shift", u: uv[0] - sentUV[0], v: uv[1] - sentUV[1], drag };
+          sentUV = uv;
+          return useEditor.getState().cmd(step, { doc: false, quiet: true });
+        },
+        (x, y) => x[0] === y[0] && x[1] === y[1],
+        [0, 0],
+      );
+      const move = (m: PointerEvent) => {
+        if (Math.hypot(m.clientX - start.x, m.clientY - start.y) < 3) return;
+        const q = onAnyPlane(rayAt(m, live.current), p0, n);
+        if (!q) return;
+        const d = sub(q, p0);
+        // the texture follows the mouse: its offset goes the other way
+        let du = -dot(d, u) / su;
+        let dv = -dot(d, vax) / sv;
+        if (!useEditor.getState().alt) {
+          const g = useEditor.getState().grid;
+          du = Math.round(du / g) * g;
+          dv = Math.round(dv / g) * g;
+        } else {
+          du = Math.round(du);
+          dv = Math.round(dv);
+        }
+        useTools.getState().setHover(`Slide ${du}, ${dv}`);
+        sender.to([du, dv]);
+      };
+      const up = async () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        controlsOff(false);
+        await sender.finish();
+        useTools.getState().setHover(null);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
       return;
     }
 
     // select / move / rotate / scale: click picks; on a picked brush in Select, drag pushes/pulls its face
     const b = hit?.kind === "brush" ? s.brushes.get(hit.id) : null;
     const canPush = tool === "select" && b && hit && hit.face != null && isPicked(b, s.sel) && !additive;
+    // flat views: dragging from empty space draws a box that picks what's inside it
+    const boxing = view !== "3d" && (!hit || hit.kind === "plane") && (tool === "select" || tool === "move" || tool === "rotate" || tool === "scale" || tool === "vertex");
+    if (boxing) {
+      const a0 = onPlane(rayAt(ev, live.current), axis, 0);
+      if (!a0) return;
+      let b0 = a0;
+      const mv = (m: PointerEvent) => {
+        const q = onPlane(rayAt(m, live.current), axis, 0);
+        if (!q) return;
+        b0 = q;
+        if (Math.hypot(m.clientX - start.x, m.clientY - start.y) >= 4) setRect({ a: a0, b: q });
+        state.invalidate();
+      };
+      const upr = () => {
+        window.removeEventListener("pointermove", mv);
+        window.removeEventListener("pointerup", upr);
+        setRect(null);
+        const [u, v] = [0, 1, 2].filter((i) => i !== axis);
+        const lo = [Math.min(a0[u], b0[u]), Math.min(a0[v], b0[v])];
+        const hi = [Math.max(a0[u], b0[u]), Math.max(a0[v], b0[v])];
+        const small = hi[0] - lo[0] < 1 && hi[1] - lo[1] < 1;
+        if (small) {
+          if (!additive) s.select({ brushes: [], entities: [], face: null });
+          return;
+        }
+        const inside = (min: Vec3, max: Vec3) => min[u] >= lo[0] && max[u] <= hi[0] && min[v] >= lo[1] && max[v] <= hi[1];
+        const st = useEditor.getState();
+        const hiddenE = st.hidden.entities;
+        const brushes: number[] = [];
+        const entities = new Set<number>();
+        for (const br of st.brushes.values()) {
+          if (st.hidden.brushes.has(br.id) || !inside(br.min, br.max)) continue;
+          if (br.entity != null) {
+            if (!hiddenE.has(br.entity)) entities.add(br.entity);
+          } else brushes.push(br.id);
+        }
+        for (const en of st.doc?.entities ?? []) {
+          if (en.brushes.length || hiddenE.has(en.id)) continue;
+          const o = originOf(en.keys);
+          if (o && inside(o, o)) entities.add(en.id);
+        }
+        // a brush entity counts only when all of it is inside
+        for (const id of [...entities]) {
+          const en = st.doc?.entities.find((x) => x.id === id);
+          if (en?.brushes.some((bid) => {
+            const g = st.brushes.get(bid);
+            return g && !inside(g.min, g.max);
+          })) entities.delete(id);
+        }
+        const cur = st.sel;
+        s.select(additive ? { brushes: [...new Set([...cur.brushes, ...brushes])], entities: [...new Set([...cur.entities, ...entities])], face: null } : { brushes, entities: [...entities], face: null });
+      };
+      window.addEventListener("pointermove", mv);
+      window.addEventListener("pointerup", upr);
+      return;
+    }
     let pushing: ReturnType<typeof faceDragger> | null = null;
     let moved = false;
     if (canPush) controlsOff(true);
@@ -577,7 +923,12 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
         <planeGeometry args={[span, span]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
-      {box && <BoxPreview a={box.a} b={box.b} cylinder={tool === "cylinder"} axis={axis} />}
+      {box && <BoxPreview a={box.a} b={box.b} cylinder={tool === "shape" && useEditor.getState().shape !== "wedge"} axis={axis} />}
+      {rect && <SelectRect a={rect.a} b={rect.b} axis={axis} />}
+      {tool === "vertex" && <VertexHandles ids={selectionIds().brushes} />}
+      <TexHandles />
+      <MeasureLine />
+      <Pointfile />
       {clip.map((p, i) => (
         <mesh key={i} position={p}>
           <sphereGeometry args={[4, 12, 8]} />
@@ -786,7 +1137,7 @@ function Flat({ view, bounds }: { view: Exclude<ViewId, "3d">; bounds: [Vec3, Ve
   return (
     <>
       <OrthographicCamera makeDefault position={eye} up={up} zoom={zoom} near={1} far={40000} onUpdate={(c) => c.lookAt(target)} />
-      {camera instanceof THREE.OrthographicCamera && <MapControls ref={ref} makeDefault enableRotate={false} screenSpacePanning enableDamping={false} minZoom={zoom / 16} maxZoom={zoom * 60} />}
+      {camera instanceof THREE.OrthographicCamera && <MapControls ref={ref} makeDefault enableRotate={false} screenSpacePanning enableDamping={false} minZoom={zoom / 16} maxZoom={zoom * 60} mouseButtons={{ LEFT: -1 as unknown as THREE.MOUSE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }} />}
     </>
   );
 }
@@ -844,6 +1195,7 @@ export function EditorScene({ bounds, docId, onLost }: { bounds: [Vec3, Vec3]; d
         </group>
       </Materials>
       <Gizmo pivot={pivot} />
+      <Bookmarks />
       {view === "3d" ? <Cameras bounds={bounds} /> : <Flat key={view} view={view} bounds={bounds} />}
     </Canvas>
   );

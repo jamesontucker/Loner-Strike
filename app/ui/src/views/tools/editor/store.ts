@@ -7,9 +7,13 @@ import type { Vec3 } from "../viewer/coords";
 import * as api from "./editorApi";
 import type { Checks, CmdResult, Doc, DocState, MeshBrush, MeshFace, MeshUpdate } from "./editorApi";
 
-export type ToolId = "select" | "move" | "rotate" | "scale" | "box" | "cylinder" | "clip" | "entity" | "texture";
+export type ToolId = "select" | "move" | "rotate" | "scale" | "vertex" | "box" | "shape" | "clip" | "entity" | "texture" | "measure";
+export type ShapeKind = "cylinder" | "wedge" | "spike" | "sphere" | "arch";
+export type FaceRef = { brush: number; face: number };
+export type Dialog = "paste" | "props" | "report" | null;
 export type ViewId = "3d" | "top" | "front" | "side";
-export type Selection = { brushes: number[]; entities: number[]; face: { brush: number; face: number } | null };
+/** `face` is the face the sheet shows; `faces` all picked faces (it included). */
+export type Selection = { brushes: number[]; entities: number[]; face: FaceRef | null; faces?: FaceRef[] };
 
 /** A brush ready to draw: one geometry, a group per texture, which face each triangle is. */
 export type BrushGeo = {
@@ -27,7 +31,9 @@ export type BrushGeo = {
   max: Vec3;
 };
 
-export const EMPTY_SEL: Selection = { brushes: [], entities: [], face: null };
+export const EMPTY_SEL: Selection = { brushes: [], entities: [], face: null, faces: [] };
+/** Every picked face (the sheet's face first). */
+export const facesOf = (s: Selection): FaceRef[] => (s.faces?.length ? s.faces : s.face ? [s.face] : []);
 
 function buildBrush(b: MeshBrush, pos: Float32Array, uv: Float32Array): BrushGeo {
   // faces sorted by texture so each texture is one draw
@@ -109,7 +115,33 @@ type EditorState = {
   texture: string;
   boxHeight: number;
   sides: number;
+  shape: ShapeKind;
+  archArc: number;
+  archWall: number;
   thickness: number;
+  /** click a grouped thing: the whole group (Hammer's default), or just it */
+  selectMode: "groups" | "objects";
+  /** hidden for now (this page only; groups have their own saved Hide) */
+  hidden: { brushes: Set<number>; entities: Set<number> };
+  /** picked corners for the vertex tool */
+  verts: { brush: number; p: Vec3 }[];
+  /** textures used lately, newest first */
+  recentTex: string[];
+  /** face sheet: work on several faces as one surface */
+  treatAsOne: boolean;
+  /** texture tool: a click picks faces, or paints them */
+  texClick: "pick" | "paint";
+  /** the measure tool's line */
+  measure: { a: Vec3; b: Vec3 } | null;
+  /** store/go to a camera bookmark (seq changes each time) */
+  bookmark: { n: number; store: boolean; seq: number } | null;
+  dialog: Dialog;
+  /** the last copy, for when the system clipboard can't be read */
+  clip: string | null;
+  /** leak line after a compile (SDHLT hook: set from the pointfile route when it lands) */
+  pointfile: Vec3[] | null;
+  /** when the last autosave went out (for the status bar) */
+  autosavedAt: string | null;
   entityClass: string;
   textureLock: boolean;
   /** a command is on its way (for the busy label) */
@@ -136,7 +168,7 @@ type EditorState = {
   cmd: (body: Record<string, unknown>, opts?: { doc?: boolean; quiet?: boolean }) => Promise<CmdResult>;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
-  file: (what: "new" | "open" | "import" | "save" | "saveAs" | "export") => Promise<void>;
+  file: (what: "new" | "open" | "import" | "save" | "saveAs" | "export" | "recover" | number) => Promise<void>;
 };
 
 function keep(key: string, v: string) {
@@ -144,6 +176,21 @@ function keep(key: string, v: string) {
     localStorage.setItem(key, v);
   } catch {
     /* private window */
+  }
+}
+function savedStr(key: string, fallback: string) {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+function savedList(key: string): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, 16) : [];
+  } catch {
+    return [];
   }
 }
 function saved(key: string, fallback: number) {
@@ -173,7 +220,22 @@ export const useEditor = create<EditorState>((set, get) => ({
   texture: "OUT_WALL5",
   boxHeight: 128,
   sides: 12,
+  shape: "cylinder",
+  archArc: 180,
+  archWall: 16,
   thickness: 8,
+  selectMode: savedStr("ls.editor.selectMode", "groups") === "objects" ? "objects" : "groups",
+  hidden: { brushes: new Set(), entities: new Set() },
+  verts: [],
+  recentTex: savedList("ls.editor.recentTex"),
+  treatAsOne: false,
+  texClick: "pick",
+  measure: null,
+  bookmark: null,
+  dialog: null,
+  clip: null,
+  pointfile: null,
+  autosavedAt: null,
   entityClass: "info_player_start",
   textureLock: true,
   working: 0,
@@ -188,6 +250,13 @@ export const useEditor = create<EditorState>((set, get) => ({
   setNotify: (notify) => set({ notify }),
   set: (p) => {
     if (p.grid) keep("ls.editor.grid", String(p.grid));
+    if (p.selectMode) keep("ls.editor.selectMode", p.selectMode);
+    if (p.texture && p.texture !== get().texture) {
+      const recentTex = [p.texture, ...get().recentTex.filter((t) => t.toLowerCase() !== p.texture!.toLowerCase())].slice(0, 16);
+      keep("ls.editor.recentTex", JSON.stringify(recentTex));
+      set({ ...p, recentTex });
+      return;
+    }
     set(p);
   },
   select: (sel) => set({ sel }),
@@ -201,7 +270,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       return;
     }
     for (const b of get().brushes.values()) b.geometry.dispose();
-    set({ doc: d, loadError: null, brushes: new Map(), meshRev: null, meshDoc: null, sel: EMPTY_SEL, preview: null, checks: null });
+    set({ doc: d, loadError: null, brushes: new Map(), meshRev: null, meshDoc: null, sel: EMPTY_SEL, preview: null, checks: null, verts: [], measure: null, hidden: { brushes: new Set(), entities: new Set() }, pointfile: null });
     await get().syncMeshes();
     get().refreshChecks();
   },
@@ -231,7 +300,20 @@ export const useEditor = create<EditorState>((set, get) => ({
       const { sel } = get();
       const brushes = sel.brushes.filter((id) => next.has(id));
       const face = sel.face && next.has(sel.face.brush) ? sel.face : null;
-      set({ brushes: next, meshRev: u.revision, meshDoc: u.docId, preview: null, ...(brushes.length !== sel.brushes.length || face !== sel.face ? { sel: { ...sel, brushes, face } } : {}) });
+      const faces = (sel.faces ?? []).filter((f) => next.has(f.brush));
+      // picked corners that aren't corners any more drop out
+      const verts = get().verts.filter((v) => {
+        const b = next.get(v.brush);
+        return b && [...b.polys.values()].some((poly) => poly.some((q) => Math.abs(q[0] - v.p[0]) + Math.abs(q[1] - v.p[1]) + Math.abs(q[2] - v.p[2]) < 0.02));
+      });
+      set({
+        brushes: next,
+        meshRev: u.revision,
+        meshDoc: u.docId,
+        preview: null,
+        ...(verts.length !== get().verts.length ? { verts } : {}),
+        ...(brushes.length !== sel.brushes.length || face !== sel.face || faces.length !== (sel.faces ?? []).length ? { sel: { ...sel, brushes, face, faces } } : {}),
+      });
     });
     return meshChain;
   },
@@ -299,9 +381,9 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   file: async (what) => {
-    const labels = { new: "Starting a new map…", open: "Opening…", import: "Importing…", save: "Saving…", saveAs: "Saving…", export: "Exporting…" } as const;
+    const labels = { new: "Starting a new map…", open: "Opening…", import: "Importing…", save: "Saving…", saveAs: "Saving…", export: "Exporting…", recover: "Recovering…" } as const;
     if (get().fileBusy) return;
-    set({ fileBusy: labels[what] });
+    set({ fileBusy: typeof what === "number" ? "Opening…" : labels[what] });
     try {
       if (what === "save" || what === "saveAs") {
         const r = await api.saveProject(what === "saveAs");
@@ -317,7 +399,8 @@ export const useEditor = create<EditorState>((set, get) => ({
         if (!r.cancelled) get().notify(`Exported ${r.file ?? "the .map"}. Open it in any GoldSrc map compiler.`);
         return;
       }
-      const r = what === "new" ? await api.newMap() : what === "open" ? await api.openProject() : await api.importMap();
+      const r =
+        typeof what === "number" ? await api.openRecent(what) : what === "recover" ? await api.recover() : what === "new" ? await api.newMap() : what === "open" ? await api.openProject() : await api.importMap();
       if (r.error) return get().notify(r.error, true);
       if ("cancelled" in r && r.cancelled) return;
       await get().load();
@@ -388,3 +471,40 @@ export function originOf(keys: [string, string][]): Vec3 | null {
 }
 
 export const isEmptySel = (s: Selection) => !s.brushes.length && !s.entities.length && !s.face;
+
+/** Brushes and entities hidden for now: by this page, or in a hidden group. */
+export function isHiddenBrush(b: { id: number; group: number | null; entity: number | null }, s = useEditor.getState(), hiddenGroups?: Set<number>) {
+  if (s.hidden.brushes.has(b.id) || (b.entity != null && s.hidden.entities.has(b.entity))) return true;
+  return b.group != null && !!hiddenGroups?.has(b.group);
+}
+
+/** The group a click picks in "groups" mode: the outermost group the thing is in. */
+export function topGroup(g: number | null, doc = useEditor.getState().doc): number | null {
+  if (g == null || !doc) return g;
+  const parent = new Map(doc.groups.map((x) => [x.id, x.parent]));
+  let cur = g;
+  for (let i = 0; i < 32; i++) {
+    const p = parent.get(cur);
+    if (p == null) break;
+    cur = p;
+  }
+  return cur;
+}
+
+/** Everything in a group (with groups inside it). */
+export function groupMembers(g: number, doc = useEditor.getState().doc): { brushes: number[]; entities: number[] } {
+  if (!doc) return { brushes: [], entities: [] };
+  const inside = new Set([g]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const x of doc.groups) if (x.parent != null && inside.has(x.parent) && !inside.has(x.id)) {
+      inside.add(x.id);
+      grew = true;
+    }
+  }
+  const entities = doc.entities.filter((e) => e.group != null && inside.has(e.group)).map((e) => e.id);
+  const owned = new Set(entities);
+  const brushes = doc.brushes.filter((b) => b.group != null && inside.has(b.group) && (b.entity == null || !owned.has(b.entity))).map((b) => b.id);
+  return { brushes, entities };
+}

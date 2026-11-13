@@ -83,3 +83,82 @@
 
 .editor-start { max-width: 720px; display: grid; gap: 10px; }
 .editor-start-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ---- feature pass: face sheet, entity forms, dialogs, visibility ---- */
+.editor-row-label { min-width: 64px; }
+.editor-option-note { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-options .editor-class-input { width: 200px; }
+.editor-gap { flex: 0 0 8px; }
+
+.editor-facesheet h3 { display: flex; align-items: center; gap: 6px; }
+.editor-face-tex > div { display: grid; gap: 4px; min-width: 0; }
+.editor-sheet-grid { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); gap: 4px 6px; align-items: center; }
+.editor-sheet-head { font-size: 12px; color: var(--bone-faint); text-align: center; }
+.editor-sheet-label { font-size: 13px; color: var(--bone-dim); white-space: nowrap; }
+.editor-num span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.editor-num input { width: 100%; min-width: 0; font-size: 13px; padding: 2px 5px; }
+.editor-nudges .btn { min-width: 30px; }
+.editor-justify { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.editor-justify .btn { white-space: nowrap; }
+.editor-recent { display: flex; flex-wrap: wrap; gap: 4px; }
+.editor-recent-tex { width: 30px; height: 30px; padding: 0; border: 0; background: #222; box-shadow: var(--sunken); border-radius: 2px; }
+.editor-recent-tex img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; display: block; }
+.editor-recent-tex[aria-pressed="true"] { outline: 2px solid var(--signal); }
+.editor-textures .editor-row input[type="search"] { flex: 1 1 auto; min-width: 0; width: auto; }
+.editor-textures .editor-row select { flex: 0 1 140px; }
+
+.editor-def-label { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--bone-dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-key-value > select { flex: 1 1 auto; min-width: 0; font-size: 13px; padding: 2px 4px; }
+.editor-key-value > input[type="number"] { flex: 1 1 auto; min-width: 0; font-size: 13px; padding: 2px 5px; }
+.editor-key-value > input.editor-bright { flex: 0 0 64px; }
+.editor-flags { border: 1px solid var(--bevel-lo); border-radius: 2px; margin: 2px 0; padding: 4px 8px 6px; display: grid; gap: 3px; font-size: 13px; }
+.editor-flags legend { color: var(--bone-dim); padding: 0 4px; }
+.editor-keys h4 { margin: 6px 0 2px; }
+
+.editor-vis { display: grid; gap: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--bevel-lo); }
+.editor-vis-name { flex: 1 1 auto; min-width: 0; font-size: 13px; padding: 1px 4px; }
+.editor-vis .editor-check { flex: none; }
+
+.editor-checks .editor-issue { display: grid; gap: 4px; justify-items: start; }
+.editor-checks > .btn { margin-bottom: 6px; }
+.editor-fix { font-size: 12px; }
+
+.editor-dialog .sheet-body { display: grid; gap: 10px; }
+.editor-dialog h2 { margin: 0; }
+.editor-inline { grid-template-columns: auto 90px; align-items: center; justify-content: start; gap: 10px; }
+.editor-vec { display: grid; grid-template-columns: minmax(120px, auto) repeat(3, minmax(0, 1fr)); gap: 6px; align-items: center; font-size: 14px; }
+.editor-vec-label { display: inline-flex; align-items: center; gap: 4px; color: var(--bone-dim); white-space: nowrap; }
+.editor-vec label { display: flex; align-items: center; gap: 4px; }
+.editor-vec label span { color: var(--bone-faint); font-size: 12px; }
+.editor-vec input { width: 100%; min-width: 0; }
+.editor-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.editor-props { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 16px; min-width: 0; }
+.editor-props > section { min-width: 0; }
+.editor-props .editor-row select { flex: 1 1 auto; min-width: 0; }
+.editor-props .editor-wads li span { overflow: hidden; text-overflow: ellipsis; }
+.editor-field-head { display: inline-flex; align-items: center; gap: 4px; }
+.editor-props section { display: grid; gap: 8px; align-content: start; }
+.editor-props h4 { margin: 0; }
+.editor-props .editor-field input, .editor-props .editor-field select { width: 100%; }
+.editor-props .editor-row .editor-field { grid-template-columns: 1fr; }
+.editor-props input[type="color"] { height: 30px; padding: 0 2px; }
+.editor-report { max-height: 52vh; overflow: auto; box-shadow: var(--sunken); background: var(--bg); }
+.editor-report table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.editor-report th { position: sticky; top: 0; background: var(--panel-2); text-align: left; padding: 4px 6px; font-weight: 600; }
+.editor-report td { padding: 3px 6px; border-top: 1px solid var(--bevel-lo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.editor-report tr:hover td { background: var(--panel-2); cursor: default; }
+.editor-dialog .editor-row input[type="search"] { flex: 1 1 auto; min-width: 0; }
+
+.editor-handle-tip { font: 600 10px/1 ui-monospace, Menlo, monospace; color: #fff; background: rgba(0,0,0,.55); padding: 2px 4px; border-radius: 2px; transform: translateY(-14px); display: inline-block; white-space: nowrap; }
+.editor-measure { font: 600 12px/1 ui-monospace, Menlo, monospace; color: #10140c; background: #7dffb0; padding: 3px 6px; border-radius: 2px; white-space: nowrap; }
+
+.editor-recover { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.editor-recover-actions { display: flex; gap: 6px; flex: none; }
+.editor-recent-files h4 { margin: 4px 0; }
+.editor-recent-files ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.editor-recent-select { font-size: 13px; padding: 2px 4px; max-width: 160px; }
+.editor-row-label, .editor-flags, .editor-facesheet .editor-check, .editor-vis .muted { font-size: 13px; }
+.editor-row select { font-size: 13px; padding: 2px 4px; }
+.tools-panel .linklike.small-note { font-size: 13px; color: var(--bone-dim); }
+.editor-nudges { gap: 4px; }
+.editor-nudges .btn { padding-left: 6px; padding-right: 6px; }
