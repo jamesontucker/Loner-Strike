@@ -19,6 +19,7 @@ mod gamebanana;
 mod hltv;
 mod lists;
 mod maps;
+mod mcp;
 mod mapcopy;
 mod modevote;
 mod notify;
@@ -54,6 +55,10 @@ use tauri::{WebviewUrl, WebviewWindowBuilder};
 const PORT: u16 = 8027;
 
 fn main() {
+    // `loner-strike --mcp-stdio`: the AI agents bridge only (mcp/stdio.rs), no window
+    if mcp::stdio::wanted() {
+        return mcp::stdio::run();
+    }
 
     // Bind before opening the window so the page never loads too early.
     // If the Python panel already has 8027, take any free port.
@@ -121,6 +126,8 @@ fn main() {
             notify::watch(app.handle().clone(), state.clone());
             // Smarter chat's llama-server: only while it's on and a game is hosted here
             smartchat::watch(state.clone());
+            // AI agents (MCP), if turned on in Settings
+            mcp::start(&state);
             #[cfg(target_os = "macos")]
             app.set_menu(mac_menu(app.handle())?)?;
             // LONER_UI_URL points the window at the React dev server while working on the UI

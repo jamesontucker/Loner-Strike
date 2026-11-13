@@ -53,6 +53,8 @@ tokio-rustls = { version = "0.26", default-features = false, features = ["ring"]
 hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio", "server", "http1", "service"] }
 base64 = "0.22"
+# AI agents (mcp/): calls the app's own routes in-process (already in the tree through axum)
+tower = { version = "0.5", features = ["util"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

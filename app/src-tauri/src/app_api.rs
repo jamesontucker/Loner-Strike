@@ -58,6 +58,12 @@ pub struct Settings {
     /// the Smarter chat model to use (catalog id)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub smart_chat_model: Option<String>,
+    /// AI agents (MCP, mcp/): coding agents may use Tools over 127.0.0.1 with this run's token
+    #[serde(default)]
+    pub mcp: bool,
+    /// and may change things (edit maps and navs, start and stop servers), not just look
+    #[serde(default)]
+    pub mcp_changes: bool,
 }
 
 /// A new phone access key.
