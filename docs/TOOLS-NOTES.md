@@ -706,3 +706,58 @@ narrow right column, "The picture's own" wraps onto three lines, checkbox labels
    keyboard shortcut sheet (?); remember last map/tool per page; shareable "open this spot" links between tools.
 4. **Developer experience:** one command to run any tool page in a browser with real data; Playwright screenshot
    tests per tool page (catch layout regressions); one shared API client + error handling instead of per-tool copies.
+
+### Integration pass (agent L) — 2026-11-12
+
+**Sidebar and addresses**
+- Tools is its own sidebar group after Hosting (the user's call). The group heading reads "Tools" with the Beta tag and folds the group (`ls.toolsOpen`). Under it: **Overview** (the cards page), then the tools grouped **Look** (Map viewer, Replay, Textures & models), **Fix** (Map health check, Map doctor, Nav fixer, Callouts) and **Make** (Map editor, Spray maker). The open tool is highlighted. This lives in `App.tsx` `ToolsNav`. Computer only, as before.
+- `registry.tsx` entries now have `group` and `icon`, and shorter one-line blurbs. The blurb shows on the overview card and under the tool's title.
+- Tools.tsx no longer has the Segmented row. It shows the overview, or the open tool under its own title.
+- Which tool is open lives in `stores/toolPage.ts`, a tiny store, so the sidebar doesn't pull the viewer's state into the start bundle. `useTools.setTool` writes there.
+- Addresses, all through `go("tools", ...)`:
+  - `overview`
+  - `<id>` or `<id>:<arg>` (read the arg with `useToolArg`)
+  - `map:<name>` or `map:<name>@x,y,z[,size]`
+  - `replay:<id>`
+- Links between tools now use these addresses: health check "Open in map viewer" (`map:…@spot`) and "Watch in Replay", doctor "Name places" (`callouts:<map>`), callouts "Check the map in the map doctor".
+- The Maps page's map sheet has "Open in Tools": own game only, not on a server, not other-game maps.
+- macOS Go menu: Tools, after Servers.
+- Get more labels the new section: "Texture pack" and "Textures". H's content.rs `textures` section is kept.
+
+**Requests done**
+- The viewer honours a look-at made before the map is up. `Cameras.tsx` LookAt waits for the camera controls, then clears the request. `setTool` drops a request left waiting by another tool.
+- `viewer/Scene.tsx` exports `pointerEvents`, and `Scene` takes `children` (extra layers inside the root group).
+  - The editor's copy of `pointerEvents` is gone.
+  - FixScene still has its own Canvas (no entities, no click-to-clear), but now uses `pointerEvents`. Picking there was off at text sizes other than 100%.
+- False "3D view stopped": Scene and FixScene now ignore a context lost by a canvas that's being put away (`isConnected`), as I did in the editor.
+- `editor::ops::tidy` snaps values within 1e-6 of a 1/1024 step, and `move_face` tidies its points (test added).
+- `goldsrc/mod.rs`: the module list is in one sorted block at the top. That edit was swept into K's commit 6ea2b7f; harmless.
+
+**Nav and hull (C's code; a helper ran this, commit 85bb88c)**
+- Ladders: our building already mostly matched the game's BuildLadders.
+  - cs_rats2's 8 topless ladders are topless in the game too: thin func_wall plates (36, 106), a vent grate (39), floors with no nav area (11, 183, 226), and only an area behind (65, 121). The sim's recordings agree: bots almost never climb those.
+  - de_nuke's vent ladders (114, 180) end at grates that are solid when ladders are built.
+- Real differences fixed in `hull.rs` (new `trace_ignoring`, entity boxes 1 unit bigger like absmin/absmax, which entity was hit) and `nav.rs` (new `ground_height` like GetGroundHeight, used for the ladder foot; ladder 65 now has a bottom):
+  - A trace that started inside a brush entity lost its start-solid flag.
+  - Entity boxes weren't padded by 1 unit.
+  - The ladder-foot fallback used a single downward trace.
+- Hull 1 "false all-solid" at cs_rats2 areas 65, 146 and 273 is real overlap: 4-unit vent grates, and a 25-wide area 15.5 units from a wall corner. The short-trace vs `ceiling_above` mismatch was the start-solid bug.
+- Tests: `real_rats2_ladders`, `real_rats2_standing_room`, `ground_height_like_the_game`, plus a start-solid unit test.
+- J's workarounds in navfix.rs are both left in, with their comments updated.
+  - The 72-unit ladder fallback: without it, cs_rats2 shows 120 unreachable areas, yet bots in the recordings stand in 39 of them. The reach model is missing some other way bots get around (J to look).
+  - The point-trace head room check: a player box at an area's centre can genuinely be stuck.
+  - `real_rats2_on_the_map` problems: raw 7 → 6, fixed 5 → 4.
+
+**Shared files reviewed:** tools/mod.rs (C's `#[path]` replay line is already gone; routes merged once each), registry.tsx, goldsrc/mod.rs, content.rs, main.rs, server.rs (one merge line), App.tsx, store.ts (only `tools` added). No duplicates left. `main.rs` has `pub mod editor;` among plain `mod`s. That keeps E's not-yet-used core API free of dead-code warnings, so I left it.
+
+**Checks:** `cargo test` 452 passed, 0 failed, 12 ignored. `npm run build` is green.
+- Start chunk is 514.02 kB (165.05 gz). That's against main 509.17 kB (163.38 gz) and this branch before the pass 509.79 kB (163.64 gz).
+- The +4.2 kB is the tool list in the sidebar: registry names, blurbs and the lazy import stubs with their preload lists. Every tool page is still its own chunk.
+
+**Left for the real-app check**
+- Sidebar: the Tools group folding, highlights, Overview cards at small and large window sizes, ⌘-number order, and Go > Tools on macOS.
+- Health check "Open in map viewer" landing on the spot on a fresh viewer (Orbit and Top-down).
+- Nav fixer picking at 90% and 125% text size (it now uses `pointerEvents`).
+- Leaving a tool page doesn't show "The 3D view stopped".
+- "Open in Tools" from a map sheet: Back should go to Maps, not a dead sheet.
+- Ladders: confirm in game, with developer 1 for the "Unconnected ladder" messages, that cs_rats2's 8 and de_nuke's 2 are topless there too.
