@@ -1,0 +1,241 @@
+// Loner-Strike game mode components (gm_components.amxx). Written for Loner-Strike; same licence
+// as the rest of it. Standard FGD syntax, so other editors can read it too. Every class here
+// needs the gm_components plugin on the server (a game mode that lists it); without it the game
+// leaves these entities out. Keys, events and what bots make of each: docs/COMPONENTS.md.
+// Times called "after the round starts" count from the end of freeze time.
+
+// ---- shared pieces ----------------------------------------------------------------------
+
+@BaseClass = LsName
+[
+	targetname(target_source) : "Name" : : "What map logic and modes call this component. A button whose target is this name sets it off."
+	name(string) : "Label" : : "A short name players see (B, North gate). Uses the Name when empty."
+	enabled(choices) : "On at round start" : 1 : "Off: it does nothing until a mode or map logic switches it on." =
+	[
+		1 : "Yes"
+		0 : "No"
+	]
+]
+@BaseClass = LsTarget [ target(target_destination) : "Sets off" : : "What to set off when its main thing happens (taken, opened, extracted, broken...)." ]
+@BaseClass = LsTeam
+[
+	team(choices) : "Team" : 0 : "Which team this is for." =
+	[
+		0 : "Anyone"
+		1 : "Terrorists"
+		2 : "Counter-Terrorists"
+	]
+]
+@BaseClass = LsArea
+[
+	radius(float) : "Radius" : 128 : "How far from the middle counts as inside (units). Ignored when Box size is set."
+	height(float) : "Height" : 160 : "How far above the floor counts as inside."
+	size(string) : "Box size (x y z)" : : "Use a box instead of a circle: width, depth and height in units, centred on the point."
+]
+@BaseClass = LsTier
+[
+	tier(choices) : "Tier" : 1 : "How good the loot is. Also its glow colour." =
+	[
+		1 : "1 - common (grey)"
+		2 : "2 - good (green)"
+		3 : "3 - rare (blue)"
+		4 : "4 - epic (purple)"
+		5 : "5 - best (gold)"
+	]
+]
+
+// ---- spawns and players ------------------------------------------------------------------
+
+@PointClass base(LsName, LsTeam) size(-16 -16 -36, 16 16 36) color(80 200 255) studio("models/player/gign/gign.mdl") = ls_respawn_point : "Where players of a team (re)spawn in a mode. When a map has any for a team, that team spawns only at these, at a free one."
+[
+	angle(angle) : "Facing" : 0 : "Which way the player faces, seen from above."
+	protect_secs(float) : "Spawn protection" : 3 : "Seconds the player can't be hurt after spawning here (glows meanwhile)."
+	role(string) : "Role" : : "For the Mode Kit: only players with this role spawn here."
+]
+
+@PointClass base(LsTeam) size(-8 -8 -8, 8 8 8) color(200 160 255) = ls_player_class : "A player class: health, speed, weapons, model. Players pick one with say /class, or a mode gives it."
+[
+	name(string) : "Class name" : "Soldier" : "What the class is called in menus and in mode code."
+	enabled(choices) : "On at round start" : 1 : "Off: not offered or given." = [ 1 : "Yes" 0 : "No" ]
+	hp(integer) : "Health" : 100 : "Health at spawn."
+	armor(integer) : "Armour" : 0 : "Armour at spawn."
+	helmet(choices) : "Helmet" : 1 : "With a helmet when armour is given." = [ 1 : "Yes" 0 : "No" ]
+	speed(float) : "Speed" : 0 : "Running speed (250 is normal with a knife). 0 keeps the weapon's own speed."
+	gravity(float) : "Gravity" : 1 : "1 is normal, 0.5 jumps twice as high."
+	weapons(string) : "Weapons" : "knife" : "Given at spawn, separated by spaces: knife deagle ak47 vesthelm he hp:50 ..."
+	strip(choices) : "Take other weapons" : 1 : "Take the game's starting weapons first." = [ 1 : "Yes" 0 : "No" ]
+	model(string) : "Player model" : : "A model folder under models/player (terror, vip). Empty keeps the team's."
+	limit(integer) : "Most players" : 0 : "How many can have it at once (0 = no limit)."
+	menu(choices) : "In the class menu" : 1 : "Players can pick it from say /class." = [ 1 : "Yes" 0 : "No" ]
+	default(choices) : "Given to everyone" : 0 : "Players of the team without a class get this one." = [ 0 : "No" 1 : "Yes" ]
+	bot_profile(string) : "Bot behaviour" : : "A behaviour profile for bots with this class (botprofiles.ini: hunter, defender ...)."
+]
+
+// ---- zones -------------------------------------------------------------------------------
+
+@PointClass base(LsName) size(-24 -24 -24, 24 24 24) color(80 160 255) = ls_safe_zone : "The safe circle (battle royale). Players outside it take damage. Put one in the middle of the play area."
+[
+	radius(float) : "Radius" : 3000 : "The circle's size at round start."
+	damage(float) : "Damage outside" : 1 : "Damage per tick outside (a shrinker changes it per stage)."
+	interval(float) : "Seconds per tick" : 1 : "How often players outside are hurt."
+]
+
+@PointClass base(LsName) size(-8 -8 -8, 8 8 8) color(80 160 255) = ls_zone_shrinker : "Shrinks a safe zone in stages: warn (next circle shown), then close in, with more damage each stage."
+[
+	zone(target_destination) : "Safe zone" : : "The safe zone's Name (empty = the first one)."
+	stages(string) : "Stages" : "2400:60:40:1 1600:45:35:2 900:40:30:4 400:30:25:8 0:20:20:15" : "Each stage as radius:warn seconds:shrink seconds:damage, separated by spaces."
+	start_delay(float) : "Starts after" : 30 : "Seconds after the round starts (-1 = when a mode starts it)."
+	random_center(choices) : "Random centres" : 1 : "Each next circle lands somewhere inside the last one." = [ 1 : "Yes" 0 : "No (stays centred)" ]
+	final_r(float) : "Smallest radius" : 0 : "Never smaller than this."
+	roundtime(choices) : "Show in round clock" : 1 : "The round timer counts down to the next change." = [ 1 : "Yes" 0 : "No" ]
+]
+
+@PointClass base(LsName, LsArea) size(-16 -16 -16, 16 16 16) color(255 60 30) = ls_damage_zone : "Hurts players inside: fire, poison, shock. Bots route around it."
+[
+	radius(float) : "Radius" : 96 : "How far from the middle hurts."
+	dmg(float) : "Damage" : 10 : "Damage per tick."
+	interval(float) : "Seconds per tick" : 1 : "How often."
+	kind(choices) : "Kind" : "fire" : "The damage type and screen colour." =
+	[
+		"fire" : "Fire"
+		"poison" : "Poison"
+		"shock" : "Shock"
+		"radiation" : "Radiation"
+		"generic" : "Plain"
+	]
+	team(choices) : "Hurts" : 0 : "Who it hurts." = [ 0 : "Everyone" 1 : "Terrorists" 2 : "Counter-Terrorists" ]
+	hud_warning(choices) : "Warning on screen" : 1 : "Shows Danger: fire while inside." = [ 1 : "Yes" 0 : "No" ]
+	show(choices) : "Red ring" : 1 : "Draw its edge for players nearby." = [ 1 : "Yes" 0 : "No" ]
+]
+
+@PointClass base(LsName, LsTarget, LsArea) size(-16 -16 -16, 16 16 16) color(255 220 40) = ls_capture_point : "A point teams take by standing on it, and hold. Bots attack and defend it."
+[
+	capture_secs(float) : "Seconds to take" : 10 : "With one player on it."
+	multiplier(choices) : "More players, faster" : 1 : "Up to 3 times faster with 3 players." = [ 1 : "Yes" 0 : "No" ]
+	decay(float) : "Decay" : 1 : "How fast a half-taken point goes back when nobody is on it (0 = keeps progress)."
+	team_lock(choices) : "Who can take it" : 0 : "" = [ 0 : "Both teams" 1 : "Only Terrorists" 2 : "Only Counter-Terrorists" ]
+	start_owner(choices) : "Held at start by" : 0 : "" = [ 0 : "Nobody" 1 : "Terrorists" 2 : "Counter-Terrorists" ]
+	ffa(choices) : "Every player for themselves" : 0 : "Held by one player instead of a team (King of the Hill)." = [ 0 : "No" 1 : "Yes" ]
+]
+
+@PointClass base(LsName, LsTarget, LsArea, LsTeam) size(-16 -16 -16, 16 16 16) color(60 255 90) = ls_extraction_zone : "Players who stay inside long enough while it's open get out (and are done for the round)."
+[
+	hold_secs(float) : "Seconds to extract" : 8 : "How long a player stays inside."
+	open_at(float) : "Opens after" : 0 : "Seconds after the round starts (-1 = when a mode or button opens it)."
+	close_at(float) : "Closes after" : -1 : "Seconds after the round starts (-1 = never)."
+	cost(integer) : "Cost" : 0 : "Money it takes to extract here."
+	shared(choices) : "Faster together" : 0 : "Each extra player inside makes it 50% faster." = [ 0 : "No" 1 : "Yes" ]
+	once(choices) : "Once per round" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
+	action(choices) : "Then" : "spectate" : "What happens to a player who extracted." =
+	[
+		"spectate" : "Out of the round (no death counted)"
+		"strip" : "Stays, weapons taken"
+		"none" : "Nothing (the mode decides)"
+	]
+]
+
+@PointClass base(LsName, LsTarget, LsArea, LsTeam) size(-16 -16 -16, 16 16 16) color(255 220 60) = ls_checkpoint : "A gate in a race. Players pass them in order; passing the last one finishes a lap."
+[
+	order(integer) : "Order" : 1 : "1 is the start; the highest number finishes the lap."
+	radius(float) : "Radius" : 96 : ""
+]
+
+@PointClass base(LsName, LsTarget, LsArea) size(-16 -16 -16, 16 16 16) color(255 200 140) = ls_meeting_point : "Players hold USE here to call a meeting: everyone gathers, talks and votes someone out."
+[
+	radius(float) : "Radius" : 160 : "Where players can call it from and gather around."
+	duration(float) : "Seconds" : 45 : "How long the meeting lasts."
+	cooldown(float) : "Cooldown" : 60 : "Seconds before another can be called."
+	calls(integer) : "Calls per player" : 1 : "Per round (0 = no limit)."
+	callers(choices) : "Who can call" : 0 : "" = [ 0 : "Any player" 1 : "Only the mode" ]
+	freeze(choices) : "Freeze players" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
+	gather(choices) : "Bring everyone here" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
+]
+
+// ---- loot --------------------------------------------------------------------------------
+
+@PointClass base(LsName, LsTier) size(-8 -8 0, 8 8 8) color(255 170 0) studio("models/w_ak47.mdl") = ls_weapon_spawner : "A weapon or item lying on the floor that comes back after it's taken. Walk over it to pick it up."
+[
+	item(string) : "Item" : "table:default" : "ak47, deagle, vesthelm, he, hp:50, ammo ... or table:<name> to roll from a loot table."
+	respawn_secs(float) : "Comes back after" : 30 : "Seconds (0 = once per round)."
+	once(choices) : "Once per round" : 0 : "" = [ 0 : "No" 1 : "Yes" ]
+]
+
+@PointClass base(LsName, LsTarget, LsTier) size(-16 -16 0, 16 16 24) color(255 170 0) studio("models/w_weaponbox.mdl") = ls_loot_container : "A crate players hold USE on to open; it gives a few items from a loot table."
+[
+	table(string) : "Loot table" : "default" : "A [table] in configs/gamemodes/loot.ini."
+	items(integer) : "Items" : 2 : "How many items it gives."
+	open_secs(float) : "Seconds to open" : 2 : ""
+	once(choices) : "Once per round" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
+	respawn_secs(float) : "Refills after" : 0 : "Seconds (0 = not this round)."
+	glow(choices) : "Glow by tier" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
+	model(studio) : "Model" : : "Empty: a weapon box."
+]
+
+@PointClass base(LsName, LsTarget, LsTier) size(-16 -16 0, 16 16 24) color(255 90 60) studio("models/mil_crate.mdl") = ls_supply_drop : "Where a supply crate can fall from the sky, with a beacon. Players hold USE on it to open it."
+[
+	at(float) : "Falls after" : -1 : "Seconds after the round starts (-1 = when a mode or button calls it)."
+	chance(integer) : "Chance" : 100 : "Percent chance it comes at all."
+	fall_secs(float) : "Seconds falling" : 20 : ""
+	table(string) : "Loot table" : "drop" : ""
+	items(integer) : "Items" : 4 : ""
+	open_secs(float) : "Seconds to open" : 3 : ""
+	beacon(choices) : "Beacon" : 1 : "A red beam above it until it's opened." = [ 1 : "Yes" 0 : "No" ]
+]
+
+// ---- doors, traps, defences --------------------------------------------------------------
+
+@PointClass base(LsName, LsTarget, LsTeam) size(-8 -8 -8, 8 8 8) color(200 200 80) = ls_timed_door : "Opens, closes and locks func_doors on a timetable. Players may lock it for a while. Bots go round a locked door."
+[
+	door(target_destination) : "Door" : : "The Name of the func_door / func_door_rotating (all doors with that name)."
+	open_at(float) : "Opens after" : -1 : "Seconds after the round starts (-1 = never by itself)."
+	close_at(float) : "Closes after" : -1 : "Seconds after the round starts (-1 = never by itself)."
+	open_secs(float) : "Closes again after" : 0 : "Seconds after it opens (0 = stays open)."
+	locked_until(float) : "Locked until" : 0 : "Players can't open it before this many seconds into the round."
+	lockable(choices) : "Players can lock it" : 0 : "Hold USE by the door to lock it." = [ 0 : "No" 1 : "Yes" ]
+	lock_time(float) : "Seconds to lock" : 3 : ""
+	lock_secs(float) : "Stays locked for" : 10 : ""
+]
+
+@PointClass base(LsName, LsTarget, LsArea) size(-16 -16 -16, 16 16 16) color(255 80 80) = ls_trigger_trap : "A trap: sets off its targets (and hurts players inside) when someone walks in, or when a button or mode fires it."
+[
+	fire_on(choices) : "Goes off" : "touch" : "" = [ "touch" : "When someone walks in" "use" : "Only from a button or mode" ]
+	team_only(choices) : "Set off by" : 0 : "Who walking in sets it off." = [ 0 : "Anyone" 1 : "Terrorists" 2 : "Counter-Terrorists" ]
+	delay(float) : "Delay" : 0 : "Seconds between being set off and going off."
+	dmg(float) : "Damage" : 0 : "Damage to players inside when it goes off."
+	rearm_secs(float) : "Rearms after" : 5 : "Seconds (0 = once per round)."
+	armed(choices) : "Armed at start" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
+	danger(choices) : "Bots avoid it" : 0 : "Bots keep away even without damage set." = [ 0 : "No" 1 : "Yes" ]
+	trap_kind(string) : "Kind" : : "A word for the mode (laser, crusher, alarm)."
+]
+
+@SolidClass base(LsName, LsTarget, LsTeam) color(180 120 60) = ls_barricade : "A wall that can be shot or hit down and repaired (hold USE). Bots defend behind it and go round it while it stands."
+[
+	hp(integer) : "Health" : 500 : ""
+	team(choices) : "Defended by" : 2 : "This team repairs it and can't damage it." = [ 0 : "Nobody" 1 : "Terrorists" 2 : "Counter-Terrorists" ]
+	repair_secs(float) : "Seconds per repair" : 3 : "Each repair adds a quarter of its health."
+	repair_cost(integer) : "Repair cost" : 0 : "Money per repair."
+	blocks_bots(choices) : "Bots go round it" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
+	friendly_damage(choices) : "Own team can damage it" : 0 : "" = [ 0 : "No" 1 : "Yes" ]
+	adopt(string) : "Take over" : : "Map packs: the Name or *model of an existing func_wall/func_breakable to turn into this barricade."
+]
+
+@PointClass base(LsName, LsTarget) size(-16 -16 0, 16 16 72) color(255 40 40) = ls_wave_spawner : "Where waves of enemies come from (Last Stand). Waves are shared by every spawner on the map."
+[
+	team(choices) : "Enemies' team" : 1 : "Dead players (bots first) of this team come back here, unless a mode spawns its own enemies." = [ 1 : "Terrorists" 2 : "Counter-Terrorists" ]
+	wave_min(integer) : "Enemies in wave 1" : 4 : "From this spawner."
+	wave_max(integer) : "Enemies in the last wave" : 12 : ""
+	waves(integer) : "Waves" : 10 : ""
+	rate(float) : "Seconds between enemies" : 1.5 : ""
+	radius(float) : "Spread" : 64 : "Enemies appear within this distance."
+	types(string) : "Enemy types" : : "Passed to the mode (creatures.ini types: runner brute ...)."
+	auto(choices) : "Starts by itself" : 0 : "" = [ 0 : "No (a mode starts it)" 1 : "Yes" ]
+	prepare(float) : "First wave after" : 30 : "Seconds after the round starts, when it starts by itself."
+	between(float) : "Seconds between waves" : 15 : ""
+	humans(choices) : "Also bring back people" : 0 : "Dead human players come back as enemies too." = [ 0 : "No" 1 : "Yes" ]
+]
+
+@PointClass base(LsName) size(-8 -8 -8, 8 8 8) color(120 200 255) = ls_moving_platform : "Tells bots about a func_train / func_plat (they wait for it and ride it) and reports when it stops and starts."
+[
+	platform(target_destination) : "Train or platform" : : "Its Name."
+	auto(float) : "Sets off after" : -1 : "Seconds after the round starts (-1 = never by itself)."
+]

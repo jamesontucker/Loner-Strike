@@ -11,7 +11,7 @@ use std::collections::HashMap;
 pub const CSTRIKE_FGD: &str = include_str!("cstrike.fgd");
 /// More definition files read after ours (they can use our base classes), e.g. the game mode
 /// components: add `include_str!("lonerstrike.fgd")` here when it lands.
-pub const EXTRA_FGDS: &[&str] = &[];
+pub const EXTRA_FGDS: &[&str] = &[include_str!("lonerstrike.fgd")];
 
 /// Every definition the editor ships, as one FGD text.
 pub fn shipped() -> String {
