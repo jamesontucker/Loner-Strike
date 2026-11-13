@@ -10,16 +10,21 @@ import { useDirty } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
 import { useReportAddress } from "../common/address";
 import { useToolCrumbs } from "../common/shell";
-import { BusyButton, LoadError, Skeleton, useAskText, useConfirm, useToast } from "../../../ui";
+import { BusyButton, LoadError, Sheet, Skeleton, useAskText, useConfirm, useToast } from "../../../ui";
+import { ActionBar, type BarAction } from "../common/ActionBar";
+import { HistoryPanel } from "../common/History";
 import type { ToolProps } from "../registry";
+import { HelpPanel } from "./Help";
 import type { EditorHandle } from "./monaco";
-import { compile, deleteFile, overview, pluginLog, readFile, saveFile, stopTrying, tryIt, words, type CompileResult, type Diag, type FolderId, type LogLine } from "./pluginsApi";
+import { compile, deleteFile, overview, pluginLog, readFile, renameFile, resetFile, saveFile, stopTrying, tryIt, words, type CompileResult, type Diag, type FolderId, type LogLine, type OpenedFile, type SourceFile } from "./pluginsApi";
 import { TEMPLATES } from "./templates";
 import "./plugins.css";
 
-type Open = { folder: FolderId; name: string; encoding: string; readOnly: string | null };
-type Busy = "open" | "save" | "compile" | "try" | "stop" | null;
-type Tab = "problems" | "log" | "output";
+type Open = Pick<OpenedFile, "folder" | "name" | "encoding" | "readOnly" | "reset" | "resetHint" | "history">;
+type Busy = "open" | "save" | "compile" | "try" | "stop" | "reset" | "rename" | null;
+type Tab = "problems" | "log" | "output" | "help";
+/** what the action bar says while each runs */
+const WORKING: Record<Exclude<Busy, null>, string> = { open: "Opening…", save: "Saving…", compile: "Compiling…", try: "Compiling and loading…", stop: "Taking it out…", reset: "Resetting…", rename: "Renaming…" };
 
 const keyOf = (folder: FolderId, name: string) => `${folder}/${name}`;
 const stemOf = (name: string) => name.replace(/\.[^.]+$/, "");
@@ -54,6 +59,8 @@ export default function PluginStudio(_: ToolProps) {
   const [result, setResult] = useState<CompileResult | null>(null);
   const [tab, setTab] = useState<Tab>("problems");
   const [creating, setCreating] = useState(false);
+  const [helpQuery, setHelpQuery] = useState("");
+  const [history, setHistory] = useState<string | null>(null);
   const openRef = useRef<Open | null>(null);
   openRef.current = open;
 
@@ -63,7 +70,7 @@ export default function PluginStudio(_: ToolProps) {
   const isSource = !!open && open.name.toLowerCase().endsWith(".sma");
 
   // Monaco loads on first open, in its own chunk
-  const actions = useRef({ save: () => {}, compile: () => {} });
+  const actions = useRef<{ save: () => void; compile: () => void; open: (f: FolderId, n: string, line?: number) => Promise<void> }>({ save: () => {}, compile: () => {}, open: async () => {} });
   const haveData = !!ov.data;
   useEffect(() => {
     if (!haveData) return;
@@ -88,6 +95,21 @@ export default function PluginStudio(_: ToolProps) {
           },
           save: () => actions.current.save(),
           compile: () => actions.current.compile(),
+          hooks: {
+            openInclude: (file, line) => void actions.current.open("include", file, line),
+            readInclude: async (file) => {
+              try {
+                return (await readFile("include", file)).text;
+              } catch {
+                return null;
+              }
+            },
+            newPlugin: () => setCreating(true),
+            docs: (q) => {
+              setHelpQuery(q);
+              setTab("help");
+            },
+          },
         });
         setEditorReady(true);
       })
@@ -109,7 +131,7 @@ export default function PluginStudio(_: ToolProps) {
   }, []);
 
   const openFile = useCallback(
-    async (folder: FolderId, name: string) => {
+    async (folder: FolderId, name: string, line?: number) => {
       if (!ed.current) return;
       const k = keyOf(folder, name);
       setBusy("open");
@@ -119,11 +141,12 @@ export default function PluginStudio(_: ToolProps) {
         const keep = dirty.has(k);
         if (!keep) savedText.set(k, f.text);
         ed.current.show(k, keep ? null : f.text, !!f.readOnly);
-        setOpen({ folder, name, encoding: f.encoding, readOnly: f.readOnly });
+        setOpen({ folder, name, encoding: f.encoding, readOnly: f.readOnly, reset: f.reset, resetHint: f.resetHint, history: f.history });
         const r = lastResult.get(k) ?? null;
         setResult(r);
         markers(r);
-        ed.current.focus();
+        if (line) ed.current.reveal(line);
+        else ed.current.focus();
       } catch (e) {
         toast((e as Error).message, true);
       } finally {
@@ -142,6 +165,19 @@ export default function PluginStudio(_: ToolProps) {
   }, [editorReady, arg]);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["tools", "plugins"], exact: true });
+
+  // History restored a file (or Undo put one back): read the open one again, unless it has
+  // unsaved changes
+  useEffect(() => {
+    const again = () => {
+      const o = openRef.current;
+      refresh();
+      if (o && !dirty.has(keyOf(o.folder, o.name))) void openFile(o.folder, o.name);
+    };
+    window.addEventListener("ls-files-restored", again);
+    return () => window.removeEventListener("ls-files-restored", again);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, openFile]);
 
   /** Saves the open file if it has changes. False if it couldn't. */
   const saveNow = async (quiet = false): Promise<boolean> => {
@@ -212,7 +248,50 @@ export default function PluginStudio(_: ToolProps) {
     }
   };
 
-  actions.current = { save: () => void saveNow(), compile: () => void run("compile") };
+  actions.current = { save: () => void saveNow(), compile: () => void run("compile"), open: openFile };
+
+  const reset = async () => {
+    const o = openRef.current;
+    if (!o?.reset) return;
+    const plugin = o.folder === "game";
+    const ok = await confirm(
+      `Put ${o.name} back to Loner-Strike's version?${plugin ? ` ${stemOf(o.name)}.amxx in your game is rebuilt from it too.` : ""} The file as it is now is kept first, so you can get it back from History.`,
+      { ok: "Reset", danger: true },
+    );
+    if (!ok) return;
+    setBusy("reset");
+    const r = await resetFile(o.folder, o.name);
+    setBusy(null);
+    if (r.error) return toast(r.error, true);
+    toast(r.message ?? "Reset.");
+    const k = keyOf(o.folder, o.name);
+    setDirty((d) => {
+      const n = new Set(d);
+      n.delete(k);
+      return n;
+    });
+    refresh();
+    await openFile(o.folder, o.name);
+  };
+
+  const renameNow = async () => {
+    const o = openRef.current;
+    if (!o || o.folder !== "mine") return;
+    if (!(await saveNow(true))) return;
+    const ext = o.name.split(".").pop()?.toLowerCase() ?? "sma";
+    const to = await askText(`Rename ${o.name} to:`, { label: "New name", placeholder: stemOf(o.name), max: 60 }, { ok: "Rename" });
+    if (to === null) return;
+    const stem = stemOf(to.trim());
+    if (!SAFE_STEM.test(stem)) return toast("Use only letters, numbers, - and _ in the name.", true);
+    setBusy("rename");
+    const r = await renameFile("mine", o.name, `${stem}.${ext}`);
+    setBusy(null);
+    if (r.error) return toast(r.error, true);
+    mod.current?.dropModel(keyOf("mine", o.name));
+    savedText.delete(keyOf("mine", o.name));
+    await refresh();
+    await openFile("mine", `${stem}.${ext}`);
+  };
 
   const stop = async () => {
     if (!open) return;
@@ -273,7 +352,7 @@ export default function PluginStudio(_: ToolProps) {
               label={f.label}
               path={f.path}
               start={f.id !== "include"}
-              files={f.files.map((x) => x.name)}
+              files={f.files}
               current={open?.folder === f.id ? open.name : null}
               dirty={(n) => dirty.has(keyOf(f.id, n))}
               tried={(n) => trying.includes(stemOf(n)) && f.id !== "include"}
@@ -293,18 +372,32 @@ export default function PluginStudio(_: ToolProps) {
               {isTrying && <span className="tag ps-trying">In your game</span>}
             </span>
             <span className="ps-actions">
-              {open?.readOnly ? (
-                <button className="btn small" onClick={saveCopy} disabled={!!busy}>
-                  Save a copy…
-                </button>
-              ) : (
-                <BusyButton className="btn small" busy={busy === "save"} label="Save" busyLabel="Saving…" disabled={!open || !!busy || !dirty.has(key ?? "")} onClick={() => void saveNow()} />
-              )}
-              <BusyButton className="btn small" busy={busy === "compile"} label="Compile" busyLabel="Compiling…" disabled={!isSource || !!busy || !data.compiler} onClick={() => run("compile")} />
-              <BusyButton className="btn small primary" busy={busy === "try"} label="Try it in my game" busyLabel="Compiling and loading…" disabled={!isSource || !!busy || !data.compiler || !!open?.readOnly} onClick={() => run("try")} />
-              {isTrying && <BusyButton className="btn small" busy={busy === "stop"} label="Take it out" busyLabel="Taking it out…" disabled={!!busy} onClick={stop} />}
+              <button className="btn small" disabled={!open || !!open.readOnly || !editorReady} onClick={() => ed.current?.palette()} title="Snippets, templates and the docs (or type / at the start of a line)">
+                Insert… <kbd>/</kbd>
+              </button>
+              <button className="btn small" aria-pressed={tab === "help"} onClick={() => setTab(tab === "help" ? "problems" : "help")} title="Search every function, and guides on writing plugins">
+                Help & docs
+              </button>
             </span>
           </div>
+          {open?.readOnly && (
+            <div className="ps-readonly" role="note">
+              <span className="ps-lock" aria-hidden="true">🔒</span>
+              <span className="ps-readonly-text">
+                {open.readOnly}
+                {open.reset?.differs && " The copy in your game has been changed from Loner-Strike's version."}
+                {open.resetHint && ` ${open.resetHint}`}
+              </span>
+              <span className="ps-readonly-actions">
+                {open.folder !== "include" || open.name.endsWith(".inc") ? (
+                  <button className="btn small" onClick={saveCopy} disabled={!!busy}>
+                    Save a copy in My plugins…
+                  </button>
+                ) : null}
+                {open.reset?.differs && <BusyButton className="btn small" busy={busy === "reset"} label="Reset to Loner-Strike's version…" busyLabel="Resetting…" disabled={!!busy} onClick={reset} />}
+              </span>
+            </div>
+          )}
           <div className="ps-editor-wrap">
             <div ref={host} className="ps-editor" />
             {!open && editorReady && (
@@ -338,6 +431,9 @@ export default function PluginStudio(_: ToolProps) {
               <button role="tab" className="chip" aria-selected={tab === "output"} onClick={() => setTab("output")}>
                 Compiler output
               </button>
+              <button role="tab" className="chip" aria-selected={tab === "help"} onClick={() => setTab("help")}>
+                Help & docs
+              </button>
               {result && (
                 <span className={`ps-result ${result.ok ? (result.warnings ? "warn" : "ok") : "bad"}`}>
                   {result.message}
@@ -349,20 +445,81 @@ export default function PluginStudio(_: ToolProps) {
               {tab === "problems" && <Problems diags={diags} errors={errors} compiled={!!result} onGo={(d) => ed.current?.reveal(d.line)} />}
               {tab === "output" && (result ? <pre className="ps-output">{result.output.trim()}</pre> : <p className="muted">Compile to see what the compiler said.</p>)}
               {tab === "log" && <GameLog name={open && isSource ? stemOf(open.name) : null} trying={isTrying} running={data.running} />}
+              {tab === "help" && (
+                <HelpPanel
+                  words={wq.data}
+                  query={helpQuery}
+                  setQuery={setHelpQuery}
+                  onOpen={(w) => void openFile("include", w.file, w.line)}
+                  onInsert={(w) => {
+                    if (!open || open.readOnly) return toast("Open one of your own plugins to put it in.", true);
+                    ed.current?.insertWord(w);
+                  }}
+                />
+              )}
             </div>
           </div>
         </section>
       </div>
       {!wq.isLoading && wq.error && <p className="ps-note">Suggestions and docs aren't available: {(wq.error as Error).message}</p>}
+      <ActionBar
+        dirty={!!key && dirty.has(key)}
+        working={busy ? WORKING[busy] : null}
+        where={open ? `${open.folder === "mine" ? "My plugins" : open.folder === "game" ? "game's plugins" : "include files"} / ${open.name}` : undefined}
+        info="Saving keeps the version before (History). Compile checks it; Try it in my game puts it in your game and restarts the map. Ctrl/⌘+S saves, Ctrl/⌘+Enter compiles."
+        status={open?.readOnly ? <span className="tl-ab-state">Read only</span> : !open ? <span className="tl-ab-state">No file open</span> : undefined}
+        save={open && !open.readOnly ? { onClick: () => saveNow(), busyLabel: WORKING.save } : null}
+        actions={[
+          { label: "Compile", busyLabel: WORKING.compile, onClick: () => run("compile"), disabled: !isSource || !data.compiler, title: data.compiler ? "Check it with the compiler (Ctrl/⌘+Enter)" : data.compilerProblem ?? undefined },
+          { label: "Try it in my game", busyLabel: WORKING.try, onClick: () => run("try"), disabled: !isSource || !data.compiler || !!open?.readOnly },
+          { label: "Take it out", busyLabel: WORKING.stop, onClick: stop, hidden: !isTrying },
+        ]}
+        more={moreActions({
+          open,
+          busy: !!busy,
+          saveCopy,
+          rename: renameNow,
+          remove: () => open && remove(open.name),
+          history: () => open && setHistory(open.history),
+          reset,
+        })}
+        reset={false}
+      />
+      {history && (
+        <Sheet className="sheet wide hist-sheet" label="History & restore" onClose={() => setHistory(null)}>
+          <div className="sheet-body">
+            <h2>History & restore</h2>
+            <p className="muted">Every time {open?.name ?? "the file"} is saved, the version before is kept (the last 20, and always the first one). Restoring keeps the current file too, so you can always go back.</p>
+            <HistoryPanel match={[history]} none="No earlier versions yet: they're kept from the first time the file is saved here." />
+            <div className="row">
+              <button className="btn" onClick={() => setHistory(null)}>Close</button>
+            </div>
+          </div>
+        </Sheet>
+      )}
     </div>
   );
+}
+
+/** The action bar's More menu for the open file. */
+function moreActions(p: { open: Open | null; busy: boolean; saveCopy: () => void; rename: () => void; remove: () => void; history: () => void; reset: () => void }): BarAction[] {
+  const o = p.open;
+  if (!o) return [];
+  const mine = o.folder === "mine";
+  return [
+    { label: "Save a copy in My plugins…", onClick: p.saveCopy, note: "Your own version to change and try" },
+    { label: "Rename…", onClick: p.rename, hidden: !mine },
+    { label: "Restore a previous version…", onClick: p.history, note: "Earlier saves of this file: compare and restore", hidden: o.folder === "include" && !o.reset },
+    { label: "Reset to Loner-Strike's version…", onClick: p.reset, danger: true, hidden: !o.reset?.differs, note: o.folder === "game" ? "The source and the plugin in your game" : "The copy in your game's include folder" },
+    { label: "Delete…", onClick: p.remove, danger: true, hidden: !mine },
+  ];
 }
 
 function FolderList(p: {
   label: string;
   path: string;
   start: boolean;
-  files: string[];
+  files: SourceFile[];
   current: string | null;
   dirty: (n: string) => boolean;
   tried: (n: string) => boolean;
@@ -372,7 +529,7 @@ function FolderList(p: {
 }) {
   const [shown, setShown] = useState(p.start);
   const [filter, setFilter] = useState("");
-  const list = useMemo(() => (filter ? p.files.filter((f) => f.toLowerCase().includes(filter.toLowerCase())) : p.files), [p.files, filter]);
+  const list = useMemo(() => (filter ? p.files.filter((f) => f.name.toLowerCase().includes(filter.toLowerCase())) : p.files), [p.files, filter]);
   return (
     <div className="ps-folder">
       <button className="ps-folder-head" aria-expanded={shown} onClick={() => setShown((s) => !s)} title={p.path}>
@@ -387,11 +544,13 @@ function FolderList(p: {
           {p.files.length > 12 && <input className="ps-filter" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label={`Filter ${p.label}`} />}
           {p.files.length === 0 && <p className="muted ps-folder-empty">{p.empty}</p>}
           <ul className="ps-file-list">
-            {list.map((n) => (
+            {list.map(({ name: n, readOnly, changed }) => (
               <li key={n} className={n === p.current ? "on" : undefined}>
-                <button className="ps-file" onClick={() => p.onOpen(n)} aria-current={n === p.current ? "true" : undefined}>
+                <button className="ps-file" onClick={() => p.onOpen(n)} aria-current={n === p.current ? "true" : undefined} title={readOnly ? `${n}: read only${changed ? ", changed from Loner-Strike's version" : ""}` : n}>
                   <span className="ps-file-name">{n}</span>
                   {p.dirty(n) && <span className="ps-dirty" role="img" aria-label="Not saved" />}
+                  {changed && <span className="ps-changed" role="img" aria-label="Changed from Loner-Strike's version" title="Changed from Loner-Strike's version">●</span>}
+                  {readOnly && <span className="ps-ro" role="img" aria-label="Read only">🔒</span>}
                   {p.tried(n) && <span className="ps-live" title="In your game" aria-label="In your game" />}
                 </button>
                 {p.onDelete && (

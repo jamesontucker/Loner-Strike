@@ -1,9 +1,9 @@
 // The Plugin Studio's server side (tools/plugins.rs).
 
-import { getJson, postJson } from "../../../api";
+import { post as postSafe, tryGet } from "../common/api";
 
 export type FolderId = "mine" | "game" | "include";
-export type SourceFile = { name: string; size: number; modified: number; readOnly: boolean };
+export type SourceFile = { name: string; size: number; modified: number; readOnly: boolean; changed?: boolean };
 export type Folder = { id: FolderId; label: string; path: string; files: SourceFile[] };
 export type Overview = { game: string; compiler: boolean; compilerProblem: string | null; running: boolean; trying: string[]; folders: Folder[] };
 
@@ -23,7 +23,8 @@ export type Word = {
   file: string;
   line: number;
 };
-export type Words = { includes: string[]; symbols: Word[] };
+/** includes: names for #include <...>; files: include files read; empty: files with nothing usable in them */
+export type Words = { includes: string[]; files?: number; unread?: string[]; empty?: string[]; symbols: Word[] };
 
 export type Diag = { file: string; inSource: boolean; line: number; endLine: number; severity: "error" | "warning" | "fatal"; code: number; message: string; plain: string };
 export type CompileResult = {
@@ -42,9 +43,9 @@ export type CompileResult = {
 export type LogLine = { at: string; text: string; error: boolean };
 
 type Err = { error?: string };
-const reach = { error: "Couldn't reach the app." };
-const post = <T>(path: string, body: unknown = {}) => postJson<T & Err>(path, body).catch(() => reach as T & Err);
-const get = <T>(path: string) => getJson<T & Err>(path).catch(() => reach as T & Err);
+// (the tools' shared client: a save that kept backups offers Undo)
+const post = <T>(path: string, body: unknown = {}) => postSafe<T>(path, body);
+const get = <T>(path: string) => tryGet<T>(path);
 const q = (folder: FolderId, name: string) => `folder=${encodeURIComponent(folder)}&name=${encodeURIComponent(name)}`;
 
 const sure = <T>(r: T & Err): T => {
@@ -54,10 +55,15 @@ const sure = <T>(r: T & Err): T => {
 
 export const overview = async () => sure(await get<Overview>("/api/tools/plugins"));
 export const words = async () => sure(await get<Words>("/api/tools/plugins/words"));
-export const readFile = async (folder: FolderId, name: string) =>
-  sure(await get<{ name: string; folder: FolderId; text: string; encoding: string; readOnly: string | null }>(`/api/tools/plugins/file?${q(folder, name)}`));
+/** A file as the page opens it. readOnly: why it can't be changed here; reset: Loner-Strike ships a
+ *  version of it (differs: the file on disk isn't that version); resetHint: how else to put it back;
+ *  history: its path for the safety net's History. */
+export type OpenedFile = { name: string; folder: FolderId; text: string; encoding: string; readOnly: string | null; reset: { differs: boolean } | null; resetHint: string | null; history: string };
+export const readFile = async (folder: FolderId, name: string) => sure(await get<OpenedFile>(`/api/tools/plugins/file?${q(folder, name)}`));
 export const saveFile = (folder: FolderId, name: string, text: string, encoding = "utf8", create = false) =>
   post<{ ok?: boolean; size?: number; modified?: number }>("/api/tools/plugins/file", { folder, name, text, encoding, create });
+export const renameFile = (folder: FolderId, name: string, to: string) => post<{ ok?: boolean; name?: string }>("/api/tools/plugins/rename", { folder, name, to });
+export const resetFile = (folder: FolderId, name: string) => post<{ ok?: boolean; message?: string }>("/api/tools/plugins/reset", { folder, name });
 export const deleteFile = (folder: FolderId, name: string) => post<{ ok?: boolean }>("/api/tools/plugins/delete", { folder, name });
 export const compile = (folder: FolderId, name: string) => post<CompileResult>("/api/tools/plugins/compile", { folder, name });
 export const tryIt = (folder: FolderId, name: string) => post<CompileResult>("/api/tools/plugins/try", { folder, name });

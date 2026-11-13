@@ -301,3 +301,103 @@ test("map workspaces: radar compare and zoom, callouts paint and undo, doctor ch
 
   expect(problems).toEqual([]);
 });
+
+// Plugin Studio (R): Loner-Strike's plugins are read only with a way back, the editor's docs
+// (hover, F12 into the include, the "/" menu, Help & docs). Writes only to My plugins, which
+// lives in the dev server's temp app folder.
+test("Plugin Studio: shipped plugins are read only, docs, go to definition and the / menu", async ({ page }, info) => {
+  const problems: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error" && !IGNORED.some((r) => r.test(m.text()))) problems.push(`console: ${m.text()}`);
+  });
+  page.on("pageerror", (e) => problems.push(`crash: ${e.message}`));
+  await page.goto(`/tools-dev.html?open=${encodeURIComponent("plugins:game/gamemodes.sma")}`);
+  await settle(page);
+  const editorLine = page.locator(".ps-editor .view-line");
+  await expect(editorLine.first()).toBeVisible({ timeout: 20_000 });
+  // read only, says whose it is, offers a copy; no Delete or Rename for it
+  const note = page.locator(".ps-readonly");
+  await expect(note).toContainText("Loner-Strike's own");
+  await expect(note.getByRole("button", { name: /Save a copy/ })).toBeVisible();
+  await expect(page.locator(".ps-file-list li.on .ps-ro")).toHaveCount(1);
+  await page.getByRole("button", { name: "More" }).click();
+  const menu = page.getByRole("menu");
+  await expect(menu.getByText("Save a copy in My plugins…")).toBeVisible();
+  await expect(menu.getByText("Restore a previous version…")).toBeVisible();
+  await expect(menu.getByText("Delete…")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.screenshot({ path: info.outputPath("plugins-readonly.png") });
+  // typing does nothing
+  await page.locator(".ps-editor .view-lines").click();
+  await page.keyboard.type("zzz");
+  await expect(page.locator(".ps-editor")).not.toContainText("zzz");
+
+  // hover docs on a native, with its AMX Mod X page
+  // (find it: the editor only draws the lines on screen)
+  await page.keyboard.press("ControlOrMeta+f");
+  await page.keyboard.type("register_plugin(");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Escape");
+  const word = page.locator(".ps-editor .view-line span", { hasText: /^register_plugin$/ }).first();
+  await word.hover();
+  const hover = page.locator(".monaco-hover:visible");
+  await expect(hover).toContainText("register_plugin", { timeout: 10_000 });
+  await expect(hover.getByRole("link", { name: "Open in the AMX Mod X docs" })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("plugins-hover.png") });
+  // F12: the include it's in, read only, at its line
+  await word.click();
+  await page.keyboard.press("F12");
+  await expect(page.locator(".ps-title")).toContainText("amxmodx.inc", { timeout: 10_000 });
+  await expect(page.locator(".ps-readonly")).toContainText("Include files");
+
+  // Help & docs: search every word, its docs and link; guides; our own docs in-app
+  await page.getByRole("tab", { name: "Help & docs" }).click();
+  await page.getByRole("searchbox", { name: "Search the docs" }).fill("user health");
+  const hit = page.locator(".ps-help-hit", { hasText: "get_user_health" }).first();
+  await expect(hit).toBeVisible();
+  await hit.click();
+  await expect(page.locator(".ps-help-doc").getByRole("link", { name: /AMX Mod X docs/ })).toHaveAttribute("href", /amxmodx\.org\/api\/[a-z_]+\/get_user_health$/);
+  await expect(page.locator(".ps-help-guides").getByRole("link", { name: /API reference/ })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("plugins-help.png") });
+  await page.getByRole("button", { name: /loner\.inc: Loner-Strike's helpers/ }).click();
+  const doc = page.getByRole("dialog", { name: /loner\.inc/ });
+  await expect(doc.locator("table")).toBeVisible();
+  await doc.getByRole("button", { name: "Close" }).click();
+
+  // a plugin of my own: the "/" menu at the start of a line, and a snippet from it
+  const stem = `ps_test_${Date.now() % 100000}`;
+  await page.getByRole("button", { name: "New plugin" }).click();
+  await page.getByLabel("Name").fill(stem);
+  await page.getByLabel("Start from").selectOption("blank");
+  await page.getByRole("button", { name: "Make it" }).click();
+  await expect(page.locator(".ps-title")).toContainText(`${stem}.sma`);
+  await expect(page.locator(".ps-readonly")).toHaveCount(0);
+  // (the end of the file: Cmd+Down on a Mac, Ctrl+End elsewhere)
+  const toEnd = process.platform === "darwin" ? "Meta+ArrowDown" : "Control+End";
+  await page.locator(".ps-editor .view-lines").click();
+  await page.keyboard.press(toEnd);
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/");
+  const suggest = page.locator(".suggest-widget.visible");
+  await expect(suggest).toContainText("/spawn", { timeout: 10_000 });
+  await page.screenshot({ path: info.outputPath("plugins-slash-menu.png") });
+  await page.keyboard.type("spawn");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".ps-editor")).toContainText("RegisterHamPlayer");
+  // a native's suggestion says where it's from
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press(toEnd);
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("get_user_hea");
+  await expect(suggest).toContainText("get_user_health");
+  await page.keyboard.press("Escape");
+  // tidy up: delete it (My plugins only)
+  await page.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menu").getByText("Delete…").click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
+  await expect(page.locator(".ps-file-list").getByText(`${stem}.sma`)).toHaveCount(0);
+  expect(problems).toEqual([]);
+});

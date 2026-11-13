@@ -7,10 +7,18 @@ import "monaco-editor/esm/vs/editor/edcore.main";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import { KEYWORDS, pawnConfig, pawnGrammar, pawnTheme } from "./pawn";
+import { docsUrl } from "./docs";
 import type { Diag, Word, Words } from "./pluginsApi";
-import { SNIPPETS } from "./templates";
+import { SNIPPETS, TEMPLATES } from "./templates";
 
 (self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = { getWorker: () => new EditorWorker() };
+
+// Monaco cancels its own pending work (a hover, a suggestion) when a file is switched or closed,
+// and that cancel arrives as an unhandled "Canceled" rejection: not an error.
+window.addEventListener("unhandledrejection", (e) => {
+  const r = e.reason as { name?: string; message?: string } | undefined;
+  if (r && (r.name === "Canceled" || r.message === "Canceled")) e.preventDefault();
+});
 
 const LANG = "pawn";
 let words: Words = { includes: [], symbols: [] };
@@ -19,6 +27,20 @@ let ready = false;
 
 const FUNCS = new Set(["native", "stock", "forward", "macro"]);
 
+/** What the page does for the editor: open an include at a line (go to definition), read an
+ *  include's text (peek), and the "/" menu's commands. Set by createEditor. */
+export type PageHooks = {
+  openInclude: (file: string, line: number) => void;
+  readInclude: (file: string) => Promise<string | null>;
+  newPlugin: () => void;
+  docs: (query: string) => void;
+};
+let hooks: PageHooks | null = null;
+/** the next suggest is the "/" menu (the Insert button) */
+let paletteNext = false;
+/** the editor's own command ids for the "/" menu's commands */
+let cmdIds: { newPlugin?: string; docs?: string } = {};
+
 function setup() {
   if (ready) return;
   ready = true;
@@ -26,9 +48,28 @@ function setup() {
   monaco.languages.setLanguageConfiguration(LANG, pawnConfig);
   monaco.languages.setMonarchTokensProvider(LANG, pawnGrammar([], []));
   monaco.editor.defineTheme("ls-pawn", pawnTheme);
-  monaco.languages.registerCompletionItemProvider(LANG, { triggerCharacters: ["<", "#"], provideCompletionItems: complete });
+  monaco.languages.registerCompletionItemProvider(LANG, { triggerCharacters: ["<", "#", "/"], provideCompletionItems: complete });
   monaco.languages.registerHoverProvider(LANG, { provideHover: hover });
   monaco.languages.registerSignatureHelpProvider(LANG, { signatureHelpTriggerCharacters: ["(", ","], signatureHelpRetriggerCharacters: [","], provideSignatureHelp: signature });
+  monaco.languages.registerDefinitionProvider(LANG, { provideDefinition: definition });
+  // go to definition into an include: the page opens it (read only) at that line
+  monaco.editor.registerEditorOpener({
+    openCodeEditor(_source, resource, at) {
+      const m = /^\/include\/(.+)$/.exec(decodeURIComponent(resource.path));
+      if (!m || resource.scheme !== "inmemory" || !hooks) return false;
+      const line = at && "lineNumber" in at ? at.lineNumber : at && "startLineNumber" in at ? at.startLineNumber : 1;
+      hooks.openInclude(m[1], line);
+      return true;
+    },
+  });
+  // links in the docs (AMX Mod X's API pages) open in the browser
+  monaco.editor.registerLinkOpener({
+    open(uri) {
+      if (uri.scheme !== "https") return false;
+      window.open(uri.toString(true), "_blank", "noopener,noreferrer");
+      return true;
+    },
+  });
 }
 
 /** The include files' words arrived: completions and colours use them from now on. */
@@ -54,8 +95,10 @@ function docOf(s: Word): monaco.IMarkdownString {
   if (s.returns) parts.push(`**Returns** ${s.returns}`);
   for (const n of s.notes ?? []) parts.push(`*Note:* ${n}`);
   if (s.error) parts.push(`*Errors:* ${s.error}`);
-  parts.push(`<small>${KIND_WORD[s.kind]} · ${s.file}</small>`);
-  return { value: parts.join("\n\n"), supportHtml: true };
+  const url = docsUrl(s);
+  parts.push(`<small>${KIND_WORD[s.kind]} · from ${s.file}${s.kind === "enum" || FUNCS.has(s.kind) || s.kind === "define" || s.kind === "constant" ? " · F12 opens it there" : ""}</small>`);
+  if (url) parts.push(`[Open in the AMX Mod X docs](${url})`);
+  return { value: parts.join("\n\n"), supportHtml: true, isTrusted: false };
 }
 
 // ---- the current file's own names ----------------------------------------------------
@@ -119,6 +162,14 @@ function complete(model: monaco.editor.ITextModel, pos: monaco.Position): monaco
     const r = new monaco.Range(pos.lineNumber, before.indexOf("#") + 1, pos.lineNumber, pos.column);
     return { suggestions: ["include", "define", "pragma", "if", "else", "endif", "tryinclude", "undef"].map((d) => ({ label: `#${d}`, kind: K.Keyword, insertText: `#${d} `, range: r })) };
   }
+  // the "/" menu: "/" at the start of a line (or the Insert button)
+  const slash = before.match(/^(\s*)\/(\w*)$/);
+  if (paletteNext || slash) {
+    const usePalette = paletteNext;
+    paletteNext = false;
+    const from = slash && !usePalette ? slash[1].length + 1 : pos.column;
+    return { suggestions: palette(model, new monaco.Range(pos.lineNumber, from, pos.lineNumber, pos.column), !usePalette) };
+  }
   if (inCommentOrString(before)) return { suggestions: [] };
 
   const atLineStart = /^\s*(public\s+)?\w*$/.test(before);
@@ -178,6 +229,62 @@ function complete(model: monaco.editor.ITextModel, pos: monaco.Position): monaco
     }
   }
   return { suggestions: out };
+}
+
+/** The "/" menu: snippets, whole templates (in an empty file), a new plugin, the docs. */
+function palette(model: monaco.editor.ITextModel, range: monaco.Range, slash: boolean): monaco.languages.CompletionItem[] {
+  const snippet = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
+  const pre = slash ? "/" : "";
+  const out: monaco.languages.CompletionItem[] = SNIPPETS.map(([label, what, body], i) => ({
+    label: { label: `${pre}${label}`, description: what },
+    kind: K.Snippet,
+    detail: what,
+    documentation: { value: "```pawn\n" + body.replace(/\$\{\d+:([^}]*)\}/g, "$1").replace(/\$\d/g, "") + "\n```" },
+    insertText: body,
+    insertTextRules: snippet,
+    filterText: `${pre}${label} ${what}`,
+    range,
+    sortText: `1${String(i).padStart(3, "0")}`,
+  }));
+  const empty = model.getValue().trim().length < 3;
+  for (const t of TEMPLATES) {
+    if (!empty) break;
+    const name = model.uri.path.split("/").pop()?.replace(/\.[^.]+$/, "") || "my_plugin";
+    out.push({ label: { label: `${pre}template ${t.label}`, description: "whole plugin" }, kind: K.File, detail: t.blurb, insertText: t.text(name), filterText: `${pre}template ${t.label}`, range, sortText: `0${t.id}` });
+  }
+  if (cmdIds.newPlugin) out.push({ label: { label: `${pre}new plugin`, description: "from a template" }, kind: K.File, detail: "Make a new plugin in My plugins from a template", insertText: "", filterText: `${pre}new plugin template`, range, sortText: "2new", command: { id: cmdIds.newPlugin, title: "New plugin" } });
+  if (cmdIds.docs) out.push({ label: { label: `${pre}docs`, description: "search every function" }, kind: K.Reference, detail: "Search the docs: every native, forward, stock and constant, and the guides", insertText: "", filterText: `${pre}docs help search`, range, sortText: "2docs", command: { id: cmdIds.docs, title: "Docs" } });
+  return out;
+}
+
+/** Opens the "/" menu at the cursor (the Insert button). */
+export function openPalette(ed: monaco.editor.IStandaloneCodeEditor) {
+  paletteNext = true;
+  ed.focus();
+  ed.trigger("palette", "editor.action.triggerSuggest", {});
+}
+
+// ---- go to definition ----------------------------------------------------------------
+
+/** An include's model (read only), so peek and go to definition can show it. */
+async function includeModel(file: string): Promise<monaco.Uri | null> {
+  const uri = monaco.Uri.parse(`inmemory://plugins/include/${file.split("/").map(encodeURIComponent).join("/")}`);
+  if (monaco.editor.getModel(uri)) return uri;
+  const text = await hooks?.readInclude(file);
+  if (text == null) return null;
+  if (!monaco.editor.getModel(uri)) models.set(`include/${file}`, monaco.editor.createModel(text, LANG, uri));
+  return uri;
+}
+
+async function definition(model: monaco.editor.ITextModel, pos: monaco.Position): Promise<monaco.languages.Definition | null> {
+  const w = model.getWordAtPosition(pos);
+  if (!w) return null;
+  const l = locals(model).find((x) => x.name === w.word);
+  if (l) return { uri: model.uri, range: new monaco.Range(l.line, 1, l.line, 1) };
+  const s = byName.get(w.word);
+  if (!s) return null;
+  const uri = await includeModel(s.file);
+  return uri ? { uri, range: new monaco.Range(s.line, 1, s.line, 1) } : null;
 }
 
 // ---- hover ---------------------------------------------------------------------------
@@ -270,18 +377,24 @@ export type EditorHandle = {
   markers: (diags: Diag[]) => void;
   reveal: (line: number) => void;
   layout: () => void;
+  palette: () => void;
+  /** puts a word from the include files at the cursor (a call with its parameters to fill in) */
+  insertWord: (w: Word) => void;
   focus: () => void;
   dispose: () => void;
 };
 
-export function createEditor(el: HTMLElement, on: { change: () => void; save: () => void; compile: () => void }): EditorHandle {
+export function createEditor(el: HTMLElement, on: { change: () => void; save: () => void; compile: () => void; hooks: PageHooks }): EditorHandle {
   setup();
+  hooks = on.hooks;
   const ed = monaco.editor.create(el, {
     theme: "ls-pawn",
     automaticLayout: true,
     fontSize: 14,
     fontFamily: "Menlo, Consolas, 'DejaVu Sans Mono', monospace",
     minimap: { enabled: false },
+    // (its header kept the last file's line when switching files)
+    stickyScroll: { enabled: false },
     tabSize: 4,
     insertSpaces: false,
     scrollBeyondLastLine: false,
@@ -293,6 +406,7 @@ export function createEditor(el: HTMLElement, on: { change: () => void; save: ()
     model: null,
   });
   const sub = ed.onDidChangeModelContent(() => on.change());
+  cmdIds = { newPlugin: ed.addCommand(0, () => hooks?.newPlugin()) ?? undefined, docs: ed.addCommand(0, () => hooks?.docs("")) ?? undefined };
   ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => on.save());
   ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => on.compile());
   return {
@@ -326,10 +440,19 @@ export function createEditor(el: HTMLElement, on: { change: () => void; save: ()
       ed.focus();
     },
     layout: () => ed.layout(),
+    palette: () => openPalette(ed),
+    insertWord(w) {
+      if (ed.getOption(monaco.editor.EditorOption.readOnly)) return;
+      const text = FUNCS.has(w.kind) && w.kind !== "forward" ? (w.kind === "macro" ? `${w.name}(\${1})` : callSnippet(w)) : w.kind === "forward" ? `public ${w.name}(${w.params.map((p) => p.label).join(", ")})\n{\n\t$0\n}` : w.name;
+      ed.focus();
+      (ed.getContribution("snippetController2") as unknown as { insert: (t: string) => void } | null)?.insert(text);
+    },
     focus: () => ed.focus(),
     dispose() {
       sub.dispose();
       ed.dispose();
+      hooks = null;
+      cmdIds = {};
     },
   };
 }
