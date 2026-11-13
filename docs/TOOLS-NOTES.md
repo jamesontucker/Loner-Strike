@@ -1619,3 +1619,54 @@ SetModel with a model this plugin precached (`set_model()` falls back to a loade
 - "Open as code" in Plugin Studio (R): Show code is read-only for now; R could open `scripting/studio/studio_<id>.sma` read-only.
 - R's diag parser could replace my small amxxpc line parser (`tools/studio/mod.rs::parse_compiler`).
 - Next milestones: Timers, Variables, more conditions, W1's component events/actions as nodes; subgraphs; minimap is in, groups aren't.
+
+### Agent P5: common editor things + Quad view — 2026-11-12
+**Built** (checklist of what mappers expect vs what we have: TOOLS-EDITOR.md §4)
+- **Quad view**: Single / Quad (3D+Top+Front+Side) / 1+3 / Two, one WebGL canvas with drei `<View>` panes (`panes.ts`,
+  `Layout.tsx`, `EditorScene()`/`PaneScene`). Each pane has its own camera, a header to change what it shows, a
+  maximise button (also double-click the header, Shift+Space; Shift+Z in the Hammer set, Ctrl+Space in TrenchBroom's),
+  splitters, layout remembered. The editor's `view` is the active pane's view, so Shift+1-4 and the old view buttons
+  work on the pane you last used. Picking, box select, tools and gizmos work in every pane (`rayAt` uses the pane's
+  box; Fly grabs the mouse in the pane). Flat panes fit the map when they open; Zoom to selection / whole map move
+  every pane. Context-lost recovery: the canvas is keyed by doc + lost count only (views switch inside panes).
+- **Menu bar** (File/Edit/View/Select/Tools/Map/Help) with keys, a **command palette** (Ctrl/⌘+K, Ctrl+Shift+P: every
+  command + entities by name), **cheat sheet** (?), **key editor** with Loner-Strike / Hammer-style / TrenchBroom-style
+  sets and your own keys (clash warnings; Hammer also switches to Quad). One command list in `commands.ts`; keys in
+  `Shortcuts.ts` run in a capture handler and swallow old keys you moved away (the old handler still does arrows, Esc,
+  1-9 camera marks, Alt).
+- **Duplicate** (Ctrl+D one grid step over, Ctrl+Shift+D in place, Shift-drag the gizmo) gives copies **new
+  targetnames** (door1 → door2, multi_manager keys too) and points links inside the copied set at the copies.
+- **Find and replace** (textures, classnames, key names, values; whole/contains, case, only in what's picked; one undo
+  step), **Transform** (exact move/turn/stretch), **Line up / spread out**, **Go to brush/entity number** (compiler
+  numbers, paste "Entity 3, Brush 12", or editor ids), **Grid and snapping** (size, show/hide grid, turn steps, snap
+  to brush corners/edges), **Replace with entity or prefab** (uses P4's `place_prefab`), select same texture / type /
+  name, touching, inside, invert, lock (per item; locked groups honoured), cross-hair in flat panes, selection count
+  and size in the status bar, the entity tool remembers its last class.
+- **Outliner** (`OutlinePanel.tsx`): groups → brush entities → brushes, point entities, world brushes; find by name,
+  type, texture or number; filters (entities/brushes/hidden/locked); picks follow the views (Ctrl/Shift adds);
+  double-click a name to rename (entity targetname / group name); drag rows (or the picked set) onto a group; hide
+  and lock per row; P4's visibility sets kept on top (`Visibility` exported from Panels.tsx).
+- **Project viewer** (`ProjectPanel.tsx`, `GET /project`, `POST /project/action`): project file and files beside it,
+  backups, compile output in the compiler's work folder, what's installed in the game (bsp/nav/lsv/res/overview),
+  WADs, sounds/models/sprites the entities name, the sky's six sides; Open (in the editor for .lsmap/.map, else the
+  system app), Show in folder, Rename (project folder only; the open project follows), Delete (asked; moved to
+  `<app>/editor/deleted/`); missing-file warnings; recent projects. Paths are only acted on when they're in the list.
+- **Undo history panel** (`HistoryPanel.tsx`, `GET /history`, `POST /history/jump`).
+- Rust: `editor/bulk.rs` (11 tests: renaming, links, multi_manager, find/replace incl. limits, similar, touching/inside,
+  align/distribute, groups) and `tools/editor/workspace.rs` (3 tests: referenced files, safe renames, no climbing out).
+
+**Committed**: 83ac37a (core), 3e33832 (new UI files), b7a2ffa (routes file, Cameras hook, checklist).
+**Not committed yet (shared files with P4's/W1's unfinished work in them):** the marked `// P5` hooks in
+`EditorScene.tsx` (panes, `rayAt`, snapVec, gizmo turn steps + Shift-drag copy, grid toggle, cross-hair, Flat fit),
+`SceneExtras.tsx` (Bookmarks pane view), `MapEditor.tsx` (MenuBar, tab state in p5store, Project/History tabs,
+OutlinePanel, SelectionSize, canvas key), `Panels.tsx` (`export function Visibility`), `tools/editor.rs`
+(`pub mod workspace;` + `.merge(workspace::routes())`). P4/W1: when you commit those files, please take my marked
+hunks with yours (say so in the message); otherwise I'll commit them once your work is in.
+
+**Tried** in Chromium (editor-dev.html on its own server/port) at 1440×900: quad/1+3/two, pick in Top, maximise,
+palette, Ctrl+D with renaming, group/rename/drag-into-group in the outliner, find & replace, history jump, project
+panel, cheat sheet, key sets. `cargo test` 610 passed. `npm run build` in the worktree is red only on P4's
+`P4Scene.tsx:123` (dataTransfer null); my new files typecheck on a clean export of HEAD.
+**Left**: render modes per pane (textured/flat/wire), editing keys of many entities at once, studio models drawn in
+place, RMF/JMF import. Note: something else edited the doc on my dev server's port while I tested (Add box/Move
+corners I didn't do) — harmless, but agents sharing ports should pick their own.
