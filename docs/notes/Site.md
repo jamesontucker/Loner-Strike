@@ -82,106 +82,76 @@ zip -X ~/Desktop/lonerstrike-site-1.0.0.zip -@ < /tmp/zipfiles.txt
   - The arrow keys work anywhere in the panel, and the strip scrolls by itself without scrolling the page. Smooth scrolling is off for reduced motion.
 - **Docs anchors the homepage now uses**: `docs#content-browser` and `docs#credits`.
 
-## Proposed homepage restructure (outline for review, NOT built yet; 2026-11-13)
+## Proposed homepage restructure, v2 (outline for review, NOT built yet; 2026-11-13)
 
-### Audit of today's page (about 3,000 words)
+The baseline is the homepage before the 1.0 overhaul: `840ca93d:site/index.html`, about 2,140 words. Today's page is about 3,000 words.
 
-| # | Block | Words | Job | Notes |
+### The page before 1.0, in order (all original)
+
+1. Top bar
+2. Hero, with the map browser shot (42)
+3. **Why this exists** (151)
+4. Bots that play like people (96)
+5. **How the bots play** (352), including **Pick the lobby**, the skill meters
+6. Classic community modes (67)
+7. Play with friends (75)
+8. Dedicated servers (155)
+9. **Everything in it** (312), a grid: Bots, Modes and maps, Friends, Servers, The app. The 1.0 overhaul removed it.
+10. Screenshots (a grid)
+11. Name your price / Download free (146)
+12. Support the people who made this possible (116)
+13. Community: our server and Discord (52)
+14. Questions (11, 510)
+
+### Added for 1.0 (all new, about 1,190 words)
+
+- The Play/Build/Host/Share strip (46)
+- Four big chapter headers (97)
+- Modes made here: two cards and a Studio line (about 204, plus the original classics)
+- The map editor (116)
+- Game Mode Studio (118)
+- Every tool in the box (288)
+- The Community browser (90)
+- The tabbed tour, replacing the original grid
+- One more "Why" paragraph (about 35)
+- 3 FAQ items: Beta, Hammer, Community (about 118)
+- The SDHLT thanks card (23)
+
+### Outline: words now → after
+
+| # | Section | Status | Now | After |
 |---|---|---|---|---|
-| 1 | Release banner | 27 | want | Dated launch notice |
-| 2 | Hero (tagline, CTAs, loader, editor shot) | 66 | understand, download | Good. Hero shot is the editor, but the page leads with Play |
-| 3 | Verbs strip (Play/Build/Host/Share) | 46 | navigate | Repeats the top nav and the chapter headers |
-| 4 | Why this exists | 185 | trust | Good voice, but long and placed before any proof |
-| 5 | Play header | 30 | understand | Repeats "server full of people" from 6 |
-| 6 | Bots that play like people | 101 | want | Repeats team play from 7 |
-| 7 | How the bots play (stats, unique, fight, ladder) | 358 | want | Deepest block on the page, and docs material |
-| 8 | Modes made here + classics chips | 271 | want | Two cards with 4 bullets each |
-| 9 | Build header | 24 | understand | |
-| 10 | Map editor | 116 | want | |
-| 11 | Game Mode Studio | 118 | want | |
-| 12 | Every tool in the box | 288 | want | A catalog: docs#tools does this job |
-| 13 | Host header | 26 | understand | |
-| 14 | Play with friends | 75 | want | |
-| 15 | Dedicated servers | 161 | want | Admin detail is docs material |
-| 16 | Share header | 17 | understand | |
-| 17 | Community browser | 90 | want, trust | |
-| 18 | Our server + Discord cards | 52 | trust | |
-| 19 | Screenshots tour | 11 | proof | Sits near the bottom: proof comes after 2,000 words |
-| 20 | Name your price / Download | 140 | download | |
-| 21 | Thanks (5 credits) | 139 | trust | |
-| 22 | Questions (14) | 628 | trust | Half are docs topics (server cost, Hammer import, map learning, AI agent already gone) |
+| 1 | Top bar | Original, lightly updated: nav anchors are Play, Make, Host, Share, Screenshots, FAQ | 27 | 27 |
+| 2 | Release banner | Launch week only, then removed | 27 | 0 |
+| 3 | Hero: "Play Counter-Strike like it's 2004, alone or with the friends you don't have." plus one line "Then build your own maps and modes, try them out on the bots, and share them." | Original, lightly updated. The original map browser shot comes back (or the editor; user's pick) | 66 | 50 |
+| 4 | Play/Build/Host/Share strip | New: cut (repeats the top nav) | 46 | 0 |
+| 5 | Why this exists | **Original**: kept as it was, with the 1.0 paragraph cut to one sentence ("Then I wanted to make things again, so now it has the tools for that too.") | 185 | 160 |
+| 6 | Chapter headers (giant Play/Build/Host/Share) | New: cut. The original page had none | 97 | 0 |
+| 7 | Bots that play like people | Original, lightly updated ("They learn the rules, whatever the mode") | 101 | 95 |
+| 8 | How the bots play, with Pick the lobby | **Original**, kept | 358 | 352 |
+| 9 | Game modes: two compact cards (Last Stand, Battle Royale: picture plus one line each, no bullets), then the original Classic community modes chips | Classics original; cards new, condensed. The details go to docs#last-stand and #battle-royale | 271 | 130 |
+| 10 | **Make your own** (one feature block like Play with friends: text plus one picture). Line: "The tools we wished we had in 2004." Bullets: map editor ("Hammer's depth, modern editor feel"), F5 to playtest with bots; Game Mode Studio, modes from nodes and wires; map simulator, nav fixer, spray maker and more (Beta). Links to docs#tools | New, condensed from the editor, Studio and tool catalog | 522 | 85 |
+| 11 | Play with friends | Original, kept | 75 | 75 |
+| 12 | Dedicated servers | Original, kept | 161 | 155 |
+| 13 | **Share it** (same feature style plus the community picture). Line: "Publish what you make, and try what others made in a click." Bullets: Try it with bots; publish from the app with credits tracked; remix with credit. Links to docs#community | New, condensed | 107 | 50 |
+| 14 | Everything in it | **Original**, restored and updated: its 5 groups plus "Make and share" (one line each, no tool catalog) | 0 | 200 |
+| 15 | Screenshots | Original place and heading. Keeps the tabbed tour with captions and arrows | 11 | 11 |
+| 16 | Name your price / Download free | Original, kept | 140 | 140 |
+| 17 | Support the people… | Original, kept, plus the SDHLT card | 139 | 139 |
+| 18 | Community: our server and Discord | Original, kept | 52 | 52 |
+| 19 | Questions | Original 11 kept. Of the new ones, "What does Beta mean?" stays (one sentence); Hammer and Community move to the docs | 628 | 540 |
+| | **Total** | | **about 3,000** | **about 2,260** |
 
-**Doing the same job twice:**
-- Navigation: the top nav, the verbs strip and the chapter headers.
-- "Feels like a server full of people": in 5 and 6.
-- Bot team play: in 6 and 7.
-- Beta: in 12 and the FAQ.
-- "Friends don't need it": in the Host header and the FAQ.
-- GameBanana: in 17 and 21.
+That is about a quarter cut, not half. The original sections alone come to about 2,000 words. Halving would mean cutting originals too. Options for the user, in order of least loss:
+- a. Move "And in every fight" (the 6-item list and the ideas note, about 140) to docs#how-bots-work.
+- b. Make "Everything in it" one line per group (about 200 → 110).
+- c. Move "What does a server cost?" and "Can people join without Loner-Strike?" to the docs (about 110).
 
-### Proposed outline (target about 1,200 words, under half)
+Doing a, b and c brings it to about 1,900.
 
-Top nav: **Play · Build · Host · Share · FAQ · [Download]**. Sticky, with anchors matching the sections below. The verbs strip goes.
-
-1. **Hero** (#top, about 50 words)
-   - H1 "Loner-Strike".
-   - Tagline: "Play Counter-Strike like it's 2004, alone or with the friends you don't have."
-   - Second line: "Then build your own maps and modes, try them out on the bots, and share them."
-   - Primary button **Download free**, secondary **See it in action**.
-   - Fine print: free, CS 1.6 and CZ, Windows or a Mac with CrossOver.
-   - Visual: in-game bots shot `bots-site` (PLACEHOLDER: the Players page with live bot chat until it exists). The loader and kill feed stay as decoration.
-2. **See it** (#screenshots, about 20 words)
-   - The tour with caption overlays and arrows.
-   - Tabs cut to **Play, Build, Host, Share** to match the pillars, with modes inside Play.
-3. **Play** (#play)
-   - Line: "A server full of bots that feels like a server full of people."
-   - Bullets:
-     - Bots that see, aim and chat like people, and remember you
-     - Last Stand, Battle Royale and 20+ classic mods, all playable with bots
-     - Pick the lobby: newbies to gods
-   - Visual: `laststand-wave` (PLACEHOLDER: the ls_outpost render until it exists).
-   - Links: "How the bots work", "Game modes" (docs).
-4. **Build** (#build, small Beta tag)
-   - Line: "The tools we wished we had in 2004."
-   - Bullets:
-     - Map editor: Hammer's depth, modern editor feel, F5 to playtest with bots
-     - Game Mode Studio: modes from nodes and wires
-     - A dozen more: map simulator, nav fixer, spray maker and the rest
-   - Visual: editor.webp.
-   - Link: "Every tool" (docs#tools).
-5. **Host** (#host)
-   - Line: "Your friends only need the game."
-   - Bullets:
-     - Host from your game: seven ways for friends to connect
-     - Or an always-on server on a rented Linux machine, set up for you
-     - Admins and moderators who help from their own app
-   - Visual: servers.jpg.
-   - Small row: Join our server · Join the Discord (the live cards slimmed to one line).
-   - Link: docs#servers.
-6. **Share** (#share)
-   - Line: "Publish what you make, and try what others made in a click."
-   - Bullets:
-     - Publish from the app, credits tracked
-     - Remix with credit
-     - Updates between maps, never mid-game
-   - Visual: `community-browse` (PLACEHOLDER: community.webp until it exists).
-   - Link: docs#community.
-7. **Questions** (#faq, 7 kept, about 300 words)
-   - Kept: Is it really free? · Do I need to own Counter-Strike? · Does it work on a Mac? · Windows says it protected my PC · Will it mess up my game? · Do my friends need it too? · What does Beta mean?
-   - Moved to the docs: server cost, joining without the app, why bots learn maps, Hammer maps, what can be shared, who made the mods.
-   - **Why this exists** is cut to two or three sentences beside the DreamHack photo, as a short note above the FAQ. The alternative is to drop it to the docs; the user should choose.
-8. **Download** (#get, about 100 words)
-   - Name your price and Download free side by side, with the 3 steps.
-9. **Thanks** (about 50 words)
-   - One compact row: GameBanana, AlliedModders, ReHLDS, SDHLT, the mod makers, each a link with no paragraph.
-   - Then the footer.
-
-**Moved to the docs, not lost:**
-- How the bots play: the stats, "What no other bot does", "In every fight" and the ladder (the ladder could stay as the Play visual if the user likes it).
-- The mode cards' detail and the classics chips: Play links to Game modes.
-- Every tool in the box.
-- The dedicated server feature list.
-- Seven FAQ answers.
+### The open questions: both sections were original
+- **Why this exists** is original (151 words before 1.0). Recommendation: keep it whole with its DreamHack photo, and cut only the added 1.0 paragraph to one sentence. That's better than cutting it to 2–3 sentences.
+- **Pick the lobby** (the skill meters) is original, inside "How the bots play". Recommendation: keep it as it was. Play's lead picture stays the Players page with live bot chat, as it was before 1.0. The `bots-site` in-game shot can replace that picture when it exists (marked as a placeholder).
 
 ## In-game shots to take (user)
 
