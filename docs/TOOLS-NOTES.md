@@ -461,3 +461,14 @@ timeline of #why notes, bot view cones as meshes, Replay heat by round.
 - No "check all maps" batch and no second-run confirmation like the sweep's (one map at a time for now).
 - "Open in map viewer" needs the LookAt request above to land on the spot.
 
+
+## Integration pass (coordinator, after the agents finish)
+- **Sidebar:** Tools becomes an expandable sidebar section (like Servers) with sub-items from `registry.tsx`,
+  grouped Look (Map viewer, Replay, Textures & models) / Fix (Map health check, Map doctor, Nav fixer,
+  Callouts) / Make (Map editor, Spray maker); clicking "Tools" opens an overview page of cards. Each tool
+  gets its own section/focus address. Registry entries gain a `group` field.
+- Viewer honours a look-at/focus request made before the map has loaded (health check "Open in map viewer").
+- "Tools" in the macOS Go menu (main.rs); "Open in Tools" on the Maps page's map sheet.
+- Check C's ladder top areas (cs_rats2's 22 ladders show no top area; de_nuke vents).
+- Shared files (tools/mod.rs, registry.tsx, goldsrc/mod.rs, content.rs): review every agent's lines.
+- Then: two reviews, cargo test, npm run build + size check, real app check, merge `tools` into main.
