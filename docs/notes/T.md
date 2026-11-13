@@ -137,3 +137,27 @@ Library items and snippets carry `fromMode` (a uid) when they're shared.
 - (follow-up) The holder's date is the earliest ever proven: `uids.file_at` only goes down, a fresh look can only
   lower it; every registration with a uid records its earliest upload carrying it. Test
   `test_the_holders_proven_date_never_weakens` (old file leaves the page, a later claimant still loses).
+
+## 2026-11-13: origins in My library, bot rating for published modes
+- **Origins** (`GET /api/tools/community/origins`, `communitylib::origins`): maps by name, modes by id, prefabs by
+  id → `mine` / `community` (with creator and page) / `remix` (of what, by whom) / `file`. Sources: the community
+  library, `remixes.json`, your Studio graphs, your published packages, P5's prefab `origin`, and
+  `<app dir>/tools/compile/made.json` (see request). UI: map cards "Made by me" + Maps Show ▸ "Made by me"
+  (next to "From Community"); Play mode cards say Made by me / Remix of …; Mods page "Your Game Mode Studio
+  modes" (Open in Studio); prefab rows tagged + a From filter on "Yours"; Installed rows "You remixed this".
+  Server content lists only community items, so no filter there.
+- **Bot rating** (`Item.bots`: great / ok / weak / none, games.ts scale and words): Publish ▸ A game mode has
+  "How well bots play it", prefilled from the graph's `mode.bots` when the Studio sets it; it goes in the
+  package, the index (list service validates it, modes only), the GameBanana text, the community cards
+  (`bots-note` badge like Play's) and a Bots filter on Browse.
+- Tests: Rust `bot_ratings`, `origins_of_things_in_the_library`, mode package test checks the rating;
+  list service `test_bot_rating`.
+- **Slip:** my commit 00e9c25 swept X's pending MCP lines (`/api/tools/studio/snippets`, `snippet/:id`,
+  `snippet/:id/delete`, `switch` and their ask entries) into `mcp/routes.rs` along with my `origins` line.
+  They're X's as written; nothing to redo, but X's own commit won't show them.
+
+## Requests (2026-11-13, origins and bot rating)
+- X (Studio): set `mode.bots` in the graph (great / ok / weak / none) when the Studio can tell (e.g. modes
+  that drive bots through the brain or use bot-aware nodes vs modes made for people only); Publish prefills it.
+- Q (compile): append each map you compile and install to `<app dir>/tools/compile/made.json`
+  (`{"maps": ["de_mymap", ...]}`), so My library can say "Made by me" for maps not yet published.
