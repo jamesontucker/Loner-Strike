@@ -1793,6 +1793,402 @@
     "y": 4180
    },
    "params": {}
+  },
+  {
+   "id": "ah",
+   "type": "event.player_about_hurt",
+   "pos": {
+    "x": 0,
+    "y": 4400
+   },
+   "params": {}
+  },
+  {
+   "id": "ah_fall",
+   "type": "text.equals",
+   "pos": {
+    "x": 260,
+    "y": 4400
+   },
+   "params": {
+    "b": "fall"
+   }
+  },
+  {
+   "id": "ah_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 520,
+    "y": 4400
+   },
+   "params": {}
+  },
+  {
+   "id": "ah_block",
+   "type": "dmg.block",
+   "pos": {
+    "x": 780,
+    "y": 4400
+   },
+   "params": {}
+  },
+  {
+   "id": "ah_scale",
+   "type": "dmg.scale",
+   "pos": {
+    "x": 780,
+    "y": 4400
+   },
+   "params": {
+    "factor": 0.5
+   }
+  },
+  {
+   "id": "ah_set",
+   "type": "dmg.set",
+   "pos": {
+    "x": 1040,
+    "y": 4400
+   },
+   "params": {
+    "amount": 5
+   }
+  },
+  {
+   "id": "dk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 0,
+    "y": 4620
+   },
+   "params": {}
+  },
+  {
+   "id": "dk_down",
+   "type": "player.down",
+   "pos": {
+    "x": 260,
+    "y": 4620
+   },
+   "params": {
+    "secs": 20,
+    "hold": 2,
+    "health": 40
+   }
+  },
+  {
+   "id": "rv",
+   "type": "event.player_revived",
+   "pos": {
+    "x": 780,
+    "y": 4620
+   },
+   "params": {}
+  },
+  {
+   "id": "rv_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1040,
+    "y": 4620
+   },
+   "params": {
+    "text": "Saved by",
+    "slot": "center"
+   }
+  },
+  {
+   "id": "to",
+   "type": "event.down_timeout",
+   "pos": {
+    "x": 1300,
+    "y": 4620
+   },
+   "params": {}
+  },
+  {
+   "id": "to_add",
+   "type": "save.add",
+   "pos": {
+    "x": 1560,
+    "y": 4620
+   },
+   "params": {
+    "key": "outs",
+    "amount": 1
+   }
+  },
+  {
+   "id": "to_set",
+   "type": "save.set",
+   "pos": {
+    "x": 1820,
+    "y": 4620
+   },
+   "params": {
+    "key": "last_out",
+    "value": 1
+   }
+  },
+  {
+   "id": "to_get",
+   "type": "save.get",
+   "pos": {
+    "x": 1820,
+    "y": 4620
+   },
+   "params": {
+    "key": "outs"
+   }
+  },
+  {
+   "id": "to_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 2080,
+    "y": 4620
+   },
+   "params": {
+    "text": "Times out:"
+   }
+  },
+  {
+   "id": "to_isd",
+   "type": "player.is_downed",
+   "pos": {
+    "x": 2080,
+    "y": 4620
+   },
+   "params": {}
+  },
+  {
+   "id": "to_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2340,
+    "y": 4620
+   },
+   "params": {}
+  },
+  {
+   "id": "sq",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 0,
+    "y": 4840
+   },
+   "params": {}
+  },
+  {
+   "id": "sq_nf",
+   "type": "player.no_fall",
+   "pos": {
+    "x": 260,
+    "y": 4840
+   },
+   "params": {
+    "mode": "once"
+   }
+  },
+  {
+   "id": "sq_set",
+   "type": "squad.set",
+   "pos": {
+    "x": 520,
+    "y": 4840
+   },
+   "params": {
+    "squad": 2
+   }
+  },
+  {
+   "id": "sq_ff",
+   "type": "squad.friendly_fire",
+   "pos": {
+    "x": 780,
+    "y": 4840
+   },
+   "params": {
+    "on": false
+   }
+  },
+  {
+   "id": "sq_of",
+   "type": "squad.get",
+   "pos": {
+    "x": 780,
+    "y": 4840
+   },
+   "params": {}
+  },
+  {
+   "id": "sq_left",
+   "type": "squad.alive",
+   "pos": {
+    "x": 780,
+    "y": 4840
+   },
+   "params": {}
+  },
+  {
+   "id": "sq_m",
+   "type": "math.op",
+   "pos": {
+    "x": 1040,
+    "y": 4840
+   },
+   "params": {
+    "op": "add"
+   }
+  },
+  {
+   "id": "sq_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1040,
+    "y": 4840
+   },
+   "params": {
+    "text": "Squad:"
+   }
+  },
+  {
+   "id": "sq_buy",
+   "type": "buy.where",
+   "pos": {
+    "x": 1300,
+    "y": 4840
+   },
+   "params": {
+    "where": "anywhere"
+   }
+  },
+  {
+   "id": "sq_allow",
+   "type": "buy.allow",
+   "pos": {
+    "x": 1560,
+    "y": 4840
+   },
+   "params": {
+    "allow": "pistols"
+   }
+  },
+  {
+   "id": "sq_up",
+   "type": "player.launch",
+   "pos": {
+    "x": 1820,
+    "y": 4840
+   },
+   "params": {
+    "speed": 600
+   }
+  },
+  {
+   "id": "sq_goto",
+   "type": "bot.goto",
+   "pos": {
+    "x": 1820,
+    "y": 4840
+   },
+   "params": {
+    "name": "spot1",
+    "secs": 15
+   }
+  },
+  {
+   "id": "ck3",
+   "type": "event.round_started",
+   "pos": {
+    "x": 0,
+    "y": 5060
+   },
+   "params": {}
+  },
+  {
+   "id": "ck3_set",
+   "type": "clock.set",
+   "pos": {
+    "x": 260,
+    "y": 5060
+   },
+   "params": {
+    "secs": 180
+   }
+  },
+  {
+   "id": "ck3_add",
+   "type": "clock.add",
+   "pos": {
+    "x": 520,
+    "y": 5060
+   },
+   "params": {
+    "secs": 30
+   }
+  },
+  {
+   "id": "ck3_p",
+   "type": "clock.pause",
+   "pos": {
+    "x": 780,
+    "y": 5060
+   },
+   "params": {
+    "do": "pause"
+   }
+  },
+  {
+   "id": "ck3_r",
+   "type": "clock.pause",
+   "pos": {
+    "x": 1040,
+    "y": 5060
+   },
+   "params": {
+    "do": "resume"
+   }
+  },
+  {
+   "id": "ck3_left",
+   "type": "clock.left",
+   "pos": {
+    "x": 1040,
+    "y": 5060
+   },
+   "params": {}
+  },
+  {
+   "id": "ck3_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1300,
+    "y": 5060
+   },
+   "params": {
+    "text": "Time:"
+   }
+  },
+  {
+   "id": "tu",
+   "type": "event.time_up",
+   "pos": {
+    "x": 1560,
+    "y": 5060
+   },
+   "params": {}
+  },
+  {
+   "id": "tu_end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 1820,
+    "y": 5060
+   },
+   "params": {
+    "winner": "ct"
+   }
   }
  ],
  "edges": [
@@ -4114,6 +4510,501 @@
    },
    "to": {
     "node": "ms_tp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w212",
+   "from": {
+    "node": "ah",
+    "pin": "kind"
+   },
+   "to": {
+    "node": "ah_fall",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w213",
+   "from": {
+    "node": "ah_fall",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ah_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w214",
+   "from": {
+    "node": "ah",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ah_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w215",
+   "from": {
+    "node": "ah_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ah_block",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w216",
+   "from": {
+    "node": "ah_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "ah_scale",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w217",
+   "from": {
+    "node": "ah_scale",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ah_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w218",
+   "from": {
+    "node": "dk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "dk_down",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w219",
+   "from": {
+    "node": "dk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dk_down",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w220",
+   "from": {
+    "node": "rv",
+    "pin": "by"
+   },
+   "to": {
+    "node": "rv_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w221",
+   "from": {
+    "node": "rv",
+    "pin": "player"
+   },
+   "to": {
+    "node": "rv_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w222",
+   "from": {
+    "node": "rv",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rv_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w223",
+   "from": {
+    "node": "to",
+    "pin": "player"
+   },
+   "to": {
+    "node": "to_add",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w224",
+   "from": {
+    "node": "to",
+    "pin": "then"
+   },
+   "to": {
+    "node": "to_add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w225",
+   "from": {
+    "node": "to",
+    "pin": "player"
+   },
+   "to": {
+    "node": "to_set",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w226",
+   "from": {
+    "node": "to_add",
+    "pin": "then"
+   },
+   "to": {
+    "node": "to_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w227",
+   "from": {
+    "node": "to",
+    "pin": "player"
+   },
+   "to": {
+    "node": "to_get",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w228",
+   "from": {
+    "node": "to_get",
+    "pin": "out"
+   },
+   "to": {
+    "node": "to_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w229",
+   "from": {
+    "node": "to",
+    "pin": "player"
+   },
+   "to": {
+    "node": "to_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w230",
+   "from": {
+    "node": "to_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "to_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w231",
+   "from": {
+    "node": "to",
+    "pin": "player"
+   },
+   "to": {
+    "node": "to_isd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w232",
+   "from": {
+    "node": "to_isd",
+    "pin": "out"
+   },
+   "to": {
+    "node": "to_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w233",
+   "from": {
+    "node": "to_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "to_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w234",
+   "from": {
+    "node": "sq",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sq_nf",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w235",
+   "from": {
+    "node": "sq",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sq_nf",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w236",
+   "from": {
+    "node": "sq",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sq_set",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w237",
+   "from": {
+    "node": "sq_nf",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sq_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w238",
+   "from": {
+    "node": "sq_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sq_ff",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w239",
+   "from": {
+    "node": "sq",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sq_of",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w240",
+   "from": {
+    "node": "sq_of",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sq_m",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w241",
+   "from": {
+    "node": "sq_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sq_m",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w242",
+   "from": {
+    "node": "sq_m",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sq_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w243",
+   "from": {
+    "node": "sq_ff",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sq_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w244",
+   "from": {
+    "node": "sq_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sq_buy",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w245",
+   "from": {
+    "node": "sq_buy",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sq_allow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w246",
+   "from": {
+    "node": "sq",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sq_up",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w247",
+   "from": {
+    "node": "sq_goto",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sq_up",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w248",
+   "from": {
+    "node": "sq",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sq_goto",
+    "pin": "bot"
+   }
+  },
+  {
+   "id": "w249",
+   "from": {
+    "node": "sq_allow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sq_goto",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w250",
+   "from": {
+    "node": "ck3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck3_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w251",
+   "from": {
+    "node": "ck3_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck3_add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w252",
+   "from": {
+    "node": "ck3_add",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck3_p",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w253",
+   "from": {
+    "node": "ck3_p",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck3_r",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w254",
+   "from": {
+    "node": "ck3_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ck3_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w255",
+   "from": {
+    "node": "ck3_r",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck3_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w256",
+   "from": {
+    "node": "tu",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tu_end",
     "pin": "exec"
    }
   }

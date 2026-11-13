@@ -50,7 +50,8 @@ lsd_init()
 	lsd_emitf("^"e^":^"session^",^"mode^":^"%s^",^"map^":^"%s^",^"nodes^":%d", LSG_MODE, map, LSD_N)
 }
 
-public plugin_end()
+// (gen.rs's plugin_end calls this)
+stock lsd_end()
 {
 	// a map change while paused: the bots mustn't stay stopped, rounds must end again
 	if (g_lsdPaused >= 0)

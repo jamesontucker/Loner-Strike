@@ -178,7 +178,7 @@ node("game.set_cvar", "Set Setting", "Game", "Changes one of the game's settings
      params=[prm("cvar","Setting","choice","mp_freeforall",choices=[["mp_freeforall","Free for all (1 on)"],["mp_friendlyfire","Friendly fire (1 on)"],["sv_gravity","Gravity (800 normal)"],["mp_buytime","Buy time (minutes)"],["mp_startmoney","Start money"],["sv_airaccelerate","Air control (10 normal)"],["mp_roundtime","Round time (minutes, next round)"],["mp_freezetime","Freeze time (seconds, next round)"],["mp_round_infinite","Rounds only end when the mode says (1 on)"],["mp_autoteambalance","Team balance (1 on)"],["mp_limitteams","Most players more than the other team (0 any)"]]),
              prm("value","Value","number",1,min=0,max=100000)])
 node("entity.use", "Use Entity", "Game", "Presses (uses) every entity with this name: a door, a button, a trigger.", inputs=[X], outputs=[E()], params=[prm("name","Name","name","door1")])
-node("bot.goto", "Bot Go To", "Bots", "Sends a bot to the entity with this name (it still fights on the way).", inputs=[X, P("bot","player","Bot",required=True)], outputs=[E()], params=[prm("name","To the entity named","name","spot1")])
+node("bot.goto", "Bot Go To", "Bots", "Sends a bot to the entity with this name (it still fights on the way), for some seconds (0: until freed).", inputs=[X, P("bot","player","Bot",required=True)], outputs=[E()], params=[prm("name","To the entity named","name","spot1"), prm("secs","For (seconds, 0 until freed)","number",0,min=0,max=600)])
 node("bot.hold", "Bot Hold", "Bots", "Makes a bot hold where it is for some seconds.", inputs=[X, P("bot","player","Bot",required=True), P("secs","number","Seconds",param="secs")], outputs=[E()], params=[prm("secs","Seconds","number",20,min=1,max=600)])
 node("bot.follow", "Bot Follow", "Bots", "Makes a bot follow a player for some seconds.", inputs=[X, P("bot","player","Bot",required=True), P("who","player","Follow",required=True)], outputs=[E()], params=[prm("secs","Seconds","number",30,min=1,max=600)])
 node("bot.release", "Bot Free", "Bots", "Lets a bot do as it likes again.", inputs=[X, P("bot","player","Bot",required=True)], outputs=[E()])
@@ -189,6 +189,40 @@ node("comp.in_zone", "Is In Zone", "Components", "Is the player inside the zone?
 node("comp.respawn_at", "Respawn At Point", "Components", "Brings a dead player back at a respawn point (ls_respawn_point), or moves a living one there.", inputs=[X, P("player","player","Player",required=True)], outputs=[E()], needs="components")
 node("comp.drop_call", "Call Supply Drop", "Components", "Calls a supply drop onto an entity (wired into At, or the one with this name).", inputs=[X, P("at_ent","entity","At",optional=True)], outputs=[E()], params=[prm("at","At the entity named","name","drop1")], needs="components")
 node("creature.count", "Creatures Alive", "Creatures", "How many creatures are alive.", outputs=[P("out","number","Alive")], pure=True, needs="creatures")
+
+# ---- milestone 4: revive, damage, squads, buying, saved stats, round clock
+node("event.player_about_hurt", "Player About To Be Hurt", "Events", "Runs just before a player takes damage. Block, scale or set the damage here (it happens straight after this flow).",
+     outputs=[E(), P("victim","player","Victim"), P("attacker","player","Attacker"), P("damage","number","Damage"), P("kind","text","Kind")], **ev)
+node("dmg.block", "Block Damage", "Damage", "The damage doesn't happen. Only in a Player About To Be Hurt flow.", inputs=[X], outputs=[E()])
+node("dmg.scale", "Scale Damage", "Damage", "Multiplies the damage (0.5 halves it). Only in a Player About To Be Hurt flow.", inputs=[X, P("factor","number","Times",param="factor")], outputs=[E()], params=[prm("factor","Times","number",0.5,min=0,max=100)])
+node("dmg.set", "Set Damage", "Damage", "Sets the damage to this. Only in a Player About To Be Hurt flow.", inputs=[X, P("amount","number","Damage",param="amount")], outputs=[E()], params=[prm("amount","Damage","number",10,min=0,max=10000)])
+node("player.no_fall", "No Fall Damage", "Players", "Stops a player taking fall damage: always, or just for their next landing (a drop-in).", inputs=[X, P("player","player","Player",required=True)], outputs=[E()],
+     params=[prm("mode","When","choice","once",choices=[["once","Their next landing"],["on","Always"],["off","Off again"]])])
+node("player.down", "Make Downed", "Players", "A player who just died lies downed where they fell: a teammate (or squad mate) holding USE on them for a few seconds brings them back; if nobody does in time they're out. Bots come to help.",
+     inputs=[X, P("player","player","Player",required=True)], outputs=[E()],
+     params=[prm("secs","Out after (seconds)","number",30,min=3,max=300), prm("hold","Hold USE (seconds)","number",3,min=1,max=20), prm("health","Health when revived","number",50,min=1,max=255)])
+node("player.is_downed", "Is Downed", "Players", "Is the player downed (waiting for a revive)?", inputs=[P("player","player","Player",required=True)], outputs=[P("out","bool","Downed")], pure=True)
+node("event.player_revived", "Player Revived", "Events", "Runs when a downed player is brought back.", outputs=[E(), P("player","player","Player"), P("by","player","Revived by")], **ev)
+node("event.down_timeout", "Downed Player Out", "Events", "Runs when nobody revived a downed player in time.", outputs=[E(), P("player","player","Player")], **ev)
+node("squad.set", "Set Squad", "Squads", "Puts a player in a squad (1 to 32; 0 none). Squad mates are on one side for the bots, and can't hurt each other unless squad friendly fire is on.",
+     inputs=[X, P("player","player","Player",required=True), P("squad","number","Squad",param="squad")], outputs=[E()], params=[prm("squad","Squad","number",1,min=0,max=32)])
+node("squad.get", "Squad Of", "Squads", "The squad a player is in (0 none).", inputs=[P("player","player","Player",required=True)], outputs=[P("out","number","Squad")], pure=True)
+node("squad.alive", "Squads Left", "Squads", "How many squads still have someone alive (a living player in no squad counts as one).", outputs=[P("out","number","Squads")], pure=True)
+node("squad.friendly_fire", "Squad Friendly Fire", "Squads", "Whether squad mates can hurt each other.", inputs=[X, P("on","bool","On",param="on")], outputs=[E()], params=[prm("on","On","bool",False)])
+node("buy.where", "Buying", "Buying", "Where players can buy: anywhere, only in buy zones, or nowhere.", inputs=[X], outputs=[E()],
+     params=[prm("where","Where","choice","anywhere",choices=[["anywhere","Anywhere"],["zones","Only in buy zones"],["nowhere","Nowhere (buying off)"]])])
+node("buy.allow", "Allow Buying", "Buying", "Lets players buy only some things (or everything again).", inputs=[X], outputs=[E()],
+     params=[prm("allow","What","choice","all",choices=[["all","Everything"],["pistols","Pistols, armor and grenades"],["no_snipers","Everything but sniper rifles"],["no_awp","Everything but the AWP"],["no_grenades","Everything but grenades"],["no_mg","Everything but machine guns"],["armor","Armor only"],["knife","Nothing (knives)"]])])
+node("save.get", "Saved Value", "Saved", "A number kept for this player across maps and restarts (0 until set). Each mode has its own.", inputs=[P("player","player","Player",required=True)], outputs=[P("out","number","Value")], params=[prm("key","Name","name","wins")], pure=True)
+node("save.set", "Save Value", "Saved", "Keeps a number for this player across maps and restarts.", inputs=[X, P("player","player","Player",required=True), P("value","number","Value",param="value")], outputs=[E()], params=[prm("key","Name","name","wins"), prm("value","Value","number",0,min=-100000,max=100000)])
+node("save.add", "Add To Saved", "Saved", "Adds to a saved number (a minus takes away).", inputs=[X, P("player","player","Player",required=True), P("amount","number","Amount",param="amount")], outputs=[E()], params=[prm("key","Name","name","wins"), prm("amount","Amount","number",1,min=-100000,max=100000)])
+node("clock.set", "Set Round Clock", "Round clock", "Runs the mode's own round clock: this many seconds, shown on everyone's round timer. When it reaches 0, Round Time Up runs (the game's own time limit is switched off while it runs).",
+     inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E()], params=[prm("secs","Seconds","number",120,min=1,max=7200)])
+node("clock.add", "Add Round Time", "Round clock", "Adds seconds to the mode's round clock (a minus takes away).", inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E()], params=[prm("secs","Seconds","number",30,min=-7200,max=7200)])
+node("clock.pause", "Pause Round Clock", "Round clock", "Stops or restarts the mode's round clock.", inputs=[X], outputs=[E()], params=[prm("do","Do","choice","pause",choices=[["pause","Pause"],["resume","Resume"]])])
+node("clock.left", "Round Time Left", "Round clock", "Seconds left on the mode's round clock (0 when it isn't running).", outputs=[P("out","number","Seconds")], pure=True)
+node("player.launch", "Launch Up", "Players", "Throws a living player straight up (with low gravity and No Fall Damage, a drop-in from the sky).", inputs=[X, P("player","player","Player",required=True), P("speed","number","Speed",param="speed")], outputs=[E()], params=[prm("speed","Speed","number",900,min=50,max=3000)])
+node("event.time_up", "Round Time Up", "Events", "Runs when the mode's round clock reaches 0.", outputs=[E()], **ev)
 
 node("flow.reroute", "Reroute", "Flow", "A bend in a wire, to keep the graph tidy. Passes on whatever comes in.", inputs=[P("in","any","")], outputs=[P("out","any","")], reroute=True)
 
@@ -205,7 +239,7 @@ data = {
     "any": {"label": "Anything", "color": "#9a9a9a"},
     "var": {"label": "Variable", "color": "#cccccc"}
   },
-  "categories": ["Events", "Conditions", "Numbers", "Variables", "Flow", "Functions", "Timers", "Players", "Messages", "Game", "Scoring", "Bots", "Components", "Creatures"],
+  "categories": ["Events", "Conditions", "Numbers", "Variables", "Flow", "Functions", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Creatures"],
   "nodes": nodes,
 }
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)

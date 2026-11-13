@@ -13,7 +13,7 @@
 #define LSG_MODE "last_stand_lite"
 #define LSG_CTX 7
 #define LSG_TXT 2
-#define LSG_N 55
+#define LSG_N 58
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -24,7 +24,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 // The mode's variables
 stock Float:g_v0 = 0.0 // Wave (number)
 
-stock g_lsgM42[33][LSG_CTX]
+stock g_lsgM45[33][LSG_CTX]
 stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
 
@@ -108,12 +108,20 @@ stock lsg_freeze(id, on)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
 }
 
-stock lsg_bot_goto(bot, const name[])
+stock lsg_bot_goto(bot, const name[], secs)
 {
 	new Float:o[3]
-	if (lsg_origin_of(name, o))
-		ls_bot_goto(bot, o)
+	if (!lsg_origin_of(name, o))
+		return
+	ls_bot_goto(bot, o)
+	// a timed goal: the bot is free again after it
+	remove_task(LSG_TASK - 100 - bot)
+	if (secs > 0)
+		set_task(float(secs), "lsg_bot_free", LSG_TASK - 100 - bot)
 }
+
+public lsg_bot_free(task)
+	ls_bot_release(LSG_TASK - 100 - task)
 
 stock Float:lsg_div(Float:a, Float:b)
 	return b == 0.0 ? 0.0 : a / b
@@ -224,6 +232,212 @@ stock lsg_creature(const kind[], const at[])
 	return is_valid_ent(ent) && !(entity_get_int(ent, EV_INT_flags) & FL_KILLME) ? ent : 0
 }
 
+stock lsg_dmg_kind(bits, out[], len)
+{
+	if (bits & DMG_FALL)
+		copy(out, len, "fall")
+	else if (bits & DMG_BLAST)
+		copy(out, len, "blast")
+	else if (bits & DMG_BURN)
+		copy(out, len, "burn")
+	else if (bits & DMG_BULLET)
+		copy(out, len, "shot")
+	else if (bits & DMG_SLASH)
+		copy(out, len, "slash")
+	else
+		copy(out, len, "other")
+}
+
+stock lsg_launch(id, Float:speed)
+{
+	new Float:v[3]
+	pev(id, pev_velocity, v)
+	v[2] = speed
+	set_pev(id, pev_velocity, v)
+}
+
+stock lsg_round_time(secs)
+{
+	message_begin(MSG_ALL, get_user_msgid("RoundTime"))
+	write_short(max(secs, 0))
+	message_end()
+}
+
+stock g_lsgSquad[33], bool:g_lsgSquadFF
+
+stock lsg_set_squad(id, squad)
+{
+	g_lsgSquad[id] = squad
+	// the bots' brain: a squad is one side, both ways
+	if (!get_cvar_pointer("ls_mode_ver"))
+		return
+	if (squad > 0)
+	{
+		server_cmd("ls_mode role %d sq%d", id, squad)
+		server_cmd("ls_mode friend @sq%d @sq%d 1", squad, squad)
+	}
+	else
+		server_cmd("ls_mode role %d -", id)
+}
+
+stock bool:lsg_same_side(a, b)
+{
+	if (g_lsgSquad[a] || g_lsgSquad[b])
+		return g_lsgSquad[a] == g_lsgSquad[b]
+	return !get_cvar_num("mp_freeforall") && lsg_team(a) > 0 && lsg_team(a) == lsg_team(b)
+}
+
+stock lsg_squads_alive()
+{
+	new seen[34], n
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p))
+			continue
+		new key = g_lsgSquad[p] ? min(g_lsgSquad[p], 32) : 0
+		if (key == 0)
+			n++
+		else if (!seen[key])
+		{
+			seen[key] = 1
+			n++
+		}
+	}
+	return n
+}
+
+stock bool:g_lsgDown[33], Float:g_lsgDownAt[33], Float:g_lsgDownOrg[33][3], g_lsgRevBy[33], Float:g_lsgRevProg[33]
+stock Float:g_lsgDownSecs[33], Float:g_lsgDownHold[33], g_lsgDownHp[33]
+
+stock lsg_make_down(p, Float:secs, Float:hold, hp)
+{
+	if (!lsg_ok(p) || is_user_alive(p))
+		return 0
+	g_lsgDown[p] = true
+	g_lsgDownAt[p] = get_gametime()
+	pev(p, pev_origin, g_lsgDownOrg[p])
+	g_lsgRevBy[p] = 0
+	g_lsgRevProg[p] = 0.0
+	g_lsgDownSecs[p] = secs
+	g_lsgDownHold[p] = hold
+	g_lsgDownHp[p] = hp
+	ls_chat(0, "%s is down! Hold USE on them to bring them back.", lsg_name(p))
+	lsg_send_revive(p)
+	return 1
+}
+
+// the two nearest bots on the same side go and stand on the downed player (the brain's "use" goal)
+stock lsg_send_revive(victim)
+{
+	if (!get_cvar_pointer("ls_mode_ver"))
+		return
+	new near[2], Float:nd[2] = { 99999.0, 99999.0 }
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (p == victim || !is_user_alive(p) || !is_user_bot(p) || !lsg_same_side(p, victim))
+			continue
+		new Float:o[3]
+		pev(p, pev_origin, o)
+		new Float:d = get_distance_f(o, g_lsgDownOrg[victim])
+		if (d < nd[0])
+		{
+			nd[1] = nd[0]
+			near[1] = near[0]
+			nd[0] = d
+			near[0] = p
+		}
+		else if (d < nd[1])
+		{
+			nd[1] = d
+			near[1] = p
+		}
+	}
+	new left = max(floatround(g_lsgDownSecs[victim] - (get_gametime() - g_lsgDownAt[victim])), 1)
+	for (new i = 0; i < 2; i++)
+		if (near[i])
+			server_cmd("ls_mode goal %d use %.0f %.0f %.0f %d 75 %d 64", near[i], g_lsgDownOrg[victim][0], g_lsgDownOrg[victim][1], g_lsgDownOrg[victim][2], victim, left)
+}
+
+stock lsg_clear_down(p)
+{
+	if (g_lsgDown[p] && get_cvar_pointer("ls_mode_ver"))
+		server_cmd("ls_mode goal_clear all %d", p)
+	if (g_lsgRevBy[p] && lsg_ok(g_lsgRevBy[p]) && !is_user_bot(g_lsgRevBy[p]))
+		lsg_bar(g_lsgRevBy[p], 0)
+	g_lsgDown[p] = false
+	g_lsgRevBy[p] = 0
+	g_lsgRevProg[p] = 0.0
+}
+
+public lsg_revive_tick()
+{
+	new Float:now = get_gametime()
+	for (new d = 1; d <= MaxClients; d++)
+	{
+		if (!g_lsgDown[d])
+			continue
+		if (!is_user_connected(d) || is_user_alive(d))
+		{
+			lsg_clear_down(d)
+			continue
+		}
+		if (now - g_lsgDownAt[d] > g_lsgDownSecs[d])
+		{
+			ls_chat(0, "%s is out.", lsg_name(d))
+			lsg_clear_down(d)
+			lsg_down_out_hook(d)
+			continue
+		}
+		// someone on the same side close by: people hold USE, bots just stay there
+		new who = 0
+		for (new p = 1; p <= MaxClients; p++)
+		{
+			if (p == d || !is_user_alive(p) || !lsg_same_side(p, d))
+				continue
+			new Float:o[3]
+			pev(p, pev_origin, o)
+			if (get_distance_f(o, g_lsgDownOrg[d]) > 72.0)
+				continue
+			if (!is_user_bot(p) && !(pev(p, pev_button) & IN_USE))
+				continue
+			who = p
+			break
+		}
+		if (who != g_lsgRevBy[d])
+		{
+			if (g_lsgRevBy[d] && lsg_ok(g_lsgRevBy[d]) && !is_user_bot(g_lsgRevBy[d]))
+				lsg_bar(g_lsgRevBy[d], 0)
+			g_lsgRevBy[d] = who
+			g_lsgRevProg[d] = 0.0
+			if (who && !is_user_bot(who))
+				lsg_bar(who, floatround(g_lsgDownHold[d], floatround_ceil))
+		}
+		if (!who)
+			continue
+		g_lsgRevProg[d] += 0.25
+		if (g_lsgRevProg[d] >= g_lsgDownHold[d])
+			lsg_revive(d, who)
+	}
+}
+
+stock lsg_revive(d, by)
+{
+	new Float:o[3]
+	o = g_lsgDownOrg[d]
+	new hp = g_lsgDownHp[d]
+	lsg_clear_down(d)
+	ExecuteHamB(Ham_CS_RoundRespawn, d)
+	if (!is_user_alive(d))
+		return
+	// back where they fell, when a player fits there
+	engfunc(EngFunc_TraceHull, o, o, DONT_IGNORE_MONSTERS, HULL_HUMAN, d, 0)
+	if (!get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid))
+		engfunc(EngFunc_SetOrigin, d, o)
+	set_user_health(d, hp)
+	ls_chat(0, "%s brought %s back.", lsg_name(by), lsg_name(d))
+	lsg_revived_hook(d, by)
+}
+
 public plugin_init()
 {
 	ls_register_mode(LSG_MODE, "Last Stand Lite", "1.0", "Game Mode Studio")
@@ -232,30 +446,54 @@ public plugin_init()
 	RegisterHamPlayer(Ham_Spawn, "lsg_on_player_spawned", 1)
 	set_task(1.0, "lsg_on_map_started")
 	register_event("HLTV", "lsg_new_round", "a", "1=0", "2=0")
-	register_clcmd("say /shop", "lsg_chat41")
-	register_clcmd("say !shop", "lsg_chat41")
-	register_clcmd("say_team /shop", "lsg_chat41")
-	register_clcmd("say_team !shop", "lsg_chat41")
+	set_task(0.25, "lsg_revive_tick", LSG_TASK - 1, _, _, "b")
+	register_clcmd("say /shop", "lsg_chat44")
+	register_clcmd("say !shop", "lsg_chat44")
+	register_clcmd("say_team /shop", "lsg_chat44")
+	register_clcmd("say_team !shop", "lsg_chat44")
 }
 
 // a new round: timers stop, round variables start again
 public lsg_new_round()
 {
 	lsg_stop_timers()
+	for (new p = 1; p <= MaxClients; p++)
+		lsg_clear_down(p)
 }
 
-public lsg_chat41(id)
+public lsg_chat44(id)
 {
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
-	lsg_n41(ctx)
+	lsg_n44(ctx)
 	return PLUGIN_CONTINUE
+}
+
+lsg_revived_hook(id, by)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	ctx[1] = by // by
+	lsg_n42(ctx)
+}
+
+lsg_down_out_hook(id)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	#pragma unused ctx
 }
 
 stock lsg_stop_timers()
 {
 	for (new i = 0; i < LSG_N; i++)
 		remove_task(LSG_TASK + i)
+}
+
+public client_putinserver(id)
+{
+	g_lsgSquad[id] = 0
+	lsg_clear_down(id)
 }
 
 public lsg_on_round_started()
@@ -654,51 +892,58 @@ lsg_n34(ctx[])
 	if (ok)
 		lsg_n35(ctx)
 	else
-		lsg_n38(ctx)
+		lsg_n39(ctx)
+}
+
+// Make Downed (pk_down)
+lsg_n35(ctx[])
+{
+	lsg_make_down(ctx[0], 25.0, 3.0, 50)
+	lsg_n36(ctx)
 }
 
 // Branch (pk_br)
-lsg_n35(ctx[])
+lsg_n36(ctx[])
 {
 	new ok = ((((((float(ls_count_alive(CsTeams:(2)))) == (0.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
 	if (ok)
-		lsg_n36(ctx)
+		lsg_n37(ctx)
 }
 
 // Show Message (pk_lost)
-lsg_n36(ctx[])
+lsg_n37(ctx[])
 {
 	ls_announce(0, 5.0, "%s", "The base is overrun!")
-	lsg_n37(ctx)
+	lsg_n38(ctx)
 }
 
 // End Round (pk_end)
-lsg_n37(ctx[])
+lsg_n38(ctx[])
 {
 	server_cmd("endround T")
 	#pragma unused ctx
 }
 
 // Is Team (pk_by)
-lsg_n38(ctx[])
+lsg_n39(ctx[])
 {
 	new ok = ((lsg_team(ctx[1]) == 2) ? 1 : 0)
 	if (ok)
-		lsg_n39(ctx)
+		lsg_n40(ctx)
 }
 
 // Give Money (pk_pay)
-lsg_n39(ctx[])
+lsg_n40(ctx[])
 {
 	if (!(!lsg_ok(ctx[1])))
 	{
 		lsg_add_money(ctx[1], floatround(300.0))
 	}
-	lsg_n40(ctx)
+	lsg_n41(ctx)
 }
 
 // Add Score (pk_score)
-lsg_n40(ctx[])
+lsg_n41(ctx[])
 {
 	if (!(!lsg_ok(ctx[1])))
 	{
@@ -706,20 +951,35 @@ lsg_n40(ctx[])
 	}
 }
 
-// Chat Command (sh)
-lsg_n41(ctx[])
+// Player Revived (rv)
+lsg_n42(ctx[])
 {
-	lsg_n42(ctx)
+	lsg_n43(ctx)
+}
+
+// Give Money (rv_pay)
+lsg_n43(ctx[])
+{
+	if (!(!lsg_ok(ctx[1])))
+	{
+		lsg_add_money(ctx[1], floatround(200.0))
+	}
+}
+
+// Chat Command (sh)
+lsg_n44(ctx[])
+{
+	lsg_n45(ctx)
 }
 
 // Menu (sh_menu)
-lsg_n42(ctx[])
+lsg_n45(ctx[])
 {
 	if (!(!lsg_ok(ctx[0]) || is_user_bot(ctx[0])))
 	{
 		for (new k = 0; k < LSG_CTX; k++)
-			g_lsgM42[ctx[0]][k] = ctx[k]
-		new m = menu_create("Shop", "lsg_mh42")
+			g_lsgM45[ctx[0]][k] = ctx[k]
+		new m = menu_create("Shop", "lsg_mh45")
 		menu_additem(m, "AK-47 (2500)")
 		menu_additem(m, "Kevlar and helmet (1000)")
 		menu_additem(m, "HE grenade (300)")
@@ -728,51 +988,51 @@ lsg_n42(ctx[])
 }
 
 // Menu (sh_menu): the choice
-public lsg_mh42(id, menu, item)
+public lsg_mh45(id, menu, item)
 {
 	menu_destroy(menu)
 	if (item < 0 || id < 1 || id > MaxClients)
 		return PLUGIN_HANDLED
 	new ctx[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
-		ctx[k] = g_lsgM42[id][k]
+		ctx[k] = g_lsgM45[id][k]
 	switch (item)
 	{
 		case 0:
 		{
-			lsg_n43(ctx)
+			lsg_n46(ctx)
 		}
 		case 1:
 		{
-			lsg_n47(ctx)
+			lsg_n50(ctx)
 		}
 		case 2:
 		{
-			lsg_n51(ctx)
+			lsg_n54(ctx)
 		}
 	}
 	return PLUGIN_HANDLED
 }
 
 // Branch (sh_b1)
-lsg_n43(ctx[])
+lsg_n46(ctx[])
 {
 	new ok = ((((((lsg_get_money(ctx[0])) >= (2500.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
 	if (ok)
-		lsg_n44(ctx)
+		lsg_n47(ctx)
 	else
-		lsg_n46(ctx)
+		lsg_n49(ctx)
 }
 
 // Give Weapon (sh_g1)
-lsg_n44(ctx[])
+lsg_n47(ctx[])
 {
 	ls_give_weapon(ctx[0], "ak47", 90)
-	lsg_n45(ctx)
+	lsg_n48(ctx)
 }
 
 // Give Money (sh_p1)
-lsg_n45(ctx[])
+lsg_n48(ctx[])
 {
 	if (!(!lsg_ok(ctx[0])))
 	{
@@ -781,33 +1041,33 @@ lsg_n45(ctx[])
 }
 
 // Chat Message (sh_n1)
-lsg_n46(ctx[])
+lsg_n49(ctx[])
 {
 	ls_chat(ctx[0], "%s", "Not enough money for that.")
 }
 
 // Branch (sh_b2)
-lsg_n47(ctx[])
+lsg_n50(ctx[])
 {
 	new ok = ((((((lsg_get_money(ctx[0])) >= (1000.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
 	if (ok)
-		lsg_n48(ctx)
+		lsg_n51(ctx)
 	else
-		lsg_n50(ctx)
+		lsg_n53(ctx)
 }
 
 // Give Item (sh_g2)
-lsg_n48(ctx[])
+lsg_n51(ctx[])
 {
 	if (!(!ls_alive(ctx[0])))
 	{
 		cs_set_user_armor(ctx[0], 100, CS_ARMOR_VESTHELM)
 	}
-	lsg_n49(ctx)
+	lsg_n52(ctx)
 }
 
 // Give Money (sh_p2)
-lsg_n49(ctx[])
+lsg_n52(ctx[])
 {
 	if (!(!lsg_ok(ctx[0])))
 	{
@@ -816,30 +1076,30 @@ lsg_n49(ctx[])
 }
 
 // Chat Message (sh_n2)
-lsg_n50(ctx[])
+lsg_n53(ctx[])
 {
 	ls_chat(ctx[0], "%s", "Not enough money for that.")
 }
 
 // Branch (sh_b3)
-lsg_n51(ctx[])
+lsg_n54(ctx[])
 {
 	new ok = ((((((lsg_get_money(ctx[0])) >= (300.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
 	if (ok)
-		lsg_n52(ctx)
+		lsg_n55(ctx)
 	else
-		lsg_n54(ctx)
+		lsg_n57(ctx)
 }
 
 // Give Weapon (sh_g3)
-lsg_n52(ctx[])
+lsg_n55(ctx[])
 {
 	ls_give_weapon(ctx[0], "hegrenade", 0)
-	lsg_n53(ctx)
+	lsg_n56(ctx)
 }
 
 // Give Money (sh_p3)
-lsg_n53(ctx[])
+lsg_n56(ctx[])
 {
 	if (!(!lsg_ok(ctx[0])))
 	{
@@ -848,7 +1108,7 @@ lsg_n53(ctx[])
 }
 
 // Chat Message (sh_n3)
-lsg_n54(ctx[])
+lsg_n57(ctx[])
 {
 	ls_chat(ctx[0], "%s", "Not enough money for that.")
 }

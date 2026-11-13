@@ -77,7 +77,8 @@ lsd_init()
 	lsd_emitf("^"e^":^"session^",^"mode^":^"%s^",^"map^":^"%s^",^"nodes^":%d", LSG_MODE, map, LSD_N)
 }
 
-public plugin_end()
+// (gen.rs's plugin_end calls this)
+stock lsd_end()
 {
 	// a map change while paused: the bots mustn't stay stopped, rounds must end again
 	if (g_lsdPaused >= 0)
@@ -551,12 +552,20 @@ stock lsg_freeze(id, on)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
 }
 
-stock lsg_bot_goto(bot, const name[])
+stock lsg_bot_goto(bot, const name[], secs)
 {
 	new Float:o[3]
-	if (lsg_origin_of(name, o))
-		ls_bot_goto(bot, o)
+	if (!lsg_origin_of(name, o))
+		return
+	ls_bot_goto(bot, o)
+	// a timed goal: the bot is free again after it
+	remove_task(LSG_TASK - 100 - bot)
+	if (secs > 0)
+		set_task(float(secs), "lsg_bot_free", LSG_TASK - 100 - bot)
 }
+
+public lsg_bot_free(task)
+	ls_bot_release(LSG_TASK - 100 - task)
 
 stock Float:lsg_div(Float:a, Float:b)
 	return b == 0.0 ? 0.0 : a / b
@@ -667,12 +676,48 @@ stock lsg_creature(const kind[], const at[])
 	return is_valid_ent(ent) && !(entity_get_int(ent, EV_INT_flags) & FL_KILLME) ? ent : 0
 }
 
+stock lsg_dmg_kind(bits, out[], len)
+{
+	if (bits & DMG_FALL)
+		copy(out, len, "fall")
+	else if (bits & DMG_BLAST)
+		copy(out, len, "blast")
+	else if (bits & DMG_BURN)
+		copy(out, len, "burn")
+	else if (bits & DMG_BULLET)
+		copy(out, len, "shot")
+	else if (bits & DMG_SLASH)
+		copy(out, len, "slash")
+	else
+		copy(out, len, "other")
+}
+
+stock lsg_launch(id, Float:speed)
+{
+	new Float:v[3]
+	pev(id, pev_velocity, v)
+	v[2] = speed
+	set_pev(id, pev_velocity, v)
+}
+
+stock lsg_round_time(secs)
+{
+	message_begin(MSG_ALL, get_user_msgid("RoundTime"))
+	write_short(max(secs, 0))
+	message_end()
+}
+
 public plugin_init()
 {
 	ls_register_mode(LSG_MODE, "All Nodes", "1.0", "Game Mode Studio")
 	lsd_init()
 	register_logevent("lsg_on_round_started", 2, "1=Round_Start")
 	register_event("DeathMsg", "lsg_on_player_killed", "a")
+}
+
+public plugin_end()
+{
+	lsd_end()
 }
 
 stock lsg_stop_timers()

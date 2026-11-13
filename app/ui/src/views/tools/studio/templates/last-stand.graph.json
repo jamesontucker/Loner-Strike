@@ -215,7 +215,7 @@
    "type": "comp.on_wave_start",
    "pos": {
     "x": 1565,
-    "y": 2153
+    "y": 1486
    },
    "params": {}
   },
@@ -224,7 +224,7 @@
    "type": "var.set",
    "pos": {
     "x": 2065,
-    "y": 1807
+    "y": 1236
    },
    "params": {
     "var": "wave"
@@ -235,7 +235,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 2565,
-    "y": 2075
+    "y": 1448
    },
    "params": {
     "text": "Wave",
@@ -248,7 +248,7 @@
    "type": "game.play_sound",
    "pos": {
     "x": 3065,
-    "y": 2086
+    "y": 1459
    },
    "params": {
     "sound": "radio/locknload"
@@ -259,7 +259,7 @@
    "type": "comp.on_wave_cleared",
    "pos": {
     "x": 65,
-    "y": 2181
+    "y": 1605
    },
    "params": {}
   },
@@ -268,7 +268,7 @@
    "type": "math.compare",
    "pos": {
     "x": 565,
-    "y": 2708
+    "y": 2139
    },
    "params": {
     "op": "ge",
@@ -280,7 +280,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1065,
-    "y": 2168
+    "y": 1592
    },
    "params": {}
   },
@@ -289,7 +289,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 1565,
-    "y": 2001
+    "y": 1334
    },
    "params": {
     "text": "You held out! The base is safe.",
@@ -301,7 +301,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 2065,
-    "y": 2003
+    "y": 1432
    },
    "params": {
     "winner": "ct"
@@ -312,7 +312,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 1565,
-    "y": 2351
+    "y": 1843
    },
    "params": {
     "which": "dead"
@@ -323,7 +323,7 @@
    "type": "cond.is_team",
    "pos": {
     "x": 2065,
-    "y": 2228
+    "y": 1657
    },
    "params": {
     "team": "ct"
@@ -334,7 +334,7 @@
    "type": "player.respawn",
    "pos": {
     "x": 2565,
-    "y": 2349
+    "y": 1730
    },
    "params": {}
   },
@@ -343,7 +343,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 2065,
-    "y": 2604
+    "y": 1959
    },
    "params": {
     "which": "alive_ct"
@@ -354,7 +354,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 2565,
-    "y": 2475
+    "y": 1878
    },
    "params": {
     "amount": 1500
@@ -365,7 +365,7 @@
    "type": "timer.countdown",
    "pos": {
     "x": 2565,
-    "y": 2649
+    "y": 2052
    },
    "params": {
     "secs": 15,
@@ -378,7 +378,7 @@
    "type": "comp.wave_start",
    "pos": {
     "x": 3065,
-    "y": 2443
+    "y": 1874
    },
    "params": {
     "wave": 0
@@ -389,7 +389,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 3065,
-    "y": 2691
+    "y": 2122
    },
    "params": {
     "text": "Wave cleared: +1500. Say !shop to buy."
@@ -400,7 +400,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 1546
+    "y": 2666
    },
    "params": {}
   },
@@ -409,7 +409,7 @@
    "type": "cond.is_team",
    "pos": {
     "x": 565,
-    "y": 1388
+    "y": 2502
    },
    "params": {
     "team": "ct"
@@ -419,8 +419,8 @@
    "id": "pk_left",
    "type": "game.count_alive",
    "pos": {
-    "x": 65,
-    "y": 1247
+    "x": 565,
+    "y": 2676
    },
    "params": {
     "team": "ct"
@@ -430,8 +430,8 @@
    "id": "pk_none",
    "type": "math.compare",
    "pos": {
-    "x": 565,
-    "y": 1236
+    "x": 1065,
+    "y": 2530
    },
    "params": {
     "op": "eq",
@@ -439,11 +439,24 @@
    }
   },
   {
+   "id": "pk_down",
+   "type": "player.down",
+   "pos": {
+    "x": 1065,
+    "y": 2336
+   },
+   "params": {
+    "secs": 25,
+    "hold": 3,
+    "health": 50
+   }
+  },
+  {
    "id": "pk_br",
    "type": "flow.branch",
    "pos": {
-    "x": 1065,
-    "y": 1236
+    "x": 1565,
+    "y": 2454
    },
    "params": {}
   },
@@ -451,8 +464,8 @@
    "id": "pk_lost",
    "type": "msg.broadcast",
    "pos": {
-    "x": 1565,
-    "y": 1236
+    "x": 2065,
+    "y": 2454
    },
    "params": {
     "text": "The base is overrun!",
@@ -463,8 +476,8 @@
    "id": "pk_end",
    "type": "score.end_round",
    "pos": {
-    "x": 2065,
-    "y": 1236
+    "x": 2565,
+    "y": 2454
    },
    "params": {
     "winner": "t"
@@ -475,7 +488,7 @@
    "type": "cond.is_team",
    "pos": {
     "x": 1065,
-    "y": 1447
+    "y": 2682
    },
    "params": {
     "team": "ct"
@@ -486,7 +499,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 1565,
-    "y": 1496
+    "y": 2731
    },
    "params": {
     "amount": 300
@@ -497,10 +510,30 @@
    "type": "player.add_frags",
    "pos": {
     "x": 2065,
-    "y": 1593
+    "y": 2779
    },
    "params": {
     "amount": 1
+   }
+  },
+  {
+   "id": "rv",
+   "type": "event.player_revived",
+   "pos": {
+    "x": 2065,
+    "y": 2985
+   },
+   "params": {}
+  },
+  {
+   "id": "rv_pay",
+   "type": "player.add_money",
+   "pos": {
+    "x": 2565,
+    "y": 2972
+   },
+   "params": {
+    "amount": 200
    }
   },
   {
@@ -508,7 +541,7 @@
    "type": "event.chat_command",
    "pos": {
     "x": 65,
-    "y": 3613
+    "y": 3894
    },
    "params": {
     "command": "shop"
@@ -519,7 +552,7 @@
    "type": "msg.menu",
    "pos": {
     "x": 1065,
-    "y": 3395
+    "y": 3676
    },
    "params": {
     "title": "Shop",
@@ -534,7 +567,7 @@
    "type": "player.get_money",
    "pos": {
     "x": 565,
-    "y": 3069
+    "y": 3350
    },
    "params": {}
   },
@@ -543,7 +576,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 3045
+    "y": 3326
    },
    "params": {
     "op": "ge",
@@ -555,7 +588,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 3035
+    "y": 3316
    },
    "params": {}
   },
@@ -564,7 +597,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 2065,
-    "y": 2911
+    "y": 3192
    },
    "params": {
     "weapon": "ak47",
@@ -576,7 +609,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 2565,
-    "y": 3110
+    "y": 3374
    },
    "params": {
     "amount": -2500
@@ -587,7 +620,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 2065,
-    "y": 3067
+    "y": 3348
    },
    "params": {
     "text": "Not enough money for that."
@@ -598,7 +631,7 @@
    "type": "player.get_money",
    "pos": {
     "x": 565,
-    "y": 3637
+    "y": 3918
    },
    "params": {}
   },
@@ -607,7 +640,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 3613
+    "y": 3894
    },
    "params": {
     "op": "ge",
@@ -619,7 +652,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 3522
+    "y": 3803
    },
    "params": {}
   },
@@ -628,7 +661,7 @@
    "type": "player.give_item",
    "pos": {
     "x": 2065,
-    "y": 3608
+    "y": 3889
    },
    "params": {
     "item": "vesthelm"
@@ -639,7 +672,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 2565,
-    "y": 3796
+    "y": 4059
    },
    "params": {
     "amount": -1000
@@ -650,7 +683,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 2065,
-    "y": 3276
+    "y": 3557
    },
    "params": {
     "text": "Not enough money for that."
@@ -661,7 +694,7 @@
    "type": "player.get_money",
    "pos": {
     "x": 565,
-    "y": 3920
+    "y": 4201
    },
    "params": {}
   },
@@ -670,7 +703,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 3896
+    "y": 4177
    },
    "params": {
     "op": "ge",
@@ -682,7 +715,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 3886
+    "y": 4167
    },
    "params": {}
   },
@@ -691,7 +724,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 2065,
-    "y": 4068
+    "y": 4349
    },
    "params": {
     "weapon": "hegrenade",
@@ -703,7 +736,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 2565,
-    "y": 4106
+    "y": 4387
    },
    "params": {
     "amount": -300
@@ -714,7 +747,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 2065,
-    "y": 3779
+    "y": 4060
    },
    "params": {
     "text": "Not enough money for that."
@@ -1231,12 +1264,12 @@
   {
    "id": "w47",
    "from": {
-    "node": "pk_none",
-    "pin": "out"
+    "node": "pk",
+    "pin": "victim"
    },
    "to": {
-    "node": "pk_br",
-    "pin": "cond"
+    "node": "pk_down",
+    "pin": "player"
    }
   },
   {
@@ -1246,12 +1279,34 @@
     "pin": "true"
    },
    "to": {
-    "node": "pk_br",
+    "node": "pk_down",
     "pin": "exec"
    }
   },
   {
    "id": "w49",
+   "from": {
+    "node": "pk_none",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "pk_down",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w51",
    "from": {
     "node": "pk_br",
     "pin": "true"
@@ -1262,7 +1317,7 @@
    }
   },
   {
-   "id": "w50",
+   "id": "w52",
    "from": {
     "node": "pk_lost",
     "pin": "then"
@@ -1273,7 +1328,7 @@
    }
   },
   {
-   "id": "w51",
+   "id": "w53",
    "from": {
     "node": "pk",
     "pin": "attacker"
@@ -1284,7 +1339,7 @@
    }
   },
   {
-   "id": "w52",
+   "id": "w54",
    "from": {
     "node": "pk_ct",
     "pin": "false"
@@ -1295,7 +1350,7 @@
    }
   },
   {
-   "id": "w53",
+   "id": "w55",
    "from": {
     "node": "pk",
     "pin": "attacker"
@@ -1306,7 +1361,7 @@
    }
   },
   {
-   "id": "w54",
+   "id": "w56",
    "from": {
     "node": "pk_by",
     "pin": "true"
@@ -1317,7 +1372,7 @@
    }
   },
   {
-   "id": "w55",
+   "id": "w57",
    "from": {
     "node": "pk",
     "pin": "attacker"
@@ -1328,7 +1383,7 @@
    }
   },
   {
-   "id": "w56",
+   "id": "w58",
    "from": {
     "node": "pk_pay",
     "pin": "then"
@@ -1339,68 +1394,46 @@
    }
   },
   {
-   "id": "w57",
-   "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_menu",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w58",
-   "from": {
-    "node": "sh",
-    "pin": "then"
-   },
-   "to": {
-    "node": "sh_menu",
-    "pin": "exec"
-   }
-  },
-  {
    "id": "w59",
    "from": {
-    "node": "sh",
-    "pin": "player"
+    "node": "rv",
+    "pin": "by"
    },
    "to": {
-    "node": "sh_m1",
+    "node": "rv_pay",
     "pin": "player"
    }
   },
   {
    "id": "w60",
    "from": {
-    "node": "sh_m1",
-    "pin": "out"
+    "node": "rv",
+    "pin": "then"
    },
    "to": {
-    "node": "sh_c1",
-    "pin": "a"
+    "node": "rv_pay",
+    "pin": "exec"
    }
   },
   {
    "id": "w61",
    "from": {
-    "node": "sh_c1",
-    "pin": "out"
+    "node": "sh",
+    "pin": "player"
    },
    "to": {
-    "node": "sh_b1",
-    "pin": "cond"
+    "node": "sh_menu",
+    "pin": "player"
    }
   },
   {
    "id": "w62",
    "from": {
-    "node": "sh_menu",
-    "pin": "c1"
+    "node": "sh",
+    "pin": "then"
    },
    "to": {
-    "node": "sh_b1",
+    "node": "sh_menu",
     "pin": "exec"
    }
   },
@@ -1411,40 +1444,40 @@
     "pin": "player"
    },
    "to": {
-    "node": "sh_g1",
+    "node": "sh_m1",
     "pin": "player"
    }
   },
   {
    "id": "w64",
    "from": {
-    "node": "sh_b1",
-    "pin": "true"
+    "node": "sh_m1",
+    "pin": "out"
    },
    "to": {
-    "node": "sh_g1",
-    "pin": "exec"
+    "node": "sh_c1",
+    "pin": "a"
    }
   },
   {
    "id": "w65",
    "from": {
-    "node": "sh",
-    "pin": "player"
+    "node": "sh_c1",
+    "pin": "out"
    },
    "to": {
-    "node": "sh_p1",
-    "pin": "player"
+    "node": "sh_b1",
+    "pin": "cond"
    }
   },
   {
    "id": "w66",
    "from": {
-    "node": "sh_g1",
-    "pin": "then"
+    "node": "sh_menu",
+    "pin": "c1"
    },
    "to": {
-    "node": "sh_p1",
+    "node": "sh_b1",
     "pin": "exec"
    }
   },
@@ -1455,7 +1488,7 @@
     "pin": "player"
    },
    "to": {
-    "node": "sh_n1",
+    "node": "sh_g1",
     "pin": "player"
    }
   },
@@ -1463,10 +1496,10 @@
    "id": "w68",
    "from": {
     "node": "sh_b1",
-    "pin": "false"
+    "pin": "true"
    },
    "to": {
-    "node": "sh_n1",
+    "node": "sh_g1",
     "pin": "exec"
    }
   },
@@ -1477,40 +1510,40 @@
     "pin": "player"
    },
    "to": {
-    "node": "sh_m2",
+    "node": "sh_p1",
     "pin": "player"
    }
   },
   {
    "id": "w70",
    "from": {
-    "node": "sh_m2",
-    "pin": "out"
+    "node": "sh_g1",
+    "pin": "then"
    },
    "to": {
-    "node": "sh_c2",
-    "pin": "a"
+    "node": "sh_p1",
+    "pin": "exec"
    }
   },
   {
    "id": "w71",
    "from": {
-    "node": "sh_c2",
-    "pin": "out"
+    "node": "sh",
+    "pin": "player"
    },
    "to": {
-    "node": "sh_b2",
-    "pin": "cond"
+    "node": "sh_n1",
+    "pin": "player"
    }
   },
   {
    "id": "w72",
    "from": {
-    "node": "sh_menu",
-    "pin": "c2"
+    "node": "sh_b1",
+    "pin": "false"
    },
    "to": {
-    "node": "sh_b2",
+    "node": "sh_n1",
     "pin": "exec"
    }
   },
@@ -1521,40 +1554,40 @@
     "pin": "player"
    },
    "to": {
-    "node": "sh_g2",
+    "node": "sh_m2",
     "pin": "player"
    }
   },
   {
    "id": "w74",
    "from": {
-    "node": "sh_b2",
-    "pin": "true"
+    "node": "sh_m2",
+    "pin": "out"
    },
    "to": {
-    "node": "sh_g2",
-    "pin": "exec"
+    "node": "sh_c2",
+    "pin": "a"
    }
   },
   {
    "id": "w75",
    "from": {
-    "node": "sh",
-    "pin": "player"
+    "node": "sh_c2",
+    "pin": "out"
    },
    "to": {
-    "node": "sh_p2",
-    "pin": "player"
+    "node": "sh_b2",
+    "pin": "cond"
    }
   },
   {
    "id": "w76",
    "from": {
-    "node": "sh_g2",
-    "pin": "then"
+    "node": "sh_menu",
+    "pin": "c2"
    },
    "to": {
-    "node": "sh_p2",
+    "node": "sh_b2",
     "pin": "exec"
    }
   },
@@ -1565,7 +1598,7 @@
     "pin": "player"
    },
    "to": {
-    "node": "sh_n2",
+    "node": "sh_g2",
     "pin": "player"
    }
   },
@@ -1573,10 +1606,10 @@
    "id": "w78",
    "from": {
     "node": "sh_b2",
-    "pin": "false"
+    "pin": "true"
    },
    "to": {
-    "node": "sh_n2",
+    "node": "sh_g2",
     "pin": "exec"
    }
   },
@@ -1587,40 +1620,40 @@
     "pin": "player"
    },
    "to": {
-    "node": "sh_m3",
+    "node": "sh_p2",
     "pin": "player"
    }
   },
   {
    "id": "w80",
    "from": {
-    "node": "sh_m3",
-    "pin": "out"
+    "node": "sh_g2",
+    "pin": "then"
    },
    "to": {
-    "node": "sh_c3",
-    "pin": "a"
+    "node": "sh_p2",
+    "pin": "exec"
    }
   },
   {
    "id": "w81",
    "from": {
-    "node": "sh_c3",
-    "pin": "out"
+    "node": "sh",
+    "pin": "player"
    },
    "to": {
-    "node": "sh_b3",
-    "pin": "cond"
+    "node": "sh_n2",
+    "pin": "player"
    }
   },
   {
    "id": "w82",
    "from": {
-    "node": "sh_menu",
-    "pin": "c3"
+    "node": "sh_b2",
+    "pin": "false"
    },
    "to": {
-    "node": "sh_b3",
+    "node": "sh_n2",
     "pin": "exec"
    }
   },
@@ -1631,40 +1664,40 @@
     "pin": "player"
    },
    "to": {
-    "node": "sh_g3",
+    "node": "sh_m3",
     "pin": "player"
    }
   },
   {
    "id": "w84",
    "from": {
-    "node": "sh_b3",
-    "pin": "true"
+    "node": "sh_m3",
+    "pin": "out"
    },
    "to": {
-    "node": "sh_g3",
-    "pin": "exec"
+    "node": "sh_c3",
+    "pin": "a"
    }
   },
   {
    "id": "w85",
    "from": {
-    "node": "sh",
-    "pin": "player"
+    "node": "sh_c3",
+    "pin": "out"
    },
    "to": {
-    "node": "sh_p3",
-    "pin": "player"
+    "node": "sh_b3",
+    "pin": "cond"
    }
   },
   {
    "id": "w86",
    "from": {
-    "node": "sh_g3",
-    "pin": "then"
+    "node": "sh_menu",
+    "pin": "c3"
    },
    "to": {
-    "node": "sh_p3",
+    "node": "sh_b3",
     "pin": "exec"
    }
   },
@@ -1675,12 +1708,56 @@
     "pin": "player"
    },
    "to": {
-    "node": "sh_n3",
+    "node": "sh_g3",
     "pin": "player"
    }
   },
   {
    "id": "w88",
+   "from": {
+    "node": "sh_b3",
+    "pin": "true"
+   },
+   "to": {
+    "node": "sh_g3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w89",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_p3",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w90",
+   "from": {
+    "node": "sh_g3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sh_p3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w91",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_n3",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w92",
    "from": {
     "node": "sh_b3",
     "pin": "false"
@@ -1733,23 +1810,23 @@
    "text": "Waves: hold out for 5. Between waves the fallen come back and everyone gets money.",
    "pos": {
     "x": 41,
-    "y": 1761
+    "y": 1190
    },
    "size": {
     "w": 3278,
-    "h": 1086
+    "h": 1088
    }
   },
   {
    "id": "c_deaths",
-   "text": "Deaths: the base falls when no defender is left; each zombie killed pays 300.",
+   "text": "Deaths: a fallen defender is downed for 25 s (hold USE on them for 3 s to bring them back: +200 for the helper); the base falls when no defender is standing; each zombie killed pays 300.",
    "pos": {
     "x": 41,
-    "y": 1190
+    "y": 2290
    },
    "size": {
-    "w": 2278,
-    "h": 559
+    "w": 2778,
+    "h": 838
    }
   },
   {
@@ -1757,7 +1834,7 @@
    "text": "The shop: say !shop (or slash shop). Each choice checks the money first.",
    "pos": {
     "x": 41,
-    "y": 2865
+    "y": 3146
    },
    "size": {
     "w": 2778,

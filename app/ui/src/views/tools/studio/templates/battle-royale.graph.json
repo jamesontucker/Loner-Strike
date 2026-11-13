@@ -4,7 +4,7 @@
  "mode": {
   "id": "royale_lite",
   "name": "Royale Lite",
-  "description": "Last one standing in a shrinking zone",
+  "description": "Last squad standing in a shrinking zone",
   "settings": [
    {
     "cvar": "mp_freeforall",
@@ -19,7 +19,7 @@
  "variables": [
   {
    "id": "alive",
-   "name": "Players left",
+   "name": "Squads left",
    "type": "number",
    "scope": "mode",
    "default": 0
@@ -51,7 +51,7 @@
    "type": "event.round_started",
    "pos": {
     "x": 65,
-    "y": 286
+    "y": 512
    },
    "params": {}
   },
@@ -60,7 +60,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 565,
-    "y": 251
+    "y": 477
    },
    "params": {
     "which": "alive"
@@ -71,7 +71,7 @@
    "type": "player.strip",
    "pos": {
     "x": 1065,
-    "y": 267
+    "y": 226
    },
    "params": {
     "knife": true
@@ -82,16 +82,71 @@
    "type": "comp.respawn_at",
    "pos": {
     "x": 1565,
-    "y": 243
+    "y": 282
    },
    "params": {}
+  },
+  {
+   "id": "rs_sqn",
+   "type": "math.random",
+   "pos": {
+    "x": 1565,
+    "y": 408
+   },
+   "params": {
+    "min": 1,
+    "max": 6,
+    "frac": false
+   }
+  },
+  {
+   "id": "rs_sq",
+   "type": "squad.set",
+   "pos": {
+    "x": 2065,
+    "y": 327
+   },
+   "params": {}
+  },
+  {
+   "id": "rs_nofall",
+   "type": "player.no_fall",
+   "pos": {
+    "x": 2565,
+    "y": 394
+   },
+   "params": {
+    "mode": "once"
+   }
+  },
+  {
+   "id": "rs_grav",
+   "type": "player.set_gravity",
+   "pos": {
+    "x": 3065,
+    "y": 467
+   },
+   "params": {
+    "gravity": 0.25
+   }
+  },
+  {
+   "id": "rs_up",
+   "type": "player.launch",
+   "pos": {
+    "x": 3565,
+    "y": 516
+   },
+   "params": {
+    "speed": 900
+   }
   },
   {
    "id": "rs_zone",
    "type": "flow.for_each_entity",
    "pos": {
     "x": 1065,
-    "y": 476
+    "y": 806
    },
    "params": {
     "by": "class",
@@ -103,7 +158,7 @@
    "type": "comp.start",
    "pos": {
     "x": 1565,
-    "y": 424
+    "y": 723
    },
    "params": {}
   },
@@ -112,7 +167,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 1565,
-    "y": 550
+    "y": 886
    },
    "params": {
     "text": "Loot up and stay in the zone. Last one standing wins!",
@@ -124,7 +179,7 @@
    "type": "var.set",
    "pos": {
     "x": 2065,
-    "y": 528
+    "y": 864
    },
    "params": {
     "var": "alive",
@@ -132,11 +187,44 @@
    }
   },
   {
+   "id": "rs_land",
+   "type": "timer.delay",
+   "pos": {
+    "x": 3065,
+    "y": 830
+   },
+   "params": {
+    "secs": 8
+   }
+  },
+  {
+   "id": "rs_all",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 3565,
+    "y": 819
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "rs_g1",
+   "type": "player.set_gravity",
+   "pos": {
+    "x": 4065,
+    "y": 819
+   },
+   "params": {
+    "gravity": 1
+   }
+  },
+  {
    "id": "rs_drops",
    "type": "timer.repeat",
    "pos": {
     "x": 2565,
-    "y": 550
+    "y": 886
    },
    "params": {
     "every": 60,
@@ -148,7 +236,7 @@
    "type": "flow.pick_entity",
    "pos": {
     "x": 3065,
-    "y": 539
+    "y": 982
    },
    "params": {
     "by": "class",
@@ -160,7 +248,7 @@
    "type": "comp.drop_call",
    "pos": {
     "x": 3565,
-    "y": 550
+    "y": 993
    },
    "params": {}
   },
@@ -169,27 +257,25 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 1429
+    "y": 1596
    },
    "params": {}
   },
   {
    "id": "pk_left",
-   "type": "game.count_alive",
+   "type": "squad.alive",
    "pos": {
     "x": 65,
-    "y": 1201
+    "y": 1884
    },
-   "params": {
-    "team": "none"
-   }
+   "params": {}
   },
   {
    "id": "pk_set",
    "type": "var.set",
    "pos": {
     "x": 565,
-    "y": 1406
+    "y": 1593
    },
    "params": {
     "var": "alive"
@@ -200,10 +286,10 @@
    "type": "msg.hud",
    "pos": {
     "x": 1065,
-    "y": 1363
+    "y": 1658
    },
    "params": {
-    "text": "Players left:",
+    "text": "Squads left:",
     "slot": "right",
     "seconds": 5
    }
@@ -213,7 +299,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 1170
+    "y": 1880
    },
    "params": {
     "op": "le",
@@ -225,7 +311,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 1275
+    "y": 1773
    },
    "params": {}
   },
@@ -234,7 +320,7 @@
    "type": "flow.pick_player",
    "pos": {
     "x": 2065,
-    "y": 1264
+    "y": 1762
    },
    "params": {
     "which": "alive"
@@ -245,7 +331,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 2565,
-    "y": 1431
+    "y": 1590
    },
    "params": {
     "text": "Winner:",
@@ -258,7 +344,7 @@
    "type": "player.add_frags",
    "pos": {
     "x": 3065,
-    "y": 1383
+    "y": 1638
    },
    "params": {
     "amount": 5
@@ -269,7 +355,7 @@
    "type": "player.get_team",
    "pos": {
     "x": 3065,
-    "y": 1164
+    "y": 1823
    },
    "params": {}
   },
@@ -278,7 +364,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 3565,
-    "y": 1292
+    "y": 1724
    },
    "params": {}
   },
@@ -287,7 +373,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 2565,
-    "y": 1226
+    "y": 1885
    },
    "params": {
     "winner": "draw"
@@ -298,7 +384,7 @@
    "type": "comp.on_zone_tick",
    "pos": {
     "x": 65,
-    "y": 766
+    "y": 1204
    },
    "params": {}
   },
@@ -307,7 +393,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 565,
-    "y": 764
+    "y": 1202
    },
    "params": {
     "text": "Get back in the zone!",
@@ -320,7 +406,7 @@
    "type": "comp.on_loot",
    "pos": {
     "x": 65,
-    "y": 951
+    "y": 1389
    },
    "params": {}
   },
@@ -329,7 +415,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 565,
-    "y": 938
+    "y": 1376
    },
    "params": {
     "text": "Crate opened."
@@ -407,6 +493,105 @@
    "id": "w7",
    "from": {
     "node": "rs_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "rs_sq",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "rs_sqn",
+    "pin": "out"
+   },
+   "to": {
+    "node": "rs_sq",
+    "pin": "squad"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "rs_spot",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_sq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "rs_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "rs_nofall",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "rs_sq",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_nofall",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "rs_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "rs_grav",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "rs_nofall",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_grav",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "rs_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "rs_up",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "rs_grav",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_up",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "rs_each",
     "pin": "then"
    },
    "to": {
@@ -415,7 +600,7 @@
    }
   },
   {
-   "id": "w8",
+   "id": "w17",
    "from": {
     "node": "rs_zone",
     "pin": "entity"
@@ -426,7 +611,7 @@
    }
   },
   {
-   "id": "w9",
+   "id": "w18",
    "from": {
     "node": "rs_zone",
     "pin": "each"
@@ -437,7 +622,7 @@
    }
   },
   {
-   "id": "w10",
+   "id": "w19",
    "from": {
     "node": "rs_zone",
     "pin": "then"
@@ -448,7 +633,7 @@
    }
   },
   {
-   "id": "w11",
+   "id": "w20",
    "from": {
     "node": "rs_msg",
     "pin": "then"
@@ -459,7 +644,40 @@
    }
   },
   {
-   "id": "w12",
+   "id": "w21",
+   "from": {
+    "node": "rs_land",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_all",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "rs_all",
+    "pin": "player"
+   },
+   "to": {
+    "node": "rs_g1",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "rs_all",
+    "pin": "each"
+   },
+   "to": {
+    "node": "rs_g1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w24",
    "from": {
     "node": "rs_alive",
     "pin": "then"
@@ -470,7 +688,18 @@
    }
   },
   {
-   "id": "w13",
+   "id": "w25",
+   "from": {
+    "node": "rs_drops",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_land",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w26",
    "from": {
     "node": "rs_drops",
     "pin": "tick"
@@ -481,7 +710,7 @@
    }
   },
   {
-   "id": "w14",
+   "id": "w27",
    "from": {
     "node": "rs_pick",
     "pin": "entity"
@@ -492,7 +721,7 @@
    }
   },
   {
-   "id": "w15",
+   "id": "w28",
    "from": {
     "node": "rs_pick",
     "pin": "then"
@@ -503,7 +732,7 @@
    }
   },
   {
-   "id": "w16",
+   "id": "w29",
    "from": {
     "node": "pk_left",
     "pin": "out"
@@ -514,7 +743,7 @@
    }
   },
   {
-   "id": "w17",
+   "id": "w30",
    "from": {
     "node": "pk",
     "pin": "then"
@@ -525,7 +754,7 @@
    }
   },
   {
-   "id": "w18",
+   "id": "w31",
    "from": {
     "node": "pk_left",
     "pin": "out"
@@ -536,7 +765,7 @@
    }
   },
   {
-   "id": "w19",
+   "id": "w32",
    "from": {
     "node": "pk_set",
     "pin": "then"
@@ -547,7 +776,7 @@
    }
   },
   {
-   "id": "w20",
+   "id": "w33",
    "from": {
     "node": "pk_left",
     "pin": "out"
@@ -558,7 +787,7 @@
    }
   },
   {
-   "id": "w21",
+   "id": "w34",
    "from": {
     "node": "pk_one",
     "pin": "out"
@@ -569,7 +798,7 @@
    }
   },
   {
-   "id": "w22",
+   "id": "w35",
    "from": {
     "node": "pk_hud",
     "pin": "then"
@@ -580,7 +809,7 @@
    }
   },
   {
-   "id": "w23",
+   "id": "w36",
    "from": {
     "node": "pk_br",
     "pin": "true"
@@ -591,7 +820,7 @@
    }
   },
   {
-   "id": "w24",
+   "id": "w37",
    "from": {
     "node": "pk_win",
     "pin": "player"
@@ -602,7 +831,7 @@
    }
   },
   {
-   "id": "w25",
+   "id": "w38",
    "from": {
     "node": "pk_win",
     "pin": "then"
@@ -613,7 +842,7 @@
    }
   },
   {
-   "id": "w26",
+   "id": "w39",
    "from": {
     "node": "pk_win",
     "pin": "player"
@@ -624,7 +853,7 @@
    }
   },
   {
-   "id": "w27",
+   "id": "w40",
    "from": {
     "node": "pk_name",
     "pin": "then"
@@ -635,7 +864,7 @@
    }
   },
   {
-   "id": "w28",
+   "id": "w41",
    "from": {
     "node": "pk_win",
     "pin": "player"
@@ -646,7 +875,7 @@
    }
   },
   {
-   "id": "w29",
+   "id": "w42",
    "from": {
     "node": "pk_team",
     "pin": "out"
@@ -657,7 +886,7 @@
    }
   },
   {
-   "id": "w30",
+   "id": "w43",
    "from": {
     "node": "pk_pts",
     "pin": "then"
@@ -668,7 +897,7 @@
    }
   },
   {
-   "id": "w31",
+   "id": "w44",
    "from": {
     "node": "pk_win",
     "pin": "none"
@@ -679,7 +908,7 @@
    }
   },
   {
-   "id": "w32",
+   "id": "w45",
    "from": {
     "node": "zt",
     "pin": "player"
@@ -690,7 +919,7 @@
    }
   },
   {
-   "id": "w33",
+   "id": "w46",
    "from": {
     "node": "zt",
     "pin": "then"
@@ -701,7 +930,7 @@
    }
   },
   {
-   "id": "w34",
+   "id": "w47",
    "from": {
     "node": "lo",
     "pin": "player"
@@ -712,7 +941,7 @@
    }
   },
   {
-   "id": "w35",
+   "id": "w48",
    "from": {
     "node": "lo",
     "pin": "then"
@@ -738,26 +967,26 @@
   },
   {
    "id": "c_start",
-   "text": "The round: everyone to a spread-out spot with a knife, the zone starts closing, a supply drop every minute.",
+   "text": "The round: everyone into a random squad of the six, dropped in from the sky over a spread-out spot (low gravity, no damage on landing, normal gravity after 8 s) with a knife; the zone starts closing; a supply drop every minute.",
    "pos": {
     "x": 41,
-    "y": 197
+    "y": 180
    },
    "size": {
-    "w": 3778,
-    "h": 509
+    "w": 4278,
+    "h": 958
    }
   },
   {
    "id": "c_end",
-   "text": "When one player is left, they win (5 points) and the round ends.",
+   "text": "When one squad is left, a player of it is named the winner (5 points) and the round ends.",
    "pos": {
     "x": 41,
-    "y": 1118
+    "y": 1544
    },
    "size": {
     "w": 3778,
-    "h": 469
+    "h": 475
    }
   },
   {
@@ -765,7 +994,7 @@
    "text": "Tips for players.",
    "pos": {
     "x": 41,
-    "y": 718
+    "y": 1156
    },
    "size": {
     "w": 778,

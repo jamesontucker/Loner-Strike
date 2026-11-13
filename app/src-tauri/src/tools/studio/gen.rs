@@ -486,6 +486,11 @@ impl<'a> Gen<'a> {
             "game.count_role" => format!("float(ls_count_role({}))", pawn_str(&name_text(self.text(n, def, "role")))),
             "comp.in_zone" => format!("(ls_components_running() && ls_zone_inside({}, {}) ? 1 : 0)", i("zone", "entity"), i("player", "player")),
             "creature.count" => "float(get_cvar_num(\"ls_creature_alive\"))".into(),
+            "player.is_downed" => format!("(g_lsgDown[lsg_slot({})] ? 1 : 0)", i("player", "player")),
+            "squad.get" => format!("float(g_lsgSquad[lsg_slot({})])", i("player", "player")),
+            "squad.alive" => "float(lsg_squads_alive())".into(),
+            "save.get" => format!("lsg_saved_get({}, {})", i("player", "player"), pawn_str(&name_text(self.text(n, def, "key")))),
+            "clock.left" => "lsg_clock_left()".into(),
             "comp.find" => format!("lsg_find({})", pawn_str(&name_text(self.text(n, def, "name")))),
             _ => "0".into(),
         };
@@ -522,7 +527,15 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     let has = |k: &str| kinds_live.contains(k);
     let timers: Vec<&str> = gen.live.iter().copied().filter(|id| matches!(v.defs[id].kind.as_str(), "timer.delay" | "timer.repeat" | "timer.countdown")).collect();
     let round_vars: Vec<(usize, &&Variable)> = gen.vars.iter().enumerate().filter(|(_, x)| x.reset == "round").collect();
-    let new_round = !timers.is_empty() || !round_vars.is_empty();
+    let any = |ks: &[&str]| ks.iter().any(|k| has(k));
+    let uses_down = any(&["player.down", "event.player_revived", "event.down_timeout"]) || pure_used(&gen, "player.is_downed");
+    let uses_squad = any(&["squad.set", "squad.friendly_fire"]) || pure_used(&gen, "squad.get") || pure_used(&gen, "squad.alive");
+    let uses_nofall = has("player.no_fall");
+    let uses_pre = has("event.player_about_hurt") || uses_nofall || uses_squad;
+    let uses_buy = any(&["buy.where", "buy.allow"]);
+    let uses_save = any(&["save.set", "save.add"]) || pure_used(&gen, "save.get");
+    let uses_clock = any(&["clock.set", "clock.add", "clock.pause", "event.time_up"]) || pure_used(&gen, "clock.left");
+    let new_round = !timers.is_empty() || !round_vars.is_empty() || uses_clock || uses_down;
 
     let mut o = Out { text: String::new(), lines: 0 };
     let mut spans = Vec::new();
@@ -535,6 +548,9 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     ));
     o.blank();
     o.line("#include <amxmodx>\n#include <cstrike>\n#include <fakemeta>\n#include <engine>\n#include <hamsandwich>\n#include <loner>");
+    if graph_uses(g, &["save.get", "save.set", "save.add"]) {
+        o.line("#include <nvault>");
+    }
     o.blank();
     o.line(format!("#define LSG_MODE {}\n#define LSG_CTX {}\n#define LSG_TXT {TXT}\n#define LSG_N {}\n#define LSG_TASK {TASK_BASE}", pawn_str(&id_text(&g.mode.id)), CTX + gen.slots.len(), gen.live.len().max(1)));
     o.line("stock g_lsgTxt[LSG_TXT][64]\nstock g_lsgOut[LSG_N]\nstock g_lsgLeft[LSG_N]\nstock const g_lsgYesNo[][] = { \"no\", \"yes\" }\nstock const g_lsgTeamName[][] = { \"no team\", \"Terrorists\", \"Counter-Terrorists\", \"Spectators\" }");
@@ -562,6 +578,12 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         o.blank();
     }
 
+    if has("event.player_about_hurt") || graph_uses(g, &["dmg.block", "dmg.scale", "dmg.set"]) {
+        o.line("stock Float:g_lsgDmg, bool:g_lsgDmgBlock");
+    }
+    if uses_nofall {
+        o.line("stock g_lsgNoFall[33]");
+    }
     // menus remember who was shown what
     for id in gen.live.iter().filter(|id| v.defs[*id].kind == "msg.menu") {
         o.line(format!("stock g_lsgM{}[33][LSG_CTX]", gen.index(id)));
@@ -600,6 +622,26 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
 
     o.line(HELPERS);
     o.blank();
+    if uses_down || uses_squad {
+        o.line(SQUADS);
+        o.blank();
+    }
+    if uses_down {
+        o.line(DOWNED);
+        o.blank();
+    }
+    if uses_buy {
+        o.line(BUYING);
+        o.blank();
+    }
+    if uses_save {
+        o.line(SAVED);
+        o.blank();
+    }
+    if uses_clock {
+        o.line(CLOCK);
+        o.blank();
+    }
 
     // registration
     let kinds: Vec<&EventKind> = EVENTS.iter().filter(|k| has(k.kind)).collect();
@@ -615,6 +657,18 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     }
     if new_round {
         o.line("\tregister_event(\"HLTV\", \"lsg_new_round\", \"a\", \"1=0\", \"2=0\")");
+    }
+    if uses_pre {
+        o.line("\tRegisterHamPlayer(Ham_TakeDamage, \"lsg_pre_damage\", 0)");
+    }
+    if uses_down {
+        o.line("\tset_task(0.25, \"lsg_revive_tick\", LSG_TASK - 1, _, _, \"b\")");
+    }
+    if uses_clock {
+        o.line("\tset_task(1.0, \"lsg_clock_tick\", LSG_TASK - 2, _, _, \"b\")");
+    }
+    if uses_save {
+        o.line("\tg_lsgVault = nvault_open(fmt(\"studio_%s\", LSG_MODE))");
     }
     // chat commands: one command each
     for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.chat_command") {
@@ -632,6 +686,12 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     o.blank();
     if new_round {
         o.line("// a new round: timers stop, round variables start again\npublic lsg_new_round()\n{\n\tlsg_stop_timers()");
+        if uses_clock {
+            o.line("\tlsg_clock_off()");
+        }
+        if uses_down {
+            o.line("\tfor (new p = 1; p <= MaxClients; p++)\n\t\tlsg_clear_down(p)");
+        }
         for (i, x) in &round_vars {
             let init = Gen::var_lit(&x.ty, Some(&x.default).filter(|d| !d.is_null()));
             let set = |r: String| if x.ty == "text" { format!("copy({r}, 63, {init})") } else { format!("{r} = {init}") };
@@ -647,13 +707,89 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         let i = gen.index(id);
         o.line(format!("public lsg_chat{i}(id)\n{{\n\tnew ctx[LSG_CTX]\n\tctx[0] = id // player\n\t{}(ctx)\n\treturn PLUGIN_CONTINUE\n}}\n", gen.fname(id)));
     }
+    if debug || uses_save || uses_clock {
+        o.line("public plugin_end()\n{");
+        if debug {
+            o.line("\tlsd_end()");
+        }
+        if uses_save {
+            o.line("\tif (g_lsgVault != INVALID_HANDLE)\n\t\tnvault_close(g_lsgVault)");
+        }
+        if uses_clock {
+            o.line("\tlsg_clock_off()");
+        }
+        o.line("}\n");
+    }
+    // the pre-damage hook: no fall damage, squad mates, Player About To Be Hurt
+    if uses_pre {
+        o.line("public lsg_pre_damage(victim, inflictor, attacker, Float:damage, bits)\n{\n\t#pragma unused inflictor");
+        if uses_nofall {
+            o.line("\tif ((bits & DMG_FALL) && victim >= 1 && victim <= MaxClients && g_lsgNoFall[victim])\n\t{\n\t\tif (g_lsgNoFall[victim] == 2)\n\t\t\tg_lsgNoFall[victim] = 0\n\t\treturn HAM_SUPERCEDE\n\t}");
+        }
+        if uses_squad {
+            o.line("\tif (!g_lsgSquadFF && attacker != victim && attacker >= 1 && attacker <= MaxClients && g_lsgSquad[victim] && g_lsgSquad[victim] == g_lsgSquad[attacker])\n\t\treturn HAM_SUPERCEDE");
+        }
+        let hurt: Vec<&&str> = gen.live.iter().filter(|id| v.defs[*id].kind == "event.player_about_hurt").collect();
+        if hurt.is_empty() {
+            o.line("\t#pragma unused damage\n\t#pragma unused bits\n\treturn HAM_IGNORED\n}\n");
+        } else {
+            o.line("\t// (saved and put back: damage done inside the flow comes back here)\n\tnew Float:was = g_lsgDmg, bool:wasBlock = g_lsgDmgBlock\n\tg_lsgDmg = damage\n\tg_lsgDmgBlock = false\n\tnew ctx[LSG_CTX]\n\tctx[0] = victim // victim\n\tctx[1] = attacker >= 1 && attacker <= MaxClients ? attacker : 0 // attacker\n\tctx[2] = _:damage // damage\n\tlsg_dmg_kind(bits, g_lsgTxt[0], 63) // kind");
+            for id in hurt {
+                o.line(format!("\t{}(ctx)", gen.fname(id)));
+            }
+            o.line("\tnew Float:now = g_lsgDmg, bool:block = g_lsgDmgBlock\n\tg_lsgDmg = was\n\tg_lsgDmgBlock = wasBlock\n\tif (block)\n\t\treturn HAM_SUPERCEDE\n\tif (now != damage)\n\t{\n\t\tSetHamParamFloat(4, now)\n\t\treturn HAM_HANDLED\n\t}\n\treturn HAM_IGNORED\n}\n");
+        }
+    }
+    // hooks the shared pieces call: revived, out, time up
+    if uses_down {
+        o.line("lsg_revived_hook(id, by)\n{\n\tnew ctx[LSG_CTX]\n\tctx[0] = id // player\n\tctx[1] = by // by");
+        let mut any_call = false;
+        for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.player_revived") {
+            o.line(format!("\t{}(ctx)", gen.fname(id)));
+            any_call = true;
+        }
+        if !any_call {
+            o.line("\t#pragma unused ctx");
+        }
+        o.line("}\n\nlsg_down_out_hook(id)\n{\n\tnew ctx[LSG_CTX]\n\tctx[0] = id // player");
+        let mut any_call = false;
+        for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.down_timeout") {
+            o.line(format!("\t{}(ctx)", gen.fname(id)));
+            any_call = true;
+        }
+        if !any_call {
+            o.line("\t#pragma unused ctx");
+        }
+        o.line("}\n");
+    }
+    if uses_clock {
+        o.line("lsg_time_up_hook()\n{\n\tnew ctx[LSG_CTX]");
+        let mut any_call = false;
+        for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.time_up") {
+            o.line(format!("\t{}(ctx)", gen.fname(id)));
+            any_call = true;
+        }
+        if !any_call {
+            o.line("\t#pragma unused ctx");
+        }
+        o.line("}\n");
+    }
     o.line("stock lsg_stop_timers()\n{\n\tfor (new i = 0; i < LSG_N; i++)\n\t\tremove_task(LSG_TASK + i)\n}");
     o.blank();
 
     // joining and leaving: per-player variables start again, and the events
     let player_vars: Vec<(usize, &&Variable)> = gen.vars.iter().enumerate().filter(|(_, x)| x.scope == "player").collect();
-    if !player_vars.is_empty() || has("event.player_joined") {
+    if !player_vars.is_empty() || has("event.player_joined") || uses_squad || uses_down || uses_nofall {
         o.line("public client_putinserver(id)\n{");
+        if uses_squad || uses_down {
+            o.line("\tg_lsgSquad[id] = 0");
+        }
+        if uses_down {
+            o.line("\tlsg_clear_down(id)");
+        }
+        if uses_nofall {
+            o.line("\tg_lsgNoFall[id] = 0");
+        }
         for (i, x) in &player_vars {
             let init = Gen::var_lit(&x.ty, Some(&x.default).filter(|d| !d.is_null()));
             if x.ty == "text" {
@@ -1023,7 +1159,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 b.line("\t}");
             }
         }
-        "func.define" | "event.chat_command" => {
+        "func.define" | "event.chat_command" | "event.player_about_hurt" | "event.player_revived" | "event.down_timeout" | "event.time_up" => {
             let e = exit("called");
             if !e.is_empty() {
                 b.line(e);
@@ -1053,7 +1189,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             then_line(&mut b, "then");
         }
-        "player.add_money" | "player.add_frags" | "player.give_item" | "player.drop_weapon" | "player.set_gravity" | "player.set_glow" | "player.set_model" | "player.kill" | "player.freeze" | "player.set_role" => {
+        "player.add_money" | "player.add_frags" | "player.launch" | "player.give_item" | "player.drop_weapon" | "player.set_gravity" | "player.set_glow" | "player.set_model" | "player.kill" | "player.freeze" | "player.set_role" => {
             let p = inp("player", "player");
             let (cond, msg, call) = match def.kind.as_str() {
                 "player.add_money" => (format!("!lsg_ok({p})"), "Nothing done: nobody there.", format!("lsg_add_money({p}, floatround({}))", inp("amount", "number"))),
@@ -1067,6 +1203,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 }),
                 "player.drop_weapon" => (format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", format!("engclient_cmd({p}, \"drop\")")),
                 "player.set_gravity" => (format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", format!("set_user_gravity({p}, {})", inp("gravity", "number"))),
+                "player.launch" => (format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", format!("lsg_launch({p}, {})", inp("speed", "number"))),
                 "player.set_glow" => (format!("!lsg_ok({p})"), "Nothing done: nobody there.", match gen.choice(n, def, "color") {
                     "off" => format!("set_user_rendering({p})"),
                     c => {
@@ -1166,12 +1303,95 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         "bot.goto" | "bot.hold" | "bot.follow" | "bot.release" => {
             let bot = inp("bot", "player");
             let call = match def.kind.as_str() {
-                "bot.goto" => format!("lsg_bot_goto({bot}, {})", pawn_str(&name_text(gen.text(n, def, "name")))),
+                "bot.goto" => format!("lsg_bot_goto({bot}, {}, {})", pawn_str(&name_text(gen.text(n, def, "name"))), gen.num(n, def, "secs").round() as i64),
                 "bot.hold" => format!("ls_bot_hold({bot}, max(floatround({}), 1))", inp("secs", "number")),
                 "bot.follow" => format!("ls_bot_follow({bot}, {}, {})", inp("who", "player"), gen.num(n, def, "secs").round() as i64),
                 _ => format!("ls_bot_release({bot})"),
             };
             check(&mut b, &format!("!ls_alive({bot}) || !is_user_bot({bot})"), "Nothing done: that player isn't a living bot.", &[format!("\t{call}"), exit("ordered")]);
+            then_line(&mut b, "then");
+        }
+        "dmg.block" | "dmg.scale" | "dmg.set" => {
+            let stmt = match def.kind.as_str() {
+                "dmg.block" => "\tg_lsgDmgBlock = true".to_string(),
+                "dmg.scale" => format!("\tg_lsgDmg = g_lsgDmg * floatmax({}, 0.0)", inp("factor", "number")),
+                _ => format!("\tg_lsgDmg = floatmax({}, 0.0)", inp("amount", "number")),
+            };
+            b.line(stmt);
+            if debug {
+                b.line(format!("\tif (g_lsgDmgBlock)\n\t\tlsd_exit({i}, \"blocked\")\n\telse\n\t\tlsd_exit({i}, fmt(\"%.1f\", g_lsgDmg))"));
+            }
+            then_line(&mut b, "then");
+        }
+        "player.no_fall" => {
+            let p = inp("player", "player");
+            let v2 = match gen.choice(n, def, "mode") { "on" => 1, "off" => 0, _ => 2 };
+            b.line(format!("\tg_lsgNoFall[lsg_slot({p})] = {v2}"));
+            let e = exit("set");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "player.down" => {
+            let p = inp("player", "player");
+            let (secs, hold, hp) = (float_lit(gen.num(n, def, "secs")), float_lit(gen.num(n, def, "hold")), gen.num(n, def, "health").round() as i64);
+            if debug {
+                b.line(format!("\tif (!lsg_make_down({p}, {secs}, {hold}, {hp}))\n\t\t{}\n\telse\n\t{}", err("Not downed: that player isn't dead (wire it from Player Killed)."), exit("downed")));
+            } else {
+                b.line(format!("\tlsg_make_down({p}, {secs}, {hold}, {hp})"));
+            }
+            then_line(&mut b, "then");
+        }
+        "squad.set" | "squad.friendly_fire" => {
+            if def.kind == "squad.set" {
+                let p = inp("player", "player");
+                check(&mut b, &format!("!lsg_ok({p})"), "Nothing done: nobody there.", &[format!("\tlsg_set_squad({p}, clamp(floatround({}), 0, 32))", inp("squad", "number")), exit("set")]);
+            } else {
+                b.line(format!("\tg_lsgSquadFF = bool:{}", bool01(&inp("on", "bool"))));
+                let e = exit("set");
+                if !e.is_empty() {
+                    b.line(e);
+                }
+            }
+            then_line(&mut b, "then");
+        }
+        "buy.where" | "buy.allow" => {
+            let stmt = if def.kind == "buy.where" {
+                match gen.choice(n, def, "where") {
+                    "zones" => "\tg_lsgBuyOff = false\n\tset_cvar_num(\"mp_buy_anywhere\", 0)",
+                    "nowhere" => "\tg_lsgBuyOff = true",
+                    _ => "\tg_lsgBuyOff = false\n\tset_cvar_num(\"mp_buy_anywhere\", 1)",
+                }
+                .to_string()
+            } else {
+                let code = ["all", "pistols", "no_snipers", "no_awp", "no_grenades", "no_mg", "armor", "knife"].iter().position(|k| *k == gen.choice(n, def, "allow")).unwrap_or(0);
+                format!("\tg_lsgBuyAllow = {code}")
+            };
+            b.line(stmt);
+            let e = exit("set");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "save.set" | "save.add" => {
+            let p = inp("player", "player");
+            let key = pawn_str(&name_text(gen.text(n, def, "key")));
+            let call = if def.kind == "save.set" { format!("lsg_saved_set({p}, {key}, {})", inp("value", "number")) } else { format!("lsg_saved_set({p}, {key}, lsg_saved_get({p}, {key}) + ({}))", inp("amount", "number")) };
+            check(&mut b, &format!("!lsg_ok({p}) || g_lsgVault == INVALID_HANDLE"), "Not saved: nobody there, or the store didn't open.", &[format!("\t{call}"), if debug { format!("\tlsd_exit({i}, fmt(\"%.1f\", lsg_saved_get({p}, {key})))") } else { String::new() }]);
+            then_line(&mut b, "then");
+        }
+        "clock.set" | "clock.add" | "clock.pause" => {
+            let stmt = match def.kind.as_str() {
+                "clock.set" => format!("\tlsg_clock_set({})", inp("secs", "number")),
+                "clock.add" => format!("\tlsg_clock_add({})", inp("secs", "number")),
+                _ => format!("\tlsg_clock_pause({})", if gen.choice(n, def, "do") == "resume" { 0 } else { 1 }),
+            };
+            b.line(stmt);
+            if debug {
+                b.line(format!("\tlsd_exit({i}, fmt(\"%.0f s left\", lsg_clock_left()))"));
+            }
             then_line(&mut b, "then");
         }
         "comp.drop_call" => {
@@ -1322,6 +1542,16 @@ fn text_args(text: &str, value: Option<Val>) -> String {
     }
 }
 
+/// Is a pure node of this kind used by something that runs?
+fn pure_used(gen: &Gen, kind: &str) -> bool {
+    gen.v.g.nodes.iter().any(|n| n.kind == kind)
+}
+
+/// Does the graph have a node of one of these kinds anywhere?
+fn graph_uses(g: &Graph, kinds: &[&str]) -> bool {
+    g.nodes.iter().any(|n| kinds.contains(&n.kind.as_str()))
+}
+
 /// The origin test for "at an entity": the one wired into At, else the one with the name.
 fn at_origin(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef) -> String {
     match gen.v.data_source(id, "at_ent") {
@@ -1442,12 +1672,20 @@ stock lsg_freeze(id, on)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
 }
 
-stock lsg_bot_goto(bot, const name[])
+stock lsg_bot_goto(bot, const name[], secs)
 {
 	new Float:o[3]
-	if (lsg_origin_of(name, o))
-		ls_bot_goto(bot, o)
+	if (!lsg_origin_of(name, o))
+		return
+	ls_bot_goto(bot, o)
+	// a timed goal: the bot is free again after it
+	remove_task(LSG_TASK - 100 - bot)
+	if (secs > 0)
+		set_task(float(secs), "lsg_bot_free", LSG_TASK - 100 - bot)
 }
+
+public lsg_bot_free(task)
+	ls_bot_release(LSG_TASK - 100 - task)
 
 stock Float:lsg_div(Float:a, Float:b)
 	return b == 0.0 ? 0.0 : a / b
@@ -1556,6 +1794,369 @@ stock lsg_creature(const kind[], const at[])
 	entity_set_origin(ent, o)
 	DispatchSpawn(ent)
 	return is_valid_ent(ent) && !(entity_get_int(ent, EV_INT_flags) & FL_KILLME) ? ent : 0
+}
+
+stock lsg_dmg_kind(bits, out[], len)
+{
+	if (bits & DMG_FALL)
+		copy(out, len, "fall")
+	else if (bits & DMG_BLAST)
+		copy(out, len, "blast")
+	else if (bits & DMG_BURN)
+		copy(out, len, "burn")
+	else if (bits & DMG_BULLET)
+		copy(out, len, "shot")
+	else if (bits & DMG_SLASH)
+		copy(out, len, "slash")
+	else
+		copy(out, len, "other")
+}
+
+stock lsg_launch(id, Float:speed)
+{
+	new Float:v[3]
+	pev(id, pev_velocity, v)
+	v[2] = speed
+	set_pev(id, pev_velocity, v)
+}
+
+stock lsg_round_time(secs)
+{
+	message_begin(MSG_ALL, get_user_msgid("RoundTime"))
+	write_short(max(secs, 0))
+	message_end()
+}"#;
+
+/// Squads (also the "same side" a revive needs).
+const SQUADS: &str = r#"stock g_lsgSquad[33], bool:g_lsgSquadFF
+
+stock lsg_set_squad(id, squad)
+{
+	g_lsgSquad[id] = squad
+	// the bots' brain: a squad is one side, both ways
+	if (!get_cvar_pointer("ls_mode_ver"))
+		return
+	if (squad > 0)
+	{
+		server_cmd("ls_mode role %d sq%d", id, squad)
+		server_cmd("ls_mode friend @sq%d @sq%d 1", squad, squad)
+	}
+	else
+		server_cmd("ls_mode role %d -", id)
+}
+
+stock bool:lsg_same_side(a, b)
+{
+	if (g_lsgSquad[a] || g_lsgSquad[b])
+		return g_lsgSquad[a] == g_lsgSquad[b]
+	return !get_cvar_num("mp_freeforall") && lsg_team(a) > 0 && lsg_team(a) == lsg_team(b)
+}
+
+stock lsg_squads_alive()
+{
+	new seen[34], n
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p))
+			continue
+		new key = g_lsgSquad[p] ? min(g_lsgSquad[p], 32) : 0
+		if (key == 0)
+			n++
+		else if (!seen[key])
+		{
+			seen[key] = 1
+			n++
+		}
+	}
+	return n
+}"#;
+
+/// Downed players and revives (Make Downed).
+const DOWNED: &str = r#"stock bool:g_lsgDown[33], Float:g_lsgDownAt[33], Float:g_lsgDownOrg[33][3], g_lsgRevBy[33], Float:g_lsgRevProg[33]
+stock Float:g_lsgDownSecs[33], Float:g_lsgDownHold[33], g_lsgDownHp[33]
+
+stock lsg_make_down(p, Float:secs, Float:hold, hp)
+{
+	if (!lsg_ok(p) || is_user_alive(p))
+		return 0
+	g_lsgDown[p] = true
+	g_lsgDownAt[p] = get_gametime()
+	pev(p, pev_origin, g_lsgDownOrg[p])
+	g_lsgRevBy[p] = 0
+	g_lsgRevProg[p] = 0.0
+	g_lsgDownSecs[p] = secs
+	g_lsgDownHold[p] = hold
+	g_lsgDownHp[p] = hp
+	ls_chat(0, "%s is down! Hold USE on them to bring them back.", lsg_name(p))
+	lsg_send_revive(p)
+	return 1
+}
+
+// the two nearest bots on the same side go and stand on the downed player (the brain's "use" goal)
+stock lsg_send_revive(victim)
+{
+	if (!get_cvar_pointer("ls_mode_ver"))
+		return
+	new near[2], Float:nd[2] = { 99999.0, 99999.0 }
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (p == victim || !is_user_alive(p) || !is_user_bot(p) || !lsg_same_side(p, victim))
+			continue
+		new Float:o[3]
+		pev(p, pev_origin, o)
+		new Float:d = get_distance_f(o, g_lsgDownOrg[victim])
+		if (d < nd[0])
+		{
+			nd[1] = nd[0]
+			near[1] = near[0]
+			nd[0] = d
+			near[0] = p
+		}
+		else if (d < nd[1])
+		{
+			nd[1] = d
+			near[1] = p
+		}
+	}
+	new left = max(floatround(g_lsgDownSecs[victim] - (get_gametime() - g_lsgDownAt[victim])), 1)
+	for (new i = 0; i < 2; i++)
+		if (near[i])
+			server_cmd("ls_mode goal %d use %.0f %.0f %.0f %d 75 %d 64", near[i], g_lsgDownOrg[victim][0], g_lsgDownOrg[victim][1], g_lsgDownOrg[victim][2], victim, left)
+}
+
+stock lsg_clear_down(p)
+{
+	if (g_lsgDown[p] && get_cvar_pointer("ls_mode_ver"))
+		server_cmd("ls_mode goal_clear all %d", p)
+	if (g_lsgRevBy[p] && lsg_ok(g_lsgRevBy[p]) && !is_user_bot(g_lsgRevBy[p]))
+		lsg_bar(g_lsgRevBy[p], 0)
+	g_lsgDown[p] = false
+	g_lsgRevBy[p] = 0
+	g_lsgRevProg[p] = 0.0
+}
+
+public lsg_revive_tick()
+{
+	new Float:now = get_gametime()
+	for (new d = 1; d <= MaxClients; d++)
+	{
+		if (!g_lsgDown[d])
+			continue
+		if (!is_user_connected(d) || is_user_alive(d))
+		{
+			lsg_clear_down(d)
+			continue
+		}
+		if (now - g_lsgDownAt[d] > g_lsgDownSecs[d])
+		{
+			ls_chat(0, "%s is out.", lsg_name(d))
+			lsg_clear_down(d)
+			lsg_down_out_hook(d)
+			continue
+		}
+		// someone on the same side close by: people hold USE, bots just stay there
+		new who = 0
+		for (new p = 1; p <= MaxClients; p++)
+		{
+			if (p == d || !is_user_alive(p) || !lsg_same_side(p, d))
+				continue
+			new Float:o[3]
+			pev(p, pev_origin, o)
+			if (get_distance_f(o, g_lsgDownOrg[d]) > 72.0)
+				continue
+			if (!is_user_bot(p) && !(pev(p, pev_button) & IN_USE))
+				continue
+			who = p
+			break
+		}
+		if (who != g_lsgRevBy[d])
+		{
+			if (g_lsgRevBy[d] && lsg_ok(g_lsgRevBy[d]) && !is_user_bot(g_lsgRevBy[d]))
+				lsg_bar(g_lsgRevBy[d], 0)
+			g_lsgRevBy[d] = who
+			g_lsgRevProg[d] = 0.0
+			if (who && !is_user_bot(who))
+				lsg_bar(who, floatround(g_lsgDownHold[d], floatround_ceil))
+		}
+		if (!who)
+			continue
+		g_lsgRevProg[d] += 0.25
+		if (g_lsgRevProg[d] >= g_lsgDownHold[d])
+			lsg_revive(d, who)
+	}
+}
+
+stock lsg_revive(d, by)
+{
+	new Float:o[3]
+	o = g_lsgDownOrg[d]
+	new hp = g_lsgDownHp[d]
+	lsg_clear_down(d)
+	ExecuteHamB(Ham_CS_RoundRespawn, d)
+	if (!is_user_alive(d))
+		return
+	// back where they fell, when a player fits there
+	engfunc(EngFunc_TraceHull, o, o, DONT_IGNORE_MONSTERS, HULL_HUMAN, d, 0)
+	if (!get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid))
+		engfunc(EngFunc_SetOrigin, d, o)
+	set_user_health(d, hp)
+	ls_chat(0, "%s brought %s back.", lsg_name(by), lsg_name(d))
+	lsg_revived_hook(d, by)
+}"#;
+
+/// Buying rules (Buying, Allow Buying): the cstrike module's buy forward.
+const BUYING: &str = r#"stock bool:g_lsgBuyOff, g_lsgBuyAllow
+
+stock bool:lsg_buy_ok(item)
+{
+	new bool:armor = item == CSI_VEST || item == CSI_VESTHELM
+	new bit = item >= 0 && item < 31 ? (1 << item) : 0
+	switch (g_lsgBuyAllow)
+	{
+		case 1: return armor || item >= CSI_DEFUSER || bool:(bit & (CSI_ALL_PISTOLS | CSI_ALL_GRENADES))
+		case 2: return !(bit & CSI_ALL_SNIPERRIFLES)
+		case 3: return item != CSI_AWP
+		case 4: return !(bit & CSI_ALL_GRENADES)
+		case 5: return item != CSI_M249
+		case 6: return armor
+		case 7: return false
+	}
+	return true
+}
+
+public CS_OnBuyAttempt(id, item)
+{
+	if (g_lsgBuyOff || !lsg_buy_ok(item))
+	{
+		client_print(id, print_center, "You can't buy that in this mode.")
+		return PLUGIN_HANDLED
+	}
+	return PLUGIN_CONTINUE
+}"#;
+
+/// Saved values (nvault, one store per mode): a player's SteamID, else their name.
+const SAVED: &str = r#"stock g_lsgVault = INVALID_HANDLE
+
+stock lsg_saved_key(id, const key[], out[], len)
+{
+	new who[44]
+	get_user_authid(id, who, charsmax(who))
+	// bots, LAN and pending ids are the same for everyone: their name instead
+	if (is_user_bot(id) || !who[0] || containi(who, "LAN") >= 0 || containi(who, "PENDING") >= 0 || containi(who, "BOT") >= 0 || equali(who, "VALVE_ID_LOOPBACK"))
+	{
+		get_user_name(id, who, charsmax(who))
+		formatex(out, len, "%s@name:%s", key, who)
+	}
+	else
+		formatex(out, len, "%s@%s", key, who)
+}
+
+stock Float:lsg_saved_get(id, const key[])
+{
+	if (g_lsgVault == INVALID_HANDLE || !lsg_ok(id))
+		return 0.0
+	new k[96], v[24]
+	lsg_saved_key(id, key, k, charsmax(k))
+	if (!nvault_get(g_lsgVault, k, v, charsmax(v)))
+		return 0.0
+	return str_to_float(v)
+}
+
+stock lsg_saved_set(id, const key[], Float:value)
+{
+	if (g_lsgVault == INVALID_HANDLE || !lsg_ok(id))
+		return
+	new k[96], v[24]
+	lsg_saved_key(id, key, k, charsmax(k))
+	formatex(v, charsmax(v), "%f", value)
+	nvault_set(g_lsgVault, k, v)
+}"#;
+
+/// The mode's own round clock (the game's time limit is held off while it runs).
+const CLOCK: &str = r#"stock bool:g_lsgClockOn, bool:g_lsgClockPaused, bool:g_lsgClockInf, Float:g_lsgClockEnd, Float:g_lsgClockLeft
+
+stock Float:lsg_clock_left()
+{
+	if (!g_lsgClockOn)
+		return 0.0
+	if (g_lsgClockPaused)
+		return g_lsgClockLeft
+	return floatmax(g_lsgClockEnd - get_gametime(), 0.0)
+}
+
+stock lsg_clock_set(Float:secs)
+{
+	// (rounds mustn't end on the game's own clock while ours runs: its "f" flag holds them)
+	if (!g_lsgClockInf && !get_cvar_num("mp_round_infinite"))
+	{
+		new cur[16]
+		get_cvar_string("mp_round_infinite", cur, charsmax(cur))
+		if (!cur[0] || equal(cur, "0"))
+		{
+			set_cvar_string("mp_round_infinite", "f")
+			g_lsgClockInf = true
+		}
+	}
+	g_lsgClockOn = true
+	g_lsgClockPaused = false
+	g_lsgClockEnd = get_gametime() + floatmax(secs, 1.0)
+	lsg_round_time(floatround(secs))
+}
+
+stock lsg_clock_add(Float:secs)
+{
+	if (!g_lsgClockOn)
+		return
+	if (g_lsgClockPaused)
+		g_lsgClockLeft = floatmax(g_lsgClockLeft + secs, 0.0)
+	else
+		g_lsgClockEnd += secs
+	lsg_round_time(floatround(lsg_clock_left()))
+}
+
+stock lsg_clock_pause(pause)
+{
+	if (!g_lsgClockOn || bool:pause == g_lsgClockPaused)
+		return
+	if (pause)
+	{
+		g_lsgClockLeft = lsg_clock_left()
+		g_lsgClockPaused = true
+	}
+	else
+	{
+		g_lsgClockEnd = get_gametime() + g_lsgClockLeft
+		g_lsgClockPaused = false
+	}
+	lsg_round_time(floatround(lsg_clock_left()))
+}
+
+stock lsg_clock_off()
+{
+	g_lsgClockOn = false
+	g_lsgClockPaused = false
+	if (g_lsgClockInf)
+	{
+		set_cvar_string("mp_round_infinite", "0")
+		g_lsgClockInf = false
+	}
+}
+
+public lsg_clock_tick()
+{
+	if (!g_lsgClockOn)
+		return
+	// paused: the round timer on screen keeps counting by itself, so it's set again each second
+	if (g_lsgClockPaused)
+	{
+		lsg_round_time(floatround(g_lsgClockLeft))
+		return
+	}
+	if (lsg_clock_left() <= 0.0)
+	{
+		g_lsgClockOn = false
+		lsg_time_up_hook()
+	}
 }"#;
 
 #[cfg(test)]
@@ -1612,7 +2213,8 @@ mod tests {
             let texts = d.outputs.iter().filter(|o| o.ty == "text").count();
             assert!(cells <= CTX && texts <= TXT, "{}", k.kind);
         }
-        for d in registry().nodes.iter().filter(|d| d.event && d.kind != "func.define" && d.kind != "event.chat_command") {
+        let special = ["func.define", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up"];
+        for d in registry().nodes.iter().filter(|d| d.event && !special.contains(&d.kind.as_str())) {
             assert!(event_kind(&d.kind).is_some(), "{} has no handler", d.kind);
         }
     }

@@ -46,7 +46,12 @@
   "Flow",
   "Functions",
   "Timers",
+  "Round clock",
   "Players",
+  "Damage",
+  "Squads",
+  "Buying",
+  "Saved",
   "Messages",
   "Game",
   "Scoring",
@@ -4087,7 +4092,7 @@
    "type": "bot.goto",
    "title": "Bot Go To",
    "category": "Bots",
-   "help": "Sends a bot to the entity with this name (it still fights on the way).",
+   "help": "Sends a bot to the entity with this name (it still fights on the way), for some seconds (0: until freed).",
    "inputs": [
     {
      "id": "exec",
@@ -4114,6 +4119,14 @@
      "label": "To the entity named",
      "kind": "name",
      "default": "spot1"
+    },
+    {
+     "id": "secs",
+     "label": "For (seconds, 0 until freed)",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 600
     }
    ]
   },
@@ -4422,6 +4435,834 @@
    "params": [],
    "pure": true,
    "needs": "creatures"
+  },
+  {
+   "type": "event.player_about_hurt",
+   "title": "Player About To Be Hurt",
+   "category": "Events",
+   "help": "Runs just before a player takes damage. Block, scale or set the damage here (it happens straight after this flow).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "victim",
+     "type": "player",
+     "label": "Victim"
+    },
+    {
+     "id": "attacker",
+     "type": "player",
+     "label": "Attacker"
+    },
+    {
+     "id": "damage",
+     "type": "number",
+     "label": "Damage"
+    },
+    {
+     "id": "kind",
+     "type": "text",
+     "label": "Kind"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "dmg.block",
+   "title": "Block Damage",
+   "category": "Damage",
+   "help": "The damage doesn't happen. Only in a Player About To Be Hurt flow.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "dmg.scale",
+   "title": "Scale Damage",
+   "category": "Damage",
+   "help": "Multiplies the damage (0.5 halves it). Only in a Player About To Be Hurt flow.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "factor",
+     "type": "number",
+     "label": "Times",
+     "param": "factor"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "factor",
+     "label": "Times",
+     "kind": "number",
+     "default": 0.5,
+     "min": 0,
+     "max": 100
+    }
+   ]
+  },
+  {
+   "type": "dmg.set",
+   "title": "Set Damage",
+   "category": "Damage",
+   "help": "Sets the damage to this. Only in a Player About To Be Hurt flow.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "amount",
+     "type": "number",
+     "label": "Damage",
+     "param": "amount"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "amount",
+     "label": "Damage",
+     "kind": "number",
+     "default": 10,
+     "min": 0,
+     "max": 10000
+    }
+   ]
+  },
+  {
+   "type": "player.no_fall",
+   "title": "No Fall Damage",
+   "category": "Players",
+   "help": "Stops a player taking fall damage: always, or just for their next landing (a drop-in).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "mode",
+     "label": "When",
+     "kind": "choice",
+     "default": "once",
+     "choices": [
+      [
+       "once",
+       "Their next landing"
+      ],
+      [
+       "on",
+       "Always"
+      ],
+      [
+       "off",
+       "Off again"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "player.down",
+   "title": "Make Downed",
+   "category": "Players",
+   "help": "A player who just died lies downed where they fell: a teammate (or squad mate) holding USE on them for a few seconds brings them back; if nobody does in time they're out. Bots come to help.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Out after (seconds)",
+     "kind": "number",
+     "default": 30,
+     "min": 3,
+     "max": 300
+    },
+    {
+     "id": "hold",
+     "label": "Hold USE (seconds)",
+     "kind": "number",
+     "default": 3,
+     "min": 1,
+     "max": 20
+    },
+    {
+     "id": "health",
+     "label": "Health when revived",
+     "kind": "number",
+     "default": 50,
+     "min": 1,
+     "max": 255
+    }
+   ]
+  },
+  {
+   "type": "player.is_downed",
+   "title": "Is Downed",
+   "category": "Players",
+   "help": "Is the player downed (waiting for a revive)?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Downed"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "event.player_revived",
+   "title": "Player Revived",
+   "category": "Events",
+   "help": "Runs when a downed player is brought back.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "by",
+     "type": "player",
+     "label": "Revived by"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.down_timeout",
+   "title": "Downed Player Out",
+   "category": "Events",
+   "help": "Runs when nobody revived a downed player in time.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "squad.set",
+   "title": "Set Squad",
+   "category": "Squads",
+   "help": "Puts a player in a squad (1 to 32; 0 none). Squad mates are on one side for the bots, and can't hurt each other unless squad friendly fire is on.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "squad",
+     "type": "number",
+     "label": "Squad",
+     "param": "squad"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "squad",
+     "label": "Squad",
+     "kind": "number",
+     "default": 1,
+     "min": 0,
+     "max": 32
+    }
+   ]
+  },
+  {
+   "type": "squad.get",
+   "title": "Squad Of",
+   "category": "Squads",
+   "help": "The squad a player is in (0 none).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Squad"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "squad.alive",
+   "title": "Squads Left",
+   "category": "Squads",
+   "help": "How many squads still have someone alive (a living player in no squad counts as one).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Squads"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "squad.friendly_fire",
+   "title": "Squad Friendly Fire",
+   "category": "Squads",
+   "help": "Whether squad mates can hurt each other.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "on",
+     "type": "bool",
+     "label": "On",
+     "param": "on"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "On",
+     "kind": "bool",
+     "default": false
+    }
+   ]
+  },
+  {
+   "type": "buy.where",
+   "title": "Buying",
+   "category": "Buying",
+   "help": "Where players can buy: anywhere, only in buy zones, or nowhere.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "where",
+     "label": "Where",
+     "kind": "choice",
+     "default": "anywhere",
+     "choices": [
+      [
+       "anywhere",
+       "Anywhere"
+      ],
+      [
+       "zones",
+       "Only in buy zones"
+      ],
+      [
+       "nowhere",
+       "Nowhere (buying off)"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "buy.allow",
+   "title": "Allow Buying",
+   "category": "Buying",
+   "help": "Lets players buy only some things (or everything again).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "allow",
+     "label": "What",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "Everything"
+      ],
+      [
+       "pistols",
+       "Pistols, armor and grenades"
+      ],
+      [
+       "no_snipers",
+       "Everything but sniper rifles"
+      ],
+      [
+       "no_awp",
+       "Everything but the AWP"
+      ],
+      [
+       "no_grenades",
+       "Everything but grenades"
+      ],
+      [
+       "no_mg",
+       "Everything but machine guns"
+      ],
+      [
+       "armor",
+       "Armor only"
+      ],
+      [
+       "knife",
+       "Nothing (knives)"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "save.get",
+   "title": "Saved Value",
+   "category": "Saved",
+   "help": "A number kept for this player across maps and restarts (0 until set). Each mode has its own.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Value"
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Name",
+     "kind": "name",
+     "default": "wins"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "save.set",
+   "title": "Save Value",
+   "category": "Saved",
+   "help": "Keeps a number for this player across maps and restarts.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "value",
+     "type": "number",
+     "label": "Value",
+     "param": "value"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Name",
+     "kind": "name",
+     "default": "wins"
+    },
+    {
+     "id": "value",
+     "label": "Value",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    }
+   ]
+  },
+  {
+   "type": "save.add",
+   "title": "Add To Saved",
+   "category": "Saved",
+   "help": "Adds to a saved number (a minus takes away).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "amount",
+     "type": "number",
+     "label": "Amount",
+     "param": "amount"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Name",
+     "kind": "name",
+     "default": "wins"
+    },
+    {
+     "id": "amount",
+     "label": "Amount",
+     "kind": "number",
+     "default": 1,
+     "min": -100000,
+     "max": 100000
+    }
+   ]
+  },
+  {
+   "type": "clock.set",
+   "title": "Set Round Clock",
+   "category": "Round clock",
+   "help": "Runs the mode's own round clock: this many seconds, shown on everyone's round timer. When it reaches 0, Round Time Up runs (the game's own time limit is switched off while it runs).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 120,
+     "min": 1,
+     "max": 7200
+    }
+   ]
+  },
+  {
+   "type": "clock.add",
+   "title": "Add Round Time",
+   "category": "Round clock",
+   "help": "Adds seconds to the mode's round clock (a minus takes away).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 30,
+     "min": -7200,
+     "max": 7200
+    }
+   ]
+  },
+  {
+   "type": "clock.pause",
+   "title": "Pause Round Clock",
+   "category": "Round clock",
+   "help": "Stops or restarts the mode's round clock.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "do",
+     "label": "Do",
+     "kind": "choice",
+     "default": "pause",
+     "choices": [
+      [
+       "pause",
+       "Pause"
+      ],
+      [
+       "resume",
+       "Resume"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "clock.left",
+   "title": "Round Time Left",
+   "category": "Round clock",
+   "help": "Seconds left on the mode's round clock (0 when it isn't running).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Seconds"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.launch",
+   "title": "Launch Up",
+   "category": "Players",
+   "help": "Throws a living player straight up (with low gravity and No Fall Damage, a drop-in from the sky).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "speed",
+     "type": "number",
+     "label": "Speed",
+     "param": "speed"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "speed",
+     "label": "Speed",
+     "kind": "number",
+     "default": 900,
+     "min": 50,
+     "max": 3000
+    }
+   ]
+  },
+  {
+   "type": "event.time_up",
+   "title": "Round Time Up",
+   "category": "Events",
+   "help": "Runs when the mode's round clock reaches 0.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "event": true
   },
   {
    "type": "flow.reroute",

@@ -774,6 +774,10 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
             p.push(Problem::warn(Some(&n.id), "Nothing runs this node: wire an event's flow into it."));
         }
         let Some(events) = reached.get(n.id.as_str()) else { continue };
+        // damage can only be changed while it's about to happen
+        if def.kind.starts_with("dmg.") && events.iter().any(|(ev, timed)| *timed || v.defs.get(ev).map(|d| d.kind.as_str()) != Some("event.player_about_hurt")) {
+            p.push(Problem::err(Some(&n.id), format!("{} only works in a Player About To Be Hurt flow, before any Delay, Repeat or Countdown.", def.title)));
+        }
         for ip in def.inputs.iter().filter(|i| i.ty != "exec") {
             for (src, spin) in v.flow_values(&n.id, &ip.id) {
                 let Some(sdef) = v.defs.get(src) else { continue };
@@ -1154,6 +1158,18 @@ mod tests {
             json!([e("e1","k","then","d","exec"), e("e2","d","then","h","exec"), e("e3","k","victim","h","player")]),
         );
         assert!(validate(&g).is_empty(), "{:?}", msgs(&validate(&g)));
+    }
+
+    #[test]
+    fn damage_nodes_only_before_the_damage() {
+        let g = graph(
+            json!([{"id":"h","type":"event.player_about_hurt"},{"id":"s","type":"dmg.scale"},{"id":"k","type":"event.player_killed"},{"id":"b","type":"dmg.block"},{"id":"d","type":"timer.delay"},{"id":"x","type":"dmg.set"}]),
+            json!([e("e1","h","then","s","exec"), e("e2","k","then","b","exec"), e("e3","s","then","d","exec"), e("e4","d","then","x","exec")]),
+        );
+        let m = msgs(&validate(&g));
+        assert!(!m.iter().any(|m| m.starts_with("error:s:")), "{m:?}");
+        assert!(m.iter().any(|m| m.starts_with("error:b:") && m.contains("only works in a Player About To Be Hurt")), "{m:?}");
+        assert!(m.iter().any(|m| m.starts_with("error:x:") && m.contains("before any Delay")), "{m:?}");
     }
 
     #[test]
