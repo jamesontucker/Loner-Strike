@@ -1330,3 +1330,50 @@ one line, added the name at the end and removed the one regular.
   or the file removed, the two plain errors.
 - Note: `tools::assets::tests::custom_wad_writes` failed once in a full run and passed alone and on the rerun
   (H's test, looks flaky under load).
+
+### Agent W1: game mode components (gm_components) — built, 2026-11-12
+**Built** (all of it in docs/COMPONENTS.md: every component's keys, events, natives, bot meaning, example)
+- `plugins/scripting/gm_components.sma`: the 17 first-cut components of GAMEMODES-PLAN §12 A (respawn point,
+  weapon spawner, damage zone, timed door, trigger trap, capture point, safe zone + zone shrinker, loot container,
+  supply drop, barricade, wave spawner, extraction zone, checkpoint, moving platform, player class, meeting point).
+  The classname trick (ls_* → info_target while the map loads, keys kept), map packs, run-time creation, hold-USE
+  actions with BarTime, round resets, `target` firing, map logic setting components off. One file, not
+  `components/*.inc` as the plan said: setup copies and compiles a single `<name>.sma` per plugin.
+- `plugins/scripting/include/ls_components.inc`: ~75 natives + 33 forwards, `#pragma reqlib ls_components`.
+- Client side: one HUD sync object (status line at y 0.70, 2 lines max), rare DHUD, BarTime/BarTime2, StatusIcon
+  `rescue`, RoundTime for the zone, ScreenFade, unreliable beam rings ≤1/s within a per-player budget
+  (`ls_comp_beams 40`), a zone pulse, crate beacons, tier glow; radar dot trick behind `ls_comp_radar 0` (unverified).
+- Bots: `ls_mode` lines exactly as agreed with W2 (avoid cost 1-10/-1, goal radius as 9th arg, tags `c<ent>`), only
+  when `ls_mode_ver` exists; otherwise `ls_bot <i> goto` for a third of the bots (`ls_comp_bot_fallback`). Also
+  sends `platform c<ent> <train> <moving> x y z` and `profile <bot> <name>` (W2: two extra verbs; ignore if unwanted).
+- Editor: `app/src-tauri/src/editor/lonerstrike.fgd` (17 classes, all parse with typed keys) loaded through P2's
+  `EXTRA_FGDS` (the one line), and `editor/components.json` (groups, titles, blurbs, visual kind, radius/size/badge
+  keys, colours, needs_nav) for a drag-in library panel.
+- `plugins/configs/gamemodes/loot.ini` (tables default/pistols/smgs/rifles/snipers/gear/drop; `<mode>.loot.ini`
+  replaces tables) and `plugins/configs/gamemodes/components/de_dust2.ini` (a test pack). Packs load from
+  `configs/gamemodes/components/` (shipped) then `configs/components/` (the server's own), `<map>.ini` and
+  `<map>.<mode>.ini`. `ls_comp_spawn` / `ls_comp_save` build packs in game.
+- Compiles with the bundled amxxpc 1.10, no warnings.
+
+**Tested** on a dedicated CrossOver HLDS (my own APFS clone of a sim server, -nomaster, removed afterwards), with
+bots and two throwaway test plugins driving the natives: de_dust2 (capture/contest/ticks, zone shrink + damage,
+spawner, crates opened by bots, supply drop announce/land/open, barricade, extraction, class, waves respawning dead
+T bots and clearing, round resets) and cs_assault (door by brush model, trap, checkpoints + lap, meeting + vote +
+ejection). The first run crashed the server (`PF_setmodel_I: no precache: models/w_glock18.mdl`, a dialog on the
+desktop — sorry): fixed by precaching every weapon w_ model and our models in plugin_precache and only ever calling
+SetModel with a model this plugin precached (`set_model()` falls back to a loaded default).
+
+**Requests**
+- (Coordinator / setup) Add `gm_components` to `OUR_PLUGINS` in `setup/core.rs` (not ALWAYS_ON: modes list it in
+  their `<id>.plugins.ini`). `configs/gamemodes/loot.ini` and `components/` ship through the existing config copy.
+- (R, loner.inc) `#include <ls_components>` from loner.inc, and let loner.inc's native filter pass natives from
+  library `ls_components` (`ls_comp_*`, `ls_cp_*`, `ls_zone_*`, `ls_door_*`, `ls_trap_*`, `ls_spawner_*`, `ls_loot_*`,
+  `ls_drop_call`, `ls_barricade_*`, `ls_wave_*`, `ls_extract*`, `ls_checkpoint_*`, `ls_platform_*`, `ls_class_*`,
+  `ls_meeting_*`, `ls_respawn_*`, `ls_give_item`) and `ls_components` in the module filter, so mode plugins load
+  without gm_components. The Plugin Studio's embedded include dir needs ls_components.inc beside loner.inc.
+  None of my names clash with loner.inc's stocks.
+- (P2) A Components panel can read `editor/components.json`; the keys/forms come from the FGD.
+- (W2) Brain side as agreed; I sent nothing to the fork.
+
+**Left**: platforms not tried in game; the look of rings/HUD on a real client (screenshots); radar dot trick;
+`ls_mode` against W2's brain build; the Mode Kit (gm_modekit) roles for `ls_respawn_point role=`.
