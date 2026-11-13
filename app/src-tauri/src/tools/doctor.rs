@@ -394,6 +394,8 @@ pub fn diagnose(m: &MapFile) -> Value {
 
 /// Writes the map's .res: what it needs, plus the old file's lines for files that exist.
 pub fn write_res(m: &MapFile) -> Result<Value, String> {
+    // P5: under test (the editor's Playtest writes one), never into the real game
+    super::studio::guard_real_game(&m.hl)?;
     let f = Finder::default();
     let (ents, _) = read_map_parts(&m.bsp).map_err(|e| format!("The map file can't be read: {e}"))?;
     let files = file_checks(&f, &m.hl, &m.game, &m.name, &ents);

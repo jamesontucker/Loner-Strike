@@ -44,7 +44,10 @@ test("a missing sprite: live checks, Project panel, and Playtest refuses", async
   await page.getByRole("button", { name: "Project", exact: true }).or(page.getByRole("tab", { name: "Project" })).first().click();
   await expect(page.getByRole("group", { name: "The map's models, sprites and sounds" })).toContainText("isn't on this computer");
   await expect(page.locator(".ed-project-file", { hasText: SPRITE })).toContainText("Missing");
-  // Playtest (compile and put in the game) refuses before anything else
+  // Playtest (compile and put in the game) refuses before anything else. (It can't reach the real
+  // game anyway: under test the compile, map install and .res routes refuse a real Half-Life
+  // install, studio::guard_real_game; a spec that really installs needs the dev server's
+  // LS_TEST_GAME on a copy, e.g. a sim server's folder.)
   const pt = await api(page, "/api/tools/compile/start", { preset: "fast", install: true });
   expect(pt.error).toContain("Playtest stopped");
   expect(pt.error).toContain(SPRITE);

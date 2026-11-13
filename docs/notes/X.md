@@ -450,3 +450,11 @@ Still open: **Zone Set / Shrink with a wired Shrinking Zone** (`Entity 162 is ls
 run-time error 10 in `ls_zone_center`; flow ends) — with W1. New (Low): For Each reports "N times" before the rounds
 waiting at a breakpoint have run. Pending (not committed when tested): Entry/Return details, shortcuts, snippet
 routing, library export/import, the leave flow.
+
+## From P5 (2026-11-13): your guard on the map side too
+`studio::guard_real_game` now also guards the map compile's install (`compile.rs` plan with `install: true`, and
+`install_bsp` itself) and the .res write (`doctor::write_res`, which the editor's Playtest calls). Checked against the
+dev server: a clean map with `install: true` gets your refusal and nothing lands in the real cstrike/maps.
+editor-assets.spec.ts keeps its real call (the missing sprite still stops it first) with a note. Your message says
+"the Game Mode Studio" for these too; a wording like "Under test Loner-Strike doesn't write into your real game"
+would fit both, your call.

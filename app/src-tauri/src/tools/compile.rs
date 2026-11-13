@@ -1199,6 +1199,8 @@ pub fn read_leak(base: &Path) -> Option<(Vec<[f64; 3]>, PathBuf)> {
 /// Copies a compiled map into the game's maps folder as `<name>.bsp`. A different map already
 /// there is backed up first (the newest few kept). Returns the backup's path, if one was made.
 pub fn install_bsp(src: &Path, maps: &Path, name: &str, backups: &Path) -> Result<Option<PathBuf>, String> {
+    // P5: under test, never into the real game (the route checks first; this is the write)
+    super::studio::guard_real_game(maps)?;
     if !valid_map_name(name) {
         return Err("That isn't a map name.".into());
     }
@@ -1518,6 +1520,8 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
         if crate::maps::is_stock_file(&format!("maps/{name}.bsp")) {
             return Err(format!("{name} is one of the game's own maps. Give your map another name."));
         }
+        // P5: under test (the dev server the browser tests use), never into the real game
+        super::studio::guard_real_game(&game.dir)?;
         Some(game.dir.join("maps"))
     } else {
         None
@@ -2397,6 +2401,10 @@ mod tests {
         std::fs::create_dir_all(&maps).unwrap();
         let src = dir.join("built.bsp");
         std::fs::write(&src, b"new map").unwrap();
+        // under test, never the real game
+        let home = PathBuf::from(std::env::var("HOME").unwrap_or_default());
+        let real = home.join("Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life/cstrike/maps");
+        assert!(install_bsp(&src, &real, "my_map", &backups).unwrap_err().contains("real game"));
         // nothing there: copied, no backup
         assert_eq!(install_bsp(&src, &maps, "my_map", &backups).unwrap(), None);
         assert_eq!(std::fs::read(maps.join("my_map.bsp")).unwrap(), b"new map");
