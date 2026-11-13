@@ -727,40 +727,66 @@ pub fn wad_problem(path: &Path) -> Option<String> {
     if n == 0 {
         return Some("it's empty (0 bytes)".into());
     }
-    if n < 12 || !(head.starts_with(b"WAD3") || head.starts_with(b"WAD2")) {
+    if n < 12 || !head.starts_with(b"WAD3") {
         return Some("it isn't a texture file (WAD3)".into());
     }
     None
 }
 
-/// Where a WAD the map lists is on this computer: the path as written when it's there
-/// (absolute, or relative to the map's folder, `\` or `/`), then its name in the map's
-/// folder, then in the game's folders (`in_game`).
-pub fn find_wad(listed: &str, folder: Option<&Path>, in_game: &dyn Fn(&str) -> Option<PathBuf>) -> Option<PathBuf> {
-    let unix = listed.trim().replace('\\', "/");
-    let base = unix.rsplit('/').next().unwrap_or(&unix).to_string();
-    if base.is_empty() {
+/// A network path (UNC `\\host\share`, `//host/share`, `\\?\UNC\...`): never touched, so a map from the
+/// internet can't make Windows connect out (and hand over the player's credentials).
+pub fn is_network_path(s: &str) -> bool {
+    let t = s.trim();
+    t.starts_with("\\\\") || t.starts_with("//") || t.starts_with("\\/") || t.starts_with("/\\") || t.to_ascii_lowercase().contains("\\?\\unc")
+}
+
+/// `p` with links resolved, when it's inside one of `roots` (also resolved); else None.
+fn contained(p: &Path, roots: &[PathBuf]) -> Option<PathBuf> {
+    let real = std::fs::canonicalize(p).ok()?;
+    let ok = roots.iter().filter_map(|r| std::fs::canonicalize(r).ok()).any(|r| real.starts_with(&r));
+    (ok && real.is_file()).then_some(real)
+}
+
+/// Where a WAD the map lists is on this computer. The list comes from map files that may be
+/// from the internet, so only these places are ever used: the map's folder (`folder`) and the
+/// known WAD places (`roots`: the game's folders). In order: an absolute path that's inside
+/// them; a path relative to the map's folder (no `..`) that stays inside it; the name in the
+/// map's folder; the name in the game's folders (`in_game`). Network paths are refused.
+/// Links are resolved before every check; the result is the real file.
+pub fn find_wad(listed: &str, folder: Option<&Path>, roots: &[PathBuf], in_game: &dyn Fn(&str) -> Option<PathBuf>) -> Option<PathBuf> {
+    if is_network_path(listed) {
         return None;
     }
-    let as_written = Path::new(&unix);
-    // (a Windows drive path like C:/... means nothing here)
-    if as_written.is_absolute() && as_written.is_file() {
-        return Some(as_written.to_path_buf());
+    let unix = listed.trim().replace('\\', "/");
+    let base = unix.rsplit('/').next().unwrap_or(&unix).to_string();
+    if base.is_empty() || base == "." || base == ".." || base.contains(':') || base.contains('\0') {
+        return None;
     }
+    let mut known: Vec<PathBuf> = roots.to_vec();
     if let Some(dir) = folder {
-        let looks_relative = !unix.contains(':') && !unix.starts_with('/');
-        if looks_relative {
-            let p = dir.join(&unix);
-            if p.is_file() {
+        known.push(dir.to_path_buf());
+    }
+    let as_written = Path::new(&unix);
+    // an absolute path counts only inside the known places (a Windows drive path means nothing here)
+    if as_written.is_absolute() {
+        if let Some(p) = contained(as_written, &known) {
+            return Some(p);
+        }
+    } else if let Some(dir) = folder {
+        let relative = !unix.contains(':') && as_written.components().all(|c| matches!(c, std::path::Component::Normal(_) | std::path::Component::CurDir));
+        if relative {
+            if let Some(p) = contained(&dir.join(as_written), &[dir.to_path_buf()]) {
                 return Some(p);
             }
         }
+    }
+    if let Some(dir) = folder {
         let finder = crate::mapcopy::Finder::default();
-        if let Some(p) = finder.find(dir, &base) {
+        if let Some(p) = finder.find(dir, &base).and_then(|p| contained(&p, &[dir.to_path_buf()])) {
             return Some(p);
         }
     }
-    in_game(&base)
+    in_game(&base).and_then(|p| contained(&p, roots))
 }
 
 /// The map's WADs as real files for the compiler. `find` gets each name as the map lists it.
@@ -1540,7 +1566,7 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
     let finder = crate::mapcopy::Finder::default();
     // beside the map's project (or the file it came from) first, then the game's folders
     let in_game = |base: &str| -> Option<PathBuf> { p.wad_dirs.iter().find_map(|d| finder.find(d, base)) };
-    let find = |name: &str| -> Option<PathBuf> { find_wad(name, p.folder.as_deref(), &in_game) };
+    let find = |name: &str| -> Option<PathBuf> { find_wad(name, p.folder.as_deref(), &p.wad_dirs, &in_game) };
     let wads = resolve_wads(&p.doc.world.wads, &find, &layout, &dir.join("wads"))?;
     if let Some(e) = wad_errors(&wads, p.folder.is_some()) {
         return Err(e);
@@ -2062,6 +2088,7 @@ mod tests {
         std::fs::write(project.join("gunshop.wad"), b"").unwrap();
         std::fs::write(game.join("halflife.wad"), wad3).unwrap();
         let in_game = |b: &str| Some(game.join(b)).filter(|p| p.is_file());
+        let roots = vec![game.clone()];
         // as Hammer writes them: someone else's drive, a path relative to the project, a stock one
         let names: Vec<String> = vec![
             "C:\\Users\\mapper\\regamedll_zedit.wad".into(),
@@ -2071,16 +2098,17 @@ mod tests {
             "nowhere.wad".into(),
         ];
         let folder = Some(project.as_path());
-        assert_eq!(find_wad(&names[0], folder, &in_game), Some(project.join("regamedll_zedit.wad")));
-        assert_eq!(find_wad(&names[1], folder, &in_game), Some(project.join("textures/extra.wad")));
-        assert_eq!(find_wad(&names[2], folder, &in_game), Some(game.join("halflife.wad")));
-        assert_eq!(find_wad(&names[0], None, &in_game), None, "without the project's folder it isn't found (the old bug)");
+        let real = |p: PathBuf| std::fs::canonicalize(p).unwrap();
+        assert_eq!(find_wad(&names[0], folder, &roots, &in_game), Some(real(project.join("regamedll_zedit.wad"))));
+        assert_eq!(find_wad(&names[1], folder, &roots, &in_game), Some(real(project.join("textures/extra.wad"))));
+        assert_eq!(find_wad(&names[2], folder, &roots, &in_game), Some(real(game.join("halflife.wad"))));
+        assert_eq!(find_wad(&names[0], None, &roots, &in_game), None, "without the project's folder it isn't found (the old bug)");
         // through CrossOver: copied next to the map (wine can't see the project), packed into the .bsp
         let mut l = wine();
         let b = dir.join("Bottles/Steam/drive_c");
         l.tools = b.join("Loner-Strike/Compiler/sdhlt-v1.3.1/tools");
         let work = b.join("Loner-Strike/Compiler/work/regamedll");
-        let find = |n: &str| find_wad(n, folder, &in_game);
+        let find = |n: &str| find_wad(n, folder, &roots, &in_game);
         let w = resolve_wads(&names, &find, &l, &work.join("wads")).unwrap();
         assert_eq!(w.missing, vec!["nowhere.wad"]);
         assert_eq!(w.bad, vec![("gunshop.wad".to_string(), "it's empty (0 bytes)".to_string())]);
@@ -2091,6 +2119,61 @@ mod tests {
         let e = wad_errors(&w, true).unwrap();
         assert!(e.contains("nowhere.wad") && e.contains("project folder") && e.contains("gunshop.wad (it's empty (0 bytes))"), "{e}");
         assert!(wad_errors(&Wads::default(), true).is_none());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A map's WAD list can come from the internet: nothing outside the map's folder and the
+    /// game's folders is ever found, copied or packed; network paths are never touched.
+    #[test]
+    fn wad_list_tricks_are_refused() {
+        let dir = std::env::temp_dir().join(format!("ls-compile-waddos-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let project = dir.join("home/me/maps/proj");
+        let game = dir.join("Half-Life/valve");
+        let secret_dir = dir.join("home/me/.ssh");
+        for d in [&project, &game, &secret_dir] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        let wad3 = b"WAD3\x01\0\0\0\x0c\0\0\0";
+        std::fs::write(secret_dir.join("id_rsa"), b"-----BEGIN OPENSSH PRIVATE KEY-----").unwrap();
+        std::fs::write(secret_dir.join("id_rsa.wad"), wad3).unwrap();
+        std::fs::write(project.join("fake.wad"), b"just some text, not a wad").unwrap();
+        std::fs::write(game.join("halflife.wad"), wad3).unwrap();
+        let roots = vec![game.clone()];
+        let in_game = |b: &str| Some(game.join(b)).filter(|p| p.is_file());
+        let folder = Some(project.as_path());
+        let f = |n: &str| find_wad(n, folder, &roots, &in_game);
+        // ../ out of the project
+        assert_eq!(f("../../.ssh/id_rsa"), None);
+        assert_eq!(f("..\\..\\.ssh\\id_rsa.wad"), None);
+        // absolute paths outside the known places (then only the name is looked up, in the known places)
+        assert_eq!(f(&secret_dir.join("id_rsa.wad").to_string_lossy()), None);
+        assert_eq!(f("/etc/passwd"), None);
+        // network paths, every spelling
+        for n in ["\\\\evil\\share\\x.wad", "//evil/share/x.wad", "\\\\?\\UNC\\evil\\share\\x.wad", "\\/evil/x.wad"] {
+            assert!(is_network_path(n), "{n}");
+            assert_eq!(f(n), None, "{n}");
+        }
+        // a link in the project pointing out
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(secret_dir.join("id_rsa.wad"), project.join("link.wad")).unwrap();
+            std::os::unix::fs::symlink(&secret_dir, project.join("textures")).unwrap();
+            assert_eq!(f("link.wad"), None);
+            assert_eq!(f("textures/id_rsa.wad"), None);
+        }
+        // an absolute path inside the game's folder is fine
+        assert!(f(&game.join("halflife.wad").to_string_lossy()).is_some());
+        // a file named .wad that isn't one is never copied or packed
+        let mut l = wine();
+        let b = dir.join("Bottles/Steam/drive_c");
+        l.tools = b.join("Loner-Strike/Compiler/sdhlt-v1.3.1/tools");
+        let work = b.join("Loner-Strike/Compiler/work/proj");
+        let w = resolve_wads(&["fake.wad".to_string(), "../../.ssh/id_rsa".into(), "//evil/share/x.wad".into()], &|n: &str| f(n), &l, &work.join("wads")).unwrap();
+        assert_eq!(w.bad.len(), 1);
+        assert_eq!(w.missing.len(), 2);
+        assert!(w.include.is_empty());
+        assert!(!work.join("wads").exists(), "nothing was copied");
         std::fs::remove_dir_all(&dir).ok();
     }
 
