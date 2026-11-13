@@ -2009,3 +2009,59 @@ no password, no time limit (started through a copy of run-wine.sh with a 100-day
 10. **Win / lose**: "You held out all 10 waves!" (round ends as a CT win), or "The base fell on wave N" (T win) +
     "Best on de_dust2: wave N" in chat; then a fresh stand starts (and waits for you).
 11. **Anything noisy**: too many messages at once, flicker, beams through walls, lag with many creatures.
+
+### Agent X: Game Mode Studio, round 2 — 2026-11-12
+
+**Studio modes survive setup.** `setup/core.rs::configs` keeps modes.ini lines for Studio modes when it rewrites
+modes.ini (`studio_mode_lines`: a mode whose `<id>.plugins.ini` lists its own `studio_<id>.amxx`, unless the new
+modes.ini ships the same id). Their plugins.ini/cfg were never touched by setup. Test: `setup::tests::studio_modes_survive_setup`
+(installs a Studio mode, adds a stray look-alike line, re-runs setup twice).
+
+**Finding: AMX Mod X's gamerules gamedata is 8 bytes off on our ReGameDLL.** ReGameDLL's `CGameRules` adds
+`char *m_GameDesc; bool m_bGameOver;` after `m_bBombDropped` (gamerules.h, "custom"), so every `CHalfLifeMultiplay`
+member in AMXX's `common.games/gamerules.games/cstrike/offsets-chalflifemultiplay.txt` (windows 56 = m_fRoundCount,
+64 = m_iRoundTimeSecs, ...) reads/writes the field 8 bytes before the real one (live: "m_iRoundTimeSecs" returned
+m_fRoundStartTime). Player/entity pdata (CBasePlayer etc.) is unaffected.
+- Who uses it: nobody. Grepped `plugins/scripting/*.sma`, loner.inc/ls_components.inc and every bundled mod's source in
+  the game's `addons/amxmodx/scripting/` (zp5, gungame, war3, shero, hns, kreedz, deathrun, basebuilder, soccerjam,
+  paintball, csdm, dice...) for `get_gamerules_*`/`set_gamerules_*`, `m_iRoundTime*`, `m_fRoundCount`,
+  `m_fRoundStartTime`, orpheu/okapi: no hits. The Studio no longer uses it either (round clock held with
+  `mp_round_infinite`, time left from our own clock).
+- The proper API is ReAPI (`get_member_game(m_iRoundTime)`, `rg_*`), which isn't installed. Any future plugin that needs
+  the round's rules object should use ReAPI (add it to the foundation) rather than fakemeta gamedata; or ReGameDLL's own
+  commands/cvars (`endround`, `mp_round_infinite`, `mp_roundtime`) where they do the job.
+- Related gotcha found live: `RegisterHam(Ham_Spawn, "player", ...)` misses ReGameDLL's bots (their own vtable); use
+  `RegisterHamPlayer` (or RegisterHamFromEntity per bot like gamemodes.sma). Our plugins already do.
+
+**Milestone 2 (68 nodes, graph version 2; version 1 files still open).**
+- Timers: Delay, Repeat (every N s, N times or until the round ends), Countdown (HUD slot), Stop Timers. Chained
+  one-shot `set_task`s carrying `ctx`; all stop at a new round; in Playtest builds they wait while the world is paused.
+- Variables: per mode or per player (reset on join), number / yes-no / text, Get / Set / Add; typed pins follow the
+  chosen variable; names only in comments, Pawn names are `g_v<n>` / `g_pv<n>[33]`. Live values while paused.
+- Conditions & numbers: Branch, Compare, And/Or, Not, Math, Random Number, Health Of, Team Of, Is Alive, Is Bot,
+  Name Of, Count Alive.
+- Events: Round Ended (winner), Player Killed (+Headshot), Player Spawned, Joined, Left, Bomb Planted/Defused/Exploded,
+  Player Used (func_button by name), Player Touched (trigger_multiple by name, once a second each).
+- Player actions: Strip Weapons, Set Health/Armor/Team/Speed, Teleport (to a named entity), Show HUD Text (loner.inc
+  slots, one player or everyone, an optional Value).
+- Components (W1's ls_components.inc): events Point Captured/Lost, Zone Stage, Zone Hurt Player, Player Extracted, Wave
+  Started/Spawned One/Cleared, Crate Opened, Checkpoint Reached, Barricade Broken, Meeting Ended; actions Find Component,
+  Create Component (kind, at a named entity, keys), Set/Shrink Zone, Open Crate, Start/Stop Waves, Open Extraction, Door,
+  Fire Trap, Lock Point, Reset Components. Guarded by `ls_components_running()` (Playtest says so on the node).
+- Creatures (docs/CREATURES.md): Spawn Creature (type at a named entity, `create_entity("ls_creature")`) and Creature
+  Killed (`RegisterHam(Ham_Killed, "ls_creature")`), both only when `ls_creature_ver` exists.
+- Security as before for every new input: entity names `[A-Za-z0-9_.-]{0,32}`, component keys `[A-Za-z0-9 _.=:,-]`, text
+  via the label allowlist; generator filters again; the hostile graph test covers names, keys, variables, teleports.
+- Tests: `testdata/every_node.graph.json` (built by `make_every_node.py`) uses every registry node, checks clean, is
+  snapshotted (release + debug) and compiled with amxxpc with zero warnings, like the other test graphs.
+- Live on a hidden HLDS clone with 10 bots: joined, spawned, round started/ended, killed, bomb planted, timers
+  (countdown done, repeat each, delay fired), variables, strip/armor/speed/team/teleport (no such entity: node_error),
+  component guards (gm_components not on that server: node_error), no AMXX errors.
+- Editor: Variables panel (This mode), new settings (yes/no, names, keys, variable pickers, values of the variable's
+  type), category colours, a note on nodes that need gm_components or creatures, variable values in the Playtest panel.
+
+**Also done:** safety-net hooks (P7) on every install write, removal and graph save; breadcrumb + `useDirty` (P6); the
+page fills its box (P6's shell.css override removed); **Open in Plugin Studio** from Show code: `POST
+/api/tools/studio/source` writes the release source to `scripting/studio_<id>.sma` and the page goes to
+`plugins:game/studio_<id>.sma`, read only by one rule in `tools/plugins.rs` (`studio_*` in the game folder). Compiles now
+keep the source there too. (S: `/api/tools/studio/source` is new if the MCP wraps the Studio routes.)
