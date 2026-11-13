@@ -9,8 +9,7 @@ import { useDirty } from "../../../store";
 import { useTools, useToolArg, type CameraMode } from "../../../stores/tools";
 import { Banner, BusyButton, Info, LoadError, Segmented, Skeleton, useAskText, useConfirm, useToast } from "../../../ui";
 import { JobProgress } from "../../JobProgress";
-import { MapList } from "../doctor/MapList";
-import "../doctor/doctor.css";
+import { MapList } from "../common";
 import type { NavArea } from "../overlays";
 import type { ToolProps } from "../registry";
 import { useMesh, useEntities } from "../toolsApi";
@@ -33,7 +32,7 @@ export default function NavFixer({ maps }: ToolProps) {
         <p className="muted measure">
           Pick a map to fix its bot nav: add the walkable spots the bots' learning missed (narrow beams, ledges), join them up, and mark drops. Only maps with a bot nav are listed.
         </p>
-        <MapList maps={maps} onPick={setMap} placeholder="Pick a map to fix its nav" filter={(m) => m.nav} />
+        <MapList maps={maps} onPick={setMap} placeholder="Pick a map to fix its nav" filter={(m) => m.nav} none="None of your maps has a bot nav yet. The map doctor can teach bots a map; then it shows up here." />
       </div>
     );
   return <Fixer map={map} onBack={() => setMap(null)} />;

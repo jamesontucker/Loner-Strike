@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
 import { Banner, BusyButton, Info, LoadError, Skeleton, useAskText, useConfirm, useToast } from "../../../ui";
-import { MapList } from "../doctor/MapList";
+import { MapList } from "../common";
 import type { ToolProps } from "../registry";
 import { loadCallouts, placeColours, saveCallouts, spoken, suggest, validPlace, type Area, type CalloutNav, type Change } from "./calloutsApi";
 import { TopDown } from "./TopDown";
@@ -25,7 +25,7 @@ export default function Callouts({ maps }: ToolProps) {
         <p className="muted measure">
           Pick a map to name its places. Bots say these names on the radio ("enemy spotted at Long") and bot chat and voice commands understand them. Only maps with a bot nav are listed: the map doctor can teach bots the others.
         </p>
-        <MapList maps={maps} onPick={setMap} placeholder="Pick a map to name its places" filter={(m) => m.nav} />
+        <MapList maps={maps} onPick={setMap} placeholder="Pick a map to name its places" filter={(m) => m.nav} none="None of your maps has a bot nav yet. The map doctor can teach bots a map; then you can name its places here." />
       </div>
     );
   return <Editor map={map} onBack={() => setMap(null)} />;

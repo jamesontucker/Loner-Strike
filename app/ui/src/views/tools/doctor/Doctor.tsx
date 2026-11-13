@@ -12,7 +12,7 @@ import { Banner, BusyButton, LoadError, Skeleton, useToast } from "../../../ui";
 import { JobProgress } from "../../JobProgress";
 import type { ToolProps } from "../registry";
 import { checkMap, copyFiles, learnMap, learnResult, writeRes, type FileRow, type Report } from "./doctorApi";
-import { MapList } from "./MapList";
+import { MapList } from "../common";
 import "./doctor.css";
 
 export default function Doctor({ maps }: ToolProps) {

@@ -3,7 +3,8 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { BusyButton, Info, LoadError, Segmented, Skeleton, Switch, useToast } from "../../../ui";
+import { BusyButton, LoadError, Segmented, Skeleton, Switch, useToast } from "../../../ui";
+import { Check, Empty, Row, Rows } from "../common";
 import { DEFAULT_CHOICE, installSpray, pickPicture, previewSpray, restoreSpray, sprayStatus, type Choice, type GameSpray, type SprayImage } from "./sprayApi";
 import "./spray.css";
 
@@ -96,13 +97,11 @@ export function SprayMaker() {
   if (status.data?.error) return <LoadError text={status.data.error} onRetry={() => status.refetch()} />;
   if (games.length === 0)
     return (
-      <div className="panel">
-        <h3>No game found</h3>
-        <p className="muted measure">Couldn't find Counter-Strike 1.6 or Condition Zero on this computer. Set up the game first, then come back to make a spray.</p>
-      </div>
+      <Empty title="No game found" text="Couldn't find Counter-Strike 1.6 or Condition Zero on this computer. Set up the game first, then come back to make a spray." />
     );
 
   return (
+    <div className="tl-page spray-page">
     <div className="spray">
       <div className="panel spray-stage">
         <div className="spray-wall" aria-label={preview ? "Your spray on a wall, as it looks in game" : undefined}>
@@ -132,80 +131,58 @@ export function SprayMaker() {
 
       <div className="panel spray-options">
         <h3>Your spray</h3>
-        <div className="settings">
-          <div className="setting">
-            <span className="name">
-              Size<span className="note">{SIZE_NOTE[choice.size]}</span>
-            </span>
+        <Rows>
+          <Row name="Size" note={SIZE_NOTE[choice.size]}>
             <Segmented label="Size" values="small medium large" labels="Small|Medium|Large" current={choice.size} onPick={(v) => set({ size: v as Choice["size"] })} />
-          </div>
-          <div className="setting">
-            <span className="name">
-              Colours
-              <Info text="Full colour keeps the picture's own colours (up to 255). One colour paints it in a single colour, like the game's own sprays: dark parts are painted, light parts are left clear." />
-            </span>
+          </Row>
+          <Row name="Colours" info="Full colour keeps the picture's own colours (up to 255). One colour paints it in a single colour, like the game's own sprays: dark parts are painted, light parts are left clear.">
             <Segmented label="Colours" values="colour mono" labels="Full colour|One colour" current={choice.look} onPick={(v) => set({ look: v as Choice["look"] })} />
-          </div>
+          </Row>
           {choice.look === "mono" && (
             <>
-              <div className="setting">
-                <span className="name">Paint colour</span>
+              <Row name="Paint colour">
                 <input className="spray-colour" type="color" value={choice.paint} aria-label="Paint colour" onChange={(e) => set({ paint: e.target.value })} />
-              </div>
-              <div className="setting">
-                <span className="name">
-                  Paint the light parts<span className="note">For a light picture on a dark background</span>
-                </span>
+              </Row>
+              <Row name="Paint the light parts" note="For a light picture on a dark background">
                 <Switch on={choice.invert} onChange={(v) => set({ invert: v })} label="Paint the light parts" />
-              </div>
+              </Row>
             </>
           )}
-          <div className="setting">
-            <span className="name">
-              See-through
-              <Info text="Which parts of the picture the wall shows through. 'The picture's own' uses its transparency (PNG, WebP). 'Plain background' removes the colour in the top-left corner, for a logo on white. Space around a picture that isn't the spray's shape is always see-through." />
-            </span>
+          <Row
+            name="See-through"
+            info="Which parts of the picture the wall shows through. 'The picture's own' uses its transparency (PNG, WebP). 'Plain background' removes the colour in the top-left corner, for a logo on white. Space around a picture that isn't the spray's shape is always see-through."
+          >
             <Segmented label="See-through" values="alpha background none" labels="The picture's own|Plain background|None" current={choice.clear} onPick={(v) => set({ clear: v as Choice["clear"] })} />
-          </div>
+          </Row>
           {choice.look === "colour" && (
-            <div className="setting">
-              <span className="name">
-                Smooth photo colours<span className="note">Mixes colours with fine dots. Good for photos, not for logos</span>
-              </span>
+            <Row name="Smooth photo colours" note="Mixes colours with fine dots. Good for photos, not for logos">
               <Switch on={choice.dither} onChange={(v) => set({ dither: v })} label="Smooth photo colours" />
-            </div>
+            </Row>
           )}
           {games.length > 1 && (
-            <div className="setting">
-              <span className="name">Install for</span>
-              <div className="row">
+            <Row name="Install for">
+              <div className="tl-checks">
                 {games.map((g) => (
-                  <label key={g.game} className="spray-game">
-                    <input
-                      type="checkbox"
-                      checked={!skip.includes(g.game)}
-                      onChange={(e) => {
-                        setSkip((s) => (e.target.checked ? s.filter((x) => x !== g.game) : [...s, g.game]));
-                        setDone(null);
-                      }}
-                    />
-                    {g.label}
-                  </label>
+                  <Check
+                    key={g.game}
+                    label={g.label}
+                    checked={!skip.includes(g.game)}
+                    onChange={(on) => {
+                      setSkip((s) => (on ? s.filter((x) => x !== g.game) : [...s, g.game]));
+                      setDone(null);
+                    }}
+                  />
                 ))}
               </div>
-            </div>
+            </Row>
           )}
-          <div className="setting">
-            <span className="name">
-              Keep it from being replaced
-              <span className="note">Picking a spray in the game's Options would replace yours. This makes the file read-only, like players usually do</span>
-            </span>
+          <Row name="Keep it from being replaced" note="Picking a spray in the game's Options would replace yours. This makes the file read-only, like players usually do">
             <Switch on={lock} onChange={setLock} label="Keep it from being replaced" />
-          </div>
-        </div>
+          </Row>
+        </Rows>
         <div className="row spray-actions">
           <BusyButton className="btn primary" busy={installing} disabled={!preview || targets.length === 0} label="Install spray" busyLabel="Installing…" onClick={install} />
-          {!picked && <span className="muted">Choose a picture first.</span>}
+          {!picked ? <span className="muted">Choose a picture first.</span> : targets.length === 0 ? <span className="muted">Tick a game to install it for.</span> : null}
         </div>
         {done && (
           <p className="spray-done" role="status">
@@ -235,6 +212,7 @@ export function SprayMaker() {
           ))}
         </div>
       </div>
+    </div>
     </div>
   );
 }

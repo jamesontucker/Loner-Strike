@@ -1,14 +1,18 @@
 /* The spray maker (views/tools/spray). A plaster-and-brick wall drawn in CSS, so the
    preview needs no game files. */
-.spray { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
-.spray > .panel:last-child { grid-column: 1 / -1; }
-@media (max-width: 900px) { .spray { grid-template-columns: minmax(0, 1fr); } }
+.spray-page { container-type: inline-size; }
+.spray { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+/* side by side only when the options get room for a row of pills next to their names */
+@container (min-width: 980px) {
+  .spray { grid-template-columns: minmax(0, 1fr) minmax(520px, 1.1fr); }
+  .spray > .panel:last-child { grid-column: 1 / -1; }
+}
 
 .spray-wall {
   position: relative;
   display: grid;
   place-items: center;
-  min-height: 320px;
+  min-height: clamp(220px, 40vh, 360px);
   border-radius: 2px;
   box-shadow: var(--sunken);
   overflow: hidden;
@@ -31,8 +35,8 @@
 .spray-caption { margin-top: 12px; flex-wrap: wrap; }
 .spray-caption .muted { min-width: 0; overflow-wrap: anywhere; }
 .spray-colour { width: 56px; height: 32px; padding: 0; border: 0; background: none; cursor: pointer; }
-.spray-game { display: inline-flex; gap: 6px; align-items: center; margin-right: 14px; }
 .spray-actions { margin-top: 14px; }
+.spray-options h3 { margin-bottom: 6px; }
 .spray-done { margin: 12px 0 0; color: var(--ok); font-weight: 600; }
 .spray-done .muted { font-weight: 500; }
 .spray-now { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
