@@ -1738,6 +1738,7 @@ fn live_error(e: crate::rcon::RconError) -> String {
     match e {
         crate::rcon::RconError::Offline => "Your game isn't running a map. Start one (Play), then try again.".into(),
         crate::rcon::RconError::BadPassword => "The game didn't let Loner-Strike in (the console password changed). Restart the map and try again.".into(),
+        crate::rcon::RconError::Refused => "That has characters the game's console can't take.".into(),
     }
 }
 

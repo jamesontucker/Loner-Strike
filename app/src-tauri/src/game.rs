@@ -196,7 +196,7 @@ impl Game {
             Err(RconError::BadPassword) => return json!({"online": false, "reason": self.bad_password_reason_cached()}),
             // game_open: the game is open on this computer but not hosting a map (main menu,
             // or playing on someone else's server)
-            Err(RconError::Offline) => return json!({"online": false, "reason": OFFLINE, "game_open": !self.dedicated && game_open()}),
+            Err(RconError::Offline | RconError::Refused) => return json!({"online": false, "reason": OFFLINE, "game_open": !self.dedicated && game_open()}),
         };
         let path = self.data.join("status.json");
         if let (Some(bytes), true) = (file, reply.contains("GM status written")) {
@@ -266,6 +266,7 @@ impl Game {
             Ok(reply) => Ok(reply.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect()),
             Err(RconError::BadPassword) => Err(CmdError::Game(BAD_PASSWORD.into())),
             Err(RconError::Offline) => Err(CmdError::Game(OFFLINE.into())),
+            Err(RconError::Refused) => Err(CmdError::Game("That has characters the game's console can't take (emoji, other alphabets or line breaks).".into())),
         }
     }
 

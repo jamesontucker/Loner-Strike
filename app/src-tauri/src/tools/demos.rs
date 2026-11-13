@@ -323,11 +323,20 @@ pub fn safe_name(name: &str) -> bool {
     name.len() <= 128 && name.len() > 4 && name.to_lowercase().ends_with(".dem") && !name.contains(['/', '\\', ':', '\0']) && !name.starts_with('.') && !name.chars().any(|c| c.is_control())
 }
 
-/// A name the game can be told to play: nothing that would end its quotes or the command
-/// (`"`, `;`). The name never goes on the command line itself: the engine cuts `+` commands at
-/// any `-` there (Quake's Cmd_StuffCmds), so "+playdemo my-demo" plays "my". It goes in a cfg.
+/// A name the game can be told to play, in a cfg line or through its console: plain ASCII
+/// letters, digits and ` _-.()[]` only. Anything else could turn into `"` or `;` on the way
+/// (the console takes one byte a character). The name never goes on the command line itself:
+/// the engine cuts `+` commands at any `-` there (Quake's Cmd_StuffCmds).
 pub fn playable_name(name: &str) -> bool {
-    safe_name(name) && !name.contains(['"', ';', '\'', '\n', '\r'])
+    safe_name(name) && name.chars().all(|c| c.is_ascii_alphanumeric() || " _-.()[]".contains(c))
+}
+
+/// A safe name for a demo the game can't be told to play as it's named: other characters
+/// become `_`.
+pub fn safe_rename(name: &str) -> String {
+    let stem: String = demo_stem(name).chars().map(|c| if c.is_ascii_alphanumeric() || "_-.()[]".contains(c) { c } else { '_' }).collect();
+    let stem = stem.trim_matches(['_', '.']).chars().take(60).collect::<String>();
+    format!("{}.dem", if stem.is_empty() { "demo" } else { &stem })
 }
 
 /// One folder demos are in.
@@ -405,7 +414,7 @@ fn list(places: &[Place]) -> Value {
                 }
                 let when = modified(&meta);
                 let mut v = json!({"at": p.at, "where": p.label, "game": p.game, "hltv": p.hltv || name.to_lowercase().starts_with("hltv-"),
-                                   "name": name, "size": meta.len(), "modified": when, "playable": playable_name(&name)});
+                                   "name": name, "size": meta.len(), "modified": when, "playable": playable_name(&name), "safeName": safe_rename(&name)});
                 match header_of(&f.path()) {
                     Ok(h) => {
                         v["map"] = json!(h.map);
@@ -500,7 +509,7 @@ fn console_hint(name: &str) -> String {
 fn play(places: &[Place], game: &crate::game::Game, at: &str, name: &str) -> Result<Value, String> {
     let (p, path) = find(places, at, name).ok_or(GONE)?;
     if !playable_name(name) {
-        return Err("The game can't be told to play a demo with \" or ; in its name. Rename it first.".into());
+        return Err(format!("The game can't be told to play a demo with letters like that in its name. Rename it first (for example to {}).", safe_rename(name)));
     }
     // the game needs the demo's map, or it stops with "couldn't open"
     if let Ok(h) = header_of(&path) {
@@ -887,7 +896,11 @@ mod tests {
         assert!(safe_name("my demo.dem") && safe_name("hltv-2611061830-de_dust2.dem") && safe_name("A.DEM"));
         assert!(!safe_name("../x.dem") && !safe_name("a/b.dem") && !safe_name(".dem") && !safe_name("x.txt") && !safe_name("a\u{7}.dem"));
         assert!(playable_name("my_demo-1.dem") && playable_name("TopFrag-DUST2only.dem") && playable_name("my demo.dem"));
-        assert!(!playable_name("a\";quit.dem") && !playable_name("a;quit.dem") && !playable_name("../x.dem"));
+        for bad in ["a\";quit.dem", "a;quit.dem", "../x.dem", "x\u{122}; quit.dem", "x\u{13B}.dem", "x\u{FF02}.dem", "a'b.dem", "a\nb.dem", "caf\u{e9}.dem"] {
+            assert!(!playable_name(bad), "{bad:?}");
+            assert!(playable_name(&safe_rename(bad)), "{bad:?} -> {}", safe_rename(bad));
+        }
+        assert_eq!(safe_rename("x\u{122}; quit.dem"), "x___quit.dem");
         assert_eq!(console_hint("abc.dem"), "playdemo abc");
         assert_eq!(console_hint("my demo.dem"), "playdemo \"my demo\"");
     }

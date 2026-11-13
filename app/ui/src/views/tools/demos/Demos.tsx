@@ -128,6 +128,17 @@ function Details({ demo, gameOpen, onGone }: { demo: Demo; gameOpen: boolean; on
     reload();
   };
 
+  const safeRename = async () => {
+    if (!demo.safeName) return;
+    setBusy("rename");
+    const r = await renameDemo(demo, demo.safeName);
+    setBusy(null);
+    if (r.error) return toast(r.error, true);
+    toast(r.message || "Renamed.");
+    onGone();
+    reload();
+  };
+
   const remove = async () => {
     if (!(await confirm(`Delete ${demo.name}? It can't be brought back.`, { ok: "Delete", danger: true }))) return;
     setBusy("delete");
@@ -210,7 +221,12 @@ function Details({ demo, gameOpen, onGone }: { demo: Demo; gameOpen: boolean; on
         <BusyButton className="btn" busy={busy === "rename"} disabled={off} label="Rename" busyLabel="Renaming…" onClick={rename} />
         <BusyButton className="btn danger" busy={busy === "delete"} disabled={off} label="Delete" busyLabel="Deleting…" onClick={remove} />
       </div>
-      {!demo.playable && !demo.error && <p className="muted small-note">The game can't be told to play a demo with " or ; in its name. Rename it to watch it from here.</p>}
+      {!demo.playable && !demo.error && (
+        <div className="row dm-actions">
+          <span className="muted small-note">The game can only be told to play a demo named with plain letters, numbers and - _ . ( ) [ ].</span>
+          {demo.safeName && <BusyButton className="btn" busy={busy === "rename"} disabled={off} label={`Rename to ${demo.safeName}`} busyLabel="Renaming…" onClick={safeRename} />}
+        </div>
+      )}
     </div>
   );
 }

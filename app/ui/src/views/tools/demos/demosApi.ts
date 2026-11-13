@@ -13,6 +13,8 @@ export type Demo = {
   modified: number;
   /** the game can be started with it (plain name) */
   playable: boolean;
+  /** a name the game can be told to play (for "Rename to a safe name") */
+  safeName?: string;
   map?: string;
   seconds?: number;
   protocol?: number;

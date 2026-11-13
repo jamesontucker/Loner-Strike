@@ -401,6 +401,7 @@ fn reset_stats(g: &Game) -> Result<Value, String> {
     match g.rcon.send(RESET) {
         Ok(_) => Ok(json!({"ok": true, "message": "Stats clear when the map changes."})),
         Err(RconError::BadPassword) => Err("The game didn't accept Loner-Strike's console password. Restart the map once.".into()),
+        Err(RconError::Refused) => Err("That has characters the game's console can't take.".into()),
         // the ranks are on the machine: the server clears them itself, so it has to be up
         Err(RconError::Offline) if g.remote.is_some() => Err("Start the server to reset its stats: it clears them itself when the map changes.".into()),
         Err(RconError::Offline) => {
@@ -617,6 +618,7 @@ fn tell(g: &Game, cmd: &str) -> Result<bool, String> {
         Ok(_) => Ok(true),
         Err(RconError::Offline) => Ok(false),
         Err(RconError::BadPassword) => Err("The game didn't accept Loner-Strike's console password. Restart the map once.".into()),
+        Err(RconError::Refused) => Err("That has characters the game's console can't take.".into()),
     }
 }
 

@@ -473,6 +473,7 @@ fn tell_game(g: &Game, line: &str) -> Result<bool, String> {
         Ok(_) => Ok(true),
         Err(RconError::Offline) => Ok(false),
         Err(RconError::BadPassword) => Err("The game didn't accept Loner-Strike's console password. Restart the map once.".into()),
+        Err(RconError::Refused) => Err("That has characters the game's console can't take.".into()),
     }
 }
 

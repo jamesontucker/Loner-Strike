@@ -12,6 +12,15 @@ pub enum RconError {
     Offline,
     /// The game rejected the password (it changes when a map loads for the first time).
     BadPassword,
+    /// The command has characters the game's console can't take as they are (control
+    /// characters, or beyond Latin-1, which used to be cut to one byte and could turn into
+    /// `"` or `;`): never sent.
+    Refused,
+}
+
+/// Whether a command can go to the game byte for byte: Latin-1, no control characters.
+pub fn wire_safe(command: &str) -> bool {
+    command.chars().all(|c| (c as u32) <= 0xFF && !c.is_control())
 }
 
 pub struct Rcon {
@@ -49,6 +58,9 @@ impl Rcon {
     }
 
     pub fn send(&self, command: &str) -> Result<String, RconError> {
+        if !wire_safe(command) {
+            return Err(RconError::Refused);
+        }
         let _guard = self.lock.lock().unwrap();
         if let Some((r, pw_file)) = &self.via {
             return match crate::remote::exec_quick(r, &self.lsrcon(pw_file, command)) {
@@ -65,6 +77,9 @@ impl Rcon {
     /// there it has just written: (reply, the file). On this computer the file is None.
     pub fn send_then_cat(&self, command: &str, file: &str, mark: &str) -> Result<(String, Option<Vec<u8>>), RconError> {
         let Some((r, pw_file)) = &self.via else { return self.send(command).map(|o| (o, None)) };
+        if !wire_safe(command) {
+            return Err(RconError::Refused);
+        }
         let _guard = self.lock.lock().unwrap();
         let printf_mark = mark.replace('\n', "\\n");
         let cmd = format!(
@@ -208,6 +223,16 @@ impl Packets {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn refuses_what_the_wire_would_mangle() {
+        use super::*;
+        for bad in ["playdemo \"x\u{122}; quit", "say \u{13B}", "a\u{FF02}b", "say hi\nquit", "say \u{1F600}", "a\0b"] {
+            assert!(!wire_safe(bad), "{bad:?}");
+            assert!(matches!(Rcon::new("pw".into(), 1).send(bad), Err(RconError::Refused)), "{bad:?}");
+        }
+        assert!(wire_safe("say caf\u{e9} \"ok\"; status"));
+    }
+
     use super::*;
 
     fn part(id: u8, num: u8, total: u8, body: &[u8]) -> Vec<u8> {
