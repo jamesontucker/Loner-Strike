@@ -17,6 +17,7 @@ import { useNav } from "../../../store";
 import { CordonPanel } from "./CordonPanel";
 import { cameraPos, cordonOf } from "./extras";
 import { madeForOf } from "./kits"; // P5: the modes the map is made for come first
+import { useP5 } from "./p5store"; // P5: Playtest from anywhere
 
 const PRESETS: { id: Preset; label: string; hint: string }[] = [
   { id: "fast", label: "Fast", hint: "Quick lighting and no visibility pass: for trying things out." },
@@ -258,6 +259,18 @@ export function CompilePanel() {
     setStopping(false);
     if (r.error) toast(r.error, true);
   };
+
+  // P5: Playtest asked for from anywhere (F5, Map > Playtest, the editor bar's button)
+  const asked = useP5((x) => x.playtestAsked);
+  useEffect(() => {
+    const p = useP5.getState();
+    if (!status || status.error || asked <= p.playtestDone) return;
+    p.set({ playtestDone: asked });
+    if (running) return toast("A compile is running already.", true);
+    void onPlaytest();
+    // (its progress shows in the Playtest box: bring it into sight)
+    requestAnimationFrame(() => document.querySelector(".compile-playtest")?.scrollIntoView({ block: "nearest" }));
+  }, [asked, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!status) {
     return (

@@ -26,7 +26,7 @@ import { useP5 } from "./p5store";
 import { DockArea, DockDropZones, DockFloats, useDockColumns } from "./Dock";
 import { showPanel } from "./dockState";
 import { useNav as useNavPreset } from "./navigation";
-import { importOther } from "./commands";
+import { importOther, playtestNow } from "./commands";
 import * as api from "./editorApi";
 import type { RecentFile, Recovery } from "./editorApi";
 import { EMPTY_SEL, facesOf, useEditor, type ViewId } from "./store";
@@ -254,6 +254,10 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
             </select>
           )}
           <button type="button" className="btn small" title="Sky, WADs, sun and rules" onClick={() => s.set({ dialog: "props" })}>Map properties</button>
+          {/* P5: the bar's main action: compile, put it in the game, play it (F5) */}
+          <button type="button" className="btn small primary" title="Compile it, put it in the game and play it with bots, as the Compile panel is set (F5)" onClick={() => playtestNow()}>
+            Playtest
+          </button>
           {/* P4: Tools > Community's Publish, for the map compiled from this one */}
           <button type="button" className="btn small" title="Make a package to share this map in Tools > Community (compile it into the game first)" onClick={() => useNav.getState().go("tools", `community:publish:${mapNameOf(doc.name)}`)}>Publish…</button>
           <BusyLabel busy={!!fileBusy} label={fileBusy ?? ""} />

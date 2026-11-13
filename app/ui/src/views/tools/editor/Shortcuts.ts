@@ -87,6 +87,7 @@ const LONER: Keys = {
   "help.palette": ["Mod+K", "Mod+Shift+P"],
   "help.cheats": ["?"],
   "map.inspect": ["Alt+Enter"],
+  "map.playtest": ["F5"],
   "view.snap": ["Shift+W"],
   "edit.applyTexture": ["Shift+T"],
 };

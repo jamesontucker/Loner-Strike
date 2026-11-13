@@ -28,6 +28,9 @@ type P5State = {
   archStart: number;
   /** brighter grid lines every 64 and 1024 units (Hammer's highlight lines) */
   gridMajor: boolean;
+  /** Playtest asked for (F5, Map > Playtest, the bar's button) and how many the Compile panel has started */
+  playtestAsked: number;
+  playtestDone: number;
   set: (p: Partial<Omit<P5State, "set">>) => void;
 };
 
@@ -58,6 +61,8 @@ export const useP5 = create<P5State>((set) => ({
   showModels: num("ls.editor.showModels", 1) !== 0,
   archStart: 0,
   gridMajor: num("ls.editor.gridMajor", 1) !== 0,
+  playtestAsked: 0,
+  playtestDone: 0,
   set: (p) => {
     if (p.gridMajor != null) keep("ls.editor.gridMajor", p.gridMajor ? "1" : "0");
     if (p.showModels != null) keep("ls.editor.showModels", p.showModels ? "1" : "0");

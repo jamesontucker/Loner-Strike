@@ -72,6 +72,13 @@ export function frame(all = false) {
   frameFlat(min, max);
 }
 
+/** Playtest from anywhere (F5, Map > Playtest, the editor bar): the Compile panel opens and starts it. */
+export function playtestNow() {
+  openTab("compile");
+  const p = useP5.getState();
+  p.set({ playtestAsked: p.playtestAsked + 1 });
+}
+
 export function openTab(tab: SideTab) {
   useP5.getState().set({ tab });
   showPanel(tab);
@@ -334,6 +341,7 @@ export function commands(): Command[] {
     { id: "map.report", label: "Entity report…", menu: "Map", run: () => S().set({ dialog: "report" }) },
     { id: "map.info", label: "Map information…", menu: "Map", hint: "Counts, textures and texture files in use", run: () => useP5.getState().set({ dialog: "info" }) },
     { id: "map.checks", label: "Check the map", menu: "Map", sep: true, run: () => openTab("checks") },
+    { id: "map.playtest", label: "Playtest", menu: "Map", hint: "Compile, put it in the game and start it with bots, as the Compile panel is set", run: playtestNow },
     { id: "map.compile", label: "Compile and play…", menu: "Map", hint: "Compile with SDHLT, show the leak line, playtest with bots", run: () => openTab("compile") },
     { id: "map.outline", label: "Outline", menu: "Map", sep: true, hint: "Everything in the map as a list", run: () => openTab("outline") },
     { id: "map.textures", label: "Textures", menu: "Map", run: () => openTab("textures") },

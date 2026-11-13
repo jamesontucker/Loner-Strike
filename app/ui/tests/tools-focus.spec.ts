@@ -44,3 +44,26 @@ test("Exit focus never covers a control, on every tool", async ({ page }) => {
   }
   expect(bad, bad.join("\n")).toEqual([]);
 });
+
+test("the one-time Focus hint sits beside the button, over nothing", async ({ page }) => {
+  for (const id of ["editor", "studio", "plugins", "creatures"]) {
+    await page.goto(`/tools-dev.html?open=${id}`);
+    await page.evaluate(() => localStorage.removeItem("ls.tools.focusHintSeen"));
+    await page.reload();
+    const hint = page.locator(".tools-focus-hint");
+    if (!(await hint.waitFor({ timeout: 6000 }).then(() => true, () => false))) continue;
+    await page.waitForTimeout(1200);
+    const hits = await page.evaluate(() => {
+      const b = document.querySelector(".tools-focus-hint")!.getBoundingClientRect();
+      const out: string[] = [];
+      for (const el of document.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea, [role=button], [role=tab], canvas")) {
+        if (el.closest(".tools-focus-hint")) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) continue;
+        if (r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top) out.push(`${el.tagName.toLowerCase()} “${(el.textContent || el.getAttribute("aria-label") || "").trim().slice(0, 30)}”`);
+      }
+      return out;
+    });
+    expect(hits, `${id}: ${hits.join(", ")}`).toEqual([]);
+  }
+});

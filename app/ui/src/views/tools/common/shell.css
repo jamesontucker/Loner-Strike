@@ -31,21 +31,21 @@ html[data-tools-focus] .ps-main { height: max(480px, calc(100vh - 100px)); }
 .tools-focus-pill kbd { font: 600 11px/1 var(--text); padding: 2px 5px; border-radius: 2px; background: var(--panel); color: var(--bone-faint); }
 @media (prefers-reduced-motion: reduce) { .tools-focus-pill { transition: none; } }
 
-/* One-time hint under the Focus button in the big workspaces (editor, studios) */
-.tools-focus-wrap { position: relative; display: inline-flex; }
+/* One-time hint beside the Focus button in the big workspaces (editor, studios): in the header's
+   row, in the flow (it used to hang below the button over the tool's own toolbar) */
+.tools-focus-wrap { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 .tools-focus-hint {
-  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: 260px;
-  display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px;
+  order: -1; position: relative; display: flex; align-items: center; gap: 8px; padding: 3px 4px 3px 10px; max-width: 420px;
   background: var(--panel, #2f3527); color: var(--bone, #e8e2cf); border: 1px solid var(--khaki, #c8b56a);
-  border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.35); font-size: 12.5px; line-height: 1.4; text-align: left; white-space: normal;
+  border-radius: 6px; font-size: 12px; line-height: 1.3; text-align: left; white-space: normal;
 }
-.tools-focus-hint::before {
-  content: ""; position: absolute; top: -6px; right: 18px; width: 10px; height: 10px; transform: rotate(45deg);
-  background: inherit; border-left: 1px solid var(--khaki, #c8b56a); border-top: 1px solid var(--khaki, #c8b56a);
+.tools-focus-hint::after {
+  content: ""; position: absolute; right: -6px; top: 50%; width: 10px; height: 10px; margin-top: -5px; transform: rotate(45deg);
+  background: inherit; border-right: 1px solid var(--khaki, #c8b56a); border-top: 1px solid var(--khaki, #c8b56a);
 }
 .tools-focus-hint-text b { color: var(--khaki, #c8b56a); }
 .tools-focus-hint-key { opacity: .75; white-space: nowrap; }
-.tools-focus-hint-x { align-self: flex-end; }
+.tools-focus-hint-x { flex: none; }
 @media (prefers-reduced-motion: no-preference) {
   .tools-focus-hint { animation: tools-focus-hint-in .18s ease-out; }
   @keyframes tools-focus-hint-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
