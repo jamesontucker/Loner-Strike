@@ -1,0 +1,104 @@
+sdHLRAD v1.3.1 64-bit (Oct 16 2026)
+seedee's Half-Life Compilation Tools
+Based on code modifications by Sean 'Zoner' Cavanaugh and Vluzacn
+Based on Valve's version, modified with permission.
+Submit detailed bug reports to (github.com/seedee/SDHLT/issues)
+-----  BEGIN  sdHLRAD -----
+Command line: C:\Loner-Strike\CompileTest\sdhlt\Win64\sdHLRAD_x64.exe C:\Loner-Strike\CompileTest\room 
+Arguments: C:\Loner-Strike\CompileTest\room -low 
+
+-= Current sdHLRAD Settings =-
+Name                | Setting             | Default
+--------------------|---------------------|-------------------------
+
+
+
+
+
+
+
+custom shadows with bounce light
+
+
+Load Textures:
+Using Wadfile: C:\Loner-Strike\CompileTest\room.wa_
+3 textures referenced
+Reading texlights from 'C:\Loner-Strike\CompileTest\sdhlt\lights.rad'
+0 texlights parsed (C:\Loner-Strike\CompileTest\sdhlt\lights.rad)
+0 opaque models
+0 opaque faces
+40 faces
+Create Patches : 261 base patches
+5461 square feet [786432.00 square inches]
+1 direct lights and 16386 fast direct lights
+1 light styles
+0 opaque studio models
+
+FindFacePositions:
+ (0.11 seconds)
+BuildFacelights:
+ (0.03 seconds)
+BuildVisLeafs:
+ (0.01 seconds)
+visibility matrix   :   0.0 megs
+MakeScales:
+ (0.01 seconds)
+Transfer Lists :       53460 :    53.46k transfers
+       Indices :        1584 :     1.55k bytes
+          Data :      107703 :   105.18k bytes
+Bounce 1 GatherLight:
+ (0.00 seconds)
+Bounce 2 GatherLight:
+ (0.00 seconds)
+Bounce 3 GatherLight:
+ (0.00 seconds)
+Bounce 4 GatherLight:
+ (0.00 seconds)
+Bounce 5 GatherLight:
+ (0.00 seconds)
+Bounce 6 GatherLight:
+ (0.00 seconds)
+Bounce 7 GatherLight:
+ (0.00 seconds)
+Bounce 8 GatherLight:
+ (0.00 seconds)
+CreateTriangulations:
+ (0.01 seconds)
+AddPatchLights:
+ (0.01 seconds)
+FinalLightFace:
+ (0.00 seconds)
+
+Object names  Objects/Maxobjs  Memory / Maxmem  Fullness
+------------  ---------------  ---------------  --------
+models              1/512           64/32768    ( 0.2%)
+planes             25/32768        500/655360   ( 0.1%)
+vertexes           56/65535        672/786420   ( 0.1%)
+nodes              11/32767        264/786408   ( 0.0%)
+texinfos            6/32767        240/1310680  ( 0.0%)
+faces              40/65535        800/1310700  ( 0.1%)
+* worldfaces       40/32768          0/0        ( 0.1%)
+clipnodes          18/32767        144/262136   ( 0.1%)
+leaves              3/32760         84/917280   ( 0.0%)
+* worldleaves       2/8192           0/0        ( 0.0%)
+marksurfaces       40/65535         80/131070   ( 0.1%)
+surfedges         188/512000       752/2048000  ( 0.0%)
+edges             105/256000       420/1024000  ( 0.0%)
+texdata          [variable]       2268/33554432 ( 0.0%)
+lightdata        [variable]      11427/50331648 ( 0.0%)
+visdata          [variable]          2/8388608  ( 0.0%)
+entdata          [variable]        296/2097152  ( 0.0%)
+* AllocBlock        1/64             0/0        ( 1.6%)
+3 textures referenced
+=== Total BSP file data space used: 18013 bytes ===
+
+1 wad file required to run the map
+----------------------------------
+  halflife.wad
+----------------------------------
+0.24 seconds elapsed
+
+-----   END   sdHLRAD -----
+
+
+

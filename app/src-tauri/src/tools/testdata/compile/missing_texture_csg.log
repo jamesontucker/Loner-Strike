@@ -1,0 +1,46 @@
+sdHLCSG v1.3.1 64-bit (Oct 16 2026)
+seedee's Half-Life Compilation Tools
+Based on code modifications by Sean 'Zoner' Cavanaugh and Vluzacn
+Based on Valve's version, modified with permission.
+Submit detailed bug reports to (github.com/seedee/SDHLT/issues)
+-----  BEGIN  sdHLCSG -----
+Command line: C:\Loner-Strike\CompileTest\sdhlt\Win64\sdHLCSG_x64.exe C:\Loner-Strike\CompileTest\leaky 
+Arguments: C:\Loner-Strike\CompileTest\leaky -low 
+Entering C:\Loner-Strike\CompileTest\leaky.map
+
+-= Current sdHLCSG Settings =-
+Name                 |  Setting  |  Default
+---------------------|-----------|-------------------------
+
+
+Loading mapfile wad configuration by default
+Wadinclude list
+---------------
+sdhlt.wad
+---------------
+
+
+CreateBrush:
+ (0.15 seconds)
+CSGBrush:
+ (0.01 seconds)
+
+Warning: ::FindTexture() texture NOTEXISTS not found!
+Wad files used by map
+---------------------
+[halflife.wad] 2/3116 textures (50.00%)
+ - C:\Program Files (x86)\Steam\steamapps\common\Half-Life\valve\halflife.wad
+---------------------
+
+Additional wad files included
+-----------------------------
+[sdhlt.wad] 1/27 texture (25.00%)
+ - C:\Loner-Strike\CompileTest\sdhlt\sdhlt.wad
+-----------------------------
+
+Error: ::LoadLump() texture NOTEXISTS not found!
+
+-----   END   sdHLCSG -----
+
+
+

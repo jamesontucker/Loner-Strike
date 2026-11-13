@@ -18,6 +18,7 @@ pub mod doctor;
 pub mod callouts;
 pub mod assets;
 pub mod render;
+pub mod compile;
 pub mod plugins;
 pub mod community;
 
@@ -297,6 +298,7 @@ pub fn local_routes() -> Router<Shared> {
         .merge(callouts::routes())
         .merge(assets::routes())
         .merge(render::routes())
+        .merge(compile::routes())
         .merge(plugins::routes())
         .merge(community::routes())
 }
