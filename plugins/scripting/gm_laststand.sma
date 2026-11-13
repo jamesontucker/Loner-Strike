@@ -81,11 +81,25 @@ new g_crStill[2048];
 new g_overrun;
 new Float:g_lastChanceEnd;
 new g_lives;
-new Float:g_spots[10][3];
-new g_nspots;
+#define MAX_HOLD 48
+new Float:g_hold[MAX_HOLD][3];
+new g_holdGate[MAX_HOLD];             /* which gate (index into g_gates), -1 none */
+new bool:g_holdHigh[MAX_HOLD];
+new g_nhold;
+new g_gates[16];
+new g_ngates;
+new Float:g_gateC[16][3];
+new Float:g_groundZ;
+new bool:g_holdBuilt;
+new Float:g_stepLike[33];
+new g_prefGate[33];
+new g_holdPick[33] = { -1, ... };
+new Float:g_holdScore[33];
+new Float:g_holdUntil[33];
+new Float:g_reweighAt;
+new g_stepSecs, g_floorSecs;
+new bool:g_preHeld;
 new g_role[33];
-new g_spot[33];
-new Float:g_nextShift[33];
 new Float:g_waveAt;
 
 new bool:g_down[33];
@@ -137,7 +151,7 @@ public plugin_init()
 {
 	ls_register_mode("laststand", "Last Stand", VERSION, "Loner-Strike");
 
-	g_cWaves = register_cvar("lst_waves", "10");
+	g_cWaves = register_cvar("lst_waves", "0");
 	g_cDiff = register_cvar("lst_difficulty", "1");
 	g_cPrepare = register_cvar("lst_prepare", "45");
 	g_cBreak = register_cvar("lst_break", "20");
@@ -156,6 +170,7 @@ public plugin_init()
 	register_clcmd("say_team /shop", "cmd_shop");
 	register_clcmd("lst_shop", "cmd_shop");
 	register_srvcmd("lst_gates", "cmd_gates");
+	register_srvcmd("lst_holds", "cmd_holds");
 	register_forward(FM_PlayerPreThink, "fm_prethink");
 	register_forward(FM_SetModel, "fm_setmodel_post", 1);
 
@@ -187,6 +202,24 @@ public plugin_cfg()
 	if (!ls_components_running())
 		log_amx("Last Stand needs gm_components.amxx; add it to laststand.plugins.ini before gm_laststand.amxx.");
 	log_amx("Last Stand on %s: enemies are %s (best wave here: %d)", g_mapname, g_creatures ? "creatures" : "zombie bots", g_record);
+}
+
+/* server: where each holder was sent and where it is (for tests) */
+public cmd_holds()
+{
+	new Float:o[3];
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT)
+			continue;
+		pev(p, pev_origin, o);
+		new k = g_holdPick[p];
+		if (k >= 0)
+			server_print("bot %d role %d at %.0f %.0f %.0f -> spot %d (%s) %.0f %.0f %.0f, %.0f away, repairing %d", p, g_role[p], o[0], o[1], o[2], k, g_holdHigh[k] ? "raised" : "floor", g_hold[k][0], g_hold[k][1], g_hold[k][2], get_distance_f(o, g_hold[k]), g_repairing[p]);
+		else
+			server_print("bot %d role %d at %.0f %.0f %.0f, no hold", p, g_role[p], o[0], o[1], o[2]);
+	}
+	return PLUGIN_HANDLED;
 }
 
 /* server: the gates list as players see it (for tests) */
@@ -261,6 +294,7 @@ public round_setup()
 	clear_defenders();
 	for (new p = 1; p <= MaxClients; p++)
 		g_role[p] = 0;
+	g_holdBuilt = false;
 	g_phase = PH_PREPARE;
 	g_overrun = 0;
 	g_lastChanceEnd = 0.0;
@@ -274,7 +308,7 @@ public round_setup()
 	bots_to_shop(get_pcvar_num(g_cPrepare));
 	if (g_record > 0)
 		ls_chat(0, "Best on %s so far: wave %d.", g_mapname, g_record);
-	ls_chat(0, "Buy at the base, or press USE at the armory (say /shop) for repair kits, armour, grenades and ammo.");
+	ls_chat(0, "Buy at the base, or press USE at the armory (say /shop) for repair kits, armor, grenades and ammo.");
 }
 
 /* the base: the middle of the CT respawn points, or of the CT spawns */
@@ -371,103 +405,333 @@ stock move_to(p, CsTeams:team, bool:respawn)
 		ExecuteHamB(Ham_CS_RoundRespawn, p);
 }
 
-/* Defenders, spread out: about 6 in 10 bots hold one of a few spots (behind each standing
-   barricade, half-way to it, the base) and move to another every minute or so; the rest have
-   no goal at all and play on their own (hunting creatures, reacting to noise). Goals are low
-   priority with a wide radius, sent only when a wave starts or a bot shifts, and cleared
-   between waves so bots buy, reload and wander like they normally do. */
-stock build_spots()
+/* Defenders. Most bots (about 85 %) hold somewhere during a wave; the rest play on their own.
+   Where a holder goes is weighed, not scripted: each gate's threat (creatures near it, its
+   damage, broken or not) against two kinds of spot - up on the firing step / any raised floor
+   behind the gate (strongly preferred: they shoot down over the wall) or on the floor just behind
+   it (worth more once the gate is broken). Every bot has its own liking for height and a favourite
+   gate, and picks among a gate's spots, so no two stands look the same. They still come down to
+   repair (a repair goal outranks holding), take supplies, revive, or chase a creature that got
+   inside (holders are let go while the base has one), then are sent back up.
+   Raised spots: the map's ls_marker kind=lst_hold if it has any, else found by tracing behind
+   each gate for floor 64+ units above the gate's own with room to stand. */
+
+stock bool:in_base_pt(const Float:o[3], Float:margin = 0.0)
 {
-	g_nspots = 0;
-	add_spot(g_base);
-	for (new b = ls_comp_find("ls_barricade"); b && g_nspots < sizeof g_spots - 1; b = ls_comp_find("ls_barricade", b))
+	new b = ls_comp_by_name("lst_base");
+	if (b)
 	{
-		if (ls_barricade_hp(b) <= 0)
-			continue;
-		new Float:mn[3], Float:mx[3], Float:c[3], Float:p[3];
-		pev(b, pev_absmin, mn);
-		pev(b, pev_absmax, mx);
-		for (new i = 0; i < 3; i++)
-			c[i] = (mn[i] + mx[i]) * 0.5;
-		new Float:d = get_distance_f(c, g_base);
-		if (d < 1.0)
-			continue;
-		/* behind it, on the base's side */
-		new Float:f = floatmin(200.0 / d, 0.9);
-		for (new i = 0; i < 3; i++)
-			p[i] = c[i] + (g_base[i] - c[i]) * f;
-		add_spot(p);
-		/* half-way back */
-		for (new i = 0; i < 3; i++)
-			p[i] = (c[i] + g_base[i]) * 0.5;
-		add_spot(p);
-	}
-	/* no barricades: a ring round the base */
-	if (g_nspots == 1)
-		for (new k = 0; k < 4; k++)
+		new Float:bo[3], sz[32];
+		pev(b, pev_origin, bo);
+		if (ls_comp_get(b, "size", sz, charsmax(sz)))
 		{
-			new Float:p[3];
-			p[0] = g_base[0] + 300.0 * floatcos(90.0 * float(k), degrees);
-			p[1] = g_base[1] + 300.0 * floatsin(90.0 * float(k), degrees);
-			p[2] = g_base[2];
-			add_spot(p);
+			new a[3][12];
+			parse(sz, a[0], 11, a[1], 11, a[2], 11);
+			return floatabs(o[0] - bo[0]) <= str_to_float(a[0]) * 0.5 + margin && floatabs(o[1] - bo[1]) <= str_to_float(a[1]) * 0.5 + margin
+				&& o[2] > bo[2] - 64.0 - margin && o[2] < bo[2] + str_to_float(a[2]) + 64.0 + margin;
 		}
+		new Float:r = ls_comp_getf(b, "radius", 300.0) + margin;
+		return floatsqroot((o[0] - bo[0]) * (o[0] - bo[0]) + (o[1] - bo[1]) * (o[1] - bo[1])) <= r && floatabs(o[2] - bo[2]) < 160.0 + margin;
+	}
+	new Float:r = get_pcvar_float(g_cBaseRadius) + margin;
+	return floatsqroot((o[0] - g_base[0]) * (o[0] - g_base[0]) + (o[1] - g_base[1]) * (o[1] - g_base[1])) <= r && floatabs(o[2] - g_base[2]) < 200.0 + margin;
 }
 
-stock add_spot(const Float:p[3])
+stock add_hold(const Float:p[3], gate, bool:high)
 {
-	if (g_nspots >= sizeof g_spots)
+	if (g_nhold >= MAX_HOLD)
 		return;
-	g_spots[g_nspots][0] = p[0];
-	g_spots[g_nspots][1] = p[1];
-	g_spots[g_nspots][2] = p[2];
-	g_nspots++;
+	for (new i = 0; i < g_nhold; i++)
+		if (get_distance_f(g_hold[i], p) < 56.0)
+			return;
+	g_hold[g_nhold] = p;
+	g_holdGate[g_nhold] = gate;
+	g_holdHigh[g_nhold] = high;
+	g_nhold++;
+}
+
+/* room for a standing player at p (feet on the floor): CLIP brushes count, so wall tops don't */
+stock bool:room_to_stand(const Float:feet[3])
+{
+	new Float:o[3];
+	o = feet;
+	o[2] += 37.0;
+	engfunc(EngFunc_TraceHull, o, o, IGNORE_MONSTERS, HULL_HUMAN, 0, 0);
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid);
+}
+
+stock build_holds()
+{
+	g_nhold = 0;
+	g_ngates = 0;
+	g_groundZ = floor_under(g_base);
+	for (new b = ls_comp_find("ls_barricade"); b && g_ngates < sizeof g_gates; b = ls_comp_find("ls_barricade", b))
+	{
+		g_gates[g_ngates] = b;
+		gate_centre(b, g_gateC[g_ngates]);
+		g_ngates++;
+	}
+	/* the map's own hold spots */
+	new marked = 0;
+	for (new m = ls_marker_find("lst_hold"); m; m = ls_marker_find("lst_hold", m))
+	{
+		new Float:o[3];
+		pev(m, pev_origin, o);
+		o[2] = floor_under(o);
+		add_hold(o, nearest_gate(o), o[2] >= g_groundZ + 48.0);
+		marked++;
+	}
+	for (new g = 0; g < g_ngates; g++)
+	{
+		new Float:c[3];
+		c = g_gateC[g];
+		new Float:gz = floor_under(c);
+		new Float:dx = g_base[0] - c[0], Float:dy = g_base[1] - c[1];
+		new Float:l = floatmax(floatsqroot(dx * dx + dy * dy), 1.0);
+		dx /= l;
+		dy /= l;
+		/* the floor just behind the gate */
+		new Float:fl[3];
+		fl[0] = c[0] + dx * 160.0;
+		fl[1] = c[1] + dy * 160.0;
+		fl[2] = gz + 1.0;
+		fl[2] = floor_under(fl);
+		if (room_to_stand(fl))
+			add_hold(fl, g, false);
+		if (marked)
+			continue;
+		/* raised floor behind it: a grid inward and along the wall */
+		new n = 0;
+		for (new t = 40; t <= 240 && n < 8; t += 40)
+			for (new s = -320; s <= 320 && n < 8; s += 64)
+			{
+				new Float:p[3];
+				p[0] = c[0] + dx * float(t) - dy * float(s);
+				p[1] = c[1] + dy * float(t) + dx * float(s);
+				p[2] = gz + 240.0;
+				new Float:fz = floor_under(p);
+				if (fz < gz + 64.0 || fz > gz + 220.0)
+					continue;
+				p[2] = fz + 1.0;
+				if (!in_base_pt(p) || !room_to_stand(p))
+					continue;
+				add_hold(p, g, true);
+				n++;
+			}
+	}
+	g_holdBuilt = true;
+	new high = 0;
+	for (new i = 0; i < g_nhold; i++)
+		if (g_holdHigh[i])
+			high++;
+	log_amx("Last Stand: %d hold spots (%d raised%s) at %d gates", g_nhold, high, marked ? ", from the map" : "", g_ngates);
+}
+
+stock nearest_gate(const Float:o[3])
+{
+	new best = -1, Float:bd = 99999.0;
+	for (new g = 0; g < g_ngates; g++)
+	{
+		new Float:d = get_distance_f(o, g_gateC[g]);
+		if (d < bd)
+		{
+			bd = d;
+			best = g;
+		}
+	}
+	return best;
+}
+
+/* how badly a gate needs people: creatures near it, its damage, broken */
+stock Float:gate_threat(g)
+{
+	new b = g_gates[g];
+	new Float:t = 0.0, Float:o[3];
+	new e = -1;
+	while ((e = find_ent_by_class(e, "ls_creature")))
+	{
+		if (pev(e, pev_deadflag) != DEAD_NO)
+			continue;
+		pev(e, pev_origin, o);
+		new Float:d = get_distance_f(o, g_gateC[g]);
+		if (d < 1200.0)
+			t += d < 500.0 ? 1.0 : 0.5;
+	}
+	new mx = floatround(ls_comp_getf(b, "hp", 500.0));
+	new hp = ls_barricade_hp(b);
+	t += 2.0 * (1.0 - float(clamp(hp, 0, mx)) / float(max(mx, 1)));
+	if (hp <= 0)
+		t += 2.0;
+	return t;
+}
+
+stock free_bots()
+{
+	new n = 0;
+	for (new p = 1; p <= MaxClients; p++)
+		if (g_role[p] == 2 && is_user_connected(p))
+			n++;
+	return n;
+}
+
+stock bots_ct()
+{
+	new n = 0;
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && is_user_bot(p) && cs_get_user_team(p) == CS_TEAM_CT)
+			n++;
+	return n;
+}
+
+stock creatures_inside()
+{
+	new n = 0, e = -1, Float:o[3];
+	while ((e = find_ent_by_class(e, "ls_creature")))
+	{
+		if (pev(e, pev_deadflag) != DEAD_NO)
+			continue;
+		pev(e, pev_origin, o);
+		if (in_base_pt(o))
+			n++;
+	}
+	return n;
 }
 
 stock assign_defenders()
 {
-	build_spots();
-	new k = random(max(g_nspots, 1));
+	if (!g_holdBuilt)
+		build_holds();
 	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_connected(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT)
 			continue;
 		if (!g_role[p])
-			g_role[p] = random_num(1, 10) <= 6 ? 1 : 2;
-		if (g_role[p] == 1)
-			send_hold(p, k++);
+		{
+			/* about 1 in 7 plays free (at least one when there are 4 or more) */
+			g_role[p] = random_num(1, 100) <= 85 ? 1 : 2;
+			if (g_role[p] == 2 && free_bots() >= max(1, bots_ct() / 7))
+				g_role[p] = 1;
+			g_stepLike[p] = random_float(0.75, 1.35);
+			g_prefGate[p] = g_ngates ? random(g_ngates) : -1;
+		}
+	}
+	g_reweighAt = 0.0;
+	weigh_defenders(true);
+}
+
+/* each holder's best spot now; a move only for a clearly better one (or its time is up) */
+stock weigh_defenders(bool:force = false)
+{
+	new Float:now = get_gametime();
+	if (!force && now < g_reweighAt)
+		return;
+	g_reweighAt = now + 3.0;
+	if (!g_nhold)
+		return;
+	new Float:threat[16];
+	for (new g = 0; g < g_ngates; g++)
+		threat[g] = gate_threat(g);
+	new inside = creatures_inside();
+	new taken[MAX_HOLD];
+	for (new p = 1; p <= MaxClients; p++)
+		if (g_holdPick[p] >= 0 && g_holdPick[p] < MAX_HOLD)
+			taken[g_holdPick[p]]++;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (g_role[p] != 1 || !is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT)
+			continue;
+		/* repairing or reviving: those goals outrank holding; it's weighed again after */
+		if (g_repairing[p])
+			continue;
+		/* a creature inside: about half the holders let go and hunt it, the rest stay up */
+		if (inside > 0 && (g_stepLike[p] < 1.05 || inside >= 3))
+		{
+			if (g_holdPick[p] >= 0)
+			{
+				new line[40];
+				formatex(line, charsmax(line), "goal_clear %d capture", p);
+				ls_comp_bots_hint(line);
+				formatex(line, charsmax(line), "goal_clear %d defend", p);
+				ls_comp_bots_hint(line);
+				taken[g_holdPick[p]]--;
+				g_holdPick[p] = -1;
+			}
+			continue;
+		}
+		new best = -1, Float:bs = -99.0, Float:o[3], Float:curSc = -99.0;
+		pev(p, pev_origin, o);
+		for (new i = 0; i < g_nhold; i++)
+		{
+			new g = g_holdGate[i];
+			new Float:th = g >= 0 ? threat[g] : 0.5;
+			new bool:broken = g >= 0 && ls_barricade_hp(g_gates[g]) <= 0;
+			new Float:sc;
+			if (g_holdHigh[i])
+				sc = (6.0 + 4.0 * th) * g_stepLike[p];
+			else
+				sc = 1.5 + th * (broken ? 2.5 : 0.8);
+			if (g == g_prefGate[p])
+				sc *= 1.25;
+			/* spread out: a spot someone else holds counts less */
+			sc /= 1.0 + 0.8 * float(taken[i] - (g_holdPick[p] == i ? 1 : 0));
+			/* the way there counts (no running across the yard for a slightly better spot) */
+			sc -= get_distance_f(o, g_hold[i]) / 300.0;
+			sc += random_float(0.0, 1.0);
+			if (i == g_holdPick[p])
+				curSc = sc;
+			if (sc > bs)
+			{
+				bs = sc;
+				best = i;
+			}
+		}
+		if (best < 0)
+			continue;
+		new cur = g_holdPick[p];
+		if (cur == best && now < g_holdUntil[p] - 2.0)
+			continue;
+		/* staying put unless clearly better (or its time there is up) */
+		if (cur >= 0 && now < g_holdUntil[p] && (bs < curSc + 4.0 || bs < curSc * 1.5))
+			continue;
+		if (cur >= 0)
+			taken[cur]--;
+		taken[best]++;
+		g_holdPick[p] = best;
+		g_holdScore[p] = bs;
+		new secs = random_num(25, 55);
+		g_holdUntil[p] = now + float(secs);
+		new line[112];
+		/* up on the step: a tight hold (the brain's "capture" station keeps it within the radius,
+		   moving between gaps, rather than wandering 400 units off); on the floor: a looser one */
+		formatex(line, charsmax(line), "goal %d %s %.0f %.0f %.0f 0 40 %d %d", p, g_holdHigh[best] ? "capture" : "defend", g_hold[best][0], g_hold[best][1], g_hold[best][2] + 1.0, secs + 5, g_holdHigh[best] ? 110 : 160);
+		ls_comp_bots_hint(line);
 	}
 }
 
-stock send_hold(p, k)
+/* step vs floor time (for tuning) */
+stock count_height()
 {
-	if (!g_nspots)
+	if (!g_holdBuilt)
 		return;
-	new spot = k % g_nspots;
-	g_spot[p] = spot;
-	new secs = random_num(45, 80);
-	g_nextShift[p] = get_gametime() + float(secs);
-	new line[96];
-	formatex(line, charsmax(line), "goal %d defend %.0f %.0f %.0f 0 35 %d 350", p, g_spots[spot][0], g_spots[spot][1], g_spots[spot][2], secs);
-	ls_comp_bots_hint(line);
-}
-
-/* a holder whose time is up moves to another spot */
-stock shift_defenders()
-{
-	new Float:now = get_gametime();
+	new Float:o[3];
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if (g_role[p] != 1 || now < g_nextShift[p] || !is_user_alive(p) || !is_user_bot(p))
+		if (!is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT)
 			continue;
-		build_spots();
-		send_hold(p, g_spot[p] + random_num(1, max(g_nspots - 1, 1)));
+		pev(p, pev_origin, o);
+		if (o[2] - 36.0 >= g_groundZ + 64.0)
+			g_stepSecs++;
+		else
+			g_floorSecs++;
 	}
 }
 
 stock clear_defenders()
 {
 	ls_comp_bots_hint("goal_clear ct defend");
+	ls_comp_bots_hint("goal_clear ct capture");
+	for (new p = 1; p <= MaxClients; p++)
+		g_holdPick[p] = -1;
 }
 
 /* =========================================================================
@@ -608,7 +872,7 @@ stock Float:diff_mult(bool:hp)
 
 stock Float:hp_mult()
 {
-	return (1.0 + 0.07 * float(g_wave - 1)) * (0.8 + 0.1 * float(defenders())) * diff_mult(true);
+	return (1.0 + 0.08 * float(g_wave - 1)) * (0.8 + 0.1 * float(defenders())) * diff_mult(true);
 }
 
 stock start_wave(n)
@@ -628,7 +892,10 @@ stock start_wave(n)
 			send_revive(d);
 
 	/* how many: grows each wave, with the team's size and the difficulty */
-	new total = floatround((5.0 + 2.5 * float(n - 1)) * (0.5 + 0.2 * float(defenders())) * diff_mult(false) * g_wCount);
+	new total = floatround((6.0 + 3.0 * float(n - 1)) * (0.5 + 0.2 * float(defenders())) * diff_mult(false) * g_wCount);
+	/* a boss wave: fewer grunts with the boss (it's the wave's threat) */
+	if (!g_bossDone)
+		total = floatround(float(total) * 0.6);
 	total = max(total, 1);
 	new nsp = max(ls_comp_count("ls_wave_spawner"), 1);
 	g_planned = 0;
@@ -657,6 +924,8 @@ stock start_wave(n)
 		log_amx("Last Stand: bots repaired %d barricade health before wave %d", g_botRepaired, n);
 	g_botRepaired = 0;
 	assign_defenders();
+	g_stepSecs = 0;
+	g_floorSecs = 0;
 	g_kills = 0;
 	g_waveAt = get_gametime();
 	log_amx("Wave %d: %d %s against %d defenders (creature health x%.2f%s)", n, g_planned, g_creatures ? "creatures" : "zombie bots", defenders(), hp_mult(), g_bossDone ? "" : ", boss wave");
@@ -709,7 +978,10 @@ public ls_on_wave_spawn(ent, wave, const Float:origin[3], const types[])
 		for (new i = 0; i < sizeof TYPES; i++)
 			if (equal(type, TYPES[i]))
 				base = float(TYPE_HP[i]);
-	new Float:hp = floatmax(base * hp_mult() * g_wHp, 1.0);
+	/* the boss: the wave's growth and difficulty, but only a little of the team-size factor
+	   (x1.4 for 6 defenders made it a wall at wave 5) */
+	new Float:mult = boss ? (1.0 + 0.08 * float(g_wave - 1)) * (0.8 + 0.04 * float(defenders())) * diff_mult(true) : hp_mult();
+	new Float:hp = floatmax(base * mult * g_wHp, 1.0);
 	entity_set_float(cr, EV_FL_health, hp);
 	entity_set_float(cr, EV_FL_max_health, hp);
 	ls_wave_track(cr);
@@ -808,7 +1080,7 @@ public ls_on_wave_cleared(wave)
 {
 	if (g_phase != PH_WAVE || wave != g_wave)
 		return;
-	log_amx("Wave %d held in %d s (%d kills)", g_wave, floatround(get_gametime() - g_waveAt), g_kills);
+	log_amx("Wave %d held in %d s (%d kills; bots on raised floor %d%% of the time)", g_wave, floatround(get_gametime() - g_waveAt), g_kills, g_stepSecs + g_floorSecs ? 100 * g_stepSecs / (g_stepSecs + g_floorSecs) : 0);
 	if (g_wave > g_record)
 	{
 		g_record = g_wave;
@@ -930,8 +1202,17 @@ public tick()
 		for (new p = 1; p <= MaxClients; p++)
 			if (is_user_connected(p) && !is_user_bot(p) && cs_get_user_team(p) == CS_TEAM_CT && !is_user_alive(p) && !g_down[p])
 				ExecuteHamB(Ham_CS_RoundRespawn, p);
+	/* the last seconds of a break: holders take their places for the wave */
+	if ((g_phase == PH_PREPARE || g_phase == PH_BREAK) && g_phaseEnd - now <= 10.0 && !g_preHeld)
+	{
+		g_preHeld = true;
+		assign_defenders();
+	}
 	if ((g_phase == PH_PREPARE || g_phase == PH_BREAK) && now >= g_phaseEnd)
+	{
+		g_preHeld = false;
 		start_wave(g_wave + 1);
+	}
 
 	/* lost: nobody standing, the base overrun, or no person left and the bots' last chance gone */
 	new alive = 0, team = 0;
@@ -958,7 +1239,7 @@ public tick()
 			record_save();
 		}
 		toast(0, 8.0, false, "The base fell on wave %d", g_wave);
-		log_amx("The base fell on wave %d (%s)", g_wave, why);
+		log_amx("The base fell on wave %d (%s) after %d s (bots on raised floor %d%% of the time)", g_wave, why, floatround(get_gametime() - g_waveAt), g_stepSecs + g_floorSecs ? 100 * g_stepSecs / (g_stepSecs + g_floorSecs) : 0);
 		g_lostLast = true;
 		ls_chat(0, "Best on %s: wave %d.", g_mapname, g_record);
 		server_cmd("endround T");
@@ -968,7 +1249,8 @@ public tick()
 	if (g_phase == PH_WAVE)
 	{
 		attack_barricades();
-		shift_defenders();
+		weigh_defenders();
+		count_height();
 		if (now >= g_stuckAt)
 		{
 			g_stuckAt = now + 15.0;
@@ -1684,7 +1966,7 @@ new Float:g_shop[3];
 new Float:g_useNext[33];
 new Float:g_menuUntil[33];
 
-new const SHOP_NAME[][] = { "Barricade repair kit", "Armour", "3 HE grenades", "Ammo", "Medkit" };
+new const SHOP_NAME[][] = { "Barricade repair kit", "Armor", "3 HE grenades", "Ammo", "Medkit" };
 new const SHOP_WHAT[][] = { "rebuild the most broken barricade fully", "kevlar + helmet", "three HE grenades", "refill all your guns", "+50 HP" };
 new const SHOP_PRICE[] = { 600, 650, 900, 300, 500 };
 new g_shopCb;
@@ -1785,7 +2067,7 @@ stock shop_why_not(id, i, out[], len)
 		{
 			new CsArmorType:t;
 			if (cs_get_user_armor(id, t) >= 100 && t == CS_ARMOR_VESTHELM)
-				copy(out, len, "you have full armour");
+				copy(out, len, "you have full armor");
 		}
 		case 2: if (g_hePack[id] >= 3) copy(out, len, "you have 3 already");
 		case 4: if (get_user_health(id) >= 100) copy(out, len, "you're at full health");

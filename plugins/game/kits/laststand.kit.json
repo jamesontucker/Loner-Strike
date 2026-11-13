@@ -32,7 +32,7 @@
     {
       "id": "lst_shop",
       "label": "Armory",
-      "description": "Where players press USE for repair kits, armour, grenades and ammo; the shopkeeper stands here. A func_buyzone named lst_shop works too. Without one, the armory is the base.",
+      "description": "Where players press USE for repair kits, armor, grenades and ammo; the shopkeeper stands here. A func_buyzone named lst_shop works too. Without one, the armory is the base.",
       "type": "point",
       "required": {
         "min": 0,

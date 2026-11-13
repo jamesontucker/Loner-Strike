@@ -2757,7 +2757,8 @@ stock tick_crate(s, bool:sec)
 	{
 		/* nobody's opened it yet: the nearest bots are sent again every 15 s for 2 min (a fight
 		   or a 45-s goal running out left most of a big map's drops shut) */
-		if (sec && g_now - g_pf[s][W_FALL] < 120.0 && floatround(g_now - g_pf[s][W_FALL]) % 15 == 0)
+		if (sec && g_now - g_pf[s][W_FALL] < 120.0 && floatround(g_now - g_pf[s][W_FALL]) % 15 == 0
+			&& !creature_near(g_org[s], g_org[s], 1500.0))
 			bots_to_crate(s);
 		bots_open(s);
 		solid_when_clear(s, SOLID_BBOX);
