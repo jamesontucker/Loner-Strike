@@ -642,8 +642,12 @@ stock landing_spot(id, Float:out[3])
 		}
 	}
 	new pts[64], n = 0;
-	for (new e = ls_comp_find("ls_respawn_point"); e && n < sizeof pts; e = ls_comp_find("ls_respawn_point", e))
+	/* a map kit's landing spots (ls_marker kind=br_drop), else the respawn points */
+	for (new e = ls_marker_find("br_drop"); e && n < sizeof pts; e = ls_marker_find("br_drop", e))
 		pts[n++] = e;
+	if (!n)
+		for (new e = ls_comp_find("ls_respawn_point"); e && n < sizeof pts; e = ls_comp_find("ls_respawn_point", e))
+			pts[n++] = e;
 	if (!n)
 	{
 		pev(id, pev_origin, out);

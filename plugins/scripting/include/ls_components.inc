@@ -73,6 +73,13 @@ native ls_comp_find(const classname[], start = 0);
 /** The next component whose targetname is this, after start (0 to begin). */
 native ls_comp_by_name(const targetname[], start = 0);
 
+/** Mode map kits: the next ls_marker named spot of this kind (lst_shop, br_drop, ...) after start
+    (0 to begin; "" any kind). Markers whose kind is a component classname are that component. */
+native ls_marker_find(const kind[], start = 0);
+
+/** A marker's key (size, radius, angle, any other); false if it has none. */
+native bool:ls_marker_get(ent, const key[], out[], len);
+
 /** How many components of a kind there are ("" counts all). */
 native ls_comp_count(const classname[] = "");
 

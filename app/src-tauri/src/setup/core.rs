@@ -140,6 +140,15 @@ pub fn plugins(rec: &mut Record, ctx: &Ctx) -> Result<Vec<String>, String> {
     }
     // files the plugins use in the game itself (the bots' spray), at the same place there
     for (full, rel) in tree(&ctx.res.join("plugins").join("game")) {
+        // the hand-written mode map kits are the app's (the map editor and the Studio read them)
+        if let Some(name) = rel.strip_prefix("kits/") {
+            let dir = crate::sys::app_dir().join("kits");
+            let _ = std::fs::create_dir_all(&dir);
+            if let Err(e) = std::fs::copy(&full, dir.join(name)) {
+                ctx.progress.note(&format!("Couldn't copy the mode map kit {name} ({e})."));
+            }
+            continue;
+        }
         rec.copy(&full, &rel)?;
     }
     let mut failed = vec![];

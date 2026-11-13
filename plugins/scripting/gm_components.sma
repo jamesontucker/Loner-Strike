@@ -261,6 +261,11 @@ new bool:g_lsBot;
 new Trie:g_models;
 new g_mapname[64];
 new g_modeId[32];
+/* Mode map kits: an ls_marker (kind, mode, targetname, size, radius, ...) becomes the component
+   its kind names, or stays a named spot the mode's plugin finds (ls_marker_find) */
+#define PEND_MARKER 99
+new Trie:g_mkKeys[MAX_ENTS];
+new g_nmarkers;
 new g_sprBeam, g_sprSmoke, g_mdlGibs;
 new g_msgBarTime, g_msgBarTime2, g_msgStatusIcon, g_msgFade, g_msgRoundTime, g_msgRadar;
 new g_sync;
@@ -299,7 +304,10 @@ public plugin_precache()
 	for (new s = 0; s < MAX_COMP; s++)
 		g_keys[s] = Invalid_Trie;
 	for (new e = 0; e < MAX_ENTS; e++)
+	{
 		g_pendKeys[e] = Invalid_Trie;
+		g_mkKeys[e] = Invalid_Trie;
+	}
 
 	g_sprBeam = precache_model("sprites/laserbeam.spr");
 	g_sprSmoke = precache_model("sprites/smokepuff.spr");
@@ -340,6 +348,8 @@ public plugin_natives()
 	register_native("ls_comp_kind", "n_kind");
 	register_native("ls_comp_find", "n_find");
 	register_native("ls_comp_by_name", "n_by_name");
+	register_native("ls_marker_find", "n_marker_find");
+	register_native("ls_marker_get", "n_marker_get");
 	register_native("ls_comp_count", "n_count");
 	register_native("ls_comp_get", "n_get");
 	register_native("ls_comp_getf", "n_getf");
@@ -628,7 +638,7 @@ public fm_keyvalue(ent, kvd)
 		   a time, so "the entity being parsed" tells the repeat from a new one) */
 		new bool:first = ent != g_parseEnt;
 		g_parseEnt = ent;
-		new kind = kind_of(val);
+		new kind = equal(val, "ls_marker") ? PEND_MARKER : kind_of(val);
 		if (first)
 		{
 			g_pend[ent] = K_NONE;
@@ -663,6 +673,11 @@ public fm_spawn_post(ent)
 	new Trie:keys = g_pendKeys[ent];
 	g_pend[ent] = K_NONE;
 	g_pendKeys[ent] = Invalid_Trie;
+	if (kind == PEND_MARKER)
+	{
+		marker_place(ent, keys, SRC_MAP);
+		return FMRES_IGNORED;
+	}
 	if (comp_add(ent, kind, keys, SRC_MAP) < 0)
 		TrieDestroy(keys);
 	return FMRES_IGNORED;
@@ -1554,6 +1569,16 @@ stock load_pack(const path[])
 		pos += next_token(line[pos], ys, charsmax(ys));
 		pos += next_token(line[pos], zs, charsmax(zs));
 		copy(rest, charsmax(rest), line[pos]);
+		if (equal(cls, "ls_marker") && zs[0])
+		{
+			new Float:mo[3];
+			mo[0] = str_to_float(xs);
+			mo[1] = str_to_float(ys);
+			mo[2] = str_to_float(zs);
+			if (marker_make(mo, rest, SRC_PACK))
+				n++;
+			continue;
+		}
 		new kind = kind_of(cls);
 		if (!kind || kind == K_CRATE || !zs[0])
 		{
@@ -1582,6 +1607,135 @@ stock next_token(const text[], out[], len)
 		out[o++] = text[i++];
 	out[o] = EOS;
 	return i;
+}
+
+/* ---- Mode map kits: ls_marker ------------------------------------------------------------
+   kind      what it marks: a component classname (ls_wave_spawner, ls_barricade, ls_safe_zone...)
+             makes that component with the marker's other keys; lst_base makes the Last Stand base
+             box (an ls_damage_zone that does nothing); anything else (lst_shop, br_drop, ...) is a
+             named spot: targetname = its kind unless it has one, found with ls_marker_find
+   mode      the mode(s) it's for ("laststand", "br", "laststand,br"; empty or "any": every mode).
+             A marker for another mode is left out. */
+stock bool:marker_for_mode(Trie:keys)
+{
+	new m[96];
+	if (!TrieGetString(keys, "mode", m, charsmax(m)) || !m[0] || equali(m, "any"))
+		return true;
+	if (!g_modeId[0])
+		return false;
+	new tok[32];
+	while (m[0])
+	{
+		strtok2(m, tok, charsmax(tok), m, charsmax(m), ',', TRIM_FULL);
+		if (equali(tok, g_modeId))
+			return true;
+	}
+	return false;
+}
+
+/* what a marker becomes: a component kind, or K_NONE (a named spot); keys filled in for aliases */
+stock marker_kind(Trie:keys)
+{
+	new k[32];
+	TrieGetString(keys, "kind", k, charsmax(k));
+	if (equal(k, "lst_base"))
+	{
+		if (!TrieKeyExists(keys, "targetname"))
+			TrieSetString(keys, "targetname", "lst_base");
+		TrieSetString(keys, "dmg", "0");
+		TrieSetString(keys, "show", "0");
+		TrieSetString(keys, "enabled", "0");
+		if (!TrieKeyExists(keys, "name"))
+			TrieSetString(keys, "name", "Base");
+		return K_DAMAGE;
+	}
+	new kind = kind_of(k);
+	return kind == K_CRATE ? K_NONE : kind;
+}
+
+/* a marker entity (an info_target already spawned) takes its place; keys are kept or freed */
+stock marker_place(ent, Trie:keys, src)
+{
+	if (!marker_for_mode(keys))
+	{
+		TrieDestroy(keys);
+		set_pev(ent, pev_flags, pev(ent, pev_flags) | FL_KILLME);
+		return 0;
+	}
+	new kind = marker_kind(keys);
+	if (kind)
+	{
+		if (comp_add(ent, kind, keys, src) < 0)
+		{
+			TrieDestroy(keys);
+			return 0;
+		}
+		return ent;
+	}
+	new k[32], tn[32];
+	TrieGetString(keys, "kind", k, charsmax(k));
+	if (!TrieGetString(keys, "targetname", tn, charsmax(tn)) || !tn[0])
+		copy(tn, charsmax(tn), k);
+	set_pev(ent, pev_classname, "ls_marker");
+	set_pev(ent, pev_targetname, tn);
+	set_pev(ent, pev_netname, k);
+	if (g_mkKeys[ent] != Invalid_Trie)
+		TrieDestroy(g_mkKeys[ent]);
+	g_mkKeys[ent] = keys;
+	g_nmarkers++;
+	return ent;
+}
+
+stock marker_make(const Float:origin[3], const keys[], src)
+{
+	new ent = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"));
+	if (!ent || ent >= MAX_ENTS)
+	{
+		if (ent)
+			engfunc(EngFunc_RemoveEntity, ent);
+		return 0;
+	}
+	new Trie:t = TrieCreate();
+	parse_keys(t, keys);
+	engfunc(EngFunc_SetOrigin, ent, origin);
+	dllfunc(DLLFunc_Spawn, ent);
+	if (!marker_place(ent, t, src))
+	{
+		if (pev_valid(ent))
+			engfunc(EngFunc_RemoveEntity, ent);
+		return 0;
+	}
+	return ent;
+}
+
+/* native ls_marker_find(const kind[], start = 0): the next named-spot marker of that kind */
+public n_marker_find(plugin, params)
+{
+	new kind[32], k[32];
+	get_string(1, kind, charsmax(kind));
+	for (new e = max(get_param(2), 0) + 1; e < MAX_ENTS; e++)
+	{
+		if (g_mkKeys[e] == Invalid_Trie || !pev_valid(e))
+			continue;
+		pev(e, pev_netname, k, charsmax(k));
+		if (!kind[0] || equal(k, kind))
+			return e;
+	}
+	return 0;
+}
+
+/* native ls_marker_get(ent, const key[], out[], len): a marker's key; false if it has none */
+public n_marker_get(plugin, params)
+{
+	new ent = get_param(1);
+	if (ent <= 0 || ent >= MAX_ENTS || g_mkKeys[ent] == Invalid_Trie)
+		return 0;
+	new key[32], v[128];
+	get_string(2, key, charsmax(key));
+	if (!TrieGetString(g_mkKeys[ent], key, v, charsmax(v)))
+		return 0;
+	set_string(3, v, get_param(4));
+	return 1;
 }
 
 stock comp_make(kind, const Float:origin[3], const keys[], src)
