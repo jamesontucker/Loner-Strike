@@ -5,8 +5,9 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Banner, BusyButton, Info, LoadError, Segmented, Switch, useConfirm, useToast } from "../../../ui";
+import { Banner, LoadError, Segmented, Switch, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading, Row, Rows } from "../common";
+import { ActionBar } from "../common/ActionBar";
 import { errorText, useBusy } from "../common/api";
 import { ACTIONS, ALL_ACTIONS, COLOURS, commandWords, keyFromCode, keyLabel, MOUSE, NET, PRESETS, RESERVED } from "./catalog";
 import { CrosshairPreview, type Motion } from "./Crosshair";
@@ -376,30 +377,27 @@ export default function PlayerConfig() {
         </div>
       </div>
 
-      <div className="panel pc-save">
-        <div className="row between pc-save-row">
-          <div>
-            <strong>{dirty ? "You have changes to save" : "Nothing new to save"}</strong>{" "}
-            <Info text="Saved in the game's userconfig.cfg, which it runs every time it starts, after its own config.cfg. Only settings that differ from the game's go in, so the rest still follow the game's Options. Your own lines in that file stay, and a copy of the old file is kept first." />
-            <p className="muted">In {game.label}'s userconfig.cfg</p>
-          </div>
-          <div className="row">
-            {game.canRestore && <BusyButton className="btn" busy={working === "Putting back…"} disabled={!!working} label="Put back the previous file" busyLabel="Putting back…" onClick={putBack} />}
-            {game.hasBlock && <BusyButton className="btn" busy={working === "Taking out…"} disabled={!!working} label="Take out" busyLabel="Taking out…" onClick={takeOut} />}
-            {dirty && (
-              <button type="button" className="btn" disabled={!!working} onClick={() => setChoice(start)}>
-                Undo changes
-              </button>
-            )}
-            <BusyButton className="btn primary" busy={working === "Saving…"} disabled={!dirty || !!working || !!lineError} label="Save" busyLabel="Saving…" onClick={save} />
-          </div>
-        </div>
+      <details className="panel pc-more">
+        <summary>What gets saved</summary>
+        {lines === null ? <Loading text="Working it out…" /> : lines.length === 0 ? <p className="muted">Nothing: everything is as the game has it.</p> : <pre className="pc-lines">{lines.join("\n")}</pre>}
+      </details>
+
+      <ActionBar
+        dirty={dirty}
+        errors={lineError ? 1 : 0}
+        working={working}
+        where={`${game.label}'s userconfig.cfg`}
+        info="Saved in the game's userconfig.cfg, which it runs every time it starts, after its own config.cfg. Only settings that differ from the game's go in, so the rest still follow the game's Options. Your own lines in that file stay, and a copy of the old file is kept first."
+        save={{ onClick: save }}
+        undo={() => setChoice(start)}
+        more={[
+          { label: "Put back the previous file", busyLabel: "Putting back…", onClick: putBack, hidden: !game.canRestore },
+          { label: "Take out Loner-Strike's lines", busyLabel: "Taking out…", onClick: takeOut, hidden: !game.hasBlock, note: "Your own lines in userconfig.cfg stay" },
+        ]}
+        reset={{ tool: "playercfg" }}
+      >
         {lineError && <p className="pc-warn" role="alert">{lineError}</p>}
-        <details className="pc-more">
-          <summary>What gets saved</summary>
-          {lines === null ? <Loading text="Working it out…" /> : lines.length === 0 ? <p className="muted">Nothing: everything is as the game has it.</p> : <pre className="pc-lines">{lines.join("\n")}</pre>}
-        </details>
-      </div>
+      </ActionBar>
     </div>
   );
 }

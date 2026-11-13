@@ -42,7 +42,7 @@ export function MenuButton({ label, items, icon = true, side = "bottom", align =
   useLayoutEffect(() => {
     if (!open || !btn.current || !list.current) return;
     placePopup(btn.current.getBoundingClientRect(), list.current, side, align, 4);
-    list.current.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus();
+    list.current.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus({ preventScroll: true });
   }, [open, side, align]);
 
   useEffect(() => {
@@ -52,13 +52,21 @@ export function MenuButton({ label, items, icon = true, side = "bottom", align =
       if (!list.current?.contains(t) && !btn.current?.contains(t)) setOpen(false);
     };
     const close = () => setOpen(false);
+    // the page scrolling leaves it behind: close when the button moved (not for the menu's own
+    // list scrolling, or the page nudging the focused button into view)
+    const at = btn.current?.getBoundingClientRect().top ?? 0;
+    const scrolled = (e: Event) => {
+      if (list.current?.contains(e.target as Node)) return;
+      const now = btn.current?.getBoundingClientRect().top ?? at;
+      if (Math.abs(now - at) > 2) setOpen(false);
+    };
     document.addEventListener("pointerdown", away);
     window.addEventListener("resize", close);
-    document.addEventListener("scroll", close, true);
+    document.addEventListener("scroll", scrolled, true);
     return () => {
       document.removeEventListener("pointerdown", away);
       window.removeEventListener("resize", close);
-      document.removeEventListener("scroll", close, true);
+      document.removeEventListener("scroll", scrolled, true);
     };
   }, [open]);
 

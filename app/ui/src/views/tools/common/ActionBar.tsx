@@ -1,6 +1,6 @@
 // The one save bar for every tool that saves something. Pinned to the bottom of the tool's
 // area (sticky: it sits after the content at the end of the page, so it never hides the last
-// field, and the page leaves room for it when a field is focused). One compact row: what's
+// field, and a field focused behind it scrolls clear). One compact row: what's
 // going on at the left (unsaved changes / saved ✓ / things to fix / working…), the actions at
 // the right, Save last, everything else in a "More" menu, with "Reset to Loner-Strike's
 // default…" at the end of it (the safety net's restore, with a sheet listing the files).
@@ -16,7 +16,7 @@
 //     {errors.length > 0 && <ProblemList list={errors} />}   (shown under the row)
 //   </ActionBar>
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Info } from "../../../ui";
 import { MenuButton, type MenuItem } from "./Menu";
 import { useResetDefaults } from "./resetDefaults";
@@ -69,6 +69,26 @@ export function ActionBar({ dirty, errors = 0, working, where, info, status, sav
   }, [dirty]);
   const resetter = useResetDefaults(reset ? reset.tool : "", { match: reset ? reset.match : [], dirty, label: reset ? reset.label : undefined });
   const busy = !!working || !!resetter.working;
+  const bar = useRef<HTMLDivElement>(null);
+  // a field focused behind the bar (Tab, a search) scrolls up clear of it
+  useEffect(() => {
+    const onFocus = (e: FocusEvent) => {
+      const t = e.target;
+      const b = bar.current;
+      if (!b || !(t instanceof HTMLElement) || b.contains(t)) return;
+      requestAnimationFrame(() => {
+        const r = t.getBoundingClientRect();
+        const br = b.getBoundingClientRect();
+        if (r.bottom > br.top && r.top < br.bottom) {
+          let sc: HTMLElement | null = b.parentElement;
+          while (sc && !/(auto|scroll)/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement;
+          (sc ?? window).scrollBy({ top: r.bottom - br.top + 12 });
+        }
+      });
+    };
+    document.addEventListener("focusin", onFocus);
+    return () => document.removeEventListener("focusin", onFocus);
+  }, []);
   const saving = save?.busyLabel ?? "Saving…";
 
   const words = status ?? (
@@ -101,7 +121,7 @@ export function ActionBar({ dirty, errors = 0, working, where, info, status, sav
   if (reset && resetter.available) menu.push({ label: resetter.label, onClick: resetter.open, disabled: busy, danger: true, separator: menu.length > 0 });
 
   return (
-    <div className={`tl-actionbar ${className}`} role="region" aria-label="Save">
+    <div ref={bar} className={`tl-actionbar ${className}`} role="region" aria-label="Save">
       <div className="tl-ab-row">
         <div className="tl-ab-status" aria-live="polite">
           {words}

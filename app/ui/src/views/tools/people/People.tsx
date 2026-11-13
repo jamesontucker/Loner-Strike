@@ -6,6 +6,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Banner, BusyButton, Info, LoadError, Segmented, useConfirm, useToast } from "../../../ui";
+import { ActionBar } from "../common/ActionBar";
 import { Empty, Loading, Row, Rows } from "../common";
 import { errorText, useBusy } from "../common/api";
 import { checkPeople, exportPeople, importPeople, peopleStatus, restorePeople, savePeople, shippedPeople, type Arch, type Catalog, type NameEdits, type People as PeopleModel, type Problem, type Status, type Who } from "./peopleApi";
@@ -547,28 +548,24 @@ export default function People() {
         </div>
       )}
 
-      <div className="panel pp-save">
-        <div className="row between pp-save-row">
-          <div>
-            <strong>{dirty ? "You have changes to save" : "Nothing new to save"}</strong>{" "}
-            <Info text="Saved into the game's people.ini, and a copy of the old one is kept first. A running game picks it up straight away; name changes show from the next map. Loner-Strike's updates keep your changes and put their own version beside yours." />
-            <p className="muted">{errors.length > 0 ? `${errors.length} thing${errors.length === 1 ? "" : "s"} to fix before saving` : `In the people.ini for ${st.game}`}</p>
-          </div>
-          <div className="row">
-            <BusyButton className="btn" busy={working === "Opening…"} disabled={!!working} label="Import" busyLabel="Opening…" onClick={doImport} />
-            <BusyButton className="btn" busy={working === "Exporting…"} disabled={!!working} label="Export" busyLabel="Exporting…" onClick={doExport} />
-            {!st.newBeside && <BusyButton className="btn" busy={working === "Loading…"} disabled={!!working} label="Start from Loner-Strike's" busyLabel="Loading…" onClick={fromShipped} />}
-            {st.canRestore && <BusyButton className="btn" busy={working === "Putting back…"} disabled={!!working} label="Put back the previous file" busyLabel="Putting back…" onClick={putBack} />}
-            {dirty && (
-              <button type="button" className="btn" disabled={!!working} onClick={() => reset(st)}>
-                Undo changes
-              </button>
-            )}
-            <BusyButton className="btn primary" busy={working === "Saving…"} disabled={!dirty || !!working || errors.length > 0} label="Save" busyLabel="Saving…" onClick={save} />
-          </div>
-        </div>
+      <ActionBar
+        dirty={dirty}
+        errors={errors.length}
+        working={working}
+        where={`people.ini for ${st.game}`}
+        info="Saved into the game's people.ini, and a copy of the old one is kept first. A running game picks it up straight away; name changes show from the next map. Loner-Strike's updates keep your changes and put their own version beside yours."
+        save={{ onClick: save }}
+        undo={() => reset(st)}
+        more={[
+          { label: "Import…", busyLabel: "Opening…", onClick: doImport, note: "Read a people.ini from a file" },
+          { label: "Export…", busyLabel: "Exporting…", onClick: doExport, note: "Save these people to a file" },
+          { label: "Start from Loner-Strike's", busyLabel: "Loading…", onClick: fromShipped, hidden: st.newBeside, note: "Load the shipped kinds of people to edit (not saved yet)" },
+          { label: "Put back the previous file", busyLabel: "Putting back…", onClick: putBack, hidden: !st.canRestore },
+        ]}
+        reset={{ tool: "people", match: ["addons/amxmodx/configs/gamemodes/people.ini", "addons/amxmodx/configs/gamemodes/regular_names.ini"] }}
+      >
         {errors.length > 0 && <ProblemList list={errors.slice(0, 5)} />}
-      </div>
+      </ActionBar>
     </div>
   );
 }

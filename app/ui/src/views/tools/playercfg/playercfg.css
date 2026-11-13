@@ -30,7 +30,7 @@
 .pc-num input[type="range"] { width: 160px; max-width: 40vw; }
 .pc-num .search { flex: none; width: 84px; }
 
-.pc-more { margin-top: 10px; }
+.pc-more { margin: 0; }
 .pc-more summary { cursor: pointer; font-weight: 600; color: var(--bone-dim); }
 .pc-more summary:hover { color: var(--bone); }
 
@@ -39,7 +39,4 @@
 .pc-key-btn { min-width: 128px; white-space: nowrap; }
 .pc-key-btn.waiting { box-shadow: inset 0 0 0 2px var(--signal); }
 
-.pc-save { position: sticky; bottom: 8px; z-index: 2; }
-.pc-save-row { flex-wrap: wrap; gap: 10px 16px; align-items: center; }
-.pc-save-row p { margin: 2px 0 0; font-size: 14px; max-width: 70ch; }
 .pc-lines { margin: 8px 0 0; padding: 10px 12px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; overflow: auto; max-height: 260px; font-size: 13px; }

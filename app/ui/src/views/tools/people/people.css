@@ -63,6 +63,3 @@
 .pp-regs li.gone strong { text-decoration: line-through; color: var(--bone-faint); }
 .pp-regs + .btn { margin-top: 10px; }
 
-.pp-save { position: sticky; bottom: 8px; z-index: 2; }
-.pp-save-row { flex-wrap: wrap; gap: 10px 16px; align-items: center; }
-.pp-save-row p { margin: 2px 0 0; font-size: 14px; max-width: 70ch; }

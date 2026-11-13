@@ -3,9 +3,9 @@
 
 /* ---- the action bar: sticky at the bottom of the tool's area, one compact row ----------------
    It's the page's last child: while there's more page below it sits pinned at the bottom edge;
-   at the end of the page it sits after the content, so it never hides the last field. Focused
-   fields scroll clear of it (scroll-padding). It bleeds over the page's side padding. */
-.content:has(.tl-actionbar) { padding-bottom: 0; scroll-padding-bottom: 76px; }
+   at the end of the page it sits after the content, so it never hides the last field. A field
+   focused behind it scrolls clear (ActionBar.tsx). It bleeds over the page's side padding. */
+.content:has(.tl-actionbar) { padding-bottom: 0; }
 .tl-actionbar {
   --tl-bleed: var(--gutter);
   position: sticky; bottom: 0; z-index: 15;
