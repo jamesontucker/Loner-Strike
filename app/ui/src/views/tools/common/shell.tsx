@@ -216,8 +216,7 @@ export function useToolsShell(startFrom: (address: string | null) => void) {
       }
       openAddress(to.tools, true);
     };
-    // the mouse's back and forward buttons, Alt+← and Alt+→ (not while typing, and not in the
-    // map editor, where Alt+arrows nudge)
+    // the mouse's back and forward buttons, Alt+← and Alt+→ (not while typing)
     const onMouse = (e: MouseEvent) => {
       if (e.button !== 3 && e.button !== 4) return;
       e.preventDefault();
@@ -227,7 +226,8 @@ export function useToolsShell(startFrom: (address: string | null) => void) {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || !e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || isField(e.target)) return;
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-      if (useToolPage.getState().tool === "editor" || document.querySelector(".sheet-backdrop")) return;
+      // (the map editor's arrows nudge without Alt, so Alt+← is Back there too: P5)
+      if (document.querySelector(".sheet-backdrop")) return;
       e.preventDefault();
       if (e.key === "ArrowLeft") history.back();
       else history.forward();

@@ -16,6 +16,7 @@ import { Dialogs } from "./Dialogs";
 import { mapNameOf } from "./ComponentPanel";
 import { useOutsideChanges } from "./extras";
 import { useToolCrumbs } from "../common/shell";
+import { useReportAddress } from "../common/address";
 import { useDirty } from "../../../store";
 import { useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
@@ -47,9 +48,22 @@ const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.isCont
 
 export default function MapEditor(_: ToolProps) {
   const doc = useEditor((s) => s.doc);
+  // P5: the bare "editor" address is the start screen (the "Map editor" crumb, Back), even with a
+  // map open in the app; "editor:<map>" is the open map. A new page per address (the shell
+  // starts the page over), so this is decided once, when the page opens.
+  const toolArg = useToolArg();
+  const [atStart, setAtStart] = useState(() => !toolArg);
+  const startedWith = useRef<number | null | undefined>(undefined);
+  if (atStart && doc !== undefined && startedWith.current === undefined) startedWith.current = doc?.docId ?? null;
+  useEffect(() => {
+    // something on the start screen opened a map (new, open, import, recent, recover)
+    if (atStart && startedWith.current !== undefined && doc && doc.docId !== startedWith.current) setAtStart(false);
+  }, [atStart, doc]);
+  const showing = !!doc && !atStart;
+  useReportAddress("editor", showing ? `editor:${doc.name.replace(/[^A-Za-z0-9_.-]+/g, "_") || "map"}` : "editor");
   // P4 (P6's request): the open map's name in the breadcrumb, and a check before leaving with unsaved changes
-  useToolCrumbs("editor", doc ? [{ label: doc.name }] : null);
-  useDirty("editor", !!doc?.dirty);
+  useToolCrumbs("editor", showing ? [{ label: doc.name }] : null);
+  useDirty("editor", showing && !!doc?.dirty);
   const loadError = useEditor((s) => s.loadError);
   const fileBusy = useEditor((s) => s.fileBusy);
   const toast = useToast();
@@ -81,13 +95,13 @@ export default function MapEditor(_: ToolProps) {
       </div>
     );
   }
-  if (doc === null) return <Start onPick={replace} busy={fileBusy} error={loadError} />;
+  if (doc === null || atStart) return <Start onPick={replace} busy={fileBusy} error={loadError} open={doc ? { name: doc.name, dirty: doc.dirty, go: () => setAtStart(false) } : null} />;
   return <Editor replace={replace} />;
 }
 
 type Pick = "new" | "open" | "import" | "recover" | number;
 
-function Start({ onPick, busy, error }: { onPick: (w: Pick) => void; busy: string | null; error: string | null }) {
+function Start({ onPick, busy, error, open }: { onPick: (w: Pick) => void; busy: string | null; error: string | null; open?: { name: string; dirty: boolean; go: () => void } | null }) {
   const [recent, setRecent] = useState<RecentFile[]>([]);
   const [rec, setRec] = useState<Recovery | null>(null);
   useEffect(() => {
@@ -116,6 +130,19 @@ function Start({ onPick, busy, error }: { onPick: (w: Pick) => void; busy: strin
               </button>
               <button type="button" className="btn small" disabled={!!busy} onClick={() => void api.discardRecovery().then(() => setRec(null))}>
                 Throw it away
+              </button>
+            </span>
+          </div>
+        )}
+        {/* P5: the map still open in the app (from the "Map editor" crumb or Back) */}
+        {open && (
+          <div className="banner editor-recover" role="status">
+            <span>
+              “{open.name}” is still open{open.dirty ? " (with unsaved changes)" : ""}.
+            </span>
+            <span className="editor-recover-actions">
+              <button type="button" className="btn small primary" disabled={!!busy} onClick={open.go}>
+                Back to {open.name}
               </button>
             </span>
           </div>
