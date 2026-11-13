@@ -2700,3 +2700,62 @@ a column of `.tools-panel`s on the right, a status line under the map) with **P8
 - Start page badges are only what /api/tools/maps knows cheaply; per-map problem counts (nav fixer problems, doctor's
   full report) would need a summary route that reads every nav / BSP — left out on purpose (365 maps).
 - Not clicked through with a real save here (saving writes the real game folder); the save paths are unchanged.
+
+### Agent R: Plugin Studio, round 2 (user feedback) — 2026-11-12
+**1. Read only, everywhere (UI and routes, so MCP too).** One rule in `tools/plugins.rs` (`protection`, `owner_of`):
+- read only in every folder view and refused by save / try it / rename / delete / take out:
+  - `OUR_PLUGINS` (incl. gm_components, gm_laststand, gm_battleroyale);
+  - AMX Mod X's own plugins (`AMXX_BASE`);
+  - every plugin the catalog's modes and add-ons build (`compile` src/out in `catalog/**.json`, read from the app's resources);
+  - `studio_*` (X's rule, kept);
+  - any `plugins/<name>.amxx` in the game that neither the Studio nor the Mods page put there (zp, superhero, ...);
+  - all include files, incl. loner.inc / ls_components.inc.
+- Case doesn't get round it. A copy in My plugins is fine, but it can't be tried under a shipped name. Delete/rename: My plugins only.
+- Tests: `shipped_plugins_are_read_only_everywhere` (every kind, every action, files unchanged after), `routes_refuse_shipped_plugins` (through the routes with X-Panel, and 403 without it), `rename_in_my_plugins`.
+
+**2. Getting back to how it was.**
+- **Reset to Loner-Strike's version** (`POST /api/tools/plugins/reset`) for our plugins whose source in the game differs from the
+  app's copy (a hand edit; \r\n ignored): source back, then `<name>.amxx` rebuilt from it (Repair hint if the compiler isn't there),
+  and for an old loner.inc/ls_components.inc in the game's include folder. Kept by the safety net first. The list marks changed files
+  (●); the read-only note says so and offers Reset.
+  - Real finding: this machine's `gamemodes.sma`, `gm_botchat.sma` and `gm_botping.sma` differ from the repo's (setup not re-run).
+- Mods and AMX Mod X plugins have no pristine copy in the app: the note says "use Repair on the Mods page"; Studio plugins: "compile the graph".
+- **Restore a previous version…** (History sheet for the open file, P7's `HistoryPanel`). My plugins now go through the safety net
+  too: `keep_mine` registers `<app>/plugin-studio` as a root (rel `my-plugins/<file>`). The app's scratch files (build/, include/)
+  are written without backups.
+- All of these, plus Save a copy / Rename / Delete, are in P8's ActionBar More menu; Save/Compile/Try it/Take it out are in the bar.
+  The open file reloads after a History restore or Undo (`ls-files-restored`).
+- Test: `reset_to_loner_strikes_version`, `my_plugins_are_kept_by_the_safety_net`.
+
+**3. Completions.**
+- Include files come from every include folder on the install: `include/` (+ subfolders) and the mods' `scripting/*_include/`.
+  - Real game: 124 files, 5797 words (was 68 / 5126).
+  - The coverage check (`inc::coverage::include_coverage`, LS_TEST_GAME) finds every native/forward/stock declaration but `fm_spawn`,
+    which is commented out in fakemeta_util.inc. `shero_include/VexdUM.inc` has nothing left in it to list (reported as `empty`).
+- **F12 / Ctrl+click** go to definition: your own functions in the file, or the include opened read only at the line (peek works too).
+- Hover links to the AMX Mod X API page (`docs.ts`: the include list amxmodx.org/api has, checked live).
+- **The "/" menu**: "/" at the start of a line, or the Insert… button. It has 38 snippets:
+  - plugin_init/precache/cfg/end;
+  - clcmd/concmd+cmd_access/srvcmd/chat command;
+  - putinserver/disconnected/authorized;
+  - RegisterHamPlayer spawn/killed/damage (the ReGameDLL finding; templates, the example and LONER-INC.md switched from
+    `RegisterHam(..., "player")`);
+  - DeathMsg, round start/new round/end;
+  - give, HUD with sync object, loner HUD slots, chat, timers incl. per-player tasks, countdown;
+  - menu with handler, bind_pcvar num/float/string cvars, loops, mode registration.
+  - It also offers whole templates in an empty file, New plugin, and Docs.
+  - Ctrl+/ stays "comment line" (what coders expect).
+- Monaco's "Canceled" rejections are swallowed. Sticky scroll is off: its header kept the previous file's line.
+
+**4. Help & docs** (bottom tab, and the button by Insert): search every word (any words, `_` ignored) with signature, docs, params,
+returns, notes, "Put it in my code", "Open <include> at it" and its AMX Mod X page; Loner-Strike's docs (LONER-INC.md, COMPONENTS.md)
+shown in the app (small Markdown reader, lazy chunks); guides: API reference, Intro to scripting, Pawn tutorial, Advanced scripting,
+the wiki's scripting category, HL1 game events, AMXX docs, AlliedModders forums, CompuPhase Pawn, ReGameDLL_CS, ReAPI (links checked).
+
+**Checks:** clean export of HEAD + my files: `cargo test` 676 passed, `npm run build` green. Start chunk unchanged (Help, docs and
+the .md files are in the Plugin Studio chunk / their own). PluginStudio chunk is 41 kB, 14.2 kB gz (was 21.5).
+- Screenshot test "Plugin Studio: shipped plugins are read only, docs, go to definition and the / menu" passes at both sizes. It
+  writes only to My plugins in the dev server's temp app folder. With it, "Tools page plugins" and "focus mode plugins" pass.
+
+**Requests**
+- (S, MCP) New routes `/api/tools/plugins/rename` and `/reset` (edits), if the MCP wraps the Plugin Studio's routes.
