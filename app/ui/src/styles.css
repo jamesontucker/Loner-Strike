@@ -1768,6 +1768,7 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .radio-list { list-style: none; margin: 3px 0 0; padding: 3px; max-height: 210px; overflow-y: auto; background: #171a12; box-shadow: var(--sunken); border-radius: 2px; }
 .radio .radio-list button { display: grid; justify-items: start; gap: 1px; width: 100%; padding: 3px 6px; background: none; box-shadow: none; text-align: left; color: var(--bone-dim); font: 600 13px/1.2 var(--text); }
 .radio .radio-list button small { font-weight: 500; font-size: 11px; color: var(--bone-faint); }
+.radio .radio-list .radio-tag { margin-left: 6px; padding: 0 4px; border: 1px solid currentColor; border-radius: 2px; font: 600 9px/13px var(--text); font-style: normal; letter-spacing: .06em; text-transform: uppercase; color: #8fb3a0; vertical-align: 1px; }
 .radio .radio-list button[aria-current="true"] { color: var(--signal); background: rgba(196, 181, 80, .08); }
 .radio .radio-list button:hover { color: var(--signal); }
 .radio .radio-list button:focus-visible { outline: 1px solid var(--signal); outline-offset: -1px; }

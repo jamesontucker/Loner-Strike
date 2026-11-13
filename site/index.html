@@ -585,6 +585,7 @@ footer a { color: var(--dim); }
 .radio-list::-webkit-scrollbar-button:single-button:vertical:increment { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M8 11L4 6h8z' fill='%23c2c9b7'/%3E%3C/svg%3E"); }
 .radio .radio-list button { display: grid; justify-items: start; gap: 1px; width: 100%; height: auto; padding: 3px 6px; background: none; box-shadow: none; text-align: left; color: var(--dim); font: 600 13px/1.2 var(--text); }
 .radio .radio-list button small { font-weight: 500; font-size: 11px; color: var(--faint); }
+.radio .radio-list .radio-tag { margin-left: 6px; padding: 0 4px; border: 1px solid currentColor; border-radius: 2px; font: 600 9px/13px var(--text); font-style: normal; letter-spacing: .06em; text-transform: uppercase; color: #8fb3a0; vertical-align: 1px; }
 .radio .radio-list button[aria-current="true"] { color: var(--signal); background: rgba(196, 181, 80, .08); }
 .radio .radio-list button:hover { color: var(--signal); }
 .radio .radio-list button:focus-visible { outline: 1px solid var(--signal); outline-offset: -1px; }
@@ -1738,7 +1739,15 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       { name: "Rainwave", desc: "Video game music, on air since 2003", stream: "https://relay.rainwave.cc/game.mp3", site: "https://rainwave.cc/", credit: "Rainwave", rainwave: true, now: "https://rainwave.cc/api4/info?sid=1" },
       { name: "0N 2000s", desc: "Hits from the 2000s", stream: "https://0n-2000s.radionetz.de/0n-2000s.mp3", site: "https://www.0nlineradio.com/", credit: "0nlineradio: 2000s", now: "https://0n-2000s.radionetz.de/status-json.xsl", mount: "/0n-2000s.mp3" },
       { name: "Radio Bob Nu Metal", desc: "Nu metal, from Korn to Linkin Park", stream: "https://streams.radiobob.de/numetal/mp3-192/", site: "https://www.radiobob.de/", credit: "Radio Bob" },
-      { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true, now: "https://somafm.com/songs/groovesalad.json" },
+      { name: "SomaFM Groove Salad", desc: "Ambient and downtempo", stream: "https://ice1.somafm.com/groovesalad-128-mp3", site: "https://somafm.com/groovesalad/", credit: "SomaFM: Groove Salad", soma: true, chill: true, now: "https://somafm.com/songs/groovesalad.json" },
+      { name: "SomaFM Drone Zone", desc: "Ambient textures with no beat", stream: "https://ice1.somafm.com/dronezone-128-mp3", site: "https://somafm.com/dronezone/", credit: "SomaFM: Drone Zone", soma: true, chill: true, now: "https://somafm.com/songs/dronezone.json" },
+      { name: "SomaFM Fluid", desc: "Instrumental hip-hop and future soul", stream: "https://ice1.somafm.com/fluid-128-mp3", site: "https://somafm.com/fluid/", credit: "SomaFM: Fluid", soma: true, chill: true, now: "https://somafm.com/songs/fluid.json" },
+      { name: "SomaFM Deep Space One", desc: "Deep ambient and space music", stream: "https://ice1.somafm.com/deepspaceone-128-mp3", site: "https://somafm.com/deepspaceone/", credit: "SomaFM: Deep Space One", soma: true, chill: true, now: "https://somafm.com/songs/deepspaceone.json" },
+      { name: "SomaFM Vaporwaves", desc: "Vaporwave, slowed and dreamy", stream: "https://ice1.somafm.com/vaporwaves-128-mp3", site: "https://somafm.com/vaporwaves/", credit: "SomaFM: Vaporwaves", soma: true, chill: true, now: "https://somafm.com/songs/vaporwaves.json" },
+      { name: "Nightride FM Chillsynth", desc: "Chill synthwave", stream: "https://stream.nightride.fm/chillsynth.mp3", site: "https://nightride.fm/", credit: "Nightride FM: Chillsynth", chill: true, nightride: "chillsynth", now: "https://nightride.fm/meta" },
+      { name: "Radio Paradise Mellow Mix", desc: "Mellow rock, folk and world music, mixed by hand", stream: "https://stream.radioparadise.com/mellow-192", site: "https://radioparadise.com/", credit: "Radio Paradise: Mellow Mix", chill: true },
+      { name: "Rainwave OC ReMix", desc: "Fan remixes of video game music", stream: "https://relay.rainwave.cc/ocremix.mp3", site: "https://rainwave.cc/ocremix/", credit: "Rainwave: OC ReMix", rainwave: true, chill: true, now: "https://rainwave.cc/api4/info?sid=2" },
+      { name: "Rainwave Chiptune", desc: "Chiptunes from old consoles and computers", stream: "https://relay.rainwave.cc/chiptune.mp3", site: "https://rainwave.cc/chiptune/", credit: "Rainwave: Chiptune", rainwave: true, chill: true, now: "https://rainwave.cc/api4/info?sid=4" },
     ];
     const keep = {
       get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -1783,9 +1792,31 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       if (!s.now) return;
       nowAbort = new AbortController();
       try {
-        const j = await (await fetch(s.now, { signal: nowAbort.signal, cache: "no-store" })).json();
+        const r = await fetch(s.now, { signal: nowAbort.signal, cache: "no-store" });
         let t = "";
-        if (s.soma) {
+        // Nightride FM's /meta is a live event stream that opens with every station's track:
+        // read until ours shows up, then hang up
+        if (s.nightride) {
+          const reader = r.body.getReader();
+          const dec = new TextDecoder();
+          let buf = "";
+          try {
+            for (let n = 0; n < 50 && !t; n++) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buf += dec.decode(value, { stream: true });
+              for (const line of buf.split("\n")) {
+                if (!line.startsWith("data:")) continue;
+                try {
+                  const hit = [JSON.parse(line.slice(5))].flat().find((x) => x?.station === s.nightride);
+                  if (hit) { t = [hit.artist, hit.title].filter(Boolean).join(" - "); break; }
+                } catch {}
+              }
+            }
+          } finally { reader.cancel().catch(() => {}); }
+        }
+        const j = s.nightride ? null : await r.json();
+        if (s.nightride) { /* read above */ } else if (s.soma) {
           const song = j?.songs?.[0];
           t = song ? [song.artist, song.title].filter(Boolean).join(" - ") : "";
         } else if (s.rainwave) {
@@ -1930,6 +1961,12 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         if (i === at) b.setAttribute("aria-current", "true");
         const name = document.createElement("span");
         name.textContent = `${i + 1}. ${s.name}`;
+        if (s.chill) {
+          const tag = document.createElement("em");
+          tag.className = "radio-tag";
+          tag.textContent = "Chill";
+          name.append(tag);
+        }
         const desc = document.createElement("small");
         desc.textContent = s.desc;
         b.append(name, desc);

@@ -100,7 +100,7 @@ A Tools section in the app for making things:
 - Control it from your phone by scanning a QR code on the same Wi-Fi. Actions that delete or reinstall stay on the computer.
 - Backup and restore in Settings: everything to one file, or just your game, and daily backups of Linux servers. Signed automatic updates.
 - Settings, Help: the docs, Report a problem, Copy diagnostics, and the usual problems with a button to the page that fixes each.
-- A built-in radio with eleven stations, from drum and bass, jungle, hardstyle, trance and demoscene music to video game music, 2000s hits and nu metal (Bassdrive, Kniteforce, TechnoBase.FM, HardBase.FM, SomaFM, SceneSat, Rainwave, 0nlineradio, Radio Bob), with shuffle and a station list.
+- A built-in radio with twenty stations, from drum and bass, jungle, hardstyle, trance and demoscene music to video game music, 2000s hits and nu metal, plus a group of chill stations tagged Chill (ambient, downtempo, space music, vaporwave, chill synthwave, mellow mixes, game remixes and chiptunes) (Bassdrive, Kniteforce, PsyMusic UK, TechnoBase.FM, HardBase.FM, SomaFM, SceneSat, Rainwave, 0nlineradio, Radio Bob, Nightride FM, Radio Paradise), with shuffle and a station list.
 - Built with Rust (Tauri) and React. It talks to the game over RCON on your own computer; nothing goes through a server run by the makers.
 
 ## FAQ
