@@ -191,7 +191,7 @@ modes (Last Stand, Battle Royale) ship a hand-written kit in `plugins/game/kits/
 {
   "schema": "loner-strike/mode-kit",
   "version": 1,
-  "mode": { "id": "last_stand", "name": "Last Stand", "description": "Hold the base against waves" },
+  "mode": { "uid": "7309d9f8-7f61-4c15-ad16-4f5260cb9787", "id": "laststand", "name": "Last Stand", "description": "Hold the base against waves" },
   "source": "studio",
   "markers": [
     {
@@ -217,7 +217,8 @@ modes (Last Stand, Battle Royale) ship a hand-written kit in `plugins/game/kits/
 | field | rules |
 |---|---|
 | `schema`, `version` | `"loner-strike/mode-kit"`, `1`. A reader refuses other schemas and newer versions it doesn't know. |
-| `mode` | `id`: 2–24 of `a-z 0-9 _`, starting with a letter (the modes.ini id). `name` ≤ 40, `description` ≤ 60 (plain text). |
+| `mode` | `id`: the mode's real id, as modes.ini, the Play page and Playtest use it (`laststand`, `br`; a Studio mode: its graph's mode id); 2–24 of `a-z 0-9 _`, starting with a letter. `name` ≤ 40, `description` ≤ 60 (plain text). |
+| `mode.uid` | required: the mode's permanent identity, a UUID v4 (lower case). Made once when the mode is made; a rename or a new short id never changes it. Match modes by uid; show and file by `id`. |
 | `source` | `"studio"` (generated from a graph: don't edit by hand) or `"hand"`. |
 | `markers[]` | ≤ 32. `id`: 1–24 of `a-z 0-9 _`, unique in the kit. `label` ≤ 30, `description` ≤ 200. |
 | `type` | `point` (one spot), `area` (a spot with a `size "x y z"` box or a `radius` round it), `path` (spots in order: 2 or more per path). |
@@ -229,18 +230,33 @@ modes (Last Stand, Battle Royale) ship a hand-written kit in `plugins/game/kits/
 | `map` | optional: `size` `small` (≤ 2048 across), `medium` (≤ 4096), `large`; `players` `{min, max}` 1–32. |
 | `notes` | ≤ 600, plain text. |
 
+**Mode identity (uid), 2026-11-13.** Every mode has a permanent `uid` (UUID v4) beside its short `id`
+(the game id: modes.ini, the cfg and plugin file names, `ls_marker`'s `mode`, Playtest).
+- Built-in modes' fixed uids: **Last Stand (`laststand`) `7309d9f8-7f61-4c15-ad16-4f5260cb9787`**,
+  **Battle Royale (`br`) `b972ea10-43af-42cb-81f0-79e493a87a11`**. Put them in their kits (W1).
+- Studio graphs: `mode.uid` is made when the mode is made (new or from a template: a template's copy
+  gets a new one); a graph from before uids gets one the first time it's opened (saved back). A rename
+  keeps it.
+- Installing a Studio mode: if its uid is installed already, it goes there (whatever short id that is);
+  else under its own id, unless another mode has that id (one not made in the Studio, or another uid):
+  then the first free `<id>_2`, `<id>_3`… The compile/Playtest answer says `installedAs`. The uid is
+  written in `<id>.plugins.ini`'s first line (`; Made with the Game Mode Studio (uid …): …`); a Studio
+  install from before uids counts as the same mode. The kit goes in the kits folder under the installed id.
+- Library items and snippets carry `fromMode` (the uid of the mode they came from). A remix gets a new
+  uid and `remixOf` = the original's uid (T).
+
 **In the map** (W1's `ls_marker`, adopted): every marker is a point entity of class **`ls_marker`** with
 - `kind` = the marker id (or an `ls_*` component classname: gm_components turns it into that component),
-- `mode` = the mode id, or `any` / empty / left out (any mode with a marker of that id),
+- `mode` = the mode id (the modes.ini id: `laststand`, `br`, a Studio mode's id), a comma list of them, or `any` / empty / left out (any mode with a marker of that id),
 - an area: `size "x y z"` (a box round the origin) or `radius`; a path: one `ls_marker` per spot with
   `order` 1, 2, 3… (several paths of one marker: `path` 1, 2…); optional `targetname`, `angle`;
 - the marker's own keys (missing → the kit's default).
 
 **At run time** gm_components keeps the `ls_marker`s (not drawn, not solid) and answers
 `ls_marker_find(const kind[], start = 0)` (next matching entity after `start`, 0 when none) and
-`ls_marker_get(ent, const key[], out[], len)`. A Studio mode that uses markers loads gm_components (like
-any component node) and its Find Marker / For Each Marker nodes use those natives; paths are sorted by
-`path`, then `order` in the generated plugin.
+`ls_marker_get(ent, const key[], out[], len)`. A Studio mode reads its markers itself (FM_KeyValue and
+FM_Spawn in its plugin's plugin_precache, the same rules: `kind`, `mode` incl. comma lists and `any`,
+`path`/`order`), so it needs no gm_components and gives the same answers with it loaded.
 
 **Differences from W1's proposal (for W1):**
 1. The kit calls the marker's shape `type` (point / area / path); the map key `kind` is the marker id, as
@@ -254,6 +270,28 @@ any component node) and its Find Marker / For Each Marker nodes use those native
 
 **Checks** (the editor's map check, the Studio's Playtest): each marker's count within `required`, each
 component's count, path markers with 2+ points and no repeated `order`, keys of the right type.
+
+## 2026-11-13, night: map markers in the Studio, kits, mode uids
+- **Graph:** `markers` (id = the map's `kind`, label, description, type point/area/path, min/max, keys
+  number/text/bool/choice with defaults, colour, icon, an area's size or radius) and `mapKit` (size,
+  players, notes); checked in `graph::marker_problems` (also used for kits). `mode.uid` (see above).
+- **Editor:** My mode > **Map markers** (add, pick → Details: name, id, description, shape, counts,
+  colour, icon, area box/circle, keys) and **Map advice**; drag a marker onto the canvas for Find Marker.
+- **Nodes** (category Map markers): **Find Marker** (marker, Which 1st/2nd… → Marker, Position, Found),
+  **Marker Count**, **For Each Marker** (Each, Marker, Number, Then). Paths come in `path`, `order` order.
+  Not in: **Marker Key** (a marker's key as text/number). It's written (gen.rs, the kit defaults table)
+  but out of the registry: the session's safety hook blocks any command containing its type name
+  (`marker.` + `key`), so it couldn't be tested; the user is asked how to go on.
+- **Kits:** `studio/kit.rs`: `kit_of(&Graph)` (markers, components the nodes act on minus those the
+  graph makes, creature types, advice), `check_kit`, `install_kit`, `list_kits_in`. Saved next to the
+  graph on every save (`<id>.kit.json`), installed to `<app dir>/kits/` by `register_mode` (every install:
+  Install, Playtest, community). Routes `GET /api/tools/studio/kits`, `GET /api/tools/studio/kit/:id`.
+- **Tests:** kit generation/refusals/install (`kit.rs`), uid install/clash (`mod.rs`), every_node and a
+  `markers.graph.json` snapshot, amxxpc compiles both with no warnings. **Sim (XMK, de_dust2 with 9
+  `ls_marker`s added to its entity lump):** For Each Marker ran 3 times (mode `mk_test`, `any`, none; the
+  `other_mode` one and an unknown kind left out) with the right origins, Marker Count 3, the area found,
+  the path's 2nd spot by `order` (444 555 66 from orders 3/1/2), the 99th not found; the same with W1's
+  gm_components (d857c24) loaded.
 
 ## 2026-11-13, later: feedback round, QA 8 and 9
 **Editor:** Function Entry/Return (and Macro Entry/Exit) show the Inputs/Outputs editor in Details.

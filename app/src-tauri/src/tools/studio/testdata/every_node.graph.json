@@ -4386,6 +4386,61 @@
    },
    "params": {},
    "graph": "ma"
+  },
+  {
+   "id": "mk_ev",
+   "type": "event.map_started",
+   "pos": {
+    "x": 0,
+    "y": 7260
+   },
+   "params": {}
+  },
+  {
+   "id": "mk_fe",
+   "type": "marker.for_each",
+   "pos": {
+    "x": 260,
+    "y": 7260
+   },
+   "params": {
+    "marker": "spot"
+   }
+  },
+  {
+   "id": "mk_cnt",
+   "type": "marker.count",
+   "pos": {
+    "x": 260,
+    "y": 7260
+   },
+   "params": {
+    "marker": "spot"
+   }
+  },
+  {
+   "id": "mk_find",
+   "type": "marker.find",
+   "pos": {
+    "x": 520,
+    "y": 7260
+   },
+   "params": {
+    "marker": "route",
+    "n": 2
+   }
+  },
+  {
+   "id": "mk_pr",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 7260
+   },
+   "params": {
+    "text": "Route spot:",
+    "chat": false
+   }
   }
  ],
  "edges": [
@@ -10273,6 +10328,50 @@
     "node": "ma_x",
     "pin": "r"
    }
+  },
+  {
+   "id": "w536",
+   "from": {
+    "node": "mk_ev",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mk_fe",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w537",
+   "from": {
+    "node": "mk_cnt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mk_find",
+    "pin": "n"
+   }
+  },
+  {
+   "id": "w538",
+   "from": {
+    "node": "mk_fe",
+    "pin": "each"
+   },
+   "to": {
+    "node": "mk_pr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w539",
+   "from": {
+    "node": "mk_find",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "mk_pr",
+    "pin": "value"
+   }
   }
  ],
  "comments": [],
@@ -10428,6 +10527,30 @@
      "type": "number"
     }
    ]
+  }
+ ],
+ "markers": [
+  {
+   "id": "spot",
+   "label": "Spot",
+   "description": "A spot",
+   "type": "point",
+   "min": 1,
+   "keys": [
+    {
+     "name": "wave",
+     "type": "number",
+     "default": 2,
+     "help": "Wave"
+    }
+   ]
+  },
+  {
+   "id": "route",
+   "label": "Route",
+   "description": "",
+   "type": "path",
+   "min": 0
   }
  ]
 }

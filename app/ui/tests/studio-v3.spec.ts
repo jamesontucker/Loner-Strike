@@ -170,6 +170,33 @@ test("library: Export all, Import a whole library", async ({ page }, info) => {
   for (const id of after) if (!had.has(id)) await page.request.post(`/api/tools/studio/library/${id}/delete`, { headers: H });
 });
 
+test("map markers make the mode's kit", async ({ page }) => {
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await expect(selectedTab(page)).toContainText("Event Graph", { timeout: 20_000 });
+  await page.getByRole("button", { name: "Add a map marker" }).click();
+  const details = page.getByRole("complementary", { name: "Details" });
+  await expect(details).toContainText("Map marker");
+  await details.getByRole("textbox").first().fill("Creature spawn");
+  await details.locator("select").first().selectOption("path");
+  await details.getByRole("button", { name: "Add key" }).click();
+  await page.locator(".st-mb-item").filter({ hasText: "Map advice" }).click();
+  await details.locator("select").first().selectOption("medium");
+  await canvasKey(page, "ControlOrMeta+s");
+  await expect.poll(async () => ((await saved(page)).markers ?? []).length).toBe(1);
+  const g = await saved(page);
+  expect(g.mode.uid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4/);
+  const kit = (await (await page.request.get(`/api/tools/studio/kit/${ID}`)).json()).kit;
+  expect(kit.mode.uid).toBe(g.mode.uid);
+  expect(kit.markers[0]).toMatchObject({ id: "marker_1", label: "Creature spawn", type: "path", draw: { shape: "line" } });
+  expect(kit.markers[0].keys[0]).toMatchObject({ name: "key_1", type: "number" });
+  expect(kit.map.size).toBe("medium");
+  // drag it onto the canvas: Find Marker
+  const before = await page.locator(".react-flow__node").count();
+  await page.locator(".st-mb-item").filter({ hasText: "Creature spawn" }).dragTo(page.locator(".react-flow__pane"), { targetPosition: { x: 300, y: 200 } });
+  await expect(page.locator(".react-flow__node")).toHaveCount(before + 1);
+  await expect(page.locator(".react-flow__node").filter({ hasText: "Find Marker" })).toHaveCount(1);
+});
+
 test.describe("leaving with unsaved edits", () => {
   // in the page, as a person gets there: Overview → Game Mode Studio → the mode → its Function
   const dirty = async (page: Page) => {

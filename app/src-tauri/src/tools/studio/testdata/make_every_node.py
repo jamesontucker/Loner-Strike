@@ -559,7 +559,19 @@ G("ma_pr", "debug.print", "ma", {"text": "In the macro:", "chat": False}, 1); W(
 G("ma_m", "math.op", "ma", {"op": "mul", "b": 2}, 1); W("ma_e", "v", "ma_m", "a")
 G("ma_x", "macro.exit", "ma", {}, 2); W("ma_pr", "then", "ma_x", "done"); W("ma_m", "out", "ma_x", "r")
 
+# map markers: For Each Marker, Find Marker, Marker Count
+nl()
+N("mk_ev", "event.map_started")
+N("mk_fe", "marker.for_each", {"marker": "spot"}, 1); W("mk_ev", "then", "mk_fe", "exec")
+N("mk_cnt", "marker.count", {"marker": "spot"}, 1)
+N("mk_find", "marker.find", {"marker": "route", "n": 2}, 2); W("mk_cnt", "out", "mk_find", "n")
+N("mk_pr", "debug.print", {"text": "Route spot:", "chat": False}, 3); W("mk_fe", "each", "mk_pr", "exec"); W("mk_find", "pos", "mk_pr", "value")
+markers = [
+    {"id": "spot", "label": "Spot", "description": "A spot", "type": "point", "min": 1, "keys": [{"name": "wave", "type": "number", "default": 2, "help": "Wave"}]},
+    {"id": "route", "label": "Route", "description": "", "type": "path", "min": 0},
+]
+
 g = {"schema": "loner-strike/graph", "version": 3, "mode": {"id": "every_node", "name": "Every Node", "description": "Every node in the registry"},
-     "variables": variables, "nodes": nodes, "edges": edges, "comments": [], "enums": enums, "structs": structs, "functions": functions, "macros": macros}
+     "variables": variables, "nodes": nodes, "edges": edges, "comments": [], "enums": enums, "structs": structs, "functions": functions, "macros": macros, "markers": markers}
 json.dump(g, open("every_node.graph.json", "w"), indent=1)
 print(len(nodes), "nodes", len(edges), "wires")

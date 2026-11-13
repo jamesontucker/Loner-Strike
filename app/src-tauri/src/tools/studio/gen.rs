@@ -363,7 +363,7 @@ fn kind_of(ty: &str) -> char {
 }
 
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
-const CTX_KINDS: [&str; 9] = ["flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array"];
+const CTX_KINDS: [&str; 10] = ["marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
 const STORE_KINDS: [&str; 5] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call"];
 /// Nodes with more than one flow input: one Pawn function each.
@@ -694,6 +694,19 @@ impl<'a> Gen<'a> {
             "squad.alive" => "float(lsg_squads_alive())".into(),
             "save.get" => format!("lsg_saved_get({}, {})", i("player", "player"), pawn_str(&name_text(self.text(n, def, "key")))),
             "clock.left" => "lsg_clock_left()".into(),
+            "marker.count" => format!("float(lsg_mk_count({}))", marker_index(self.v.g, self.text(n, def, "marker"))),
+            "marker.find" => {
+                let get = format!("lsg_mk_get({}, floatround({}))", marker_index(self.v.g, self.text(n, def, "marker")), i("n", "number"));
+                match pin {
+                    "pos" => format!("lsg_vent({get})"),
+                    "found" => format!("({get} > 0 ? 1 : 0)"),
+                    _ => get,
+                }
+            }
+            "marker.key" => {
+                let key = pawn_str(&name_text(self.text(n, def, "key")));
+                if pin == "num" { format!("str_to_float(lsg_mk_key({}, {key}))", i("in", "entity")) } else { format!("lsg_mk_key({}, {key})", i("in", "entity")) }
+            }
             "comp.find" => format!("lsg_find({})", pawn_str(&ent_name_text(self.text(n, def, "name")))),
             // graph version 3
             "logic.equal" => {
@@ -1086,8 +1099,21 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     // registration
     let kinds: Vec<&EventKind> = EVENTS.iter().filter(|k| has(k.kind)).collect();
     let need = needs(checked);
+    let uses_markers = has("marker.for_each") || ["marker.find", "marker.count", "marker.key"].iter().any(|k| pure_used(&gen, k));
+    if uses_markers {
+        o.line(markers_block(g));
+    }
+    if !need.creatures.is_empty() || uses_markers {
+        let mut pre = String::from("public plugin_precache()\n{");
+        if uses_markers {
+            pre.push_str("\n\t// the map's ls_marker entities, as they load\n\tregister_forward(FM_KeyValue, \"lsg_mk_kv\")\n\tregister_forward(FM_Spawn, \"lsg_mk_spawn\", 1)");
+        }
+        if !need.creatures.is_empty() {
+            pre.push_str(&format!("\n\t// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)\n\tif (get_cvar_pointer(\"ls_creature_precache\"))\n\t\tlsg_precache_types({})", pawn_str(&need.creatures.join(" "))));
+        }
+        o.line(format!("{pre}\n}}\n"));
+    }
     if !need.creatures.is_empty() {
-        o.line(format!("// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)\npublic plugin_precache()\n{{\n\tif (get_cvar_pointer(\"ls_creature_precache\"))\n\t\tlsg_precache_types({})\n}}\n", pawn_str(&need.creatures.join(" "))));
         o.line("stock lsg_precache_types(const want[])\n{\n\tnew cur[256], w[32], rest[256], padded[280], pw[36]\n\tget_cvar_string(\"ls_creature_precache\", cur, charsmax(cur))\n\tif (equali(cur, \"all\"))\n\t\treturn\n\tif (equali(want, \"all\"))\n\t{\n\t\tset_cvar_string(\"ls_creature_precache\", \"all\")\n\t\treturn\n\t}\n\tcopy(rest, charsmax(rest), want)\n\twhile (rest[0])\n\t{\n\t\tstrtok(rest, w, charsmax(w), rest, charsmax(rest), ' ')\n\t\tformatex(padded, charsmax(padded), \" %s \", cur)\n\t\tformatex(pw, charsmax(pw), \" %s \", w)\n\t\tif (w[0] && containi(padded, pw) < 0)\n\t\t{\n\t\t\tif (cur[0])\n\t\t\t\tadd(cur, charsmax(cur), \" \")\n\t\t\tadd(cur, charsmax(cur), w)\n\t\t}\n\t}\n\tset_cvar_string(\"ls_creature_precache\", cur)\n}\n");
     }
     o.line("public plugin_init()\n{");
@@ -1601,6 +1627,31 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             match body {
                 Some(c) => b.line(format!("\t\t{c}")),
                 None => b.line("\t\t#pragma unused c"),
+            }
+            b.line("\t}");
+            if debug {
+                b.line(format!("\tlsd_exit({i}, fmt(\"%d times\", count))"));
+            } else {
+                b.line("\t#pragma unused count");
+            }
+            then_line(&mut b, "then");
+        }
+        "marker.for_each" => {
+            let k = marker_index(v.g, gen.text(n, def, "marker"));
+            let body = next("each").map(|c| c.replace("(ctx)", "(c)"));
+            b.line(format!("\tnew c[LSG_CTX], count\n\tfor (new m = 0; m < g_lsgMkN; m++)\n\t{{\n\t\tif (g_lsgMkKind[m] != {k})\n\t\t\tcontinue\n\t\tcount++\n\t\tfor (new j = 0; j < LSG_CTX; j++)\n\t\t\tc[j] = ctx[j]"));
+            if let Some(s) = gen.slot(id, "entity") {
+                b.line(format!("\t\tc[{s}] = g_lsgMkEnt[m]"));
+            }
+            if let Some(s) = gen.slot(id, "index") {
+                b.line(format!("\t\tc[{s}] = _:float(count)"));
+            }
+            match body {
+                Some(c) => b.line(format!("\t\t{c}")),
+                None => b.line("\t\t#pragma unused c"),
+            }
+            if let Some(stop) = &fn_done {
+                b.line(format!("\t\tif ({stop})\n\t\t\treturn"));
             }
             b.line("\t}");
             if debug {
@@ -2390,6 +2441,7 @@ fn multi_fn(gen: &Gen, id: &str, pin: &str, body: &str) -> String {
 
 /// Node kinds that need the version 3 helpers (by prefix).
 const V3_KINDS: &[&str] = &[
+    "marker.",
     "fn.", "macro.", "struct.", "enum.", "array.", "map.", "vec.", "flow.sequence", "flow.do_", "flow.gate", "flow.flipflop", "flow.for_loop", "flow.while", "flow.for_each_array", "flow.switch_", "flow.if_valid", "timer.retrigger", "timer.by_function",
     "timer.clear", "timer.is_active", "debug.print", "logic.equal", "logic.select", "cond.is_valid", "player.is_player", "creature.is", "math.fn", "math.clamp", "math.lerp", "math.in_range", "math.number", "text.literal", "text.append", "text.format", "text.contains", "text.length", "text.to_number", "text.from",
 ];
@@ -2488,6 +2540,174 @@ fn at_origin(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef) -> String {
         Some(_) => format!("lsg_ent_origin({}, o)", gen.need(id, "at_ent", "entity")),
         None => format!("lsg_origin_of({}, o)", pawn_str(&name_text(gen.text(n, def, "at")))),
     }
+}
+
+/// A marker id's place in the graph's markers (what the plugin's tables use).
+fn marker_index(g: &Graph, id: &str) -> usize {
+    g.markers.iter().position(|m| m.id == id).unwrap_or(0)
+}
+
+/// The map's ls_marker entities (docs/notes/X.md, "Mode map kit format"): taken as the map loads
+/// (the class becomes info_target so the engine keeps them; not drawn, not solid), kept in kind,
+/// path, order order, with their keys; the kit's defaults for keys the map left out.
+fn markers_block(g: &Graph) -> String {
+    let ids = g.markers.iter().map(|m| pawn_str(&m.id)).collect::<Vec<_>>().join(", ");
+    let ids = if ids.is_empty() { "\"\"".to_string() } else { ids };
+    let mut defaults = String::new();
+    for (k, m) in g.markers.iter().enumerate() {
+        for key in &m.keys {
+            let v = match &key.default {
+                Value::Bool(b) => if *b { "1".to_string() } else { "0".to_string() },
+                Value::Number(x) => x.to_string(),
+                Value::String(t) => t.clone(),
+                _ => continue,
+            };
+            defaults.push_str(&format!("\tif (k == {k} && equal(key, {}))\n\t\tcopy(t, charsmax(t), {})\n", pawn_str(&key.name), pawn_str(&safe_text(&v, 60))));
+        }
+    }
+    format!(
+        r##"// ---- map markers ----
+#define LSG_MK_MAX 128
+new const g_lsgMkIds[][] = {{ {ids} }}
+new g_lsgMkN, g_lsgMkEnt[LSG_MK_MAX], g_lsgMkKind[LSG_MK_MAX], g_lsgMkPath[LSG_MK_MAX], g_lsgMkOrder[LSG_MK_MAX], Trie:g_lsgMkKeys[LSG_MK_MAX]
+new g_lsgMkParse, bool:g_lsgMkPend, Trie:g_lsgMkPendKeys = Invalid_Trie
+
+public lsg_mk_kv(ent, kvd)
+{{
+	if (ent <= 0)
+		return FMRES_IGNORED
+	new key[32], val[64]
+	get_kvd(kvd, KV_KeyName, key, charsmax(key))
+	get_kvd(kvd, KV_Value, val, charsmax(val))
+	if (equal(key, "classname"))
+	{{
+		// the engine sends the class first on its own, then again among the keys
+		if (ent != g_lsgMkParse)
+		{{
+			g_lsgMkParse = ent
+			g_lsgMkPend = false
+			if (g_lsgMkPendKeys != Invalid_Trie)
+				TrieDestroy(g_lsgMkPendKeys)
+			g_lsgMkPendKeys = Invalid_Trie
+			// (another plugin may have made an ls_marker an info_target already: its kind decides)
+			if (equal(val, "ls_marker") || equal(val, "info_target"))
+			{{
+				g_lsgMkPend = true
+				g_lsgMkPendKeys = TrieCreate()
+			}}
+		}}
+		if (g_lsgMkPend && equal(val, "ls_marker"))
+			set_kvd(kvd, KV_Value, "info_target")
+		return FMRES_IGNORED
+	}}
+	if (g_lsgMkPend && ent == g_lsgMkParse)
+		TrieSetString(g_lsgMkPendKeys, key, val)
+	return FMRES_IGNORED
+}}
+
+public lsg_mk_spawn(ent)
+{{
+	if (ent != g_lsgMkParse || !g_lsgMkPend)
+		return FMRES_IGNORED
+	g_lsgMkPend = false
+	g_lsgMkParse = 0
+	new Trie:keys = g_lsgMkPendKeys
+	g_lsgMkPendKeys = Invalid_Trie
+	new kind[32], mode[32], num[12], k = -1
+	TrieGetString(keys, "kind", kind, charsmax(kind))
+	TrieGetString(keys, "mode", mode, charsmax(mode))
+	for (new i = 0; i < sizeof g_lsgMkIds; i++)
+	{{
+		if (kind[0] && equal(kind, g_lsgMkIds[i]))
+		{{
+			k = i
+			break
+		}}
+	}}
+	if (k < 0 || !lsg_mk_mode_ok(mode) || g_lsgMkN >= LSG_MK_MAX || !pev_valid(ent))
+	{{
+		TrieDestroy(keys)
+		return FMRES_IGNORED
+	}}
+	set_pev(ent, pev_effects, pev(ent, pev_effects) | EF_NODRAW)
+	set_pev(ent, pev_solid, SOLID_NOT)
+	new path, order
+	if (TrieGetString(keys, "path", num, charsmax(num)))
+		path = str_to_num(num)
+	if (TrieGetString(keys, "order", num, charsmax(num)))
+		order = str_to_num(num)
+	// in kind, path, order order (then the map's)
+	new at = g_lsgMkN
+	while (at > 0 && (g_lsgMkKind[at - 1] > k || (g_lsgMkKind[at - 1] == k && (g_lsgMkPath[at - 1] > path || (g_lsgMkPath[at - 1] == path && g_lsgMkOrder[at - 1] > order)))))
+	{{
+		g_lsgMkEnt[at] = g_lsgMkEnt[at - 1]
+		g_lsgMkKind[at] = g_lsgMkKind[at - 1]
+		g_lsgMkPath[at] = g_lsgMkPath[at - 1]
+		g_lsgMkOrder[at] = g_lsgMkOrder[at - 1]
+		g_lsgMkKeys[at] = g_lsgMkKeys[at - 1]
+		at--
+	}}
+	g_lsgMkEnt[at] = ent
+	g_lsgMkKind[at] = k
+	g_lsgMkPath[at] = path
+	g_lsgMkOrder[at] = order
+	g_lsgMkKeys[at] = keys
+	g_lsgMkN++
+	return FMRES_IGNORED
+}}
+
+// a marker's mode: empty, "any", this mode's id, or a comma list with it
+stock bool:lsg_mk_mode_ok(const mode[])
+{{
+	if (!mode[0] || equal(mode, "any") || equal(mode, LSG_MODE))
+		return true
+	new list[40], me[32]
+	formatex(list, charsmax(list), ",%s,", mode)
+	replace_all(list, charsmax(list), " ", "")
+	formatex(me, charsmax(me), ",%s,", LSG_MODE)
+	return contain(list, me) >= 0 || contain(list, ",any,") >= 0
+}}
+
+stock lsg_mk_count(k)
+{{
+	new n
+	for (new m = 0; m < g_lsgMkN; m++)
+		if (g_lsgMkKind[m] == k)
+			n++
+	return n
+}}
+
+// the n-th (from 1) marker of a kind, or 0
+stock lsg_mk_get(k, n)
+{{
+	for (new m = 0; m < g_lsgMkN; m++)
+		if (g_lsgMkKind[m] == k && --n == 0)
+			return pev_valid(g_lsgMkEnt[m]) ? g_lsgMkEnt[m] : 0
+	return 0
+}}
+
+stock lsg_mk_key(ent, const key[])
+{{
+	new t[64]
+	for (new m = 0; m < g_lsgMkN; m++)
+	{{
+		if (g_lsgMkEnt[m] != ent || !ent)
+			continue
+		if (!TrieGetString(g_lsgMkKeys[m], key, t, charsmax(t)))
+			lsg_mk_default(g_lsgMkKind[m], key, t)
+		break
+	}}
+	return t
+}}
+
+stock lsg_mk_default(k, const key[], t[64])
+{{
+{defaults}	#pragma unused k
+	#pragma unused key
+	#pragma unused t
+}}
+"##
+    )
 }
 
 /// Who a loop or a pick takes, as lsg_match's number.
@@ -3474,9 +3694,10 @@ mod tests {
         for (name, t) in [
             ("last_stand.sma", include_str!("../../../../ui/src/views/tools/studio/templates/last-stand.graph.json")),
             ("royale.sma", include_str!("../../../../ui/src/views/tools/studio/templates/battle-royale.graph.json")),
+            ("markers.sma", include_str!("testdata/markers.graph.json")),
         ] {
             let g = parse(t).unwrap();
-            assert!(validate(&g).is_empty());
+            assert!(validate(&g).is_empty(), "{name}: {:#?}", validate(&g));
             snapshot(name, &generate(&g, false).source);
         }
     }

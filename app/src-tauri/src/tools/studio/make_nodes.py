@@ -293,6 +293,15 @@ node("text.length", "Text Length", "Text", "How many characters the text has.", 
 node("text.to_number", "Text To Number", "Text", "The number written in the text (0 if none).", inputs=[P("a","text","Text",required=True)], outputs=[P("out","number","Number")], pure=True)
 node("text.from", "To Text", "Text", "A value as text: a number, a player's name, a vector, an enum's name...", inputs=[P("a","$T","Value",required=True)], outputs=[P("out","text","Text")], params=[OF()], pure=True)
 # vectors
+# map markers (the mode map kit): ls_marker entities the map places, found by marker id
+MK = prm("marker","Marker","marker","")
+node("marker.find", "Find Marker", "Map markers", "The map's marker of this kind (1st, 2nd... in the map's order; a path's spots in their order), where it is, and whether the map has it.",
+     inputs=[P("n","number","Which",param="n")], outputs=[P("out","entity","Marker"), P("pos","vector","Position"), P("found","bool","Found")],
+     params=[MK, prm("n","Which (1st, 2nd...)","number",1,min=1,max=128)], pure=True)
+node("marker.count", "Marker Count", "Map markers", "How many markers of this kind the map has.", outputs=[P("out","number","Count")], params=[MK], pure=True)
+node("marker.for_each", "For Each Marker", "Map markers", "Runs Each once for every marker of this kind (a path's spots in order), then Then.",
+     inputs=[X], outputs=[E("each","Each"), P("entity","entity","Marker"), P("index","number","Number (from 1)"), E("then","Then")], params=[MK])
+
 node("vec.make", "Make Vector", "Vectors", "A position or direction from X, Y and Z.", inputs=[P("x","number","X",param="x"), P("y","number","Y",param="y"), P("z","number","Z",param="z")], outputs=[P("out","vector","Vector")],
      params=[prm("x","X","number",0,min=-100000,max=100000), prm("y","Y","number",0,min=-100000,max=100000), prm("z","Z","number",0,min=-100000,max=100000)], pure=True)
 node("vec.break", "Break Vector", "Vectors", "A vector's X, Y and Z.", inputs=[P("in","vector","Vector",required=True)], outputs=[P("x","number","X"), P("y","number","Y"), P("z","number","Z")], pure=True)
@@ -363,7 +372,7 @@ data = {
     "any": {"label": "Anything", "color": "#9a9a9a"},
     "var": {"label": "Variable", "color": "#cccccc"}
   },
-  "categories": ["Events", "Conditions", "Numbers", "Text", "Variables", "Flow", "Functions", "Macros", "Arrays", "Maps", "Structs", "Enums", "Vectors", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Creatures"],
+  "categories": ["Events", "Conditions", "Numbers", "Text", "Variables", "Flow", "Functions", "Macros", "Arrays", "Maps", "Structs", "Enums", "Vectors", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Map markers", "Creatures"],
   "nodes": nodes,
 }
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)

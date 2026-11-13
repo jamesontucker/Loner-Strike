@@ -516,7 +516,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
           const g = useStudio.getState().graph;
           const f = g?.functions?.find((x) => x.id === pid);
           const made: [string, Record<string, string>] | null =
-            k === "fn" && f ? [f.pure ? "fn.call_pure" : "fn.call", { func: pid }] : k === "macro" ? ["macro.use", { macro: pid }] : k === "make" ? ["struct.make", { struct: pid }] : k === "break" ? ["struct.break", { struct: pid }] : null;
+            k === "fn" && f ? [f.pure ? "fn.call_pure" : "fn.call", { func: pid }] : k === "macro" ? ["macro.use", { macro: pid }] : k === "make" ? ["struct.make", { struct: pid }] : k === "break" ? ["struct.break", { struct: pid }] : k === "marker" ? ["marker.find", { marker: pid }] : null;
           if (!made || pid === tab) return toast("A Function or Macro can't call itself.", true);
           edit((g2) => addNode(g2, made[0], { x: flow.x - 20, y: flow.y - 20 }, home, made[1]).graph);
           return;

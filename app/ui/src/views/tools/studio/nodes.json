@@ -80,6 +80,7 @@
   "Scoring",
   "Bots",
   "Components",
+  "Map markers",
   "Creatures"
  ],
  "nodes": [
@@ -6823,6 +6824,120 @@
     }
    ],
    "pure": true
+  },
+  {
+   "type": "marker.find",
+   "title": "Find Marker",
+   "category": "Map markers",
+   "help": "The map's marker of this kind (1st, 2nd... in the map's order; a path's spots in their order), where it is, and whether the map has it.",
+   "inputs": [
+    {
+     "id": "n",
+     "type": "number",
+     "label": "Which",
+     "param": "n"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Marker"
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position"
+    },
+    {
+     "id": "found",
+     "type": "bool",
+     "label": "Found"
+    }
+   ],
+   "params": [
+    {
+     "id": "marker",
+     "label": "Marker",
+     "kind": "marker",
+     "default": ""
+    },
+    {
+     "id": "n",
+     "label": "Which (1st, 2nd...)",
+     "kind": "number",
+     "default": 1,
+     "min": 1,
+     "max": 128
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "marker.count",
+   "title": "Marker Count",
+   "category": "Map markers",
+   "help": "How many markers of this kind the map has.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Count"
+    }
+   ],
+   "params": [
+    {
+     "id": "marker",
+     "label": "Marker",
+     "kind": "marker",
+     "default": ""
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "marker.for_each",
+   "title": "For Each Marker",
+   "category": "Map markers",
+   "help": "Runs Each once for every marker of this kind (a path's spots in order), then Then.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "each",
+     "type": "exec",
+     "label": "Each"
+    },
+    {
+     "id": "entity",
+     "type": "entity",
+     "label": "Marker"
+    },
+    {
+     "id": "index",
+     "type": "number",
+     "label": "Number (from 1)"
+    },
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Then"
+    }
+   ],
+   "params": [
+    {
+     "id": "marker",
+     "label": "Marker",
+     "kind": "marker",
+     "default": ""
+    }
+   ]
   },
   {
    "type": "vec.make",

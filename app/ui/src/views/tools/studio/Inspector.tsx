@@ -3,8 +3,8 @@
 
 import { useStudio } from "./store";
 import { ENT_NAME_CHARS, KEYS_CHARS, NAME_CHARS, nodeDef, type ParamDef } from "./registry";
-import { freshMember, removeGraphPart, removeType, removeVariable, setParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
-import { LABEL_CHARS, type GMember, type GNode, type GVariable, type Graph } from "./schema";
+import { freshMember, removeGraphPart, removeMarker, updateMarker, removeType, removeVariable, setParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
+import { LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { allVariables, itemTypeOk, nodeTitle, typeLabel } from "./pins";
 import { TypePicker } from "./TypePicker";
 import { insertItem, newerInLibrary } from "./library";
@@ -85,6 +85,7 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
   if (p.kind === "macro") return pick((graph.macros ?? []).filter((m) => m.id !== node.graph).map((m) => [m.id, m.name]), "Add a Macro under My mode first");
   if (p.kind === "struct") return pick((graph.structs ?? []).map((x) => [x.id, x.name]), "Add a struct under My mode first");
   if (p.kind === "enum") return pick((graph.enums ?? []).map((x) => [x.id, x.name]), "Add an enum under My mode first");
+  if (p.kind === "marker") return pick((graph.markers ?? []).map((x) => [x.id, x.label]), "Add a map marker under My mode first");
   if (p.kind === "type") return <TypePicker graph={graph} value={itemTypeOk(graph, String(value), true) ? String(value) : "number"} onChange={onChange} containers={false} structs={!node.type.startsWith("map.")} label={p.label} />;
   if (p.kind === "field") {
     const st = graph.structs?.find((x) => `struct:${x.id}` === nodeVar?.type);
@@ -394,6 +395,216 @@ const COMMENT_COLOURS = ["#5b6a4b", "#4a5a6a", "#6a4a8a", "#2f6a4a", "#7a6a2b", 
 
 const cleanLabel = (v: string, max: number) => [...v].filter((c) => LABEL_CHARS.test(c)).join("").slice(0, max);
 
+const MARKER_ID = /^[a-z0-9_]{0,24}$/;
+const ICONS = ["flag", "skull", "star", "crate", "door", "person", "arrow", "circle", "bolt", "heart"];
+const RESERVED = ["classname", "origin", "angles", "angle", "model", "targetname", "target", "mode", "kind", "order", "path", "size", "radius", "spawnflags"];
+
+/** One key a marker carries in the map. */
+function MarkerKeyRow({ k, onChange, onRemove }: { k: GMarkerKey; onChange: (k: GMarkerKey) => void; onRemove: () => void }) {
+  const choicesText = (k.choices ?? []).map(([v, l]) => (v === l ? v : `${v}=${l}`)).join(", ");
+  return (
+    <li className="st-var">
+      <div className="st-var-row">
+        <TextField value={k.name} max={24} allowed={MARKER_ID} onChange={(name) => onChange({ ...k, name })} />
+        <select className="st-field" value={k.type} aria-label="Key type" onChange={(e) => {
+          const type = e.target.value as GMarkerKey["type"];
+          onChange({ ...k, type, default: type === "number" ? 0 : type === "bool" ? false : type === "choice" ? k.choices?.[0]?.[0] ?? "" : "", choices: type === "choice" ? k.choices ?? [] : undefined });
+        }}>
+          <option value="number">Number</option>
+          <option value="text">Text</option>
+          <option value="bool">Yes/no</option>
+          <option value="choice">Choice</option>
+        </select>
+        <button type="button" className="btn small" aria-label={`Remove the key ${k.name}`} onClick={onRemove}>×</button>
+      </div>
+      {RESERVED.includes(k.name) && <p className="st-side-help bad">Maps use “{k.name}” themselves: pick another name.</p>}
+      <label className="st-side-field">
+        <span>Default</span>
+        {k.type === "number" ? (
+          <NumberField value={Number(k.default ?? 0)} onChange={(v) => onChange({ ...k, default: v })} />
+        ) : k.type === "bool" ? (
+          <select className="st-field" value={k.default ? "1" : "0"} onChange={(e) => onChange({ ...k, default: e.target.value === "1" })}>
+            <option value="1">Yes</option>
+            <option value="0">No</option>
+          </select>
+        ) : k.type === "choice" ? (
+          <select className="st-field" value={String(k.default ?? "")} onChange={(e) => onChange({ ...k, default: e.target.value })}>
+            {(k.choices ?? []).map(([v, l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))}
+          </select>
+        ) : (
+          <TextField value={String(k.default ?? "")} max={60} allowed={LABEL_CHARS} onChange={(v) => onChange({ ...k, default: v })} />
+        )}
+      </label>
+      {k.type === "choice" && (
+        <label className="st-side-field">
+          <span>Choices (value=Label, …)</span>
+          <input className="st-field" defaultValue={choicesText} placeholder="north=North, south=South" onBlur={(e) => {
+            const choices = e.target.value.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 16).map((x) => {
+              const [v, l] = x.split("=").map((y) => y.trim());
+              return [v.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 24), (l || v).slice(0, 30)] as [string, string];
+            });
+            onChange({ ...k, choices, default: choices.some(([v]) => v === k.default) ? k.default : choices[0]?.[0] ?? "" });
+          }} />
+        </label>
+      )}
+      <label className="st-side-field">
+        <span>Help</span>
+        <TextField value={k.help ?? ""} max={120} allowed={LABEL_CHARS} onChange={(help) => onChange({ ...k, help })} />
+      </label>
+    </li>
+  );
+}
+
+/** A map marker (picked under Map markers): what a map for this mode places. */
+function MarkerDetails({ id }: { id: string }) {
+  const graph = useStudio((s) => s.graph)!;
+  const edit = useStudio((s) => s.edit);
+  const { selectPart } = useStudio.getState();
+  const ask = useConfirm();
+  const m = graph.markers!.find((x) => x.id === id)!;
+  const set = (patch: Partial<GMarker>) => {
+    edit((g) => updateMarker(g, id, patch));
+    if (patch.id && patch.id !== id) selectPart(`mk:${patch.id}`);
+  };
+  const used = graph.nodes.filter((n) => n.params.marker === id).length;
+  const keys = m.keys ?? [];
+  const setKey = (i: number, k: GMarkerKey) => set({ keys: keys.map((x, j) => (j === i ? k : x)) });
+  return (
+    <aside className="st-side" aria-label="Details">
+      <p className="st-side-kicker">Details · Map marker</p>
+      <div className="st-side-fields">
+        <label className="st-side-field">
+          <span>Name</span>
+          <TextField value={m.label} max={30} allowed={LABEL_CHARS} onChange={(label) => set({ label })} />
+        </label>
+        <label className="st-side-field">
+          <span>Id in the map (kind)</span>
+          <TextField value={m.id} max={24} allowed={MARKER_ID} onChange={(v) => v && !(graph.markers ?? []).some((x) => x.id === v && x.id !== id) && set({ id: v })} />
+        </label>
+        <label className="st-side-field">
+          <span>What it's for (map makers read this)</span>
+          <TextField value={m.description} max={200} allowed={LABEL_CHARS} onChange={(description) => set({ description })} />
+        </label>
+        <label className="st-side-field">
+          <span>Shape</span>
+          <select className="st-field" value={m.type} onChange={(e) => {
+            const type = e.target.value as GMarker["type"];
+            set({ type, size: type === "area" ? m.size ?? [256, 256, 128] : undefined, radius: type === "area" ? m.radius : undefined });
+          }}>
+            <option value="point">A point (one spot)</option>
+            <option value="area">An area (a box or circle round a spot)</option>
+            <option value="path">A path (spots in order)</option>
+          </select>
+        </label>
+        {m.type === "area" && (
+          <label className="st-side-field">
+            <span>{m.radius != null ? "Radius" : "Box (x y z)"}</span>
+            {m.radius != null ? (
+              <NumberField value={m.radius} min={1} max={16384} onChange={(radius) => set({ radius })} />
+            ) : (
+              <span className="st-var-row">
+                {[0, 1, 2].map((i) => (
+                  <NumberField key={i} value={(m.size ?? [256, 256, 128])[i]} min={1} max={16384} onChange={(v) => set({ size: (m.size ?? [256, 256, 128]).map((x, j) => (j === i ? v : x)) as [number, number, number] })} />
+                ))}
+              </span>
+            )}
+            <button type="button" className="btn small" onClick={() => set(m.radius != null ? { radius: undefined, size: [256, 256, 128] } : { radius: 256, size: undefined })}>
+              {m.radius != null ? "Use a box" : "Use a circle"}
+            </button>
+          </label>
+        )}
+        <label className="st-side-field">
+          <span>{m.type === "path" ? "Paths: at least" : "At least"}</span>
+          <NumberField value={m.min} min={0} max={64} onChange={(min) => set({ min: Math.round(min), max: m.max != null && m.max < min ? Math.round(min) || 1 : m.max })} />
+        </label>
+        <label className="st-side-field">
+          <span>At most (empty: no limit)</span>
+          <input className="st-field st-field-num" type="number" min={1} max={64} value={m.max ?? ""} onChange={(e) => {
+            const v = e.target.value === "" ? undefined : Math.max(1, Math.min(64, Math.round(Number(e.target.value))));
+            if (v === undefined || Number.isFinite(v)) set({ max: v });
+          }} />
+        </label>
+        <label className="st-side-field">
+          <span>Colour in the editor</span>
+          <input className="st-field" type="color" value={m.colour || "#d9c27a"} onChange={(e) => set({ colour: e.target.value })} />
+        </label>
+        <label className="st-side-field">
+          <span>Icon</span>
+          <select className="st-field" value={m.icon || "flag"} onChange={(e) => set({ icon: e.target.value })}>
+            {ICONS.map((i) => (
+              <option key={i} value={i}>{i}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <h4 className="st-side-sub">Keys map makers set</h4>
+      <ul className="st-vars-list">
+        {keys.map((k, i) => (
+          <MarkerKeyRow key={i} k={k} onChange={(x) => setKey(i, x)} onRemove={() => set({ keys: keys.filter((_, j) => j !== i) })} />
+        ))}
+      </ul>
+      <button type="button" className="btn small" disabled={keys.length >= 8} onClick={() => {
+        let n = keys.length + 1;
+        while (keys.some((k) => k.name === `key_${n}`)) n++;
+        set({ keys: [...keys, { name: `key_${n}`, type: "number", default: 0, help: "" }] });
+      }}>
+        Add key
+      </button>
+      <p className="st-side-help">
+        In the map: an <code>ls_marker</code> with <code>kind</code> “{m.id}”{m.type === "path" ? ", one per spot with order 1, 2, 3…" : ""}. Used by {used} node{used === 1 ? "" : "s"}; drag it onto the canvas for Find Marker.
+      </p>
+      <p className="st-side-help">
+        <button type="button" className="btn small" onClick={async () => {
+          if (!(await ask(`Remove the map marker “${m.label}”? Nodes using it show a problem until changed.`, { ok: "Remove", danger: true }))) return;
+          edit((g) => removeMarker(g, id));
+          selectPart(null);
+        }}>
+          Remove “{m.label}”
+        </button>
+      </p>
+    </aside>
+  );
+}
+
+/** The kit's advice for map makers: size, players, notes. */
+function MapAdvice() {
+  const graph = useStudio((s) => s.graph)!;
+  const edit = useStudio((s) => s.edit);
+  const k = graph.mapKit ?? { size: "" as const, notes: "" };
+  const set = (patch: Partial<NonNullable<Graph["mapKit"]>>) => edit((g) => ({ ...g, mapKit: { ...(g.mapKit ?? { size: "", notes: "" }), ...patch } }));
+  return (
+    <aside className="st-side" aria-label="Details">
+      <p className="st-side-kicker">Details · Map advice</p>
+      <p className="st-side-help">Goes in the mode's map kit with the markers, the components its nodes use and the creatures it spawns.</p>
+      <div className="st-side-fields">
+        <label className="st-side-field">
+          <span>Map size</span>
+          <select className="st-field" value={k.size} onChange={(e) => set({ size: e.target.value as "" })}>
+            <option value="">Any</option>
+            <option value="small">Small (up to 2048 across)</option>
+            <option value="medium">Medium (up to 4096)</option>
+            <option value="large">Large</option>
+          </select>
+        </label>
+        <label className="st-side-field">
+          <span>Players, from</span>
+          <NumberField value={k.playersMin ?? 1} min={1} max={32} onChange={(v) => set({ playersMin: Math.round(v) })} />
+        </label>
+        <label className="st-side-field">
+          <span>to</span>
+          <NumberField value={k.playersMax ?? 32} min={1} max={32} onChange={(v) => set({ playersMax: Math.round(v) })} />
+        </label>
+        <label className="st-side-field">
+          <span>Notes for map makers</span>
+          <textarea className="st-field" maxLength={600} rows={5} value={k.notes} onChange={(e) => set({ notes: [...e.target.value].filter((c) => LABEL_CHARS.test(c) || c === "\n").join("").replace(/\n/g, " ") })} />
+        </label>
+      </div>
+    </aside>
+  );
+}
+
 export function Inspector() {
   const graph = useStudio((s) => s.graph);
   const selected = useStudio((s) => s.selected);
@@ -404,6 +615,11 @@ export function Inspector() {
   const edit = useStudio((s) => s.edit);
   if (!graph) return null;
   if (selectedVar && allVariables(graph).some((x) => x.id === selectedVar)) return <VariableDetails id={selectedVar} />;
+  if (part?.startsWith("mk:") && !selected.length) {
+    const id = part.slice(3);
+    if (!id) return <MapAdvice />;
+    if ((graph.markers ?? []).some((m) => m.id === id)) return <MarkerDetails id={id} />;
+  }
   if (part && !selected.length) {
     const d = <PartDetails id={part} />;
     if ([...(graph.functions ?? []), ...(graph.macros ?? []), ...(graph.structs ?? []), ...(graph.enums ?? [])].some((x) => x.id === part)) return d;

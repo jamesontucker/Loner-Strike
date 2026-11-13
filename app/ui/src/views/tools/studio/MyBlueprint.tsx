@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStudio } from "./store";
 import { nodeDef, typeColor } from "./registry";
-import { addEnum, addFunction, addLocal, addMacro, addStruct, addVariable, makeSnippet, type Snippet } from "./graphOps";
+import { addEnum, addFunction, addLocal, addMacro, addMarker, addStruct, addVariable, makeSnippet, type Snippet } from "./graphOps";
 import { addFromLibrary, DRAG_LIB, DRAG_PART, DRAG_SNIPPET, DRAG_VAR, type CanvasApi } from "./Canvas";
 import { extractItem, itemFile, itemId, LIBRARY_SET, readItem, type LibItem } from "./library";
 import { deleteItem, saveItem } from "./libraryApi";
@@ -24,7 +24,17 @@ function Section({ title, count, onAdd, addTitle, children, open: start = true }
           <span className="st-mb-caret">{open ? "▾" : "▸"}</span> {title} <span className="st-muted">{count}</span>
         </button>
         {onAdd && (
-          <button type="button" className="st-mb-add" onClick={onAdd} title={addTitle} aria-label={addTitle}>
+          <button
+            type="button"
+            className="st-mb-add"
+            onClick={() => {
+              // (what was just added shows)
+              setOpen(true);
+              onAdd();
+            }}
+            title={addTitle}
+            aria-label={addTitle}
+          >
             +
           </button>
         )}
@@ -52,7 +62,7 @@ function SaveToLibrary({ partId, onDone, toast }: { partId: string; onDone: () =
     if ("error" in x) return toast(x.error, true);
     const id = fromItem?.id ?? itemId(name, library.map((l) => l.id));
     setBusy(true);
-    const r = await saveItem(id, itemFile({ name: name.trim(), description, category: category.trim() || "General", kind: x.kind, root: partId, body: x.body }));
+    const r = await saveItem(id, { ...itemFile({ name: name.trim(), description, category: category.trim() || "General", kind: x.kind, root: partId, body: x.body }), ...(graph.mode.uid ? { fromMode: graph.mode.uid } : {}) });
     setBusy(false);
     if (r.error) return toast(r.error, true);
     // this copy is now that version of the item
@@ -429,6 +439,40 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       >
         {!graph.enums?.length && <p className="st-muted st-mb-empty">Named choices (Class: Scout, Tank, Medic).</p>}
         {(graph.enums ?? []).map((e) => partItem(e.id, e.name, "en", null, `${e.values.length} values`))}
+      </Section>
+      <Section
+        title="Map markers"
+        count={graph.markers?.length ?? 0}
+        onAdd={() => {
+          const r = addMarker(graph);
+          edit(() => r.graph);
+          selectPart(`mk:${r.id}`);
+        }}
+        addTitle="Add a map marker"
+        open={!!graph.markers?.length}
+      >
+        {!graph.markers?.length && <p className="st-muted st-mb-empty">What a map for this mode places (creature spawns, a base, a patrol path). They make the mode's map kit for the map editor.</p>}
+        {(graph.markers ?? []).map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(DRAG_PART, `marker:${m.id}`);
+              e.dataTransfer.effectAllowed = "copy";
+            }}
+            className={`st-mb-item${part === `mk:${m.id}` ? " on" : ""}`}
+            onClick={() => selectPart(`mk:${m.id}`)}
+            title="Drag onto the canvas for Find Marker"
+          >
+            <span className="st-mb-dot mk" style={{ background: m.colour || undefined }} /> {m.label}
+            <span className="st-muted st-mb-note">{m.type}</span>
+          </button>
+        ))}
+        <button type="button" className={`st-mb-item${part === "mk:" ? " on" : ""}`} onClick={() => selectPart("mk:")}>
+          <span className="st-mb-dot mk" /> Map advice
+          <span className="st-muted st-mb-note">size, players</span>
+        </button>
       </Section>
       <LibrarySection api={api} toast={toast} />
       <Section title="Snippets" count={snippets.length}>

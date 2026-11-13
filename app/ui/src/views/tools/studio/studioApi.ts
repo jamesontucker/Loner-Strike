@@ -7,7 +7,7 @@ const S = "/api/tools/studio";
 
 export type Problem = { level: "error" | "warning"; node?: string; pin?: string; edge?: string; message: string };
 export type GraphInfo = { id: string; name: string; description?: string; nodes?: number; modified: number; installed: boolean; damaged?: boolean };
-export type CompileResult = { ok?: boolean; problems?: Problem[]; output?: string; plugin?: string; error?: string; cached?: boolean; secs?: number };
+export type CompileResult = { ok?: boolean; problems?: Problem[]; output?: string; plugin?: string; installedAs?: string; error?: string; cached?: boolean; secs?: number };
 
 export const studioStatus = () => tryGet<{ game?: boolean; compiler?: boolean; graphsDir?: string }>(`${S}/status`);
 export const listGraphs = () => get<{ graphs: GraphInfo[] }>(`${S}/graphs`);

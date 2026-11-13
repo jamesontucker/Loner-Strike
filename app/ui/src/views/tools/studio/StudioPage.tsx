@@ -25,7 +25,7 @@ import { tabView } from "./graphOps";
 import { Results } from "./Results";
 import { DebugPanel } from "./DebugPanel";
 import { applyLayout, autoLayout } from "./layout";
-import { emptyGraph, parseGraph, type Graph } from "./schema";
+import { emptyGraph, newUid, parseGraph, type Graph } from "./schema";
 import rifleRaw from "./templates/team-dm.graph.json?raw";
 import lastStandRaw from "./templates/last-stand.graph.json?raw";
 import royaleRaw from "./templates/battle-royale.graph.json?raw";
@@ -226,7 +226,7 @@ function Studio({ maps }: ToolProps) {
     if (template) {
       const p = parseGraph(JSON.parse(template.raw));
       if ("error" in p) return toast(p.error, true);
-      g = { ...p.graph, mode: { ...p.graph.mode, id, name: clean } };
+      g = { ...p.graph, mode: { ...p.graph.mode, id, uid: newUid(), name: clean } };
     } else g = emptyGraph(id, clean);
     // saved straight away: a new mode isn't "unsaved changes"
     const r = await busy("studio-save", "Saving the graph…", () => api.saveGraph(g));
@@ -315,6 +315,8 @@ function Studio({ maps }: ToolProps) {
       const r = await api.playtest(g, activeBreakpoints(g, useStudio.getState().bpsOff));
       if (r.output) st.setOutput(r.output);
       if (!showCompile(r) || cancelled.current) return;
+      // (installed under another short id when another mode in the game has this one)
+      const mode = r.installedAs ?? g.mode.id;
       setStep("Checking the game");
       const state = await api.gameState();
       if (cancelled.current) return;
@@ -322,23 +324,23 @@ function Studio({ maps }: ToolProps) {
         // the open game switches to the mode with a map change: much quicker than a restart
         if (await ask(`The game is open. Switch it to \u201c${g.mode.name}\u201d on ${prefs.map} now? (A map change; the bots stay as they are.)`, { ok: "Switch the open game" })) {
           setStep("Switching the open game");
-          const sw = await api.switchOpenGame(g.mode.id, prefs.map);
+          const sw = await api.switchOpenGame(mode, prefs.map);
           if (!sw.error) {
-            st.startPlaying(g.mode.id);
+            st.startPlaying(mode);
             toast(`Switching to ${prefs.map}. Nodes light up as they run.`);
             return;
           }
           if (!(await ask(`${sw.error} Close the game and start it again in this mode?`, { ok: "Restart and playtest" }))) return;
         } else return;
         setStep("Restarting the game");
-        const l = await api.launchGame({ map: prefs.map, bots: prefs.bots, mode: g.mode.id, restart: true });
+        const l = await api.launchGame({ map: prefs.map, bots: prefs.bots, mode, restart: true });
         if (l.error) return void toast(l.error, true);
       } else {
         setStep("Starting the game");
-        const l = await api.launchGame({ map: prefs.map, bots: prefs.bots, mode: g.mode.id });
+        const l = await api.launchGame({ map: prefs.map, bots: prefs.bots, mode });
         if (l.error) return void toast(l.error, true);
       }
-      st.startPlaying(g.mode.id);
+      st.startPlaying(mode);
       toast(`Starting the game on ${prefs.map}. Nodes light up as they run.`);
     }).finally(() => setStep(null));
 

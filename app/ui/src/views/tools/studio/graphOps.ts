@@ -2,7 +2,7 @@
 // and the rules are testable without React (studio.test.ts). The app checks the same rules
 // again before compiling (tools/studio/graph.rs).
 
-import { parseGraph, type GComment, type GEdge, type GFunction, type GMacro, type GMember, type GNode, type GVariable, type Graph } from "./schema";
+import { parseGraph, type GComment, type GEdge, type GFunction, type GMacro, type GMarker, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { compatible, defaultParams, nodeDef, type PinDef, type PinType } from "./registry";
 import { adaptTo, allVariables, pinsOf, typeLabel } from "./pins";
 
@@ -570,7 +570,7 @@ export function makeSnippet(g: Graph, ids: Iterable<string>, name: string, descr
   if (!text) return null;
   const { kind: _k, ...rest } = JSON.parse(text);
   void _k;
-  return { schema: SNIPPET, version: 1, name, description, ...rest };
+  return { schema: SNIPPET, version: 1, name, description, ...(g.mode.uid ? { fromMode: g.mode.uid } : {}), ...rest };
 }
 
 /** Drops a snippet in at `at`, inside a comment box named after it (unless it brings its own). */
@@ -611,4 +611,31 @@ export function redo(h: History, now: Graph): { history: History; graph: Graph }
   if (!h.future.length) return null;
   const [graph, ...future] = h.future;
   return { graph, history: { past: [...h.past, now], future } };
+}
+
+// ---- map markers (the mode map kit) ----
+
+/** A new map marker, with an id no other marker has. */
+export function addMarker(g: Graph, type: GMarker["type"] = "point"): { graph: Graph; id: string } {
+  const taken = new Set((g.markers ?? []).map((m) => m.id));
+  let n = (g.markers?.length ?? 0) + 1;
+  while (taken.has(`marker_${n}`)) n++;
+  const id = `marker_${n}`;
+  const m: GMarker = { id, label: `Marker ${n}`, description: "", type, min: 1, colour: "", icon: "", ...(type === "area" ? { size: [256, 256, 128] as [number, number, number] } : {}) };
+  return { graph: { ...g, markers: [...(g.markers ?? []), m] }, id };
+}
+
+/** Changes a marker; a new id goes to the nodes that use it too. */
+export function updateMarker(g: Graph, id: string, patch: Partial<GMarker>): Graph {
+  const to = patch.id ?? id;
+  return {
+    ...g,
+    markers: (g.markers ?? []).map((m) => (m.id === id ? { ...m, ...patch } : m)),
+    nodes: to === id ? g.nodes : g.nodes.map((n) => (n.params.marker === id ? { ...n, params: { ...n.params, marker: to } } : n)),
+  };
+}
+
+/** Removes a marker (nodes using it show a problem until changed). */
+export function removeMarker(g: Graph, id: string): Graph {
+  return { ...g, markers: (g.markers ?? []).filter((m) => m.id !== id) };
 }

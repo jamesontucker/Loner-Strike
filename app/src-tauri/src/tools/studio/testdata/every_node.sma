@@ -13,9 +13,9 @@
 #include <cellarray>
 
 #define LSG_MODE "every_node"
-#define LSG_CTX 22
+#define LSG_CTX 24
 #define LSG_TXT 2
-#define LSG_N 248
+#define LSG_N 251
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -1709,9 +1709,155 @@ public lsg_clock_tick()
 	}
 }
 
-// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
+// ---- map markers ----
+#define LSG_MK_MAX 128
+new const g_lsgMkIds[][] = { "spot", "route" }
+new g_lsgMkN, g_lsgMkEnt[LSG_MK_MAX], g_lsgMkKind[LSG_MK_MAX], g_lsgMkPath[LSG_MK_MAX], g_lsgMkOrder[LSG_MK_MAX], Trie:g_lsgMkKeys[LSG_MK_MAX]
+new g_lsgMkParse, bool:g_lsgMkPend, Trie:g_lsgMkPendKeys = Invalid_Trie
+
+public lsg_mk_kv(ent, kvd)
+{
+	if (ent <= 0)
+		return FMRES_IGNORED
+	new key[32], val[64]
+	get_kvd(kvd, KV_KeyName, key, charsmax(key))
+	get_kvd(kvd, KV_Value, val, charsmax(val))
+	if (equal(key, "classname"))
+	{
+		// the engine sends the class first on its own, then again among the keys
+		if (ent != g_lsgMkParse)
+		{
+			g_lsgMkParse = ent
+			g_lsgMkPend = false
+			if (g_lsgMkPendKeys != Invalid_Trie)
+				TrieDestroy(g_lsgMkPendKeys)
+			g_lsgMkPendKeys = Invalid_Trie
+			// (another plugin may have made an ls_marker an info_target already: its kind decides)
+			if (equal(val, "ls_marker") || equal(val, "info_target"))
+			{
+				g_lsgMkPend = true
+				g_lsgMkPendKeys = TrieCreate()
+			}
+		}
+		if (g_lsgMkPend && equal(val, "ls_marker"))
+			set_kvd(kvd, KV_Value, "info_target")
+		return FMRES_IGNORED
+	}
+	if (g_lsgMkPend && ent == g_lsgMkParse)
+		TrieSetString(g_lsgMkPendKeys, key, val)
+	return FMRES_IGNORED
+}
+
+public lsg_mk_spawn(ent)
+{
+	if (ent != g_lsgMkParse || !g_lsgMkPend)
+		return FMRES_IGNORED
+	g_lsgMkPend = false
+	g_lsgMkParse = 0
+	new Trie:keys = g_lsgMkPendKeys
+	g_lsgMkPendKeys = Invalid_Trie
+	new kind[32], mode[32], num[12], k = -1
+	TrieGetString(keys, "kind", kind, charsmax(kind))
+	TrieGetString(keys, "mode", mode, charsmax(mode))
+	for (new i = 0; i < sizeof g_lsgMkIds; i++)
+	{
+		if (kind[0] && equal(kind, g_lsgMkIds[i]))
+		{
+			k = i
+			break
+		}
+	}
+	if (k < 0 || !lsg_mk_mode_ok(mode) || g_lsgMkN >= LSG_MK_MAX || !pev_valid(ent))
+	{
+		TrieDestroy(keys)
+		return FMRES_IGNORED
+	}
+	set_pev(ent, pev_effects, pev(ent, pev_effects) | EF_NODRAW)
+	set_pev(ent, pev_solid, SOLID_NOT)
+	new path, order
+	if (TrieGetString(keys, "path", num, charsmax(num)))
+		path = str_to_num(num)
+	if (TrieGetString(keys, "order", num, charsmax(num)))
+		order = str_to_num(num)
+	// in kind, path, order order (then the map's)
+	new at = g_lsgMkN
+	while (at > 0 && (g_lsgMkKind[at - 1] > k || (g_lsgMkKind[at - 1] == k && (g_lsgMkPath[at - 1] > path || (g_lsgMkPath[at - 1] == path && g_lsgMkOrder[at - 1] > order)))))
+	{
+		g_lsgMkEnt[at] = g_lsgMkEnt[at - 1]
+		g_lsgMkKind[at] = g_lsgMkKind[at - 1]
+		g_lsgMkPath[at] = g_lsgMkPath[at - 1]
+		g_lsgMkOrder[at] = g_lsgMkOrder[at - 1]
+		g_lsgMkKeys[at] = g_lsgMkKeys[at - 1]
+		at--
+	}
+	g_lsgMkEnt[at] = ent
+	g_lsgMkKind[at] = k
+	g_lsgMkPath[at] = path
+	g_lsgMkOrder[at] = order
+	g_lsgMkKeys[at] = keys
+	g_lsgMkN++
+	return FMRES_IGNORED
+}
+
+// a marker's mode: empty, "any", this mode's id, or a comma list with it
+stock bool:lsg_mk_mode_ok(const mode[])
+{
+	if (!mode[0] || equal(mode, "any") || equal(mode, LSG_MODE))
+		return true
+	new list[40], me[32]
+	formatex(list, charsmax(list), ",%s,", mode)
+	replace_all(list, charsmax(list), " ", "")
+	formatex(me, charsmax(me), ",%s,", LSG_MODE)
+	return contain(list, me) >= 0 || contain(list, ",any,") >= 0
+}
+
+stock lsg_mk_count(k)
+{
+	new n
+	for (new m = 0; m < g_lsgMkN; m++)
+		if (g_lsgMkKind[m] == k)
+			n++
+	return n
+}
+
+// the n-th (from 1) marker of a kind, or 0
+stock lsg_mk_get(k, n)
+{
+	for (new m = 0; m < g_lsgMkN; m++)
+		if (g_lsgMkKind[m] == k && --n == 0)
+			return pev_valid(g_lsgMkEnt[m]) ? g_lsgMkEnt[m] : 0
+	return 0
+}
+
+stock lsg_mk_key(ent, const key[])
+{
+	new t[64]
+	for (new m = 0; m < g_lsgMkN; m++)
+	{
+		if (g_lsgMkEnt[m] != ent || !ent)
+			continue
+		if (!TrieGetString(g_lsgMkKeys[m], key, t, charsmax(t)))
+			lsg_mk_default(g_lsgMkKind[m], key, t)
+		break
+	}
+	return t
+}
+
+stock lsg_mk_default(k, const key[], t[64])
+{
+	if (k == 0 && equal(key, "wave"))
+		copy(t, charsmax(t), "2")
+	#pragma unused k
+	#pragma unused key
+	#pragma unused t
+}
+
 public plugin_precache()
 {
+	// the map's ls_marker entities, as they load
+	register_forward(FM_KeyValue, "lsg_mk_kv")
+	register_forward(FM_Spawn, "lsg_mk_spawn", 1)
+	// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
 	if (get_cvar_pointer("ls_creature_precache"))
 		lsg_precache_types("all")
 }
@@ -2053,6 +2199,7 @@ public lsg_on_map_started()
 {
 	new ctx[LSG_CTX]
 	lsg_n122(ctx)
+	lsg_n247(ctx)
 }
 
 public lsg_on_new_round()
@@ -4033,7 +4180,7 @@ lsg_n212(ctx[])
 lsg_n213(ctx[])
 {
 	lsg_tclear(g_v17)
-	lsg_n247(ctx)
+	lsg_n250(ctx)
 }
 
 // Print String (d_pr7)
@@ -4393,8 +4540,41 @@ stock lsg_n246(ctx[])
 	#pragma unused ctx
 }
 
-// Print String (d_mac)
+// Map Started (mk_ev)
 lsg_n247(ctx[])
+{
+	lsg_n248(ctx)
+}
+
+// For Each Marker (mk_fe)
+lsg_n248(ctx[])
+{
+	new c[LSG_CTX], count
+	for (new m = 0; m < g_lsgMkN; m++)
+	{
+		if (g_lsgMkKind[m] != 0)
+			continue
+		count++
+		for (new j = 0; j < LSG_CTX; j++)
+			c[j] = ctx[j]
+		c[22] = g_lsgMkEnt[m]
+		c[23] = _:float(count)
+		lsg_n249(c)
+	}
+	#pragma unused count
+}
+
+// Print String (mk_pr)
+lsg_n249(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Route spot:", lsg_vtext(lsg_vent(lsg_mk_get(1, floatround(float(lsg_mk_count(0)))))))
+	server_print("[%s] %s", LSG_MODE, t)
+	#pragma unused ctx
+}
+
+// Print String (d_mac)
+lsg_n250(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "In the macro:", floatround(3.0))

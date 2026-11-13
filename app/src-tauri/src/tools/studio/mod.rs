@@ -22,6 +22,7 @@ pub mod debug;
 pub mod gen;
 pub mod expand;
 pub mod graph;
+pub mod kit;
 
 use crate::server::Shared;
 use axum::extract::{Path as UrlPath, Query, State};
@@ -76,6 +77,15 @@ pub const SNIPPET_SCHEMA: &str = "loner-strike/graph-snippet";
 
 /// A snippet checked like a graph (same shapes, ids, node kinds, settings and text rules), its
 /// name and description included. Graph data only: it never carries code.
+/// A snippet's or library item's `fromMode`: the uid of the mode it was taken from (optional).
+fn from_mode_ok(v: &Value) -> Result<(), String> {
+    match v.get("fromMode") {
+        None | Some(Value::Null) => Ok(()),
+        Some(Value::String(u)) if graph::valid_uid(u) => Ok(()),
+        _ => Err("That part says it came from a mode, but not with a uid this app knows.".into()),
+    }
+}
+
 pub fn check_snippet(v: &Value) -> Result<(), String> {
     if v.get("schema").and_then(Value::as_str) != Some(SNIPPET_SCHEMA) {
         return Err("That isn't a Game Mode Studio snippet.".into());
@@ -85,6 +95,7 @@ pub fn check_snippet(v: &Value) -> Result<(), String> {
     if name.trim().is_empty() || !graph::valid_label(name, 40) || !graph::valid_label(desc, 160) {
         return Err("A snippet needs a name (up to 40 letters, digits, spaces or plain punctuation) and a short description.".into());
     }
+    from_mode_ok(v)?;
     let mut g = v.clone();
     if let Some(o) = g.as_object_mut() {
         o.insert("schema".into(), json!(graph::SCHEMA));
@@ -124,6 +135,7 @@ pub fn check_library_item(v: &Value) -> Result<(), String> {
     if s("name").trim().is_empty() || !graph::valid_label(s("name"), 40) || !graph::valid_label(s("description"), 160) || !graph::valid_label(s("category"), 30) {
         return Err("A library item needs a name (up to 40 letters, digits, spaces or plain punctuation), a short description and a category.".into());
     }
+    from_mode_ok(v)?;
     let kind = s("kind");
     if !LIBRARY_KINDS.contains(&kind) {
         return Err("A library item is a Function, a Macro, a struct or an enum.".into());
@@ -131,7 +143,7 @@ pub fn check_library_item(v: &Value) -> Result<(), String> {
     let mut g = v.clone();
     let root = s("root").to_string();
     if let Some(o) = g.as_object_mut() {
-        for k in ["name", "description", "category", "kind", "root", "itemVersion"] {
+        for k in ["name", "description", "category", "kind", "root", "itemVersion", "fromMode"] {
             o.remove(k);
         }
         o.insert("schema".into(), json!(graph::SCHEMA));
@@ -224,7 +236,13 @@ fn save_graph(dir: &Path, id: &str, g: &Graph) -> Result<(), String> {
     let path = dir.join(format!("{id}.graph.json"));
     // (graphs live in the app's own folder; the safety net keeps a copy where it looks after files)
     crate::safety::before("Game Mode Studio", "save a graph", &path);
-    crate::sys::write_atomic(&path, text.as_bytes()).map_err(|e| format!("Couldn't save the graph ({e})."))
+    crate::sys::write_atomic(&path, text.as_bytes()).map_err(|e| format!("Couldn't save the graph ({e})."))?;
+    // its mode map kit beside it (made again from the graph each save)
+    if !graph::has_errors(&graph::validate(g)) {
+        let kit = serde_json::to_string_pretty(&kit::kit_of(g)).map_err(|_| INTERNAL.to_string())?;
+        let _ = crate::sys::write_atomic(&dir.join(format!("{id}.kit.json")), kit.as_bytes());
+    }
+    Ok(())
 }
 
 // ---- compiling -----------------------------------------------------------------------------
@@ -352,7 +370,8 @@ pub fn register_mode(cfg: &Path, g: &Graph, plugin: &str) -> Result<(), String> 
     };
     // gm_components first when a node needs it (as the shipped modes list it)
     let comps = if gen::needs(g).components { format!("gm_components.amxx{nl}") } else { String::new() };
-    write(gm.join(format!("{id}.plugins.ini")), &format!("; Made with the Game Mode Studio from {id}.graph.json: compile the graph again instead of editing this.{nl}{comps}{plugin}.amxx{nl}"))?;
+    let uid = if g.mode.uid.is_empty() { String::new() } else { format!(" (uid {})", g.mode.uid) };
+    write(gm.join(format!("{id}.plugins.ini")), &format!("; Made with the Game Mode Studio{uid}: compile the graph again instead of editing this.{nl}{comps}{plugin}.amxx{nl}"))?;
     // the mode's settings (the graph's own; written every compile, after base.cfg each map)
     let mut cfg_text = format!("// {} (Game Mode Studio): its settings, written from the graph each compile. Runs after base.cfg.{nl}", gen::comment_text(&g.mode.name));
     let allowed = graph::allowed_settings();
@@ -362,7 +381,51 @@ pub fn register_mode(cfg: &Path, g: &Graph, plugin: &str) -> Result<(), String> 
         cfg_text.push_str(&format!("{} \"{v}\"{nl}", st.cvar));
     }
     write(gm.join(format!("{id}.cfg")), &cfg_text)?;
-    write(ini_path, &text)
+    write(ini_path, &text)?;
+    // the mode's map kit, for the map editor (a kit that can't be kept doesn't stop the install;
+    // tests don't write into the app's folder)
+    #[cfg(not(test))]
+    if let Err(e) = kit::install_kit(&kit::kit_of(g)) {
+        eprintln!("Game Mode Studio: {e}");
+    }
+    Ok(())
+}
+
+/// The uid an installed Studio mode was made with (from its plugin list's first line).
+fn installed_uid(gm: &Path, id: &str) -> Option<String> {
+    let t = crate::sys::read_latin1(&gm.join(format!("{id}.plugins.ini"))).ok()?;
+    let first = t.lines().next()?;
+    let at = first.find("(uid ")? + 5;
+    let u = first.get(at..at + 36)?;
+    graph::valid_uid(u).then(|| u.to_string())
+}
+
+/// The short id a graph installs under in this game: the one its uid is installed as already;
+/// else its own, unless another mode (one not made in the Studio, or another uid) has it; then
+/// the first free `<id>_2`, `<id>_3`...
+pub fn install_id(game_dir: &Path, g: &Graph) -> String {
+    let gm = game_dir.join("addons/amxmodx/configs/gamemodes");
+    let modes: Vec<String> = crate::extras::parse_modes(&crate::sys::read_latin1(&gm.join("modes.ini")).unwrap_or_default()).into_iter().map(|(m, _)| m).collect();
+    let id = &g.mode.id;
+    if g.mode.uid.is_empty() {
+        return id.clone();
+    }
+    if let Some(m) = modes.iter().find(|m| installed(game_dir, m) && installed_uid(&gm, m).as_deref() == Some(g.mode.uid.as_str())) {
+        return m.clone();
+    }
+    // free, or our own install from before uids
+    let mine = |m: &str| installed(game_dir, m) && installed_uid(&gm, m).is_none();
+    if !modes.contains(id) || mine(id) {
+        return id.clone();
+    }
+    for n in 2..1000 {
+        let suffix = format!("_{n}");
+        let cand = format!("{}{suffix}", &id[..id.len().min(24 - suffix.len())]);
+        if !modes.contains(&cand) {
+            return cand;
+        }
+    }
+    id.clone()
 }
 
 /// Is a Studio mode installed in this game (its line, its plugin list naming our plugin)?
@@ -409,12 +472,15 @@ pub fn uninstall(game_dir: &Path, id: &str) -> Result<(), String> {
 
 /// Checks, generates, compiles and installs. `{ok, problems, output, plugin}`; ok is false
 /// (with problems on the nodes) when the graph or the compiler said no.
-pub fn compile(st: &Shared, g: Graph, debug: bool) -> Result<Value, String> {
+pub fn compile(st: &Shared, mut g: Graph, debug: bool) -> Result<Value, String> {
     let mut problems = graph::validate(&g);
     if graph::has_errors(&problems) {
         return Ok(json!({"ok": false, "problems": problems}));
     }
     let game = local_game(st)?;
+    // installed under the short id this game has for its uid (another mode may have its own)
+    let installed_as = install_id(&game.dir, &g);
+    g.mode.id = installed_as.clone();
     let install = crate::servers::client(st).ok_or(NO_GAME)?;
     let _one = COMPILING.lock().unwrap_or_else(|e| e.into_inner());
     let out = gen::generate(&g, debug);
@@ -436,7 +502,7 @@ pub fn compile(st: &Shared, g: Graph, debug: bool) -> Result<Value, String> {
     let stamp = source_hash(&out.source);
     if dest.is_file() && built.is_file() && std::fs::read_to_string(&stamp_path).is_ok_and(|s| s.trim() == stamp) {
         register_mode(&am.join("configs"), &g, &plugin)?;
-        return Ok(json!({"ok": true, "problems": problems, "output": "Unchanged since the last compile: the installed plugin is used as it is.", "plugin": plugin, "debug": debug, "cached": true, "secs": 0.0}));
+        return Ok(json!({"ok": true, "problems": problems, "output": "Unchanged since the last compile: the installed plugin is used as it is.", "plugin": plugin, "installedAs": installed_as, "debug": debug, "cached": true, "secs": 0.0}));
     }
     let _ = std::fs::remove_file(&stamp_path);
     let (ok, output) = run_amxxpc(&install, &scripting, &src, &inc, &built)?;
@@ -453,7 +519,7 @@ pub fn compile(st: &Shared, g: Graph, debug: bool) -> Result<Value, String> {
     std::fs::copy(&built, &dest).map_err(|e| format!("Couldn't install the plugin ({e})."))?;
     let _ = std::fs::write(&stamp_path, &stamp);
     register_mode(&am.join("configs"), &g, &plugin)?;
-    Ok(json!({"ok": true, "problems": problems, "output": output, "plugin": plugin, "debug": debug, "secs": (started.elapsed().as_secs_f64() * 10.0).round() / 10.0}))
+    Ok(json!({"ok": true, "problems": problems, "output": output, "plugin": plugin, "installedAs": installed_as, "debug": debug, "secs": (started.elapsed().as_secs_f64() * 10.0).round() / 10.0}))
 }
 
 /// What decides whether a compile can be skipped: the source and the includes it's built with.
@@ -528,7 +594,16 @@ async fn api_graphs(State(st): State<Shared>) -> Response {
 }
 
 async fn api_graph(UrlPath(id): UrlPath<String>) -> Response {
-    blocking(move || read_graph(&graphs_dir(), &id).map(|g| json!({"graph": g}))).await
+    blocking(move || {
+        let mut g = read_graph(&graphs_dir(), &id)?;
+        // a graph from before uids gets its own the first time it's opened
+        if g.mode.uid.is_empty() {
+            g.mode.uid = graph::new_uid();
+            save_graph(&graphs_dir(), &id, &g)?;
+        }
+        Ok(json!({"graph": g}))
+    })
+    .await
 }
 
 async fn api_save(UrlPath(id): UrlPath<String>, h: HeaderMap, Json(body): Json<Value>) -> Response {
@@ -536,9 +611,32 @@ async fn api_save(UrlPath(id): UrlPath<String>, h: HeaderMap, Json(body): Json<V
         return forbidden();
     }
     blocking(move || {
-        let g = graph_of(body.get("graph").cloned().unwrap_or(Value::Null))?;
+        let mut g = graph_of(body.get("graph").cloned().unwrap_or(Value::Null))?;
+        // (a mode keeps its uid: the saved one, else a new one)
+        if g.mode.uid.is_empty() {
+            g.mode.uid = read_graph(&graphs_dir(), &id).ok().map(|x| x.mode.uid).filter(|u| !u.is_empty()).unwrap_or_else(graph::new_uid);
+        }
         save_graph(&graphs_dir(), &id, &g)?;
         Ok(json!({"ok": true}))
+    })
+    .await
+}
+
+/// The kits of the modes this computer has (`<app dir>/kits`).
+async fn api_kits() -> Response {
+    blocking(move || Ok(json!({"kits": kit::list_kits_in(&kit::kits_dir())}))).await
+}
+
+/// One mode's kit: a Studio graph's made from it now, else the kits folder's.
+async fn api_kit(UrlPath(id): UrlPath<String>) -> Response {
+    blocking(move || {
+        if !graph::valid_mode_id(&id) {
+            return Err(BAD_ID.into());
+        }
+        if let Ok(g) = read_graph(&graphs_dir(), &id) {
+            return Ok(json!({"kit": kit::kit_of(&g)}));
+        }
+        kit::list_kits_in(&kit::kits_dir()).into_iter().find(|k| k["mode"]["id"] == id.as_str()).map(|k| json!({"kit": k})).ok_or_else(|| "There's no map kit for that mode.".to_string())
     })
     .await
 }
@@ -552,6 +650,7 @@ async fn api_delete(UrlPath(id): UrlPath<String>, h: HeaderMap) -> Response {
             return Err(BAD_ID.into());
         }
         crate::safety::before("Game Mode Studio", "delete a graph", &graph_path(&id));
+        let _ = std::fs::remove_file(graphs_dir().join(format!("{id}.kit.json")));
         match std::fs::remove_file(graph_path(&id)) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("Couldn't delete the graph ({e}).")),
             _ => Ok(json!({"ok": true})),
@@ -642,10 +741,10 @@ async fn api_playtest(State(st): State<Shared>, h: HeaderMap, Json(req): Json<Pl
     }
     blocking(move || {
         let g = graph_of(req.graph)?;
-        let id = g.mode.id.clone();
         let r = compile(&st, g, true)?;
         if r["ok"] == true {
             let game = local_game(&st)?;
+            let id = r["installedAs"].as_str().unwrap_or_default().to_string();
             debug::start(&game.dir, &id, req.breakpoints).map_err(|e| format!("Couldn't get the debugger ready ({e})."))?;
         }
         Ok(r)
@@ -674,7 +773,10 @@ async fn api_uninstall(State(st): State<Shared>, UrlPath(id): UrlPath<String>, h
         if !graph::valid_mode_id(&id) {
             return Err(BAD_ID.into());
         }
-        uninstall(&local_game(&st)?.dir, &id)?;
+        let dir = local_game(&st)?.dir.clone();
+        // a Studio graph's mode: wherever its uid is installed
+        let short = read_graph(&graphs_dir(), &id).map(|g| install_id(&dir, &g)).unwrap_or(id);
+        uninstall(&dir, &short)?;
         Ok(json!({"ok": true}))
     })
     .await
@@ -897,6 +999,8 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/studio/snippets", get(api_snippets))
         .route("/api/tools/studio/snippet/:id", post(api_snippet_save))
         .route("/api/tools/studio/snippet/:id/delete", post(api_snippet_delete))
+        .route("/api/tools/studio/kits", get(api_kits))
+        .route("/api/tools/studio/kit/:id", get(api_kit))
         .route("/api/tools/studio/library", get(api_library))
         .route("/api/tools/studio/library/:id", post(api_library_save))
         .route("/api/tools/studio/library/:id/delete", post(api_library_delete))
@@ -1019,6 +1123,59 @@ mod tests {
     }
 
     #[test]
+    fn installs_match_by_uid_and_clashes_get_a_new_short_id() {
+        let game = temp("game_uid");
+        let gm = game.join("addons/amxmodx/configs/gamemodes");
+        std::fs::create_dir_all(&gm).unwrap();
+        std::fs::create_dir_all(game.join("addons/amxmodx/plugins")).unwrap();
+        std::fs::write(gm.join("modes.ini"), "; modes\nclassic  \"Classic\"  \"Bombs\"  \"\"  \"w\"\n").unwrap();
+        let cfg = game.join("addons/amxmodx/configs");
+        let mut a = graph::parse(TEMPLATE).unwrap();
+        a.mode.uid = "11111111-1111-4111-8111-111111111111".into();
+        // free: its own id
+        assert_eq!(install_id(&game, &a), "rifle_reward");
+        // a mode not made in the Studio has the id: the next free one
+        a.mode.id = "classic".into();
+        assert_eq!(install_id(&game, &a), "classic_2");
+        let mut inst = a.clone();
+        inst.mode.id = "classic_2".into();
+        register_mode(&cfg, &inst, &gen::plugin_name("classic_2")).unwrap();
+        assert!(std::fs::read_to_string(gm.join("classic_2.plugins.ini")).unwrap().contains("(uid 11111111-1111-4111-8111-111111111111)"));
+        // found again by its uid, under whatever short id
+        assert_eq!(install_id(&game, &a), "classic_2");
+        a.mode.id = "renamed".into();
+        assert_eq!(install_id(&game, &a), "classic_2");
+        // another mode (another uid) asking for classic_2 gets its own
+        let mut b = graph::parse(TEMPLATE).unwrap();
+        b.mode.uid = "22222222-2222-4222-9222-222222222222".into();
+        b.mode.id = "classic_2".into();
+        assert_eq!(install_id(&game, &b), "classic_2_2");
+        // a Studio install from before uids is the same mode
+        std::fs::write(gm.join("old.plugins.ini"), "; Made with the Game Mode Studio from old.graph.json\nstudio_old.amxx\n").unwrap();
+        std::fs::write(gm.join("modes.ini"), "; modes\nclassic  \"Classic\"  \"\"  \"\"  \"\"\nclassic_2  \"C\"  \"\"  \"\"  \"\"\nold  \"Old\"  \"\"  \"\"  \"\"\n").unwrap();
+        b.mode.id = "old".into();
+        assert_eq!(install_id(&game, &b), "old");
+        // ids stay within 24 letters
+        b.mode.id = "classic".into();
+        b.mode.uid = "33333333-3333-4333-a333-333333333333".into();
+        assert_eq!(install_id(&game, &b), "classic_3");
+        let _ = std::fs::remove_dir_all(&game);
+    }
+
+    #[test]
+    fn uids() {
+        for _ in 0..50 {
+            let u = graph::new_uid();
+            assert!(graph::valid_uid(&u), "{u}");
+        }
+        assert!(!graph::valid_uid("11111111-1111-1111-1111-111111111111"));
+        assert!(!graph::valid_uid("11111111-1111-4111-8111-11111111111G"));
+        let mut g = graph::parse(TEMPLATE).unwrap();
+        g.mode.uid = "nope".into();
+        assert!(graph::has_errors(&graph::validate(&g)));
+    }
+
+    #[test]
     fn registering_and_removing_a_mode() {
         let game = temp("game");
         let gm = game.join("addons/amxmodx/configs/gamemodes");
@@ -1080,7 +1237,8 @@ mod tests {
         let every = include_str!("testdata/every_node.graph.json");
         let ls = include_str!("../../../../ui/src/views/tools/studio/templates/last-stand.graph.json");
         let br = include_str!("../../../../ui/src/views/tools/studio/templates/battle-royale.graph.json");
-        let mut graphs: Vec<(String, String)> = [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br)].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+        let mk = include_str!("testdata/markers.graph.json");
+        let mut graphs: Vec<(String, String)> = [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br), ("markers", mk)].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
         for (id, v) in builtin_snippets() {
             graphs.push((format!("sn_{id}"), serde_json::to_string(&snippet_as_graph(&id, &v)).unwrap()));
         }

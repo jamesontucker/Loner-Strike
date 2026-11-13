@@ -382,9 +382,9 @@ stock lsg_squads_alive()
 	return n
 }
 
-// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
 public plugin_precache()
 {
+	// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
 	if (get_cvar_pointer("ls_creature_precache"))
 		lsg_precache_types("all")
 }

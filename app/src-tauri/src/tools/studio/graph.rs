@@ -167,6 +167,160 @@ pub struct Graph {
     pub functions: Vec<Function>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub macros: Vec<Macro>,
+    /// what a map for this mode places (`ls_marker` entities): the mode map kit's markers
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub markers: Vec<MarkerDef>,
+    /// the kit's advice for map makers (size, players, notes)
+    #[serde(default, rename = "mapKit", skip_serializing_if = "Option::is_none")]
+    pub map_kit: Option<MapKitInfo>,
+}
+
+/// A marker a map places for this mode (docs/notes/X.md, "Mode map kit format").
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct MarkerDef {
+    pub id: String,
+    pub label: String,
+    #[serde(default)]
+    pub description: String,
+    /// point, area or path
+    #[serde(rename = "type")]
+    pub ty: String,
+    #[serde(default)]
+    pub min: u32,
+    /// None: no limit
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keys: Vec<MarkerKey>,
+    #[serde(default)]
+    pub colour: String,
+    #[serde(default)]
+    pub icon: String,
+    /// an area's default box (x y z) or radius, for the editor
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<[f64; 3]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub radius: Option<f64>,
+}
+
+/// A key a marker carries in the map (wave=2, side=north).
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct MarkerKey {
+    pub name: String,
+    /// number, text, bool or choice
+    #[serde(rename = "type")]
+    pub ty: String,
+    #[serde(default)]
+    pub default: Value,
+    #[serde(default)]
+    pub help: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<(String, String)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+}
+
+/// The kit's advice for map makers.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+pub struct MapKitInfo {
+    /// small, medium, large or empty
+    #[serde(default)]
+    pub size: String,
+    #[serde(default, rename = "playersMin", skip_serializing_if = "Option::is_none")]
+    pub players_min: Option<u32>,
+    #[serde(default, rename = "playersMax", skip_serializing_if = "Option::is_none")]
+    pub players_max: Option<u32>,
+    #[serde(default)]
+    pub notes: String,
+}
+
+pub const MARKER_TYPES: [&str; 3] = ["point", "area", "path"];
+pub const MARKER_KEY_TYPES: [&str; 4] = ["number", "text", "bool", "choice"];
+pub const MARKER_ICONS: [&str; 10] = ["flag", "skull", "star", "crate", "door", "person", "arrow", "circle", "bolt", "heart"];
+/// keys the map entity uses itself (a marker's own keys can't be these)
+pub const MARKER_RESERVED: [&str; 14] = ["classname", "origin", "angles", "angle", "model", "targetname", "target", "mode", "kind", "order", "path", "size", "radius", "spawnflags"];
+
+/// A UUID v4 as text (lower case, 8-4-4-4-12).
+pub fn valid_uid(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 36
+        && b.iter().enumerate().all(|(i, c)| if [8, 13, 18, 23].contains(&i) { *c == b'-' } else { c.is_ascii_digit() || (b'a'..=b'f').contains(c) })
+        && b[14] == b'4'
+        && matches!(b[19], b'8' | b'9' | b'a' | b'b')
+}
+
+/// A new UUID v4 for a mode.
+pub fn new_uid() -> String {
+    use rand::RngCore;
+    let mut r = [0u8; 16];
+    rand::thread_rng().fill_bytes(&mut r);
+    r[6] = (r[6] & 0x0f) | 0x40;
+    r[8] = (r[8] & 0x3f) | 0x80;
+    let h: String = r.iter().map(|b| format!("{b:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+}
+
+/// A marker id or key name: 1 to 24 small letters, digits or _ (written in maps by hand).
+pub fn valid_marker_id(s: &str) -> bool {
+    (1..=24).contains(&s.len()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// What's wrong with the graph's markers and map advice (empty: nothing).
+pub fn marker_problems(g: &Graph) -> Vec<String> {
+    let mut out = Vec::new();
+    if g.markers.len() > 32 {
+        out.push("A mode can have at most 32 map markers.".to_string());
+        return out;
+    }
+    let mut ids = HashSet::new();
+    for m in &g.markers {
+        let name = short(&m.label);
+        if !valid_marker_id(&m.id) || !ids.insert(m.id.as_str()) || m.id.starts_with("ls_") {
+            out.push(format!("The map marker \u{201c}{name}\u{201d} needs its own id: 1 to 24 small letters, digits or _ (not starting with ls_)."));
+        }
+        if m.label.trim().is_empty() || !valid_label(&m.label, 30) || !valid_label(&m.description, 200) {
+            out.push(format!("The map marker \u{201c}{name}\u{201d} needs a name (up to 30 letters) and a description of up to 200 (plain punctuation)."));
+        }
+        if !MARKER_TYPES.contains(&m.ty.as_str()) {
+            out.push(format!("The map marker \u{201c}{name}\u{201d} is a point, an area or a path."));
+        }
+        if m.min > 64 || m.max.is_some_and(|x| x == 0 || x > 64 || x < m.min) {
+            out.push(format!("The map marker \u{201c}{name}\u{201d}: at least 0 to 64, at most 1 to 64 and not under the least."));
+        }
+        if !(m.colour.is_empty() || (m.colour.len() == 7 && m.colour.starts_with('#') && m.colour[1..].chars().all(|c| c.is_ascii_hexdigit()))) || !(m.icon.is_empty() || MARKER_ICONS.contains(&m.icon.as_str())) {
+            out.push(format!("The map marker \u{201c}{name}\u{201d} has a colour or icon this app doesn't know."));
+        }
+        if m.size.is_some_and(|s| s.iter().any(|x| !x.is_finite() || *x < 1.0 || *x > 16384.0)) || m.radius.is_some_and(|r| !r.is_finite() || !(1.0..=16384.0).contains(&r)) {
+            out.push(format!("The map marker \u{201c}{name}\u{201d}: a size or radius is 1 to 16384 units."));
+        }
+        if m.keys.len() > 8 {
+            out.push(format!("The map marker \u{201c}{name}\u{201d} can have at most 8 keys."));
+        }
+        let mut kn = HashSet::new();
+        for k in &m.keys {
+            let ok_default = match k.ty.as_str() {
+                "number" => k.default.is_null() || k.default.as_f64().is_some_and(|x| x.is_finite() && x.abs() <= NUMBER_LIMIT),
+                "text" => k.default.is_null() || k.default.as_str().is_some_and(|x| valid_label(x, 60)),
+                "bool" => k.default.is_null() || k.default.is_boolean(),
+                "choice" => k.default.is_null() || k.default.as_str().is_some_and(|x| k.choices.iter().any(|(v, _)| v == x)),
+                _ => false,
+            };
+            let ok_choices = k.choices.len() <= 16 && k.choices.iter().all(|(v, l)| valid_marker_id(v) && valid_label(l, 30)) && (k.ty != "choice" || !k.choices.is_empty());
+            let ok_range = k.min.map_or(true, f64::is_finite) && k.max.map_or(true, f64::is_finite) && k.min.zip(k.max).map_or(true, |(a, b)| a <= b);
+            if !valid_marker_id(&k.name) || MARKER_RESERVED.contains(&k.name.as_str()) || !kn.insert(k.name.as_str()) || !MARKER_KEY_TYPES.contains(&k.ty.as_str()) || !ok_default || !ok_choices || !ok_range || !valid_label(&k.help, 120) {
+                out.push(format!("The map marker \u{201c}{name}\u{201d}: the key \u{201c}{}\u{201d} needs its own name (small letters, digits, _; not a key maps use themselves), a type and a default that fits it.", short(&k.name)));
+            }
+        }
+    }
+    if let Some(k) = &g.map_kit {
+        let players = |x: Option<u32>| x.map_or(true, |p| (1..=32).contains(&p));
+        if !["", "small", "medium", "large"].contains(&k.size.as_str()) || !players(k.players_min) || !players(k.players_max) || k.players_min.zip(k.players_max).is_some_and(|(a, b)| a > b) || !valid_label(&k.notes, 600) {
+            out.push("The map advice: a size of small, medium or large, players 1 to 32, and notes of up to 600 letters.".to_string());
+        }
+    }
+    out
 }
 
 /// A named list of choices (Class: Scout, Tank, Medic): its values are 0, 1, 2...
@@ -241,7 +395,12 @@ pub struct Macro {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct ModeInfo {
+    /// the short game id (modes.ini, the cfg and plugin names); can differ once installed when
+    /// another mode has it
     pub id: String,
+    /// the mode's permanent identity (a UUID v4 made when the mode is made; a rename keeps it)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub uid: String,
     pub name: String,
     #[serde(default)]
     pub description: String,
@@ -1051,6 +1210,9 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
     if g.mode.name.trim().is_empty() || !valid_label(&g.mode.name, 40) {
         p.push(Problem::err(None, "Give the mode a name (up to 40 letters, digits, spaces or plain punctuation; no * / \\ \" ^)."));
     }
+    if !g.mode.uid.is_empty() && !valid_uid(&g.mode.uid) {
+        p.push(Problem::err(None, "The mode's uid isn't a UUID this app knows."));
+    }
     if !valid_label(&g.mode.description, 60) {
         p.push(Problem::err(None, "The mode's description can be up to 60 letters, digits, spaces or plain punctuation (no * / \\ \" ^)."));
     }
@@ -1102,6 +1264,10 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         if s.fields.iter().filter(|f| f.ty == "text").count() > MAX_TEXT_FIELDS {
             p.push(Problem::err(None, format!("The struct \u{201c}{}\u{201d} can have at most {MAX_TEXT_FIELDS} text fields.", short(&s.name))));
         }
+    }
+
+    for m in marker_problems(g) {
+        p.push(Problem::err(None, m));
     }
 
     // library marks: an item id and a version
@@ -1230,6 +1396,10 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
                 "macro" => match sval.and_then(|id| v.macros.get(id)) {
                     None => Err("Pick which Macro to use.".into()),
                     _ => Ok(()),
+                },
+                "marker" => match sval {
+                    Some(id) if g.markers.iter().any(|m| m.id == id) => Ok(()),
+                    _ => Err(format!("Pick a map marker for {} (add one under Map markers).", def.title)),
                 },
                 "struct" => match sval.and_then(|id| v.structs.get(id)) {
                     None => Err(format!("Pick a struct for {} (add one under My mode).", def.title)),
@@ -1650,7 +1820,7 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
             Some(s) if valid_keys(s, def.max.unwrap_or(120.0) as usize) => Ok(()),
             _ => Err(format!("{} are words like radius=160 (letters, digits, _ - . = : and spaces; no quotes).", def.label)),
         },
-        "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases" => Ok(()),
+        "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases" | "marker" => Ok(()),
         _ => Err(format!("{} has a setting this app doesn't know.", def.label)),
     }
 }

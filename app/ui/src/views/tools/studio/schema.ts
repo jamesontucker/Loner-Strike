@@ -84,6 +84,36 @@ export const functionSchema = z.object({
   locals: z.array(variableSchema).max(16).optional(),
   from: libFrom,
 });
+/** A map marker (the mode map kit, docs/notes/X.md): what a map for this mode places. */
+const markerId = z.string().regex(/^[a-z0-9_]{1,24}$/);
+export const markerKeySchema = z.object({
+  name: markerId,
+  type: z.enum(["number", "text", "bool", "choice"]),
+  default: z.union([z.number().finite(), z.string().max(60), z.boolean(), z.null()]).optional(),
+  help: z.string().max(120).default(""),
+  choices: z.array(z.tuple([markerId, z.string().max(30)])).max(16).optional(),
+  min: z.number().finite().optional(),
+  max: z.number().finite().optional(),
+});
+export const markerSchema = z.object({
+  id: markerId,
+  label: label(30),
+  description: label(200).default(""),
+  type: z.enum(["point", "area", "path"]),
+  min: z.number().int().min(0).max(64).default(0),
+  max: z.number().int().min(1).max(64).optional(),
+  keys: z.array(markerKeySchema).max(8).optional(),
+  colour: z.string().regex(/^(#[0-9a-fA-F]{6})?$/).default(""),
+  icon: z.string().max(12).default(""),
+  size: z.tuple([z.number(), z.number(), z.number()]).optional(),
+  radius: z.number().optional(),
+});
+export const mapKitSchema = z.object({
+  size: z.enum(["", "small", "medium", "large"]).default(""),
+  playersMin: z.number().int().min(1).max(32).optional(),
+  playersMax: z.number().int().min(1).max(32).optional(),
+  notes: label(600).default(""),
+});
 export const macroSchema = z.object({ id, name: label(30), inputs: z.array(memberSchema).max(12).default([]), outputs: z.array(memberSchema).max(12).default([]), from: libFrom });
 
 export const graphSchema = z.object({
@@ -91,6 +121,8 @@ export const graphSchema = z.object({
   version: z.union([z.literal(1), z.literal(2), z.literal(VERSION)]).transform(() => VERSION),
   mode: z.object({
     id: modeId,
+    /** the mode's permanent identity (UUID v4): made with the mode, kept through renames */
+    uid: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/).optional(),
     name: label(40),
     description: label(60).default(""),
     /** game settings for the mode's cfg (Set Setting's choices; the app checks them) */
@@ -104,6 +136,8 @@ export const graphSchema = z.object({
   structs: z.array(structSchema).max(32).optional(),
   functions: z.array(functionSchema).max(64).optional(),
   macros: z.array(macroSchema).max(32).optional(),
+  markers: z.array(markerSchema).max(32).optional(),
+  mapKit: mapKitSchema.optional(),
 });
 
 export type Graph = z.infer<typeof graphSchema>;
@@ -114,6 +148,8 @@ export type GVariable = z.infer<typeof variableSchema>;
 export type GMember = z.infer<typeof memberSchema>;
 export type GEnum = z.infer<typeof enumSchema>;
 export type GStruct = z.infer<typeof structSchema>;
+export type GMarker = z.infer<typeof markerSchema>;
+export type GMarkerKey = z.infer<typeof markerKeySchema>;
 export type GFunction = z.infer<typeof functionSchema>;
 export type GMacro = z.infer<typeof macroSchema>;
 export type ParamValue = GNode["params"][string];
@@ -132,6 +168,15 @@ export function parseGraph(v: unknown): { graph: Graph } | { error: string } {
   return { graph: r.data };
 }
 
+/** A new mode's uid (UUID v4). */
+export const newUid = (): string =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        return (c === "x" ? r : (r & 3) | 8).toString(16);
+      });
+
 export function emptyGraph(id: string, name: string): Graph {
-  return { schema: SCHEMA, version: VERSION, mode: { id, name, description: "" }, variables: [], nodes: [], edges: [], comments: [] };
+  return { schema: SCHEMA, version: VERSION, mode: { id, uid: newUid(), name, description: "" }, variables: [], nodes: [], edges: [], comments: [] };
 }

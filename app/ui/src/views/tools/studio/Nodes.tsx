@@ -10,7 +10,7 @@ import { allVariables, nodeTitle, pinsOf, typeLabel } from "./pins";
 import { showValue } from "./Inspector";
 import type { GNode, GVariable, Graph } from "./schema";
 
-const CAT_CLASS: Record<string, string> = { Events: "ev", Conditions: "cond", Numbers: "num", Text: "num", Variables: "var", Timers: "timer", Players: "player", Messages: "msg", Scoring: "score", Components: "comp", Creatures: "creature", Flow: "flow", Arrays: "var", Maps: "var", Structs: "var", Enums: "var", Vectors: "num" };
+const CAT_CLASS: Record<string, string> = { Events: "ev", Conditions: "cond", Numbers: "num", Text: "num", Variables: "var", Timers: "timer", Players: "player", Messages: "msg", Scoring: "score", Components: "comp", "Map markers": "comp", Creatures: "creature", Flow: "flow", Arrays: "var", Maps: "var", Structs: "var", Enums: "var", Vectors: "num" };
 
 /** How a node is drawn, as in Blueprints: events red, values (pure) green, functions purple,
  *  flow control grey, actions blue. */
@@ -43,6 +43,7 @@ export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boo
       if (p.kind === "var") return vars.find((x) => x.id === v)?.name ?? "(pick a variable)";
       if (p.kind === "name" || p.kind === "entname") return v ? `${p.label.replace(/^.*named$/i, "at")} ${String(v)}` : "";
       if (p.kind === "keys") return v ? String(v) : "";
+      if (p.kind === "marker") return g?.markers?.find((m) => m.id === v)?.label ?? "(pick a marker)";
       if (p.kind === "varvalue") return v === "" ? "" : `= ${typeof v === "boolean" ? (v ? "yes" : "no") : String(v)}`;
       return `“${String(v)}”`;
     })

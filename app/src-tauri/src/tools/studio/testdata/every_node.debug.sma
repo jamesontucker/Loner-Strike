@@ -14,9 +14,9 @@
 #include <cellarray>
 
 #define LSG_MODE "every_node"
-#define LSG_CTX 22
+#define LSG_CTX 24
 #define LSG_TXT 2
-#define LSG_N 248
+#define LSG_N 251
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -60,9 +60,9 @@ stock g_v19 = 0 // Seen (Array of Player)
 stock Float:g_lsgDmg, bool:g_lsgDmgBlock
 stock g_lsgNoFall[33]
 stock g_lsgM93[33][LSG_CTX]
-#define LSD_N 248
-new const g_lsdIds[LSD_N][] = { "rs", "rs_set", "rs_cd", "rs_msg", "rs_rep", "rs_hud", "rs_delay", "rs_wave", "rs_wstop", "rs_reset", "pk", "pk_br", "pk_add", "pk_add2", "pk_team", "pk_give", "pk_seth", "pk_hud", "ps", "ps_strip", "ps_arm", "ps_spd", "ps_team", "ps_tp", "ps_set", "pj", "pj_hud", "pj_br", "pl", "pl_set", "bp", "bp_hud", "bd", "bd_end", "bx", "bx_end", "re", "re_br", "re_set", "re_stop", "pu", "pu_door", "pu_trap", "pt", "pt_crate", "cc", "cc_lock", "cc_hud", "cl", "cl_ex", "zs", "zs_shrink", "zt", "zt_set", "zt_hud", "ex", "ex_add", "ws", "ws_hud", "wp", "wp_hud", "wc", "wc_start", "lo", "lo_hud", "ck", "ck_set", "bb", "bb_msg", "me", "me_hud", "ck2", "ck2_set", "ck2_make", "ck2_spawn", "ck2_hud", "ck2_hud2", "hurt", "hurt_tadd", "hurt_glow", "tc", "tc_model", "nr", "nr_cvar", "nr_each", "nr_resp", "nr_pick", "nr_ents", "nr_use", "nr_set", "nr_stop", "nr_hud", "cmd", "cmd_menu", "cmd_arm", "cmd_money", "cmd_grav", "cmd_bar", "cmd_chat", "fn", "fn_frag", "fn_snd", "fn_role", "pk2", "pk2_call", "pk2_pick", "pk2_bot", "pk2_hold", "pk2_follow", "pk2_free", "pk2_drop", "pk2_fr", "pk2_kill", "lo2", "lo2_br", "lo2_pick", "lo2_br2", "lo2_resp", "lo2_drop", "lo2_hud", "lo2_br3", "lo2_end", "ms", "ms_pack", "ms_pick", "ms_start", "ms_stop", "ms_make", "ms_drop", "ms_each", "ms_tp", "ah", "ah_br", "ah_block", "ah_scale", "ah_set", "dk", "dk_down", "rv", "rv_hud", "to", "to_add", "to_set", "to_hud", "to_br", "sq", "sq_nf", "sq_set", "sq_ff", "sq_hud", "sq_buy", "sq_allow", "sq_up", "sq_goto", "ck3", "ck3_set", "ck3_add", "ck3_p", "ck3_r", "ck3_hud", "tu", "tu_end", "a0", "a_seq", "a_for", "a_add", "a_sort", "a_shuf", "a_ins", "a_rmi", "a_aset", "a_arem", "a_fe", "a_br", "a_pr", "a_pr2", "a_clr", "b_set", "b_wh", "b_add", "b_sw", "b_pr1", "b_sn", "b_pr2", "b_pr3", "c_each", "c_setp", "c_pos", "c_vel", "c_pr", "c_sl", "c_sf", "c_sf2", "c_push", "c_pr2", "c_sw", "c_pr3", "c_pr4", "d_each", "d_madd", "d_call", "d_pr", "d_pr2", "d_tadd", "d_vadd", "d_rem", "d_pr3", "d_mclr", "d_pr4", "d_pr5", "d_tbf", "d_tset", "d_pr6", "d_tclr", "d_pr7", "e0", "e_once", "e_n", "e_gate", "e_ff", "e_iv", "e_rt", "e_pr", "e_pr2", "e_seq", "f0", "f_brk", "f_br", "f_pr", "f_pr2", "f_pr3", "f_pr4", "f_setc", "f_sw", "f_pr5", "f_sp", "f_pr6", "fa_e", "fa_set", "fa_push", "fa_br", "fa_r1", "fa_r2", "fb_e", "fb_r", "fc_e", "fc_pr", "d_mac" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 251
+new const g_lsdIds[LSD_N][] = { "rs", "rs_set", "rs_cd", "rs_msg", "rs_rep", "rs_hud", "rs_delay", "rs_wave", "rs_wstop", "rs_reset", "pk", "pk_br", "pk_add", "pk_add2", "pk_team", "pk_give", "pk_seth", "pk_hud", "ps", "ps_strip", "ps_arm", "ps_spd", "ps_team", "ps_tp", "ps_set", "pj", "pj_hud", "pj_br", "pl", "pl_set", "bp", "bp_hud", "bd", "bd_end", "bx", "bx_end", "re", "re_br", "re_set", "re_stop", "pu", "pu_door", "pu_trap", "pt", "pt_crate", "cc", "cc_lock", "cc_hud", "cl", "cl_ex", "zs", "zs_shrink", "zt", "zt_set", "zt_hud", "ex", "ex_add", "ws", "ws_hud", "wp", "wp_hud", "wc", "wc_start", "lo", "lo_hud", "ck", "ck_set", "bb", "bb_msg", "me", "me_hud", "ck2", "ck2_set", "ck2_make", "ck2_spawn", "ck2_hud", "ck2_hud2", "hurt", "hurt_tadd", "hurt_glow", "tc", "tc_model", "nr", "nr_cvar", "nr_each", "nr_resp", "nr_pick", "nr_ents", "nr_use", "nr_set", "nr_stop", "nr_hud", "cmd", "cmd_menu", "cmd_arm", "cmd_money", "cmd_grav", "cmd_bar", "cmd_chat", "fn", "fn_frag", "fn_snd", "fn_role", "pk2", "pk2_call", "pk2_pick", "pk2_bot", "pk2_hold", "pk2_follow", "pk2_free", "pk2_drop", "pk2_fr", "pk2_kill", "lo2", "lo2_br", "lo2_pick", "lo2_br2", "lo2_resp", "lo2_drop", "lo2_hud", "lo2_br3", "lo2_end", "ms", "ms_pack", "ms_pick", "ms_start", "ms_stop", "ms_make", "ms_drop", "ms_each", "ms_tp", "ah", "ah_br", "ah_block", "ah_scale", "ah_set", "dk", "dk_down", "rv", "rv_hud", "to", "to_add", "to_set", "to_hud", "to_br", "sq", "sq_nf", "sq_set", "sq_ff", "sq_hud", "sq_buy", "sq_allow", "sq_up", "sq_goto", "ck3", "ck3_set", "ck3_add", "ck3_p", "ck3_r", "ck3_hud", "tu", "tu_end", "a0", "a_seq", "a_for", "a_add", "a_sort", "a_shuf", "a_ins", "a_rmi", "a_aset", "a_arem", "a_fe", "a_br", "a_pr", "a_pr2", "a_clr", "b_set", "b_wh", "b_add", "b_sw", "b_pr1", "b_sn", "b_pr2", "b_pr3", "c_each", "c_setp", "c_pos", "c_vel", "c_pr", "c_sl", "c_sf", "c_sf2", "c_push", "c_pr2", "c_sw", "c_pr3", "c_pr4", "d_each", "d_madd", "d_call", "d_pr", "d_pr2", "d_tadd", "d_vadd", "d_rem", "d_pr3", "d_mclr", "d_pr4", "d_pr5", "d_tbf", "d_tset", "d_pr6", "d_tclr", "d_pr7", "e0", "e_once", "e_n", "e_gate", "e_ff", "e_iv", "e_rt", "e_pr", "e_pr2", "e_seq", "f0", "f_brk", "f_br", "f_pr", "f_pr2", "f_pr3", "f_pr4", "f_setc", "f_sw", "f_pr5", "f_sp", "f_pr6", "fa_e", "fa_set", "fa_push", "fa_br", "fa_r1", "fa_r2", "fb_e", "fb_r", "fc_e", "fc_pr", "mk_ev", "mk_fe", "mk_pr", "d_mac" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -2232,9 +2232,155 @@ public lsg_clock_tick()
 	}
 }
 
-// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
+// ---- map markers ----
+#define LSG_MK_MAX 128
+new const g_lsgMkIds[][] = { "spot", "route" }
+new g_lsgMkN, g_lsgMkEnt[LSG_MK_MAX], g_lsgMkKind[LSG_MK_MAX], g_lsgMkPath[LSG_MK_MAX], g_lsgMkOrder[LSG_MK_MAX], Trie:g_lsgMkKeys[LSG_MK_MAX]
+new g_lsgMkParse, bool:g_lsgMkPend, Trie:g_lsgMkPendKeys = Invalid_Trie
+
+public lsg_mk_kv(ent, kvd)
+{
+	if (ent <= 0)
+		return FMRES_IGNORED
+	new key[32], val[64]
+	get_kvd(kvd, KV_KeyName, key, charsmax(key))
+	get_kvd(kvd, KV_Value, val, charsmax(val))
+	if (equal(key, "classname"))
+	{
+		// the engine sends the class first on its own, then again among the keys
+		if (ent != g_lsgMkParse)
+		{
+			g_lsgMkParse = ent
+			g_lsgMkPend = false
+			if (g_lsgMkPendKeys != Invalid_Trie)
+				TrieDestroy(g_lsgMkPendKeys)
+			g_lsgMkPendKeys = Invalid_Trie
+			// (another plugin may have made an ls_marker an info_target already: its kind decides)
+			if (equal(val, "ls_marker") || equal(val, "info_target"))
+			{
+				g_lsgMkPend = true
+				g_lsgMkPendKeys = TrieCreate()
+			}
+		}
+		if (g_lsgMkPend && equal(val, "ls_marker"))
+			set_kvd(kvd, KV_Value, "info_target")
+		return FMRES_IGNORED
+	}
+	if (g_lsgMkPend && ent == g_lsgMkParse)
+		TrieSetString(g_lsgMkPendKeys, key, val)
+	return FMRES_IGNORED
+}
+
+public lsg_mk_spawn(ent)
+{
+	if (ent != g_lsgMkParse || !g_lsgMkPend)
+		return FMRES_IGNORED
+	g_lsgMkPend = false
+	g_lsgMkParse = 0
+	new Trie:keys = g_lsgMkPendKeys
+	g_lsgMkPendKeys = Invalid_Trie
+	new kind[32], mode[32], num[12], k = -1
+	TrieGetString(keys, "kind", kind, charsmax(kind))
+	TrieGetString(keys, "mode", mode, charsmax(mode))
+	for (new i = 0; i < sizeof g_lsgMkIds; i++)
+	{
+		if (kind[0] && equal(kind, g_lsgMkIds[i]))
+		{
+			k = i
+			break
+		}
+	}
+	if (k < 0 || !lsg_mk_mode_ok(mode) || g_lsgMkN >= LSG_MK_MAX || !pev_valid(ent))
+	{
+		TrieDestroy(keys)
+		return FMRES_IGNORED
+	}
+	set_pev(ent, pev_effects, pev(ent, pev_effects) | EF_NODRAW)
+	set_pev(ent, pev_solid, SOLID_NOT)
+	new path, order
+	if (TrieGetString(keys, "path", num, charsmax(num)))
+		path = str_to_num(num)
+	if (TrieGetString(keys, "order", num, charsmax(num)))
+		order = str_to_num(num)
+	// in kind, path, order order (then the map's)
+	new at = g_lsgMkN
+	while (at > 0 && (g_lsgMkKind[at - 1] > k || (g_lsgMkKind[at - 1] == k && (g_lsgMkPath[at - 1] > path || (g_lsgMkPath[at - 1] == path && g_lsgMkOrder[at - 1] > order)))))
+	{
+		g_lsgMkEnt[at] = g_lsgMkEnt[at - 1]
+		g_lsgMkKind[at] = g_lsgMkKind[at - 1]
+		g_lsgMkPath[at] = g_lsgMkPath[at - 1]
+		g_lsgMkOrder[at] = g_lsgMkOrder[at - 1]
+		g_lsgMkKeys[at] = g_lsgMkKeys[at - 1]
+		at--
+	}
+	g_lsgMkEnt[at] = ent
+	g_lsgMkKind[at] = k
+	g_lsgMkPath[at] = path
+	g_lsgMkOrder[at] = order
+	g_lsgMkKeys[at] = keys
+	g_lsgMkN++
+	return FMRES_IGNORED
+}
+
+// a marker's mode: empty, "any", this mode's id, or a comma list with it
+stock bool:lsg_mk_mode_ok(const mode[])
+{
+	if (!mode[0] || equal(mode, "any") || equal(mode, LSG_MODE))
+		return true
+	new list[40], me[32]
+	formatex(list, charsmax(list), ",%s,", mode)
+	replace_all(list, charsmax(list), " ", "")
+	formatex(me, charsmax(me), ",%s,", LSG_MODE)
+	return contain(list, me) >= 0 || contain(list, ",any,") >= 0
+}
+
+stock lsg_mk_count(k)
+{
+	new n
+	for (new m = 0; m < g_lsgMkN; m++)
+		if (g_lsgMkKind[m] == k)
+			n++
+	return n
+}
+
+// the n-th (from 1) marker of a kind, or 0
+stock lsg_mk_get(k, n)
+{
+	for (new m = 0; m < g_lsgMkN; m++)
+		if (g_lsgMkKind[m] == k && --n == 0)
+			return pev_valid(g_lsgMkEnt[m]) ? g_lsgMkEnt[m] : 0
+	return 0
+}
+
+stock lsg_mk_key(ent, const key[])
+{
+	new t[64]
+	for (new m = 0; m < g_lsgMkN; m++)
+	{
+		if (g_lsgMkEnt[m] != ent || !ent)
+			continue
+		if (!TrieGetString(g_lsgMkKeys[m], key, t, charsmax(t)))
+			lsg_mk_default(g_lsgMkKind[m], key, t)
+		break
+	}
+	return t
+}
+
+stock lsg_mk_default(k, const key[], t[64])
+{
+	if (k == 0 && equal(key, "wave"))
+		copy(t, charsmax(t), "2")
+	#pragma unused k
+	#pragma unused key
+	#pragma unused t
+}
+
 public plugin_precache()
 {
+	// the map's ls_marker entities, as they load
+	register_forward(FM_KeyValue, "lsg_mk_kv")
+	register_forward(FM_Spawn, "lsg_mk_spawn", 1)
+	// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
 	if (get_cvar_pointer("ls_creature_precache"))
 		lsg_precache_types("all")
 }
@@ -2578,6 +2724,7 @@ public lsg_on_map_started()
 {
 	new ctx[LSG_CTX]
 	lsg_n122(ctx)
+	lsg_n247(ctx)
 }
 
 public lsg_on_new_round()
@@ -6010,7 +6157,7 @@ lsg_n213(ctx[])
 		return
 	lsg_tclear(lsi0)
 	lsd_exit(213, "cleared")
-	lsg_n247(ctx)
+	lsg_n250(ctx)
 }
 
 // Print String (d_pr7)
@@ -6581,20 +6728,67 @@ stock lsg_n246(ctx[])
 	lsd_exit(246, esc)
 }
 
-// Print String (d_mac)
+// Map Started (mk_ev)
 lsg_n247(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(247, ctx))
+		return
+	lsd_exit(247, "ran")
+	lsg_n248(ctx)
+}
+
+// For Each Marker (mk_fe)
+lsg_n248(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(248, ctx))
+		return
+	new c[LSG_CTX], count
+	for (new m = 0; m < g_lsgMkN; m++)
+	{
+		if (g_lsgMkKind[m] != 0)
+			continue
+		count++
+		for (new j = 0; j < LSG_CTX; j++)
+			c[j] = ctx[j]
+		c[22] = g_lsgMkEnt[m]
+		c[23] = _:float(count)
+		lsg_n249(c)
+	}
+	lsd_exit(248, fmt("%d times", count))
+}
+
+// Print String (mk_pr)
+lsg_n249(ctx[])
+{
+	new lsi0 = lsg_vent(lsg_mk_get(1, floatround(float(lsg_mk_count(0)))))
+	lsd_begin()
+	lsd_in_text("Value", lsg_vtext(lsi0))
+	if (lsd_enter(249, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Route spot:", lsg_vtext(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(249, esc)
+}
+
+// Print String (d_mac)
+lsg_n250(ctx[])
 {
 	new Float:lsi0 = 3.0
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
-	if (lsd_enter(247, ctx))
+	if (lsd_enter(250, ctx))
 		return
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "In the macro:", floatround(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
-	lsd_exit(247, esc)
+	lsd_exit(250, esc)
 	lsg_n214(ctx)
 }
 
@@ -6853,5 +7047,8 @@ lsd_call(n, const data[])
 		case 245: lsg_n245(ctx)
 		case 246: lsg_n246(ctx)
 		case 247: lsg_n247(ctx)
+		case 248: lsg_n248(ctx)
+		case 249: lsg_n249(ctx)
+		case 250: lsg_n250(ctx)
 	}
 }
