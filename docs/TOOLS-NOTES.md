@@ -2657,56 +2657,6 @@ build right now because of `studio/gen.rs`/`graph.rs` work in progress); `tsc -b
   configs/gamemodes as "shipped"). Or `useResetDefaults("plugins", { match })` + `{reset.sheet}` from a menu.
 - (X, Game Mode Studio) if the Studio gets a save area, `ActionBar` with `reset={{ tool: "studio", match: [...] }}`.
 
-### Agent P9: UX overhaul of Radar maker, Callouts, Nav fixer, Map doctor — plan, 2026-11-12
-Owner of `views/tools/{overview,callouts,navfix,doctor}/*` for this pass (+ their screenshot tests, their `SHORTCUTS`
-lines). Rust routes unchanged unless a tool needs one more field.
-- **One workspace layout for all four**, the one the viewer and nav fixer already use (`.tools-page` →
-  `.tools-bar` + `.tools-viewer` = big map stage left, `.tools-side` column of `.tools-panel`s right): the map large,
-  side panel in steps/sections, status line under the map, primary action in P8's sticky ActionBar.
-- **Start page**: P8's MapBrowser with per-tool badges (radar: has overview; callouts: nav/places; nav fixer: has nav;
-  doctor: nav / downloaded). Until it lands, the old MapList stays. **P8: I'll only consume MapBrowser/ActionBar;
-  please note their props here when ready.**
-- Radar: current vs new side by side (or a slider), style presets as thumbnails, marks as toggles, zoom/pan, install
-  result card. Callouts: palette of names (paint mode), places list with counts/colours, suggestions, conflicts.
-  Nav fixer: problems grouped by kind with Fix / Show me, tool palette, reach legend, Undo/Redo in the bar.
-  Doctor: checklist report (passed / warnings / problems) grouped files · .res · nav · overview · textures, Fix all
-  safe, links into the other tools. Help text → `Info` tooltips; `?` keys for each.
-
-**W2, later (brain side done for now): ls-modes c5c9466 merged into `ls-next-w2`, CI run 43364829560.**
-Builds on W1's plugin change (holders + free roamers). What was wrong in the brain, in order found:
-1. **The freeze:** a station's `Hide()` was refused by the brain's half-second repath throttle. It fell to Idle,
-   Hunt then pathed straight away, which restarted the throttle, and the next `Hide()` was refused too. This also
-   caused the "same pose, same facing" look: those bots never reached the hide state, the one that looks round.
-   Stations now wait for the throttle, pick their own spot (away from teammates' spots, never the last one) and move
-   on every 5-9 s in a wave.
-2. **Mode moves wiped the trigger:** `ClearMovement()` resets the whole bot command, buttons included. The
-   stand-still/step/back-off moves done after the state machine erased fire and use. Those are re-pressed now. This
-   was also why crate/shop `use` could fail.
-3. **Fighting on the move:** bots shot creatures while walking (hunting, re-stationing) and ran from biters when
-   hurt. Every bot died in wave 1. Now: bursts standing still, a sidestep between bursts with the trigger released
-   (bolder bots step more), one step back right up close, cover only from a creature at range, and no new spot or
-   errand mid-fight.
-4. **Roamers** (no goal): back to the others when hurt, over to a teammate who's fighting, out after creatures
-   (more often the more aggressive the bot), round the area their side holds rather than across the map, and now and
-   then tagging along with a person between waves. Creatures close by or coming for a bot are noticed behind it.
-- **Answers:** `use` with no `ent` (the shop) holds use 6 s and then the goal ends, as you wanted. Your revive
-  (`go_hold` with `ent` = the downed player) is now treated as a revive: the bot edges up to them and holds use until
-  you clear it (15 s at most). No change needed on your side.
-- **Measured** (de_dust2, 6 CT bots, about 8 min, gm_simrec + lstrace's new `mode_goal` column, plugins as in
-  LSPLAY at 19:17):
-
-| | still | still 5 s+ | view deg/s | yaw sectors/min | 128-u cells/min | shots/min | waves |
-|---|---|---|---|---|---|---|---|
-| old brain, old creatures | 40% | 17% | 59 | 28 | 47 | 22 | held 2, fell on 3 |
-| old brain, new creatures (control) | 29% | 10% | 62 | 31 | 60 | 25 | overrun on 3 |
-| new brain, run A: holders / roamers | 41% / 27% | 12% / 4% | 36 / 25 | 21 / 16 | 29 / 20 | 31 / 16 | held 1-2 (long fights at a choke) |
-| new brain, run B: holders / roamers | 46% / 30% | 9% / 7% | 52 / 66 | 32 / 36 | 36 / 55 | 28 / 24 | held 4, fell on 5 |
-| Classic (new build, modes off) | 39% | 11% | 56 | 27 | 53 | 29 | - |
-
-  Classic on the new build matches the old build (still 37-39%, 56 deg/s), and its trace has no mode decisions:
-  modes-off is unchanged. Remaining: holders still stand ~45% (they hold angles and fight standing up); roamers are
-  at Classic levels.
-
 ### Agent P9: UX overhaul of Radar maker, Callouts, Nav fixer, Map doctor — done, 2026-11-12
 **One layout for all four** (the viewer's: `.tools-page` → `.tools-bar` + `.tools-viewer` = the map large on the left,
 a column of `.tools-panel`s on the right, a status line under the map) with **P8's MapBrowser** as the start page and
