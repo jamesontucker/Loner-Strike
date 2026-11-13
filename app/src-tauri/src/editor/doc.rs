@@ -214,10 +214,6 @@ pub struct EditorSettings {
     pub vis_sets: Vec<VisSet>,
     #[serde(default, skip_serializing_if = "CordonSettings::is_empty")]
     pub cordon: CordonSettings,
-    /// P5: the folder an imported map came from (its models/, sprites/ and sound/ files are
-    /// found there after the project is saved elsewhere; tools/editor/assets.rs)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<String>,
 }
 
 impl CordonSettings {

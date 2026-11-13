@@ -57,14 +57,83 @@ pub struct Asset {
     pub status: Status,
 }
 
-/// A value that's a path inside the game folder (no drive letters, no climbing out).
-fn clean(v: &str) -> Option<String> {
-    let v = v.trim().trim_start_matches(['*', '#']).replace('\\', "/");
-    let v = v.trim_start_matches('/').to_string();
-    if v.is_empty() || v.len() > 120 || v.contains("..") || v.contains(':') || v.starts_with('!') {
+/// The folders an asset can be in, and the file types each holds.
+const PLACES: [(&str, &[&str]); 4] = [("models/", &["mdl"]), ("sprites/", &["spr"]), ("sound/", &["wav", "mp3"]), ("gfx/env/", &["tga", "bmp"])];
+
+/// A clean path inside the game folder, or None: only models/, sprites/, sound/ and gfx/env/
+/// with their own file types; plain names (letters, digits, _ - . space), no empty, "." or ".."
+/// parts, nothing absolute (/, \, drive letters). A backslash counts as a folder separator,
+/// as the game reads it.
+pub fn clean_rel(v: &str) -> Option<String> {
+    let v = v.replace('\\', "/");
+    if v.is_empty() || v.len() > 120 || v.starts_with('/') || v.contains(':') {
         return None;
     }
-    v.bytes().all(|b| b.is_ascii_alphanumeric() || b"_-./ +~()[]{}".contains(&b)).then_some(v)
+    let parts: Vec<&str> = v.split('/').collect();
+    if parts.len() > 8 || parts.iter().any(|p| p.is_empty() || *p == "." || *p == ".." || p.starts_with(' ') || p.ends_with(' ') || p.ends_with('.')) {
+        return None;
+    }
+    if !v.bytes().all(|b| b.is_ascii_alphanumeric() || b"_-. ".contains(&b) || b == b'/') {
+        return None;
+    }
+    let low = v.to_ascii_lowercase();
+    let ext = low.rsplit_once('.').map(|x| x.1).unwrap_or("");
+    PLACES.iter().any(|(dir, exts)| low.starts_with(dir) && exts.contains(&ext) && low.len() > dir.len()).then_some(v)
+}
+
+/// An entity key's value as a game path: models and sprites as they are, sounds under sound/.
+fn clean(v: &str) -> Option<String> {
+    let v = v.trim().trim_start_matches(['*', '#']).replace('\\', "/");
+    if v.starts_with('!') {
+        return None;
+    }
+    let low = v.to_ascii_lowercase();
+    let v = if (low.ends_with(".wav") || low.ends_with(".mp3")) && !low.starts_with("sound/") { format!("sound/{v}") } else { v };
+    clean_rel(&v)
+}
+
+/// The biggest file of each type that's taken (bigger: not a real asset).
+fn size_cap(ext: &str) -> u64 {
+    match ext {
+        "mdl" | "wav" | "mp3" => 32 << 20,
+        _ => 8 << 20,
+    }
+}
+
+/// Whether the file's first bytes are what its type says (MDL IDST/IDSQ, SPR IDSP, WAV
+/// RIFF…WAVE, MP3 ID3 or a frame sync, BMP BM, TGA a plain image header).
+pub fn looks_right(path: &Path, ext: &str) -> bool {
+    use std::io::Read;
+    let Ok(mut f) = std::fs::File::open(path) else { return false };
+    let mut h = [0u8; 18];
+    let n = f.read(&mut h).unwrap_or(0);
+    let h = &h[..n];
+    match ext {
+        "mdl" => h.starts_with(b"IDST") || h.starts_with(b"IDSQ"),
+        "spr" => h.starts_with(b"IDSP"),
+        "wav" => n >= 12 && &h[..4] == b"RIFF" && &h[8..12] == b"WAVE",
+        "mp3" => h.starts_with(b"ID3") || (n >= 2 && h[0] == 0xFF && h[1] & 0xE0 == 0xE0),
+        "bmp" => h.starts_with(b"BM"),
+        // id length, colour map type 0/1, image type 1 2 3 9 10 11, then 8/16/24/32 bits
+        "tga" => n == 18 && h[1] <= 1 && matches!(h[2], 1 | 2 | 3 | 9 | 10 | 11) && matches!(h[16], 8 | 15 | 16 | 24 | 32),
+        _ => false,
+    }
+}
+
+/// A found file that's safe to use: a real file (not a link) whose real path stays under
+/// `root`, of a sane size, and of the type its name says. Returns its real path.
+pub fn vet(root: &Path, found: &Path, rel: &str) -> Option<PathBuf> {
+    let md = std::fs::symlink_metadata(found).ok()?;
+    if !md.file_type().is_file() {
+        return None;
+    }
+    let real = std::fs::canonicalize(found).ok()?;
+    let root = std::fs::canonicalize(root).ok()?;
+    if !real.starts_with(&root) {
+        return None;
+    }
+    let ext = rel.rsplit_once('.').map(|x| x.1.to_ascii_lowercase()).unwrap_or_default();
+    (md.len() > 0 && md.len() <= size_cap(&ext) && looks_right(&real, &ext)).then_some(real)
 }
 
 /// The files the map's entities name, with who names them.
@@ -96,12 +165,16 @@ pub fn named_files(doc: &MapDocument) -> Vec<Named> {
             }
             let Some(rel) = clean(v) else { continue };
             let low = rel.to_ascii_lowercase();
-            if low.ends_with(".mdl") || low.ends_with(".spr") {
-                add(rel, if low.ends_with(".spr") { "sprite" } else { "model" }, id.0, class);
-            } else if low.ends_with(".wav") || low.ends_with(".mp3") {
-                let rel = if low.starts_with("sound/") { rel } else { format!("sound/{rel}") };
-                add(rel, "sound", id.0, class);
-            }
+            let kind = if low.starts_with("sprites/") {
+                "sprite"
+            } else if low.starts_with("models/") {
+                "model"
+            } else if low.starts_with("sound/") {
+                "sound"
+            } else {
+                continue;
+            };
+            add(rel, kind, id.0, class);
         }
     }
     out
@@ -112,7 +185,8 @@ pub struct Places {
     pub hl: Option<PathBuf>,
     /// "cstrike" or "czero"
     pub game: String,
-    /// the project's folder and the imported file's, each then its parent
+    /// the project's folder, and the folder the map was imported from in this run and its
+    /// parent (never a path read from a project file)
     pub beside: Vec<PathBuf>,
 }
 
@@ -129,12 +203,21 @@ impl Places {
 
 fn beside_dirs(s: &Session) -> Vec<PathBuf> {
     let mut v: Vec<PathBuf> = Vec::new();
-    let roots = [s.project.as_deref().and_then(Path::parent).map(Path::to_path_buf), s.folder.clone(), s.doc.editor.source.as_ref().map(PathBuf::from)];
-    for d in roots.into_iter().flatten() {
-        for x in [Some(d.clone()), d.parent().map(Path::to_path_buf)].into_iter().flatten() {
-            if x.is_dir() && !v.contains(&x) {
-                v.push(x);
-            }
+    let project = s.project.as_deref().and_then(Path::parent).map(Path::to_path_buf);
+    let import = s.import_dir.clone();
+    let mut push = |x: PathBuf| {
+        if x.is_dir() && !v.contains(&x) {
+            v.push(x);
+        }
+    };
+    if let Some(d) = project {
+        push(d);
+    }
+    if let Some(d) = import {
+        push(d.clone());
+        // (a map in maps/ next to its sprites/, models/ and sound/)
+        if let Some(p) = d.parent() {
+            push(p.to_path_buf());
         }
     }
     v
@@ -164,15 +247,17 @@ pub fn locate(named: Vec<Named>, places: &Places) -> Vec<Asset> {
                     }
                 }
                 for d in &places.beside {
-                    if let Some(p) = f.find(d, &rel) {
+                    if let Some(p) = f.find(d, &rel).and_then(|p| vet(d, &p, &rel)) {
                         status = Status::Beside(p);
                         break 'look;
                     }
                 }
                 if let Some(hl) = &places.hl {
-                    if let Found::Elsewhere { path, .. } = doctor::find_file(&f, hl, &path, &rel) {
-                        status = Status::Elsewhere(path);
-                        break 'look;
+                    if let Found::Elsewhere { path, folder } = doctor::find_file(&f, hl, &path, &rel) {
+                        if let Some(p) = vet(&hl.join(&folder), &path, &rel) {
+                            status = Status::Elsewhere(p);
+                            break 'look;
+                        }
                     }
                 }
             }
@@ -242,14 +327,27 @@ pub fn assets_json(assets: &[Asset], places: &Places, project_dir: Option<&Path>
 }
 
 /// Copies `src` to `dest` unless something is there already. Ok(true) when it copied.
-fn copy_new(src: &Path, dest: &Path) -> Result<bool, String> {
-    if dest.exists() {
+/// Copies `src` to `<base>/<rel>` unless something is there already. Ok(true) when it
+/// copied. `rel` must be a clean asset path, `src` a real file of its type, and the folder it
+/// lands in must really be inside `base` (no linked folders leading elsewhere).
+fn copy_into(base: &Path, rel: &str, src: &Path) -> Result<bool, String> {
+    let rel = clean_rel(rel).ok_or("That file's name isn't a model, sprite, sound or sky path.")?;
+    let ext = rel.rsplit_once('.').map(|x| x.1.to_ascii_lowercase()).unwrap_or_default();
+    let md = std::fs::symlink_metadata(src).map_err(|_| format!("{rel} isn't there any more."))?;
+    if !md.file_type().is_file() || md.len() > size_cap(&ext) || !looks_right(src, &ext) {
+        return Err(format!("{rel} isn't a real {ext} file, so it wasn't copied."));
+    }
+    let dest = base.join(&rel);
+    if std::fs::symlink_metadata(&dest).is_ok() {
         return Ok(false);
     }
-    if let Some(p) = dest.parent() {
-        std::fs::create_dir_all(p).map_err(|e| format!("Couldn't make {} ({e}).", p.display()))?;
+    let parent = dest.parent().ok_or("No folder to copy to.")?;
+    std::fs::create_dir_all(parent).map_err(|e| format!("Couldn't make {} ({e}).", parent.display()))?;
+    let (real_parent, real_base) = (std::fs::canonicalize(parent).map_err(|e| e.to_string())?, std::fs::canonicalize(base).map_err(|e| e.to_string())?);
+    if !real_parent.starts_with(&real_base) {
+        return Err(format!("{} leads outside {}, so {rel} wasn't copied.", parent.display(), base.display()));
     }
-    std::fs::copy(src, dest).map_err(|e| format!("Couldn't copy {} ({e}).", src.display()))?;
+    std::fs::copy(src, &dest).map_err(|e| format!("Couldn't copy {rel} ({e})."))?;
     Ok(true)
 }
 
@@ -266,7 +364,7 @@ pub fn copy_to_game(assets: &[Asset], places: &Places) -> Result<Vec<String>, St
     for a in assets {
         if let Status::Beside(src) | Status::Elsewhere(src) = &a.status {
             let rel = src_rel(src, &a.named.rel);
-            if copy_new(src, &to.join(&rel))? {
+            if copy_into(&to, &rel, src)? {
                 done.push(rel);
             }
         }
@@ -291,7 +389,7 @@ pub fn copy_to_project(assets: &[Asset], places: &Places, project_dir: &Path) ->
     for a in assets {
         let src = match &a.status {
             Status::Beside(p) | Status::Elsewhere(p) => Some(p.clone()),
-            Status::Game { stock: false } => alternatives(&a.named.rel).iter().find_map(|r| path.iter().find_map(|d| f.find(d, r))),
+            Status::Game { stock: false } => alternatives(&a.named.rel).iter().find_map(|r| path.iter().find_map(|d| f.find(d, r).and_then(|p| vet(d, &p, r)))),
             _ => None,
         };
         let Some(src) = src else { continue };
@@ -299,7 +397,7 @@ pub fn copy_to_project(assets: &[Asset], places: &Places, project_dir: &Path) ->
             continue;
         }
         let rel = src_rel(&src, &a.named.rel);
-        if copy_new(&src, &project_dir.join(&rel))? {
+        if copy_into(project_dir, &rel, &src)? {
             done.push(rel);
         }
     }
@@ -438,7 +536,89 @@ mod tests {
         d
     }
 
-/// A map file with only entities and an empty texture list (version 30, 15 lumps).
+    const MDL: &[u8] = b"IDST\x0a\0\0\0model";
+    const SPR: &[u8] = b"IDSP\x02\0\0\0sprite";
+    const WAV: &[u8] = b"RIFF\x10\0\0\0WAVEfmt data";
+    const TGA: &[u8] = &[0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 24, 0, 1, 2, 3];
+
+    #[test]
+    fn only_clean_asset_paths() {
+        for ok in ["sprites/de_kobbl/blin.spr", "models/barney.mdl", "sound/ambience/wind 1.wav", "gfx/env/desertup.tga", "sprites\\x\\y.spr"] {
+            assert!(clean_rel(ok).is_some(), "{ok}");
+        }
+        for bad in [
+            "../x.spr", "sprites/../../x.spr", "sprites/./x.spr", "/etc/x.spr", "C:/x/y.mdl", "c:x.mdl", "sprites\\..\\..\\x.spr", "\\\\server\\share\\x.spr",
+            "sprites//x.spr", "models/x.txt", "maps/x.spr", ".ssh/id_rsa", "models/x.mdl.", "sound/x.mdl", "sprites/x\0.spr", "sprites/\u{f1}.spr", "",
+        ] {
+            assert!(clean_rel(bad).is_none(), "{bad}");
+        }
+        // entity values: sounds get sound/, anything else must be a clean asset path
+        let d = doc_with(&[("env_sprite", &[("model", "../../.ssh/id_rsa.spr")]), ("cycler", &[("model", "C:/x/y.mdl")]), ("ambient_generic", &[("message", "../../../etc/passwd.wav")]), ("env_glow", &[("model", "/Users/x/.ssh/id_rsa")])]);
+        assert!(named_files(&d).iter().all(|n| n.kind == "sky"), "{:?}", named_files(&d));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn links_wrong_types_and_linked_folders_are_refused() {
+        use std::os::unix::fs::symlink;
+        let root = tmp("sec");
+        let secret = root.join("home/.ssh");
+        std::fs::create_dir_all(&secret).unwrap();
+        std::fs::write(secret.join("id_rsa"), b"-----BEGIN OPENSSH PRIVATE KEY-----").unwrap();
+        // a sprite-looking file outside the map's folder, reached by a link
+        std::fs::write(secret.join("real.spr"), SPR).unwrap();
+        let src = root.join("map");
+        std::fs::create_dir_all(src.join("sprites")).unwrap();
+        symlink(secret.join("real.spr"), src.join("sprites/link.spr")).unwrap();
+        symlink(&secret, src.join("sprites/dir")).unwrap();
+        // a file named like a sprite that isn't one, and one too big
+        std::fs::copy(secret.join("id_rsa"), src.join("sprites/fake.spr")).unwrap();
+        std::fs::write(src.join("sprites/big.spr"), [b"IDSP".as_slice(), &vec![0u8; (8 << 20) + 1]].concat()).unwrap();
+        std::fs::write(src.join("sprites/good.spr"), SPR).unwrap();
+        let hl = root.join("Half-Life");
+        std::fs::create_dir_all(hl.join("cstrike")).unwrap();
+        let places = Places { hl: Some(hl.clone()), game: "cstrike".into(), beside: vec![src.clone()] };
+        let mut d = doc_with(&[
+            ("env_sprite", &[("model", "sprites/link.spr")]),
+            ("env_sprite", &[("model", "sprites/dir/real.spr")]),
+            ("env_sprite", &[("model", "sprites/fake.spr")]),
+            ("env_sprite", &[("model", "sprites/big.spr")]),
+            ("env_sprite", &[("model", "sprites/good.spr")]),
+        ]);
+        d.world.keys.clear();
+        let a = locate(named_files(&d), &places);
+        let st = |rel: &str| a.iter().find(|x| x.named.rel == rel).unwrap().status.clone();
+        for bad in ["sprites/link.spr", "sprites/dir/real.spr", "sprites/fake.spr", "sprites/big.spr"] {
+            assert_eq!(st(bad), Status::Missing, "{bad}");
+        }
+        assert!(matches!(st("sprites/good.spr"), Status::Beside(_)));
+        // the download folder's sprites/ is a link to somewhere else: nothing is copied there
+        std::fs::create_dir_all(hl.join("cstrike_downloads")).unwrap();
+        let elsewhere = root.join("elsewhere");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        symlink(&elsewhere, hl.join("cstrike_downloads/sprites")).unwrap();
+        assert!(copy_to_game(&a, &places).is_err());
+        assert!(std::fs::read_dir(&elsewhere).unwrap().next().is_none());
+        // copies only go under the folder they're for, and only real files of their type
+        let proj = root.join("proj");
+        assert!(copy_into(&proj, "../outside.spr", &src.join("sprites/good.spr")).is_err());
+        assert!(copy_into(&proj, "sprites/x.spr", &src.join("sprites/fake.spr")).is_err());
+        assert!(copy_into(&proj, "sprites/x.spr", &src.join("sprites/link.spr")).is_err());
+        assert!(copy_into(&proj, "sprites/x.spr", &src.join("sprites/good.spr")).unwrap());
+        assert!(!root.join("outside.spr").exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A project file can't name a folder to search: only this run's own import does.
+    #[test]
+    fn a_project_file_cannot_add_search_folders() {
+        let json = r#"{"version":1,"world":{"wads":[],"keys":[]},"brushes":{},"entities":{},"next_id":1,"editor":{"source":"/Users/someone/.ssh"}}"#;
+        if let Ok(d) = serde_json::from_str::<MapDocument>(json) {
+            assert_eq!(serde_json::to_value(&d.editor).unwrap().get("source"), None);
+        }
+    }
+
+    /// A map file with only entities and an empty texture list (version 30, 15 lumps).
     fn tiny_bsp(ents: &str) -> Vec<u8> {
         let mut lumps = [(0u32, 0u32); 15];
         lumps[0] = (124, ents.len() as u32);
@@ -477,19 +657,19 @@ mod tests {
         let root = tmp("a");
         let hl = root.join("Half-Life");
         // the game: one model and the sky in cstrike, a sound only in valve
-        for (rel, what) in [("cstrike/models/barney.mdl", "x"), ("valve/sound/ambience/wind1.wav", "x")] {
+        for (rel, what) in [("cstrike/models/barney.mdl", MDL), ("valve/sound/ambience/wind1.wav", WAV)] {
             std::fs::create_dir_all(hl.join(rel).parent().unwrap()).unwrap();
             std::fs::write(hl.join(rel), what).unwrap();
         }
         for side in SKY_SIDES {
             std::fs::create_dir_all(hl.join("valve/gfx/env")).unwrap();
-            std::fs::write(hl.join(format!("valve/gfx/env/desert{side}.tga")), "x").unwrap();
+            std::fs::write(hl.join(format!("valve/gfx/env/desert{side}.tga")), TGA).unwrap();
         }
         // the imported map's folder: maps/ with sprites/ beside it
         let src = root.join("de_kobbl");
         std::fs::create_dir_all(src.join("maps")).unwrap();
         std::fs::create_dir_all(src.join("sprites/de_kobbl")).unwrap();
-        std::fs::write(src.join("sprites/de_kobbl/blin.spr"), "spr").unwrap();
+        std::fs::write(src.join("sprites/de_kobbl/blin.spr"), SPR).unwrap();
         let d = doc_with(&[
             ("env_sprite", &[("model", "sprites/de_kobbl/blin.spr")]),
             ("env_glow", &[("model", "sprites\\de_kobbl\\BLIN.spr")]),
@@ -558,7 +738,7 @@ mod tests {
         let mut d = doc_with(&[("env_sprite", &[("model", "sprites/de_kobbl/blin.spr"), ("origin", "0 0 64")])]);
         d.world.keys.clear();
         ed.install_from(d, "de_kobbl".into(), None, Some(&file), &[]);
-        assert_eq!(ed.lock().as_ref().unwrap().doc.editor.source.as_deref(), Some(root.join("de_kobbl/maps").to_string_lossy().as_ref()));
+        assert_eq!(ed.lock().as_ref().unwrap().import_dir.as_deref(), Some(root.join("de_kobbl/maps").as_path()));
 
         assert!(for_playtest_in(&st, &ed).is_ok(), "no game set up: the compile says so instead");
         let hl = root.join("Half-Life");
@@ -588,7 +768,7 @@ mod tests {
 
         // the sprite beside the map's folder: found, and Playtest goes ahead
         std::fs::create_dir_all(root.join("de_kobbl/sprites/de_kobbl")).unwrap();
-        std::fs::write(root.join("de_kobbl/sprites/de_kobbl/blin.spr"), "spr").unwrap();
+        std::fs::write(root.join("de_kobbl/sprites/de_kobbl/blin.spr"), SPR).unwrap();
         let ok = check_playtest(&doc(), places()).expect("goes ahead");
         // after the map is in the game: the sprite in cstrike_downloads, and a .res naming it
         std::fs::create_dir_all(hl.join("cstrike/maps")).unwrap();

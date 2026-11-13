@@ -76,6 +76,8 @@ struct Session {
     prev: BTreeMap<BrushId, Brush>,
     drag: Option<Drag>,
     wads: Option<(Vec<String>, Vec<PathBuf>, Arc<wad::WadSet>)>,
+    /// P5: the folder the map was imported from in this run (assets.rs searches it)
+    import_dir: Option<PathBuf>,
 }
 
 impl Session {
@@ -84,7 +86,7 @@ impl Session {
         let stamps = doc.brushes.keys().map(|b| (*b, rev)).collect();
         let prev = doc.brushes.clone();
         let folder = project.as_deref().and_then(Path::parent).map(Path::to_path_buf);
-        Session { id, doc, history: History::default(), name, project, folder, stamps, removed: Vec::new(), horizon: 0, prev, drag: None, wads: None }
+        Session { id, doc, history: History::default(), name, project, folder, stamps, removed: Vec::new(), horizon: 0, prev, drag: None, wads: None, import_dir: None }
     }
 
     /// Notes which brushes changed since the last look (cheap: brushes compare by value).
@@ -195,8 +197,9 @@ impl Editor {
         let mut s = Session::new(id, doc, name, project);
         if let Some(dir) = source.and_then(Path::parent) {
             s.folder = Some(dir.to_path_buf());
-            // P5: kept with the project, so its models/sprites/sounds are still found after Save
-            s.doc.editor.source = Some(dir.to_string_lossy().to_string());
+            // P5: where its models/sprites/sounds are looked for, also after Save (this run only:
+            // never read from a project file, which could point anywhere)
+            s.import_dir = Some(dir.to_path_buf());
         }
         s.learn_textures(dirs);
         s.track();
