@@ -42,3 +42,19 @@ nav learn (not hand-edited), covering the glass room, the chooser room and all s
 linked, ladders joined, no unreachable or trapped areas in playable space, and the 6,000-area map-knowledge limit
 respected. Fix the learner generally (seeding every arena, teleport destinations, trigger_push areas, water) if it
 misses parts, and run the nav fixer's reach check on the result.
+
+## Queued after QA round 4 (user, 2026-11-13): vehicles and other interactive func_ entities
+General fun-map skills, alongside the fun_allinone work. Bots should understand and use the interactive entities fun maps
+are built from, learned from the map's own entities (no per-map code):
+- Vehicles: func_vehicle (CS 1.6 drivable cars and boats: get in with USE, steer, exit; drive toward goals, run people
+  over, avoid water/edges) and func_tracktrain (drivable trains and carts on path_track).
+- Mounted guns: func_tank / func_tankmortar / func_tankrocket / func_tanklaser with func_tankcontrols (man a turret,
+  aim it, leave it).
+- Lifts and movers: func_plat, func_train lifts, func_door used as an elevator, func_rotating platforms, func_conveyor,
+  func_pushable crates (push to climb or block).
+- Buttons and valves: func_button, func_rot_button, momentary_rot_button (hold to turn), multisource-gated doors.
+- Hazards and movement: trigger_push / trigger_gravity, func_water (swim, breathe), trigger_hurt, func_breakable to
+  break through, ladders.
+Nav learn has to cover areas reached only by riding or pushing something (link ride start -> ride end). Test on a few
+real fun maps with vehicles and turrets from GameBanana (pick popular ones), with the same "general, not overfitted"
+check as deathrun.
