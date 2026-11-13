@@ -52,6 +52,14 @@ new g_cSquad, g_cStart, g_cDrop, g_cZoneStart, g_cDrops, g_cWaitHuman, g_cDropIn
 
 new Float:g_dropSpots[33][2];
 new g_ndropSpots;
+#define BELOW_Z -250.0
+new g_lootTarget[33];
+new g_looterN;
+new g_lootupGuns, g_gunGoals;
+new g_gunGoal[33];
+new g_secsAll, g_secsBelow;
+new bool:g_wentBelow[33];
+new bool:g_gunTaken[2048];
 new g_usedDrops[16];
 new g_nusedDrops;
 
@@ -111,6 +119,7 @@ public plugin_init()
 	RegisterHamPlayer(Ham_TakeDamage, "ham_takedamage");
 
 	register_clcmd("say /br", "cmd_help");
+	register_srvcmd("br_goals", "cmd_goals");
 	/* no shopping in Battle Royale: what you find is what you get */
 	new const buycmds[][] = { "buy", "buyequip", "autobuy", "rebuy", "client_buy_open", "cl_autobuy", "cl_rebuy", "cl_setautobuy", "cl_setrebuy", "buyammo1", "buyammo2" };
 	for (new i = 0; i < sizeof buycmds; i++)
@@ -132,6 +141,27 @@ stock toast(id, Float:secs, const fmt[], any:...)
 	new msg[128];
 	vformat(msg, charsmax(msg), fmt, 4);
 	ls_toast(id, secs, msg);
+}
+
+/* server: each bot's loot-up target and how far it is (for tests) */
+public cmd_goals()
+{
+	new Float:o[3], Float:t[3];
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p) || !is_user_bot(p))
+			continue;
+		pev(p, pev_origin, o);
+		new e = g_gunGoal[p];
+		if (e && pev_valid(e))
+		{
+			pev(e, pev_origin, t);
+			server_print("bot %d at %.0f %.0f %.0f falling %d armed %d -> gun %d (state %d) %.0f away, dz %.0f", p, o[0], o[1], o[2], g_falling[p], has_gun(p), e, ls_comp_state(e), get_distance_f(o, t), o[2] - t[2]);
+		}
+		else
+			server_print("bot %d at %.0f %.0f %.0f falling %d armed %d, no gun goal", p, o[0], o[1], o[2], g_falling[p], has_gun(p));
+	}
+	return PLUGIN_HANDLED;
 }
 
 public cmd_nobuy(id)
@@ -260,6 +290,14 @@ stock start_drop()
 			give_start(p);
 	g_ndropSpots = 0;
 	g_nusedDrops = 0;
+	g_looterN = 0;
+	g_lootupGuns = 0;
+	arrayset(g_gunGoal, 0, sizeof g_gunGoal);
+	g_gunGoals = 0;
+	g_secsAll = 0;
+	g_secsBelow = 0;
+	arrayset(g_wentBelow, false, sizeof g_wentBelow);
+	arrayset(g_gunTaken, false, sizeof g_gunTaken);
 	if (get_pcvar_num(g_cDropIn))
 		for (new p = 1; p <= MaxClients; p++)
 			if (is_user_alive(p))
@@ -268,7 +306,15 @@ stock start_drop()
 	   they start the fight in knife range: half a 20-bot lobby went in the first 15 s on br_valley) */
 	ls_comp_bots_hint("phase loot");
 	new drop = floatround(get_pcvar_float(g_cDrop) * floatclamp(0.6 + g_pace * 0.4, 0.7, 1.1));
+	/* dropping in takes a while (a slow fall from up to br_drop_height): the loot-up starts
+	   counting for real once people are down, so add the fall (they landed with 3 s left before) */
+	if (get_pcvar_num(g_cDropIn))
+		drop += floatround(floatclamp(get_pcvar_float(g_cDropHeight) / 250.0, 4.0, 14.0));
 	g_phaseEnd = get_gametime() + float(drop);
+	/* anyone who couldn't drop in (no sky over their spot) goes for a gun now */
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_alive(p) && !g_falling[p])
+			loot_goal_on_landing(p);
 	toast(0, 5.0, "Battle Royale: loot up! Fighting starts in %d seconds", drop);
 	log_amx("Battle Royale on %s: game starts, %d players, pace %.2f, loot-up %d s", g_mapname, alive_count(), g_pace, drop);
 	if (get_pcvar_num(g_cSquad) > 1)
@@ -292,7 +338,20 @@ stock start_play()
 				else if (d < 350.0)
 					near++;
 			}
-	log_amx("Battle Royale: fight starts, %d pairs within 100 u, %d more within 350 u", close, near);
+	new armed = 0, below = 0, alive = 0;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p))
+			continue;
+		alive++;
+		if (has_gun(p))
+			armed++;
+		new Float:o[3];
+		pev(p, pev_origin, o);
+		if (o[2] < BELOW_Z)
+			below++;
+	}
+	log_amx("Battle Royale: fight starts, %d pairs within 100 u, %d more within 350 u; %d of %d armed (%d guns picked up in the loot-up, %d sent for one), %d below ground", close, near, armed, alive, g_lootupGuns, g_gunGoals, below);
 	toast(0, 3.0, "Fight! %d left", alive_sides());
 	/* supply drops spread over the game */
 	g_ndrops = min(get_pcvar_num(g_cDrops), sizeof g_dropAt);
@@ -469,6 +528,32 @@ public tick()
 	}
 	bot_goals();
 	unstick_bots();
+	/* the gun a bot was walking to went to someone else: the next nearest (loot-up and the
+	   first half minute of the fight) */
+	if (g_phase == PH_DROP || (g_phase == PH_PLAY && get_gametime() - g_playAt < 30.0))
+		for (new p = 1; p <= MaxClients; p++)
+		{
+			new e = g_gunGoal[p];
+			if (e && is_user_alive(p) && is_user_bot(p) && !g_falling[p] && pev_valid(e) && ls_comp_state(e) != 0 && !has_gun(p))
+			{
+				g_gunGoal[p] = 0;
+				loot_goal_on_landing(p);
+			}
+		}
+	/* (for tests: how much of the time people spend below ground, and how many went at all) */
+	if (g_phase == PH_PLAY)
+		for (new p = 1; p <= MaxClients; p++)
+			if (is_user_alive(p))
+			{
+				new Float:o[3];
+				pev(p, pev_origin, o);
+				g_secsAll++;
+				if (o[2] < BELOW_Z)
+				{
+					g_secsBelow++;
+					g_wentBelow[p] = true;
+				}
+			}
 	hud();
 }
 
@@ -571,7 +656,11 @@ stock bool:check_winner()
 		toast(0, 8.0, "%s's squad wins!", name);
 	else
 		toast(0, 8.0, "%s wins! (%d kills)", name, g_kills[last]);
-	log_amx("Battle Royale on %s won by %s (%d kills) after %d s of fighting", g_mapname, name, g_kills[last], floatround(get_gametime() - g_playAt));
+	new went = 0;
+	for (new p = 1; p <= MaxClients; p++)
+		if (g_wentBelow[p])
+			went++;
+	log_amx("Battle Royale on %s won by %s (%d kills) after %d s of fighting; %d players went below ground, %d%% of the time there", g_mapname, name, g_kills[last], floatround(get_gametime() - g_playAt), went, g_secsAll ? 100 * g_secsBelow / g_secsAll : 0);
 	server_cmd(cs_get_user_team(last) == CS_TEAM_T ? "endround T" : "endround CT");
 	return true;
 }
@@ -670,19 +759,186 @@ stock give_start(id)
 
 /* where this player comes down: bots by habit (looters over a good crate, campers out at the
    edge, hunters anywhere), people over a spread-out respawn point they steer away from */
+/* room to fall from 250 units above a spot */
+stock bool:open_above(const Float:p[3])
+{
+	new Float:a[3], Float:b[3], Float:hit[3];
+	a = p;
+	a[2] += 40.0;
+	b = a;
+	b[2] += 300.0;
+	engfunc(EngFunc_TraceHull, a, b, IGNORE_MONSTERS, HULL_HUMAN, 0, 0);
+	get_tr2(0, TR_vecEndPos, hit);
+	return !get_tr2(0, TR_StartSolid) && hit[2] - a[2] >= 250.0;
+}
+
+/* the open landing spot (br_drop marker, else respawn point) nearest to a point */
+stock bool:nearest_landing(const Float:p[3], Float:out[3])
+{
+	new best = 0, Float:bd = 999999.0, Float:o[3];
+	for (new e = ls_marker_find("br_drop"); e; e = ls_marker_find("br_drop", e))
+	{
+		pev(e, pev_origin, o);
+		new Float:d = get_distance_f(o, p);
+		/* (one someone already drops on is as good as further away: no crowd at one spot) */
+		for (new i = 0; i < g_ndropSpots; i++)
+			if (floatabs(o[0] - g_dropSpots[i][0]) < 300.0 && floatabs(o[1] - g_dropSpots[i][1]) < 300.0)
+				d += 1500.0;
+		if (d < bd && open_above(o))
+		{
+			bd = d;
+			best = e;
+		}
+	}
+	if (!best)
+		for (new e = ls_comp_find("ls_respawn_point"); e; e = ls_comp_find("ls_respawn_point", e))
+		{
+			pev(e, pev_origin, o);
+			new Float:d = get_distance_f(o, p);
+			if (d < bd && open_above(o))
+			{
+				bd = d;
+				best = e;
+			}
+		}
+	if (!best)
+		return false;
+	pev(best, pev_origin, out);
+	return true;
+}
+
+/* landed: an unarmed bot goes for the nearest gun on the floor (else a crate); a looter with a
+   crate in mind goes for it (below ground too: the nav takes it down the stairs and hatches) */
+stock loot_goal_on_landing(p)
+{
+	if (!is_user_bot(p) || !is_user_alive(p))
+		return;
+	new Float:po[3], line[128];
+	pev(p, pev_origin, po);
+	new left = max(floatround(g_phaseEnd - get_gametime()), 0) + 20;
+	if (!has_gun(p))
+	{
+		new best = 0, Float:bd = 1600.0, Float:o[3];
+		for (new e = ls_comp_find("ls_weapon_spawner"); e; e = ls_comp_find("ls_weapon_spawner", e))
+		{
+			if (ls_comp_state(e) != 0)
+				continue;
+			pev(e, pev_origin, o);
+			/* (same layer first: a gun right below the floor is a long way round) */
+			new Float:d = get_distance_f(o, po) + 3.0 * floatabs(o[2] - po[2]);
+			/* (one another bot is already after counts a bit further) */
+			if (g_gunTaken[e < sizeof g_gunTaken ? e : 0])
+				d += 1500.0;
+			if (d < bd)
+			{
+				bd = d;
+				best = e;
+			}
+		}
+		if (!best)
+			for (new e = ls_comp_find("ls_loot_container"); e; e = ls_comp_find("ls_loot_container", e))
+			{
+				if (ls_comp_state(e) != 0)
+					continue;
+				pev(e, pev_origin, o);
+				new Float:d = get_distance_f(o, po);
+				if (d < bd)
+				{
+					bd = d;
+					best = e;
+				}
+			}
+		if (best)
+		{
+			if (best < sizeof g_gunTaken)
+				g_gunTaken[best] = true;
+			g_gunGoal[p] = best;
+			pev(best, pev_origin, o);
+			formatex(line, charsmax(line), "goal %d loot %.0f %.0f %.0f %d 65 %d 16", p, o[0], o[1], o[2], best, left);
+			g_gunGoals++;
+			/* and a person-style order to walk there: the loot-up's "give the others room" moves
+			   otherwise win over a goal (let go when the gun is taken or the loot-up ends) */
+			server_cmd("ls_bot %d goto %.0f %.0f %.0f", p, o[0], o[1], o[2]);
+			g_releaseAt[p] = g_phaseEnd;
+			ls_comp_bots_hint(line);
+			g_nextGoal[p] = get_gametime() + float(left);
+			return;
+		}
+	}
+	new t = g_lootTarget[p];
+	if (t && pev_valid(t) && ls_comp_state(t) == 0)
+	{
+		new Float:o[3];
+		pev(t, pev_origin, o);
+		formatex(line, charsmax(line), "goal %d loot %.0f %.0f %.0f %d 55 %d 64", p, o[0], o[1], o[2], t, left + 30);
+		ls_comp_bots_hint(line);
+		/* below ground or far: walk there as ordered through the loot-up, the goal after */
+		server_cmd("ls_bot %d goto %.0f %.0f %.0f", p, o[0], o[1], o[2]);
+		g_releaseAt[p] = g_phaseEnd;
+		g_nextGoal[p] = get_gametime() + float(left + 30);
+	}
+}
+
+public ls_on_weapon_taken(ent, id, const item[])
+{
+	if (g_phase == PH_DROP)
+		g_lootupGuns++;
+	/* got one: the walk-there order is done */
+	if (1 <= id <= MaxClients && is_user_bot(id) && g_releaseAt[id] > 0.0)
+	{
+		g_releaseAt[id] = 0.0;
+		server_cmd("ls_bot %d release", id);
+	}
+	return PLUGIN_CONTINUE;
+}
+
+stock bool:has_gun(p)
+{
+	new weapons[32], n;
+	get_user_weapons(p, weapons, n);
+	for (new i = 0; i < n; i++)
+		if (weapons[i] != CSW_KNIFE && weapons[i] != CSW_HEGRENADE && weapons[i] != CSW_FLASHBANG && weapons[i] != CSW_SMOKEGRENADE && weapons[i] != CSW_C4)
+			return true;
+	return false;
+}
+
 stock landing_spot(id, Float:out[3])
 {
 	new Float:c[3], Float:r, closing;
 	ls_zone_next(0, c, r, closing);
+	g_lootTarget[id] = 0;
 	if (is_user_bot(id) && g_trait[id] == TR_LOOTER)
 	{
-		new cands[32], n = 0;
-		for (new e = ls_comp_find("ls_loot_container"); e && n < sizeof cands; e = ls_comp_find("ls_loot_container", e))
-			if (ls_comp_state(e) == 0 && ls_comp_getf(e, "tier", 1.0) >= 2.0)
+		/* looters spread over the layers: about every third goes for a crate below ground
+		   (the map's lower level), the rest for one up top */
+		new bool:below = (g_looterN++ % 3) == 0;
+		new cands[128], n = 0;
+		for (new pass = 0; pass < 2 && !n; pass++)
+			for (new e = ls_comp_find("ls_loot_container"); e && n < sizeof cands; e = ls_comp_find("ls_loot_container", e))
+			{
+				if (ls_comp_state(e) != 0 || ls_comp_getf(e, "tier", 1.0) < 2.0)
+					continue;
+				new Float:o[3];
+				pev(e, pev_origin, o);
+				/* (second pass: any layer) */
+				if (pass == 0 && (o[2] < BELOW_Z) != below)
+					continue;
 				cands[n++] = e;
+			}
 		if (n)
 		{
-			pev(spread_pick(cands, n), pev_origin, out);
+			new crate = spread_pick(cands, n);
+			g_lootTarget[id] = crate;
+			pev(crate, pev_origin, out);
+			/* a crate under a roof or below ground: nobody can fall onto it, so the drop is to the
+			   nearest landing spot in the open and the bot walks the rest (stairs, hatches) */
+			if (!open_above(out))
+			{
+				new Float:o[3];
+				o = out;
+				if (nearest_landing(o, out))
+					return 1;
+			}
 			out[0] += random_float(-120.0, 120.0);
 			out[1] += random_float(-120.0, 120.0);
 			return 1;
@@ -710,6 +966,10 @@ stock landing_spot(id, Float:out[3])
 			new Float:o[3];
 			pev(pts[i], pev_origin, o);
 			new Float:d = floatsqroot((o[0] - c[0]) * (o[0] - c[0]) + (o[1] - c[1]) * (o[1] - c[1])) + random_float(0.0, 400.0);
+			/* (not where another camper already drops: the far corner drew them all) */
+			for (new u = 0; u < g_ndropSpots; u++)
+				if (floatabs(o[0] - g_dropSpots[u][0]) < 600.0 && floatabs(o[1] - g_dropSpots[u][1]) < 600.0)
+					d -= 2500.0;
 			if (d > bd)
 			{
 				bd = d;
@@ -797,7 +1057,11 @@ stock land(id)
 		return;
 	g_falling[id] = false;
 	if (is_user_alive(id))
+	{
 		set_user_gravity(id, 1.0);
+		if (g_phase == PH_DROP)
+			loot_goal_on_landing(id);
+	}
 }
 
 public fm_postthink(id)
