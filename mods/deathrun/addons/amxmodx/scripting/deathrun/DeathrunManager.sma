@@ -37,6 +37,12 @@ new g_iMsgHideWeapon, g_iMsgCrosshair, g_iMsgMoney, g_iMsgTeamInfo, g_iMsgSayTex
 new g_iMaxplayers, g_iHudSync, g_iHudSync2, g_iLastTerr, g_iThinker;
 new g_iSemiClip[ 33 ], g_Lifes[ 33 ];
 
+// Semiclip makes bunched CTs SOLID_NOT for the frame, and what isn't solid doesn't touch triggers:
+// two runners together walked through a teleport (or a push, a finish line) and nothing happened.
+// Players at a teleport or a push stay solid (Loner-Strike)
+#define MAX_TOUCH_BOXES 96
+new Float:g_fTouchMin[ MAX_TOUCH_BOXES ][ 3 ], Float:g_fTouchMax[ MAX_TOUCH_BOXES ][ 3 ], g_iTouchBoxes;
+
 #if defined FAKE_PLAYER
 	new g_iFakeplayer;
 #endif
@@ -183,6 +189,7 @@ public plugin_init( ) {
 		}
 		
 		if( get_pcvar_num( g_pSemiclip ) ) {
+			CollectTouchBoxes( );
 			register_forward( FM_StartFrame,	"FwdStartFrame", 0 );
 			register_forward( FM_AddToFullPack,	"FwdFullPack",   1 );
 		}
@@ -600,6 +607,41 @@ public client_disconnect( id ) {
 
 // SEMICLIP
 ///////////////////////////////////////////
+CollectTouchBoxes( ) {
+	// (teleports and pushes only: a trigger_multiple that starts lasers or a trap at the spawn would
+	// make everyone there solid - and in reach of the lasers semiclip had been hiding them from)
+	new const szClasses[ ][ ] = { "trigger_teleport", "trigger_push" };
+	g_iTouchBoxes = 0;
+	for( new c = 0; c < sizeof szClasses; c++ ) {
+		new iEnt = -1;
+		while( ( iEnt = find_ent_by_class( iEnt, szClasses[ c ] ) ) > 0 && g_iTouchBoxes < MAX_TOUCH_BOXES ) {
+			new Float:fMin[ 3 ], Float:fMax[ 3 ];
+			entity_get_vector( iEnt, EV_VEC_absmin, fMin );
+			entity_get_vector( iEnt, EV_VEC_absmax, fMax );
+			// (a whole-room trigger would switch semiclip off there: only ones a player walks into)
+			if( fMax[ 0 ] - fMin[ 0 ] > 1024.0 && fMax[ 1 ] - fMin[ 1 ] > 1024.0 )
+				continue;
+			g_fTouchMin[ g_iTouchBoxes ] = fMin;
+			g_fTouchMax[ g_iTouchBoxes ] = fMax;
+			g_iTouchBoxes++;
+		}
+	}
+}
+
+// At (or right by) one of those triggers: a player's box within 24 units of it
+bool:AtTouchBox( id ) {
+	new Float:fMin[ 3 ], Float:fMax[ 3 ];
+	entity_get_vector( id, EV_VEC_absmin, fMin );
+	entity_get_vector( id, EV_VEC_absmax, fMax );
+	for( new b = 0; b < g_iTouchBoxes; b++ ) {
+		if( fMin[ 0 ] <= g_fTouchMax[ b ][ 0 ] + 24.0 && fMax[ 0 ] >= g_fTouchMin[ b ][ 0 ] - 24.0
+		&& fMin[ 1 ] <= g_fTouchMax[ b ][ 1 ] + 24.0 && fMax[ 1 ] >= g_fTouchMin[ b ][ 1 ] - 24.0
+		&& fMin[ 2 ] <= g_fTouchMax[ b ][ 2 ] + 24.0 && fMax[ 2 ] >= g_fTouchMin[ b ][ 2 ] - 24.0 )
+			return true;
+	}
+	return false;
+}
+
 public FwdFullPack( es, e, ent, host, flags, player, pSet ) {
 	if( !g_bEnabled )
 		return FMRES_IGNORED;
@@ -646,6 +688,10 @@ public FwdStartFrame( ) {
 	
 	for( i = 0; i < iNum; i++ ) {
 		iPlayer = iPlayers[ i ];
+		
+		// (at a teleport / push / trigger: solid, so it touches it)
+		if( g_iSemiClip[ iPlayer ] && g_iTouchBoxes && AtTouchBox( iPlayer ) )
+			g_iSemiClip[ iPlayer ] = false;
 		
 		set_pev( iPlayer, pev_solid, g_iSemiClip[ iPlayer ] ? SOLID_NOT : SOLID_SLIDEBOX );
 	}
