@@ -362,14 +362,67 @@ export function Breadcrumbs() {
   );
 }
 
-/** The button in a tool's header that turns Focus mode on and off. */
+// The big workspaces, where filling the window helps most: a one-time hint points at Focus there.
+const FOCUS_HINT_TOOLS = ["editor", "studio", "plugins", "creatures"];
+const FOCUS_HINT_KEY = "ls.tools.focusHintSeen";
+function focusHintSeen(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(FOCUS_HINT_KEY) ?? "[]");
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+function markFocusHintSeen(tool: string) {
+  try {
+    localStorage.setItem(FOCUS_HINT_KEY, JSON.stringify([...new Set([...focusHintSeen(), tool])]));
+  } catch {
+    /* private mode: it just shows again next time */
+  }
+}
+
+/** The button in a tool's header that turns Focus mode on and off (with a one-time hint in the big workspaces). */
 export function FocusButton() {
   const focus = useShell((s) => s.focus);
+  const tool = useToolPage((s) => s.tool);
+  const [hint, setHint] = useState(false);
+  useEffect(() => {
+    if (!tool || focus || !FOCUS_HINT_TOOLS.includes(tool) || focusHintSeen().includes(tool)) return setHint(false);
+    setHint(true);
+    const t = window.setTimeout(() => {
+      setHint(false);
+      markFocusHintSeen(tool);
+    }, 12000);
+    return () => window.clearTimeout(t);
+  }, [tool, focus]);
+  const close = () => {
+    setHint(false);
+    if (tool) markFocusHintSeen(tool);
+  };
   return (
-    <button type="button" className="btn small tools-focus-btn" aria-pressed={focus} title={`${focus ? "Leave focus mode" : "Focus: the tool fills the window"} (${FOCUS_KEY})`} onClick={() => toggleFocus()}>
-      <FocusIcon on={focus} />
-      {focus ? "Exit focus" : "Focus"}
-    </button>
+    <span className="tools-focus-wrap">
+      <button
+        type="button"
+        className="btn small tools-focus-btn"
+        aria-pressed={focus}
+        title={`${focus ? "Leave focus mode" : "Focus: the tool fills the window"} (${FOCUS_KEY})`}
+        onClick={() => {
+          close();
+          toggleFocus();
+        }}
+      >
+        <FocusIcon on={focus} />
+        {focus ? "Exit focus" : "Focus"}
+      </button>
+      {hint && (
+        <span className="tools-focus-hint" role="status">
+          Need more room? <b>Focus</b> fills the window with this tool. <kbd>{FOCUS_KEY}</kbd>
+          <button type="button" className="tools-focus-hint-x" aria-label="Got it" onClick={close}>
+            Got it
+          </button>
+        </span>
+      )}
+    </span>
   );
 }
 

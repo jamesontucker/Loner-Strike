@@ -27,3 +27,22 @@ html[data-tools-focus] .ps-main { height: max(480px, calc(100vh - 70px)); }
 .tools-focus-pill:hover, .tools-focus-pill:focus-visible { opacity: 1; }
 .tools-focus-pill kbd { font: 600 11px/1 var(--text); padding: 2px 5px; border-radius: 2px; background: var(--panel); color: var(--bone-faint); }
 @media (prefers-reduced-motion: reduce) { .tools-focus-pill { transition: none; } }
+
+/* One-time hint under the Focus button in the big workspaces (editor, studios) */
+.tools-focus-wrap { position: relative; display: inline-flex; }
+.tools-focus-hint {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: max-content; max-width: 280px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px;
+  background: var(--panel, #2f3527); color: var(--bone, #e8e2cf); border: 1px solid var(--khaki, #c8b56a);
+  border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.35); font-size: 12.5px; line-height: 1.35;
+}
+.tools-focus-hint::before {
+  content: ""; position: absolute; top: -6px; right: 18px; width: 10px; height: 10px; transform: rotate(45deg);
+  background: inherit; border-left: 1px solid var(--khaki, #c8b56a); border-top: 1px solid var(--khaki, #c8b56a);
+}
+.tools-focus-hint kbd { font-size: 11px; }
+.tools-focus-hint-x { margin-left: auto; font-size: 12px; padding: 2px 8px; }
+@media (prefers-reduced-motion: no-preference) {
+  .tools-focus-hint { animation: tools-focus-hint-in .18s ease-out; }
+  @keyframes tools-focus-hint-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+}
