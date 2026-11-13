@@ -4,9 +4,9 @@
 # workflow fetches it and uploads it, so the server never holds keys to the bucket (which also
 # holds the app's updates).
 #
-# Every 10 minutes (scheduled workflows run from the default branch only) and by hand: Actions >
-# Community index > Run workflow ("force" publishes even when many creations would leave the list
-# at once). It does nothing when:
+# By hand only: Actions > Community index > Run workflow ("force" publishes even when many creations
+# would leave the list at once). The every-10-minutes publish is the Cloudflare Worker in
+# services/community-publisher (same checks; GitHub's schedule skipped most runs). It does nothing when:
 #   - the index is the same as the live one;
 #   - the list service's last re-check was held back (too many pages leaving at once: a person
 #     looks, then `lsmod.py release-hold`).
@@ -20,8 +20,6 @@
 name: Community index
 
 on:
-  schedule:
-    - cron: "*/10 * * * *"
   workflow_dispatch:
     inputs:
       force:
