@@ -296,6 +296,24 @@ Sim copies of the playtest server (`~/loner-strike-sim/creatures/`: `ls_crec.amx
 - **Walk/run feet vs ground:** about 10–16 % off at the median, before and after. The HL zombie has only a walk (72
   u/s), played at up to 4×.
 
+## 7c. Half-Life model versions (HL25)
+
+The server picks a sequence by its number in **its own** copy of the model, and each player's game draws that number from
+**its** copy. The Half-Life 25th anniversary update changed `zombie.mdl` (44 → 49 sequences; `idle2` inserted at 1),
+but HLDS from SteamCMD still had the old file. So the server's walk (10) was the game's `attack2` (gliding with arm
+swings), and its `attack1` (8) the game's `falling` (the "superman" lunge). `barney.mdl` and `gman.mdl` changed too,
+with the same sequence order.
+- The app copies the game's current `valve/models/<creature>.mdl` into each server at start when it differs
+  (`app/src-tauri/src/hlmodels.rs`; local and over SSH). Both copies are Valve's, on the player's own machines.
+- The fork warns loudly at precache when a known model's size or sequence count isn't Steam's current one
+  (`s_knownModels` in creature.cpp: size, CRC32 and sequence count for zombie, bullsquid, houndeye, agrunt, garg,
+  headcrab, sentry, barney and gman).
+- Checked on a sim server with the current file: zombie walk → 11 `walk`, idle → 0/1 `idle1`/`idle2`, attack → 9
+  `attack1`; spitter attack → 10 `range`. These are the same names the game's file has at those numbers. With the old
+  layout the warning prints.
+- `mp_consistency`/`force_unmodified` aren't used: they would kick players whose copy differs, and the copy at start
+  makes it unnecessary.
+
 ## 8. Model sequence tables (for `anim_*` keys)
 
 The sequences the built-in types' models have: index, name, activity (weight when it's above 1), fps, frames, whether it
@@ -303,29 +321,30 @@ loops, and ground speed (units/s at framerate 1). `ls_creature` picks by activit
 by name. `sentry.mdl` has no activities, so the turret names its sequences (`spin`, `fire`, `die`). Dumped with
 `~/loner-strike-sim/creatures/mdlseq.py` from `valve/models` and `cstrike/models`.
 
-**zombie.mdl** (44 sequences; only those with an activity, plus walk/run names)
+**zombie.mdl** (current Steam, HL25) (49 sequences; only those with an activity, plus walk/run names)
 
 | # | name | activity | fps | frames | loops | ground speed |
 |---|---|---|---|---|---|---|
 | 0 | idle1 | IDLE (w 4) | 15 | 31 | yes | 0 |
-| 1 | turnleft | TURN_LEFT | 20 | 16 | no | 0 |
-| 2 | turnright | TURN_RIGHT | 20 | 16 | no | 0 |
-| 3 | flinchsmall | SMALL_FLINCH (w 5) | 22 | 7 | no | 0 |
-| 4 | flinch | SMALL_FLINCH | 22 | 21 | no | 0 |
-| 5 | bigflinch | BIG_FLINCH | 20 | 31 | no | 0 |
-| 7 | falling | FALL | 26 | 21 | yes | 0 |
-| 8 | attack1 | MELEE_ATTACK1 (w 5) | 15 | 36 | no | 0 |
-| 9 | attack2 | MELEE_ATTACK1 | 15 | 21 | no | 0 |
-| 10 | walk | WALK | 22 | 60 | yes | 72 |
-| 11 | laflinch | FLINCH_LEFTARM | 15 | 16 | no | 0 |
-| 12 | raflinch | FLINCH_RIGHTARM | 15 | 16 | no | 0 |
-| 13 | llflinch | FLINCH_LEFTLEG | 15 | 16 | no | 0 |
-| 14 | rlflinch | FLINCH_RIGHTLEG | 15 | 16 | no | 0 |
-| 15 | dieheadshot | DIE_HEADSHOT | 20 | 27 | no | 0 |
-| 16 | dieheadshot2 | DIE_GUTSHOT | 22 | 29 | no | 0 |
-| 17 | diesimple | DIESIMPLE | 20 | 21 | no | 0 |
-| 18 | diebackward | DIEBACKWARD | 18 | 31 | no | 0 |
-| 19 | dieforward | DIEFORWARD | 18 | 31 | no | 0 |
+| 1 | idle2 | IDLE | 15 | 45 | yes | 0 |
+| 2 | turnleft | TURN_LEFT | 20 | 16 | no | 0 |
+| 3 | turnright | TURN_RIGHT | 20 | 16 | no | 0 |
+| 4 | flinchsmall | SMALL_FLINCH (w 5) | 22 | 7 | no | 0 |
+| 5 | flinch | SMALL_FLINCH | 22 | 21 | no | 0 |
+| 6 | bigflinch | BIG_FLINCH | 20 | 31 | no | 0 |
+| 8 | falling | FALL | 26 | 21 | yes | 0 |
+| 9 | attack1 | MELEE_ATTACK1 (w 5) | 15 | 36 | no | 0 |
+| 10 | attack2 | MELEE_ATTACK1 | 15 | 21 | no | 0 |
+| 11 | walk | WALK | 22 | 60 | yes | 59 |
+| 12 | laflinch | FLINCH_LEFTARM | 15 | 16 | no | 0 |
+| 13 | raflinch | FLINCH_RIGHTARM | 15 | 16 | no | 0 |
+| 14 | llflinch | FLINCH_LEFTLEG | 15 | 16 | no | 0 |
+| 15 | rlflinch | FLINCH_RIGHTLEG | 15 | 16 | no | 0 |
+| 16 | dieheadshot | DIE_HEADSHOT | 20 | 27 | no | 0 |
+| 17 | dieheadshot2 | DIE_GUTSHOT | 22 | 29 | no | 0 |
+| 18 | diesimple | DIESIMPLE | 20 | 21 | no | 0 |
+| 19 | diebackward | DIEBACKWARD | 18 | 31 | no | 0 |
+| 20 | dieforward | DIEFORWARD | 18 | 31 | no | 0 |
 
 **bullsquid.mdl** (24 sequences; only those with an activity, plus walk/run names)
 
