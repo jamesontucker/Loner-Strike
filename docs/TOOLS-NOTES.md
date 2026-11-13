@@ -1304,3 +1304,29 @@ one line, added the name at the end and removed the one regular.
 - Commit tangle: my first commit (ebfba75) also carried `tools/devserve.rs` and `tools/shot.rs`, which someone else had staged in the shared index. 1545661 then briefly deleted my files. HEAD is complete now.
 - The tools-dev harness (`tools-dev.html`) didn't open any tool from its sidebar while I tried, because of reloads during others' edits. So the two pages are checked by `npm run build` and the API only. A screenshot pass is left.
 - Left: an in-game check that a made overview shows in spectator mode (bmp and tga), and P1-style screenshots at three sizes.
+
+### Agent S: AI agents follow-up — any MCP client, setups that stay valid — 2026-11-12
+- **stdio bridge needs no token or port.** While the connector listens, the app writes
+  `<app dir>/mcp-connection.json` (`{port, token, pid}`).
+  - Owner-only via `sys::write_private` (0600, atomic). Rewritten on a new token or port; deleted when turned off,
+    and at start when off.
+  - `--mcp-stdio` reads it on every message; `LONER_MCP_TOKEN` / `LONER_MCP_PORT` still win.
+  - Clear JSON-RPC errors when the app isn't running or the connector is off.
+  - After an app restart it re-sends the client's `initialize` on a 404 session, so the client never notices.
+- **HTTP clients:**
+  - "Keep the same token across restarts" (off by default; `<app dir>/mcp-token`, owner-only, like the
+    app's other key files).
+  - A port preference (Settings; default 8029). If the port is taken it falls back to a free one and says so.
+  - New settings fields: `mcp_keep_token`, `mcp_port`.
+- **Settings > AI agents > Connect an agent:** pick a client, copy a ready setup. The stdio form is preferred;
+  "Connect over HTTP" is offered where the client supports it.
+  - Clients: Claude Code, Codex, OpenCode (`mcp.servers`, the current docs' shape), Cursor, Claude Desktop,
+    VS Code (`servers`), other.
+  - Formats checked against each client's docs. Snippets are made in Rust (`mcp/conn.rs::snippets`, paths
+    escaped for JSON/TOML) and tested.
+- Tests: `the_connection_file` (0600, atomic with no temp left, damaged/short files, removal, env precedence,
+  kept token) and `the_bridge_without_the_app_or_after_a_restart`; `setup_commands` parses every JSON snippet.
+- Tried live: the harness wrote the file (0600, port 8029); the bridge with no env listed maps; with the app gone
+  or the file removed, the two plain errors.
+- Note: `tools::assets::tests::custom_wad_writes` failed once in a full run and passed alone and on the rerun
+  (H's test, looks flaky under load).

@@ -64,6 +64,12 @@ pub struct Settings {
     /// and may change things (edit maps and navs, start and stop servers), not just look
     #[serde(default)]
     pub mcp_changes: bool,
+    /// the same AI agents token across restarts (kept in its own owner-only file, mcp/conn.rs)
+    #[serde(default)]
+    pub mcp_keep_token: bool,
+    /// the port AI agents connect to (None: 8029)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_port: Option<u16>,
 }
 
 /// A new phone access key.

@@ -13,6 +13,7 @@
 //! start local programs (`loner-strike --mcp-stdio`).
 
 pub mod catalog;
+pub mod conn;
 pub mod rpc;
 pub mod stdio;
 
@@ -127,6 +128,11 @@ struct Mcp {
     token: RwLock<String>,
     enabled: AtomicBool,
     changes: AtomicBool,
+    /// the token is kept across restarts (conn::token_file)
+    keep: AtomicBool,
+    /// the port asked for (Settings), and why another one is used if it was taken
+    port_pref: Mutex<u16>,
+    port_note: Mutex<Option<String>>,
     running: Mutex<Option<Running>>,
     error: Mutex<Option<String>>,
     sessions: rpc::Sessions,
@@ -140,6 +146,9 @@ fn mcp() -> &'static Mcp {
         token: RwLock::new(random_token(32)),
         enabled: AtomicBool::new(false),
         changes: AtomicBool::new(false),
+        keep: AtomicBool::new(false),
+        port_pref: Mutex::new(PORT),
+        port_note: Mutex::new(None),
         running: Mutex::new(None),
         error: Mutex::new(None),
         sessions: rpc::Sessions::default(),
@@ -155,8 +164,41 @@ pub fn start(st: &Shared) {
     let s = crate::app_api::load_settings();
     m.changes.store(s.mcp_changes, Ordering::Relaxed);
     m.enabled.store(s.mcp, Ordering::Relaxed);
+    m.keep.store(s.mcp_keep_token, Ordering::Relaxed);
+    *lock(&m.port_pref) = s.mcp_port.filter(|p| *p >= 1024).unwrap_or(PORT);
+    if s.mcp_keep_token {
+        let file = conn::token_file();
+        match conn::kept_token(&file) {
+            Some(t) => *m.token.write().unwrap() = t,
+            None => {
+                let _ = conn::keep_token(&file, &m.token.read().unwrap());
+            }
+        }
+    }
     if s.mcp {
         switch(true);
+    } else {
+        // (left from a run that ended with it on)
+        conn::remove(&conn::connection_file());
+    }
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Tells the stdio bridge where to connect (or that it can't), after any change.
+fn publish() {
+    let m = mcp();
+    let port = lock(&m.running).as_ref().map(|r| r.port);
+    let file = conn::connection_file();
+    match port {
+        Some(p) => {
+            if let Err(e) = conn::write(&file, p, &m.token.read().unwrap()) {
+                *lock(&m.error) = Some(format!("Couldn't save the connection details for the stdio bridge ({e}). HTTP still works."));
+            }
+        }
+        None => conn::remove(&file),
     }
 }
 
@@ -170,19 +212,26 @@ fn switch(on: bool) {
         }
         m.sessions.clear();
         *m.error.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *lock(&m.port_note) = None;
+        drop(running);
+        publish();
         return;
     }
     if running.is_some() {
         return;
     }
     let Some(st) = m.st.get() else { return };
-    match listen(st) {
+    let pref = *lock(&m.port_pref);
+    match listen(st, pref) {
         Ok(r) => {
+            *lock(&m.port_note) = (r.port != pref).then(|| format!("Port {pref} is taken by another program, so AI agents use {} this time. The stdio setup doesn't mind; for HTTP setups pick a free port.", r.port));
             *running = Some(r);
             *m.error.lock().unwrap_or_else(|e| e.into_inner()) = None;
         }
         Err(e) => *m.error.lock().unwrap_or_else(|e| e.into_inner()) = Some(e),
     }
+    drop(running);
+    publish();
 }
 
 struct Endpoint {
@@ -192,8 +241,8 @@ struct Endpoint {
     st: Shared,
 }
 
-fn listen(st: &Shared) -> Result<Running, String> {
-    let l = std::net::TcpListener::bind(("127.0.0.1", PORT))
+fn listen(st: &Shared, port: u16) -> Result<Running, String> {
+    let l = std::net::TcpListener::bind(("127.0.0.1", port))
         .or_else(|_| std::net::TcpListener::bind(("127.0.0.1", 0)))
         .map_err(|e| format!("Couldn't open a local port for AI agents: {e}"))?;
     l.set_nonblocking(true).map_err(|e| e.to_string())?;
@@ -315,18 +364,12 @@ fn view() -> Value {
         "url": url,
         "token": token,
         "error": m.error.lock().unwrap_or_else(|e| e.into_inner()).clone(),
-        "command": url.as_ref().map(|u| setup_command(u, &token)),
-        "stdio": port.map(|p| stdio_command(&exe, p, &token)),
+        "keep": m.keep.load(Ordering::Relaxed),
+        "port_pref": *lock(&m.port_pref),
+        "port_note": lock(&m.port_note).clone(),
+        "setups": conn::snippets(&exe, url.as_deref(), &token),
         "log": m.log.rows(),
     })
-}
-
-pub fn setup_command(url: &str, token: &str) -> String {
-    format!("claude mcp add --transport http loner-strike {url} --header \"Authorization: Bearer {token}\"")
-}
-
-pub fn stdio_command(exe: &str, port: u16, token: &str) -> String {
-    format!("claude mcp add --transport stdio loner-strike --env LONER_MCP_TOKEN={token} --env LONER_MCP_PORT={port} -- \"{exe}\" --mcp-stdio")
 }
 
 async fn api_get() -> Json<Value> {
@@ -339,8 +382,34 @@ async fn api_set(h: HeaderMap, Json(b): Json<Value>) -> Response {
     }
     let enabled = b.get("enabled").and_then(Value::as_bool);
     let changes = b.get("changes").and_then(Value::as_bool);
+    let keep = b.get("keep").and_then(Value::as_bool);
+    let port = match b.get("port") {
+        None => None,
+        Some(p) => match p.as_u64().filter(|p| (1024..=65535).contains(p)) {
+            Some(p) => Some(p as u16),
+            None => return Json(json!({"error": "Pick a port from 1024 to 65535."})).into_response(),
+        },
+    };
     let v = tokio::task::spawn_blocking(move || {
         let m = mcp();
+        if let Some(k) = keep {
+            let file = conn::token_file();
+            let saved = if k { conn::keep_token(&file, &m.token.read().unwrap()).map_err(|e| e.to_string()) } else { Ok(conn::remove(&file)) };
+            if let Err(e) = saved {
+                return json!({"error": format!("Couldn't keep the token: {e}")});
+            }
+            m.keep.store(k, Ordering::Relaxed);
+            crate::app_api::edit_settings(|s| s.mcp_keep_token = k);
+        }
+        if let Some(p) = port {
+            *lock(&m.port_pref) = p;
+            crate::app_api::edit_settings(|s| s.mcp_port = (p != PORT).then_some(p));
+            // listening already: moved to the new port
+            if lock(&m.running).is_some() {
+                switch(false);
+                switch(true);
+            }
+        }
         crate::app_api::edit_settings(|s| {
             if let Some(e) = enabled {
                 s.mcp = e;
@@ -372,6 +441,10 @@ async fn api_token(h: HeaderMap) -> Response {
     let m = mcp();
     *m.token.write().unwrap() = random_token(32);
     m.sessions.clear();
+    if m.keep.load(Ordering::Relaxed) {
+        let _ = conn::keep_token(&conn::token_file(), &m.token.read().unwrap());
+    }
+    publish();
     Json(view()).into_response()
 }
 

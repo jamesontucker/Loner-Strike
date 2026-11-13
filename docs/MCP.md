@@ -7,12 +7,20 @@ Code: `app/src-tauri/src/mcp/`. Settings UI: `app/ui/src/views/AgentSettings.tsx
 
 ## Safety
 - **Off by default.** Settings > AI agents > "Let AI agents connect". While it's off nothing listens.
-- **Local only.** It listens on `127.0.0.1:8029/mcp`, or on any free port if 8029 is taken. The setup
-  command always shows the real address. This listener is separate from the app window's.
+- **Local only.** It listens on `127.0.0.1:8029/mcp`, or on the port picked in Settings. If that port is
+  taken it uses a free one, and Settings says so. This listener is separate from the app window's.
   - A request needs a local `Host` (`127.0.0.1`, `localhost` or `[::1]` with that port).
   - An `Origin` from anywhere else gets 403. That stops web pages, including DNS-rebinding tricks.
 - **Token.** Every request needs `Authorization: Bearer <token>`.
   - The token is new each time the app starts, and "New token" makes another one.
+  - **"Keep the same token across restarts"** (off by default) is for HTTP setups. It keeps the token in
+    `<app dir>/mcp-token`, readable by this user only (`sys::write_private`).
+  - **The stdio bridge needs no token in its config.** While the connector listens, the app writes
+    `<app dir>/mcp-connection.json` (`{port, token, pid}`).
+    - The file is written atomically, readable by this user only, and rewritten when the token or
+      port changes. It's deleted when the connector is turned off, or at start if it's off.
+    - `<app dir>` is `~/Library/Application Support/Loner-Strike` on the Mac and the per-user
+      `%APPDATA%\Loner-Strike` on Windows.
   - The token is compared without stopping at the first difference.
   - It's shown only on the computer's Settings page, never on the phone listener.
 - **Read-only unless "Allow changes" is on.**
@@ -63,9 +71,15 @@ Code: `app/src-tauri/src/mcp/`. Settings UI: `app/ui/src/views/AgentSettings.tsx
   when the app already has axum and serde. The protocol part we need is small and fully tested.
   `tower` moved from dev-dependencies to dependencies; it was already in the tree through axum.
 - **stdio bridge:** `loner-strike --mcp-stdio` (`stdio.rs`, standard library only).
-  - It reads JSON-RPC lines on stdin and POSTs each one to the running app with `LONER_MCP_TOKEN` and
-    `LONER_MCP_PORT`. Each answer goes out as one line on stdout.
-  - It mirrors the modern headers, and it keeps the legacy session.
+  - It reads JSON-RPC lines on stdin and POSTs each one to the running app. Each answer goes out as one
+    line on stdout.
+  - The port and token are looked up for every message. `LONER_MCP_TOKEN` and `LONER_MCP_PORT` win if
+    they're set; otherwise it reads `mcp-connection.json`. A config of just `<app> --mcp-stdio` keeps
+    working across restarts and new tokens.
+  - When the app isn't running, or the connector is off, it answers with a JSON-RPC error that says so
+    and how to turn it on.
+  - It mirrors the modern headers and keeps the legacy session. If the app restarted (its sessions are
+    gone, so 404), it re-sends the client's `initialize` and retries, and the client never notices.
   - It's for agents that only start local programs. It checks for its flag before Tauri starts, so it
     never opens a window or trips the single-instance lock.
 
@@ -106,27 +120,45 @@ Every tool except the read tools needs "Allow changes". * = may ask the person.
 
 **Prompts:** `make_small_arena` (size, theme) and `check_map_for_bots` (map).
 
-## Connect Claude Code
+## Connect an agent
 1. In Loner-Strike, open Settings > AI agents and turn on "Let AI agents connect". Turn on "Allow changes"
    if the agent should build or fix things.
-2. Click **Copy setup command** and run it in a terminal:
-   ```
-   claude mcp add --transport http loner-strike http://127.0.0.1:8029/mcp --header "Authorization: Bearer <token>"
-   ```
-   Or tick "Use the stdio bridge instead":
-   ```
-   claude mcp add --transport stdio loner-strike --env LONER_MCP_TOKEN=<token> --env LONER_MCP_PORT=8029 -- "<app binary>" --mcp-stdio
-   ```
-3. After Loner-Strike restarts, the token is new. Run `claude mcp remove loner-strike`, then run the new
-   command.
+2. Under **Connect an agent**, pick your client and click **Copy**, then paste it where the line under the
+   picker says. These setups use the stdio bridge, need no token, and stay valid. The app binary on a
+   Mac is `/Applications/Loner-Strike.app/Contents/MacOS/loner-strike`; the copied setups have the real
+   path.
 
-Other clients: the address is `http://127.0.0.1:<port>/mcp` (Streamable HTTP), with the header
+All of these formats were checked against each client's docs on 2026-11-12. Codex, OpenCode, Cursor and
+VS Code came from their current pages. The Claude Desktop format came from modelcontextprotocol.io.
+Claude Code's `claude mcp add` comes from its CLI.
+
+| Client | Where | stdio setup (preferred) |
+|---|---|---|
+| Claude Code | terminal | `claude mcp add --scope user --transport stdio loner-strike -- "<app>" --mcp-stdio` |
+| Codex | `~/.codex/config.toml` | `[mcp_servers.loner-strike]` / `command = "<app>"` / `args = ["--mcp-stdio"]` |
+| OpenCode | `opencode.json` | `"mcp": {"servers": {"loner-strike": {"type": "local", "command": ["<app>", "--mcp-stdio"]}}}` |
+| Cursor | `~/.cursor/mcp.json` | `"mcpServers": {"loner-strike": {"type": "stdio", "command": "<app>", "args": ["--mcp-stdio"]}}` |
+| Claude Desktop | `claude_desktop_config.json` (Settings > Developer > Edit Config) | `"mcpServers": {"loner-strike": {"command": "<app>", "args": ["--mcp-stdio"]}}` |
+| VS Code | `.vscode/mcp.json` or MCP: Open User Configuration | `"servers": {"loner-strike": {"type": "stdio", "command": "<app>", "args": ["--mcp-stdio"]}}` |
+| Others (Windsurf…) | the client's MCP config | the `mcpServers` / `command` / `args` shape |
+
+**HTTP instead:** tick "Connect over HTTP with the token instead". For HTTP, turn on "Keep the same token
+across restarts" and pick a port that's free, or copy the setup again after each restart.
+- Claude Code: `--transport http ... --header "Authorization: Bearer <token>"`.
+- Codex: `url` plus `http_headers = { "Authorization" = "Bearer <token>" }`.
+- OpenCode: `"type": "remote"`, `"oauth": false` and `headers`.
+- Cursor: `url` and `headers`.
+- VS Code: `"type": "http"`, `url` and `headers`.
+- Claude Desktop's config file only starts local programs, so it uses stdio.
+
+Any other client: `http://127.0.0.1:<port>/mcp` (Streamable HTTP), with the header
 `Authorization: Bearer <token>`.
 
 ## Manual test recipe
 1. **Connect.** Do the steps above, then run `claude mcp list`. `loner-strike` should say "Connected".
    - Turn the setting off: it should fail to connect.
-   - Run the setup command with a wrong token: you should get 401, "Wrong or missing token…".
+   - With the HTTP setup and a wrong token you should get 401, "Wrong or missing token…".
+   - Restart Loner-Strike: the stdio setup should still connect, with no change to the config.
 2. **List tools.** In Claude Code, run `/mcp` and pick loner-strike. You should see 55 tools, 3 resources
    and 2 prompts.
 3. **Read a map.** Ask: "Use loner-strike to tell me about de_dust2: its spawns, nav and whether bots know
@@ -154,7 +186,8 @@ LONER_MCP_TOKEN=trytoken0123456789abcd LONER_MCP_CHANGES=1 cargo test serve_mcp_
 - This serves the real routes with your game on 127.0.0.1:8029, or the printed port. Questions for the
   person are answered "Don't allow".
 - Try it with `curl` (examples in the test), or with the bridge:
-  `printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}' | LONER_MCP_TOKEN=... LONER_MCP_PORT=... target/debug/loner-strike --mcp-stdio`.
+  `printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}' | target/debug/loner-strike --mcp-stdio`. It finds the harness through `mcp-connection.json`. That file
+  stays behind when the harness is killed, so delete it afterwards; the app removes a stale one at start.
 
 Checked this way on 2026-11-12:
 - initialize (legacy), modern tools/list, `map_info` and `map_nav_summary` on the real

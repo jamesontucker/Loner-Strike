@@ -16,10 +16,13 @@ type Agents = {
   url: string | null;
   token: string;
   error: string | null;
-  command: string | null;
-  stdio: string | null;
+  keep: boolean;
+  port_pref: number;
+  port_note: string | null;
+  setups: Setup[];
   log: Row[];
 };
+type Setup = { client: string; label: string; kind: "stdio" | "http"; where: string; text: string };
 
 const KEY = ["mcpAgents"];
 const OUTCOME: Record<Row["outcome"], string> = { done: "Done", refused: "Not allowed", failed: "Didn't work" };
@@ -37,11 +40,15 @@ export function AgentSettings() {
   const toast = useToast();
   const ask = useConfirm();
   const [showToken, setShowToken] = useState(false);
-  const [stdio, setStdio] = useState(false);
+  const [client, setClient] = useState(() => {
+    try { return localStorage.getItem("ls.mcpClient") || "claude-code"; } catch { return "claude-code"; }
+  });
+  const [http, setHttp] = useState(false);
+  const [portText, setPortText] = useState<string | null>(null);
 
   type Answer = Partial<Agents> & { error?: string | null };
   const post = (path: string, body: unknown = {}) => postJson<Answer>(path, body).catch((): Answer => ({ error: "Couldn't reach the app." }));
-  const save = (key: string, body: Partial<Pick<Agents, "enabled" | "changes">>, label: string) =>
+  const save = (key: string, body: { enabled?: boolean; changes?: boolean; keep?: boolean; port?: number }, label: string) =>
     run(key, async () => {
       const r = await post("/api/mcp", body);
       if (r.enabled === undefined) return toast(r.error ?? "Couldn't change that setting.", true);
@@ -54,23 +61,36 @@ export function AgentSettings() {
     await save("mcp:changes", { changes }, "Saving the setting…");
   };
   const newToken = async () => {
-    if (!(await ask("Make a new token? Agents set up with the old one stop working until you add them again with the new command.", { ok: "New token", danger: true }))) return;
+    if (!(await ask("Make a new token? HTTP setups with the old one stop working until you copy the setup again. The stdio bridge picks up the new one by itself.", { ok: "New token", danger: true }))) return;
     await run("mcp:token", async () => {
       const r = await post("/api/mcp/token");
       if (r.error && !r.token) return toast(r.error, true);
       queryClient.setQueryData(KEY, r);
-      toast("New token made. Copy the setup command again.");
+      toast("New token made.");
     }, "Making a new token…");
   };
   const clearLog = () => run("mcp:clear", async () => {
     const r = await post("/api/mcp/log/clear");
     if (r.token) queryClient.setQueryData(KEY, r);
   }, "Clearing…");
-  const copy = async (text: string | null, what: string) => {
-    if (text && (await copyText(text))) toast(`${what} copied. Paste it in a terminal.`);
+  const copy = async (s: Setup | undefined) => {
+    if (s && (await copyText(s.text))) toast(s.where.startsWith("Run") ? "Copied. Paste it in a terminal." : `Copied. Paste it into ${s.where.split(" (")[0]}.`);
     else toast("Couldn't copy. Select the text and copy it by hand.", true);
   };
-  const command = stdio ? a?.stdio : a?.command;
+  const pickClient = (c: string) => {
+    setClient(c);
+    try { localStorage.setItem("ls.mcpClient", c); } catch { /* private window */ }
+  };
+  const clients = (a?.setups ?? []).filter((s) => s.kind === "stdio");
+  const hasHttp = (a?.setups ?? []).some((s) => s.client === client && s.kind === "http");
+  const setup = (a?.setups ?? []).find((s) => s.client === client && s.kind === (http && hasHttp ? "http" : "stdio")) ?? clients[0];
+  const savePort = () => {
+    const n = Number(portText);
+    setPortText(null);
+    if (!a || !portText || n === a.port_pref) return;
+    if (!Number.isInteger(n) || n < 1024 || n > 65535) return toast("Pick a port from 1024 to 65535.", true);
+    save("mcp:port", { port: n }, "Moving to the new port…");
+  };
   const log = [...(a?.log ?? [])].reverse();
 
   return (
@@ -95,31 +115,49 @@ export function AgentSettings() {
               <Switch on={a.changes} label="Allow AI agents to change things" disabled={busy("mcp:changes")} onChange={setChanges} />
             </div>
             {a.error && <p className="err-text">{a.error}</p>}
-            {a.running && (
+            {a.running && setup && (
               <div className="setting-line stack-tight">
                 <div className="row between">
                   <div>
-                    <b>Connect Claude Code</b>
-                    <p className="muted">Run this once in a terminal. The token changes each time Loner-Strike starts, so run the new one after a restart.</p>
+                    <b>Connect an agent</b>
+                    <p className="muted">Set it up once. The usual setup starts Loner-Strike's bridge, which finds the app by itself, so it keeps working after restarts.</p>
                   </div>
                   <div className="row nowrap">
-                    <button className="btn primary" onClick={() => copy(command ?? null, "Setup command")}>Copy setup command</button>
-                    <Info text={<>Other agents: the address is <span className="mono">{a.url}</span> (Streamable HTTP) with the header <span className="mono">Authorization: Bearer</span> and the token. Agents that only start programs can use the stdio bridge instead.</>} />
+                    <select value={setup.client} onChange={(e) => pickClient(e.target.value)} aria-label="Your agent">
+                      {clients.map((c) => <option key={c.client} value={c.client}>{c.label}</option>)}
+                    </select>
+                    <button className="btn primary" onClick={() => copy(setup)}>Copy</button>
                   </div>
                 </div>
-                <p className="mono small agent-command" style={{ padding: "8px 10px", background: "rgba(0,0,0,.18)", borderRadius: 2 }}>{command}</p>
-                <div className="row">
+                <p className="muted">{setup.where}</p>
+                <pre className="mono small agent-command" style={{ padding: "8px 10px", background: "rgba(0,0,0,.18)", borderRadius: 2, whiteSpace: "pre-wrap", margin: 0 }}>{setup.text}</pre>
+                {hasHttp && (
                   <label className="row nowrap">
-                    <input type="checkbox" checked={stdio} onChange={(e) => setStdio(e.target.checked)} /> Use the stdio bridge instead
+                    <input type="checkbox" checked={http} onChange={(e) => setHttp(e.target.checked)} /> Connect over HTTP with the token instead
+                    <Info text="For agents that can't start programs, or if you prefer HTTP. The address and token are in the setup: keep the same token across restarts below, or copy it again after each restart." />
                   </label>
+                )}
+              </div>
+            )}
+            {a.running && (
+              <div className="setting-line stack-tight">
+                <div className="row between toggle">
+                  <div>
+                    <b>Keep the same token across restarts</b>
+                    <p className="muted">For HTTP setups. Off: a new token each time Loner-Strike starts, so an old one stops working by itself.</p>
+                  </div>
+                  <Switch on={a.keep} label="Keep the same token across restarts" disabled={busy("mcp:keep")} onChange={(keep) => save("mcp:keep", { keep }, "Saving the setting…")} />
                 </div>
                 <div className="row between">
                   <p className="muted">
-                    Token: <span className="mono">{showToken ? a.token : "•".repeat(12)}</span>{" "}
+                    Port{" "}
+                    <input className="search narrow" type="number" min={1024} max={65535} aria-label="Port for AI agents" value={portText ?? String(a.port_pref)} disabled={busy("mcp:port")} onChange={(e) => setPortText(e.target.value)} onBlur={savePort} onKeyDown={(e) => e.key === "Enter" && savePort()} />
+                    {"  "}Token: <span className="mono">{showToken ? a.token : "•".repeat(12)}</span>{" "}
                     <button className="link inline" onClick={() => setShowToken((s) => !s)}>{showToken ? "Hide" : "Show"}</button>
                   </p>
                   <BusyButton className="btn" busy={busy("mcp:token")} label="New token" busyLabel="Making…" onClick={newToken} />
                 </div>
+                {a.port_note && <p className="muted">{a.port_note}</p>}
               </div>
             )}
             <div className="setting-line stack-tight">

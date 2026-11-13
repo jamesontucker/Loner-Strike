@@ -535,11 +535,132 @@ fn the_stdio_bridge_passes_messages_through() {
 
 #[test]
 fn setup_commands() {
-    let c = setup_command("http://127.0.0.1:8029/mcp", "TOKEN");
-    assert_eq!(c, r#"claude mcp add --transport http loner-strike http://127.0.0.1:8029/mcp --header "Authorization: Bearer TOKEN""#);
-    assert!(stdio_command("/Applications/Loner-Strike.app/Contents/MacOS/loner-strike", 8029, "T").ends_with(r#"-- "/Applications/Loner-Strike.app/Contents/MacOS/loner-strike" --mcp-stdio"#));
+    let exe = r#"C:\Program Files\Loner-Strike\loner-strike.exe"#;
+    let all = conn::snippets(exe, Some("http://127.0.0.1:8029/mcp"), "TOKEN0123456789abcdef");
+    let get = |client: &str, kind: &str| all.iter().find(|s| s["client"] == client && s["kind"] == kind).map(|s| s["text"].as_str().unwrap().to_string()).unwrap();
+    // stdio setups carry no token or port: they stay valid
+    for s in all.iter().filter(|s| s["kind"] == "stdio") {
+        let text = s["text"].as_str().unwrap();
+        assert!(text.contains("--mcp-stdio") && !text.contains("TOKEN") && !text.contains("8029"), "{text}");
+    }
+    assert_eq!(get("claude-code", "stdio"), r#"claude mcp add --scope user --transport stdio loner-strike -- "C:\\Program Files\\Loner-Strike\\loner-strike.exe" --mcp-stdio"#);
+    // JSON snippets parse, with the path escaped right
+    for client in ["opencode", "cursor", "claude-desktop", "vscode", "other"] {
+        let v: Value = serde_json::from_str(&get(client, "stdio")).unwrap_or_else(|e| panic!("{client}: {e}"));
+        let entry = v.pointer("/mcp/servers/loner-strike").or(v.pointer("/mcpServers/loner-strike")).or(v.pointer("/servers/loner-strike")).unwrap();
+        let cmd = entry["command"].as_str().or(entry["command"][0].as_str()).unwrap();
+        assert_eq!(cmd, exe, "{client}");
+    }
+    let vs: Value = serde_json::from_str(&get("vscode", "http")).unwrap();
+    assert_eq!(vs["servers"]["loner-strike"]["type"], "http");
+    assert_eq!(vs["servers"]["loner-strike"]["headers"]["Authorization"], "Bearer TOKEN0123456789abcdef");
+    let oc: Value = serde_json::from_str(&get("opencode", "http")).unwrap();
+    assert_eq!((oc["mcp"]["servers"]["loner-strike"]["type"].clone(), oc["mcp"]["servers"]["loner-strike"]["oauth"].clone()), (json!("remote"), json!(false)));
+    let cu: Value = serde_json::from_str(&get("cursor", "http")).unwrap();
+    assert_eq!(cu["mcpServers"]["loner-strike"]["url"], "http://127.0.0.1:8029/mcp");
+    // Codex: TOML basic strings (same escapes as JSON)
+    assert_eq!(get("codex", "stdio"), "[mcp_servers.loner-strike]\ncommand = \"C:\\\\Program Files\\\\Loner-Strike\\\\loner-strike.exe\"\nargs = [\"--mcp-stdio\"]\n");
+    assert!(get("codex", "http").contains(r#"http_headers = { "Authorization" = "Bearer TOKEN0123456789abcdef" }"#));
+    assert_eq!(get("claude-code", "http"), r#"claude mcp add --scope user --transport http loner-strike http://127.0.0.1:8029/mcp --header "Authorization: Bearer TOKEN0123456789abcdef""#);
+    // not listening: stdio setups only
+    assert!(conn::snippets("x", None, "t").iter().all(|s| s["kind"] == "stdio"));
     assert_eq!(short(&json!({"map": "de_dust2", "x": [1, 2]})), "map: de_dust2, x: [1,2]");
     assert!(short(&json!({"t": "y".repeat(500)})).chars().count() <= 120);
+}
+
+fn scratch(name: &str) -> std::path::PathBuf {
+    let d = std::env::temp_dir().join(format!("ls-mcp-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    d
+}
+
+#[test]
+fn the_connection_file() {
+    let d = scratch("conn");
+    let f = d.join("mcp-connection.json");
+    assert!(conn::read(&f).is_none());
+    conn::write(&f, 8031, "abcdefghijkmnpqrstuvwxyz").unwrap();
+    assert_eq!(conn::read(&f), Some((8031, "abcdefghijkmnpqrstuvwxyz".into())));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&f).unwrap().permissions().mode() & 0o777, 0o600, "this user only");
+    }
+    // rewritten in one step: no temporary files left beside it
+    conn::write(&f, 8032, "zyxwvutsrqpnmkjihgfedcba").unwrap();
+    assert_eq!(conn::read(&f).unwrap().0, 8032);
+    let names: Vec<String> = std::fs::read_dir(&d).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+    assert_eq!(names, ["mcp-connection.json"]);
+    // a damaged or short file is no connection
+    std::fs::write(&f, r#"{"port": 8031, "token": "short"}"#).unwrap();
+    assert!(conn::read(&f).is_none());
+    std::fs::write(&f, "{nope").unwrap();
+    assert!(conn::read(&f).is_none());
+    conn::write(&f, 8031, "abcdefghijkmnpqrstuvwxyz").unwrap();
+    conn::remove(&f);
+    assert!(!f.exists());
+    conn::remove(&f); // (twice is fine)
+
+    // the environment wins; the file fills in what it doesn't say; nothing at all: a clear "off"
+    conn::write(&f, 8031, "filetoken0123456789").unwrap();
+    assert_eq!(conn::resolve(None, None, &f), Ok((8031, "filetoken0123456789".into())));
+    assert_eq!(conn::resolve(Some("envtoken0123456789".into()), Some("9000".into()), &f), Ok((9000, "envtoken0123456789".into())));
+    assert_eq!(conn::resolve(Some("envtoken0123456789".into()), None, &f), Ok((8031, "envtoken0123456789".into())));
+    assert_eq!(conn::resolve(None, Some("9000".into()), &f), Ok((9000, "filetoken0123456789".into())));
+    assert_eq!(conn::resolve(Some(" ".into()), Some("junk".into()), &f), Ok((8031, "filetoken0123456789".into())), "blank env is unset");
+    conn::remove(&f);
+    assert_eq!(conn::resolve(None, None, &f), Err(conn::OFF.into()));
+    assert_eq!(conn::resolve(Some("envtoken0123456789".into()), None, &f), Ok((PORT, "envtoken0123456789".into())));
+
+    // a kept token: this user only, and only a sane one is used
+    let k = d.join("mcp-token");
+    conn::keep_token(&k, "keptkeptkeptkept1234").unwrap();
+    assert_eq!(conn::kept_token(&k).as_deref(), Some("keptkeptkeptkept1234"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&k).unwrap().permissions().mode() & 0o777, 0o600);
+    }
+    std::fs::write(&k, "short").unwrap();
+    assert!(conn::kept_token(&k).is_none());
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn the_bridge_without_the_app_or_after_a_restart() {
+    // off / not running: a JSON-RPC error with the request's id, nothing for a notification
+    let mut b = stdio::Bridge::default();
+    fn never(_: u16, _: &str, _: Option<&str>, _: &str) -> Result<(u16, Vec<(String, String)>, Vec<u8>), String> {
+        Err("connection refused".into())
+    }
+    let a = b.pass(r#"{"jsonrpc":"2.0","id":3,"method":"tools/list"}"#, Err(conn::OFF.into()), never).unwrap();
+    assert_eq!(a["id"], 3);
+    assert!(a["error"]["message"].as_str().unwrap().contains("Settings > AI agents"));
+    assert!(b.pass(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#, Err(conn::OFF.into()), never).is_none());
+    let a = b.pass(r#"{"jsonrpc":"2.0","id":4,"method":"ping"}"#, Ok((8029, "t".repeat(20))), never).unwrap();
+    assert!(a["error"]["message"].as_str().unwrap().contains("isn't running"));
+
+    // the app restarted: the old session is unknown (404); the bridge greets it again and retries
+    static SEEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    fn app(_: u16, _: &str, session: Option<&str>, body: &str) -> Result<(u16, Vec<(String, String)>, Vec<u8>), String> {
+        let method = serde_json::from_str::<Value>(body).unwrap()["method"].as_str().unwrap().to_string();
+        SEEN.lock().unwrap().push(format!("{method} {}", session.unwrap_or("-")));
+        let ok = |s: &str| Ok((200, vec![("mcp-session-id".to_string(), s.to_string())], br#"{"jsonrpc":"2.0","id":1,"result":{}}"#.to_vec()));
+        match (method.as_str(), session) {
+            ("initialize", None) => ok(if SEEN.lock().unwrap().len() == 1 { "old" } else { "new" }),
+            ("notifications/initialized", _) => Ok((202, vec![], vec![])),
+            (_, Some("old")) => Ok((404, vec![], br#"{"jsonrpc":"2.0","id":2,"error":{"code":-32600,"message":"Unknown session: initialize again."}}"#.to_vec())),
+            (_, Some("new")) => Ok((200, vec![], br#"{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}"#.to_vec())),
+            _ => Ok((400, vec![], vec![])),
+        }
+    }
+    let mut b = stdio::Bridge::default();
+    let w = || Ok((8029, "t".repeat(20)));
+    b.pass(r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}"#, w(), app).unwrap();
+    let a = b.pass(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#, w(), app).unwrap();
+    assert!(a["result"]["tools"].is_array(), "{a}");
+    assert_eq!(SEEN.lock().unwrap().as_slice(), ["initialize -", "tools/list old", "initialize -", "notifications/initialized new", "tools/list new"]);
 }
 
 /// Serves the connector on 127.0.0.1:8029 with the real game and app routes, without the app

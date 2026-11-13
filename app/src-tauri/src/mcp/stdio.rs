@@ -13,14 +13,12 @@ pub fn wanted() -> bool {
     std::env::args().any(|a| a == "--mcp-stdio")
 }
 
-/// Runs until stdin closes.
+/// Runs until stdin closes. The port and token are looked up for every message (the app may
+/// have restarted, or got a new token): LONER_MCP_TOKEN / LONER_MCP_PORT if set, else the file
+/// the app writes while AI agents are on (conn.rs).
 pub fn run() {
-    let port: u16 = std::env::var("LONER_MCP_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(super::PORT);
-    let token = std::env::var("LONER_MCP_TOKEN").unwrap_or_default();
-    if token.is_empty() {
-        eprintln!("loner-strike --mcp-stdio: set LONER_MCP_TOKEN (Settings > AI agents in Loner-Strike has the command).");
-    }
-    let mut session: Option<String> = None;
+    let file = super::conn::connection_file();
+    let mut bridge = Bridge::default();
     let stdin = std::io::stdin();
     let mut out = std::io::stdout();
     for line in stdin.lock().lines() {
@@ -29,24 +27,62 @@ pub fn run() {
         if line.is_empty() {
             continue;
         }
-        let id = serde_json::from_str::<Value>(line).ok().and_then(|v| v.get("id").cloned()).filter(|i| !i.is_null());
-        let answer = match send(port, &token, session.as_deref(), line) {
+        let where_ = super::conn::resolve(std::env::var("LONER_MCP_TOKEN").ok(), std::env::var("LONER_MCP_PORT").ok(), &file);
+        let answer = bridge.pass(line, where_, send);
+        if let Some(a) = answer {
+            if writeln!(out, "{a}").and_then(|_| out.flush()).is_err() {
+                break;
+            }
+        }
+    }
+}
+
+type Sender = fn(u16, &str, Option<&str>, &str) -> Result<HttpAnswer, String>;
+
+/// What the bridge remembers between messages: the legacy session, and the client's
+/// `initialize`, so a restarted app (whose sessions are gone) is greeted again without the
+/// client noticing.
+#[derive(Default)]
+pub struct Bridge {
+    session: Option<String>,
+    init: Option<String>,
+}
+
+impl Bridge {
+    /// One message from the agent: its answer (None for a notification).
+    pub fn pass(&mut self, line: &str, where_: Result<(u16, String), String>, send: Sender) -> Option<Value> {
+        let msg = serde_json::from_str::<Value>(line).ok();
+        let id = msg.as_ref().and_then(|v| v.get("id").cloned()).filter(|i| !i.is_null());
+        let fail = |id: Option<&Value>, why: &str| id.map(|id| json!({"jsonrpc": "2.0", "id": id, "error": {"code": -32603, "message": why}}));
+        let (port, token) = match where_ {
+            Ok(w) => w,
+            Err(why) => return fail(id.as_ref(), &why),
+        };
+        if msg.as_ref().and_then(|m| m["method"].as_str()) == Some("initialize") {
+            self.init = Some(line.to_string());
+            self.session = None;
+        }
+        let mut r = send(port, &token, self.session.as_deref(), line);
+        // the app restarted under us: start a new session the way the client did, then retry
+        if matches!(&r, Ok((404, _, _))) && self.session.is_some() {
+            if let Some(init) = self.init.clone() {
+                if let Ok((200, h, _)) = send(port, &token, None, &init) {
+                    self.session = header(&h, "mcp-session-id");
+                    let _ = send(port, &token, self.session.as_deref(), r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+                    r = send(port, &token, self.session.as_deref(), line);
+                }
+            }
+        }
+        match r {
             Ok((status, headers, body)) => {
                 if let Some(s) = header(&headers, "mcp-session-id") {
-                    session = Some(s);
+                    self.session = Some(s);
                 }
                 answer_for(status, &body, id.as_ref())
             }
             Err(e) => {
                 eprintln!("loner-strike --mcp-stdio: {e}");
-                id.as_ref().map(|id| {
-                    json!({"jsonrpc": "2.0", "id": id, "error": {"code": -32603, "message": "Loner-Strike isn't running, or AI agents are off in its Settings."}})
-                })
-            }
-        };
-        if let Some(a) = answer {
-            if writeln!(out, "{a}").and_then(|_| out.flush()).is_err() {
-                break;
+                fail(id.as_ref(), "Loner-Strike isn't running, or AI agents were turned off. Open Loner-Strike and turn on Settings > AI agents.")
             }
         }
     }
