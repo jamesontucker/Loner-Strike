@@ -26,6 +26,9 @@ type Props = {
   speed?: number;
   /** a played-once animation reached its last frame */
   onEnded?: () => void;
+  /** Creature Studio: the entity's scale (pev->scale) and a kRenderFxGlowShell colour (rgb 0-255) with its renderamt */
+  scale?: number;
+  shell?: { color: [number, number, number]; amount: number } | null;
 };
 
 export function ModelView(p: Props) {
@@ -46,10 +49,10 @@ export function ModelView(p: Props) {
       <hemisphereLight args={["#ffffff", "#4c5046", 1.1]} />
       <directionalLight position={[0.6, 1, 0.8]} intensity={1.4} />
       <Floor bundle={p.bundle} />
-      <group rotation={ROOT_ROTATION}>
+      <group rotation={ROOT_ROTATION} scale={p.scale ?? 1}>
         <ModelMesh {...p} />
       </group>
-      <Fit bundle={p.bundle} />
+      <Fit bundle={p.bundle} scale={p.scale ?? 1} />
     </Canvas>
   );
 }
@@ -62,11 +65,11 @@ function Floor({ bundle }: { bundle: ModelBundle }) {
 }
 
 /** Frames the model: in front of it (GoldSrc models face +x), a little above. */
-function Fit({ bundle }: { bundle: ModelBundle }) {
+function Fit({ bundle, scale = 1 }: { bundle: ModelBundle; scale?: number }) {
   const ref = useRef<ElementRef<typeof OrbitControls>>(null);
   const camera = useThree((s) => s.camera);
   useEffect(() => {
-    const [lo, hi] = bundle.bounds;
+    const [lo, hi] = bundle.bounds.map((v) => v.map((x) => x * scale)) as typeof bundle.bounds;
     const c = new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2, -(lo[1] + hi[1]) / 2);
     const r = Math.max(4, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2);
     const d = r / Math.sin(((45 / 2) * Math.PI) / 180) * 1.1;
@@ -76,7 +79,7 @@ function Fit({ bundle }: { bundle: ModelBundle }) {
     camera.updateProjectionMatrix();
     ref.current?.target.copy(c);
     ref.current?.update();
-  }, [bundle, camera]);
+  }, [bundle, camera, scale]);
   return <OrbitControls ref={ref} makeDefault enableDamping dampingFactor={0.15} />;
 }
 
@@ -94,7 +97,7 @@ function missingTexture() {
   return t;
 }
 
-function ModelMesh({ item, bundle, skin, body, anim, playing, wire, loop, speed, onEnded }: Props) {
+function ModelMesh({ item, bundle, skin, body, anim, playing, wire, loop, speed, onEnded, shell }: Props) {
   const invalidate = useThree((s) => s.invalidate);
   // the vertex data we move when animating (copies; the bundle stays as it came)
   const geometry = useMemo(() => {
@@ -198,7 +201,24 @@ function ModelMesh({ item, bundle, skin, body, anim, playing, wire, loop, speed,
     }
   });
 
-  return <mesh geometry={geometry} material={materials} frustumCulled={false} />;
+  // kRenderFxGlowShell: the model drawn again a little larger along its normals, added on in the colour
+  const shellMats = useMemo(() => {
+    if (!shell) return null;
+    const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(shell.color[0] / 255, shell.color[1] / 255, shell.color[2] / 255), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide });
+    const push = Math.max(0.5, shell.amount * 0.1);
+    m.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace("#include <begin_vertex>", `vec3 transformed = vec3(position) + normalize(normal) * ${push.toFixed(2)};`);
+    };
+    return bundle.draws.map(() => m);
+  }, [shell?.color[0], shell?.color[1], shell?.color[2], shell?.amount, bundle]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => shellMats?.[0]?.dispose(), [shellMats]);
+
+  return (
+    <>
+      <mesh geometry={geometry} material={materials} frustumCulled={false} />
+      {shellMats && <mesh geometry={geometry} material={shellMats} frustumCulled={false} renderOrder={1} />}
+    </>
+  );
 }
 
 /** Moves the vertices to frame `f` of an animation. */

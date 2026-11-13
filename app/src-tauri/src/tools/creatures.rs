@@ -200,14 +200,30 @@ pub fn builtins() -> Vec<Creature> {
     t.display = "Runner".into();
     (t.hp, t.speed, t.walk_speed, t.damage, t.attack_rate, t.attack_delay) = (60.0, 300.0, 110.0, 10.0, 1.6, 0.25);
     t.behaviour = "chase".into();
+    t.blood = "yellow".into();
+    t.model = "models/houndeye.mdl models/hostage.mdl".into();
+    (t.hull_min, t.hull_max) = ([-16.0, -16.0, 0.0], [16.0, 16.0, 36.0]);
     t.fallback_glow = [160.0, 160.0, 20.0];
+    t.snd[0] = "houndeye/he_idle1.wav houndeye/he_idle2.wav houndeye/he_idle3.wav".into();
+    t.snd[1] = "houndeye/he_alert1.wav houndeye/he_alert2.wav houndeye/he_alert3.wav".into();
+    t.snd[2] = "houndeye/he_attack1.wav houndeye/he_attack3.wav".into();
+    t.snd[5] = "houndeye/he_pain1.wav houndeye/he_pain3.wav | player/pl_pain2.wav".into();
+    t.snd[6] = "houndeye/he_die1.wav houndeye/he_die2.wav | player/die1.wav".into();
     out.push(t);
 
     let mut t = defaults("brute");
     t.display = "Brute".into();
     (t.hp, t.speed, t.walk_speed, t.damage, t.attack_range, t.attack_rate, t.attack_delay) = (450.0, 170.0, 70.0, 40.0, 72.0, 0.7, 0.6);
-    (t.scale, t.frags) = (1.25, 3);
-    t.glow = [120.0, 20.0, 20.0];
+    t.category = "alien".into();
+    t.frags = 3;
+    t.blood = "yellow".into();
+    t.model = "models/agrunt.mdl models/hostage.mdl".into();
+    t.fallback_glow = [120.0, 20.0, 20.0];
+    t.snd[0] = "agrunt/ag_idle1.wav agrunt/ag_idle2.wav agrunt/ag_idle3.wav agrunt/ag_idle4.wav".into();
+    t.snd[1] = "agrunt/ag_alert1.wav agrunt/ag_alert3.wav agrunt/ag_alert4.wav".into();
+    t.snd[2] = "agrunt/ag_attack1.wav agrunt/ag_attack2.wav agrunt/ag_attack3.wav".into();
+    t.snd[5] = "agrunt/ag_pain1.wav agrunt/ag_pain2.wav agrunt/ag_pain3.wav | player/pl_pain2.wav".into();
+    t.snd[6] = "agrunt/ag_die1.wav agrunt/ag_die4.wav | player/die1.wav".into();
     out.push(t);
 
     let mut t = defaults("spitter");
@@ -218,7 +234,7 @@ pub fn builtins() -> Vec<Creature> {
     (t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.spread, t.flee_hp) = (8.0, 900.0, 0.8, 0.5, 4.0, 0.3);
     t.blood = "yellow".into();
     t.model = "models/bullsquid.mdl models/hostage.mdl".into();
-    (t.hull_min, t.hull_max) = ([-24.0, -24.0, 0.0], [24.0, 24.0, 40.0]);
+    (t.hull_min, t.hull_max) = ([-16.0, -16.0, 0.0], [16.0, 16.0, 36.0]);
     t.fallback_glow = [120.0, 200.0, 40.0];
     t.snd = [
         "bullchicken/bc_idle1.wav bullchicken/bc_idle2.wav bullchicken/bc_idle3.wav".into(),
@@ -260,6 +276,8 @@ pub fn builtins() -> Vec<Creature> {
     t.blood = "none".into();
     t.corpse_time = 15.0;
     t.model = "models/sentry.mdl models/hostage.mdl".into();
+    // (sentry.mdl has no activities: its sequences by name)
+    (t.anim[0], t.anim[3], t.anim[5]) = ("spin".into(), "fire".into(), "die".into());
     (t.hull_min, t.hull_max) = ([-16.0, -16.0, 0.0], [16.0, 16.0, 48.0]);
     t.fallback_glow = [40.0, 80.0, 200.0];
     t.snd = Default::default();
@@ -273,8 +291,33 @@ pub fn builtins() -> Vec<Creature> {
     t.category = "boss".into();
     (t.hp, t.speed, t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.detect_radius) = (3000.0, 200.0, 60.0, 80.0, 0.6, 0.7, 2000.0);
     t.behaviour = "chase".into();
-    (t.scale, t.frags) = (1.6, 10);
-    t.glow = [160.0, 0.0, 160.0];
+    (t.scale, t.frags) = (0.7, 10);
+    t.blood = "yellow".into();
+    t.model = "models/garg.mdl models/hostage.mdl".into();
+    t.fallback_glow = [160.0, 0.0, 160.0];
+    t.snd[0] = "garg/gar_idle1.wav garg/gar_idle2.wav garg/gar_idle3.wav garg/gar_breathe1.wav".into();
+    t.snd[1] = "garg/gar_alert1.wav garg/gar_alert2.wav garg/gar_alert3.wav".into();
+    t.snd[2] = "garg/gar_attack1.wav garg/gar_attack2.wav garg/gar_attack3.wav".into();
+    t.snd[3] = "garg/gar_stomp1.wav | weapons/knife_hit1.wav".into();
+    t.snd[5] = "garg/gar_pain1.wav garg/gar_pain2.wav garg/gar_pain3.wav | player/pl_pain2.wav".into();
+    t.snd[6] = "garg/gar_die1.wav garg/gar_die2.wav | player/die1.wav".into();
+    out.push(t);
+
+    let mut t = defaults("headcrab");
+    t.display = "Headcrab".into();
+    (t.hp, t.speed, t.walk_speed, t.damage, t.attack_range, t.attack_delay, t.detect_radius) = (25.0, 200.0, 60.0, 8.0, 72.0, 0.3, 800.0);
+    t.blood = "yellow".into();
+    t.model = "models/headcrab.mdl models/hostage.mdl".into();
+    t.anim[3] = "jump".into(); // (its leap is a range attack in the model; MELEE_ATTACK2 is a looping turn)
+    (t.hull_min, t.hull_max) = ([-16.0, -16.0, 0.0], [16.0, 16.0, 36.0]);
+    t.fallback_glow = [200.0, 200.0, 120.0];
+    t.snd[0] = "headcrab/hc_idle1.wav headcrab/hc_idle2.wav headcrab/hc_idle3.wav headcrab/hc_idle4.wav headcrab/hc_idle5.wav".into();
+    t.snd[1] = "headcrab/hc_alert1.wav headcrab/hc_alert2.wav".into();
+    t.snd[2] = "headcrab/hc_attack1.wav headcrab/hc_attack2.wav headcrab/hc_attack3.wav".into();
+    t.snd[3] = "headcrab/hc_headbite.wav | weapons/knife_hit1.wav".into();
+    t.snd[4] = String::new();
+    t.snd[5] = "headcrab/hc_pain1.wav headcrab/hc_pain2.wav headcrab/hc_pain3.wav | player/pl_pain2.wav".into();
+    t.snd[6] = "headcrab/hc_die1.wav headcrab/hc_die2.wav | player/die1.wav".into();
     out.push(t);
     out
 }
@@ -488,6 +531,10 @@ fn settle(t: &mut Creature) {
     if !hull_ok(t.hull_min, t.hull_max) {
         t.hull_min = [-16.0, -16.0, 0.0];
         t.hull_max = [16.0, 16.0, 72.0];
+    }
+    // never wider than a player: the engine moves anything wider with the 64-unit hull
+    if t.hull_min[0] < -16.0 || t.hull_min[1] < -16.0 || t.hull_max[0] > 16.0 || t.hull_max[1] > 16.0 {
+        (t.hull_min[0], t.hull_min[1], t.hull_max[0], t.hull_max[1]) = (-16.0, -16.0, 16.0, 16.0);
     }
 }
 
@@ -821,7 +868,7 @@ pub fn check(types: &[Creature]) -> Vec<Problem> {
     let builtin_names: Vec<String> = builtins().into_iter().map(|t| t.name).collect();
     let extra = types.iter().filter(|t| !builtin_names.contains(&t.name)).count();
     if builtin_names.len() + extra > MAX_TYPES {
-        out.push(problem("", "", format!("The game holds {MAX_TYPES} types at most (7 built in + {} of yours): remove {}.", MAX_TYPES - 7, builtin_names.len() + extra - MAX_TYPES), true));
+        out.push(problem("", "", format!("The game holds {MAX_TYPES} types at most ({} built in + {} of yours): remove {}.", builtin_names.len(), MAX_TYPES - builtin_names.len(), builtin_names.len() + extra - MAX_TYPES), true));
     }
     for (i, t) in types.iter().enumerate() {
         let at = t.name.as_str();
@@ -841,23 +888,25 @@ pub fn check(types: &[Creature]) -> Vec<Problem> {
             }
         }
         // text: the file cuts a value at ; # or //, and each has a size
-        for k in KEYS {
-            let v = t.get(k);
+        for key in KEYS {
+            let v = t.get(key);
+            // (the file's `name =` is the shown name: reported as "display", apart from the type's name)
+            let k: &str = if *key == "name" { "display" } else { key };
             if comment_at(&v) < v.len() {
                 out.push(problem(at, k, "No ; # or // in a value: the game reads them as the start of a note and cuts the rest.", true));
             }
-            if v.contains(['\r', '\n', '[', ']']) && *k != "name" {
+            if v.contains(['\r', '\n', '[', ']']) && k != "display" {
                 out.push(problem(at, k, "No line breaks or [ ] in a value.", true));
             }
-            if v.len() + k.len() + 3 > MAX_LINE {
+            if v.len() + key.len() + 3 > MAX_LINE {
                 out.push(problem(at, k, "Too long for one line of the file (511 characters).", true));
             }
         }
         if t.display.len() > MAX_DISPLAY {
-            out.push(problem(at, "name", format!("The shown name is {} characters; the game keeps {MAX_DISPLAY}.", t.display.len()), true));
+            out.push(problem(at, "display", format!("The shown name is {} characters; the game keeps {MAX_DISPLAY}.", t.display.len()), true));
         }
         if t.display.contains(['\r', '\n']) {
-            out.push(problem(at, "name", "No line breaks in the shown name.", true));
+            out.push(problem(at, "display", "No line breaks in the shown name.", true));
         }
         // numbers: the game clamps, so out of range is a mistake to fix here
         let nums: [(&str, f32); 21] = [
@@ -895,6 +944,9 @@ pub fn check(types: &[Creature]) -> Vec<Problem> {
         let hv = t.hull_min.iter().chain(t.hull_max.iter()).all(|v| finite(*v) && v.abs() <= 8192.0);
         if !hv || !hull_ok(t.hull_min, t.hull_max) {
             out.push(problem(at, "hull_min", "Its size doesn't work: the bottom must be at 0 or a little below (to -64), the top at least 30 up, each side smaller than the other and at most 256 across. The game would use a person's size instead.", true));
+        }
+        if hv && hull_ok(t.hull_min, t.hull_max) && (t.hull_min[0] < -16.0 || t.hull_min[1] < -16.0 || t.hull_max[0] > 16.0 || t.hull_max[1] > 16.0) {
+            out.push(problem(at, "hull_min", "Wider than a player: the game narrows it to 32 so it fits through the doors the bots' nav leads through. Make the model look bigger with Size instead.", false));
         }
         // models
         let models: Vec<&str> = t.model.split_whitespace().collect();
@@ -1579,12 +1631,14 @@ pub fn list_sounds(hl: &Path, game: &str) -> Vec<Value> {
 }
 
 // GoldSrc activities (activity.h) the fork looks for, in its order
-const ACTS: [[i32; 3]; 6] = [[1, 1, 1], [3, 4, 1], [4, 3, 1], [30, 28, 31], [26, 27, 71], [36, 38, 37]];
+const ACTS: [[i32; 3]; 6] = [[1, 1, 1], [3, 4, 1], [4, 3, 1], [30, 31, 28], [26, 27, 71], [36, 38, 37]];
+/// a ranged attacker spits: its range attack before any melee one
+const RANGED_ACTS: [i32; 3] = [28, 29, 30];
 const PLAYER_NAMES: [&str; 6] = ["idle1", "walk", "run", "ref_shoot_knife", "gutshot", "death1"];
 
 /// The sequences in a model and which one the game would play for idle, walk, run, attack,
 /// flinch and death (SetAnim: the type's name, else by activity, else player-model names).
-pub fn sequences(path: &Path, anims: &[String; 6]) -> Result<Value, String> {
+pub fn sequences(path: &Path, anims: &[String; 6], ranged: bool) -> Result<Value, String> {
     let bytes = crate::goldsrc::read_capped(path, "model file", crate::goldsrc::mdl::MAX_MDL).map_err(|e| e.to_string())?;
     let m = crate::goldsrc::mdl::Model::parse(bytes).map_err(|e| e.to_string())?;
     let find_name = |n: &str| m.sequences.iter().position(|s| s.name.eq_ignore_ascii_case(n));
@@ -1593,7 +1647,7 @@ pub fn sequences(path: &Path, anims: &[String; 6]) -> Result<Value, String> {
             let by_name = (!anims[i].is_empty()).then(|| find_name(&anims[i])).flatten();
             let (seq, how) = match by_name {
                 Some(s) => (Some(s), "name"),
-                None => match ACTS[i].iter().find_map(|a| m.sequences.iter().position(|s| s.activity == *a)) {
+                None => match (if i == 3 && ranged { &RANGED_ACTS } else { &ACTS[i] }).iter().find_map(|a| m.sequences.iter().position(|s| s.activity == *a)) {
                     Some(s) => (Some(s), "activity"),
                     None => (find_name(PLAYER_NAMES[i]), "player"),
                 },
@@ -1602,7 +1656,9 @@ pub fn sequences(path: &Path, anims: &[String; 6]) -> Result<Value, String> {
         })
         .collect();
     let seqs: Vec<Value> = m.sequences.iter().enumerate().map(|(i, s)| json!({"index": i, "name": s.name, "activity": s.activity, "fps": s.fps, "frames": s.frames})).collect();
-    Ok(json!({"sequences": seqs, "picks": picks}))
+    // (ResolveAnims: no run of its own when run comes out as the walk; the game plays the walk faster)
+    let no_run = picks[2]["seq"].is_null() || picks[2]["seq"] == picks[1]["seq"];
+    Ok(json!({"sequences": seqs, "picks": picks, "noRun": no_run}))
 }
 
 // ---- the files on disk ----------------------------------------------------------------------
@@ -1949,6 +2005,9 @@ struct ModelQ {
     /// the type's anim_* names, comma separated (idle,walk,run,attack,flinch,die)
     #[serde(default)]
     anims: String,
+    /// a ranged attacker (its attack sequence is picked differently)
+    #[serde(default)]
+    ranged: bool,
 }
 
 async fn api_model(State(st): State<Shared>, Query(q): Query<ModelQ>) -> Response {
@@ -1971,10 +2030,11 @@ async fn api_model(State(st): State<Shared>, Query(q): Query<ModelQ>) -> Respons
         if let Some(path) = picked_path {
             if let Some((folder, file)) = find_in(&search_dirs(&f.hl, &f.game), &path) {
                 out["model"] = json!({"folder": folder, "path": path});
-                match sequences(&file, &anims) {
+                match sequences(&file, &anims, q.ranged) {
                     Ok(s) => {
                         out["sequences"] = s["sequences"].clone();
                         out["picks"] = s["picks"].clone();
+                        out["noRun"] = s["noRun"].clone();
                     }
                     Err(e) => out["modelError"] = json!(e),
                 }
@@ -2098,7 +2158,7 @@ mod tests {
         assert_eq!(runner.snd[0], "zombie/zo_idle1.wav zombie/zo_idle2.wav | player/pl_pain2.wav");
         assert_eq!(runner.fallback_glow, [160.0, 160.0, 20.0]);
         assert_eq!(runner.glow, [0.0; 3]);
-        assert_eq!(t.len(), 7);
+        assert_eq!(t.len(), 8);
         // clamps, aliases, comments, a bad hull, walk over run, base copies, numbers for names
         let t = types_of("[a]\nhealth = 500000 ; huge\ndetect = -5\nfov = 1\nwalk_speed = 900\nspeed = 100\nhull_min = 0 0 10\nname = Big // shown\ncategory = 3\nattack = ranged\nhates = terrorist\nmoves = 0\nmoney = 99999\n[b]\nbase = a\nhp = 7\n");
         let a = t.iter().find(|x| x.name == "a").unwrap();
@@ -2111,7 +2171,7 @@ mod tests {
         let many: String = (0..30).map(|i| format!("[t{i}]\n")).collect();
         let r = resolve(&Doc::parse(&many));
         assert_eq!(r.iter().filter(|x| !x.skipped).count(), MAX_TYPES);
-        assert_eq!(r.iter().filter(|x| x.skipped).count(), 5);
+        assert_eq!(r.iter().filter(|x| x.skipped).count(), 6);
     }
 
     #[test]
@@ -2198,7 +2258,7 @@ mod tests {
         }
         let mut x = t.clone();
         x.display = "Nice ; name".into();
-        assert!(err(&x, "name"));
+        assert!(err(&x, "display"));
         let mut x = t.clone();
         x.model = "../../liblist.gam".into();
         assert!(err(&x, "model"));
@@ -2274,7 +2334,7 @@ mod tests {
         assert!(text.contains("\n\n[runner]\nhp = 61\n"), "{text}");
         assert!(!save(&f, &SaveReq { types }).unwrap());
         let st = status(&f).unwrap();
-        assert_eq!(st["types"].as_array().unwrap().len(), 7);
+        assert_eq!(st["types"].as_array().unwrap().len(), 8);
         assert_eq!(st["types"][1]["inFile"], true);
         assert_eq!(st["types"][1]["set"], json!(["hp"]));
         // waves next to it
@@ -2329,7 +2389,7 @@ mod tests {
         if !p.exists() {
             return;
         }
-        let v = sequences(&p, &Default::default()).unwrap();
+        let v = sequences(&p, &Default::default(), false).unwrap();
         println!("{v:#}");
         assert!(v["picks"][1]["seq"].is_u64());
     }

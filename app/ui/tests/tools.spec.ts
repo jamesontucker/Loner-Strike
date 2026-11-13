@@ -194,7 +194,7 @@ test("a save offers Undo, and Undo puts the file back", async ({ page }, info) =
   expect(await names()).not.toContain(name);
 });
 
-test("Creature Studio: a type's form with its model, the model picker and the waves", async ({ page }, info) => {
+test("Creature Studio: a type's form, the preview drawn as the game would, the pickers and the waves", async ({ page }, info) => {
   const problems: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error" && !IGNORED.some((r) => r.test(m.text()))) problems.push(`console: ${m.text()}`);
@@ -202,12 +202,29 @@ test("Creature Studio: a type's form with its model, the model picker and the wa
   page.on("pageerror", (e) => problems.push(`crash: ${e.message}`));
   await page.goto(`/tools-dev.html?open=creatures`);
   await settle(page);
-  await page.getByRole("listbox", { name: "Creature types" }).getByRole("option", { name: /Spitter/ }).click();
+  const list = page.getByRole("listbox", { name: "Creature types" });
+  // the zombie's model has no run: the preview says so when Run is played
+  await list.getByRole("option", { name: /Zombie/ }).click();
+  await expect(page.locator(".cs-preview-view canvas")).toBeVisible({ timeout: 15_000 });
+  await page.locator(".cs-moves").getByRole("button", { name: "Run" }).click();
+  await expect(page.locator(".cs-preview .cs-note")).toContainText(/no run of its own/);
+  // a tint shows in the preview (glow shell), as the game draws it
+  await page.getByRole("switch", { name: "Tinted" }).first().click();
+  await expect(page.locator(".cs-preview .cs-note")).toContainText(/Tinted as in the game/);
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: info.outputPath("creatures-zombie-tinted.png") });
+  // the model picker and the sound picker open as popovers
+  await list.getByRole("option", { name: /Spitter/ }).click();
   await expect(page.locator(".cs-summary")).toContainText(/shoots/);
-  await page.getByRole("button", { name: "Change…" }).click();
-  await expect(page.locator(".cs-model-list")).toBeVisible();
-  await page.waitForTimeout(1500); // the 3D view and the model list
-  await page.screenshot({ path: info.outputPath("creatures-spitter.png"), fullPage: true });
+  await page.locator(".cs-model-btn").click();
+  await expect(page.getByRole("dialog", { name: "Pick a model" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  const sounds = page.locator("details.cs-section").filter({ hasText: "Sounds" });
+  if (!(await sounds.evaluate((d) => (d as HTMLDetailsElement).open))) await sounds.locator("summary").click();
+  await sounds.getByRole("button", { name: "+ Add" }).first().click();
+  await expect(page.getByRole("dialog", { name: /Add a .* sound/ })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("creatures-spitter-sounds.png") });
+  await page.keyboard.press("Escape");
   // a value past the game's limit says so under its control
   await page.getByRole("spinbutton", { name: "Health (number)" }).fill("200000");
   await expect(page.locator(".cs-error").first()).toContainText(/between 1 and 100000/, { timeout: 5_000 });

@@ -62,7 +62,7 @@ export type Checked = { problems: Problem[]; summaries: { name: string; summary:
 
 export type Seq = { index: number; name: string; activity: number; fps: number; frames: number };
 export type Pick = { seq: number | null; how: "name" | "activity" | "player" | "none"; missing: boolean };
-export type ModelLook = { report: ModelReport; model?: { folder: string; path: string }; sequences?: Seq[]; picks?: Pick[]; modelError?: string };
+export type ModelLook = { report: ModelReport; model?: { folder: string; path: string }; sequences?: Seq[]; picks?: Pick[]; noRun?: boolean; modelError?: string };
 
 export type ModelItem = { path: string; folder: string; kind: Candidate["kind"]; note: string; group: string; size: number };
 export type SoundItem = { file: string; folder: string };
@@ -79,8 +79,8 @@ export const creatureStatus = (signal?: AbortSignal) => get<Status>("/api/tools/
 export const checkTypes = (types: Creature[], look?: string) => post<Checked>("/api/tools/creatures/check", { types, look });
 export const saveTypes = (types: Creature[]) => post<Done<Status>>("/api/tools/creatures/save", { types });
 export const listModels = (signal?: AbortSignal) => get<{ models: ModelItem[] }>("/api/tools/creatures/models", signal);
-export const lookModel = (models: string, anims: string[], signal?: AbortSignal) =>
-  get<ModelLook>(`/api/tools/creatures/model?models=${encodeURIComponent(models)}&anims=${encodeURIComponent(anims.join(","))}`, signal);
+export const lookModel = (models: string, anims: string[], ranged: boolean, signal?: AbortSignal) =>
+  get<ModelLook>(`/api/tools/creatures/model?models=${encodeURIComponent(models)}&anims=${encodeURIComponent(anims.join(","))}&ranged=${ranged}`, signal);
 export const listSounds = (signal?: AbortSignal) => get<{ sounds: SoundItem[] }>("/api/tools/creatures/sounds", signal);
 export const liveStatus = (signal?: AbortSignal) => get<Live>("/api/tools/creatures/live", signal);
 export const applyLive = () => post<{ ok?: boolean; message?: string; reply?: string }>("/api/tools/creatures/reload");

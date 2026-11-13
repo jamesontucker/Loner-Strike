@@ -3,18 +3,21 @@
 // the wave mixes modes use; and "apply to game" / "spawn one" on the player's running map.
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useDirty } from "../../../store";
 import { BusyButton, Info, LoadError, Segmented, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading } from "../common";
+import { ActionBar } from "../common/ActionBar";
 import { errorText, useBusy } from "../common/api";
 import { matches, searchWords } from "../common/search";
 import { useToolCrumbs } from "../common/shell";
-import { applyLive, checkTypes, creatureStatus, liveStatus, saveTypes, spawnOne, type Checked, type Creature, type Status, type TypeRow } from "./creaturesApi";
+import { applyLive, checkTypes, creatureStatus, liveStatus, lookModel, saveTypes, spawnOne, type Checked, type Creature, type Status, type TypeRow } from "./creaturesApi";
 import { TypeForm } from "./TypeForm";
 import { WavesTab } from "./WavesTab";
-import { CATEGORY_WORDS, TEMPLATE_WORDS } from "./words";
+import { CATEGORY_WORDS, KIND_WORDS, TEMPLATE_WORDS } from "./words";
 import "./creatures.css";
+
+const CreaturePreview = lazy(() => import("./CreaturePreview"));
 
 type Tab = "types" | "waves";
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
@@ -50,6 +53,12 @@ export default function Creatures() {
   }, [status.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const t = types?.[Math.min(sel, (types?.length ?? 1) - 1)] ?? null;
+  const look = useQuery({
+    queryKey: ["tools", "creatures", "look", t?.model, t?.anim.join(","), t?.attack === "ranged"],
+    queryFn: ({ signal }) => lookModel(t!.model, t!.anim, t!.attack === "ranged", signal),
+    enabled: !!t?.model.trim(),
+    staleTime: 30_000,
+  });
   // problems, a summary and the model/sound report, from the server (its rules are the game's)
   useEffect(() => {
     if (!types) return;
@@ -165,6 +174,9 @@ export default function Creatures() {
   const canSpawn = !!t && !!live.data?.creatures && !dirty && savedNames.includes(t.name);
   const spawnWhy = !live.data?.creatures ? liveText : dirty ? "Save and apply first." : !t || !savedNames.includes(t.name) ? "Save it first." : liveType && !liveType.precached ? "This map didn't load this type: it may refuse." : "";
 
+  const report = checked?.models ?? look.data?.report;
+  const first = report?.candidates[report.picked ?? 0];
+
   return (
     <div className="cs tl-page">
       <div className="tl-head">
@@ -176,7 +188,7 @@ export default function Creatures() {
 
       {tab === "types" && (
         <div className="cs-grid">
-          <div className="panel cs-list">
+          <aside className="panel cs-list" aria-label="Creature types">
             <input className="search" type="search" placeholder="Search types" aria-label="Search creature types" value={q} onChange={(e) => setQ(e.target.value)} />
             <ul role="listbox" aria-label="Creature types">
               {filtered.map(({ x, i }) => {
@@ -191,25 +203,22 @@ export default function Creatures() {
                           {x.name} · {CATEGORY_WORDS[x.category] ?? x.category}
                         </span>
                       </span>
-                      {err ? <span className="cs-dot err" title="Something to fix" /> : isBuiltin(x.name) ? <span className="cs-tag">{row?.inFile || changedFromShipped(x) ? "built in, changed" : "built in"}</span> : <span className="cs-tag own">yours</span>}
+                      {err ? <span className="cs-dot err" title="Something to fix" /> : isBuiltin(x.name) ? <span className="cs-tag">{row?.inFile || changedFromShipped(x) ? "changed" : "built in"}</span> : <span className="cs-tag own">yours</span>}
                     </button>
                   </li>
                 );
               })}
               {filtered.length === 0 && <li className="muted cs-none">No type matches.</li>}
             </ul>
-            <label className="cs-new">
-              <span className="muted">New from a template</span>
-              <select value="" aria-label="New from a template" onChange={(e) => void addFrom(e.target.value)}>
-                <option value="">Pick one…</option>
-                {st.templates.map((x) => (
-                  <option key={x.name} value={x.name}>
-                    {TEMPLATE_WORDS[x.name] ?? x.display}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="row cs-list-actions">
+            <select className="cs-new" value="" aria-label="New from a template" onChange={(e) => void addFrom(e.target.value)}>
+              <option value="">New from a template…</option>
+              {st.templates.map((x) => (
+                <option key={x.name} value={x.name}>
+                  {TEMPLATE_WORDS[x.name] ?? x.display}
+                </option>
+              ))}
+            </select>
+            <div className="cs-list-actions">
               <button type="button" className="btn small" disabled={!t} onClick={() => t && void addFrom(t.name)}>
                 Duplicate
               </button>
@@ -217,12 +226,12 @@ export default function Creatures() {
                 {t && isBuiltin(t.name) ? "Put back" : "Remove"}
               </button>
             </div>
-            <p className="small-note muted">
-              {types.length} of {st.limits.maxTypes} types. <Info text="The game always has the seven built-in types; you can change them or make your own from them (up to 32 in all). A mode spawns a type by its name." />
+            <p className="cs-note">
+              {types.length} of {st.limits.maxTypes} types <Info text={`The game always has the ${builtinNames.length} built-in types; change them or make your own from them, ${st.limits.maxTypes} in all. A mode spawns a type by its name.`} />
             </p>
-          </div>
+          </aside>
 
-          <div className="panel cs-main">
+          <section className="panel cs-main" aria-label="Edit the type">
             {t ? (
               <>
                 <h3>{t.display || t.name}</h3>
@@ -235,43 +244,57 @@ export default function Creatures() {
                   limits={st.limits}
                   problems={problems.filter((p) => p.at === t.name)}
                   checked={checked}
+                  look={look.data}
                   onChange={(c) => setTypes(types.map((x, j) => (j === sel ? c : x)))}
                 />
               </>
             ) : (
               <Empty plain title="No creature types" text="Make one from a template." />
             )}
-          </div>
+          </section>
+
+          <aside className="panel cs-side" aria-label="Preview">
+            {t && look.data?.model ? (
+              <Suspense fallback={<p className="muted"><span className="spinner" aria-hidden="true" /> Loading the 3D view…</p>}>
+                <CreaturePreview look={look.data} skin={t.skin} glow={t.glow} fallbackGlow={t.fallback_glow} scale={t.scale} />
+              </Suspense>
+            ) : look.isFetching ? (
+              <p className="muted"><span className="spinner" aria-hidden="true" /> Looking for the model…</p>
+            ) : (
+              <p className="muted cs-nomodel">{look.data?.modelError ?? "None of its models are in your game, so there's nothing to show."}</p>
+            )}
+            {first && (
+              <p className="cs-note">
+                <span className={`cs-kind ${first.kind}`}>{KIND_WORDS[first.kind]}</span> {first.path.replace(/^models\//, "")}
+              </p>
+            )}
+            <div className="cs-try">
+              <h4>Try it in your game</h4>
+              <p className="cs-note">{liveText}</p>
+              <BusyButton className="btn" busy={working === "Spawning…"} disabled={!!working || !canSpawn} label="Spawn one in front of me" busyLabel="Spawning…" onClick={spawn} />
+              <label className="tl-check" title="It stands still so you can look at it (it still fights back)">
+                <input type="checkbox" checked={calm} onChange={(e) => setCalm(e.target.checked)} /> Standing still
+              </label>
+              {spawnWhy && spawnWhy !== liveText && <p className="cs-note">{spawnWhy}</p>}
+            </div>
+          </aside>
         </div>
       )}
 
       {tab === "types" && (
-        <div className="panel cs-save">
-          <div className="row between cs-save-row">
-            <div>
-              <strong>{dirty ? "You have changes to save" : "Nothing new to save"}</strong>
-              <p className="muted">{errors.length > 0 ? `${errors.length} thing${errors.length === 1 ? "" : "s"} to fix before saving` : "Goes into creatures.ini in your game"}</p>
-              <p className="muted cs-live">{liveText}</p>
-            </div>
-            <div className="row">
-              {dirty && (
-                <button type="button" className="btn" disabled={!!working} onClick={() => reset(st)}>
-                  Undo changes
-                </button>
-              )}
-              <BusyButton className="btn primary" busy={working === "Saving…"} disabled={!dirty || !!working || errors.length > 0} label="Save" busyLabel="Saving…" onClick={save} />
-              <BusyButton className="btn" busy={working === "Applying…"} disabled={!!working || errors.length > 0 || !live.data?.creatures} label={dirty ? "Save and apply to game" : "Apply to game"} busyLabel="Applying…" onClick={apply} />
-              <span className="row cs-spawn" title={spawnWhy || undefined}>
-                <BusyButton className="btn" busy={working === "Spawning…"} disabled={!!working || !canSpawn} label="Spawn one in front of me" busyLabel="Spawning…" onClick={spawn} />
-                <label className="tl-check" title="It stands still so you can look at it (it still fights back)">
-                  <input type="checkbox" checked={calm} onChange={(e) => setCalm(e.target.checked)} /> Standing still
-                </label>
-              </span>
-            </div>
-          </div>
-          {errors.length > 0 && (
+        <ActionBar
+          dirty={dirty}
+          errors={errors.length}
+          working={working}
+          where={errors.length > 0 && errors[0] ? `${errors[0].at ? errors[0].at + ": " : ""}${errors[0].text}` : `creatures.ini for ${st.game}`}
+          save={{ onClick: save }}
+          undo={() => reset(st)}
+          actions={[{ label: dirty ? "Save and apply to game" : "Apply to game", busyLabel: "Applying…", onClick: apply, disabled: errors.length > 0 || !live.data?.creatures, title: live.data?.creatures ? undefined : liveText }]}
+          reset={{ tool: "creatures", match: ["addons/amxmodx/configs/gamemodes/creatures.ini"] }}
+        >
+          {errors.length > 1 && (
             <ul className="cs-problems">
-              {errors.slice(0, 5).map((p, i) => (
+              {errors.slice(1, 4).map((p, i) => (
                 <li key={i} className="cs-error">
                   {p.at && <strong>{p.at}: </strong>}
                   {p.text}
@@ -279,7 +302,7 @@ export default function Creatures() {
               ))}
             </ul>
           )}
-        </div>
+        </ActionBar>
       )}
     </div>
   );

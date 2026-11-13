@@ -4,8 +4,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useNav, useDirty } from "../../../store";
-import { Banner, BusyButton, Info, LoadError, useToast } from "../../../ui";
+import { Banner, Info, LoadError, useToast } from "../../../ui";
 import { Loading, Row, Rows } from "../common";
+import { ActionBar } from "../common/ActionBar";
 import { errorText, useBusy } from "../common/api";
 import { saveWaves, wavesStatus, type WaveRow, type WaveSet } from "./creaturesApi";
 
@@ -183,7 +184,7 @@ export function WavesTab() {
                 {cols.map((t) => (
                   <input key={t} className="search cs-numbox" role="cell" type="number" min={0} max={1000} value={weight(r, t)} aria-label={`${rowLabel(r)}: ${t}`} onChange={(e) => setWeight(i, t, Math.max(0, Math.min(1000, Math.round(Number(e.target.value) || 0))))} />
                 ))}
-                <span className="cs-bar" role="cell" title={cols.map((t) => `${t} ${Math.round((weight(r, t) / total) * 100)}%`).join(", ")}>
+                <span className="cs-mixbar" role="cell" title={cols.map((t) => `${t} ${Math.round((weight(r, t) / total) * 100)}%`).join(", ")}>
                   {cols.map((t, k) => (weight(r, t) > 0 ? <span key={t} style={{ flexGrow: weight(r, t), background: COLOURS[k % COLOURS.length] }} /> : null))}
                 </span>
                 <button type="button" className="btn small" aria-label={`Remove ${rowLabel(r)}`} disabled={w.rows.length <= 1} onClick={() => setW({ ...w, rows: w.rows.filter((_, j) => j !== i) })}>
@@ -233,22 +234,16 @@ export function WavesTab() {
         </button>
       </div>
 
-      <div className="panel cs-save">
-        <div className="row between cs-save-row">
-          <div>
-            <strong>{dirty ? "You have changes to save" : saved ? "Saved" : "Not saved yet: the mode uses its own mix"}</strong>
-            <p className="muted">In {st.data.file}</p>
-          </div>
-          <div className="row">
-            {dirty && (
-              <button type="button" className="btn" disabled={!!working} onClick={() => setW(clone(saved ?? st.data.defaults[w.mode] ?? w))}>
-                Undo changes
-              </button>
-            )}
-            <BusyButton className="btn primary" busy={working === "Saving…"} disabled={!!working || problems.length > 0 || (!dirty && !!saved) || !w.mode} label="Save waves" busyLabel="Saving…" onClick={save} />
-          </div>
-        </div>
-      </div>
+      <ActionBar
+        dirty={dirty || (!saved && !!w.mode)}
+        errors={problems.length}
+        working={working}
+        status={!dirty && !saved ? <span className="tl-ab-state">Not saved yet: the mode uses its own mix</span> : undefined}
+        where={problems.length ? problems[0] : st.data.file}
+        save={{ label: "Save waves", onClick: save, disabled: problems.length > 0 || (!dirty && !!saved) || !w.mode }}
+        undo={dirty ? () => setW(clone(saved ?? st.data.defaults[w.mode] ?? w)) : null}
+        reset={{ tool: "creatures", match: ["addons/amxmodx/configs/gamemodes/waves.ini"] }}
+      />
     </div>
   );
 }

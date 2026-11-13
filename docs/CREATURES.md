@@ -162,13 +162,14 @@ Built-in types:
 
 | Type | Category | Notes |
 |---|---|---|
-| `zombie` | infected | 100 hp, 230/80 speed, melee 20, wanders |
-| `runner` | infected | 60 hp, 300 speed, melee 10 fast, chases (horde) |
-| `brute` | infected | 450 hp, slow, melee 40, scale 1.25, red tint |
+| `zombie` | infected | 100 hp, 230/80 speed, melee 20, wanders; `zombie.mdl` (walk only: runs by playing it faster) |
+| `runner` | infected | 60 hp, 300 speed, melee 10 fast, chases (horde); `houndeye.mdl` (a real run) |
+| `brute` | alien | 450 hp, slow, melee 40; `agrunt.mdl` (alien grunt) |
 | `spitter` | alien | ranged 8 @ 900, flees at 30 %; `bullsquid.mdl` |
 | `hound` | wildlife | territorial (aggression 0.35, guard 350), flees at 35 %; `houndeye.mdl` |
 | `turret` | mechanical | doesn't move, ranged 6 × 4/s @ 1200, all-round sight; `sentry.mdl` |
-| `boss` | boss | 3000 hp, melee 60, chases, scale 1.6, purple tint |
+| `boss` | boss | 3000 hp, melee 60, chases; `garg.mdl` at scale 0.7 (the hull stays player-sized) |
+| `headcrab` | infected | 25 hp, small (36 tall), melee 8 by leaping (`anim_attack jump`); `headcrab.mdl` |
 
 **Models.** Each type lists Half-Life's own model first (`valve/models/zombie.mdl` and the like, from the shared depot most CS
 installs have; the engine finds `valve/` files from `cstrike`). If that file is missing, `models/hostage.mdl` stands in with a
