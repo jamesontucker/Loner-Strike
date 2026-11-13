@@ -1674,6 +1674,56 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    #[tokio::test]
+    async fn routes_answer_in_plain_words() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use std::sync::{Arc, RwLock};
+        use tower::ServiceExt;
+        let st: Shared = Arc::new(crate::server::AppState {
+            current: RwLock::new(None),
+            hosts: RwLock::new(vec!["127.0.0.1:8027".into()]),
+            lan_hosts: RwLock::new(vec![]),
+            token: RwLock::new("testtoken0123456789".into()),
+            app: OnceLock::new(),
+            phone: Mutex::new(crate::app_api::Phone::default()),
+        });
+        let call = |method: &str, uri: &str, panel: bool, body: &str| {
+            let mut r = Request::builder().method(method).uri(uri).header("host", "127.0.0.1:8027").header("content-type", "application/json");
+            if panel {
+                r = r.header("x-panel", "1");
+            }
+            let req = r.body(Body::from(body.to_string())).unwrap();
+            let app = routes().with_state(st.clone());
+            async move {
+                let res = app.oneshot(req).await.unwrap();
+                let s = res.status();
+                let b = axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap();
+                (s, serde_json::from_slice::<Value>(&b).unwrap_or(Value::Null))
+            }
+        };
+        let (s, v) = call("GET", "/api/tools/compile/status", false, "").await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["version"], SDHLT_VERSION);
+        assert_eq!(v["bytes"], SDHLT_BYTES);
+        assert_eq!(v["canRun"], false, "no game set up");
+        // POSTs need the panel header
+        let (s, _) = call("POST", "/api/tools/compile/start", false, "{}").await;
+        assert_eq!(s, StatusCode::FORBIDDEN);
+        let (s, _) = call("POST", "/api/tools/compile/setup", false, "").await;
+        assert_eq!(s, StatusCode::FORBIDDEN);
+        // nothing to stop; a compile without SDHLT or a map says why
+        let (_, v) = call("POST", "/api/tools/compile/cancel", true, "").await;
+        assert!(v["error"].as_str().is_some());
+        let (_, v) = call("POST", "/api/tools/compile/start", true, r#"{"preset":"fast"}"#).await;
+        assert!(v["error"].as_str().is_some_and(|e| !e.is_empty()), "{v}");
+        let (s, _) = call("POST", "/api/tools/compile/start", true, r#"{"preset":"ultra"}"#).await;
+        assert!(s.is_client_error());
+        let (s, v) = call("GET", "/api/tools/compile/progress?from=0", false, "").await;
+        assert_eq!(s, StatusCode::OK);
+        assert!(v.get("job").is_some());
+    }
+
     /// Opt-in: a real compile of the editor's starter room. Needs the game and SDHLT:
     /// `LS_TEST_GAME=<Half-Life folder> LS_TEST_SDHLT=<sdhlt-v1.3.1.zip> cargo test real_compile -- --ignored --nocapture`.
     /// On a Mac the game must be in a CrossOver bottle (the compile runs there).
