@@ -51,7 +51,7 @@ sleep 2
 if python3 -c 'import urllib.request; [urllib.request.urlopen("http://127.0.0.1:8100" + p, timeout=5) for p in ("/servers", "/community/health")]'; then
   echo "The server list and community creations are running on 127.0.0.1:8100."
   if systemctl start lonerstrike-list-backup.service; then
-    echo "Backup: $(journalctl -u lonerstrike-list-backup -n 1 --no-pager -o cat) Daily at about 04:30; kept 14 days."
+    echo "Backup: $(journalctl -u lonerstrike-list-backup -n 20 --no-pager -o cat | grep -E "^(Backed up|Nothing)" | tail -2 | tr "\n" " ") Daily at about 04:30; kept 14 days."
   else
     echo "The backup didn't run: $(journalctl -u lonerstrike-list-backup -n 3 --no-pager -o cat)"
     exit 1
