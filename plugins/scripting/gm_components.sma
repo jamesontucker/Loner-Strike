@@ -199,6 +199,8 @@ new g_slotOf[MAX_ENTS];
 new g_doorOf[MAX_ENTS];
 new g_pend[MAX_ENTS];
 new g_parseEnt;
+new bool:g_attractOn[MAX_COMP];
+new g_nattract;
 new Trie:g_pendKeys[MAX_ENTS];
 
 /* ---- players ---- */
@@ -1311,6 +1313,9 @@ stock round_begin()
 	g_roundStart = g_now;
 	g_brain = get_cvar_pointer("ls_mode_ver") != 0;
 	hint("reset");
+	for (new k = 0; k < MAX_COMP; k++)
+		g_attractOn[k] = false;
+	g_nattract = 0;
 	for (new s = 0; s < g_nslots; s++)
 	{
 		if (!g_ent[s] || !g_on[s])
@@ -2539,6 +2544,7 @@ stock tick_crate(s, bool:sec)
 			g_aux[s] = 1;
 			g_state[s] = CRATE_FULL;
 			tier_glow(ent, 5);
+			bots_to_crate(s);
 			smoke(g_org[s]);
 			fwd_drop(ent, 1, g_org[s]);
 			fire_targets(s, 0);
@@ -2558,6 +2564,31 @@ stock tick_crate(s, bool:sec)
 		b[2] += 900.0;
 		beam(0, a, b, 255, 60, 30, 11, 16, 200);
 	}
+}
+
+/* a landed supply crate: the two nearest bots go for it (others come anyway: it's attract-ed) */
+stock bots_to_crate(s)
+{
+	new near[2], Float:nd[2] = { 2500.0, 2500.0 }, Float:o[3];
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p) || !is_user_bot(p))
+			continue;
+		pev(p, pev_origin, o);
+		new Float:d = get_distance_f(o, g_org[s]);
+		if (d < nd[0])
+		{
+			nd[1] = nd[0]; near[1] = near[0];
+			nd[0] = d; near[0] = p;
+		}
+		else if (d < nd[1])
+		{
+			nd[1] = d; near[1] = p;
+		}
+	}
+	for (new i = 0; i < 2; i++)
+		if (near[i])
+			hint("goal %d loot %.0f %.0f %.0f %d 60 45 48", near[i], g_org[s][0], g_org[s][1], g_org[s][2], g_ent[s]);
 }
 
 /* ---- barricade ---- */
@@ -2672,6 +2703,10 @@ public fm_traceline_post(const Float:v1[3], const Float:v2[3], noMonsters, skip,
 		}
 	}
 	if (hit <= 0 || hit >= MAX_ENTS || g_traceDepth >= 4)
+		return FMRES_IGNORED;
+	/* only players' traces (their bullets, bots' sight) go through: a creature's claws don't
+	   (deeper layers are this hook's own carry-on traces) */
+	if (!(1 <= skip <= MaxClients) && !g_traceDepth)
 		return FMRES_IGNORED;
 	new s = g_slotOf[hit] ? g_slotOf[hit] - 1 : g_boardOf[hit] - 1;
 	if (s < 0 || g_kind[s] != K_BARRICADE || !g_seeThrough[s])
@@ -4031,6 +4066,28 @@ stock comp_stop(s)
  * Bots: ls_mode hints (docs/TOOLS-NOTES.md, W1/W2 interface)
  * ========================================================================= */
 
+/* the brain keeps 32 avoid/attract tags at most: loot hints stop at 26, leaving room for the rest */
+
+stock bool:attract_ok(s)
+{
+	if (g_attractOn[s])
+		return true;
+	if (g_nattract >= 26)
+		return false;
+	g_attractOn[s] = true;
+	g_nattract++;
+	return true;
+}
+
+stock attract_off(s)
+{
+	if (g_attractOn[s])
+	{
+		g_attractOn[s] = false;
+		g_nattract--;
+	}
+}
+
 stock hint(const fmt[], any:...)
 {
 	if (!get_pcvar_num(g_cBots))
@@ -4119,24 +4176,41 @@ stock hint_comp(s)
 		}
 		case K_WEAPON:
 		{
-			if (g_state[s] == 0)
+			if (g_state[s] == 0 && attract_ok(s))
 				hint("attract c%d %.0f %.0f %.0f 400 %d 0 0", ent, o[0], o[1], o[2], 20 + floatround(g_pf[s][W_TIER]) * 15);
-			else
+			else if (g_state[s] != 0)
+			{
+				attract_off(s);
 				hint("forget c%d", ent);
+			}
 		}
 		case K_LOOT:
 		{
-			if (g_state[s] == 0)
+			if (g_state[s] == 0 && attract_ok(s))
 				hint("attract c%d %.0f %.0f %.0f 500 %d 0 0", ent, o[0], o[1], o[2], 20 + floatround(g_pf[s][W_TIER]) * 20);
-			else
+			else if (g_state[s] != 0)
+			{
+				attract_off(s);
 				hint("forget c%d", ent);
+			}
 		}
 		case K_CRATE:
 		{
+			/* (a supply crate always gets one: it's worth more than any) */
 			if (g_state[s] == CRATE_FULL)
+			{
+				if (!g_attractOn[s])
+				{
+					g_attractOn[s] = true;
+					g_nattract++;
+				}
 				hint("attract c%d %.0f %.0f %.0f 1500 90 0 0", ent, o[0], o[1], o[2]);
+			}
 			else if (g_state[s] == CRATE_EMPTY)
+			{
+				attract_off(s);
 				hint("forget c%d", ent);
+			}
 		}
 		case K_BARRICADE:
 		{
@@ -4216,6 +4290,7 @@ stock hint_forget(s)
 	if (!g_ready || !g_ent[s])
 		return;
 	new ent = g_ent[s];
+	attract_off(s);
 	switch (g_kind[s])
 	{
 		case K_CAPTURE, K_EXTRACT, K_MEETING:
@@ -5643,8 +5718,13 @@ public n_zone_inside(plugin, params)
 	g_now = get_gametime();
 	if (ent)
 	{
-		new s = arg_slot(1, K_ZONE);
-		return s >= 0 && dist2d(o, g_va[s]) <= zone_radius_now(s);
+		/* (any component: a safe zone by its circle, anything else by its area) */
+		new s = slot_of(ent);
+		if (s < 0 || !g_ent[s])
+			return 0;
+		if (g_kind[s] != K_ZONE)
+			return inside(s, o);
+		return dist2d(o, g_va[s]) <= zone_radius_now(s);
 	}
 	for (new s = 0; s < g_nslots; s++)
 		if (g_ent[s] && g_kind[s] == K_ZONE && g_on[s] && dist2d(o, g_va[s]) > zone_radius_now(s))
