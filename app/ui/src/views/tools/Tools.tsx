@@ -13,6 +13,7 @@ import { TOOL_GROUPS, TOOLS } from "./registry";
 import { lastTool, rememberWhereYouAre } from "./common/address";
 import { Breadcrumbs, FocusButton, FocusPill, openAddress, useShell, useToolsShell } from "./common/shell";
 import { ToolKeys } from "./common/Shortcuts";
+import { ToolHistory } from "./common/History";
 import "./tools.css";
 import "./common/common.css";
 
@@ -65,6 +66,7 @@ export default function Tools({ maps }: { maps: MapInfo[] }) {
         <div className="section-title">
           <h2>{entry.label}</h2>
           <div className="section-actions">
+            <ToolHistory tool={entry.id} />
             <FocusButton />
           </div>
         </div>

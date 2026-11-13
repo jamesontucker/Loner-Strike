@@ -267,7 +267,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 // ---- toasts --------------------------------------------------------------
 type ToastAction = { label: string; run: () => void };
 type Toast = { id: number; text: string; error?: boolean; action?: ToastAction };
-type Push = (text: string, error?: boolean, action?: ToastAction) => void;
+/** `ms`: how long a toast with a button stays (without: until dismissed) */
+type Push = (text: string, error?: boolean, action?: ToastAction, ms?: number) => void;
 const ToastCtx = createContext<Push>(() => {});
 /** `toast("Saved")`, `toast("Couldn't save", true)`, or with a button:
  *  `toast("Couldn't load the maps.", true, { label: "Try again", run: reload })`. */
@@ -277,14 +278,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
   const push = useCallback<Push>(
-    (text, error, action) => {
+    (text, error, action, ms) => {
       // nothing to say (an empty reply from the game): no empty toast
       if (!String(text ?? "").trim()) return;
       const id = Date.now() + Math.random();
       // the same message twice in a row shows once
       setToasts((t) => [...t.filter((x) => x.text !== text), { id, text, error, action }]);
       // errors stay long enough to read (and until dismissed when there's something to do)
-      if (!action) setTimeout(() => dismiss(id), error ? 9000 : 2600);
+      if (!action || ms) setTimeout(() => dismiss(id), ms ?? (error ? 9000 : 2600));
     },
     [dismiss],
   );
@@ -293,6 +294,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const on = (e: Event) => push(String((e as CustomEvent).detail), true);
     window.addEventListener("ls-error", on);
     return () => window.removeEventListener("ls-error", on);
+  }, [push]);
+  // a save that kept backups (tools/common/api.ts offerUndo): "Undo" for 8 seconds
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ text: string; run: () => Promise<{ error?: string; message?: string }> }>).detail;
+      push(d.text, false, { label: "Undo", run: () => void d.run().then((r) => push(r.error ?? r.message ?? "Undone.", !!r.error)) }, 8000);
+    };
+    window.addEventListener("ls-undoable", on);
+    return () => window.removeEventListener("ls-undoable", on);
   }, [push]);
   return (
     <ToastCtx.Provider value={push}>

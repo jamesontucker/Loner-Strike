@@ -104,11 +104,33 @@ export async function post<T>(path: string, body: unknown = {}): Promise<T & Err
       body: JSON.stringify(body),
     });
     const v = await r.json().catch(() => null);
+    // the save kept backups (safety.rs): offer "Undo" for a few seconds
+    const undo = r.headers.get("x-ls-undo");
+    if (undo) offerUndo(undo);
     if (v && typeof v === "object") return v as T & Err;
     return { error: r.ok ? WENT_WRONG : r.status === 404 ? "This version of the app can't do that yet." : WENT_WRONG } as T & Err;
   } catch {
     return { error: NOT_REACHED } as T & Err;
   }
+}
+
+/** After a save that kept backups: a toast with "Undo" for a few seconds (ui.tsx ToastProvider
+ *  listens for ls-undoable). Undo puts every file that save changed back, then the open tool
+ *  starts over on what's on disk. `range` is the X-LS-Undo header: "<from>-<to>". */
+export function offerUndo(range: string) {
+  const m = /^(\d+)-(\d+)$/.exec(range);
+  if (!m) return;
+  const run = async (): Promise<{ error?: string; message?: string }> => {
+    const r = await post<{ message?: string }>("/api/safety/undo", { from: Number(m[1]), to: Number(m[2]) });
+    if (!r.error) {
+      // the open tool reads its files again (common/shell.tsx starts its page over)
+      const { useShell } = await import("./shell");
+      useShell.setState((s) => ({ n: s.n + 1 }));
+      window.dispatchEvent(new CustomEvent("ls-files-restored"));
+    }
+    return r;
+  };
+  window.dispatchEvent(new CustomEvent("ls-undoable", { detail: { text: "Undo that save?", run } }));
 }
 
 /** POST that throws ToolsError on {error} (for code that already uses try/catch). */

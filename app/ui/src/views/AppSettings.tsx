@@ -12,6 +12,7 @@ import type { Scan } from "./Setup";
 import { BackupSheet, RestoreSheet } from "./Backup";
 // AI agents (MCP): its own chunk, loaded when Settings opens
 const AgentSettings = lazy(() => import("./AgentSettings"));
+const BackupsDefaults = lazy(() => import("./BackupsDefaults"));
 
 const NO_GAME_TO_BACK_UP = "No game to back up: set up Counter-Strike on this computer first (a dedicated server is backed up from its own page).";
 
@@ -446,6 +447,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
         {backup === "game" && ownGame && <BackupSheet only={[`local:${ownGame}`]} onClose={() => setBackup(null)} />}
         {backup === "restore" && <RestoreAll onClose={() => setBackup(null)} onChanged={reloadApp} />}
       </section>
+
+      {ON_THIS_COMPUTER && <Suspense fallback={null}><BackupsDefaults /></Suspense>}
 
       <section>
         <SectionHead title="Storage" />
