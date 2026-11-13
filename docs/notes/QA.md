@@ -234,3 +234,15 @@ laststand.cfg and to mappresets.ini. Step 3: a shipped file changed (br.cfg), in
 **Machine note:** the data volume reached 100 % (206 MB free) during round 2: 31 GB under /private/tmp/claude-501 (all
 sessions), 13 GB of cargo target, many HLDS sims. QA deleted its own finished sims (QA4, QA5, QA7, QA8, QAfresh) and
 clones; QA1 is kept for re-tests.
+
+### (3) Re-tests as fixes land
+| Bug | Fix | Re-test (real) | Result |
+|---|---|---|---|
+| P4 #1 WAD beside the project not found | 05b4602 | regamedll_test_map project with regamedll_zedit.wad beside it, Fast compile from a fresh build of the tree (WAD not in any game folder) | **FIXED**: found, `-wadinclude regamedll_zedit.wad`, CSG ran (the map still leaks: P5 #1, geometry) |
+| P4 #2 empty WAD said as "not on this computer" | 05b4602 | aim_stadium with the 0-byte stgswad3.wad listed | **FIXED**: "These texture files can't be read: stgswad3.wad (it's empty (0 bytes))…" |
+| P4 #3 raw "Portal file … does not exist" | 05b4602 | carver1.jmf, Normal | **FIXED**: "The map has nothing inside it for the compiler to start from. Put a player spawn…" |
+| SDHLT download into a fresh app folder | – | dev server with a fresh app dir: `POST compile/setup` | PASS: downloaded from GitHub, checked, installed in 2 s |
+| P5 #1-#6 (RMF/JMF geometry, spawnflags, text, checks) | uncommitted work in rmf.rs/checks.rs at 00:10 | waiting for the commit | – |
+| X #1-#9, W1 #1-#7, W1 round 2 #1, Y | not landed yet | waiting | – |
+Note: a dev server run with a different HOME can't find the CrossOver bottle (steam::find_installs), so compiling says
+"Set up the game first"; the dev server's own temp app folder (LS_APP_DIR, new) is enough isolation.
