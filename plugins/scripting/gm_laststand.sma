@@ -38,7 +38,7 @@ new const TYPE_HP[] = { 100, 60, 450, 120, 3000 };
 new const TYPE_MONEY[] = { 100, 100, 250, 150, 1000 };
 new const CREATURE_PRECACHE[] = "zombie runner brute spitter boss";
 
-new g_cWaves, g_cDiff, g_cPrepare, g_cBreak, g_cRevive, g_cDrops, g_cCreatures, g_cDefenders, g_cWaveMoney;
+new g_cWaves, g_cDiff, g_cPrepare, g_cBreak, g_cRevive, g_cDrops, g_cCreatures, g_cDefenders, g_cWaveMoney, g_cWaitHuman;
 
 new g_phase;
 new g_wave;
@@ -91,6 +91,7 @@ public plugin_init()
 	g_cDrops = register_cvar("lst_drops", "2");
 	g_cDefenders = register_cvar("lst_defenders", "4");
 	g_cWaveMoney = register_cvar("lst_wave_money", "1000");
+	g_cWaitHuman = register_cvar("lst_wait_human", "1");
 
 	g_msgShake = get_user_msgid("ScreenShake");
 	g_msgRoundTime = get_user_msgid("RoundTime");
@@ -500,6 +501,32 @@ public tick()
 	if (g_phase == PH_IDLE || g_phase == PH_OVER || !ls_components_running())
 		return;
 	new Float:now = get_gametime();
+	/* lst_wait_human: bots alone don't play the stand; a person joining gets a fresh one */
+	new humans = 0;
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && !is_user_bot(p) && cs_get_user_team(p) == CS_TEAM_CT)
+			humans++;
+	if (get_pcvar_num(g_cWaitHuman) && humans == 0)
+	{
+		if (g_phase == PH_PREPARE)
+		{
+			g_phaseEnd = now + get_pcvar_float(g_cPrepare);
+			hud_wait();
+			return;
+		}
+		if (g_phase == PH_WAVE || g_phase == PH_BREAK)
+		{
+			/* everyone left mid-stand: start over, and wait */
+			g_phase = PH_OVER;
+			server_cmd("endround");
+			return;
+		}
+	}
+	/* a person who joined during the prepare time or a break plays straight away */
+	if (g_phase == PH_PREPARE || g_phase == PH_BREAK)
+		for (new p = 1; p <= MaxClients; p++)
+			if (is_user_connected(p) && !is_user_bot(p) && cs_get_user_team(p) == CS_TEAM_CT && !is_user_alive(p) && !g_down[p])
+				ExecuteHamB(Ham_CS_RoundRespawn, p);
 	if ((g_phase == PH_PREPARE || g_phase == PH_BREAK) && now >= g_phaseEnd)
 		start_wave(g_wave + 1);
 
@@ -631,6 +658,13 @@ stock hud()
 				ls_hud(p, LS_HUD_RIGHT, 1.1, "Barricade DOWN");
 		}
 	}
+}
+
+stock hud_wait()
+{
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && !is_user_bot(p))
+			ls_hud(p, LS_HUD_TOP, 1.1, "Last Stand starts when a player joins the Counter-Terrorists");
 }
 
 stock nearest_barricade(p)
