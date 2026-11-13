@@ -55,9 +55,33 @@ nulls), `LsCreatureOf(ent)`, `LsCreaturesExist()`, `LsCreatureSpawn(type, origin
   - Flee: when below `flee_hp`, or when passive (`aggression 0`) and someone comes close or hurts it. It picks the nav area
     that best puts distance between it and the threat, then comes back after a cooldown.
   - Retaliation: a hit always tells it where the shooter is.
-- **Animation.** Sequences by name from the type's `anim_*` keys. Otherwise by activity (ACT_IDLE/WALK/RUN/MELEE_ATTACK1/
-  SMALL_FLINCH/DIESIMPLE with fallbacks), which covers the HL models and `hostage.mdl`, then player-model names. Walk and run
-  play back scaled to the real speed.
+- **Animation.** Sequences come from the model's own table: the type's `anim_*` name first, then by activity (weighted
+  as the model asks), then player-model names. `ls_creature_debug 4` prints each choice.
+  - Idle, walk and run are resolved once per model, with their ground speeds. A model without a run (the HL zombie)
+    plays its walk faster instead.
+  - Walk and run play back at the real speed ÷ the sequence's ground speed (0.3–4×), so feet match the ground. There
+    is a small margin before switching between idle and moving.
+  - Attacks: melee uses ACT_MELEE_ATTACK1/2. Ranged types use ACT_RANGE_ATTACK1 first, which is the bullsquid's spit
+    `range`, not its tail `whip`.
+  - A swing plays once, from frame 0, sped up to fit the attack rate (1–3×). The creature stands still for it: no
+    sliding at the target mid-swing. A target stepping well out of reach breaks the swing off.
+  - A flinch plays once and holds the creature still, at most once every 2 s.
+  - Death plays once and holds its last frame.
+- **Crowds.** Creatures pass through each other: `pfnShouldCollide` returns 0 only for a pair of `ls_creature`s, and
+  always 1 when no creature exists, so stock behaviour is untouched.
+  - Before this, one creature stopped in a doorway (a spitter shooting from the B doors) jammed everyone behind it.
+    Two spawned close together could end up inside each other with neither able to move.
+  - The personal-space push (40 units) still keeps them visually apart.
+  - A spawn spot inside a player or a wall moves to the nearest free spot within 128 units that it can walk to.
+- **Hulls.** Never wider than a player (32). The engine moves a monster with the player hull that fits its size, and
+  anything over 36 wide gets the 64×64×64 "large" hull. That hull doesn't fit through doors the nav mesh (made for
+  players) leads through, which is how the bullsquid jammed. Wider hulls in the file are narrowed with a console note.
+- **Stuck watch** (once a second, while it is trying to go somewhere and isn't swinging):
+  - 2 s without 24 units of headway: hop and shove sideways.
+  - 4 s: a fresh path and a shove backwards.
+  - 7 s, then every 4 s: back to the newest breadcrumb (a spot it walked through lately, recorded every ~100 units)
+    that is free and that nobody can see.
+  - Past 15 s with no usable breadcrumb: back to its spawn spot, again only if nobody can see it go or arrive.
 - **Death.** The death animation holds its last frame and the body stays `corpse_time` seconds. A creature from a command is
   then removed. One placed in the map (or `persist 1`) hides until its `respawn` or the next round. Map-placed creatures reset
   every round (`FCAP_MUST_RESET`); command-spawned ones are released at round restart (`FCAP_MUST_RELEASE`).
@@ -245,3 +269,172 @@ That only makes sense after the MonsterMod spike (§6.3) confirms it runs under 
 - Bot side: W2's `@creatures` and the aim model on entity targets (`gm_humanbots`).
 - **Testing**: the code compiles (syntax-checked with g++ 12; CI builds win32/linux32) but hasn't been run in game yet. Check
   movement on stock maps with and without a nav mesh, HL model animations by activity, and the precache warnings.
+
+## 7b. Measured: crowds, stuck and animations (2026-11-12)
+
+Sim copies of the playtest server (`~/loner-strike-sim/creatures/`: `ls_crec.amxx` records every creature 4×/s,
+`crec.py` and `reach.py` read the recordings, `pathrun.sh` and `doorway.sh` are the tests).
+
+- **Cause of the playtest jam.** The spitter's 48×48×40 hull put it on the engine's 64-unit hull. It sat jumping in
+  place for 25.6 s near T spawn (-424 -232) and couldn't pass dust2's doors. Creatures also collided with each other,
+  so one stopped in a choke held the rest, and two spawned close together could end up inside each other.
+- **Pathing benchmark** (de_dust2 Last Stand, wave 1 zombies, defenders frozen and not shooting, so only creature
+  movement counts; ~7 min each):
+
+| | stuck (no headway 2.5 s+, not at a barricade or a player) | longest | reached the base | T-spawn lane median / p90 | B lane median / p90 |
+|---|---|---|---|---|---|
+| before (ls-next r43348308295) | 2.5 % of alive time (62 s) | 36.2 s | 53/54 | 16.5 / 19.5 s | 21.5 / 24.0 s |
+| after (ls-creatures r43361583332) | 0.1 % (2 s) | 1.1 s | 36/36 | 16.5 / 21.3 s | 22.0 / 26.4 s |
+
+- **Doorway test** (`doorway.sh`: a spitter in the B double doors, two zombies right behind it). Before: one zombie never
+  left its spawn spot (20 s+, jammed) and the spitter attacked with its tail-whip sequence. After: both zombies were
+  past the spitter within ~2 s and at the barricade; the spitter spits with `range`.
+- **Swings.** Before: zombies moved at a median 19–24 u/s mid-swing, and 20–27 % of swing samples were faster than
+  60–100 u/s (the "sliding at you in a superman pose"). After: median 13 u/s. The samples still over 60 are almost all
+  the swing's first frame, where the 0.25 s sample window still holds the run-up; about 3 % are later in the swing.
+- **Walk/run feet vs ground:** about 10–16 % off at the median, before and after. The HL zombie has only a walk (72
+  u/s), played at up to 4×.
+
+## 8. Model sequence tables (for `anim_*` keys)
+
+The sequences the built-in types' models have: index, name, activity (weight when it's above 1), fps, frames, whether it
+loops, and ground speed (units/s at framerate 1). `ls_creature` picks by activity, so a row without one is only reachable
+by name. `sentry.mdl` has no activities, so the turret names its sequences (`spin`, `fire`, `die`). Dumped with
+`~/loner-strike-sim/creatures/mdlseq.py` from `valve/models` and `cstrike/models`.
+
+**zombie.mdl** (44 sequences; only those with an activity, plus walk/run names)
+
+| # | name | activity | fps | frames | loops | ground speed |
+|---|---|---|---|---|---|---|
+| 0 | idle1 | IDLE (w 4) | 15 | 31 | yes | 0 |
+| 1 | turnleft | TURN_LEFT | 20 | 16 | no | 0 |
+| 2 | turnright | TURN_RIGHT | 20 | 16 | no | 0 |
+| 3 | flinchsmall | SMALL_FLINCH (w 5) | 22 | 7 | no | 0 |
+| 4 | flinch | SMALL_FLINCH | 22 | 21 | no | 0 |
+| 5 | bigflinch | BIG_FLINCH | 20 | 31 | no | 0 |
+| 7 | falling | FALL | 26 | 21 | yes | 0 |
+| 8 | attack1 | MELEE_ATTACK1 (w 5) | 15 | 36 | no | 0 |
+| 9 | attack2 | MELEE_ATTACK1 | 15 | 21 | no | 0 |
+| 10 | walk | WALK | 22 | 60 | yes | 72 |
+| 11 | laflinch | FLINCH_LEFTARM | 15 | 16 | no | 0 |
+| 12 | raflinch | FLINCH_RIGHTARM | 15 | 16 | no | 0 |
+| 13 | llflinch | FLINCH_LEFTLEG | 15 | 16 | no | 0 |
+| 14 | rlflinch | FLINCH_RIGHTLEG | 15 | 16 | no | 0 |
+| 15 | dieheadshot | DIE_HEADSHOT | 20 | 27 | no | 0 |
+| 16 | dieheadshot2 | DIE_GUTSHOT | 22 | 29 | no | 0 |
+| 17 | diesimple | DIESIMPLE | 20 | 21 | no | 0 |
+| 18 | diebackward | DIEBACKWARD | 18 | 31 | no | 0 |
+| 19 | dieforward | DIEFORWARD | 18 | 31 | no | 0 |
+
+**bullsquid.mdl** (24 sequences; only those with an activity, plus walk/run names)
+
+| # | name | activity | fps | frames | loops | ground speed |
+|---|---|---|---|---|---|---|
+| 0 | walk | WALK | 30 | 150 | yes | 51 |
+| 1 | run | RUN | 30 | 37 | yes | 299 |
+| 2 | suprisedhop | HOP | 42 | 41 | no | 0 |
+| 3 | flinchs | SMALL_FLINCH | 30 | 8 | no | 0 |
+| 4 | flinchb | BIG_FLINCH | 30 | 17 | no | 0 |
+| 5 | turnleft | TURN_LEFT | 30 | 21 | no | 0 |
+| 6 | turnright | TURN_RIGHT | 30 | 21 | no | 0 |
+| 7 | idle | IDLE | 30 | 151 | yes | 0 |
+| 8 | whip | MELEE_ATTACK1 | 30 | 55 | no | 0 |
+| 9 | bite | MELEE_ATTACK2 | 30 | 29 | no | 0 |
+| 10 | range | RANGE_ATTACK1 | 30 | 42 | no | 0 |
+| 11 | look | INSPECT_WALL | 20 | 116 | no | 0 |
+| 12 | seecrab | EXCITED | 30 | 101 | no | 0 |
+| 13 | eat | EAT | 30 | 101 | yes | 0 |
+| 14 | inspectdown | INSPECT_FLOOR | 30 | 201 | no | 0 |
+| 15 | sniff | SNIFF | 15 | 57 | no | 0 |
+| 16 | die | DIEFORWARD | 15 | 11 | no | 0 |
+| 17 | die1 | DIESIMPLE | 20 | 76 | no | 0 |
+
+**houndeye.mdl** (31 sequences; only those with an activity, plus walk/run names)
+
+| # | name | activity | fps | frames | loops | ground speed |
+|---|---|---|---|---|---|---|
+| 0 | idle1 | IDLE | 30 | 46 | no | 0 |
+| 1 | idle2 | IDLE (w 20) | 30 | 101 | yes | 0 |
+| 2 | idle3 | IDLE | 30 | 61 | no | 0 |
+| 3 | run | RUN (w 4) | 30 | 19 | yes | 410 |
+| 4 | run | RUN (w 2) | 30 | 19 | yes | 410 |
+| 5 | run | RUN | 30 | 19 | yes | 410 |
+| 6 | die | DIESIMPLE | 20 | 11 | no | 0 |
+| 7 | die1 | DIEFORWARD | 20 | 19 | no | 0 |
+| 8 | die2 | DIEBACKWARD (w 2) | 20 | 17 | no | 0 |
+| 9 | die3 | DIEBACKWARD | 20 | 17 | no | 0 |
+| 10 | attack | RANGE_ATTACK1 | 25 | 60 | no | 0 |
+| 11 | flinch_small | SMALL_FLINCH | 30 | 19 | no | 0 |
+| 12 | flinch_small2 | SMALL_FLINCH | 30 | 10 | no | 0 |
+| 13 | die_crumple | DIESIMPLE | 30 | 31 | no | 0 |
+| 15 | walk2 | WALK | 30 | 36 | yes | 33 |
+| 16 | leaderlook | GUARD | 30 | 121 | no | 0 |
+| 17 | sleep | CROUCHIDLE | 30 | 41 | yes | 0 |
+| 18 | gotosleep | CROUCH | 30 | 301 | no | 0 |
+| 19 | sleeptostand | STAND | 30 | 24 | no | 0 |
+| 20 | madidle | IDLE_ANGRY (w 2) | 30 | 31 | yes | 0 |
+| 21 | madidle2 | IDLE_ANGRY (w 3) | 37 | 46 | yes | 0 |
+| 22 | madidle3 | IDLE_ANGRY | 30 | 31 | yes | 0 |
+| 23 | inspect | INSPECT_WALL | 10 | 61 | no | 0 |
+| 24 | eat | EAT | 30 | 248 | no | 0 |
+| 25 | 180l | TURN_LEFT | 30 | 21 | yes | 0 |
+| 26 | 180r | TURN_RIGHT | 30 | 21 | yes | 0 |
+| 27 | jumpback | LEAP | 30 | 29 | no | 0 |
+| 28 | wakefast | HOP | 30 | 24 | no | 0 |
+
+**sentry.mdl** (6 sequences; only those with an activity, plus walk/run names)
+
+| # | name | activity | fps | frames | loops | ground speed |
+|---|---|---|---|---|---|---|
+| 0 | idle_off | 0 | 1 | 1 | no | 0 |
+| 1 | fire | 0 | 20 | 17 | yes | 0 |
+| 2 | spin | 0 | 20 | 17 | yes | 0 |
+| 3 | deploy | 0 | 20 | 8 | no | 0 |
+| 4 | retire | 0 | 10 | 8 | no | 0 |
+| 5 | die | 0 | 15 | 21 | no | 0 |
+
+**hostage.mdl** (129 sequences; only those with an activity, plus walk/run names)
+
+| # | name | activity | fps | frames | loops | ground speed |
+|---|---|---|---|---|---|---|
+| 0 | walk | WALK | 20 | 17 | yes | 59 |
+| 1 | walk_scared | 63 | 20 | 17 | yes | 42 |
+| 2 | run | RUN | 25 | 19 | yes | 275 |
+| 3 | run1 | 64 | 30 | 18 | yes | 316 |
+| 4 | run2 | 64 | 30 | 18 | yes | 316 |
+| 5 | 180_Left | TURN_LEFT | 30 | 13 | yes | 0 |
+| 6 | 180_Right | TURN_RIGHT | 15 | 13 | yes | 0 |
+| 7 | flinch | BIG_FLINCH | 30 | 31 | no | 0 |
+| 8 | flinch1 | SMALL_FLINCH | 20 | 9 | no | 0 |
+| 9 | laflinch | FLINCH_LEFTARM | 15 | 9 | no | 0 |
+| 10 | raflinch | FLINCH_RIGHTARM | 15 | 9 | no | 0 |
+| 11 | llflinch | FLINCH_LEFTLEG | 15 | 16 | no | 0 |
+| 12 | rlflinch | FLINCH_RIGHTLEG | 15 | 16 | no | 0 |
+| 13 | idle1 | IDLE (w 50) | 18 | 31 | yes | 0 |
+| 14 | idle3 | IDLE | 15 | 21 | no | 0 |
+| 15 | idle4 | IDLE (w 2) | 15 | 21 | no | 0 |
+| 16 | idle5 | IDLE | 15 | 21 | no | 0 |
+| 17 | idle6 | IDLE | 15 | 21 | no | 0 |
+| 18 | idle7 | IDLE (w 10) | 10 | 31 | no | 0 |
+| 19 | crouchstand | STAND | 18 | 22 | no | 0 |
+| 20 | crouch_idle | CROUCHIDLE | 18 | 11 | yes | 0 |
+| 21 | crouch_idle2 | CROUCHIDLE | 18 | 16 | yes | 0 |
+| 22 | crouch_idle3 | CROUCHIDLE | 18 | 16 | yes | 0 |
+| 23 | crouch_idle3 | CROUCHIDLE | 18 | 16 | yes | 0 |
+| 24 | panic | EXCITED | 18 | 21 | no | 0 |
+| 25 | fear1 | 58 | 18 | 56 | no | 0 |
+| 26 | fear2 | 58 | 18 | 41 | no | 0 |
+| 27 | eye_wipe | 58 | 18 | 51 | no | 0 |
+| 28 | pull_needle | 33 | 15 | 36 | no | 0 |
+| 29 | return_needle | 34 | 15 | 21 | no | 0 |
+| 30 | give_shot | MELEE_ATTACK1 | 15 | 24 | no | 0 |
+| 31 | diesimple | DIESIMPLE | 24 | 20 | no | 0 |
+| 32 | dieforward | DIE_HEADSHOT | 20 | 31 | no | 0 |
+| 33 | dieforward1 | DIEFORWARD | 16 | 25 | no | 0 |
+| 34 | diebackward | DIEBACKWARD | 15 | 16 | no | 0 |
+| 35 | headshot | DIE_HEADSHOT (w 20) | 15 | 22 | no | 0 |
+| 36 | gutshot | DIE_GUTSHOT | 15 | 21 | no | 0 |
+| 43 | barnacled1 | 40 | 18 | 9 | no | 0 |
+| 44 | barnacled2 | 41 | 28 | 41 | yes | 0 |
+| 45 | barnacled3 | 42 | 18 | 36 | no | 0 |
+| 46 | barnacled4 | 43 | 15 | 36 | yes | 0 |
