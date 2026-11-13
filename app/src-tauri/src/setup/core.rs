@@ -133,6 +133,10 @@ pub fn plugins(rec: &mut Record, ctx: &Ctx) -> Result<bool, String> {
     for name in OUR_PLUGINS {
         rec.copy(&src.join(format!("{name}.sma")), &format!("addons/amxmodx/scripting/{name}.sma"))?;
     }
+    // our own includes (loner.inc, ls_components.inc): the modes' sources #include them
+    for inc in ["loner.inc", "ls_components.inc"] {
+        rec.copy(&src.join("include").join(inc), &format!("addons/amxmodx/scripting/include/{inc}"))?;
+    }
     // files the plugins use in the game itself (the bots' spray), at the same place there
     for (full, rel) in tree(&ctx.res.join("plugins").join("game")) {
         rec.copy(&full, &rel)?;
