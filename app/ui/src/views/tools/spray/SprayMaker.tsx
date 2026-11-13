@@ -40,6 +40,14 @@ const same = (a: Doc, b: Doc) => JSON.stringify(strip(a)) === JSON.stringify(str
 /** the doc without layer ids (they're new on every open) */
 const strip = (d: Doc) => ({ ...d, layers: d.layers.map(({ id: _id, ...l }) => l) });
 
+function BarIcon({ d }: { d: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}
+
 export function SprayMaker() {
   const toast = useToast();
   const ask = useConfirm();
@@ -306,20 +314,9 @@ export function SprayMaker() {
           <span className="sr-only">Design name</span>
           <input className="search" value={design.name} maxLength={60} aria-label="Design name" onChange={(e) => setDesign((d) => ({ ...d, name: e.target.value }))} />
         </label>
-        <div className="sc-bar-group" role="group" aria-label="Undo">
-          <button type="button" className="btn small" disabled={!h.canUndo} onClick={h.undo} title="Undo (Mod+Z)">
-            Undo
-          </button>
-          <button type="button" className="btn small" disabled={!h.canRedo} onClick={h.redo} title="Redo (Shift+Mod+Z)">
-            Redo
-          </button>
-        </div>
-        <label className="sc-snap" title="Snap to the middle, the edges and other layers while dragging (hold Alt to ignore)">
-          <Switch on={snap} onChange={setSnap} label="Snap" />
-          Snap
-        </label>
+        <span className="muted sc-bar-note">{design.id ? (dirty ? "Changed since saved" : "Saved") : "Not saved yet"}</span>
         <span className="push" />
-        <button type="button" className="btn small" onClick={() => setOpening(true)}>
+        <button type="button" className="btn" onClick={() => setOpening(true)}>
           Designs & templates…
         </button>
       </div>
@@ -332,29 +329,55 @@ export function SprayMaker() {
 
         <div className="sc-centre">
           <div className="panel sc-stage-panel">
+            <div className="sc-canvas-bar" role="toolbar" aria-label="Canvas">
+              <span className="sc-bar-group">
+                <button type="button" className="btn small sc-ibtn" disabled={!h.canUndo} onClick={h.undo} title="Undo (Mod+Z)" aria-label="Undo">
+                  <BarIcon d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" />
+                </button>
+                <button type="button" className="btn small sc-ibtn" disabled={!h.canRedo} onClick={h.redo} title="Redo (Shift+Mod+Z)" aria-label="Redo">
+                  <BarIcon d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3" />
+                </button>
+              </span>
+              <Segmented label="Shape" options={(Object.keys(SHAPES) as Shape[]).map((k) => [k, SHAPES[k].label] as const)} current={doc.shape} onPick={(v) => setDoc({ shape: v as Shape })} />
+              <span className="sc-bar-group">
+                <Segmented label="Background" values=",colour" labels="No background|Colour" current={doc.background ? "colour" : ""} onPick={(v) => setDoc({ background: v ? "#202020" : "" })} />
+                {doc.background && <input type="color" className="sc-colour" value={doc.background} aria-label="Background colour" title="Background colour" onChange={(e) => setDoc({ background: e.target.value }, "bg")} />}
+              </span>
+              <button type="button" className="btn small sc-snap" aria-pressed={snap} onClick={() => setSnap(!snap)} title="Snap to the middle, the edges and other layers while dragging (hold Alt to ignore)">
+                <BarIcon d="M4 4v6a8 8 0 0 0 16 0V4h-5v6a3 3 0 0 1-6 0V4zM4 7h5M15 7h5" />
+                Snap
+              </button>
+            </div>
             <Stage doc={doc} selected={selected} onSelect={setSelected} onBegin={h.begin} onLive={h.live} snap={snap} canvasRef={stageCanvas} />
             <p className="muted sc-hint">
-              Drag to move, a corner to resize, the dot to turn. Shift keeps a straight line; Alt turns snapping off. In game it's {gw}×{gh} pixels.
+              Drag to move, a corner to resize, the dot to turn. Shift: a straight line. Alt: no snapping. The game gets {gw}×{gh} pixels.
             </p>
           </div>
         </div>
 
         <div className="sc-right">
-          <Inspector doc={doc} layer={sel} onChange={(v, key) => sel && change(sel.id, v, key)} onDoc={setDoc} onReplacePicture={() => sel && pickPictures(sel.id)} onCentre={centre} onFit={fill} />
+          <Inspector layer={sel} onChange={(v, key) => sel && change(sel.id, v, key)} onReplacePicture={() => sel && pickPictures(sel.id)} onCentre={centre} onFit={fill} />
         </div>
       </div>
 
       <section className="panel sc-game" aria-label="In game">
         <div className="sc-game-head">
           <h3>In game</h3>
-          <Info text="This is the spray as the game will draw it: shrunk to the size the game takes, with its colours cut to the game's 255 (or one colour), on a wall at the wall's own scale. What's see-through in your design shows the wall." />
-          <span className="push" />
-          <Segmented label="Wall" options={WALLS.filter((w) => !badWalls.includes(w.id)).map((w) => [w.id, w.label] as const)} current={wallTex || wall === "plaster" ? wall : "plaster"} onPick={setWall} />
-          <Segmented label="Zoom" values="1 2 3" labels="1×|2×|3×" current={String(zoom)} onPick={(v) => setZoom(Number(v))} />
+          <Info text="The spray as the game will draw it: shrunk to the size the game takes, its colours cut to the game's 255 (or one colour), on a wall at the wall's own scale. Where your design has nothing, the wall shows." />
+          {preview && (
+            <span className="sc-facts">
+              <span className="tag">{preview.width}×{preview.height} in game</span>
+              <span className="tag">{preview.colour ? `${preview.colours} colours` : "one colour"}</span>
+            </span>
+          )}
         </div>
         <div className="sc-game-body">
-          <div className="sc-views">
-            <figure className="sc-view">
+          <div className="sc-preview">
+            <div className="sc-preview-bar">
+              <Segmented label="Wall" options={WALLS.filter((w) => !badWalls.includes(w.id)).map((w) => [w.id, w.label] as const)} current={wallTex || wall === "plaster" ? wall : "plaster"} onPick={setWall} />
+              <Segmented label="Zoom" values="1 2 3" labels="1×|2×|3×" current={String(zoom)} onPick={(v) => setZoom(Number(v))} />
+            </div>
+            <div className="sc-views">
               <div className={`spray-wall sc-wall${wallTex ? " tex" : ""}`} style={wallTex ? { backgroundImage: `url(${wallTex})`, backgroundSize: `${(wallW[wall] ?? 128) * zoom}px auto` } : undefined}>
                 {wallTex && <img src={wallTex} alt="" hidden onLoad={(e) => { const w = e.currentTarget.naturalWidth; setWallW((m) => ({ ...m, [wall]: w })); }} onError={() => setBadWalls((b) => [...b, wall])} />}
                 {preview ? (
@@ -364,17 +387,15 @@ export function SprayMaker() {
                 )}
                 {previewing && preview && <span className="spinner spray-busy" aria-label="Updating the preview" />}
               </div>
-              <figcaption className="muted">
-                {preview ? `${preview.width}×${preview.height} in game · ${preview.colour ? `${preview.colours} colours` : "one colour"}` : " "}
-              </figcaption>
-            </figure>
-            <figure className="sc-view small">
-              <div className="sc-actual">{preview && <img className="sc-pixel" src={preview.png} width={preview.width} height={preview.height} alt="Your spray at its real size" />}</div>
-              <figcaption className="muted">Real size</figcaption>
-            </figure>
+              <figure className="sc-view">
+                <div className="sc-actual">{preview && <img className="sc-pixel" src={preview.png} width={preview.width} height={preview.height} alt="Your spray at its real size" />}</div>
+                <figcaption className="muted">Real size</figcaption>
+              </figure>
+            </div>
           </div>
 
-          <div className="sc-options">
+          <div className="sc-options" role="group" aria-label="Spray settings">
+            <h4>Spray settings</h4>
             <div className="sc-field">
               <span className="sc-field-name">Size</span>
               <div className="sc-field-control">

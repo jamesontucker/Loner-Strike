@@ -27,7 +27,7 @@ type Base = {
   scale: number;
   flipX: boolean;
   flipY: boolean;
-  /** 0-1 */
+  /** 0-1: 1 = fully shown, 0 = hidden */
   opacity: number;
   hidden: boolean;
   locked: boolean;
@@ -76,7 +76,9 @@ export type ShapeLayer = Base & {
 export type Layer = ImageLayer | TextLayer | ShapeLayer;
 
 export type Doc = {
-  v: 1;
+  /** 2: layers carry `opacity` (1 = fully shown). A layer with a `seeThrough` value (0-1, the
+   *  opposite) is turned into opacity when read. */
+  v: 2;
   shape: Shape;
   /** "" = see-through, else "#rrggbb" */
   background: string;
@@ -120,7 +122,7 @@ export function imageLayer(doc: Doc, src: string, natW: number, natH: number, na
   return { ...base(doc, name.slice(0, 40) || "Picture"), kind: "image", src, w: natW * fit, h: natH * fit, keyOut: false, tint: "#ff7818", tintAmount: 0 };
 }
 
-export const blankDoc = (shape: Shape = "square"): Doc => ({ v: 1, shape, background: "", layers: [] });
+export const blankDoc = (shape: Shape = "square"): Doc => ({ v: 2, shape, background: "", layers: [] });
 
 /** The doc as read from a saved file, with anything missing or odd put right. */
 export function cleanDoc(raw: unknown): Doc {
@@ -136,7 +138,9 @@ export function cleanDoc(raw: unknown): Doc {
     b.y = num(b.y, SHAPES[shape].h / 2);
     b.rot = num(b.rot, 0);
     b.scale = Math.max(0.02, num(b.scale, 1));
-    b.opacity = Math.min(1, Math.max(0, num(b.opacity, 1)));
+    const seeThrough = (l as { seeThrough?: unknown }).seeThrough;
+    b.opacity = Math.min(1, Math.max(0, typeof seeThrough === "number" ? 1 - seeThrough : num(b.opacity, 1)));
+    delete (b as { seeThrough?: unknown }).seeThrough;
     if (b.kind === "image" && typeof b.src === "string" && b.src.startsWith("data:image/")) doc.layers.push({ ...imageLayer(doc, b.src, 1, 1, b.name), ...b });
     else if (b.kind === "text") doc.layers.push({ ...textLayer(doc), ...b, text: String(b.text ?? "") });
     else if (b.kind === "shape") doc.layers.push({ ...shapeLayer(doc, String(b.shape)), ...b });

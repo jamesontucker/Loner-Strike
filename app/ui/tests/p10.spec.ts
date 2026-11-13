@@ -51,7 +51,7 @@ test.describe("spray composer", () => {
     const layers = page.getByRole("listbox", { name: "Layers, top first" }).getByRole("option");
     await expect(layers).toHaveCount(2);
     await expect(page.locator(".sc-wall img.spray-img")).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator(".sc-view figcaption").first()).toContainText("96×96 in game");
+    await expect(page.locator(".sc-facts")).toContainText("96×96 in game");
 
     // add a sticker and words, pick the words by clicking the canvas
     await page.getByRole("button", { name: "Add a star sticker" }).click();
@@ -63,6 +63,18 @@ test.describe("spray composer", () => {
     await page.locator('.sc-page input[type="file"]').setInputFiles(await pngFile(page));
     await expect(layers).toHaveCount(5);
     await expect(page.getByRole("region", { name: "Picture settings" })).toBeVisible();
+
+    // opacity: 100% shows the layer fully (the default), and the sticker picker is a grid
+    await expect(page.getByRole("slider", { name: "Opacity" })).toHaveValue("1");
+    await expect(page.getByText("See-through", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Add a heart sticker" }).click();
+    const picker = page.getByRole("group", { name: "Sticker shape" });
+    const tops = await picker.getByRole("button").evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().top))).size);
+    const count = await picker.getByRole("button").count();
+    expect(count / tops, "stickers per row").toBeGreaterThanOrEqual(6);
+    await expect(page.getByRole("group", { name: "Place" })).toBeInViewport();
+    await page.keyboard.press("Delete");
+    await page.locator(".sc-layer").filter({ hasText: "red-square" }).click();
 
     // drag it: one undo step, Undo puts it back, Redo again
     await page.locator(".sc-stage").evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -97,7 +109,7 @@ test.describe("spray composer", () => {
 
     // one colour: the game's look follows
     await page.getByRole("group", { name: "Colours" }).getByRole("button", { name: "One colour" }).click();
-    await expect(page.locator(".sc-view figcaption").first()).toContainText("one colour", { timeout: 10_000 });
+    await expect(page.locator(".sc-facts")).toContainText("one colour", { timeout: 10_000 });
     await fits(page);
     await page.screenshot({ path: info.outputPath("spray-composer.png"), fullPage: true });
 

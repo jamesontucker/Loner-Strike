@@ -2,8 +2,8 @@
 // and the picked layer's settings (or the canvas's when nothing is picked).
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { Info, Segmented, Switch } from "../../../ui";
-import { FONTS, SHAPES, type Doc, type ImageLayer, type Layer, type Shape, type ShapeLayer, type TextLayer } from "./doc";
+import { Info, Switch } from "../../../ui";
+import { FONTS, type Doc, type ImageLayer, type Layer, type ShapeLayer, type TextLayer } from "./doc";
 import { STICKERS, type Sticker } from "./stickers";
 
 /** A sticker drawn small, for its button. */
@@ -127,10 +127,10 @@ export function LayerList({ doc, selected, onSelect, onChange, onMove, onDuplica
   );
 }
 
-/** One setting: its name on the left, the control on the right. */
-function Field({ name, children, info }: { name: ReactNode; children: ReactNode; info?: ReactNode }) {
+/** One setting: its name on the left, the control on the right (`wide`: the control under the name, full width). */
+function Field({ name, children, info, wide }: { name: ReactNode; children: ReactNode; info?: ReactNode; wide?: boolean }) {
   return (
-    <div className="sc-field">
+    <div className={`sc-field${wide ? " wide" : ""}`}>
       <span className="sc-field-name">
         {name}
         {info && <Info text={info} />}
@@ -140,54 +140,72 @@ function Field({ name, children, info }: { name: ReactNode; children: ReactNode;
   );
 }
 
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="sc-section" role="group" aria-label={title}>
+      <h4>{title}</h4>
+      {children}
+    </div>
+  );
+}
+
 function Slider({ value, min, max, step, onChange, label, unit = "", digits = 0, scale = 1 }: { value: number; min: number; max: number; step: number; onChange: (v: number) => void; label: string; unit?: string; digits?: number; scale?: number }) {
   return (
     <span className="sc-slider">
       <input type="range" min={min} max={max} step={step} value={value} aria-label={label} onChange={(e) => onChange(Number(e.target.value))} />
-      <input
-        type="number"
-        className="search"
-        aria-label={`${label} (number)`}
-        value={Number((value * scale).toFixed(digits))}
-        step={step * scale}
-        onChange={(e) => {
-          const v = Number(e.target.value) / scale;
-          if (Number.isFinite(v)) onChange(Math.min(max, Math.max(min, v)));
-        }}
-      />
-      {unit && <span className="muted">{unit}</span>}
+      <span className="sc-num">
+        <input
+          type="number"
+          className="search"
+          aria-label={`${label} (number)`}
+          value={Number((value * scale).toFixed(digits))}
+          step={step * scale}
+          onChange={(e) => {
+            const v = Number(e.target.value) / scale;
+            if (Number.isFinite(v)) onChange(Math.min(max, Math.max(min, v)));
+          }}
+        />
+        {unit && <span className="sc-unit">{unit}</span>}
+      </span>
     </span>
   );
 }
 
 function Colour({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
-  return <input type="color" className="sc-colour" value={value} aria-label={label} onChange={(e) => onChange(e.target.value)} />;
+  return <input type="color" className="sc-colour" value={value} aria-label={label} title={label} onChange={(e) => onChange(e.target.value)} />;
 }
 
-export function Inspector({ doc, layer, onChange, onDoc, onReplacePicture, onCentre, onFit }: {
-  doc: Doc;
+const FLIP_X = "M12 3v18M8 7L3 12l5 5zM16 7l5 5-5 5z";
+const FLIP_Y = "M3 12h18M7 8l5-5 5 5zM7 16l5 5 5-5z";
+const CENTRE = "M12 3v4M12 17v4M3 12h4M17 12h4M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z";
+const FILL = "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5";
+
+function IconButton({ d, label, pressed, onClick }: { d: string; label: string; pressed?: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className="btn small sc-ibtn" aria-label={label} title={label} aria-pressed={pressed} onClick={onClick}>
+      <Icon d={d} />
+    </button>
+  );
+}
+
+export function Inspector({ layer, onChange, onReplacePicture, onCentre, onFit }: {
   layer: Layer | null;
   /** `key`: changes with the same key close together are one undo step */
   onChange: (v: Partial<Layer>, key?: string) => void;
-  onDoc: (v: Partial<Doc>, key?: string) => void;
   onReplacePicture: () => void;
   onCentre: () => void;
   onFit: () => void;
 }) {
   if (!layer)
     return (
-      <section className="panel sc-inspector" aria-label="Canvas">
-        <h3>Canvas</h3>
-        <Field name="Shape" info="The game takes a spray up to 12288 pixels: 96×96 square, 128×96 wide or 96×128 tall at the largest size.">
-          <Segmented label="Shape" options={(Object.keys(SHAPES) as Shape[]).map((s) => [s, SHAPES[s].label] as const)} current={doc.shape} onPick={(v) => onDoc({ shape: v as Shape })} />
-        </Field>
-        <Field name="Background" info="See-through shows the wall around your design. A colour fills the whole spray.">
-          <span className="sc-inline">
-            <Segmented label="Background" values=",colour" labels="See-through|Colour" current={doc.background ? "colour" : ""} onPick={(v) => onDoc({ background: v ? "#202020" : "" })} />
-            {doc.background && <Colour label="Background colour" value={doc.background} onChange={(c) => onDoc({ background: c }, "bg")} />}
-          </span>
-        </Field>
-        <p className="muted sc-hint">Click a layer on the canvas or in the list to change it.</p>
+      <section className="panel sc-inspector" aria-label="Nothing picked">
+        <h3>Nothing picked</h3>
+        <p className="muted sc-hint">Click a layer on the canvas or in the list to change it: its size, turn, opacity and colours show here.</p>
+        <ul className="sc-tips">
+          <li>Add a picture, words or a sticker from the left, or start from a template (Designs & templates).</li>
+          <li>The canvas bar sets the spray's shape and background.</li>
+          <li>Below the canvas: how it looks in the game, and Install.</li>
+        </ul>
       </section>
     );
 
@@ -199,45 +217,41 @@ export function Inspector({ doc, layer, onChange, onDoc, onReplacePicture, onCen
         {layer.locked && <span className="tag">Locked</span>}
       </div>
       {layer.kind === "text" ? (
-        <TextFields l={layer} set={set} />
+        <Field name="Words" wide>
+          <textarea className="search sc-text" rows={2} maxLength={80} value={layer.text} aria-label="Words" onChange={(e) => set({ text: e.target.value, name: e.target.value.split("\n")[0].slice(0, 40) || "Words" } as Partial<TextLayer>, "text")} />
+        </Field>
       ) : (
         <Field name="Name">
           <input className="search" value={layer.name} maxLength={40} aria-label="Layer name" onChange={(e) => set({ name: e.target.value }, "name")} />
         </Field>
       )}
-      {layer.kind === "shape" && <ShapeFields l={layer} set={set} />}
-      {layer.kind === "image" && <ImageFields l={layer} set={set} onReplace={onReplacePicture} />}
 
-      <h4>Place</h4>
-      <Field name="Size">
-        <Slider label="Size" value={layer.scale} min={0.05} max={4} step={0.01} scale={100} unit="%" onChange={(v) => set({ scale: v }, "scale")} />
-      </Field>
-      <Field name="Turn">
-        <Slider label="Turn" value={layer.rot} min={-180} max={180} step={1} unit="°" onChange={(v) => set({ rot: v }, "rot")} />
-      </Field>
-      <Field name="See-through">
-        <Slider label="Opacity" value={layer.opacity} min={0} max={1} step={0.01} scale={100} unit="%" onChange={(v) => set({ opacity: v }, "opacity")} />
-      </Field>
-      <Field name="Flip">
-        <span className="sc-inline">
-          <button type="button" className="btn small" aria-pressed={layer.flipX} onClick={() => set({ flipX: !layer.flipX })}>
-            Left–right
-          </button>
-          <button type="button" className="btn small" aria-pressed={layer.flipY} onClick={() => set({ flipY: !layer.flipY })}>
-            Upside down
-          </button>
-        </span>
-      </Field>
-      <Field name="Line up">
-        <span className="sc-inline">
-          <button type="button" className="btn small" onClick={onCentre}>
-            Centre
-          </button>
-          <button type="button" className="btn small" onClick={onFit}>
-            Fill the canvas
-          </button>
-        </span>
-      </Field>
+      <Section title="Place">
+        <Field name="Size">
+          <Slider label="Size" value={layer.scale} min={0.05} max={4} step={0.01} scale={100} unit="%" onChange={(v) => set({ scale: v }, "scale")} />
+        </Field>
+        <Field name="Turn">
+          <Slider label="Turn" value={layer.rot} min={-180} max={180} step={1} unit="°" onChange={(v) => set({ rot: v }, "rot")} />
+        </Field>
+        <Field name="Opacity" info="100% shows the layer fully; lower lets what's under it show through; 0% hides it.">
+          <Slider label="Opacity" value={layer.opacity} min={0} max={1} step={0.01} scale={100} unit="%" onChange={(v) => set({ opacity: v }, "opacity")} />
+        </Field>
+        <Field name="Arrange">
+          <span className="sc-inline">
+            <IconButton d={FLIP_X} label="Flip left–right" pressed={layer.flipX} onClick={() => set({ flipX: !layer.flipX })} />
+            <IconButton d={FLIP_Y} label="Flip upside down" pressed={layer.flipY} onClick={() => set({ flipY: !layer.flipY })} />
+            <span className="sc-sep" aria-hidden="true" />
+            <IconButton d={CENTRE} label="Centre on the canvas" onClick={onCentre} />
+            <IconButton d={FILL} label="Fill the canvas" onClick={onFit} />
+          </span>
+        </Field>
+      </Section>
+
+      <Section title={layer.kind === "text" ? "Lettering" : layer.kind === "shape" ? "Sticker" : "Picture"}>
+        {layer.kind === "text" && <TextFields l={layer} set={set} />}
+        {layer.kind === "shape" && <ShapeFields l={layer} set={set} />}
+        {layer.kind === "image" && <ImageFields l={layer} set={set} onReplace={onReplacePicture} />}
+      </Section>
     </section>
   );
 }
@@ -245,17 +259,17 @@ export function Inspector({ doc, layer, onChange, onDoc, onReplacePicture, onCen
 function TextFields({ l, set }: { l: TextLayer; set: (v: Partial<TextLayer>, key?: string) => void }) {
   return (
     <>
-      <Field name="Words">
-        <textarea className="search sc-text" rows={2} maxLength={80} value={l.text} aria-label="Words" onChange={(e) => set({ text: e.target.value, name: e.target.value.split("\n")[0].slice(0, 40) || "Words" }, "text")} />
-      </Field>
       <Field name="Font">
-        <select className="search" value={l.font} aria-label="Font" onChange={(e) => set({ font: e.target.value })}>
-          {FONTS.map(([v, label]) => (
-            <option key={v} value={v}>
-              {label}
-            </option>
-          ))}
-        </select>
+        <span className="sc-inline sc-grow">
+          <select className="search" value={l.font} aria-label="Font" onChange={(e) => set({ font: e.target.value })}>
+            {FONTS.map(([v, label]) => (
+              <option key={v} value={v}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <Colour label="Words colour" value={l.colour} onChange={(c) => set({ colour: c }, "colour")} />
+        </span>
       </Field>
       <Field name="Style">
         <span className="sc-inline">
@@ -265,11 +279,10 @@ function TextFields({ l, set }: { l: TextLayer; set: (v: Partial<TextLayer>, key
           <button type="button" className="btn small" aria-pressed={l.italic} onClick={() => set({ italic: !l.italic })} style={{ fontStyle: "italic" }}>
             Italic
           </button>
-          <Colour label="Words colour" value={l.colour} onChange={(c) => set({ colour: c }, "colour")} />
         </span>
       </Field>
       <Field name="Outline">
-        <span className="sc-inline">
+        <span className="sc-inline sc-grow">
           <Slider label="Outline" value={l.outline} min={0} max={24} step={1} onChange={(v) => set({ outline: v }, "outline")} />
           <Colour label="Outline colour" value={l.outlineColour} onChange={(c) => set({ outlineColour: c }, "ocolour")} />
         </span>
@@ -285,13 +298,14 @@ function TextFields({ l, set }: { l: TextLayer; set: (v: Partial<TextLayer>, key
 }
 
 function ShapeFields({ l, set }: { l: ShapeLayer; set: (v: Partial<ShapeLayer>, key?: string) => void }) {
+  const current = STICKERS.find((s) => s.id === l.shape);
   return (
     <>
-      <Field name="Sticker">
-        <div className="sc-stickers small" role="group" aria-label="Sticker">
+      <Field name={<>Shape <span className="muted sc-current">{current?.label}</span></>} wide>
+        <div className="sc-stickers picker" role="group" aria-label="Sticker shape">
           {STICKERS.map((s) => (
             <button key={s.id} type="button" className="sc-sticker" aria-pressed={l.shape === s.id} title={s.label} aria-label={s.label} onClick={() => set({ shape: s.id, name: s.label, h: l.w * (s.aspect ?? 1) })}>
-              <StickerIcon s={s} size={20} />
+              <StickerIcon s={s} size={22} />
             </button>
           ))}
         </div>
@@ -300,16 +314,16 @@ function ShapeFields({ l, set }: { l: ShapeLayer; set: (v: Partial<ShapeLayer>, 
         <Colour label="Sticker colour" value={l.colour} onChange={(c) => set({ colour: c }, "colour")} />
       </Field>
       <Field name="Outline">
-        <span className="sc-inline">
+        <span className="sc-inline sc-grow">
           <Slider label="Outline" value={l.outline} min={0} max={24} step={1} onChange={(v) => set({ outline: v }, "outline")} />
           <Colour label="Outline colour" value={l.outlineColour} onChange={(c) => set({ outlineColour: c }, "ocolour")} />
         </span>
       </Field>
-      <Field name="Stretch" info="Width and height of the sticker before its size: make a circle an oval, a banner longer.">
-        <span className="sc-stack">
-          <Slider label="Width" value={l.w} min={10} max={1024} step={1} onChange={(v) => set({ w: v }, "w")} />
-          <Slider label="Height" value={l.h} min={10} max={1024} step={1} onChange={(v) => set({ h: v }, "h")} />
-        </span>
+      <Field name="Width" info="Stretch the sticker before its size: make a circle an oval, a banner longer.">
+        <Slider label="Width" value={l.w} min={10} max={1024} step={1} onChange={(v) => set({ w: v }, "w")} />
+      </Field>
+      <Field name="Height">
+        <Slider label="Height" value={l.h} min={10} max={1024} step={1} onChange={(v) => set({ h: v }, "h")} />
       </Field>
     </>
   );
@@ -323,11 +337,11 @@ function ImageFields({ l, set, onReplace }: { l: ImageLayer; set: (v: Partial<Im
           Replace…
         </button>
       </Field>
-      <Field name="Clear the background" info="Makes the colour in the picture's top-left corner, and colours close to it, see-through. For a logo on a plain background.">
-        <Switch on={l.keyOut} onChange={(v) => set({ keyOut: v })} label="Clear the background" />
+      <Field name="Clear its background" info="Makes the colour in the picture's top-left corner, and colours close to it, transparent. For a logo on a plain background.">
+        <Switch on={l.keyOut} onChange={(v) => set({ keyOut: v })} label="Clear its background" />
       </Field>
       <Field name="Colour it">
-        <span className="sc-inline">
+        <span className="sc-inline sc-grow">
           <Slider label="Colour it" value={l.tintAmount} min={0} max={1} step={0.01} scale={100} unit="%" onChange={(v) => set({ tintAmount: v }, "tint")} />
           <Colour label="Colour" value={l.tint} onChange={(c) => set({ tint: c }, "tintc")} />
         </span>
