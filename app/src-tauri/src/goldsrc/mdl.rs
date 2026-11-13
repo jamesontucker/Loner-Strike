@@ -315,6 +315,7 @@ impl Model {
     }
 
     /// Which model each body part shows for a body number (the engine's `body / base % n`).
+    #[allow(dead_code)] // the page does this itself; kept as the reference
     pub fn body_choice(&self, body: u32) -> Vec<usize> {
         self.bodyparts.iter().map(|p| if p.models.is_empty() { 0 } else { ((body / p.base.max(1)) as usize) % p.models.len() }).collect()
     }
