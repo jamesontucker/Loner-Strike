@@ -11,6 +11,7 @@ pub mod mapinfo;
 pub mod overlays;
 pub mod spray;
 pub mod replay;
+pub mod navfix;
 pub mod health;
 pub mod editor;
 pub mod doctor;
@@ -286,6 +287,7 @@ pub fn local_routes() -> Router<Shared> {
         .route("/api/tools/map/:name/entities", get(api_entities))
         .merge(overlays::routes())
         .merge(spray::routes())
+        .merge(navfix::routes())
         .merge(health::routes())
         .merge(editor::routes())
         .merge(doctor::routes())
