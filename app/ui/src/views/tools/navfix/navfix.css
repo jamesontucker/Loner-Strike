@@ -9,17 +9,44 @@
 .navfix-box summary { cursor: pointer; font-size: 14px; color: var(--bone-dim); padding: 2px 0; }
 .navfix-grid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 4px 6px; align-items: center; font-size: 13px; margin: 6px 0; }
 .navfix-grid input { width: 100%; min-width: 0; }
-.navfix-problems { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.navfix-problem { display: grid; gap: 4px; padding: 6px 8px; border-left: 3px solid var(--signal); background: var(--panel-2); border-radius: 2px; }
-.navfix-problem.navfix-unreachable { border-left-color: #e2574c; }
-.navfix-problem.navfix-trap { border-left-color: #e8a23c; }
-.navfix-problem.navfix-falls { border-left-color: #d9c75a; }
-.navfix-problem strong { font-size: 14px; }
-.navfix-problem .row { gap: 6px; }
-.navfix-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 3px 0 8px; vertical-align: -1px; }
-.navfix-key i:first-child { margin-left: 0; }
-.navfix-key .k-ok { background: #6fc2b0; }
-.navfix-key .k-never { background: #e2574c; }
-.navfix-key .k-trap { background: #e8a23c; }
-.navfix-key .k-falls { background: #d9c75a; }
-.navfix-key .k-sel { background: #fff6b0; }
+
+/* the tool palette in the bar: a segmented control with each tool's key */
+.navfix-tools { display: inline-flex; background: var(--bg); box-shadow: var(--sunken); border-radius: 3px; padding: 2px; gap: 2px; }
+.navfix-tools button { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 2px; padding: 5px 10px; background: none; color: var(--bone-dim); font: inherit; font-size: 15px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.navfix-tools button:hover { color: var(--bone); }
+.navfix-tools button[aria-pressed="true"] { background: var(--panel-2); color: var(--signal); box-shadow: var(--raised); }
+.navfix-tools kbd { font: 600 11px/1 var(--text); padding: 2px 4px; border-radius: 2px; background: var(--panel); color: var(--bone-faint); }
+.navfix-cam { position: absolute; top: 8px; right: 8px; }
+.navfix-cam .seg { background: rgba(20, 24, 17, .8); }
+.navfix-page .tools-status { grid-template-columns: auto minmax(0, 1fr) minmax(0, auto); }
+.navfix-page .tools-status > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.navfix-page .tools-panel h3 { display: flex; align-items: center; gap: 6px; }
+
+/* the reach check */
+.navfix-bar { display: flex; height: 8px; border-radius: 2px; overflow: hidden; background: var(--bg); }
+.navfix-bar i { flex: 0 0 0; min-width: 3px; }
+.navfix-reach { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.navfix-reach-row { width: 100%; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 2px; padding: 3px 6px; background: none; color: var(--bone); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+.navfix-reach-row:hover:not(:disabled) { background: var(--panel-2); }
+.navfix-reach-row:disabled { color: var(--bone-faint); cursor: default; }
+.navfix-reach-row .push { margin-left: auto; font-variant-numeric: tabular-nums; }
+.navfix-page i.k-ok, .navfix-page i.k-never, .navfix-page i.k-trap, .navfix-page i.k-falls { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.navfix-page .navfix-bar i { height: 100%; width: auto; border-radius: 0; }
+.k-ok { background: #6fc2b0; }
+.k-never { background: #e2574c; }
+.k-trap { background: #e8a23c; }
+.k-falls { background: #d9c75a; }
+
+/* problems, grouped by kind */
+.navfix-clear { color: var(--ok); }
+.navfix-group { border-left: 3px solid var(--signal); background: var(--panel-2); border-radius: 2px; }
+.navfix-group.navfix-unreachable { border-left-color: #e2574c; }
+.navfix-group.navfix-trap { border-left-color: #e8a23c; }
+.navfix-group.navfix-falls { border-left-color: #d9c75a; }
+.navfix-group-head { display: flex; align-items: center; gap: 6px; padding: 2px 6px 2px 0; }
+.navfix-group-btn { flex: 1; display: flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--bone); font: inherit; font-weight: 700; font-size: 14px; padding: 5px 8px; cursor: pointer; text-align: left; }
+.navfix-caret { width: 10px; color: var(--bone-faint); }
+.navfix-problems { list-style: none; margin: 0; padding: 0 8px 8px; display: grid; gap: 6px; }
+.navfix-problem { display: grid; gap: 4px; padding-top: 6px; border-top: 1px solid rgba(0, 0, 0, .18); font-size: 14px; }
+.navfix-problem .row { gap: 6px; align-items: center; }
+.navfix-row { display: flex; align-items: center; gap: 6px; }

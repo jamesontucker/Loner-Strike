@@ -9,7 +9,8 @@ import { useDirty } from "../../../store";
 import { useTools, useToolArg, type CameraMode } from "../../../stores/tools";
 import { Banner, BusyButton, Info, LoadError, Segmented, Skeleton, useAskText, useConfirm, useToast } from "../../../ui";
 import { JobProgress } from "../../JobProgress";
-import { Check, Loading, MapList } from "../common";
+import { Check, Loading } from "../common";
+import { MapBrowser, rememberMap, type MapBadge } from "../common/MapBrowser";
 import type { NavArea } from "../overlays";
 import type { ToolProps } from "../registry";
 import { useReportAddress } from "../common/address";
@@ -18,7 +19,7 @@ import { fmtVec } from "../viewer/coords";
 import { canDraw3d, SceneBoundary } from "../viewer/Scene";
 import { useModelMeshes } from "../viewer/World";
 import { FixScene, type ColourBy, type Mode } from "./FixScene";
-import { ATTRS, DIRS, editNav, openFix, rebuildKnowledge, redoNav, reloadNav, saveNav, undoNav, REACH_FALLS, REACH_NEVER, REACH_TRAP, type FixState, type Op, type Problem } from "./navfixApi";
+import { ATTRS, DIRS, editNav, openFix, rebuildKnowledge, redoNav, reloadNav, saveNav, undoNav, REACH_FALLS, REACH_NEVER, REACH_OK, REACH_TRAP, type FixState, type Op, type Problem } from "./navfixApi";
 import "./navfix.css";
 
 export default function NavFixer({ maps }: ToolProps) {
@@ -28,19 +29,46 @@ export default function NavFixer({ maps }: ToolProps) {
   useEffect(() => {
     if (arg) setMap(arg);
   }, [arg]);
+  useEffect(() => {
+    if (map) rememberMap("navfix", map);
+  }, [map]);
   if (!map)
     return (
-      <div className="stack-tight">
-        <p className="muted measure">
-          Pick a map to fix its bot nav: add the walkable spots the bots' learning missed (narrow beams, ledges), join them up, and mark drops. Only maps with a bot nav are listed.
-        </p>
-        <MapList maps={maps} onPick={setMap} placeholder="Pick a map to fix its nav" filter={(m) => m.nav} none="None of your maps has a bot nav yet. The map doctor can teach bots a map; then it shows up here." />
-      </div>
+      <MapBrowser
+        tool="navfix"
+        maps={maps}
+        onPick={setMap}
+        title="Pick a map to fix its nav"
+        note={<>Only maps with a bot nav. <Info text="Add the walkable spots the bots' learning missed (narrow beams, ledges), join them up, and mark drops. The reach check shows where bots can't get to. Only maps with a bot nav are listed." /></>}
+        action="Fix nav"
+        filter={(m, f) => !!(f ? f.nav : m.nav)}
+        none="None of your maps has a bot nav yet. The map doctor can teach bots a map; then it shows up here."
+        badges={(_m, f) => {
+          if (!f?.nav) return [];
+          const b: MapBadge[] = [];
+          if (f.nav.matchesMap === false) b.push({ text: "Nav for another version", tone: "bad" });
+          if (f.lsv?.done) b.push({ text: "Bots know it", tone: "ok" });
+          return b;
+        }}
+      />
     );
   return <Fixer map={map} onBack={() => setMap(null)} />;
 }
 
 const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
+
+const KINDS: [string, string][] = [
+  ["unreachable", "Bots can't get there"],
+  ["trap", "Bots can't get back"],
+  ["falls", "Only by falling in"],
+  ["ladder", "Ladders"],
+  ["cramped", "No room to stand"],
+  ["dangling", "Broken links"],
+  ["self", "Broken links"],
+  ["duplicate", "Damaged areas"],
+  ["flat", "Damaged areas"],
+];
+const kindLabel = (k: string) => KINDS.find((x) => x[0] === k)?.[1] ?? "Other";
 
 const HINTS: Record<Mode, string> = {
   select: "Click an area to pick it · Shift-click adds more · Delete removes them",
@@ -136,6 +164,16 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
       setBusy(null);
     }
   };
+  const fixAll = async (list: Problem[]) => {
+    for (const p of list) if (p.fix) await edit("Fixing…", p.fix.op);
+  };
+  const showReach = (r: number) => {
+    if (!st) return;
+    const ids = st.nav.areas.filter((_, i) => st.reach[i] === r).map((a) => a.id);
+    setColourBy("reach");
+    setShown(new Set(ids));
+    setSelected(new Set());
+  };
   const del = (ids: number[]) => ids.length && edit(ids.length === 1 ? "Deleting the area…" : "Deleting the areas…", { op: "delete", ids }, () => setSelected(new Set()));
 
   const onPick = useCallback(
@@ -212,7 +250,7 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
   const ready = mesh.data && st && !ents.isLoading;
 
   return (
-    <div className="tools-page">
+    <div className="tools-page navfix-page">
       <div className="tools-bar">
         <span className="map-title">{map}</span>
         {st?.file && <span className="muted small-note">{st.file}</span>}
@@ -220,8 +258,16 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
           Other map
         </button>
         <span className="push" />
-        <Segmented values="select draw link" labels="Select|Draw area|Link" current={mode} onPick={(v) => setMode(v as Mode)} label="What clicks do" />
-        <Segmented values="orbit top" labels="Orbit|Top-down" current={camera === "fly" ? "orbit" : camera} onPick={(v) => setCamera(v as CameraMode)} label="Camera" />
+        <div className="navfix-tools" role="group" aria-label="What clicks do">
+          {(["select", "draw", "link"] as Mode[]).map((m) => (
+            <button key={m} type="button" aria-pressed={mode === m} title={`${HINTS[m]} (${m === "select" ? "V" : m === "draw" ? "D" : "L"})`} onClick={() => setMode(m)}>
+              {m === "select" ? "Select" : m === "draw" ? "Draw area" : "Link"}<kbd>{m === "select" ? "V" : m === "draw" ? "D" : "L"}</kbd>
+            </button>
+          ))}
+        </div>
+        <button className="btn" disabled={!st?.undo || !!busy} title={st?.undo ? `Undo: ${st.undo} (Mod+Z)` : "Nothing to undo"} onClick={undo}>Undo</button>
+        <button className="btn" disabled={!st?.redo || !!busy} title={st?.redo ? `Redo: ${st.redo} (Shift+Mod+Z)` : "Nothing to redo"} onClick={redo}>Redo</button>
+        <BusyButton className="btn primary" busy={busy === "Saving…"} busyLabel="Saving…" label={st?.dirty && st.steps ? `Save (${st.steps})` : "Save"} disabled={!st?.dirty || !!busy} onClick={save} />
       </div>
       {st?.nav.warning && <Banner>{st.nav.warning}</Banner>}
       {st?.nav.matchesMap === false && <Banner>This nav was made for a different version of the map. Fixing it is fine, but the game may learn a new one when it loads the map.</Banner>}
@@ -261,6 +307,11 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
                   />
                 </SceneBoundary>
               )}
+              {ready && (
+                <div className="navfix-cam">
+                  <Segmented values="orbit top" labels="Orbit|Top-down" current={camera === "fly" ? "orbit" : camera} onPick={(v) => setCamera(v as CameraMode)} label="Camera" />
+                </div>
+              )}
               {busy && (
                 <div className="navfix-busy" role="status">
                   <span className="spinner" aria-hidden="true" />
@@ -275,57 +326,33 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
               <section className="tools-panel"><Skeleton rows={4} /></section>
             ) : (
               <>
-                <section className="tools-panel">
-                  <h3>Changes</h3>
-                  <p className="small-note muted">
-                    {st.dirty ? `Not saved yet${st.steps ? ` · ${st.steps} change${st.steps === 1 ? "" : "s"} you can undo` : ""}.` : st.steps ? "Saved." : "No changes yet."}
-                    {st.did ? ` Last: ${st.did}.` : ""}
-                  </p>
-                  <div className="row">
-                    <button className="btn small" disabled={!st.undo || !!busy} title={st.undo ? `Undo: ${st.undo} (Cmd/Ctrl+Z)` : "Nothing to undo"} onClick={undo}>Undo</button>
-                    <button className="btn small" disabled={!st.redo || !!busy} title={st.redo ? `Redo: ${st.redo} (Shift+Cmd/Ctrl+Z)` : "Nothing to redo"} onClick={redo}>Redo</button>
-                    <span className="push" />
-                    <button className="btn small" disabled={!!busy} onClick={startOver}>Start over</button>
-                  </div>
-                  <BusyButton className="btn primary" busy={busy === "Saving…"} busyLabel="Saving…" label="Save the nav" disabled={!st.dirty || !!busy} onClick={save} />
-                  {said && <p className="small-note">{said}</p>}
-                  {!said && st.backup && <p className="small-note muted">The nav you first changed is kept next to it as a .bak file.</p>}
-                </section>
-                {mode === "link" && (
-                  <section className="tools-panel">
-                    <h3>Link areas</h3>
-                    <p className="small-note muted">
-                      {linkFrom === null ? "Click the area to link from." : `From area ${linkFrom}: click the area it leads to. Each link carries on from the last area, so you can click along a beam.`}
-                    </p>
-                    <Check checked={oneWay} onChange={setOneWay} label="One way" title="A drop bots can't climb back up" />
-                    <p className="small-note muted">One way is for a drop bots can't climb back up. Holding Shift while clicking makes a one-way link too.</p>
-                  </section>
-                )}
-                {mode === "draw" && (
-                  <section className="tools-panel">
-                    <h3>Draw an area</h3>
-                    <p className="small-note muted">
-                      Drag a box on the floor where players can walk. It's laid at the height you start on and each corner is dropped to the floor. Top-down (T) makes narrow spots easiest. Then link it to its neighbours.
-                    </p>
+                <ReachPanel st={st} colourBy={colourBy} setColourBy={setColourBy} onShow={showReach} />
+                {mode !== "select" && (
+                  <section className="tools-panel navfix-mode">
+                    <h3>{mode === "link" ? "Link areas" : "Draw an area"} <Info text={mode === "link" ? "Click the area to link from, then the one it leads to. Each link carries on from the last area, so you can click along a beam. One way is for a drop bots can't climb back up (or hold Shift)." : "Drag a box on the floor where players can walk. It's laid at the height you start on and each corner is dropped to the floor. Top-down (T) makes narrow spots easiest. Then link it to its neighbours."} /></h3>
+                    {mode === "link" ? (
+                      <>
+                        <p className="small-note">{linkFrom === null ? "Click the area to link from." : `From area ${linkFrom}: click the area it leads to.`}</p>
+                        <Check checked={oneWay} onChange={setOneWay} label="One way (a drop)" title="A drop bots can't climb back up" />
+                      </>
+                    ) : (
+                      <p className="small-note">Drag on the floor. Right-drag moves the view.</p>
+                    )}
                   </section>
                 )}
                 <Selection st={st} ids={[...selected]} busy={!!busy} edit={edit} del={del} />
-                <Problems st={st} busy={!!busy} onShow={showProblem} edit={edit} />
+                <Problems st={st} busy={!!busy} onShow={showProblem} edit={edit} fixAll={fixAll} />
                 <Knowledge st={st} busy={busy} rebuilding={rebuilding} onRebuild={rebuild} onDone={() => (setRebuilding(false), void q.refetch())} />
                 <section className="tools-panel">
-                  <label className="tools-field">
-                    Colours
-                    <select value={colourBy} onChange={(e) => setColourBy(e.target.value as ColourBy)}>
-                      <option value="reach">Where bots can get to</option>
-                      <option value="place">Places</option>
-                      <option value="moves">How bots move</option>
-                    </select>
-                  </label>
-                  {colourBy === "reach" && (
-                    <p className="small-note muted navfix-key">
-                      <i className="k-ok" /> reachable <i className="k-never" /> can't get there <i className="k-trap" /> can't get back <i className="k-falls" /> only by falling in <i className="k-sel" /> picked
-                    </p>
-                  )}
+                  <h3>File</h3>
+                  <p className="small-note muted">
+                    {st.dirty ? `Not saved${st.steps ? `: ${st.steps} change${st.steps === 1 ? "" : "s"}` : ""}.` : st.steps ? "Saved." : "No changes yet."}
+                    {st.did ? ` Last: ${st.did}.` : ""}
+                    {said ? ` ${said}` : st.backup ? " The nav as it first was is kept as a .bak file, and every save is in History." : ""}
+                  </p>
+                  <div className="row">
+                    <button className="btn small" disabled={!!busy} onClick={startOver}>Start over</button>
+                  </div>
                 </section>
               </>
             )}
@@ -486,35 +513,88 @@ function boxOf(a: NavArea) {
 
 // ---- problems --------------------------------------------------------------------------------
 
-function Problems({ st, busy, onShow, edit }: { st: FixState; busy: boolean; onShow: (p: Problem) => void; edit: Edit }) {
-  const [all, setAll] = useState(false);
-  const list = all ? st.problems : st.problems.slice(0, 12);
+function Problems({ st, busy, onShow, edit, fixAll }: { st: FixState; busy: boolean; onShow: (p: Problem) => void; edit: Edit; fixAll: (list: Problem[]) => Promise<void> }) {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const groups = new Map<string, Problem[]>();
+  for (const p of st.problems) groups.set(kindLabel(p.kind), [...(groups.get(kindLabel(p.kind)) ?? []), p]);
   return (
     <section className="tools-panel">
       <h3>
-        Problems <Info text="Checked after every change: areas bots can't reach from any spawn (or can't get back from, or only land in by falling off an edge), links to areas that aren't there, spots a standing player doesn't fit, ladders with no area at an end." />
+        Problems <span className="muted small-note">{st.problems.length + st.moreProblems || ""}</span>
+        <Info text="Checked after every change: areas bots can't reach from any spawn (or can't get back from, or only land in by falling off an edge), links to areas that aren't there, spots a standing player doesn't fit, ladders with no area at an end." />
       </h3>
       {st.checkNote && <p className="small-note muted">{st.checkNote}</p>}
       {!st.problems.length ? (
-        <p className="small-note">Nothing found. Bots can reach every area from the spawns and get back.</p>
+        <p className="small-note navfix-clear">Nothing found. Bots can reach every area from the spawns and get back.</p>
       ) : (
-        <ul className="navfix-problems">
-          {list.map((p, i) => (
-            <li key={`${p.kind}-${p.areas[0] ?? i}-${i}`} className={`navfix-problem navfix-${p.kind}`}>
-              <strong>{p.text}</strong>
-              <span className="small-note muted">{p.hint}</span>
-              <div className="row">
-                <button className="btn small" onClick={() => onShow(p)}>Show me</button>
-                {p.fix && <button className="btn small" disabled={busy} onClick={() => void edit("Fixing…", p.fix!.op)}>{p.fix.label}</button>}
+        [...groups.entries()].map(([label, list]) => {
+          const isOpen = open[label] ?? groups.size <= 2;
+          const fixable = list.filter((p) => p.fix);
+          return (
+            <div key={label} className={`navfix-group navfix-${list[0].kind}`}>
+              <div className="navfix-group-head">
+                <button className="navfix-group-btn" aria-expanded={isOpen} onClick={() => setOpen({ ...open, [label]: !isOpen })}>
+                  <span className="navfix-caret" aria-hidden="true">{isOpen ? "▾" : "▸"}</span>
+                  {label} <span className="muted">{list.length}</span>
+                </button>
+                {fixable.length > 1 && <button className="btn small" disabled={busy} title="Each fix is its own step: Undo takes them back one at a time" onClick={() => void fixAll(fixable)}>Fix {fixable.length}</button>}
               </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      {st.problems.length > 12 && (
-        <button className="btn small" onClick={() => setAll(!all)}>{all ? "Show fewer" : `Show all ${st.problems.length}`}</button>
+              {isOpen && (
+                <ul className="navfix-problems">
+                  {list.map((p, i) => (
+                    <li key={`${p.kind}-${p.areas[0] ?? i}-${i}`} className={`navfix-problem navfix-${p.kind}`} title={p.hint}>
+                      <span>{p.text}</span>
+                      <div className="row">
+                        <button className="btn small" onClick={() => onShow(p)}>Show me</button>
+                        {p.fix && <button className="btn small primary" disabled={busy} onClick={() => void edit("Fixing…", p.fix!.op)}>{p.fix.label}</button>}
+                        <Info text={p.hint} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })
       )}
       {st.moreProblems > 0 && <p className="small-note muted">And {st.moreProblems} more not listed.</p>}
+    </section>
+  );
+}
+
+// ---- the reach check -------------------------------------------------------------------------
+
+function ReachPanel({ st, colourBy, setColourBy, onShow }: { st: FixState; colourBy: ColourBy; setColourBy: (c: ColourBy) => void; onShow: (r: number) => void }) {
+  const n = [0, 0, 0, 0];
+  for (const r of st.reach) if (r >= 0 && r <= 3) n[r]++;
+  const total = st.reach.length || 1;
+  const rows: [number, string, string][] = [
+    [REACH_OK, "k-ok", "Bots get there and back"],
+    [REACH_NEVER, "k-never", "Can't get there"],
+    [REACH_TRAP, "k-trap", "Can't get back"],
+    [REACH_FALLS, "k-falls", "Only by falling in"],
+  ];
+  return (
+    <section className="tools-panel">
+      <h3>
+        Reach check <Info text="From the spawns, along links and ladders (the way bots plan), plus stepping or falling off edges (the way bots really move in fights). Click a line to show those areas." />
+      </h3>
+      <div className="navfix-bar" aria-hidden="true">
+        {rows.map(([r, cls]) => n[r] > 0 && <i key={r} className={cls} style={{ flexGrow: n[r] / total }} />)}
+      </div>
+      <ul className="navfix-reach">
+        {rows.map(([r, cls, label]) => (
+          <li key={r}>
+            <button className="navfix-reach-row" disabled={!n[r]} onClick={() => onShow(r)}>
+              <i className={cls} /> {label} <span className="push">{n[r]}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="tools-field">
+        <span>Colours</span>
+        <Segmented label="Colours" values="reach place moves" labels="Reach|Places|Moves" current={colourBy} onPick={(v) => setColourBy(v as ColourBy)} />
+      </div>
     </section>
   );
 }
@@ -551,10 +631,9 @@ function Knowledge({ st, busy, rebuilding, onRebuild, onDone }: { st: FixState; 
             disabled={!!busy || st.dirty || !st.rebuild.can || !needed}
             onClick={onRebuild}
           />
-          <p className="small-note muted">
-            {!st.rebuild.can && st.rebuild.why
-              ? st.rebuild.why
-              : `A hidden server on this computer loads the map with one bot; it takes ${st.rebuild.about} for this map's ${st.nav.areas.length} areas (longer the first time: it downloads Valve's server, about 1 GB).`}
+          <p className="small-note muted navfix-row">
+            {!st.rebuild.can && st.rebuild.why ? st.rebuild.why : `Takes ${st.rebuild.about}.`}
+            <Info text={`A hidden server on this computer loads the map with one bot; it takes ${st.rebuild.about} for this map's ${st.nav.areas.length} areas (longer the first time: it downloads Valve's server, about 1 GB).`} />
           </p>
         </>
       )}
