@@ -4,3 +4,7 @@
 /servers.html  /docs#vps  301
 /servers       /docs#vps  301
 /discord/  https://discord.gg/K9eBHVVwZE   302
+# short links to the 1.0 docs
+/mcp           /docs#mcp            302
+/tools         /docs#tools          302
+/whats-new     /docs#whats-new      302

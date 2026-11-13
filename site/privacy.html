@@ -39,7 +39,7 @@ a { color: var(--signal); }
 <main>
 <a class="back" href="/">Back to lonerstrike.com</a>
 <h1>Privacy</h1>
-<p class="updated">Last updated November 10, 2026</p>
+<p class="updated">Last updated November 14, 2026</p>
 
 <p>Loner-Strike is made by Nanoshrine Interactive LLC ("we"). This explains what this website and the Loner-Strike app do with information about you. Short version: we don't use cookies, we don't track you, and we don't sell anything about you.</p>
 
@@ -64,10 +64,25 @@ a { color: var(--signal); }
   <li>browse and download maps and other content from GameBanana, when you use those pages;</li>
   <li>connect to services you choose to use for playing with friends, such as playit.gg, Tailscale, your router (UPnP) or Valve's server downloader;</li>
   <li>connect over SSH to Linux servers you rent, when you add one;</li>
-  <li>download the speech models for voice commands, when you install them.</li>
+  <li>download the speech models for voice commands, when you install them;</li>
+  <li>download ready-made bot navigation for maps, and other optional files, from our download server (dl.lonerstrike.com);</li>
+  <li>ask our server list (list.lonerstrike.com) for servers when you open Find servers, and tell it about a server you choose to list there;</li>
+  <li>download the SDHLT map compiler from GitHub, the first time you compile a map;</li>
+  <li>use Community, described below.</li>
 </ul>
 <p>Voice commands are optional and off until you turn them on for a server. Players' team voice is turned into text on the machine running that server, to give the bots their orders. No audio is kept or sent anywhere; the lines it heard are written to that server's own log.</p>
 <p>Each of those services has its own privacy policy. Your settings, admin lists and the list of players who joined your games stay on your computer, and on the servers you run.</p>
+<p>The optional connector for AI agents only listens on your own computer. Loner-Strike sends nothing to any AI service; the agent you connect is a program you run, under its own terms.</p>
+
+<h2>Community</h2>
+<p>Community lists maps and modes people made with Loner-Strike. The files are hosted by <a href="https://gamebanana.com">GameBanana</a>, under its own privacy policy, and the app never signs in there for you.</p>
+<ul>
+  <li><b>Browsing.</b> The app downloads the Community list from dl.lonerstrike.com. No account, and nothing about you is sent.</li>
+  <li><b>Publishing.</b> Adding a creation sends us its GameBanana page address and the app's version. The listing is built from what's public on GameBanana: the title, the GameBanana name of who made it, its pictures and its file.</li>
+  <li><b>Reports.</b> A report sends the page, the reason and your note. We keep them for 90 days. To spot repeated reports from one person, the server keeps a scrambled tag of your IP address made with a key that only lives in memory and changes when it restarts; the address itself is never stored, and moderators never see it.</li>
+  <li><b>Limits and logs.</b> Request limits are counted per address in memory only. Logs say what happened to which page, not who asked.</li>
+</ul>
+<p>More detail is in the <a href="docs#community-privacy">docs</a>.</p>
 
 <h2>Your rights</h2>
 <p>If you paid and want a copy of what we hold about you, or want it deleted, ask us and we'll take care of it. Depending on where you live (for example the EU, UK or California) you have rights over your personal data, and you can contact your local data protection authority.</p>

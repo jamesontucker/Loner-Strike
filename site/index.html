@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Loner-Strike: CS 1.6 and Condition Zero with bots that play like people</title>
-<meta name="description" content="Free app for Counter-Strike 1.6 and Condition Zero: bots that play like real people, 22 classic mods, and a full control panel for your game and servers.">
+<title>Loner-Strike: build, play, host and share Counter-Strike 1.6 and Condition Zero</title>
+<meta name="description" content="Free app for Counter-Strike 1.6 and Condition Zero: bots that play like real people, classic mods and new modes, a map editor and game mode tools, your own servers, and a community to share what you make.">
 <link rel="canonical" href="https://lonerstrike.com/">
 <meta name="author" content="nanoshrine">
 <meta name="robots" content="index, follow, max-image-preview:large">
@@ -17,8 +17,8 @@
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="alternate" type="text/plain" href="https://lonerstrike.com/llms.txt" title="Loner-Strike for AI assistants">
 <meta property="og:site_name" content="Loner-Strike">
-<meta property="og:title" content="Loner-Strike: CS 1.6 and Condition Zero with bots that play like people">
-<meta property="og:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, classic mods and a full panel to run your game and servers. Free, for CS 1.6 and Condition Zero.">
+<meta property="og:title" content="Loner-Strike 1.0: build, play, host and share CS 1.6 and Condition Zero">
+<meta property="og:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, Last Stand and Battle Royale, a map editor and Game Mode Studio, your own servers and a community to share what you make. Free, for CS 1.6 and Condition Zero.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://lonerstrike.com/">
 <meta property="og:locale" content="en_US">
@@ -28,8 +28,8 @@
 <meta property="og:image:alt" content="Loner-Strike: Play Counter-Strike like it's 2004, alone or with the friends you don't have. Free, for CS 1.6 and Condition Zero.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:creator" content="@nanoshrine">
-<meta name="twitter:title" content="Loner-Strike: CS 1.6 and Condition Zero with bots that play like people">
-<meta name="twitter:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, classic mods and a full panel to run your game and servers. Free, for CS 1.6 and Condition Zero.">
+<meta name="twitter:title" content="Loner-Strike 1.0: build, play, host and share CS 1.6 and Condition Zero">
+<meta name="twitter:description" content="Play Counter-Strike like it's 2004, alone or with the friends you don't have. Bots that play like people, Last Stand and Battle Royale, a map editor and Game Mode Studio, your own servers and a community to share what you make. Free, for CS 1.6 and Condition Zero.">
 <meta name="twitter:image" content="https://lonerstrike.com/img/og.jpg">
 <script type="application/ld+json">
 {
@@ -38,7 +38,8 @@
  "name": "Loner-Strike",
  "alternateName": "Loner Strike",
  "url": "https://lonerstrike.com/",
- "description": "A free desktop app for Counter-Strike 1.6 and Condition Zero on Steam. Its own build of the game's bot brain makes bots move, fight and chat like real players, each with a personality, habits and a skill level of its own. It installs classic community mods (Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf and more) patched so bots can play them, and controls your game or a dedicated server from one panel, including from your phone. It can set up an always-on server on a rented Linux machine, with admins and moderators who help run it from their own app.",
+ "description": "A free desktop app for Counter-Strike 1.6 and Condition Zero on Steam. Its own build of the game's bot brain makes bots move, fight and chat like real players, each with a personality, habits and a skill level of its own. It installs classic community mods (Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf and more) patched so bots can play them, and controls your game or a dedicated server from one panel, including from your phone. It can set up an always-on server on a rented Linux machine, with admins and moderators who help run it from their own app. Version 1.0 adds two new modes (Last Stand and Battle Royale), creation tools (a map editor that compiles with SDHLT and playtests with bots, Game Mode Studio with node graphs, Plugin Studio for AMX Mod X, Creature Studio, a nav fixer, map doctor, health check, radar maker and more), a moderated Community browser for sharing maps and modes, and an MCP connector so AI coding agents can use the tools.",
+ "softwareVersion": "1.0.0",
  "applicationCategory": "GameApplication",
  "applicationSubCategory": "Game mod manager and server control panel",
  "operatingSystem": "Windows, macOS (through CrossOver)",
@@ -56,7 +57,10 @@
   "https://lonerstrike.com/img/maps.jpg",
   "https://lonerstrike.com/img/play.jpg",
   "https://lonerstrike.com/img/friends.jpg",
-  "https://lonerstrike.com/img/servers.jpg"
+  "https://lonerstrike.com/img/servers.jpg",
+  "https://lonerstrike.com/img/1.0/editor.png",
+  "https://lonerstrike.com/img/1.0/studio.png",
+  "https://lonerstrike.com/img/1.0/render-valley.png"
  ],
  "author": {
   "@type": "Person",
@@ -75,7 +79,14 @@
   "Admins, VIPs, bans, mutes, swear filter, chat log, stats and ranks",
   "Match mode for 5v5s and HLTV for spectators and demos",
   "Dedicated servers on your computer or a rented Linux machine",
-  "Control from your phone with a QR code"
+  "Control from your phone with a QR code",
+  "Last Stand and Battle Royale, new modes with their own maps (ls_outpost, br_valley)",
+  "Map editor: brushes and entities in 3D, Hammer and J.A.C.K. import, SDHLT compiling and one-click playtests with bots",
+  "Game Mode Studio: game modes from Blueprint-style node graphs, debugged live in the game",
+  "Plugin Studio for AMX Mod X, and Creature Studio for creatures and waves",
+  "Map tools: map doctor, health check, nav fixer, callouts and radar maker",
+  "Community browser for maps and Studio modes, hosted on GameBanana and moderated",
+  "MCP connector for AI coding agents such as Claude Code, Codex, OpenCode and Cursor"
  ],
  "gamePlatform": "PC",
  "about": [
@@ -176,6 +187,38 @@
    "acceptedAnswer": {
     "@type": "Answer",
     "text": "Counter-Strike 1.6 never came with bots, so its maps have nothing telling bots where they can walk. The maps Loner-Strike installs and almost every stock map come with that already, so bots play them straight away. Any other map they learn the first time you play it, which takes a few minutes, or 15 minutes or more on a big one. It's once per map, and Teach bots maps can do it ahead of time."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does Beta mean on the tools?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "They're new in 1.0 and still settling in. They save backups before they change a file, but keep your own copies of work you care about, and tell us on Discord when something's off."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Can I use maps I made in Hammer or J.A.C.K.?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Yes. The map editor opens Hammer .rmf, J.A.C.K. .jmf and .map files, and exports a .map for any GoldSrc compiler."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What can I share in Community?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Maps, prefabs, textures, sprays and Game Mode Studio modes. Hand-written plugins can't be shared, so nothing you download from Community runs code on your computer."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Can an AI agent mess things up?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Only as much as you let it. The connector is off until you turn it on, agents can only look until you allow changes, and the app asks you before anything that overwrites a file or stops people playing. Passwords and keys are never shown to them."
    }
   },
   {
@@ -315,9 +358,6 @@ html { scroll-padding-top: 72px; }
 
 /* modes */
 .modes { padding: 36px 0 20px; }
-.modes ul { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.modes li { background: var(--panel); box-shadow: var(--raised); padding: 6px 12px; border-radius: 2px; font-weight: 600; color: var(--dim); }
-.modes li b { color: var(--bone); font-weight: 700; }
 .lead { color: var(--dim); max-width: 58ch; margin: 10px 0 0; text-wrap: pretty; }
 
 /* features */
@@ -604,21 +644,144 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   .ctas .btn { flex: 1 1 100%; }
   h2 { font-size: 28px; }
 }
+
+/* ---- 1.0 ------------------------------------------------------------------ */
+.tagline-2 { margin: -12px 0 24px; color: var(--faint); font-size: 18px; max-width: 40ch; }
+.feature .more, .agents .more { margin-top: 18px; }
+
+/* the four things it does, right under the hero: tabs to the four parts of the page */
+.verbs { background: var(--side); box-shadow: inset 0 1px 0 var(--bevel-lo), inset 0 -1px 0 var(--bevel-lo); }
+.verbs .wrap { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.verbs a { display: block; padding: 18px 20px 20px; text-decoration: none; color: var(--dim); font-size: 16px; line-height: 1.35; box-shadow: inset -1px 0 0 var(--bevel-lo), inset 1px 0 0 rgba(136,145,128,.18); }
+.verbs a:first-child { box-shadow: inset -1px 0 0 var(--bevel-lo); }
+.verbs a:last-child { box-shadow: inset 1px 0 0 rgba(136,145,128,.18); }
+.verbs b { display: block; font: 400 26px/1 var(--stencil); color: var(--bone); margin-bottom: 6px; }
+.verbs a:hover b, .verbs a:focus-visible b { color: var(--signal); }
+.verbs a:hover { background: rgba(255,255,255,.03); }
+@media (max-width: 860px) {
+  .verbs .wrap { grid-template-columns: 1fr 1fr; width: 100%; }
+  .verbs a { padding: 14px 16px 16px; box-shadow: inset 0 -1px 0 var(--bevel-lo) !important; }
+  .verbs a:nth-child(odd) { box-shadow: inset -1px 0 0 var(--bevel-lo), inset 0 -1px 0 var(--bevel-lo) !important; }
+  .verbs b { font-size: 22px; }
+}
+
+/* chapter openers: the big word, the loader's blocks under it, one line beside it */
+.chapter { padding: 88px 0 4px; }
+.chapter .wrap { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 40px; align-items: end; }
+.chapter h2 { font: 400 clamp(60px, 10vw, 120px)/.82 var(--stencil); letter-spacing: .01em; padding-bottom: 22px; position: relative; }
+.chapter h2::after { content: ""; position: absolute; left: 2px; right: 0; bottom: 0; height: 12px;
+  background: repeating-linear-gradient(to right, var(--signal) 0 9px, transparent 9px 12px); opacity: .9; }
+.chapter p { margin: 0 0 18px; color: var(--dim); font-size: 21px; line-height: 1.4; max-width: 50ch; }
+@media (max-width: 860px) {
+  .chapter { padding-top: 64px; }
+  .chapter .wrap { grid-template-columns: 1fr; }
+  .chapter h2 { padding-bottom: 18px; width: max-content; max-width: 100%; }
+  .chapter p { font-size: 18px; margin: 4px 0 0; }
+}
+
+/* the new modes */
+.modes .chips { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.modes .chips li { background: var(--panel); box-shadow: var(--raised); padding: 6px 12px; border-radius: 2px; font-weight: 600; color: var(--dim); }
+.modes .chips li b { color: var(--bone); font-weight: 700; }
+.modes-sub { font: 400 24px/1.1 var(--stencil); margin-top: 44px; }
+.mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; }
+.mode-card { background: var(--panel); box-shadow: var(--raised), 0 18px 50px rgba(0,0,0,.28); border-radius: 3px; overflow: hidden; display: flex; flex-direction: column; }
+.mode-card picture { display: block; background: #0d0f0a; aspect-ratio: 16 / 10; }
+.mode-card picture img { width: 100%; height: 100%; object-fit: cover; }
+.mode-text { padding: 18px 20px 20px; }
+.mode-text h3 { font: 400 30px/1 var(--stencil); }
+.mode-map { margin: 4px 0 10px; color: var(--signal); font-weight: 600; font-size: 16px; }
+.mode-text p { color: var(--dim); margin: 0 0 10px; }
+.mode-text ul { margin: 0; padding-left: 20px; color: var(--dim); font-size: 16px; }
+.mode-text li + li { margin-top: 3px; }
+@media (max-width: 860px) { .mode-cards { grid-template-columns: 1fr; } }
+
+/* every tool */
+.toolbox { padding: 24px 0 40px; }
+.toolbox h3 { font: 400 28px/1.1 var(--stencil); }
+.tool-groups { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
+.tool-group { background: var(--side); box-shadow: var(--sunken); border-radius: 3px; padding: 16px 16px 6px; }
+.tool-group h4 { margin: 0 0 10px; font: 400 19px/1.1 var(--stencil); color: var(--faint); }
+.tool-group dl { margin: 0; }
+.tool-group dt { font-weight: 700; font-size: 17px; }
+.tool-group dt a { color: var(--bone); text-decoration: none; }
+.tool-group dt a:hover, .tool-group dt a:focus-visible { color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
+.tool-group dd { margin: 1px 0 12px; color: var(--dim); font-size: 15px; line-height: 1.4; }
+@media (max-width: 1060px) { .tool-groups { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .tool-groups { grid-template-columns: 1fr; } }
+
+/* AI agents */
+.agents { padding: 40px 0 24px; }
+.agents .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 40px; align-items: center; }
+.agents h3 { font: 400 28px/1.1 var(--stencil); margin-bottom: 12px; }
+.agents p { color: var(--dim); margin: 0 0 12px; }
+.console { margin: 0; background: #23271c; box-shadow: var(--raised), 0 18px 50px rgba(0,0,0,.35); border-radius: 3px; padding: 4px; min-width: 0; }
+.console pre { margin: 0; padding: 14px 16px 16px; background: #171a12; box-shadow: var(--sunken); border-radius: 2px; overflow-x: auto; }
+.console code { font: 14px/1.6 ui-monospace, Menlo, Consolas, monospace; color: var(--bone); }
+.console .c { color: var(--faint); }
+@media (max-width: 860px) { .agents .wrap { grid-template-columns: 1fr; gap: 24px; } }
+
+/* share */
+.share .safe { margin-top: 16px; padding: 12px 14px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; font-size: 16px; line-height: 1.45; }
+.community { padding: 8px 0 40px; }
+.community h3 { font: 400 28px/1.1 var(--stencil); }
+
+/* the screenshots: a property sheet with tabs, like the game's own Options window */
+.gallery { padding: 88px 0 70px; }
+.tour { margin-top: 22px; background: var(--panel); box-shadow: var(--raised), 0 24px 70px rgba(0,0,0,.35); border-radius: 3px; padding: 10px 12px 14px; }
+.tour-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; margin: 0 -2px; padding: 2px 2px 0; scroll-snap-type: x proximity; }
+.tour-tabs::-webkit-scrollbar { display: none; }
+.tour-tabs button { flex: none; scroll-snap-align: start; border: 0; border-radius: 3px 3px 0 0; padding: 9px 16px 8px; margin-top: 4px; background: var(--side); color: var(--dim);
+  box-shadow: inset 1px 1px 0 var(--bevel-hi), inset -1px 0 0 var(--bevel-lo); font: 600 16px/1.1 var(--text); cursor: pointer; white-space: nowrap; }
+.tour-tabs button:hover { color: var(--bone); }
+.tour-tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--signal); margin-top: 0; padding-bottom: 12px; }
+.tour-tabs button:focus-visible { outline: 2px solid var(--signal); outline-offset: -3px; }
+.tour-panel { background: var(--panel-2); box-shadow: inset 1px 0 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo); border-radius: 0 3px 3px 3px; padding: 12px; }
+.tour-panel:focus { outline: none; }
+.tour-stage, .tour-strip button { font: inherit; color: inherit; }
+.tour-stage { display: block; width: 100%; padding: 0; border: 0; border-radius: 2px; background: #1d2118; box-shadow: var(--sunken); cursor: zoom-in; aspect-ratio: 16 / 10; overflow: hidden; touch-action: pan-y; }
+.tour-stage img { width: 100%; height: 100%; object-fit: contain; }
+.tour-stage:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.tour-bar { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin: 10px 2px 8px; }
+.tour-cap { margin: 0; color: var(--bone); font-weight: 600; font-size: 17px; line-height: 1.35; min-height: 1.35em; }
+.tour-count { color: var(--faint); font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tour-strip { list-style: none; margin: 0; padding: 4px 2px 6px; display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: var(--panel) transparent; }
+.tour-strip li { flex: none; scroll-snap-align: start; }
+.tour-strip button { display: block; width: 132px; aspect-ratio: 16 / 10; padding: 0; border: 0; border-radius: 2px; overflow: hidden; background: #1d2118; box-shadow: var(--sunken); cursor: pointer; opacity: .72; }
+.tour-strip button:hover { opacity: 1; }
+.tour-strip button[aria-current="true"] { opacity: 1; outline: 2px solid var(--signal); outline-offset: 1px; }
+.tour-strip button:focus-visible { opacity: 1; outline: 2px solid var(--bone); outline-offset: 1px; }
+.tour-strip img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.tour-strip .tall img { object-fit: contain; }
+/* an in-game shot that hasn't been taken yet (only shown with ?drafts) */
+.tour-draft { display: grid; place-items: center; width: 100%; height: 100%; padding: 16px; text-align: center; color: var(--faint); font-weight: 600; font-size: 15px;
+  outline: 2px dashed rgba(196,181,80,.5); outline-offset: -10px; }
+.tour-strip .tour-draft { font-size: 11px; padding: 6px; outline-offset: -4px; }
+@media (max-width: 860px) {
+  .gallery { padding-top: 64px; }
+  .tour { padding: 8px 8px 10px; margin-left: -8px; margin-right: -8px; }
+  .tour-panel { padding: 8px; }
+  .tour-tabs button { padding: 8px 12px 7px; font-size: 15px; }
+  .tour-strip button { width: 104px; }
+  .tour-cap { font-size: 16px; }
+}
+@media (prefers-reduced-motion: no-preference) { .tour-stage img { transition: opacity .15s; } .tour-stage.loading img { opacity: .55; } }
+@media (pointer: fine) { .gallery .tour-stage { cursor: zoom-in; } }
 </style>
 </head>
 <body>
 
-<div class="release-banner" role="note">Loner-Strike 1.0.0, the full release, comes out November 13. <a href="/discord">Join the Discord to hear when it's out</a></div>
+<div class="release-banner" id="release-banner" role="note">Loner-Strike 1.0.0, the full release, comes out November 14. <a href="/discord">Join the Discord to hear when it's out</a></div>
 
 <header class="top">
   <div class="wrap">
     <a class="wordmark" href="#">Loner-Strike</a>
     <nav aria-label="Page">
-      <a href="#features">Features</a>
-      <a href="#modes">Modes</a>
-      <a href="#hosting">Hosting</a>
+      <a href="#play">Play</a>
+      <a href="#build">Build</a>
+      <a href="#hosting">Host</a>
+      <a href="#share">Share</a>
       <a href="#gallery">Screenshots</a>
-      <a href="#community">Community</a>
       <a href="#faq">FAQ</a>
       <a href="docs">Docs</a>
       <a class="btn primary" href="#get" data-event="Get it (top)">Get it</a>
@@ -643,10 +806,12 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <h1>Loner-Strike</h1>
         <p class="byline">A <a href="https://nanoshrine.com" target="_blank" rel="noopener">nanoshrine</a> side project</p>
         <p class="tagline">Play <span class="nobr">Counter-Strike</span> like it's 2004,<br>alone or with the friends you don't have.</p>
+        <p class="tagline-2">Version 1.0 adds the rest: make your own maps and modes, host them, share them.</p>
         <div class="ctas">
           <a class="btn primary" href="#get" data-event="Get it (hero)">Get Loner-Strike</a>
+          <a class="btn" href="#gallery">See it in action</a>
         </div>
-        <p class="fine">For Counter-Strike 1.6 and Condition Zero on Steam. Windows, or Mac through CrossOver or Parallels.</p>
+        <p class="fine">Free, for Counter-Strike 1.6 and Condition Zero on Steam. Windows, or a Mac with CrossOver.</p>
         <div class="loader" aria-hidden="true">
           <div class="loader-title">Loading…</div>
           <div class="loader-text">Establishing network connection to server…</div>
@@ -654,11 +819,24 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         </div>
       </div>
       <div class="window">
-        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike</div>
-        <img src="img/maps.jpg" alt="Loner-Strike's map browser during a live game: classic maps with screenshots, filters and search" width="1280" height="950">
+        <div class="window-bar"><span></span><span></span><span></span>Loner-Strike: Map editor</div>
+        <picture>
+          <source srcset="img/1.0/editor.webp" type="image/webp">
+          <img src="img/1.0/editor.png" alt="The map editor with ls_outpost open: tools on the left, the map in 3D, the outline and map settings on the right, and the texture browser below" width="1440" height="900" fetchpriority="high">
+        </picture>
       </div>
     </div>
   </section>
+
+  <!-- The four things it does: each tab jumps to its part of the page -->
+  <nav class="verbs" aria-label="What it does">
+    <div class="wrap">
+      <a href="#play"><b>Play</b><span>Bots that play like people, and new modes to play with them</span></a>
+      <a href="#build"><b>Build</b><span>Maps, game modes and plugins, playtested with the bots</span></a>
+      <a href="#hosting"><b>Host</b><span>Servers on your computer or a rented Linux machine</span></a>
+      <a href="#share"><b>Share</b><span>Publish what you made, and try what others made in a click</span></a>
+    </div>
+  </nav>
 
   <section class="why" id="why">
     <div class="wrap">
@@ -668,6 +846,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <p>I still play Counter-Strike 1.6 and Condition Zero.<br>Mostly late at night, mostly against bots.</p>
         <p>The problem is the bots. They aren't very fun to play with. And the custom stuff, Zombie Plague, Warcraft 3, Gun Game, means digging through forum threads from 2009, fixing config files, and then finding out half the mods don't even notice bots exist.</p>
         <p>So I fixed it for myself. Bots that feel like the regulars on an old community server. The old mods, patched to work with them. A panel so I never have to open another .cfg file. And on the rare night a friend wants to play, they can join in a click.</p>
+        <p>Then I wanted to make things again, like we all did back then: maps, silly game modes, plugins. So 1.0 has the tools for that too, and the bots to test them on.</p>
         <p>It turned out pretty good, so here it is. It's free, because none of it would exist without the people who made these mods in the first place.</p>
       </div>
       <figure class="why-photo">
@@ -678,6 +857,14 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     </div>
   </section>
 
+  <!-- ============ PLAY ============ -->
+  <header class="chapter" id="play">
+    <div class="wrap">
+      <h2>Play</h2>
+      <p>A server full of bots that feels like a server full of people. Classic community mods, two new modes built for 1.0, and bots that play every one of them.</p>
+    </div>
+  </header>
+
   <section class="feature" id="features">
     <div class="wrap">
       <div class="text">
@@ -687,7 +874,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li>Each bot has its own personality, skill and habits</li>
           <li>They chat, banter and rage, and answer you in chat or on your mic: "rush b", "flash for me", "someone buy me an awp"</li>
           <li>Ts take sites together; CTs hold them and retake</li>
-          <li>Lone wolves in a pub, a team in a match</li>
+          <li>They run deathrun courses, spring the traps and surf the ramps</li>
           <li>Regulars with clan tags who remember you</li>
         </ul>
       </div>
@@ -729,7 +916,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li><b>They move like players.</b> Quiet near enemies, peeking corners, stopping to shoot.</li>
           <li><b>They play as a team.</b> Ts take sites together; CTs hold and retake.</li>
           <li><b>They have habits.</b> Spawn hops, tilt after a bad streak, the best bunnyhop.</li>
-          <li><b>They play the mode.</b> Run and gun in Deathmatch, a team in a 5v5.</li>
+          <li><b>They play the mode.</b> Run and gun in Deathmatch, a team in a 5v5, hold the walls in Last Stand.</li>
         </ul>
         <p class="deep">The ideas come from games known for their AI: Killzone's precomputed cover, Quake III's map study, the human-likeness of Unreal Tournament 2004's BotPrize and F.E.A.R.'s squad chatter.<br><a class="btn" href="docs#how-bots-work">See how the bots work</a></p>
         </div>
@@ -755,9 +942,49 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 
   <section class="modes" id="modes">
     <div class="wrap">
-      <h2>Classic community modes</h2>
+      <h2>New in 1.0: two modes of our own</h2>
+      <p class="lead">Built on Loner-Strike's own game mode pieces, each with a map made for it. Bots play both, and both also work on stock maps.</p>
+      <div class="mode-cards">
+        <article class="mode-card">
+          <!-- IN-GAME SHOT WANTED: swap this map render for img/1.0/ingame-laststand.webp once it exists (see docs/notes/Site.md) -->
+          <picture>
+            <source srcset="img/1.0/render-outpost.webp" type="image/webp">
+            <img src="img/1.0/render-outpost.png" alt="ls_outpost from above: a walled desert outpost with a courtyard, the keep and the armory, and three gates to hold" width="1092" height="682" loading="lazy">
+          </picture>
+          <div class="mode-text">
+            <h3>Last Stand</h3>
+            <p class="mode-map">on ls_outpost</p>
+            <p>Everyone plays Counter-Terrorist. Hold a walled desert outpost at night against waves of zombies, runners, brutes, spitters and a boss every few waves.</p>
+            <ul>
+              <li>Board up the three gates and repair them between waves</li>
+              <li>Revive downed teammates, buy from the armory, grab the supply drops</li>
+              <li>5, 10 or 15 waves, or endless with a best-wave record</li>
+              <li>Bots defend with you, buy between waves and fall back to the keep</li>
+            </ul>
+          </div>
+        </article>
+        <article class="mode-card">
+          <!-- IN-GAME SHOT WANTED: swap this map render for img/1.0/ingame-br-dropin.webp once it exists -->
+          <picture>
+            <source srcset="img/1.0/render-valley.webp" type="image/webp">
+            <img src="img/1.0/render-valley.png" alt="br_valley from above: a river valley with a town, a factory, farms, bridges and hills" width="1092" height="682" loading="lazy">
+          </picture>
+          <div class="mode-text">
+            <h3>Battle Royale</h3>
+            <p class="mode-map">on br_valley</p>
+            <p>Drop in from high over a river valley with only a knife. Loot crates and floor weapons, fight while the zone closes, and be the last one, or the last squad, standing.</p>
+            <ul>
+              <li>Solo, duos or squads of 4</li>
+              <li>A town, a factory, a bunker, radio hill and tunnels under the river</li>
+              <li>Supply drops and a six-stage zone</li>
+              <li>Bots land, loot, hunt or camp by their playstyle</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+      <h3 class="modes-sub">And the classics</h3>
       <p class="lead">The popular mods from the old community servers, installed and set up for you, and patched so bots can play them. Pick a mode and a map, and bots fill the server.</p>
-      <ul>
+      <ul class="chips">
         <li><b>Zombie Plague</b></li><li><b>Warcraft 3</b></li><li><b>SuperHero</b></li><li><b>Gun Game</b></li><li><b>Deathmatch</b></li>
         <li><b>Hide and Seek</b></li><li><b>Deathrun</b></li><li><b>Surf</b></li><li><b>Kreedz</b></li><li><b>Base Builder</b></li><li><b>SoccerJam</b></li>
         <li><b>Paintball</b></li><li><b>Knife Arena</b></li><li>AWP, Scoutz, Deagle and pistol-only</li><li>Roll the Dice</li><li>Round-end music</li><li>Grappling hook</li>
@@ -765,7 +992,136 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     </div>
   </section>
 
-  <section class="feature flip" id="hosting">
+  <!-- ============ BUILD ============ -->
+  <header class="chapter" id="build">
+    <div class="wrap">
+      <h2>Build</h2>
+      <p>The tools we wished we had in 2004. Make a map, give it a mode, and playtest it with bots in one click. All of it is new in 1.0, and marked Beta while it settles in.</p>
+    </div>
+  </header>
+
+  <section class="feature">
+    <div class="wrap">
+      <div class="text">
+        <h3>A map editor that compiles</h3>
+        <p>Build Counter-Strike maps with real brushes and entities, like Hammer, in one 3D view. Draw boxes, push and pull their faces, place spawns and lights, paint textures. Your map is checked as you go.</p>
+        <ul>
+          <li>Move the camera like Unreal, Blender or Hammer: pick on first open</li>
+          <li>One view, or four like Hammer, a key away</li>
+          <li>Compiles with SDHLT, downloaded for you; leaks shown as a line to follow</li>
+          <li>Playtest: it compiles, teaches the bots the map and drops you in</li>
+          <li>Opens Hammer .rmf, J.A.C.K. .jmf and .map files; exports .map</li>
+        </ul>
+        <p class="more"><a class="btn" href="docs#map-editor">The map editor guide</a></p>
+      </div>
+      <div class="window">
+        <div class="window-bar"><span></span><span></span><span></span>Map editor</div>
+        <picture>
+          <source srcset="img/1.0/editor-quad.webp" type="image/webp">
+          <img src="img/1.0/editor-quad.png" alt="The map editor in its four-view layout: 3D, top, front and side views of ls_outpost" width="1440" height="900" loading="lazy">
+        </picture>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature flip">
+    <div class="wrap">
+      <div class="text">
+        <h3>Game modes from nodes and wires</h3>
+        <p>Game Mode Studio is a node editor in the style of Unreal's Blueprints. When something happens, a round starts or a player dies, check things and do things. The Studio writes the plugin for you.</p>
+        <ul>
+          <li>Over 200 nodes: players, timers, rounds, buying, squads, bots, creatures</li>
+          <li>Functions, macros, variables, structs and enums</li>
+          <li>Start from Last Stand, Battle Royale or a blank mode, and drop in snippets</li>
+          <li>Playtest with bots and watch the nodes light up as they run, with breakpoints and live values</li>
+          <li>Share your mode in Community: everyone's app builds it, so nothing that runs code is downloaded</li>
+        </ul>
+        <p class="more"><a class="btn" href="docs#game-mode-studio">The Studio guide</a></p>
+      </div>
+      <div class="window">
+        <div class="window-bar"><span></span><span></span><span></span>Game Mode Studio</div>
+        <picture>
+          <source srcset="img/1.0/studio.webp" type="image/webp">
+          <img src="img/1.0/studio.png" alt="Game Mode Studio with the Last Stand template open: event nodes wired to branches, messages and loops" width="1440" height="900" loading="lazy">
+        </picture>
+      </div>
+    </div>
+  </section>
+
+  <section class="toolbox" id="tools">
+    <div class="wrap">
+      <h3>Every tool in the box</h3>
+      <p class="lead">In the app under Tools, grouped the way you'd use them. Each one has its own page in the <a href="docs#tools">docs</a>.</p>
+      <div class="tool-groups">
+        <div class="tool-group">
+          <h4>Create</h4>
+          <dl>
+            <dt><a href="docs#map-editor">Map editor</a></dt><dd>Brushes, entities and textures in 3D, with compiling and playtests</dd>
+            <dt><a href="docs#game-mode-studio">Game Mode Studio</a></dt><dd>Game modes from nodes, debugged live in the game</dd>
+            <dt><a href="docs#plugin-studio">Plugin Studio</a></dt><dd>AMX Mod X plugins with suggestions and docs, tried in your game in a click</dd>
+            <dt><a href="docs#creature-studio">Creature Studio</a></dt><dd>Zombies, aliens, turrets and bosses, and the waves they come in</dd>
+          </dl>
+        </div>
+        <div class="tool-group">
+          <h4>Map tools</h4>
+          <dl>
+            <dt><a href="docs#map-doctor">Map doctor</a></dt><dd>Finds missing textures, sounds and models, and fixes them</dd>
+            <dt><a href="docs#health-check">Map health check</a></dt><dd>Bots play your map, then a report says where they fell or got stuck</dd>
+            <dt><a href="docs#nav-fixer">Nav fixer</a></dt><dd>Fix where bots can walk: beams, ledges, links and drops</dd>
+            <dt><a href="docs#callouts">Callouts</a></dt><dd>Name places, so bots say where they are</dd>
+            <dt><a href="docs#radar-maker">Radar maker</a></dt><dd>The overview spectators and HLTV see, drawn from the map</dd>
+          </dl>
+        </div>
+        <div class="tool-group">
+          <h4>Personalize</h4>
+          <dl>
+            <dt><a href="docs#crosshair-config">Crosshair &amp; config</a></dt><dd>Crosshair, keys, mouse and network, with the crosshair drawn live</dd>
+            <dt><a href="docs#bot-people">Bot people</a></dt><dd>Who the bots are, how they play and talk, and the regulars' names</dd>
+            <dt><a href="docs#spray-maker">Spray maker</a></dt><dd>Your spray from pictures, words and stickers</dd>
+          </dl>
+        </div>
+        <div class="tool-group">
+          <h4>Watch &amp; inspect</h4>
+          <dl>
+            <dt><a href="docs#map-viewer">Map viewer</a></dt><dd>Walk any map, with the bots' nav and what they learned</dd>
+            <dt><a href="docs#replay">Replay</a></dt><dd>Watch a bot match: where every bot went, and why</dd>
+            <dt><a href="docs#demos">Demos</a></dt><dd>Your demos and your servers' HLTV ones, in one list</dd>
+            <dt><a href="docs#textures-models">Textures &amp; models</a></dt><dd>Every texture and model in your game, and your own</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="agents" id="ai">
+    <div class="wrap">
+      <div class="agents-text">
+        <h3>Let an AI agent do the busywork</h3>
+        <p>Turn on <b>AI agents</b> in Settings and coding agents like Claude Code, Codex, OpenCode or Cursor can use the tools through MCP: read maps, check them for bots, build in the map editor, fix navs and run your servers.</p>
+        <p>It's off until you turn it on, only reachable from your own computer, and look-only until you allow changes. The app asks you before anything that overwrites a file or stops people playing.</p>
+        <p><a class="btn" href="docs#mcp">Connect an agent</a></p>
+      </div>
+      <figure class="console" aria-label="Example: connecting Claude Code">
+        <div class="window-bar"><span></span><span></span><span></span>Terminal</div>
+        <pre><code><span class="c"># one line in your terminal (the app copies it for you)</span>
+claude mcp add --scope user --transport stdio loner-strike \
+  -- "/Applications/Loner-Strike.app/Contents/MacOS/loner-strike" --mcp-stdio
+
+<span class="c"># then ask for something</span>
+&gt; make a small aim arena, check it for bots and playtest it</code></pre>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============ HOST ============ -->
+  <header class="chapter" id="hosting">
+    <div class="wrap">
+      <h2>Host</h2>
+      <p>Your friends don't need Loner-Strike, only the game. Host from the game you're playing, or run a real community server that stays up without you.</p>
+    </div>
+  </header>
+
+  <section class="feature flip">
     <div class="wrap">
       <div class="text">
         <h3>Play with friends</h3>
@@ -804,11 +1160,11 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <li>Admins, moderators and helpers who run it from their own app, each within their role</li>
           <li>Bans, mutes, a swear filter and reports, shared across your servers</li>
           <li>Mode and map votes, or a mode rotation; 5v5 matches, HLTV and demos</li>
-          <li>Updates itself once nobody's playing, and checks its own security and health</li>
-          <li>Backed up daily, and restarts itself after a crash</li>
-          <li>Live player count on your website, and Discord hears if it goes down</li>
+          <li>Fast downloads, so players get your maps in seconds</li>
+          <li>Updates itself once nobody's playing, backs itself up every day, and restarts after a crash</li>
+          <li>Live player count on your website, and a Discord message that keeps up with who's playing</li>
         </ul>
-        <p style="margin-top:18px"><a class="btn" href="docs#servers">How to set one up</a></p>
+        <p class="more"><a class="btn" href="docs#servers">How to set one up</a></p>
       </div>
       <div class="pair">
         <div class="window">
@@ -819,71 +1175,97 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     </div>
   </section>
 
-  <section class="everything" id="everything">
+  <!-- ============ SHARE ============ -->
+  <header class="chapter" id="share">
     <div class="wrap">
-      <h2>Everything in it</h2>
-      <p class="lead">Free, for Counter-Strike 1.6 and Condition Zero. Everything it changes is backed up and can be removed.</p>
-      <div class="feature-groups">
-        <div class="group">
-          <h3>Bots</h3>
-          <ul>
-            <li>Our own bot brain, built from the ground up: it studies every map, sees only what you could and decides for itself</li>
-            <li>Talk to them in team chat or on your mic: they answer and take orders</li>
-            <li>Ten lobbies, from newbies to bunnyhopping pros</li>
-            <li>Regulars with personalities and clan tags who remember you</li>
-            <li>The included maps and almost every stock map come ready; new ones they learn by themselves</li>
-          </ul>
-        </div>
-        <div class="group">
-          <h3>Modes and maps</h3>
-          <ul>
-            <li>22 classic community modes, patched so bots play them</li>
-            <li>Mode votes with rtv, or a mode rotation, each mode on maps made for it</li>
-<li>27 fun and popular maps installed for you, from aim_map to de_mirage</li>
-            <li>Thousands of maps from GameBanana, with screenshots and search</li>
-            <li>Skins, models, sprays, round-end music, Quake sounds and sound packs</li>
-            <li>Your own maps, sounds and AMX Mod X plugins from a file</li>
-          </ul>
-        </div>
-        <div class="group">
-          <h3>Friends</h3>
-          <ul>
-            <li>Seven ways to connect, from a LAN party to playit.gg and Hamachi</li>
-            <li>Server name, join password and a ready-to-send invite</li>
-            <li>A notification when someone joins while you're away</li>
-            <li>Find servers: a server browser like Steam's old one</li>
-          </ul>
-        </div>
-        <div class="group">
-          <h3>Servers</h3>
-          <ul>
-            <li>On your computer or a rented Linux machine, set up for you</li>
-            <li>Admins, moderators and VIPs, and helpers with their own app</li>
-            <li>Bans, mutes, a swear filter, reports, stats and votes</li>
-            <li>5v5 match mode, HLTV and demos</li>
-            <li>Updates, security checks and daily backups by themselves, all on one Health tab</li>
-            <li>Live status on your website and in Discord</li>
-          </ul>
-        </div>
-        <div class="group">
-          <h3>The app</h3>
-          <ul>
-            <li>Guided setup on Windows, or a Mac with CrossOver</li>
-            <li>Set up bots, rules and fun before you start a game</li>
-            <li>The Game Mode Menu in game (F3), and control from your phone</li>
-            <li>Backup, restore and moving to another computer</li>
-            <li>Signed automatic updates, and <a href="docs">docs</a> for everything</li>
-            <li>Open source (GPL), with a built-in radio</li>
-          </ul>
-        </div>
+      <h2>Share</h2>
+      <p>Made something? Put it where other Loner-Strike players find it, and try theirs in a click.</p>
+    </div>
+  </header>
+
+  <section class="feature share">
+    <div class="wrap">
+      <div class="text">
+        <h3>The Community browser</h3>
+        <p>Maps, Game Mode Studio modes, prefabs, sprays and textures made with Loner-Strike, in the app under Tools. Pick one, press <b>Try it</b>, and play it with bots.</p>
+        <ul>
+          <li>Files live on GameBanana, with its virus scan, pictures, likes and comments</li>
+          <li>Publish from the app: it checks your map, packs it with its bot nav and overview, and tells you what to put on GameBanana</li>
+          <li>Badges like "Works with bots" and "Checked with bots"</li>
+          <li>Moderated: a Report button on everything, and the team can pull a creation from every app</li>
+        </ul>
+        <p class="safe"><b>Nothing that runs code is shared.</b> Community takes content and Game Mode Studio modes only. A Studio mode travels as its graph, and each player's app builds it.</p>
+        <p class="more"><a class="btn" href="docs#community">How Community works</a></p>
+      </div>
+      <div class="window">
+        <div class="window-bar"><span></span><span></span><span></span>Community</div>
+        <picture>
+          <source srcset="img/1.0/community.webp" type="image/webp">
+          <img src="img/1.0/community.png" alt="The Community browser in Tools, with search, filters for maps, modes, prefabs, sprays and textures, and its tabs: Browse, Installed, Publish and Published" width="1440" height="900" loading="lazy">
+        </picture>
       </div>
     </div>
   </section>
 
+  <section class="community" id="community" hidden>
+    <div class="wrap">
+      <div class="community-text">
+        <h3>Find people to play with</h3>
+        <p>Jump on our server, or join the Discord. Share maps and setups, report bugs and see what's coming next. Bring your own clan tag.</p>
+      </div>
+      <div class="community-cards">
+        <div class="window srv" id="play-online" hidden>
+          <div class="window-bar"><span></span><span></span><span></span>Our server</div>
+          <div class="srv-body">
+            <div>
+              <b class="srv-name" id="ourserver-name">Loner-Strike | Alone Together</b>
+              <p class="server-live" id="ourserver-live" hidden></p>
+              <p class="server-addr">Bots and the community modes, 24/7.<br>Console: <code id="ourserver-addr"></code></p>
+            </div>
+            <div class="srv-actions">
+              <a class="btn primary" id="ourserver-join" href="#" data-event="Join our server">Join the server</a>
+              <button type="button" class="btn" id="servers-open" data-event="Open server list">All servers</button>
+            </div>
+          </div>
+        </div>
+      <!-- Our own card instead of Discord's widget: the invite comes from data-invite, or from the
+           server's widget settings (Server Settings, Widget, Invite channel) when that's set -->
+      <div class="window dc" id="discord" data-guild="1568421500636233748" data-invite="https://discord.gg/K9eBHVVwZE" hidden>
+        <div class="window-bar"><span></span><span></span><span></span>Discord</div>
+        <div class="dc-body">
+          <svg class="dc-logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.32 4.37A19.8 19.8 0 0 0 15.4 2.85a13.8 13.8 0 0 0-.63 1.3 18.4 18.4 0 0 0-5.53 0 12.6 12.6 0 0 0-.64-1.3 19.7 19.7 0 0 0-4.93 1.53C.54 9.06-.3 13.62.12 18.12a19.9 19.9 0 0 0 6.04 3.05c.49-.66.92-1.36 1.3-2.1a12.9 12.9 0 0 1-2.04-.98c.17-.13.34-.26.5-.39a14.2 14.2 0 0 0 12.16 0c.16.13.33.26.5.39-.65.38-1.33.71-2.05.98.38.74.81 1.44 1.3 2.1a19.8 19.8 0 0 0 6.04-3.05c.5-5.2-.84-9.73-3.55-13.75ZM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.96 2.42-2.16 2.42Zm7.97 0c-1.18 0-2.16-1.08-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.95 2.42-2.16 2.42Z"/></svg>
+          <div>
+            <b class="dc-name">Loner-Strike</b>
+            <span class="dc-online" id="dc-online" hidden><i></i><span></span></span>
+          </div>
+          <a class="btn primary" id="dc-join" href="#" target="_blank" rel="noopener" data-event="Join Discord">Join the Discord</a>
+        </div>
+      </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREENSHOTS: a tabbed tour, filled by the script below (TOUR) ============ -->
   <section class="gallery" id="gallery">
     <div class="wrap">
       <h2>Screenshots</h2>
-      <ul class="shots" id="shots"></ul>
+      <div class="tour" id="tour">
+        <div class="tour-tabs" role="tablist" aria-label="Screenshots" id="tour-tabs"></div>
+        <div class="tour-panel" role="tabpanel" id="tour-panel" tabindex="-1">
+          <button type="button" class="tour-stage" id="tour-stage" aria-label="Open this screenshot larger">
+            <picture><source id="tour-src" type="image/webp"><img id="tour-img" alt="" width="1440" height="900"></picture>
+          </button>
+          <div class="tour-bar">
+            <p class="tour-cap" id="tour-cap" aria-live="polite"></p>
+            <span class="tour-count" id="tour-count"></span>
+          </div>
+          <ul class="tour-strip" id="tour-strip" aria-label="Screenshots in this tab"></ul>
+        </div>
+        <noscript>
+          <p class="lead">The app's map editor, Game Mode Studio and map viewer:</p>
+          <img src="img/1.0/editor.png" alt="The map editor" width="1440" height="900" loading="lazy">
+        </noscript>
+      </div>
     </div>
   </section>
 
@@ -932,13 +1314,13 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <h3>Download free</h3>
         <p>Every release is also free on GitHub.</p>
         <a class="btn release" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download free">Download from GitHub</a>
-        <p class="fine">It updates itself from the app. Something not working? <a href="docs#no-bots-help">The docs</a> cover the usual problems.</p>
+        <p class="fine" id="which-file">On the release page, Windows takes the <code>-setup.exe</code> and a Mac the <code>.dmg</code>.</p>
         <ol class="steps">
           <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a>, or use the Windows version of Loner-Strike in Parallels.</li>
           <li><b>Open Loner-Strike.</b> It finds the game and walks you through setup. Everything it changes is backed up.</li>
           <li><b>Press Play.</b> Bots fill the server.</li>
         </ol>
-        <p class="fine">No account, no sign-up and no ads. The app talks to your game on your own computer, and voice commands never leave the machine running the server.</p>
+        <p class="fine">It updates itself from the app. Something not working? <a href="docs#no-bots-help">The docs</a> cover the usual problems. No account, no sign-up and no ads.</p>
       </div>
     </div>
   </section>
@@ -950,7 +1332,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <div class="thanks-grid">
         <a href="https://gamebanana.com" target="_blank" rel="noopener">
           <b>GameBanana</b>
-          <span>Maps, skins and sounds come from GameBanana's creators. Like and comment on what you play, and follow the people who make it.</span>
+          <span>Maps, skins and sounds come from GameBanana's creators, and Community creations live there. Like and comment on what you play, and follow the people who make it.</span>
         </a>
         <a href="https://www.alliedmods.net" target="_blank" rel="noopener">
           <b>AlliedModders</b>
@@ -960,48 +1342,14 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <b>The ReHLDS team</b>
           <span>ReGameDLL and ReHLDS are the base of our bot brain and server engine. Star their projects, and report what you find.</span>
         </a>
+        <a href="https://github.com/seedee/SDHLT" target="_blank" rel="noopener">
+          <b>SDHLT</b>
+          <span>The map compiler the editor uses, carrying on Zoner's Half-Life tools. Free software with its own licence.</span>
+        </a>
         <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md" target="_blank" rel="noopener">
           <b>The mod and map makers</b>
           <span>Zombie Plague, Warcraft 3, SuperHero, Gun Game and the rest. Every author is named in our credits.</span>
         </a>
-      </div>
-    </div>
-  </section>
-
-  <section class="community" id="community" hidden>
-    <div class="wrap">
-      <div class="community-text">
-        <h2>Community</h2>
-        <p>Jump on our server, or find people to play with on Discord. Share maps and setups, report bugs and see what's coming next. Bring your own clan tag.</p>
-      </div>
-      <div class="community-cards">
-        <div class="window srv" id="play-online" hidden>
-          <div class="window-bar"><span></span><span></span><span></span>Our server</div>
-          <div class="srv-body">
-            <div>
-              <b class="srv-name" id="ourserver-name">Loner-Strike | Alone Together</b>
-              <p class="server-live" id="ourserver-live" hidden></p>
-              <p class="server-addr">Bots and the community modes, 24/7.<br>Console: <code id="ourserver-addr"></code></p>
-            </div>
-            <div class="srv-actions">
-              <a class="btn primary" id="ourserver-join" href="#" data-event="Join our server">Join the server</a>
-              <button type="button" class="btn" id="servers-open" data-event="Open server list">All servers</button>
-            </div>
-          </div>
-        </div>
-      <!-- Our own card instead of Discord's widget: the invite comes from data-invite, or from the
-           server's widget settings (Server Settings, Widget, Invite channel) when that's set -->
-      <div class="window dc" id="discord" data-guild="1568421500636233748" data-invite="https://discord.gg/K9eBHVVwZE" hidden>
-        <div class="window-bar"><span></span><span></span><span></span>Discord</div>
-        <div class="dc-body">
-          <svg class="dc-logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.32 4.37A19.8 19.8 0 0 0 15.4 2.85a13.8 13.8 0 0 0-.63 1.3 18.4 18.4 0 0 0-5.53 0 12.6 12.6 0 0 0-.64-1.3 19.7 19.7 0 0 0-4.93 1.53C.54 9.06-.3 13.62.12 18.12a19.9 19.9 0 0 0 6.04 3.05c.49-.66.92-1.36 1.3-2.1a12.9 12.9 0 0 1-2.04-.98c.17-.13.34-.26.5-.39a14.2 14.2 0 0 0 12.16 0c.16.13.33.26.5.39-.65.38-1.33.71-2.05.98.38.74.81 1.44 1.3 2.1a19.8 19.8 0 0 0 6.04-3.05c.5-5.2-.84-9.73-3.55-13.75ZM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.96 2.42-2.16 2.42Zm7.97 0c-1.18 0-2.16-1.08-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.95 2.42-2.16 2.42Z"/></svg>
-          <div>
-            <b class="dc-name">Loner-Strike</b>
-            <span class="dc-online" id="dc-online" hidden><i></i><span></span></span>
-          </div>
-          <a class="btn primary" id="dc-join" href="#" target="_blank" rel="noopener" data-event="Join Discord">Join the Discord</a>
-        </div>
-      </div>
       </div>
     </div>
   </section>
@@ -1011,7 +1359,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <div class="docs-callout">
         <div>
           <b>Docs</b>
-          <p>Setup, the bots, voice commands, servers, and fixes for the usual problems, in one place.</p>
+          <p>Setup, the bots, the new modes, every tool, servers, Community and fixes for the usual problems, in one place.</p>
         </div>
         <a class="btn primary" href="docs">Read the docs</a>
       </div>
@@ -1026,7 +1374,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       </details>
       <details>
         <summary>Does it work on a Mac?</summary>
-        <p>Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in <b>CrossOver</b> (paid, with a free trial), and Loner-Strike finds it there. With <b>Parallels</b> (a Windows virtual machine), install the Windows version of Loner-Strike inside Windows.</p>
+        <p>Yes, but not with the Mac version of Counter-Strike, which can't run mods. Install Windows Steam and the game in <b>CrossOver</b> (paid, with a free trial), and Loner-Strike finds it there. The map editor compiles through CrossOver too. With <b>Parallels</b> (a Windows virtual machine), install the Windows version of Loner-Strike inside Windows.</p>
       </details>
       <details>
         <summary>Windows says it protected my PC</summary>
@@ -1055,6 +1403,22 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <details>
         <summary>Why do bots need to learn a map first?</summary>
         <p>Counter-Strike 1.6 never came with bots, so its maps have nothing telling bots where they can walk. The maps Loner-Strike installs and almost every stock map come with that already, so bots play them straight away. Any other map they learn the first time you play it, which takes a few minutes, or 15 minutes or more on a big one. It's once per map, and <a href="docs#teach-bots">Teach bots maps</a> can do it ahead of time.</p>
+      </details>
+      <details>
+        <summary>What does Beta mean on the tools?</summary>
+        <p>They're new in 1.0 and still settling in. They save backups before they change a file, but keep your own copies of work you care about, and tell us on Discord when something's off.</p>
+      </details>
+      <details>
+        <summary>Can I use maps I made in Hammer or J.A.C.K.?</summary>
+        <p>Yes. The map editor opens Hammer .rmf, J.A.C.K. .jmf and .map files, and exports a .map for any GoldSrc compiler. <a href="docs#map-import">What comes over</a>.</p>
+      </details>
+      <details>
+        <summary>What can I share in Community?</summary>
+        <p>Maps, prefabs, textures, sprays and Game Mode Studio modes. Hand-written plugins can't be shared, so nothing you download from Community runs code on your computer. <a href="docs#publishing">The rules</a>.</p>
+      </details>
+      <details>
+        <summary>Can an AI agent mess things up?</summary>
+        <p>Only as much as you let it. The connector is off until you turn it on, agents can only look until you allow changes, and the app asks you before anything that overwrites a file or stops people playing. Passwords and keys are never shown to them.</p>
       </details>
       <details>
         <summary>Who made the mods?</summary>
@@ -1238,63 +1602,253 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     if (a) window.plausible(a.dataset.event);
   });
 
-  // ---- screenshots ------------------------------------------------------------
-  // Add one: put the image in img/gallery/ and add a line here. tall: true for phone shots.
-  const GALLERY = [
-    { src: "img/gallery/play.jpg", caption: "Pick a preset or a mode, mid-game" },
-    { src: "img/gallery/players.jpg", caption: "Bots with names, clan tags and their own playstyles" },
-    { src: "img/gallery/maps.jpg", caption: "Maps with screenshots, filters and favourites" },
-    { src: "img/gallery/bots.jpg", caption: "Bot skill, style and personality" },
-    { src: "img/gallery/friends.jpg", caption: "Seven ways for friends to join" },
-    { src: "img/gallery/servers.jpg", caption: "Your own server on a rented machine, with a live console" },
-    { src: "img/gallery/server-maps.jpg", caption: "Send your own maps to a server" },
-    { src: "img/gallery/website-status.jpg", caption: "Live player count for your website" },
-    { src: "img/gallery/radio.jpg", caption: "And a radio, obviously" },
-    { src: "img/gallery/phone-server.jpg", caption: "Run the game or a server from your phone", tall: true },
-  ];
+  // ---- release banner ----------------------------------------------------------
+  // Before release day it says when; from November 14 it says it's out.
+  {
+    const banner = document.getElementById("release-banner");
+    if (Date.now() >= Date.parse("2026-11-14T00:00:00-08:00")) {
+      const a = Object.assign(document.createElement("a"), { href: "#get", textContent: "Get it" });
+      a.dataset.event = "Get it (banner)";
+      banner.replaceChildren("Loner-Strike 1.0.0 is out: build maps and modes, play them with bots, host them and share them. ", a);
+    }
+  }
 
-  const list = document.getElementById("shots");
+  // Which file to take from the release page, for this computer
+  {
+    const p = document.getElementById("which-file");
+    const ua = navigator.userAgent;
+    if (/Macintosh|Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua)) p.innerHTML = 'You\'re on a Mac: take the <code>.dmg</code>, and set up the game in CrossOver first (<a href="docs#mac">how</a>).';
+    else if (/Windows/.test(ua)) p.innerHTML = "You're on Windows: take the <code>-setup.exe</code>.";
+  }
+
+  // ---- screenshots: tabs ---------------------------------------------------------
+  // A shot named "x" is img/1.0/x.webp, with img/1.0/x.png for old browsers and img/1.0/thumb/x.webp
+  // for the strip. app-* shots fall back to the older jpgs in img/gallery/.
+  // draft: an in-game shot still to take, at img/1.0/ingame/<draft>.jpg. Put the file there and its name in
+  // INGAME, and it shows; until then it's left out. ?drafts on the page shows where each one goes.
+  // See docs/notes/Site.md for the list and how to frame them.
+  const INGAME = new Set([]);
+  const shot = (name, cap, more) => Object.assign({
+    webp: `img/1.0/${name}.webp`, src: `img/1.0/${name}.png`, thumb: `img/1.0/thumb/${name}.webp`, cap,
+  }, more);
+  const app = (name, cap, more) => shot(`app-${name}`, cap, Object.assign({ src: `img/gallery/${name}.jpg` }, more));
+  const draft = (name, cap) => ({ draft: name, have: INGAME.has(name), src: `img/1.0/ingame/${name}.jpg`, thumb: `img/1.0/ingame/${name}.jpg`, cap });
+  const TOUR = [
+    { tab: "Play", shots: [
+      draft("bots-site", "Bots taking a site together"),
+      app("play", "Pick a preset or a mode, mid-game"),
+      app("players", "Bots with names, clan tags and their own playstyles"),
+      app("bots", "Bot skill, style and personality"),
+      app("maps", "Maps with screenshots, filters and favourites"),
+      draft("bots-chat", "Ask the team for an AWP; a bot drops one"),
+      app("radio", "And a radio, obviously"),
+    ] },
+    { tab: "Game modes", shots: [
+      draft("laststand-wave", "Last Stand: holding the west gate against a wave"),
+      shot("render-outpost", "Last Stand's ls_outpost: the courtyard, the keep and the armory"),
+      draft("laststand-revive", "Last Stand: reviving a teammate between waves"),
+      draft("br-dropin", "Battle Royale: dropping in over br_valley"),
+      shot("render-valley", "Battle Royale's br_valley: town, factory, farms and the river"),
+      draft("br-zone", "Battle Royale: the zone closing in on the last squads"),
+      draft("deathrun", "Deathrun: bots running the course while the activator waits"),
+      draft("surf", "Surf: a bot carving a ramp"),
+    ] },
+    { tab: "Map editor", shots: [
+      shot("editor", "Brushes, entities and textures in one 3D view"),
+      shot("editor-quad", "Or four views, like Hammer"),
+      shot("editor-compile", "Compile with SDHLT, then playtest with bots"),
+      shot("editor-checks", "Your map is checked as you go"),
+    ] },
+    { tab: "Game Mode Studio", shots: [
+      shot("studio", "A game mode from nodes and wires: the Last Stand template"),
+      shot("creatures", "Creature Studio: the creatures modes throw at you, and their waves"),
+      shot("plugins", "Plugin Studio: AMX Mod X with suggestions and docs"),
+    ] },
+    { tab: "Tools", shots: [
+      shot("tools", "Every tool, on one page in the app"),
+      shot("viewer-nav", "The map viewer with the bots' nav and named places"),
+      shot("navfix", "Nav fixer: where bots can walk, and where they can't get back from"),
+      shot("doctor", "Map doctor: what a map is missing, and the fix"),
+      shot("callouts", "Callouts: name places so bots say where they are"),
+      shot("radar", "Radar maker: the overview, drawn from the map"),
+      shot("playercfg", "Crosshair & config, with the crosshair drawn live"),
+      shot("spray", "Spray maker"),
+      shot("people", "Bot people: who the bots are"),
+      shot("models", "Every texture and model in your game"),
+      shot("render-dust2", "Any map, lit like the game"),
+    ] },
+    { tab: "Hosting", shots: [
+      app("servers", "Your own server on a rented machine, with a live console"),
+      app("friends", "Seven ways for friends to join"),
+      app("server-maps", "Send your own maps to a server"),
+      app("website-status", "Live player count for your website"),
+      app("phone-server", "Run the game or a server from your phone", { tall: true }),
+    ] },
+    { tab: "Community", shots: [
+      shot("community", "Community: maps, modes, prefabs, sprays and textures made with Loner-Strike"),
+      draft("community-browse", "Trying a community map with bots"),
+    ] },
+  ];
+  const showDrafts = /[?&]drafts\b/.test(location.search);
+
+  const tabsEl = document.getElementById("tour-tabs");
+  const panel = document.getElementById("tour-panel");
+  const stage = document.getElementById("tour-stage");
+  const big = document.getElementById("tour-img");
+  const bigSrc = document.getElementById("tour-src");
+  const strip = document.getElementById("tour-strip");
   const viewer = document.getElementById("viewer");
-  const big = document.getElementById("viewer-img");
-  let at = 0;
-  GALLERY.forEach((g, i) => {
-    const li = document.createElement("li");
-    li.innerHTML = `<button type="button"><div class="frame${g.tall ? " tall" : ""}"><img loading="lazy" alt=""></div><span></span></button>`;
-    li.querySelector("img").src = g.src;
-    li.querySelector("img").alt = g.caption;
-    li.querySelector("span").textContent = g.caption;
-    li.querySelector("button").addEventListener("click", () => open(i));
-    list.appendChild(li);
+  const vimg = document.getElementById("viewer-img");
+  let tab = 0, at = 0;
+  const shots = () => TOUR[tab].shots.filter((s) => !s.draft || s.have || showDrafts);
+
+  // a draft shot counts once its picture loads
+  if (showDrafts) for (const t of TOUR) for (const s of t.shots) if (s.draft && !s.have) {
+    const probe = new Image();
+    probe.onload = () => { s.have = true; if (TOUR[tab] === t) render(); };
+    probe.src = s.src;
+  }
+
+  const pictureOf = (s, thumb) => {
+    if (s.draft && !s.have) {
+      const d = document.createElement("span");
+      d.className = "tour-draft";
+      d.textContent = `In-game shot to take: ${s.cap} (img/1.0/ingame/${s.draft}.jpg)`;
+      return d;
+    }
+    const img = document.createElement("img");
+    img.alt = thumb ? "" : s.cap;
+    img.loading = "lazy";
+    img.src = thumb ? s.thumb : s.src;
+    if (!thumb || !s.webp) return img;
+    const pic = document.createElement("picture");
+    pic.append(Object.assign(document.createElement("source"), { srcset: s.thumb, type: "image/webp" }), img);
+    img.src = s.src;
+    return pic;
+  };
+
+  const tabs = TOUR.map((t, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.id = `tour-tab-${i}`;
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-controls", "tour-panel");
+    b.textContent = t.tab;
+    b.addEventListener("click", () => pickTab(i));
+    tabsEl.append(b);
+    return b;
   });
-  const show = (i) => {
-    at = (i + GALLERY.length) % GALLERY.length;
-    big.src = GALLERY[at].src;
-    big.alt = GALLERY[at].caption;
-    document.getElementById("viewer-cap").textContent = GALLERY[at].caption;
-    document.getElementById("count").textContent = `${at + 1} / ${GALLERY.length}`;
+  tabsEl.addEventListener("keydown", (e) => {
+    const n = { ArrowRight: tab + 1, ArrowLeft: tab - 1, Home: 0, End: TOUR.length - 1 }[e.key];
+    if (n === undefined) return;
+    e.preventDefault();
+    pickTab((n + TOUR.length) % TOUR.length);
+    tabs[tab].focus();
+  });
+
+  function render() {
+    const list = shots();
+    if (at >= list.length) at = 0;
+    const s = list[at];
+    tabs.forEach((b, i) => { b.setAttribute("aria-selected", String(i === tab)); b.tabIndex = i === tab ? 0 : -1; });
+    panel.setAttribute("aria-labelledby", tabs[tab].id);
+    // the big picture
+    stage.replaceChildren();
+    if (s.draft && !s.have) stage.append(pictureOf(s));
+    else {
+      bigSrc.srcset = s.webp || "";
+      if (s.webp) bigSrc.setAttribute("type", "image/webp"); else bigSrc.removeAttribute("type");
+      big.alt = s.cap;
+      big.removeAttribute("loading");
+      if (big.getAttribute("src") !== s.src) { stage.classList.add("loading"); big.src = s.src; }
+      stage.append(big.parentElement);
+    }
+    document.getElementById("tour-cap").textContent = s.cap;
+    document.getElementById("tour-count").textContent = `${at + 1} of ${list.length}`;
+    // the strip
+    strip.replaceChildren(...list.map((x, i) => {
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("aria-label", x.cap);
+      if (x.tall) b.className = "tall";
+      if (i === at) b.setAttribute("aria-current", "true");
+      b.tabIndex = i === at ? 0 : -1;
+      b.append(pictureOf(x, true));
+      b.addEventListener("click", () => pickShot(i));
+      li.append(b);
+      return li;
+    }));
+    const cur = strip.querySelector('[aria-current="true"]');
+    if (cur) cur.parentElement.scrollIntoView({ block: "nearest", inline: "nearest" });
+    // the next one, ready before it's asked for
+    const nx = list[(at + 1) % list.length];
+    if (nx && !nx.draft) new Image().src = nx.webp || nx.src;
+  }
+  big.addEventListener("load", () => stage.classList.remove("loading"));
+
+  function pickTab(i) {
+    if (i === tab) return;
+    tab = i; at = 0; render();
+    window.plausible("Screenshots tab", { props: { tab: TOUR[i].tab } });
+  }
+  function pickShot(i, focus = true) {
+    const n = shots().length;
+    at = (i + n) % n; render();
+    if (focus) strip.querySelector('[aria-current="true"]')?.focus({ preventScroll: true });
+  }
+  strip.addEventListener("keydown", (e) => {
+    const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (e.key === "Home") { e.preventDefault(); pickShot(0); }
+    else if (e.key === "End") { e.preventDefault(); pickShot(shots().length - 1); }
+    else if (d) { e.preventDefault(); pickShot(at + d); }
+  });
+  // swipe the big picture on phones
+  let sx = null, sy = null;
+  stage.addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  stage.addEventListener("touchend", (e) => {
+    if (sx === null) return;
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    sx = null;
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) { stage.dataset.swiped = "1"; pickShot(at + (dx < 0 ? 1 : -1), false); }
+  });
+
+  // the big viewer, over the page, for the open tab's shots
+  const showBig = () => {
+    const list = shots().filter((s) => !s.draft || s.have);
+    const s = shots()[at];
+    if (!list.length || (s.draft && !s.have)) return;
+    vimg.src = s.webp || s.src;
+    vimg.alt = s.cap;
+    document.getElementById("viewer-cap").textContent = s.cap;
+    document.getElementById("count").textContent = `${TOUR[tab].tab}: ${at + 1} / ${shots().length}`;
   };
-  const open = (i) => {
-    show(i);
+  stage.addEventListener("click", () => {
+    if (stage.dataset.swiped) { delete stage.dataset.swiped; return; }
+    const s = shots()[at];
+    if (s.draft && !s.have) return;
+    showBig();
     viewer.showModal();
-    window.plausible("Screenshot", { props: { image: GALLERY[i].src.split("/").pop() } });
-  };
-  document.getElementById("prev").addEventListener("click", () => show(at - 1));
-  document.getElementById("next").addEventListener("click", () => show(at + 1));
+    window.plausible("Screenshot", { props: { image: (s.webp || s.src).split("/").pop() } });
+  });
+  const step = (d) => { pickShot(at + d, false); showBig(); };
+  document.getElementById("prev").addEventListener("click", () => step(-1));
+  document.getElementById("next").addEventListener("click", () => step(1));
   document.getElementById("close").addEventListener("click", () => viewer.close());
   viewer.addEventListener("click", (e) => { if (e.target === viewer || e.target.tagName === "FIGURE") viewer.close(); });
   viewer.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowLeft") show(at - 1);
-    if (e.key === "ArrowRight") show(at + 1);
+    if (e.key === "ArrowLeft") step(-1);
+    if (e.key === "ArrowRight") step(1);
   });
-  // swipe on phones
   let x0 = null;
   viewer.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
   viewer.addEventListener("touchend", (e) => {
     if (x0 === null) return;
     const dx = e.changedTouches[0].clientX - x0;
-    if (Math.abs(dx) > 50) show(at + (dx < 0 ? 1 : -1));
+    if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1);
     x0 = null;
   });
+  render();
 
   // The loader fills up once, like Steam connecting in 2004
   const bar = document.getElementById("bar");

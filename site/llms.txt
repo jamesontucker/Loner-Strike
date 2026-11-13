@@ -1,6 +1,6 @@
 # Loner-Strike
 
-> Loner-Strike is a free, open-source (GPL-3.0) desktop app for Counter-Strike 1.6 and Counter-Strike: Condition Zero on Steam. It installs classic community mods patched so bots can play them, makes bots play like people, and gives you one control panel for your own game or a dedicated server, including from your phone. Windows, and Mac through CrossOver. Made by nanoshrine.
+> Loner-Strike is a free, open-source (GPL-3.0) desktop app for Counter-Strike 1.6 and Counter-Strike: Condition Zero on Steam. It makes bots play like people, installs classic community mods patched so bots can play them, adds its own modes (Last Stand and Battle Royale), and gives you one control panel for your own game or a dedicated server, including from your phone. Version 1.0 adds Tools for making things (a map editor that compiles and playtests with bots, Game Mode Studio, Plugin Studio and more), a Community browser for sharing maps and modes, and an MCP connector for AI coding agents. Windows, and Mac through CrossOver. Made by nanoshrine.
 
 Key facts:
 
@@ -15,7 +15,11 @@ Key facts:
 
 - [Website](https://lonerstrike.com/): what it does, screenshots, download and FAQ
 - [Full details for AI assistants](https://lonerstrike.com/llms-full.txt): features, setup, servers and FAQ in plain text
-- [Docs](https://lonerstrike.com/docs): setup, the app, bot styles and settings, talking to the bots, voice commands, servers, in-game commands and troubleshooting
+- [Docs](https://lonerstrike.com/docs): setup, the app, the bots, game modes, every tool, servers, Community, AI agents, in-game commands and troubleshooting
+- [What's new in 1.0](https://lonerstrike.com/docs#whats-new): the new modes, Tools, Community and AI agents
+- [Map editor](https://lonerstrike.com/docs#map-editor) and [Game Mode Studio](https://lonerstrike.com/docs#game-mode-studio): making maps and modes
+- [Connect an AI agent](https://lonerstrike.com/docs#mcp): MCP setup for Claude Code, Codex, OpenCode, Cursor and others
+- [Community](https://lonerstrike.com/docs#community): sharing and trying creations
 - [Run a server on a VPS](https://lonerstrike.com/docs#vps): step-by-step guide to an always-on server on a rented Linux machine
 - [README on GitHub](https://github.com/jamesontucker/Loner-Strike#readme): features, install and how it works
 - [Linux server guide (Markdown)](https://github.com/jamesontucker/Loner-Strike/blob/main/docs/linux-server.md): the full VPS guide, with troubleshooting

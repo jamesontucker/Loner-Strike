@@ -38,6 +38,28 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 - Add your own maps, sounds and AMX Mod X plugins from a file.
 - Mods are downloaded from their original sources and checked against pinned checksums.
 
+## New in 1.0: game modes
+
+- Last Stand (map ls_outpost): co-op; everyone plays Counter-Terrorist and holds a walled desert outpost against waves of creatures (zombies, runners, brutes, spitters, a boss every few waves). Barricades to repair, revives, an armory shop and supply drops. 5, 10, 15 or endless waves. Bots defend alongside you. Also set up on de_dust2, de_inferno, de_nuke, de_aztec and cs_office.
+- Battle Royale (map br_valley): drop in from high over a river valley with only a knife, loot crates and floor weapons, and be the last one or last squad standing while a six-stage zone closes. Solo, duos or squads of 4. Bots land, loot, hunt or camp by playstyle. Also set up on de_aztec, cs_italy, de_dust2, de_inferno and de_train.
+- Bots run deathrun courses (and a bot activator springs the traps) and surf.
+
+## New in 1.0: Tools (Beta)
+
+A Tools section in the app for making things:
+- Map editor: brushes, entities and textures in one 3D view (or four, like Hammer), with Unreal, Blender or Hammer camera controls, live checks, prefabs, Hammer .rmf / J.A.C.K. .jmf / .map import and .map export. Compiles with SDHLT (downloaded on first use; through CrossOver on a Mac) and playtests with bots in one click.
+- Game Mode Studio: game modes from Blueprint-style node graphs (200+ nodes, functions, macros, variables, structs, enums, snippets), compiled to an AMX Mod X plugin; playtest with bots while nodes light up, with breakpoints and live values.
+- Plugin Studio: an AMX Mod X editor with suggestions, docs, plain-language compile errors and "Try it in my game"; loner.inc gives short natives for modes, HUD, players, timers and bots.
+- Creature Studio: creature types (zombies, aliens, animals, turrets, bosses) and the waves they come in.
+- Map tools: Map doctor, Map health check (bots play a map and a report says where they fall or get stuck), Nav fixer, Callouts and Radar maker.
+- Personalize: Crosshair & config, Bot people, Spray maker.
+- Watch & inspect: Map viewer (with the bots' nav and what they learned), Replay, Demos, Textures & models.
+
+## New in 1.0: Community and AI agents
+
+- Community browser (Tools, Share): maps, Game Mode Studio modes, prefabs, sprays and textures made with Loner-Strike, hosted on GameBanana (tagged "Software Used: LonerStrike") and moderated. Try one in a click. Only content and Studio modes can be shared; nothing that runs code is downloaded. Publishing is done from the app, which checks and packages a map with its nav, knowledge and overview. Docs: https://lonerstrike.com/docs#community
+- AI agents (Settings): an MCP connector so coding agents such as Claude Code, Codex, OpenCode, Cursor, Claude Desktop and VS Code can use the tools. Off by default, local only, read-only until "Allow changes", and it asks before anything destructive. Setup: https://lonerstrike.com/docs#mcp
+
 ## Playing with friends
 
 - Seven ways to connect: LAN, your router (port forwarding), playit.gg, Tailscale, ZeroTier, Radmin VPN and Hamachi.
@@ -72,7 +94,7 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 ## The app
 
 - Guided setup that finds your game, on Windows or a Mac with CrossOver.
-- The sidebar for your own game is grouped like a server's tabs: Game (Play, Bots, Rules, Fun, Add-ons, Rotation & extras), People (Players, Moderation, Stats, Admins, Welcome page), Online (Play with friends, Find servers), My library (Maps, Mods, Skins & models, Sounds, Get more) and Hosting (Servers). A bar on every page says whether you're changing your own game or a server, with Back to my game.
+- The sidebar for your own game is grouped like a server's tabs: Game (Play, Bots, Rules, Fun, Add-ons, Rotation & extras), People (Players, Moderation, Stats, Admins, Welcome page), Online (Play with friends, Find servers), My library (Maps, Mods, Skins & models, Sounds, Get more) and Hosting (Servers), plus Tools (Beta). A bar on every page says whether you're changing your own game or a server, with Back to my game.
 - Bots, Rules, Fun and Add-ons can be changed before a game starts; changes apply when you start one.
 - An in-game menu on F3, and quick actions in the app while you play: pause, round (including Start a mode vote), map, bot count with difficulty and style, god mode, noclip, announce and more.
 - Control it from your phone by scanning a QR code on the same Wi-Fi. Actions that delete or reinstall stay on the computer.

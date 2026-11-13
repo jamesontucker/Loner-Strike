@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Docs · Loner-Strike</title>
-<meta name="description" content="How to use Loner-Strike: setup, the app, bot styles and settings, talking to the bots in chat and on voice, servers, and fixes for common problems like no bots or Bad Rcon.">
+<meta name="description" content="How to use Loner-Strike 1.0: setup, the bots, Last Stand and Battle Royale, the map editor, Game Mode Studio, Plugin Studio and every tool, servers, Community, connecting AI agents, and fixes for common problems.">
 <link rel="canonical" href="https://lonerstrike.com/docs">
 <meta name="author" content="nanoshrine">
 <meta name="robots" content="index, follow, max-image-preview:large">
@@ -17,7 +17,7 @@
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <meta property="og:site_name" content="Loner-Strike">
 <meta property="og:title" content="Loner-Strike docs">
-<meta property="og:description" content="Setup, the app, the bots, servers, and fixes for common problems.">
+<meta property="og:description" content="Setup, the bots, the new modes, the map editor and every tool, servers, Community, AI agents, and fixes for common problems.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://lonerstrike.com/docs">
 <meta property="og:locale" content="en_US">
@@ -141,6 +141,10 @@ details.prov p { margin: 0; padding: 0 14px 12px; }
   .table td:first-child { margin-bottom: 2px; }
   .table thead { display: none; }
 }
+figure.shot { margin: 16px 0 20px; }
+figure.shot img { display: block; width: 100%; height: auto; border-radius: 3px; background: #23271c; box-shadow: var(--raised), 0 14px 40px rgba(0,0,0,.3); }
+figure.shot figcaption { margin-top: 8px; color: var(--faint); font-size: 15px; }
+h3 { font-weight: 700; }
 .pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; padding-top: 16px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
 .pager a { display: block; text-decoration: none; background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; min-width: 0; color: var(--bone); font-weight: 700; }
 .pager a small { display: block; color: var(--faint); font-weight: 500; font-size: 14px; }
@@ -178,8 +182,9 @@ footer a { color: var(--dim); }
     <div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Docs</span></div>
     <nav aria-label="Site">
       <a href="/">Home</a>
+      <a href="#whats-new">What's new</a>
+      <a href="#tools">Tools</a>
       <a href="#vps">Run a server</a>
-      <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CHANGELOG.md">What's new</a>
       <a class="btn" href="/#get">Get it</a>
     </nav>
   </div>
@@ -205,7 +210,7 @@ footer a { color: var(--dim); }
 <section class="topic" id="getting-started" data-group="Basics">
   <p class="crumb">Basics</p>
   <h1>Getting started</h1>
-  <p class="lead">Install in a few minutes, then pick where to go next: <a href="#playing">play with bots</a>, <a href="#friends">play with friends</a> or <a href="#servers">run a server</a>.</p>
+  <p class="lead">Install in a few minutes, then pick where to go next: <a href="#playing">play with bots</a>, <a href="#friends">play with friends</a>, <a href="#servers">run a server</a> or <a href="#tools">make something</a>. Coming from 0.1? See <a href="#whats-new">what's new in 1.0</a>.</p>
   <h2 id="requirements">What you need</h2>
   <ul>
     <li><b>Counter-Strike 1.6 or Condition Zero on Steam</b>, the current version. Old retail or repacked copies can't run the mods (<a href="#old-copy">why</a>).</li>
@@ -236,6 +241,41 @@ footer a { color: var(--dim); }
   <p>Setup backs up every file it replaces, and mods only run in games you host.</p>
 </section>
 
+<section class="topic" id="whats-new" data-group="Basics">
+  <p class="crumb">Basics</p>
+  <h1>What's new in 1.0</h1>
+  <p class="lead">1.0 is the full release. Everything from 0.1 is still here, and it now covers the whole loop: build something, play it with bots, host it, and share it.</p>
+  <h2 id="new-play">Play</h2>
+  <ul>
+    <li><b>Two new modes with their own maps</b>: <a href="#last-stand">Last Stand</a> on ls_outpost and <a href="#battle-royale">Battle Royale</a> on br_valley. Both work on several stock maps too.</li>
+    <li><b>Bots in more modes</b>: they run <a href="#deathrun-surf">deathrun</a> courses and spring the traps, and they surf.</li>
+    <li>Bots that play like people, on Loner-Strike's own bot brain, with team chat and <a href="#voice">voice commands</a>.</li>
+  </ul>
+  <h2 id="new-build">Build</h2>
+  <p>A new <b>Tools</b> section in the app, marked Beta while it settles in. <a href="#tools">Every tool</a> has its own page here:</p>
+  <ul>
+    <li><a href="#map-editor">Map editor</a> that compiles with SDHLT and <a href="#compile-playtest">playtests with bots</a>, and <a href="#map-import">opens Hammer and J.A.C.K. maps</a>.</li>
+    <li><a href="#game-mode-studio">Game Mode Studio</a>: game modes from nodes and wires, <a href="#studio-debugging">debugged live</a> in the game.</li>
+    <li><a href="#plugin-studio">Plugin Studio</a> for AMX Mod X, and <a href="#creature-studio">Creature Studio</a> for creatures and waves.</li>
+    <li>Map tools: <a href="#map-doctor">Map doctor</a>, <a href="#health-check">Map health check</a>, <a href="#nav-fixer">Nav fixer</a>, <a href="#callouts">Callouts</a>, <a href="#radar-maker">Radar maker</a>.</li>
+    <li>Make the game yours: <a href="#crosshair-config">Crosshair &amp; config</a>, <a href="#bot-people">Bot people</a>, <a href="#spray-maker">Spray maker</a>.</li>
+    <li>Look inside: <a href="#map-viewer">Map viewer</a>, <a href="#replay">Replay</a>, <a href="#demos">Demos</a>, <a href="#textures-models">Textures &amp; models</a>.</li>
+  </ul>
+  <h2 id="new-host">Host</h2>
+  <ul>
+    <li>Servers update themselves once nobody's playing, and a Linux server is <a href="#backups">backed up</a> to your computer every day.</li>
+    <li>New tabs on every server: <b>Health</b>, <b>Who can join</b>, <b>Moderation</b> and <b>Stats</b>.</li>
+    <li><a href="#shared-control">Shared control</a> is safer: Moderators can't act against the owner or Admins.</li>
+    <li>A <a href="#tick-rate">tick rate</a> setting and a mode rotation; Discord hears when a server goes down.</li>
+  </ul>
+  <h2 id="new-share">Share and connect</h2>
+  <ul>
+    <li><a href="#community">Community</a>: maps and modes made with Loner-Strike, hosted on GameBanana and moderated. Try one in a click, or <a href="#publishing">publish your own</a>.</li>
+    <li><a href="#mcp">AI agents</a>: let coding agents like Claude Code, Codex, OpenCode or Cursor use the tools.</li>
+  </ul>
+  <p>Every change is in the <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CHANGELOG.md">changelog</a>.</p>
+</section>
+
 <section class="topic" id="the-app" data-group="Basics">
   <p class="crumb">Basics</p>
   <h1>Finding your way around</h1>
@@ -250,7 +290,8 @@ footer a { color: var(--dim); }
       <tr><td><b>Online</b></td><td><b>Play with friends</b>, <b>Find servers</b></td></tr>
       <tr><td><b>My library</b></td><td><b>Maps</b>, <b>Mods</b>, <b>Skins &amp; models</b>, <b>Sounds</b>, <b>Get more</b></td></tr>
       <tr><td><b>Hosting</b></td><td><b>Servers</b></td></tr>
-      <tr><td><b>Settings</b></td><td>Updates, phone access, your game folder, backup and restore, help</td></tr>
+      <tr><td><b>Tools</b> (Beta)</td><td>The <a href="#map-editor">map editor</a>, <a href="#game-mode-studio">Game Mode Studio</a> and every other <a href="#tools">tool</a>, and <a href="#community">Community</a></td></tr>
+      <tr><td><b>Settings</b></td><td>Updates, phone access, your game folder, backup and restore, <a href="#mcp">AI agents</a>, help</td></tr>
     </tbody>
   </table>
   </div>
@@ -291,7 +332,7 @@ footer a { color: var(--dim); }
   <p>Both are for you as the host and for admins. If <span class="kbd">F3</span> does nothing, type <code>bind F3 gamemenu</code> in the game console.</p>
   <p>In the app, a bar of quick actions sits at the top while a game runs: <b>Pause</b>, <b>Round</b> (restart, end, add time, <b>Start a mode vote</b>), <b>Map</b>, the bot count with <b>Difficulty</b> and <b>Bot style</b> in its menu, <b>You</b> (god mode, noclip, respawn), <b>Announce</b> and <b>Record demo</b>.</p>
   <h2 id="modes">Game modes</h2>
-  <p>Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf, Paintball and the rest are installed from <b>Mods</b>. Each one is patched so bots can play it, and each has a note on how well they do. Switch modes from Play or the F3 menu; switching reloads the map.</p>
+  <p>New in 1.0, <a href="#last-stand">Last Stand</a> and <a href="#battle-royale">Battle Royale</a> come with their own maps. Zombie Plague, Warcraft 3, SuperHero, Gun Game, <a href="#deathrun-surf">Deathrun, Surf</a>, Paintball and the rest are installed from <b>Mods</b>. Each one is patched so bots can play it, and each has a note on how well they do. Switch modes from Play or the F3 menu; switching reloads the map.</p>
   <p>Modes have their own chat commands, like <code>/war3menu</code> in Warcraft 3 or <code>/guns</code> in deathmatch. See <a href="#commands-modes">In-game commands</a>.</p>
   <h2 id="match-mode">5v5 matches</h2>
   <p>Match mode runs a proper match: warmup, <code>/ready</code>, a knife round for sides, and pauses. The Play page shows the match panel when it's on. The commands are under <a href="#commands-match">In-game commands</a>.</p>
@@ -370,6 +411,108 @@ footer a { color: var(--dim); }
 </section>
 
 <!-- ============ The bots ============ -->
+
+<!-- ============ Game modes ============ -->
+
+<section class="topic" id="last-stand" data-group="Game modes">
+  <p class="crumb">Game modes</p>
+  <h1>Last Stand</h1>
+  <p class="lead">Co-op against waves of creatures. Everyone plays Counter-Terrorist and holds a base; the enemies are zombies, runners, brutes, spitters and bosses.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/render-outpost.webp" type="image/webp"><img src="img/1.0/render-outpost.png" alt="ls_outpost from above: the walled courtyard, the keep and the armory" width="1092" height="682" loading="lazy"></picture>
+    <figcaption>ls_outpost, the map made for it, in the map viewer.</figcaption>
+  </figure>
+  <h2 id="ls-start">Start it</h2>
+  <ol>
+    <li>On <b>Play</b>, under <b>Game mode</b>, pick <b>Last Stand</b>.</li>
+    <li>Pick the map. <b>Maps for Last Stand</b> lists the ones made for it: ls_outpost, and stock maps with a Last Stand setup (de_dust2, de_inferno, de_nuke, de_aztec, cs_office).</li>
+    <li>Press <b>Play Last Stand on</b> the map. Any map whose name starts with <code>ls_</code> picks the mode by itself.</li>
+  </ol>
+  <h2 id="ls-rounds">How a stand goes</h2>
+  <ul>
+    <li>You get about 45 seconds to get ready, then the waves come. A banner at the top says the wave and how many are left.</li>
+    <li>Between waves (20 seconds) you get money and a supply drop, and anyone who died comes back.</li>
+    <li>A boss comes every few waves. The default is 10 waves; <b>Endless</b> keeps a best-wave record for each map.</li>
+    <li>You lose when nobody's left standing, or when the creatures overrun the base.</li>
+  </ul>
+  <h2 id="ls-tips">Holding the base</h2>
+  <ul>
+    <li><b>Barricades</b>: hold <span class="kbd">E</span> (use) on a gate's boards to repair them, board by board.</li>
+    <li><b>Reviving</b>: a downed teammate can be picked up. Hold use on them.</li>
+    <li><b>Buying</b>: the buy menu works during waves too, in buy zones. The armory shop (press use there, or say <code>/shop</code>) sells repair kits, armour, grenades, ammo and medkits, a bit dearer each wave.</li>
+  </ul>
+  <h2 id="ls-outpost">ls_outpost</h2>
+  <p>A walled desert outpost at night. Three gates (west, east and south) are closed by boarded barricades you can shoot through. A firing step runs along the walls where creatures can't reach you, the keep in the north is the last place to hold, and the armory has the shop. Supply drops land in the field outside the west wall: climb down the ladder to get them. Creatures can't climb.</p>
+  <p>Players joining your server don't download anything: the map uses the game's own textures and sounds.</p>
+  <h2 id="ls-settings">Settings</h2>
+  <p>In the game, <span class="kbd">F3</span> (or <code>say /ls</code>) has the mode's settings:</p>
+  <div class="table"><table>
+    <thead><tr><th>Setting</th><th>Choices</th></tr></thead>
+    <tbody>
+      <tr><td><b>Waves</b></td><td>5, 10, 15 or Endless</td></tr>
+      <tr><td><b>Wave difficulty</b></td><td>Easy, Normal, Hard or Nightmare (with shared lives: 3, 5 or 10)</td></tr>
+      <tr><td><b>Revive time</b></td><td>Off, 15, 30 or 60 seconds</td></tr>
+      <tr><td><b>Base overrun after</b></td><td>10, 15 or 25 seconds of creatures inside, or Never</td></tr>
+      <tr><td><b>Bots' last chance</b></td><td>When every person is down, how long the bots get to save it, or they carry on alone</td></tr>
+      <tr><td><b>Buy anywhere</b></td><td>Off, or between waves</td></tr>
+      <tr><td><b>Enemies</b></td><td>Creatures, or knife-only zombie bots (from the next map)</td></tr>
+    </tbody>
+  </table></div>
+  <h2 id="ls-bots">Bots in Last Stand</h2>
+  <p>With creatures, every bot defends with you, buys guns between waves and holds the walls. With zombie bots as the enemy, four bots defend and the rest are zombies. You can make your own creatures and change the waves in <a href="#creature-studio">Creature Studio</a>.</p>
+</section>
+
+<section class="topic" id="battle-royale" data-group="Game modes">
+  <p class="crumb">Game modes</p>
+  <h1>Battle Royale</h1>
+  <p class="lead">Everyone for themselves, or in squads. Start with a knife, loot crates and floor weapons, and fight while the safe zone closes. The last one, or the last squad, standing wins.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/render-valley.webp" type="image/webp"><img src="img/1.0/render-valley.png" alt="br_valley from above: a river valley with a town, a factory, farms, hills and bridges" width="1092" height="682" loading="lazy"></picture>
+    <figcaption>br_valley, the map made for it.</figcaption>
+  </figure>
+  <h2 id="br-start">Start it</h2>
+  <ol>
+    <li>On <b>Play</b>, under <b>Game mode</b>, pick <b>Battle Royale</b>.</li>
+    <li>Pick br_valley, or a stock map with a Battle Royale setup (de_aztec, cs_italy, de_dust2, de_inferno, de_train). Maps starting with <code>br_</code> pick the mode by themselves.</li>
+    <li>Bots fill the server. A game only starts once a person has joined, so bots don't play on their own.</li>
+  </ol>
+  <h2 id="br-rounds">How a game goes</h2>
+  <ul>
+    <li><b>Drop in</b>: you start high over the map and fall slowly. Steer to where you want to land; landing doesn't hurt. On stock maps the sky is low, so the drop is short.</li>
+    <li><b>Loot-up time</b>: for the first few seconds nobody can hurt anyone. Grab what you can.</li>
+    <li><b>The zone</b>: after a while it starts closing. The round clock counts down to each change. br_valley's zone closes in six stages.</li>
+    <li><b>Supply drops</b> land during the game with the best loot.</li>
+  </ul>
+  <h2 id="br-valley">br_valley</h2>
+  <p>A river valley by day, about 180 metres a side, with a town (the town hall's roof has a sniper rifle), a factory, a farm, radio hill (the best crate on the map), docks, a gas station, a quarry, a bunker with the best loot, a lumber camp, cabins and woods. Three bridges and two fords cross the river, with tunnels underneath. It plays best with 16 to 28 players: fill the rest with bots.</p>
+  <h2 id="br-settings">Settings</h2>
+  <p><span class="kbd">F3</span> (or <code>say /br</code>):</p>
+  <div class="table"><table>
+    <thead><tr><th>Setting</th><th>Choices</th></tr></thead>
+    <tbody>
+      <tr><td><b>Squads</b></td><td>Solo, Duos or Squads of 4. Squad mates can't hurt each other.</td></tr>
+      <tr><td><b>Start with</b></td><td>Knife, or knife and a pistol</td></tr>
+      <tr><td><b>Loot-up time</b></td><td>10, 20 or 40 seconds</td></tr>
+      <tr><td><b>Zone starts after</b></td><td>20, 40 or 90 seconds</td></tr>
+    </tbody>
+  </table></div>
+  <p>Times scale with the number of players, so a small game is a quick one.</p>
+  <h2 id="br-bots">Bots in Battle Royale</h2>
+  <p>Each bot plays by its <a href="#skill-style-personality">playstyle</a>. Rushers and knifers hunt, roamers and objective players loot, and campers, AWPers and lurkers find a spot and wait. They pick where to land the same way: looters go for a good crate, campers for the edge of the map.</p>
+</section>
+
+<section class="topic" id="deathrun-surf" data-group="Game modes">
+  <p class="crumb">Game modes</p>
+  <h1>Deathrun and Surf</h1>
+  <p class="lead">Two classic movement modes the bots now play themselves. Install them from <b>Mods</b>, like the other <a href="#modes">community modes</a>.</p>
+  <h2 id="deathrun">Deathrun</h2>
+  <p>One player is the trap activator; everyone else runs the course. Bot runners make their own way through: jumps, beams, ladders, and waiting for a trap to pass. A bot activator walks to the buttons and presses them like a person would: sometimes early, sometimes late, sometimes waiting to catch more runners, with the odd line in chat.</p>
+  <p>In <span class="kbd">F3</span>: <b>Bot springs traps</b>, <b>Bot trap eagerness</b> (Low, Normal or High), <b>Runners get a USP</b> and <b>Extra lives</b>.</p>
+  <h2 id="surf">Surf</h2>
+  <p>Air control, free guns and long rounds. Bots walk off the start, strafe into each ramp they reach and keep their speed in the air, instead of standing still. Whole routes through a course aren't in yet: on long courses they ride the ramps they find.</p>
+  <h2 id="mode-maps">Maps pick their mode</h2>
+  <p>A map's name picks its mode: <code>deathrun_</code> maps load Deathrun and <code>surf</code> maps load Surf, like <code>ls_</code> and <code>br_</code> do for the new modes.</p>
+</section>
 
 <section class="topic" id="bot-styles" data-group="The bots">
   <p class="crumb">The bots</p>
@@ -574,6 +717,549 @@ footer a { color: var(--dim); }
 </section>
 
 <!-- ============ Multiplayer ============ -->
+
+<!-- ============ Create ============ -->
+
+<section class="topic" id="tools" data-group="Create">
+  <p class="crumb">Create</p>
+  <h1>The Tools</h1>
+  <p class="lead">Everything for making things, in the app's sidebar under <b>Tools</b>. They're new in 1.0 and marked <b>Beta</b> while they settle in.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/tools.webp" type="image/webp"><img src="img/1.0/tools.png" alt="The Tools page: cards for every tool, grouped Create, Map tools, Personalize, Watch and inspect, and Share" width="1218" height="900" loading="lazy"></picture>
+    <figcaption>Tools, with a card for each one.</figcaption>
+  </figure>
+  <h2 id="tools-groups">What's in it</h2>
+  <div class="table"><table>
+    <thead><tr><th>Group</th><th>Tools</th></tr></thead>
+    <tbody>
+      <tr><td><b>Create</b></td><td><a href="#map-editor">Map editor</a>, <a href="#game-mode-studio">Game Mode Studio</a>, <a href="#creature-studio">Creature Studio</a>, <a href="#plugin-studio">Plugin Studio</a></td></tr>
+      <tr><td><b>Map tools</b></td><td><a href="#map-doctor">Map doctor</a>, <a href="#health-check">Map health check</a>, <a href="#nav-fixer">Nav fixer</a>, <a href="#callouts">Callouts</a>, <a href="#radar-maker">Radar maker</a></td></tr>
+      <tr><td><b>Personalize</b></td><td><a href="#crosshair-config">Crosshair &amp; config</a>, <a href="#bot-people">Bot people</a>, <a href="#spray-maker">Spray maker</a></td></tr>
+      <tr><td><b>Watch &amp; inspect</b></td><td><a href="#map-viewer">Map viewer</a>, <a href="#replay">Replay</a>, <a href="#demos">Demos</a>, <a href="#textures-models">Textures &amp; models</a></td></tr>
+      <tr><td><b>Share</b></td><td><a href="#community">Community</a></td></tr>
+    </tbody>
+  </table></div>
+  <h2 id="tools-moving">Getting around</h2>
+  <ul>
+    <li>The bar at the top shows where you are, like <b>Tools › Nav fixer › de_dust2</b>. Click a part to go back to it, or use <b>Back</b>.</li>
+    <li><span class="kbd">?</span> shows the keys for the page you're on. <span class="kbd">/</span> jumps to the page's search box.</li>
+    <li><b>Focus</b> (<span class="kbd">Shift</span> <span class="kbd">Cmd</span> <span class="kbd">Enter</span>, <span class="kbd">Ctrl</span> on Windows) hides everything but the tool.</li>
+    <li>A tool opens on the map you last used it on.</li>
+  </ul>
+  <h2 id="tools-safe">Your files are backed up</h2>
+  <p>Tools that change a file in your game (a nav, a map's overview, your config, your spray) back up the old one first, and most have <b>Put back the previous file</b> in their <b>More</b> menu. Still, while they're Beta, keep your own copy of work you care about, and tell us on <a href="/discord">Discord</a> when something's off.</p>
+</section>
+
+<section class="topic" id="map-editor" data-group="Create">
+  <p class="crumb">Create</p>
+  <h1>Map editor</h1>
+  <p class="lead">Build Counter-Strike maps with brushes and entities, like Hammer, in one 3D view. Draw boxes, push and pull their faces, place spawns and lights, paint textures. Your map is checked as you go.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/editor.webp" type="image/webp"><img src="img/1.0/editor.png" alt="The map editor: tools down the left, ls_outpost in 3D, the outline and map settings on the right, textures below" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>ls_outpost in the editor: tools on the left, panels on the right and below.</figcaption>
+  </figure>
+  <h2 id="editor-start">Start a map</h2>
+  <p>Open <b>Tools › Map editor</b>. The start screen has:</p>
+  <ul>
+    <li><b>New map</b>: an open-sky room with two spawns for each team, ready to build in.</li>
+    <li><b>Open a project</b>: a map you saved before (<code>.lsmap</code>). <b>Recent</b> lists the last ones.</li>
+    <li><b>Import a .map</b> and <b>Import from Hammer / J.A.C.K.</b>: see <a href="#map-import">Importing</a>.</li>
+  </ul>
+  <p>Your work is saved every 3 minutes while you have changes. If the app closed with unsaved work, the start screen offers <b>Recover it</b>. Each save also keeps a copy of the one before.</p>
+  <h2 id="editor-camera">Moving around</h2>
+  <p>The first time, the editor asks <b>How should the 3D view move?</b> Pick what your hands know. Change it any time in <b>View</b>.</p>
+  <div class="table"><table>
+    <thead><tr><th>Preset</th><th>How it moves</th></tr></thead>
+    <tbody>
+      <tr><td><b>Unreal</b></td><td>Hold the right mouse button to look; with it held, <span class="kbd">W</span> <span class="kbd">A</span> <span class="kbd">S</span> <span class="kbd">D</span> fly, <span class="kbd">Q</span> and <span class="kbd">E</span> go down and up, <span class="kbd">Shift</span> is faster and the scroll wheel changes speed. <span class="kbd">Alt</span>-drag orbits, middle-drag pans.</td></tr>
+      <tr><td><b>Blender</b></td><td>Left-drag orbits, right-drag pans, scroll zooms. <span class="kbd">F</span> switches to flying with WASD; <span class="kbd">Esc</span> lets go.</td></tr>
+      <tr><td><b>Hammer</b></td><td><span class="kbd">Z</span> turns mouse-look on and off, WASD to move while it's on. Left-drag on empty space looks, right-drag moves forward and back.</td></tr>
+    </tbody>
+  </table></div>
+  <p>In every preset, <span class="kbd">F</span> frames what's picked, and <span class="kbd">Ctrl</span> plus <span class="kbd">1</span> to <span class="kbd">9</span> keeps a camera spot that <span class="kbd">1</span> to <span class="kbd">9</span> jumps back to. <span class="kbd">?</span> lists every key.</p>
+  <h2 id="editor-views">Views and panels</h2>
+  <ul>
+    <li><b>Single</b>, <b>Quad</b>, <b>1+3</b> and <b>Two</b> (top right, or <span class="kbd">Alt</span> <span class="kbd">1</span> to <span class="kbd">4</span>) set the views. Quad is 3D, Top, Front and Side, like Hammer. Each view's corner picks what it shows and how it's drawn.</li>
+    <li>The panels (<b>Inspect</b>, <b>Outline</b>, <b>Textures</b>, <b>Library</b>, <b>Checks</b>, <b>Compile</b>, <b>Project</b>, <b>History</b>) can be dragged to another side or floated. <b>View</b> has layouts like <b>Hammer</b> and <b>Unreal-like</b>, and <b>Reset the panel layout</b>.</li>
+    <li><b>Find a command</b> (<span class="kbd">Cmd</span> <span class="kbd">K</span>) finds anything in the menus by name.</li>
+    <li>Prefer Hammer's or TrenchBroom's keys? <b>Help › Change keys…</b> has both.</li>
+  </ul>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/editor-quad.webp" type="image/webp"><img src="img/1.0/editor-quad.png" alt="The Quad layout: 3D, top, front and side views" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>Quad: four views, like Hammer.</figcaption>
+  </figure>
+  <h2 id="editor-tools">Building</h2>
+  <div class="table"><table>
+    <thead><tr><th>Tool</th><th>Key</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><b>Select</b></td><td><span class="kbd">Q</span></td><td>Click to pick. Drag a face of something picked to push or pull it.</td></tr>
+      <tr><td><b>Move</b>, <b>Rotate</b>, <b>Scale</b></td><td><span class="kbd">W</span> <span class="kbd">E</span> <span class="kbd">R</span></td><td>Drag the arrows, rings or handles.</td></tr>
+      <tr><td><b>Vertex</b></td><td><span class="kbd">V</span></td><td>Drag a corner, an edge or a face. Brushes stay convex.</td></tr>
+      <tr><td><b>Box</b></td><td><span class="kbd">B</span></td><td>Drag on the floor, or on top of a brush, to draw a box.</td></tr>
+      <tr><td><b>Shape</b></td><td><span class="kbd">C</span></td><td>Cylinder, wedge, spike, sphere or arch.</td></tr>
+      <tr><td><b>Clip</b></td><td><span class="kbd">X</span></td><td>Click two points; <span class="kbd">Tab</span> picks which side stays, <span class="kbd">Enter</span> cuts.</td></tr>
+      <tr><td><b>Entity</b></td><td><span class="kbd">N</span></td><td>Click a surface to place a spawn, light, weapon or anything else there.</td></tr>
+      <tr><td><b>Texture</b></td><td><span class="kbd">T</span></td><td>Pick faces and slide, turn or stretch their texture. <span class="kbd">Alt</span>-click picks a texture up.</td></tr>
+      <tr><td><b>Measure</b></td><td><span class="kbd">M</span></td><td>Drag between two points.</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><b>Snapping</b> is on, to a 16-unit grid. <span class="kbd">[</span> and <span class="kbd">]</span> change the grid; hold <span class="kbd">Alt</span> to ignore it for a moment.</li>
+    <li><b>Edit</b> has the modelling moves: <b>Hollow</b> (<span class="kbd">Cmd</span> <span class="kbd">H</span>), <b>Carve</b>, <b>Merge</b>, <b>Duplicate</b>, <b>Paste special…</b> (copies in a row, ring or spiral), <b>Group</b>, and <b>Tie to entity</b> to make a door or a func_wall.</li>
+    <li><b>Select</b> has <b>Select same texture</b>, <b>Hide</b> (<span class="kbd">H</span>), <b>Hide everything else</b> and <b>Lock</b>.</li>
+    <li>Copy and paste work between maps, and with other editors: copies travel as .map text.</li>
+  </ul>
+  <h2 id="editor-textures">Textures</h2>
+  <p>The <b>Textures</b> panel shows every texture in the map's texture files (WADs). Click one to choose it; double-click to paint what's picked, or press <span class="kbd">Shift</span> <span class="kbd">T</span>. The Texture tool's sheet sets shift, scale and turn, fits a texture to a face, and lines textures up like a floor or along a slope. <b>Texture lock</b> keeps textures in place when you move a brush. Add texture files in <b>Map properties</b>.</p>
+  <h2 id="editor-entities">Entities</h2>
+  <p>Pick an entity and <b>Inspect</b> shows a form for it: choices, colour pickers for lights, an angle dial, flags, and help on every key. Links between a <code>target</code> and a <code>targetname</code> are drawn as lines in 3D. Pick several entities to change their keys together. Spawns, hostages and weapons are drawn as their models. Using a mod's own entities? <b>Map properties › Entity definitions</b> takes its FGD file.</p>
+  <h2 id="editor-library">Prefabs</h2>
+  <p>The <b>Library</b> panel has starter prefabs (a doorway, stairs, crates, a ladder, a window, a bombsite kit, a buy zone with spawns, a light). Drag one in, or press <b>Place</b> and click: they stand on floors, hang from ceilings and face out of walls, and <span class="kbd">R</span> turns them while you place. Pick something you built and <b>Save what's picked…</b> to make your own. The <b>Components</b> tab places Loner-Strike's game mode pieces, like wave spawners and loot crates.</p>
+  <h2 id="editor-checks">Checks as you go</h2>
+  <p>The <b>Checks</b> panel looks over the map after every change: broken brushes, things outside the map's limits, too many of something, missing textures, missing spawns, targets that point nowhere. Click a problem to go to it; most have a fix button, like <b>Place a CT spawn</b> or <b>Add halflife.wad and cstrike.wad</b>. Leaks are found when the map is compiled.</p>
+  <h2 id="editor-save">Saving and exporting</h2>
+  <ul>
+    <li><b>Save</b> keeps a project (<code>.lsmap</code>) with everything the editor knows, like groups and hidden things.</li>
+    <li><b>Export .map</b> (<span class="kbd">Cmd</span> <span class="kbd">E</span>) writes a Valve 220 .map with its texture list, for any GoldSrc compiler or editor.</li>
+    <li><b>Publish…</b> packs a compiled map for <a href="#publishing">Community</a>.</li>
+  </ul>
+  <p>Next: <a href="#compile-playtest">compile it and playtest with bots</a>.</p>
+</section>
+
+<section class="topic" id="compile-playtest" data-group="Create">
+  <p class="crumb">Create</p>
+  <h1>Compile and playtest</h1>
+  <p class="lead">Turn your map into a .bsp the game can load, then play it with bots, from the editor's <b>Compile</b> panel.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/editor-compile.webp" type="image/webp"><img src="img/1.0/editor-compile.png" alt="The Compile panel offering to download SDHLT, with the cordon settings below" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>The first time, the Compile panel offers to download SDHLT.</figcaption>
+  </figure>
+  <h2 id="sdhlt">The compiler</h2>
+  <p>Maps are compiled with <b>SDHLT</b>, a free GoldSrc map compiler (about 3 MB). It isn't part of Loner-Strike: the first time, the panel offers <b>Download SDHLT</b>, which fetches it from its official GitHub release and checks it. Its licence is in the panel.</p>
+  <ul>
+    <li><b>Windows</b>: it runs directly.</li>
+    <li><b>Mac</b>: it runs through CrossOver, in the same bottle as your game. The first compile takes a little longer.</li>
+  </ul>
+  <h2 id="compile">Compile</h2>
+  <ol>
+    <li>Give the map a <b>Map name</b>: letters, numbers, <code>_</code> and <code>-</code>, up to 31.</li>
+    <li>Pick the quality. <b>Fast</b> skips the visibility pass and does quick lighting, for trying things out. <b>Normal</b> is how most maps are tested. <b>Final</b> is full quality, for release; it's slow on big maps.</li>
+    <li>Press <b>Compile</b>. The steps show as they go: brushes, building the map, what can be seen from where, lighting.</li>
+  </ol>
+  <p>Texture files that aren't the game's own are packed into the .bsp, so players don't need them. <b>Use all cores</b> is faster but the computer may lag; without it, the compiler leaves you some room.</p>
+  <h2 id="compile-problems">When it finds a problem</h2>
+  <p>Problems come in plain words, and clicking one picks the brush or entity it's about.</p>
+  <ul>
+    <li><b>The map leaks</b>: there's a gap between the inside and the void. <b>Show the leak line</b> draws a red line from an entity to the gap; follow it and close the gap with a brush.</li>
+    <li><b>Nothing inside</b>: put a player spawn inside a sealed room.</li>
+    <li><b>A missing texture</b> or texture file: add the WAD in Map properties, or replace the texture.</li>
+    <li><b>Too many faces</b> or another limit: cover faces nobody sees with <code>NULL</code>, or simplify.</li>
+  </ul>
+  <p><b>Compiler output</b> has the compiler's full log if you want it.</p>
+  <h2 id="cordon">Compile part of a map</h2>
+  <p>On a big map, <b>Cordon</b> compiles only what's inside the boxes you draw, sealed off with sky or black walls. Lights near the box come along, and a playtest puts you inside it.</p>
+  <h2 id="playtest">Playtest with bots</h2>
+  <ol>
+    <li>In the <b>Playtest</b> part of the panel, pick the <b>Mode</b> and how many <b>Bots</b>.</li>
+    <li>Leave <b>Teach bots the map first</b> ticked: a hidden server loads the map and a bot walks it, so the others know where they can go (about a minute).</li>
+    <li>Press <b>Playtest</b>. It compiles, puts the map in your game (backing up any map with the same name) and starts it with bots.</li>
+  </ol>
+  <p>If the game is open, it asks before restarting it. The game's own maps can't be overwritten: give yours another name.</p>
+  <h2 id="after-playtest">After a playtest</h2>
+  <ul>
+    <li>Bots got stuck? Run a <a href="#health-check">health check</a>, then fix the spots in the <a href="#nav-fixer">Nav fixer</a>.</li>
+    <li>Name the places with <a href="#callouts">Callouts</a> and make its overview with the <a href="#radar-maker">Radar maker</a>.</li>
+    <li>Happy with it? <a href="#publishing">Publish it</a>.</li>
+  </ul>
+</section>
+
+<section class="topic" id="map-import" data-group="Create">
+  <p class="crumb">Create</p>
+  <h1>Hammer and J.A.C.K. maps</h1>
+  <p class="lead">Bring maps you made in another editor into the map editor. The original file is never changed: saving makes a new project.</p>
+  <h2 id="import-what">What it opens</h2>
+  <div class="table"><table>
+    <thead><tr><th>File</th><th>From</th><th>How</th></tr></thead>
+    <tbody>
+      <tr><td><code>.rmf</code></td><td>Valve Hammer Editor (3.x)</td><td><b>Import from Hammer / J.A.C.K.</b> on the start screen, or <b>File › Import a Hammer .rmf or J.A.C.K. .jmf…</b></td></tr>
+      <tr><td><code>.jmf</code></td><td>J.A.C.K.</td><td>The same</td></tr>
+      <tr><td><code>.map</code></td><td>Any GoldSrc editor, including TrenchBroom</td><td><b>Import a .map</b></td></tr>
+    </tbody>
+  </table></div>
+  <h2 id="import-comes-over">What comes over</h2>
+  <ul>
+    <li>Brushes with their texture alignment, entities and brush entities.</li>
+    <li>Groups (TrenchBroom's too), and visgroups as visibility sets in the Outline.</li>
+    <li>Paths, as linked path_corner or path_track entities.</li>
+  </ul>
+  <p>Left out, and the import says so: saved cameras, background pictures, the cordon and J.A.C.K.'s curved patches (GoldSrc maps can't use them).</p>
+  <h2 id="import-wads">Texture files</h2>
+  <p>Hammer and J.A.C.K. keep the list of texture files outside the map. The editor looks for WADs beside the file you imported and in your game folders. If textures show as missing, add the WADs in <b>Map properties</b>; the compiler also finds WADs that sit beside the map or its project.</p>
+  <h2 id="import-check">Before you compile</h2>
+  <p>Importing is new. Look the map over and open <b>Checks</b> before the first compile, and keep your original file. If something came over wrong, a copy of the file in a <a href="https://github.com/jamesontucker/Loner-Strike/issues">GitHub issue</a> or on Discord helps us fix it.</p>
+</section>
+
+<section class="topic" id="game-mode-studio" data-group="Create">
+  <p class="crumb">Create</p>
+  <h1>Game Mode Studio</h1>
+  <p class="lead">Make a game mode out of nodes, in the style of Unreal's Blueprints: when something happens (a round starts, a player dies), check things and do things. The Studio turns your graph into a plugin, and Playtest starts the game in your mode with bots.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/studio.webp" type="image/webp"><img src="img/1.0/studio.png" alt="Game Mode Studio: My mode on the left with events and variables, the graph in the middle, Details on the right" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>The Last Stand template open in the Studio.</figcaption>
+  </figure>
+  <h2 id="studio-start">Start a mode</h2>
+  <p>Open <b>Tools › Game Mode Studio</b> and start from a template or from nothing:</p>
+  <ul>
+    <li><b>Rifle Reward</b>: every kill earns the killer a rifle. Small, and a good first read.</li>
+    <li><b>Last Stand</b>: everyone defends against creature waves; between waves, money and a shop.</li>
+    <li><b>Battle Royale</b>: everyone for themselves, a shrinking zone, loot.</li>
+    <li><b>Blank mode</b>.</li>
+  </ul>
+  <p>Name it and it's saved straight away. <b>Your modes</b> lists them.</p>
+  <h2 id="studio-layout">The editor</h2>
+  <ul>
+    <li><b>My mode</b> (left): the mode's events, functions, macros, variables, structs, enums and snippets. Drag a variable onto the graph to get or set it.</li>
+    <li><b>The graph</b> (middle): the <b>Event Graph</b> tab, plus a tab for each function or macro you open.</li>
+    <li><b>Details</b> (right): help and settings for the picked node, or the mode's name, description and game settings.</li>
+    <li><b>Results</b> (bottom): <b>Problems</b>, which you click to jump to the node, and <b>Compiler output</b>.</li>
+  </ul>
+  <h2 id="studio-nodes">Nodes and wires</h2>
+  <ul>
+    <li>Right-click or press <span class="kbd">Space</span> to add a node. Drag from a pin to empty space and the list only shows nodes that fit that wire.</li>
+    <li>White pentagon pins carry the flow (what runs next); round pins carry values, coloured by type.</li>
+    <li><span class="kbd">C</span> adds a comment box, double-clicking a wire adds a reroute point, and <b>Tidy up</b> lays nodes out left to right.</li>
+  </ul>
+  <p>There are over 200 nodes. The main kinds:</p>
+  <div class="table"><table>
+    <thead><tr><th>Kind</th><th>For example</th></tr></thead>
+    <tbody>
+      <tr><td><b>Events</b></td><td>Round Started, Player Killed, Player Spawned, Player Hurt, Bomb Planted, Chat Command, Player Revived</td></tr>
+      <tr><td><b>Flow</b></td><td>Branch, Sequence, Do Once, Gate, For Each Player, For Loop, Switch on Number</td></tr>
+      <tr><td><b>Players</b></td><td>Give Weapon, Set Health, Give Money, Set Team, Teleport, Freeze, Respawn, Set Glow, Make Downed</td></tr>
+      <tr><td><b>Timers and the round</b></td><td>Delay, Repeat, Countdown, Set Timer by Function, Set Round Clock, End Round</td></tr>
+      <tr><td><b>Damage</b></td><td>Block Damage, Scale Damage (after Player About To Be Hurt)</td></tr>
+      <tr><td><b>Squads and buying</b></td><td>Set Squad, Squads Left, Allow Buying</td></tr>
+      <tr><td><b>Messages</b></td><td>Show Message, Show HUD Text, Chat Message, Menu, Play Sound</td></tr>
+      <tr><td><b>Bots</b></td><td>Bot Go To, Bot Hold, Bot Follow, Bot Free</td></tr>
+      <tr><td><b>Components and creatures</b></td><td>Zones, crates, waves, doors, traps, supply drops; Spawn Creature, Creature Killed</td></tr>
+      <tr><td><b>Saved</b></td><td>Numbers kept between maps and restarts</td></tr>
+    </tbody>
+  </table></div>
+  <h2 id="studio-variables">Variables, functions and macros</h2>
+  <ul>
+    <li><b>Variables</b> hold a number, yes/no, text, player, team, vector and more, for the whole mode, each player or each team, kept for the map or reset each round. Lists and maps of values work too.</li>
+    <li><b>Functions</b> are pieces you call from several places, each on its own graph with inputs, outputs and local variables. They run straight through, so waiting nodes like Delay go in a macro instead.</li>
+    <li><b>Macros</b> are pieces copied in where they're used, with several flows in and out.</li>
+    <li><b>Structs</b> group values (a loadout: weapon and ammo); <b>enums</b> are named choices (a class: scout, tank, medic).</li>
+    <li>Pick some nodes and <b>Collapse to Function</b> or <b>Collapse to Macro</b> to tidy a graph.</li>
+  </ul>
+  <h2 id="studio-snippets">Snippets</h2>
+  <p>The <b>Snippets</b> section has ready-made pieces to drop in: a wave system, a shop menu, a shrinking zone, revive, a kill reward, a round timer win, teleport on touch and more. Each arrives in its own comment box, and its variables join yours. Pick some of your own nodes and <b>Save the selection as a snippet</b> to reuse them.</p>
+  <h2 id="studio-install">Install and play</h2>
+  <p><b>Install</b> builds the plugin and adds your mode to the game's mode list, so it's on the Play page and in the <span class="kbd">F3</span> menu like any other. <b>More › Remove from the game</b> takes it out. <b>More › Show code</b> shows the plugin your graph becomes, and <b>Open in Plugin Studio</b> lets you carry on in code.</p>
+  <p>To test while you build, use <a href="#studio-debugging">Playtest</a>.</p>
+  <h2 id="studio-share">Share a mode</h2>
+  <p>Publish it from <b>Tools › Community › Publish › A game mode</b>. Only the graph goes in the package: each player's Loner-Strike builds the mode on their own computer, so nothing that runs code is shared. Others can <b>Remix in Game Mode Studio</b>, and you keep the credit. See <a href="#publishing">Publishing</a>.</p>
+</section>
+
+<section class="topic" id="studio-debugging" data-group="Create">
+  <p class="crumb">Create</p>
+  <h1>Playtest and debug a mode</h1>
+  <p class="lead">Run your mode in the game with bots and watch the graph while it plays.</p>
+  <h2 id="studio-playtest">Playtest</h2>
+  <ol>
+    <li>Pick a map and the number of bots in the Studio's toolbar.</li>
+    <li>Press <b>Playtest</b>. It saves, compiles with the debugger, checks the game and starts it in your mode. Problems have to be fixed first: they're under <b>Results</b>.</li>
+    <li>If the game is already open, it asks to <b>Switch the open game</b> to your mode: a map change, and the bots stay.</li>
+  </ol>
+  <p>The first start can take a minute (Steam, CrossOver on a Mac, the map). The panel says <b>Playing on</b> the map once it's connected.</p>
+  <h2 id="studio-watch">Watch it run</h2>
+  <ul>
+    <li>Nodes light up as they run, and wires show the way the last flow went. A condition that came out false, and a node with an error, are marked.</li>
+    <li>Hover a pin to see the last value the game saw there. Players show like <i>Name (team, 87 hp, ak47)</i>.</li>
+    <li><b>Details</b> shows <b>Last time it ran</b> for the picked node: how often, the result and the inputs.</li>
+    <li><b>What happened</b> lists the last 40 things that ran.</li>
+  </ul>
+  <h2 id="studio-breakpoints">Breakpoints</h2>
+  <p>Click the dot on a node, or press <span class="kbd">F9</span>, to pause the world when it runs. Everyone freezes and the round clock stops; <b>Live values</b> shows the round, the time left, who's alive, your variables and every player's health and weapon. Press <b>Resume</b> to carry on. Only the world pauses: there's no stepping through one node at a time.</p>
+  <h2 id="studio-limits">Good to know</h2>
+  <ul>
+    <li>Menus need a person to answer them: bots won't.</li>
+    <li>A mode can have up to 400 nodes and 64 variables, plenty for most modes.</li>
+    <li>Component and creature nodes need Loner-Strike's game mode pieces on the server, which your own game has.</li>
+  </ul>
+</section>
+
+<section class="topic" id="plugin-studio" data-group="Create">
+  <p class="crumb">Create</p>
+  <h1>Plugin Studio</h1>
+  <p class="lead">Write AMX Mod X plugins with suggestions and docs as you type, then try them in your game in a click.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/plugins.webp" type="image/webp"><img src="img/1.0/plugins.png" alt="Plugin Studio: plugins listed on the left, a plugin's code in the editor, and Problems, Game log, Compiler output and Help tabs below" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>Plugin Studio, with one of Loner-Strike's own plugins open read-only.</figcaption>
+  </figure>
+  <h2 id="plugin-files">Your plugins and the game's</h2>
+  <ul>
+    <li><b>My plugins</b> are yours to change. <b>New plugin</b> starts one from a template: an empty plugin, a new game mode, a chat command, on player killed, give items on spawn, a HUD message, a menu or a timer.</li>
+    <li><b>Game's plugins</b> and <b>Include files</b> are read-only. <b>Save a copy in My plugins…</b> to make your own version.</li>
+    <li>Saving keeps the version before; <b>More › Restore a previous version…</b> brings one back.</li>
+  </ul>
+  <h2 id="plugin-editor">Writing</h2>
+  <ul>
+    <li>Suggestions come as you type: functions with their parameters, forwards, constants and include names, read from your game's own include files.</li>
+    <li>Hover a function for its docs, and <span class="kbd">F12</span> (or <span class="kbd">Ctrl</span>-click) opens where it's defined.</li>
+    <li>Type <span class="kbd">/</span> at the start of a line, or use <b>Insert…</b>, for snippets and templates.</li>
+    <li><b>Help &amp; docs</b> searches every function, with <b>Put it in my code</b>.</li>
+  </ul>
+  <h2 id="plugin-try">Compile and try it</h2>
+  <ol>
+    <li><b>Compile</b> (<span class="kbd">Cmd</span> <span class="kbd">Enter</span>) checks it. Errors are explained in plain words, marked on their lines and listed under <b>Problems</b>.</li>
+    <li><b>Try it in my game</b> compiles it, puts it in your game and restarts the map. <b>Game log</b> shows that plugin's messages and errors.</li>
+    <li><b>Take it out</b> removes it again.</li>
+  </ol>
+  <p>Trying a plugin works on your own game, not on servers. Plugins can't be shared in Community; a mode made in <a href="#game-mode-studio">Game Mode Studio</a> can.</p>
+  <h2 id="loner-inc">loner.inc</h2>
+  <p>Loner-Strike's include file gives you short ways to do the usual things. In Plugin Studio, <code>#include &lt;loner&gt;</code> just works.</p>
+  <div class="table"><table>
+    <thead><tr><th>For</th><th>Natives</th></tr></thead>
+    <tbody>
+      <tr><td><b>Modes</b></td><td><code>ls_register_mode</code>, <code>ls_mode_active</code>, <code>ls_mode_current</code></td></tr>
+      <tr><td><b>HUD and chat</b></td><td><code>ls_hud</code> (four slots other plugins don't wipe), <code>ls_announce</code>, <code>ls_chat</code></td></tr>
+      <tr><td><b>Players</b></td><td><code>ls_give_weapon</code>, <code>ls_strip</code>, <code>ls_set_health</code>, <code>ls_set_armor</code>, <code>ls_teleport</code>, <code>ls_set_team</code>, <code>ls_count_alive</code></td></tr>
+      <tr><td><b>Roles</b></td><td><code>ls_set_role</code>, <code>ls_is_role</code>, <code>ls_count_role</code></td></tr>
+      <tr><td><b>Timers</b></td><td><code>ls_after</code>, <code>ls_every</code>, <code>ls_stop</code>, <code>ls_countdown</code></td></tr>
+      <tr><td><b>Bots</b></td><td><code>ls_is_bot</code>, <code>ls_bot_goto</code>, <code>ls_bot_hold</code>, <code>ls_bot_follow</code>, <code>ls_bot_release</code></td></tr>
+      <tr><td><b>Components</b></td><td>Zones, doors, waves, loot and more, with forwards like <code>ls_on_wave_start</code> and <code>ls_on_capture</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>A whole mode in a few lines:</p>
+<pre><code>#include &lt;amxmodx&gt;
+#include &lt;hamsandwich&gt;
+#include &lt;loner&gt;
+
+public plugin_init()
+{
+	ls_register_mode("deagleduel", "Deagle Duel", "1.0", "me")
+	RegisterHamPlayer(Ham_Spawn, "on_spawn", 1)
+}
+
+public on_spawn(id)
+{
+	if (!ls_alive(id) || !ls_mode_active())
+		return
+	ls_strip(id)
+	ls_give_weapon(id, "deagle", 35)
+	ls_set_health(id, 150)
+	ls_hud(id, LS_HUD_LEFT, 5.0, "Deagle Duel^nLast one standing wins")
+}</code></pre>
+  <p>The full reference is <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/docs/LONER-INC.md">LONER-INC.md</a> on GitHub, and it's also under <b>Help &amp; docs</b> in Plugin Studio.</p>
+</section>
+
+<section class="topic" id="creature-studio" data-group="Create">
+  <p class="crumb">Create</p>
+  <h1>Creature Studio</h1>
+  <p class="lead">Make the creatures modes throw at you, like zombies, aliens, animals, turrets and bosses, and the waves they come in.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/creatures.webp" type="image/webp"><img src="img/1.0/creatures.png" alt="Creature Studio: creature types on the left, the zombie's settings in the middle, its model playing an animation on the right" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>A creature type, with its model in the preview.</figcaption>
+  </figure>
+  <h2 id="creature-types">Creature types</h2>
+  <ol>
+    <li>Pick a type on the left. The game has eight built in (zombie, runner, brute, spitter, hound, turret, boss, headcrab). <b>New from a template…</b> makes your own from one of them; <b>Duplicate</b> copies one.</li>
+    <li>Change it, section by section: <b>Look</b> (model, size, tint, blood), <b>Health and speed</b>, <b>Senses</b> (how far it sees and hears), <b>Attack</b> (melee or ranged, damage, rate), <b>Behaviour</b>, <b>Sounds</b> and <b>Rewards</b>.</li>
+    <li>The preview plays its animations: idle, walk, run, attack, flinch and die.</li>
+    <li><b>Save and apply to game</b>. With the game running, <b>Spawn one in front of me</b> tries it out.</li>
+  </ol>
+  <p><b>Behaviour</b> sets how it acts: stand still, wander, patrol, guard, hunt as a horde, or keep away; who it goes for (nearest, weakest, last attacker); and whether it runs when hurt. New models and sounds load on the next map.</p>
+  <h2 id="creature-waves">Waves</h2>
+  <p>Switch to <b>Waves &amp; spawn groups</b> and pick the mode (Last Stand reads its own). Set which type is the <b>Boss</b> and how often it comes, how many enemies a wave has and how much health they get, and <b>The mix</b>: which creatures come in which waves. <b>Start from the mode's own mix</b> is a good place to begin. <b>Save waves</b> when you're done; <b>Place in map…</b> opens the map editor to put spawners where you want them.</p>
+</section>
+
+<!-- ============ Map tools ============ -->
+
+<section class="topic" id="map-doctor" data-group="Map tools">
+  <p class="crumb">Map tools</p>
+  <h1>Map doctor</h1>
+  <p class="lead">Find what a map is missing (textures, models, sounds, its nav) and fix it.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/doctor.webp" type="image/webp"><img src="img/1.0/doctor.png" alt="Map doctor on de_dust2: every check passed, grouped by map and files, textures, download list and bots" width="1440" height="900" loading="lazy"></picture>
+  </figure>
+  <ol>
+    <li>Pick a map. The list marks the ones with <b>No bot nav</b>.</li>
+    <li>Read the verdict. <b>Needs a look</b> shows only the problems; <b>All checks</b> shows everything: the map and its files, textures and WADs, the download list (.res), the bots' nav, places and knowledge, and the overview.</li>
+    <li>Use each check's fix: copy missing files from another game folder, <b>Make the list</b> for downloads, <b>Teach bots this map</b>, <b>Search GameBanana</b>, <b>Name places</b> or <b>Make one</b> (an overview).</li>
+    <li><b>Fix all safe</b> does the fixes that can't hurt in one go. <b>Check again</b> when you're done.</li>
+  </ol>
+</section>
+
+<section class="topic" id="health-check" data-group="Map tools">
+  <p class="crumb">Map tools</p>
+  <h1>Map health check</h1>
+  <p class="lead">Bots play a map for a few minutes on a hidden server; a report says where they fall, get stuck or hit errors.</p>
+  <ol>
+    <li>Under <b>Check a map</b>, pick one. It needs a bot nav, so teach bots the map first if it hasn't one.</li>
+    <li>Pick the <b>Game mode</b>, <b>How long</b> (2 to 15 minutes) and how many <b>Bots</b>.</li>
+    <li>Close the game and your servers, then <b>Run the check</b>. You can leave the page while it runs.</li>
+    <li>Read the report: <b>Looks fine</b>, <b>Worth a look</b> or <b>Problems</b>, then the numbers (stuck bots, deaths to the map, how much of the map got used, plugin errors) and where bots fell or got stuck.</li>
+    <li><b>Watch in Replay</b> to see it happen. Earlier checks stay listed.</li>
+  </ol>
+  <p>A good result earns a map the <b>Checked with bots</b> badge in <a href="#community">Community</a>.</p>
+</section>
+
+<section class="topic" id="nav-fixer" data-group="Map tools">
+  <p class="crumb">Map tools</p>
+  <h1>Nav fixer</h1>
+  <p class="lead">Fix where bots can walk: add the beams and ledges they missed, link areas and mark drops.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/navfix.webp" type="image/webp"><img src="img/1.0/navfix.png" alt="The Nav fixer on cs_rats2: nav areas coloured by whether bots can get there and back, with the reach check and problems on the right" width="1440" height="900" loading="lazy"></picture>
+  </figure>
+  <ol>
+    <li>Pick a map that has a bot nav.</li>
+    <li>Look at the <b>reach check</b>: areas are coloured by <b>Bots get there and back</b>, <b>Can't get there</b>, <b>Can't get back</b> and <b>Only by falling in</b>. Each problem has <b>Show me</b> and a fix.</li>
+    <li>Fix by hand with <b>Select</b> (<span class="kbd">V</span>), <b>Draw area</b> (<span class="kbd">D</span>, drag on the floor) and <b>Link</b> (<span class="kbd">L</span>, click one area then the one it leads to). <b>One way (a drop)</b> makes a link bots can't climb back up.</li>
+    <li>Set how bots move through an area: crouch, jump, precise, or no jumping.</li>
+    <li><b>Save the nav</b>, then <b>Rebuild bot knowledge</b> so the bots learn the map again with your changes.</li>
+  </ol>
+</section>
+
+<section class="topic" id="callouts" data-group="Map tools">
+  <p class="crumb">Map tools</p>
+  <h1>Callouts</h1>
+  <p class="lead">Name places on a map, so bots say where they are and understand where you mean.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/callouts.webp" type="image/webp"><img src="img/1.0/callouts.png" alt="Callouts on de_dust2: the map from above, painted in colours by place, with the list of places on the right" width="1440" height="900" loading="lazy"></picture>
+  </figure>
+  <ol>
+    <li>Pick a map with a bot nav.</li>
+    <li>Type a place name (like <i>Catwalk</i>) and paint it onto the map with <b>Paint</b> (<span class="kbd">P</span>). <b>Erase</b> (<span class="kbd">E</span>) takes it off.</li>
+    <li>Or start from <b>Suggestions</b>: from bomb sites and spawns, the usual callouts, or Condition Zero's.</li>
+    <li><b>Save names</b>. Names don't move anything, so the bots' knowledge of the map stays as it is.</li>
+  </ol>
+  <p><b>Names bots know</b> marks the ones bots say on the radio and the ones their chat understands, like "two long".</p>
+</section>
+
+<section class="topic" id="radar-maker" data-group="Map tools">
+  <p class="crumb">Map tools</p>
+  <h1>Radar maker</h1>
+  <p class="lead">Make a map's overview: the top-down picture spectators and HLTV viewers see, drawn from the map itself.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/radar.webp" type="image/webp"><img src="img/1.0/radar.png" alt="Radar maker on de_dust2: the overview drawn from the map with the bomb sites marked" width="1440" height="900" loading="lazy"></picture>
+  </figure>
+  <ol>
+    <li>Pick a map, then a look: <b>Game</b>, <b>Clean</b> or <b>Simple</b>.</li>
+    <li>Choose what's drawn: bomb sites, buy zones, hostages and spawns, outlined walls, and whether to leave out roofs.</li>
+    <li>Compare it with the one installed now, side by side.</li>
+    <li><b>Install overview</b>. The old files are kept, and <b>Put the old one back</b> restores them. <b>Send it to players</b> adds it to the map's download list.</li>
+  </ol>
+  <p>The overview is what spectators see, not the small round radar you see while you're alive.</p>
+</section>
+
+<!-- ============ Personalize ============ -->
+
+<section class="topic" id="crosshair-config" data-group="Personalize">
+  <p class="crumb">Personalize</p>
+  <h1>Crosshair &amp; config</h1>
+  <p class="lead">Your crosshair, keys, mouse and connection settings, with the crosshair drawn live as you change it.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/playercfg.webp" type="image/webp"><img src="img/1.0/playercfg.png" alt="Crosshair and config: a live crosshair preview, presets, and the crosshair settings" width="1440" height="900" loading="lazy"></picture>
+  </figure>
+  <ol>
+    <li>Pick the game: <b>CS 1.6</b> or <b>CZ</b>.</li>
+    <li>Start from a preset if you like: <b>The game's own</b>, <b>Pro</b> or <b>Classic 2004</b>. A preset sets the crosshair, connection and weapon switch; your keys and sensitivity stay.</li>
+    <li>Change things on the tabs: <b>Crosshair</b>, <b>Keys</b> (press a key's button, then the key), <b>Mouse</b>, <b>Network</b>, and <b>Video &amp; HUD</b>. The preview shows the crosshair standing, running, jumping and shooting.</li>
+    <li><b>Save</b>. It goes into the game's <code>userconfig.cfg</code>, in a block of its own; your own lines there are kept, and <code>config.cfg</code> isn't touched.</li>
+  </ol>
+  <p><b>More › Take out Loner-Strike's lines</b> removes it all again. <span class="kbd">F3</span> and <span class="kbd">F4</span> stay Loner-Strike's menus.</p>
+</section>
+
+<section class="topic" id="bot-people" data-group="Personalize">
+  <p class="crumb">Personalize</p>
+  <h1>Bot people</h1>
+  <p class="lead">Decide who the bots are: kinds of people, how they play and talk, and the regulars' names.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/people.webp" type="image/webp"><img src="img/1.0/people.png" alt="Bot people: kinds of people on the left, one kind's name, how common it is, how it chats and plays, and its traits" width="1440" height="900" loading="lazy"></picture>
+  </figure>
+  <ul>
+    <li><b>Kinds of people</b>: each kind has a name, how common it is (about how many in every 100 new bots), how it chats, how it plays, and traits that are fixed or rolled. <b>Add</b>, <b>Duplicate</b> or <b>Remove</b> kinds.</li>
+    <li><b>How common traits are</b>: a slider for each, and <b>Never together</b> for pairs that shouldn't meet.</li>
+    <li><b>Regulars' names</b>: the names bots use, and who has which. <b>Fresh names for everyone</b> starts over.</li>
+  </ul>
+  <p><b>Save</b>, and a running game picks it up straight away; name changes show from the next map. <b>More</b> has <b>Import…</b>, <b>Export…</b> and <b>Start from Loner-Strike's</b>. See <a href="#every-bot">Every bot is someone</a> for how it all fits together.</p>
+</section>
+
+<section class="topic" id="spray-maker" data-group="Personalize">
+  <p class="crumb">Personalize</p>
+  <h1>Spray maker</h1>
+  <p class="lead">Make your in-game spray from your pictures, words and stickers, and see it as the game will draw it.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/spray.webp" type="image/webp"><img src="img/1.0/spray.png" alt="Spray maker: a spray with a red splat and the words YOUR NAME, stickers on the left, and an in-game preview on a wall" width="1440" height="900" loading="lazy"></picture>
+  </figure>
+  <ol>
+    <li>Start from <b>Designs &amp; templates…</b> (a name tag, a skull banner, a team badge, GG) or blank.</li>
+    <li>Add layers: a <b>Picture…</b>, <b>Words</b> or a sticker. Move, turn and resize them on the canvas; pictures can lose their background, words get an outline and a shadow.</li>
+    <li>Check it under <b>In game</b> on a plaster, sandstone or crate wall, at the size and colours the game will use.</li>
+    <li><b>Install spray</b> for the games you tick. <b>Put back the previous one</b> undoes it.</li>
+  </ol>
+</section>
+
+<!-- ============ Watch & inspect ============ -->
+
+<section class="topic" id="map-viewer" data-group="Watch &amp; inspect">
+  <p class="crumb">Watch &amp; inspect</p>
+  <h1>Map viewer</h1>
+  <p class="lead">Walk around any map: spawns, doors, triggers, the bots' nav and what they learned about it.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/viewer-nav.webp" type="image/webp"><img src="img/1.0/viewer-nav.png" alt="The map viewer on de_dust2 with the bots' nav drawn over the map and places named" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>de_dust2 with <b>Bots' nav</b> on.</figcaption>
+  </figure>
+  <ul>
+    <li><b>Camera</b>: <b>Orbit</b>, <b>Fly</b> or <b>Top-down</b>.</li>
+    <li><b>Show</b>: textures, lighting (<b>Like the game</b> or <b>Bright</b>), spawns and items, doors and breakables, triggers and zones, and the <b>Bots' nav</b>.</li>
+    <li>With the nav on, <b>What bots learned</b> shows their cover, what they see from where, wallbang spots, corners and the angles they watch.</li>
+    <li>Click anything to see what it is, or find it in <b>In this map</b>.</li>
+    <li><b>Go to</b> takes coordinates or a link. <b>Keep this view</b>, <b>Picture</b> and <b>Copy link</b> save the spot.</li>
+  </ul>
+</section>
+
+<section class="topic" id="replay" data-group="Watch &amp; inspect">
+  <p class="crumb">Watch &amp; inspect</p>
+  <h1>Replay</h1>
+  <p class="lead">Watch a recorded bot match in 3D: where every bot went, why, and where it fell.</p>
+  <ol>
+    <li>Pick a recording, newest first. A <a href="#health-check">health check</a> makes one, or <b>Open a recording…</b> from a file.</li>
+    <li>Play it at up to 16 times speed. The bar marks rounds, kills and falls.</li>
+    <li>Click a player to pick them; double-click to <b>Follow</b>.</li>
+    <li><b>Heat map</b> shows time spent, deaths or where they got stuck.</li>
+    <li>With a bot's trace recorded, you can read why it did what it did.</li>
+  </ol>
+</section>
+
+<section class="topic" id="demos" data-group="Watch &amp; inspect">
+  <p class="crumb">Watch &amp; inspect</p>
+  <h1>Demos</h1>
+  <p class="lead">Your recorded demos and your servers' HLTV ones, in one list: what's in them, rename, delete, watch.</p>
+  <ol>
+    <li>Filter by <b>All</b>, <b>Recorded in game</b> or <b>HLTV</b>, or search.</li>
+    <li>Pick one to see how long it is, when and where it was recorded, and who played.</li>
+    <li><b>Watch</b> it. A server's demo becomes <b>Copy to my game and watch</b>.</li>
+    <li><b>Rename</b> or <b>Delete</b>. The game can only play demos with plain names.</li>
+  </ol>
+  <p>Record one in game with the app's <b>Record demo</b> button, or turn on <a href="#hltv">HLTV</a> on a server.</p>
+</section>
+
+<section class="topic" id="textures-models" data-group="Watch &amp; inspect">
+  <p class="crumb">Watch &amp; inspect</p>
+  <h1>Textures &amp; models</h1>
+  <p class="lead">Browse every texture and model in your game, add your own or get more. Browsing changes nothing in your game.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/models.webp" type="image/webp"><img src="img/1.0/models.png" alt="Textures and models: the AK-47 view model in 3D with its animations and textures listed" width="1440" height="900" loading="lazy"></picture>
+  </figure>
+  <ul>
+    <li><b>Textures</b>: search every WAD, see where a texture comes from and which of your maps use it, and <b>Save as picture…</b>. <b>Make your own…</b> turns a picture into a texture.</li>
+    <li><b>Models</b>: player models, weapons in hand, carried and on the ground, and hostages, in 3D with their animations and skins.</li>
+    <li><b>Get more</b>: <b>Add a WAD…</b> or <b>Add a model…</b> from your computer, or download from GameBanana. A file you replace comes back when you remove yours.</li>
+  </ul>
+</section>
 
 <section class="topic" id="friends" data-group="Multiplayer">
   <p class="crumb">Multiplayer</p>
@@ -894,6 +1580,141 @@ lsctl logs        the last 100 console lines</code></pre>
 
 <!-- ============ Help ============ -->
 
+<!-- ============ Share ============ -->
+
+<section class="topic" id="community" data-group="Share">
+  <p class="crumb">Share</p>
+  <h1>Community</h1>
+  <p class="lead">Maps, game modes, prefabs, sprays and textures made with Loner-Strike, in the app under <b>Tools › Community</b>. Find one, try it in a click, and play it with bots.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/community.webp" type="image/webp"><img src="img/1.0/community.png" alt="The Community browser: search, a filter for maps, modes, prefabs, sprays and textures, and the Browse, Installed, Publish and Published tabs" width="1440" height="900" loading="lazy"></picture>
+  </figure>
+  <h2 id="community-how">How it works</h2>
+  <p>The files live on <a href="https://gamebanana.com">GameBanana</a>, which hosts them, scans them for viruses, and has the pictures, likes and comments. A creation shows up in Community when its GameBanana page says <b>Software Used: LonerStrike</b>. Loner-Strike keeps a small list on top of that, with badges, featured picks and anything the moderators pulled.</p>
+  <h2 id="community-try">Try something</h2>
+  <ol>
+    <li>On <b>Browse</b>, search by name, maker or mode, and filter by <b>Maps</b>, <b>Modes</b>, <b>Prefabs</b>, <b>Sprays</b> or <b>Textures</b>.</li>
+    <li>Pick one and press <b>Try it</b>, then <b>Install it</b>.</li>
+    <li><b>Play with bots</b>. A prefab opens in the map editor instead.</li>
+  </ol>
+  <p>Installed things show up where they usually do (Maps, the mode list, the editor's Library), marked <b>From Community</b>. The <b>Installed</b> tab has <b>Update</b>, <b>Remove</b> and, for a mode, <b>Remix in Game Mode Studio</b>. A server can carry Community content too, from its <b>Library › Community content</b> tab; players get it through fast downloads.</p>
+  <h2 id="community-badges">Badges</h2>
+  <ul>
+    <li><b>Works with bots</b>: it comes with a bot nav and finished map knowledge.</li>
+    <li><b>Checked with bots</b>: it passed a <a href="#health-check">map health check</a>.</li>
+    <li><b>Settings only</b>: a Game Mode Studio mode, built on your computer.</li>
+    <li><b>Featured</b>: picked by the Loner-Strike team.</li>
+  </ul>
+  <h2 id="community-safe">What it will install</h2>
+  <p>Community installs content (maps, textures, sounds, models, sprays) and Game Mode Studio modes. Nothing that runs code is ever downloaded: a Studio mode travels as its graph, and your own app builds the plugin. Anything marked <b>Plugins</b> or <b>Not checked</b> won't install, and something the team <b>Pulled</b> can't be installed any more.</p>
+  <h2 id="community-report">Report something</h2>
+  <p>Every creation has <b>Report</b>. Say what's wrong (it doesn't work, it looks harmful, it's someone else's work, it's offensive, it isn't a Loner-Strike creation) and add a note if you like. Only the page, the reason and your note are sent: nothing about you or your computer. Moderators see each report in our Discord and can pull a creation from every app within about half an hour. Copies already installed stay, with a note that it was pulled.</p>
+</section>
+
+<section class="topic" id="publishing" data-group="Share">
+  <p class="crumb">Share</p>
+  <h1>Publishing</h1>
+  <p class="lead">Share a map or a Game Mode Studio mode you made. The app checks it and packs it; you upload it to GameBanana; the app adds it to Community.</p>
+  <h2 id="publish-rules">What can be shared</h2>
+  <div class="table"><table>
+    <thead><tr><th>Yes</th><th>No</th></tr></thead>
+    <tbody>
+      <tr><td>Maps you made or added, with their nav, knowledge, overview, sounds, models and textures</td><td>The game's own stock maps</td></tr>
+      <tr><td>Game Mode Studio modes (only the graph is shared)</td><td>Plugin modes and anything compiled: <code>.amxx</code>, <code>.sma</code>, <code>.dll</code>, <code>.exe</code>, scripts</td></tr>
+      <tr><td>Prefabs, textures and sprays</td><td>Game settings files (<code>.cfg</code>, <code>liblist.gam</code>, plugin lists), archives inside the package, Metamod or <code>dlls</code> folders</td></tr>
+    </tbody>
+  </table></div>
+  <p>Share your own work, or work you have permission to share, and credit the people whose pieces you used. Sprays get a look from a moderator before they're listed.</p>
+  <h2 id="publish-steps">Publish a map</h2>
+  <ol>
+    <li>Compile the map into your game first (the editor's <b>Publish…</b> brings you here once it has).</li>
+    <li>In <b>Tools › Community</b>, open <b>Publish</b>, choose <b>A map</b> and pick it. The app checks it and says what's missing; tips like naming places or running a health check earn it badges.</li>
+    <li>Fill in <b>Name</b>, <b>Made by</b> (your GameBanana name), <b>About it</b>, the modes it's made for, and up to 6 screenshots. Shots from the <a href="#map-viewer">map viewer</a> work well.</li>
+    <li><b>Make the package</b>. It makes a <code>.zip</code> with the map, its nav and knowledge, a fresh download list, its overview and the files it uses.</li>
+    <li><b>Open GameBanana</b> and sign in there. Add the attribute <b>Software Used: LonerStrike</b> (it's how Community finds it), upload the package unchanged, and add the screenshots. The app has copy buttons for the name, description and attribute.</li>
+    <li>Once GameBanana has checked the file, paste the page's link back in the app and press <b>Add to Community</b>.</li>
+  </ol>
+  <p>Most things are <b>Listed</b> straight away and show up within a few minutes. Some go to a moderator first. If the list turns it down, the app says why.</p>
+  <h2 id="publish-mode">Publish a game mode</h2>
+  <p>The same steps, with <b>A game mode</b> and one of your Studio modes. Others can play it and remix it in their own Studio, with your name on it.</p>
+  <h2 id="publish-yours">After it's up</h2>
+  <p>The <b>Published</b> tab lists what you've shared and where each one is. To update one, upload the new file to its GameBanana page, then paste the page's link in Publish again so the list checks the new file. Players see an <b>Update</b> on their Installed tab. The app never signs in to GameBanana for you.</p>
+</section>
+
+<section class="topic" id="community-privacy" data-group="Share">
+  <p class="crumb">Share</p>
+  <h1>Community and your privacy</h1>
+  <p class="lead">What Loner-Strike's community server keeps, and what it doesn't. The short version: nothing about you.</p>
+  <h2 id="privacy-browse">Browsing and installing</h2>
+  <p>The app downloads the Community list from <code>dl.lonerstrike.com</code> and the files themselves from GameBanana, like any download. You don't need an account, and the list doesn't know who fetched it.</p>
+  <h2 id="privacy-publish">Publishing</h2>
+  <p>Adding a creation sends the GameBanana page's address and the app's version, nothing else. The listing is built from what's public on GameBanana (the title, the GameBanana name of who made it, the pictures and the file) and the package's own description. Moderation decisions are kept with the listing.</p>
+  <h2 id="privacy-reports">Reports</h2>
+  <p>A report keeps the page, the reason and your note for 90 days. To spot one person sending many reports, the server keeps a scrambled tag made from your address with a key that only lives in memory and changes when it restarts. Your address itself is never stored, and moderators never see it.</p>
+  <h2 id="privacy-limits">Rate limits and logs</h2>
+  <p>To stop floods, the server counts requests per address in memory only, and forgets them. Its logs say what happened to which page, never who asked.</p>
+  <h2 id="privacy-local">On your computer</h2>
+  <p>What you published and what you installed are listed in Loner-Strike's own folder, along with a copy of the Community list. They never leave your computer. See also the site's <a href="privacy.html">privacy page</a>.</p>
+</section>
+
+<!-- ============ AI agents ============ -->
+
+<section class="topic" id="mcp" data-group="AI agents">
+  <p class="crumb">AI agents</p>
+  <h1>Connect an AI agent</h1>
+  <p class="lead">Let coding agents like Claude Code, Codex, OpenCode or Cursor use Loner-Strike's tools: read maps, check them for bots, build in the map editor, fix navs and run your servers. It works through MCP (the Model Context Protocol).</p>
+  <h2 id="mcp-on">Turn it on</h2>
+  <ol>
+    <li>In the app, open <b>Settings › AI agents</b>.</li>
+    <li>Turn on <b>Let AI agents connect</b>. On its own, agents can only look.</li>
+    <li>To let them make changes, turn on <b>Allow changes</b> too: editing maps and navs, starting and stopping servers.</li>
+    <li>Under <b>Connect an agent</b>, pick your agent, press <b>Copy</b> and paste where it says. The copied setup already has the app's real path.</li>
+  </ol>
+  <h2 id="mcp-clients">Each agent</h2>
+  <p>Replace <code>&lt;app&gt;</code> with the app's path. On a Mac that's <code>/Applications/Loner-Strike.app/Contents/MacOS/loner-strike</code>; the app's <b>Copy</b> button fills it in for you.</p>
+  <h3>Claude Code</h3>
+  <p>In a terminal:</p>
+<pre><code>claude mcp add --scope user --transport stdio loner-strike -- "&lt;app&gt;" --mcp-stdio</code></pre>
+  <p><code>claude mcp list</code> should say it's connected, and <code>/mcp</code> inside Claude Code lists the tools.</p>
+  <h3>Codex</h3>
+  <p>In <code>~/.codex/config.toml</code>:</p>
+<pre><code>[mcp_servers.loner-strike]
+command = "&lt;app&gt;"
+args = ["--mcp-stdio"]</code></pre>
+  <h3>OpenCode</h3>
+  <p>In <code>opencode.json</code>:</p>
+<pre><code>"mcp": {"servers": {"loner-strike": {"type": "local", "command": ["&lt;app&gt;", "--mcp-stdio"]}}}</code></pre>
+  <h3>Cursor</h3>
+  <p>In <code>~/.cursor/mcp.json</code>:</p>
+<pre><code>"mcpServers": {"loner-strike": {"type": "stdio", "command": "&lt;app&gt;", "args": ["--mcp-stdio"]}}</code></pre>
+  <h3>Claude Desktop</h3>
+  <p>In <code>claude_desktop_config.json</code> (Settings › Developer › Edit Config):</p>
+<pre><code>"mcpServers": {"loner-strike": {"command": "&lt;app&gt;", "args": ["--mcp-stdio"]}}</code></pre>
+  <h3>VS Code</h3>
+  <p>In <code>.vscode/mcp.json</code>, or <b>MCP: Open User Configuration</b>:</p>
+<pre><code>"servers": {"loner-strike": {"type": "stdio", "command": "&lt;app&gt;", "args": ["--mcp-stdio"]}}</code></pre>
+  <h3>Others</h3>
+  <p>Any agent that takes MCP servers (Windsurf and the rest) uses the same shape: a <code>command</code> of the app's path with <code>--mcp-stdio</code> as its argument. Agents that only speak HTTP can use <b>Connect over HTTP with the token instead</b>: <code>http://127.0.0.1:8029/mcp</code> with the header <code>Authorization: Bearer &lt;token&gt;</code>. The token is on the same page, and changes every launch unless you tick <b>Keep the same token across restarts</b>.</p>
+  <h2 id="mcp-what">What agents can do</h2>
+  <ul>
+    <li>List and read maps, run the map doctor and health check, read replays.</li>
+    <li>Build and change maps in the map editor, compile and playtest.</li>
+    <li>Fix navs, name places, make overviews and look at demos.</li>
+    <li>Work in Game Mode Studio and Plugin Studio.</li>
+    <li>Start, stop and change your own servers, read their console and logs, and look at the bots' thinking.</li>
+  </ul>
+  <p>Agents also get ready-made prompts, like <i>check map for bots</i>, <i>fix map nav</i> and <i>make game mode</i>. Try: "make a small aim arena, check it for bots and playtest it".</p>
+  <h2 id="mcp-safety">What keeps you in charge</h2>
+  <ul>
+    <li>Off until you turn it on, and only reachable from your own computer. Web pages can't use it.</li>
+    <li>Look-only until <b>Allow changes</b> is on.</li>
+    <li>The app asks you (<b>An AI agent is asking</b>) before deleting anything, kicking or banning, stopping a server people are on, starting the game, compiling into the game, or anything public or online.</li>
+    <li>Never for agents: these settings themselves, updates and removing the app, phone access, shared control, passwords and secrets. Passwords, tokens, keys, webhooks and Steam IDs are never shown to them.</li>
+    <li>Agents pick files through the system's own file window, with you.</li>
+    <li><b>What agents did</b> lists every call: done, not allowed, or didn't work.</li>
+  </ul>
+</section>
+
 <section class="topic" id="no-bots-help" data-group="Help">
   <p class="crumb">Help</p>
   <h1>No bots or Bad Rcon</h1>
@@ -1012,6 +1833,32 @@ lsctl logs        the last 100 console lines</code></pre>
 </section>
 
 
+<section class="topic" id="tools-help" data-group="Help">
+  <p class="crumb">Help</p>
+  <h1>Tools, the editor and the studios</h1>
+  <p class="lead">Fixes for the usual problems when making things.</p>
+  <h2 id="no-3d" data-keywords="webgl black blank 3d view graphics" data-short="3D view is blank">The 3D view is black or empty <a class="anchor" href="#no-3d" aria-label="Link to this">#</a></h2>
+  <p>The map viewer and editor draw with your graphics card. Update its driver, and on Windows make sure Loner-Strike isn't forced onto a basic display adapter. Big maps can take a few seconds to appear the first time.</p>
+  <h2 id="compile-mac" data-keywords="crossover compile wine sdhlt mac" data-short="Compiling on a Mac">Compiling doesn't start on a Mac <a class="anchor" href="#compile-mac" aria-label="Link to this">#</a></h2>
+  <p>The compiler runs through CrossOver, in the bottle with your game, so the game has to be set up in Loner-Strike first. "Compiling maps works on Windows, and on a Mac with CrossOver" means it couldn't find CrossOver: check it's in <b>Applications</b>. The first compile copies the compiler into the bottle and takes longer.</p>
+  <h2 id="compile-leak" data-keywords="leak void sealed" data-short="The map leaks">"The map leaks" <a class="anchor" href="#compile-leak" aria-label="Link to this">#</a></h2>
+  <p>Somewhere the inside of your map touches the void. Press <b>Show the leak line</b> and follow the red line from the entity it starts at; where it leaves the map is the gap. Close it with a brush and compile again. Remember that entities, like a func_wall or a door, don't seal a map: only world brushes do.</p>
+  <h2 id="missing-textures" data-keywords="wad texture missing pink checkerboard" data-short="Missing textures">Textures are missing <a class="anchor" href="#missing-textures" aria-label="Link to this">#</a></h2>
+  <p>The map lists texture files (WADs) that aren't on this computer, or uses a texture none of them has. Put the WADs beside the map, or add them in <b>Map properties › WADs</b>. For maps from Hammer or J.A.C.K., see <a href="#import-wads">Texture files</a>.</p>
+  <h2 id="playtest-stuck" data-keywords="playtest game won't start bots don't move" data-short="Playtest problems">A playtest doesn't start, or bots stand still <a class="anchor" href="#playtest-stuck" aria-label="Link to this">#</a></h2>
+  <ul>
+    <li>Close the game if it asks, and let it restart into the playtest.</li>
+    <li>Bots standing still haven't learned the map: leave <b>Teach bots the map first</b> ticked, or use <b>Teach bots this map</b> in the <a href="#map-doctor">Map doctor</a>.</li>
+    <li>Bots stuck in one place: run a <a href="#health-check">health check</a> and fix the spot in the <a href="#nav-fixer">Nav fixer</a>.</li>
+  </ul>
+  <h2 id="studio-problems" data-keywords="studio compile error playtest node" data-short="Studio problems">Game Mode Studio won't playtest <a class="anchor" href="#studio-problems" aria-label="Link to this">#</a></h2>
+  <p><b>Playtest</b> waits until <b>Problems</b> is empty: click each one to go to its node. If the game starts but nothing happens, check the mode's events are wired up (a node only runs when a wire leads to it), and watch the nodes light up while you play. Menus need a person to answer them.</p>
+  <h2 id="plugin-compile" data-keywords="compiler amxx error sma include" data-short="Plugin won't compile">A plugin won't compile <a class="anchor" href="#plugin-compile" aria-label="Link to this">#</a></h2>
+  <p>Each error under <b>Problems</b> is explained in plain words and marked on its line. "Couldn't find your game's install to run the compiler" means Loner-Strike isn't set up in the game yet: run setup from the app first.</p>
+  <h2 id="tools-report" data-keywords="bug report beta" data-short="Report a tools bug">Something else is off <a class="anchor" href="#tools-report" aria-label="Link to this">#</a></h2>
+  <p>The tools are Beta. Tell us on <a href="/discord">Discord</a> or in a <a href="https://github.com/jamesontucker/Loner-Strike/issues">GitHub issue</a>, with <a href="#diagnostics">diagnostics</a>, and the map or mode if you can share it.</p>
+</section>
+
 <section class="topic" id="faq" data-group="Help">
   <p class="crumb">Help</p>
   <h1>Questions</h1>
@@ -1032,6 +1879,10 @@ lsctl logs        the last 100 console lines</code></pre>
     <li><b>Everything</b>: <b>Remove everything</b> in the same place takes it off every game and deletes your servers on this computer and all its data. Servers on Linux machines keep running.</li>
     <li>Then uninstall the app like any other.</li>
   </ul>
+  <h2 id="tools-mac">Do the tools work on a Mac? <a class="anchor" href="#tools-mac" aria-label="Link to this">#</a></h2>
+  <p>Yes, all of them. The map editor's compiler is a Windows program, so on a Mac it runs through CrossOver, in the same bottle as your game.</p>
+  <h2 id="tools-beta">What does Beta mean on the tools? <a class="anchor" href="#tools-beta" aria-label="Link to this">#</a></h2>
+  <p>They're new in 1.0 and still settling in. They back up files before changing them, but keep your own copy of work you care about, and tell us what you find.</p>
   <h2 id="where-files">Where are its files? <a class="anchor" href="#where-files" aria-label="Link to this">#</a></h2>
   <p>In Settings, <b>Storage</b> shows Loner-Strike's folder, and downloads and map pictures can be cleared there to save space. <b>Servers folder</b> shows where your servers are.</p>
   <h2 id="diagnostics">Still stuck? Send diagnostics <a class="anchor" href="#diagnostics" aria-label="Link to this">#</a></h2>
