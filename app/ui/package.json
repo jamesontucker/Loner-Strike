@@ -7,19 +7,26 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "tauri": "node scripts/tauri.mjs"
+    "test:studio": "node scripts/test-studio.mjs",
+    "tauri": "node scripts/tauri.mjs",
+    "tools:dev": "node scripts/tools-dev.mjs",
+    "test:tools": "playwright test"
   },
   "dependencies": {
+    "@dagrejs/dagre": "1.1.4",
     "@react-three/drei": "9.117.3",
     "@react-three/fiber": "8.17.10",
     "@tanstack/react-query": "5.59.20",
+    "@xyflow/react": "12.4.4",
     "monaco-editor": "0.52.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "three": "0.170.0",
+    "zod": "3.23.8",
     "zustand": "5.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.0",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
     "@types/three": "0.170.0",

@@ -25,9 +25,10 @@ export const TOOLS: ToolEntry[] = [
   { id: "editor", label: "Map editor", group: "Make", icon: "mods", blurb: "Build your own maps with brushes, like Hammer, in one 3D view.", beta: true, load: () => import("./editor/MapEditor") },
   { id: "spray", label: "Spray maker", group: "Make", icon: "fun", blurb: "Turn a picture into your in-game spray.", load: () => import("./spray/SprayMaker") },
   { id: "community", label: "Community", group: "Share", icon: "friends", blurb: "Find maps, modes and more made with Loner-Strike and try them in a click; publish your own.", beta: true, load: () => import("./community/Community") },
-  { id: "plugins", label: "Plugin Studio", group: "Make", icon: "addons", blurb: "Write AMX Mod X plugins with suggestions and docs, then try them in your game in a click.", beta: true, load: () => import("./plugins/PluginStudio") },
   { id: "playercfg", label: "Crosshair & config", group: "Make", icon: "awp", blurb: "Make your crosshair, keys, mouse and connection settings, with the crosshair drawn live.", beta: true, load: () => import("./playercfg/PlayerConfig") },
   { id: "people", label: "Bot people", group: "Make", icon: "players", blurb: "Decide who the bots are: kinds of people, how they play and talk, and the regulars' names.", beta: true, load: () => import("./people/People") },
-  { id: "overview", label: "Radar maker", group: "Make", icon: "maps", blurb: "Make a map's overview: the top-down picture spectators and HLTV viewers see, drawn from the map.", beta: true, load: () => import("./overview/Overview") },
+  { id: "plugins", label: "Plugin Studio", group: "Make", icon: "addons", blurb: "Write AMX Mod X plugins with suggestions and docs, then try them in your game in a click.", beta: true, load: () => import("./plugins/PluginStudio") },
+  { id: "radar", label: "Radar maker", group: "Make", icon: "maps", blurb: "Make a map's overview: the top-down picture spectators and HLTV viewers see, drawn from the map.", beta: true, load: () => import("./overview/Overview") },
   { id: "demos", label: "Demos", group: "Look", icon: "play", blurb: "Your recorded demos and your servers' HLTV ones: what's in them, rename, delete, watch.", beta: true, load: () => import("./demos/Demos") },
+  { id: "studio", label: "Game Mode Studio", group: "Make", icon: "rules", blurb: "Make a game mode from nodes and wires, then playtest it with bots and watch the nodes run.", beta: true, load: () => import("./studio/StudioPage") },
 ];
