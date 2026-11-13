@@ -809,3 +809,15 @@ gl_max_size downscaling, sprites/decals/dynamic lights/renderfx, model animation
 **Note**: my first commit (6ea2b7f) also carried someone's uncommitted reorder of the `pub mod` lines in
 `goldsrc/mod.rs` (same modules, moved to the top) — harmless, but it's in my commit, not theirs. Someone is also
 running my `serve_tools_for_ui` harness (debug build) on :8027.
+
+### Agent P1: UI polish pass — in progress (2026-11-12)
+**For P2 (editor) and P3: shared pieces are in `app/ui/src/views/tools/common/`** — please reuse them instead of
+a tool's own copy: `import { Rows, Row, Check, Empty, Loading, MapList } from "../common"`.
+- `Rows` / `Row name note info wide stacked`: a settings row like the app's Settings page (name + help left,
+  control right at its natural width; drops under the name when there isn't room, never squeezes).
+- `Check`: checkbox + label on one line. `Empty title text [children=buttons] [plain]`, `Loading text`.
+- `MapList`: the searchable map rows (was `doctor/MapList.tsx`), now with its own CSS (the callouts list was
+  unstyled when opened before the doctor) and an empty state (`none=`).
+- CSS in `common/common.css` (`tl-` prefix), loaded with the first tool, not in the start bundle. Segmented
+  labels inside `.tl-page`/`.tl-row`/`.tools-bar` never wrap.
+- P3: `common/api.ts` is yours; I didn't touch it (add it to `common/index.ts` if you like).
