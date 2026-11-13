@@ -517,14 +517,14 @@ async fn api_project_action(State(st): State<Shared>, Extension(ed): Extension<E
                 let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
                 if (ext == "rmf" || ext == "jmf") && r.kind != Kind::Project {
                     let im = import_other(&path)?;
-                    let mut state = ed.install(im.doc, stem(&path), None, &dirs);
+                    let mut state = ed.install_from(im.doc, stem(&path), None, Some(&path), &dirs);
                     state["notes"] = json!(im.notes);
                     return Ok(json!({"opened": true, "state": state}));
                 }
                 if (ext == "lsmap" || ext == "map") && r.kind != Kind::Project {
                     let (doc, project) = load_file(&path)?;
                     remember(&ed.dir, &path, project);
-                    let state = ed.install(doc, stem(&path), project.then_some(path.clone()), &dirs);
+                    let state = ed.install_from(doc, stem(&path), project.then_some(path.clone()), Some(&path), &dirs);
                     return Ok(json!({"opened": true, "state": state}));
                 }
                 open_with_system(&path)?;
@@ -602,7 +602,7 @@ async fn api_import_other(State(st): State<Shared>, Extension(ed): Extension<Ed>
         let path = picked.into_path().map_err(|_| "That file can't be used.".to_string())?;
         let im = import_other(&path)?;
         // not a project yet: Save makes one (the original file is never written to)
-        let mut state = ed.install(im.doc, stem(&path), None, &dirs);
+        let mut state = ed.install_from(im.doc, stem(&path), None, Some(&path), &dirs);
         state["notes"] = json!(im.notes);
         Ok(state)
     })

@@ -64,6 +64,9 @@ struct Session {
     name: String,
     /// Where Save writes (a project file). None until saved or opened from a project.
     project: Option<PathBuf>,
+    /// The folder the map came from (the project's, or an imported .map/.rmf/.jmf's): texture
+    /// files there are found before the game's (P4, QA-1).
+    folder: Option<PathBuf>,
     /// The revision each brush last changed at, and brushes removed since.
     stamps: HashMap<BrushId, u64>,
     removed: Vec<(BrushId, u64)>,
@@ -79,7 +82,8 @@ impl Session {
         let rev = doc.revision;
         let stamps = doc.brushes.keys().map(|b| (*b, rev)).collect();
         let prev = doc.brushes.clone();
-        Session { id, doc, history: History::default(), name, project, stamps, removed: Vec::new(), horizon: 0, prev, drag: None, wads: None }
+        let folder = project.as_deref().and_then(Path::parent).map(Path::to_path_buf);
+        Session { id, doc, history: History::default(), name, project, folder, stamps, removed: Vec::new(), horizon: 0, prev, drag: None, wads: None }
     }
 
     /// Notes which brushes changed since the last look (cheap: brushes compare by value).
@@ -106,9 +110,12 @@ impl Session {
 
     /// The document's WADs, opened (kept until the WAD list or the game changes).
     fn wads(&mut self, dirs: &[PathBuf]) -> Option<Arc<wad::WadSet>> {
-        if dirs.is_empty() {
+        if dirs.is_empty() && self.folder.is_none() {
             return None;
         }
+        // the map's own folder first, then the game's
+        let all: Vec<PathBuf> = self.folder.iter().cloned().chain(dirs.iter().cloned()).collect();
+        let dirs = &all[..];
         let names = self.doc.world.wad_names();
         if let Some((n, d, set)) = &self.wads {
             if *n == names && d == dirs {
@@ -179,8 +186,15 @@ impl Editor {
         self.session.lock().unwrap_or_else(|e| e.into_inner())
     }
     fn install(&self, doc: MapDocument, name: String, project: Option<PathBuf>, dirs: &[PathBuf]) -> Value {
+        self.install_from(doc, name, project, None, dirs)
+    }
+    /// As `install`, remembering the file it came from (its folder is searched for WADs).
+    fn install_from(&self, doc: MapDocument, name: String, project: Option<PathBuf>, source: Option<&Path>, dirs: &[PathBuf]) -> Value {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let mut s = Session::new(id, doc, name, project);
+        if let Some(dir) = source.and_then(Path::parent) {
+            s.folder = Some(dir.to_path_buf());
+        }
         s.learn_textures(dirs);
         s.track();
         let st = s.state();
@@ -1123,6 +1137,11 @@ fn save_project(s: &mut Session, path: &Path, backups: Option<&Path>) -> Result<
     }
     write_atomic(path, &s.doc.to_json())?;
     s.project = Some(path.to_path_buf());
+    // saved somewhere new: WADs beside it are found from now on
+    if s.folder.as_deref() != path.parent() {
+        s.folder = path.parent().map(Path::to_path_buf);
+        s.wads = None;
+    }
     s.name = stem(path);
     s.history.mark_saved();
     Ok(())
@@ -1363,7 +1382,7 @@ async fn open_with(st: Shared, ed: Ed, h: HeaderMap, kind: Pick) -> Response {
         let Some(path) = dialog(&st, kind, "")? else { return Ok(json!({"cancelled": true})) };
         let (doc, project) = load_file(&path)?;
         remember(&ed.dir, &path, project);
-        Ok(ed.install(doc, stem(&path), project.then_some(path), &dirs))
+        Ok(ed.install_from(doc, stem(&path), project.then_some(path.clone()), Some(&path), &dirs))
     })
     .await
 }
@@ -1785,7 +1804,7 @@ async fn api_open_recent(State(st): State<Shared>, Extension(ed): Extension<Ed>,
         }
         let (doc, project) = load_file(&r.path)?;
         remember(&ed.dir, &r.path, project);
-        Ok(ed.install(doc, stem(&r.path), project.then_some(r.path), &dirs))
+        Ok(ed.install_from(doc, stem(&r.path), project.then_some(r.path.clone()), Some(&r.path), &dirs))
     })
     .await
 }
@@ -1890,6 +1909,12 @@ pub fn routes() -> Router<Shared> {
 /// A copy of the open document and its name; None when no map is open.
 pub fn open_document() -> Option<(MapDocument, String)> {
     global().lock().as_ref().map(|s| (s.doc.clone(), s.name.clone()))
+}
+
+/// The folder the open map came from (its project's, or the imported file's), for finding
+/// texture files kept beside it (P4, QA-1).
+pub fn open_document_folder() -> Option<PathBuf> {
+    global().lock().as_ref().and_then(|s| s.folder.clone())
 }
 
 #[cfg(test)]

@@ -716,8 +716,54 @@ pub struct Wads {
     pub paths: Vec<String>,
     pub include: Vec<String>,
     pub missing: Vec<String>,
+    /// there but not a texture file the compiler can read: (name, why)
+    pub bad: Vec<(String, String)>,
 }
 
+/// Why a file isn't a WAD the compiler can read, if it isn't.
+pub fn wad_problem(path: &Path) -> Option<String> {
+    let mut head = [0u8; 12];
+    let n = std::fs::File::open(path).and_then(|mut f| std::io::Read::read(&mut f, &mut head)).unwrap_or(0);
+    if n == 0 {
+        return Some("it's empty (0 bytes)".into());
+    }
+    if n < 12 || !(head.starts_with(b"WAD3") || head.starts_with(b"WAD2")) {
+        return Some("it isn't a texture file (WAD3)".into());
+    }
+    None
+}
+
+/// Where a WAD the map lists is on this computer: the path as written when it's there
+/// (absolute, or relative to the map's folder, `\` or `/`), then its name in the map's
+/// folder, then in the game's folders (`in_game`).
+pub fn find_wad(listed: &str, folder: Option<&Path>, in_game: &dyn Fn(&str) -> Option<PathBuf>) -> Option<PathBuf> {
+    let unix = listed.trim().replace('\\', "/");
+    let base = unix.rsplit('/').next().unwrap_or(&unix).to_string();
+    if base.is_empty() {
+        return None;
+    }
+    let as_written = Path::new(&unix);
+    // (a Windows drive path like C:/... means nothing here)
+    if as_written.is_absolute() && as_written.is_file() {
+        return Some(as_written.to_path_buf());
+    }
+    if let Some(dir) = folder {
+        let looks_relative = !unix.contains(':') && !unix.starts_with('/');
+        if looks_relative {
+            let p = dir.join(&unix);
+            if p.is_file() {
+                return Some(p);
+            }
+        }
+        let finder = crate::mapcopy::Finder::default();
+        if let Some(p) = finder.find(dir, &base) {
+            return Some(p);
+        }
+    }
+    in_game(&base)
+}
+
+/// The map's WADs as real files for the compiler. `find` gets each name as the map lists it.
 pub fn resolve_wads(names: &[String], find: &dyn Fn(&str) -> Option<PathBuf>, layout: &Layout, copy_dir: &Path) -> Result<Wads, String> {
     let mut w = Wads::default();
     for name in names {
@@ -725,10 +771,14 @@ pub fn resolve_wads(names: &[String], find: &dyn Fn(&str) -> Option<PathBuf>, la
         if base.is_empty() || base.eq_ignore_ascii_case("sdhlt.wad") || base.eq_ignore_ascii_case("zhlt.wad") {
             continue;
         }
-        let Some(found) = find(&base) else {
+        let Some(found) = find(name) else {
             w.missing.push(base);
             continue;
         };
+        if let Some(why) = wad_problem(&found) {
+            w.bad.push((base, why));
+            continue;
+        }
         let arg = match layout.arg_path(&found) {
             Ok(a) => a,
             // (somewhere wine can't see: copied next to the map)
@@ -746,6 +796,20 @@ pub fn resolve_wads(names: &[String], find: &dyn Fn(&str) -> Option<PathBuf>, la
     }
     w.paths.push(layout.arg_path(&layout.tools.join("sdhlt.wad"))?);
     Ok(w)
+}
+
+/// What stops a compile in the WAD list, in plain words.
+pub fn wad_errors(w: &Wads, has_folder: bool) -> Option<String> {
+    let mut out = Vec::new();
+    if !w.missing.is_empty() {
+        let where_ = if has_folder { "the map's project folder or the game folder" } else { "the game folder (or save the map as a project beside them)" };
+        out.push(format!("The map lists texture files that aren't on this computer: {}. Put them in {where_}, or remove them in Map properties.", w.missing.join(", ")));
+    }
+    if !w.bad.is_empty() {
+        let list: Vec<String> = w.bad.iter().map(|(n, why)| format!("{n} ({why})")).collect();
+        out.push(format!("These texture files can't be read: {}. Replace them with working copies, or remove them in Map properties.", list.join(", ")));
+    }
+    (!out.is_empty()).then(|| out.join(" "))
 }
 
 /// CSG's extra arguments: each custom WAD goes inside the .bsp.
@@ -901,6 +965,20 @@ pub fn parse_output(text: &str, idx: &Index, doc: &MapDocument) -> Vec<Problem> 
         }
         let level = if line.starts_with("Error") { "error" } else { "warning" };
         let before = out.len();
+        // (QA-3) no .prt: BSP found no inside to work from, which happens when no entity is inside the map
+        if line.contains("Portal file") && line.contains("does not exist") {
+            add(&mut out, Problem {
+                level: "error".into(),
+                kind: "other".into(),
+                message: "The map has nothing inside it for the compiler to start from. Put a player spawn (info_player_start) inside a sealed room.".into(),
+                detail: line.to_string(),
+                help: Some("The compiler fills the map from its entities; with none inside, everything counts as outside.".into()),
+                brush: None,
+                entity: None,
+                at: None,
+            });
+            continue;
+        }
         if leak.is_match(line) {
             if !leaked {
                 leaked = true;
@@ -1324,6 +1402,8 @@ struct Plan {
     maps: Option<PathBuf>,
     /// said before compiling (cordon links crossing the edge)
     warnings: Vec<Problem>,
+    /// the folder the map came from: WADs beside it are found first
+    folder: Option<PathBuf>,
 }
 
 fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
@@ -1361,7 +1441,8 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     let mut layout = layout_for(&client, &install_from, false)?;
     layout.threads = Some(compile_threads(cores(), req.all_cores));
     let wad_dirs = crate::goldsrc::wad::search_dirs(&game.hl, game.is_czero());
-    Ok(Plan { layout, install_from, name, preset: req.preset, doc, wad_dirs, maps, warnings })
+    let folder = super::editor::open_document_folder();
+    Ok(Plan { layout, install_from, name, preset: req.preset, doc, wad_dirs, maps, warnings, folder })
 }
 
 /// Runs one stage, streaming its output into the job; Ok(its whole output) when it exits
@@ -1457,16 +1538,12 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
 
     // the .map, with the WADs as files on this computer
     let finder = crate::mapcopy::Finder::default();
-    let find = |name: &str| -> Option<PathBuf> {
-        let set = crate::goldsrc::wad::WadSet::open(&finder, &p.wad_dirs, &[name.to_string()]);
-        set.wads.into_iter().next().and_then(|(_, w)| w.ok()).map(|w| w.path)
-    };
+    // beside the map's project (or the file it came from) first, then the game's folders
+    let in_game = |base: &str| -> Option<PathBuf> { p.wad_dirs.iter().find_map(|d| finder.find(d, base)) };
+    let find = |name: &str| -> Option<PathBuf> { find_wad(name, p.folder.as_deref(), &in_game) };
     let wads = resolve_wads(&p.doc.world.wads, &find, &layout, &dir.join("wads"))?;
-    if !wads.missing.is_empty() {
-        return Err(format!(
-            "The map lists texture files that aren't on this computer: {}. Put them in the game folder, or remove them in Map settings.",
-            wads.missing.join(", ")
-        ));
+    if let Some(e) = wad_errors(&wads, p.folder.is_some()) {
+        return Err(e);
     }
     let text = map_text(&p.doc, &wads.paths)?;
     std::fs::write(base.with_extension("map"), &text).map_err(|e| format!("Couldn't write the map for the compiler ({e})."))?;
@@ -1942,9 +2019,9 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("ls-compile-wads-{}", std::process::id()));
         let game = dir.join("Half-Life");
         std::fs::create_dir_all(game.join("valve")).unwrap();
-        std::fs::write(game.join("valve/halflife.wad"), b"WAD3").unwrap();
-        std::fs::write(game.join("valve/mine.wad"), b"WAD3").unwrap();
-        let find = |n: &str| Some(game.join("valve").join(n)).filter(|p| p.is_file());
+        std::fs::write(game.join("valve/halflife.wad"), b"WAD3\0\0\0\0\0\0\0\0").unwrap();
+        std::fs::write(game.join("valve/mine.wad"), b"WAD3\0\0\0\0\0\0\0\0").unwrap();
+        let find = |n: &str| Some(game.join("valve").join(n.rsplit(['\\', '/']).next().unwrap())).filter(|p| p.is_file());
         let mut l = native(&dir.join("sdhlt/tools").to_string_lossy());
         let names = vec!["\\half-life\\valve\\HALFLIFE.WAD".to_string(), "D:\\sierra\\mine.wad".into(), "gone.wad".into(), "zhlt.wad".into()];
         let w = resolve_wads(&names, &find, &l, &dir.join("copies")).unwrap();
@@ -1967,6 +2044,62 @@ mod tests {
         let text = map_text(&room(), &w.paths).unwrap();
         assert!(text.contains("\"wad\" \"C:\\Loner-Strike\\Compiler\\work\\m\\wads\\HALFLIFE.WAD;"), "{}", &text[..300]);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// QA-1/QA-2: a WAD kept beside the project (or named relative to it) is found, copied for
+    /// the compiler and packed into the map; an empty one is said plainly.
+    #[test]
+    fn wads_beside_the_project() {
+        let dir = std::env::temp_dir().join(format!("ls-compile-projwads-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let project = dir.join("projects/regamedll");
+        let game = dir.join("Half-Life/valve");
+        std::fs::create_dir_all(project.join("textures")).unwrap();
+        std::fs::create_dir_all(&game).unwrap();
+        let wad3 = b"WAD3\x01\0\0\0\x0c\0\0\0";
+        std::fs::write(project.join("regamedll_zedit.wad"), wad3).unwrap();
+        std::fs::write(project.join("textures/extra.wad"), wad3).unwrap();
+        std::fs::write(project.join("gunshop.wad"), b"").unwrap();
+        std::fs::write(game.join("halflife.wad"), wad3).unwrap();
+        let in_game = |b: &str| Some(game.join(b)).filter(|p| p.is_file());
+        // as Hammer writes them: someone else's drive, a path relative to the project, a stock one
+        let names: Vec<String> = vec![
+            "C:\\Users\\mapper\\regamedll_zedit.wad".into(),
+            "textures\\extra.wad".into(),
+            "\\half-life\\valve\\halflife.wad".into(),
+            "gunshop.wad".into(),
+            "nowhere.wad".into(),
+        ];
+        let folder = Some(project.as_path());
+        assert_eq!(find_wad(&names[0], folder, &in_game), Some(project.join("regamedll_zedit.wad")));
+        assert_eq!(find_wad(&names[1], folder, &in_game), Some(project.join("textures/extra.wad")));
+        assert_eq!(find_wad(&names[2], folder, &in_game), Some(game.join("halflife.wad")));
+        assert_eq!(find_wad(&names[0], None, &in_game), None, "without the project's folder it isn't found (the old bug)");
+        // through CrossOver: copied next to the map (wine can't see the project), packed into the .bsp
+        let mut l = wine();
+        let b = dir.join("Bottles/Steam/drive_c");
+        l.tools = b.join("Loner-Strike/Compiler/sdhlt-v1.3.1/tools");
+        let work = b.join("Loner-Strike/Compiler/work/regamedll");
+        let find = |n: &str| find_wad(n, folder, &in_game);
+        let w = resolve_wads(&names, &find, &l, &work.join("wads")).unwrap();
+        assert_eq!(w.missing, vec!["nowhere.wad"]);
+        assert_eq!(w.bad, vec![("gunshop.wad".to_string(), "it's empty (0 bytes)".to_string())]);
+        assert_eq!(w.paths[0], "C:\\Loner-Strike\\Compiler\\work\\regamedll\\wads\\regamedll_zedit.wad");
+        assert_eq!(w.paths[1], "C:\\Loner-Strike\\Compiler\\work\\regamedll\\wads\\extra.wad");
+        assert!(work.join("wads/regamedll_zedit.wad").is_file());
+        assert_eq!(w.include, vec!["regamedll_zedit.wad", "extra.wad"]);
+        let e = wad_errors(&w, true).unwrap();
+        assert!(e.contains("nowhere.wad") && e.contains("project folder") && e.contains("gunshop.wad (it's empty (0 bytes))"), "{e}");
+        assert!(wad_errors(&Wads::default(), true).is_none());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_map_with_nothing_inside() {
+        let d = room();
+        let p = parse_output("Error: Portal file 'C:\\work\\carver1\\carver1.prt' does not exist, cannot vis the map\n", &Index::of(&d), &d);
+        assert_eq!(p.len(), 1);
+        assert!(p[0].message.contains("info_player_start"), "{:?}", p[0]);
     }
 
     #[test]
@@ -2188,7 +2321,7 @@ mod tests {
         layout.threads = Some(compile_threads(cores(), false));
         let doc = super::super::editor::starter_map();
         let dirs = crate::goldsrc::wad::search_dirs(&hl, false);
-        let p = Plan { layout: layout.clone(), install_from: install.clone(), name: "ls_test_room".into(), preset: Preset::Fast, doc, wad_dirs: dirs, maps: None, warnings: vec![] };
+        let p = Plan { layout: layout.clone(), install_from: install.clone(), name: "ls_test_room".into(), preset: Preset::Fast, doc, wad_dirs: dirs, maps: None, warnings: vec![], folder: None };
         begin("compile", "test").unwrap();
         let r = run_compile(p);
         let (log, problems) = with_job(|j| (j.log.join("\n"), j.problems.clone())).unwrap();
