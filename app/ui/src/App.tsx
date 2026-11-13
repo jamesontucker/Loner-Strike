@@ -6,6 +6,7 @@ import { Icon } from "./icons";
 import { forgetLive, queryClient, reloadAppInfo, useOpenReports, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
 import { hasUnsavedEdits, isPageEntry, useNav, type Section } from "./store";
 import { usePlayDrafts } from "./stores/playDraft";
+import { useToolPage } from "./stores/toolPage";
 import { waitsForRestart, type AppInfo, type GameState, type Online, type ServerInfo } from "./types";
 import { applyScale, closeSheetsAbove, ConfirmProvider, lazyPage, LoadError, PageBoundary, savedScale, Sheet, Skeleton, ToastProvider, useConfirm, useToast } from "./ui";
 import { FilesUpdate } from "./views/FilesUpdate";
@@ -25,6 +26,8 @@ import { FUN_NOTE, MatchButtons, RULES_NOTE, SavedSettingsPage, SettingsPage } f
 import { Welcome } from "./views/Welcome";
 import { WhatsNew } from "./views/WhatsNew";
 import { anySetUp, Setup } from "./views/Setup";
+// the list of tools only (each tool's page is its own lazy chunk)
+import { TOOL_GROUPS, TOOLS } from "./views/tools/registry";
 
 // The bigger pages load the first time they're opened, so the app starts on a smaller bundle
 const Servers = lazyPage(() => import("./views/Servers").then((m) => ({ default: m.Servers })));
@@ -62,7 +65,8 @@ const NAV: { id: Section; label: string; icon: string; group?: string; live?: bo
   { id: "servers", label: "Servers", icon: "server", group: "Hosting" },
   // looking inside maps, right after Servers: on the computer only (3D over Wi-Fi on a phone
   // isn't a goal)
-  ...(ON_THIS_COMPUTER ? [{ id: "tools" as Section, label: "Tools", icon: "tools", beta: true }] : []),
+  // its own group: the sidebar lists every tool under it (ToolsNav)
+  ...(ON_THIS_COMPUTER ? [{ id: "tools" as Section, label: "Tools", icon: "tools", group: "Tools", beta: true }] : []),
   // (the sidebar keeps it below the list, always in view)
   { id: "settings", label: "Settings", icon: "settings", group: "App" },
 ];
@@ -411,7 +415,7 @@ function Shell() {
           </div>
           {NAV.slice(hostingAt).filter((n) => n.id !== "settings").map((n) => (
             <div key={n.id}>
-              {n.group && <div className="nav-group">{n.group}</div>}
+              {n.group && n.id !== "tools" && <div className="nav-group">{n.group}</div>}
               {n.id === "servers" ? (
                 <ServersNav
                   servers={servers?.servers ?? []}
@@ -428,6 +432,8 @@ function Shell() {
                     enterServer(id);
                   }}
                 />
+              ) : n.id === "tools" ? (
+                <ToolsNav section={section} onOpen={(focus) => nav("tools", focus)} />
               ) : (
                 navButton(n)
               )}
@@ -657,6 +663,65 @@ function ServersNav({ servers, section, openId, pill, onOverview, onNew, onOpen 
               <span className="side-server-name">New server</span>
             </button>
           )}
+        </div>
+      )}
+    </>
+  );
+}
+
+const TOOLS_FOLD = "ls.toolsOpen";
+
+/**
+ * Tools in the sidebar: its own group after Hosting. The group heading (with the Beta tag)
+ * folds it; under it Overview (the cards page), then the tools grouped Look / Fix / Make
+ * (views/tools/registry.tsx), each straight to its page. Opening a tool unfolds it.
+ */
+function ToolsNav({ section, onOpen }: { section: Section; onOpen: (focus: string) => void }) {
+  const tool = useToolPage((s) => s.tool);
+  const here = section === "tools";
+  const [folded, setFolded] = useState(() => {
+    try {
+      return localStorage.getItem(TOOLS_FOLD) === "0";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    if (here) setFolded(false);
+  }, [here, tool]);
+  const open = !folded;
+  const toggle = () => {
+    setFolded(open);
+    try {
+      localStorage.setItem(TOOLS_FOLD, open ? "0" : "1");
+    } catch {
+      // storage off: it just isn't remembered
+    }
+  };
+  const item = (focus: string, label: string, icon: string, current: boolean, title?: string) => (
+    <button key={focus} className="nav-item" aria-current={current ? "page" : undefined} title={title} onClick={() => onOpen(focus)}>
+      <Icon name={icon} />
+      {label}
+    </button>
+  );
+  return (
+    <>
+      <button className="nav-group nav-group-fold" aria-expanded={open} aria-controls="side-tools" onClick={toggle}>
+        Tools
+        <span className="tag nav-beta">Beta</span>
+        <svg className="fold-caret" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d={open ? "M6 9l6 6 6-6" : "M9 6l6 6-6 6"} />
+        </svg>
+      </button>
+      {open && (
+        <div id="side-tools">
+          {item("overview", "Overview", "tools", here && !tool)}
+          {TOOL_GROUPS.map((g) => (
+            <div key={g} role="group" aria-label={g}>
+              <div className="nav-subgroup">{g}</div>
+              {TOOLS.filter((t) => t.group === g).map((t) => item(t.id, t.label, t.icon ?? "tools", here && tool === t.id, t.blurb))}
+            </div>
+          ))}
         </div>
       )}
     </>

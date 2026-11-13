@@ -13,6 +13,7 @@ import type { Nav } from "../overlays";
 import type { MeshBundle } from "../viewer/bundle";
 import { Cameras } from "../viewer/Cameras";
 import { ROOT_ROTATION, type Vec3 } from "../viewer/coords";
+import { pointerEvents } from "../viewer/Scene";
 import { areaColours } from "../viewer/NavLayer";
 import { World, type ModelMesh } from "../viewer/World";
 import { REACH_NEVER, REACH_TRAP } from "./navfixApi";
@@ -53,7 +54,8 @@ export function FixScene(p: Props) {
     <Canvas
       onCreated={({ gl }) => gl.domElement.addEventListener("webglcontextlost", (e) => {
         e.preventDefault();
-        p.onLost();
+        // a canvas being put away (leaving the page, another map) drops its context on purpose
+        if (gl.domElement.isConnected) p.onLost();
       })}
       frameloop="demand"
       dpr={[1, 1.5]}
@@ -61,6 +63,7 @@ export function FixScene(p: Props) {
       flat
       gl={{ powerPreference: "high-performance", antialias: true }}
       camera={{ fov: 70, near: 2, far: 40000, position: [0, 512, 512] }}
+      events={pointerEvents}
       onPointerLeave={() => useTools.getState().setHover(null)}
     >
       <color attach="background" args={["#262c21"]} />

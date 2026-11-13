@@ -395,6 +395,10 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               {canCopy && hasServers && (
                 <button className="btn" onClick={() => { setCopyMap(picked.name); setPicked(null); }}>Copy to a server</button>
               )}
+              {/* look inside it (Tools is on this computer only, and reads your own game's maps) */}
+              {ON_THIS_COMPUTER && !currentTarget() && !picked.other && (
+                <button className="btn" onClick={() => { go("tools", `map:${picked.name}`); setPicked(null); }}>Open in Tools</button>
+              )}
               {ON_THIS_COMPUTER && picked.source === "download" && picked.mod && (
                 <BusyButton className="btn danger" busy={busy(key(`remove:${picked.mod}`))} label="Remove" busyLabel="Removing…" onClick={() => remove(picked)} />
               )}

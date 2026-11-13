@@ -388,7 +388,7 @@ function SlotsBar() {
     </p>
   );
 }
-const SECTION_NAME: Record<string, string> = { maps: "Map", skins: "Weapon skin", players: "Player model", sounds: "Sound", sprays: "Spray", sprites: "Effect", gui: "HUD & menus" };
+const SECTION_NAME: Record<string, string> = { maps: "Map", skins: "Weapon skin", players: "Player model", sounds: "Sound", sprays: "Spray", sprites: "Effect", gui: "HUD & menus", textures: "Texture pack" };
 
 /** Everything downloaded into this game, in one place, to remove what you don't want. */
 function InstalledList({ onChanged, server, only, empty = "Nothing downloaded yet. Anything you install from here shows up in this list." }: { onChanged: () => void; server?: boolean; only?: string[]; empty?: string }) {
@@ -469,7 +469,7 @@ function InstalledList({ onChanged, server, only, empty = "Nothing downloaded ye
 /** What you have of some kinds of GameBanana content in your own game, with Remove on each
  *  and a way to get more of that kind (Get more, opened on it): a chip per kind when there's
  *  more than one. */
-const KIND_NAMES: Record<string, string> = { skins: "Weapon skins", players: "Player models", sprays: "Sprays", sprites: "Effects", gui: "HUD & menus", sounds: "Sounds" };
+const KIND_NAMES: Record<string, string> = { skins: "Weapon skins", players: "Player models", sprays: "Sprays", sprites: "Effects", gui: "HUD & menus", sounds: "Sounds", textures: "Textures" };
 export function MyContent({ kinds, title, note, empty }: { kinds: string[]; title: string; note: string; empty: string }) {
   const [kind, setKind] = useState<string>(kinds.length > 1 ? "all" : kinds[0]);
   const these = kind === "all" ? kinds : [kind];

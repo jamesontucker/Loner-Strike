@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { useSetupJob, waitForSetupJob } from "../../../queries";
 import { useNav } from "../../../store";
-import { useTools, useToolArg } from "../../../stores/tools";
+import { useToolArg } from "../../../stores/tools";
 import type { MapInfo } from "../../../types";
 import { Banner, BusyButton, LoadError, Skeleton, useToast } from "../../../ui";
 import { JobProgress } from "../../JobProgress";
@@ -100,10 +100,7 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
     reload();
   };
 
-  const nameplaces = () => {
-    useTools.getState().setTool("callouts");
-    useTools.setState({ arg: map });
-  };
+  const nameplaces = () => useNav.getState().go("tools", `callouts:${map}`);
 
   const head = (
     <div className="row between doc-head">

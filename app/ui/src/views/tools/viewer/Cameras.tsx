@@ -196,16 +196,18 @@ function Top({ home }: { home: Home }) {
   );
 }
 
-/** Moves the camera to a point when something asks (Inspector's Look at). */
+/** Moves the camera to a point when something asks (Inspector's Look at, or another tool
+ *  opening the viewer on a spot before the map was up), then clears the request. */
 function LookAt({ mode }: { mode: CameraMode }) {
   const req = useTools((s) => s.lookAt);
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => void } | null;
   const invalidate = useThree((s) => s.invalidate);
-  const done = useRef(req?.n ?? 0);
   useEffect(() => {
-    if (!req || req.n === done.current) return;
-    done.current = req.n;
+    if (!req) return;
+    // Orbit and Top-down move their controls' target too: wait until those are up
+    if (mode !== "fly" && !controls) return;
+    useTools.setState({ lookAt: null });
     const p = gsToThree(req.point);
     const dist = Math.max(160, req.size * 2.5);
     if (mode === "top") {

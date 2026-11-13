@@ -4,36 +4,19 @@
 // Everything inside the root group is in GoldSrc units (plan 3.2).
 
 import { Line, MapControls, OrthographicCamera, TransformControls } from "@react-three/drei";
-import { Canvas, events, useThree, type EventManager, type RootState, type ThreeEvent } from "@react-three/fiber";
+import { Canvas, useThree, type RootState, type ThreeEvent } from "@react-three/fiber";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { useTools } from "../../../stores/tools";
 import { Cameras } from "../viewer/Cameras";
 import { gsToThree, ROOT_ROTATION, threeToGs, type Vec3 } from "../viewer/coords";
 import { MapMaterials } from "../viewer/materials";
+import { pointerEvents } from "../viewer/Scene";
 import type { Draw } from "../viewer/bundle";
 import { texUrl, type DocEntity } from "./editorApi";
 import { keyOf, originOf, selectionBounds, snap, useEditor, type BrushGeo, type ViewId } from "./store";
 
 // ---- small helpers ---------------------------------------------------------------------
-
-/** Pointer events measured against the canvas on screen (the app's text size is a CSS zoom). */
-function pointerEvents(store: Parameters<typeof events>[0]): EventManager<HTMLElement> {
-  const base = events(store);
-  return {
-    ...base,
-    compute(event: Event, state: RootState) {
-      const el = state.gl.domElement;
-      if (document.pointerLockElement === el) state.pointer.set(0, 0);
-      else {
-        const r = el.getBoundingClientRect();
-        const e = event as PointerEvent;
-        state.pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-      }
-      state.raycaster.setFromCamera(state.pointer, state.camera);
-    },
-  };
-}
 
 const drawOf = (texture: string): Draw => ({ model: 0, texture, start: 0, count: 0, flags: 0 });
 const isSkyTex = (t: string) => /^sky$/i.test(t);

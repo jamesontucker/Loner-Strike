@@ -1,10 +1,11 @@
 import { create } from "zustand";
 import type { Vec3 } from "../views/tools/viewer/coords";
+import { useToolPage } from "./toolPage";
 
 // The Tools page's view state (plan 3.1): which tool and map are open, the layers, the
 // camera, what's picked. Documents (the mesh, entities) live in TanStack Query.
 
-/** a tool's id in views/tools/registry.tsx */
+/** a tool's id in views/tools/registry.tsx; "" is the Tools overview (kept in toolPage.ts) */
 export type Tool = string;
 export type CameraMode = "orbit" | "fly" | "top";
 
@@ -39,7 +40,6 @@ export type Selection =
 export type CameraStatus = { pos: Vec3; yaw: number; pitch: number };
 
 type ToolsState = {
-  tool: Tool;
   map: string | null;
   layers: Layers;
   camera: CameraMode;
@@ -49,7 +49,8 @@ type ToolsState = {
   status: CameraStatus | null;
   /** fly mode has the mouse (pointer lock or a drag) */
   looking: boolean;
-  /** a request to move the camera to a point; n changes on every request */
+  /** a request to move the camera to a point; n changes on every request. The viewer
+   *  clears it once it has looked, so one made before the map is up still happens. */
   lookAt: { point: Vec3; size: number; n: number } | null;
   /** what the nav focus asked a tool to open ("<tool>:<arg>"), for tools that take one */
   arg: string | null;
@@ -109,7 +110,6 @@ const savedCamera = (): CameraMode => {
 };
 
 export const useTools = create<ToolsState>((set, get) => ({
-  tool: "map",
   map: null,
   layers: savedLayers(),
   camera: savedCamera(),
@@ -127,7 +127,11 @@ export const useTools = create<ToolsState>((set, get) => ({
   speed: 4,
   follow: null,
   heat: "off",
-  setTool: (tool) => set({ tool }),
+  // a look-at left waiting by the last tool (no 3D view up) mustn't move the next one's
+  setTool: (tool) => {
+    useToolPage.setState({ tool });
+    set({ lookAt: null });
+  },
   setNavColour: (navColour) => set({ navColour }),
   setKnow: (know) => set({ know }),
   // a recording opens on its own map

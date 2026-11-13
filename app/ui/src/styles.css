@@ -1910,6 +1910,21 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 /* Tools is in beta for 1.0: a small tag in the sidebar and on the page */
 .nav-beta { margin-left: auto; font-size: 11px; padding: 0 6px; letter-spacing: .03em; text-transform: uppercase; }
 .tools-beta { font-size: 11px; padding: 0 6px; letter-spacing: .03em; text-transform: uppercase; vertical-align: 1px; margin-right: 4px; }
+/* Tools in the sidebar: like Servers, the tools grouped Look / Fix / Make (App.tsx ToolsNav) */
+.nav-group-fold { display: flex; align-items: center; gap: 8px; width: calc(100% - 20px); padding: 0; border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 600; color: var(--bone-faint); text-align: left; cursor: pointer; }
+.nav-group-fold:hover { color: var(--bone-dim); }
+.nav-group-fold .nav-beta { margin-left: 0; }
+.nav-group-fold .fold-caret { margin-left: auto; flex: none; }
+.nav-subgroup { margin: 8px 10px 2px 12px; font-size: 11px; font-weight: 700; color: var(--bone-faint); letter-spacing: .04em; text-transform: uppercase; }
+/* the Tools overview: a card per tool, one line each */
+.tools-cards-group { margin-bottom: 18px; }
+.tools-cards-head { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--bone-faint); letter-spacing: .04em; text-transform: uppercase; }
+.tools-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.tools-card { display: grid; gap: 4px; align-content: start; min-width: 0; padding: 12px 14px; border: 0; border-radius: 3px; background: var(--panel); box-shadow: var(--raised); color: var(--bone); text-align: left; cursor: pointer; }
+.tools-card:hover { background: var(--panel-2); }
+.tools-card-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; }
+.tools-card-title .tools-beta { margin: 0; }
+.tools-card-blurb { color: var(--bone-dim); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* the viewer fills the page's height: the page stops scrolling and the view takes the rest */
 .content:has(> .tools-page) { display: flex; flex-direction: column; padding-bottom: 16px; }
 .tools-page { flex: 1 1 auto; min-height: 460px; display: flex; flex-direction: column; gap: 10px; }

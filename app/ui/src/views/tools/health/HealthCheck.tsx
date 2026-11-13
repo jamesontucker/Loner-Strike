@@ -3,6 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNav } from "../../../store";
 import { useTools } from "../../../stores/tools";
 import type { MapInfo } from "../../../types";
 import { BusyButton, Info, LoadError, Segmented, Skeleton, SteamProgress, useToast } from "../../../ui";
@@ -38,10 +39,7 @@ const where = (s: Spot) => s.place || `the spot at ${s.at.map((v) => Math.round(
 
 /** Opens the map viewer on the map, looking at a spot. */
 function openInViewer(map: string, s: Spot) {
-  const t = useTools.getState();
-  t.setTool("map");
-  t.openMap(map);
-  t.look(s.at, 192);
+  useNav.getState().go("tools", `map:${map}@${s.at.map((v) => Math.round(v)).join(",")},192`);
 }
 
 export default function HealthCheck({ maps }: ToolProps) {
@@ -349,9 +347,7 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
     const rid = await recordingId(r.recording);
     setReplaying(false);
     if (!rid) return toast("That recording isn't in the recordings folder any more.", true);
-    const t = useTools.getState();
-    t.setTool("replay");
-    t.openReplay(rid, r.map);
+    useNav.getState().go("tools", `replay:${rid}`);
   };
 
   return (

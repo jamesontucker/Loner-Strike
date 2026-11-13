@@ -32,7 +32,7 @@ export function canDraw3d(): boolean {
 /** Pointer events: from the mouse, or from the middle of the view while flying with the
  *  mouse grabbed. Measured against the canvas on screen, so the app's text size (a CSS
  *  zoom on the page) doesn't throw picking off. */
-function pointerEvents(store: Parameters<typeof events>[0]): EventManager<HTMLElement> {
+export function pointerEvents(store: Parameters<typeof events>[0]): EventManager<HTMLElement> {
   const base = events(store);
   return {
     ...base,
@@ -60,14 +60,17 @@ export class SceneBoundary extends Component<{ fallback: ReactNode; children: Re
   }
 }
 
-export function Scene({ bundle, meshes, entities, map, overlays, onLost }: { bundle: MeshBundle; meshes: ModelMesh[]; entities: MapEntity[]; map: string; overlays: Overlays; onLost: () => void }) {
+/** The map in 3D with its layers; `children` are extra layers, drawn in GoldSrc units like
+ *  the rest (inside the root group). */
+export function Scene({ bundle, meshes, entities, map, overlays, onLost, children }: { bundle: MeshBundle; meshes: ModelMesh[]; entities: MapEntity[]; map: string; overlays: Overlays; onLost: () => void; children?: ReactNode }) {
   const knowOk = overlays.nav && overlays.know && overlays.know.count === overlays.nav.areas.length && overlays.know.keyMatches !== false ? overlays.know : null;
   return (
     <Canvas
       // the graphics driver can drop the 3D context (sleep, a driver update, too much else open)
       onCreated={({ gl }) => gl.domElement.addEventListener("webglcontextlost", (e) => {
         e.preventDefault();
-        onLost();
+        // a canvas being put away (leaving the page, another map) drops its context on purpose
+        if (gl.domElement.isConnected) onLost();
       })}
       frameloop="demand"
       dpr={[1, 1.5]}
@@ -92,6 +95,7 @@ export function Scene({ bundle, meshes, entities, map, overlays, onLost }: { bun
         {overlays.nav && <NavLayer nav={overlays.nav} know={knowOk} />}
         {overlays.nav && knowOk && <KnowLayer nav={overlays.nav} know={knowOk} />}
         {overlays.replay && <ReplayLayer replay={overlays.replay} trace={overlays.trace} top={bundle.bounds[1][2] + 16} />}
+        {children}
       </group>
       <Cameras bounds={bundle.bounds} />
     </Canvas>

@@ -4,7 +4,8 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { useTools, useToolArg } from "../../../stores/tools";
+import { useNav } from "../../../store";
+import { useToolArg } from "../../../stores/tools";
 import { Banner, BusyButton, Info, LoadError, Skeleton, useAskText, useConfirm, useToast } from "../../../ui";
 import { MapList } from "../doctor/MapList";
 import type { ToolProps } from "../registry";
@@ -321,7 +322,7 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
             </div>
             {saved && <p className="co-saved small-note">{saved}</p>}
             <p className="muted small-note">
-              The old nav is kept as {nav.file}.bak the first time{nav.backup ? " (there's one already)" : ""}. <button className="linkish" onClick={() => { useTools.getState().setTool("doctor"); useTools.setState({ arg: map }); }}>Check the map in the map doctor</button>
+              The old nav is kept as {nav.file}.bak the first time{nav.backup ? " (there's one already)" : ""}. <button className="linkish" onClick={() => useNav.getState().go("tools", `doctor:${map}`)}>Check the map in the map doctor</button>
             </p>
           </div>
         </div>
