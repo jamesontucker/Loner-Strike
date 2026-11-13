@@ -165,3 +165,45 @@ wave 15+   = zombie 3  runner 3  brute 3  spitter 2  vortigaunt 2  assassin 2  s
 - Request: heavies that speed up when hurt (the "enrage" heavy): a key or command to change a live creature's run
   speed (or a type key like `enrage_below 0.5 enrage_speed 320`). Spawn-time `speed` works and is used for walkers.
 - Tested on brain r43509839679.
+
+## Y (2026-11-13): precache budget guard, measured numbers (brain f54a228/6987c8f, CI 43514350606)
+How the guard works:
+- Creature types precache at ServerActivate (`ls_creature_precache_late 1`), after the game, map and plugins, so the
+  real free room is known. `ls_creature_reserve "40 60"` keeps 40 model and 60 sound slots free for later needs.
+- `ls_creature_sounds 2` (default) keeps 2 sounds per kind. When room is short, kinds drop in this order: idle,
+  alert, miss, hit, pain, die, attack. A type is skipped only if its model has no room; skipped names are in the
+  `ls_creature_skipped` cvar and in the log (`ls_creature: skipped ...`). Never a precache crash.
+- `ls_creature_debug 2` logs every call: `ls_creature: precache sound X -> slot N (new)`.
+- New `ls_barnacle` entity (FGD in 1c307485): keys health 25, damage 10, length 512, speed 80, hates. Costs
+  models/barnacle.mdl + 4 sounds.
+- soldier uses sentences (`say_idle HG_IDLE`, `say_alert HG_ALERT`) at no precache cost. cstrike sentences.txt has
+  only human groups (HG_, BA_, SC_); no monster lines. Playback on a real client is not checked yet.
+
+Measured on ls_outpost, Last Stand, full roster (waves_full.ini), with bots and barnacles:
+- Game + map + plugins before creatures: about 197 models and 315 sounds (first new creature slot: model 198,
+  sound 316). P5: use these in the editor Budget panel instead of the fixed 160/200 (stock maps differ; this is a
+  Loner-Strike map with plugins loaded).
+- All 13 types cost 13 models and 99 new sounds (about 1 model + 8 sounds each).
+- Totals: with 6 sounds per kind 209/512 models, 448/512 sounds; with 2 per kind 209/512, 414/512.
+
+| type | model | new sounds | shared (already in game or another type) |
+|---|---|---|---|
+| zombie | zombie.mdl | 12 | 1 |
+| headcrab | headcrab.mdl | 11 | 0 |
+| runner | houndeye.mdl | 10 | 4 (zombie claw sounds) |
+| babycrab | baby_headcrab.mdl | 0 | 5 (headcrab) |
+| spitter | bullsquid.mdl | 12 | 0 |
+| vortigaunt | islave.mdl + sprites/lgtning.spr | 10 | 0 |
+| brute | agrunt.mdl | 10 | 4 (claw) |
+| snark | w_squeak.mdl | 5 | 1 |
+| assassin | hassassin.mdl | 2 | 4 (player pain/die) |
+| soldier | hgrunt.mdl | 6 | 0 (plus sentences) |
+| babygarg | garg.mdl | 10 | 2 (claw) |
+| gonarch | big_mom.mdl | 10 | 0 |
+| boss | garg.mdl (shared with babygarg) | 1 | 12 |
+
+- More room if needed: point melee hit/miss at CS knife sounds (already precached), 1 die sound per type.
+- Skins and bodygroups: types take `skin` and `body` keys (hgrunt has head/weapon bodygroups).
+- W1: gm_laststand should precache only the types its waves use (it does, up to round 20). The enrage request is
+  noted for the next batch.
+- Flyers (controller, stukabat) start after QA round 4, as agreed.
