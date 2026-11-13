@@ -25,7 +25,7 @@
 .tl-row.stacked .tl-row-control { justify-content: flex-start; }
 
 /* a choice of a few words: one line of pills, labels never wrap (whole pills may) */
-.tl-page .seg button, .tl-row .seg button, .tools-bar .seg button { white-space: nowrap; }
+.tl-page .seg button, .tl-row .seg button, .tools-bar .seg button, .tools-panel .seg button { white-space: nowrap; }
 .tl-row .seg { max-width: 100%; }
 
 /* ---- a checkbox with its label, kept on one line ---- */
