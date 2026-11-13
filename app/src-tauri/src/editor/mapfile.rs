@@ -599,3 +599,116 @@ mod tests {
         assert_eq!(fmt_num(31.9999999999), "32");
     }
 }
+
+// ---- the game's code page ------------------------------------------------------------------
+
+/// The Windows code page a .map's text is written in for the compiler (GoldSrc reads entity
+/// text as bytes and shows them in the player's own code page).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CodePage {
+    /// Western (the default)
+    Cp1252,
+    /// Cyrillic
+    Cp1251,
+}
+
+impl CodePage {
+    pub fn name(self) -> &'static str {
+        match self {
+            CodePage::Cp1252 => "Western (Windows-1252)",
+            CodePage::Cp1251 => "Cyrillic (Windows-1251)",
+        }
+    }
+
+    /// The byte for a character, if this code page has it.
+    pub fn byte(self, c: char) -> Option<u8> {
+        let u = c as u32;
+        if u < 0x80 {
+            return Some(u as u8);
+        }
+        // the 0x80-0x9F block (and a few others) differ between the two
+        const W1252: [(char, u8); 27] = [
+            ('€', 0x80), ('‚', 0x82), ('ƒ', 0x83), ('„', 0x84), ('…', 0x85), ('†', 0x86), ('‡', 0x87), ('ˆ', 0x88), ('‰', 0x89),
+            ('Š', 0x8A), ('‹', 0x8B), ('Œ', 0x8C), ('Ž', 0x8E), ('‘', 0x91), ('’', 0x92), ('“', 0x93), ('”', 0x94), ('•', 0x95),
+            ('–', 0x96), ('—', 0x97), ('˜', 0x98), ('™', 0x99), ('š', 0x9A), ('›', 0x9B), ('œ', 0x9C), ('ž', 0x9E), ('Ÿ', 0x9F),
+        ];
+        const W1251: [(char, u8); 22] = [
+            ('Ђ', 0x80), ('Ѓ', 0x81), ('‚', 0x82), ('ѓ', 0x83), ('„', 0x84), ('…', 0x85), ('‘', 0x91), ('’', 0x92), ('“', 0x93),
+            ('”', 0x94), ('•', 0x95), ('–', 0x96), ('—', 0x97), ('™', 0x99), ('Ё', 0xA8), ('ё', 0xB8), ('№', 0xB9), ('«', 0xAB),
+            ('»', 0xBB), ('Є', 0xAA), ('є', 0xBA), ('Ї', 0xAF),
+        ];
+        match self {
+            CodePage::Cp1252 => {
+                if (0xA0..=0xFF).contains(&u) {
+                    Some(u as u8)
+                } else {
+                    W1252.iter().find(|(k, _)| *k == c).map(|(_, b)| *b)
+                }
+            }
+            CodePage::Cp1251 => {
+                if (0x0410..=0x044F).contains(&u) {
+                    Some((u - 0x0410 + 0xC0) as u8)
+                } else if c == '\u{A0}' || c == '§' || c == '©' || c == '®' || c == '°' || c == '±' || c == 'µ' || c == '¶' || c == '·' || c == '¬' || c == '¦' || c == '¤' {
+                    Some(u as u8)
+                } else {
+                    W1251.iter().find(|(k, _)| *k == c).map(|(_, b)| *b)
+                }
+            }
+        }
+    }
+}
+
+/// A .map's text as the bytes the compiler gets: Western (cp1252) unless the text needs
+/// Cyrillic (cp1251). Characters neither has become `?`, and are listed (each once) so the
+/// player can be told.
+pub fn encode_for_game(text: &str) -> (Vec<u8>, CodePage, Vec<char>) {
+    let fits = |cp: CodePage| text.chars().all(|c| cp.byte(c).is_some());
+    let cp = if fits(CodePage::Cp1252) {
+        CodePage::Cp1252
+    } else if fits(CodePage::Cp1251) {
+        CodePage::Cp1251
+    } else {
+        // the one that keeps more of the text
+        let lost = |cp: CodePage| text.chars().filter(|c| cp.byte(*c).is_none()).count();
+        if lost(CodePage::Cp1251) < lost(CodePage::Cp1252) { CodePage::Cp1251 } else { CodePage::Cp1252 }
+    };
+    let mut bad: Vec<char> = Vec::new();
+    let bytes = text
+        .chars()
+        .map(|c| {
+            cp.byte(c).unwrap_or_else(|| {
+                if !bad.contains(&c) {
+                    bad.push(c);
+                }
+                b'?'
+            })
+        })
+        .collect();
+    (bytes, cp, bad)
+}
+
+#[cfg(test)]
+mod code_page_tests {
+    use super::*;
+
+    #[test]
+    fn entity_text_in_the_games_code_page() {
+        // plain text stays as it is
+        let (b, cp, bad) = encode_for_game("\"message\" \"Hello\"");
+        assert_eq!((b.as_slice(), cp, bad.len()), (b"\"message\" \"Hello\"".as_slice(), CodePage::Cp1252, 0));
+        // Western accents and quotes: cp1252
+        let (b, cp, _) = encode_for_game("Café – “ok”");
+        assert_eq!(cp, CodePage::Cp1252);
+        assert_eq!(b, vec![b'C', b'a', b'f', 0xE9, b' ', 0x96, b' ', 0x93, b'o', b'k', 0x94]);
+        // Russian: cp1251, and it reads back the way the importer reads it
+        let (b, cp, bad) = encode_for_game("Фаза - #1 Ёё №");
+        assert_eq!(cp, CodePage::Cp1251);
+        assert!(bad.is_empty());
+        assert_eq!(&b[..4], &[0xD4, 0xE0, 0xE7, 0xE0]);
+        assert_eq!(crate::editor::rmf::decode_text(&b), "Фаза - #1 Ёё №");
+        // what neither has (Chinese, emoji) becomes ? and is listed once
+        let (b, _, bad) = encode_for_game("go 去去 🙂");
+        assert_eq!(b, b"go ?? ?");
+        assert_eq!(bad, vec!['去', '🙂']);
+    }
+}

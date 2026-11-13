@@ -1100,11 +1100,9 @@ fn read_text(path: &Path) -> Result<String, String> {
         return Err("That file is too big to open.".into());
     }
     let bytes = std::fs::read(path).map_err(|_| "That file couldn't be read.".to_string())?;
-    // old .map files are often Windows-1252: keep the bytes as Latin-1 rather than refuse
-    Ok(match String::from_utf8(bytes) {
-        Ok(s) => s,
-        Err(e) => e.into_bytes().iter().map(|b| *b as char).collect(),
-    })
+    // old .map files are in a Windows code page (Western, or Cyrillic in Russian maps; ours
+    // are written that way too): UTF-8 when it is, else the code page it most likely was in
+    Ok(crate::editor::rmf::decode_text(&bytes))
 }
 
 fn stem(path: &Path) -> String {
@@ -1120,7 +1118,7 @@ pub fn load_file(path: &Path) -> Result<(MapDocument, bool), String> {
 }
 
 /// Writes next to the target and renames over it, so a failed write never leaves half a file.
-fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
+fn write_atomic(path: &Path, text: impl AsRef<[u8]>) -> Result<(), String> {
     let tmp = path.with_extension("lsmap-tmp");
     // backups (P7, safety.rs): only files inside a game folder; a project elsewhere keeps its own copies
     crate::safety::before("Map editor", &format!("Saved {}", path.file_name().unwrap_or_default().to_string_lossy()), path);
@@ -1147,10 +1145,21 @@ fn save_project(s: &mut Session, path: &Path, backups: Option<&Path>) -> Result<
     Ok(())
 }
 
-fn export_map(s: &Session, path: &Path) -> Result<usize, String> {
+/// Writes the document as a .map in the game's code page (Western, or Cyrillic when its text
+/// needs it); the size, and a note when some characters couldn't be kept.
+fn export_map(s: &Session, path: &Path) -> Result<(usize, Option<String>), String> {
     let text = mapfile::write_map(&s.doc, &mapfile::WriteOptions::default())?;
-    write_atomic(path, &text)?;
-    Ok(text.len())
+    let (bytes, cp, lost) = mapfile::encode_for_game(&text);
+    write_atomic(path, &bytes)?;
+    Ok((bytes.len(), code_page_note(cp, &lost)))
+}
+
+/// What to say when entity text has characters the game can't show (written as ?).
+pub fn code_page_note(cp: mapfile::CodePage, lost: &[char]) -> Option<String> {
+    (!lost.is_empty()).then(|| {
+        let shown: String = lost.iter().take(12).collect();
+        format!("Some text in the map has characters the game can't show ({shown}); they were written as ? ({}).", cp.name())
+    })
 }
 
 enum Pick {
@@ -1431,8 +1440,8 @@ async fn api_export(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: H
         let Some(path) = dialog(&st, Pick::ExportMap, &name)? else { return Ok(json!({"cancelled": true})) };
         let g = ed.lock();
         let s = g.as_ref().ok_or(NO_DOC)?;
-        let bytes = export_map(s, &path)?;
-        Ok(json!({"exported": true, "file": path.file_name().map(|n| n.to_string_lossy().to_string()), "bytes": bytes}))
+        let (bytes, note) = export_map(s, &path)?;
+        Ok(json!({"exported": true, "file": path.file_name().map(|n| n.to_string_lossy().to_string()), "bytes": bytes, "note": note}))
     })
     .await
 }
@@ -2289,6 +2298,53 @@ mod tests {
         assert!(load_file(&dir.join("bad.lsmap")).is_err());
         assert!(load_file(&dir.join("missing.lsmap")).is_err());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// P5/QA: a WAD beside the map's project or imported file counts for live checks and the
+    /// texture list too (not only the game's folders); entity text keeps its code page on export.
+    #[tokio::test]
+    async fn wads_beside_the_map_and_code_pages() {
+        let root = std::env::temp_dir().join(format!("ls-editor-beside-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let hl = root.join("Half-Life");
+        std::fs::create_dir_all(hl.join("cstrike/maps")).unwrap();
+        std::fs::create_dir_all(hl.join("valve")).unwrap();
+        std::fs::write(hl.join("valve/halflife.wad"), wad::build_wad(&[("crete3_flr04", crate::goldsrc::bsp::fixture::miptex("crete3_flr04", true))])).unwrap();
+        let proj = root.join("maps/russian");
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(proj.join("mine.wad"), wad::build_wad(&[("out_wall5", crate::goldsrc::bsp::fixture::miptex("out_wall5", true))])).unwrap();
+        let g = crate::game::Game::with_app_dir(&hl, "cstrike", &root.join("app"));
+        let t = T::new();
+        *t.st.current.write().unwrap() = Some(Arc::new(g));
+        let mut doc = starter_map();
+        doc.world.wads = vec!["\\half-life\\valve\\halflife.wad".into(), "C:\\mapper\\mine.wad".into()];
+        let mut text = Entity::new("game_text");
+        text.set("origin", "0 0 64");
+        text.set("message", "Фаза - #1");
+        doc.insert_entity(text);
+        let dirs = wad_dirs(&t.st);
+        t.ed.install_from(doc, "russian".into(), None, Some(&proj.join("russian.rmf")), &dirs);
+        // the texture list and the checks both see mine.wad beside the file
+        let list = t.get("/api/tools/editor/textures").await;
+        let mine = list["wads"].as_array().unwrap().iter().find(|w| w["name"] == "mine.wad").unwrap().clone();
+        assert_eq!(mine["found"], true, "{list}");
+        let c = t.get("/api/tools/editor/checks").await;
+        let missing: Vec<String> = c["issues"].as_array().unwrap().iter().filter(|i| i["code"] == "missing-texture").filter_map(|i| i["message"].as_str().map(String::from)).collect();
+        // (sky is in neither test WAD)
+        assert!(!missing.iter().any(|m| m.to_ascii_lowercase().contains("out_wall5") || m.to_ascii_lowercase().contains("crete3")), "{missing:?}");
+        // export: Cyrillic text in cp1251, read back the same
+        let out = root.join("russian.map");
+        {
+            let g = t.ed.lock();
+            let (_, note) = export_map(g.as_ref().unwrap(), &out).unwrap();
+            assert!(note.is_none());
+        }
+        let raw = std::fs::read(&out).unwrap();
+        assert!(raw.windows(4).any(|w| w == [0xD4, 0xE0, 0xE7, 0xE0]), "cp1251 bytes in the file");
+        assert!(std::str::from_utf8(&raw).is_err());
+        let (back, _) = load_file(&out).unwrap();
+        assert!(back.entities.values().any(|e| e.get("message") == Some("Фаза - #1")));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[tokio::test]

@@ -824,6 +824,52 @@ pub fn resolve_wads(names: &[String], find: &dyn Fn(&str) -> Option<PathBuf>, la
     Ok(w)
 }
 
+/// The game's limit for planes (MAX_MAP_PLANES), for hlbsp's "Reduced N planes to M".
+const MAX_MAP_PLANES: f64 = 32768.0;
+
+fn limit_message(name: &str, pct: f64) -> String {
+    format!("The map is over the limit for {name} ({pct:.1}% of what the game allows).")
+}
+
+/// Each limit's share of what the game allows, as the LAST report in `text` says it (hlcsg's
+/// chart counts planes before hlbsp throws most away: its "Reduced N planes to M" and later
+/// charts win): (name, percent, the line).
+pub fn chart_values(text: &str) -> Vec<(String, f64, String)> {
+    static CHART: OnceLock<regex::Regex> = OnceLock::new();
+    static REDUCED: OnceLock<regex::Regex> = OnceLock::new();
+    let chart = re(&CHART, r"^\*?\s*([a-zA-Z]+)\s+\d+/\d+\s+\d+/\d+\s+\(\s*([\d.]+)%\)");
+    let reduced = re(&REDUCED, r"(?i)reduced\s+(\d+)\s+planes\s+to\s+(\d+)");
+    let mut out: Vec<(String, f64, String)> = Vec::new();
+    let mut put = |name: String, pct: f64, row: &str| match out.iter_mut().find(|(n, _, _)| n.eq_ignore_ascii_case(&name)) {
+        Some(e) => {
+            e.1 = pct;
+            e.2 = row.to_string();
+        }
+        None => out.push((name, pct, row.to_string())),
+    };
+    for raw in text.lines() {
+        let line = raw.trim();
+        if let Some(c) = chart.captures(line) {
+            put(c[1].to_string(), c[2].parse().unwrap_or(0.0), line);
+        } else if let Some(c) = reduced.captures(line) {
+            let after: f64 = c[2].parse().unwrap_or(0.0);
+            put("planes".into(), after / MAX_MAP_PLANES * 100.0, line);
+        }
+    }
+    out
+}
+
+/// A later stage's report settles a limit an earlier stage was over: drop the old problem.
+pub fn settle_limits(problems: &mut Vec<Problem>, later: &[(String, f64, String)]) {
+    for (name, pct, _) in later {
+        if *pct <= 100.0 {
+            let old = limit_message(name, 0.0);
+            let head = &old[..old.find('(').unwrap_or(old.len())];
+            problems.retain(|p| !(p.kind == "limit" && p.message.starts_with(head)));
+        }
+    }
+}
+
 /// What stops a compile in the WAD list, in plain words.
 pub fn wad_errors(w: &Wads, has_folder: bool) -> Option<String> {
     let mut out = Vec::new();
@@ -1027,11 +1073,8 @@ pub fn parse_output(text: &str, idx: &Index, doc: &MapDocument) -> Vec<Problem> 
             add(&mut out, Problem { level: "error".into(), kind: "limit".into(), message: limit_words(&c[1]), detail: line.into(), ..Default::default() });
         } else if line.contains("AllocBlock") && line.to_lowercase().contains("full") {
             add(&mut out, Problem { level: "error".into(), kind: "limit".into(), message: "The map has too many lightmaps (AllocBlock). Raise the texture scale on big surfaces, or cover hidden faces with NULL.".into(), detail: line.into(), ..Default::default() });
-        } else if let Some(c) = chart.captures(line) {
-            let pct: f64 = c[2].parse().unwrap_or(0.0);
-            if pct > 100.0 {
-                add(&mut out, Problem { level: "error".into(), kind: "limit".into(), message: format!("The map is over the limit for {} ({pct:.1}% of what the game allows).", &c[1]), detail: line.into(), ..Default::default() });
-            }
+        } else if chart.is_match(line) {
+            // (said after the loop: the last row for each limit counts, see chart_values)
         } else if let Some(c) = tex.captures(line) {
             let name = c[1].trim_end_matches('!').to_string();
             add(&mut out, Problem {
@@ -1079,6 +1122,11 @@ pub fn parse_output(text: &str, idx: &Index, doc: &MapDocument) -> Vec<Problem> 
         }
         if out.len() > before {
             last = Some(out.len() - 1);
+        }
+    }
+    for (name, pct, row) in chart_values(text) {
+        if pct > 100.0 {
+            add(&mut out, Problem { level: "error".into(), kind: "limit".into(), message: limit_message(&name, pct), detail: row, ..Default::default() });
         }
     }
     out
@@ -1572,7 +1620,12 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
         return Err(e);
     }
     let text = map_text(&p.doc, &wads.paths)?;
-    std::fs::write(base.with_extension("map"), &text).map_err(|e| format!("Couldn't write the map for the compiler ({e})."))?;
+    // entity text in the game's code page (GoldSrc shows bytes, not UTF-8)
+    let (bytes, cp, lost) = mapfile::encode_for_game(&text);
+    if let Some(note) = super::editor::code_page_note(cp, &lost) {
+        with_job(|j| j.problems.push(Problem { level: "warning".into(), kind: "other".into(), message: note, ..Default::default() }));
+    }
+    std::fs::write(base.with_extension("map"), &bytes).map_err(|e| format!("Couldn't write the map for the compiler ({e})."))?;
     let idx = Index::of(&p.doc);
     if !p.warnings.is_empty() {
         with_job(|j| j.problems.extend(p.warnings.iter().take(MAX_PROBLEMS).cloned()));
@@ -1598,7 +1651,9 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
         };
         let found = parse_output(&out, &idx, &p.doc);
         let leaked = found.iter().any(|x| x.kind == "leak");
+        let charts = chart_values(&out);
         with_job(|j| {
+            settle_limits(&mut j.problems, &charts);
             for f in found.iter() {
                 if j.problems.len() < MAX_PROBLEMS && !j.problems.contains(f) {
                     j.problems.push(f.clone());
@@ -2175,6 +2230,31 @@ mod tests {
         assert!(w.include.is_empty());
         assert!(!work.join("wads").exists(), "nothing was copied");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// P5's de_kobbl: hlcsg's chart counts planes before hlbsp throws most away; the last
+    /// report for each limit counts.
+    #[test]
+    fn limits_use_the_last_report() {
+        let d = room();
+        let csg = "Object names  Objects/Maxobjs  Memory / Maxmem  Fullness\n\
+                   planes         61780/32768     1235600/655360  (188.5%)\n\
+                   texinfos         120/32767       4800/1310680  (  0.4%)\n";
+        let p = parse_output(csg, &Index::of(&d), &d);
+        assert_eq!(p.iter().filter(|x| x.kind == "limit").count(), 1);
+        let mut problems = p.clone();
+        let bsp = "Reduced 61780 planes to 14670\n";
+        let later = chart_values(bsp);
+        assert_eq!(later.len(), 1);
+        assert!((later[0].1 - 44.77).abs() < 0.1, "{later:?}");
+        settle_limits(&mut problems, &later);
+        assert!(problems.iter().all(|x| x.kind != "limit"), "{problems:?}");
+        // within one log the last row wins (and a row still over stays)
+        let two = "planes 61780/32768 1/1 (188.5%)\nplanes 14670/32768 1/1 ( 44.8%)\nleafs 9000/8192 1/1 (109.9%)\n";
+        let p = parse_output(two, &Index::of(&d), &d);
+        let limits: Vec<&str> = p.iter().filter(|x| x.kind == "limit").map(|x| x.message.as_str()).collect();
+        assert_eq!(limits.len(), 1);
+        assert!(limits[0].contains("leafs"));
     }
 
     #[test]
