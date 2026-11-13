@@ -295,7 +295,7 @@ pub fn hollow(b: &Brush, thickness: f64) -> OpResult<Vec<Brush>> {
 }
 
 /// Pick the source face that best matches a plane, for faces of a rebuilt brush.
-fn style_from(sources: &[(Plane, Face)], pl: &Plane) -> (String, TexAlign) {
+pub(crate) fn style_from(sources: &[(Plane, Face)], pl: &Plane) -> (String, TexAlign) {
     let mut best: Option<(&Plane, &Face, f64)> = None;
     for (sp, f) in sources {
         let score = sp.normal.dot(pl.normal) - (sp.dist - pl.dist).abs() * 1e-6;
@@ -313,7 +313,7 @@ fn style_from(sources: &[(Plane, Face)], pl: &Plane) -> (String, TexAlign) {
     }
 }
 
-fn sources_of<'a>(brushes: impl IntoIterator<Item = &'a Brush>) -> Vec<(Plane, Face)> {
+pub(crate) fn sources_of<'a>(brushes: impl IntoIterator<Item = &'a Brush>) -> Vec<(Plane, Face)> {
     brushes.into_iter().flat_map(|b| b.faces.iter().filter_map(|f| f.plane().map(|p| (p, f.clone())))).collect()
 }
 

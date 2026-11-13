@@ -152,6 +152,82 @@ pub fn center(a: &TexAlign, poly: &[Vec3], tex_w: f64, tex_h: f64) -> TexAlign {
     normalize_offsets(&out, tex_w, tex_h)
 }
 
+/// Where to line a texture up on a face (Hammer's justify buttons).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Justify {
+    Left,
+    Right,
+    Top,
+    Bottom,
+    Center,
+    Fit,
+}
+
+impl Justify {
+    pub fn parse(s: &str) -> Option<Justify> {
+        Some(match s {
+            "left" => Justify::Left,
+            "right" => Justify::Right,
+            "top" => Justify::Top,
+            "bottom" => Justify::Bottom,
+            "center" | "centre" => Justify::Center,
+            "fit" => Justify::Fit,
+            _ => return None,
+        })
+    }
+}
+
+/// Line the texture up with an edge of the points (one face, or several faces treated as
+/// one), keeping scale (Fit changes scale to one repeat).
+pub fn justify(a: &TexAlign, points: &[Vec3], tex_w: f64, tex_h: f64, how: Justify) -> TexAlign {
+    if points.is_empty() {
+        return a.clone();
+    }
+    let range = |axis: Vec3, s: f64| {
+        points.iter().map(|p| p.dot(axis) / nonzero(s)).fold((f64::MAX, f64::MIN), |(lo, hi), x| (lo.min(x), hi.max(x)))
+    };
+    let (u0, u1) = range(a.u_axis, a.scale_u);
+    let (v0, v1) = range(a.v_axis, a.scale_v);
+    let mut out = a.clone();
+    match how {
+        Justify::Left => out.u_offset = -u0,
+        Justify::Right => out.u_offset = tex_w - u1,
+        Justify::Top => out.v_offset = -v0,
+        Justify::Bottom => out.v_offset = tex_h - v1,
+        Justify::Center => return center(a, points, tex_w, tex_h),
+        Justify::Fit => return fit(a, points, tex_w, tex_h, 1.0, 1.0),
+    }
+    normalize_offsets(&out, tex_w, tex_h)
+}
+
+/// Set the face sheet's numbers directly: offsets, scales and rotation (each only when
+/// given). A new rotation turns the axes about the face normal by the difference.
+pub fn set_values(a: &TexAlign, normal: Vec3, u_off: Option<f64>, v_off: Option<f64>, su: Option<f64>, sv: Option<f64>, rot: Option<f64>) -> TexAlign {
+    let mut out = a.clone();
+    if let Some(r) = rot {
+        let d = r - a.rotation;
+        if d.abs() > 1e-9 {
+            let m = Mat3::rotation(normal, d);
+            out.u_axis = m.mul_vec(a.u_axis);
+            out.v_axis = m.mul_vec(a.v_axis);
+        }
+        out.rotation = r.rem_euclid(360.0);
+    }
+    if let Some(x) = su {
+        out.scale_u = nonzero(x);
+    }
+    if let Some(x) = sv {
+        out.scale_v = nonzero(x);
+    }
+    if let Some(x) = u_off {
+        out.u_offset = x;
+    }
+    if let Some(x) = v_off {
+        out.v_offset = x;
+    }
+    out
+}
+
 /// Bring offsets into 0..size (same look; tidier numbers).
 pub fn normalize_offsets(a: &TexAlign, tex_w: f64, tex_h: f64) -> TexAlign {
     let wrap = |o: f64, s: f64| if s > 0.0 { clean_zero(o.rem_euclid(s)) } else { o };
@@ -260,5 +336,42 @@ mod tests {
         assert_eq!(r.rotation, 45.0);
         let f = align_to_face(&a, v3(0.0, 1.0, 1.0).normalized());
         assert!(f.u_axis.dot(v3(0.0, 1.0, 1.0)).abs() < 1e-12 && f.v_axis.dot(v3(0.0, 1.0, 1.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn justify_edges() {
+        use crate::editor::math::v3;
+        // a wall 64 wide, 32 high, facing -y (u along x, v along -z)
+        let poly = [v3(16.0, 0.0, 0.0), v3(80.0, 0.0, 0.0), v3(80.0, 0.0, 32.0), v3(16.0, 0.0, 32.0)];
+        let a = world_aligned(-Vec3::Y);
+        let left = justify(&a, &poly, 128.0, 128.0, Justify::Left);
+        let (u, _) = left.uv(v3(16.0, 0.0, 0.0));
+        assert!(u.rem_euclid(128.0).abs() < 1e-9);
+        let right = justify(&a, &poly, 128.0, 128.0, Justify::Right);
+        assert!((right.uv(v3(80.0, 0.0, 0.0)).0.rem_euclid(128.0)).abs() < 1e-9);
+        let top = justify(&a, &poly, 128.0, 128.0, Justify::Top);
+        // v grows downwards: the top edge (z 32) starts the texture
+        assert!(top.uv(v3(16.0, 0.0, 32.0)).1.rem_euclid(128.0).abs() < 1e-9);
+        let bottom = justify(&a, &poly, 128.0, 128.0, Justify::Bottom);
+        assert!(bottom.uv(v3(16.0, 0.0, 0.0)).1.rem_euclid(128.0).abs() < 1e-9);
+        let fit1 = justify(&a, &poly, 128.0, 128.0, Justify::Fit);
+        assert!((fit1.scale_u - 0.5).abs() < 1e-9 && (fit1.scale_v - 0.25).abs() < 1e-9);
+        assert_eq!(Justify::parse("centre"), Some(Justify::Center));
+        assert_eq!(Justify::parse("nope"), None);
+    }
+
+    #[test]
+    fn set_values_directly() {
+        let a = world_aligned(Vec3::Z);
+        let b = set_values(&a, Vec3::Z, Some(8.0), None, Some(0.5), None, Some(90.0));
+        assert_eq!(b.u_offset, 8.0);
+        assert_eq!(b.v_offset, a.v_offset);
+        assert_eq!(b.scale_u, 0.5);
+        assert_eq!(b.scale_v, a.scale_v);
+        assert_eq!(b.rotation, 90.0);
+        assert!(b.u_axis.approx_eq(Vec3::Y, 1e-9), "{:?}", b.u_axis);
+        // back to 0 turns the axes back
+        let c = set_values(&b, Vec3::Z, None, None, None, None, Some(0.0));
+        assert!(c.u_axis.approx_eq(a.u_axis, 1e-9));
     }
 }

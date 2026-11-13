@@ -334,6 +334,28 @@ pub fn cmd_delete(doc: &mut MapDocument, h: &mut History, brushes: &[BrushId], e
     tx.commit(h);
 }
 
+/// Moves a point entity's origin with `t` (when `move_origin`) and turns its `angle`/`angles`
+/// yaw with rotations about z.
+fn transform_entity(e: &mut Entity, t: &Affine, move_origin: bool) {
+    if let (Some(o), true) = (e.origin(), move_origin) {
+        let n = t.apply(o);
+        e.set("origin", &format!("{} {} {}", fmt_num(n.x), fmt_num(n.y), fmt_num(n.z)));
+    }
+    let yaw = (t.m.r[1].x).atan2(t.m.r[0].x).to_degrees();
+    let pure_z_rotation = t.m.r[2].approx_eq(Vec3::Z, 1e-9) && (t.m.det() - 1.0).abs() < 1e-9;
+    if pure_z_rotation && yaw.abs() > 1e-9 {
+        if let Some(a) = e.get("angle").and_then(|a| a.parse::<f64>().ok()) {
+            if a >= 0.0 {
+                e.set("angle", &fmt_num((a + yaw).rem_euclid(360.0)));
+            }
+        } else if let Some(v) = e.get("angles").map(|s| s.split_whitespace().filter_map(|x| x.parse::<f64>().ok()).collect::<Vec<_>>()) {
+            if v.len() == 3 {
+                e.set("angles", &format!("{} {} {}", fmt_num(v[0]), fmt_num((v[1] + yaw).rem_euclid(360.0)), fmt_num(v[2])));
+            }
+        }
+    }
+}
+
 /// Move/rotate/scale brushes and point entities together. Point entity origins follow the
 /// transform; `angle`/`angles` yaw follows rotations about z.
 pub fn cmd_transform(
@@ -354,26 +376,10 @@ pub fn cmd_transform(
         let b = get_brush(tx.doc(), *id)?;
         tx.set_brush(*id, ops::transform(&b, t, lock)?);
     }
-    let yaw = (t.m.r[1].x).atan2(t.m.r[0].x).to_degrees();
-    let pure_z_rotation = t.m.r[2].approx_eq(Vec3::Z, 1e-9) && (t.m.det() - 1.0).abs() < 1e-9;
     for id in entities {
         let Some(mut e) = tx.doc().entities.get(id).cloned() else { continue };
         let has_brushes = tx.doc().brushes_of(Some(*id)).next().is_some();
-        if let (Some(o), false) = (e.origin(), has_brushes) {
-            let n = t.apply(o);
-            e.set("origin", &format!("{} {} {}", fmt_num(n.x), fmt_num(n.y), fmt_num(n.z)));
-        }
-        if pure_z_rotation && yaw.abs() > 1e-9 {
-            if let Some(a) = e.get("angle").and_then(|a| a.parse::<f64>().ok()) {
-                if a >= 0.0 {
-                    e.set("angle", &fmt_num((a + yaw).rem_euclid(360.0)));
-                }
-            } else if let Some(v) = e.get("angles").map(|s| s.split_whitespace().filter_map(|x| x.parse::<f64>().ok()).collect::<Vec<_>>()) {
-                if v.len() == 3 {
-                    e.set("angles", &format!("{} {} {}", fmt_num(v[0]), fmt_num((v[1] + yaw).rem_euclid(360.0)), fmt_num(v[2])));
-                }
-            }
-        }
+        transform_entity(&mut e, t, !has_brushes);
         tx.set_entity(*id, e);
     }
     tx.commit(h);
@@ -631,6 +637,201 @@ pub fn cmd_ungroup(doc: &mut MapDocument, h: &mut History, gid: GroupId) {
     tx.commit(h);
 }
 
+/// What a copy, paste or array made.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Created {
+    pub brushes: Vec<BrushId>,
+    pub entities: Vec<EntityId>,
+}
+
+/// Copies `brushes` and `entities` into the transaction with `t` applied. Brushes of a
+/// copied entity go to the entity's copy; others keep their owner. Groups aren't copied.
+fn copy_into(tx: &mut Tx, src: &MapDocument, brushes: &[BrushId], entities: &[EntityId], t: &Affine, lock: bool, out: &mut Created) -> OpResult<()> {
+    let mut new_entity = std::collections::HashMap::new();
+    for id in entities {
+        let mut e = src.entities.get(id).cloned().ok_or("That entity no longer exists.")?;
+        let has_brushes = src.brushes_of(Some(*id)).next().is_some();
+        transform_entity(&mut e, t, !has_brushes);
+        e.group = None;
+        let nid = tx.add_entity(e);
+        new_entity.insert(*id, nid);
+        out.entities.push(nid);
+    }
+    for id in brushes {
+        let b = src.brushes.get(id).ok_or("That brush no longer exists.")?;
+        let mut nb = ops::transform(b, t, lock)?;
+        nb.entity = b.entity.map(|e| new_entity.get(&e).copied().unwrap_or(e));
+        nb.group = None;
+        out.brushes.push(tx.add_brush(nb));
+    }
+    Ok(())
+}
+
+/// Paste special: `copies` copies of the selection, each one `step` on from the one
+/// before (an offset, a turn, a stretch, or all three), as one undo step.
+pub fn cmd_array(doc: &mut MapDocument, h: &mut History, brushes: &[BrushId], entities: &[EntityId], copies: usize, step: &Affine, lock: bool) -> OpResult<Created> {
+    if brushes.is_empty() && entities.is_empty() {
+        return Err("Pick something to copy first.".into());
+    }
+    if copies == 0 || copies > 256 {
+        return Err("Make between 1 and 256 copies.".into());
+    }
+    let src = doc.clone();
+    let mut tx = Tx::new(doc, if copies == 1 { "Paste special" } else { "Paste copies" });
+    let mut out = Created::default();
+    let mut t = Affine::IDENTITY;
+    for _ in 0..copies {
+        t = t.then(step);
+        copy_into(&mut tx, &src, brushes, entities, &t, lock, &mut out)?;
+    }
+    tx.commit(h);
+    Ok(out)
+}
+
+/// A little document holding just these brushes and entities (with the brushes of picked
+/// brush entities), for the clipboard. World settings are left out.
+pub fn fragment(doc: &MapDocument, brushes: &[BrushId], entities: &[EntityId]) -> MapDocument {
+    let mut f = MapDocument::new();
+    let mut ents = std::collections::HashMap::new();
+    for id in entities {
+        if let Some(e) = doc.entities.get(id) {
+            ents.insert(*id, f.insert_entity(Entity { group: None, ..e.clone() }));
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    let owned = doc.brushes.iter().filter(|(_, b)| b.entity.is_some_and(|e| ents.contains_key(&e))).map(|(i, _)| *i);
+    for id in brushes.iter().copied().chain(owned.collect::<Vec<_>>()) {
+        if !seen.insert(id) {
+            continue;
+        }
+        if let Some(b) = doc.brushes.get(&id) {
+            // a brush of an entity that isn't copied pastes as a world brush
+            f.insert_brush(Brush { entity: b.entity.and_then(|e| ents.get(&e).copied()), group: None, ..b.clone() });
+        }
+    }
+    let used: Vec<_> = f.brushes.values().flat_map(|b| b.faces.iter().filter_map(|face| doc.material(&face.texture).cloned())).collect();
+    for m in used {
+        f.add_material(m);
+    }
+    f
+}
+
+/// Paste a clipboard fragment (from this map or another), moved by `offset`.
+pub fn cmd_paste(doc: &mut MapDocument, h: &mut History, frag: &MapDocument, offset: Vec3) -> OpResult<Created> {
+    if frag.brushes.is_empty() && frag.entities.is_empty() {
+        return Err("There's nothing to paste.".into());
+    }
+    if frag.brushes.len() > 50_000 || frag.entities.len() > 10_000 {
+        return Err("That's too much to paste at once.".into());
+    }
+    for m in frag.materials.values() {
+        if doc.material(&m.name).is_none() {
+            doc.add_material(m.clone());
+        }
+    }
+    let brushes: Vec<BrushId> = frag.brushes.keys().copied().collect();
+    let entities: Vec<EntityId> = frag.entities.keys().copied().collect();
+    let mut tx = Tx::new(doc, "Paste");
+    let mut out = Created::default();
+    copy_into(&mut tx, frag, &brushes, &entities, &Affine::translate(offset), true, &mut out)?;
+    tx.commit(h);
+    Ok(out)
+}
+
+/// Swap one texture for another on every face of the map (names match without case).
+pub fn cmd_replace_texture(doc: &mut MapDocument, h: &mut History, from: &str, to: &str) -> usize {
+    let mut tx = Tx::new(doc, "Replace texture");
+    let n = replace_texture_in(&mut tx, from, to);
+    tx.commit(h);
+    n
+}
+
+fn replace_texture_in(tx: &mut Tx, from: &str, to: &str) -> usize {
+    let hits: Vec<(BrushId, Brush)> = tx.doc().brushes.iter().filter(|(_, b)| b.faces.iter().any(|f| f.texture.eq_ignore_ascii_case(from))).map(|(i, b)| (*i, b.clone())).collect();
+    let n = hits.len();
+    for (id, mut b) in hits {
+        for f in b.faces.iter_mut().filter(|f| f.texture.eq_ignore_ascii_case(from)) {
+            f.texture = to.to_string();
+        }
+        tx.set_brush(id, b);
+    }
+    n
+}
+
+/// One problem to fix (from `checks::run`): the fix code and what it's about.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FixIt {
+    pub fix: String,
+    pub brush: Option<BrushId>,
+    pub entity: Option<EntityId>,
+    pub texture: Option<String>,
+}
+
+/// Apply check fixes (one or many) as one undo step; `with` is the texture that replaces
+/// missing ones. Returns how many were fixed; things already gone are skipped.
+pub fn cmd_fix(doc: &mut MapDocument, h: &mut History, fixes: &[FixIt], with: Option<&str>) -> OpResult<usize> {
+    let mut tx = Tx::new(doc, if fixes.len() == 1 { "Fix a problem" } else { "Fix problems" });
+    let mut n = 0;
+    for f in fixes {
+        match f.fix.as_str() {
+            "delete-brush" => {
+                if let Some(id) = f.brush {
+                    n += tx.remove_brush(id).is_some() as usize;
+                }
+            }
+            "delete-entity" | "to-world" => {
+                let Some(e) = f.entity else { continue };
+                if !tx.doc().entities.contains_key(&e) {
+                    continue;
+                }
+                let owned: Vec<(BrushId, Brush)> = tx.doc().brushes_of(Some(e)).map(|(i, b)| (i, b.clone())).collect();
+                for (id, b) in owned {
+                    if f.fix == "to-world" {
+                        tx.set_brush(id, Brush { entity: None, ..b });
+                    } else {
+                        tx.remove_brush(id);
+                    }
+                }
+                tx.remove_entity(e);
+                n += 1;
+            }
+            "clear-target" => {
+                let Some(id) = f.entity else { continue };
+                let names: std::collections::HashSet<String> = tx.doc().entities.values().filter_map(|e| e.get("targetname").map(String::from)).collect();
+                let Some(mut e) = tx.doc().entities.get(&id).cloned() else { continue };
+                let mut changed = false;
+                for k in ["target", "killtarget"] {
+                    if e.get(k).is_some_and(|t| !names.contains(t)) {
+                        e.remove(k);
+                        changed = true;
+                    }
+                }
+                if changed {
+                    tx.set_entity(id, e);
+                    n += 1;
+                }
+            }
+            "add-wads" => {
+                let mut w = tx.doc().world.clone();
+                for wad in ["halflife.wad", "cstrike.wad"] {
+                    if !w.wad_names().iter().any(|x| x.eq_ignore_ascii_case(wad)) {
+                        w.wads.push(wad.into());
+                    }
+                }
+                tx.set_world(w);
+                n += 1;
+            }
+            "replace-texture" => {
+                let (Some(from), Some(to)) = (f.texture.as_deref(), with) else { return Err("Pick the texture to use instead first.".into()) };
+                n += (replace_texture_in(&mut tx, from, to) > 0) as usize;
+            }
+            _ => return Err("That problem can't be fixed here.".into()),
+        }
+    }
+    tx.commit(h);
+    Ok(n)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -780,5 +981,119 @@ mod tests {
         cmd_set_world(&mut d, &mut h, w);
         h.undo(&mut d);
         assert!(d.world.get("skyname").is_none());
+    }
+
+    #[test]
+    fn clip_keeps_back_front_or_both() {
+        // a plane through x = 16, normal +x: "back" is the x < 16 side
+        let plane = Plane::new(Vec3::X, 16.0);
+        for (keep, count, max_x, min_x) in [(Keep::Back, 1, 16.0, 0.0), (Keep::Front, 1, 64.0, 16.0), (Keep::Both, 2, 64.0, 0.0)] {
+            let (mut d, mut h, id) = setup();
+            let ids = cmd_clip(&mut d, &mut h, &[id], &plane, keep, "CLIP").unwrap();
+            assert_eq!(ids.len(), count, "{keep:?}");
+            assert_eq!(d.brushes.len(), count);
+            let b = d.brushes.values().map(brush_bounds).fold(crate::editor::math::Bounds::empty(), |a, x| a.union(&x));
+            assert!((b.max.x - max_x).abs() < 1e-9 && (b.min.x - min_x).abs() < 1e-9, "{keep:?} {b:?}");
+            let vol: f64 = d.brushes.values().map(brush_volume).sum();
+            let want = if keep == Keep::Back { 16.0 } else if keep == Keep::Front { 48.0 } else { 64.0 } * 64.0 * 64.0;
+            assert!((vol - want).abs() < 1e-6, "{keep:?}");
+            // the new face has the clip texture, the first piece keeps the old id
+            assert!(d.brushes.values().any(|b| b.faces.iter().any(|f| f.texture == "CLIP")));
+            assert_eq!(ids[0], id);
+            h.undo(&mut d);
+            assert_eq!(d.brushes.len(), 1);
+        }
+    }
+
+    #[test]
+    fn paste_special_makes_a_staircase() {
+        let (mut d, mut h, id) = setup();
+        let mut lamp = Entity::new("light");
+        lamp.set("origin", "32 32 80");
+        let e = cmd_add_entity(&mut d, &mut h, lamp);
+        // 3 copies, each 64 over and 32 up
+        let step = Affine::translate(v3(64.0, 0.0, 32.0));
+        let out = cmd_array(&mut d, &mut h, &[id], &[e], 3, &step, true).unwrap();
+        assert_eq!(out.brushes.len(), 3);
+        assert_eq!(out.entities.len(), 3);
+        let last = brush_bounds(&d.brushes[&out.brushes[2]]);
+        assert!(last.min.approx_eq(v3(192.0, 0.0, 96.0), 1e-9), "{last:?}");
+        assert_eq!(d.entities[&out.entities[2]].get("origin"), Some("224 32 176"));
+        assert_eq!(h.undo_label(), Some("Paste copies"));
+        h.undo(&mut d);
+        assert_eq!(d.brushes.len(), 1);
+        assert_eq!(d.entities.len(), 1);
+        // turning copies round a pivot: 4 copies of 90 degrees come back to the start
+        let turn = Affine::around(Mat3::rotation(Vec3::Z, 90.0), v3(128.0, 128.0, 0.0));
+        let out = cmd_array(&mut d, &mut h, &[id], &[], 4, &turn, true).unwrap();
+        assert_eq!(d.brushes[&out.brushes[3]], d.brushes[&id]);
+        assert!(cmd_array(&mut d, &mut h, &[id], &[], 0, &turn, true).is_err());
+        assert!(cmd_array(&mut d, &mut h, &[], &[], 2, &turn, true).is_err());
+    }
+
+    #[test]
+    fn copy_paste_between_maps_through_map_text() {
+        let (mut d, mut h, id) = setup();
+        let door = cmd_add_brush(&mut d, &mut h, make_box(v3(128.0, 0.0, 0.0), v3(136.0, 64.0, 96.0), "DOOR"), "Box");
+        let de = cmd_tie_to_entity(&mut d, &mut h, &[door], "func_door").unwrap();
+        cmd_set_key(&mut d, &mut h, de, "targetname", "d1").unwrap();
+        // copy a world brush and the door entity (its brush comes along)
+        let frag = fragment(&d, &[id], &[de]);
+        assert_eq!(frag.brushes.len(), 2);
+        assert_eq!(frag.entities.len(), 1);
+        let text = crate::editor::mapfile::write_map(&frag, &Default::default()).unwrap();
+        // ...into another map
+        let mut other = MapDocument::new();
+        let mut oh = History::default();
+        let back = crate::editor::mapfile::read_map(&text).unwrap();
+        let out = cmd_paste(&mut other, &mut oh, &back, v3(0.0, 0.0, 256.0)).unwrap();
+        assert_eq!(out.brushes.len(), 2);
+        assert_eq!(out.entities.len(), 1);
+        let pe = out.entities[0];
+        assert_eq!(other.entities[&pe].get("targetname"), Some("d1"));
+        assert_eq!(other.brushes_of(Some(pe)).count(), 1);
+        let world: Vec<_> = other.brushes_of(None).collect();
+        assert_eq!(world.len(), 1);
+        assert!(brush_bounds(world[0].1).min.approx_eq(v3(0.0, 0.0, 256.0), 1e-9));
+        assert_eq!(oh.undo_label(), Some("Paste"));
+        assert!(cmd_paste(&mut other, &mut oh, &MapDocument::new(), Vec3::ZERO).is_err());
+    }
+
+    #[test]
+    fn check_fixes() {
+        use crate::editor::checks;
+        let (mut d, mut h, id) = setup();
+        let mut relay = Entity::new("trigger_relay");
+        relay.set("origin", "0 0 0");
+        relay.set("target", "nobody");
+        let r = cmd_add_entity(&mut d, &mut h, relay);
+        let empty = cmd_add_entity(&mut d, &mut h, Entity::new("func_wall"));
+        let issues = checks::run(&d, None);
+        let fixes: Vec<FixIt> = issues
+            .iter()
+            .filter_map(|i| i.fix.filter(|f| !f.starts_with("place:")).map(|f| FixIt { fix: f.into(), brush: i.brush.map(BrushId), entity: i.entity.map(EntityId), texture: i.texture.clone() }))
+            .collect();
+        assert!(fixes.iter().any(|f| f.fix == "clear-target"));
+        assert!(fixes.iter().any(|f| f.fix == "delete-entity" && f.entity == Some(empty)));
+        assert!(fixes.iter().any(|f| f.fix == "add-wads"));
+        let n = cmd_fix(&mut d, &mut h, &fixes, None).unwrap();
+        assert_eq!(n, fixes.len(), "{fixes:?}");
+        assert_eq!(d.entities[&r].get("target"), None);
+        assert!(!d.entities.contains_key(&empty));
+        assert_eq!(d.world.wads, vec!["halflife.wad".to_string(), "cstrike.wad".to_string()]);
+        let left: Vec<&str> = checks::run(&d, None).iter().filter(|i| i.fix.is_some_and(|f| !f.starts_with("place:"))).map(|i| i.code).collect();
+        assert!(left.is_empty(), "{left:?}");
+        // one undo step brings them all back
+        h.undo(&mut d);
+        assert!(d.entities.contains_key(&empty));
+        // missing texture swapped for another everywhere
+        let known: std::collections::HashSet<String> = ["other".to_string()].into();
+        let miss = checks::run(&d, Some(&known)).into_iter().find(|i| i.code == "missing-texture").unwrap();
+        assert_eq!(miss.fix, Some("replace-texture"));
+        assert_eq!(miss.texture.as_deref(), Some("crate"));
+        let f = FixIt { fix: "replace-texture".into(), brush: None, entity: None, texture: miss.texture };
+        assert!(cmd_fix(&mut d, &mut h, &[f.clone()], None).is_err());
+        cmd_fix(&mut d, &mut h, &[f], Some("OTHER")).unwrap();
+        assert!(d.brushes[&id].faces.iter().all(|f| f.texture == "OTHER"));
     }
 }

@@ -247,6 +247,11 @@ impl Mat3 {
     pub fn det(&self) -> f64 {
         self.r[0].dot(self.r[1].cross(self.r[2]))
     }
+    /// `self * o` (apply `o` first, then `self`).
+    pub fn mul(&self, o: &Mat3) -> Mat3 {
+        let c = o.transpose();
+        Mat3 { r: [0, 1, 2].map(|i| v3(self.r[i].dot(c.r[0]), self.r[i].dot(c.r[1]), self.r[i].dot(c.r[2]))) }
+    }
     pub fn inverse(&self) -> Option<Mat3> {
         let d = self.det();
         if d.abs() < 1e-12 || !d.is_finite() {
@@ -285,6 +290,11 @@ impl Affine {
     }
     pub fn apply(&self, p: Vec3) -> Vec3 {
         self.m.mul_vec(p) + self.t
+    }
+    pub const IDENTITY: Affine = Affine { m: Mat3::IDENTITY, t: Vec3::ZERO };
+    /// `self` first, then `next`.
+    pub fn then(&self, next: &Affine) -> Affine {
+        Affine { m: next.m.mul(&self.m), t: next.m.mul_vec(self.t) + next.t }
     }
 }
 

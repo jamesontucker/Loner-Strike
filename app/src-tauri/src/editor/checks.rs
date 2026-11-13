@@ -59,10 +59,47 @@ pub struct Issue {
     pub brush: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entity: Option<u64>,
+    /// The texture it's about (missing or badly named).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub texture: Option<String>,
+    /// A one-click fix the editor offers (see `fix_label`), when there is one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fix: Option<&'static str>,
 }
 
 fn issue(level: Level, code: &'static str, message: String) -> Issue {
-    Issue { level, code, message, brush: None, entity: None }
+    Issue { level, code, message, brush: None, entity: None, texture: None, fix: fix_for(code) }
+}
+
+/// The fix offered for an issue code. `place:<class>` fixes are done by the page (it hands
+/// the mapper the entity tool); the rest are `history::cmd_fix`.
+pub fn fix_for(code: &str) -> Option<&'static str> {
+    Some(match code {
+        "bad-brush" | "outside-world" => "delete-brush",
+        "no-classname" | "extra-worldspawn" => "to-world",
+        "empty-brush-entity" | "no-origin" => "delete-entity",
+        "dangling-target" => "clear-target",
+        "no-wads" => "add-wads",
+        "missing-texture" | "long-texture-name" => "replace-texture",
+        "no-ct-spawns" | "no-spawns" => "place:info_player_start",
+        "no-t-spawns" => "place:info_player_deathmatch",
+        _ => return None,
+    })
+}
+
+/// Plain words for a fix button.
+pub fn fix_label(fix: &str) -> &'static str {
+    match fix {
+        "delete-brush" => "Delete the brush",
+        "to-world" => "Make its brushes world brushes",
+        "delete-entity" => "Delete it",
+        "clear-target" => "Clear the target",
+        "add-wads" => "Add halflife.wad and cstrike.wad",
+        "replace-texture" => "Replace with the current texture",
+        "place:info_player_start" => "Place a CT spawn",
+        "place:info_player_deathmatch" => "Place a T spawn",
+        _ => "Fix",
+    }
 }
 
 /// Counts for the status bar.
@@ -120,7 +157,7 @@ pub fn run(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<I
         }
     }
     if out_of_world > 20 {
-        out.push(issue(Level::Warning, "outside-world", format!("{} more brushes go past the edge of the world.", out_of_world - 20)));
+        out.push(Issue { fix: None, ..issue(Level::Warning, "outside-world", format!("{} more brushes go past the edge of the world.", out_of_world - 20)) });
     }
     if st.brushes > limits::MAX_BRUSHES {
         out.push(issue(Level::Error, "too-many-brushes", format!("{} brushes; the compilers stop at {}.", st.brushes, limits::MAX_BRUSHES)));
@@ -167,7 +204,9 @@ pub fn run(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<I
         if cls == "worldspawn" {
             out.push(Issue { entity: eid, ..issue(Level::Error, "extra-worldspawn", "There's a second worldspawn.".into()) });
         }
-        let needs_brushes = cls.starts_with("func_") || cls.starts_with("trigger_") || cls == "momentary_rot_button";
+        // trigger_relay, trigger_auto, trigger_camera and trigger_changetarget are point entities
+        let point_trigger = matches!(cls, "trigger_relay" | "trigger_auto" | "trigger_camera" | "trigger_changetarget");
+        let needs_brushes = ((cls.starts_with("func_") || cls.starts_with("trigger_")) && !point_trigger) || cls == "momentary_rot_button";
         let has_brushes = with_brushes.contains(id);
         if needs_brushes && !has_brushes {
             out.push(Issue { entity: eid, ..issue(Level::Error, "empty-brush-entity", format!("{cls} has no brushes.")) });
@@ -221,7 +260,7 @@ pub fn run(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<I
     }
     for (name, ids) in &used {
         if name.len() > limits::MAX_TEXTURE_NAME {
-            out.push(Issue { brush: Some(ids[0].0), ..issue(Level::Error, "long-texture-name", format!("Texture name \"{name}\" is longer than 15 letters.")) });
+            out.push(Issue { brush: Some(ids[0].0), texture: Some(name.clone()), ..issue(Level::Error, "long-texture-name", format!("Texture name \"{name}\" is longer than 15 letters.")) });
         }
     }
     let from_doc: HashSet<String>;
@@ -243,7 +282,8 @@ pub fn run(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<I
             } else {
                 (Level::Error, format!("Texture \"{name}\" isn't in any of the map's WADs ({} brush{}).", ids.len(), if ids.len() == 1 { "" } else { "es" }))
             };
-            out.push(Issue { brush: Some(ids[0].0), ..issue(level, "missing-texture", msg) });
+            let fix = if level == Level::Error { fix_for("missing-texture") } else { None };
+            out.push(Issue { brush: Some(ids[0].0), texture: Some(name.clone()), fix, ..issue(level, "missing-texture", msg) });
         }
     }
     if doc.world.wads.is_empty() && !used.is_empty() {
