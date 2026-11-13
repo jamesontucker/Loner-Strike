@@ -17,6 +17,7 @@ import { overviewInfo } from "../overview/overviewApi";
 import { checkMap, copyFiles, learnMap, learnResult, writeRes, type FileRow, type Report } from "./doctorApi";
 import { Empty, Loading } from "../common";
 import { MapBrowser, rememberMap, type MapBadge } from "../common/MapBrowser";
+import { ActionBar } from "../common/ActionBar";
 import "./doctor.css";
 
 export default function Doctor({ maps }: ToolProps) {
@@ -234,7 +235,6 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
         {title}
         <span className="push" />
         <BusyButton className="btn" busy={q.isFetching && !busy} label="Check again" busyLabel="Checking…" onClick={() => reload()} />
-        {safe > 0 && <BusyButton className="btn primary" busy={busy === "all"} disabled={off} label={`Fix all safe (${safe})`} busyLabel="Fixing…" onClick={fixAll} />}
       </div>
       {locked && <Banner>The game has {map} loaded. Change to another map (or close the game) to use the fixes.</Banner>}
 
@@ -284,16 +284,6 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
             </dl>
             <p className="small-note muted">Looked where the game looks: {r.looksIn.join(", then ")}.</p>
           </section>
-          {safe > 0 && (
-            <section className="tools-panel">
-              <h3>Safe fixes <Info text="Copying files from another game's folder never replaces anything, and the .res only lists files. Both are kept in History, so you can undo them." /></h3>
-              <ul className="doc-safe">
-                {elsewhere.length > 0 && <li>Copy {plural(elsewhere.length, "file")} from {[...new Set(elsewhere.map((f) => f.folder))].join(", ")}</li>}
-                {(resFix || elsewhere.length > 0) && <li>{r.res.exists ? "Update" : "Make"} {r.name}.res</li>}
-              </ul>
-              <BusyButton className="btn primary" busy={busy === "all"} disabled={off} label="Fix all safe" busyLabel="Fixing…" onClick={fixAll} />
-            </section>
-          )}
           {missing.length > 0 && (
             <section className="tools-panel">
               <h3>Missing files</h3>
@@ -313,6 +303,14 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
           </section>
         </aside>
       </div>
+      <ActionBar
+        dirty={false}
+        working={busy === "all" ? "Fixing…" : busy === "copy" ? "Copying…" : busy === "res" ? "Saving…" : busy === "learn" ? "Starting…" : null}
+        status={busy ? undefined : <span className={`tl-ab-state doc-ab ${count.bad ? "bad" : count.warn ? "warn" : "ok"}`}>{count.bad || count.warn ? `${todo} to look at` : "✓ All good"}</span>}
+        where={safe ? `${safe} safe fix${safe === 1 ? "" : "es"}: ${[elsewhere.length ? "copy files" : "", resFix || elsewhere.length ? `update ${r.name}.res` : ""].filter(Boolean).join(", ")}` : undefined}
+        info="Safe fixes never replace a file: copying only adds files from another game's folder, and the .res only lists files. Both are kept in History."
+        save={safe ? { label: "Fix all safe", busyLabel: "Fixing…", onClick: fixAll, disabled: off } : null}
+      />
     </div>
   );
 }

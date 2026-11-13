@@ -13,6 +13,7 @@ import { useReportAddress } from "../common/address";
 import { Banner, BusyButton, Info, LoadError, Segmented, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading } from "../common";
 import { MapBrowser, rememberMap } from "../common/MapBrowser";
+import { ActionBar } from "../common/ActionBar";
 import type { ToolProps } from "../registry";
 import { loadCallouts, placeColours, saveCallouts, spoken, suggest, validPlace, type Area, type CalloutNav, type Change } from "./calloutsApi";
 import { TopDown, type Tool } from "./TopDown";
@@ -284,7 +285,6 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
         <Segmented label="What dragging does" values="pick paint erase" labels="Pick|Paint|Erase" current={tool} onPick={(v) => setTool(v as Tool)} />
         <button className="btn" onClick={undo} disabled={at === 0} title={at ? `Undo ${history[at].what} (Mod+Z)` : "Nothing to undo"}>Undo</button>
         <button className="btn" onClick={redo} disabled={at >= history.length - 1} title={at < history.length - 1 ? `Redo ${history[at + 1].what}` : "Nothing to redo"}>Redo</button>
-        <BusyButton className="btn primary" busy={saving} label={changes.length ? `Save ${changes.length} change${changes.length === 1 ? "" : "s"}` : "Save names"} busyLabel="Saving…" disabled={!changes.length || locked} onClick={save} />
       </div>
       {locked && <Banner>The game has {map} loaded. You can name places, but saving waits until you change map (or close the game).</Banner>}
       {nav.matchesMap === false && <Banner>This nav was made for another version of the map. Names still work; the map doctor can teach bots the map again.</Banner>}
@@ -412,6 +412,14 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
           </p>
         </aside>
       </div>
+      <ActionBar
+        dirty={changes.length > 0}
+        working={saving ? "Saving…" : null}
+        where={changes.length ? `${changes.length} area${changes.length === 1 ? "" : "s"} renamed · ${nav.file}` : nav.file}
+        info={`The old nav is kept as ${nav.file}.bak the first time, and every save is in History. Names don't move areas, so the bots' map knowledge still fits.`}
+        save={{ label: "Save names", onClick: save, disabled: !changes.length || locked, title: locked ? "The game has this map loaded" : undefined }}
+        undo={() => push({}, "put every name back")}
+      />
     </div>
   );
 }

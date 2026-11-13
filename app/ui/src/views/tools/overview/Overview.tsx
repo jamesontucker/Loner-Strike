@@ -12,11 +12,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useToolArg } from "../../../stores/tools";
 import { useReportAddress } from "../common/address";
-import { Banner, BusyButton, Info, LoadError, Segmented, Switch, useConfirm, useToast } from "../../../ui";
+import { Banner, Info, LoadError, Segmented, Switch, useConfirm, useToast } from "../../../ui";
 import { isAbort } from "../../../api";
 import { errorText } from "../common/api";
 import { Loading } from "../common";
 import { MapBrowser, rememberMap } from "../common/MapBrowser";
+import { ActionBar } from "../common/ActionBar";
 import type { ToolProps } from "../registry";
 import { currentUrl, DEFAULT_CHOICE, installOverview, overviewInfo, previewUrl, restoreOverview, type Choice, type Format, type MarkKind, type OverviewInfo, type Style } from "./overviewApi";
 import { FIT, PanZoom, zoomBy, type View } from "./PanZoom";
@@ -224,7 +225,6 @@ function Maker({ map, onBack }: { map: string; onBack: () => void }) {
         {title}
         <span className="push" />
         {hasCurrent && <Segmented label="Show" values="ours split installed" labels="New|Side by side|Installed now" current={mode} onPick={(v) => setShow(v as Show)} />}
-        <BusyButton className="btn primary" busy={busy === "install"} disabled={busy !== null || !!ours.error} label={i.current ? "Install, replacing the old one" : "Install overview"} busyLabel="Installing…" onClick={install} />
       </div>
       {i.inUse && <Banner>The game has {map} loaded. It reads the overview when a map loads, so a new one shows after the next map change.</Banner>}
 
@@ -323,10 +323,19 @@ function Maker({ map, onBack }: { map: string; onBack: () => void }) {
             ) : (
               i.current && !i.current.ours && <p className="small-note muted">The old files are kept (.bak), so you can put them back.</p>
             )}
-            {i.backups && <BusyButton className="btn small" busy={busy === "restore"} disabled={busy !== null} label="Put the old one back" busyLabel="Putting it back…" onClick={restore} />}
+            {i.backups && !done && <p className="small-note muted">To put the old overview back: More, below.</p>}
           </section>
         </aside>
       </div>
+      <ActionBar
+        dirty={!done}
+        working={busy === "install" ? "Installing…" : busy === "restore" ? "Putting it back…" : null}
+        status={busy ? undefined : done ? <span className="tl-ab-state saved">✓ Installed</span> : <span className="tl-ab-state">{i.current ? "Not installed: the game still has the old one" : "Not installed yet"}</span>}
+        where={`${i.game}/overviews/${map}.txt and .${format}`}
+        info="The game reads the overview when a map loads. Replaced files are kept (.bak, and in History), so you can put them back."
+        save={{ label: i.current ? "Install, replacing the old one" : "Install overview", busyLabel: "Installing…", onClick: install, disabled: busy !== null || !!ours.error }}
+        more={i.backups ? [{ label: "Put the old one back", busyLabel: "Putting it back…", onClick: restore }] : []}
+      />
     </div>
   );
 }

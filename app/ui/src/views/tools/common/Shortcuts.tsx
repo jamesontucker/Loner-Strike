@@ -55,9 +55,13 @@ export const SHORTCUTS: Record<string, Keys> = {
     ["+ / − / 0", "Zoom in, out, fit (scroll and drag work too)"],
   ],
   callouts: [
+    ["V", "Pick: click, Shift-click, drag a box, double-click a place"],
+    ["P", "Paint the name in the box on every area you drag over"],
+    ["E", "Erase: take the name off every area you drag over"],
+    ["Right-drag / Space", "Move the map (scroll zooms)"],
     ["Mod+Z", "Undo"],
     ["Shift+Mod+Z", "Redo"],
-    ["Esc", "Clear the pick"],
+    ["Esc", "Clear the pick and what's shown"],
   ],
   editor: [
     ["Q W E R", "Select, Move, Rotate, Scale"],

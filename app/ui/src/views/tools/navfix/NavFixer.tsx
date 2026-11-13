@@ -11,6 +11,7 @@ import { Banner, BusyButton, Info, LoadError, Segmented, Skeleton, useAskText, u
 import { JobProgress } from "../../JobProgress";
 import { Check, Loading } from "../common";
 import { MapBrowser, rememberMap, type MapBadge } from "../common/MapBrowser";
+import { ActionBar } from "../common/ActionBar";
 import type { NavArea } from "../overlays";
 import type { ToolProps } from "../registry";
 import { useReportAddress } from "../common/address";
@@ -267,7 +268,6 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
         </div>
         <button className="btn" disabled={!st?.undo || !!busy} title={st?.undo ? `Undo: ${st.undo} (Mod+Z)` : "Nothing to undo"} onClick={undo}>Undo</button>
         <button className="btn" disabled={!st?.redo || !!busy} title={st?.redo ? `Redo: ${st.redo} (Shift+Mod+Z)` : "Nothing to redo"} onClick={redo}>Redo</button>
-        <BusyButton className="btn primary" busy={busy === "Saving…"} busyLabel="Saving…" label={st?.dirty && st.steps ? `Save (${st.steps})` : "Save"} disabled={!st?.dirty || !!busy} onClick={save} />
       </div>
       {st?.nav.warning && <Banner>{st.nav.warning}</Banner>}
       {st?.nav.matchesMap === false && <Banner>This nav was made for a different version of the map. Fixing it is fine, but the game may learn a new one when it loads the map.</Banner>}
@@ -343,21 +343,20 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
                 <Selection st={st} ids={[...selected]} busy={!!busy} edit={edit} del={del} />
                 <Problems st={st} busy={!!busy} onShow={showProblem} edit={edit} fixAll={fixAll} />
                 <Knowledge st={st} busy={busy} rebuilding={rebuilding} onRebuild={rebuild} onDone={() => (setRebuilding(false), void q.refetch())} />
-                <section className="tools-panel">
-                  <h3>File</h3>
-                  <p className="small-note muted">
-                    {st.dirty ? `Not saved${st.steps ? `: ${st.steps} change${st.steps === 1 ? "" : "s"}` : ""}.` : st.steps ? "Saved." : "No changes yet."}
-                    {st.did ? ` Last: ${st.did}.` : ""}
-                    {said ? ` ${said}` : st.backup ? " The nav as it first was is kept as a .bak file, and every save is in History." : ""}
-                  </p>
-                  <div className="row">
-                    <button className="btn small" disabled={!!busy} onClick={startOver}>Start over</button>
-                  </div>
-                </section>
               </>
             )}
           </aside>
         </div>
+      )}
+      {st && (
+        <ActionBar
+          dirty={st.dirty}
+          working={busy}
+          where={said ?? (st.dirty ? `${st.steps} change${st.steps === 1 ? "" : "s"}${st.did ? ` · last: ${st.did}` : ""}` : st.file)}
+          info="Saving keeps the nav as it first was (a .bak file) and every save in History. Start over throws away what isn't saved and reads the file again."
+          save={{ label: "Save the nav", onClick: save }}
+          undo={startOver}
+        />
       )}
     </div>
   );

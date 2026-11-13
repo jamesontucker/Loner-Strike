@@ -56,3 +56,6 @@
 .doc-safe { margin: 0; padding-left: 18px; font-size: 14px; display: grid; gap: 2px; }
 .doc-links { display: flex; flex-wrap: wrap; gap: 6px; }
 .doc-page .tools-panel h3 { display: flex; align-items: center; gap: 6px; }
+.tl-ab-state.doc-ab.ok { color: var(--ok); }
+.tl-ab-state.doc-ab.warn { color: var(--warn); }
+.tl-ab-state.doc-ab.bad { color: var(--weak); }
