@@ -13,4 +13,5 @@ export const TOOLS: ToolEntry[] = [
   { id: "map", label: "Map viewer", blurb: "Walk around a map, see every spawn, door and trigger, and the bots' nav and what they learned.", load: () => import("./MapViewer") },
   { id: "replay", label: "Replay", blurb: "Watch a recorded bot match on its map: where every bot went, why, and where it fell.", load: () => import("./Replay") },
   { id: "spray", label: "Spray maker", blurb: "Turn a picture into your in-game spray.", load: () => import("./spray/SprayMaker") },
+  { id: "doctor", label: "Map doctor", blurb: "Find what a map is missing (textures, models, sounds, the download list, the bots' nav) and fix it.", beta: true, load: () => import("./doctor/Doctor") },
 ];

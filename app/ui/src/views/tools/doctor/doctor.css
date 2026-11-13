@@ -1,0 +1,37 @@
+/* The map doctor and its map list (views/tools/doctor). */
+.doc-maps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.doc-map { display: flex; gap: 10px; align-items: baseline; width: 100%; text-align: left; border: 0; border-radius: 2px; padding: 7px 12px; background: var(--panel); color: var(--bone); box-shadow: var(--raised); font: inherit; cursor: pointer; }
+.doc-map:hover, .doc-map:focus-visible { background: var(--panel-2); }
+.doc-map-name { font-weight: 700; }
+.doc-map-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-map .push { margin-left: auto; }
+
+.doc-head { align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
+.doc-title { margin: 0; }
+.doc-summary { font-weight: 700; margin: 8px 0 4px; }
+.doc-summary.ok { color: var(--ok); }
+.doc-summary.warn { color: var(--warn); }
+.doc section h3 { margin-top: 0; }
+.doc-sub { margin: 14px 0 6px; font-size: 14px; color: var(--bone-dim); }
+.doc-pad { margin: 8px 0; }
+
+.doc-line { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid rgba(0, 0, 0, .18); }
+.doc-line:first-of-type { border-top: 0; }
+.doc-mark { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: var(--signal-ink); margin-top: 1px; }
+.doc-line.ok .doc-mark { background: var(--ok); }
+.doc-line.warn .doc-mark { background: var(--warn); }
+.doc-line.bad .doc-mark { background: var(--weak); }
+.doc-text { min-width: 0; overflow-wrap: anywhere; }
+.doc-action { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 700px) {
+  .doc-line { grid-template-columns: 22px minmax(0, 1fr); }
+  .doc-action { grid-column: 2; justify-content: flex-start; }
+}
+.doc-more { margin-top: 4px; }
+.doc-more summary { cursor: pointer; color: var(--bone-dim); font-size: 14px; }
+.doc-tex { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--bone-dim); }
+.doc-files { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
+.doc-files li { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; font-size: 14px; }
+.doc-files code { font-size: 13px; overflow-wrap: anywhere; }
+.doc-files li.missing code { color: var(--weak); }
+.doc-files li.elsewhere code { color: var(--warn); }
