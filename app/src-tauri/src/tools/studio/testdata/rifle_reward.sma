@@ -21,7 +21,7 @@ public plugin_init()
 public lsg_on_round_started()
 {
 	new ctx[LSG_CTX]
-	lsg_start(ctx)
+	lsg_n0(ctx)
 }
 
 public lsg_on_player_killed()
@@ -29,54 +29,54 @@ public lsg_on_player_killed()
 	new ctx[LSG_CTX]
 	ctx[0] = read_data(2) // victim
 	ctx[1] = read_data(1) // attacker
-	lsg_killed(ctx)
+	lsg_n2(ctx)
 }
 
 // Round Started (start)
-lsg_start(const ctx[])
+lsg_n0(const ctx[])
 {
-	lsg_hello(ctx)
+	lsg_n1(ctx)
 }
 
 // Show Message (hello)
-lsg_hello(const ctx[])
+lsg_n1(const ctx[])
 {
 	ls_announce(0, 4.0, "%s", "Every kill earns you a rifle!")
 	#pragma unused ctx
 }
 
 // Player Killed (killed)
-lsg_killed(const ctx[])
+lsg_n2(const ctx[])
 {
-	lsg_is_ct(ctx)
+	lsg_n3(ctx)
 }
 
 // Is Team (is_ct)
-lsg_is_ct(const ctx[])
+lsg_n3(const ctx[])
 {
 	new bool:ok = 1 <= ctx[1] <= MaxClients && is_user_connected(ctx[1]) && cs_get_user_team(ctx[1]) == CS_TEAM_CT
 	if (ok)
-		lsg_give_m4(ctx)
+		lsg_n4(ctx)
 	else
-		lsg_is_t(ctx)
+		lsg_n5(ctx)
 }
 
 // Give Weapon (give_m4)
-lsg_give_m4(const ctx[])
+lsg_n4(const ctx[])
 {
 	ls_give_weapon(ctx[1], "m4a1", 90)
 }
 
 // Is Team (is_t)
-lsg_is_t(const ctx[])
+lsg_n5(const ctx[])
 {
 	new bool:ok = 1 <= ctx[1] <= MaxClients && is_user_connected(ctx[1]) && cs_get_user_team(ctx[1]) == CS_TEAM_T
 	if (ok)
-		lsg_give_ak(ctx)
+		lsg_n6(ctx)
 }
 
 // Give Weapon (give_ak)
-lsg_give_ak(const ctx[])
+lsg_n6(const ctx[])
 {
 	ls_give_weapon(ctx[1], "ak47", 90)
 }

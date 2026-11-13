@@ -1,10 +1,10 @@
 {
   "schema": "loner-strike/graph",
   "version": 1,
-  "mode": { "id": "all_nodes", "name": "All ^ Nodes", "description": "Every milestone 1 node" },
+  "mode": { "id": "all_nodes", "name": "All Nodes", "description": "Every milestone 1 node" },
   "nodes": [
     { "id": "r", "type": "event.round_started", "pos": { "x": 0, "y": 0 } },
-    { "id": "m", "type": "msg.broadcast", "pos": { "x": 300, "y": 0 }, "params": { "text": "Fight! 100% ^ go", "seconds": 2.5 } },
+    { "id": "m", "type": "msg.broadcast", "pos": { "x": 300, "y": 0 }, "params": { "text": "Fight! 100% go", "seconds": 2.5 } },
     { "id": "k", "type": "event.player_killed", "pos": { "x": 0, "y": 200 }, "breakpoint": true },
     { "id": "x", "type": "flow.reroute", "pos": { "x": 150, "y": 200 } },
     { "id": "y", "type": "flow.reroute", "pos": { "x": 150, "y": 260 } },

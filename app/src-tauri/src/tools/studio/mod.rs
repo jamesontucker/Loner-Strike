@@ -605,7 +605,8 @@ mod tests {
         std::fs::create_dir_all(&inc).unwrap();
         std::fs::write(inc.join("loner.inc"), LONER_INC).unwrap();
         let all = include_str!("testdata/all_nodes.graph.json");
-        for (name, text) in [("rifle_reward", TEMPLATE), ("all_nodes", all)] {
+        let evil = include_str!("testdata/malicious.graph.json");
+        for (name, text) in [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil)] {
             for debug in [false, true] {
                 let g = graph::parse(text).unwrap();
                 let out = gen::generate(&g, debug);

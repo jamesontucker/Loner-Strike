@@ -239,9 +239,23 @@ pub fn valid_mode_id(id: &str) -> bool {
     (2..=24).contains(&id.len()) && id.starts_with(|c: char| c.is_ascii_lowercase()) && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
 }
 
-/// Text that goes into modes.ini (quoted) or a Pawn string: printable, no quotes.
+/// The characters names, labels and text settings may use: letters, digits, space and plain
+/// punctuation. Never `*`, `/`, `\\`, `"`, `^` (Pawn's escape), newlines or control characters,
+/// so graph text can't end a comment, a string or a line in generated code or modes.ini, even
+/// before the generator escapes it (community graphs are data, never code).
+pub fn label_char(c: char) -> bool {
+    c.is_alphanumeric() || " .,!?'()-:;+&%#@=<>[]_~$".contains(c)
+}
+
+/// Text that goes into modes.ini (quoted) or a Pawn string.
 pub fn valid_label(s: &str, max: usize) -> bool {
-    s.chars().count() <= max && !s.chars().any(|c| c.is_control() || c == '"')
+    s.chars().count() <= max && s.chars().all(label_char)
+}
+
+/// A comment box's note: never put into generated code, but held to the same characters
+/// (plus new lines).
+pub fn valid_note(s: &str) -> bool {
+    s.chars().count() <= 2000 && s.chars().all(|c| c == '\n' || label_char(c))
 }
 
 /// The graph as the checks and the generator see it: lookups by id, wires by pin.
@@ -380,10 +394,10 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         p.push(Problem::err(None, "The mode's id needs 2 to 24 small letters, digits or _ (starting with a letter)."));
     }
     if g.mode.name.trim().is_empty() || !valid_label(&g.mode.name, 40) {
-        p.push(Problem::err(None, "Give the mode a name (up to 40 characters, no quotes)."));
+        p.push(Problem::err(None, "Give the mode a name (up to 40 letters, digits, spaces or plain punctuation; no * / \\ \" ^)."));
     }
     if !valid_label(&g.mode.description, 60) {
-        p.push(Problem::err(None, "The mode's description can be up to 60 characters, with no quotes."));
+        p.push(Problem::err(None, "The mode's description can be up to 60 letters, digits, spaces or plain punctuation (no * / \\ \" ^)."));
     }
     if g.nodes.len() > MAX_NODES || g.edges.len() > MAX_EDGES || g.comments.len() > MAX_COMMENTS {
         p.push(Problem::err(None, format!("That graph is too big (at most {MAX_NODES} nodes, {MAX_EDGES} wires and {MAX_COMMENTS} comments).")));
@@ -423,8 +437,11 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         if !valid_id(&c.id) || !cids.insert(c.id.as_str()) {
             p.push(Problem::err(None, "A comment has a bad or repeated id."));
         }
-        if c.text.chars().count() > 2000 {
-            p.push(Problem::err(None, "A comment is too long (2000 characters at most)."));
+        if c.color.as_deref().is_some_and(|k| !(k.len() == 7 && k.starts_with('#') && k[1..].chars().all(|h| h.is_ascii_hexdigit()))) {
+            p.push(Problem::err(None, "A comment's colour isn't a colour (#rrggbb)."));
+        }
+        if !valid_note(&c.text) {
+            p.push(Problem::err(None, "A comment is too long (2000 characters at most) or uses a character that isn't allowed (* / \\ \" ^)."));
         }
     }
 
@@ -595,7 +612,7 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
         },
         "text" => match v.as_str() {
             Some(s) if valid_label(s, def.max.unwrap_or(100.0) as usize) => Ok(()),
-            _ => Err(format!("{} can be up to {} characters, on one line, with no quotes.", def.label, def.max.unwrap_or(100.0))),
+            _ => Err(format!("{} can be up to {} letters, digits, spaces or plain punctuation (no * / \\ \" ^).", def.label, def.max.unwrap_or(100.0))),
         },
         _ => Err(format!("{} has a setting this app doesn't know.", def.label)),
     }

@@ -109,9 +109,37 @@ fn event_kind(kind: &str) -> Option<&'static EventKind> {
     EVENTS.iter().find(|e| e.kind == kind)
 }
 
-/// The function a node becomes.
-fn fname(id: &str) -> String {
-    format!("lsg_{id}")
+/// Text for a `//` or `/* */` comment in generated code: only the characters names may use
+/// (graph::label_char), so it can never end the comment or start a new line of code.
+pub fn comment_text(s: &str) -> String {
+    safe_text(s, 80)
+}
+
+/// An id from the graph (mode, node) for a string literal or a comment: letters, digits, _ only
+/// (the checks allow nothing else; this is the generator's own guard).
+pub fn id_text(s: &str) -> String {
+    s.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').take(32).collect()
+}
+
+/// Graph text for a string literal: only the characters names may use, then `pawn_str`.
+pub fn safe_text(s: &str, max: usize) -> String {
+    s.chars().filter(|c| super::graph::label_char(*c)).take(max).collect()
+}
+
+/// A number setting, finite and inside the registry's range (or the default).
+fn number(n: &Node, def: &NodeDef, id: &str) -> f64 {
+    let p = def.param(id);
+    let v = param(n, def, id).and_then(Value::as_f64).filter(|x| x.is_finite()).or_else(|| p.and_then(|p| p.default.as_f64())).unwrap_or(0.0);
+    let lo = p.and_then(|p| p.min).unwrap_or(0.0);
+    let hi = p.and_then(|p| p.max).unwrap_or(1000.0);
+    v.clamp(lo, hi)
+}
+
+/// A choice setting: one of the registry's own choices (never the graph's text), or the default.
+fn choice<'a>(n: &Node, def: &'a NodeDef, id: &str) -> &'a str {
+    let Some(p) = def.param(id) else { return "" };
+    let want = n.params.get(id).and_then(Value::as_str);
+    p.choices.iter().find(|(k, _)| Some(k.as_str()) == want).or_else(|| p.choices.iter().find(|(k, _)| Some(k.as_str()) == p.default.as_str())).map(|(k, _)| k.as_str()).unwrap_or("")
 }
 
 /// The Pawn expression for a data input: the wired value, or the param it falls back to.
@@ -139,10 +167,6 @@ fn team_const(t: &str) -> &'static str {
     }
 }
 
-fn num(n: &Node, def: &NodeDef, id: &str) -> f64 {
-    param(n, def, id).and_then(Value::as_f64).unwrap_or(0.0)
-}
-
 fn text<'a>(n: &'a Node, def: &'a NodeDef, id: &str) -> &'a str {
     param(n, def, id).and_then(Value::as_str).unwrap_or("")
 }
@@ -160,19 +184,21 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         .filter(|id| v.defs.get(id).is_some_and(|d| !d.reroute && (d.event || reached.contains_key(id))))
         .collect();
     let index = |id: &str| live.iter().position(|x| *x == id).unwrap_or(0);
+    // function names are ours (lsg_n<index>), never made from graph text
+    let fname = |id: &str| format!("lsg_n{}", index(id));
 
     let mut o = Out { text: String::new(), lines: 0, spans: Vec::new() };
     o.line(format!("/*\n\t{} - made with Loner-Strike's Game Mode Studio (graph version {}).\n\tGenerated from {}.graph.json: change the graph and compile it again; edits here are lost.{}\n*/",
-        g.mode.name, g.version, g.mode.id, if debug { "\n\tThis is a debug build (Playtest): it reports every node to the Studio." } else { "" }));
+        comment_text(&g.mode.name), g.version, id_text(&g.mode.id), if debug { "\n\tThis is a debug build (Playtest): it reports every node to the Studio." } else { "" }));
     o.blank();
     o.line("#include <amxmodx>\n#include <cstrike>\n#include <fakemeta>\n#include <loner>");
     o.blank();
-    o.line(format!("#define LSG_MODE {}\n#define LSG_CTX {CTX}", pawn_str(&g.mode.id)));
+    o.line(format!("#define LSG_MODE {}\n#define LSG_CTX {CTX}", pawn_str(&id_text(&g.mode.id))));
     o.blank();
 
     if debug {
         o.line(format!("#define LSD_N {}", live.len().max(1)));
-        let ids: Vec<String> = if live.is_empty() { vec![pawn_str("")] } else { live.iter().map(|id| pawn_str(id)).collect() };
+        let ids: Vec<String> = if live.is_empty() { vec![pawn_str("")] } else { live.iter().map(|id| pawn_str(&id_text(id))).collect() };
         o.line(format!("new const g_lsdIds[LSD_N][] = {{ {} }}", ids.join(", ")));
         let bps: Vec<&str> = if live.is_empty() { vec!["false"] } else { live.iter().map(|id| if v.nodes[id].breakpoint { "true" } else { "false" }).collect() };
         o.line(format!("new bool:g_lsdBp[LSD_N] = {{ {} }}", bps.join(", ")));
@@ -183,7 +209,7 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     // registration
     let kinds: Vec<&EventKind> = EVENTS.iter().filter(|k| live.iter().any(|id| v.defs[id].kind == k.kind)).collect();
     o.line("public plugin_init()\n{");
-    o.line(format!("\tls_register_mode(LSG_MODE, {}, \"1.0\", \"Game Mode Studio\")", pawn_str(&g.mode.name)));
+    o.line(format!("\tls_register_mode(LSG_MODE, {}, \"1.0\", \"Game Mode Studio\")", pawn_str(&safe_text(&g.mode.name, 40))));
     if debug {
         o.line("\tlsd_init()");
     }
@@ -212,7 +238,7 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         let def = v.defs[id];
         let n = v.nodes[id];
         let from = o.lines + 1;
-        o.line(format!("// {} ({id})", def.title));
+        o.line(format!("// {} ({})", comment_text(&def.title), id_text(id)));
         o.line(format!("{}(const ctx[])\n{{", fname(id)));
         let mut body = Out { text: String::new(), lines: 0, spans: Vec::new() };
         let i = index(id);
@@ -261,8 +287,8 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
             }
             "player.give_weapon" => {
                 let p = data_expr(&v, id, def, "player");
-                let w = text(n, def, "weapon");
-                let ammo = num(n, def, "ammo").round() as i64;
+                let w = choice(n, def, "weapon");
+                let ammo = number(n, def, "ammo").round() as i64;
                 if debug {
                     body.line(format!("\tif (ls_give_weapon({p}, {}, {ammo}))\n{}\n\telse\n\t\tlsd_error({i}, \"Not given: that player isn't alive.\")", pawn_str(w), exit("given").replacen('\t', "\t\t", 1)));
                 } else {
@@ -273,14 +299,14 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
                 }
             }
             "score.end_round" => {
-                let cmd = match text(n, def, "winner") {
+                let cmd = match choice(n, def, "winner") {
                     "t" => "endround T",
                     "ct" => "endround CT",
                     _ => "endround",
                 };
                 body.line(format!("\tserver_cmd({})", pawn_str(cmd)));
                 if debug {
-                    body.line(exit(match text(n, def, "winner") {
+                    body.line(exit(match choice(n, def, "winner") {
                         "t" => "Terrorists win",
                         "ct" => "Counter-Terrorists win",
                         _ => "draw",
@@ -288,8 +314,8 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
                 }
             }
             "msg.broadcast" => {
-                let secs = num(n, def, "seconds");
-                body.line(format!("\tls_announce(0, {secs:.1}, \"%s\", {})", pawn_str(text(n, def, "text"))));
+                let secs = number(n, def, "seconds");
+                body.line(format!("\tls_announce(0, {secs:.1}, \"%s\", {})", pawn_str(&safe_text(text(n, def, "text"), 100))));
                 if debug {
                     body.line(exit("shown"));
                 }
@@ -645,6 +671,7 @@ mod tests {
 
     const TEMPLATE: &str = include_str!("../../../../ui/src/views/tools/studio/templates/team-dm.graph.json");
     const ALL_NODES: &str = include_str!("testdata/all_nodes.graph.json");
+    pub const MALICIOUS: &str = include_str!("testdata/malicious.graph.json");
 
     fn snapshot(name: &str, got: &str) {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tools/studio/testdata").join(name);
@@ -688,6 +715,39 @@ mod tests {
         snapshot("all_nodes.debug.sma", &dbg.source);
         // breakpoints marked in the graph start enabled
         assert!(dbg.source.contains("new bool:g_lsdBp[LSD_N] = { false, false, true"), "{}", dbg.source.lines().find(|l| l.contains("g_lsdBp[LSD_N]")).unwrap_or(""));
+    }
+
+    /// Community graphs are data: text in them is refused by the checks, and even a graph that
+    /// skipped them can only ever become literal text in the plugin.
+    #[test]
+    fn hostile_text_never_becomes_code() {
+        let g = parse(MALICIOUS).unwrap();
+        let p = validate(&g);
+        let errors = p.iter().filter(|p| p.level == "error").count();
+        assert!(errors >= 7, "{p:?}");
+        for debug in [false, true] {
+            let src = generate(&g, debug).source;
+            assert!(!src.contains("server_cmd(\"quit"), "{src}");
+            // the hostile words survive only inside the header comment or a string literal
+            let header_end = src.find("*/").unwrap();
+            for (i, _) in src.match_indices("plugin_init() {") {
+                assert!(i < header_end, "{src}");
+            }
+            for l in src.lines().filter(|l| l.contains("#include <evil>")) {
+                assert!(l.starts_with("\tls_announce(0, 20.0, \"%s\", \"") && l.ends_with("\")"), "{l}");
+            }
+            assert_eq!(src.lines().filter(|l| l.trim_start().starts_with("#include")).count(), 4);
+            assert_eq!(src.matches("*/").count(), src.matches("/*").count());
+            assert_eq!(src.matches("*/").count(), 1, "only the header comment closes");
+            // every quote in the plugin's own lines is balanced (no string was cut open)
+            for l in src.lines().filter(|l| !l.trim_start().starts_with("//")) {
+                assert_eq!(l.replace("^\"", "").replace("'\"'", "").matches('"').count() % 2, 0, "{l}");
+            }
+            assert!(src.contains("ls_give_weapon(ctx[1], \"ak47\", 0)") || debug);
+            assert!(src.contains("ls_announce(0, 20.0,"));
+            assert!(src.contains("server_cmd(\"endround\")"));
+            snapshot(if debug { "malicious.debug.sma" } else { "malicious.sma" }, &src);
+        }
     }
 
     #[test]

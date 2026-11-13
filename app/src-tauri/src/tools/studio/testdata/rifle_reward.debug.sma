@@ -338,7 +338,7 @@ public plugin_init()
 public lsg_on_round_started()
 {
 	new ctx[LSG_CTX]
-	lsg_start(ctx)
+	lsg_n0(ctx)
 }
 
 public lsg_on_player_killed()
@@ -346,21 +346,21 @@ public lsg_on_player_killed()
 	new ctx[LSG_CTX]
 	ctx[0] = read_data(2) // victim
 	ctx[1] = read_data(1) // attacker
-	lsg_killed(ctx)
+	lsg_n2(ctx)
 }
 
 // Round Started (start)
-lsg_start(const ctx[])
+lsg_n0(const ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(0, ctx))
 		return
 	lsd_exit(0, "ran")
-	lsg_hello(ctx)
+	lsg_n1(ctx)
 }
 
 // Show Message (hello)
-lsg_hello(const ctx[])
+lsg_n1(const ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(1, ctx))
@@ -370,17 +370,17 @@ lsg_hello(const ctx[])
 }
 
 // Player Killed (killed)
-lsg_killed(const ctx[])
+lsg_n2(const ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(2, ctx))
 		return
 	lsd_exit(2, "ran")
-	lsg_is_ct(ctx)
+	lsg_n3(ctx)
 }
 
 // Is Team (is_ct)
-lsg_is_ct(const ctx[])
+lsg_n3(const ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -390,13 +390,13 @@ lsg_is_ct(const ctx[])
 	new bool:ok = 1 <= ctx[1] <= MaxClients && is_user_connected(ctx[1]) && cs_get_user_team(ctx[1]) == CS_TEAM_CT
 	lsd_exit(3, g_lsdBool[_:ok])
 	if (ok)
-		lsg_give_m4(ctx)
+		lsg_n4(ctx)
 	else
-		lsg_is_t(ctx)
+		lsg_n5(ctx)
 }
 
 // Give Weapon (give_m4)
-lsg_give_m4(const ctx[])
+lsg_n4(const ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -409,7 +409,7 @@ lsg_give_m4(const ctx[])
 }
 
 // Is Team (is_t)
-lsg_is_t(const ctx[])
+lsg_n5(const ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -419,11 +419,11 @@ lsg_is_t(const ctx[])
 	new bool:ok = 1 <= ctx[1] <= MaxClients && is_user_connected(ctx[1]) && cs_get_user_team(ctx[1]) == CS_TEAM_T
 	lsd_exit(5, g_lsdBool[_:ok])
 	if (ok)
-		lsg_give_ak(ctx)
+		lsg_n6(ctx)
 }
 
 // Give Weapon (give_ak)
-lsg_give_ak(const ctx[])
+lsg_n6(const ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -439,12 +439,12 @@ lsd_call(n, const ctx[])
 {
 	switch (n)
 	{
-		case 0: lsg_start(ctx)
-		case 1: lsg_hello(ctx)
-		case 2: lsg_killed(ctx)
-		case 3: lsg_is_ct(ctx)
-		case 4: lsg_give_m4(ctx)
-		case 5: lsg_is_t(ctx)
-		case 6: lsg_give_ak(ctx)
+		case 0: lsg_n0(ctx)
+		case 1: lsg_n1(ctx)
+		case 2: lsg_n2(ctx)
+		case 3: lsg_n3(ctx)
+		case 4: lsg_n4(ctx)
+		case 5: lsg_n5(ctx)
+		case 6: lsg_n6(ctx)
 	}
 }

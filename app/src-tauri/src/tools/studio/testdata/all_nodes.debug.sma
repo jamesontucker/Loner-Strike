@@ -1,5 +1,5 @@
 /*
-	All ^ Nodes - made with Loner-Strike's Game Mode Studio (graph version 1).
+	All Nodes - made with Loner-Strike's Game Mode Studio (graph version 1).
 	Generated from all_nodes.graph.json: change the graph and compile it again; edits here are lost.
 	This is a debug build (Playtest): it reports every node to the Studio.
 */
@@ -329,7 +329,7 @@ public lsd_poll()
 
 public plugin_init()
 {
-	ls_register_mode(LSG_MODE, "All ^^ Nodes", "1.0", "Game Mode Studio")
+	ls_register_mode(LSG_MODE, "All Nodes", "1.0", "Game Mode Studio")
 	lsd_init()
 	register_logevent("lsg_on_round_started", 2, "1=Round_Start")
 	register_event("DeathMsg", "lsg_on_player_killed", "a")
@@ -338,7 +338,7 @@ public plugin_init()
 public lsg_on_round_started()
 {
 	new ctx[LSG_CTX]
-	lsg_r(ctx)
+	lsg_n0(ctx)
 }
 
 public lsg_on_player_killed()
@@ -346,41 +346,41 @@ public lsg_on_player_killed()
 	new ctx[LSG_CTX]
 	ctx[0] = read_data(2) // victim
 	ctx[1] = read_data(1) // attacker
-	lsg_k(ctx)
+	lsg_n2(ctx)
 }
 
 // Round Started (r)
-lsg_r(const ctx[])
+lsg_n0(const ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(0, ctx))
 		return
 	lsd_exit(0, "ran")
-	lsg_m(ctx)
+	lsg_n1(ctx)
 }
 
 // Show Message (m)
-lsg_m(const ctx[])
+lsg_n1(const ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(1, ctx))
 		return
-	ls_announce(0, 2.5, "%s", "Fight! 100% ^^ go")
+	ls_announce(0, 2.5, "%s", "Fight! 100% go")
 	lsd_exit(1, "shown")
 }
 
 // Player Killed (k)
-lsg_k(const ctx[])
+lsg_n2(const ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(2, ctx))
 		return
 	lsd_exit(2, "ran")
-	lsg_c(ctx)
+	lsg_n3(ctx)
 }
 
 // Is Team (c)
-lsg_c(const ctx[])
+lsg_n3(const ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[0])
@@ -390,13 +390,13 @@ lsg_c(const ctx[])
 	new bool:ok = 1 <= ctx[0] <= MaxClients && is_user_connected(ctx[0]) && cs_get_user_team(ctx[0]) == CS_TEAM_CT
 	lsd_exit(3, g_lsdBool[_:ok])
 	if (ok)
-		lsg_g(ctx)
+		lsg_n4(ctx)
 	else
-		lsg_e2(ctx)
+		lsg_n6(ctx)
 }
 
 // Give Weapon (g)
-lsg_g(const ctx[])
+lsg_n4(const ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -406,11 +406,11 @@ lsg_g(const ctx[])
 		lsd_exit(4, "given")
 	else
 		lsd_error(4, "Not given: that player isn't alive.")
-	lsg_e(ctx)
+	lsg_n5(ctx)
 }
 
 // End Round (e)
-lsg_e(const ctx[])
+lsg_n5(const ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(5, ctx))
@@ -420,7 +420,7 @@ lsg_e(const ctx[])
 }
 
 // End Round (e2)
-lsg_e2(const ctx[])
+lsg_n6(const ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(6, ctx))
@@ -433,12 +433,12 @@ lsd_call(n, const ctx[])
 {
 	switch (n)
 	{
-		case 0: lsg_r(ctx)
-		case 1: lsg_m(ctx)
-		case 2: lsg_k(ctx)
-		case 3: lsg_c(ctx)
-		case 4: lsg_g(ctx)
-		case 5: lsg_e(ctx)
-		case 6: lsg_e2(ctx)
+		case 0: lsg_n0(ctx)
+		case 1: lsg_n1(ctx)
+		case 2: lsg_n2(ctx)
+		case 3: lsg_n3(ctx)
+		case 4: lsg_n4(ctx)
+		case 5: lsg_n5(ctx)
+		case 6: lsg_n6(ctx)
 	}
 }
