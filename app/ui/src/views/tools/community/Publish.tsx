@@ -14,6 +14,7 @@ import { BusyButton, LoadError, useToast } from "../../../ui";
 import { errorText, useBusy } from "../common/api";
 import { Empty, Loading, MapList } from "../common";
 import { Segmented } from "../../../ui";
+import { CreditsPanel } from "./Credits";
 import { BOT_NOTE, BOT_RATING_INFO } from "../../../games";
 import { modeReadiness, publish, publishMode, readiness, register, reveal, sizeText, startModes, studioGraphs, type Form, type MineState, type Package, type Shot } from "./communityApi";
 
@@ -264,6 +265,7 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
           {r.files.length ? ` and ${r.files.length} file${r.files.length === 1 ? "" : "s"} it uses (${r.files.slice(0, 4).join(", ")}${r.files.length > 4 ? "…" : ""})` : ""}.
           {r.health ? ` Bot simulation from ${new Date(r.health.when * 1000).toLocaleDateString()}: ${r.health.verdict}.` : ""}
         </p>
+        <CreditsPanel assets={r.assets ?? []} onChanged={() => q.refetch()} />
       </section>
 
       {!blocked && (
@@ -366,6 +368,9 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
             <CopyRow label="Name" value={form.title} />
             <CopyRow label="Description" value={form.text} long />
             <CopyRow label={`Attribute: ${form.tag.title}`} value={form.tag.value} />
+            {form.credits && form.credits.length > 0 && (
+              <CopyRow label="Credits module (one per line: group, name, role)" value={form.credits.map((c) => `${c.group} | ${c.name} | ${c.role}${c.url ? ` | ${c.url}` : ""}`).join("\n")} long />
+            )}
           </div>
           <p className="muted small-note">
             Add the attribute <code>{form.tag.title}: {form.tag.value}</code> (it's how Community finds it), upload <code>{form.file}</code> unchanged, and add the screenshots.

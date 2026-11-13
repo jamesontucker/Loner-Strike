@@ -117,3 +117,10 @@
 .cm-srv-row .check-row { font-weight: 400; min-width: 0; }
 .cm-srv-row .check-row span { overflow-wrap: anywhere; }
 .cm-notes { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
+.cm-credits { display: grid; gap: 6px; margin-top: 10px; }
+.cm-credits h4 { margin: 0; }
+.cm-credits ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cm-credit { display: grid; gap: 4px; padding: 6px 0; border-top: 1px solid rgba(0, 0, 0, .18); }
+.cm-credit-main { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.cm-credit-form { display: flex; flex-wrap: wrap; gap: 6px; }
+.cm-credit-form input { flex: 1 1 220px; min-width: 0; }

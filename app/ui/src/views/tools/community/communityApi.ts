@@ -71,15 +71,29 @@ export type Details = {
   canTry: boolean; why: string | null; have: boolean; installed: InstalledInfo | null;
 };
 
+export type Author = { name: string; role: string; url: string };
+export type CreditAsset = {
+  rel: string; sha256: string; source: "stock" | "gamebanana" | "community" | "mine" | "manual" | "unknown"; page: string; name: string;
+  authors: Author[]; checklist: Record<string, string>; ported: string; verdict: "ok" | "ask" | "no" | "none"; why: string;
+  permission: { granted: boolean; note: string; date: number; authors: Author[]; page: string } | null;
+};
+export type AssetCredit = { files: string[]; page: string; name: string; authors: Author[]; permission: string; note: string };
 export type Readiness = {
   blockers: string[]; warnings: string[]; tips: string[]; map: MapMeta; health: HealthMeta | null; files: string[]; title: string; game: string;
+  assets: CreditAsset[]; credits: AssetCredit[];
 };
+export const notePermission = (b: { key: string; granted: boolean; note: string; authors?: Author[]; page?: string }) =>
+  post<{ ok: boolean }>(`/api/tools/credits/${b.authors ? "manual" : "permission"}`, b);
 
 export type Package = {
   file: string; size: number; md5: string; sha256: string; contents: string[]; screenshots: string[]; item: Item; warnings: string[];
 };
 
-export type Form = { submitUrl: string; game: string; category: string; title: string; text: string; tag: { title: string; value: string }; file: string; md5: string };
+export type Form = {
+  submitUrl: string; game: string; category: string; title: string; text: string; tag: { title: string; value: string }; file: string; md5: string;
+  /** rows for GameBanana's Credits module */
+  credits?: { group: string; name: string; role: string; url: string }[];
+};
 
 /** listed / pending (a moderator looks first) / refused (error says why) / waiting (not sent yet); "sent" from older versions */
 export type MineState = "listed" | "pending" | "refused" | "waiting" | "sent";

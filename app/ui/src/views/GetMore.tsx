@@ -6,6 +6,7 @@ import { usePlayDrafts } from "../stores/playDraft";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
 import { BusyButton, LoadError, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
 import { CommunityLink } from "./tools/community/chip";
+import { LicenseTerms, type Licence } from "./tools/community/Terms";
 /** (community) Get more sections → the Community browser's kinds */
 const COMMUNITY_KIND: Record<string, string> = { maps: "map", sprays: "spray", textures: "texture" };
 
@@ -332,6 +333,7 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
             <p className="muted">by {open.author}{open.type ? ` · ${open.type}` : ""}</p>
             {open.audio && <audio controls src={open.audio} className="preview" />}
             <p className="gb-text">{open.text}</p>
+            <LicenseTerms licence={(open as { licence?: Licence }).licence} />{/* (credits: the terms before download) */}
             {open.installed ? (
               <div className="banner">
                 <div>Installed.{ON_THIS_COMPUTER ? "" : " To remove it, use the computer running Loner-Strike."}</div>
