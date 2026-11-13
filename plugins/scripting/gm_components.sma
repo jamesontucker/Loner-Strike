@@ -192,6 +192,7 @@ new g_ndoors[MAX_COMP];
 new g_boards[MAX_COMP][MAX_BOARDS];
 new g_nboards[MAX_COMP];
 new g_boardOf[MAX_ENTS];
+new bool:g_seeThrough[MAX_COMP];
 new g_nslots;
 
 new g_slotOf[MAX_ENTS];
@@ -443,7 +444,7 @@ public plugin_init()
 	RegisterHam(Ham_Touch, "func_door", "ham_door_touch");
 	RegisterHam(Ham_Touch, "func_door_rotating", "ham_door_touch");
 	register_forward(FM_PlayerPreThink, "fm_prethink");
-	register_forward(FM_ShouldCollide, "fm_shouldcollide");
+	register_forward(FM_TraceLine, "fm_traceline_post", 1);
 
 	register_event("HLTV", "ev_new_round", "a", "1=0", "2=0");
 	register_logevent("ev_round_start", 2, "1=Round_Start");
@@ -2603,6 +2604,7 @@ stock barricade_tint(s)
 	/* boards: as many showing as the health is worth */
 	/* the bots' brain: pev_iuser4 1 = shoot-through by design (W2), for the barricade and its boards */
 	new st = ki(s, "see_through", 1) ? 1 : 0;
+	g_seeThrough[s] = st != 0;
 	set_pev(ent, pev_iuser4, st);
 	new n = g_nboards[s];
 	for (new i = 0; i < n; i++)
@@ -2624,19 +2626,50 @@ stock barricade_tint(s)
 	}
 }
 
-/* Players (their bullets, their bots' sight, their steps) pass through a see-through barricade;
-   creatures don't, so they have to break it */
-public fm_shouldcollide(touched, other)
+/* Shooting and seeing through a barricade's gaps (CoD style): nobody walks through an intact
+   barricade (movement uses hull traces: the barricade's CLIP brush or box stops players, bots and
+   creatures), but a point trace (a bullet, a bot's look) that hits a see-through barricade or one
+   of its boards carries on past it to whatever is behind */
+new g_traceDepth;
+
+public fm_traceline_post(const Float:v1[3], const Float:v2[3], noMonsters, skip, tr)
 {
-	if (touched <= 0 || touched >= MAX_ENTS || !(1 <= other <= MaxClients))
+	new hit = get_tr2(tr, TR_pHit);
+	if (hit <= 0 || hit >= MAX_ENTS || g_traceDepth >= 4)
 		return FMRES_IGNORED;
-	new s = g_slotOf[touched] ? g_slotOf[touched] - 1 : g_boardOf[touched] - 1;
-	if (s < 0)
+	new s = g_slotOf[hit] ? g_slotOf[hit] - 1 : g_boardOf[hit] - 1;
+	if (s < 0 || g_kind[s] != K_BARRICADE || !g_seeThrough[s])
 		return FMRES_IGNORED;
-	if (g_kind[s] != K_BARRICADE || !ki(s, "see_through", 1))
+	new Float:end[3], Float:dir[3], Float:start[3];
+	get_tr2(tr, TR_vecEndPos, end);
+	new Float:total = get_distance_f(v1, v2);
+	if (total < 1.0)
 		return FMRES_IGNORED;
-	forward_return(FMV_CELL, 0);
-	return FMRES_SUPERCEDE;
+	for (new i = 0; i < 3; i++)
+	{
+		dir[i] = (v2[i] - v1[i]) / total;
+		start[i] = end[i] + dir[i] * 2.0;
+	}
+	new Float:done = get_distance_f(v1, start);
+	if (done >= total)
+		return FMRES_IGNORED;
+	new tr2 = create_tr2();
+	g_traceDepth++;
+	engfunc(EngFunc_TraceLine, start, v2, noMonsters, hit, tr2);
+	g_traceDepth--;
+	new Float:f2, Float:e2[3], Float:n2[3];
+	get_tr2(tr2, TR_flFraction, f2);
+	get_tr2(tr2, TR_vecEndPos, e2);
+	get_tr2(tr2, TR_vecPlaneNormal, n2);
+	set_tr2(tr, TR_flFraction, floatmin((done + f2 * (total - done)) / total, 1.0));
+	set_tr2(tr, TR_vecEndPos, e2);
+	set_tr2(tr, TR_vecPlaneNormal, n2);
+	set_tr2(tr, TR_pHit, get_tr2(tr2, TR_pHit));
+	set_tr2(tr, TR_iHitgroup, get_tr2(tr2, TR_iHitgroup));
+	set_tr2(tr, TR_InOpen, get_tr2(tr2, TR_InOpen));
+	set_tr2(tr, TR_InWater, get_tr2(tr2, TR_InWater));
+	free_tr2(tr2);
+	return FMRES_IGNORED;
 }
 
 public ham_takedamage(ent, inflictor, attacker, Float:dmg, bits)

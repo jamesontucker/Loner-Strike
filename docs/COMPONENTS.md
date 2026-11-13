@@ -204,6 +204,14 @@ Hill). Ring in the owner's colour, BarTime while taking.
 - Bots: `goal capture` for whoever doesn't hold it, `goal defend` for the holders, `attract`.
 
 ### ls_barricade
+Call of Duty style by default (`see_through 1`): nobody walks through an intact barricade (players,
+bots, creatures: movement uses hull traces, which the barricade's brush (a CLIP brush filling the
+opening is ideal) or box stops), but bullets and sight pass the gaps: a point trace that hits the
+barricade or one of its `boards=` brushes carries on past it (an FM_TraceLine hook), and the
+entity carries `pev_iuser4 = 1` (the bots' shoot-through marker). Boards disappear one by one as
+it weakens and come back one by one as it's repaired; broken, the opening is open to everyone;
+it re-forms only when nothing stands in it and no creature is within 250 units. `see_through 0`
+is a plain solid wall.
 A wall (a brush in the map; in a pack, a box of `size`, stretched wall to wall with `fit=x|y`, drawn
 as a beam fence that goes from green to red with health, or shown with `model`; or `adopt=` an
 existing `func_wall`/`func_breakable` by name or `*model`) with `hp`; shots and grenades break it (its own team
