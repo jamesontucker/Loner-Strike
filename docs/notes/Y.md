@@ -85,3 +85,73 @@
   Last Stand that appears only when mode-basebuilder is installed: a creatures.ini overlay of bb_ types, no new fetch
   and no Base Builder dependency. Never put the files on FastDL. A server that uses it makes clients without Base
   Builder download them (sv_allowdownload) or fail to join: that's the server owner's choice, stated on the toggle.
+
+## Half-Life's monsters as Last Stand creatures (Y, 2026-11-13)
+**Where the files come from.** All from `valve/models` and `valve/sound` in Steam's shared base depot (depot 1). Every
+CS 1.6 and Condition Zero install gets it, including CS-only and CZ-only players who don't own Half-Life. Nothing is
+redistributed. `babygarg.mdl` is NOT in that depot, so the baby gargantua is `garg.mdl` at scale 0.45. The app keeps
+the servers' copies the same as the game's (hlmodels.rs, now 18 models). The fork warns when they differ. hgrunt.mdl
+changed in HL25 (82 to 86 sequences) and hassassin.mdl changed size (same order); both are in its check now.
+
+**New built-in types** (ls-creatures `5b1772d` + `d8604b6`, CI 43507381531; Creature Studio mirrors them). Live sim
+test (de_dust2, 4 types per server, two servers): sequence chosen per state, then `ls_creature kill all` with the
+death sequence recorded.
+
+| Type | Model | Role | Idle / walk / run / attack / die | Notes |
+|---|---|---|---|---|
+| vortigaunt | islave | ranged alien | 2 / 4 / 6 / 12 zapattack1 / 19 | electric zap: green TE_BEAMPOINTS (sprites/lgtning.spr), 12 dmg, 0.8 s charge |
+| babygarg | garg (×0.45) | mini-boss | 3 / 4 / 5 / 8 Attack / 14 | 900 hp, melee 35 |
+| snark | w_squeak | swarm | 0 / 3 / 3 / 2 jump / (none: pops) | 6 hp, 320 speed, bite 4; corpse 0.5 s |
+| babycrab | baby_headcrab | swarm | 2 / 3 / 4 / 10-12 jumps / 7 | 8 hp, bite 3 |
+| miniturret | miniturret | placed defence/hazard | 2 spin / - / - / 1 fire / 5 die | doesn't move, 6 shots/s, 4 dmg |
+| assassin | hassassin | flanker | 2 / 4 / 3 / 5 shoot / 11 | pistol 8 dmg, 2/s; hops sideways while closing (`hops`), comes from the side (`flank`) |
+| soldier | hgrunt | military | 11 / 0 / 1 / 18 standing_mp5 / 35 | MP5 bursts 6 dmg ×4/s, 1200 range, flanks, falls back hurt |
+| gonarch | big_mom (×0.55) | boss | 0 / 2 / 3 / 6-7 claw / (die by activity) | 3500 hp, melee 50, reach 96 |
+
+New type keys: `shot_fx = tracer|zap|none`, `hops = 0..1`, `flank = 0|1` (and `can_climb` from the ladder fix). The
+fork now has room for 48 types: 16 built in, 32 from the file.
+
+**Not added, and why:**
+- **controller** (flying, energy balls) and **stukabat**: creatures walk the bot nav mesh with MOVETYPE_STEP. Flying
+  needs its own mover: MOVETYPE_FLY, steering in 3D with hull traces, a cruise height over the nav areas, and a way
+  to follow paths through doors at head height. That's about 2-3 days to do well. Without it they'd hover through
+  walls or stick to them.
+- **barnacle**: a ceiling hazard, not a wave creature. It needs its own entity (`ls_barnacle`, placed by the mapper,
+  tongue trace down, pull and bite, released when shot): about half a day. It would fit the component library, but
+  isn't built.
+- **turret.mdl** (the big one) is the same as the sentry: the built-in `turret` already uses sentry.mdl.
+- **chumtoad, icky, leech, tentacle2, loader**: no fit for Last Stand (passive, water-only, huge or a machine).
+
+**Precache.** With ALL 16 types loaded: 17 models + 200 sounds for creatures. A CS map with the game and our plugins
+already uses roughly 120-200 models and 150-250 sounds of the 512/512, so all types at once puts sounds near the
+limit. Last Stand should precache only the types its waves use (gm_laststand already does this from waves.ini).
+That's 8-10 types, about 10 models and 110-130 sounds.
+
+### Requests from Y for W1: a wave mix for gm_laststand (waves.ini [laststand] rows)
+Bosses alternate garg and gonarch every 5 waves, with a baby gargantua mini-boss halfway between bosses. Swarms
+(snark, babycrab) come in groups of 4-8 from one spawner at once, counted as one "slot" of the wave's size.
+```
+[laststand]
+boss = boss             ; garg on 5, 15, 25...; gonarch on 10, 20, 30... (needs "boss_alt = gonarch" or the rows below)
+boss_every = 5
+wave 1     = zombie 10
+wave 2     = zombie 8  headcrab 3
+wave 3     = zombie 7  runner 3  babycrab 2        ; babycrab = a swarm of 4
+wave 4     = zombie 6  runner 3  spitter 2  vortigaunt 1
+wave 5     = zombie 6  runner 4  boss 1            ; garg
+wave 6     = zombie 5  runner 3  brute 2  snark 2  ; snark = a swarm of 6
+wave 7     = zombie 5  runner 3  vortigaunt 2  assassin 1
+wave 8     = zombie 4  brute 2  soldier 2  babygarg 1
+wave 9     = zombie 4  runner 3  spitter 2  vortigaunt 2  assassin 2  babycrab 2
+wave 10    = zombie 4  brute 2  babycrab 3  gonarch 1   ; gonarch; babycrab swarms around her
+wave 11-14 = zombie 4  runner 3  brute 2  spitter 2  vortigaunt 2  assassin 1  soldier 1  snark 1
+wave 13    = babygarg 1 (plus the 11-14 mix)
+wave 15+   = zombie 3  runner 3  brute 3  spitter 2  vortigaunt 2  assassin 2  soldier 2  snark 2  babycrab 2
+```
+- Every 10th wave from 20 on: two baby gargantuas with the boss.
+- The gonarch could drop a babycrab swarm every ~15 s while she lives (her "spawn" sequence is MELEE_ATTACK2): a
+  plugin timer spawning `babycrab` at her origin is enough.
+- miniturret is a placed defence or hazard (a component, or a buyable defender turret with `hates t`), not a wave
+  creature.
+- Precache from the rows in range: about 13 types for an endless stand. Trim snark or assassin if a map's own
+  precache is heavy.
