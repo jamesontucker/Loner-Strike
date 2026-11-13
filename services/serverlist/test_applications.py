@@ -119,8 +119,7 @@ class Deciding(unittest.TestCase):
     MAPPER = ROLE_IDS["🗺️・Map Maker"]
 
     def click(self, cid, who=None):
-        # a Moderator who is a Map Maker themselves (only holders, or the owner, may give a role)
-        return interact(self.mod, 3, cid, who or member("111", roles=[MOD_ROLE, self.MAPPER]))
+        return interact(self.mod, 3, cid, who or member("111", roles=[MOD_ROLE]))
 
     def test_only_the_team_can_decide(self):
         for who in (applicant("555"), member("222", roles=["999"])):
@@ -211,11 +210,24 @@ class Deciding(unittest.TestCase):
         self.assertEqual(self.c.store.application(2)["state"], "pending")
         self.assertEqual(self.click(mine["Approve"]["custom_id"], member("444", roles=[DEV_ROLE, tester]))["type"], 7, "someone else may")
 
-    def test_only_holders_or_the_owner_may_give_a_role(self):
-        ans = self.click(self.ok, member("444", roles=[DEV_ROLE]))
-        self.assertIn("Only someone who has the Map Maker role", ans["data"]["content"])
-        self.assertFalse(any(c[0] == "PUT" for c in self.bot.calls))
-        self.assertEqual(self.click(self.ok, member(OWNER, roles=[]))["type"], 7, "the owner may")
+    def test_earned_roles_from_any_decider(self):
+        for who in (member("444", roles=[DEV_ROLE]), member("333", roles=[GMAN])):
+            c, mod, bot = make()
+            apply(mod, applicant())
+            ok = card_buttons(bot)["Approve"]["custom_id"]
+            ans = interact(mod, 3, ok, who)
+            self.assertEqual(ans["type"], 7)
+            self.assertEqual(c.store.application(1)["state"], "approved")
+            interact(mod, 3, buttons(ans["data"])["Undo"]["custom_id"], who)
+            self.assertEqual(c.store.application(1)["state"], "pending", "and undo them")
+
+    def test_privileged_roles_can_be_added(self):
+        c, mod, bot = make()
+        mod.apps = applications.Applications(mod, APPS, [MOD_ROLE, DEV_ROLE, GMAN], ["Surf Legend"])
+        apply(mod, applicant(), key="surf_legend")
+        ok = card_buttons(bot)["Approve"]["custom_id"]
+        self.assertIn("Only someone who has the Surf Legend role", interact(mod, 3, ok, member("444", roles=[DEV_ROLE]))["data"]["content"])
+        self.assertEqual(interact(mod, 3, ok, member("445", roles=[DEV_ROLE, ROLE_IDS["Surf Legend"]]))["type"], 7)
 
     def test_moderator_applications(self):
         apply(self.mod, applicant("999"), key="moderator")

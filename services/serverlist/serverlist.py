@@ -400,7 +400,8 @@ def main():
                        os.environ.get("DISCORD_GUILD_ID", "").strip(), os.environ.get("DISCORD_MOD_ROLES", "").split(","),
                        os.environ.get("DISCORD_OWNER_ID", "").strip(), webhook=webhook,
                        apply_channel=os.environ.get("DISCORD_APPLY_CHANNEL_ID", "").strip(),
-                       apply_roles=os.environ.get("DISCORD_APPLY_ROLES", "").split(","))
+                       apply_roles=os.environ.get("DISCORD_APPLY_ROLES", "").split(","),
+                       apply_privileged=os.environ.get("DISCORD_APPLY_PRIVILEGED", "moderator").split(","))
         if a.recheck_hours > 0:
             threading.Thread(target=community.recheck_loop, args=(a.recheck_hours,), daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(registry, RateLimit(MAX_REGISTER), community=community))

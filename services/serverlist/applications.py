@@ -41,10 +41,13 @@ def created(snowflake):
 
 
 class Applications:
-    def __init__(self, mod, channel, deciders):
+    def __init__(self, mod, channel, deciders, privileged=("moderator",)):
         self.mod, self.c, self.bot = mod, mod.c, mod.bot
         self.channel = str(channel or "")
         self.deciders = {str(r) for r in deciders if r}
+        # roles with powers: only the owner or a holder may give them (DISCORD_APPLY_PRIVILEGED,
+        # role keys or names; Moderator always counts)
+        self.privileged = {"moderator"} | {k for k, n in ROLES for p in privileged if p and norm(p) in (norm(k), norm(n))}
         self.per_day = cm.Window(PER_DAY, 86400)
         self._roles, self._roles_at = {}, 0.0
 
@@ -164,9 +167,11 @@ class Applications:
             raise cm.Reject(404, "That application is gone.")
         return a
 
-    def may_grant(self, actor, rid):
-        """Only the owner, or someone who has the role themselves, may give it (or take it back):
-        a Dev or G-Man can't make someone a Moderator unless they are one."""
+    def may_grant(self, actor, key, rid):
+        """A role with powers (Moderator, DISCORD_APPLY_PRIVILEGED) only from the owner or someone
+        who has it themselves (a Dev or G-Man can't make a Moderator); earned roles from any decider."""
+        if key not in self.privileged:
+            return True
         return actor["id"] == self.mod.owner or (rid is not None and rid in actor.get("roles", set()))
 
     def decide(self, action, app_id, d, actor):
@@ -179,7 +184,7 @@ class Applications:
         name = NAMES.get(a["role_key"], a["role_key"])
         if action in ("appok", "appundo"):
             rid = self.role_id(a["role_key"])
-            if rid and not self.may_grant(actor, rid):
+            if rid and not self.may_grant(actor, a["role_key"], rid):
                 raise cm.Reject(403, f"Only someone who has the {name} role (or the owner) can give it or take it back.")
         if action == "appok":
             if not rid:

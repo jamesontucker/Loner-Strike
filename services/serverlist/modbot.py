@@ -241,7 +241,7 @@ class Mod(cm.Notifier):
     card through the bot (text through the webhook when the bot can't), say() a plain line."""
 
     def __init__(self, community, bot, public_key_hex, guild, roles, owner, webhook="", post=None, background=True,
-                 apply_channel="", apply_roles=()):
+                 apply_channel="", apply_roles=(), apply_privileged=("moderator",)):
         super().__init__(webhook, post=post)
         self.c = community
         self.bot = bot
@@ -255,7 +255,7 @@ class Mod(cm.Notifier):
         self.background = background
         community.notifier = self
         # role applications (only when their private channel is set)
-        self.apps = applications.Applications(self, apply_channel, apply_roles) if apply_channel and bot else None
+        self.apps = applications.Applications(self, apply_channel, apply_roles, apply_privileged) if apply_channel and bot else None
         if self.pub and not FAST:
             cm.log("python3-cryptography isn't installed: Discord signatures are checked by the slower built-in "
                    "verifier (apt install python3-cryptography)")
