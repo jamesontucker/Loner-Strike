@@ -9,8 +9,9 @@
 //! the same node registry (nodes.json) and asks `/validate` for the problems it shows on nodes.
 //!
 //! What a compile installs (in the player's game, `addons/amxmodx/`):
-//! - `plugins/studio_<id>.amxx` (the source is kept at `scripting/studio/studio_<id>.sma`,
-//!   with the `loner.inc` it was built against in `scripting/studio/include/`),
+//! - `plugins/studio_<id>.amxx` (the source is kept at `scripting/studio_<id>.sma`, where the
+//!   Plugin Studio opens it read only, with the `loner.inc` it was built against in
+//!   `scripting/studio/include/`),
 //! - `configs/gamemodes/<id>.plugins.ini` (just that plugin) and `<id>.cfg`,
 //! - a line in `configs/gamemodes/modes.ini`, so the mode shows in the Game Mode Menu, the Play
 //!   page and Playtest. A Loner-Strike update rewrites modes.ini: compiling again puts it back.
@@ -301,7 +302,8 @@ fn compile(st: &Shared, g: Graph, debug: bool) -> Result<Value, String> {
     let work = scripting.join("studio");
     let inc = work.join("include");
     write_includes(&inc).map_err(|e| format!("Couldn't write the plugin ({e})."))?;
-    let src = work.join(format!("{plugin}.sma"));
+    let src = scripting.join(format!("{plugin}.sma"));
+    crate::safety::before("Game Mode Studio", "install a mode", &src);
     crate::sys::write_atomic(&src, out.source.as_bytes()).map_err(|e| format!("Couldn't write the plugin ({e})."))?;
     let built = work.join(format!("{plugin}.amxx"));
     let (ok, output) = run_amxxpc(&install, &scripting, &src, &inc, &built)?;
@@ -431,6 +433,32 @@ async fn api_compile(State(st): State<Shared>, h: HeaderMap, Json(req): Json<Bui
     blocking(move || compile(&st, graph_of(req.graph)?, req.debug)).await
 }
 
+/// "Open as code": writes the graph's plugin source (a release build) where the Plugin Studio
+/// opens it read only; the page then goes to `plugins:game/studio_<id>.sma`.
+fn write_source(st: &Shared, g: Graph) -> Result<Value, String> {
+    let problems = graph::validate(&g);
+    if graph::has_errors(&problems) {
+        return Ok(json!({"problems": problems}));
+    }
+    let game = local_game(st)?;
+    let scripting = game.dir.join("addons/amxmodx/scripting");
+    if !scripting.is_dir() {
+        return Err("AMX Mod X isn't installed in your game yet. Install the basics first.".into());
+    }
+    let name = format!("{}.sma", gen::plugin_name(&g.mode.id));
+    let path = scripting.join(&name);
+    crate::safety::before("Game Mode Studio", "open as code", &path);
+    crate::sys::write_atomic(&path, gen::generate(&g, false).source.as_bytes()).map_err(|e| format!("Couldn't write the code ({e})."))?;
+    Ok(json!({"ok": true, "folder": "game", "name": name}))
+}
+
+async fn api_source(State(st): State<Shared>, h: HeaderMap, Json(req): Json<BuildReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || write_source(&st, graph_of(req.graph)?)).await
+}
+
 #[derive(Deserialize)]
 struct PlaytestReq {
     graph: Value,
@@ -536,6 +564,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/studio/validate", post(api_validate))
         .route("/api/tools/studio/generate", post(api_generate))
         .route("/api/tools/studio/compile", post(api_compile))
+        .route("/api/tools/studio/source", post(api_source))
         .route("/api/tools/studio/playtest", post(api_playtest))
         .route("/api/tools/studio/uninstall/:id", post(api_uninstall))
         .route("/api/tools/studio/debug/events", get(api_events))

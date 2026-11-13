@@ -10,7 +10,7 @@ import { Sheet, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading } from "../common";
 import { busy, errorText } from "../common/api";
 import { useToolCrumbs } from "../common/shell";
-import { useDirty } from "../../../store";
+import { useDirty, useNav } from "../../../store";
 import { useStudio, activeBreakpoints } from "./store";
 import { Canvas } from "./Canvas";
 import { Inspector } from "./Inspector";
@@ -62,6 +62,7 @@ function Studio({ maps }: ToolProps) {
   const ask = useConfirm();
   const askText = useAskText();
   const rf = useReactFlow();
+  const go = useNav((s) => s.go);
   const [list, setList] = useState<api.GraphInfo[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [working, setWorking] = useState<string | null>(null);
@@ -397,6 +398,24 @@ function Studio({ maps }: ToolProps) {
             <div className="row">
               <button type="button" className="btn" onClick={() => void navigator.clipboard.writeText(code).then(() => toast("Copied."), () => toast("Couldn't copy.", true))}>
                 Copy
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={!!working}
+                title="Opens it read only in the Plugin Studio (Save a copy there to make it your own plugin)"
+                onClick={() =>
+                  void run("Opening the code…", async () => {
+                    const g = useStudio.getState().graph;
+                    if (!g) return;
+                    const r = await api.openAsCode(g);
+                    if (r.error || !r.name) return toast(r.error ?? "Fix the problems on the nodes first.", true);
+                    setCode(null);
+                    go("tools", `plugins:${r.folder}/${r.name}`);
+                  })
+                }
+              >
+                Open in Plugin Studio
               </button>
               <button type="button" className="btn primary" onClick={() => setCode(null)}>
                 Close

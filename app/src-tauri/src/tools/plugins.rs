@@ -131,6 +131,8 @@ fn read_only(f: Folder, name: &str) -> Option<&'static str> {
             Some("This is one of Loner-Strike's own plugins; setup puts it back as it was. Save a copy in My plugins to change it.")
         }
         Folder::Game if name.to_ascii_lowercase().ends_with(".inc") => Some("Save include files in My plugins."),
+        // (the Game Mode Studio's "Open as code": made from a graph, so changes belong in the graph)
+        Folder::Game if stem(name).starts_with("studio_") => Some("Made by the Game Mode Studio from a graph: change the graph and compile it again. Save a copy in My plugins to make it a plugin of your own."),
         _ => None,
     }
 }
