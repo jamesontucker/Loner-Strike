@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "pinTypes": {
+    "exec": { "label": "Flow", "color": "#f2f2f2" },
+    "player": { "label": "Player", "color": "#5ab0ff" },
+    "team": { "label": "Team", "color": "#ffb347" },
+    "any": { "label": "Anything", "color": "#9a9a9a" }
+  },
+  "categories": ["Events", "Conditions", "Player", "Scoring", "Messages", "Flow"],
+  "nodes": [
+    {
+      "type": "event.round_started",
+      "title": "Round Started",
+      "category": "Events",
+      "help": "Runs when a round begins: freeze time is over and everyone can move.",
+      "event": true,
+      "inputs": [],
+      "outputs": [{ "id": "then", "type": "exec", "label": "" }],
+      "params": []
+    },
+    {
+      "type": "event.player_killed",
+      "title": "Player Killed",
+      "category": "Events",
+      "help": "Runs when a player dies. Attacker is nobody when the world killed them (a fall, the bomb).",
+      "event": true,
+      "inputs": [],
+      "outputs": [
+        { "id": "then", "type": "exec", "label": "" },
+        { "id": "victim", "type": "player", "label": "Victim" },
+        { "id": "attacker", "type": "player", "label": "Attacker" }
+      ],
+      "params": []
+    },
+    {
+      "type": "cond.is_team",
+      "title": "Is Team",
+      "category": "Conditions",
+      "help": "Checks which team a player is on. Nobody (an empty attacker) is on no team, so that goes to False.",
+      "inputs": [
+        { "id": "exec", "type": "exec", "label": "" },
+        { "id": "player", "type": "player", "label": "Player", "required": true },
+        { "id": "team", "type": "team", "label": "Team", "param": "team" }
+      ],
+      "outputs": [
+        { "id": "true", "type": "exec", "label": "True" },
+        { "id": "false", "type": "exec", "label": "False" }
+      ],
+      "params": [
+        { "id": "team", "label": "Team", "kind": "choice", "default": "t", "choices": [["t", "Terrorists"], ["ct", "Counter-Terrorists"]] }
+      ]
+    },
+    {
+      "type": "player.give_weapon",
+      "title": "Give Weapon",
+      "category": "Player",
+      "help": "Gives a living player a weapon and spare bullets. Does nothing for a dead player (the debugger marks that).",
+      "inputs": [
+        { "id": "exec", "type": "exec", "label": "" },
+        { "id": "player", "type": "player", "label": "Player", "required": true }
+      ],
+      "outputs": [{ "id": "then", "type": "exec", "label": "" }],
+      "params": [
+        {
+          "id": "weapon",
+          "label": "Weapon",
+          "kind": "choice",
+          "default": "ak47",
+          "choices": [
+            ["ak47", "AK-47"], ["m4a1", "M4A1"], ["awp", "AWP"], ["scout", "Scout"], ["famas", "FAMAS"], ["galil", "Galil"],
+            ["aug", "AUG"], ["sg552", "SG 552"], ["mp5navy", "MP5"], ["p90", "P90"], ["ump45", "UMP 45"], ["mac10", "MAC-10"],
+            ["tmp", "TMP"], ["m3", "M3 shotgun"], ["xm1014", "XM1014 shotgun"], ["m249", "M249"], ["deagle", "Desert Eagle"],
+            ["usp", "USP"], ["glock18", "Glock"], ["p228", "P228"], ["fiveseven", "Five-SeveN"], ["elite", "Dual Elites"],
+            ["hegrenade", "HE grenade"], ["flashbang", "Flashbang"], ["smokegrenade", "Smoke grenade"]
+          ]
+        },
+        { "id": "ammo", "label": "Spare bullets", "kind": "number", "default": 90, "min": 0, "max": 250 }
+      ]
+    },
+    {
+      "type": "score.end_round",
+      "title": "End Round",
+      "category": "Scoring",
+      "help": "Ends the round now with a winner, or as a draw. The next round starts after the usual short wait.",
+      "inputs": [{ "id": "exec", "type": "exec", "label": "" }],
+      "outputs": [],
+      "params": [
+        { "id": "winner", "label": "Winner", "kind": "choice", "default": "draw", "choices": [["t", "Terrorists"], ["ct", "Counter-Terrorists"], ["draw", "Draw"]] }
+      ]
+    },
+    {
+      "type": "msg.broadcast",
+      "title": "Show Message",
+      "category": "Messages",
+      "help": "Shows a big message in the middle of everyone's screen.",
+      "inputs": [{ "id": "exec", "type": "exec", "label": "" }],
+      "outputs": [{ "id": "then", "type": "exec", "label": "" }],
+      "params": [
+        { "id": "text", "label": "Text", "kind": "text", "default": "Hello!", "max": 100 },
+        { "id": "seconds", "label": "Seconds", "kind": "number", "default": 3, "min": 1, "max": 20 }
+      ]
+    },
+    {
+      "type": "flow.reroute",
+      "title": "Reroute",
+      "category": "Flow",
+      "help": "A bend in a wire, to keep the graph tidy. Passes on whatever comes in.",
+      "reroute": true,
+      "inputs": [{ "id": "in", "type": "any", "label": "" }],
+      "outputs": [{ "id": "out", "type": "any", "label": "" }],
+      "params": []
+    }
+  ]
+}

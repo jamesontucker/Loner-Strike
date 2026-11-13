@@ -27,6 +27,7 @@ pub mod plugins;
 pub mod community;
 pub mod playercfg;
 pub mod people;
+pub mod studio;
 
 use crate::goldsrc::{self, bsp::Bsp, entities, mesh, wad};
 use crate::server::Shared;
@@ -312,6 +313,7 @@ pub fn local_routes() -> Router<Shared> {
         .merge(community::routes())
         .merge(playercfg::routes())
         .merge(people::routes())
+        .merge(studio::routes())
 }
 
 /// Builds everything the viewer needs for one map file, uncached (tests and the real-map

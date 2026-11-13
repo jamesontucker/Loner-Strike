@@ -1,0 +1,29 @@
+{
+  "schema": "loner-strike/graph",
+  "version": 1,
+  "mode": { "id": "all_nodes", "name": "All ^ Nodes", "description": "Every milestone 1 node" },
+  "nodes": [
+    { "id": "r", "type": "event.round_started", "pos": { "x": 0, "y": 0 } },
+    { "id": "m", "type": "msg.broadcast", "pos": { "x": 300, "y": 0 }, "params": { "text": "Fight! 100% ^ go", "seconds": 2.5 } },
+    { "id": "k", "type": "event.player_killed", "pos": { "x": 0, "y": 200 }, "breakpoint": true },
+    { "id": "x", "type": "flow.reroute", "pos": { "x": 150, "y": 200 } },
+    { "id": "y", "type": "flow.reroute", "pos": { "x": 150, "y": 260 } },
+    { "id": "c", "type": "cond.is_team", "pos": { "x": 300, "y": 200 }, "params": { "team": "ct" } },
+    { "id": "g", "type": "player.give_weapon", "pos": { "x": 600, "y": 150 }, "params": { "weapon": "awp", "ammo": 30 } },
+    { "id": "e", "type": "score.end_round", "pos": { "x": 900, "y": 150 }, "params": { "winner": "ct" } },
+    { "id": "e2", "type": "score.end_round", "pos": { "x": 600, "y": 300 } },
+    { "id": "lonely", "type": "msg.broadcast", "pos": { "x": 0, "y": 500 } }
+  ],
+  "edges": [
+    { "id": "w1", "from": { "node": "r", "pin": "then" }, "to": { "node": "m", "pin": "exec" } },
+    { "id": "w2", "from": { "node": "k", "pin": "then" }, "to": { "node": "x", "pin": "in" } },
+    { "id": "w3", "from": { "node": "x", "pin": "out" }, "to": { "node": "c", "pin": "exec" } },
+    { "id": "w4", "from": { "node": "k", "pin": "victim" }, "to": { "node": "y", "pin": "in" } },
+    { "id": "w5", "from": { "node": "y", "pin": "out" }, "to": { "node": "c", "pin": "player" } },
+    { "id": "w6", "from": { "node": "c", "pin": "true" }, "to": { "node": "g", "pin": "exec" } },
+    { "id": "w7", "from": { "node": "k", "pin": "attacker" }, "to": { "node": "g", "pin": "player" } },
+    { "id": "w8", "from": { "node": "g", "pin": "then" }, "to": { "node": "e", "pin": "exec" } },
+    { "id": "w9", "from": { "node": "c", "pin": "false" }, "to": { "node": "e2", "pin": "exec" } }
+  ],
+  "comments": []
+}
