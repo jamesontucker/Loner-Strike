@@ -2041,11 +2041,26 @@ stock random_center(const Float:c[3], Float:r, Float:nr, Float:out[3])
 		new Float:p[3];
 		p[0] = c[0] + d * floatcos(a, degrees);
 		p[1] = c[1] + d * floatsin(a, degrees);
-		p[2] = c[2] + 64.0;
-		if (engfunc(EngFunc_PointContents, p) != CONTENTS_EMPTY)
+		/* ground there, whatever the hills: open air found from high up, then straight down */
+		new bool:open = false;
+		for (new h = 3000; h >= -3000 && !open; h -= 250)
+		{
+			p[2] = floatclamp(c[2] + float(h), -4000.0, 4000.0);
+			open = engfunc(EngFunc_PointContents, p) == CONTENTS_EMPTY;
+		}
+		if (!open)
 			continue;
-		new Float:f = floor_z(p, 0);
-		if (p[2] - f > 2000.0)
+		new Float:down[3], Float:frac;
+		down = p;
+		down[2] = -4090.0;
+		engfunc(EngFunc_TraceLine, p, down, IGNORE_MONSTERS, 0, 0);
+		get_tr2(0, TR_flFraction, frac);
+		if (frac >= 1.0)
+			continue;
+		new Float:g[3];
+		get_tr2(0, TR_vecEndPos, g);
+		g[2] += 40.0;
+		if (engfunc(EngFunc_PointContents, g) != CONTENTS_EMPTY)
 			continue;
 		out[0] = p[0];
 		out[1] = p[1];
