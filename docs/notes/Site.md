@@ -64,6 +64,24 @@ zip -X ~/Desktop/lonerstrike-site-1.0.0.zip -@ < /tmp/zipfiles.txt
 
 (`rm` first: zip adds to an existing archive instead of replacing it.)
 
+## Homepage pass from the user's feedback (2026-11-13)
+
+- **Evergreen copy**: no version numbers in the homepage copy (hero, Play, Build, Why, FAQ, og/twitter titles, JSON-LD; `softwareVersion` dropped). The release banner still names 1.0.0 on purpose: it's the dated launch notice, so take it out after launch week.
+- **Hero**: "Then build your own maps and modes, try them out on the bots, and share them with everyone."
+- **Modes**: "New in 1.0: two modes of our own" became **"Modes made here"**, a showcase that also points to Game Mode Studio (`#studio`) and Community. Last Stand says it's endless by default.
+- **Build**: the map editor section is now **"Hammer's depth, a modern editor's feel"** ("inspired by Unreal Engine's editor", nothing more), covering the one editor bar, the Content Browser, live checks, F5 and import. Every tool in the box has a small Beta tag, a Content Browser entry and a fifth group, Share (Community, Credits). The groups sit 3 + 2 on desktop.
+- **Cut**: the AI agents (MCP) section, its CSS, its FAQ (HTML and JSON-LD) and the MCP feature line. The MCP docs topic stays on the docs page.
+- **Share**: no virus-scan claim. The section covers publishing, credits, remix, ownership, updates, bot ratings and moderation.
+- **Clipping fixes**:
+  - The chapter headings' block underline uses `background-repeat: space` with a 12 px tile, so it draws whole blocks only.
+  - The loader bar's block count follows its width (ResizeObserver, `contain: inline-size`), so a resize never leaves half a block. It also no longer widens the hero on phones.
+  - `.meter` blocks are `flex: none`.
+- **Screenshot tour**:
+  - The caption sits over the picture's lower edge on a gradient scrim, in a `figcaption` with `aria-live`.
+  - Prev and next arrows are always visible on the picture.
+  - The arrow keys work anywhere in the panel, and the strip scrolls by itself without scrolling the page. Smooth scrolling is off for reduced motion.
+- **Docs anchors the homepage now uses**: `docs#content-browser` and `docs#credits`.
+
 ## In-game shots to take (user)
 
 Save each one as a JPEG at `site/img/1.0/ingame/<name>.jpg`, 16:10 if you can (for example 1680×1050 or 1280×800, or crop to it). Turn off net_graph and the console.
