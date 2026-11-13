@@ -749,6 +749,11 @@ pub fn cmd_paste(doc: &mut MapDocument, h: &mut History, frag: &MapDocument, off
 /// Place a prefab: its pieces moved by `offset`, kept together in a group named after it
 /// (one click picks the lot; Ungroup frees them), its WADs added to the map's list. One step.
 pub fn cmd_place_prefab(doc: &mut MapDocument, h: &mut History, frag: &MapDocument, offset: Vec3, name: &str, wads: &[String]) -> OpResult<(Created, GroupId)> {
+    cmd_place_prefab_with(doc, h, frag, &Affine::translate(offset), name, wads)
+}
+
+/// Place a prefab with any transform (turned to face out of a wall, then moved).
+pub fn cmd_place_prefab_with(doc: &mut MapDocument, h: &mut History, frag: &MapDocument, t: &Affine, name: &str, wads: &[String]) -> OpResult<(Created, GroupId)> {
     if frag.brushes.is_empty() && frag.entities.is_empty() {
         return Err("That prefab is empty.".into());
     }
@@ -764,7 +769,7 @@ pub fn cmd_place_prefab(doc: &mut MapDocument, h: &mut History, frag: &MapDocume
     let entities: Vec<EntityId> = frag.entities.keys().copied().collect();
     let mut tx = Tx::new(doc, "Place prefab");
     let mut out = Created::default();
-    copy_into(&mut tx, frag, &brushes, &entities, &Affine::translate(offset), true, &mut out)?;
+    copy_into(&mut tx, frag, &brushes, &entities, t, true, &mut out)?;
     let gid = tx.add_group(Group { name: if name.trim().is_empty() { "Prefab".into() } else { name.trim().chars().take(64).collect() }, ..Default::default() });
     for id in &out.brushes {
         let b = get_brush(tx.doc(), *id)?;

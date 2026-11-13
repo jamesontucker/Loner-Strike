@@ -525,6 +525,10 @@ enum Cmd {
         point: P3,
         #[serde(default = "up")] normal: P3,
         #[serde(default)] grid: f64,
+        /// degrees to turn it about z (on top of facing out of a wall)
+        #[serde(default)] yaw: f64,
+        /// on a wall, turn it so its front faces out (default on)
+        #[serde(default = "yes")] face_out: bool,
         /// filled in by api_cmd from the library before the session is locked
         #[serde(skip)] loaded: Option<Box<(MapDocument, crate::editor::prefab::PrefabMeta)>>,
     },
@@ -1038,13 +1042,14 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             tx.set_group(GroupId(group), g);
             tx.commit(h);
         }
-        Cmd::PlacePrefab { point, normal, grid, loaded, .. } => {
+        Cmd::PlacePrefab { point, normal, grid, yaw, face_out, loaded, .. } => {
             let (frag, meta) = *loaded.ok_or("That prefab isn't there any more.")?;
             let n = v3(normal[0], normal[1], normal[2]);
             let grid = num(grid, 0.0, 1024.0, "grid")?;
-            let off = crate::editor::prefab::placement(&crate::editor::prefab::bounds(&frag), p3(point)?, n, grid);
-            p3([off.x, off.y, off.z])?;
-            let (out, _) = history::cmd_place_prefab(d, h, &frag, off, &meta.name, &meta.wads)?;
+            let yaw = num(yaw, -3600.0, 3600.0, "turn")?;
+            let (t, _) = crate::editor::prefab::place_transform(&crate::editor::prefab::bounds(&frag), p3(point)?, n, grid, yaw, face_out);
+            p3([t.t.x, t.t.y, t.t.z])?;
+            let (out, _) = history::cmd_place_prefab_with(d, h, &frag, &t, &meta.name, &meta.wads)?;
             created = (out.brushes.iter().map(|i| i.0).collect(), out.entities.iter().map(|i| i.0).collect());
             note = Some(format!("Placed {}.", meta.name));
         }

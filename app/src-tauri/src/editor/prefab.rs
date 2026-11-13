@@ -279,6 +279,46 @@ pub fn placement(b: &Bounds, point: Vec3, normal: Vec3, grid: f64) -> Vec3 {
     v3(out[0], out[1], out[2])
 }
 
+/// How far a prefab turns about z when it goes on a surface: on a wall, so its front (+y, the
+/// side away from its back: a ladder's rungs, a doorway's face) points out of the wall; on
+/// floors and ceilings not at all. Whole quarter turns for axis-aligned walls.
+pub fn wall_yaw(normal: Vec3) -> f64 {
+    let n = if normal.is_finite() && normal.len() > 0.5 { normal.normalized() } else { return 0.0 };
+    if n.z.abs() >= 0.7 {
+        return 0.0;
+    }
+    let yaw = n.y.atan2(n.x).to_degrees() - 90.0;
+    let q = (yaw / 90.0).round() * 90.0;
+    let yaw = if (yaw - q).abs() < 1.0 { q } else { yaw };
+    yaw.rem_euclid(360.0)
+}
+
+/// A box turned about z (round the origin): the box round its turned corners.
+pub fn turned_bounds(b: &Bounds, yaw: f64) -> Bounds {
+    if yaw.rem_euclid(360.0).abs() < 1e-9 {
+        return *b;
+    }
+    let m = super::math::Mat3::rotation(v3(0.0, 0.0, 1.0), yaw);
+    let mut out = Bounds::empty();
+    for k in 0..8 {
+        let c = v3(if k & 1 != 0 { b.max.x } else { b.min.x }, if k & 2 != 0 { b.max.y } else { b.min.y }, if k & 4 != 0 { b.max.z } else { b.min.z });
+        out.add(m.mul_vec(c));
+    }
+    out
+}
+
+/// The whole move for dropping a prefab: turned (to face out of a wall, plus `extra_yaw`
+/// degrees the player asked for), then placed on the surface (`placement`). Also the turn used.
+pub fn place_transform(b: &Bounds, point: Vec3, normal: Vec3, grid: f64, extra_yaw: f64, face_out: bool) -> (super::math::Affine, f64) {
+    use super::math::{Affine, Mat3};
+    let extra = if extra_yaw.is_finite() { extra_yaw } else { 0.0 };
+    let yaw = ((if face_out { wall_yaw(normal) } else { 0.0 }) + extra).rem_euclid(360.0);
+    let turned = turned_bounds(b, yaw);
+    let off = placement(&turned, point, normal, grid);
+    let turn = if yaw.abs() < 1e-9 { Affine::IDENTITY } else { Affine::around(Mat3::rotation(v3(0.0, 0.0, 1.0), yaw), Vec3::ZERO) };
+    (turn.then(&Affine::translate(off)), yaw)
+}
+
 // ---- the starter prefabs -------------------------------------------------------------------
 
 fn bx(f: &mut MapDocument, a: [f64; 3], b: [f64; 3], tex: &str) -> super::doc::BrushId {
@@ -631,6 +671,35 @@ mod tests {
         let o = placement(&b, v3(10.4, 0.0, 5.5), v3(f64::NAN, 0.0, 0.0), 0.0);
         assert_eq!(o.z, 5.5);
         assert_eq!(o.x.fract(), 0.0);
+    }
+
+    #[test]
+    fn prefabs_face_out_of_walls() {
+        // the ladder's rungs are on +y: on a wall facing -x they must end up on the -x side
+        let (_, _, frag) = builtins().into_iter().find(|(id, _, _)| *id == "ladder").unwrap();
+        let b = bounds(&frag);
+        assert_eq!(wall_yaw(v3(0.0, 1.0, 0.0)), 0.0);
+        assert_eq!(wall_yaw(v3(-1.0, 0.0, 0.0)), 90.0);
+        assert_eq!(wall_yaw(v3(1.0, 0.0, 0.0)), 270.0);
+        assert_eq!(wall_yaw(v3(0.0, -1.0, 0.0)), 180.0);
+        assert_eq!(wall_yaw(v3(0.0, 0.0, 1.0)), 0.0);
+        let (t, yaw) = place_transform(&b, v3(512.0, 40.0, 70.0), v3(-1.0, 0.0, 0.0), 8.0, 0.0, true);
+        assert_eq!(yaw, 90.0);
+        let mut d = MapDocument::new();
+        let mut h = History::default();
+        history::cmd_place_prefab_with(&mut d, &mut h, &frag, &t, "Ladder", &[]).unwrap();
+        let placed = d.brushes.values().fold(Bounds::empty(), |a, br| a.union(&brush_bounds(br)));
+        // flush against the wall (its back on x 512) and thin along x now
+        assert_eq!(placed.max.x, 512.0);
+        assert!(placed.size().x < placed.size().y);
+        let rungs = d.brushes.values().find(|br| br.faces[0].texture == "{LADDER1").map(brush_bounds).unwrap();
+        assert!(rungs.max.x < 512.0 - 7.0, "rungs face out of the wall: {rungs:?}");
+        assert!(d.brushes.values().all(is_valid));
+        // turned by hand on a floor: a quarter turn
+        let (_, yaw) = place_transform(&b, v3(0.0, 0.0, 0.0), v3(0.0, 0.0, 1.0), 16.0, 90.0, true);
+        assert_eq!(yaw, 90.0);
+        let tb = turned_bounds(&Bounds { min: v3(-40.0, -8.0, 0.0), max: v3(40.0, 8.0, 10.0) }, 90.0);
+        assert!((tb.size().x - 16.0).abs() < 1e-9 && (tb.size().y - 80.0).abs() < 1e-9);
     }
 
     #[test]
