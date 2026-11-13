@@ -1,0 +1,15 @@
+// overview description file for br_valley.bsp
+// made by Loner-Strike's radar maker
+
+global
+{
+	ZOOM	0.79
+	ORIGIN	0	0	-512
+	ROTATED	1
+}
+
+layer
+{
+	IMAGE	"overviews/br_valley.bmp"
+	HEIGHT	-512
+}
