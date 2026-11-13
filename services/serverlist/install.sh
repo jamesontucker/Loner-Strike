@@ -16,7 +16,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 python3 -c 'import cryptography' 2>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-cryptography >/dev/null \
   || echo "Couldn't install python3-cryptography; the slower built-in signature check will be used."
 install -d -o root -g root -m 755 /opt/lonerstrike-list
-for f in serverlist.py community.py modbot.py lsmod.py formats.py formats_runner.py applications.py; do
+for f in serverlist.py community.py modbot.py lsmod.py formats.py formats_runner.py applications.py backup.py; do
   install -o root -g root -m 644 "$here/$f" "/opt/lonerstrike-list/$f"
 done
 install -o root -g root -m 755 "$here/set-env.sh" /opt/lonerstrike-list/set-env.sh
@@ -42,9 +42,20 @@ install -o root -g root -m 644 "$here/lonerstrike-list.service" /etc/systemd/sys
 systemctl daemon-reload
 systemctl enable lonerstrike-list >/dev/null 2>&1
 systemctl restart lonerstrike-list
+# daily backup of community.db and list.json into <state>/backups (14 days kept; same machine only)
+install -o root -g root -m 644 "$here/lonerstrike-list-backup.service" /etc/systemd/system/lonerstrike-list-backup.service
+install -o root -g root -m 644 "$here/lonerstrike-list-backup.timer" /etc/systemd/system/lonerstrike-list-backup.timer
+systemctl daemon-reload
+systemctl enable --now lonerstrike-list-backup.timer >/dev/null 2>&1
 sleep 2
 if python3 -c 'import urllib.request; [urllib.request.urlopen("http://127.0.0.1:8100" + p, timeout=5) for p in ("/servers", "/community/health")]'; then
   echo "The server list and community creations are running on 127.0.0.1:8100."
+  if systemctl start lonerstrike-list-backup.service; then
+    echo "Backup: $(journalctl -u lonerstrike-list-backup -n 1 --no-pager -o cat) Daily at about 04:30; kept 14 days."
+  else
+    echo "The backup didn't run: $(journalctl -u lonerstrike-list-backup -n 3 --no-pager -o cat)"
+    exit 1
+  fi
 else
   echo "It didn't start: $(journalctl -u lonerstrike-list -n 3 --no-pager -o cat)"
   exit 1

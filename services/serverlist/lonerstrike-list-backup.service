@@ -1,0 +1,20 @@
+[Unit]
+Description=Loner-Strike community database backup
+
+[Service]
+Type=oneshot
+# the same user and state folder as lonerstrike-list.service, so the backups and any files SQLite
+# touches stay owned by the service's own user
+DynamicUser=yes
+User=lonerstrike-list
+StateDirectory=lonerstrike-list
+ExecStart=/usr/bin/python3 /opt/lonerstrike-list/backup.py %S/lonerstrike-list
+Nice=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
