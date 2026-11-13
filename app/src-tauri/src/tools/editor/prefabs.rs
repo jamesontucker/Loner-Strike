@@ -36,23 +36,35 @@ fn now_secs() -> u64 {
 
 fn card(id: &str, m: &PrefabMeta, builtin: bool) -> Value {
     json!({
-        "id": id, "name": m.name, "tags": m.tags, "author": m.author, "description": m.description, "builtin": builtin,
+        "id": id, "uid": m.uid, "name": m.name, "tags": m.tags, "author": m.author, "description": m.description, "builtin": builtin,
         "brushes": m.brushes, "entities": m.entities, "size": m.size, "textures": m.textures, "wads": m.wads, "created": m.created,
         "thumb": format!("/api/tools/editor/prefab/{}/thumb.png", id.replace(':', "~")),
     })
 }
 
 /// The player's own prefabs: (id without the "mine:" prefix, details), newest first.
+/// P5: one without a valid uid (made before uids, or edited by hand), or with one another
+/// prefab already has, gets a new one, written into its .json.
 pub fn mine(dir: &Path) -> Vec<(String, PrefabMeta)> {
-    let mut out = Vec::new();
-    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-        let p = e.path();
+    let mut out: Vec<(String, PrefabMeta)> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = prefab::builtins().into_iter().map(|(_, m, _)| m.uid).collect();
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).collect();
+    // (the oldest file keeps a shared uid: sorted by name, then the rest)
+    files.sort();
+    for p in files {
         let Some(stem) = p.file_stem().and_then(|s| s.to_str()).map(String::from) else { continue };
         if p.extension().and_then(|x| x.to_str()) != Some("json") || !prefab::valid_id(&stem) || !dir.join(format!("{stem}.map")).is_file() {
             continue;
         }
         let Ok(text) = std::fs::read_to_string(&p) else { continue };
-        let Ok(m) = serde_json::from_str::<PrefabMeta>(&text) else { continue };
+        let Ok(mut m) = serde_json::from_str::<PrefabMeta>(&text) else { continue };
+        if !crate::editor::doc::valid_uid(&m.uid) || seen.contains(&m.uid) {
+            m.uid = crate::editor::doc::new_uid();
+            if let Ok(t) = serde_json::to_string_pretty(&m) {
+                let _ = write_file(&p, t.as_bytes());
+            }
+        }
+        seen.insert(m.uid.clone());
         out.push((stem, m));
         if out.len() >= MAX_MINE {
             break;
@@ -70,6 +82,10 @@ pub fn list(dir: &Path) -> Value {
 
 /// A prefab's pieces and details by id ("builtin:stairs", "mine:my_room").
 pub fn load(dir: &Path, id: &str) -> Result<(MapDocument, PrefabMeta), String> {
+    // P5: "uid:<uuid>": by the prefab's permanent id (a placed group's prefab, a package)
+    if let Some(u) = id.strip_prefix("uid:") {
+        return load(dir, &id_of_uid(dir, u).ok_or("That prefab isn't in your library any more.")?);
+    }
     if let Some(b) = id.strip_prefix(BUILTIN) {
         return prefab::builtins().into_iter().find(|(i, _, _)| *i == b).map(|(_, m, f)| (f, m)).ok_or_else(|| "That prefab isn't there any more.".to_string());
     }
@@ -77,6 +93,15 @@ pub fn load(dir: &Path, id: &str) -> Result<(MapDocument, PrefabMeta), String> {
     let map = std::fs::read_to_string(dir.join(format!("{own}.map"))).map_err(|_| "That prefab isn't there any more.".to_string())?;
     let meta = std::fs::read_to_string(dir.join(format!("{own}.json"))).ok();
     prefab::from_files(&map, meta.as_deref(), own)
+}
+
+/// P5: the library id ("mine:…" or "builtin:…") of the prefab with this uid.
+pub fn id_of_uid(dir: &Path, uid: &str) -> Option<String> {
+    let u = uid.trim().to_ascii_lowercase();
+    if !crate::editor::doc::valid_uid(&u) {
+        return None;
+    }
+    mine(dir).into_iter().find(|(_, m)| m.uid == u).map(|(id, _)| format!("{MINE}{id}")).or_else(|| prefab::builtins().into_iter().find(|(_, m, _)| m.uid == u).map(|(id, _, _)| format!("{BUILTIN}{id}")))
 }
 
 /// A free id for a name (`crate`, `crate_2`, ...).
@@ -103,7 +128,19 @@ pub fn save(dir: &Path, frag: &MapDocument, meta: &PrefabMeta, thumb: Option<&[u
         return Err("Your prefab library is full (2000). Delete some first.".into());
     }
     std::fs::create_dir_all(dir).map_err(|e| format!("Couldn't make the prefab folder ({e})."))?;
-    let id = free_id(dir, &meta.name);
+    // P5: a prefab with this uid in the library already is updated in place (a newer version
+    // of a package, Replace it in Save); otherwise a new one (with a new uid if it had none,
+    // or one of the starter prefabs')
+    let mut meta = meta.clone();
+    let builtin = prefab::builtins().into_iter().any(|(_, m, _)| m.uid == meta.uid);
+    if !crate::editor::doc::valid_uid(&meta.uid) || builtin {
+        meta.uid = crate::editor::doc::new_uid();
+    }
+    let meta = &meta;
+    let id = match mine(dir).into_iter().find(|(_, m)| m.uid == meta.uid) {
+        Some((own, _)) => own,
+        None => free_id(dir, &meta.name),
+    };
     let (map, js) = prefab::to_files(frag, meta)?;
     if let Some(png) = thumb {
         prefab::check_png(png)?;
@@ -213,7 +250,7 @@ pub fn package(dir: &Path, id: &str, out: &Path) -> Result<(), String> {
         meta.name, meta.brushes, meta.entities, meta.size[0], meta.size[1], meta.size[2], meta.textures.join(", "), meta.wads.join(", ")
     );
     let manifest = json!({"schema": 1, "app": env!("CARGO_PKG_VERSION"), "item": {"kind": "prefab", "name": meta.name, "author": meta.author, "summary": meta.description, "tags": meta.tags,
-        "prefab": {"files": [format!("prefabs/{slug}.map")], "brushes": meta.brushes, "entities": meta.entities, "size": meta.size, "wads": meta.wads}}});
+        "prefab": {"uid": meta.uid, "files": [format!("prefabs/{slug}.map")], "brushes": meta.brushes, "entities": meta.entities, "size": meta.size, "wads": meta.wads}}});
     let part = out.with_extension("part");
     let write = || -> Result<(), String> {
         let f = std::fs::File::create(&part).map_err(|e| format!("Couldn't write the package ({e})."))?;
@@ -306,6 +343,9 @@ struct SaveReq {
     entities: Vec<u64>,
     /// a PNG of the view (base64, a data: URL is fine)
     thumb: Option<String>,
+    /// P5: the id of one of your prefabs this replaces (it keeps its uid; "Replace it" in Save)
+    #[serde(default)]
+    replace: Option<String>,
 }
 
 async fn api_save(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Json<SaveReq>) -> Response {
@@ -348,7 +388,12 @@ async fn api_save(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Json<Sa
             meta.wads.retain(|w| used.contains(w));
         }
         meta.description = prefab::clean_text(&req.description, 400);
-        let id = save(&lib_dir(&ed.dir), &frag, &meta, thumb.as_deref())?;
+        let dir = lib_dir(&ed.dir);
+        if let Some(r) = &req.replace {
+            let own = r.strip_prefix(MINE).ok_or("Only your own prefabs can be replaced.")?;
+            meta.uid = mine(&dir).into_iter().find(|(i, _)| i == own).map(|(_, m)| m.uid).ok_or("The prefab to replace isn't there any more.")?;
+        }
+        let id = save(&dir, &frag, &meta, thumb.as_deref())?;
         Ok(json!({"ok": true, "id": id, "name": meta.name}))
     })
     .await
@@ -521,6 +566,49 @@ mod tests {
         std::fs::create_dir_all(&empty).unwrap();
         std::fs::write(empty.join("readme.txt"), "hi").unwrap();
         assert!(install_dir(&lib2, &empty, "").is_err());
+
+        // P5: uids: a new one per saved prefab, kept in the package and by the install
+        let ua = mine(&lib).into_iter().find(|(i, _)| format!("{MINE}{i}") == a).unwrap().1.uid;
+        assert!(crate::editor::doc::valid_uid(&ua));
+        let ub = mine(&lib).into_iter().find(|(i, _)| format!("{MINE}{i}") == b).unwrap().1.uid;
+        assert_ne!(ua, ub, "a starter prefab saved twice: two prefabs");
+        let pk: Value = serde_json::from_slice(&std::fs::read(un.join("loner-strike.json")).unwrap()).unwrap();
+        assert_eq!(pk["item"]["prefab"]["uid"], json!(ua));
+        assert_eq!(mine(&lib2).iter().find(|(_, m)| m.name == "Crate stack").unwrap().1.uid, ua);
+        // the same package again (a newer version): updates it, no second copy
+        let n2 = mine(&lib2).len();
+        install_dir(&lib2, &un, "someone").unwrap();
+        assert_eq!(mine(&lib2).len(), n2);
+        // by uid
+        assert_eq!(load(&lib, &format!("uid:{ua}")).unwrap().1.name, "Crate stack");
+        assert_eq!(id_of_uid(&lib, &ua).as_deref(), Some(a.as_str()));
+        assert!(load(&lib, "uid:not-a-uid").is_err());
+        assert!(id_of_uid(&lib, &prefab::builtins()[0].1.uid).unwrap().starts_with(BUILTIN));
+        // a package with a broken uid gets a new one; an old prefab without one gets one on load,
+        // written into its file; two with the same uid (copied by hand): the second gets a new one
+        let js = std::fs::read_to_string(un.join("prefabs/crate_stack.json")).unwrap();
+        std::fs::write(un.join("prefabs/crate_stack.json"), js.replace(&ua, "../../not-a-uuid")).unwrap();
+        let lib3 = root.join("lib3");
+        install_dir(&lib3, &un, "").unwrap();
+        let u3 = mine(&lib3)[0].1.uid.clone();
+        assert!(crate::editor::doc::valid_uid(&u3) && u3 != ua);
+        let old = std::fs::read_to_string(lib3.join("crate_stack.json")).unwrap().replace(&format!("\"uid\": \"{u3}\","), "");
+        assert!(!old.contains("\"uid\""));
+        std::fs::write(lib3.join("crate_stack.json"), &old).unwrap();
+        std::fs::copy(lib3.join("crate_stack.map"), lib3.join("crate_copy.map")).unwrap();
+        let m = mine(&lib3);
+        assert!(m.iter().all(|(_, x)| crate::editor::doc::valid_uid(&x.uid)));
+        assert!(std::fs::read_to_string(lib3.join("crate_stack.json")).unwrap().contains("\"uid\""));
+        std::fs::write(lib3.join("crate_copy.json"), std::fs::read_to_string(lib3.join("crate_stack.json")).unwrap()).unwrap();
+        let m = mine(&lib3);
+        assert_eq!(m.len(), 2);
+        assert_ne!(m[0].1.uid, m[1].1.uid);
+        // placed: the group remembers it
+        let mut d = MapDocument::new();
+        let mut h = history::History::default();
+        let (frag2, meta2) = load(&lib, &a).unwrap();
+        let (_, g) = history::cmd_place_prefab_from(&mut d, &mut h, &frag2, &crate::editor::math::Affine::translate(crate::editor::math::v3(0.0, 0.0, 0.0)), &meta2.name, &[], Some(&meta2.uid)).unwrap();
+        assert_eq!(d.groups[&g].prefab.as_deref(), Some(ua.as_str()));
 
         // delete: only your own
         let gone = mine(&lib).len();

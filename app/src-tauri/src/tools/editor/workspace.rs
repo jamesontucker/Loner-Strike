@@ -9,7 +9,7 @@
 //!                                             similar, touching, align, distribute
 //! Paths from the page are only acted on when they're one of the listed files.
 
-use super::{blocking, forbidden, load_file, remember, stem, wad_dirs, Ed, Session, NOT_UNDERSTOOD, NO_DOC, PROJECT_EXT};
+use super::{blocking, forbidden, load_file, remember, stem, wad_dirs, Ed, Session, NOT_UNDERSTOOD, NO_DOC};
 use crate::editor::bulk::{self, Edge, FindSpec, Similar};
 use crate::editor::doc::{BrushId, EntityId, GroupId, MapDocument};
 use crate::editor::math::Vec3;
@@ -330,10 +330,10 @@ fn collect(st: &Shared, ed: &Ed) -> Result<(Vec<FileRow>, Value), String> {
     // backups made on save
     let backups = ed.dir.join("backups");
     if let Ok(rd) = std::fs::read_dir(&backups) {
-        let prefix = format!("{}-", s.name);
-        let mut b: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with(&prefix) && n.ends_with(PROJECT_EXT))).collect();
+        // P5: this project's by its uid (also after a rename), and old ones by name; newest first
+        let mut b: Vec<(u64, PathBuf)> = rd.flatten().map(|e| e.path()).filter_map(|p| super::backup_of(&p, &s.name, s.doc.editor.uid.as_deref()).map(|t| (t, p))).collect();
         b.sort();
-        for p in b.into_iter().rev().take(10) {
+        for (_, p) in b.into_iter().rev().take(10) {
             rows.push(row("Backups", p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(), Some(p), Kind::Output, false, "A copy kept when you saved over it"));
         }
     }
@@ -724,6 +724,63 @@ pub fn routes() -> Router<Shared> {
 mod tests {
     use super::*;
     use crate::editor::doc::Entity;
+
+    /// P5: a project's permanent uid: given to an old project when it's opened (and written
+    /// into it), read back cheaply, and it finds the project after a rename or a move; backups
+    /// and the recent list follow it.
+    #[test]
+    fn projects_keep_a_uid_and_are_followed_by_it() {
+        use super::super::{backup, backup_of, file_uid, find_project, recent_list, PROJECT_EXT};
+        use crate::editor::doc::valid_uid;
+        let root = std::env::temp_dir().join(format!("ls-p5-uid-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let maps = root.join("maps");
+        std::fs::create_dir_all(&maps).unwrap();
+        let app = root.join("app");
+        // an old project: no uid
+        let mut d = MapDocument::new();
+        d.world.keys.push(("message".into(), "uid test".into()));
+        let old = maps.join(format!("arena.{PROJECT_EXT}"));
+        std::fs::write(&old, d.to_json()).unwrap();
+        assert_eq!(file_uid(&old), None);
+        let (doc, project) = load_file(&old).unwrap();
+        assert!(project);
+        let uid = doc.editor.uid.clone().unwrap();
+        assert!(valid_uid(&uid));
+        assert_eq!(file_uid(&old).as_deref(), Some(uid.as_str()), "written into the file on open");
+        assert_eq!(load_file(&old).unwrap().0.editor.uid.as_deref(), Some(uid.as_str()), "and kept");
+        // a .map import gets none from the file (the session gives it one)
+        // recents: one entry per project, following a rename
+        remember(&app, &old, true);
+        let renamed = maps.join(format!("arena_v2.{PROJECT_EXT}"));
+        std::fs::rename(&old, &renamed).unwrap();
+        assert_eq!(find_project(&app, &uid, Some(&old)).as_deref(), Some(renamed.as_path()));
+        // moved into a sibling folder
+        let other = root.join("elsewhere");
+        std::fs::create_dir_all(&other).unwrap();
+        let moved = other.join(format!("arena_final.{PROJECT_EXT}"));
+        std::fs::rename(&renamed, &moved).unwrap();
+        assert_eq!(find_project(&app, &uid, Some(&old)).as_deref(), Some(moved.as_path()));
+        remember(&app, &moved, true);
+        let list = recent_list(&app);
+        assert_eq!(list.len(), 1, "the moved project replaced its old entry");
+        assert_eq!(list[0].uid.as_deref(), Some(uid.as_str()));
+        // another project with a broken uid isn't mistaken for it
+        let mut d2 = MapDocument::new();
+        d2.editor.uid = Some("nope".into());
+        std::fs::write(maps.join(format!("other.{PROJECT_EXT}")), d2.to_json()).unwrap();
+        assert_eq!(find_project(&app, &uid, Some(&old)).as_deref(), Some(moved.as_path()));
+        // backups: named by uid, found by it after a rename; old ones by name still listed
+        let bdir = app.join("backups");
+        backup(&bdir, &moved, Some(&uid));
+        std::fs::write(bdir.join(format!("arena_final-123.{PROJECT_EXT}")), "{}").unwrap();
+        let names: Vec<String> = std::fs::read_dir(&bdir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+        let by_uid = names.iter().find(|n| n.contains(&uid)).unwrap();
+        assert!(backup_of(&bdir.join(by_uid), "renamed_again", Some(&uid)).is_some());
+        assert!(backup_of(&bdir.join("arena_final-123.lsmap"), "arena_final", Some(&uid)) == Some(123));
+        assert!(backup_of(&bdir.join(by_uid), "arena_final", Some("00000000-0000-4000-8000-000000000000")).is_none());
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn referenced_files_from_entities() {

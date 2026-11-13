@@ -82,7 +82,11 @@ struct Session {
 }
 
 impl Session {
-    fn new(id: u64, doc: MapDocument, name: String, project: Option<PathBuf>) -> Session {
+    fn new(id: u64, mut doc: MapDocument, name: String, project: Option<PathBuf>) -> Session {
+        // P5: every document has a permanent uid (a new map, an import, an old project)
+        if !doc.editor.uid.as_deref().is_some_and(crate::editor::doc::valid_uid) {
+            doc.editor.uid = Some(crate::editor::doc::new_uid());
+        }
         let rev = doc.revision;
         let stamps = doc.brushes.keys().map(|b| (*b, rev)).collect();
         let prev = doc.brushes.clone();
@@ -1076,7 +1080,8 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             let yaw = num(yaw, -3600.0, 3600.0, "turn")?;
             let (t, _) = crate::editor::prefab::place_transform(&crate::editor::prefab::bounds(&frag), p3(point)?, n, grid, yaw, face_out);
             p3([t.t.x, t.t.y, t.t.z])?;
-            let (out, _) = history::cmd_place_prefab_with(d, h, &frag, &t, &meta.name, &meta.wads)?;
+            // P5: the group remembers the prefab's uid
+            let (out, _) = history::cmd_place_prefab_from(d, h, &frag, &t, &meta.name, &meta.wads, Some(&meta.uid))?;
             created = (out.brushes.iter().map(|i| i.0).collect(), out.entities.iter().map(|i| i.0).collect());
             note = Some(format!("Placed {}.", meta.name));
         }
@@ -1126,7 +1131,13 @@ fn stem(path: &Path) -> String {
 pub fn load_file(path: &Path) -> Result<(MapDocument, bool), String> {
     let text = read_text(path)?;
     let is_map = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("map"));
-    let doc = if is_map { mapfile::read_map(&text)? } else { MapDocument::from_json(&text)? };
+    let mut doc = if is_map { mapfile::read_map(&text)? } else { MapDocument::from_json(&text)? };
+    // P5: an old project (or one with a broken uid) gets its permanent uid now, written into
+    // the file so it keeps it (the rest of the file is as it was read)
+    if !is_map && !doc.editor.uid.as_deref().is_some_and(crate::editor::doc::valid_uid) {
+        doc.editor.uid = Some(crate::editor::doc::new_uid());
+        let _ = write_atomic(path, doc.to_json());
+    }
     Ok((doc, !is_map))
 }
 
@@ -1144,7 +1155,7 @@ fn write_atomic(path: &Path, text: impl AsRef<[u8]>) -> Result<(), String> {
 
 fn save_project(s: &mut Session, path: &Path, backups: Option<&Path>) -> Result<(), String> {
     if let (Some(dir), true) = (backups, path.exists()) {
-        backup(dir, path);
+        backup(dir, path, s.doc.editor.uid.as_deref());
     }
     write_atomic(path, &s.doc.to_json())?;
     s.project = Some(path.to_path_buf());
@@ -1223,28 +1234,88 @@ fn now_secs() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
 
-/// Copies a project about to be saved over into the backups folder (the last few per name).
-fn backup(dir: &Path, path: &Path) {
+/// Copies a project about to be saved over into the backups folder (the last few per
+/// project). P5: named `<name>~<uid>~<time>.lsmap`, so a renamed or moved project keeps its
+/// backups (old ones, `<name>-<time>.lsmap`, are still kept by name).
+fn backup(dir: &Path, path: &Path, uid: Option<&str>) {
     if std::fs::create_dir_all(dir).is_err() {
         return;
     }
     let name = stem(path);
-    let _ = std::fs::copy(path, dir.join(format!("{name}-{}.{PROJECT_EXT}", now_secs())));
+    let file = match uid {
+        Some(u) => format!("{name}~{u}~{}.{PROJECT_EXT}", now_secs()),
+        None => format!("{name}-{}.{PROJECT_EXT}", now_secs()),
+    };
+    let _ = std::fs::copy(path, dir.join(file));
     let Ok(rd) = std::fs::read_dir(dir) else { return };
-    let prefix = format!("{name}-");
-    let mut mine: Vec<PathBuf> = rd
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with(&prefix) && n[prefix.len()..].trim_end_matches(".lsmap").bytes().all(|c| c.is_ascii_digit())))
-        .collect();
+    let mut mine: Vec<(u64, PathBuf)> = rd.flatten().map(|e| e.path()).filter_map(|p| backup_of(&p, &name, uid).map(|t| (t, p))).collect();
     mine.sort();
+    let mut mine: Vec<PathBuf> = mine.into_iter().map(|x| x.1).collect();
     while mine.len() > KEEP_BACKUPS {
         let _ = std::fs::remove_file(mine.remove(0));
     }
 }
 
+/// P5: when `p` is a backup of the project (by its uid, or an old one by name): its time.
+pub(crate) fn backup_of(p: &Path, name: &str, uid: Option<&str>) -> Option<u64> {
+    let n = p.file_name()?.to_str()?.strip_suffix(&format!(".{PROJECT_EXT}"))?;
+    if let Some(u) = uid {
+        let parts: Vec<&str> = n.rsplitn(3, '~').collect();
+        if parts.len() == 3 && parts[1] == u {
+            return parts[0].parse().ok();
+        }
+    }
+    let t = n.strip_prefix(&format!("{name}-"))?;
+    t.bytes().all(|c| c.is_ascii_digit()).then(|| t.parse().ok()).flatten()
+}
+
+/// P5: a project file's uid, without reading the whole map into a document (the editor
+/// settings' `"uid"`, the last one in the file).
+pub(crate) fn file_uid(path: &Path) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    // the editor settings come last: the end of the file is enough
+    let from = len.saturating_sub(64 * 1024);
+    f.seek(SeekFrom::Start(from)).ok()?;
+    let mut buf = Vec::new();
+    f.take(64 * 1024).read_to_end(&mut buf).ok()?;
+    let text = String::from_utf8_lossy(&buf);
+    let i = text.rfind("\"uid\"")?;
+    let rest = text[i + 5..].trim_start().strip_prefix(':')?.trim_start().strip_prefix('"')?;
+    let u = rest.get(..36)?;
+    crate::editor::doc::valid_uid(u).then(|| u.to_string())
+}
+
+/// P5: where a project with this uid is now: the recent list, then the folder it was in (and
+/// that folder's neighbours, one level), for a project renamed or moved outside the app.
+pub(crate) fn find_project(dir: &Path, uid: &str, was: Option<&Path>) -> Option<PathBuf> {
+    let is = |p: &Path| p.is_file() && p.extension().is_some_and(|e| e == PROJECT_EXT) && file_uid(p).as_deref() == Some(uid);
+    if let Some(r) = recent_list(dir).into_iter().find(|r| r.uid.as_deref() == Some(uid) && is(&r.path)) {
+        return Some(r.path);
+    }
+    let folder = was?.parent()?;
+    let mut dirs = vec![folder.to_path_buf()];
+    if let Some(up) = folder.parent() {
+        dirs.push(up.to_path_buf());
+        if let Ok(rd) = std::fs::read_dir(up) {
+            dirs.extend(rd.flatten().map(|e| e.path()).filter(|p| p.is_dir() && p != folder).take(50));
+        }
+    }
+    for d in dirs {
+        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        if let Some(p) = rd.flatten().map(|e| e.path()).take(300).find(|p| is(p)) {
+            return Some(p);
+        }
+    }
+    None
+}
+
 #[derive(serde::Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct Recent {
+    /// P5: the project's uid (follows a renamed or moved project)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    uid: Option<String>,
     path: PathBuf,
     project: bool,
 }
@@ -1256,8 +1327,10 @@ fn recent_list(dir: &Path) -> Vec<Recent> {
 /// Puts a file at the top of the recent list.
 fn remember(dir: &Path, path: &Path, project: bool) {
     let mut list = recent_list(dir);
-    list.retain(|r| r.path != path);
-    list.insert(0, Recent { path: path.to_path_buf(), project });
+    // P5: one entry per project: a moved or renamed one replaces its old path
+    let uid = if project { file_uid(path) } else { None };
+    list.retain(|r| r.path != path && (uid.is_none() || r.uid != uid));
+    list.insert(0, Recent { path: path.to_path_buf(), project, uid });
     list.truncate(MAX_RECENT);
     if std::fs::create_dir_all(dir).is_ok() {
         if let Ok(t) = serde_json::to_string_pretty(&list) {
@@ -1272,7 +1345,9 @@ fn recent_json(dir: &Path) -> Value {
         .enumerate()
         .map(|(i, r)| {
             let folder = r.path.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-            json!({"index": i, "name": r.path.file_name().map(|n| n.to_string_lossy().to_string()), "folder": folder, "project": r.project, "found": r.path.is_file()})
+            // P5: a project that moved still counts as found (opening it finds it by its uid)
+            let found = r.path.is_file() || r.uid.as_deref().is_some_and(|u| find_project(dir, u, Some(&r.path)).is_some());
+            json!({"index": i, "name": r.path.file_name().map(|n| n.to_string_lossy().to_string()), "folder": folder, "project": r.project, "found": found})
         })
         .collect();
     json!({"files": files})
@@ -1285,7 +1360,7 @@ fn autosave(dir: &Path, s: &Session) -> Result<bool, String> {
     }
     std::fs::create_dir_all(dir).map_err(|_| "Couldn't make the autosave folder.".to_string())?;
     write_atomic(&dir.join(AUTOSAVE), &s.doc.to_json())?;
-    let meta = json!({"name": s.name, "project": s.project, "time": now_secs(), "brushes": s.doc.brushes.len(), "entities": s.doc.entities.len()});
+    let meta = json!({"name": s.name, "project": s.project, "uid": s.doc.editor.uid, "time": now_secs(), "brushes": s.doc.brushes.len(), "entities": s.doc.entities.len()});
     std::fs::write(dir.join(AUTOSAVE_META), meta.to_string()).map_err(|_| "Couldn't write the autosave.".to_string())?;
     Ok(true)
 }
@@ -1436,6 +1511,10 @@ async fn api_save(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: Hea
         };
         let mut g = ed.lock();
         let s = g.as_mut().ok_or(NO_DOC)?;
+        // P5: Save as to another file makes a copy: it gets its own uid
+        if req.save_as && s.project.as_ref().is_some_and(|p| p != &path) {
+            s.doc.editor.uid = Some(crate::editor::doc::new_uid());
+        }
         save_project(s, &path, Some(&ed.dir.join("backups")))?;
         let _ = std::fs::remove_file(ed.dir.join(AUTOSAVE));
         let _ = std::fs::remove_file(ed.dir.join(AUTOSAVE_META));
@@ -1821,9 +1900,14 @@ async fn api_open_recent(State(st): State<Shared>, Extension(ed): Extension<Ed>,
     }
     let dirs = wad_dirs(&st);
     blocking(move || {
-        let r = recent_list(&ed.dir).get(req.index).cloned().ok_or("That file isn't in the recent list any more.")?;
-        if !r.path.is_file() {
-            return Err("That file isn't there any more. It may have been moved or deleted.".into());
+        let mut r = recent_list(&ed.dir).get(req.index).cloned().ok_or("That file isn't in the recent list any more.")?;
+        // P5: a project renamed or moved outside the app: found by its uid
+        if !r.path.is_file() || (r.uid.is_some() && file_uid(&r.path) != r.uid) {
+            match r.uid.as_deref().and_then(|u| find_project(&ed.dir, u, Some(&r.path))) {
+                Some(p) => r.path = p,
+                None if !r.path.is_file() => return Err("That file isn't there any more. It may have been moved or deleted.".into()),
+                None => {}
+            }
         }
         let (doc, project) = load_file(&r.path)?;
         remember(&ed.dir, &r.path, project);
@@ -1863,7 +1947,13 @@ async fn api_recover(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: 
         let doc = MapDocument::from_json(&read_text(&path)?)?;
         let meta: Value = std::fs::read_to_string(ed.dir.join(AUTOSAVE_META)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(json!({}));
         let name = meta["name"].as_str().filter(|n| !n.is_empty()).unwrap_or("Recovered").to_string();
-        let project = meta["project"].as_str().map(PathBuf::from).filter(|p| p.extension().is_some_and(|e| e == PROJECT_EXT));
+        let mut project = meta["project"].as_str().map(PathBuf::from).filter(|p| p.extension().is_some_and(|e| e == PROJECT_EXT));
+        // P5: the project was renamed or moved since: find it by its uid
+        if let (Some(p), Some(u)) = (&project, doc.editor.uid.as_deref()) {
+            if !p.is_file() || file_uid(p).as_deref() != Some(u) {
+                project = find_project(&ed.dir, u, Some(p));
+            }
+        }
         let mut st = ed.install(doc, name, project, &dirs);
         // it isn't saved anywhere yet: mark it changed so Save (and the next autosave) keep it
         let mut g = ed.lock();

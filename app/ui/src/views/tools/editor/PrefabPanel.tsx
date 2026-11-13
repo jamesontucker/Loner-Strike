@@ -299,13 +299,11 @@ function SaveDialog({ taken, onClose, onSaved }: { taken: Prefab[]; onClose: () 
     } catch {
       /* private window */
     }
-    const r = await api.savePrefab({ name: saveAs, tags: tags.split(","), author, description: desc, brushes: ids.brushes, entities: ids.entities, thumb });
+    // P5: Replace keeps the old prefab's uid (and its place in the library); Keep both makes a new one
+    const replace = same && clash === "replace" ? same.id : undefined;
+    const r = await api.savePrefab({ name: saveAs, tags: tags.split(","), author, description: desc, brushes: ids.brushes, entities: ids.entities, thumb, replace });
     setBusy(false);
     if (r.error) return setError(r.error);
-    if (same && clash === "replace") {
-      const d = await api.deletePrefab(same.id);
-      if (d.error) toast(`Saved it, but the old “${same.name}” couldn't be removed: ${d.error}`, true);
-    }
     toast(`${same && clash === "replace" ? "Replaced" : "Saved"} the prefab ${r.name}.`);
     useP4.getState().set({ prefabRev: useP4.getState().prefabRev + 1 });
     onSaved();

@@ -26,6 +26,10 @@ pub const MAX_PREFAB_MAP: usize = 8 * 1024 * 1024;
 pub struct PrefabMeta {
     #[serde(default)]
     pub format: u32,
+    /// P5: the prefab's permanent id (a UUID v4): who it is in the library, in packages and
+    /// in a placed group; the name is only for showing. Empty until the library gives it one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub uid: String,
     pub name: String,
     #[serde(default)]
     pub tags: Vec<String>,
@@ -167,6 +171,7 @@ pub fn describe(frag: &MapDocument, name: &str, tags: &[String], author: &str, c
     }
     PrefabMeta {
         format: PREFAB_FORMAT,
+        uid: String::new(),
         name: clean_text(name, 64),
         tags: clean_tags(tags),
         author: clean_text(author, 48),
@@ -247,6 +252,11 @@ pub fn from_files(map: &str, json: Option<&str>, fallback_name: &str) -> Result<
         meta.wads = meta.wads.iter().map(|w| w.rsplit(['\\', '/']).next().unwrap_or(w).to_ascii_lowercase()).filter(|w| w.ends_with(".wad") && w.len() <= 64).collect();
     }
     meta.format = PREFAB_FORMAT;
+    // P5: a uid that isn't a UUID v4 is dropped (the library gives it a new one)
+    meta.uid = meta.uid.trim().to_ascii_lowercase();
+    if !crate::editor::doc::valid_uid(&meta.uid) {
+        meta.uid.clear();
+    }
     Ok((frag, meta))
 }
 
@@ -357,6 +367,7 @@ pub fn builtins() -> Vec<(&'static str, PrefabMeta, MapDocument)> {
         let _ = centre(&mut f);
         let mut m = describe(&f, name, &tags.iter().map(|t| t.to_string()).collect::<Vec<_>>(), "Loner-Strike", 0);
         m.description = desc.into();
+        m.uid = crate::editor::doc::stable_uid(&format!("loner-strike builtin prefab {id}")); // P5: the same everywhere
         out.push((id, m, f));
     };
 

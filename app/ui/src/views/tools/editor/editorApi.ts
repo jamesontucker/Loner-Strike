@@ -65,6 +65,8 @@ export type FgdKey = {
 };
 export type Prefab = {
   id: string;
+  /** P5: the prefab's permanent id (UUID v4) */
+  uid?: string;
   name: string;
   tags: string[];
   author: string;
@@ -161,7 +163,7 @@ export const pickFgd = () => post<DocState & { editor?: EditorSettings; cancelle
 export const clearFgd = () => post<DocState & { editor: EditorSettings }>(`${E}/fgd/clear`);
 export const soundUrl = (path: string) => `${E}/sound?path=${encodeURIComponent(path)}`;
 export const getPrefabs = () => getJson<{ prefabs: Prefab[]; folder: string }>(`${E}/prefabs`);
-export const savePrefab = (b: { name: string; tags: string[]; author: string; description: string; brushes: number[]; entities: number[]; thumb?: string | null }) =>
+export const savePrefab = (b: { name: string; tags: string[]; author: string; description: string; brushes: number[]; entities: number[]; thumb?: string | null; /** P5: the id of your prefab this replaces (keeps its uid) */ replace?: string }) =>
   post<{ ok?: boolean; id?: string; name?: string }>(`${E}/prefabs/save`, b);
 export const editPrefab = (b: { id: string; name?: string; tags?: string[]; description?: string }) => post<{ ok?: boolean }>(`${E}/prefabs/edit`, b);
 export const deletePrefab = (id: string) => post<{ ok?: boolean }>(`${E}/prefabs/delete`, { id });

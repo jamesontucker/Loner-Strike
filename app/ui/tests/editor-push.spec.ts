@@ -71,7 +71,7 @@ test("one pane has the drawing style picker", async ({ page }) => {
 test("saving a prefab under a name you already use: keep both or replace", async ({ page }) => {
   await openWithBox(page);
   const name = `P5 test crate ${Date.now()}`;
-  const mine = async () => ((await api(page, "/api/tools/editor/prefabs")).prefabs as { id: string; name: string; builtin?: boolean }[]).filter((p) => !p.builtin && p.name.startsWith(name));
+  const mine = async () => ((await api(page, "/api/tools/editor/prefabs")).prefabs as { id: string; uid: string; name: string; builtin?: boolean }[]).filter((p) => !p.builtin && p.name.startsWith(name));
   const save = async (choice?: RegExp) => {
     await page.getByRole("button", { name: "Save what's picked…" }).click();
     await page.getByRole("dialog").getByLabel("Name", { exact: true }).fill(name);
@@ -86,9 +86,16 @@ test("saving a prefab under a name you already use: keep both or replace", async
   await page.getByRole("tab", { name: "Library" }).or(page.getByRole("button", { name: "Library", exact: true })).first().click();
   await save();
   await save(/^Keep both/);
-  expect((await mine()).map((p) => p.name).sort()).toEqual([name, `${name} 2`]);
+  const before = await mine();
+  expect(before.map((p) => p.name).sort()).toEqual([name, `${name} 2`]);
+  // each has its own permanent uid
+  expect(new Set(before.map((p) => p.uid)).size).toBe(2);
+  for (const p of before) expect(p.uid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   await save(/^Replace it$/);
   const after = await mine();
   expect(after.map((p) => p.name).sort()).toEqual([name, `${name} 2`]);
+  // Replace kept the replaced prefab's uid and id (no new prefab, nothing deleted)
+  const old = before.find((p) => p.name === name)!;
+  expect(after.find((p) => p.name === name)).toMatchObject({ id: old.id, uid: old.uid });
   for (const p of after) await api(page, "/api/tools/editor/prefabs/delete", { id: p.id });
 });

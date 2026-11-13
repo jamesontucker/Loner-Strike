@@ -754,6 +754,11 @@ pub fn cmd_place_prefab(doc: &mut MapDocument, h: &mut History, frag: &MapDocume
 
 /// Place a prefab with any transform (turned to face out of a wall, then moved).
 pub fn cmd_place_prefab_with(doc: &mut MapDocument, h: &mut History, frag: &MapDocument, t: &Affine, name: &str, wads: &[String]) -> OpResult<(Created, GroupId)> {
+    cmd_place_prefab_from(doc, h, frag, t, name, wads, None)
+}
+
+/// P5: the same, with the group remembering the prefab it came from (its permanent uid).
+pub fn cmd_place_prefab_from(doc: &mut MapDocument, h: &mut History, frag: &MapDocument, t: &Affine, name: &str, wads: &[String], source: Option<&str>) -> OpResult<(Created, GroupId)> {
     if frag.brushes.is_empty() && frag.entities.is_empty() {
         return Err("That prefab is empty.".into());
     }
@@ -770,7 +775,11 @@ pub fn cmd_place_prefab_with(doc: &mut MapDocument, h: &mut History, frag: &MapD
     let mut tx = Tx::new(doc, "Place prefab");
     let mut out = Created::default();
     copy_into(&mut tx, frag, &brushes, &entities, t, true, &mut out)?;
-    let gid = tx.add_group(Group { name: if name.trim().is_empty() { "Prefab".into() } else { name.trim().chars().take(64).collect() }, ..Default::default() });
+    let gid = tx.add_group(Group {
+        name: if name.trim().is_empty() { "Prefab".into() } else { name.trim().chars().take(64).collect() },
+        prefab: source.filter(|u| crate::editor::doc::valid_uid(u)).map(String::from),
+        ..Default::default()
+    });
     for id in &out.brushes {
         let b = get_brush(tx.doc(), *id)?;
         // brushes of a placed entity stay with it (the entity carries the group)

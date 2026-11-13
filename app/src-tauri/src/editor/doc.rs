@@ -120,6 +120,9 @@ impl Entity {
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct Group {
     pub name: String,
+    /// P5: the prefab it was placed from (the prefab's permanent uid), when it was one
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prefab: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<GroupId>,
     #[serde(default)]
@@ -214,6 +217,45 @@ pub struct EditorSettings {
     pub vis_sets: Vec<VisSet>,
     #[serde(default, skip_serializing_if = "CordonSettings::is_empty")]
     pub cordon: CordonSettings,
+    /// P5: the project's permanent id (a UUID v4): autosave/recovery, backups and the recent
+    /// list follow the project by it when it's renamed or moved
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uid: Option<String>,
+}
+
+/// P5: a new random UUID (version 4), as text.
+pub fn new_uid() -> String {
+    let mut b: [u8; 16] = rand::random();
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+}
+
+/// P5: a UUID v4 in lower case (the only form uids are kept in).
+pub fn valid_uid(u: &str) -> bool {
+    let b = u.as_bytes();
+    u.len() == 36
+        && u.char_indices().all(|(i, c)| if [8, 13, 18, 23].contains(&i) { c == '-' } else { c.is_ascii_digit() || ('a'..='f').contains(&c) })
+        && b[14] == b'4'
+        && matches!(b[19], b'8' | b'9' | b'a' | b'b')
+}
+
+/// P5: a fixed uid made from a name (the starter prefabs: the same on every computer).
+pub fn stable_uid(seed: &str) -> String {
+    let mut a: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut c: u64 = 0x8422_2325_cbf2_9ce4;
+    for x in seed.bytes() {
+        a = (a ^ x as u64).wrapping_mul(0x100_0000_01b3);
+        c = (c ^ x as u64).wrapping_mul(0x100_0000_01b3).rotate_left(17);
+    }
+    let mut b = [0u8; 16];
+    b[..8].copy_from_slice(&a.to_be_bytes());
+    b[8..].copy_from_slice(&c.to_be_bytes());
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
 }
 
 impl CordonSettings {
