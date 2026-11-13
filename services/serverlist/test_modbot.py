@@ -45,6 +45,7 @@ def make(fail=False):
     gb, files = FakeGB(), FakeFiles()
     gb.files = files
     c = cm.Community(cm.Store(os.path.join(tempfile.mkdtemp(), "c.db")), token="t" * 40, get=gb, get_range=files)
+    c.verify_md5 = False
     bot = FakeBot(fail)
     mod = modbot.Mod(c, bot, PUB.hex(), GUILD, [MOD_ROLE, DEV_ROLE], OWNER,
                      webhook="https://discord.com/api/webhooks/1/abc", post=hook, background=False)

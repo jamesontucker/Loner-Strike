@@ -269,6 +269,10 @@ class Mod(cm.Notifier):
         fields = [{"name": "Kind", "value": it.get("kind") or "?", "inline": True},
                   {"name": "Page", "value": f"`{card['key']}`", "inline": True},
                   {"name": "By", "value": cm.discord_text((row or {}).get("submitter") or "?", 40), "inline": True}]
+        checks = it.get("checks") or {}
+        if checks:
+            what = ", ".join(f"{n} {k}{'s' if n != 1 else ''}" for k, n in sorted(checks.get("kinds", {}).items()))
+            fields.append({"name": "Files checked", "value": f"{checks.get('files', 0)} passed ({what or 'none of a checked kind'})", "inline": False})
         embed = {"title": name[:200], "url": cm.gb_link(model, gb), "fields": fields}
         shots = it.get("screenshots") or []
         if shots and shots[0].startswith("https://images.gamebanana.com/"):

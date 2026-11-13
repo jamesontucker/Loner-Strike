@@ -83,12 +83,48 @@ MAP_MANIFEST = {"kind": "map", "gb": 0, "name": "de_marakesh (from the package)"
                            "stuckPct": 0.8, "falls": 0, "killsPerBotMin": 1.2, "coveragePct": 61.0}}
 
 
+def tiny_bsp():
+    """The smallest map formats.py takes: a world model and an entity list."""
+    ents = b'{\n"classname" "worldspawn"\n}\n\0'
+    lumps = [(0, 0)] * 15
+    lumps[0] = (124, len(ents))
+    lumps[14] = (124 + len(ents), 64)
+    head = struct.pack("<i", 30) + b"".join(struct.pack("<ii", o, n) for o, n in lumps)
+    return head + ents + bytes(64)
+
+
+def sample(name):
+    """Valid content for a file of this name (what the format checks expect)."""
+    ext = name.lower().rsplit(".", 1)[-1]
+    if ext == "bsp":
+        return tiny_bsp()
+    if ext == "nav":
+        return struct.pack("<IIIHI", 0xFEEDFACE, 5, 0, 0, 0)
+    if ext == "lsv":
+        return struct.pack("<10If", 0x3256534C, 6, 0, 0, 4, 0, 0, 0, 0, 0, 0.0)
+    if ext == "wav":
+        pcm = bytes(100)
+        return b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 22050, 22050, 1, 8) \
+            + b"data" + struct.pack("<I", len(pcm)) + pcm
+    if ext == "wad":
+        return b"WAD3" + struct.pack("<ii", 0, 12)
+    if ext == "bmp":  # 1x1, 24-bit
+        return b"BM" + struct.pack("<IHHI", 58, 0, 0, 54) + struct.pack("<IiiHHIIiiII", 40, 1, 1, 1, 24, 0, 4, 0, 0, 0, 0) + bytes(4)
+    if ext == "tga":  # 1x1, uncompressed 24-bit
+        return struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, 1, 1, 24, 0) + bytes(3)
+    if ext == "json":
+        return b"{}"
+    if ext == "png":
+        return b"\x89PNG\r\n\x1a\n" + bytes(32)
+    return b"text " * 20
+
+
 def zip_of(names, files=None):
-    """A zip with these paths (100 bytes each) and loner-strike.json etc. from `files`."""
+    """A zip with these paths (each with valid sample content) and `files` as given."""
     b = io.BytesIO()
     with zipfile.ZipFile(b, "w", zipfile.ZIP_DEFLATED) as z:
         for n in names:
-            z.writestr(n, b"x" * 100)
+            z.writestr(n, sample(n))
         for n, data in (files or {}).items():
             z.writestr(n, data)
     return b.getvalue()
@@ -107,6 +143,8 @@ class FakeFiles:
             1885247: map_zip(),
             1886785: zip_of(["addons/amxmodx/configs/gamemodes/cage.ini", "modes/cage/graph.json"],
                             {"loner-strike.json": manifest({"kind": "mode", "name": "Cage", "mode": {"id": "cage", "maps": ["de_dust2"], "plugins": []}})}),
+            1873526: sample("tempdecal.wad"),
+            2000000: sample("tempdecal.wad"),  # a newer spray file (map tests put a zip here)
             1789868: zip_of(["prefabs/can.map", "prefabs/can.json", "prefabs/can.png"],
                             {"loner-strike.json": manifest({"kind": "prefab", "name": "Can", "tags": ["props"]})}),
         }
@@ -170,6 +208,7 @@ def make(gb=None, token=TOKEN, hook="https://discord.com/api/webhooks/1/abc", fi
     gb.files = files
     c = cm.Community(cm.Store(os.path.join(tmp, "c.db")), token=token, notifier=cm.Notifier(hook, post=rec),
                      get=gb, get_range=files)
+    c.verify_md5 = False  # the fixture pages list the real files' MD5s, not these zips' (FileChecks tests it)
     # notifications in tests go straight through
     c.notifier.say = (lambda say: (lambda text, wait=False: say(text, wait=True)))(c.notifier.say)
     return c, rec
@@ -545,8 +584,9 @@ class Moderation(unittest.TestCase):
         # a blocked creator's update waits; the listed one stays until then
         c.submit(body(SPRAY_ITEM), "a")
         block(c, SPRAY)
-        c.get.pages[("Spray", 82585)] = new_file(SPRAY)
-        self.assertEqual(c.submit(body(dict(SPRAY_ITEM, file=2000000, md5="1" * 32)), "a")[1]["state"], "pending",
+        c.get.pages[("Spray", 82585)] = new_file(SPRAY, 2000001)
+        c.get_range.files[2000001] = sample("tempdecal.wad")
+        self.assertEqual(c.submit(body(dict(SPRAY_ITEM, file=2000001, md5="1" * 32)), "a")[1]["state"], "pending",
                          "the app hears its update waits")
         self.assertEqual(c.store.get("spray:82585")["state"], "listed")
         self.assertIn("update", rec.sent[-1][1]["content"])
@@ -1036,7 +1076,7 @@ class Provenance(unittest.TestCase):
                          ("de_marakesh", "TheHouthi", "A market town.", ["cstrike"], ["desert"]))
         self.assertEqual(it["md5"], "bb48b1faf89c4daad7545c4f3a2ce681", "the MD5 GameBanana lists")
         m = it["map"]
-        self.assertEqual((m["name"], m["modes"], m["bspSize"]), ("de_marakesh", ["classic", "csdm"], 100))
+        self.assertEqual((m["name"], m["modes"], m["bspSize"]), ("de_marakesh", ["classic", "csdm"], len(tiny_bsp())))
         self.assertEqual((m["nav"], m["lsv"], m["places"], m["res"], m["overview"]), (True, True, True, False, False),
                          "only what ships in the zip counts")
         self.assertNotIn("health", it)
@@ -1392,12 +1432,91 @@ class Hardening(unittest.TestCase):
         self.assertIn("settings", e.exception.message)
 
 
+class FileChecks(unittest.TestCase):
+    """Every file in a package is checked (formats.py) before it's listed."""
+
+    def test_results_are_kept_with_the_entry(self):
+        c, rec = make()
+        c.submit(body(map_item()), "a")
+        checks = json.loads(c.store.get("mod:739197")["item"])["checks"]
+        self.assertEqual(checks["kinds"], {"map": 1, "nav": 1, "knowledge": 1, "text": 2})
+        self.assertNotIn("checks", json.loads(cm.build_index(c.store)[0])["items"][0], "not part of the index")
+
+    def test_a_bad_file_is_named(self):
+        for name, data, words in (("maps/de_marakesh.bsp", struct.pack("<i", 31) + bytes(200), "version 31"),
+                                  ("maps/de_marakesh.bsp", tiny_bsp()[:130], "past the end"),
+                                  ("maps/de_marakesh.nav", b"\xce\xfa\xed\xfe" + struct.pack("<I", 9), "version 9")):
+            ff = FakeFiles()
+            ff.files[1885247] = zip_of([n for n in ("maps/de_marakesh.bsp", "maps/de_marakesh.nav") if n != name],
+                                       {name: data, "loner-strike.json": manifest(MAP_MANIFEST)})
+            c, rec = make(files=ff)
+            code, ans = c.submit(body(map_item()), "a")
+            self.assertEqual(code, 422, ans)
+            self.assertIn(name, ans["error"])
+            self.assertIn(words, ans["error"])
+            self.assertIsNone(c.store.get("mod:739197"))
+
+    def test_the_downloaded_file_must_be_the_listed_one(self):
+        c, _ = make()
+        c.verify_md5 = True
+        code, ans = c.submit(body(map_item()), "a")  # the fixture page lists another MD5
+        self.assertEqual(code, 422)
+        self.assertIn("checksum", ans["error"])
+        gb, files = FakeGB(), FakeFiles()
+        gb.files = files
+        page = copy.deepcopy(MAP)
+        page["_aFiles"][0]["_sMd5Checksum"] = hashlib.md5(files.files[1885247]).hexdigest()
+        gb.pages[("Mod", 739197)] = page
+        c2 = cm.Community(cm.Store(os.path.join(tempfile.mkdtemp(), "c.db")), get=gb, get_range=files)
+        self.assertEqual(c2.submit(body(map_item()), "a")[0], 200)
+
+    def test_too_big_to_check(self):
+        old = cm.CHECK_MAX
+        cm.CHECK_MAX = 100
+        try:
+            c, _ = make()
+            code, ans = c.submit(body(map_item()), "a")
+            self.assertEqual(code, 422)
+            self.assertIn("too big to check", ans["error"])
+        finally:
+            cm.CHECK_MAX = old
+
+    def test_one_check_at_a_time(self):
+        c, _ = make()
+        c.check_slot.acquire()
+        try:
+            code, ans = c.submit(body(map_item()), "a")
+            self.assertEqual(code, 429)
+            self.assertIn("another package", ans["error"])
+        finally:
+            c.check_slot.release()
+
+    def test_a_zip_entry_bigger_than_it_says(self):
+        data = bytearray(map_zip())
+        z = zipfile.ZipFile(io.BytesIO(bytes(data)))
+        i = z.getinfo("README.txt")
+        # make the directory claim a smaller unpacked size than the data really unpacks to
+        cd = data.rfind(b"PK\x01\x02" + data[data.find(b"PK\x01\x02") + 4:data.find(b"PK\x01\x02") + 4])
+        pos = data.find(b"PK\x01\x02")
+        while pos >= 0:
+            nlen = struct.unpack_from("<H", data, pos + 28)[0]
+            if data[pos + 46:pos + 46 + nlen] == b"README.txt":
+                struct.pack_into("<I", data, pos + 24, 10)
+            pos = data.find(b"PK\x01\x02", pos + 4)
+        ff = FakeFiles()
+        ff.files[1885247] = bytes(data)
+        c, _ = make(files=ff)
+        code, ans = c.submit(body(map_item()), "a")
+        self.assertEqual(code, 422, ans)
+
+
 class Migrations(unittest.TestCase):
     def test_reopening_keeps_everything(self):
         p = os.path.join(tempfile.mkdtemp(), "c.db")
         gb, files = FakeGB(), FakeFiles()
         gb.files = files
         c = cm.Community(cm.Store(p), get=gb, get_range=files)
+        c.verify_md5 = False
         c.submit(body(map_item()), "a")
         s = cm.Store(p)
         self.assertEqual(s.db.execute("PRAGMA user_version").fetchone()[0], len(cm.MIGRATIONS))

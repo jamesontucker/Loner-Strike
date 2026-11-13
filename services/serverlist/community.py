@@ -24,6 +24,8 @@
 # Standard library only, like serverlist.py. Nothing secret is logged (no tokens, no webhook
 # addresses, no visitor addresses).
 import hashlib
+import os
+import tempfile
 import hmac
 import io
 import ipaddress
@@ -81,6 +83,10 @@ HEADER_SAMPLES = 16           # local headers compared with the directory, sprea
 GB_PER_VISITOR_MIN = 10       # a visitor's share of the GameBanana checks a minute
 REPORTS_PER_VISITOR_DAY = 20  # a visitor's share of the day's reports
 STATUS_PER_MIN = 60
+CHECK_MAX = 128 << 20         # biggest package whose files are checked one by one (bigger: "too big to check")
+CHECK_ENTRY_MAX = 256 << 20   # biggest single file inside it
+CHECK_SECONDS = 180           # the whole check (download and files) must finish in this
+CHECK_BLOCK = 4 << 20         # download piece size
 PUBLISH_PER_HOUR = 60         # the publish workflow asks twice every 10 minutes
 PLUGIN_REFUSAL = "Plugin modes can't be shared yet. Make it in Game Mode Studio, which builds a mode's code on each player's computer."
 # files that run code (or hide other files) never go out in a shared package
@@ -1317,6 +1323,8 @@ class Community:
         self.publish_limit = Window(PUBLISH_PER_HOUR, 3600)
         self.publish_fails = Window(ADMIN_FAILS_PER_HOUR, 3600)
         self.pkg_slots = threading.BoundedSemaphore(PACKAGE_CHECKS)
+        self.check_slot = threading.BoundedSemaphore(1)  # files are checked for one package at a time
+        self.verify_md5 = True
         self.report_ip = Window(REPORTS_PER_IP_HOUR, 3600)
         self.report_same = Window(1, 86400)
         self.report_all = Window(REPORTS_PER_DAY, 86400)
@@ -1357,7 +1365,110 @@ class Community:
         finally:
             self.pkg_slots.release()
         check_package(list(sizes), facts["kind"])
-        return build_item(model, gb, dict(facts, file=f), sizes, manifest)
+        item = build_item(model, gb, dict(facts, file=f), sizes, manifest)
+        # the files themselves, one by one (kept with the entry; not part of the index)
+        item["checks"] = self.check_files(model, gb, f, facts["kind"])
+        return item
+
+    def check_files(self, model, gb, f, kind):
+        """Downloads the page's file (by range requests to GameBanana's file hosts, at most
+        CHECK_MAX, to a temporary file), checks its MD5 is the one GameBanana lists, and runs
+        formats.py on every file in it, one by one, each streamed to its own temporary file
+        (never whole into memory). One check at a time, at a lower priority, with a deadline.
+        Returns a summary; Reject(422) names the file that didn't pass."""
+        if not self.check_slot.acquire(timeout=1):
+            raise Reject(429, "The list is checking another package. Try again in a minute.")
+        out = {}
+        try:
+            worker = threading.Thread(target=self._check_worker, args=(f, kind, out), daemon=True)
+            worker.start()
+            worker.join(CHECK_SECONDS + 5)
+            if worker.is_alive():
+                out["stop"] = True
+                raise Reject(422, "The package took too long to check. Make it smaller, or ask in the Discord.")
+        finally:
+            self.check_slot.release()
+        if "error" in out:
+            raise out["error"]
+        log(f"checked {key_of(model, gb)}: {out['summary']['files']} files")
+        return out["summary"]
+
+    def _check_worker(self, f, kind, out):
+        try:
+            os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 10)  # Linux: this thread only
+        except (AttributeError, OSError):
+            pass
+        deadline = time.monotonic() + CHECK_SECONDS
+        try:
+            out["summary"] = self._check_package_files(f, kind, deadline, out)
+        except Reject as e:
+            out["error"] = e
+        except FetchError as e:
+            out["error"] = Reject(502, f"GameBanana's file server didn't answer ({e}). Try again in a few minutes.")
+        except Exception as e:  # never a crash: a refusal that says so
+            log(f"check failed: {type(e).__name__}")
+            out["error"] = Reject(422, "The package couldn't be checked. Upload the zip the app made, unchanged.")
+
+    def _check_package_files(self, f, kind, deadline, out):
+        import formats
+        if f["size"] > CHECK_MAX:
+            raise Reject(422, f"The package is too big to check ({f['size'] >> 20} MB; the list checks up to {CHECK_MAX >> 20} MB). "
+                              "Leave out what the map doesn't need, or ask in the Discord.")
+
+        def late():
+            if out.get("stop") or time.monotonic() > deadline:
+                raise Reject(422, "The package took too long to check. Make it smaller, or ask in the Discord.")
+
+        kinds = {}
+        with tempfile.TemporaryDirectory(prefix="ls-check-") as tmp:
+            path = os.path.join(tmp, "package")
+            md5 = hashlib.md5()
+            url = f"https://{GB_HOST}/dl/{f['id']}"
+            with open(path, "wb") as fh:
+                for start in range(0, f["size"], CHECK_BLOCK):
+                    late()
+                    end = min(f["size"], start + CHECK_BLOCK) - 1
+                    data, url = self.get_range(url, start, end)
+                    fh.write(data)
+                    md5.update(data)
+            if self.verify_md5 and md5.hexdigest() != f["md5"]:
+                raise Reject(422, "The file GameBanana sent isn't the one its page lists (its checksum differs). Try again later.")
+
+            def one(name, fh, size):
+                late()
+                try:
+                    k = formats.check(name, fh, size)
+                except formats.FormatError as e:
+                    raise Reject(422, f"{name} didn't pass the checks: {e}.")
+                if k:
+                    kinds[k] = kinds.get(k, 0) + 1
+
+            if not f["name"].lower().endswith(".zip"):
+                with open(path, "rb") as fh:
+                    one(f["name"], fh, f["size"])
+            else:
+                with zipfile.ZipFile(path) as z:
+                    for i in z.infolist():
+                        if i.is_dir():
+                            continue
+                        if i.file_size > CHECK_ENTRY_MAX:
+                            raise Reject(422, f"{i.filename} is too big to check ({i.file_size >> 20} MB).")
+                        part = os.path.join(tmp, "part")
+                        with z.open(i) as src, open(part, "wb") as dst:
+                            got = 0
+                            while True:
+                                late()
+                                chunk = src.read(1 << 20)
+                                if not chunk:
+                                    break
+                                got += len(chunk)
+                                if got > i.file_size:  # more than it said: refuse (no zip bombs)
+                                    raise Reject(422, f"{i.filename} unpacks to more than the zip says.")
+                                dst.write(chunk)
+                        with open(part, "rb") as fh:
+                            one(i.filename, fh, got)
+                        os.remove(part)
+        return {"files": sum(kinds.values()), "kinds": kinds, "bytes": f["size"], "at": now()}
 
     def _choose(self, model, gb, row):
         """(page facts, the entry or None, a note). The server picks the file, never the request:

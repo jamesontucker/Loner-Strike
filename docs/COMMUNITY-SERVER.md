@@ -30,7 +30,7 @@ Nothing here is live until the steps in section 6 are run.
 | `services/serverlist/test_community.py`, `test_modbot.py`, `testdata/gamebanana/` | Offline tests with recorded GameBanana answers and forged Discord interactions. |
 
 Tests: `cd services/serverlist && python3 -m unittest test_community test_modbot test_serverlist`
-(113 tests: `python3 -m unittest test_community test_modbot test_serverlist test_publish_check`). A live check that a real GameBanana zip can be listed by range requests:
+(125 tests: `python3 -m unittest test_formats test_community test_modbot test_serverlist test_publish_check`). A live check that a real GameBanana zip can be listed by range requests:
 `python3 -c "import community as c; print(c.package_names({'id': 1886785, 'name': 'cage.zip', 'size': 278384}))"`.
 
 ## 2. How it works
@@ -86,6 +86,15 @@ request ends up in the listing: a stranger can at most make an entry match the p
    - `loner-strike.json` (one entry, at most 64 KB packed and unpacked whatever the header claims,
      stored or deflated, not encrypted; a damaged stream is a clean 422). Maps, modes and prefabs
      need one, of the page's kind; a lone `.wad`/picture (sprays, textures) needs none.
+5. **Format checks of every file** (formats.py; see "Format checks" below): the page's file is
+   downloaded (range requests to GameBanana's file hosts, at most 128 MB, otherwise "too big to
+   check") to a temporary file, its MD5 must be the one the page lists, and every file in it is
+   streamed to its own temporary file and checked: maps, textures, models, sprites, sounds,
+   pictures, nav and knowledge files, text. One package at a time (others get a 429 "try again in a
+   minute"), at a lower CPU priority, 180 seconds at most. A file that fails is named in the
+   refusal ("maps/x.bsp didn't pass the checks: a face points at edges that aren't there"). What
+   passed is kept with the entry and shown on the Discord card ("Files checked: 14 passed (1 map, 1
+   nav, 12 sounds)").
 5. **The entry is built only from verified sources**: title, author and pictures from the page; the
    file id and MD5 from the page; summary, games, tags, map modes and mode details from the
    package's manifest (checked with the same strict rules); the map's `.bsp` must be in the zip
@@ -161,6 +170,44 @@ by compiling the app's structs and `parse_index` against a generated index: all 
 and the app refuses an index that doesn't match it (keeping the copy from before). That catches a
 damaged or half-finished upload; a signature with a key pinned in the app would also stop a
 tampered one (request in COMMUNITY.md section 8).
+
+### Format checks
+
+`services/serverlist/formats.py` reads only headers, directories and table entries (seek and
+read; nothing decompressed or loaded whole beyond a nav file or an RLE picture), and refuses with a
+plain reason:
+
+| Kind | Checked |
+|---|---|
+| `.bsp` | version 30 (or Quake's 29, which the engine also reads); every lump inside the file and a whole number of records; counts within the engine's own index types (16-bit node, leaf, clip node, face, mark surface, vertex indices; 512 models); every index between lumps in range (faces → planes, edges, texinfo, lighting; nodes → planes, nodes, leaves, faces; leaves → mark surfaces, visibility; clip nodes; models); the entity list (quote-aware braces); embedded textures 16-aligned with their pixels inside the lump; at most 1 MB after the last lump |
+| `.wad` | WAD3; the directory and every entry inside the file; known types, no compression; texture sizes and pixels |
+| `.mdl` | IDST/IDSQ version 10; its stated length (a few bytes off is fine, as in real models); every table inside the file and within MAXSTUDIO-style limits; body parts → models → meshes, vertices, normals; textures; sequences → events, groups, animations |
+| `.spr` | IDSP version 2; palette; every frame and frame group inside the file |
+| `.wav` | RIFF/WAVE; PCM 8/16/24-bit or 32-bit float (two stock radio sounds are float); the sound data inside the file (chunks after it may be cut short, as in many stock sounds) |
+| `.nav` | the magic; version 1–5 (the game's bots read up to 5); version 5 walked area by area (places, links, hiding spots, approach and encounter data) — data after the areas is allowed (about 40 real navs have it) |
+| `.lsv` | the bot brain's magic; version 6 must be exactly the size its counts say |
+| `.bmp` `.tga` | header, size, pixels inside the file (RLE packets walked) |
+| `.mp3` `.png` `.jpg` | signature (MP3 after any zero padding, as the stock music has) |
+| text | no NUL bytes (UTF-16 with a BOM allowed, as the game's language files); JSON must parse (JSON lines too) |
+
+**The proof that it doesn't refuse real content** (`python3 corpus_check.py --hostile <folders>`,
+2026-11-12): 21,574 real files — the installed CS 1.6, Condition Zero and Half-Life folders, the
+`cstrike_downloads` folder (content real servers sent), our nav pack and bot-brain files, the HLDS
+and test trees, ls_outpost and br_valley, and 29 real GameBanana CS 1.6 map packages (272 files,
+downloaded to a scratch folder only) — 761 maps, 139 wads, 2,271 models, 1,300 sprites, 8,412 sounds,
+2,625 pictures, 544 navs, 248 knowledge files, 5,133 text files. **Refused: 4, each genuinely unusable**:
+`cstrike/maps/cs_ship.nav` (version 9, a Source nav the GoldSrc bots can't read),
+`cstrike_downloads/sound/misc/doublekill.wav` and `unstoppable.wav` (MP3 data named .wav; the game
+can't play them), HLDS's `valve/models/doctor.mdl` (version 9; the engine refuses it). No crashes.
+
+**Damaged files**: of 101,001 damaged variants of those files (cut to nothing, 4 bytes, a third and
+a half; wrong magic or version; lumps, tables and directories pointed past the end; huge counts),
+100,942 were refused and none crashed. The 59 that passed are truncations that cut only data
+the game ignores or that can't be told from the header: navs with extra data after their areas,
+TGAs with trailing extension data, WAVs cut in chunks after the sound, two models cut inside
+their last palette, and an old-version knowledge file (rebuilt by the brain anyway).
+Tests: `test_formats.py` (every cut of each kind refused, wrong versions, huge counts and offsets,
+4,000 random damages without a crash; `LS_CORPUS=<folders>` runs the real-content check too).
 
 ## 3. Admin API and lsmod.py
 
