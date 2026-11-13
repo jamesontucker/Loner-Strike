@@ -992,3 +992,44 @@ right; the message isn't mine. Tip for everyone: stage and commit in one command
 - Ideas: re-light only (`sdHLRAD` on the last .bsp), `-estimate` time left, a "Copy the log" button, compiling while
   the game runs uses `-low` already.
 - Git slip: my notes commit a6a6838 also carried agent W2's then-uncommitted "brain interface for modes" section (the whole file was staged). Content intact; only the commit message is mine.
+
+### Agent S: AI agents (MCP connector) — 2026-11-12
+
+**Built** (all details, safety model and the manual test: docs/MCP.md)
+- `app/src-tauri/src/mcp/` (`mod mcp;`, a `--mcp-stdio` check at the top of `main()` and `mcp::start` in main.rs;
+  `.merge(crate::mcp::local_routes())` in server.rs; `mcp`/`mcp_changes` in app_api's Settings; `tower` moved to
+  dependencies, already in the tree through axum):
+  - `rpc.rs`: JSON-RPC over Streamable HTTP, own code (no `rmcp`: see MCP.md). Dual-era: 2026-07-28 (stateless,
+    `_meta` version, mirrored headers checked, `server/discover`) and 2025-11-25/06-18/03-26 (`initialize` +
+    `Mcp-Session-Id`).
+  - `catalog.rs`: 55 tools, 3 resources + 4 templates, 2 prompts. Every tool calls the app's own routes in-process
+    (the Local router through `guard_local`, `X-Panel: 1`), so no tool logic is duplicated; answers trimmed to
+    ~48 KB. Maps/doctor/health, editor (incl. any `cmd` op), Q's compile + playtest, nav fixer, replay summary,
+    the player's own local servers (start/stop/map/mode/bots).
+  - `mod.rs`: own listener on 127.0.0.1:8029 (or a free port), only while on; Host/Origin checks; per-run token
+    (Bearer, constant-time); read-only unless "Allow changes"; risky actions ask in a native dialog (Allow /
+    Don't allow), and ask when the state can't be told (coordinator's security review, fixed in d84b0cc);
+    activity log; `/api/mcp` routes for Settings (app window listener only).
+  - `stdio.rs`: `loner-strike --mcp-stdio` bridge (std only).
+- UI: `views/AgentSettings.tsx` (own lazy chunk, 5.7 kB) mounted with one line in **AppSettings.tsx** (that's the
+  app's Settings page; Settings.tsx is the game's settings): switch, Allow changes (asks first), copy setup command
+  (HTTP or stdio), token show / New token, "What agents did".
+
+**How to try it**: `cargo test mcp::` (16 tests: protocol both eras, header mismatch, versions, tool listing,
+token/host/origin, read-only, asking, unknown-state asking, trimming, real app routes, the endpoint, the bridge,
+compile/playtest). Without the app: `LONER_MCP_TOKEN=... LONER_MCP_CHANGES=1 cargo test serve_mcp_for_try --
+--ignored --nocapture`, then curl or the bridge. Checked that way with the real game (de_dust2 info/nav; new map +
+box + checks through the bridge). In the app: Settings > AI agents, then the Claude Code steps in MCP.md.
+
+**Left**
+- Not run inside the Tauri app or with Claude Code itself (would change the user's Claude config); the native
+  dialog path (`ask_person`) is untested by hand.
+- 8029 was taken here by someone's node dev server, so the try-out used a random port; the setup command always
+  shows the real one, but the token and maybe the port change per run, so agents need the command re-run after a
+  restart.
+- No game-mode tools yet (graphs, generate/compile plugins, logs): add them when those routes exist.
+
+**Requests**
+- (I, editor UI) The editor page should pick up changes made by an agent: refetch `meshes?since=` / `doc` when
+  `revision` moves (e.g. poll `GET /api/tools/editor/doc` state every couple of seconds while the page is open, or
+  on window focus). Today a box added over MCP shows up only after the page reloads its document.
