@@ -75,11 +75,11 @@ export default function Tools({ maps }: { maps: MapInfo[] }) {
           {entry.beta && <span className="tag tools-beta">Beta</span>} {entry.blurb}
         </p>
       </div>
+      <FocusPill label={entry.label} />
       <Suspense fallback={<Skeleton rows={4} />}>
         <Page key={`${entry.id}:${n}`} maps={maps} />
       </Suspense>
       <ToolKeys />
-      <FocusPill />
     </>
   );
 }

@@ -22,9 +22,12 @@ html[data-tools-focus] .content > :not(.tools-start ~ *),
 html[data-tools-focus] .content > .tools-head { display: none; }
 html[data-tools-focus] .content { padding: 8px 10px; max-width: none !important; }
 /* pages sized against the window rather than their box get the room the app's frame had */
-html[data-tools-focus] .ps-main { height: max(480px, calc(100vh - 70px)); }
-.tools-focus-pill { position: fixed; right: 12px; bottom: 12px; z-index: 60; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 0; border-radius: 999px; background: var(--panel-2); box-shadow: var(--raised), 0 4px 14px rgba(0, 0, 0, .45); color: var(--bone); font-size: 13px; font-weight: 600; cursor: pointer; opacity: .6; transition: opacity .15s; }
-.tools-focus-pill:hover, .tools-focus-pill:focus-visible { opacity: 1; }
+html[data-tools-focus] .ps-main { height: max(480px, calc(100vh - 100px)); }
+/* the way out of focus: a slim bar of its own above the tool (in the flow, never over a control) */
+.tools-focus-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 24px; margin: -2px 0 6px; }
+.tools-focus-bar-name { font-size: 12px; color: var(--bone-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tools-focus-pill { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border: 0; border-radius: 999px; background: var(--panel-2); box-shadow: var(--raised); color: var(--bone-dim); font-size: 12px; font-weight: 600; cursor: pointer; transition: color .15s; }
+.tools-focus-pill:hover, .tools-focus-pill:focus-visible { color: var(--bone); }
 .tools-focus-pill kbd { font: 600 11px/1 var(--text); padding: 2px 5px; border-radius: 2px; background: var(--panel); color: var(--bone-faint); }
 @media (prefers-reduced-motion: reduce) { .tools-focus-pill { transition: none; } }
 

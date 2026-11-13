@@ -431,15 +431,19 @@ export function FocusButton() {
   );
 }
 
-/** In focus mode: the way back, in a corner. */
-export function FocusPill(): ReactNode {
+/** In focus mode: the way back, in a slim bar of its own above the tool (in the page's flow, so
+ *  it never sits on a tool's buttons; it used to float in the bottom-right corner over them). */
+export function FocusPill({ label }: { label?: string }): ReactNode {
   const focus = useShell((s) => s.focus);
   const tool = useToolPage((s) => s.tool);
   if (!focus || !tool) return null;
   return (
-    <button type="button" className="tools-focus-pill" title={`Show the app around the tool again (${FOCUS_KEY})`} onClick={() => toggleFocus(false)}>
-      <FocusIcon on />
-      Exit focus <kbd>{FOCUS_KEY}</kbd>
-    </button>
+    <div className="tools-focus-bar">
+      <span className="tools-focus-bar-name">{label}</span>
+      <button type="button" className="tools-focus-pill" title={`Show the app around the tool again (${FOCUS_KEY})`} onClick={() => toggleFocus(false)}>
+        <FocusIcon on />
+        Exit focus <kbd>{FOCUS_KEY}</kbd>
+      </button>
+    </div>
   );
 }
