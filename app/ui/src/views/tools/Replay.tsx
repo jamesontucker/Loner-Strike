@@ -68,11 +68,11 @@ function RecordingList() {
           {recs.map((r) => (
             <button key={r.id} className="tools-rec" disabled={!!r.error} title={r.error ?? `${r.file}: click to watch it`} onClick={() => openReplay(r.id, r.map)}>
               <span className="tools-rec-map">{r.map || "unknown map"}</span>
-              <span className="muted small">{when(r.when)}</span>
+              <span className="muted small-note">{when(r.when)}</span>
               {r.error ? (
-                <span className="tools-warn small">{r.error}</span>
+                <span className="tools-warn small-note">{r.error}</span>
               ) : (
-                <span className="small">
+                <span className="small-note">
                   {mins(r.seconds)} · {r.bots} bots · {r.kills} kills{r.hasTrace ? " · with bot thoughts" : ""}
                 </span>
               )}

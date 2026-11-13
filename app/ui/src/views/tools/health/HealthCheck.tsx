@@ -36,6 +36,7 @@ function duration(secs: number) {
 }
 
 const when = (unix: number) => new Date(unix * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 const where = (s: Spot) => s.place || `the spot at ${s.at.map((v) => Math.round(v)).join(" ")}`;
 
 /** Opens the map viewer on the map, looking at a spot. */
@@ -297,7 +298,7 @@ function SpotList({ title, spots, map, what }: { title: string; spots: Spot[]; m
       <ul className="health-spots">
         {spots.map((s, i) => (
           <li key={i}>
-            <span className="health-spot-place">{where(s)}</span>
+            <span className="health-spot-place">{capital(where(s))}</span>
             <span className="muted">{what(s)}</span>
             <button type="button" className="btn small" onClick={() => openInViewer(map, s)}>
               Open in map viewer
