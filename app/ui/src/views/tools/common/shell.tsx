@@ -416,8 +416,10 @@ export function FocusButton() {
       </button>
       {hint && (
         <span className="tools-focus-hint" role="status">
-          Need more room? <b>Focus</b> fills the window with this tool. <kbd>{FOCUS_KEY}</kbd>
-          <button type="button" className="tools-focus-hint-x" aria-label="Got it" onClick={close}>
+          <span className="tools-focus-hint-text">
+            Need more room? <b>Focus</b> fills the window with this tool <span className="tools-focus-hint-key">({FOCUS_KEY})</span>.
+          </span>
+          <button type="button" className="btn small tools-focus-hint-x" onClick={close}>
             Got it
           </button>
         </span>
