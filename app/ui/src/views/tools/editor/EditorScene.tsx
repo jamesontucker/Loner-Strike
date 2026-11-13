@@ -28,6 +28,7 @@ import { duplicateWith } from "./commands";
 import { shiftHeld, snapToGeometry } from "./snapGeo";
 import { edgeLook, flatMaterial, usePaneMode } from "./renderModes";
 import { EntityModelMesh, SpriteGlow, useEntityModel } from "./EntityModels";
+import { MergedBrushes } from "./MergedBrushes";
 import { useNav } from "./navigation";
 import { NavCamera } from "./NavCamera";
 import { Bookmarks, MeasureLine, sameP, SelectRect, TexHandles, useVisibleBrush, VertexHandles } from "./SceneExtras";
@@ -154,6 +155,9 @@ function BrushMesh({ b, mats, picked, hideSky, version, dim }: { b: BrushGeo; ma
   );
 }
 
+/** P5: dev builds can draw brushes one by one (?nomerge) to compare speeds. */
+const NO_MERGE = import.meta.env.DEV && typeof location !== "undefined" && location.search.includes("nomerge");
+
 function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
   const brushes = useEditor((s) => s.brushes);
   const sel = useEditor((s) => s.sel);
@@ -172,16 +176,36 @@ function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
     g.matrixWorldNeedsUpdate = true;
   }, [preview]);
   void groups;
-  const list = [...brushes.values()].filter(visible);
+  // P5: the unpicked brushes are drawn merged (MergedBrushes); brushes dimmed by the cordon keep
+  // their own mesh for the dimming. Rebuilt only when these change.
+  const mode = usePaneMode();
+  const cordon = useEditor((s) => s.doc?.editor?.cordon);
+  const { merged, own, picked } = useMemo(() => {
+    const merged: BrushGeo[] = [];
+    const own: BrushGeo[] = [];
+    const picked: BrushGeo[] = [];
+    for (const b of brushes.values()) {
+      if (!visible(b)) continue;
+      if (isPicked(b, sel)) picked.push(b);
+      else if (dim?.(b)) own.push(b);
+      else merged.push(b);
+    }
+    return { merged, own, picked };
+  }, [brushes, sel, visible, cordon]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <group>
-        {list.filter((b) => !isPicked(b, sel)).map((b) => (
-          <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} version={version} dim={!!dim?.(b)} />
+        {NO_MERGE ? (
+          merged.map((b) => <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} version={version} />)
+        ) : (
+          <MergedBrushes list={merged} mats={mats} version={version} mode={mode} hideSky={hideSky} />
+        )}
+        {own.map((b) => (
+          <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} version={version} dim />
         ))}
       </group>
       <group ref={moving} matrixAutoUpdate={false}>
-        {list.filter((b) => isPicked(b, sel)).map((b) => (
+        {picked.map((b) => (
           <BrushMesh key={b.id} b={b} mats={mats} picked hideSky={hideSky} version={version} />
         ))}
         <PickedEntities />
@@ -1218,11 +1242,15 @@ export function EditorScene({ bounds, docId, onLost }: { bounds: [Vec3, Vec3]; d
     <div ref={wrap} className="ed-panes">
       <div className="ed-panes-canvas">
         <Canvas
-          onCreated={({ gl }) => gl.domElement.addEventListener("webglcontextlost", (e) => {
+          onCreated={({ gl }) => {
+            // P5: dev builds let the perf test read draw counts
+            if (import.meta.env.DEV) (window as unknown as { __lsEditorGl?: THREE.WebGLRenderer }).__lsEditorGl = gl;
+            gl.domElement.addEventListener("webglcontextlost", (e) => {
             e.preventDefault();
             // a canvas being put away (new document) drops its context on purpose
             if (gl.domElement.isConnected) onLost();
-          })}
+            });
+          }}
           frameloop="demand"
           dpr={[1, 1.5]}
           linear

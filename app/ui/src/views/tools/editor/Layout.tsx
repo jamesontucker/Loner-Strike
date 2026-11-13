@@ -30,6 +30,7 @@ function NavHud() {
   const speed = useNav((s) => s.speed);
   const looking = useNav((s) => s.looking);
   const preset = useNav((s) => s.preset);
+  const scale = useNav((s) => s.mapScale);
   const [, tick] = useState(0);
   useEffect(() => {
     const left = until - performance.now();
@@ -40,7 +41,7 @@ function NavHud() {
   if (preset === "blender" || (!looking && performance.now() > until)) return null;
   return (
     <div className="ed-nav-hud" aria-live="polite">
-      Speed {speed + 1} <span className="muted">· {SPEEDS[speed]} u/s</span>
+      Speed {speed + 1} <span className="muted">· {Math.round(SPEEDS[speed] * scale)} u/s</span>
       {looking && <span className="muted"> · {preset === "hammer" ? "Z or Esc to stop" : "scroll: speed"}</span>}
     </div>
   );

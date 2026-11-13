@@ -28,6 +28,8 @@ type NavState = {
   hudUntil: number;
   /** right mouse (Unreal) or Z (Hammer) look is on: keys go to the camera */
   looking: boolean;
+  /** big maps fly faster: 1 up to 4 (a map's size / 3000 units), times the speed step */
+  mapScale: number;
   /** the "how to move" hint has done its job (flown once, or closed) */
   hintDone: boolean;
   set: (p: Partial<Omit<NavState, "set">>) => void;
@@ -49,6 +51,7 @@ export const useNav = create<NavState>((set, get) => ({
   ...load(),
   hudUntil: 0,
   looking: false,
+  mapScale: 1,
   hintDone: (() => {
     try {
       return localStorage.getItem("ls.editor.navHint") === "1";
@@ -80,6 +83,9 @@ export const useNav = create<NavState>((set, get) => ({
 export function setNavPreset(preset: NavPreset) {
   useNav.getState().set({ preset, chosen: true, looking: false });
 }
+
+/** Units per second now: the step's speed times the map's size factor. */
+export const flySpeed = () => SPEEDS[useNav.getState().speed] * useNav.getState().mapScale;
 
 /** One speed step up or down, with the note in the view. */
 export function stepSpeed(d: number) {

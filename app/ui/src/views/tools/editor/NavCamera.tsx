@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { useTools } from "../../../stores/tools";
 import { gsToThree, type Vec3 } from "../viewer/coords";
 import { selectionBounds, useEditor } from "./store";
-import { SPEEDS, stepSpeed, useNav, type NavPreset } from "./navigation";
+import { flySpeed, stepSpeed, useNav, type NavPreset } from "./navigation";
 
 const LOOK = 0.0022;
 const MOVE_KEYS = ["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "ShiftLeft", "ShiftRight", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
@@ -51,7 +51,10 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
     const b = gsToThree(bounds[1]);
     const centre = a.clone().add(b).multiplyScalar(0.5);
     const r = Math.max(256, a.distanceTo(b) / 2);
-    camera.near = 2;
+    // big maps: faster flying, and a near plane that keeps depth sharp far away
+    const extent = Math.max(...bounds[1].map((x, i) => x - bounds[0][i]));
+    useNav.getState().set({ mapScale: Math.max(1, Math.min(4, extent / 3000)) });
+    camera.near = Math.max(2, Math.min(8, r / 1500));
     camera.far = Math.max(20000, r * 8);
     camera.position.copy(centre).add(new THREE.Vector3(r * 0.55, r * 0.45, r * 0.55));
     camera.lookAt(centre);
@@ -124,7 +127,7 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
       euler.current.setFromQuaternion(camera.quaternion, "YXZ");
       invalidate();
     };
-    const stepScale = () => SPEEDS[nav().speed] / 512;
+    const stepScale = () => flySpeed() / 512;
 
     type Drag = { kind: "look" | "move" | "orbit" | "dolly" | "pan" | "pending-left"; x: number; y: number; moved: boolean; pivot?: THREE.Vector3; button: number };
     let drag: Drag | null = null;
@@ -302,7 +305,7 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
     camera.getWorldDirection(fwd);
     side.crossVectors(fwd, camera.up).normalize();
     want.set(0, 0, 0).addScaledVector(fwd, f).addScaledVector(side, s).addScaledVector(camera.up, u);
-    if (want.lengthSq() > 0) want.normalize().multiplyScalar(SPEEDS[useNav.getState().speed] * fast);
+    if (want.lengthSq() > 0) want.normalize().multiplyScalar(flySpeed() * fast);
     const step = Math.min(dt, 0.1);
     vel.current.lerp(want, 1 - Math.exp(-step * 9));
     if (vel.current.lengthSq() < 1) {

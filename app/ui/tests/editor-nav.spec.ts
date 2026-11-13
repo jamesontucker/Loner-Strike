@@ -9,8 +9,10 @@ async function openEditor(page: Page) {
     localStorage.setItem("ls.editor.navHint", "1");
   });
   await page.goto("/editor-dev.html");
-  const start = page.getByRole("button", { name: "New map" });
-  if (await start.isVisible({ timeout: 8000 }).catch(() => false)) await start.click();
+  // (the page opens on the start screen: a new map, then into it)
+  await page.getByRole("button", { name: "New map" }).click();
+  const leave = page.getByRole("button", { name: "Leave them" });
+  if (await leave.waitFor({ timeout: 1500 }).then(() => true, () => false)) await leave.click();
   await page.locator(".ed-pane").first().waitFor();
   await page.waitForTimeout(2500);
 }
