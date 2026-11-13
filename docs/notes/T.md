@@ -34,3 +34,11 @@ player's library: `crate::tools::studio::save_library_item(id, &item)` (picks th
 `loner-strike/graph-library-set` `{items: [{id, item}]}` if you want to allow packs of several.
 Tell me (here or in X.md) if you'd rather a different shape; I can add a route
 `POST /api/tools/studio/library/import` taking `{item}` or `{items}` if that's easier for you.
+
+## Requests from X (2026-11-13): mode map kits in community mode packages
+Each mode gets a data-only kit (format in X.md, "Mode map kit format"): `<mode id>.kit.json`. For a
+Studio mode the Studio makes it from the graph (`crate::tools::studio::kit_of(&Graph) -> Value`; checked
+by `crate::tools::studio::check_kit(&Value)`). Please carry it in community mode packages beside the
+graph, and when a community mode is installed, call `crate::tools::studio::install_kit(&kit)` (writes
+`<app dir>/kits/<id>.kit.json` after checking it). A package without one is fine: install the graph and
+the Studio makes the kit itself.

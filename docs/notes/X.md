@@ -177,6 +177,84 @@ debug with no warnings); `npm run test:studio` 20 passed; `npm run build` green 
 **For S (MCP):** new routes `GET /api/tools/studio/library`, `POST /api/tools/studio/library/:id`,
 `POST /api/tools/studio/library/:id/delete`.
 
+## Mode map kit format (version 1, 2026-11-13)
+A **mode map kit** says what a map needs for one game mode, so anyone can make a map for it in the map
+editor. It's data only (JSON, no code). One file per mode: `<mode id>.kit.json`.
+
+**Where kits live:** the app's kits folder, `<app dir>/kits/<mode id>.kit.json`. The Studio writes one
+for each Studio mode (generated from the graph, saved next to it as `<graphs>/<id>.kit.json`) and copies it
+into the kits folder when the mode is installed (Install / Playtest / a community mode). Hand-written
+modes (Last Stand, Battle Royale) ship a hand-written kit in `plugins/game/kits/<id>.kit.json`
+(setup copies them the same way). Community mode packages carry the kit beside the graph.
+
+```json
+{
+  "schema": "loner-strike/mode-kit",
+  "version": 1,
+  "mode": { "id": "last_stand", "name": "Last Stand", "description": "Hold the base against waves" },
+  "source": "studio",
+  "markers": [
+    {
+      "id": "creature_spawn",
+      "label": "Creature spawn",
+      "description": "Where creatures come in. Put them out of sight of the base.",
+      "type": "point",
+      "required": { "min": 2, "max": 32 },
+      "keys": [
+        { "name": "wave", "type": "number", "default": 1, "help": "First wave that uses it", "min": 1, "max": 99 },
+        { "name": "side", "type": "choice", "default": "north", "help": "Which gate", "choices": [["north", "North"], ["south", "South"]] }
+      ],
+      "draw": { "colour": "#c0392b", "icon": "skull", "shape": "diamond" }
+    }
+  ],
+  "components": [ { "classname": "ls_wave_spawner", "min": 1, "max": 1, "note": "One wave spawner" } ],
+  "creatures": [ "zombie", "brute" ],
+  "map": { "size": "medium", "players": { "min": 2, "max": 16 } },
+  "notes": "Free text for map makers (up to 600 letters)."
+}
+```
+
+| field | rules |
+|---|---|
+| `schema`, `version` | `"loner-strike/mode-kit"`, `1`. A reader refuses other schemas and newer versions it doesn't know. |
+| `mode` | `id`: 2–24 of `a-z 0-9 _`, starting with a letter (the modes.ini id). `name` ≤ 40, `description` ≤ 60 (plain text). |
+| `source` | `"studio"` (generated from a graph: don't edit by hand) or `"hand"`. |
+| `markers[]` | ≤ 32. `id`: 1–24 of `a-z 0-9 _`, unique in the kit. `label` ≤ 30, `description` ≤ 200. |
+| `type` | `point` (one spot), `area` (a spot with a `size "x y z"` box or a `radius` round it), `path` (spots in order: 2 or more per path). |
+| `required` | `min` 0–64 (0 = optional), `max` 1–64 and ≥ min, or `null` (no limit). For a path: how many paths. |
+| `keys[]` | ≤ 8 per marker. `name`: 1–24 of `a-z 0-9 _`, not one of the reserved keys (`classname origin angles model targetname target mode kind order path size radius spawnflags`). `type`: `number` (with optional `min`/`max`), `text` (≤ 60), `bool` (0/1 in the map), `choice` (`choices`: [value, label] pairs, ≤ 16, values like names). `default` fits the type. `help` ≤ 120. |
+| `draw` | how editors show it: `colour` `#rrggbb`; `icon` one of `flag skull star crate door person arrow circle bolt heart`; `shape` one of `diamond box sphere cylinder line` (defaults: point diamond, area box, path line). An area also has `size` `[x, y, z]` or `radius` (the default the editor puts on a new one). |
+| `components[]` | `ls_*` classnames (gm_components' kinds) the map must have, `min`/`max` as above, `note` ≤ 120. Placed as the component entity itself or as an `ls_marker` with `kind` = the classname (W1). Components the mode makes itself at run time aren't listed. |
+| `creatures[]` | creature type names the mode spawns (the map needs room/nav for them; nothing to place). |
+| `map` | optional: `size` `small` (≤ 2048 across), `medium` (≤ 4096), `large`; `players` `{min, max}` 1–32. |
+| `notes` | ≤ 600, plain text. |
+
+**In the map** (W1's `ls_marker`, adopted): every marker is a point entity of class **`ls_marker`** with
+- `kind` = the marker id (or an `ls_*` component classname: gm_components turns it into that component),
+- `mode` = the mode id, or `any` / empty / left out (any mode with a marker of that id),
+- an area: `size "x y z"` (a box round the origin) or `radius`; a path: one `ls_marker` per spot with
+  `order` 1, 2, 3… (several paths of one marker: `path` 1, 2…); optional `targetname`, `angle`;
+- the marker's own keys (missing → the kit's default).
+
+**At run time** gm_components keeps the `ls_marker`s (not drawn, not solid) and answers
+`ls_marker_find(const kind[], start = 0)` (next matching entity after `start`, 0 when none) and
+`ls_marker_get(ent, const key[], out[], len)`. A Studio mode that uses markers loads gm_components (like
+any component node) and its Find Marker / For Each Marker nodes use those natives; paths are sorted by
+`path`, then `order` in the generated plugin.
+
+**Differences from W1's proposal (for W1):**
+1. The kit calls the marker's shape `type` (point / area / path); the map key `kind` is the marker id, as
+   you have it.
+2. Paths: please pass `path` and `order` through like other keys (the Studio sorts by them).
+3. Please resolve markers when the map loads (by plugin_cfg), not only at round start, so a mode's
+   Map Started event can find them; and have `ls_marker_find` skip markers whose `mode` is another mode's
+   (match the running mode id, `any` or empty).
+4. Areas: `size` and `radius` as you proposed (no brush entities), so the editor draws them from keys.
+5. Please add `ls_marker_mode(ent, out[], len)` only if you need it; the Studio doesn't.
+
+**Checks** (the editor's map check, the Studio's Playtest): each marker's count within `required`, each
+component's count, path markers with 2+ points and no repeated `order`, keys of the right type.
+
 ## 2026-11-13, later: feedback round, QA 8 and 9
 **Editor:** Function Entry/Return (and Macro Entry/Exit) show the Inputs/Outputs editor in Details.
 Keys (never while typing): ⌘S, F5 Playtest, ⌘F find, ⌘W close tab, Ctrl+Tab / Ctrl+⇧Tab, ⌘D duplicate,
