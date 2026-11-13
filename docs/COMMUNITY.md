@@ -242,3 +242,19 @@ Other tools open Publish with a map: `go("tools", "community:publish:<map>")`. O
 - **Spray maker:** "Share on GameBanana" for sprays: the spray image + the tag; register the same way.
 - **Game Mode Studio:** a mode package format (mode.ini + cfg + plugins.ini + modes/<id>/ +
   sources) and its installer following section 4; Publish then gets a "game mode" path.
+
+## 9. Prefab packages (map editor, agent P4)
+
+A prefab package is a zip made by the editor's Library > Prefabs > Share:
+`prefabs/<id>.map` (a plain Valve 220 .map: any GoldSrc editor can paste it), `prefabs/<id>.json`
+(`format`, `name`, `tags`, `author`, `description`, `size`, `brushes`, `entities`, `textures`, `wads`,
+`materials` with texture sizes), `prefabs/<id>.png` (thumbnail), optional `*.wad`, `README.txt` and
+`loner-strike.json` (`{"schema": 1, "item": {"kind": "prefab", ...}}`). Upload it to GameBanana's
+Prefabs category with the tag, like any creation.
+
+**Try it** (`community::try_prefab`, no installer job): downloads the file (GameBanana hosts only,
+MD5 checked against the page, 128 MB cap), unpacks it, and `tools::editor::prefabs::install_download`
+adds every `.map` it finds to the player's library (`<app dir>/editor/prefabs/`, the `.json`/`.png`
+beside it when there; a bare GameBanana `.map` or a zip of them works too, centred on install).
+WADs in the package go into the game folder only when no file of that name is there. The page then
+offers "Open the map editor" (`go("tools", "editor:prefabs")`).

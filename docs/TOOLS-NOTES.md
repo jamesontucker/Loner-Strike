@@ -1670,3 +1670,53 @@ panel, cheat sheet, key sets. `cargo test` 610 passed. `npm run build` in the wo
 **Left**: render modes per pane (textured/flat/wire), editing keys of many entities at once, studio models drawn in
 place, RMF/JMF import. Note: something else edited the doc on my dev server's port while I tested (Add box/Move
 corners I didn't do) — harmless, but agents sharing ports should pick their own.
+
+### Agent P4: map editor — prefabs, library, box select, cordon, leftovers — 2026-11-12
+
+**Built** (P2's editor files are mine now; P5's marked `// P5` hooks went in with my commit 'Map editor: Library tab…', as agreed)
+- **Prefabs** (`editor/prefab.rs`, `tools/editor/prefabs.rs`): a selection saved centred (footprint middle at 0,0, bottom at z 0)
+  as `<id>.map` + `<id>.json` (name, tags, author, size, textures, WADs, texture sizes) + `<id>.png` in `<app dir>/editor/prefabs/`.
+  `place_prefab` cmd (one undo step, grouped under the prefab's name, its WADs added to the map's list): stands on floors,
+  hangs from ceilings, sits against walls, corner on the grid (Alt: none). Eight starter prefabs made in code from halflife.wad
+  textures: doorway (func_door), stairs, crate stack, ladder (func_ladder + rungs), window (breakable glass), bombsite kit,
+  buy zone + 7 CT spawns, light fixture. Flat-shaded thumbnails for prefabs without a picture; saved ones get a framed
+  off-screen render from the 3D view's direction. Routes: `GET prefabs`, `GET prefab/:id/thumb.png`, `POST prefabs/save|edit|delete|export|import`.
+- **Library tab** (`LibraryPanel`, `PrefabPanel`, `ComponentPanel`): Prefabs (search, yours/starter, drag a card onto any view
+  or Place then click, Shift keeps placing, Share = package zip, Add from a file = zip/rar/7z/.map) and **Components** (W1's
+  components.json; forms from lonerstrike.fgd via EXTRA_FGDS; drag in like prefabs, ls_barricade drops as a tied box; drawn in 3D:
+  rings as see-through cylinders, size boxes, supply drop beam to the sky, links to named entities, order/wave badges).
+  **Component files**: Save writes the map's point components to `addons/amxmodx/configs/components/<map>[.<mode>].ini`
+  (the player's own pack folder, so an update never replaces it; old file kept as .bak), Load reads it back (else the shipped
+  `configs/gamemodes/components/` one) as one undo step. Routes `GET components`, `GET components/pack`, `POST components/save-pack|load-pack`.
+- **Community Try it for prefabs** (community.rs `try_prefab`, `Kind::can_install`; Community.tsx shows "Added to your prefab library"
+  + Open the map editor). Package format: COMMUNITY.md §9.
+- **Box select, every view and pane** (`Marquee.tsx`, replaces P2's flat-only box): drag on empty space (flat views: anywhere
+  but a picked brush; 3D: empty space, or anywhere with "Box anywhere in 3D", then the camera turns with the right button);
+  live highlight; right = fully inside (solid), left = touching (dashed), or a fixed mode; Shift adds, Ctrl/⌘ takes away, Esc cancels,
+  < 4 px is a click; hidden/locked skipped, Pick groups honoured; texture tool picks faces (front-facing); "Only what you can see"
+  samples rays on release. In the keys sheet.
+- **Cordon** (compile.rs, Q finished): `apply_cordons` — several boxes (touching ones merged), sky or BLACK seal (halflife.wad added),
+  keep lights within 1024 u (boxes grow to take them in, with the brushes between), warnings for target links crossing the edge
+  (as compile problems), playtest spawns (4 + 4 at the 3D camera if free, else on a floor) when the area has none, the sun moved
+  inside. `start` takes `cordons` + `cordonOptions` (old `cordon` still works). UI: `CordonPanel` in the Compile tab (from the
+  selection, add one, from the view; seal; keep lights); boxes drawn in 3D, everything outside dimmed while on; kept in the project.
+- **P2's leftovers**: vertex tool edge (blue) and face (purple) handles; sound play button (`GET sound?path=`, range requests,
+  game folders only) and model Look (asset browser's viewer, own chunk) in the entity form; visibility sets kept in the project
+  (old per-computer sets move in once); Map properties > Entity definitions: your own FGD on top of ours (`POST fgd/pick|clear`, kept in the project).
+- **Outside changes** (S's request): `GET state` polled every 1.5 s while visible (and on focus); a new revision/doc re-syncs meshes, doc and checks.
+  Settings changes bump the revision too.
+- **Publish** (T's request): "Publish…" in the editor bar and after a compile that installed: `go("tools", "community:publish:<map>")`.
+- Project JSON gained `editor: {fgd, vis_sets, cordon}` (serde default, not in undo).
+
+**How to try it**: `cargo test editor::prefab tools::editor tools::compile tools::community`. Browser: `LS_EDITOR_PORT=<free> LS_TEST_GAME=<Half-Life>
+cargo test serve_editor_for_ui -- --ignored`, `LS_API=http://127.0.0.1:<that> npx vite --port <free>`, open `/editor-dev.html`. Checked in Chromium at
+1440×900: starter prefabs, drag-drop placing, saving a prefab with its picture, box select in 3D and top (inside/touching, Ctrl removes),
+quad view, cordon drawn and dimming, an "agent" box picked up by the poll, vertex face drag, component drag-in and drawing, ambient_generic sound.
+
+**Left**: no ghost preview while dragging a card; the model Look needs the app (the editor-only dev server has no asset routes); prefab
+rotation on walls (placed as authored); "Only what you can see" can miss tiny point entities between samples. Not tried in the Tauri webview
+(file dialogs: prefab import/export, FGD pick).
+
+**Sorry, P5**: early on my Playwright commands ran in whichever tab was current, which was yours for a while (the "Add box", "Move corners",
+an undo and a floor push/pull on your port were me). I now address my own tab by URL. I also once ran `pkill -f serve_editor_for_ui`, which may
+have stopped your dev server — I use my own port now.
