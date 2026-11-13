@@ -27,10 +27,15 @@
  * end of the course the bot's own brain takes over (and hunts the terrorist).
  *   dr_bot_run          1     on/off
  *   dr_bot_run_fight    450   fight the terrorist when he is seen within this many units (0 = never)
+ *
+ * With Loner-Strike's bot brain playing deathrun itself (bot_ls_deathrun 1: runners run the course
+ * with their own movement, a bot terrorist walks to the buttons and presses them) this plugin
+ * steps back: no presses, no runners - only the activator's chat after a trap.
  */
 
 #include <amxmodx>
 #include <fakemeta>
+#include <hamsandwich>
 
 #pragma dynamic 16384
 
@@ -82,6 +87,12 @@ new bool:g_bSaving[ MAX_BUTTONS ];
 new Float:g_fPressedAt, g_iPressKills, bool:g_bPressOpen;
 new g_iActivator;
 new g_iMaxPlayers;
+// Loner-Strike's brain plays deathrun (bot_ls_deathrun): then it presses and runs, not us
+new g_pBrain;
+
+bool:BrainOn( ) {
+	return g_pBrain && get_pcvar_num( g_pBrain ) > 0;
+}
 
 public plugin_precache( ) {
 	g_fwKeyValue = register_forward( FM_KeyValue, "FwdKeyValue", 0 );
@@ -160,6 +171,25 @@ public plugin_init( ) {
 	set_task( 0.1, "TaskThink", _, _, _, "b" );
 	register_event( "DeathMsg", "EventDeath", "a" );
 	set_task( TICK, "TaskRunners", _, _, _, "b" );
+	RegisterHam( Ham_Use, "func_button", "FwdButtonUsed", 1 );
+	RegisterHam( Ham_Use, "func_rot_button", "FwdButtonUsed", 1 );
+}
+
+public plugin_cfg( ) {
+	g_pBrain = get_cvar_pointer( "bot_ls_deathrun" );
+}
+
+// The brain's activator pressed a trap: the chat after it is still ours
+public FwdButtonUsed( iEnt, iCaller, iActivator ) {
+	if( !BrainOn( ) || !( 1 <= iActivator <= g_iMaxPlayers ) || !is_user_alive( iActivator ) || !is_user_bot( iActivator ) || get_user_team( iActivator ) != 1 )
+		return HAM_IGNORED;
+	if( g_bPressOpen && get_gametime( ) - g_fPressedAt < 3.0 )
+		return HAM_IGNORED;
+	g_iActivator = iActivator;
+	g_fPressedAt = get_gametime( );
+	g_iPressKills = 0;
+	g_bPressOpen = true;
+	return HAM_IGNORED;
 }
 
 public plugin_natives( ) {
@@ -317,7 +347,7 @@ public TaskThink( ) {
 
 	new Float:fNow = get_gametime( );
 	CheckPressResult( fNow );
-	if( fNow < g_fNextAny )
+	if( fNow < g_fNextAny || BrainOn( ) )
 		return;
 
 	// find a living bot terrorist and the living CTs
@@ -510,7 +540,7 @@ public TaskRunners( ) {
 	if( !g_bBotNav )
 		return;
 
-	new bool:bOn = get_pcvar_num( g_pRun ) && botnav_has_mesh( );
+	new bool:bOn = get_pcvar_num( g_pRun ) && !BrainOn( ) && botnav_has_mesh( );
 	if( bOn && !g_bGoalTried )
 		FindGoal( );
 	bOn = bOn && g_bHaveGoal;
