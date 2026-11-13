@@ -54,6 +54,11 @@ new g_record;
 new g_mapname[64];
 new g_classZombie;
 new g_kills;
+new Float:g_spots[10][3];
+new g_nspots;
+new g_role[33];
+new g_spot[33];
+new Float:g_nextShift[33];
 new Float:g_waveAt;
 
 new bool:g_down[33];
@@ -98,8 +103,8 @@ public plugin_init()
 
 	register_event("HLTV", "ev_new_round", "a", "1=0", "2=0");
 	register_logevent("ev_round_start", 2, "1=Round_Start");
-	RegisterHam(Ham_Killed, "player", "ham_player_killed", 1);
-	RegisterHam(Ham_Spawn, "player", "ham_player_spawn", 1);
+	RegisterHamPlayer(Ham_Killed, "ham_player_killed", 1);
+	RegisterHamPlayer(Ham_Spawn, "ham_player_spawn", 1);
 	RegisterHam(Ham_Touch, "weaponbox", "ham_touch_weapon");
 	RegisterHam(Ham_Touch, "armoury_entity", "ham_touch_weapon");
 	if (g_hasCreatureDll)
@@ -165,7 +170,9 @@ public round_setup()
 	ls_comp_bots_hint("set laststand");
 	if (g_creatures)
 		ls_comp_bots_hint("enemyclass ls_creature 1");
-	defend_hint();
+	clear_defenders();
+	for (new p = 1; p <= MaxClients; p++)
+		g_role[p] = 0;
 	g_phase = PH_PREPARE;
 	g_phaseEnd = get_gametime() + get_pcvar_float(g_cPrepare);
 	set_cvar_num("mp_buy_anywhere", 1);
@@ -269,11 +276,103 @@ stock move_to(p, CsTeams:team, bool:respawn)
 		ExecuteHamB(Ham_CS_RoundRespawn, p);
 }
 
-stock defend_hint()
+/* Defenders, spread out: about 6 in 10 bots hold one of a few spots (behind each standing
+   barricade, half-way to it, the base) and move to another every minute or so; the rest have
+   no goal at all and play on their own (hunting creatures, reacting to noise). Goals are low
+   priority with a wide radius, sent only when a wave starts or a bot shifts, and cleared
+   between waves so bots buy, reload and wander like they normally do. */
+stock build_spots()
 {
+	g_nspots = 0;
+	add_spot(g_base);
+	for (new b = ls_comp_find("ls_barricade"); b && g_nspots < sizeof g_spots - 1; b = ls_comp_find("ls_barricade", b))
+	{
+		if (ls_barricade_hp(b) <= 0)
+			continue;
+		new Float:mn[3], Float:mx[3], Float:c[3], Float:p[3];
+		pev(b, pev_absmin, mn);
+		pev(b, pev_absmax, mx);
+		for (new i = 0; i < 3; i++)
+			c[i] = (mn[i] + mx[i]) * 0.5;
+		new Float:d = get_distance_f(c, g_base);
+		if (d < 1.0)
+			continue;
+		/* behind it, on the base's side */
+		new Float:f = floatmin(200.0 / d, 0.9);
+		for (new i = 0; i < 3; i++)
+			p[i] = c[i] + (g_base[i] - c[i]) * f;
+		add_spot(p);
+		/* half-way back */
+		for (new i = 0; i < 3; i++)
+			p[i] = (c[i] + g_base[i]) * 0.5;
+		add_spot(p);
+	}
+	/* no barricades: a ring round the base */
+	if (g_nspots == 1)
+		for (new k = 0; k < 4; k++)
+		{
+			new Float:p[3];
+			p[0] = g_base[0] + 300.0 * floatcos(90.0 * float(k), degrees);
+			p[1] = g_base[1] + 300.0 * floatsin(90.0 * float(k), degrees);
+			p[2] = g_base[2];
+			add_spot(p);
+		}
+}
+
+stock add_spot(const Float:p[3])
+{
+	if (g_nspots >= sizeof g_spots)
+		return;
+	g_spots[g_nspots][0] = p[0];
+	g_spots[g_nspots][1] = p[1];
+	g_spots[g_nspots][2] = p[2];
+	g_nspots++;
+}
+
+stock assign_defenders()
+{
+	build_spots();
+	new k = random(max(g_nspots, 1));
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT)
+			continue;
+		if (!g_role[p])
+			g_role[p] = random_num(1, 10) <= 6 ? 1 : 2;
+		if (g_role[p] == 1)
+			send_hold(p, k++);
+	}
+}
+
+stock send_hold(p, k)
+{
+	if (!g_nspots)
+		return;
+	new spot = k % g_nspots;
+	g_spot[p] = spot;
+	new secs = random_num(45, 80);
+	g_nextShift[p] = get_gametime() + float(secs);
 	new line[96];
-	formatex(line, charsmax(line), "goal ct defend %.0f %.0f %.0f 0 70 0 450", g_base[0], g_base[1], g_base[2]);
+	formatex(line, charsmax(line), "goal %d defend %.0f %.0f %.0f 0 35 %d 350", p, g_spots[spot][0], g_spots[spot][1], g_spots[spot][2], secs);
 	ls_comp_bots_hint(line);
+}
+
+/* a holder whose time is up moves to another spot */
+stock shift_defenders()
+{
+	new Float:now = get_gametime();
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (g_role[p] != 1 || now < g_nextShift[p] || !is_user_alive(p) || !is_user_bot(p))
+			continue;
+		build_spots();
+		send_hold(p, g_spot[p] + random_num(1, max(g_nspots - 1, 1)));
+	}
+}
+
+stock clear_defenders()
+{
+	ls_comp_bots_hint("goal_clear ct defend");
 }
 
 /* =========================================================================
@@ -340,7 +439,7 @@ stock start_wave(n)
 		ls_comp_set(g_classZombie, "hp", v);
 	}
 	ls_wave_start(n);
-	defend_hint();
+	assign_defenders();
 	g_kills = 0;
 	g_waveAt = get_gametime();
 	log_amx("Wave %d: %d %s against %d defenders", n, g_planned, g_creatures ? "creatures" : "zombie bots", defenders());
@@ -452,6 +551,7 @@ public ls_on_wave_cleared(wave)
 		return;
 	}
 	g_phase = PH_BREAK;
+	clear_defenders();
 	new brk = get_pcvar_num(g_cBreak);
 	g_phaseEnd = get_gametime() + float(brk);
 	set_cvar_num("mp_buy_anywhere", 1);
@@ -555,7 +655,10 @@ public tick()
 		return;
 	}
 	if (g_phase == PH_WAVE)
+	{
 		attack_barricades();
+		shift_defenders();
+	}
 	hud();
 	beacons();
 }
@@ -730,8 +833,32 @@ public ham_player_killed(victim, killer, gib)
 	new name[32], line[96];
 	get_user_name(victim, name, charsmax(name));
 	ls_chat(0, "%s is down! Hold USE on the blue beam to revive them.", name);
-	formatex(line, charsmax(line), "goal ct go_hold %.0f %.0f %.0f %d 55 %d 40", g_downOrg[victim][0], g_downOrg[victim][1], g_downOrg[victim][2], victim, get_pcvar_num(g_cRevive));
-	ls_comp_bots_hint(line);
+	/* the two nearest bots go to help */
+	new near[2], Float:nd[2] = { 99999.0, 99999.0 };
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (p == victim || !is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT)
+			continue;
+		new Float:o[3];
+		pev(p, pev_origin, o);
+		new Float:d = get_distance_f(o, g_downOrg[victim]);
+		if (d < nd[0])
+		{
+			nd[1] = nd[0]; near[1] = near[0];
+			nd[0] = d; near[0] = p;
+		}
+		else if (d < nd[1])
+		{
+			nd[1] = d; near[1] = p;
+		}
+	}
+	for (new i = 0; i < 2; i++)
+	{
+		if (!near[i])
+			continue;
+		formatex(line, charsmax(line), "goal %d go_hold %.0f %.0f %.0f %d 60 %d 40", near[i], g_downOrg[victim][0], g_downOrg[victim][1], g_downOrg[victim][2], victim, get_pcvar_num(g_cRevive));
+		ls_comp_bots_hint(line);
+	}
 	return HAM_IGNORED;
 }
 
@@ -741,6 +868,7 @@ stock clear_down(p)
 	{
 		new line[48];
 		formatex(line, charsmax(line), "goal_clear ct %d", p);
+		/* (ent = the downed player: only the revive goals go) */
 		ls_comp_bots_hint(line);
 	}
 	if (g_revBy[p] && is_user_connected(g_revBy[p]))
