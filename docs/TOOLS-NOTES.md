@@ -1272,3 +1272,35 @@ one line, added the name at the end and removed the one regular.
   pin a regular's kind and traits. The UI would be a form on each name in Regulars' names.
 - The crosshair drawing should be checked against the game side by side (gap and length per size).
 - The pages use `views/tools/common` (Rows/Row/Empty/Loading) and `common/api` (get/post/useBusy).
+
+### Agent U: Radar maker and Demos (both Beta), 2026-11-12
+
+**Radar maker** (Make; `tools/overview.rs`, `views/tools/overview/`)
+- Draws a map's spectator overview from the map file. Software rasteriser: floors (faces pointing up) seen from above, highest one wins. Lit with the map's lightmaps through the game's light curve (TOOLS-RENDER.md). Walls are a dark outline where the floor drops more than 24 units.
+- Roofs: with the bots' nav (only if it matches the BSP size), the floors a nav area stands on are drawn. Other floors within 96 units of those are drawn too (crate tops, rock slopes), but never over a walked floor. Without a nav, you pick a height and nothing above it is drawn.
+- Styles: Like the game (textures × light), Clean (height colours, lit), Simple. Optional marks: bomb sites with letters A/B in the game's order, buy zones by team, rescue/VIP zones, spawns, hostages. Background green (as every stock overview has) or black. Turn: auto / north up / sideways.
+- Install writes `overviews/<map>.txt` plus a 1024×768 picture, either 8-bit .bmp (median cut, colours weighted by √count so small marks keep their colour) or 24-bit .tga. Replaced files are kept as `.bak` (doctor's `save_file`). "Put the old one back" restores them. For non-stock maps, `doctor::write_res` brings the .res up to date, which lists the overview. Preview and "installed now" comparison come as PNG.
+- **Format, verified**:
+  - From HLSDK `cl_dll/hud_spectator.cpp` (fetched): `ParseOverviewFile` and `DrawOverviewLayer`. The picture is split into 128-px tiles, and `numframes/12` must be a square, so 1024×768 works. At zoom 1 the picture is 8192 units wide.
+  - `ROTATED 0`: columns run along −Y and rows along −X. `ROTATED 1`: north up, x across. So client-limits.md §7's "ROTATED 1 for maps longer in Y" is backwards.
+  - The Steam install ships 46 stock overviews as uncompressed 24-bit TGA (`cstrike/overviews/as_moria.tga`, etc.), so TGA loads.
+  - Our de_dust2 drawn with the stock txt's framing lines up with the stock bmp: 93-98% of our pixels fall on the stock map (`real_dust2_matches_the_stock_overview`, opt-in).
+- **"Who sees it"** is from the code, not tried in game: the overview is drawn in spectator overview mode and the inset map, and HLTV demos play back as a spectator. The 1.6 radar is a plain circle. In-game check left.
+- Timing: about 1.2-1.9 s to read a map the first time (cached 5 min), about 0.4 s per redraw (debug build).
+- Try it: `LS_TEST_GAME=<HL> LS_TEST_DUMP=<dir> LS_TEST_OV_MAPS=cs_office,de_nuke cargo test real_maps_dump -- --nocapture`.
+
+**Demos** (Look; `tools/demos.rs`, `views/tools/demos/`)
+- Lists .dem files in `cstrike/` and `czero/`, and in each local server's folder (its HLTV writes `hltv-*.dem` there; remote servers' demos stay on their HLTV page).
+- From the header: map, length (Playback part), protocol. Details from walking the frames: players seen (`\name\` in userinfo), server name (svc_serverinfo), problems. Frame layout checked on two real demos (net frame = 464 bytes of state + i32 length + message; ref_params offsets in the doc comment). A 66 MB demo scans in 0.18 s.
+- Rename (never overwrites), delete (with a confirm), Watch: `steam::launch(..., +playdemo <stem>)`. Plain names only; otherwise the page asks you to rename first. A server's demo is copied into the game first. If the game is open, it shows what to type in the console, with Copy.
+- **Phase 2 (partial)**: "Show my path in Replay" writes the recording player's own path (ref_params origin, velocity and angles, 10 a second) as a gm_simrec CSV in `app_dir/tools/recordings/demo-<name>_<map>_1.csv`, then opens it in Replay. Other players need the full entity stream:
+  - delta.lst-driven decoding of svc_deltadescription
+  - svc_packetentities and svc_deltapacketentities (bit-packed deltas against the baseline and the previous frame)
+  - svc_spawnbaseline, plus user-message sizes from svc_newusermsg, to skip unknown messages
+  - With those, each player entity's origin/angles per frame gives full columns. HLTV demos follow a camera, so they need this to be useful.
+- Security (coordinator review): the map name from a demo header is cleaned to `[A-Za-z0-9_-]` (64 characters at most) before it goes into the Replay file name, and the file must sit right in the recordings folder. Test: `crafted_headers_stay_in_the_folder`. Header strings reach nothing else: +playdemo uses the checked file name, and the page shows text through React.
+
+**Notes**
+- Commit tangle: my first commit (ebfba75) also carried `tools/devserve.rs` and `tools/shot.rs`, which someone else had staged in the shared index. 1545661 then briefly deleted my files. HEAD is complete now.
+- The tools-dev harness (`tools-dev.html`) didn't open any tool from its sidebar while I tried, because of reloads during others' edits. So the two pages are checked by `npm run build` and the API only. A screenshot pass is left.
+- Left: an in-game check that a made overview shows in spectator mode (bmp and tga), and P1-style screenshots at three sizes.
