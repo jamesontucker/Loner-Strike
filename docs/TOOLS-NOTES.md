@@ -2168,3 +2168,33 @@ Apply/spawn need a running map with the creatures DLL (not checked live here: no
   path, radius, respawn, health, speed, damage, aggression, detect, hates, persist, angles) would let maps place creatures.
 - (setup) creatures.ini/waves.ini aren't shipped (an update would overwrite them: only `EDITABLE` files are kept); if one ships
   later, add it to `setup::core::EDITABLE`.
+
+### Agent W1: Battle Royale (mode id `br`, Phase D) — 2026-11-12
+**Built** (`gm_battleroyale.sma` on gm_components + loner.inc; `br.cfg`, `br.plugins.ini`, modes.ini, mappresets `br_*`,
+botplay `br solo`, base.cfg `ls_comp_spawn_far 0`, Game Mode Menu settings Squads / Start with / Loot-up time / Zone starts
+after, and the app registration like Last Stand: CORE_MODES, OUR_PLUGINS, Mods card, icon, Settings family `br_`, Play maps).
+- One round = one game (`mp_freeforall 1`, `mp_round_infinite 1`, the mode ends it). Spawns at the map's respawn points,
+  as far apart as possible (`ls_comp_spawn_far 1`), with only `br_start` (knife; "knife+glock18" works too), no money,
+  no buying. `br_drop` (20 s) loot-up time with no player damage, then fighting; the shrinker starts `br_zone_start`
+  (40 s) later and the round clock counts down each warn/shrink. `br_drops` (3) supply drops spread over the game,
+  on a marker inside the next circle. Last player (or squad) standing wins; "X is out (#N)" in chat; draws if nobody's left.
+- Squads (`br_squad` 2/4): dealt at random, kept on one CS team, no damage between squad mates, and to the brain
+  `ls_mode role <id> sqN` + `ls_mode friend @sqN @sqN 1` (W2's ties, both ways in one line).
+- `br_wait_human 1`: bots alone don't play; a person joining starts a fresh game.
+- HUD: top "ALIVE 14  Zone closes in 0:32" / "ZONE CLOSING (12 s)" / "Final zone" (from the new `ls_zone_next`
+  native), right "Kills N", left the squad's HP. gm_components shows "OUTSIDE THE ZONE - 12 m to your left".
+- Bots: never one goal for everyone. gm_components' `zone` (with the next circle) and `attract` on loot do most of it;
+  per bot a trait at the game's start: looters (~35 %) get `goal <bot> loot <crate> <ent> 40 25 80` for the nearest full
+  crate inside the zone every 15-30 s; campers (~25 %) get `goal <bot> go_hold <spot in the next circle> 0 45 <stage> 300`
+  at each new stage; hunters get nothing (the brain hunts and third-parties by noise). Every goal ends by itself.
+- Map packs `components/<map>.br.ini` for de_aztec, cs_italy, de_dust2, de_inferno, de_train, made from each map's nav
+  mesh: zone centre/radius from the walkable area, 24 spread spawns, 30 loot crates and 22 floor weapons (better tiers
+  towards the middle), 4 supply drop spots, a 5-stage shrinker. Other maps get a zone round their spawns.
+- gm_components: `ls_zone_next(ent, center[3], &radius, &closing)` and `ls_comp_state(ent)` natives (in the include).
+
+**Tested** (my own copy of Sim/B with the combined DLL, -nomaster, removed afterwards): de_dust2 solo, 12 bots, ~7 min:
+two complete games (won with 4 and 3 kills, ~2 and ~3.5 min), 27 looter goals, 3 camper holds, supply drops, zone
+hints, no errors; de_aztec duos: roles + friend ties sent, a squad won. With 12 bots a game ends before the zone does
+much; with more players or a bigger map it matters more (raise `br_drop` / lower `br_zone_start` to taste).
+**Not done**: a drop-in (parachute) start, spectating your own squad, overview files (spectators get one if the map has
+`overviews/<map>.txt/.bmp` + .res), bot persona traits from gm_people (random traits for now).
