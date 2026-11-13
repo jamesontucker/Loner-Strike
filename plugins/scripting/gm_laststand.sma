@@ -11,7 +11,9 @@
  *
  * Needs gm_components.amxx (listed before this in laststand.plugins.ini).
  * Settings: lst_waves, lst_difficulty, lst_prepare, lst_break, lst_revive, lst_drops,
- * lst_creatures, lst_defenders, lst_wait_human (1: the stand waits for a person on CT). docs/COMPONENTS.md has the components; docs/CREATURES.md the
+ * lst_creatures, lst_defenders, lst_wait_human (1: the stand waits for a person on CT),
+ * lst_overrun, lst_last_chance, lst_lives (Nightmare), lst_base_radius (laststand.cfg explains them),
+ * lst_buy_anywhere, lst_shop_scale. docs/COMPONENTS.md has the components; docs/CREATURES.md the
  * creatures.
  */
 
@@ -38,7 +40,7 @@ new const TYPE_HP[] = { 100, 60, 450, 120, 3000 };
 new const TYPE_MONEY[] = { 100, 100, 250, 150, 1000 };
 new const CREATURE_PRECACHE[] = "zombie runner brute spitter boss";
 
-new g_cWaves, g_cDiff, g_cPrepare, g_cBreak, g_cRevive, g_cDrops, g_cCreatures, g_cDefenders, g_cWaveMoney, g_cWaitHuman;
+new g_cWaves, g_cDiff, g_cPrepare, g_cBreak, g_cRevive, g_cDrops, g_cCreatures, g_cDefenders, g_cWaveMoney, g_cWaitHuman, g_cOverrun, g_cLastChance, g_cLives, g_cBaseRadius, g_cBuyAnywhere, g_cShopScale;
 
 new g_phase;
 new g_wave;
@@ -54,6 +56,9 @@ new g_record;
 new g_mapname[64];
 new g_classZombie;
 new g_kills;
+new g_overrun;
+new Float:g_lastChanceEnd;
+new g_lives;
 new Float:g_spots[10][3];
 new g_nspots;
 new g_role[33];
@@ -80,6 +85,7 @@ public plugin_precache()
 	/* creature types can only spawn mid-map if they were precached as the map loaded */
 	g_hasCreatureDll = get_cvar_pointer("ls_creature_ver") != 0;
 	g_cCreatures = register_cvar("lst_creatures", "1");
+	keeper_precache();
 	if (g_hasCreatureDll && get_pcvar_num(g_cCreatures))
 		set_cvar_string("ls_creature_precache", CREATURE_PRECACHE);
 }
@@ -97,6 +103,16 @@ public plugin_init()
 	g_cDefenders = register_cvar("lst_defenders", "4");
 	g_cWaveMoney = register_cvar("lst_wave_money", "1000");
 	g_cWaitHuman = register_cvar("lst_wait_human", "1");
+	g_cOverrun = register_cvar("lst_overrun", "10");
+	g_cLastChance = register_cvar("lst_last_chance", "30");
+	g_cLives = register_cvar("lst_lives", "5");
+	g_cBaseRadius = register_cvar("lst_base_radius", "450");
+	g_cBuyAnywhere = register_cvar("lst_buy_anywhere", "0");
+	g_cShopScale = register_cvar("lst_shop_scale", "1.0");
+	register_clcmd("say /shop", "cmd_shop");
+	register_clcmd("say_team /shop", "cmd_shop");
+	register_clcmd("lst_shop", "cmd_shop");
+	register_forward(FM_PlayerPreThink, "fm_prethink");
 
 	g_msgShake = get_user_msgid("ScreenShake");
 	g_msgRoundTime = get_user_msgid("RoundTime");
@@ -117,6 +133,7 @@ public plugin_init()
 	g_record = record_load();
 	set_task(1.0, "tick", TASK_TICK, _, _, "b");
 	set_task(0.25, "tick_revive", TASK_REV, _, _, "b");
+	set_task(0.2, "keeper_tick", TASK_REV + 1, _, _, "b");
 }
 
 public plugin_cfg()
@@ -174,12 +191,19 @@ public round_setup()
 	for (new p = 1; p <= MaxClients; p++)
 		g_role[p] = 0;
 	g_phase = PH_PREPARE;
+	g_overrun = 0;
+	g_lastChanceEnd = 0.0;
+	g_lives = get_pcvar_num(g_cLives);
 	g_phaseEnd = get_gametime() + get_pcvar_float(g_cPrepare);
-	set_cvar_num("mp_buy_anywhere", 1);
+	set_cvar_num("mp_buy_anywhere", get_pcvar_num(g_cBuyAnywhere) ? 1 : 0);
+	find_shop();
+	keeper_spawn();
 	round_clock(floatround(get_pcvar_float(g_cPrepare)));
 	ls_announce(0, 5.0, "Last Stand: hold the base! First wave in %d seconds", get_pcvar_num(g_cPrepare));
+	bots_to_shop(get_pcvar_num(g_cPrepare));
 	if (g_record > 0)
-		ls_chat(0, "Best on %s so far: wave %d. Buy now - you can buy anywhere until the wave comes.", g_mapname, g_record);
+		ls_chat(0, "Best on %s so far: wave %d.", g_mapname, g_record);
+	ls_chat(0, "Buy at the base, or press USE at the armory (say /shop) for repair kits, armour, grenades and ammo.");
 }
 
 /* the base: the middle of the CT respawn points, or of the CT spawns */
@@ -379,6 +403,113 @@ stock clear_defenders()
  * Waves
  * ========================================================================= */
 
+/* Easy gives longer, Nightmare shorter */
+stock Float:time_scale()
+{
+	switch (clamp(get_pcvar_num(g_cDiff), 0, 3))
+	{
+		case 0: return 1.5;
+		case 2: return 0.7;
+		case 3: return 0.5;
+	}
+	return 1.0;
+}
+
+/* the base: a component named lst_base (a map's inner room), else lst_base_radius round the base */
+stock bool:in_base(e)
+{
+	new Float:o[3];
+	pev(e, pev_origin, o);
+	new b = ls_comp_by_name("lst_base");
+	if (b)
+	{
+		if (1 <= e <= MaxClients)
+			return ls_comp_inside(b, e);
+		new Float:bo[3], sz[32];
+		pev(b, pev_origin, bo);
+		if (ls_comp_get(b, "size", sz, charsmax(sz)))
+		{
+			new a[3][12];
+			parse(sz, a[0], 11, a[1], 11, a[2], 11);
+			return floatabs(o[0] - bo[0]) <= str_to_float(a[0]) * 0.5 && floatabs(o[1] - bo[1]) <= str_to_float(a[1]) * 0.5
+				&& o[2] > bo[2] - 64.0 && o[2] < bo[2] + str_to_float(a[2]) + 64.0;
+		}
+		new Float:r = ls_comp_getf(b, "radius", 300.0);
+		return floatsqroot((o[0] - bo[0]) * (o[0] - bo[0]) + (o[1] - bo[1]) * (o[1] - bo[1])) <= r && floatabs(o[2] - bo[2]) < 160.0;
+	}
+	new Float:r = get_pcvar_float(g_cBaseRadius);
+	return floatsqroot((o[0] - g_base[0]) * (o[0] - g_base[0]) + (o[1] - g_base[1]) * (o[1] - g_base[1])) <= r && floatabs(o[2] - g_base[2]) < 200.0;
+}
+
+/* sets why when the stand is lost this second */
+stock lose_checks(why[], len)
+{
+	new Float:now = get_gametime();
+	/* overrun: enemies in the base and no defender alive in it, for lst_overrun seconds */
+	new limit = floatround(get_pcvar_float(g_cOverrun) * time_scale());
+	if (get_pcvar_num(g_cOverrun) > 0)
+	{
+		new enemies = 0, inside = 0;
+		if (g_creatures)
+		{
+			new e = -1;
+			while ((e = find_ent_by_class(e, "ls_creature")) > 0 && !enemies)
+				if (pev(e, pev_deadflag) == DEAD_NO && in_base(e))
+					enemies++;
+		}
+		else
+			for (new p = 1; p <= MaxClients && !enemies; p++)
+				if (is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_T && in_base(p))
+					enemies++;
+		for (new p = 1; p <= MaxClients && !inside; p++)
+			if (is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_CT && in_base(p))
+				inside++;
+		if (enemies && !inside)
+		{
+			g_overrun++;
+			if (g_overrun >= limit)
+			{
+				copy(why, len, "The base was overrun");
+				return;
+			}
+			ls_announce(0, 1.1, "Base being overrun! %d", limit - g_overrun);
+		}
+		else
+			g_overrun = 0;
+	}
+	/* people: when every human defender is down or out, the bots get a last chance */
+	new humans = 0, up = 0;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT)
+			continue;
+		humans++;
+		if (is_user_alive(p))
+			up++;
+	}
+	new chance = floatround(get_pcvar_float(g_cLastChance) * time_scale());
+	if (humans && !up && get_pcvar_num(g_cLastChance) > 0)
+	{
+		if (g_lastChanceEnd <= 0.0)
+		{
+			g_lastChanceEnd = now + float(chance);
+			ls_announce(0, 3.0, "Every player is down! The bots have %d seconds to hold or revive you", chance);
+		}
+		else if (now >= g_lastChanceEnd)
+		{
+			copy(why, len, "The bots couldn't hold without you");
+			return;
+		}
+	}
+	else
+		g_lastChanceEnd = 0.0;
+}
+
+stock bool:nightmare()
+{
+	return get_pcvar_num(g_cDiff) >= 3;
+}
+
 stock defenders()
 {
 	new n = 0;
@@ -408,10 +539,13 @@ stock start_wave(n)
 {
 	g_wave = n;
 	g_phase = PH_WAVE;
+	g_overrun = 0;
+	g_lastChanceEnd = 0.0;
 	g_bossDone = (n % 5) != 0;
 	g_spawned = 0;
 	g_failSpawns = 0;
 	set_cvar_num("mp_buy_anywhere", 0);
+	ls_comp_bots_hint("goal_clear ct use");
 
 	/* how many: grows each wave, with the team's size and the difficulty */
 	new total = floatround((5.0 + 2.5 * float(n - 1)) * (0.5 + 0.2 * float(defenders())) * diff_mult(false));
@@ -554,8 +688,9 @@ public ls_on_wave_cleared(wave)
 	clear_defenders();
 	new brk = get_pcvar_num(g_cBreak);
 	g_phaseEnd = get_gametime() + float(brk);
-	set_cvar_num("mp_buy_anywhere", 1);
+	set_cvar_num("mp_buy_anywhere", get_pcvar_num(g_cBuyAnywhere) ? 1 : 0);
 	round_clock(brk);
+	bots_to_shop(brk);
 	/* money, the dead back, maybe a supply drop */
 	new bonus = get_pcvar_num(g_cWaveMoney);
 	for (new p = 1; p <= MaxClients; p++)
@@ -566,13 +701,20 @@ public ls_on_wave_cleared(wave)
 		if (!is_user_alive(p))
 		{
 			clear_down(p);
+			/* Nightmare: coming back costs one of the team's shared lives */
+			if (nightmare())
+			{
+				if (g_lives <= 0)
+					continue;
+				g_lives--;
+			}
 			ExecuteHamB(Ham_CS_RoundRespawn, p);
 		}
 	}
 	new drops = get_pcvar_num(g_cDrops);
 	if (drops > 0 && g_wave % drops == 0)
 		supply_drop();
-	ls_announce(0, 4.0, "Wave %d held! Next wave in %d seconds - buy anywhere now", g_wave, brk);
+	ls_announce(0, 4.0, "Wave %d held! Next wave in %d seconds - restock at the armory", g_wave, brk);
 }
 
 stock supply_drop()
@@ -630,7 +772,7 @@ public tick()
 	if ((g_phase == PH_PREPARE || g_phase == PH_BREAK) && now >= g_phaseEnd)
 		start_wave(g_wave + 1);
 
-	/* lost: nobody on the team standing */
+	/* lost: nobody standing, the base overrun, or no person left and the bots' last chance gone */
 	new alive = 0, team = 0;
 	for (new p = 1; p <= MaxClients; p++)
 	{
@@ -640,16 +782,22 @@ public tick()
 		if (is_user_alive(p))
 			alive++;
 	}
+	new why[64];
 	if (team > 0 && alive == 0 && g_phase == PH_WAVE)
+		copy(why, charsmax(why), "Nobody left standing");
+	else if (g_phase == PH_WAVE)
+		lose_checks(why, charsmax(why));
+	if (why[0])
 	{
 		g_phase = PH_OVER;
+		ls_chat(0, "%s.", why);
 		if (g_wave - 1 > g_record)
 		{
 			g_record = g_wave - 1;
 			record_save();
 		}
 		ls_announce(0, 8.0, "The base fell on wave %d", g_wave);
-		log_amx("The base fell on wave %d", g_wave);
+		log_amx("The base fell on wave %d (%s)", g_wave, why);
 		ls_chat(0, "Best on %s: wave %d.", g_mapname, g_record);
 		server_cmd("endround T");
 		return;
@@ -661,6 +809,9 @@ public tick()
 	}
 	hud();
 	beacons();
+	bots_shop_tick();
+	if (g_phase != PH_WAVE || (floatround(now) % 3) == 0)
+		shop_hint();
 }
 
 /* creatures and zombies that reach a barricade hit it */
@@ -718,17 +869,21 @@ stock hud()
 	switch (g_phase)
 	{
 		case PH_PREPARE:
-			formatex(top, charsmax(top), "Get ready: first wave in %d s  (buy anywhere)", max(floatround(g_phaseEnd - now), 0));
+			formatex(top, charsmax(top), "Get ready: first wave in %d s", max(floatround(g_phaseEnd - now), 0));
 		case PH_BREAK:
-			formatex(top, charsmax(top), "Wave %d held - next in %d s  (buy anywhere)", g_wave, max(floatround(g_phaseEnd - now), 0));
+			formatex(top, charsmax(top), "Wave %d held - next in %d s", g_wave, max(floatround(g_phaseEnd - now), 0));
 		case PH_WAVE:
 		{
 			if (waves > 0)
 				formatex(top, charsmax(top), "WAVE %d/%d  -  %d left", g_wave, waves, enemies_left());
 			else
 				formatex(top, charsmax(top), "WAVE %d  -  %d left  (best %d)", g_wave, enemies_left(), g_record);
+			if (g_lastChanceEnd > 0.0)
+				format(top, charsmax(top), "%s^nLAST CHANCE: %d s", top, max(floatround(g_lastChanceEnd - now), 0));
 		}
 	}
+	if (nightmare() && g_phase != PH_IDLE)
+		format(top, charsmax(top), "%s   Lives %d", top, g_lives);
 	/* the team: who's up, who's down */
 	new team[400], name[24], len = 0, lines = 0;
 	for (new p = 1; p <= MaxClients && len < charsmax(team) - 40 && lines < 10; p++)
@@ -1004,6 +1159,386 @@ public ham_creature_killed(ent, killer, gib)
 		ls_announce(0, 4.0, "%s brought the boss down!", name);
 	}
 	return HAM_IGNORED;
+}
+
+/* =========================================================================
+ * The armory: Last Stand's own shop (CS buying stays the map's buy zone)
+ * ========================================================================= */
+
+new Float:g_shop[3];
+new Float:g_useNext[33];
+
+new const SHOP_NAME[][] = { "Barricade repair kit", "Armour refill", "Grenade pack", "Ammo refill", "Medkit" };
+new const SHOP_PRICE[] = { 300, 200, 300, 150, 250 };
+
+/* an entity or component named lst_shop (the map's armory), else the base */
+stock find_shop()
+{
+	new e = ls_comp_by_name("lst_shop");
+	if (!e)
+		e = find_ent_by_tname(-1, "lst_shop");
+	if (e > 0)
+	{
+		new Float:mn[3], Float:mx[3];
+		pev(e, pev_absmin, mn);
+		pev(e, pev_absmax, mx);
+		if (mx[0] > mn[0])
+			for (new i = 0; i < 3; i++)
+				g_shop[i] = (mn[i] + mx[i]) * 0.5;
+		else
+			pev(e, pev_origin, g_shop);
+	}
+	else if (!buyzone_spot(g_shop))
+		g_shop = g_base;
+}
+
+/* stock maps: a clear spot in the CT buy zone nearest the base, off the spawn points */
+stock bool:buyzone_spot(Float:out[3])
+{
+	new e = -1, best = 0, Float:bd = 99999.0, Float:c[3];
+	while ((e = find_ent_by_class(e, "func_buyzone")) > 0)
+	{
+		new Float:mn[3], Float:mx[3], Float:m[3];
+		pev(e, pev_absmin, mn);
+		pev(e, pev_absmax, mx);
+		for (new i = 0; i < 3; i++)
+			m[i] = (mn[i] + mx[i]) * 0.5;
+		new Float:d = get_distance_f(m, g_base);
+		if (d < bd)
+		{
+			bd = d;
+			best = e;
+			c = m;
+		}
+	}
+	if (!best || bd > 1500.0)
+		return false;
+	for (new ring = 0; ring <= 6; ring++)
+	{
+		for (new k = 0; k < 8; k++)
+		{
+			new Float:p[3];
+			p[0] = c[0] + 60.0 * float(ring) * floatcos(45.0 * float(k), degrees);
+			p[1] = c[1] + 60.0 * float(ring) * floatsin(45.0 * float(k), degrees);
+			p[2] = c[2];
+			p[2] = floor_under(p) + 37.0;
+			engfunc(EngFunc_TraceHull, p, p, IGNORE_MONSTERS, HULL_HUMAN, 0, 0);
+			if (get_tr2(0, TR_StartSolid) || get_tr2(0, TR_AllSolid))
+				continue;
+			new bool:onspawn = false, s = -1, Float:so[3];
+			while ((s = find_ent_by_class(s, "info_player_start")) > 0 && !onspawn)
+			{
+				pev(s, pev_origin, so);
+				onspawn = get_distance_f(so, p) < 40.0;
+			}
+			if (onspawn)
+				continue;
+			out = p;
+			return true;
+		}
+		if (ring == 0)
+			continue;
+	}
+	return false;
+}
+
+stock bool:at_shop(id)
+{
+	new Float:o[3];
+	pev(id, pev_origin, o);
+	return get_distance_f(o, g_shop) < 160.0 && floatabs(o[2] - g_shop[2]) < 120.0;
+}
+
+stock shop_price(i)
+{
+	return floatround(float(SHOP_PRICE[i]) * (1.0 + 0.1 * float(max(g_wave - 1, 0))) * get_pcvar_float(g_cShopScale));
+}
+
+public cmd_shop(id)
+{
+	if (g_phase == PH_IDLE || !is_user_alive(id))
+		return PLUGIN_HANDLED;
+	if (!at_shop(id))
+	{
+		ls_chat(id, "The armory is at the base: go there and press USE (or say /shop).");
+		return PLUGIN_HANDLED;
+	}
+	shop_menu(id);
+	return PLUGIN_HANDLED;
+}
+
+stock shop_menu(id)
+{
+	new m = menu_create("\yArmory", "menu_shop");
+	new text[64], info[4];
+	for (new i = 0; i < sizeof SHOP_NAME; i++)
+	{
+		formatex(text, charsmax(text), "%s \R\y$%d", SHOP_NAME[i], shop_price(i));
+		num_to_str(i, info, charsmax(info));
+		menu_additem(m, text, info);
+	}
+	menu_display(id, m);
+}
+
+public menu_shop(id, menu, item)
+{
+	if (item < 0)
+	{
+		menu_destroy(menu);
+		return PLUGIN_HANDLED;
+	}
+	new info[4], name[64], access, cb;
+	menu_item_getinfo(menu, item, access, info, charsmax(info), name, charsmax(name), cb);
+	menu_destroy(menu);
+	if (is_user_alive(id) && at_shop(id))
+		shop_buy(id, str_to_num(info), true);
+	return PLUGIN_HANDLED;
+}
+
+stock bool:shop_buy(id, i, bool:tell)
+{
+	new price = shop_price(i), money = cs_get_user_money(id);
+	if (money < price)
+	{
+		if (tell)
+			client_print(id, print_center, "Not enough money ($%d)", price);
+		return false;
+	}
+	switch (i)
+	{
+		case 0:
+		{
+			/* the most damaged barricade, fully */
+			new best = 0, worst = 101;
+			for (new b = ls_comp_find("ls_barricade"); b; b = ls_comp_find("ls_barricade", b))
+			{
+				new mx = floatround(ls_comp_getf(b, "hp", 500.0));
+				new pct = 100 * ls_barricade_hp(b) / max(mx, 1);
+				if (pct < worst)
+				{
+					worst = pct;
+					best = b;
+				}
+			}
+			if (!best || worst >= 100)
+			{
+				if (tell)
+					client_print(id, print_center, "The barricades are fine");
+				return false;
+			}
+			ls_barricade_repair(best, 0);
+		}
+		case 1: cs_set_user_armor(id, 100, CS_ARMOR_VESTHELM);
+		case 2:
+		{
+			ls_give_item(id, "he");
+			ls_give_item(id, "flash");
+			ls_give_item(id, "smoke");
+			cs_set_user_bpammo(id, CSW_FLASHBANG, 2);
+		}
+		case 3: ls_give_item(id, "ammo");
+		case 4: set_user_health(id, max(get_user_health(id), 100));
+	}
+	cs_set_user_money(id, money - price);
+	if (tell)
+	{
+		client_print(id, print_center, "%s bought", SHOP_NAME[i]);
+		keeper_thanks(id);
+	}
+	return true;
+}
+
+/* USE at the armory opens the shop; a hint when close */
+public fm_prethink(id)
+{
+	if (g_phase == PH_IDLE || g_phase == PH_OVER || !is_user_alive(id) || is_user_bot(id))
+		return FMRES_IGNORED;
+	new b = pev(id, pev_button), ob = pev(id, pev_oldbuttons);
+	if ((b & IN_USE) && !(ob & IN_USE) && get_gametime() >= g_useNext[id] && at_shop(id))
+	{
+		g_useNext[id] = get_gametime() + 1.0;
+		shop_menu(id);
+	}
+	return FMRES_IGNORED;
+}
+
+/* bots: some go to the armory at a break, stock up, and go back to playing */
+stock bots_to_shop(secs)
+{
+	new line[96];
+	formatex(line, charsmax(line), "goal ct use %.0f %.0f %.0f 0 25 %d 120", g_shop[0], g_shop[1], g_shop[2], secs);
+	ls_comp_bots_hint(line);
+}
+
+stock bots_shop_tick()
+{
+	if (g_phase != PH_BREAK && g_phase != PH_PREPARE)
+		return;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT || !at_shop(p))
+			continue;
+		if (get_gametime() < g_useNext[p])
+			continue;
+		g_useNext[p] = get_gametime() + 20.0;
+		new CsArmorType:t;
+		if (cs_get_user_armor(p, t) < 60)
+			shop_buy(p, 1, false);
+		shop_buy(p, 3, false);
+		if (random_num(0, 2) == 0)
+			shop_buy(p, 2, false);
+		if (random_num(0, 3) == 0)
+			shop_buy(p, 0, false);
+	}
+}
+
+stock shop_hint()
+{
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_alive(p) && !is_user_bot(p) && at_shop(p))
+			client_print(p, print_center, "Armory: press USE (or say /shop)");
+}
+
+/* =========================================================================
+ * The shopkeeper: Barney (or the G-Man) at the armory, from Half-Life's own models
+ * ========================================================================= */
+
+new g_cKeeper;
+new g_keeperModel[64];
+new g_keeper;
+new g_keeperKind;	/* 0 none, 1 barney, 2 gman, 3 a CS model standing in */
+new Float:g_keeperNext;
+new Float:g_keeperBackAt;
+new bool:g_keeperSolid;
+
+new const BARNEY_FIDGETS[][] = { "idle2", "idle3", "idle4" };
+new const GMAN_FIDGETS[][] = { "idlebrush", "idlelook", "idle02" };
+new const BARNEY_LINES[][] = { "Need ammo?", "Stay safe out there.", "That'll hold 'em.", "Watch your back, pal." };
+new const GMAN_LINES[][] = { "Prepare for... the next wave.", "Wise... choice.", "Time to... choose.", "Rise and... shine." };
+
+stock keeper_precache()
+{
+	g_cKeeper = register_cvar("lst_shopkeeper", "barney");
+	new want[16];
+	get_pcvar_string(g_cKeeper, want, charsmax(want));
+	if (equali(want, "none"))
+		return;
+	g_keeperKind = equali(want, "gman") ? 2 : 1;
+	formatex(g_keeperModel, charsmax(g_keeperModel), "models/%s.mdl", g_keeperKind == 2 ? "gman" : "barney");
+	/* Half-Life's models live in valve/, which the engine reads from cstrike too */
+	new alt[96];
+	formatex(alt, charsmax(alt), "../valve/%s", g_keeperModel);
+	if (!file_exists(g_keeperModel) && !file_exists(alt))
+	{
+		log_amx("Last Stand: %s not found on this server; the shopkeeper is a CS model instead.", g_keeperModel);
+		copy(g_keeperModel, charsmax(g_keeperModel), "models/player/gign/gign.mdl");
+		g_keeperKind = 3;
+	}
+	precache_model(g_keeperModel);
+}
+
+stock keeper_spawn()
+{
+	if (!g_keeperKind)
+		return;
+	if (!g_keeper || !is_valid_ent(g_keeper))
+	{
+		g_keeper = create_entity("info_target");
+		if (!g_keeper)
+			return;
+		entity_set_string(g_keeper, EV_SZ_classname, "lst_shopkeeper");
+		entity_set_model(g_keeper, g_keeperModel);
+	}
+	new Float:o[3];
+	o = g_shop;
+	o[2] = floor_under(g_shop) + 1.0;
+	entity_set_origin(g_keeper, o);
+	entity_set_size(g_keeper, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 72.0});
+	set_pev(g_keeper, pev_movetype, MOVETYPE_NONE);
+	set_pev(g_keeper, pev_solid, SOLID_NOT);
+	set_pev(g_keeper, pev_takedamage, DAMAGE_NO);
+	set_pev(g_keeper, pev_controller_0, 127);
+	set_pev(g_keeper, pev_controller_1, 127);
+	g_keeperSolid = false;
+	keeper_play(g_keeperKind == 2 ? "idle01" : "idle1");
+	g_keeperNext = get_gametime() + random_float(6.0, 12.0);
+}
+
+stock keeper_play(const seq[])
+{
+	new Float:fr, bool:loops;
+	new n = lookup_sequence(g_keeper, seq, fr, loops);
+	set_pev(g_keeper, pev_sequence, n >= 0 ? n : 0);
+	set_pev(g_keeper, pev_frame, 0.0);
+	set_pev(g_keeper, pev_framerate, 1.0);
+	set_pev(g_keeper, pev_animtime, get_gametime());
+}
+
+/* faces whoever's nearest within 300 units, fidgets now and then, solid once nobody's in him */
+public keeper_tick()
+{
+	if (!g_keeper || !is_valid_ent(g_keeper))
+		return;
+	new Float:now = get_gametime(), Float:o[3], Float:po[3];
+	pev(g_keeper, pev_origin, o);
+	new near = 0, Float:nd = 300.0;
+	new bool:overlap = false;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p))
+			continue;
+		pev(p, pev_origin, po);
+		new Float:d = get_distance_f(o, po);
+		if (floatabs(po[0] - o[0]) < 34.0 && floatabs(po[1] - o[1]) < 34.0 && po[2] - o[2] < 110.0 && po[2] - o[2] > -40.0)
+			overlap = true;
+		if (d < nd)
+		{
+			nd = d;
+			near = p;
+		}
+	}
+	if (!g_keeperSolid && !overlap)
+	{
+		g_keeperSolid = true;
+		set_pev(g_keeper, pev_solid, SOLID_BBOX);
+		entity_set_origin(g_keeper, o);
+	}
+	if (near)
+	{
+		pev(near, pev_origin, po);
+		new Float:ang[3];
+		pev(g_keeper, pev_angles, ang);
+		new Float:want = floatatan2(po[1] - o[1], po[0] - o[0], degrees);
+		new Float:d = want - ang[1];
+		while (d > 180.0) d -= 360.0;
+		while (d < -180.0) d += 360.0;
+		ang[1] += floatclamp(d, -25.0, 25.0);
+		set_pev(g_keeper, pev_angles, ang);
+	}
+	if (g_keeperBackAt > 0.0 && now >= g_keeperBackAt)
+	{
+		g_keeperBackAt = 0.0;
+		keeper_play(g_keeperKind == 2 ? "idle01" : "idle1");
+	}
+	if (now >= g_keeperNext && g_keeperBackAt <= 0.0 && g_keeperKind != 3)
+	{
+		g_keeperNext = now + random_float(8.0, 15.0);
+		keeper_play(g_keeperKind == 2 ? GMAN_FIDGETS[random(sizeof GMAN_FIDGETS)] : BARNEY_FIDGETS[random(sizeof BARNEY_FIDGETS)]);
+		g_keeperBackAt = now + 2.5;
+	}
+}
+
+/* a nod (or Barney's wave) and a line after a purchase */
+stock keeper_thanks(id)
+{
+	if (!g_keeper || !is_valid_ent(g_keeper) || g_keeperKind == 3)
+		return;
+	keeper_play(g_keeperKind == 2 ? (random_num(0, 1) ? "yes" : "bigyes") : "barn_wave");
+	g_keeperBackAt = get_gametime() + 2.5;
+	if (g_keeperKind == 2)
+		client_print_color(id, print_team_default, "^4G-Man:^1 %s", GMAN_LINES[random(sizeof GMAN_LINES)]);
+	else
+		client_print_color(id, print_team_default, "^4Barney:^1 %s", BARNEY_LINES[random(sizeof BARNEY_LINES)]);
 }
 
 /* =========================================================================
