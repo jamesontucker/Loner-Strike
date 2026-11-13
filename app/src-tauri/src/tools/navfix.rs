@@ -133,7 +133,10 @@ impl Ground for MapHulls {
     fn fits(&self, p: [f32; 3]) -> bool {
         // head room over the middle, with a point trace (a nav area over stairs sits under the
         // steps' edges, so starting inside one counts as a step; somewhere solid at every
-        // height tried isn't something to report: the area may just be drawn a little low)
+        // height tried isn't something to report: the area may just be drawn a little low).
+        // Not the player's box: an area's edge can run up to a wall or through a vent grate
+        // (cs_rats2 areas 65, 146, 273), so the box at its middle can rightly be stuck while
+        // players stand in most of the area.
         for up in [1.0, 10.0, SNAP_UP] {
             let from = [p[0], p[1], p[2] + up];
             let t = self.trace(0, from, [p[0], p[1], p[2] + up + 128.0]);
@@ -613,9 +616,13 @@ fn ids(n: &Nav, list: &[usize]) -> Vec<u32> {
     list.iter().map(|&i| n.areas[i].id).collect()
 }
 
-/// A ladder's ends and the areas at each (indices): the game's own pick where ours found one,
-/// plus any area within reach of the ladder box's foot or top (our copy of the game's ladder
-/// building misses some on odd maps; a missed one would show whole floors as islands).
+/// A ladder's ends and the areas at each (indices): the game's own pick (nav::build_ladders,
+/// which follows the game's BuildLadders; in the sim's cs_rats2 recordings the ladders it
+/// leaves without a top are ones bots hardly ever climb), plus any area within reach of the
+/// ladder box's foot or top. That second part is generous on purpose: without it cs_rats2's
+/// nav (raw or hand-fixed) shows 120 areas no bot can reach, yet bots in those recordings
+/// stand in 39 of them, so the reach model alone would cry wolf. A ladder the game really leaves without a
+/// top is still reported on its own ("A ladder has no area at its top").
 #[derive(Debug, Clone)]
 pub struct LadderEnds {
     pub bottom: [f32; 3],

@@ -428,6 +428,52 @@ pub struct LadderBox {
 /// brush never blocks (the game skips it).
 pub trait LineTrace {
     fn line(&self, from: [f32; 3], to: [f32; 3]) -> (f32, bool);
+
+    /// The same trace with what it hit, skipping the solid entity `ignore` (an
+    /// [`LineHit::entity`] from an earlier trace). The default knows no entities.
+    fn line_hit(&self, from: [f32; 3], to: [f32; 3], ignore: Option<usize>) -> LineHit {
+        let _ = ignore;
+        let (fraction, start_solid) = self.line(from, to);
+        let end = [from[0] + fraction * (to[0] - from[0]), from[1] + fraction * (to[1] - from[1]), from[2] + fraction * (to[2] - from[2])];
+        LineHit { fraction, start_solid, end, entity: None, walkable: false }
+    }
+}
+
+/// A [`LineTrace::line_hit`] answer.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LineHit {
+    pub fraction: f32,
+    pub start_solid: bool,
+    pub end: [f32; 3],
+    /// The solid brush entity hit (None: the world, or nothing).
+    pub entity: Option<usize>,
+    /// What was hit is something the bots' nav code walks through: a door, or a breakable that
+    /// takes damage (IsEntityWalkable), unless it's a breakable floor met at its top.
+    pub walkable: bool,
+}
+
+/// The floor under `pos` as the game's GetGroundHeight finds it: traces straight down from
+/// 1, 11, ... 91 units above it, walking through doors and breakables, keeping each floor
+/// found higher than the last; the answer climbs those floors while each is less than half a
+/// player's height above the one before (so the floor under a high shelf wins over the shelf,
+/// a step doesn't). None: every trace started inside something.
+pub fn ground_height(tr: &dyn LineTrace, pos: [f32; 3]) -> Option<f32> {
+    let to = [pos[0], pos[1], pos[2] - 9999.9];
+    let mut ignore = None;
+    let mut layers: Vec<f32> = Vec::new();
+    for k in 0..10 {
+        let from = [pos[0], pos[1], pos[2] + 1.0 + 10.0 * k as f32];
+        let r = tr.line_hit(from, to, ignore);
+        if r.fraction != 1.0 && r.walkable {
+            ignore = r.entity;
+            continue;
+        }
+        if !r.start_solid && layers.last().map(|&g| r.end[2] > g).unwrap_or(true) {
+            layers.push(r.end[2]);
+        }
+    }
+    let i = (0..layers.len().saturating_sub(1)).find(|&i| layers[i + 1] - layers[i] >= HUMAN_HEIGHT / 2.0).unwrap_or(layers.len().saturating_sub(1));
+    layers.get(i).copied()
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -487,15 +533,7 @@ fn nearest_area(nav: &Nav, tr: &dyn LineTrace, pos: [f32; 3]) -> Option<usize> {
     if let Some(a) = nav.area_at(pos, 120.0) {
         return Some(a);
     }
-    // (the game's GetGroundHeight samples several start heights to find layered floors; one
-    // trace down from just above is close enough for picking the nearest area)
-    let from = [pos[0], pos[1], pos[2] + 1.0];
-    let to = [pos[0], pos[1], pos[2] - 9999.9];
-    let (f, solid) = tr.line(from, to);
-    if solid {
-        return None;
-    }
-    let src = [pos[0], pos[1], from[2] + (to[2] - from[2]) * f + 36.0];
+    let src = [pos[0], pos[1], ground_height(tr, pos)? + HUMAN_HEIGHT / 2.0];
     let mut best: Option<(usize, f32)> = None;
     for (i, a) in nav.areas.iter().enumerate() {
         let c = a.closest_point(src);
@@ -707,6 +745,54 @@ mod tests {
         let l = &build_ladders(&nav, &[bx], &Open)[0];
         assert_eq!(l.dir, 2);
         assert_eq!(l.bottom_area, Some(0));
+    }
+
+    /// A floor at z 0 and a slab at z 50..54 over it (entity 0, a door when `door`).
+    struct Layers {
+        door: bool,
+    }
+    impl LineTrace for Layers {
+        fn line(&self, from: [f32; 3], to: [f32; 3]) -> (f32, bool) {
+            let h = self.line_hit(from, to, None);
+            (h.fraction, h.start_solid)
+        }
+        fn line_hit(&self, from: [f32; 3], to: [f32; 3], ignore: Option<usize>) -> LineHit {
+            let at = |z: f32| ((from[2] - z) / (from[2] - to[2])).clamp(0.0, 1.0);
+            let slab = ignore.is_none();
+            let (fraction, start_solid, entity) = if from[2] < 0.0 {
+                (1.0, true, None)
+            } else if slab && (50.0..=54.0).contains(&from[2]) {
+                (1.0, true, Some(0))
+            } else if slab && from[2] > 54.0 {
+                (at(54.0), false, Some(0))
+            } else {
+                (at(0.0), false, None)
+            };
+            let end = [from[0], from[1], from[2] + fraction * (to[2] - from[2])];
+            LineHit { fraction, start_solid, end, entity, walkable: self.door && entity.is_some() && !start_solid }
+        }
+    }
+
+    #[test]
+    fn ground_height_like_the_game() {
+        let near = |got: Option<f32>, want: f32| got.map(|g| (g - want).abs() < 0.01).unwrap_or(false);
+        // under the slab: the floor, not the slab 54 up (a gap of more than half a player)
+        assert!(near(ground_height(&Layers { door: false }, [0.0, 0.0, 10.0]), 0.0));
+        // on the slab: the slab
+        assert!(near(ground_height(&Layers { door: false }, [0.0, 0.0, 60.0]), 54.0));
+        // a door is walked through: the floor under it
+        assert!(near(ground_height(&Layers { door: true }, [0.0, 0.0, 60.0]), 0.0));
+        // inside the floor everywhere tried
+        assert_eq!(ground_height(&Layers { door: false }, [0.0, 0.0, -200.0]), None);
+        // a step (under half a player) is climbed: the higher one
+        struct Step;
+        impl LineTrace for Step {
+            fn line(&self, from: [f32; 3], to: [f32; 3]) -> (f32, bool) {
+                let floor = if from[2] > 30.0 { 20.0 } else { 0.0 };
+                ((from[2] - floor) / (from[2] - to[2]), false)
+            }
+        }
+        assert!(near(ground_height(&Step, [0.0, 0.0, 5.0]), 20.0));
     }
 
     #[test]

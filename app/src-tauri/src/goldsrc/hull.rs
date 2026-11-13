@@ -7,7 +7,7 @@
 //! `func_ladder` brushes, and later the nav fixer and the surf lab. A port of
 //! loner-strike-sim/surfsim.py's Hull.
 
-use super::nav::{LadderBox, LineTrace};
+use super::nav::{LadderBox, LineHit, LineTrace};
 use super::{Error, Le, Result};
 use std::collections::HashMap;
 
@@ -17,6 +17,7 @@ const DIST_EPSILON: f32 = 0.031_25;
 
 pub const CONTENTS_EMPTY: i32 = -1;
 pub const CONTENTS_SOLID: i32 = -2;
+pub const CONTENTS_TRANSLUCENT: i32 = -15;
 
 /// Half the standing player's height: hull 1's origin is this far above the feet.
 pub const PLAYER_HALF_HEIGHT: f32 = 36.0;
@@ -90,6 +91,9 @@ pub struct Trace {
     pub start_solid: bool,
     pub in_open: bool,
     pub in_water: bool,
+    /// The solid brush entity hit or started in (an index into the map's solid entities), None
+    /// for the world or nothing.
+    pub hit: Option<usize>,
 }
 
 /// One hull's tree.
@@ -132,7 +136,7 @@ impl<'a> Walk<'a> {
                 self.t.all_solid = false;
                 if num == CONTENTS_EMPTY {
                     self.t.in_open = true;
-                } else {
+                } else if num != CONTENTS_TRANSLUCENT {
                     self.t.in_water = true;
                 }
             } else {
@@ -182,14 +186,20 @@ impl<'a> Walk<'a> {
     }
 }
 
-/// A solid brush entity: its model's tree heads, where it is, and a box around it (grown by
-/// the player hull for hull 1).
+/// A solid brush entity: its model's tree heads, where it is, and its box as the engine links
+/// it (absmin/absmax: the model's bounds moved by the origin, 1 unit bigger each way).
 #[derive(Debug, Clone)]
 struct Solid {
     heads: [i32; 2],
     origin: [f32; 3],
     mins: [f32; 3],
     maxs: [f32; 3],
+    /// A door, or a breakable that takes damage: the bots' nav code walks through these
+    /// (IsEntityWalkable with doors and breakables allowed).
+    walkable: bool,
+    /// A breakable the brain counts as a floor (IsFloorBreakable in the bot code: glass or
+    /// wood, at least 48 across, at most 32 thick, not made to give way, not an alpha-tested grille).
+    floor: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -350,14 +360,32 @@ impl MapHulls {
                     entity: index,
                 });
             } else if SOLID_CLASSES.contains(&class) {
-                solids.push(Solid { heads: m.heads, origin: o, mins, maxs });
+                let num = |k: &str| e.get(k).and_then(|v| v.trim().parse::<f32>().ok()).unwrap_or(0.0);
+                let flags = num("spawnflags") as i64;
+                let breakable = class == "func_breakable";
+                // (SF_BREAK_TRIGGER_ONLY 1: no damage taken, so not walked through)
+                let walkable = matches!(class, "func_door" | "func_door_rotating") || (breakable && flags & 1 == 0);
+                let mins = [mins[0] - 1.0, mins[1] - 1.0, mins[2] - 1.0];
+                let maxs = [maxs[0] + 1.0, maxs[1] + 1.0, maxs[2] + 1.0];
+                let size = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
+                // (SF_BREAK_TOUCH 2 with under 3 health, SF_BREAK_PRESSURE 4; rendermode 4 is
+                // alpha-tested; materials 0 glass, 1 wood, 7 unbreakable glass)
+                let floor = breakable
+                    && size[0] >= 48.0
+                    && size[1] >= 48.0
+                    && size[2] <= 32.0
+                    && flags & 4 == 0
+                    && !(flags & 2 != 0 && num("health") < 3.0)
+                    && num("rendermode") as i32 != 4
+                    && matches!(num("material") as i32, 0 | 1 | 7);
+                solids.push(Solid { heads: m.heads, origin: o, mins, maxs, walkable, floor });
             }
         }
         Ok(MapHulls { planes, trees: [Tree { nodes: nodes0 }, Tree { nodes: nodes1 }], world: models[0].heads, solids, ladders })
     }
 
     fn trace_one(&self, hull: usize, head: i32, start: [f32; 3], end: [f32; 3]) -> Trace {
-        let t = Trace { fraction: 1.0, end, normal: [0.0; 3], all_solid: true, start_solid: false, in_open: false, in_water: false };
+        let t = Trace { fraction: 1.0, end, normal: [0.0; 3], all_solid: true, start_solid: false, in_open: false, in_water: false, hit: None };
         let mut w = Walk { planes: &self.planes, tree: &self.trees[hull], head, t };
         w.rec(head, 0.0, 1.0, start, end, 0);
         let mut t = w.t;
@@ -373,24 +401,38 @@ impl MapHulls {
     /// A trace from `start` to `end` with hull 0 (a point) or 1 (a standing player's box,
     /// positions are its centre): the world and the solid brush entities, the nearest hit.
     pub fn trace(&self, hull: usize, start: [f32; 3], end: [f32; 3]) -> Trace {
+        self.trace_ignoring(hull, start, end, None)
+    }
+
+    /// [`MapHulls::trace`] skipping one solid entity (an index from [`Trace::hit`]), as the
+    /// engine's traces skip the entity they're told to ignore.
+    ///
+    /// Merged the way the engine's SV_ClipToLinks merges them: the world first, then every
+    /// entity whose box the move touches; an entity that's hit sooner, or that the trace starts
+    /// in, takes over, and starting inside any of them always counts as starting solid (even
+    /// when the trace gets out of it again; like the engine, such an entity's answer then
+    /// replaces a nearer world hit).
+    pub fn trace_ignoring(&self, hull: usize, start: [f32; 3], end: [f32; 3], ignore: Option<usize>) -> Trace {
         let hull = hull.min(1);
         let mut best = self.trace_one(hull, self.world[hull], start, end);
         let grow = if hull == 1 { [16.0, 16.0, 36.0] } else { [0.0; 3] };
-        for s in &self.solids {
+        for (k, s) in self.solids.iter().enumerate() {
+            if best.all_solid {
+                break;
+            }
             let out = (0..3).any(|i| start[i].max(end[i]) < s.mins[i] - grow[i] || start[i].min(end[i]) > s.maxs[i] + grow[i]);
-            if out || s.heads[hull] < 0 {
+            if out || s.heads[hull] < 0 || Some(k) == ignore {
                 continue;
             }
             let s2 = [start[0] - s.origin[0], start[1] - s.origin[1], start[2] - s.origin[2]];
             let e2 = [end[0] - s.origin[0], end[1] - s.origin[1], end[2] - s.origin[2]];
             let mut t = self.trace_one(hull, s.heads[hull], s2, e2);
-            if t.all_solid {
-                t.end = start;
-                return t;
-            }
-            if t.fraction < best.fraction {
-                t.end = [t.end[0] + s.origin[0], t.end[1] + s.origin[1], t.end[2] + s.origin[2]];
+            if t.all_solid || t.start_solid || t.fraction < best.fraction {
+                t.end = if t.fraction == 1.0 { end } else { [t.end[0] + s.origin[0], t.end[1] + s.origin[1], t.end[2] + s.origin[2]] };
+                t.hit = Some(k);
+                let was_solid = best.start_solid;
                 best = t;
+                best.start_solid |= was_solid;
             }
         }
         best
@@ -430,6 +472,13 @@ impl LineTrace for MapHulls {
     fn line(&self, from: [f32; 3], to: [f32; 3]) -> (f32, bool) {
         let t = self.trace(0, from, to);
         (t.fraction, t.start_solid)
+    }
+
+    fn line_hit(&self, from: [f32; 3], to: [f32; 3], ignore: Option<usize>) -> LineHit {
+        let t = self.trace_ignoring(0, from, to, ignore);
+        let walkable = t.fraction < 1.0
+            && t.hit.and_then(|k| self.solids.get(k)).map(|s| s.walkable && !(s.floor && t.normal[2] >= 0.7 && t.end[2] >= s.maxs[2] - 2.0)).unwrap_or(false);
+        LineHit { fraction: t.fraction, start_solid: t.start_solid, end: t.end, entity: t.hit, walkable }
     }
 }
 
@@ -569,6 +618,13 @@ pub(crate) mod tests {
         let t = h.trace(0, [10.0, 50.0, 50.0], [200.0, 50.0, 50.0]);
         assert!((t.end[0] - 100.0).abs() < 0.1, "{t:?}");
         assert_eq!(t.normal, [-1.0, 0.0, 0.0]);
+        assert_eq!(t.hit, Some(0));
+        // starting inside the pillar and coming out of it still starts solid (as the engine
+        // merges entity traces), whatever the world says
+        let t = h.trace(0, [110.0, 50.0, 50.0], [200.0, 50.0, 50.0]);
+        assert!(t.start_solid && !t.all_solid, "{t:?}");
+        let t = h.trace_ignoring(0, [110.0, 50.0, 50.0], [200.0, 50.0, 50.0], Some(0));
+        assert!(t.fraction == 1.0 && !t.start_solid, "{t:?}");
         // inside the floor
         assert!(h.floor_below([50.0, 50.0, -100.0], 4096.0).is_none());
     }
@@ -617,9 +673,78 @@ pub(crate) mod tests {
         let nav = super::super::nav::Nav::parse(&std::fs::read(std::path::Path::new(&sim).join("navpack/out/de_nuke.nav")).unwrap()).unwrap();
         let ladders = super::super::nav::build_ladders(&nav, &h.ladders, &h);
         assert!(!ladders.is_empty());
-        // (the two vent ladders end under breakable grates the game's traces hit too)
         assert!(ladders.iter().all(|l| l.bottom_area.is_some() && l.length > 100.0), "{ladders:?}");
-        let joined = ladders.iter().filter(|l| l.top_forward.is_some() || l.top_left.is_some() || l.top_right.is_some()).count();
-        assert!(joined >= 2, "{ladders:?}");
+        // the two vent ladders (entities 114 and 180) end beside the vents' grates
+        // (func_breakable, solid until broken; the game builds ladders once, when the nav loads,
+        // with traces that hit them), so the game finds no area at their tops either
+        let topless: Vec<usize> = ladders.iter().filter(|l| l.top_forward.is_none() && l.top_left.is_none() && l.top_right.is_none()).map(|l| l.entity).collect();
+        assert_eq!(topless, vec![114, 180], "{ladders:?}");
+    }
+
+    /// The raw cs_rats2 nav (the learner's, before the hand fix).
+    fn rats2_raw_nav() -> super::super::nav::Nav {
+        use std::io::Read;
+        let mut b = Vec::new();
+        flate2::read::GzDecoder::new(&include_bytes!("../tools/testdata/cs_rats2_raw.nav.gz")[..]).read_to_end(&mut b).unwrap();
+        super::super::nav::Nav::parse(&b).unwrap()
+    }
+
+    /// LS_TEST_GAME: standing room at cs_rats2 spots where the player box looked wrongly stuck.
+    /// Areas 65 and 146 run through the vents' grates (func_breakable plates 4 thick), so a
+    /// player at their centres is inside a grate; area 273 is 25 wide and its centre is 15.5
+    /// from a wall corner. The short trace and the long one (ceiling_above) agree on that now,
+    /// and a few units over there's room.
+    #[test]
+    fn real_rats2_standing_room() {
+        let Ok(game) = std::env::var("LS_TEST_GAME") else { return };
+        let h = MapHulls::parse(&std::fs::read(std::path::Path::new(&game).join("cstrike/maps/cs_rats2.bsp")).unwrap()).unwrap();
+        let nav = rats2_raw_nav();
+        let feet = |id: u32| nav.areas.iter().find(|a| a.id == id).unwrap().center();
+        let up = |p: [f32; 3], dz: f32| h.trace(1, [p[0], p[1], p[2] + PLAYER_HALF_HEIGHT + 1.0], [p[0], p[1], p[2] + PLAYER_HALF_HEIGHT + 1.0 + dz]);
+        for (id, step) in [(65, [0.0, -8.0]), (146, [0.0, 8.0]), (273, [3.0, 0.0])] {
+            let c = feet(id);
+            assert!(up(c, 10.0).start_solid, "area {id}: the box overlaps the grate or the wall at the centre");
+            assert!(h.ceiling_above(c, 200.0).is_none(), "area {id}: the long trace starts in it too");
+            let p = [c[0] + step[0], c[1] + step[1], c[2]];
+            let t = up(p, 10.0);
+            assert!(!t.start_solid && !t.all_solid, "area {id} at {p:?}: {t:?}");
+            let (ceil, _) = h.ceiling_above(p, 400.0).unwrap_or_else(|| panic!("area {id}: no ceiling over {p:?}"));
+            assert!(ceil - c[2] >= 72.0, "area {id}: head room {}", ceil - c[2]);
+        }
+    }
+
+    /// LS_TEST_GAME (+ LS_TEST_SIM for the fixed nav): cs_rats2's 22 ladders, built as the game
+    /// builds them. Every one has a bottom area. These have no top area ahead or to the side
+    /// (the game's BuildLadders ends the same way, "Unconnected ladder top"):
+    /// - 36 and 106 hang on thin func_wall plates in front of a table with open space under
+    ///   it: the facing trace (25 units behind the rungs) passes under the table, so the ladder
+    ///   faces the plate, every clearance trace hits the plate, and top and bottom both end at
+    ///   the box's top (length 0); the table top's area becomes the bottom.
+    /// - 39's top is behind a vent grate (func_breakable, solid when the nav loads).
+    /// - 11, 183 and 226 lead up to floors the raw nav has no area on (11: z 448 past the
+    ///   wall, 183: the 448 beam, 226: z 64). The hand fix adds the beam, so 183 joins.
+    /// - 65 and 121 find only an area behind them, which the game doesn't use going up (65 also
+    ///   hangs on a plate with open space behind it, so it faces the plate).
+    #[test]
+    fn real_rats2_ladders() {
+        let Ok(game) = std::env::var("LS_TEST_GAME") else { return };
+        let h = MapHulls::parse(&std::fs::read(std::path::Path::new(&game).join("cstrike/maps/cs_rats2.bsp")).unwrap()).unwrap();
+        assert_eq!(h.ladders.len(), 22);
+        let topless = |nav: &super::super::nav::Nav| {
+            let ladders = super::super::nav::build_ladders(nav, &h.ladders, &h);
+            assert!(ladders.iter().all(|l| l.bottom_area.is_some()), "{ladders:?}");
+            let up_top = |l: &&super::super::nav::Ladder| l.top_forward.is_none() && l.top_left.is_none() && l.top_right.is_none();
+            let none: Vec<usize> = ladders.iter().filter(up_top).map(|l| l.entity).collect();
+            let behind: Vec<usize> = ladders.iter().filter(up_top).filter(|l| l.top_behind.is_some()).map(|l| l.entity).collect();
+            let zero: Vec<usize> = ladders.iter().filter(|l| l.length == 0.0).map(|l| l.entity).collect();
+            (none, behind, zero)
+        };
+        let (none, behind, zero) = topless(&rats2_raw_nav());
+        assert_eq!(none, vec![11, 36, 39, 65, 106, 121, 183, 226]);
+        assert_eq!(behind, vec![65, 121]);
+        assert_eq!(zero, vec![36, 106]);
+        let Ok(sim) = std::env::var("LS_TEST_SIM") else { return };
+        let fixed = super::super::nav::Nav::parse(&std::fs::read(std::path::Path::new(&sim).join("navpack/fixes/cs_rats2.nav")).unwrap()).unwrap();
+        assert_eq!(topless(&fixed).0, vec![11, 36, 39, 65, 106, 121, 226]);
     }
 }
