@@ -86,6 +86,9 @@ GB_PER_VISITOR_MIN = 10       # a visitor's share of the GameBanana checks a min
 REPORTS_PER_VISITOR_DAY = 20  # a visitor's share of the day's reports
 STATUS_PER_MIN = 60
 APPLICATION_DAYS = 180        # role applications are deleted this long after the decision (or after sending, if undecided)
+HISTORY_DAYS = 730            # moderation history, cards, uid records and delisted entries: kept two years
+REPORT_DAYS = 90
+INTERACTION_DAYS = 1
 CHECK_MAX = 256 << 20         # [Caps] biggest package whose files are checked one by one (bigger: "too big to check"); the biggest real CS 1.6 item found is a 132.7 MB mappack
 CHECK_ENTRY_MAX = 256 << 20   # biggest single file inside it
 CHECK_SECONDS = 180           # the whole check (download and files) must finish in this
@@ -1449,10 +1452,48 @@ class Store:
 
     # -- role applications --
 
-    def prune_applications(self):
+    def housekeeping(self, at=None):
+        """The daily retention pass (the privacy page's promises). Returns what went, by table.
+        - applications: 180 days after the decision (or after sending, undecided);
+        - reports: 90 days; Discord interaction ids: 1 day;
+        - entries out of the list (pulled, turned down, hidden) for two years: the whole entry (with
+          its creator, credits and reasons) and its uid records; a pulled page can then be registered
+          again like any new one;
+        - moderation history: two years, except a creator's block history while the block is in place
+          (after it's lifted, two years from the lifting, its newest line);
+        - moderators' cards and settled uid disputes: two years;
+        - uid ownership records whose entry is gone."""
+        t = now() if at is None else at
+        cut = t - HISTORY_DAYS * 86400
+        out = {"applications": self.prune_applications(t)}
+        with self.lock:
+            self.db.execute("BEGIN")
+            try:
+                ex = lambda sql, args=(): self.db.execute(sql, args).rowcount
+                out["reports"] = ex("DELETE FROM reports WHERE at < ?", (t - REPORT_DAYS * 86400,))
+                out["interactions"] = ex("DELETE FROM interactions WHERE at < ?", (t - INTERACTION_DAYS * 86400,))
+                out["entries"] = ex("DELETE FROM entries WHERE state IN ('pulled', 'rejected', 'hidden') AND updated < ?", (cut,))
+                # (a moderator's assignment with no page yet: two years like the rest of the history)
+                out["uids"] = ex("DELETE FROM uids WHERE (key <> '' AND key NOT IN (SELECT key FROM entries)) OR (key = '' AND at < ?)", (cut,))
+                out["uid_conflicts"] = ex("DELETE FROM uid_conflicts WHERE at < ? OR (holder NOT IN (SELECT key FROM entries) AND other NOT IN (SELECT key FROM entries))", (cut,))
+                out["cards"] = ex("DELETE FROM cards WHERE at < ?", (cut,))
+                # a creator's block history stays while the block does; lifted, it counts from its newest line
+                out["log"] = ex(
+                    "DELETE FROM log WHERE at < ? AND NOT (key LIKE 'member:%' AND ("
+                    "CAST(substr(key, 8) AS INTEGER) IN (SELECT submitter_id FROM blocked) "
+                    "OR (SELECT MAX(l2.at) FROM log l2 WHERE l2.key = log.key) >= ?))",
+                    (cut, cut),
+                )
+                self.db.execute("COMMIT")
+            except Exception:
+                self.db.execute("ROLLBACK")
+                raise
+        return out
+
+    def prune_applications(self, at=None):
         """Deletes role applications 180 days after their decision, and undecided ones 180 days after
         they were sent (the privacy page's promise). Moderation history (log) is left as it is."""
-        cut = now() - APPLICATION_DAYS * 86400
+        cut = (now() if at is None else at) - APPLICATION_DAYS * 86400
         with self.lock:
             return self.db.execute("DELETE FROM applications WHERE (decided_at > 0 AND decided_at < ?) OR (decided_at = 0 AND at < ?)",
                                    (cut, cut)).rowcount
@@ -2194,8 +2235,13 @@ class Community:
         page is hidden. Network trouble changes nothing."""
         if not self.recheck_lock.acquire(blocking=False):
             raise Reject(409, "A re-check is already running.")
-        # (the daily housekeeping: role applications past their 180 days go)
-        self.store.prune_applications()
+        # (the daily housekeeping: what's past its time goes; see Store.housekeeping)
+        try:
+            gone = self.store.housekeeping()
+            if any(gone.values()):
+                log(f"housekeeping: {', '.join(f'{k} {v}' for k, v in gone.items() if v)}")
+        except Exception as e:  # (never stops the re-check)
+            log(f"housekeeping failed: {e}")
         try:
             rows = [self.store.get(k) for k in keys] if keys else self.store.rows(("pending", "listed", "hidden"))
             rows = [r for r in rows if r and r["state"] in ("pending", "listed", "hidden")]

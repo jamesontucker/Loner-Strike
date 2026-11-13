@@ -324,6 +324,52 @@ class Setup(unittest.TestCase):
 
 
 class Store(unittest.TestCase):
+    def test_retention(self):
+        """Two years of history; a block's history while it's in place, then two years from its lifting;
+        delisted entries, their uid records and old cards go; reports 90 days, interaction ids 1 day."""
+        _c, mod, _bot = make()
+        s, day, t = mod.c.store, 86400, cm.now()
+        old, recent = t - 800 * day, t - 30 * day
+        def entry(key, state, updated, sid):
+            row = cm.new_row("Mod", int(key[4:]), updated)
+            row.update(kind="map", state=state, submitter_id=sid, submitter=f"m{sid}", item="{}", updated=updated)
+            s.put(row, "test")
+        entry("mod:1", "pulled", old, 10)      # out of the list for over two years: goes
+        entry("mod:2", "listed", old, 20)      # listed: stays however old
+        entry("mod:3", "rejected", recent, 30)  # turned down a month ago: stays
+        s.db.execute("UPDATE log SET at=?", (old,))
+        s.db.execute("INSERT INTO log (key, at, action, detail) VALUES (?,?,?,?)", ("mod:2", recent, "list", ""))
+        s.set_blocked(40, "blocked one", "mod", "spam", True)       # still blocked: history stays
+        s.set_blocked(50, "lifted long ago", "mod", "x", True)
+        s.set_blocked(50, "", "mod", "", False)                      # lifted
+        s.set_blocked(60, "lifted lately", "mod", "x", True)
+        s.set_blocked(60, "", "mod", "", False)
+        s.db.execute("UPDATE log SET at=? WHERE key IN ('member:40', 'member:50')", (old,))
+        s.db.execute("UPDATE log SET at=? WHERE key='member:60' AND action='block'", (old,))  # blocked long ago, lifted lately
+        s.db.execute("INSERT INTO uids (uid, owner_id, owner, key, at, by) VALUES ('u7', 1, 'x', '', ?, 'lsmod')", (recent,))
+        s.db.execute("INSERT INTO uids (uid, owner_id, owner, key, at, by) VALUES ('u8', 1, 'x', '', ?, 'lsmod')", (old,))
+        for uid, key in (("u1", "mod:1"), ("u2", "mod:2"), ("u9", "mod:999")):
+            s.db.execute("INSERT INTO uids (uid, owner_id, owner, key, at, by) VALUES (?,?,?,?,?,?)", (uid, 1, "x", key, old, "t"))
+        s.db.execute("INSERT INTO uid_conflicts (uid, holder, other, why, at) VALUES ('u2', 'mod:2', 'mod:3', '', ?)", (old,))
+        s.db.execute("INSERT INTO uid_conflicts (uid, holder, other, why, at) VALUES ('u2', 'mod:2', 'mod:3', '', ?)", (recent,))
+        s.db.execute("INSERT INTO cards (kind, key, at) VALUES ('listing', 'mod:2', ?)", (old,))
+        s.db.execute("INSERT INTO cards (kind, key, at) VALUES ('listing', 'mod:2', ?)", (recent,))
+        s.db.execute("INSERT INTO reports (key, at, reason, note, reporter, app) VALUES ('mod:2', ?, 'other', '', 'r', '')", (t - 91 * day,))
+        s.db.execute("INSERT INTO interactions (id, at) VALUES ('i1', ?)", (t - 2 * day,))
+        gone = s.housekeeping()
+        keys = lambda q: [r[0] for r in s.db.execute(q)]
+        self.assertEqual(sorted(keys("SELECT key FROM entries")), ["mod:2", "mod:3"])
+        self.assertEqual(sorted(keys("SELECT uid FROM uids")), ["u2", "u7"], "uid records of gone entries go; a recent moderator assignment stays")
+        self.assertEqual(len(keys("SELECT id FROM uid_conflicts")), 1)
+        self.assertEqual(len(keys("SELECT id FROM cards")), 1)
+        log = keys("SELECT key FROM log")
+        self.assertIn("member:40", log, "a block in place keeps its history")
+        self.assertNotIn("member:50", log, "lifted over two years ago: gone")
+        self.assertEqual(log.count("member:60"), 2, "lifted lately: its whole history counts from the lifting")
+        self.assertEqual(log.count("mod:2"), 1, "only the recent line of a listed entry")
+        self.assertNotIn("mod:1", log)
+        self.assertEqual((gone["reports"], gone["interactions"]), (1, 1))
+
     def test_applications_go_after_180_days(self):
         """The privacy page: deleted 180 days after the decision, or after sending when undecided."""
         _c, mod, _bot = make()
