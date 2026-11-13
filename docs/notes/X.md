@@ -74,3 +74,32 @@ and all snippets, no warnings); `npm run test:studio` 14 passed; `npm run build`
 
 **For S (MCP):** new Studio routes if you wrap them: `POST /api/tools/studio/switch`,
 `GET /api/tools/studio/snippets`, `POST /api/tools/studio/snippet/:id`, `POST /api/tools/studio/snippet/:id/delete`.
+
+## Requests from QA (2026-11-12, real tests on sims QA4/QA5; full report docs/notes/QA.md)
+1. **[Critical] Drop Weapon crashes HLDS** (bots on de_dust2, both tries; "Illegal termination of worker thread
+   'CFileWriterThread'"). A bare `engclient_cmd(bot,"drop")` with no Studio mode crashes the LSPLAY brain+creatures mp.dll
+   too, so the root is in the DLL (told Y), but the node should avoid it (e.g. a different drop path for bots).
+2. **[High] Studio modes never load gm_components**: the installed plugin list has only the Studio plugin, so every
+   component node says "gm_components isn't running"; `needs` in nodes.json isn't used by the Rust side.
+3. **[High] Creature Spawn fails without Last Stand loaded** ("model isn't precached": only gm_laststand sets
+   `ls_creature_precache`). Precache the creature types a graph uses.
+4. **[High] Last Stand Lite stalls forever**: kills the T bots, `load_pack laststand` fails on ls_outpost (its components
+   are in the BSP), no creatures, wave 1 never clears. Royale Lite stalls as installed (bug 2); with gm_components it
+   plays to a winner.
+5. **[High] A breakpoint inside For Each leaves the server frozen and the page can't Resume**: other iterations keep
+   running and each `node_enter` clears the page's paused state (`debugState.ts`); the page ignores `world_paused` /
+   `vars.paused`. Same in WebKit and Chromium.
+6. **[Medium] A Resume sent together with a breakpoint change can be lost** (the .cmd file read then deleted by path);
+   world stayed frozen 190 s+.
+7. **[Medium] The debugger can show a different value from the one used** (inputs evaluated twice in debug builds:
+   showed "Condition: True", took False with math.random).
+8. **[Medium] Zone Set / Zone Shrink ignore a wired zone** ("No entity has that name"); Create Component for a trap or an
+   extraction returns entity 0 with no error; In Zone on a created zone throws AMXX run-time error 10 in
+   `ls_zone_inside` (W1 native) and ends the flow.
+9. **[Low] Player Hurt fires for blocked damage** with the original amount; ls_outpost's component names have spaces that
+   Find Component refuses; Creature Count reads 0 right after a spawn; Team Changed fires 3× per join (first "none");
+   an entity sent to a HUD node shows empty; uninstall leaves the .sma/.amxx/.hash/.bp/.cmd; `npm run test:studio` 2 of
+   14 fail on the current tree (`timer.delay.handle` registry check, template layout).
+Passed for real: every player node, readouts, damage scale/set/block, down/revive, squads, buying rules incl. bots,
+saved values across kill -9, round clock, variables/maths/flow/timers/functions, events, chat command, compile/install/
+uninstall routes, server-side breakpoint pause/resume, the Playtest button test (both engines).
