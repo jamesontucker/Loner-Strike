@@ -29,11 +29,20 @@ import Publish from "./Publish";
 import Yours from "./Yours";
 import InstalledList, { InstalledActions } from "./Installed";
 import "./community.css";
+import { DiscordButton } from "../../DiscordButton";
 
 type Tab = "browse" | "installed" | "publish" | "yours";
 
+/** Tools reopens a tool where it was left, even from an earlier session. Community always starts
+ *  on Browse the first time it's opened in a session: a bare tab address (installed, yours,
+ *  publish without a map) only counts once you've been here. Links to a creation or a map to
+ *  publish are always followed. */
+let openedThisSession = false;
+
 function fromArg(arg: string | null): { tab: Tab; map?: string; open?: { model: Model; id: number } } {
+  const first = !openedThisSession;
   if (!arg) return { tab: "browse" };
+  if (first && (arg === "installed" || arg === "yours" || arg === "publish")) return { tab: "browse" };
   const [a, b] = [arg.split(":")[0], arg.split(":").slice(1).join(":")];
   if (a === "publish") return { tab: "publish", map: b || undefined };
   if (a === "yours") return { tab: "yours" };
@@ -44,11 +53,20 @@ function fromArg(arg: string | null): { tab: Tab; map?: string; open?: { model: 
 
 export default function Community({ maps }: ToolProps) {
   const arg = useToolArg();
-  const start = fromArg(arg);
+  const [start] = useState(() => fromArg(arg));
   const [tab, setTab] = useState<Tab>(start.tab);
   const [publishMap, setPublishMap] = useState<string | undefined>(start.map);
   const [open, setOpen] = useState<{ model: Model; id: number } | null>(start.open ?? null);
+  const firstArg = useRef(true);
   useEffect(() => {
+    openedThisSession = true;
+  }, []);
+  useEffect(() => {
+    // (the first address was read above)
+    if (firstArg.current) {
+      firstArg.current = false;
+      return;
+    }
     const s = fromArg(arg);
     setTab(s.tab);
     if (s.map) setPublishMap(s.map);
@@ -72,6 +90,7 @@ export default function Community({ maps }: ToolProps) {
       <div className="cm-tabs">
         <Segmented label="Community" values="browse installed publish yours" labels="Browse|Installed|Publish|Published" current={tab} onPick={(v) => setTab(v as Tab)} />
       </div>
+      {tab === "browse" && !open && <DiscordButton note="Show off what you made, find people to play with, and tell us what Community needs." />}
       {tab === "browse" && (open ? <CreationPage model={open.model} id={open.id} onBack={() => setOpen(null)} /> : <BrowseList onOpen={(e) => setOpen({ model: e.model, id: e.id })} />)}
       {tab === "installed" && <InstalledList onOpen={(m, id) => { setOpen({ model: m, id }); setTab("browse"); }} onBrowse={() => setTab("browse")} />}
       {tab === "publish" && <Publish maps={maps} map={publishMap} onMap={setPublishMap} onDone={() => setTab("yours")} />}
