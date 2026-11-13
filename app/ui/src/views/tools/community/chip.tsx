@@ -9,6 +9,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { getJson, ON_THIS_COMPUTER } from "../../../api";
+import { useNav } from "../../../store";
 
 export type Chip = { key: string; name: string; author: string; url: string; kind: string };
 export type CommunityLookup = { maps: Record<string, Chip>; modes: Record<string, Chip>; prefabs: Record<string, Chip>; pages: Record<string, Chip> };
@@ -46,5 +47,24 @@ export function CommunityChip({ chip }: { chip?: Chip | null }) {
     >
       Community{chip.author ? ` · ${chip.author}` : ""}
     </a>
+  );
+}
+
+/** Opens Tools > Community on Browse, showing one kind ("map", "mode", "prefab", "spray",
+ *  "texture"). Nothing on a phone, where Tools isn't. `link`: a text link instead of a button. */
+export function CommunityLink({ kind, label, link, before }: { kind: string; label: string; link?: boolean; before?: () => void }) {
+  if (!ON_THIS_COMPUTER) return null;
+  return (
+    <button
+      type="button"
+      className={link ? "link" : "btn small"}
+      title="Opens Tools > Community: things other Loner-Strike players made, ready to try in a click"
+      onClick={() => {
+        before?.();
+        useNav.getState().go("tools", `community:browse:${kind}`);
+      }}
+    >
+      {label}
+    </button>
   );
 }

@@ -5,6 +5,9 @@ import { useNav, type Section } from "../store";
 import { usePlayDrafts } from "../stores/playDraft";
 import type { GbDetails, GbItem, GbJob, GbPage, GbSection } from "../types";
 import { BusyButton, LoadError, SectionHead, Sheet, Skeleton, Switch, useConfirm, useToast } from "../ui";
+import { CommunityLink } from "./tools/community/chip";
+/** (community) Get more sections → the Community browser's kinds */
+const COMMUNITY_KIND: Record<string, string> = { maps: "map", sprays: "spray", textures: "texture" };
 
 const SORTS: [string, string][] = [["popular", "Most downloaded"], ["new", "Newest"], ["liked", "Most liked"]];
 // Shown until the server sends its own list
@@ -212,6 +215,7 @@ export function GetMore({ onInstalled: onInstalledProp, server, only, title = "G
       <div>
         <SectionHead title={title} note={`From GameBanana's Counter-Strike 1.6 section. ${server ? (section === "maps" ? NOTES.maps : SERVER_NOTE) : NOTES[section] ?? NOTES.default}`}>
           {back && <button className="btn" onClick={back.go}>{back.label}</button>}
+          {!server && <CommunityLink kind={COMMUNITY_KIND[section] ?? "all"} label="Made with Loner-Strike: Community" />}{/* (community) */}
           {ON_THIS_COMPUTER && !isSharedId(targetKey()) && (
             <BusyButton busy={busy(key(`add-file:${section}`))} label="Add from a file" busyLabel="Adding…" onClick={() => run(key(`add-file:${section}`), async () => {
               const r = await addFromFile(section);

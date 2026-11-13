@@ -9,7 +9,7 @@ import { usePlayDraft, usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
 import { Banner, BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 import { COLLATOR, MapCard } from "./Maps";
-import { communityMode, useCommunity } from "./tools/community/chip";
+import { CommunityLink, communityMode, useCommunity } from "./tools/community/chip";
 import { MatchMode } from "./MatchMode";
 
 /** A start that hasn't brought the game up after this long can be sent again (CrossOver
@@ -220,6 +220,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
               <div className="sheet-body">
                 <SectionHead title="Pick a mode" note={MODES_NOTE}>{getMoreModes(() => setPickingMode(false))}</SectionHead>
                 <ModeCards modes={modes} current={mode?.id} onPick={(id) => { pickMode(id); setPickingMode(false); }} />
+                {targetKey() === "local" && <p className="small-note"><CommunityLink kind="mode" label="More modes from Community →" link before={() => setPickingMode(false)} /></p>}{/* (community) */}
                 <div className="row">
                   <button className="btn" onClick={() => setPickingMode(false)}>Cancel</button>
                 </div>
@@ -355,6 +356,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
       <section>
         <SectionHead title="Game mode" note={<>Switching reloads the map. {MODES_NOTE}</>}>{getMoreModes()}</SectionHead>
         <ModeCards modes={data.modes} current={st.mode} busy={modeBusy} onPick={(id) => { const m = data.modes.find((x) => x.id === id); if (m) setSwitching(m); }} />
+        {targetKey() === "local" && <p className="small-note"><CommunityLink kind="mode" label="More modes from Community →" link /></p>}{/* (community) */}
       </section>
       {recent.length > 0 && (
         <section>

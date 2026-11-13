@@ -6,7 +6,7 @@ import { usePlayDrafts } from "../stores/playDraft";
 import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Sheet, Switch, useCommand, useConfirm, useToast } from "../ui";
 import { JobProgress } from "./JobProgress";
-import { CommunityChip, communityMap, useCommunity } from "./tools/community/chip";
+import { CommunityChip, CommunityLink, communityMap, useCommunity } from "./tools/community/chip";
 import { CATS, CopyFromGame, CopyToServers } from "./MapCopy";
 
 /** Where a map came from and whether it's hidden or new to the bots: one menu, so the chips stay about map types. */
@@ -295,6 +295,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
             </select>
           </label>
           <Info text={SHOW_INFO} />
+          {!currentTarget() && <CommunityLink kind="map" label="More maps from Community" />}{/* (community) */}
           <label className="sort">
             <span>Sort</span>
             <select value={sort} onChange={(e) => setSort(e.target.value)} disabled={cat === "recent"}>

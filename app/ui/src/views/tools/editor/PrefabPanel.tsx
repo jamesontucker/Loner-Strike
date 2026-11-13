@@ -16,7 +16,7 @@ import { dragging, snapshot, useP4 } from "./extras";
 import { PREFAB_MIME } from "./P4Scene";
 import { selectionBounds, useEditor } from "./store";
 import "./p4.css";
-import { CommunityChip, communityPrefab, useCommunity } from "../community/chip";
+import { CommunityChip, CommunityLink, communityPrefab, useCommunity } from "../community/chip";
 
 const AUTHOR_KEY = "ls.editor.prefabAuthor";
 
@@ -98,6 +98,7 @@ export function PrefabPanel() {
           Save what's picked…
         </button>
         <BusyButton className="btn small" busy={busy === "Adding…"} label="Add from a file…" busyLabel="Adding…" onClick={() => void doImport()} />
+        <CommunityLink kind="prefab" label="Community prefabs…" />{/* (community) */}
       </div>
       {busy && busy !== "Adding…" && (
         <p className="small-note muted" role="status">

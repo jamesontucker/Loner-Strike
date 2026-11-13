@@ -39,12 +39,13 @@ type Tab = "browse" | "installed" | "publish" | "yours";
  *  publish are always followed. */
 let openedThisSession = false;
 
-function fromArg(arg: string | null): { tab: Tab; map?: string; open?: { model: Model; id: number } } {
+function fromArg(arg: string | null): { tab: Tab; map?: string; open?: { model: Model; id: number }; kind?: string } {
   const first = !openedThisSession;
   if (!arg) return { tab: "browse" };
   if (first && (arg === "installed" || arg === "yours" || arg === "publish")) return { tab: "browse" };
   const [a, b] = [arg.split(":")[0], arg.split(":").slice(1).join(":")];
   if (a === "publish") return { tab: "publish", map: b || undefined };
+  if (a === "browse") return { tab: "browse", kind: ["map", "mode", "prefab", "spray", "texture"].includes(b) ? b : "all" };
   if (a === "yours") return { tab: "yours" };
   if (a === "installed") return { tab: "installed" };
   if ((a === "mod" || a === "spray") && /^\d+$/.test(b)) return { tab: "browse", open: { model: a === "mod" ? "Mod" : "Spray", id: Number(b) } };
@@ -57,6 +58,7 @@ export default function Community({ maps }: ToolProps) {
   const [tab, setTab] = useState<Tab>(start.tab);
   const [publishMap, setPublishMap] = useState<string | undefined>(start.map);
   const [open, setOpen] = useState<{ model: Model; id: number } | null>(start.open ?? null);
+  const [kind, setKind] = useState(start.kind ?? "all");
   const firstArg = useRef(true);
   useEffect(() => {
     openedThisSession = true;
@@ -71,6 +73,10 @@ export default function Community({ maps }: ToolProps) {
     setTab(s.tab);
     if (s.map) setPublishMap(s.map);
     if (s.open) setOpen(s.open);
+    if (s.kind) {
+      setKind(s.kind);
+      setOpen(null);
+    }
   }, [arg]);
   // each tab and creation has its own address, so Back and the crumbs step between them
   const shown = tab === "browse" && open ? open : null;
@@ -91,7 +97,7 @@ export default function Community({ maps }: ToolProps) {
         <Segmented label="Community" values="browse installed publish yours" labels="Browse|Installed|Publish|Published" current={tab} onPick={(v) => setTab(v as Tab)} />
       </div>
       {tab === "browse" && !open && <DiscordButton note="Show off what you made, find people to play with, and tell us what Community needs." />}
-      {tab === "browse" && (open ? <CreationPage model={open.model} id={open.id} onBack={() => setOpen(null)} /> : <BrowseList onOpen={(e) => setOpen({ model: e.model, id: e.id })} />)}
+      {tab === "browse" && (open ? <CreationPage model={open.model} id={open.id} onBack={() => setOpen(null)} /> : <BrowseList kind={kind} setKind={setKind} onOpen={(e) => setOpen({ model: e.model, id: e.id })} />)}
       {tab === "installed" && <InstalledList onOpen={(m, id) => { setOpen({ model: m, id }); setTab("browse"); }} onBrowse={() => setTab("browse")} />}
       {tab === "publish" && <Publish maps={maps} map={publishMap} onMap={setPublishMap} onDone={() => setTab("yours")} />}
       {tab === "yours" && <Yours onPublish={() => setTab("publish")} />}
@@ -101,8 +107,7 @@ export default function Community({ maps }: ToolProps) {
 
 // ---- browse --------------------------------------------------------------------------------
 
-function BrowseList({ onOpen }: { onOpen: (e: Entry) => void }) {
-  const [kind, setKind] = useState("all");
+function BrowseList({ onOpen, kind, setKind }: { onOpen: (e: Entry) => void; kind: string; setKind: (k: string) => void }) {
   const [sort, setSort] = useState("new");
   const [text, setText] = useState("");
   const [q, setQ] = useState("");

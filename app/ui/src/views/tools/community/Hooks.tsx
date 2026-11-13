@@ -8,6 +8,7 @@ import { getJson, ON_THIS_COMPUTER, currentTarget } from "../../../api";
 import { useNav } from "../../../store";
 import { useToast } from "../../../ui";
 import { post } from "../common/api";
+import { CommunityLink } from "./chip";
 
 type Row = { key: string; kind: string; name: string; author: string; url: string; mode: string; update: number | null; pulled: boolean };
 
@@ -58,14 +59,19 @@ function Rows({ rows, what }: { rows: Row[]; what: string }) {
 /** Mods page: the Game Mode Studio modes installed from Community (your own game only). */
 export function CommunityModes() {
   const rows = useRows("mode");
-  if (!rows.length || currentTarget()) return null;
+  if (currentTarget() || !ON_THIS_COMPUTER) return null;
   return (
     <section>
       <div className="section-head">
         <div className="section-title"><h3>Modes from Community</h3></div>
         <p>Made by others in the Game Mode Studio and built on this computer. They're in your mode list; Remix one in Tools &gt; Community to make it your own.</p>
+        <div className="section-actions"><CommunityLink kind="mode" label="Browse community modes" /></div>
       </div>
-      <Rows rows={rows} what="To put one on a dedicated server, open the server's Community tab." />
+      {rows.length ? (
+        <Rows rows={rows} what="To put one on a dedicated server, open the server's Community content tab." />
+      ) : (
+        <p className="muted small-note">None yet. Other players' Game Mode Studio modes install in a click and are built on this computer: nothing that runs code is downloaded.</p>
+      )}
     </section>
   );
 }
@@ -73,11 +79,18 @@ export function CommunityModes() {
 /** Spray maker: sprays installed from Community (the last one installed is the one in the game). */
 export function CommunitySprays() {
   const rows = useRows("spray");
-  if (!rows.length) return null;
+  if (!ON_THIS_COMPUTER) return null;
   return (
     <section className="panel" style={{ display: "grid", gap: 6 }}>
-      <h3 style={{ margin: 0 }}>Sprays from Community</h3>
-      <Rows rows={rows} what="Removing one puts back the spray you had before it." />
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <h3 style={{ margin: 0 }}>Sprays from Community</h3>
+        <CommunityLink kind="spray" label="Browse community sprays" />
+      </div>
+      {rows.length ? (
+        <Rows rows={rows} what="Removing one puts back the spray you had before it." />
+      ) : (
+        <p className="muted small-note">None yet. Sprays other Loner-Strike players made install in a click; removing one puts yours back.</p>
+      )}
     </section>
   );
 }
