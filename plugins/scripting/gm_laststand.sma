@@ -55,6 +55,10 @@ new g_record;
 new g_mapname[64];
 new g_classZombie;
 new g_kills;
+new Float:g_beatAt;
+new Float:g_stuckAt;
+new Float:g_crPos[2048][3];
+new g_crStill[2048];
 new g_overrun;
 new Float:g_lastChanceEnd;
 new g_lives;
@@ -570,7 +574,11 @@ stock start_wave(n)
 	g_spawned = 0;
 	g_failSpawns = 0;
 	set_cvar_num("mp_buy_anywhere", 0);
+	/* the shop trips end; anyone still waiting for a revive gets their helpers back */
 	ls_comp_bots_hint("goal_clear ct use");
+	for (new d = 1; d <= MaxClients; d++)
+		if (g_down[d])
+			send_revive(d);
 
 	/* how many: grows each wave, with the team's size and the difficulty */
 	new total = floatround((5.0 + 2.5 * float(n - 1)) * (0.5 + 0.2 * float(defenders())) * diff_mult(false) * g_wCount);
@@ -886,12 +894,58 @@ public tick()
 	{
 		attack_barricades();
 		shift_defenders();
+		if (now >= g_stuckAt)
+		{
+			g_stuckAt = now + 15.0;
+			unstick_creatures();
+		}
+	}
+	if (now >= g_beatAt)
+	{
+		g_beatAt = now + 120.0;
+		log_amx("Last Stand: phase %d, wave %d, %d enemies left, %d of %d defenders standing", g_phase, g_wave, g_phase == PH_WAVE ? enemies_left() : 0, alive, team);
 	}
 	hud();
 	beacons();
 	bots_shop_tick();
 	if (g_phase != PH_WAVE || (floatround(now) % 3) == 0)
 		shop_hint();
+}
+
+/* A creature that hasn't moved for a minute with no defender within 800 units is stuck
+   somewhere nobody can reach: it goes, so a wave can't hang on it */
+stock unstick_creatures()
+{
+	if (!g_creatures)
+		return;
+	new e = -1, Float:o[3], Float:po[3];
+	while ((e = find_ent_by_class(e, "ls_creature")) > 0)
+	{
+		if (e >= sizeof g_crPos || pev(e, pev_deadflag) != DEAD_NO)
+			continue;
+		pev(e, pev_origin, o);
+		if (get_distance_f(o, g_crPos[e]) > 32.0)
+		{
+			g_crPos[e] = o;
+			g_crStill[e] = 0;
+			continue;
+		}
+		if (++g_crStill[e] < 4)
+			continue;
+		new bool:near = false;
+		for (new p = 1; p <= MaxClients && !near; p++)
+		{
+			if (!is_user_alive(p) || cs_get_user_team(p) != CS_TEAM_CT)
+				continue;
+			pev(p, pev_origin, po);
+			near = get_distance_f(o, po) < 800.0;
+		}
+		if (near)
+			continue;
+		log_amx("Last Stand: creature %d stuck at %.0f %.0f %.0f for a minute; removed", e, o[0], o[1], o[2]);
+		g_crStill[e] = 0;
+		server_cmd("ls_creature kill %d", e);
+	}
 }
 
 /* creatures and zombies that reach a barricade hit it */
@@ -1065,10 +1119,17 @@ public ham_player_killed(victim, killer, gib)
 	pev(victim, pev_origin, g_downOrg[victim]);
 	g_revBy[victim] = 0;
 	g_revProg[victim] = 0.0;
-	new name[32], line[96];
+	new name[32];
 	get_user_name(victim, name, charsmax(name));
 	ls_chat(0, "%s is down! Hold USE on the blue beam to revive them.", name);
-	/* the two nearest bots go to help */
+	send_revive(victim);
+	return HAM_IGNORED;
+}
+
+/* the two nearest bots go and hold USE on a downed player (W2: kind use, prio 75) */
+stock send_revive(victim)
+{
+	new line[96];
 	new near[2], Float:nd[2] = { 99999.0, 99999.0 };
 	for (new p = 1; p <= MaxClients; p++)
 	{
@@ -1091,10 +1152,10 @@ public ham_player_killed(victim, killer, gib)
 	{
 		if (!near[i])
 			continue;
-		formatex(line, charsmax(line), "goal %d go_hold %.0f %.0f %.0f %d 60 %d 40", near[i], g_downOrg[victim][0], g_downOrg[victim][1], g_downOrg[victim][2], victim, get_pcvar_num(g_cRevive));
+		new left = max(floatround(get_pcvar_float(g_cRevive) - (get_gametime() - g_downAt[victim])), 1);
+		formatex(line, charsmax(line), "goal %d use %.0f %.0f %.0f %d 75 %d 64", near[i], g_downOrg[victim][0], g_downOrg[victim][1], g_downOrg[victim][2], victim, left);
 		ls_comp_bots_hint(line);
 	}
-	return HAM_IGNORED;
 }
 
 stock clear_down(p)
