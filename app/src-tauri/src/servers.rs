@@ -2396,6 +2396,8 @@ pub fn start(id: &str) -> Result<(), String> {
         if let Err(why) = crate::remote::ensure_ham(r, &e.id, &e.game) {
             crate::diagnostics::log_error("ham sandwich", &why);
         }
+        // Half-Life's monster models as the players' games have them (hlmodels.rs)
+        crate::hlmodels::copy_to_server(&e);
         clear_pending_restart(&e.id);
         return crate::remote::systemctl(r, &e.id, "start");
     }
@@ -2411,6 +2413,8 @@ pub fn start(id: &str) -> Result<(), String> {
     end_leftover(&e);
     // the bots' newer navigation files from this computer's games
     crate::navs::copy_to_server(&e, None, true);
+    // Half-Life's monster models as the players' games have them (hlmodels.rs)
+    crate::hlmodels::copy_to_server(&e);
     if let Some(other) = load().iter().find(|o| o.id != e.id && o.port == e.port && with_runs(|r| r.procs.contains_key(&o.id))) {
         return Err(format!("\"{}\" is using port {} already. Stop it first, or change this server's port.", other.name, e.port));
     }

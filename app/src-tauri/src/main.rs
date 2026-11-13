@@ -32,6 +32,7 @@ mod scrim;
 mod server;
 mod navs;
 mod goldsrc;
+mod hlmodels;
 pub mod editor;
 mod tools;
 mod navpack;
