@@ -2617,7 +2617,8 @@ stock bots_open(s)
 	{
 		if (!g_alive[p] || !g_bot[p] || g_act[p])
 			continue;
-		if (get_distance_f(g_porg[p], g_org[s]) < 64.0)
+		/* (side by side, not 3D: a bot's origin is 36 above the crate's) */
+		if (dist2d(g_porg[p], g_org[s]) < 80.0 && floatabs(g_porg[p][2] - g_org[s][2]) < 90.0)
 		{
 			act_start(p, s, ACT_LOOT, g_pf[s][W_OPEN]);
 			break;
