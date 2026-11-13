@@ -8,10 +8,13 @@ import react from "@vitejs/plugin-react";
 // load the 3D chunks at start. R3F and drei land in the Tools page's own chunk instead.
 const THREE = /[\\/]node_modules[\\/]three[\\/]/;
 
-// In development the panel API is the Rust server inside the app (port 8027)
+// In development the panel API is the Rust server inside the app (port 8027), or the Tools dev
+// server `npm run tools:dev` starts (LS_API, docs/TOOLS-DEV.md)
+const API = process.env.LS_API || "http://127.0.0.1:8027";
+
 export default defineConfig({
   plugins: [react()],
-  server: { port: 5173, fs: { allow: ["../.."] }, proxy: { "/api": "http://127.0.0.1:8027", "/thumb": "http://127.0.0.1:8027" } },
+  server: { port: Number(process.env.LS_VITE_PORT) || 5173, fs: { allow: ["../.."] }, proxy: { "/api": API, "/thumb": API } },
   build: {
     outDir: "dist",
     emptyOutDir: true,

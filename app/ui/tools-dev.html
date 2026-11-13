@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tools (dev)</title>
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Big+Shoulders+Stencil+Display:wght@700;800&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;background:#3e4637">
+<!-- Development only: every Tools page in the app's own layout, against the Rust routes
+     (npm run tools:dev, docs/TOOLS-DEV.md). ?open=<address> opens one, e.g.
+     ?open=map:de_dust2@0,0,64 or ?open=navfix:cs_rats2. Not part of the app's build. -->
+<div id="root"></div>
+<script type="module" src="/src/views/tools/dev/toolsDev.tsx"></script>
+</body>
+</html>
