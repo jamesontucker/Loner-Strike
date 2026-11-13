@@ -290,6 +290,10 @@ impl History {
     pub fn redo_label(&self) -> Option<&str> {
         self.redo.last().map(|c| c.label.as_str())
     }
+    /// P5: every step's label for the history panel: undo oldest first, redo next first.
+    pub fn labels(&self) -> (Vec<&str>, Vec<&str>) {
+        (self.undo.iter().map(|c| c.label.as_str()).collect(), self.redo.iter().rev().map(|c| c.label.as_str()).collect())
+    }
     /// Call after saving; `is_dirty` is then false until the next change (or undo/redo away).
     pub fn mark_saved(&mut self) {
         self.saved_serial = self.undo.last().map_or(0, |c| c.serial);

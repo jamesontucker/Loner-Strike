@@ -3,6 +3,7 @@
 //! Pure Rust with no routes yet; see docs/TOOLS-EDITOR.md for how the UI will drive it.
 #![allow(dead_code)]
 
+pub mod bulk; // P5
 pub mod checks;
 pub mod fgd;
 pub mod doc;
