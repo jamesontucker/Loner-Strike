@@ -273,6 +273,8 @@ pub fn copy_with(e: &Entry, hl: &Path, local: &LocalNavs, only: Option<&str>, qu
             out.sent.push(stem.clone());
             // what the bot brain worked out from that nav goes with it
             send_knowledge(nav, &dest_dir);
+            // and its place names into the server's BotChatter.db, or the game drops any it doesn't list
+            crate::tools::callouts::teach_server(&e.dir, &e.game, &nav.path);
         }
     }
     // a server on this computer that already has the same nav: its knowledge too, if ours is

@@ -62,11 +62,31 @@ pub fn valid_place(n: &str) -> bool {
     !b.is_empty() && b.len() <= 31 && b[0].is_ascii_alphabetic() && b.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
-/// The voice list from the game's BotChatter.db ("Place <Name>" lines), else the built-in one.
+/// The places in a BotChatter.db with a voice line (a `.wav` before the entry's `End`): not
+/// the ones added for names of our own (teach_places), nor Loner-Strike's CS 1.6 file's.
+fn spoken_places(text: &str) -> Vec<String> {
+    let (mut out, mut open): (Vec<String>, Option<&str>) = (Vec::new(), None);
+    for l in text.lines().map(str::trim) {
+        let mut w = l.split_whitespace();
+        match (w.next(), w.next(), open) {
+            (Some("Place"), Some(n), None) if n != "=" && valid_place(n) => open = Some(n),
+            (Some("End"), None, _) => open = None,
+            (_, _, Some(n)) if l.to_ascii_lowercase().ends_with(".wav") => {
+                if !out.iter().any(|o: &String| o == n) {
+                    out.push(n.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// The voice list from the game's BotChatter.db (places with a voice line), else the built-in one.
 fn voice_places(hl: &Path, game: &str) -> Vec<String> {
     for g in [game, "cstrike", "czero"] {
         if let Ok(text) = crate::sys::read_latin1(&hl.join(g).join("BotChatter.db")) {
-            let v: Vec<String> = text.lines().filter_map(|l| l.trim().strip_prefix("Place ")).map(|n| n.trim().to_string()).filter(|n| valid_place(n)).collect();
+            let v = spoken_places(&text);
             if v.len() >= 10 {
                 return v;
             }
@@ -120,6 +140,105 @@ pub fn write_checked(before: &nav::Nav, after: &nav::Nav) -> Result<Vec<u8>, Str
         return Err("The new nav didn't come back the same. Nothing was saved.".into());
     }
     Ok(bytes)
+}
+
+// ---- the game's place list --------------------------------------------------------------
+
+/// ReGameDLL keeps a nav's place name only when the game's BotChatter.db has a `Place <Name>`
+/// entry for it (nav_file.cpp PlaceDirectory::Load -> BotPhraseManager::NameToID, matched
+/// without case): any other name is read as no place. Bots then never say it, the Location
+/// message (where someone is) never carries it, and bot chat never hears it. So every name a
+/// nav uses goes into BotChatter.db as an entry of its own with no voice line: the radio skips
+/// the place (the rest of the line is said), and the Location message and bot chat use it.
+pub const CHATTER: &str = "BotChatter.db";
+
+/// The `Place <Name>` entries in a BotChatter.db (not `Place = <Name>` conditions inside a
+/// phrase), lower case.
+fn chatter_places(text: &str) -> std::collections::HashSet<String> {
+    text.lines()
+        .filter_map(|l| {
+            let mut w = l.split_whitespace();
+            (w.next()? == "Place").then(|| w.next()).flatten().filter(|n| *n != "=").map(|n| n.to_ascii_lowercase())
+        })
+        .collect()
+}
+
+/// The text to append to a BotChatter.db so it lists `names` (`None`: it does already).
+pub fn chatter_additions(text: &str, names: &[String]) -> Option<(String, Vec<String>)> {
+    let have = chatter_places(text);
+    let mut add: Vec<String> = Vec::new();
+    for n in names {
+        if valid_place(n) && !have.contains(&n.to_ascii_lowercase()) && !add.iter().any(|a| a.eq_ignore_ascii_case(n)) {
+            add.push(n.clone());
+        }
+    }
+    if add.is_empty() {
+        return None;
+    }
+    let nl = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut out = String::new();
+    if !text.is_empty() && !text.ends_with('\n') {
+        out.push_str(nl);
+    }
+    out.push_str(&format!("{nl}// Place names from Loner-Strike's callout editor (no voice line: bots say them in chat){nl}"));
+    for n in &add {
+        out.push_str(&format!("Place {n}{nl}End{nl}{nl}"));
+    }
+    Some((out, add))
+}
+
+/// Makes `<game_dir>/BotChatter.db` list `names`. Ok(the names added). Err: there's no such
+/// file (the game then keeps only its built-in names), or it couldn't be written. `history`:
+/// keep the old file in the app's History first (the player's own game; not a server's copy).
+pub fn teach_places(game_dir: &Path, names: &[String], history: bool) -> Result<Vec<String>, String> {
+    let p = game_dir.join(CHATTER);
+    let Ok(bytes) = std::fs::read(&p) else { return Err(format!("There's no {CHATTER} in {}.", game_dir.display())) };
+    let text: String = bytes.iter().map(|&c| c as char).collect();
+    let Some((more, added)) = chatter_additions(&text, names) else { return Ok(Vec::new()) };
+    if history {
+        crate::safety::before("Callouts", &format!("Added {} to {CHATTER}", added.join(", ")), &p);
+    }
+    let mut out = bytes;
+    out.extend(more.bytes());
+    let part = p.with_file_name(format!("{CHATTER}.part"));
+    crate::sys::make_writable(&p);
+    std::fs::write(&part, &out).and_then(|_| crate::sys::rename_over(&part, &p)).map_err(|e| {
+        let _ = std::fs::remove_file(&part);
+        format!("{CHATTER} couldn't be saved ({e}).")
+    })?;
+    Ok(added)
+}
+
+/// The place names in a nav file's place table (it's at the start: only that much is read).
+pub fn nav_place_names(nav_file: &Path) -> Vec<String> {
+    use std::io::Read;
+    let mut b = Vec::new();
+    if std::fs::File::open(nav_file).and_then(|f| f.take(64 * 1024).read_to_end(&mut b)).is_err() {
+        return Vec::new();
+    }
+    let u16_at = |i: usize| b.get(i..i + 2).map(|x| u16::from_le_bytes([x[0], x[1]]) as usize);
+    let u32_at = |i: usize| b.get(i..i + 4).map(|x| u32::from_le_bytes([x[0], x[1], x[2], x[3]]));
+    if u32_at(0) != Some(nav::NAV_MAGIC) || u32_at(4).is_none_or(|v| v < 5) {
+        return Vec::new();
+    }
+    let Some(count) = u16_at(12) else { return Vec::new() };
+    let (mut at, mut out) = (14, Vec::new());
+    for _ in 0..count {
+        let Some(len) = u16_at(at).filter(|l| (1..=256).contains(l)) else { break };
+        let Some(raw) = b.get(at + 2..at + 2 + len) else { break };
+        out.push(raw[..len - 1].iter().take_while(|&&c| c != 0).map(|&c| c as char).collect());
+        at += 2 + len;
+    }
+    out
+}
+
+/// A server got a nav (navs.rs): its game's BotChatter.db learns the nav's place names, so the
+/// game keeps them. Quiet: a server without the file keeps the game's own names, as before.
+pub fn teach_server(server_dir: &Path, game: &str, nav_file: &Path) {
+    let names = nav_place_names(nav_file);
+    if !names.is_empty() {
+        let _ = teach_places(&server_dir.join(game), &names, false);
+    }
 }
 
 // ---- suggestions ------------------------------------------------------------------------
@@ -353,6 +472,42 @@ fn changes_json(c: &[(u32, String)]) -> Value {
     Value::Array(c.iter().map(|(id, p)| json!({"id": id, "place": p})).collect())
 }
 
+/// The player's game learns the nav's names (CS 1.6 and Condition Zero each read their own
+/// BotChatter.db, and Condition Zero plays CS 1.6's maps too). Words for the save message.
+fn teach_game(m: &MapFile, places: &[String]) -> String {
+    let mut added: Vec<String> = Vec::new();
+    let mut found = false;
+    for g in ["cstrike", "czero"] {
+        let dir = m.hl.join(g);
+        if !dir.join(CHATTER).is_file() {
+            continue;
+        }
+        found = true;
+        match teach_places(&dir, places, true) {
+            Ok(a) => {
+                for n in a {
+                    if !added.contains(&n) {
+                        added.push(n);
+                    }
+                }
+            }
+            Err(e) => return format!(" {e} The game won't know the new names until it can be."),
+        }
+    }
+    if !found {
+        let known = voice_places(&m.hl, &m.game);
+        if places.iter().all(|p| known.iter().any(|v| v.eq_ignore_ascii_case(p))) {
+            return String::new();
+        }
+        return format!(" This game has no {CHATTER}, so playing here it keeps only the standard place names (servers learn the new ones with the nav).");
+    }
+    match added.len() {
+        0 => String::new(),
+        1 => format!(" {} is new to the game, so it's added to its place list ({CHATTER}): the game reads it when it next starts.", added[0]),
+        _ => format!(" {} are new to the game, so they're added to its place list ({CHATTER}): the game reads them when it next starts.", crate::navs::names(&added)),
+    }
+}
+
 /// Saves `changes` to the map's nav. `seen`: the stamp the page loaded.
 pub fn save(m: &MapFile, seen: &str, changes: &[(u32, String)]) -> Result<Value, String> {
     let p = m.sibling("nav").ok_or(NO_NAV)?;
@@ -380,6 +535,7 @@ pub fn save(m: &MapFile, seen: &str, changes: &[(u32, String)]) -> Result<Value,
     if backed {
         msg.push_str(" The old nav is kept next to it as .nav.bak.");
     }
+    msg.push_str(&teach_game(m, &after.places));
     msg.push_str(" Servers get the new names with the next sync.");
     Ok(json!({"ok": true, "changed": changed, "message": msg, "stamp": stamp(&p), "knowledge": knowledge_fits(m, &after)}))
 }
@@ -645,6 +801,80 @@ mod tests {
         let st2 = out["stamp"].as_str().unwrap().to_string();
         save(&m, &st2, &[(11, "Long".into())]).unwrap();
         assert_eq!(std::fs::read(hl.join("cstrike/maps/de_cal.nav.bak")).unwrap(), original);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_game_learns_new_place_names() {
+        // a CZ-style file: places with and without voice lines, a phrase with a place condition
+        let db = "BaseDir \"radio\\bot\"\r\n\r\nPlace BombsiteA\r\n\tradio\\bot\\a.wav\r\nEnd\r\n\r\nPlace Catwalkish\r\nEnd\r\n\r\nChatter Help\r\n\tPlace = Bridge\r\n\tbridge.wav\r\nEnd";
+        let names: Vec<String> = ["bombsitea", "Catwalk", "ZorkBase", "Bridge", "catwalk", "not valid"].iter().map(|s| s.to_string()).collect();
+        let (more, added) = chatter_additions(db, &names).unwrap();
+        // known ones (any case) stay out; a "Place = X" condition isn't an entry; one of each
+        assert_eq!(added, ["Catwalk", "ZorkBase", "Bridge"]);
+        assert!(more.starts_with("\r\n\r\n//"), "{more:?}");
+        assert!(more.contains("\r\nPlace Catwalk\r\nEnd\r\n") && more.contains("\r\nPlace ZorkBase\r\nEnd\r\n"), "{more:?}");
+        let both = format!("{db}{more}");
+        assert!(chatter_additions(&both, &names).is_none());
+        let have = chatter_places(&both);
+        for n in ["bombsitea", "catwalkish", "catwalk", "zorkbase", "bridge"] {
+            assert!(have.contains(n), "{n}");
+        }
+        // the radio list is only the places with a voice line: not the ones added here
+        assert_eq!(spoken_places(&both), ["BombsiteA"]);
+
+        // on disk: a game folder's file, then a server getting a nav
+        let root = std::env::temp_dir().join(format!("ls-callouts-chatter-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("srv/cstrike/maps")).unwrap();
+        assert!(teach_places(&root.join("srv/czero"), &names, false).unwrap_err().contains("There's no BotChatter.db"));
+        let file = root.join("srv/cstrike/BotChatter.db");
+        std::fs::write(&file, "Place BombsiteA\nEnd\n").unwrap();
+        let mut n = row();
+        n.places = vec!["Side".into(), "Tunnel".into(), "BombsiteA".into()];
+        let navp = root.join("srv/cstrike/maps/de_x.nav");
+        std::fs::write(&navp, n.write()).unwrap();
+        assert_eq!(nav_place_names(&navp), ["Side", "Tunnel", "BombsiteA"]);
+        teach_server(&root.join("srv"), "cstrike", &navp);
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.starts_with("Place BombsiteA\nEnd\n\n//"), "{text}");
+        assert!(text.contains("\nPlace Side\nEnd\n") && text.contains("\nPlace Tunnel\nEnd\n") && !text.contains("Place BombsiteA\nEnd\n\nPlace BombsiteA"), "{text}");
+        // a second time adds nothing
+        teach_server(&root.join("srv"), "cstrike", &navp);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
+        // not a nav, an old nav: no names
+        std::fs::write(&navp, b"nonsense").unwrap();
+        assert!(nav_place_names(&navp).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn saving_adds_new_names_to_the_games_place_list() {
+        let root = std::env::temp_dir().join(format!("ls-callouts-teach-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let hl = root.join("Half-Life");
+        std::fs::create_dir_all(hl.join("cstrike/maps")).unwrap();
+        std::fs::create_dir_all(hl.join("czero")).unwrap();
+        let bsp = hl.join("cstrike/maps/de_cal.bsp");
+        std::fs::write(&bsp, crate::goldsrc::bsp::fixture::build()).unwrap();
+        let navp = hl.join("cstrike/maps/de_cal.nav");
+        std::fs::write(&navp, row().write()).unwrap();
+        let voice: String = VOICE.iter().map(|v| format!("Place {v}\nEnd\n\n")).collect();
+        std::fs::write(hl.join("cstrike/BotChatter.db"), &voice).unwrap();
+        std::fs::write(hl.join("czero/BotChatter.db"), &voice).unwrap();
+        let m = MapFile { name: "de_cal".into(), bsp, game: "cstrike".into(), hl: hl.clone(), czero: false };
+        // "Side" and "Tunnel" are in the voice list; "Catwalk" and "ZorkBase" aren't
+        let out = save(&m, &stamp(&navp), &[(10, "Catwalk".into()), (12, "ZorkBase".into())]).unwrap();
+        let msg = out["message"].as_str().unwrap();
+        assert!(msg.contains("Catwalk and ZorkBase are new to the game"), "{msg}");
+        for g in ["cstrike", "czero"] {
+            let text = std::fs::read_to_string(hl.join(g).join("BotChatter.db")).unwrap();
+            assert!(text.contains("\nPlace Catwalk\nEnd\n") && text.contains("\nPlace ZorkBase\nEnd\n"), "{g}: {text}");
+            assert_eq!(text.matches("Place Side\n").count(), 1);
+        }
+        // known names only: nothing to say about the place list
+        let out = save(&m, &out["stamp"].as_str().unwrap().to_string(), &[(10, "Side".into())]).unwrap();
+        assert!(!out["message"].as_str().unwrap().contains("BotChatter"), "{out}");
         let _ = std::fs::remove_dir_all(&root);
     }
 
