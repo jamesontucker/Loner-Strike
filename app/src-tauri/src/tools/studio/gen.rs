@@ -535,7 +535,7 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     let uses_buy = any(&["buy.where", "buy.allow"]);
     let uses_save = any(&["save.set", "save.add"]) || pure_used(&gen, "save.get");
     let uses_clock = any(&["clock.set", "clock.add", "clock.pause", "event.time_up"]) || pure_used(&gen, "clock.left");
-    let new_round = !timers.is_empty() || !round_vars.is_empty() || uses_clock || uses_down;
+    let new_round = !timers.is_empty() || !round_vars.is_empty() || uses_clock || uses_down || uses_save;
 
     let mut o = Out { text: String::new(), lines: 0 };
     let mut spans = Vec::new();
@@ -549,7 +549,7 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     o.blank();
     o.line("#include <amxmodx>\n#include <cstrike>\n#include <fakemeta>\n#include <engine>\n#include <hamsandwich>\n#include <loner>");
     if graph_uses(g, &["save.get", "save.set", "save.add"]) {
-        o.line("#include <nvault>");
+        o.line("#include <celltrie>");
     }
     o.blank();
     o.line(format!("#define LSG_MODE {}\n#define LSG_CTX {}\n#define LSG_TXT {TXT}\n#define LSG_N {}\n#define LSG_TASK {TASK_BASE}", pawn_str(&id_text(&g.mode.id)), CTX + gen.slots.len(), gen.live.len().max(1)));
@@ -668,7 +668,7 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         o.line("\tset_task(1.0, \"lsg_clock_tick\", LSG_TASK - 2, _, _, \"b\")");
     }
     if uses_save {
-        o.line("\tg_lsgVault = nvault_open(fmt(\"studio_%s\", LSG_MODE))");
+        o.line("\tlsg_saved_load()");
     }
     // chat commands: one command each
     for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.chat_command") {
@@ -692,6 +692,9 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         if uses_down {
             o.line("\tfor (new p = 1; p <= MaxClients; p++)\n\t\tlsg_clear_down(p)");
         }
+        if uses_save {
+            o.line("\tlsg_saved_flush()");
+        }
         for (i, x) in &round_vars {
             let init = Gen::var_lit(&x.ty, Some(&x.default).filter(|d| !d.is_null()));
             let set = |r: String| if x.ty == "text" { format!("copy({r}, 63, {init})") } else { format!("{r} = {init}") };
@@ -713,7 +716,7 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
             o.line("\tlsd_end()");
         }
         if uses_save {
-            o.line("\tif (g_lsgVault != INVALID_HANDLE)\n\t\tnvault_close(g_lsgVault)");
+            o.line("\tlsg_saved_flush()");
         }
         if uses_clock {
             o.line("\tlsg_clock_off()");
@@ -804,8 +807,17 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         o.line("}");
         o.blank();
     }
-    if has("event.player_left") {
-        o.line("public client_disconnected(id)\n\tlsg_on_player_left(id)\n");
+    if has("event.player_left") || uses_save {
+        o.line("public client_disconnected(id)\n{");
+        if has("event.player_left") {
+            o.line("\tlsg_on_player_left(id)");
+        }
+        if uses_save {
+            o.line("\tlsg_saved_flush()");
+        } else {
+            o.line("\t#pragma unused id");
+        }
+        o.line("}\n");
     }
 
     // handlers
@@ -1379,7 +1391,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let p = inp("player", "player");
             let key = pawn_str(&name_text(gen.text(n, def, "key")));
             let call = if def.kind == "save.set" { format!("lsg_saved_set({p}, {key}, {})", inp("value", "number")) } else { format!("lsg_saved_set({p}, {key}, lsg_saved_get({p}, {key}) + ({}))", inp("amount", "number")) };
-            check(&mut b, &format!("!lsg_ok({p}) || g_lsgVault == INVALID_HANDLE"), "Not saved: nobody there, or the store didn't open.", &[format!("\t{call}"), if debug { format!("\tlsd_exit({i}, fmt(\"%.1f\", lsg_saved_get({p}, {key})))") } else { String::new() }]);
+            check(&mut b, &format!("!lsg_ok({p}) || g_lsgSaved == Invalid_Trie"), "Not saved: nobody there, or the store didn't open.", &[format!("\t{call}"), if debug { format!("\tlsd_exit({i}, fmt(\"%.1f\", lsg_saved_get({p}, {key})))") } else { String::new() }]);
             then_line(&mut b, "then");
         }
         "clock.set" | "clock.add" | "clock.pause" => {
@@ -2034,8 +2046,75 @@ public CS_OnBuyAttempt(id, item)
 	return PLUGIN_CONTINUE
 }"#;
 
-/// Saved values (nvault, one store per mode): a player's SteamID, else their name.
-const SAVED: &str = r#"stock g_lsgVault = INVALID_HANDLE
+/// Saved values: one file per mode in the game's addons/amxmodx/data/studio/<mode>.saved, a line
+/// "key<TAB>value" each, kept in memory and written on every change (and again at a new round, a
+/// disconnect and the map's end), through a .new file renamed over the old one so a crash leaves
+/// one whole file. A player is their SteamID, else their name (bots, LAN and pending ids).
+const SAVED: &str = r#"stock Trie:g_lsgSaved = Invalid_Trie, bool:g_lsgSavedDirty
+
+stock lsg_saved_path(out[], len, const ext[])
+{
+	new dir[128]
+	get_localinfo("amxx_datadir", dir, charsmax(dir))
+	formatex(out, len, "%s/studio/%s.saved%s", dir, LSG_MODE, ext)
+}
+
+stock lsg_saved_load()
+{
+	g_lsgSaved = TrieCreate()
+	new path[192], line[160], key[128], val[24]
+	lsg_saved_path(path, charsmax(path), "")
+	// (a crash between writing the new file and renaming it: the new one is whole)
+	if (!file_exists(path))
+		lsg_saved_path(path, charsmax(path), ".new")
+	new f = fopen(path, "rt")
+	if (!f)
+		return
+	while (fgets(f, line, charsmax(line)))
+	{
+		trim(line)
+		new tab = contain(line, "^t")
+		if (tab <= 0)
+			continue
+		line[tab] = 0
+		copy(key, charsmax(key), line)
+		copy(val, charsmax(val), line[tab + 1])
+		TrieSetCell(g_lsgSaved, key, str_to_float(val))
+	}
+	fclose(f)
+}
+
+public lsg_saved_flush()
+{
+	if (!g_lsgSavedDirty || g_lsgSaved == Invalid_Trie)
+		return
+	new path[192], tmp[200], dir[128]
+	get_localinfo("amxx_datadir", dir, charsmax(dir))
+	add(dir, charsmax(dir), "/studio")
+	if (!dir_exists(dir))
+		mkdir(dir)
+	lsg_saved_path(path, charsmax(path), "")
+	lsg_saved_path(tmp, charsmax(tmp), ".new")
+	new f = fopen(tmp, "wt")
+	if (!f)
+		return
+	new Snapshot:snap = TrieSnapshotCreate(g_lsgSaved), key[128], Float:v
+	for (new i = 0; i < TrieSnapshotLength(snap); i++)
+	{
+		TrieSnapshotGetKey(snap, i, key, charsmax(key))
+		TrieGetCell(g_lsgSaved, key, v)
+		fprintf(f, "%s^t%f^n", key, v)
+	}
+	TrieSnapshotDestroy(snap)
+	fclose(f)
+	// Windows won't rename over a file: the old one goes first (the .new one is read if a crash lands here)
+	if (!rename_file(tmp, path, 1))
+	{
+		delete_file(path)
+		rename_file(tmp, path, 1)
+	}
+	g_lsgSavedDirty = false
+}
 
 stock lsg_saved_key(id, const key[], out[], len)
 {
@@ -2049,27 +2128,33 @@ stock lsg_saved_key(id, const key[], out[], len)
 	}
 	else
 		formatex(out, len, "%s@%s", key, who)
+	// (a tab or a line end in a name would break the file's lines)
+	for (new i = 0; out[i]; i++)
+		if (out[i] < 32)
+			out[i] = '_'
 }
 
 stock Float:lsg_saved_get(id, const key[])
 {
-	if (g_lsgVault == INVALID_HANDLE || !lsg_ok(id))
+	if (g_lsgSaved == Invalid_Trie || !lsg_ok(id))
 		return 0.0
-	new k[96], v[24]
+	new k[96], Float:v
 	lsg_saved_key(id, key, k, charsmax(k))
-	if (!nvault_get(g_lsgVault, k, v, charsmax(v)))
+	if (!TrieGetCell(g_lsgSaved, k, v))
 		return 0.0
-	return str_to_float(v)
+	return v
 }
 
 stock lsg_saved_set(id, const key[], Float:value)
 {
-	if (g_lsgVault == INVALID_HANDLE || !lsg_ok(id))
+	if (g_lsgSaved == Invalid_Trie || !lsg_ok(id))
 		return
-	new k[96], v[24]
+	new k[96]
 	lsg_saved_key(id, key, k, charsmax(k))
-	formatex(v, charsmax(v), "%f", value)
-	nvault_set(g_lsgVault, k, v)
+	TrieSetCell(g_lsgSaved, k, value)
+	g_lsgSavedDirty = true
+	// written straight away: a crash or a killed server keeps it
+	lsg_saved_flush()
 }"#;
 
 /// The mode's own round clock (the game's time limit is held off while it runs).

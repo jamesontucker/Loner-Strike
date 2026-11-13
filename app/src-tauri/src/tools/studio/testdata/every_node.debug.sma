@@ -10,7 +10,7 @@
 #include <engine>
 #include <hamsandwich>
 #include <loner>
-#include <nvault>
+#include <celltrie>
 
 #define LSG_MODE "every_node"
 #define LSG_CTX 13
@@ -932,7 +932,71 @@ public CS_OnBuyAttempt(id, item)
 	return PLUGIN_CONTINUE
 }
 
-stock g_lsgVault = INVALID_HANDLE
+stock Trie:g_lsgSaved = Invalid_Trie, bool:g_lsgSavedDirty
+
+stock lsg_saved_path(out[], len, const ext[])
+{
+	new dir[128]
+	get_localinfo("amxx_datadir", dir, charsmax(dir))
+	formatex(out, len, "%s/studio/%s.saved%s", dir, LSG_MODE, ext)
+}
+
+stock lsg_saved_load()
+{
+	g_lsgSaved = TrieCreate()
+	new path[192], line[160], key[128], val[24]
+	lsg_saved_path(path, charsmax(path), "")
+	// (a crash between writing the new file and renaming it: the new one is whole)
+	if (!file_exists(path))
+		lsg_saved_path(path, charsmax(path), ".new")
+	new f = fopen(path, "rt")
+	if (!f)
+		return
+	while (fgets(f, line, charsmax(line)))
+	{
+		trim(line)
+		new tab = contain(line, "^t")
+		if (tab <= 0)
+			continue
+		line[tab] = 0
+		copy(key, charsmax(key), line)
+		copy(val, charsmax(val), line[tab + 1])
+		TrieSetCell(g_lsgSaved, key, str_to_float(val))
+	}
+	fclose(f)
+}
+
+public lsg_saved_flush()
+{
+	if (!g_lsgSavedDirty || g_lsgSaved == Invalid_Trie)
+		return
+	new path[192], tmp[200], dir[128]
+	get_localinfo("amxx_datadir", dir, charsmax(dir))
+	add(dir, charsmax(dir), "/studio")
+	if (!dir_exists(dir))
+		mkdir(dir)
+	lsg_saved_path(path, charsmax(path), "")
+	lsg_saved_path(tmp, charsmax(tmp), ".new")
+	new f = fopen(tmp, "wt")
+	if (!f)
+		return
+	new Snapshot:snap = TrieSnapshotCreate(g_lsgSaved), key[128], Float:v
+	for (new i = 0; i < TrieSnapshotLength(snap); i++)
+	{
+		TrieSnapshotGetKey(snap, i, key, charsmax(key))
+		TrieGetCell(g_lsgSaved, key, v)
+		fprintf(f, "%s^t%f^n", key, v)
+	}
+	TrieSnapshotDestroy(snap)
+	fclose(f)
+	// Windows won't rename over a file: the old one goes first (the .new one is read if a crash lands here)
+	if (!rename_file(tmp, path, 1))
+	{
+		delete_file(path)
+		rename_file(tmp, path, 1)
+	}
+	g_lsgSavedDirty = false
+}
 
 stock lsg_saved_key(id, const key[], out[], len)
 {
@@ -946,27 +1010,33 @@ stock lsg_saved_key(id, const key[], out[], len)
 	}
 	else
 		formatex(out, len, "%s@%s", key, who)
+	// (a tab or a line end in a name would break the file's lines)
+	for (new i = 0; out[i]; i++)
+		if (out[i] < 32)
+			out[i] = '_'
 }
 
 stock Float:lsg_saved_get(id, const key[])
 {
-	if (g_lsgVault == INVALID_HANDLE || !lsg_ok(id))
+	if (g_lsgSaved == Invalid_Trie || !lsg_ok(id))
 		return 0.0
-	new k[96], v[24]
+	new k[96], Float:v
 	lsg_saved_key(id, key, k, charsmax(k))
-	if (!nvault_get(g_lsgVault, k, v, charsmax(v)))
+	if (!TrieGetCell(g_lsgSaved, k, v))
 		return 0.0
-	return str_to_float(v)
+	return v
 }
 
 stock lsg_saved_set(id, const key[], Float:value)
 {
-	if (g_lsgVault == INVALID_HANDLE || !lsg_ok(id))
+	if (g_lsgSaved == Invalid_Trie || !lsg_ok(id))
 		return
-	new k[96], v[24]
+	new k[96]
 	lsg_saved_key(id, key, k, charsmax(k))
-	formatex(v, charsmax(v), "%f", value)
-	nvault_set(g_lsgVault, k, v)
+	TrieSetCell(g_lsgSaved, k, value)
+	g_lsgSavedDirty = true
+	// written straight away: a crash or a killed server keeps it
+	lsg_saved_flush()
 }
 
 stock bool:g_lsgClockOn, bool:g_lsgClockPaused, bool:g_lsgClockInf, Float:g_lsgClockEnd, Float:g_lsgClockLeft
@@ -1080,7 +1150,7 @@ public plugin_init()
 	RegisterHamPlayer(Ham_TakeDamage, "lsg_pre_damage", 0)
 	set_task(0.25, "lsg_revive_tick", LSG_TASK - 1, _, _, "b")
 	set_task(1.0, "lsg_clock_tick", LSG_TASK - 2, _, _, "b")
-	g_lsgVault = nvault_open(fmt("studio_%s", LSG_MODE))
+	lsg_saved_load()
 	register_clcmd("say /shop", "lsg_chat92")
 	register_clcmd("say !shop", "lsg_chat92")
 	register_clcmd("say_team /shop", "lsg_chat92")
@@ -1094,6 +1164,7 @@ public lsg_new_round()
 	lsg_clock_off()
 	for (new p = 1; p <= MaxClients; p++)
 		lsg_clear_down(p)
+	lsg_saved_flush()
 	for (new t = 0; t < 4; t++)
 		g_tv4[t] = 0.0
 }
@@ -1109,8 +1180,7 @@ public lsg_chat92(id)
 public plugin_end()
 {
 	lsd_end()
-	if (g_lsgVault != INVALID_HANDLE)
-		nvault_close(g_lsgVault)
+	lsg_saved_flush()
 	lsg_clock_off()
 }
 
@@ -1185,7 +1255,10 @@ public client_putinserver(id)
 }
 
 public client_disconnected(id)
+{
 	lsg_on_player_left(id)
+	lsg_saved_flush()
+}
 
 public lsg_on_round_started()
 {
@@ -3466,7 +3539,7 @@ lsg_n141(ctx[])
 	lsd_in_number("Amount", 1.0)
 	if (lsd_enter(141, ctx))
 		return
-	if (!lsg_ok(ctx[0]) || g_lsgVault == INVALID_HANDLE)
+	if (!lsg_ok(ctx[0]) || g_lsgSaved == Invalid_Trie)
 		lsd_error(141, "Not saved: nobody there, or the store didn't open.")
 	else
 	{
@@ -3484,7 +3557,7 @@ lsg_n142(ctx[])
 	lsd_in_number("Value", 1.0)
 	if (lsd_enter(142, ctx))
 		return
-	if (!lsg_ok(ctx[0]) || g_lsgVault == INVALID_HANDLE)
+	if (!lsg_ok(ctx[0]) || g_lsgSaved == Invalid_Trie)
 		lsd_error(142, "Not saved: nobody there, or the store didn't open.")
 	else
 	{

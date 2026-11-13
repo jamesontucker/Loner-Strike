@@ -4948,7 +4948,7 @@
       ],
       [
        "knife",
-       "Nothing (knives)"
+       "Nothing at all (the spawn pistol stays)"
       ]
      ]
     }
@@ -4958,7 +4958,7 @@
    "type": "save.get",
    "title": "Saved Value",
    "category": "Saved",
-   "help": "A number kept for this player across maps and restarts (0 until set). Each mode has its own.",
+   "help": "A number kept for this player across maps, restarts and crashes (0 until set). Each mode has its own file.",
    "inputs": [
     {
      "id": "player",
