@@ -13,6 +13,7 @@ pub mod mapfile;
 pub mod math;
 pub mod ops;
 pub mod prefab;
+pub mod rmf; // P5: Hammer .rmf and J.A.C.K. .jmf import
 pub mod shapes;
 pub mod texture;
 pub mod vertex;

@@ -419,7 +419,7 @@ fn rows_json(rows: &[FileRow]) -> Value {
                 "size": md.as_ref().map(|m| m.len()),
                 "modified": modified,
                 "note": r.note,
-                "openHere": exists && (ext == "lsmap" || ext == "map") && r.kind != Kind::Project,
+                "openHere": exists && matches!(ext.as_str(), "lsmap" | "map" | "rmf" | "jmf") && r.kind != Kind::Project,
                 "canRename": exists && matches!(r.kind, Kind::Project | Kind::Mine),
                 "canDelete": exists && matches!(r.kind, Kind::Mine | Kind::Output),
             })
@@ -504,6 +504,12 @@ async fn api_project_action(State(st): State<Shared>, Extension(ed): Extension<E
                     return Err("That file isn't there.".into());
                 }
                 let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+                if (ext == "rmf" || ext == "jmf") && r.kind != Kind::Project {
+                    let im = import_other(&path)?;
+                    let mut state = ed.install(im.doc, stem(&path), None, &dirs);
+                    state["notes"] = json!(im.notes);
+                    return Ok(json!({"opened": true, "state": state}));
+                }
                 if (ext == "lsmap" || ext == "map") && r.kind != Kind::Project {
                     let (doc, project) = load_file(&path)?;
                     remember(&ed.dir, &path, project);
@@ -553,9 +559,49 @@ async fn api_project_action(State(st): State<Shared>, Extension(ed): Extension<E
     .await
 }
 
+// ---- Hammer .rmf / J.A.C.K. .jmf import --------------------------------------------------
+
+/// A .rmf or .jmf file read into a document (by its extension, then by its first bytes).
+pub fn import_other(path: &Path) -> Result<crate::editor::rmf::Imported, String> {
+    let len = std::fs::metadata(path).map_err(|_| "That file couldn't be opened.".to_string())?.len();
+    if len > super::MAX_FILE {
+        return Err("That file is too big to be a map (over 64 MB).".into());
+    }
+    let bytes = std::fs::read(path).map_err(|_| "That file couldn't be read.".to_string())?;
+    if bytes.starts_with(b"JHMF") {
+        crate::editor::rmf::read_jmf(&bytes)
+    } else if bytes.len() > 7 && &bytes[4..7] == b"RMF" {
+        crate::editor::rmf::read_rmf(&bytes)
+    } else {
+        Err("That isn't a Hammer .rmf or J.A.C.K. .jmf file.".into())
+    }
+}
+
+async fn api_import_other(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let dirs = wad_dirs(&st);
+    blocking(move || {
+        use tauri_plugin_dialog::DialogExt;
+        let app = st.app.get().cloned().ok_or(super::INTERNAL)?;
+        let Some(picked) = app.dialog().file().set_title("Import a Hammer or J.A.C.K. map").add_filter("Hammer / J.A.C.K. map", &["rmf", "jmf"]).blocking_pick_file() else {
+            return Ok(json!({"cancelled": true}));
+        };
+        let path = picked.into_path().map_err(|_| "That file can't be used.".to_string())?;
+        let im = import_other(&path)?;
+        // not a project yet: Save makes one (the original file is never written to)
+        let mut state = ed.install(im.doc, stem(&path), None, &dirs);
+        state["notes"] = json!(im.notes);
+        Ok(state)
+    })
+    .await
+}
+
 /// Mounted by tools/editor.rs (`routes_with`), sharing its session.
 pub fn routes() -> Router<Shared> {
     Router::new()
+        .route("/api/tools/editor/import-other", post(api_import_other))
         .route("/api/tools/editor/project", get(api_project))
         .route("/api/tools/editor/project/action", post(api_project_action))
         .route("/api/tools/editor/history", get(api_history))
