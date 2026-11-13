@@ -193,6 +193,7 @@ new g_nslots;
 new g_slotOf[MAX_ENTS];
 new g_doorOf[MAX_ENTS];
 new g_pend[MAX_ENTS];
+new g_parseEnt;
 new Trie:g_pendKeys[MAX_ENTS];
 
 /* ---- players ---- */
@@ -610,13 +611,30 @@ public fm_keyvalue(ent, kvd)
 	get_kvd(kvd, KV_Value, val, charsmax(val));
 	if (equal(key, "classname"))
 	{
+		/* the engine sends classname twice: first on its own to pick the class (no class
+		   yet), then again among the other keys (last of all in a compiled BSP). The first
+		   starts this entity afresh; the repeat must keep the keys that came before it */
+		/* (nothing may be read from the entity or kvd's class name on the first call: the
+		   entity has no game data yet and the class name is NULL. Entities are parsed one at
+		   a time, so "the entity being parsed" tells the repeat from a new one) */
+		new bool:first = ent != g_parseEnt;
+		g_parseEnt = ent;
 		new kind = kind_of(val);
+		if (first)
+		{
+			g_pend[ent] = K_NONE;
+			if (g_pendKeys[ent] != Invalid_Trie)
+			{
+				TrieDestroy(g_pendKeys[ent]);
+				g_pendKeys[ent] = Invalid_Trie;
+			}
+		}
 		if (kind && kind != K_CRATE)
 		{
 			set_kvd(kvd, KV_Value, "info_target");
+			if (g_pend[ent] && g_pendKeys[ent] != Invalid_Trie)
+				return FMRES_IGNORED;
 			g_pend[ent] = kind;
-			if (g_pendKeys[ent] != Invalid_Trie)
-				TrieDestroy(g_pendKeys[ent]);
 			g_pendKeys[ent] = TrieCreate();
 		}
 		return FMRES_IGNORED;
@@ -628,6 +646,8 @@ public fm_keyvalue(ent, kvd)
 
 public fm_spawn_post(ent)
 {
+	if (ent == g_parseEnt)
+		g_parseEnt = 0;
 	if (ent <= 0 || ent >= MAX_ENTS || !g_pend[ent])
 		return FMRES_IGNORED;
 	new kind = g_pend[ent];
