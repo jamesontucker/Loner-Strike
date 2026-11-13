@@ -17,10 +17,12 @@ export type Op =
 
 export type Problem = { kind: string; text: string; hint: string; areas: number[]; at: Vec3; fix: { label: string; op: Op } | null };
 
-/** Per area (nav file order): 0 bots get there and back, 1 never, 2 only one way (a trap). */
+/** Per area (nav file order): 0 bots get there and back, 1 never, 2 only one way (a trap), 3 only by falling in. */
 export const REACH_OK = 0;
 export const REACH_NEVER = 1;
 export const REACH_TRAP = 2;
+/** 3: bots only get there by falling or stumbling in (no link leads there), and can walk back out. */
+export const REACH_FALLS = 3;
 
 export type FixState = {
   map: string;

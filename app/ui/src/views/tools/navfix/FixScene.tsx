@@ -16,7 +16,7 @@ import { ROOT_ROTATION, type Vec3 } from "../viewer/coords";
 import { pointerEvents } from "../viewer/Scene";
 import { areaColours } from "../viewer/NavLayer";
 import { World, type ModelMesh } from "../viewer/World";
-import { REACH_NEVER, REACH_TRAP } from "./navfixApi";
+import { REACH_FALLS, REACH_NEVER, REACH_TRAP } from "./navfixApi";
 
 export type Mode = "select" | "draw" | "link";
 export type ColourBy = "reach" | Exclude<NavColour, "island">;
@@ -27,6 +27,7 @@ const C = {
   ok: new THREE.Color("#6fc2b0"),
   never: new THREE.Color("#e2574c"),
   trap: new THREE.Color("#e8a23c"),
+  falls: new THREE.Color("#d9c75a"),
   picked: new THREE.Color("#fff6b0"),
   from: new THREE.Color("#7fd1ff"),
   problem: new THREE.Color("#ff5fd2"),
@@ -155,7 +156,7 @@ const EditNav = forwardRef<THREE.Mesh, Props>(function EditNav({ nav, reach, col
     const base = colourBy === "reach" ? null : areaColours(nav, colourBy, null, "off");
     const attr = geo.g.getAttribute("color") as THREE.BufferAttribute;
     nav.areas.forEach((a, i) => {
-      let col = base ? base[i] : reach[i] === REACH_NEVER ? C.never : reach[i] === REACH_TRAP ? C.trap : C.ok;
+      let col = base ? base[i] : reach[i] === REACH_NEVER ? C.never : reach[i] === REACH_TRAP ? C.trap : reach[i] === REACH_FALLS ? C.falls : C.ok;
       if (shown.has(a.id)) col = C.problem;
       if (selected.has(a.id)) col = C.picked;
       if (a.id === linkFrom) col = C.from;

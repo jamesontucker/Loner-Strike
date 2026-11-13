@@ -118,7 +118,27 @@ pub trait Ground {
     fn floor(&self, x: f32, y: f32, z: f32) -> Option<f32>;
     /// Whether a standing player fits with their feet at `p`.
     fn fits(&self, p: [f32; 3]) -> bool;
+    /// What happens to a player walking from `from` (feet, just inside an area's edge) out
+    /// to `to`: where they land, falling no further than [`MAX_FALL`].
+    fn step_off(&self, _from: [f32; 3], _to: [f32; 2]) -> Step {
+        Step::Wall
+    }
 }
+
+/// See [`Ground::step_off`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Step {
+    /// A wall or railing is in the way, or a player doesn't fit there.
+    Wall,
+    /// Nothing to land on (a pit deeper than a bot survives, or the void).
+    Fall,
+    /// Lands with the feet at this height.
+    Land(f32),
+}
+
+/// The furthest a bot falls and lives at full health: the game's fall damage is
+/// (speed - 500) * 100 / 600 * 1.25, so 100 damage at 980 units/s, a 600-unit drop at sv_gravity 800.
+pub const MAX_FALL: f32 = 590.0;
 
 /// How far above and below the drawn height the floor is looked for.
 const SNAP_UP: f32 = 18.0;
@@ -145,6 +165,33 @@ impl Ground for MapHulls {
             }
         }
         true
+    }
+    fn step_off(&self, from: [f32; 3], to: [f32; 2]) -> Step {
+        // nothing at shin or head height between the edge and the spot past it (point traces:
+        // an area can run right up to a wall, so the player's box at the edge may be stuck)
+        for up in [20.0, 56.0] {
+            let t = self.trace(0, [from[0], from[1], from[2] + up], [to[0], to[1], from[2] + up]);
+            if t.fraction < 1.0 || t.all_solid {
+                return Step::Wall;
+            }
+        }
+        // then the standing player's box (hull 1, origin 36 above the feet) falls from a step
+        // up, so a step up onto the next area counts as walking on. Close to a wall the box
+        // doesn't fit at that exact spot (the player would be a few units over): a point then.
+        let top = from[2] + 36.0 + SNAP_UP;
+        let mut t = self.trace(1, [to[0], to[1], top], [to[0], to[1], from[2] + 36.0 - MAX_FALL]);
+        if t.start_solid {
+            t = self.trace(0, [to[0], to[1], from[2] + SNAP_UP], [to[0], to[1], from[2] - MAX_FALL]);
+            t.end[2] += 36.0;
+        }
+        if t.start_solid {
+            Step::Wall
+        } else if t.fraction < 1.0 && t.normal[2] >= 0.7 {
+            Step::Land(t.end[2] - 36.0)
+        } else {
+            // (the void, a pit too deep, or a slope too steep to stand on: they slide off it)
+            Step::Fall
+        }
     }
 }
 
@@ -495,6 +542,9 @@ fn place_index(d: &mut Doc, name: &str) -> Result<u16, String> {
 pub const REACH_OK: u8 = 0;
 pub const REACH_NEVER: u8 = 1;
 pub const REACH_TRAP: u8 = 2;
+/// Bots only get there by falling or stumbling in (off an edge with no link), and can walk
+/// back out: they never go there on purpose.
+pub const REACH_FALLS: u8 = 3;
 
 #[derive(Debug, Clone)]
 pub struct Problem {
@@ -616,13 +666,10 @@ fn ids(n: &Nav, list: &[usize]) -> Vec<u32> {
     list.iter().map(|&i| n.areas[i].id).collect()
 }
 
-/// A ladder's ends and the areas at each (indices): the game's own pick (nav::build_ladders,
-/// which follows the game's BuildLadders; in the sim's cs_rats2 recordings the ladders it
-/// leaves without a top are ones bots hardly ever climb), plus any area within reach of the
-/// ladder box's foot or top. That second part is generous on purpose: without it cs_rats2's
-/// nav (raw or hand-fixed) shows 120 areas no bot can reach, yet bots in those recordings
-/// stand in 39 of them, so the reach model alone would cry wolf. A ladder the game really leaves without a
-/// top is still reported on its own ("A ladder has no area at its top").
+/// A ladder's ends and the areas at each (indices), as the game picks them
+/// (nav::build_ladders follows the game's BuildLadders). A ladder it leaves without a top is
+/// reported ("A ladder has no area at its top"); in the sim's cs_rats2 recordings those are
+/// ladders bots hardly ever climb (thin plates, a vent grate, floors with no area).
 #[derive(Debug, Clone)]
 pub struct LadderEnds {
     pub bottom: [f32; 3],
@@ -631,37 +678,142 @@ pub struct LadderEnds {
     pub at_top: Vec<usize>,
 }
 
-/// How close an area has to be to a ladder's end to count as at it.
-const LADDER_REACH: f32 = 72.0;
-
-pub fn ladder_ends(n: &Nav, built: &[nav::Ladder], boxes: &[nav::LadderBox]) -> Vec<LadderEnds> {
-    let near = |p: [f32; 3], skip: &[usize]| -> Vec<usize> {
-        n.areas
-            .iter()
-            .enumerate()
-            .filter(|(i, a)| {
-                let c = a.closest_point(p);
-                !skip.contains(i) && (c[0] - p[0]).powi(2) + (c[1] - p[1]).powi(2) + (c[2] - p[2]).powi(2) <= LADDER_REACH * LADDER_REACH
-            })
-            .map(|(i, _)| i)
-            .collect()
-    };
+pub fn ladder_ends(built: &[nav::Ladder], boxes: &[nav::LadderBox]) -> Vec<LadderEnds> {
     boxes
         .iter()
         .map(|bx| {
             let (cx, cy) = ((bx.mins[0] + bx.maxs[0]) / 2.0, (bx.mins[1] + bx.maxs[1]) / 2.0);
             let (bottom, top) = ([cx, cy, bx.mins[2]], [cx, cy, bx.maxs[2]]);
             let l = built.iter().find(|l| l.entity == bx.entity);
-            let mut at_bottom: Vec<usize> = l.and_then(|l| l.bottom_area).into_iter().collect();
+            let at_bottom: Vec<usize> = l.and_then(|l| l.bottom_area).into_iter().collect();
             let mut at_top: Vec<usize> = l.map(|l| [l.top_forward, l.top_left, l.top_right, l.top_behind].into_iter().flatten().collect()).unwrap_or_default();
-            at_bottom.extend(near(bottom, &at_bottom));
-            at_top.extend(near(top, &at_top));
-            // (a short ladder's ends can reach the same area: it's the foot, not the top)
-            at_top.retain(|i| !at_bottom.contains(i));
+            at_top.sort_unstable();
             at_top.dedup();
             LadderEnds { bottom, top, at_bottom, at_top }
         })
         .collect()
+}
+
+/// Areas by 256-unit cell, for finding the area under a point without trying every one.
+struct AreaGrid {
+    cells: HashMap<(i32, i32), Vec<usize>>,
+}
+
+const CELL: f32 = 256.0;
+
+impl AreaGrid {
+    fn new(n: &Nav) -> AreaGrid {
+        let mut cells: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
+        for (i, a) in n.areas.iter().enumerate() {
+            let (lo, hi) = rect(a);
+            if !(lo[0].is_finite() && lo[1].is_finite() && hi[0].is_finite() && hi[1].is_finite()) || hi[0] - lo[0] > WORLD || hi[1] - lo[1] > WORLD {
+                continue;
+            }
+            let (x0, y0, x1, y1) = ((lo[0] / CELL).floor() as i32, (lo[1] / CELL).floor() as i32, (hi[0] / CELL).floor() as i32, (hi[1] / CELL).floor() as i32);
+            for x in x0..=x1 {
+                for y in y0..=y1 {
+                    cells.entry((x, y)).or_default().push(i);
+                }
+            }
+        }
+        AreaGrid { cells }
+    }
+
+    /// The highest area under `p` within `beneath` (the same rule as Nav::area_at).
+    fn area_at(&self, n: &Nav, p: [f32; 3], beneath: f32) -> Option<usize> {
+        let key = ((p[0] / CELL).floor() as i32, (p[1] / CELL).floor() as i32);
+        let mut best: Option<(usize, f32)> = None;
+        for &i in self.cells.get(&key).map(|v| v.as_slice()).unwrap_or(&[]) {
+            let a = &n.areas[i];
+            if !a.contains_xy(p[0], p[1]) {
+                continue;
+            }
+            let z = a.z_at(p[0], p[1]);
+            if z > p[2] + 5.0 || z < p[2] - beneath {
+                continue;
+            }
+            if best.map(|(_, bz)| z > bz).unwrap_or(true) {
+                best = Some((i, z));
+            }
+        }
+        best.map(|(i, _)| i)
+    }
+}
+
+/// How far past an area's edge the spots tried are: first where a player's middle has to be
+/// before they drop off (half the player's width and a little more), then further on across
+/// floor the nav left out.
+const PAST_EDGE_STEPS: [f32; 4] = [20.0, 48.0, 80.0, 112.0];
+/// Room between the spots tried along an edge.
+const EDGE_STEP: f32 = 32.0;
+
+/// Where bots end up stepping off each side of an area with no link to follow: the areas
+/// they land in (indices), and whether that's a drop (more than a step down) or a walk.
+/// The game's path finding only follows links and ladders, but bots leave the nav all the
+/// time (strafing in a fight, dodging, pushed by others, getting unstuck), and then fall or
+/// walk wherever the map lets them. In the sim's cs_rats2 recordings that's how bots get
+/// into 39 areas no link leads to: off the beams and shelves onto the floor below.
+fn step_offs(n: &Nav, grid: &AreaGrid, i: usize, g: &dyn Ground) -> Vec<(usize, bool)> {
+    let a = &n.areas[i];
+    let (lo, hi) = rect(a);
+    let mut out: Vec<(usize, bool)> = Vec::new();
+    let along = |from: f32, to: f32| -> Vec<f32> {
+        let len = to - from;
+        if len <= EDGE_STEP {
+            return vec![(from + to) / 2.0];
+        }
+        let k = (len / EDGE_STEP).ceil() as usize;
+        (0..=k).map(|j| from + 8.0_f32.min(len / 2.0) + (len - 16.0_f32.min(len)) * j as f32 / k as f32).collect()
+    };
+    // (inset a few units from the edge, where the floor's brush still is; then out past the
+    // edge, straight out from each side and diagonally from each corner)
+    let inset = 4.0_f32.min((hi[0] - lo[0]) / 2.0).min((hi[1] - lo[1]) / 2.0);
+    let mut tries: Vec<([f32; 2], [f32; 2])> = Vec::new();
+    for x in along(lo[0], hi[0]) {
+        tries.push(([x, lo[1] + inset], [0.0, -1.0]));
+        tries.push(([x, hi[1] - inset], [0.0, 1.0]));
+    }
+    for y in along(lo[1], hi[1]) {
+        tries.push(([lo[0] + inset, y], [-1.0, 0.0]));
+        tries.push(([hi[0] - inset, y], [1.0, 0.0]));
+    }
+    let d = std::f32::consts::FRAC_1_SQRT_2;
+    for (cx, cy, dx, dy) in [(lo[0] + inset, lo[1] + inset, -d, -d), (hi[0] - inset, lo[1] + inset, d, -d), (hi[0] - inset, hi[1] - inset, d, d), (lo[0] + inset, hi[1] - inset, -d, d)] {
+        tries.push(([cx, cy], [dx, dy]));
+    }
+    for (from, dir) in tries {
+        let z = a.z_at(from[0], from[1]);
+        // a little past the edge first; when that's floor with no area on it (a gap the nav
+        // left out), a bit further, as a player carries on walking across it; past a drop or
+        // a pit, further on is where a running jump across it lands
+        for far in PAST_EDGE_STEPS {
+            let to = [from[0] + dir[0] * (far + inset), from[1] + dir[1] * (far + inset)];
+            let land = match g.step_off([from[0], from[1], z], to) {
+                Step::Wall => break,
+                Step::Fall => continue,
+                Step::Land(h) => h,
+            };
+            let drop = z - land > SNAP_UP;
+            // (look a step above where the feet land: the area's own floor can sit a little higher)
+            match grid.area_at(n, [to[0], to[1], land + SNAP_UP], SNAP_UP + 24.0) {
+                Some(j) if j == i => {}
+                Some(j) => {
+                    if let Some(seen) = out.iter_mut().find(|(k, _)| *k == j) {
+                        seen.1 &= drop;
+                    } else {
+                        out.push((j, drop));
+                    }
+                }
+                None if !drop => continue,
+                None => {}
+            }
+            if !drop {
+                break;
+            }
+            // (dropped: a running jump may still clear it to something level further on)
+        }
+    }
+    out
 }
 
 /// Everything the auto-check finds: areas bots can't reach from any spawn (or can't get back
@@ -705,10 +857,24 @@ pub fn check(n: &Nav, spawns: &[[f32; 3]], ladders: &[LadderEnds], ground: Optio
         }
         note = Some(if spawns.is_empty() { "No spawn points were found in this map, so the biggest connected part of the nav counts as the main map." } else { "No area is under this map's spawn points, so the biggest connected part of the nav counts as the main map." }.to_string());
     }
-    let reached = bfs(&starts, &fwd);
+    // stepping off an edge where no link goes: bots don't plan it, but they end up there
+    let mut loose: Vec<Vec<(usize, bool)>> = vec![Vec::new(); count];
+    if let Some(g) = ground {
+        let grid = AreaGrid::new(n);
+        for (i, out) in loose.iter_mut().enumerate() {
+            *out = step_offs(n, &grid, i, g).into_iter().filter(|(j, _)| !fwd[i].contains(j)).collect();
+        }
+    }
+    let planned = bfs(&starts, &fwd);
+    let mut any: Vec<Vec<usize>> = fwd.clone();
+    for (i, out) in loose.iter().enumerate() {
+        any[i].extend(out.iter().map(|(j, _)| *j));
+    }
+    let reached = bfs(&starts, &any);
+    // (the way back is planned: a bot that fell somewhere only gets out along links)
     let returns = bfs(&starts, &back);
     let mut reach = vec![REACH_OK; count];
-    let (mut never, mut trapped) = (Vec::new(), Vec::new());
+    let (mut never, mut trapped, mut falls) = (Vec::new(), Vec::new(), Vec::new());
     for i in 0..count {
         if !reached[i] {
             reach[i] = REACH_NEVER;
@@ -716,6 +882,9 @@ pub fn check(n: &Nav, spawns: &[[f32; 3]], ladders: &[LadderEnds], ground: Optio
         } else if !returns[i] {
             reach[i] = REACH_TRAP;
             trapped.push(i);
+        } else if !planned[i] {
+            reach[i] = REACH_FALLS;
+            falls.push(i);
         }
     }
     for g in clusters(n, &never, &index) {
@@ -734,10 +903,27 @@ pub fn check(n: &Nav, spawns: &[[f32; 3]], ladders: &[LadderEnds], ground: Optio
         problems.push(Problem {
             kind: "trap",
             text,
-            hint: "They're only reached by one-way drops. Fine for a pit you really can't climb out of; otherwise link them back to where they lead.".into(),
+            hint: "Bots only get there by dropping down (a one-way link, or falling off an edge). Fine for a pit you really can't climb out of; otherwise link them back to where they lead.".into(),
             areas: ids(n, &g),
             at: mid(n, &g),
             fix: None,
+        });
+    }
+    for g in clusters(n, &falls, &index) {
+        let text = if g.len() == 1 { format!("Bots only get to area {} by falling in", n.areas[g[0]].id) } else { format!("Bots only get to these {} areas by falling in", g.len()) };
+        // the link bots would need: from an area they plan to reach to where they fall or walk in
+        let way_in = (0..count).filter(|&i| planned[i]).find_map(|i| loose[i].iter().find(|(j, _)| g.contains(j)).map(|&(j, drop)| (i, j, drop)));
+        problems.push(Problem {
+            kind: "falls",
+            text,
+            hint: "No link leads there, so bots never go there on purpose; they only land there falling off an edge (or stumbling in). Link them to the area they fall from (a one-way drop) or walk in from.".into(),
+            areas: ids(n, &g),
+            at: mid(n, &g),
+            fix: way_in.map(|(i, j, drop)| {
+                let (a, b) = (n.areas[i].id, n.areas[j].id);
+                let label = if drop { format!("Add a drop from {a} to {b}") } else { format!("Link {a} and {b}") };
+                (label, json!({"op": "link", "a": a, "b": b, "oneWay": drop}))
+            }),
         });
     }
 
@@ -1023,7 +1209,7 @@ fn state_json(m: &MapFile, v: &View, ctx: &MapCtx, extra: Value, can_rebuild: Re
     let n = v.doc.to_nav();
     let ground: Option<&dyn Ground> = ctx.hulls.as_deref().map(|h| h as &dyn Ground);
     let ladders = ctx.hulls.as_ref().map(|h| nav::build_ladders(&n, &h.ladders, h.as_ref())).unwrap_or_default();
-    let ends = ctx.hulls.as_ref().map(|h| ladder_ends(&n, &ladders, &h.ladders)).unwrap_or_default();
+    let ends = ctx.hulls.as_ref().map(|h| ladder_ends(&ladders, &h.ladders)).unwrap_or_default();
     let checked = check(&n, &ctx.spawns, &ends, ground);
     let mut navj = super::overlays::nav_json(&n, ctx.bsp_size, &ladders);
     navj["warning"] = json!(ctx.hull_error.as_ref().map(|e| format!("The map's shape couldn't be read, so heights aren't snapped to the floor and ladders aren't shown: {e}")));
@@ -1699,6 +1885,84 @@ mod tests {
         assert!(apply(&d, &serde_json::from_value(json!({"op": "place", "ids": [3], "name": "Bomb site"})).unwrap(), None).is_err());
     }
 
+    /// A ledge at z 128 over x < 100 and a floor at 0 past it; `wall` puts a wall at its edge.
+    struct Ledge {
+        wall: bool,
+    }
+    impl Ground for Ledge {
+        fn floor(&self, x: f32, _y: f32, z: f32) -> Option<f32> {
+            let top = if x < 100.0 { 128.0 } else { 0.0 };
+            (top <= z + SNAP_UP && top >= z - SNAP_DOWN).then_some(top)
+        }
+        fn fits(&self, _p: [f32; 3]) -> bool {
+            true
+        }
+        fn step_off(&self, from: [f32; 3], to: [f32; 2]) -> Step {
+            let top = if to[0] < 100.0 { 128.0 } else { 0.0 };
+            if (self.wall && from[0] < 100.0 && to[0] >= 100.0) || top > from[2] + SNAP_UP {
+                Step::Wall
+            } else if from[2] - top > MAX_FALL {
+                Step::Fall
+            } else {
+                Step::Land(top)
+            }
+        }
+    }
+
+    /// Bots get to areas no link leads to by stepping off edges; the check says so, and
+    /// offers the link that's missing.
+    #[test]
+    fn falling_in_counts_as_getting_there() {
+        let mut up = area(1, [0.0, 100.0], [0.0, 100.0], 128.0);
+        let mut down = area(2, [100.0, 200.0], [0.0, 100.0], 0.0);
+        // stairs back up from 2 to 1, but no drop from 1 to 2
+        down.conns[3] = vec![1];
+        up.conns = Default::default();
+        let n = Nav { version: 5, bsp_size: 1, places: vec![], areas: vec![up, down] };
+        let spawn = [50.0, 50.0, 128.0 + 36.0];
+        // no map to go by: only links count
+        assert_eq!(check(&n, &[spawn], &[], None).reach, vec![REACH_OK, REACH_NEVER]);
+        // off the ledge: bots land in 2 and walk back up the stairs
+        let c = check(&n, &[spawn], &[], Some(&Ledge { wall: false }));
+        assert_eq!(c.reach, vec![REACH_OK, REACH_FALLS]);
+        let p = c.problems.iter().find(|p| p.kind == "falls").expect("a falls problem");
+        assert_eq!(p.text, "Bots only get to area 2 by falling in");
+        let (label, op) = p.fix.clone().unwrap();
+        assert_eq!(label, "Add a drop from 1 to 2");
+        assert_eq!(op, json!({"op": "link", "a": 1, "b": 2, "oneWay": true}));
+        // with that drop linked, it's an ordinary area
+        let mut fixed = n.clone();
+        fixed.areas[0].conns[1] = vec![2];
+        assert_eq!(check(&fixed, &[spawn], &[], Some(&Ledge { wall: false })).reach, vec![REACH_OK, REACH_OK]);
+        // without the stairs, a bot that falls in is stuck there
+        let mut pit = n.clone();
+        pit.areas[1].conns = Default::default();
+        assert_eq!(check(&pit, &[spawn], &[], Some(&Ledge { wall: false })).reach, vec![REACH_OK, REACH_TRAP]);
+        // a wall along the edge: nobody gets down
+        assert_eq!(check(&n, &[spawn], &[], Some(&Ledge { wall: true })).reach, vec![REACH_OK, REACH_NEVER]);
+        // floor the nav left out between two areas is walked across
+        let a = area(1, [0.0, 50.0], [0.0, 100.0], 0.0);
+        let mut b = area(2, [130.0, 200.0], [0.0, 100.0], 0.0);
+        b.conns[3] = vec![1];
+        let gap = Nav { version: 5, bsp_size: 1, places: vec![], areas: vec![a, b] };
+        let flat = Ledge { wall: false };
+        struct Flat<'a>(&'a Ledge);
+        impl Ground for Flat<'_> {
+            fn floor(&self, _x: f32, _y: f32, _z: f32) -> Option<f32> {
+                Some(0.0)
+            }
+            fn fits(&self, p: [f32; 3]) -> bool {
+                self.0.fits(p)
+            }
+            fn step_off(&self, _from: [f32; 3], _to: [f32; 2]) -> Step {
+                Step::Land(0.0)
+            }
+        }
+        let c = check(&gap, &[[25.0, 50.0, 36.0]], &[], Some(&Flat(&flat)));
+        assert_eq!(c.reach, vec![REACH_OK, REACH_FALLS]);
+        assert_eq!(c.problems[0].fix.as_ref().unwrap().0, "Link 1 and 2");
+    }
+
     #[test]
     fn islands_and_traps() {
         let d = rooms();
@@ -1901,7 +2165,7 @@ mod tests {
         }
         let ents = goldsrc::entities::parse(&crate::rcon::latin1(&bsp::read_lumps(&bsp, &[bsp::LUMP_ENTITIES]).unwrap()[0]));
         let spawns: Vec<[f32; 3]> = ents.iter().filter(|e| matches!(e.classname(), "info_player_start" | "info_player_deathmatch")).filter_map(|e| e.origin()).collect();
-        let ends = |n: &Nav| ladder_ends(n, &nav::build_ladders(n, &hulls.ladders, &hulls), &hulls.ladders);
+        let ends = |n: &Nav| ladder_ends(&nav::build_ladders(n, &hulls.ladders, &hulls), &hulls.ladders);
         let before = check(&raw.to_nav(), &spawns, &ends(&raw.to_nav()), Some(&hulls));
         let after = check(&n, &spawns, &ends(&n), Some(&hulls));
         let new_reach: Vec<u8> = after.reach[raw.areas.len()..].to_vec();
@@ -1912,6 +2176,58 @@ mod tests {
         // into area 2, so it's an island unless something leads up to it
         assert!(new_reach[..4].iter().all(|&r| r == REACH_OK), "{new_reach:?}");
         assert!(!after.problems.iter().any(|p| p.kind == "cramped" && p.areas.iter().any(|&id| id >= 1144)), "a player fits on the beams");
+    }
+
+    /// LS_TEST_SIM + LS_TEST_GAME: the reach check against where bots really went. Every area
+    /// a bot stood in during the sim's rats2_v5 recordings (5 matches of 12 bots) has to be
+    /// one the check says bots get to. Before the step-off model, 120 areas of the raw nav were
+    /// "unreachable" and bots stood in 39 of them: they fall off the beams and shelves.
+    #[test]
+    fn real_rats2_reach_matches_the_recordings() {
+        let (Ok(sim), Ok(hl)) = (std::env::var("LS_TEST_SIM"), std::env::var("LS_TEST_GAME")) else { return };
+        let bsp = crate::mapcopy::Finder::default().find(&PathBuf::from(&hl).join("cstrike/maps"), "cs_rats2.bsp").expect("cs_rats2.bsp");
+        let hulls = MapHulls::parse(&std::fs::read(&bsp).unwrap()).unwrap();
+        let ents = goldsrc::entities::parse(&crate::rcon::latin1(&bsp::read_lumps(&bsp, &[bsp::LUMP_ENTITIES]).unwrap()[0]));
+        let spawns: Vec<[f32; 3]> = ents.iter().filter(|e| matches!(e.classname(), "info_player_start" | "info_player_deathmatch")).filter_map(|e| e.origin()).collect();
+        // where every bot stood: S rows (x y z of the player's origin)
+        let mut stood: Vec<[f32; 3]> = Vec::new();
+        for e in std::fs::read_dir(PathBuf::from(&sim).join("results/rats2_v5")).unwrap().flatten() {
+            let name = e.file_name().to_string_lossy().to_string();
+            if !name.starts_with('W') || !name.ends_with(".csv") {
+                continue;
+            }
+            for line in std::fs::read_to_string(e.path()).unwrap().lines() {
+                let f: Vec<&str> = line.split(',').collect();
+                if f.len() >= 7 && f[0] == "S" {
+                    if let (Ok(x), Ok(y), Ok(z)) = (f[4].parse(), f[5].parse(), f[6].parse()) {
+                        stood.push([x, y, z]);
+                    }
+                }
+            }
+        }
+        assert!(stood.len() > 100_000, "{} samples", stood.len());
+        for which in ["raw", "fixes"] {
+            let n = Nav::parse(&std::fs::read(PathBuf::from(&sim).join(format!("navpack/{which}/cs_rats2.nav"))).unwrap()).unwrap();
+            let ends = ladder_ends(&nav::build_ladders(&n, &hulls.ladders, &hulls), &hulls.ladders);
+            let t = std::time::Instant::now();
+            let c = check(&n, &spawns, &ends, Some(&hulls));
+            let took = t.elapsed();
+            let mut visits = vec![0u32; n.areas.len()];
+            for p in &stood {
+                if let Some(a) = n.area_at(*p, 120.0) {
+                    visits[a] += 1;
+                }
+            }
+            let count = |r: u8| c.reach.iter().filter(|&&x| x == r).count();
+            let missed: Vec<(u32, u32)> = (0..n.areas.len()).filter(|&i| c.reach[i] == REACH_NEVER && visits[i] > 0).map(|i| (n.areas[i].id, visits[i])).collect();
+            println!(
+                "{which}: {} areas: {} can't be reached, {} only by falling in, {} can't get back; bots stood in {} areas; check took {took:?}; problems {:?}",
+                n.areas.len(), count(REACH_NEVER), count(REACH_FALLS), count(REACH_TRAP), visits.iter().filter(|&&v| v > 0).count(),
+                c.problems.iter().map(|p| p.text.as_str()).collect::<Vec<_>>()
+            );
+            assert!(missed.is_empty(), "{which}: bots stood in areas the check says nobody reaches (id, samples): {missed:?}");
+            assert!(count(REACH_NEVER) <= 10, "{which}: {} unreachable", count(REACH_NEVER));
+        }
     }
 
     /// The routes over a game folder with the fixture room and a nav: open, edit, undo, redo,

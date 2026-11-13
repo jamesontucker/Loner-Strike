@@ -13,6 +13,7 @@
 .navfix-problem { display: grid; gap: 4px; padding: 6px 8px; border-left: 3px solid var(--signal); background: var(--panel-2); border-radius: 2px; }
 .navfix-problem.navfix-unreachable { border-left-color: #e2574c; }
 .navfix-problem.navfix-trap { border-left-color: #e8a23c; }
+.navfix-problem.navfix-falls { border-left-color: #d9c75a; }
 .navfix-problem strong { font-size: 14px; }
 .navfix-problem .row { gap: 6px; }
 .navfix-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 3px 0 8px; vertical-align: -1px; }
@@ -20,4 +21,5 @@
 .navfix-key .k-ok { background: #6fc2b0; }
 .navfix-key .k-never { background: #e2574c; }
 .navfix-key .k-trap { background: #e8a23c; }
+.navfix-key .k-falls { background: #d9c75a; }
 .navfix-key .k-sel { background: #fff6b0; }

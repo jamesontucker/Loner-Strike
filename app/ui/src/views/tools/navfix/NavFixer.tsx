@@ -17,7 +17,7 @@ import { fmtVec } from "../viewer/coords";
 import { canDraw3d, SceneBoundary } from "../viewer/Scene";
 import { useModelMeshes } from "../viewer/World";
 import { FixScene, type ColourBy, type Mode } from "./FixScene";
-import { ATTRS, DIRS, editNav, openFix, rebuildKnowledge, redoNav, reloadNav, saveNav, undoNav, REACH_NEVER, REACH_TRAP, type FixState, type Op, type Problem } from "./navfixApi";
+import { ATTRS, DIRS, editNav, openFix, rebuildKnowledge, redoNav, reloadNav, saveNav, undoNav, REACH_FALLS, REACH_NEVER, REACH_TRAP, type FixState, type Op, type Problem } from "./navfixApi";
 import "./navfix.css";
 
 export default function NavFixer({ maps }: ToolProps) {
@@ -321,7 +321,7 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
                   </label>
                   {colourBy === "reach" && (
                     <p className="small-note muted navfix-key">
-                      <i className="k-ok" /> reachable <i className="k-never" /> can't get there <i className="k-trap" /> can't get back <i className="k-sel" /> picked
+                      <i className="k-ok" /> reachable <i className="k-never" /> can't get there <i className="k-trap" /> can't get back <i className="k-falls" /> only by falling in <i className="k-sel" /> picked
                     </p>
                   )}
                 </section>
@@ -437,7 +437,7 @@ function AreaFacts({ st, a, busy, edit }: { st: FixState; a: NavArea; busy: bool
       <p className="small-note muted">
         {Math.round(a.se[0] - a.nw[0])} × {Math.round(a.se[1] - a.nw[1])} units, floor at {Math.round(Math.min(a.nw[2], a.se[2], a.neZ, a.swZ))}
         {a.place ? ` · ${st.nav.places[a.place - 1]}` : ""}
-        {reach === REACH_NEVER ? " · bots can't get here" : reach === REACH_TRAP ? " · bots can't get back from here" : ""}
+        {reach === REACH_NEVER ? " · bots can't get here" : reach === REACH_TRAP ? " · bots can't get back from here" : reach === REACH_FALLS ? " · bots only get here by falling in (no link leads here)" : ""}
         {a.hiding.length ? ` · ${a.hiding.length} hiding spot${a.hiding.length === 1 ? "" : "s"}` : ""}
       </p>
       <h4>
@@ -490,7 +490,7 @@ function Problems({ st, busy, onShow, edit }: { st: FixState; busy: boolean; onS
   return (
     <section className="tools-panel">
       <h3>
-        Problems <Info text="Checked after every change: areas bots can't reach from any spawn (or can't get back from), links to areas that aren't there, spots a standing player doesn't fit, ladders with no area at an end." />
+        Problems <Info text="Checked after every change: areas bots can't reach from any spawn (or can't get back from, or only land in by falling off an edge), links to areas that aren't there, spots a standing player doesn't fit, ladders with no area at an end." />
       </h3>
       {st.checkNote && <p className="small-note muted">{st.checkNote}</p>}
       {!st.problems.length ? (
