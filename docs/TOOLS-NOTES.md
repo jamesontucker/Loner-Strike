@@ -2198,3 +2198,25 @@ hints, no errors; de_aztec duos: roles + friend ties sent, a squad won. With 12 
 much; with more players or a bigger map it matters more (raise `br_drop` / lower `br_zone_start` to taste).
 **Not done**: a drop-in (parachute) start, spectating your own squad, overview files (spectators get one if the map has
 `overviews/<map>.txt/.bmp` + .res), bot persona traits from gm_people (random traits for now).
+
+### Agent W1: Last Stand waves.ini, ls_creature in the editor, Battle Royale polish — 2026-11-12
+- **Last Stand reads `configs/gamemodes/waves.ini` `[laststand]`** (Z's format): rows `wave N | N-M | N+ = type weight …`
+  (a wave without a row uses the closest one before it), `boss`/`boss_every`, `count_scale`, `hp_scale`, `type_hp 1` (the
+  type's own hp from creatures.ini, read off the spawned creature, × hp_scale × the mode's scaling). Types it names go into
+  `ls_creature_precache`. No file/section → the built-in mix. Creature Studio's `reads` flipped to true. Tested: a file with
+  `count_scale 0.5`, boss brute every 2nd wave → 4 creatures in wave 1, 6+1 boss in wave 2.
+- **Editor**: `ls_creature` in lonerstrike.fgd (CREATURES.md §3 keys, type choices, studio zombie) and components.json
+  (group Creatures). `ls_wave_spawner` was already in both.
+- **Battle Royale**: bots' habits from gm_people's playstyle (`people_get(id,"style")`: rusher/knifer/ninja hunt, roamer/
+  nader/objective/weirdgun loot, lurker/careful/camper/awper camp; random without gm_people). Times scale with players
+  (`n/24`, 0.5-1.25): zone delay, every stage's warn/shrink (rewritten from the map's own stages each game), drop times,
+  a slightly shorter loot-up; 3 items per crate instead of 2 in small games. Drop-in (`br_dropin 1`): everyone starts as
+  high as the sky allows (≤ `br_drop_height` 3000) over a landing spot, falls at 0.2 gravity, steers, lands with normal
+  gravity and no fall damage (also normal gravity when hit); bots start over a spot by habit (looters a tier 2+ crate,
+  campers the outermost respawn point), so they don't steer in the air (no brain change needed). Stock skies are low:
+  on de_aztec it's a ~500-unit, ~2-3 s fall. Out in squads: you watch a living squad mate. Supply drops: each person
+  gets "Supply drop coming down 140 m to your left." Zone damage is by horizontal distance (underground inside the
+  circle is safe) as before. Defaults now `br_drop 15`, `br_zone_start 30`.
+- Tested on my own copy (removed): de_dust2 12 bots (traits 2/4/6 from personas, pace 0.5, games won), de_aztec drop-in
+  (all players fell from ~500 u above ground and landed in ~2 s, no deaths in the drop, a game won).
+- Extraction: not started (tabled by the user).
