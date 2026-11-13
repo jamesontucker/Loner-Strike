@@ -82,6 +82,107 @@ zip -X ~/Desktop/lonerstrike-site-1.0.0.zip -@ < /tmp/zipfiles.txt
   - The arrow keys work anywhere in the panel, and the strip scrolls by itself without scrolling the page. Smooth scrolling is off for reduced motion.
 - **Docs anchors the homepage now uses**: `docs#content-browser` and `docs#credits`.
 
+## Proposed homepage restructure (outline for review, NOT built yet; 2026-11-13)
+
+### Audit of today's page (about 3,000 words)
+
+| # | Block | Words | Job | Notes |
+|---|---|---|---|---|
+| 1 | Release banner | 27 | want | Dated launch notice |
+| 2 | Hero (tagline, CTAs, loader, editor shot) | 66 | understand, download | Good. Hero shot is the editor, but the page leads with Play |
+| 3 | Verbs strip (Play/Build/Host/Share) | 46 | navigate | Repeats the top nav and the chapter headers |
+| 4 | Why this exists | 185 | trust | Good voice, but long and placed before any proof |
+| 5 | Play header | 30 | understand | Repeats "server full of people" from 6 |
+| 6 | Bots that play like people | 101 | want | Repeats team play from 7 |
+| 7 | How the bots play (stats, unique, fight, ladder) | 358 | want | Deepest block on the page, and docs material |
+| 8 | Modes made here + classics chips | 271 | want | Two cards with 4 bullets each |
+| 9 | Build header | 24 | understand | |
+| 10 | Map editor | 116 | want | |
+| 11 | Game Mode Studio | 118 | want | |
+| 12 | Every tool in the box | 288 | want | A catalog: docs#tools does this job |
+| 13 | Host header | 26 | understand | |
+| 14 | Play with friends | 75 | want | |
+| 15 | Dedicated servers | 161 | want | Admin detail is docs material |
+| 16 | Share header | 17 | understand | |
+| 17 | Community browser | 90 | want, trust | |
+| 18 | Our server + Discord cards | 52 | trust | |
+| 19 | Screenshots tour | 11 | proof | Sits near the bottom: proof comes after 2,000 words |
+| 20 | Name your price / Download | 140 | download | |
+| 21 | Thanks (5 credits) | 139 | trust | |
+| 22 | Questions (14) | 628 | trust | Half are docs topics (server cost, Hammer import, map learning, AI agent already gone) |
+
+**Doing the same job twice:**
+- Navigation: the top nav, the verbs strip and the chapter headers.
+- "Feels like a server full of people": in 5 and 6.
+- Bot team play: in 6 and 7.
+- Beta: in 12 and the FAQ.
+- "Friends don't need it": in the Host header and the FAQ.
+- GameBanana: in 17 and 21.
+
+### Proposed outline (target about 1,200 words, under half)
+
+Top nav: **Play · Build · Host · Share · FAQ · [Download]**. Sticky, with anchors matching the sections below. The verbs strip goes.
+
+1. **Hero** (#top, about 50 words)
+   - H1 "Loner-Strike".
+   - Tagline: "Play Counter-Strike like it's 2004, alone or with the friends you don't have."
+   - Second line: "Then build your own maps and modes, try them out on the bots, and share them."
+   - Primary button **Download free**, secondary **See it in action**.
+   - Fine print: free, CS 1.6 and CZ, Windows or a Mac with CrossOver.
+   - Visual: in-game bots shot `bots-site` (PLACEHOLDER: the Players page with live bot chat until it exists). The loader and kill feed stay as decoration.
+2. **See it** (#screenshots, about 20 words)
+   - The tour with caption overlays and arrows.
+   - Tabs cut to **Play, Build, Host, Share** to match the pillars, with modes inside Play.
+3. **Play** (#play)
+   - Line: "A server full of bots that feels like a server full of people."
+   - Bullets:
+     - Bots that see, aim and chat like people, and remember you
+     - Last Stand, Battle Royale and 20+ classic mods, all playable with bots
+     - Pick the lobby: newbies to gods
+   - Visual: `laststand-wave` (PLACEHOLDER: the ls_outpost render until it exists).
+   - Links: "How the bots work", "Game modes" (docs).
+4. **Build** (#build, small Beta tag)
+   - Line: "The tools we wished we had in 2004."
+   - Bullets:
+     - Map editor: Hammer's depth, modern editor feel, F5 to playtest with bots
+     - Game Mode Studio: modes from nodes and wires
+     - A dozen more: map simulator, nav fixer, spray maker and the rest
+   - Visual: editor.webp.
+   - Link: "Every tool" (docs#tools).
+5. **Host** (#host)
+   - Line: "Your friends only need the game."
+   - Bullets:
+     - Host from your game: seven ways for friends to connect
+     - Or an always-on server on a rented Linux machine, set up for you
+     - Admins and moderators who help from their own app
+   - Visual: servers.jpg.
+   - Small row: Join our server · Join the Discord (the live cards slimmed to one line).
+   - Link: docs#servers.
+6. **Share** (#share)
+   - Line: "Publish what you make, and try what others made in a click."
+   - Bullets:
+     - Publish from the app, credits tracked
+     - Remix with credit
+     - Updates between maps, never mid-game
+   - Visual: `community-browse` (PLACEHOLDER: community.webp until it exists).
+   - Link: docs#community.
+7. **Questions** (#faq, 7 kept, about 300 words)
+   - Kept: Is it really free? · Do I need to own Counter-Strike? · Does it work on a Mac? · Windows says it protected my PC · Will it mess up my game? · Do my friends need it too? · What does Beta mean?
+   - Moved to the docs: server cost, joining without the app, why bots learn maps, Hammer maps, what can be shared, who made the mods.
+   - **Why this exists** is cut to two or three sentences beside the DreamHack photo, as a short note above the FAQ. The alternative is to drop it to the docs; the user should choose.
+8. **Download** (#get, about 100 words)
+   - Name your price and Download free side by side, with the 3 steps.
+9. **Thanks** (about 50 words)
+   - One compact row: GameBanana, AlliedModders, ReHLDS, SDHLT, the mod makers, each a link with no paragraph.
+   - Then the footer.
+
+**Moved to the docs, not lost:**
+- How the bots play: the stats, "What no other bot does", "In every fight" and the ladder (the ladder could stay as the Play visual if the user likes it).
+- The mode cards' detail and the classics chips: Play links to Game modes.
+- Every tool in the box.
+- The dedicated server feature list.
+- Seven FAQ answers.
+
 ## In-game shots to take (user)
 
 Save each one as a JPEG at `site/img/1.0/ingame/<name>.jpg`, 16:10 if you can (for example 1680×1050 or 1280×800, or crop to it). Turn off net_graph and the console.

@@ -248,7 +248,6 @@ footer a { color: var(--dim); }
   <h2 id="new-play">Play</h2>
   <ul>
     <li><b>Two new modes with their own maps</b>: <a href="#last-stand">Last Stand</a> on ls_outpost and <a href="#battle-royale">Battle Royale</a> on br_valley. Both work on several stock maps too.</li>
-    <li><b>Bots in more modes</b>: they run <a href="#deathrun-surf">deathrun</a> courses and spring the traps, and they surf.</li>
     <li>Bots that play like people, on Loner-Strike's own bot brain, with team chat and <a href="#voice">voice commands</a>.</li>
   </ul>
   <h2 id="new-build">Build</h2>
@@ -272,7 +271,7 @@ footer a { color: var(--dim); }
   <ul>
     <li><a href="#community">Community</a>: maps and modes made with Loner-Strike, hosted on GameBanana and moderated. Try one in a click, or <a href="#publishing">publish your own</a>.</li>
     <li><a href="#community-updates">Updates</a> reach your app and your servers by themselves, never while the map or mode is in use, and <b>Go back</b> undoes one.</li>
-    <li><a href="#credits">Credits</a> are tracked for you: the app knows where each file came from and what its maker allows, and Publish credits them.</li>
+    <li>Credits are tracked for you, as part of <a href="#credits">publishing</a>: the app knows where each file came from and what its maker allows, and Publish credits them.</li>
     <li>Modes say <a href="#community-badges">how well bots play them</a>, and a remix credits the original.</li>
     <li><a href="#mcp">AI agents</a>: let coding agents like Claude Code, Codex, OpenCode or Cursor use the tools.</li>
   </ul>
@@ -335,7 +334,7 @@ footer a { color: var(--dim); }
   <p>Both are for you as the host and for admins. If <span class="kbd">F3</span> does nothing, type <code>bind F3 gamemenu</code> in the game console.</p>
   <p>In the app, a bar of quick actions sits at the top while a game runs: <b>Pause</b>, <b>Round</b> (restart, end, add time, <b>Start a mode vote</b>), <b>Map</b>, the bot count with <b>Difficulty</b> and <b>Bot style</b> in its menu, <b>You</b> (god mode, noclip, respawn), <b>Announce</b> and <b>Record demo</b>.</p>
   <h2 id="modes">Game modes</h2>
-  <p>New in 1.0, <a href="#last-stand">Last Stand</a> and <a href="#battle-royale">Battle Royale</a> come with their own maps. Zombie Plague, Warcraft 3, SuperHero, Gun Game, <a href="#deathrun-surf">Deathrun, Surf</a>, Paintball and the rest are installed from <b>Mods</b>. Each one is patched so bots can play it, and each has a note on how well they do. Switch modes from Play or the F3 menu; switching reloads the map.</p>
+  <p>New in 1.0, <a href="#last-stand">Last Stand</a> and <a href="#battle-royale">Battle Royale</a> come with their own maps. Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf, Paintball and the rest are installed from <b>Mods</b>. Each one is patched so bots can play it, and each has a note on how well they do. Switch modes from Play or the F3 menu; switching reloads the map.</p>
   <p>Modes have their own chat commands, like <code>/war3menu</code> in Warcraft 3 or <code>/guns</code> in deathmatch. See <a href="#commands-modes">In-game commands</a>.</p>
   <h2 id="match-mode">5v5 matches</h2>
   <p>Match mode runs a proper match: warmup, <code>/ready</code>, a knife round for sides, and pauses. The Play page shows the match panel when it's on. The commands are under <a href="#commands-match">In-game commands</a>.</p>
@@ -504,19 +503,6 @@ footer a { color: var(--dim); }
   <p>Times scale with the number of players, so a small game is a quick one.</p>
   <h2 id="br-bots">Bots in Battle Royale</h2>
   <p>Each bot plays by its <a href="#skill-style-personality">playstyle</a>. Rushers and knifers hunt, roamers and objective players loot, and campers, AWPers and lurkers find a spot and wait. They pick where to land the same way: looters go for a good crate, campers for the edge of the map. During the loot-up they loot and keep their distance instead of fighting.</p>
-</section>
-
-<section class="topic" id="deathrun-surf" data-group="Game modes">
-  <p class="crumb">Game modes</p>
-  <h1>Deathrun and Surf</h1>
-  <p class="lead">Two classic movement modes the bots now play themselves. Install them from <b>Mods</b>, like the other <a href="#modes">community modes</a>.</p>
-  <h2 id="deathrun">Deathrun</h2>
-  <p>One player is the trap activator; everyone else runs the course. Bot runners make their own way through: jumps, beams, ladders, and waiting for a trap to pass. A bot activator walks to the buttons and presses them like a person would: sometimes early, sometimes late, sometimes waiting to catch more runners, with the odd line in chat.</p>
-  <p>In <span class="kbd">F3</span>: <b>Bot springs traps</b>, <b>Bot trap eagerness</b> (Low, Normal or High), <b>Runners get a USP</b> and <b>Extra lives</b>.</p>
-  <h2 id="surf">Surf</h2>
-  <p>Air control, free guns and long rounds. Bots walk off the start, strafe into each ramp they reach and keep their speed in the air, instead of standing still. Whole routes through a course aren't in yet: on long courses they ride the ramps they find.</p>
-  <h2 id="mode-maps">Maps pick their mode</h2>
-  <p>A map's name picks its mode: <code>deathrun_</code> maps load Deathrun and <code>surf</code> maps load Surf, like <code>ls_</code> and <code>br_</code> do for the new modes.</p>
 </section>
 
 <section class="topic" id="bot-styles" data-group="The bots">
@@ -822,7 +808,7 @@ footer a { color: var(--dim); }
   <h2 id="editor-entities">Entities</h2>
   <p>Pick an entity and <b>Inspect</b> shows a form for it: choices, color pickers for lights, an angle dial, flags, and help on every key. Links between a <code>target</code> and a <code>targetname</code> are drawn as lines in 3D. Pick several entities to change their keys together. Spawns, hostages and weapons are drawn as their models. A key that names a model, sprite or sound has <b>Choose…</b> to pick one from a list with pictures, ↗ to show it in the <a href="#content-browser">Content Browser</a>, and <b>Use selected</b> to take what's picked there. Using a mod's own entities? <b>Map properties › Entity definitions</b> takes its FGD file.</p>
   <h2 id="content-browser" data-keywords="assets models sprites sounds props content drawer">Content Browser</h2>
-  <p>Everything you can put in a map, in one panel, like Unreal's: <b>View › Content Browser</b> (its tab says <b>Content</b>, with the line "Models, sprites, sounds, textures and prefabs" under it). Along the top: <b>Models</b>, <b>Sprites</b>, <b>Sounds</b>, <b>Textures</b>, <b>Prefabs</b> and <b>GameBanana</b>.</p>
+  <p>A panel of the map editor, not a tool of its own: everything you can put in a map, in one place, like Unreal's. Open it from <b>View › Content Browser</b>, or pull it up as a drawer (below) (its tab says <b>Content</b>, with the line "Models, sprites, sounds, textures and prefabs" under it). Along the top: <b>Models</b>, <b>Sprites</b>, <b>Sounds</b>, <b>Textures</b>, <b>Prefabs</b> and <b>GameBanana</b>.</p>
   <ul>
     <li><b>Where from</b>, on the left: <b>Everything</b>, <b>Game</b> (the game's own), <b>Downloaded</b> (each GameBanana page you got files from), <b>Community</b>, <b>Mine</b> (next to your project), <b>Other</b>, then <b>Favorites</b> and <b>Recent</b>.</li>
     <li>Models and sprites show as pictures; search, and make them bigger or smaller with the size slider. A sound plays from its ▶ button, on a double-click, or on hover with <b>Play on hover</b>.</li>
@@ -1683,7 +1669,7 @@ lsctl logs        the last 100 console lines</code></pre>
   <h2 id="publish-mode">Publish a game mode</h2>
   <p>The same steps, with <b>A game mode</b> and one of your Studio modes. Say <b>How well bots play it</b> (the Studio may suggest it); it shows as a badge and in the Bots filter. Others can play it and remix it in their own Studio, with your name on it.</p>
   <h2 id="credits" data-keywords="credit license permission terms author assets">Credits</h2>
-  <p>Loner-Strike keeps track of where every file in your map came from, so you don't have to.</p>
+  <p>There's nothing to open for this: Loner-Strike keeps track of where every file in your map came from, so you don't have to. It shows in the <a href="#content-browser">Content Browser</a>'s details, in Get more before you download, and when you publish:</p>
   <ul>
     <li><b>Before you download.</b> Get more and the Content Browser show a GameBanana page's terms first: whether you may use it in a map you share or commercially, whether it's ported from another game, who to credit, and its license. They're kept with the files.</li>
     <li><b>When you publish.</b> <b>Credits for the files it uses</b> lists each file the package ships: the game's own (not shipped), a GameBanana download, a Community creation, your own, or unknown, with its makers and what its page allows.</li>

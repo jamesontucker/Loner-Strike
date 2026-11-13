@@ -678,6 +678,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 .modes .chips li { background: var(--panel); box-shadow: var(--raised); padding: 6px 12px; border-radius: 2px; font-weight: 600; color: var(--dim); }
 .modes .chips li b { color: var(--bone); font-weight: 700; }
 .modes-sub { font: 400 24px/1.1 var(--stencil); margin-top: 44px; }
+.feature h3.two-lines span { display: block; white-space: nowrap; }
 .modes-more { margin: 18px 0 0; color: var(--dim); max-width: 70ch; }
 .mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; }
 .mode-card { background: var(--panel); box-shadow: var(--raised), 0 18px 50px rgba(0,0,0,.28); border-radius: 3px; overflow: hidden; display: flex; flex-direction: column; }
@@ -1012,7 +1013,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   <section class="feature">
     <div class="wrap">
       <div class="text">
-        <h3>Hammer's depth, a modern editor's feel</h3>
+        <h3 class="two-lines"><span>Hammer's depth,</span> <span>modern editor feel</span></h3>
         <p>Real brushes and entities, like Hammer, in a layout inspired by Unreal Engine's editor. Draw boxes, push and pull their faces, place spawns and lights, paint textures.</p>
         <ul>
           <li>One editor bar: every menu, Save, Playtest and Publish, with each key shown</li>
@@ -1065,8 +1066,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <div class="tool-group">
           <h4>Create</h4>
           <dl>
-            <dt><a href="docs#map-editor">Map editor</a></dt><dd>Brushes, entities and textures in 3D, with live checks and F5 playtests</dd>
-            <dt><a href="docs#content-browser">Content Browser</a></dt><dd>Every model, sprite, sound, texture and prefab, with credits; drag one into your map</dd>
+            <dt><a href="docs#map-editor">Map editor</a></dt><dd>Brushes, entities and textures in 3D, a Content Browser to drag models, sounds and prefabs in from, live checks and F5 playtests</dd>
             <dt><a href="docs#game-mode-studio">Game Mode Studio</a></dt><dd>Game modes from nodes, debugged live in the game</dd>
             <dt><a href="docs#plugin-studio">Plugin Studio</a></dt><dd>AMX Mod X plugins with suggestions and docs, tried in your game in a click</dd>
             <dt><a href="docs#creature-studio">Creature Studio</a></dt><dd>Zombies, aliens, turrets and bosses, and the waves they come in</dd>
@@ -1102,8 +1102,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <div class="tool-group">
           <h4>Share</h4>
           <dl>
-            <dt><a href="docs#community">Community</a></dt><dd>Browse and try what others made, and publish yours to GameBanana</dd>
-            <dt><a href="docs#credits">Credits</a></dt><dd>Where every file in your work came from, and whether you can share it</dd>
+            <dt><a href="docs#community">Community</a></dt><dd>Try what others made, and publish yours to GameBanana with its credits tracked for you</dd>
           </dl>
         </div>
       </div>
@@ -1184,17 +1183,14 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     <div class="wrap">
       <div class="text">
         <h3>The Community browser</h3>
-        <p>Maps, Game Mode Studio modes, prefabs, sprays and textures made with Loner-Strike, in the app under Tools. Pick one, press <b>Try it</b>, and play it with bots. Everything lives on GameBanana, with its pictures, likes and comments.</p>
+        <p>Maps, modes, prefabs and sprays made with Loner-Strike, hosted on GameBanana. Press <b>Try it</b> and play with bots.</p>
         <ul>
-          <li><b>Publish from the app.</b> It checks your work, packs it with its bot nav and overview, and walks you through putting it on GameBanana</li>
-          <li><b>Credits, tracked for you.</b> Every file is traced to where it came from and credited, and the app tells you what you're allowed to share</li>
-          <li><b>Remix anything.</b> Your version links back to the original and credits its creator</li>
-          <li><b>Yours stays yours.</b> A creation belongs to the GameBanana member who first published it</li>
-          <li><b>Updates that roll out.</b> New versions reach your app and your servers at the next map change, never mid-game, and you can always go back</li>
-          <li><b>Bot ratings on modes.</b> See how well bots play a mode before you try it</li>
-          <li><b>Moderated.</b> A Report button on everything, and the team can pull a creation from every app</li>
+          <li><b>Publish from the app</b>, with every file's credits tracked for you</li>
+          <li><b>Remix anything</b>, and the original creator keeps the credit</li>
+          <li><b>Updates roll out</b> to your app and servers between maps, never mid-game</li>
+          <li><b>Bot ratings</b> on modes, so you know how well bots play them</li>
         </ul>
-        <p class="safe"><b>Nothing that runs code is shared.</b> Community takes content and Game Mode Studio modes only. A Studio mode travels as its graph, and each player's app builds it.</p>
+        <p class="safe"><b>Nothing that runs code is shared.</b> A Studio mode travels as its graph, and each player's app builds it.</p>
         <p class="more"><a class="btn" href="docs#community">How Community works</a></p>
       </div>
       <div class="window">
