@@ -161,3 +161,20 @@ Library items and snippets carry `fromMode` (a uid) when they're shared.
   that drive bots through the brain or use bot-aware nodes vs modes made for people only); Publish prefills it.
 - Q (compile): append each map you compile and install to `<app dir>/tools/compile/made.json`
   (`{"maps": ["de_mymap", ...]}`), so My library can say "Made by me" for maps not yet published.
+
+## 2026-11-13: asset credits (Assets.md steps 1 and 2)
+- **Install:** `gamebanana.rs` keeps `rights` (credits::rights_of: checklist by line, license text, Credits module,
+  ported, submitter id/name) and `hashes` (game path → SHA-256) in installed_maps.json and content/record.json;
+  `details()` returns the same as `licence`, shown in Get more's detail sheet before download (`Terms.tsx`).
+- **Publish:** `tools/credits.rs` resolves each shipped custom file: stock → GameBanana (path, then hash) →
+  community creation (its index credits, kept at install) → yours (imported models) → typed credit → unknown.
+  Verdicts: ok; ask (warning, worded as GameBanana's default terms); no or a Definite-No port (Publish refuses
+  until Permission granted is recorded with a note). Credits go into README.txt (Credits section), the GameBanana
+  form (`credits` rows, shown as a copy box for the Credits module, and "Uses assets by …" in the text) and
+  `Item.credits` (list service validates: ≤ 64, plain paths, GameBanana links only).
+- **UI:** Publish lists each file with source, authors, terms, Permission granted… / Add credit… (`Credits.tsx`).
+- **MCP:** credits/map read; permission and manual are user-only (only the person can say permission was given).
+- **P5:** API shape and the prefab request are in docs/notes/P5.md ("Requests from T").
+- Tests: Rust credits (checklist lines, rights snapshot and verdicts, resolve order incl. copies by hash and old
+  installs, publish credits/warnings/refusals, cleaning for the index, noting permissions), MCP user-only; list
+  service `test_asset_credits`.
