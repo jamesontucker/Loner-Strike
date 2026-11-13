@@ -99,7 +99,16 @@ the person's call:
 3. Phone access, shared control (inviting, joining, opening ports) and sharing links
    (`/api/app/phone*`, POST `/api/control/*`, POST `/api/share`).
 4. Showing or setting server console passwords and website-status secrets.
-5. Any route not listed in `routes.rs` (default deny).
+5. A server's extra start options (`extra_args`, they can run anything), putting back all of
+   Loner-Strike's default files and clearing old backups (`/api/safety/defaults`, `/api/safety/clear`).
+6. Any route not listed in `routes.rs` (default deny), and any path that isn't plain: `.` or `..` parts,
+   empty parts, `%` escapes, backslashes, `?`/`#`, non-ASCII (`routes::canonical`; app_call sends
+   exactly the checked path, and a query only with GETs). Test `path_tricks_are_refused`.
+
+Routes that hand the game a raw console line or a setting it runs (`/api/servers/:id/console/send`,
+`/api/app/mode-settings`) go through the same classifier as `console_send`. No route is weaker through
+`app_call` than through its typed tool: `typed_tools_are_never_stronger_than_app_call` runs every typed
+tool and classifies each request it makes.
    `cargo test mcp_route_coverage -- --ignored` lists any route that isn't classified yet.
 
 **Asked in the app every time** ("An AI agent is asking", Allow / Don't allow; with no window the answer

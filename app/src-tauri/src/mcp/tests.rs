@@ -813,7 +813,7 @@ fn what_agents_may_do_with_each_route() {
         ("GET", "/api/app/phone", none.clone()), ("POST", "/api/app/phone", json!({"enabled": true})), ("POST", "/api/app/phone/reset", none.clone()),
         ("POST", "/api/control/invite", none.clone()), ("POST", "/api/control/open-port", none.clone()), ("POST", "/api/control/server/abc/invite", none.clone()),
         ("POST", "/api/share", none.clone()), ("POST", "/api/servers/abc/rcon-password", none.clone()), ("POST", "/api/servers/abc/rcon-password/show", none.clone()),
-        ("POST", "/api/servers/abc/webstatus/secret", none.clone()), ("GET", "/api/nothing/here", none.clone()), ("POST", "/api/servers/abc/hltv/../../mcp", none.clone()),
+        ("POST", "/api/servers/abc/webstatus/secret", none.clone()), ("POST", "/api/safety/defaults", json!({"ids": []})), ("POST", "/api/safety/clear", none.clone()), ("GET", "/api/nothing/here", none.clone()), ("POST", "/api/servers/abc/hltv/../../mcp", none.clone()),
     ] {
         assert!(user_only(m, p, b.clone()), "{m} {p} {b}");
     }
@@ -825,14 +825,15 @@ fn what_agents_may_do_with_each_route() {
         ("POST", "/api/app/storage/clear", none.clone()), ("POST", "/api/tools/demos/delete", none.clone()), ("POST", "/api/tools/plugins/delete", none.clone()),
         ("POST", "/api/tools/editor/prefabs/delete", none.clone()), ("POST", "/api/tools/community/register", none.clone()), ("POST", "/api/tools/community/publish/de_x", none.clone()),
         ("POST", "/api/servers/abc/webstatus", none.clone()), ("POST", "/api/app/direct", none.clone()), ("POST", "/api/safety/restore", none.clone()),
-        ("POST", "/api/safety/clear", none.clone()), ("POST", "/api/setup/install", json!({"components": ["addon-monstermod"]})),
+        ("POST", "/api/safety/undo", json!({"from": 1, "to": 2})), ("POST", "/api/setup/install", json!({"components": ["addon-monstermod"]})),
         ("POST", "/api/setup/uninstall", json!({"components": ["addon-monstermod"]})), ("POST", "/api/cmd", json!({"cmd": "gm_player", "args": ["3", "kick"]})),
         ("POST", "/api/sounds/pack", json!({"id": 1, "action": "remove"})), ("POST", "/api/backup/restore", none.clone()), ("POST", "/api/browser/connect", none.clone()),
     ] {
         assert!(asks(m, p, b.clone()), "{m} {p} {b} -> {:?}", policy(m, p, &b));
     }
     // plain changes and reads
-    assert_eq!(policy("POST", "/api/cmd", &json!({"cmd": "gm_map", "args": ["de_dust2"]})), Policy::Change);
+    assert!(matches!(policy("POST", "/api/cmd", &json!({"cmd": "gm_map", "args": ["de_dust2"]})), Policy::Ask(_)), "people may be playing");
+    assert_eq!(policy("POST", "/api/cmd", &json!({"cmd": "gm_bots", "args": ["count", "4"]})), Policy::Change);
     assert_eq!(policy("POST", "/api/servers/abc/start", &none), Policy::Change);
     assert_eq!(policy("POST", "/api/servers", &json!({"name": "x"})), Policy::Change);
     assert_eq!(policy("POST", "/api/servers/import", &none), Policy::Change, "the literal route, not /api/servers/:id");
@@ -841,6 +842,9 @@ fn what_agents_may_do_with_each_route() {
     assert_eq!(policy("GET", "/api/state", &none), Policy::Read);
     assert_eq!(policy("GET", "/api/servers/abc/console", &none), Policy::Read);
     assert_eq!(policy("GET", "/api/gb/browse", &none), Policy::Read);
+    for p in ["/api/safety/files", "/api/safety/version", "/api/safety/changed"] {
+        assert_eq!(policy("GET", p, &none), Policy::Read, "{p}");
+    }
     // every listed route has a known area and no route is listed twice
     let mut seen = std::collections::HashSet::new();
     for (m, p) in routes::ROUTES {
@@ -1036,4 +1040,192 @@ fn mcp_route_coverage() {
     }
     println!("{}", missing.join("\n"));
     assert!(missing.is_empty(), "{} routes aren't listed in mcp/routes.rs", missing.len());
+}
+
+// ---- no way round the rules: raw console routes and path tricks -------------------------
+
+#[test]
+fn raw_console_routes_follow_the_console_rules() {
+    use routes::{policy, Policy};
+    let send = |line: &str| policy("POST", "/api/servers/abc/console/send", &json!({"command": line}));
+    // the console password and chains: never, even with Allow changes
+    for line in ["rcon_password x", "\"RCON_PASSWORD\" x", "rcon status", "status; quit", "bot_add;rcon_password x", "status\nquit", ""] {
+        assert!(matches!(send(line), Policy::UserOnly(_)), "{line:?} -> {:?}", send(line));
+    }
+    // risky lines ask, exactly as console_send asks
+    for line in ["quit", "exec server.cfg", "kick Bob", "changelevel de_dust2", "sv_password abc", "amx_ban x", "sv_downloadurl http://x"] {
+        assert!(matches!(send(line), Policy::Ask(_)), "{line} -> {:?}", send(line));
+    }
+    assert_eq!(send("status"), Policy::Read);
+    assert_eq!(send("bot_ls_trace 1"), Policy::Change);
+    // the same verdict as console_send for every line
+    for line in ["status", "bot_kick", "quit", "rcon_password x", "meta list", "exec x", "a;b", "mp_timelimit 5"] {
+        let typed = debug::console_policy(line, true);
+        let routed = send(line);
+        let same = match (&typed, &routed) {
+            (Err(_), Policy::UserOnly(_)) | (Ok(debug::Console::Read), Policy::Read) | (Ok(debug::Console::Change), Policy::Change) | (Ok(debug::Console::Ask(_)), Policy::Ask(_)) => true,
+            _ => false,
+        };
+        assert!(same, "{line}: console_send {typed:?} but app_call {routed:?}");
+    }
+    // a setting written into a mode's config (which the game runs as console lines)
+    let ms = |cvar: &str, value: &str| policy("POST", "/api/app/mode-settings", &json!({"mode": "dm", "cvar": cvar, "value": value}));
+    assert!(matches!(ms("rcon_password", "x"), Policy::UserOnly(_)));
+    assert!(matches!(ms("exec", "x.cfg"), Policy::Ask(_)));
+    assert!(matches!(ms("sv_password", "x"), Policy::Ask(_)));
+    assert!(matches!(ms("mp_timelimit 5;quit", "1"), Policy::UserOnly(_)));
+    assert_eq!(ms("mp_timelimit", "5"), Policy::Change);
+    // a server's start options run anything: the person's alone; join password and listing ask
+    assert!(matches!(policy("POST", "/api/servers/abc", &json!({"extra_args": "+rcon_password x"})), Policy::UserOnly(_)));
+    assert!(matches!(policy("POST", "/api/servers", &json!({"name": "x", "extra_args": "+exec x"})), Policy::UserOnly(_)));
+    assert!(matches!(policy("POST", "/api/servers/abc", &json!({"password": "x"})), Policy::Ask(_)));
+    assert!(matches!(policy("POST", "/api/servers/abc", &json!({"visibility": "listed"})), Policy::Ask(_)));
+    assert_eq!(policy("POST", "/api/servers/abc", &json!({"maxplayers": 12})), Policy::Change);
+    // the Studio debugger takes typed fields only (no command text): a plain change
+    assert_eq!(policy("POST", "/api/tools/studio/debug/command", &json!({"mode": "x", "resume": true})), Policy::Change);
+}
+
+#[test]
+fn path_tricks_are_refused() {
+    use routes::{canonical, matches, policy, Policy};
+    // ":x" never matches nothing, "." or ".."
+    assert!(!matches("/api/servers/:id/start", "/api/servers/../start"));
+    assert!(!matches("/api/servers/:id/start", "/api/servers/./start"));
+    assert!(!matches("/api/servers/:id/start", "/api/servers//start"));
+    assert!(matches("/api/servers/:id/start", "/api/servers/abc/start"));
+    for p in [
+        "/api/servers/../mcp", "/api/servers/./x/start", "/api/servers/abc/../../mcp/token", "/api/./state", "/api/state/", "/api//state", "//api/state",
+        "/api/servers/%2e%2e/mcp", "/api/servers/%2E%2E/start", "/api/servers/abc%2fstart", "/api/servers/abc%2Fstart", "/api/servers/abc%5cstart", "/api/servers/abc%5Cstart",
+        "/api/servers/abc\\..\\mcp", "/api/state?x=1", "/api/state#x", "/api/st ate", "/api/stäte", "api/state", "", "/", "/api/state\n", "/api/servers/abc/start?/../../mcp",
+    ] {
+        assert!(canonical(p).is_err(), "{p:?} passed");
+        assert!(matches!(policy("POST", p, &json!({})), Policy::UserOnly(_)), "{p:?}");
+        assert!(matches!(policy("GET", p, &json!({})), Policy::UserOnly(_)), "{p:?}");
+    }
+    assert_eq!(canonical("/api/servers/abc/start"), Ok("/api/servers/abc/start"));
+    // queries: GETs only (and the screenshot route)
+    assert!(routes::query_allowed("GET", "/api/state"));
+    assert!(!routes::query_allowed("POST", "/api/servers/:id/:action"));
+    assert!(routes::query_allowed("POST", "/api/tools/screenshot"));
+}
+
+#[tokio::test]
+async fn app_call_sends_exactly_what_it_checked() {
+    let on = t(true, true, false, 0);
+    for p in ["/api/servers/%2e%2e/mcp", "/api/servers/mine/..", "/api/servers/mine\\start", "/api/servers/./start", "/api/servers/mine/start/"] {
+        let r = call_tool(&on, "app_call", json!({"method": "POST", "path": p})).await;
+        assert_eq!(r["isError"], true, "{p}");
+    }
+    // a query on a POST is refused; on a GET it goes, encoded, after the checked path
+    let r = call_tool(&on, "app_call", json!({"method": "POST", "path": "/api/servers/mine/start", "query": {"x": "1"}})).await;
+    assert_eq!(r["isError"], true);
+    let _ = call_tool(&on, "app_call", json!({"method": "GET", "path": "/api/state", "query": {"a": "../../mcp?b=#"}})).await;
+    // the raw console route through app_call: the password never, quitting asks
+    let r = call_tool(&on, "app_call", json!({"method": "POST", "path": "/api/servers/mine/console/send", "body": {"command": "rcon_password x"}})).await;
+    assert_eq!(r["isError"], true);
+    assert!(on.asked.lock().unwrap().is_empty());
+    let deny = t(true, false, false, 0);
+    let r = call_tool(&deny, "app_call", json!({"method": "POST", "path": "/api/servers/mine/console/send", "body": {"command": "quit"}})).await;
+    assert_eq!(r["isError"], true);
+    assert_eq!(deny.asked.lock().unwrap().len(), 1);
+    let calls = on.calls.lock().unwrap().clone();
+    let paths: Vec<&str> = calls.iter().map(|c| c.split([' ', '?']).nth(1).unwrap_or("")).collect();
+    assert!(!paths.iter().any(|p| p.contains("console/send") || p.contains("mcp") || p.contains('%')), "{calls:?}");
+    assert!(calls.iter().any(|c| c.starts_with("GET /api/state?a=..%2F..%2Fmcp%3Fb%3D%23")), "{calls:?}");
+    deny.calls.lock().unwrap().iter().for_each(|c| assert!(!c.contains("console/send"), "{c}"));
+}
+
+/// No route is weaker through app_call than through the typed tool that uses it: every typed
+/// tool is run (changes on, the person saying yes) against a stand-in app that notes every
+/// request, and each POST it makes is classified by routes::policy, as app_call would.
+#[tokio::test]
+async fn typed_tools_are_never_stronger_than_app_call() {
+    use axum::middleware::{self, Next};
+    use routes::Policy;
+    let calls: Calls = Arc::default();
+    let c = calls.clone();
+    let note = move |req: axum::extract::Request, next: Next| {
+        let c = c.clone();
+        async move {
+            let (parts, body) = req.into_parts();
+            let bytes = axum::body::to_bytes(body, 1 << 20).await.unwrap();
+            c.lock().unwrap().push(format!("{} {} {}", parts.method, parts.uri, String::from_utf8_lossy(&bytes)));
+            next.run(axum::extract::Request::from_parts(parts, Body::from(bytes))).await
+        }
+    };
+    let app = Router::new()
+        .route("/api/servers", get(|| async { Json(json!({"servers": [{"id": "mine", "name": "Mine", "state": "running", "host": null}]})) }))
+        .fallback(|| async { Json(json!({"ok": true, "id": "x", "events": [], "lines": [], "items": []})) })
+        .layer(middleware::from_fn(note));
+    let a2 = calls.clone();
+    let ctx = Ctx {
+        app,
+        host: HOST.into(),
+        changes: true,
+        confirm: Arc::new(move |_| {
+            a2.lock().unwrap().push("ASK".into());
+            true
+        }),
+        log: Arc::new(Log::default()),
+        st: None,
+    };
+    // plausible arguments from each tool's schema
+    fn sample(name: &str, p: &Value) -> Value {
+        if let Some(e) = p["enum"].as_array().and_then(|e| e.first()) {
+            return e.clone();
+        }
+        match (name, p["type"].as_str().unwrap_or("string")) {
+            ("map", _) => json!("de_dust2"),
+            ("server" | "target", _) => json!("mine"),
+            ("command", _) => json!("bot_ls_trace 1"),
+            ("cvar" | "name" | "setting", _) => json!("bot_ls_trace"),
+            (_, "integer" | "number") => json!(1),
+            (_, "boolean") => json!(true),
+            (_, "array") => json!([]),
+            (_, "object") => json!({}),
+            _ => json!("x"),
+        }
+    }
+    let mut checked = std::collections::BTreeSet::new();
+    let mut weaker = vec![];
+    for spec in catalog::specs() {
+        if ["app_call", "app_routes"].contains(&spec.name) {
+            continue;
+        }
+        let schema = (spec.schema)();
+        let mut args = serde_json::Map::new();
+        for (k, p) in schema["properties"].as_object().into_iter().flatten() {
+            args.insert(k.clone(), sample(k, p));
+        }
+        calls.lock().unwrap().clear();
+        let _ = catalog::call_tool(&ctx, spec.name, Value::Object(args)).await;
+        let mut asked = false;
+        for c in calls.lock().unwrap().iter() {
+            if c == "ASK" {
+                asked = true;
+                continue;
+            }
+            let mut it = c.splitn(3, ' ');
+            let (m, uri, body) = (it.next().unwrap(), it.next().unwrap(), it.next().unwrap_or(""));
+            if m != "POST" {
+                continue;
+            }
+            let path = uri.split('?').next().unwrap();
+            let body: Value = serde_json::from_str(body).unwrap_or(json!({}));
+            let p = routes::policy(m, path, &body);
+            checked.insert(format!("{} -> {path}", spec.name));
+            let bad = match &p {
+                Policy::UserOnly(_) => true,
+                Policy::Read | Policy::Change => asked,
+                Policy::Ask(_) => false,
+            };
+            if bad {
+                weaker.push(format!("{} (asked: {asked}) POST {path} {body} -> app_call {p:?}", spec.name));
+            }
+        }
+    }
+    let unreached: Vec<&str> = catalog::specs().iter().filter(|s| s.kind == catalog::Kind::Risky && !checked.iter().any(|c| c.starts_with(&format!("{} ->", s.name)))).map(|s| s.name).collect();
+    println!("risky tools not reached: {unreached:?}");
+    assert!(weaker.is_empty(), "app_call is weaker than the typed tool for:\n{}", weaker.join("\n"));
+    assert!(checked.len() >= 30, "only {} tool routes were reached: {checked:?}", checked.len());
 }

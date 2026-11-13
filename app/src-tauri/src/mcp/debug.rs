@@ -568,10 +568,13 @@ fn app_routes(search: &str) -> Value {
 async fn app_call(ctx: &Ctx, a: &Value) -> Done {
     let method = s(a, "method").unwrap_or("GET").to_ascii_uppercase();
     let path = s(a, "path").ok_or_else(|| err("Say the path, e.g. /api/state."))?;
-    if !path.starts_with('/') || path.contains("..") || path.contains('?') || path.contains('#') || path.contains("//") || !path.chars().all(|c| c.is_ascii_graphic()) {
-        return Err(err("path is a route's path without ?query (use query for that)."));
-    }
+    // (checked once and sent exactly as checked)
+    let path = routes::canonical(path).map_err(|e| err(&e))?;
     let body = a.get("body").cloned().unwrap_or_else(|| json!({}));
+    let query = a.get("query").and_then(Value::as_object).filter(|q| !q.is_empty());
+    if query.is_some() && !routes::route_for(&method, path).is_some_and(|r| routes::query_allowed(&method, r)) {
+        return Err(err("A query only goes with GET requests (and the screenshot route)."));
+    }
     let policy = routes::policy(&method, path, &body);
     match &policy {
         Policy::UserOnly(why) => return Err(Fail::Refused(why.clone())),
@@ -585,7 +588,7 @@ async fn app_call(ctx: &Ctx, a: &Value) -> Done {
         Some(_) => Some(own_server(ctx, &json!({"server": a["target"]})).await?),
     };
     let mut full = path.to_string();
-    if let Some(q) = a.get("query").and_then(Value::as_object) {
+    if let Some(q) = query {
         let parts: Vec<String> = q
             .iter()
             .map(|(k, v)| {

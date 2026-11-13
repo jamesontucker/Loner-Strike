@@ -371,12 +371,49 @@ pub const USER_ONLY_LIST: &[&str] = &[
     "App updates, uninstalling Loner-Strike, and setting up, repairing or removing the game's setup.",
     "Phone access, shared control (inviting friends, joining theirs, opening ports) and sharing links.",
     "Showing or changing server console passwords and website-status secrets.",
+    "A server's extra start options, putting back all of Loner-Strike's default files, and clearing old backups.",
 ];
 
-/// The parts of a path, matched against a pattern's (":x" matches any one part).
+/// The parts of a path, matched against a pattern's (":x" matches any one part, but never an
+/// empty one, "." or "..").
 pub fn matches(pattern: &str, path: &str) -> bool {
     let (p, q): (Vec<&str>, Vec<&str>) = (pattern.split('/').collect(), path.split('/').collect());
-    p.len() == q.len() && p.iter().zip(&q).all(|(a, b)| a.starts_with(':') && !b.is_empty() || a == b)
+    p.len() == q.len() && p.iter().zip(&q).all(|(a, b)| a.starts_with(':') && !b.is_empty() && *b != "." && *b != ".." || a == b)
+}
+
+/// A path exactly as it's checked and sent: "/" and plain ASCII parts, nothing a router or
+/// the game might read differently from how it's classified here. Refused: anything not
+/// starting with "/", empty parts ("//", a trailing "/"), "." or ".." parts, any "%"
+/// (so no %2e, %2f, %5c in any case), backslashes, "?" and "#" (a query goes separately,
+/// only where the route takes one), spaces, control and non-ASCII characters.
+pub fn canonical(path: &str) -> Result<&str, String> {
+    let bad = || Err("path is a route's plain path, e.g. /api/servers/<id>/start (no query, %, \\, . or .. parts).".to_string());
+    if !path.starts_with('/') || path.len() > 512 || !path.chars().all(|c| c.is_ascii_graphic()) || path.contains(['%', '\\', '?', '#']) {
+        return bad();
+    }
+    if path[1..].split('/').any(|s| s.is_empty() || s == "." || s == "..") {
+        return bad();
+    }
+    Ok(path)
+}
+
+/// Whether a query string may go with this request: GETs, and the one POST that takes one.
+pub fn query_allowed(method: &str, route: &str) -> bool {
+    method == "GET" || route == "/api/tools/screenshot"
+}
+
+/// What a raw console line may do, for an agent: the same rules as console_send
+/// (mcp::debug::console_policy), the one classifier for every route that hands the game a
+/// command, a setting's name, or a start option.
+pub fn console_line(line: &str) -> Policy {
+    use super::debug::{console_policy, Console};
+    // (with changes on, so a refusal means never, not "turn changes on")
+    match console_policy(line, true) {
+        Err(why) => user_only(&why),
+        Ok(Console::Ask(what)) => Policy::Ask(format!("{what} (console: {})", line.trim())),
+        Ok(Console::Change) => Policy::Change,
+        Ok(Console::Read) => Policy::Read,
+    }
 }
 
 /// The listed route a request is for.
@@ -393,6 +430,9 @@ fn user_only(why: &str) -> Policy {
 
 /// What an agent may do with one request.
 pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
+    let Ok(path) = canonical(path) else {
+        return Policy::UserOnly("That path isn't a plain route path (no query, %, \\, . or .. parts).".into());
+    };
     let Some(route) = route_for(method, path) else {
         return Policy::UserOnly("That isn't one of the app's routes agents can use (app_routes lists them).".into());
     };
@@ -411,6 +451,11 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
     if route.ends_with("/rcon-password") || route.ends_with("/rcon-password/show") || route.ends_with("/webstatus/secret") {
         return user_only("Console passwords and website-status secrets are off limits to agents.");
     }
+    // the safety net: putting every default back or throwing old versions away undoes many
+    // changes at once (one file, or the last save, is asked about below)
+    if route == "/api/safety/defaults" || route == "/api/safety/clear" {
+        return user_only("Putting back all of Loner-Strike's defaults or clearing old backups is off limits to agents.");
+    }
     if route == "/api/setup/install" {
         let comps = b("components").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
         if b("repair").and_then(Value::as_bool) == Some(true) || comps == 0 {
@@ -427,6 +472,35 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
     }
     if method == "GET" {
         return Policy::Read;
+    }
+    // a raw console line, a setting written into a config the game runs, start options:
+    // through the console's own rules (never weaker than console_send)
+    if route == "/api/servers/:id/console/send" {
+        return console_line(b("command").and_then(Value::as_str).unwrap_or(""));
+    }
+    if route == "/api/app/mode-settings" {
+        let cvar = b("cvar").and_then(Value::as_str).unwrap_or("");
+        let value = b("value").and_then(Value::as_str).unwrap_or("");
+        if cvar.is_empty() || cvar.contains(char::is_whitespace) {
+            return Policy::UserOnly("That isn't a setting's name.".into());
+        }
+        // (the mode's config is run as console lines, so "cvar value" is one)
+        return match console_line(&format!("{cvar} {value}")) {
+            Policy::Read => Policy::Change,
+            p => p,
+        };
+    }
+    if route == "/api/servers/:id" || route == "/api/servers" {
+        // start options can run anything on the machine (the phone can't set them either)
+        if b("extra_args").is_some_and(|v| !v.is_null()) {
+            return user_only("A server's extra start options are off limits to agents.");
+        }
+        if b("password").is_some_and(|v| !v.is_null()) && route == "/api/servers/:id" {
+            return Policy::Ask("change the server's join password".into());
+        }
+        if b("visibility").and_then(Value::as_str).is_some_and(|v| v == "listed") || b("ls_listed").and_then(Value::as_bool) == Some(true) {
+            return Policy::Ask("make the server public / list it".into());
+        }
     }
     // outward or public: asked every time
     let outward = [
@@ -449,12 +523,32 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
         ("/api/tools/demos/play", "start the game to watch a demo"),
         ("/api/tools/studio/playtest", "build a Studio mode with the debugger into your game"),
         ("/api/safety/restore", "put an earlier version of a game file back"),
-        ("/api/safety/defaults", "put Loner-Strike's shipped versions of files back"),
         ("/api/safety/undo", "undo the last change to game files"),
-        ("/api/safety/clear", "delete old backups"),
     ];
     if let Some((_, what)) = outward.iter().find(|(p, _)| *p == route) {
         return Policy::Ask(what.to_string());
+    }
+    // what the typed tools ask about (overwriting, replacing unsaved work, the game): asked
+    // here too, so app_call is never the way round (test typed_tools_are_never_stronger_than_app_call)
+    let overwrites = [
+        ("/api/tools/editor/new", "start a new map in the editor (unsaved changes are lost)"),
+        ("/api/tools/editor/open", "open another map in the editor (unsaved changes are lost)"),
+        ("/api/tools/editor/import-map", "import a map into the editor (unsaved changes are lost)"),
+        ("/api/tools/editor/import-other", "import into the editor (unsaved changes are lost)"),
+        ("/api/tools/editor/save", "save the editor's map (overwrites its file)"),
+        ("/api/tools/compile/setup", "download and set up the map compilers"),
+        ("/api/tools/navfix/:name/save", "save the map's nav (overwrites the bots' nav)"),
+        ("/api/tools/studio/graph/:id", "save a Game Mode Studio graph (overwrites it)"),
+        ("/api/tools/studio/uninstall/:id", "take a Studio mode out of the game"),
+        ("/api/tools/plugins/file", "save a plugin's source file (overwrites it)"),
+        ("/api/tools/plugins/try", "put a plugin into your game to try"),
+        ("/api/tools/editor/components/save-pack", "save a map's components (overwrites them)"),
+    ];
+    if let Some((_, what)) = overwrites.iter().find(|(p, _)| *p == route) {
+        return Policy::Ask(what.to_string());
+    }
+    if route == "/api/tools/compile/start" && b("install").and_then(Value::as_bool) == Some(true) {
+        return Policy::Ask("compile a map and install it into the game".into());
     }
     if route == "/api/app/launch" {
         return if b("restart").and_then(Value::as_bool) == Some(true) { Policy::Ask("start the game (closing it first if it's open)".into()) } else { Policy::Ask("start the game".into()) };
@@ -492,6 +586,9 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
         let args: Vec<&str> = b("args").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
         if cmd == "gm_player" && args.iter().any(|a| ["kick", "ban", "slay"].contains(a)) {
             return Policy::Ask(format!("{} a player", args.iter().find(|a| ["kick", "ban", "slay"].contains(*a)).unwrap()));
+        }
+        if ["gm_map", "gm_mode", "gm_restartmap", "gm_votemode"].contains(&cmd) {
+            return Policy::Ask(format!("change the map or mode ({cmd}; people playing would be moved)"));
         }
         if cmd == "gm_presetdel" {
             return Policy::Ask("delete a preset".into());
