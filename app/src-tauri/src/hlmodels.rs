@@ -16,7 +16,10 @@ use crate::servers::Entry;
 use std::path::{Path, PathBuf};
 
 /// The models creatures and the shopkeeper use (creatures.ini's built-in types, gm_laststand).
-pub const MODELS: [&str; 9] = ["zombie", "bullsquid", "houndeye", "agrunt", "garg", "headcrab", "sentry", "barney", "gman"];
+pub const MODELS: [&str; 16] = [
+    "zombie", "bullsquid", "houndeye", "agrunt", "garg", "headcrab", "sentry", "barney", "gman", "islave", "hassassin", "hgrunt", "big_mom", "w_squeak",
+    "controller", "barnacle",
+];
 
 /// This computer's game's copy of a model (the current Steam one), if it has it.
 fn client_model(hl: &Path, name: &str) -> Option<PathBuf> {
