@@ -3,7 +3,17 @@
 // isn't started here: the launch is answered by a stub.
 import { expect, test } from "@playwright/test";
 
+// (nothing is installed in a game: compile and playtest are answered in the page; the dev server
+// also refuses to write into a real Half-Life install under test. Anything left is removed after.)
+test.afterAll(async ({ playwright }, info) => {
+  const api = await playwright.request.newContext({ baseURL: String(info.project.use.baseURL) });
+  for (const short of ["pw_playtest", "pw_playtest_2", "pw_playtest_3"]) await api.post(`/api/tools/studio/uninstall/${short}`, { headers: { "X-Panel": "1" } }).catch(() => {});
+  await api.post("/api/tools/studio/graph/pw_playtest/delete", { headers: { "X-Panel": "1" } }).catch(() => {});
+  await api.dispose();
+});
+
 test("Playtest button: shown, enabled, steps with time", async ({ page }) => {
+  await page.route("**/api/tools/studio/compile", (r) => r.fulfill({ json: { ok: true, problems: [] } }));
   // a graph of our own to open (made from the example, saved through the app)
   const tpl = await (await page.request.get("/src/views/tools/studio/templates/team-dm.graph.json")).json();
   tpl.mode.id = "pw_playtest";

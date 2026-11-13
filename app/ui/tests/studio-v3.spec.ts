@@ -29,8 +29,23 @@ const canvasKey = async (page: Page, key: string) => {
   await page.keyboard.press(key);
 };
 
+// Nothing here installs, compiles or plays in a game: those routes are answered in the page
+// (a test that wants a Playtest answer routes it itself, later routes win). The dev server also
+// refuses to write into a real Half-Life install while under test (studio::guard_real_game).
+const WRITES = ["compile", "playtest", "switch", "source", "uninstall/**", "debug/command"];
 test.beforeEach(async ({ page }) => {
+  for (const r of WRITES) await page.route(`**/api/tools/studio/${r}`, (route) => route.fulfill({ json: { ok: true, problems: [], output: "(a test: not installed)", installedAs: ID } }));
+  await page.route("**/api/app/launch", (r) => r.fulfill({ json: { ok: true } }));
   await seed(page);
+});
+// and whatever a test made is taken away again, installed or not
+test.afterAll(async ({ playwright }, info) => {
+  const api = await playwright.request.newContext({ baseURL: String(info.project.use.baseURL) });
+  for (const id of [ID, "pw_tall", "pw_shots"]) {
+    for (const short of [id, `${id}_2`, `${id}_3`, `${id}_4`]) await api.post(`/api/tools/studio/uninstall/${short}`, { headers: H }).catch(() => {});
+    await api.post(`/api/tools/studio/graph/${id}/delete`, { headers: H }).catch(() => {});
+  }
+  await api.dispose();
 });
 test.afterEach(async ({ page }) => {
   await page.request.post(`/api/tools/studio/graph/${ID}/delete`, { headers: H });

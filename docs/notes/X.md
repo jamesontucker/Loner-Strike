@@ -271,6 +271,29 @@ FM_Spawn in its plugin's plugin_precache, the same rules: `kind`, `mode` incl. c
 **Checks** (the editor's map check, the Studio's Playtest): each marker's count within `required`, each
 component's count, path markers with 2+ points and no repeated `order`, keys of the right type.
 
+## 2026-11-13: tests never install into the real game
+QA found pw_v3 and pw_v3_2 to _4 ("V3 check") installed in the real game (the coordinator removed them;
+backup in the scratchpad's pw_v3_backup). Now:
+- **Guard:** `studio::guard_real_game` refuses, under test (`cfg(test)`: the unit tests and the Tools dev
+  server the browser tests run against, which is a test binary), to write into a real Half-Life install
+  (the usual Steam places, or anything inside one): compile/install, `register_mode` (so community
+  installs too), uninstall, Open as code, switching the game, debugger commands. It says to point
+  LS_TEST_GAME at a copy (a sim server) for real installs. Outside tests it does nothing. Unit test
+  `tests_never_write_into_the_real_game`.
+- **Specs:** `studio-v3.spec.ts` answers every Studio write route in the page (compile, playtest,
+  switch, source, uninstall, debug command, the game launch), and an `afterAll` uninstalls and deletes
+  whatever its modes might have left (pw_v3, pw_tall, pw_shots and their `_2`… ids);
+  `studio-playtest.spec.ts` the same for pw_playtest. Checked: after both specs in Chromium and WebKit
+  the real game's modes.ini is byte for byte the same and no `pw_` files are there (the cleanup's
+  uninstalls were refused by the guard, as they should be).
+- **Other specs (not mine; for their owners):** `editor-assets.spec.ts` calls
+  `/api/tools/compile/start` with `install: true` against the dev server's game and relies on the
+  refusal (a missing sprite) to keep the map out of the game; `callouts.spec.ts` saves names through the
+  real callouts route once and puts the old names back afterwards (a write into the real game's nav).
+  tools.spec, editor-*, p10, navfix-ux, shared-ux: no installs, compiles or game writes found (prefabs,
+  spray designs and Studio graphs go to the dev server's temp app folder). The same kind of guard in
+  the map compile/install and callouts save routes would make those safe too.
+
 ## 2026-11-13: menus and details polish (user's real-app pass)
 - **One right-click menu for the Studio** (`studio/ContextMenu.tsx`): opens at the pointer, kept on
   screen, keyboard on the first item, ↑ ↓ Home End, Enter, Escape / a click elsewhere / scroll / leaving

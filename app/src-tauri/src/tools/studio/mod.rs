@@ -343,6 +343,10 @@ fn wine_noise(line: &str) -> bool {
 
 /// Writes the mode's files and its modes.ini line. Refuses an id a mode not made here uses.
 pub fn register_mode(cfg: &Path, g: &Graph, plugin: &str) -> Result<(), String> {
+    // (cfg is <game>/addons/amxmodx/configs)
+    if let Some(game) = cfg.ancestors().nth(3) {
+        guard_real_game(game)?;
+    }
     let id = &g.mode.id;
     let gm = cfg.join("gamemodes");
     let ini_path = gm.join("modes.ini");
@@ -428,6 +432,35 @@ pub fn install_id(game_dir: &Path, g: &Graph) -> String {
     id.clone()
 }
 
+/// Under test (unit tests, and the Tools dev server the browser tests use, which is a test
+/// binary), the Studio never writes into a real Half-Life install (the usual Steam places):
+/// installs, compiles, uninstalls, Open as code and switching the game go to a throwaway game
+/// folder or a sim copy (LS_TEST_GAME) instead. Outside tests it lets everything through.
+#[cfg(test)]
+pub fn guard_real_game(game_dir: &Path) -> Result<(), String> {
+    let home = PathBuf::from(std::env::var("HOME").unwrap_or_default());
+    let real = [
+        home.join("Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life"),
+        home.join("Library/Application Support/Steam/steamapps/common/Half-Life"),
+        home.join(".steam/steam/steamapps/common/Half-Life"),
+        home.join(".local/share/Steam/steamapps/common/Half-Life"),
+        PathBuf::from("C:/Program Files (x86)/Steam/steamapps/common/Half-Life"),
+    ];
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let me = canon(game_dir);
+    // (the Half-Life folder or anything in it: game.dir is its mod folder, cstrike or czero)
+    if real.iter().any(|r| me.starts_with(canon(r))) {
+        eprintln!("studio: refused to write into the real game under test ({})", game_dir.display());
+        return Err("Under test the Game Mode Studio doesn't install into your real game. Point LS_TEST_GAME at a copy (a sim server) for that.".into());
+    }
+    Ok(())
+}
+
+#[cfg(not(test))]
+pub fn guard_real_game(_game_dir: &Path) -> Result<(), String> {
+    Ok(())
+}
+
 /// Is a Studio mode installed in this game (its line, its plugin list naming our plugin)?
 // (pub: the community library builds and removes community Studio modes with these)
 pub fn installed(game_dir: &Path, id: &str) -> bool {
@@ -438,6 +471,7 @@ pub fn installed(game_dir: &Path, id: &str) -> bool {
 
 /// Removes a Studio mode from the game (never one it didn't make).
 pub fn uninstall(game_dir: &Path, id: &str) -> Result<(), String> {
+    guard_real_game(game_dir)?;
     if !installed(game_dir, id) {
         return Err("That mode isn't installed (or wasn't made in the Studio).".into());
     }
@@ -478,6 +512,7 @@ pub fn compile(st: &Shared, mut g: Graph, debug: bool) -> Result<Value, String> 
         return Ok(json!({"ok": false, "problems": problems}));
     }
     let game = local_game(st)?;
+    guard_real_game(&game.dir)?;
     // installed under the short id this game has for its uid (another mode may have its own)
     let installed_as = install_id(&game.dir, &g);
     g.mode.id = installed_as.clone();
@@ -539,6 +574,7 @@ fn source_hash(source: &str) -> String {
 /// instead of closing and starting the game again.
 fn switch_open_game(st: &Shared, mode: &str, map: &str) -> Result<Value, String> {
     let g = local_game(st)?;
+    guard_real_game(&g.dir)?;
     if !installed(&g.dir, mode) {
         return Err("That mode isn't installed yet.".into());
     }
@@ -708,6 +744,7 @@ fn write_source(st: &Shared, g: Graph) -> Result<Value, String> {
         return Ok(json!({"problems": problems}));
     }
     let game = local_game(st)?;
+    guard_real_game(&game.dir)?;
     let scripting = game.dir.join("addons/amxmodx/scripting");
     if !scripting.is_dir() {
         return Err("AMX Mod X isn't installed in your game yet. Install the basics first.".into());
@@ -821,6 +858,7 @@ async fn api_command(State(st): State<Shared>, h: HeaderMap, Json(req): Json<Com
             return Err(BAD_ID.into());
         }
         let game = local_game(&st)?;
+        guard_real_game(&game.dir)?;
         let mut cmds = Vec::new();
         // breakpoints first: Resume with them all off doesn't stop again at the next one
         if let Some(b) = req.breakpoints {
@@ -1160,6 +1198,18 @@ mod tests {
         b.mode.uid = "33333333-3333-4333-a333-333333333333".into();
         assert_eq!(install_id(&game, &b), "classic_3");
         let _ = std::fs::remove_dir_all(&game);
+    }
+
+    #[test]
+    fn tests_never_write_into_the_real_game() {
+        let home = PathBuf::from(std::env::var("HOME").unwrap_or_default());
+        let real = home.join("Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life");
+        assert!(guard_real_game(&real).is_err());
+        assert!(uninstall(&real, "anything").unwrap_err().contains("real game"));
+        let g = graph::parse(TEMPLATE).unwrap();
+        assert!(register_mode(&real.join("cstrike/addons/amxmodx/configs"), &g, "studio_x").unwrap_err().contains("real game"));
+        // a throwaway copy is fine
+        assert!(guard_real_game(&temp("throwaway")).is_ok());
     }
 
     #[test]
