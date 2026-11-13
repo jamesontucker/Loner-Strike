@@ -1779,6 +1779,23 @@ stock bots_shop_tick()
 
 /* Both ways to buy, made obvious: on walking into the armory a centre message (in full the first
    3 visits on a map, short after), a line on the HUD while inside, and the shopkeeper says it */
+/* walking out: shut the supplies menu and the game's buy menu, clear the armory line */
+stock leave_shop(p)
+{
+	if (g_menuUntil[p] > 0.0)
+	{
+		g_menuUntil[p] = 0.0;
+		menu_cancel(p);
+	}
+	new menu, keys;
+	get_user_menu(p, menu, keys);
+	if (menu != 0)
+		show_menu(p, 0, "^n", 1);
+	/* the buy menu (VGUI on the Steam client): the game's own "close" */
+	client_cmd(p, "slot10");
+	ls_hud_clear(p, LS_HUD_CENTER);
+}
+
 stock shop_hint()
 {
 	for (new p = 1; p <= MaxClients; p++)
@@ -1788,21 +1805,19 @@ stock shop_hint()
 		new bool:in = at_shop(p);
 		if (in && !g_inShop[p])
 		{
+			/* walking in: a short hint (and the shopkeeper's line the first 3 visits) */
 			g_shopVisits[p]++;
-			if (g_shopVisits[p] <= 3)
+			client_print(p, print_center, "Armory: B for weapons - E at the counter for supplies");
+			if (g_shopVisits[p] <= 3 && g_keeper && is_valid_ent(g_keeper))
 			{
-				client_print(p, print_center, "Armory^nPress B for weapons, USE at the counter for supplies");
-				if (g_keeper && is_valid_ent(g_keeper))
-				{
-					if (g_keeperKind == 2)
-						client_print_color(p, print_team_default, "^4G-Man:^1 Weapons... on the B menu. Supplies... from me.");
-					else if (g_keeperKind == 1)
-						client_print_color(p, print_team_default, "^4Barney:^1 Guns are on the B menu, supplies from me. Press USE.");
-				}
+				if (g_keeperKind == 2)
+					client_print_color(p, print_team_default, "^4G-Man:^1 Weapons... on the B menu. Supplies... from me.");
+				else if (g_keeperKind == 1)
+					client_print_color(p, print_team_default, "^4Barney:^1 Guns are on the B menu, supplies from me.");
 			}
-			else
-				client_print(p, print_center, "Armory: B weapons, USE supplies");
 		}
+		else if (!in && g_inShop[p])
+			leave_shop(p);
 		g_inShop[p] = in;
 		if (in)
 			ls_hud(p, LS_HUD_CENTER, 1.1, "Armory  -  B: weapons   USE: supplies");
