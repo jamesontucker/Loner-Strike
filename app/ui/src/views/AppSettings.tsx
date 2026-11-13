@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ReleaseNotes } from "./WhatsNew";
 import { useQuery } from "@tanstack/react-query";
 import { copyText, getJson, getJsonAt, ON_COMPUTER_ONLY, postJson, useActions, useActivity } from "../api";
@@ -10,6 +10,8 @@ import { useNav, type Section } from "../store";
 import { applyScale, savedScale, BusyButton, Info, LoadError, SCALES, SectionHead, Sheet, Switch, useConfirm, useToast } from "../ui";
 import type { Scan } from "./Setup";
 import { BackupSheet, RestoreSheet } from "./Backup";
+// AI agents (MCP): its own chunk, loaded when Settings opens
+const AgentSettings = lazy(() => import("./AgentSettings"));
 
 const NO_GAME_TO_BACK_UP = "No game to back up: set up Counter-Strike on this computer first (a dedicated server is backed up from its own page).";
 
@@ -295,6 +297,8 @@ export function AppSettings({ app, reloadApp, scan, openSetup, switchGame }: { a
           </div>
         )}
       </section>
+
+      {ON_THIS_COMPUTER && <Suspense fallback={null}><AgentSettings /></Suspense>}
 
       <section>
         <SectionHead title="App" />
