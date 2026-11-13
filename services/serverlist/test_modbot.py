@@ -42,7 +42,9 @@ class FakeBot(modbot.Bot):
 
 def make(fail=False):
     hook = Recorder()
-    c = cm.Community(cm.Store(os.path.join(tempfile.mkdtemp(), "c.db")), token="t" * 40, get=FakeGB(), get_range=FakeFiles())
+    gb, files = FakeGB(), FakeFiles()
+    gb.files = files
+    c = cm.Community(cm.Store(os.path.join(tempfile.mkdtemp(), "c.db")), token="t" * 40, get=gb, get_range=files)
     bot = FakeBot(fail)
     mod = modbot.Mod(c, bot, PUB.hex(), GUILD, [MOD_ROLE, DEV_ROLE], OWNER,
                      webhook="https://discord.com/api/webhooks/1/abc", post=hook, background=False)
@@ -175,7 +177,7 @@ class Cards(unittest.TestCase):
         c.submit(body(map_item()), "a")
         form = click(mod, buttons(bot.posts[-1])["Pull"]["custom_id"])[1]
         ans = modal(mod, form["data"]["custom_id"], "")[1]
-        self.assertIn("Pulled from Discord by user111", c.store.get("mod:739197")["reason"])
+        self.assertEqual(c.store.get("mod:739197")["reason"], "Pulled by the moderators", "neutral, no moderator's name")
         c.moderate("mod:739197", "restore", {})
         self.assertIn("changed since", click(mod, buttons(ans["data"])["Undo"]["custom_id"])[1]["data"]["content"])
 
@@ -243,6 +245,14 @@ class Cards(unittest.TestCase):
         self.assertIn("Listed map", hook.sent[-1][1]["content"])
         self.assertEqual(hook.sent[-1][1]["allowed_mentions"], {"parse": []})
         self.assertNotIn("bot-token-not-real", err.getvalue())
+
+    def test_junk_commands_get_a_clean_answer(self):
+        c, mod, bot, _ = make()
+        for data in ({"name": "community", "options": "x"}, {"name": "community", "options": [{"name": "pull", "options": [1, None, {"name": 5}]}]},
+                     {"name": "community", "options": [None]}, {"name": "other"}, "x"):
+            d = {"type": 2, "id": f"j{next(_ids)}", "guild_id": GUILD, "member": member(), "data": data}
+            code, ans = mod.interaction(*signed(d))
+            self.assertEqual((code, ans["type"]), (200, 4), data)
 
     def test_slash_commands(self):
         c, mod, bot, _ = make()

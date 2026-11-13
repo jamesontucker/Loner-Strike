@@ -1,13 +1,16 @@
 #!/bin/sh
-# Sets one value in /etc/lonerstrike-list/community.env, read from stdin so it never shows up on
-# a command line, in ps or in shell history. Keeps the file root-only (0600).
-#   cat ~/.config/loner-discord-token | ssh you@box 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_BOT_TOKEN'
+# Sets one value in /etc/lonerstrike-list/community.env (or publish.env), read from stdin so it
+# never shows up on a command line, in ps or in shell history. Keeps the file root-only (0600).
+#   ssh you@box 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_BOT_TOKEN' < ~/.config/loner-discord-token
+#   ssh you@box 'sudo /opt/lonerstrike-list/set-env.sh R2_BUCKET publish' <<< "lonerstrike"
 set -eu
 [ "$(id -u)" = 0 ] || { echo "Run it with sudo."; exit 1; }
-key=${1:?Usage: set-env.sh KEY < value}
-exec python3 -I - "$key" <<'PY'
+key=${1:?Usage: set-env.sh KEY [community|publish] < value}
+file=${2:-community}
+case "$file" in community|publish) ;; *) echo "The file is community or publish."; exit 1 ;; esac
+exec python3 -I - "$key" "/etc/lonerstrike-list/$file.env" <<'PY'
 import os, re, sys, tempfile
-key, path = sys.argv[1], "/etc/lonerstrike-list/community.env"
+key, path = sys.argv[1], sys.argv[2]
 if not re.fullmatch(r"[A-Z][A-Z0-9_]{1,40}", key):
     sys.exit("That isn't a setting name.")
 value = open("/dev/stdin").read().strip()
@@ -29,5 +32,5 @@ with os.fdopen(fd, "w") as f:
     f.write("\n".join(out) + "\n")
 os.chmod(tmp, 0o600)
 os.replace(tmp, path)
-print(f"{key} set (value not shown). Restart the service: sudo systemctl restart lonerstrike-list")
+print(f"{key} set in {path} (value not shown). For community.env, restart: sudo systemctl restart lonerstrike-list")
 PY

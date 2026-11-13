@@ -26,9 +26,11 @@
 import hashlib
 import hmac
 import io
+import ipaddress
 import json
 import re
 import sqlite3
+import struct
 import sys
 import threading
 import time
@@ -37,6 +39,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+import zlib
 
 SCHEMA = 1
 CS16_GAME = 4254
@@ -70,13 +73,23 @@ REPORTS_PER_IP_HOUR = 5
 REPORTS_PER_DAY = 300         # all together; more and the button says "try later"
 REPORT_REASONS = ("broken", "malware", "stolen", "offensive", "not-loner-strike", "other")
 MAX_NOTE = 500
-MAX_LISTING = 4 << 20         # bytes read to list a package's files
-MAX_ENTRIES = 20000
+MAX_LISTING = 1 << 20         # bytes read to list a package's files (its directory and manifest)
+MAX_ENTRIES = 5000            # files in one package
+PACKAGE_CHECKS = 2            # packages looked into at the same time
+LOCAL_SLACK = 96              # bytes allowed between one zip entry's data and the next header
+HEADER_SAMPLES = 16           # local headers compared with the directory, spread over the zip
+GB_PER_VISITOR_MIN = 10       # a visitor's share of the GameBanana checks a minute
+REPORTS_PER_VISITOR_DAY = 20  # a visitor's share of the day's reports
+STATUS_PER_MIN = 60
 PLUGIN_REFUSAL = "Plugin modes can't be shared yet. Make it in Game Mode Studio, which builds a mode's code on each player's computer."
 # files that run code (or hide other files) never go out in a shared package
+# files that run code: named in the refusal (plugins get the Game Mode Studio message)
 CODE_EXT = (".amxx", ".amx", ".sma", ".inc", ".dll", ".so", ".dylib", ".exe", ".com", ".scr", ".msi", ".bat", ".cmd",
             ".sh", ".ps1", ".py", ".pyc", ".js", ".vbs", ".jar", ".lua", ".pl", ".rb", ".php", ".app", ".command")
-ARCHIVE_EXT = (".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".cab")
+# game settings a package must never bring (they'd change how the server runs)
+SETTINGS_FILES = ("liblist.gam", "server.cfg", "listenserver.cfg", "autoexec.cfg", "config.cfg", "userconfig.cfg")
+STOCK_WADS = ("halflife.wad", "cstrike.wad", "czero.wad", "decals.wad", "tempdecal.wad", "pldecal.wad", "gfx.wad",
+              "fonts.wad", "cached.wad", "liquids.wad", "xeno.wad", "spraypaint.wad")
 # a page's file may be one of these on its own (nothing to look inside)
 SINGLE_OK = (".bsp", ".wad", ".bmp", ".tga", ".png", ".jpg", ".jpeg")
 # a re-check that finds more than this share of pages gone changes nothing (GameBanana's API
@@ -492,27 +505,93 @@ class RangeFile(io.RawIOBase):
         b[:len(d)] = d
         return len(d)
 
+    def peek(self, off, n):
+        """Exactly n bytes at off in one small request (a local header), within the budget."""
+        n = min(n, self.size - off)
+        if n <= 0:
+            return b""
+        self.read_total += n
+        if self.read_total > self.budget:
+            raise FetchError("the package's file list is too big")
+        data, self.url = self.get(self.url, off, off + n - 1)
+        return data
+
 
 MAX_MANIFEST = 64 * 1024
+_EOCD = b"PK\x05\x06"
+_LOCAL = b"PK\x03\x04"
+
+
+def zip_directory(rf):
+    """(entries, directory offset) from a zip's end record, checked before anything is built:
+    too many entries, a directory too big to read, or zip64 (never needed for a package under
+    1 GB with a few thousand files) are refused."""
+    tail_len = min(rf.size, 22 + 65535)
+    rf.seek(rf.size - tail_len)
+    tail = rf.read(tail_len)
+    at = tail.rfind(_EOCD)
+    if at < 0 or len(tail) - at < 22:
+        raise Reject(422, "The zip on the page couldn't be read. Upload the zip the app made, unchanged.")
+    disk, cd_disk, here, total, cd_size, cd_off = struct.unpack("<HHHHII", tail[at + 4:at + 20])
+    if disk or cd_disk or here != total or 0xFFFF in (here, total) or 0xFFFFFFFF in (cd_size, cd_off):
+        raise Reject(422, "The zip is split or in zip64 form. Upload the zip the app made, unchanged.")
+    if total > MAX_ENTRIES:
+        raise Reject(422, f"The package has too many files ({total}; at most {MAX_ENTRIES}).")
+    if cd_size > MAX_LISTING or cd_off + cd_size > rf.size:
+        raise Reject(422, "The package's file list is too big or damaged.")
+    return total, cd_off
+
+
+def check_layout(rf, infos, cd_off):
+    """The zip's directory and its entries must agree: entries start at 0, follow each other
+    with only a few bytes between them (no hidden extra entries an unzipper could find), and the
+    local headers sampled across the file name the same files with the same sizes."""
+    def name_len(i):
+        return len(i.orig_filename.encode("utf-8" if i.flag_bits & 0x800 else "cp437"))
+    order = sorted(infos, key=lambda i: i.header_offset)
+    pos = 0
+    for i in order:
+        gap = i.header_offset - pos
+        if gap < 0 or gap > (0 if pos == 0 else LOCAL_SLACK):
+            raise Reject(422, "The zip has data outside its file list. Upload the zip the app made, unchanged.")
+        pos = i.header_offset + 30 + name_len(i) + i.compress_size
+    if not 0 <= cd_off - pos <= LOCAL_SLACK:
+        raise Reject(422, "The zip has data outside its file list. Upload the zip the app made, unchanged.")
+    picks = order if len(order) <= HEADER_SAMPLES else [order[round(k * (len(order) - 1) / (HEADER_SAMPLES - 1))] for k in range(HEADER_SAMPLES)]
+    for i in picks:
+        head = rf.peek(i.header_offset, 30 + name_len(i))
+        if len(head) < 30 or head[:4] != _LOCAL:
+            raise Reject(422, "The zip's entries don't match its file list.")
+        flags, method, _, _, _, csize, _, nlen, xlen = struct.unpack("<HHHHIIIHH", head[6:30])
+        same_size = flags & 0x08 or csize == i.compress_size
+        if method != i.compress_type or nlen != name_len(i) or head[30:] != i.orig_filename.encode("utf-8" if i.flag_bits & 0x800 else "cp437") \
+                or not same_size or xlen > LOCAL_SLACK:
+            raise Reject(422, "The zip's entries don't match its file list.")
 
 
 def read_package(f, get=range_get):
     """(sizes {path: bytes}, loner-strike.json's bytes or None) of a page's file, read from the
-    zip's directory and that one small entry by range requests (a lone .bsp/.wad/picture is
-    itself). Reject(422) when it can't be looked inside; FetchError on network trouble."""
+    zip's directory and that one small entry by range requests (a lone .wad/picture is itself).
+    Reject(422) when it can't be looked inside; FetchError on network trouble."""
     low = f["name"].lower()
     if low.endswith(SINGLE_OK):
         return {f["name"]: f["size"]}, None
     if not low.endswith(".zip"):
         raise Reject(422, "Upload the zip the app made (Publish), unchanged: the list can only look inside zips.")
+    rf = RangeFile(f"https://{GB_HOST}/dl/{f['id']}", f["size"], get)
     try:
-        with zipfile.ZipFile(RangeFile(f"https://{GB_HOST}/dl/{f['id']}", f["size"], get)) as z:
+        total, cd_off = zip_directory(rf)
+        rf.seek(0)
+        with zipfile.ZipFile(rf) as z:
             infos = z.infolist()
-            if len(infos) > MAX_ENTRIES:
-                raise Reject(422, "The package has too many files.")
+            if len(infos) != total:
+                raise Reject(422, "The zip's file list is damaged.")
+            check_layout(rf, infos, cd_off)
             sizes = {i.filename: i.file_size for i in infos}
             manifest = None
             found = [i for i in infos if i.filename.lower() == "loner-strike.json"]
+            if len(found) > 1:
+                raise Reject(422, "The package has more than one loner-strike.json.")
             if found:
                 i = found[0]
                 if i.flag_bits & 1 or i.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
@@ -524,7 +603,7 @@ def read_package(f, get=range_get):
                     manifest = fh.read(MAX_MANIFEST + 1)
                 if len(manifest) > MAX_MANIFEST:
                     raise Reject(422, "The package's loner-strike.json is too big.")
-    except (zipfile.BadZipFile, zipfile.LargeZipFile, EOFError, ValueError, NotImplementedError, KeyError):
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, EOFError, ValueError, NotImplementedError, KeyError, zlib.error, struct.error):
         raise Reject(422, "The zip on the page couldn't be read. Upload the zip the app made, unchanged.")
     return sizes, manifest
 
@@ -534,27 +613,99 @@ def package_names(f, get=range_get):
     return list(read_package(f, get)[0])
 
 
+_PART = re.compile(r"^[A-Za-z0-9 _.\-()+!#&',]{1,64}$")
+
+
+def norm_path(name):
+    """A package path made plain (lower case, '/'), or None when it isn't one the app's
+    installer would write: backslashes, '..', empty or dot parts, NUL, trailing dots or spaces,
+    or any character outside the installer's own set (content.rs safe_part)."""
+    if not isinstance(name, str) or "\\" in name or "\x00" in name or name.startswith("/") or len(name) > 255:
+        return None
+    parts = name[:-1].split("/") if name.endswith("/") else name.split("/")
+    for p in parts:
+        if p in ("", ".", "..") or p.startswith(".") or p.endswith((" ", ".")) or not _PART.match(p):
+            return None
+    return "/".join(parts).lower() + ("/" if name.endswith("/") else "")
+
+
+def _ext(p):
+    base = p.rsplit("/", 1)[-1]
+    return base[base.rfind("."):] if "." in base else ""
+
+
+# where content goes and what it may be: the app's installer's own allow-list (archive.rs
+# content_exts), plus .lsv map knowledge
+CONTENT = {"maps": (".bsp", ".nav", ".txt", ".res", ".lsv"), "gfx": (".tga", ".bmp"), "models": (".mdl",),
+           "sound": (".wav", ".mp3"), "sprites": (".spr",), "overviews": (".txt", ".bmp", ".tga")}
+
+
+def allowed_path(kind, p):
+    """May this (normalised) path be in a package of this kind? An allow-list: anything not
+    named here is refused."""
+    if p.endswith("/"):
+        return True  # a folder entry (its files are checked one by one)
+    parts, ext = p.split("/"), _ext(p)
+    top = parts[0]
+    if p in ("readme.txt", "loner-strike.json"):
+        return True
+    root_wad = len(parts) == 1 and ext == ".wad" and p not in STOCK_WADS
+    content = len(parts) >= 2 and top in CONTENT and ext in CONTENT[top]
+    if kind == "map":
+        return content or root_wad
+    if kind == "texture":
+        return root_wad
+    if kind == "spray":
+        return p == "tempdecal.wad" or root_wad or (top == "logos" and len(parts) == 2 and ext == ".bmp") \
+            or (len(parts) == 1 and ext in (".bmp", ".tga", ".png", ".jpg", ".jpeg"))
+    if kind == "prefab":
+        return root_wad or (top == "prefabs" and len(parts) == 2 and ext in (".map", ".json", ".png"))
+    if kind == "mode":
+        # Game Mode Studio data (provisional until the Studio's package format is fixed): its
+        # graphs and settings, and the content it uses; never plugins or their lists
+        data = (top == "modes" and len(parts) >= 3 and ext in (".json", ".ini", ".txt")) or \
+               (p.startswith("addons/amxmodx/configs/gamemodes/") and len(parts) == 5 and ext == ".ini")
+        return (data or content or root_wad) and not parts[-1].startswith("plugins")
+    return False
+
+
 def code_files(names):
-    """The paths in a package that run code or hide other files."""
+    """The paths in a package that run code or hide other files (named in the refusal)."""
     bad = []
     for n in names:
         low = n.replace("\\", "/").lower()
         if low.endswith("/"):
             continue
         base = low.rsplit("/", 1)[-1]
-        if base.endswith(CODE_EXT) or base.endswith(ARCHIVE_EXT) or "addons/metamod/" in low or "/dlls/" in "/" + low:
+        if base.endswith(CODE_EXT) or base.endswith((".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".cab")) \
+                or "addons/metamod/" in low or "/dlls/" in "/" + low:
             bad.append(n)
     return bad
 
 
-def check_package(names):
+def check_package(names, kind="map"):
+    """Every path in the package must be plain and on the allow-list for its kind."""
     bad = code_files(names)
-    if not bad:
-        return
     if any(b.lower().endswith((".amxx", ".amx", ".sma", ".inc")) for b in bad):
         raise Reject(422, PLUGIN_REFUSAL)
-    raise Reject(422, f"The package has files that run code or can't be checked ({', '.join(bad[:3])}). "
-                      "Only maps, textures, models, sounds, sprays and Game Mode Studio settings can be shared.")
+    if bad:
+        raise Reject(422, f"The package has files that run code or can't be checked ({', '.join(bad[:3])}). "
+                          "Only maps, textures, models, sounds, sprays and Game Mode Studio settings can be shared.")
+    odd = [n for n in names if norm_path(n) is None]
+    if odd:
+        raise Reject(422, f"The package has file names the app won't install ({', '.join(repr(n) for n in odd[:3])}). "
+                          "Make it again with Publish.")
+    paths = [norm_path(n) for n in names]
+    if len(set(paths)) != len(paths):
+        raise Reject(422, "The package has the same file twice (names differing only in case).")
+    settings = [n for n, p in zip(names, paths) if p.rsplit("/", 1)[-1] in SETTINGS_FILES or p.endswith(".cfg") or p.endswith(".gam")
+                or p.rsplit("/", 1)[-1].startswith("plugins") and p.endswith(".ini")]
+    if settings:
+        raise Reject(422, f"The package has game settings files ({', '.join(settings[:3])}); shared creations can't change "
+                          "how a server runs.")
+    other = [n for n, p in zip(names, paths) if not allowed_path(kind, p)]
+    if other:
+        raise Reject(422, f"The package has files the app doesn't install for a {kind} ({', '.join(other[:3])}).")
 
 
 def fetch_page(model, gb, get=http_get):
@@ -724,25 +875,47 @@ def build_item(model, gb, facts, sizes, manifest):
 
 # ---- rate limits ----------------------------------------------------------------------------
 
-class Window:
-    """At most `n` hits per `secs` per key, in memory (lost on restart, which is fine)."""
+def visitor_key(ip):
+    """What the rate limits count by: an IPv4 address, or an IPv6 address's /64 (one home or
+    server usually has a whole /64, so counting single v6 addresses would be no limit at all)."""
+    try:
+        a = ipaddress.ip_address((ip or "").strip())
+    except ValueError:
+        return (ip or "?")[:64]
+    if a.version == 6 and a.ipv4_mapped:
+        return str(a.ipv4_mapped)
+    if a.version == 6:
+        return str(ipaddress.ip_network(f"{a}/64", strict=False))
+    return str(a)
 
-    def __init__(self, n, secs):
-        self.n, self.secs = n, secs
+
+class Window:
+    """At most `n` hits per `secs` per key, in memory (lost on restart, which is fine). The
+    table keeps at most `max_keys` keys, dropping the ones heard from longest ago."""
+
+    def __init__(self, n, secs, max_keys=20000):
+        self.n, self.secs, self.max_keys = n, secs, max_keys
         self.lock = threading.Lock()
         self.hits = {}
 
     def allow(self, who, t=None):
         t = time.time() if t is None else t
         with self.lock:
-            recent = [x for x in self.hits.get(who, []) if t - x < self.secs]
+            recent = [x for x in self.hits.pop(who, []) if t - x < self.secs]
             ok = len(recent) < self.n
             if ok:
                 recent.append(t)
-            self.hits[who] = recent
-            if len(self.hits) > 10000:
-                self.hits = {k: v for k, v in self.hits.items() if v and t - v[-1] < self.secs}
+            self.hits[who] = recent  # re-inserted: dicts keep order, so the oldest keys come first
+            if len(self.hits) > self.max_keys:
+                for k in list(self.hits)[: len(self.hits) - int(self.max_keys * 0.9)]:
+                    del self.hits[k]
             return ok
+
+    def full(self, who, t=None):
+        """True when `who` has used up its hits (without counting one)."""
+        t = time.time() if t is None else t
+        with self.lock:
+            return len([x for x in self.hits.get(who, []) if t - x < self.secs]) >= self.n
 
 
 # ---- Discord --------------------------------------------------------------------------------
@@ -1122,11 +1295,13 @@ def build_index(store):
 # ---- the service ----------------------------------------------------------------------------
 
 class Community:
-    def __init__(self, store, token="", notifier=None, get=http_get, get_range=range_get, admin_local=False):
+    def __init__(self, store, token="", notifier=None, get=http_get, get_range=range_get, admin_local=False, publish_token=""):
         self.store = store
         self.token_digest = hashlib.sha256(token.encode()).digest() if len(token) >= MIN_TOKEN else None
         if token and not self.token_digest:
             log(f"the admin token is shorter than {MIN_TOKEN} characters; moderation is off")
+        # the publish job's own token: it may read the index and status and say what it published, nothing else
+        self.publish_digest = hashlib.sha256(publish_token.encode()).digest() if len(publish_token) >= MIN_TOKEN else None
         self.notifier = notifier or Notifier("")
         self.get = get
         self.get_range = get_range
@@ -1136,9 +1311,13 @@ class Community:
         self.ip_day = Window(SUBMIT_PER_IP_DAY, 86400)
         self.admin_fails = Window(ADMIN_FAILS_PER_HOUR, 3600)
         self.gb_limit = Window(GB_FETCHES_PER_MIN, 60)
+        self.gb_share = Window(GB_PER_VISITOR_MIN, 60)
+        self.status_limit = Window(STATUS_PER_MIN, 60)
+        self.pkg_slots = threading.BoundedSemaphore(PACKAGE_CHECKS)
         self.report_ip = Window(REPORTS_PER_IP_HOUR, 3600)
         self.report_same = Window(1, 86400)
         self.report_all = Window(REPORTS_PER_DAY, 86400)
+        self.report_day = Window(REPORTS_PER_VISITOR_DAY, 86400)
         self.report_said = Window(1, 1800)
         # reporters are told apart in the mod channel by a hash of their address with a salt that
         # lives only in memory: the same person reads the same for a while, nobody can reverse it
@@ -1162,12 +1341,19 @@ class Community:
     def _entry(self, model, gb, facts, f):
         """The entry for one of the page's files after the file and package checks."""
         file_ok(f)
+        if norm_path(f["name"]) is None:
+            raise Reject(422, "The file's name isn't one the app would install. Upload the zip the app made, unchanged.")
+        # only a couple of packages are looked into at once (memory on a small box)
+        if not self.pkg_slots.acquire(timeout=0.5):
+            raise Reject(429, "The list is checking other packages. Try again in a minute.")
         try:
             sizes, manifest = read_package(f, self.get_range)
         except FetchError as e:
             log(f"couldn't read the package of {key_of(model, gb)}: {e}")
             raise Reject(502, "GameBanana's file server didn't answer. Try again in a few minutes.")
-        check_package(list(sizes))
+        finally:
+            self.pkg_slots.release()
+        check_package(list(sizes), facts["kind"])
         return build_item(model, gb, dict(facts, file=f), sizes, manifest)
 
     def _choose(self, model, gb, row):
@@ -1209,6 +1395,7 @@ class Community:
         """(status, answer) for the app's POST /community/submit. Anyone may register any
         tagged page (the tag is the creator's say-so); what gets listed is always the page's and
         the package's own data, so a stranger can at most make the entry match them again."""
+        ip = visitor_key(ip)
         if not self.ip_limit.allow(ip):
             return 429, {"error": "Too many registrations from here. Try again in an hour."}
         if not self.ip_day.allow(ip):
@@ -1219,8 +1406,9 @@ class Community:
             row = self.store.get(key)
             if row and row["state"] == "pulled":
                 raise Reject(409, "The Loner-Strike team pulled this page, so it can't be registered again. Ask in the Discord.")
-            if not self.gb_limit.allow("gb"):
-                raise Reject(503, "The list is busy. Try again in a few minutes.")
+            # a visitor's fair share of GameBanana checks first, so one source can't use them all up
+            if not self.gb_share.allow(ip) or not self.gb_limit.allow("gb"):
+                raise Reject(429, "The list is busy. Try again in a few minutes.")
             facts, item, note = self._choose(model, gb, row)
             if item is None:
                 # nothing newer that passes: the entry stays as it is
@@ -1285,6 +1473,7 @@ class Community:
         if proposed:
             out["waiting"] = proposed.get("md5", "")
         if row["state"] in ("rejected", "pulled", "hidden") and row["reason"]:
+            # the reason the moderators gave (written for the author); never who gave it
             out["reason"] = row["reason"]
         return out
 
@@ -1293,6 +1482,7 @@ class Community:
     def report(self, body, ip):
         """(status, answer) for the app's POST /community/report: a player says something's wrong
         with a creation. Kept 90 days with a reason, an optional note and the reporter's hash."""
+        ip = visitor_key(ip)
         if not self.report_ip.allow(ip):
             return 429, {"error": "Too many reports from here. Try again in an hour."}
         try:
@@ -1322,7 +1512,7 @@ class Community:
         who = self.reporter(ip)
         if not self.report_same.allow(f"{who}|{key}"):
             return 200, {"ok": True}  # already reported by them today: thanks, once is enough
-        if not self.report_all.allow("all"):
+        if not self.report_day.allow(who) or not self.report_all.allow("all"):
             return 503, {"error": "Lots of reports right now. Try again later, or tell us in the Discord."}
         rid = self.store.add_report(key, reason, note, who, app)
         log(f"report for {key}: {reason}")
@@ -1508,14 +1698,16 @@ class Community:
                 if i and pause:
                     time.sleep(pause)
                 verdicts.append((row, *self._verdict(row)))
-            gone = sum(1 for _, v, _ in verdicts if v in ("pull", "reject"))
-            suspicious = not keys and len(rows) >= 8 and gone > len(rows) * RECHECK_GONE_SHARE
+            # many pages leaving the list at once is more likely GameBanana's API having a bad day (or
+            # changing shape) than real: more than 3, or 2+ and over a quarter, waits for a person
+            gone = sum(1 for _, v, _ in verdicts if v in ("pull", "reject", "hide"))
+            suspicious = not keys and (gone > 3 or (gone >= 2 and gone > len(rows) * RECHECK_GONE_SHARE))
             changed, t = [], now()
             for row, verdict, why in verdicts:
                 if verdict == "error":
                     self.store.touch(row["key"], row["checked"], f"couldn't check: {why}")
                     continue
-                if suspicious and verdict in ("pull", "reject"):
+                if suspicious and verdict in ("pull", "reject", "hide"):
                     self.store.touch(row["key"], row["checked"], f"would be {verdict}ed ({why}), held back")
                     continue
                 self.store.touch(row["key"], t, why if verdict != "ok" else "")
@@ -1541,8 +1733,9 @@ class Community:
             if not keys:
                 self.store.set_meta("last_recheck", summary)
             if suspicious:
-                self.notifier.say(f"**Re-check held back:** {gone} of {len(rows)} pages looked gone or untagged, which is too many "
-                                  "to be real. Nothing was pulled. Check GameBanana, then `lsmod.py recheck` again.")
+                self.notifier.say(f"**Re-check held back:** {gone} of {len(rows)} pages would have left the list at once, which "
+                                  "is more than looks real. Nothing changed and the publish timer waits. Check GameBanana, then "
+                                  "`lsmod.py recheck` again (or publish by hand).")
             elif changed:
                 lines = [f"**Re-check:** {len(changed)} change(s). `lsmod.py publish --upload` to put the index out."]
                 lines += [f"- `{k}` {v}: {discord_text(w)}" for k, v, w in changed[:15]]
@@ -1603,22 +1796,25 @@ class Community:
 
     # -- HTTP --
 
-    def _authorized(self, h, ip):
-        """None when the request carries the admin token, else (status, why)."""
-        if self.token_digest is None:
+    def _authorized(self, h, ip, path):
+        """None when the request carries the admin token (or the publish token, for what the
+        publish job may do), else (status, why)."""
+        if self.token_digest is None and self.publish_digest is None:
             return 503, "Moderation is off (no admin token set)."
         if self.admin_local and (h.client_address[0] != "127.0.0.1" or h.headers.get("CF-Connecting-IP")):
-            return 403, "Moderation only answers on this machine."
+            return 403, "Moderation only answers on this machine (ssh -L 8100:127.0.0.1:8100 to the box)."
         # too many wrong tokens from one place: even a right one is refused for the hour
-        with self.admin_fails.lock:
-            recent = [x for x in self.admin_fails.hits.get(ip, []) if time.time() - x < 3600]
-        if len(recent) >= ADMIN_FAILS_PER_HOUR:
+        if self.admin_fails.full(ip):
             return 429, "Too many wrong tokens from here. Try again in an hour."
         auth = h.headers.get("Authorization") or ""
-        given = auth[7:].strip() if auth[:7].lower() == "bearer " else ""
+        given = hashlib.sha256((auth[7:].strip() if auth[:7].lower() == "bearer " else "").encode()).digest()
         # both sides hashed first, so the comparison takes the same time whatever the length
-        if hmac.compare_digest(hashlib.sha256(given.encode()).digest(), self.token_digest):
+        admin = self.token_digest is not None and hmac.compare_digest(given, self.token_digest)
+        publisher = self.publish_digest is not None and hmac.compare_digest(given, self.publish_digest)
+        if admin or (publisher and path in (("GET", "index"), ("GET", "status"), ("POST", "published"))):
             return None
+        if publisher:
+            return 403, "The publish token can only read the index and say what was published."
         self.admin_fails.allow(ip)
         return 401, "Wrong or missing admin token."
 
@@ -1637,12 +1833,14 @@ class Community:
                 code, answer = (self.submit if parts == ["submit"] else self.report)(body, ip)
                 return reply(h, code, answer, cors=False)
             if len(parts) == 3 and parts[0] == "submission" and method == "GET":
+                if not self.status_limit.allow(visitor_key(ip)):
+                    return reply(h, 429, {"error": "Too many questions from here. Try again in a minute."})
                 p = parse_key(f"{parts[1]}:{parts[2]}")
                 if not p:
                     return reply(h, 404, {"error": "not found"})
                 return reply(h, 200, self.status(*p))
             if parts[:1] == ["admin"]:
-                denied = self._authorized(h, ip)
+                denied = self._authorized(h, visitor_key(ip), (method, "/".join(parts[1:])))
                 if denied:
                     return reply(h, denied[0], {"error": denied[1]}, cors=False)
                 return self.admin(h, method, parts[1:], query)
@@ -1725,8 +1923,27 @@ class Community:
 
 
 def read_body(h):
-    if h.headers.get("Transfer-Encoding"):
-        raise Reject(411, "Send a Content-Length.")
+    """The request body, at most MAX_BODY bytes: by Content-Length, or chunked (Cloudflare's
+    tunnel may pass a body on that way)."""
+    te = (h.headers.get("Transfer-Encoding") or "").strip().lower()
+    if te:
+        if te != "chunked" or h.headers.get("Content-Length"):
+            raise Reject(400, "Unsupported Transfer-Encoding.")
+        out = b""
+        while True:
+            line = h.rfile.readline(64)
+            try:
+                n = int(line.split(b";")[0].strip(), 16)
+            except ValueError:
+                raise Reject(400, "Bad chunked body.")
+            if n < 0 or len(out) + n > MAX_BODY:
+                raise Reject(413, "The request is too big.")
+            if n == 0:
+                while h.rfile.readline(1024).strip():
+                    pass  # trailers
+                return out
+            out += h.rfile.read(n)
+            h.rfile.readline(8)
     try:
         size = int(h.headers.get("Content-Length") or 0)
     except ValueError:

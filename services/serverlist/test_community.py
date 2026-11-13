@@ -12,6 +12,7 @@ import hashlib
 import io
 import json
 import os
+import struct
 import subprocess
 import sys
 import tempfile
@@ -62,6 +63,12 @@ class FakeGB:
             raise page
         if page is None:
             return 404, json.dumps(fixture("not_found.json")).encode()
+        page = copy.deepcopy(page)
+        # the size GameBanana lists for a file is the size of the zip the fake file host serves
+        for f in page.get("_aFiles", []):
+            data = getattr(self, "files", None) and self.files.files.get(f["_idRow"])
+            if isinstance(data, bytes):
+                f["_nFilesize"] = len(data)
         return 200, json.dumps(page).encode()
 
 
@@ -105,17 +112,12 @@ class FakeFiles:
         }
         self.calls = 0
 
-    # the sizes the fixture pages list; a zip here is padded at the front to that size (a zip is
-    # read from its end, so it reads the same)
-    SIZES = {1885247: 216842, 1886785: 278384, 1789868: 55491, 2000000: 216842}
-
     def __call__(self, url, start, end):
         self.calls += 1
         fid = int(url.rsplit("/", 1)[1])
         data = self.files[fid]
         if isinstance(data, Exception):
             raise data
-        data = bytes(max(0, self.SIZES.get(fid, 0) - len(data))) + data
         return data[start:end + 1], url
 
 
@@ -164,8 +166,10 @@ def block(c, page):
 def make(gb=None, token=TOKEN, hook="https://discord.com/api/webhooks/1/abc", files=None):
     tmp = tempfile.mkdtemp()
     rec = Recorder()
+    gb, files = gb or FakeGB(), files or FakeFiles()
+    gb.files = files
     c = cm.Community(cm.Store(os.path.join(tmp, "c.db")), token=token, notifier=cm.Notifier(hook, post=rec),
-                     get=gb or FakeGB(), get_range=files or FakeFiles())
+                     get=gb, get_range=files)
     # notifications in tests go straight through
     c.notifier.say = (lambda say: (lambda text, wait=False: say(text, wait=True)))(c.notifier.say)
     return c, rec
@@ -357,7 +361,7 @@ class Packages(unittest.TestCase):
             return data[start:end + 1], "https://filecache1.gamebanana.com/x.zip"
         self.assertEqual(cm.package_names({"id": 5, "name": "x.zip", "size": len(data)}, get), names)
         self.assertLess(sum(read), 200_000)
-        self.assertLessEqual(len(read), 3)
+        self.assertLessEqual(len(read), 3 + cm.HEADER_SAMPLES, "the tail, maybe the directory, a few local headers")
         with self.assertRaises(cm.FetchError):
             cm.package_names({"id": 5, "name": "x.zip", "size": len(data)}, lambda u, s, e: (data[s:e + 1], u)) if False else \
                 zipfile.ZipFile(cm.RangeFile("u", len(data), lambda u, s, e: (data[s:e + 1], u), budget=1000))
@@ -723,18 +727,46 @@ class Recheck(unittest.TestCase):
         self.assertEqual(len(rec.sent), n)
         self.assertGreater(c.store.get("mod:739197")["checked"], 0)
 
-    def test_untagged_or_gone_is_pulled(self):
+    def test_untagged_is_pulled(self):
+        c, rec = self.listed()
+        c.get.pages[("Mod", 739197)] = fixture("mod_739197_untagged.json")
+        r = c.recheck(pause=0)
+        self.assertEqual((r["changed"], r["heldBack"]), (1, False), "one change on its own goes through")
+        self.assertEqual(c.store.get("mod:739197")["state"], "pulled")
+        self.assertIn("tag", c.store.get("mod:739197")["reason"])
+        idx = json.loads(cm.build_index(c.store)[0])
+        self.assertEqual(idx["revoked"], ["mod:739197"])
+        self.assertIn("Re-check", rec.sent[-1][1]["content"])
+
+    def test_a_waiting_page_that_vanished_is_turned_down(self):
+        c, _ = self.listed()
+        del c.get.pages[("Mod", 739703)]
+        c.recheck(pause=0)
+        self.assertEqual(c.store.get("mod:739703")["state"], "rejected")
+
+    def test_two_of_two_leaving_waits_for_a_person(self):
         c, rec = self.listed()
         c.get.pages[("Mod", 739197)] = fixture("mod_739197_untagged.json")
         del c.get.pages[("Mod", 739703)]
         r = c.recheck(pause=0)
-        self.assertEqual(r["changed"], 2)
-        self.assertEqual(c.store.get("mod:739197")["state"], "pulled")
-        self.assertIn("tag", c.store.get("mod:739197")["reason"])
-        self.assertEqual(c.store.get("mod:739703")["state"], "rejected", "a waiting page that vanished is turned down")
-        idx = json.loads(cm.build_index(c.store)[0])
-        self.assertEqual(idx["revoked"], ["mod:739197"])
-        self.assertIn("Re-check", rec.sent[-1][1]["content"])
+        self.assertTrue(r["heldBack"])
+        self.assertEqual(c.store.get("mod:739197")["state"], "listed")
+        self.assertTrue(c.store.meta("last_recheck")["heldBack"])
+        self.assertIn("held back", rec.sent[-1][1]["content"])
+
+    def test_hides_count_toward_the_guard(self):
+        pages = {}
+        c, _ = make(FakeGB(pages))
+        for i in range(1, 5):
+            p = copy.deepcopy(MAP)
+            p["_idRow"] = i
+            pages[("Mod", i)] = p
+            c.submit(body(map_item(gb=i)), f"ip{i}")
+        for i in range(1, 5):  # every listed file replaced at once
+            pages[("Mod", i)]["_aFiles"][0]["_sMd5Checksum"] = "9" * 32
+        r = c.recheck(pause=0)
+        self.assertTrue(r["heldBack"])
+        self.assertEqual(c.store.count("listed"), 4)
 
     def test_replaced_file_hides(self):
         c, _ = self.listed()
@@ -889,6 +921,30 @@ class Http(unittest.TestCase):
         self.assertEqual(self.call("GET", "/community/admin/queue", token=TOKEN, headers={"CF-Connecting-IP": "1.1.1.1"})[0], 403)
         self.assertEqual(self.call("GET", "/community/admin/queue", token=TOKEN)[0], 200)
 
+    def test_status_is_rate_limited(self):
+        self.c.status_limit = cm.Window(2, 60)
+        for _ in range(2):
+            self.assertEqual(self.call("GET", "/community/submission/mod/1", headers={"CF-Connecting-IP": "9.9.9.9"})[0], 200)
+        self.assertEqual(self.call("GET", "/community/submission/mod/1", headers={"CF-Connecting-IP": "9.9.9.9"})[0], 429)
+
+    def test_a_chunked_body(self):
+        import http.client
+        conn = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=5)
+        raw = body(map_item())
+        conn.request("POST", "/community/submit", body=iter([raw[:50], raw[50:]]), headers={"Content-Type": "application/json"},
+                     encode_chunked=True)
+        r = conn.getresponse()
+        self.assertEqual((r.status, json.loads(r.read())["state"]), (200, "listed"))
+        conn.close()
+
+    def test_the_publish_token_only_publishes(self):
+        pub = "p" * 40
+        self.c.publish_digest = hashlib.sha256(pub.encode()).digest()
+        self.assertEqual(self.call("GET", "/community/admin/index", token=pub)[0], 200)
+        self.assertEqual(self.call("GET", "/community/admin/status", token=pub)[0], 200)
+        self.assertEqual(self.call("POST", "/community/admin/item/mod/1", {"action": "pull", "reason": "x"}, token=pub)[0], 403)
+        self.assertEqual(self.call("GET", "/community/admin/queue", token=pub)[0], 403)
+
     def test_without_community_nothing_changes(self):
         self.srv.RequestHandlerClass = sl.make_handler(sl.Registry(os.path.join(tempfile.mkdtemp(), "l.json")), sl.RateLimit(3))
         self.assertEqual(self.call("POST", "/community/submit", body(map_item()))[0], 404)
@@ -926,6 +982,10 @@ class Http(unittest.TestCase):
         r = run("show", "mod:739197")
         self.assertIn("restore", r.stdout)
         self.assertNotIn(TOKEN, r.stdout + r.stderr)
+        r = subprocess.run([sys.executable, "-I", os.path.join(HERE, "lsmod.py"), "--server", "http://list.lonerstrike.com", "status"],
+                           capture_output=True, text=True, env=env, timeout=30)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("isn't https", r.stderr)
         env["LS_COMMUNITY_TOKEN"] = "wrong" * 10
         r = run("queue")
         self.assertNotEqual(r.returncode, 0)
@@ -1165,10 +1225,148 @@ class Transitions(unittest.TestCase):
         self.assertTrue(c.store.get("mod:739197")["featured"])
 
 
+def shift_entries(data, after_index, junk):
+    """A zip with `junk` bytes slipped in before entry number `after_index` (directory offsets
+    fixed up), as a hidden extra entry would be."""
+    z = zipfile.ZipFile(io.BytesIO(data))
+    infos = sorted(z.infolist(), key=lambda i: i.header_offset)
+    cut_at = infos[after_index].header_offset
+    eocd = data.rfind(b"PK\x05\x06")
+    cd_off = struct.unpack("<I", data[eocd + 16:eocd + 20])[0]
+    out = bytearray(data[:cut_at] + junk + data[cut_at:])
+    n = len(junk)
+    pos = cd_off + n
+    while out[pos:pos + 4] == b"PK\x01\x02":
+        off = struct.unpack("<I", out[pos + 42:pos + 46])[0]
+        if off >= cut_at:
+            out[pos + 42:pos + 46] = struct.pack("<I", off + n)
+        nl, xl, cl = struct.unpack("<HHH", out[pos + 28:pos + 34])
+        pos += 46 + nl + xl + cl
+    e = eocd + n
+    out[e + 16:e + 20] = struct.pack("<I", cd_off + n)
+    return bytes(out)
+
+
+class Hardening(unittest.TestCase):
+    def test_visitors_are_counted_by_ipv4_and_ipv6_64(self):
+        self.assertEqual(cm.visitor_key("203.0.113.9"), "203.0.113.9")
+        self.assertEqual(cm.visitor_key("2001:db8:1:2:aaaa::1"), cm.visitor_key("2001:db8:1:2:ffff::9"))
+        self.assertNotEqual(cm.visitor_key("2001:db8:1:2::1"), cm.visitor_key("2001:db8:1:3::1"))
+        self.assertEqual(cm.visitor_key("::ffff:203.0.113.9"), "203.0.113.9")
+        self.assertEqual(cm.visitor_key("junk"), "junk")
+        c, _ = make()
+        c.ip_limit = cm.Window(1, 3600)
+        self.assertEqual(c.submit(b"x", "2001:db8:1:2::1")[0], 400)
+        self.assertEqual(c.submit(b"x", "2001:db8:1:2::2")[0], 429, "another address in the same /64")
+
+    def test_limit_tables_stay_small(self):
+        w = cm.Window(1, 3600, max_keys=100)
+        for i in range(1000):
+            w.allow(f"k{i}", t=1000 + i)
+        self.assertLessEqual(len(w.hits), 100)
+        self.assertIn("k999", w.hits)
+        self.assertNotIn("k0", w.hits, "the oldest go first")
+
+    def test_fair_shares_of_the_global_caps(self):
+        c, _ = make()
+        c.gb_share = cm.Window(1, 60)
+        c.submit(body(map_item()), "1.1.1.1")
+        code, ans = c.submit(body(map_item(gb=5)), "1.1.1.1")
+        self.assertEqual(code, 429, "one visitor's share of GameBanana checks")
+        c.report_day = cm.Window(2, 86400)
+        c.report(report(gb=1), "2.2.2.2")
+        c.report(report(gb=2), "2.2.2.2")
+        self.assertEqual(c.report(report(gb=3), "2.2.2.2")[0], 503)
+        self.assertEqual(c.report(report(gb=3), "3.3.3.3")[0], 200, "others still can")
+
+    def test_two_package_checks_at_a_time(self):
+        c, _ = make()
+        c.pkg_slots.acquire()
+        c.pkg_slots.acquire()
+        try:
+            code, ans = c.submit(body(map_item()), "a")
+            self.assertEqual(code, 429)
+            self.assertIn("other packages", ans["error"])
+        finally:
+            c.pkg_slots.release()
+            c.pkg_slots.release()
+        self.assertEqual(c.submit(body(map_item()), "a")[0], 200)
+
+    def package(self, data, name="x.zip"):
+        return cm.read_package({"id": 5, "name": name, "size": len(data)}, lambda u, s, e: (data[s:e + 1], u))
+
+    def test_entry_count_is_checked_before_anything_is_built(self):
+        old = cm.MAX_ENTRIES
+        cm.MAX_ENTRIES = 3
+        try:
+            with self.assertRaises(cm.Reject) as e:
+                self.package(zip_of([f"sound/{i}.wav" for i in range(5)]))
+            self.assertIn("too many files", e.exception.message)
+        finally:
+            cm.MAX_ENTRIES = old
+        z = bytearray(zip_of(["maps/a.bsp"]))
+        e = z.rfind(b"PK\x05\x06")
+        z[e + 8:e + 12] = b"\xff\xff\xff\xff"  # zip64 markers
+        with self.assertRaises(cm.Reject):
+            self.package(bytes(z))
+
+    def test_directory_and_entries_must_agree(self):
+        good = map_zip()
+        self.assertIn("maps/de_marakesh.bsp", self.package(good)[0])
+        for bad in (b"junk" * 50 + good,                                   # data before the first entry
+                    shift_entries(good, 2, b"\0" * 300),                  # room for a hidden entry
+                    good.replace(b"maps/de_marakesh.nav", b"maps/de_marakesh.cfg", 1)):  # local header renamed
+            with self.subTest(len(bad)):
+                with self.assertRaises(cm.Reject):
+                    self.package(bad)
+
+    def test_damaged_manifest_data(self):
+        z = bytearray(map_zip())
+        i = zipfile.ZipFile(io.BytesIO(bytes(z))).getinfo("loner-strike.json")
+        start = i.header_offset + 30 + len("loner-strike.json")
+        for k in range(start + 2, start + 12):
+            z[k] ^= 0xFF
+        with self.assertRaises(cm.Reject) as e:
+            self.package(bytes(z))
+        self.assertEqual(e.exception.code, 422)
+
+    def test_names_and_the_allow_list(self):
+        for bad in ("maps\\x.bsp", "../x.bsp", "maps/./x.bsp", "maps/x.bsp.", "maps/x.bsp ", "maps/.hidden", "maps/x\x00.bsp",
+                    "/maps/x.bsp", "maps/de_\u0430.bsp", "maps//x.bsp"):
+            self.assertIsNone(cm.norm_path(bad), bad)
+        self.assertEqual(cm.norm_path("Maps/De_Dust.BSP"), "maps/de_dust.bsp")
+        allowed = {"map": ["maps/a.bsp", "maps/a.lsv", "sound/x/y.wav", "gfx/env/skyup.tga", "overviews/a.bmp", "mytex.wad", "README.txt"],
+                   "prefab": ["prefabs/can.map", "prefabs/can.json", "prefabs/can.png", "props.wad"],
+                   "spray": ["tempdecal.wad", "logos/x.bmp", "preview.png"],
+                   "texture": ["mytex.wad"],
+                   "mode": ["modes/zm/graph.json", "addons/amxmodx/configs/gamemodes/zm.ini", "sound/zm/a.wav"]}
+        refused = {"map": ["server.cfg", "maps/a.cfg", "liblist.gam", "addons/amxmodx/configs/plugins.ini", "cstrike.wad", "Thumbs.db",
+                           "maps/a.exe", "models/a.txt", "readme.md"],
+                   "prefab": ["maps/a.bsp", "prefabs/x/y.map"],
+                   "spray": ["sound/a.wav"],
+                   "texture": ["maps/a.bsp", "sub/x.wad"],
+                   "mode": ["modes/zm/plugins-zm.ini", "addons/amxmodx/configs/zm.cfg", "addons/amxmodx/plugins/zm.amxx", "modes/zm/x.sma"]}
+        for kind, names in allowed.items():
+            cm.check_package(names, kind)
+        for kind, names in refused.items():
+            for n in names:
+                with self.subTest(kind=kind, name=n):
+                    with self.assertRaises(cm.Reject):
+                        cm.check_package(["README.txt", n], kind)
+        with self.assertRaises(cm.Reject) as e:
+            cm.check_package(["maps/A.bsp", "maps/a.bsp"], "map")
+        self.assertIn("twice", e.exception.message)
+        with self.assertRaises(cm.Reject) as e:
+            cm.check_package(["maps/a.bsp", "liblist.gam"], "map")
+        self.assertIn("settings", e.exception.message)
+
+
 class Migrations(unittest.TestCase):
     def test_reopening_keeps_everything(self):
         p = os.path.join(tempfile.mkdtemp(), "c.db")
-        c = cm.Community(cm.Store(p), get=FakeGB(), get_range=FakeFiles())
+        gb, files = FakeGB(), FakeFiles()
+        gb.files = files
+        c = cm.Community(cm.Store(p), get=gb, get_range=files)
         c.submit(body(map_item()), "a")
         s = cm.Store(p)
         self.assertEqual(s.db.execute("PRAGMA user_version").fetchone()[0], len(cm.MIGRATIONS))

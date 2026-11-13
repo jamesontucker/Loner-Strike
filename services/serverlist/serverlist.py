@@ -376,7 +376,8 @@ def main():
     p.add_argument("--state", required=True, help="file that keeps the list between restarts")
     p.add_argument("--community-db", default="", help="turns on community creations: their SQLite database")
     p.add_argument("--recheck-hours", type=float, default=24, help="how often every community page is checked again")
-    p.add_argument("--admin-local", action="store_true", help="moderation only from this machine, not through the tunnel")
+    p.add_argument("--admin-remote", action="store_true",
+                   help="also answer moderation through the tunnel (default: only on this machine, via ssh -L)")
     a = p.parse_args()
     registry = Registry(a.state)
     threading.Thread(target=registry.poll, daemon=True).start()
@@ -386,9 +387,10 @@ def main():
         # secrets come from the service's env file (EnvironmentFile=, root-only, 0600), never on
         # the command line; taken out of the environment once read
         token = os.environ.pop("COMMUNITY_ADMIN_TOKEN", "").strip()
+        publish_token = os.environ.pop("COMMUNITY_PUBLISH_TOKEN", "").strip()
         webhook = os.environ.pop("COMMUNITY_MOD_WEBHOOK", "").strip()
         community = cm.Community(cm.Store(a.community_db), token=token, notifier=cm.Notifier(webhook),
-                                 admin_local=a.admin_local)
+                                 admin_local=not a.admin_remote, publish_token=publish_token)
         # the private mod channel's cards and buttons, through the bot application
         bot_token = os.environ.pop("DISCORD_BOT_TOKEN", "").strip()
         channel = os.environ.get("DISCORD_CHANNEL_ID", "").strip()

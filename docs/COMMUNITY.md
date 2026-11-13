@@ -191,9 +191,11 @@ and anything outside the mode's content and settings.
 
 ### Index integrity
 
-The list service publishes `community/index.json.sha256` beside the index. The app doesn't
-check it yet, and a checksum from the same server only catches a damaged download; a signature
-the app verifies (a key pinned in the app) would be the real fix. Request in section 8.
+The list service publishes `community/index.json.sha256` beside the index, and the app refuses a
+download that doesn't match it (`community::checked_index`; the copy from before is used, as when
+the index can't be reached). That catches a damaged or half-finished upload. A checksum from the
+same server can't catch a tampered one; a signature the app verifies (a key pinned in the app)
+would. Request in section 8.
 
 ## 5. Try it
 
@@ -263,7 +265,7 @@ independently of the author's numbers, and render viewer screenshots to
 
 - **App / list service: a signed index.** Pin a public key in the app and have it verify a
   signature published beside `community/index.json` (Ed25519 or minisign) before using a
-  download; the list service already writes `index.json.sha256`. Until then a tampered index on
+  download; the app already checks `index.json.sha256`, which only catches damage. Until then a tampered index on
   the download server would be believed (the trust rules still stop plugins and the installer's
   allow-lists still apply).
 

@@ -28,8 +28,9 @@ a terminal, and the way to publish the index.
         --upload are they put on dl.lonerstrike.com (scripts/r2-community.sh, R2 keys from
         ~/.config/lonerstrike/r2.env)
 
-<page> is mod:<id>, spray:<id> or the GameBanana link. --server http://127.0.0.1:8100 when
-running on the box itself. Publishing again is needed after a pull for apps to see it (or the
+<page> is mod:<id>, spray:<id> or the GameBanana link. The admin API answers only on the box:
+from a Mac, open a tunnel first (ssh -N -L 8100:127.0.0.1:8100 cs@<box>) and use the default
+--server http://127.0.0.1:8100. Publishing again is needed after a pull for apps to see it (or the
 optional publish timer on the box does it every few minutes; docs/COMMUNITY-SERVER.md).
 """
 import argparse
@@ -48,7 +49,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from community import parse_key  # noqa: E402
 
-DEFAULT_SERVER = "https://list.lonerstrike.com"
+# moderation answers only on the box itself: open a tunnel first,  ssh -N -L 8100:127.0.0.1:8100 cs@<box>
+DEFAULT_SERVER = "http://127.0.0.1:8100"
 TOKEN_FILE = os.path.expanduser("~/.config/lonerstrike/community-admin.token")
 # beside this file when installed on the box, in the repo's scripts/ on a Mac
 UPLOADS = [os.path.join(HERE, "r2-community.sh"), os.path.join(HERE, "..", "..", "scripts", "r2-community.sh")]
@@ -71,6 +73,16 @@ def token(path):
             return f.read().strip()
     except OSError:
         raise Failed(f"No admin token: set LS_COMMUNITY_TOKEN or put it in {path} (chmod 600).")
+
+
+def check_server(server):
+    """https anywhere, plain http only to this machine (a token must never cross a network in the clear)."""
+    u = urllib.parse.urlsplit(server)
+    if u.scheme == "https" and u.hostname:
+        return
+    if u.scheme == "http" and u.hostname in ("127.0.0.1", "localhost", "::1"):
+        return
+    raise Failed(f"{server} isn't https (plain http is only for 127.0.0.1, through an ssh tunnel).")
 
 
 def call(server, tok, method, path, body=None, raw=False):
@@ -131,10 +143,15 @@ def show_entry(d):
         print(f"    {when(h['at'])}  {h['action']}  {h['detail']}")
 
 
-def publish(server, tok, out, upload, if_changed=False):
-    if if_changed and not call(server, tok, "GET", "status")["changedSincePublish"]:
-        print("The index hasn't changed since it was last published.")
-        return
+def publish(server, tok, out, upload, if_changed=False, auto=False):
+    if if_changed or auto:
+        st = call(server, tok, "GET", "status")
+        if auto and (st.get("lastRecheck") or {}).get("heldBack"):
+            print("The last re-check was held back (too many pages leaving at once): not publishing until a person looks.")
+            return
+        if not st["changedSincePublish"]:
+            print("The index hasn't changed since it was last published.")
+            return
     data, headers = call(server, tok, "GET", "index", raw=True)
     sha = hashlib.sha256(data).hexdigest()
     if headers.get("X-Index-Sha256") != sha:
@@ -194,10 +211,12 @@ def main(argv=None):
     s.add_argument("--out", default="community-index")
     s.add_argument("--upload", action="store_true", help="really put it on dl.lonerstrike.com")
     s.add_argument("--if-changed", action="store_true", help="do nothing when it's the same as last published")
+    s.add_argument("--auto", action="store_true", help="the publish timer: --if-changed, and nothing after a held-back re-check")
     a = p.parse_args(argv)
     try:
-        tok = token(a.token_file)
         srv = a.server
+        check_server(srv)
+        tok = token(a.token_file)
         if a.cmd == "queue":
             r = call(srv, tok, "GET", "queue" + (f"?state={urllib.parse.quote(a.state)}" if a.state else ""))
             if not r["entries"]:
@@ -262,7 +281,7 @@ def main(argv=None):
                 print(f"Last re-check {when(lr.get('at', 0))}: {lr.get('checked')} checked, {lr.get('changed')} changed"
                       + (", HELD BACK" if lr.get("heldBack") else ""))
         elif a.cmd == "publish":
-            publish(srv, tok, a.out, a.upload, a.if_changed)
+            publish(srv, tok, a.out, a.upload, a.if_changed, a.auto)
     except Failed as e:
         print(e, file=sys.stderr)
         return 1

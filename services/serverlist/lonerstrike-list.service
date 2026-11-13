@@ -9,6 +9,7 @@ StateDirectory=lonerstrike-list
 # community secrets and Discord ids (root-only, 0600; read by systemd before it drops to the
 # service's user). Optional: without it the community part still answers, without moderation.
 EnvironmentFile=-/etc/lonerstrike-list/community.env
+# moderation (the admin API) answers only on this machine; add --admin-remote to open it through the tunnel
 ExecStart=/usr/bin/python3 /opt/lonerstrike-list/serverlist.py --listen 8100 --state %S/lonerstrike-list/list.json --community-db %S/lonerstrike-list/community.db
 Restart=always
 RestartSec=5
@@ -20,7 +21,8 @@ PrivateDevices=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
 AmbientCapabilities=
-MemoryMax=128M
+# room for the list, the community database and two package checks at once (each reads at most 1 MB)
+MemoryMax=192M
 
 [Install]
 WantedBy=multi-user.target

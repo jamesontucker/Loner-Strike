@@ -450,9 +450,29 @@ fn index(refresh: bool) -> (Index, Source) {
             return (idx.clone(), *src);
         }
     }
-    let (idx, src) = load_index(&|| http_get(INDEX_URL, MAX_INDEX), &dir().join("index.json"));
+    let fetch = || {
+        let body = http_get(INDEX_URL, MAX_INDEX)?;
+        let sum = http_get(&format!("{INDEX_URL}.sha256"), 1024)?;
+        checked_index(body, &sum)
+    };
+    let (idx, src) = load_index(&fetch, &dir().join("index.json"));
     *g = Some((Instant::now(), idx.clone(), src));
     (idx, src)
+}
+
+/// The index as downloaded, only when it matches the sha256 the list service publishes beside it
+/// (`index.json.sha256`, "<hex>  index.json"). A mismatch (a half-finished upload, or a file
+/// changed on the way) counts as not reaching the index: the kept copy is used instead.
+pub fn checked_index(body: Vec<u8>, sum: &[u8]) -> Result<Vec<u8>, String> {
+    let want = std::str::from_utf8(sum).ok().and_then(|t| t.split_whitespace().next()).map(|h| h.to_ascii_lowercase()).unwrap_or_default();
+    if want.len() != 64 || !want.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return Err("the index's checksum couldn't be read".into());
+    }
+    let have: String = Sha256::digest(&body).iter().map(|b| format!("{b:02x}")).collect();
+    if have != want {
+        return Err("the index doesn't match its checksum".into());
+    }
+    Ok(body)
 }
 
 // ---- GameBanana --------------------------------------------------------------------------------
@@ -1823,6 +1843,23 @@ mod tests {
         assert!(parse_index(br#"{"schema": 2, "items": []}"#).unwrap_err().contains("newer"));
         assert!(parse_index(&vec![b' '; (MAX_INDEX + 1) as usize]).is_err());
         assert_eq!(parse_index(br#"{"schema": 1}"#).unwrap().items.len(), 0);
+    }
+
+    #[test]
+    fn index_must_match_its_checksum() {
+        let body = br#"{"schema": 1, "items": []}"#.to_vec();
+        let sum: String = Sha256::digest(&body).iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(checked_index(body.clone(), format!("{sum}  index.json\n").as_bytes()).unwrap(), body);
+        assert_eq!(checked_index(body.clone(), sum.to_uppercase().as_bytes()).unwrap(), body);
+        assert!(checked_index(body.clone(), format!("{}  index.json", "0".repeat(64)).as_bytes()).is_err());
+        assert!(checked_index(body.clone(), b"<html>not found</html>").is_err());
+        assert!(checked_index(body, b"").is_err());
+        // a mismatch keeps the copy from before
+        let d = tmp("sum");
+        let cache = d.join("index.json");
+        std::fs::write(&cache, br#"{"schema": 1, "items": [], "revoked": ["mod:1"]}"#).unwrap();
+        let (idx, src) = load_index(&|| checked_index(br#"{"schema": 1, "items": []}"#.to_vec(), "0".repeat(64).as_bytes()), &cache);
+        assert_eq!((src, idx.revoked), (Source::Cached, vec!["mod:1".to_string()]));
     }
 
     #[test]

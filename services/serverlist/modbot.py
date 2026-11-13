@@ -141,8 +141,10 @@ try:
             return True
         except (InvalidSignature, ValueError):
             return False
+    FAST = True
 except ImportError:  # the box's python3 without python3-cryptography: the version above
     verify = verify_pure
+    FAST = False
 
 
 # ---- the bot's side of Discord's API ----------------------------------------------------------
@@ -189,6 +191,7 @@ def _button(label, custom_id, style, disabled=False):
 
 
 PRIMARY, SECONDARY, SUCCESS, DANGER = 1, 2, 3, 4
+PULLED = "Pulled by the moderators"  # the default reason: neutral, never a moderator's name
 DONE_WORDS = {"pull": "Pulled", "keep": "Kept", "block": "Creator blocked", "approve": "Approved", "reject": "Turned down"}
 
 
@@ -209,6 +212,9 @@ class Mod(cm.Notifier):
         self.lock = threading.Lock()
         self.background = background
         community.notifier = self
+        if self.pub and not FAST:
+            cm.log("python3-cryptography isn't installed: Discord signatures are checked by the slower built-in "
+                   "verifier (apt install python3-cryptography)")
 
     # -- posting --
 
@@ -338,6 +344,8 @@ class Mod(cm.Notifier):
                     return 200, self.command(d, actor)
             except cm.Reject as e:
                 return 200, self.tell(e.message)
+            except (TypeError, AttributeError, KeyError, ValueError, IndexError):
+                return 200, self.tell("That didn't make sense to the list service.")
         return 400, {"error": "unknown interaction"}
 
     def tell(self, text):
@@ -395,9 +403,9 @@ class Mod(cm.Notifier):
         before = self.c.store.get(key)
         reason = cm.one_line(reason or "", cm.MAX_REASON)
         if action == "pull":
-            self.c.moderate(key, "pull", {"reason": reason or f"Pulled from Discord by {actor['name']}"})
+            self.c.moderate(key, "pull", {"reason": reason or PULLED})
         elif action == "approve":
-            self.c.moderate(key, "approve", {"reason": f"by {actor['name']}"}, live=False)
+            self.c.moderate(key, "approve", {"reason": ""}, live=False)
         elif action == "reject":
             self.c.moderate(key, "reject", {"reason": reason})
         elif action == "block":
@@ -434,8 +442,10 @@ class Mod(cm.Notifier):
         data = d.get("data") if isinstance(d.get("data"), dict) else {}
         if data.get("name") != "community":
             raise cm.Reject(400, "Unknown command.")
-        sub = (data.get("options") or [{}])[0]
-        opts = {o.get("name"): o.get("value") for o in sub.get("options") or [] if isinstance(o, dict)}
+        subs = data.get("options")
+        sub = subs[0] if isinstance(subs, list) and subs and isinstance(subs[0], dict) else {}
+        raw = sub.get("options") if isinstance(sub.get("options"), list) else []
+        opts = {o.get("name"): o.get("value") for o in raw if isinstance(o, dict) and isinstance(o.get("name"), str)}
         page = opts.get("page") if isinstance(opts.get("page"), str) else ""
         reason = opts.get("reason") if isinstance(opts.get("reason"), str) else ""
         p = cm.parse_key(page)
@@ -448,7 +458,7 @@ class Mod(cm.Notifier):
             reps = self.c.store.report_count(key, cm.now() - 7 * 86400)
             return self.tell(f"`{key}`: {st['state']}" + (f" ({st['reason']})" if st.get("reason") else "") + f" · {reps} report(s) in 7 days")
         if name == "pull":
-            self.c.moderate(key, "pull", {"reason": reason or f"Pulled from Discord by {actor['name']}"})
+            self.c.moderate(key, "pull", {"reason": reason or PULLED})
             self.audit(f"Pulled `{key}` by <@{actor['id']}> (command)" + (f" · {cm.discord_text(reason, 200)}" if reason else ""))
             return self.tell(f"Pulled `{key}`. Run `lsmod.py publish --upload` (or wait for the next publish) to put it out.")
         if name == "keep":
