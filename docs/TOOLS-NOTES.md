@@ -1720,3 +1720,54 @@ rotation on walls (placed as authored); "Only what you can see" can miss tiny po
 **Sorry, P5**: early on my Playwright commands ran in whichever tab was current, which was yours for a while (the "Add box", "Move corners",
 an undo and a floor push/pull on your port were me). I now address my own tab by URL. I also once ran `pkill -f serve_editor_for_ui`, which may
 have stopped your dev server — I use my own port now.
+
+### Agent W1: Last Stand (mode id `laststand`, Phase B) — 2026-11-12
+**Built**
+- `plugins/scripting/gm_laststand.sma` on gm_components + loner.inc: everyone on CT; one round = one stand
+  (`mp_round_infinite 1`, the mode ends it with ReGameDLL's `endround CT|T`). Phases: prepare (`lst_prepare` 45 s) →
+  wave → break (`lst_break` 20 s) → …; win after `lst_waves` (10; 0 = endless with a best-wave record per map in
+  `data/gamemodes/laststand_records.ini`), lose when no CT is standing during a wave.
+- Enemies: **creatures** when the DLL has `ls_creature_ver` (and `lst_creatures 1`): the plugin sets
+  `ls_creature_precache "zombie runner brute spitter boss"` in plugin_precache (verified: the fork precaches them for
+  that map), spawns them with `create_entity("ls_creature")` + keys (type, health scaled, `behaviour chase`,
+  `hates ct`) from the wave spawners' `ls_on_wave_spawn`, and tracks them with `ls_wave_track`. Mix by wave
+  (zombies, runners from 2, brutes from 3, spitters from 4, a boss every 5th wave with a screen shake). Otherwise
+  **zombie bots**: `lst_defenders` bots defend, the rest go T as knife-only zombies (an `ls_player_class` with
+  per-wave HP, green glow, no money, can't pick up guns), brought in by the spawners. 20 failed creature spawns
+  with nothing alive → falls back to zombie bots for the map.
+- Scaling: enemies per wave `(5 + 2.5·(n-1)) × (0.5 + 0.2·defenders) × difficulty`, HP `× (1 + 0.07·(n-1)) ×
+  (0.8 + 0.1·defenders) × difficulty`; `lst_difficulty` Easy/Normal/Hard/Nightmare.
+- Between waves: `lst_wave_money` ($1000) to the team, the dead come back, buy anywhere (`mp_buy_anywhere` 1 in
+  prepare/break only), a supply drop every `lst_drops` (2) waves at one of the map's `ls_supply_drop`s (or near the
+  base). Creatures/zombies by a standing barricade hit it each second. Kill money per creature type.
+- Revives (`lst_revive` 30 s, 0 off): a downed CT leaves a blue beam; a teammate holding USE there for 3 s (bots:
+  standing there) brings them back with 50 HP. Bots get `goal ct go_hold <spot> <victim> 55 <secs> 40`.
+- HUD (loner.inc slots): top "WAVE 3/10 - 12 left" / "next in 18 s (buy anywhere)", left the team (HP / DOWN 23s /
+  out), right the nearest barricade's health; RoundTime counts down prepare/break.
+- Bots: `ls_mode set laststand`, `enemyclass ls_creature 1`, `goal ct defend <base> 0 70 0 450` each wave (base =
+  CT respawn points or CT spawns), barricades' own defend goals; botplay.ini `laststand team`.
+- Map packs `plugins/configs/gamemodes/components/<map>.laststand.ini` for de_dust2, de_inferno, cs_office, de_aztec,
+  de_nuke, made from each map's nav mesh + BSP entities: spawners at the T spawn and the bomb site furthest from the
+  base, barricades on the first narrow nav area 350-1300 u out on each route (`fit=` spans the corridor at map start),
+  two supply drop spots, gear spawners in the base. Any other map plays too (a spawner goes on the T spawn).
+- Configs: `laststand.cfg`, `laststand.plugins.ini` (gm_components, gm_laststand), modes.ini line, mappresets `ls_*`,
+  base.cfg resets (`humans_join_team any`, `ls_creature_precache ""`, `ls_comp_wave_announce 1`).
+- App/menu, the way other modes are listed: `CORE_MODES` + `OUR_PLUGINS` (setup/core.rs), Mods.tsx BUILT_IN, an icon
+  in icons.tsx, Settings.tsx family `lst_`, Play.tsx MODE_PREFIX, gamemodes.sma SETTINGS (Waves, Wave difficulty,
+  Revive time, Enemies). gm_components gained `fit=x|y` barricades drawn as beam fences and `ls_comp_wave_announce`.
+- All compile with amxxpc 1.10, no warnings; `cargo test setup` passes.
+
+**Tested** (my own APFS clone of a sim server with the combined brain+creatures mp.dll, via a copy of run-wine.sh:
+dedicated, -nomaster; no server left running): de_dust2 with creatures, 3 waves → win → `endround CT` → a new
+stand; de_inferno with zombie bots on Nightmare, 3 defenders → the base fell on wave 1 → `endround T` → new stand;
+de_nuke with creatures, 8 defenders: wave 1 (11 creatures) still being fought when the timed run ended, bot traces
+show them hunting the creatures as mode enemies. Barricades fitted (dust2: 221 and 573 units; 400 each way is the cap).
+
+**Notes / not done**
+- The plan's turret, waves.ini and shop.ini aren't in (built-in wave mix instead; buying is CS's own menu, anywhere
+  between waves). Revive is "dead + revive window" rather than a downed state (no crawling on the stock client).
+- The vote list (`modevote.rs` DEFAULT) and `games.ts` BOT_RATING (unlisted = "great") left alone.
+- Cleanup I couldn't do: the safety hook blocks recursive deletes outside the worktree, so my server clone
+  `drive_c/Loner-Strike/Sim/LST` (APFS clone of W1, little real space) and compile folder `drive_c/lsw1` are still there;
+  please delete them.
+- Not checked in a client: how the HUD, fence beams and creature models look; creatures on maps without nav.
